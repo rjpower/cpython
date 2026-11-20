@@ -72,6 +72,13 @@ def trace(func, *args, opcodes=False):
 # The attributes are instance attributes, whose loads specialise.  A class
 # attribute holding an inline int is classified INLINE_VALUE and its load
 # stays generic (Python/specialize.c).
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class C:
     def __init__(self):
         self.attr = 5

@@ -57,6 +57,19 @@ typedef struct {
     void *closure;
 } _PyValueGetSet;
 
+/* Call the getter of descr, a getset descriptor with a _PyValueGetSet record
+   (its d_value), on self. The record is read before the call and descr is
+   not used after it: the getter can run Python that drops the last reference
+   to the descriptor. */
+static inline PyValue
+_PyGetSet_ValueRead(PyObject *descr, PyValueBorrow self)
+{
+    const _PyValueGetSet *record = ((PyGetSetDescrObject *)descr)->d_value;
+    assert(record != NULL);
+    return record->get(self, record->closure);
+}
+#define _PyGetSet_ValueRead(D, S) (_PyGetSet_ValueRead)(D, PyValue_Borrow(S))
+
 // Export for static extension modules that define value getsets
 PyAPI_FUNC(PyObject *) _PyGetSet_ValueGet(PyObject *self, void *record);
 PyAPI_FUNC(int) _PyGetSet_ValueSet(PyObject *self, PyObject *value,

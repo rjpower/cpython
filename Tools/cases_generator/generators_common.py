@@ -112,6 +112,7 @@ POINTER_VARIANTS = {
     "PyValue_CLOSE_SPECIALIZED": "_PyValue_CLOSE_SPECIALIZED_POINTER",
     "PyValue_DUP": "_PyValue_DUP_POINTER",
     "PyValue_AsKnownObjectSteal": "_PyValue_AsPyObjectStealPointer",
+    "PyValue_AsKnownObjectBorrow": "_PyValue_AsKnownObjectBorrowPointer",
 }
 
 
@@ -243,6 +244,7 @@ class Emitter:
             "PyValue_XCLOSE": self.value_pointer_variant,
             "PyValue_DUP": self.value_pointer_variant,
             "PyValue_AsKnownObjectSteal": self.value_steal,
+            "PyValue_AsKnownObjectBorrow": self.known_object_borrow,
             "DISPATCH": self.dispatch,
             "INSTRUCTION_SIZE": self.instruction_size,
             "stack_pointer": self.stack_pointer,
@@ -283,6 +285,29 @@ class Emitter:
         self.emit(";\n")
         return False
 
+    def emit_condition(
+        self,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> None:
+        "emit_to() the closing parenthesis, with the replacement of known_object_borrow()"
+        parens = 0
+        for tkn in tkn_iter:
+            if tkn.kind == "RPAREN" and parens == 0:
+                return
+            if tkn.kind == "LPAREN":
+                parens += 1
+            if tkn.kind == "RPAREN":
+                parens -= 1
+            if tkn.kind == "IDENTIFIER" and tkn.text == "PyValue_AsKnownObjectBorrow":
+                self.known_object_borrow(tkn, tkn_iter, uop, storage, inst)
+                parens += 1
+                continue
+            self.out.emit(tkn)
+        raise analysis_error("Expecting RPAREN. Reached end of file", tkn)
+
     def deopt_if(
         self,
         tkn: Token,
@@ -296,7 +321,7 @@ class Emitter:
         lparen = next(tkn_iter)
         assert lparen.kind == "LPAREN"
         first_tkn = tkn_iter.peek()
-        emit_to(self.out, tkn_iter, "RPAREN")
+        self.emit_condition(tkn_iter, uop, storage, inst)
         self.emit(") {\n")
         next(tkn_iter)  # Semi colon
         self.emit_jump_to_predicted(inst)
@@ -466,6 +491,23 @@ class Emitter:
         storage: Storage,
         inst: Instruction | None,
     ) -> bool:
+        lparen = next(tkn_iter)
+        assert lparen.kind == "LPAREN"
+        arg = tkn_iter.peek()
+        assert arg is not None
+        self.emit_function_name(tkn, arg, storage)
+        self.out.emit(lparen)
+        return True
+
+    def known_object_borrow(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        "The object of a variable that a guard showed to be a pointer: no test"
         lparen = next(tkn_iter)
         assert lparen.kind == "LPAREN"
         arg = tkn_iter.peek()

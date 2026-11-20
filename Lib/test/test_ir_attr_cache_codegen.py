@@ -104,7 +104,7 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
                 handler = output[start:end]
                 guard = handler.index("tp_version_tag")
                 load = handler.index("_PyValueGuarded_Load(class_value)")
-                acquire = handler.index("attr = PyValue_XDUP(found)")
+                acquire = handler.index("attr = PyValue_DUP(found)")
                 detach = handler.index("IR_DETACH(ir_word, B, owner)")
                 store = handler.index("IR_STORE_DST(ir_word, A, attr)")
                 close = handler.index("_PyValue_XCLOSE_POINTER(ir_own_B)")

@@ -33,6 +33,13 @@ def exception_entry(*values):
     return semantic_table(bytes(data))
 
 
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class SemanticCompletionTests(unittest.TestCase):
     def test_cleanup_throw_survives_optimization_as_named_semantic_jump(self):
         first, second = object(), object()

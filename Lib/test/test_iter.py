@@ -1344,5 +1344,100 @@ class TestCase(unittest.TestCase):
 
 
 
+class SubtypeIterationTest(unittest.TestCase):
+    # A subtype of a sequence iterates the way its base does until it
+    # defines __iter__; the loop's choice is made when it starts.
+
+    def collect(self, iterable):
+        # Several passes, so that the loop specializes on the first.
+        return [[x for x in iterable] for _ in range(4)][-1]
+
+    def test_subtypes_with_the_base_iter(self):
+        class L(list): pass
+        class T(tuple): pass
+        class S(str): pass
+        class B(bytes): pass
+        for cls, data, expected in [
+            (L, [1, 2, 3], [1, 2, 3]),
+            (T, (1, 2, 3), [1, 2, 3]),
+            (S, "abc", ["a", "b", "c"]),
+            (B, b"abc", [97, 98, 99]),
+        ]:
+            with self.subTest(cls=cls):
+                self.assertEqual(self.collect(cls(data)), expected)
+
+    def test_list_subtype_sees_appends(self):
+        class L(list): pass
+        seen = []
+        items = L([1, 2])
+        for x in items:
+            seen.append(x)
+            if x < 4:
+                items.append(x + 2)
+        self.assertEqual(seen, [1, 2, 3, 4, 5])
+
+    def test_overriding_iter(self):
+        class L(list):
+            def __iter__(self):
+                return iter([9])
+        class M(L): pass
+        for cls in (L, M):
+            with self.subTest(cls=cls):
+                self.assertEqual(self.collect(cls([1, 2, 3])), [9])
+
+    def test_iter_defined_after_a_loop_specialized(self):
+        class L(list): pass
+        items = L([1, 2, 3])
+        self.assertEqual(self.collect(items), [1, 2, 3])
+        L.__iter__ = lambda self: iter("x")
+        self.assertEqual(self.collect(items), ["x"])
+        del L.__iter__
+        self.assertEqual(self.collect(items), [1, 2, 3])
+
+    def test_iter_defined_inside_a_loop(self):
+        class L(list): pass
+        items = L([1, 2, 3])
+        seen = []
+        for x in items:
+            seen.append(x)
+            L.__iter__ = lambda self: iter("x")
+        self.assertEqual(seen, [1, 2, 3])
+        self.assertEqual(list(items), ["x"])
+
+    def test_iter_from_another_base(self):
+        class Other:
+            def __iter__(self):
+                return iter("o")
+        class L(Other, list): pass
+        self.assertEqual(self.collect(L([1, 2])), ["o"])
+
+    def test_list_subtype_is_its_own_iterator(self):
+        class L(list):
+            def __iter__(self):
+                return self
+            def __next__(self):
+                if not self:
+                    raise StopIteration
+                return self.pop()
+        for _ in range(4):
+            items = L([1, 2, 3])
+            self.assertEqual([x for x in items], [3, 2, 1])
+        # One loop site that sees a list, a subtype and a self-iterator.
+        def run(items):
+            return [x for x in items]
+        for _ in range(4):
+            self.assertEqual(run([1, 2]), [1, 2])
+        self.assertEqual(run(L([1, 2])), [2, 1])
+
+    def test_slots_with_a_getitem_fallback(self):
+        class L(list):
+            __iter__ = None
+        with self.assertRaises(TypeError):
+            iter(L([1]))
+        with self.assertRaises(TypeError):
+            for _ in L([1]):
+                pass
+
+
 if __name__ == "__main__":
     unittest.main()

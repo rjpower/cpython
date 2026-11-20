@@ -71,6 +71,12 @@ def shadow_of(name: str, analysis: Analysis) -> str:
     for fused, compare in FUSED_SHADOWS.items():
         if name.startswith(fused) or name.startswith("INSTRUMENTED_" + fused):
             return compare
+    # An IR-only member of a real family (LOAD_ATTR_GETSET) stands for the
+    # family head, as the specialisations that have an opcode stand for
+    # themselves
+    inst = handler_instructions(analysis).get(name)
+    if name in analysis.ir_only and inst is not None and inst.family:
+        return inst.family.name
     return canonical_handler(name)
 
 

@@ -18,6 +18,13 @@ def return_sites(code):
                           "INSTRUMENTED_RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE_EMPTY"}]
 
 
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class RetirementPlanTests(unittest.TestCase):
     def routes(self, code):
         return (code, construct(code), code.replace(),

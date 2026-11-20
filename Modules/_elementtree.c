@@ -19,6 +19,7 @@
 #include "Python.h"
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCall()
 #include "pycore_dict.h"          // _PyDict_CopyAsDict()
+#include "pycore_descrobject.h"   // _Py_VALUE_GETSET()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_pyhash.h"        // _Py_HashSecret
 #include "pycore_tuple.h"         // _PyTuple_FromPair
@@ -2355,44 +2356,53 @@ element_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
     }
 }
 
-static PyObject*
-element_tag_getter(PyObject *op, void *closure)
+/* The value getsets of tag, text, tail and attrib: a read costs no boxing of
+   the receiver and no adapter. The getters return an owner of the field. */
+static PyValue
+element_tag_getter(PyValueBorrow op, void *closure)
 {
-    ElementObject *self = _Element_CAST(op);
-    PyObject *res = self->tag;
-    return Py_NewRef(res);
+    ElementObject *self = _Element_CAST(PyValue_AsKnownObjectBorrow(op));
+    return PyValue_DUP(PyValue_FromObjectBorrow(self->tag));
 }
 
-static PyObject*
-element_text_getter(PyObject *op, void *closure)
+static PyValue
+element_text_getter(PyValueBorrow op, void *closure)
 {
-    ElementObject *self = _Element_CAST(op);
-    return element_get_text(self);
+    ElementObject *self = _Element_CAST(PyValue_AsKnownObjectBorrow(op));
+    if (!self->text_joined) {
+        return PyValue_XDUP(PyValue_Borrow(self->text));
+    }
+    return _PyValue_FromObjectResult(element_get_text(self));
 }
 
-static PyObject*
-element_tail_getter(PyObject *op, void *closure)
+static PyValue
+element_tail_getter(PyValueBorrow op, void *closure)
 {
-    ElementObject *self = _Element_CAST(op);
-    return element_get_tail(self);
+    ElementObject *self = _Element_CAST(PyValue_AsKnownObjectBorrow(op));
+    if (!self->tail_joined) {
+        return PyValue_XDUP(PyValue_Borrow(self->tail));
+    }
+    return _PyValue_FromObjectResult(element_get_tail(self));
 }
 
-static PyObject*
-element_attrib_getter(PyObject *op, void *closure)
+static PyValue
+element_attrib_getter(PyValueBorrow op, void *closure)
 {
-    PyObject *res;
-    ElementObject *self = _Element_CAST(op);
+    ElementObject *self = _Element_CAST(PyValue_AsKnownObjectBorrow(op));
     if (!self->extra) {
         if (create_extra(self, NULL) < 0)
-            return NULL;
+            return PyValue_NULL;
     }
-    res = element_get_attrib(self);
-    return Py_XNewRef(res);
+    PyObject *res = element_get_attrib(self);
+    if (res == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_DUP(PyValue_FromObjectBorrow(res));
 }
 
 /* macro for setter validation */
 #define _VALIDATE_ATTR_VALUE(V)                     \
-    if ((V) == NULL) {                              \
+    if (PyValue_IsNull(V)) {                        \
         PyErr_SetString(                            \
             PyExc_AttributeError,                   \
             "can't delete element attribute");      \
@@ -2400,48 +2410,67 @@ element_attrib_getter(PyObject *op, void *closure)
     }
 
 static int
-element_tag_setter(PyObject *op, PyObject *value, void *closure)
+element_tag_setter(PyValueBorrow op, PyValueBorrow value, void *closure)
 {
     _VALIDATE_ATTR_VALUE(value);
-    ElementObject *self = _Element_CAST(op);
-    Py_SETREF(self->tag, Py_NewRef(value));
-    return 0;
-}
-
-static int
-element_text_setter(PyObject *op, PyObject *value, void *closure)
-{
-    _VALIDATE_ATTR_VALUE(value);
-    ElementObject *self = _Element_CAST(op);
-    _set_joined(&self->text, &self->text_joined, Py_NewRef(value), 0);
-    return 0;
-}
-
-static int
-element_tail_setter(PyObject *op, PyObject *value, void *closure)
-{
-    _VALIDATE_ATTR_VALUE(value);
-    ElementObject *self = _Element_CAST(op);
-    _set_joined(&self->tail, &self->tail_joined, Py_NewRef(value), 0);
-    return 0;
-}
-
-static int
-element_attrib_setter(PyObject *op, PyObject *value, void *closure)
-{
-    _VALIDATE_ATTR_VALUE(value);
-    if (!PyAnyDict_Check(value)) {
-        PyErr_Format(PyExc_TypeError,
-                     "attrib must be dict or frozendict, not %T",
-                     value);
+    ElementObject *self = _Element_CAST(PyValue_AsKnownObjectBorrow(op));
+    PyObject *tag = _PyValue_AsObjectAt(value, BOX_SITE_FIELD);
+    if (tag == NULL) {
         return -1;
     }
-    ElementObject *self = _Element_CAST(op);
-    if (!self->extra) {
-        if (create_extra(self, NULL) < 0)
-            return -1;
+    Py_SETREF(self->tag, tag);
+    return 0;
+}
+
+static int
+element_text_setter(PyValueBorrow op, PyValueBorrow value, void *closure)
+{
+    _VALIDATE_ATTR_VALUE(value);
+    ElementObject *self = _Element_CAST(PyValue_AsKnownObjectBorrow(op));
+    PyObject *text = _PyValue_AsObjectAt(value, BOX_SITE_FIELD);
+    if (text == NULL) {
+        return -1;
     }
-    Py_XSETREF(self->extra->attrib, Py_NewRef(value));
+    _set_joined(&self->text, &self->text_joined, text, 0);
+    return 0;
+}
+
+static int
+element_tail_setter(PyValueBorrow op, PyValueBorrow value, void *closure)
+{
+    _VALIDATE_ATTR_VALUE(value);
+    ElementObject *self = _Element_CAST(PyValue_AsKnownObjectBorrow(op));
+    PyObject *tail = _PyValue_AsObjectAt(value, BOX_SITE_FIELD);
+    if (tail == NULL) {
+        return -1;
+    }
+    _set_joined(&self->tail, &self->tail_joined, tail, 0);
+    return 0;
+}
+
+static int
+element_attrib_setter(PyValueBorrow op, PyValueBorrow value, void *closure)
+{
+    _VALIDATE_ATTR_VALUE(value);
+    PyObject *attrib = _PyValue_AsObjectAt(value, BOX_SITE_FIELD);
+    if (attrib == NULL) {
+        return -1;
+    }
+    if (!PyAnyDict_Check(attrib)) {
+        PyErr_Format(PyExc_TypeError,
+                     "attrib must be dict or frozendict, not %T",
+                     attrib);
+        Py_DECREF(attrib);
+        return -1;
+    }
+    ElementObject *self = _Element_CAST(PyValue_AsKnownObjectBorrow(op));
+    if (!self->extra) {
+        if (create_extra(self, NULL) < 0) {
+            Py_DECREF(attrib);
+            return -1;
+        }
+    }
+    Py_XSETREF(self->extra->attrib, attrib);
     return 0;
 }
 
@@ -3159,14 +3188,13 @@ treebuilder_handle_end(TreeBuilderObject* self, PyObject* tag)
         return NULL;
     }
 
-    PyValue new_this_value = PyList_GetValue(self->stack, self->index - 1);
-    if (PyValue_IsNull(new_this_value)) {
-        return NULL;
-    }
-    PyObject *new_this = _PyValue_AsObjectStealAt(new_this_value, BOX_SITE_LIST);
-    if (new_this == NULL) {
-        return NULL;
-    }
+    /* The stack list is private to the builder: only this file's code
+       changes it, and it holds at least self->index entries. An entry is
+       None or a former self->this that took a child through append(), so it
+       is never an inline int or float. The borrow is retained on the same
+       line, before any call can run, so it cannot outlive the list's count. */
+    PyObject *new_this = Py_NewRef(PyValue_AsKnownObjectBorrow(
+        PyList_GET_VALUE(self->stack, self->index - 1)));
     PyObject *last = self->last;
     PyObject *last_for_tail = self->last_for_tail;
     PyObject *this = self->this;
@@ -4776,22 +4804,26 @@ static struct PyMemberDef element_members[] = {
 };
 
 static PyGetSetDef element_getsetlist[] = {
-    {"tag",
+    _Py_VALUE_GETSET("tag",
         element_tag_getter,
         element_tag_setter,
-        "A string identifying what kind of data this element represents"},
-    {"text",
+        "A string identifying what kind of data this element represents",
+        NULL),
+    _Py_VALUE_GETSET("text",
         element_text_getter,
         element_text_setter,
-        "A string of text directly after the start tag, or None"},
-    {"tail",
+        "A string of text directly after the start tag, or None",
+        NULL),
+    _Py_VALUE_GETSET("tail",
         element_tail_getter,
         element_tail_setter,
-        "A string of text directly after the end tag, or None"},
-    {"attrib",
+        "A string of text directly after the end tag, or None",
+        NULL),
+    _Py_VALUE_GETSET("attrib",
         element_attrib_getter,
         element_attrib_setter,
-        "A dictionary containing the element's attributes"},
+        "A dictionary containing the element's attributes",
+        NULL),
     {NULL},
 };
 

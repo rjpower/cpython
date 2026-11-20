@@ -44,7 +44,8 @@ PyAPI_FUNC(PyObject *) _PyTuple_FromPairSteal(PyObject *, PyObject *);
    reach a variadic call, so PackValues takes the n borrowed inputs as an
    array, written as a compound literal at the call:
        _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_Borrow(a), b});
-   It retains them before it allocates. FromPairTakeValue consumes both
+   It retains them into the new tuple, which is safe because the allocation
+   runs no Python. FromPairTakeValue consumes both
    owners on every exit. Each returns a new tuple, or NULL with an
    exception. */
 PyAPI_FUNC(PyObject *) _PyTuple_PackValues(Py_ssize_t n,

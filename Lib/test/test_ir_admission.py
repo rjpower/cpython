@@ -43,6 +43,13 @@ def replace_field(word, index, value):
     return fields
 
 
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class AdmissionTests(unittest.TestCase):
     def assert_rejected(self, code, replacement, message, field="co_code"):
         original = getattr(code, field)

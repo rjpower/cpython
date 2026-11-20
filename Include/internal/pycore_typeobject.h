@@ -14,6 +14,20 @@ extern "C" {
 
 extern int _PyType_IsGenericCallPair(PyTypeObject *type);
 
+/* tp_iter of a type whose __iter__ is a Python function (or None, or falls
+ * back to __getitem__). */
+extern PyObject *_PyType_SlotIter(PyObject *);
+
+/* Whether iterating an instance of type indexes it through _tp_iteritem. A
+ * subtype inherits _tp_iteritem with its base's tp_iter; defining __iter__
+ * later replaces tp_iter, not _tp_iteritem, so loops already running keep
+ * their cursor. */
+static inline int
+_PyType_IteratesByIndex(PyTypeObject *type)
+{
+    return type->_tp_iteritem != NULL && type->tp_iter != _PyType_SlotIter;
+}
+
 
 /* state */
 
@@ -46,9 +60,10 @@ extern int _PyType_IsGenericCallPair(PyTypeObject *type);
    this interpreter's complete publication, independently of shared tags. */
 extern unsigned int _PyType_GetVersionForCurrentState(
     PyInterpreterState *interp, PyTypeObject *type);
+// A "__x__" name, for the type cache statistics and slot updates.
+extern int _PyType_IsDunderName(PyObject *name);
 extern int _PyType_MatchesVersion(PyInterpreterState *interp,
                                   PyTypeObject *type, unsigned int expected);
-extern void _Py_NO_RETURN _PyType_AbortClosedLookup(void);
 
 /* Positive-refcount mutation receiver. Keep this C-local scope active through
    writes, rollback and all displaced-owner cleanup. Begin only closes admission;

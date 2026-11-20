@@ -33,13 +33,6 @@ static_assert(Py_INT_BASE == (uintptr_t)0xFFF8 << 48, "int51 region");
 static_assert(((uintptr_t)0xFFF0 << 48) + Py_DOUBLE_OFFSET < Py_INT_BASE,
               "the float and int regions are disjoint");
 
-/* Consume obj and return its canonical value, which owns what obj owned.
- * An exact int or float whose value is held inline is returned inline and
- * its box is released at once; that release runs no Python and leaves the
- * current exception unchanged ("Release contract" in
- * Include/internal/pycore_value.h). NULL gives PyValue_NULL. */
-PyAPI_FUNC(PyValue) PyValue_PrepareOwned(PyObject *obj);
-
 /* The view of an owner or a borrow, as a borrow: the same bits, at no cost.
  * Readers take a PyValueBorrow; each has a same-name macro that passes its
  * value arguments through PyValue_Borrow(), so that callers pass owners and

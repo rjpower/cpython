@@ -263,7 +263,7 @@ class OperandModeGeneratorTests(unittest.TestCase):
         body = body.split("TARGET(", 1)[0]
         self.assertNotIn("IR_IS_LOCAL", body)
         self.assertNotIn("IR_CONSUME_INPUT", body)
-        self.assertIn("attr = shape_read_dup(PyValue_AsKnownObjectBorrow(owner), offset);", body)
+        self.assertIn("attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);", body)
         self.assertIn("ir_own_B = PyValue_NULL;", body)
         read = body.index("attr = shape_read_dup(")
         store = body.index("IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);")
@@ -276,7 +276,7 @@ class OperandModeGeneratorTests(unittest.TestCase):
         read = read.split("\n}", 1)[0]
         self.assertIn("PyValue_Borrow(*(PyValue *)((char *)owner + offset))", read)
         self.assertIn("assert(!PyValue_IsNull(found));", read)
-        self.assertIn("return PyValue_XDUP(found);", read)
+        self.assertIn("return PyValue_DUP(found);", read)
         self.assertIn("int opcode = LOAD_ATTR_SHAPE;", body)
 
     def test_synthetic_instruction_without_specialization_family(self):

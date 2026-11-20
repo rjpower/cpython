@@ -452,6 +452,11 @@ typedef struct _rare_events {
 // Optimization configuration for the interpreter.
 typedef struct _PyOptimizationConfig {
     bool specialization_enabled;
+    /* Whether the code constructor re-proves the compiler's output and
+     * rejects malformed images. Assertion builds always do; release builds
+     * do under PYTHON_VALIDATE_CODE=1. The proofs only guard against
+     * hand-built code objects and corrupt .pyc files. */
+    bool validate_code;
 } _PyOptimizationConfig;
 
 struct
@@ -576,10 +581,8 @@ typedef struct {
 #define TYPE_VERSION_CACHE_SIZE (1<<12)  /* Must be a power of 2 */
 
 struct types_state {
-    /* Cache/guard admission is closed across live mutation and permanently
-       after static-type finalization starts. */
+    /* Cache/guard admission is closed across live mutation. */
     unsigned int mutation_depth;
-    int lookup_closed;
 
     /* Used to set PyTypeObject.tp_version_tag.
        It starts at _Py_MAX_GLOBAL_TYPE_VERSION_TAG + 1,

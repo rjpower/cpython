@@ -1399,6 +1399,21 @@ set_eval_frame_interp(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+/* Set whether code constructors reject malformed images; return the old
+ * setting. Release builds do not by default. */
+static PyObject *
+set_code_validation(PyObject *self, PyObject *arg)
+{
+    int enable = PyObject_IsTrue(arg);
+    if (enable < 0) {
+        return NULL;
+    }
+    _PyOptimizationConfig *config = &_PyInterpreterState_GET()->opt_config;
+    bool old = config->validate_code;
+    config->validate_code = enable;
+    return PyBool_FromLong(old);
+}
+
 static PyObject *
 is_specialization_enabled(PyObject *self, PyObject *Py_UNUSED(args))
 {
@@ -1777,7 +1792,7 @@ get_feedback(PyObject *self, PyObject *args)
         return NULL;
     }
     if (h->poly) {
-        _PyFbPoly *poly = &exec->feedback->poly[h->poly - 1];
+        _PyFbPoly *poly = _PyFb_PolyOf(exec->feedback, h);
         for (int r = 0; r < FB_POLY_SIZE && poly->handler[r]; r++) {
             PyObject *row = Py_BuildValue("(IIi)", poly->type_version[r],
                                           poly->aux[r], poly->handler[r]);
@@ -4807,8 +4822,13 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
     if (exec == NULL) {
         return NULL;
     }
+    const _PyIRCodePlan *plan;
+    if (_PyCode_BuildSemanticPlan(code, &plan) < 0) {
+        return NULL;
+    }
     PyValue *homes = PyMem_New(PyValue, Py_MAX(nslots, 1));
     if (homes == NULL) {
+        _PyCode_FreeSemanticPlan(plan);
         return PyErr_NoMemory();
     }
     for (int i = 0; i < nslots; i++) {
@@ -4826,8 +4846,9 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
         .instr_ptr = (_PyInstr *)pc,
         .owner = FRAME_OWNED_BY_THREAD,
     };
-    uint8_t status = _PyIR_ShadowRetirement(&frame, (uint8_t)reason);
+    uint8_t status = _PyIR_ShadowRetirement(&frame, (uint8_t)reason, plan);
     PyMem_Free(homes);
+    _PyCode_FreeSemanticPlan(plan);
     return PyLong_FromLong(status);
 }
 
@@ -4857,9 +4878,7 @@ check_frame_copy(PyObject *args, int mode)
         if (exec == NULL) {
             return NULL;
         }
-        if (exec->semantic_plan == NULL ||
-            !(exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY))
-        {
+        if (!exec->all_created_empty) {
             PyErr_SetString(PyExc_ValueError, "probe needs certified empty creation");
             return NULL;
         }
@@ -4937,11 +4956,30 @@ has_empty_created_copy_plan(PyObject *self, PyObject *arg)
     if (exec == NULL) {
         return NULL;
     }
-    return PyBool_FromLong(exec->semantic_plan != NULL &&
-        (exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY));
+    return PyBool_FromLong(exec->all_created_empty);
+}
+
+/* The words of a code object with the compiler's return selection applied to
+ * a code object built by hand. */
+static PyObject *
+select_empty_returns(PyObject *self, PyObject *arg)
+{
+    if (!PyCode_Check(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected code");
+        return NULL;
+    }
+    PyObject *words;
+    if (_PyCode_SelectEmptyReturns((PyCodeObject *)arg, &words) < 0) {
+        return NULL;
+    }
+    if (words == NULL) {
+        return PyObject_GetAttrString(arg, "co_code");
+    }
+    return words;
 }
 
 static PyMethodDef module_functions[] = {
+    {"select_empty_returns", select_empty_returns, METH_O},
     {"has_empty_created_copy_plan", has_empty_created_copy_plan, METH_O},
     {"check_created_frame_copy", check_created_frame_copy, METH_VARARGS},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
@@ -5008,6 +5046,7 @@ static PyMethodDef module_functions[] = {
     {"set_eval_frame_record", set_eval_frame_record, METH_O, NULL},
     {"run_staged_provider", run_staged_provider, METH_VARARGS, NULL},
     {"is_specialization_enabled", is_specialization_enabled, METH_NOARGS, NULL},
+    {"set_code_validation", set_code_validation, METH_O, NULL},
     _TESTINTERNALCAPI_COMPILER_CLEANDOC_METHODDEF
     _TESTINTERNALCAPI_NEW_INSTRUCTION_SEQUENCE_METHODDEF
     _TESTINTERNALCAPI_COMPILER_CODEGEN_METHODDEF

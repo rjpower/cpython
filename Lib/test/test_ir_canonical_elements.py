@@ -46,14 +46,14 @@ class CanonicalElementTests(unittest.TestCase):
         for kind in ("LIST", "TUPLE"):
             with self.subTest(kind=kind):
                 body = self.emit(source, f"BINARY_OP_SUBSCR_{kind}_INT")
-                self.assertIn(f"PyValue_XDUP(Py{kind.title()}_GET_VALUE(", body)
+                self.assertIn(f"PyValue_DUP(Py{kind.title()}_GET_VALUE(", body)
                 self.assertIn("IR_STORE_DST(ir_word, A, res);", body)
                 self.assertNotIn("_PyValue_Publish", body)
                 # The result is stored before the dying container is
                 # released
                 self.assertLess(body.index("IR_STORE_DST("),
                                 body.index("_PyValue_XCLOSE_POINTER(ir_own_B);"))
-                self.assertLess(body.index("index >= Py"), body.index("PyValue_XDUP(Py"))
+                self.assertLess(body.index("index >= Py"), body.index("PyValue_DUP(Py"))
         renamed = source.replace("BINARY_OP_SUBSCR_LIST_INT", "RENAMED_ELEMENT")
         self.assertIn("IR_STORE_DST(", self.emit(renamed, "RENAMED_ELEMENT"))
 
@@ -84,6 +84,7 @@ class CanonicalElementTests(unittest.TestCase):
         source = self.source()
         guard = "IR_GUARD_INLINE_INT(value);"
         for prefix in ("PyValue (*PyValue_XDUP)(PyValue) = replacement; ",
+                       "PyValue (*PyValue_DUP)(PyValue) = replacement; ",
                        "#define PyList_GET_VALUE replacement\n",
                        "#if 1\n"):
             suffix = "\n#endif" if prefix.startswith("#if") else ""

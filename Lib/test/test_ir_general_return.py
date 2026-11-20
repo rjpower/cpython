@@ -26,6 +26,13 @@ def general_code():
         locals=("owner", "result"), slots=2).replace(co_argcount=2)
 
 
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class GeneralReturnTests(unittest.TestCase):
     def test_remaining_owner_is_valid_but_not_an_empty_return(self):
         code = general_code()

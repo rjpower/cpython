@@ -1765,13 +1765,12 @@ _textiowrapper_writeflush(textio *self)
         Py_ssize_t pos = 0;
 
         for (Py_ssize_t i = 0; i < PyList_GET_SIZE(pending); i++) {
-            PyValue objv = PyList_GetValue(pending, i);
-            if (PyValue_IsNull(objv)) {
-                PyBytesWriter_Discard(writer);
-                return -1;
-            }
-            /* pending holds only str and bytes objects */
-            PyObject *obj = PyValue_AsKnownObjectBorrow(objv);
+            /* A borrow is enough: the loop only reads the item and copies
+               its bytes, so no Python runs and nothing releases the list's
+               count of it. i is below the size read by the loop condition.
+               pending holds only str and bytes objects. */
+            PyObject *obj = PyValue_AsKnownObjectBorrow(
+                PyList_GET_VALUE(pending, i));
             const char *src;
             Py_ssize_t len;
             if (PyUnicode_Check(obj)) {
@@ -1785,7 +1784,6 @@ _textiowrapper_writeflush(textio *self)
                 len = PyBytes_GET_SIZE(obj);
             }
             memcpy(buf + pos, src, len);
-            PyValue_CLOSE(objv);
             pos += len;
         }
         assert(pos == self->pending_bytes_count);

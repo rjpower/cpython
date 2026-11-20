@@ -1,5 +1,6 @@
 """Builders for deliberate serialized IR recovery/position test images."""
 
+import contextlib
 import struct
 
 
@@ -50,3 +51,18 @@ def observation_tables(locations, records, exceptions=b""):
             exceptions, [(*row[:3], *row[7:]) for row in records]),
         "co_linetable": position_table(locations, [row[3:7] for row in records]),
     }
+
+
+@contextlib.contextmanager
+def code_validation(enabled=True):
+    """Make code constructors reject malformed images inside the block.
+
+    Release builds skip these proofs, which only guard against hand-built
+    code objects and corrupt .pyc files (assertion builds always run them).
+    """
+    import _testinternalcapi
+    previous = _testinternalcapi.set_code_validation(enabled)
+    try:
+        yield
+    finally:
+        _testinternalcapi.set_code_validation(previous)

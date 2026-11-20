@@ -73,14 +73,20 @@
 #define TARGET(op) TARGET_##op:
 #define LABEL(name) LABEL_##name:
 
-/* The generator transfer steps (Python/ceval_generator.h, rule 13) are
- * functions that take the value that they transfer as their word.  A handler
- * calls one with IR_GEN_JUMP() by name, or with IR_GEN_JUMP_TO() by the
- * function that generator_outcome_target() or a generator_*_targets table
- * gave, and runs the frame and word that it returns.  The arguments are
- * evaluated before the call, as they were when they set the state.  The
- * steps use the same macros to continue a transfer, which then return what
- * the next step returns. */
+/* A label that the inline helpers of its code are to be inlined into: GCC
+ * estimates the target of a plain goto as unlikely and optimises the code
+ * for size, which outlines them. */
+#define HOT_LABEL(name) LABEL_##name: __attribute__((hot));
+
+/* The generator transfers.  The plain send, yield and return of a delegation
+ * chain run in the evaluator, in the labels gen_resume, gen_yield, gen_return
+ * and gen_complete (Python/ceval_generator_labels.h): a handler sets the
+ * state that they read and jumps to one.  A transfer that is not plain,
+ * because a callback, a hook or a pending redirect must observe it, runs
+ * the steps of Python/ceval_generator.h (rule 13): functions that take the
+ * value that they transfer as the word of their call, and return the frame
+ * and next word to run.  A handler calls one with IR_GEN_JUMP() by name and
+ * runs what it returns. */
 #define IR_STEP_DONE(STEP) \
     do { \
         _PyIRTransfer ir_t = (STEP); \
@@ -98,20 +104,50 @@
  * their homes. */
 #define IR_GEN_EFFECT(REMAINING, IP, V) \
     IR_STEP_DONE(ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, (REMAINING)))
-#define IR_GEN_JUMP_TO(STEP, F, IP, V) \
-    IR_STEP_DONE((STEP)(tstate, (F), (IP), (V).bits))
 
+/* The yielded value V passes up from the SEND at this_instr, whose YIELD
+ * follows it, through every delegating frame above. */
+#define IR_GEN_YIELD(V) \
+    do { \
+        ir_gen_value = (V); \
+        next_instr = this_instr; \
+        goto LABEL_gen_yield; \
+    } while (0)
+/* Likewise V from the frame that a leaf YIELD has just suspended, if its
+ * resumer is a SEND with a native yielded outcome. */
 #define IR_TRY_NATIVE_YIELD(V) \
     do { \
-        if (frame->owner != FRAME_OWNED_BY_INTERPRETER) { \
-            _PyIRGenStep *ir_yield_target = generator_outcome_target( \
-                frame, frame->instr_ptr, generator_yielded_targets); \
-            if (ir_yield_target != NULL && !frame->pending_redirect) { \
-                assert(_PyValue_IsHome(V)); \
-                IR_GEN_JUMP_TO(ir_yield_target, frame, \
-                               frame->instr_ptr, (V)); \
-            } \
+        if (generator_site_kind(frame, frame->instr_ptr, \
+                                generator_yielded_targets) && \
+            !frame->pending_redirect) { \
+            assert(_PyValue_IsHome(V)); \
+            ir_gen_value = (V); \
+            next_instr = frame->instr_ptr; \
+            goto LABEL_gen_yield; \
         } \
+    } while (0)
+/* The SEND or CLEANUP_THROW at this_instr completes with V, whose word has
+ * a native completed outcome. */
+#define IR_GEN_COMPLETE(V) \
+    do { \
+        ir_gen_value = (V); \
+        next_instr = this_instr; \
+        goto LABEL_gen_complete; \
+    } while (0)
+/* The generator frame DYING has returned V and been unlinked and debited;
+ * frame is its resumer. */
+#define IR_GEN_RETURN(V, DYING) \
+    do { \
+        ir_gen_value = (V); \
+        ir_gen_dying = (DYING); \
+        goto LABEL_gen_return; \
+    } while (0)
+/* The generator that frame has just entered resumes with V, and follows the
+ * chain of delegating frames that the words of the frame describe. */
+#define IR_GEN_RESUME(V) \
+    do { \
+        ir_gen_value = (V); \
+        goto LABEL_gen_resume; \
     } while (0)
 
 /* Every IR word is one word, so every handler's entry computes the same
@@ -618,6 +654,34 @@ _PyIR_Taken(PyValueBorrow view, PyValue *owner)
 }
 #define IR_TAKEN(V, OWN) _PyIR_Taken(PyValue_Borrow(V), &(OWN))
 
+/* IR_TAKEN() of a view of a required input, which is not PyValue_NULL, and
+ * of one that a guard has shown to be in pointer space: a local's value then
+ * gets its count with one test fewer (see PyValue_DUP() and
+ * _PyValue_DUP_POINTER()). */
+static inline PyValue
+_PyIR_TakenRequired(PyValueBorrow view, PyValue *owner)
+{
+    PyValue taken = *owner;
+    if (PyValue_IsNull(taken)) {
+        return PyValue_DUP(view);
+    }
+    *owner = PyValue_NULL;
+    return taken;
+}
+#define IR_TAKEN_REQUIRED(V, OWN) _PyIR_TakenRequired(PyValue_Borrow(V), &(OWN))
+
+static inline PyValue
+_PyIR_TakenPointer(PyValueBorrow view, PyValue *owner)
+{
+    PyValue taken = *owner;
+    if (PyValue_IsNull(taken)) {
+        return _PyValue_DUP_POINTER(view);
+    }
+    *owner = PyValue_NULL;
+    return taken;
+}
+#define IR_TAKEN_POINTER(V, OWN) _PyIR_TakenPointer(PyValue_Borrow(V), &(OWN))
+
 /* Values are canonical where they are made (the PyValue_From*()
  * constructors), so a store writes V as it is; the debug check proves it. */
 
@@ -664,29 +728,70 @@ _PyIR_Taken(PyValueBorrow view, PyValue *owner)
         } \
     } while (0)
 
-/* The elements of an unpack, in WINDOW in stack order (element i in
- * WINDOW[N - 1 - i]), go to the locals LOCALS[0..N-1].  Each local's old
- * value changes places with the element's slot, so the frame owns every
- * value throughout.  The handler then closes the old values from the window
- * (IR_CLOSE_WINDOW), after all the stores. */
-static inline void
+/* IR_MOVE_TO_DST for the result V of a window-style handler, which the
+ * slot SLOT above the inputs' would only pass on: a local gets V directly
+ * and the slot stays empty. */
+#define IR_MOVE_RESULT_TO_DST(W, X, SLOT, V) \
+    do { \
+        if (IR_IS_LOCAL_FIELD(W, X)) { \
+            ir_old = IR_SLOT(IR_FIELD(W, X)); \
+            assert(_PyValue_IsHome(V)); \
+            IR_SLOT(IR_FIELD(W, X)) = (V); \
+            _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
+        } \
+        else { \
+            IR_SET_TEMP(SLOT, V); \
+        } \
+    } while (0)
+
+/* The elements of an unpack go to the locals LOCALS[0..N-1], the first of
+ * a run: element I goes to LOCALS[N - 1 - I] (the elements are in stack
+ * order) and the old value of that local to the window's slot SLOT, if it
+ * owns an object, or the slot stays empty.  The frame owns every value
+ * throughout.  The handler then closes the old values from the window
+ * (IR_CLOSE_WINDOW), after all the stores and only if one owns an object. */
+#define IR_UNPACK_DIRECT(LOCALS, SLOT, I, N, X) \
+    do { \
+        PyValue *ir_local = (LOCALS) + ((N) - 1 - (I)); \
+        PyValue ir_displaced = *ir_local; \
+        *ir_local = (X); \
+        _PyValue_CheckHome(*ir_local); \
+        bool ir_owns = PyValue_RefcountOnObject(ir_displaced); \
+        *(SLOT) = ir_owns ? ir_displaced : PyValue_NULL; \
+        ir_unpack_owned |= ir_owns; \
+    } while (0)
+
+/* The elements of an unpack that a function wrote into WINDOW in stack
+ * order (element i in WINDOW[N - 1 - i]) go to the locals LOCALS[0..N-1].
+ * Each local's old value changes places with the element's slot if it owns
+ * an object, and the slot is left empty otherwise.  The frame owns every
+ * value throughout.  The result says whether the window holds an owner to
+ * close. */
+static inline bool
 _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n)
 {
+    bool owned = false;
     for (int i = 0; i < n; i++) {
         PyValue *element = &window[n - 1 - i];
         PyValue old = locals[i];
         locals[i] = *element;
         _PyValue_CheckHome(locals[i]);
-        *element = old;
+        bool owns = PyValue_RefcountOnObject(old);
+        *element = owns ? old : PyValue_NULL;
+        owned |= owns;
     }
+    return owned;
 }
 #define IR_UNPACK_TO_LOCALS(L, W, N) _PyIR_UnpackToLocals((L), (W), (N))
 
-/* Close the N owners in WINDOW, detaching each before it closes it. */
+/* Close the N owners in WINDOW, which are the old values of the locals that
+ * received the elements, detaching each before it closes it.  The first
+ * local's old value goes first, as the STORE_FASTs that the unpack replaces
+ * would close it. */
 static inline void
 _PyIR_CloseWindow(PyValue *window, int n)
 {
-    for (int i = 0; i < n; i++) {
+    for (int i = n; i-- > 0;) {
         PyValue owner = window[i];
         window[i] = PyValue_NULL;
         PyValue_XCLOSE(owner);
@@ -730,30 +835,33 @@ coro_awaitable_can_transfer(PyValueBorrow value)
 /* The feedback entry at index F. */
 #define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_feedback, (F)))
 
-/* Every executable row was nominated by the checked managed-shape lookup.
- * No pointer from the bank escapes this callback-free selection. */
+/* Every executable row was nominated by the checked managed-shape lookup
+ * (fb_shape_read_set()): its handler is LOAD_ATTR_SHAPE, its type version is
+ * not zero and its aux is a shape.  A row that is not in use has version zero
+ * and never matches the type's nonzero version.  ENTRIES is the frame's
+ * ir_feedback, whose block header precedes it.  No pointer from the bank
+ * escapes this callback-free selection. */
 static inline int64_t
-shape_read_offset(_PyFbBlock *block, _PyFbAttr *entry, PyObject *owner)
+shape_read_offset(char *entries, _PyFbAttr *entry, PyObject *owner)
 {
 #ifdef Py_SHAPES
-    assert(entry->h.poly != 0 && entry->h.poly <= block->npoly);
-    const _PyFbPoly *poly = &block->poly[entry->h.poly - 1];
+    _PyFbBlock *block = (_PyFbBlock *)entries - 1;
+    const _PyFbPoly *poly = _PyFb_PolyOf(block, &entry->h);
     uint32_t version = Py_TYPE(owner)->tp_version_tag;
     if (version == 0) {
         return -1;
     }
     for (int i = 0; i < FB_POLY_SIZE; i++) {
         if (poly->type_version[i] == version) {
-            if (poly->payload[i].read_kind != _Py_FB_READ_SHAPE ||
-                _PyObject_Shape(owner) != poly->aux[i])
-            {
+            assert(poly->payload[i].read_kind == _Py_FB_READ_SHAPE);
+            if (_PyObject_Shape(owner) != poly->aux[i]) {
                 return -1;
             }
             return poly->index[i];
         }
     }
 #else
-    (void)block;
+    (void)entries;
     (void)entry;
     (void)owner;
 #endif
@@ -766,7 +874,7 @@ shape_read_dup(PyObject *owner, uint32_t offset)
     PyValueBorrow found = PyValue_Borrow(*(PyValue *)((char *)owner + offset));
     /* The current type and shape guards prove that this slot is filled. */
     assert(!PyValue_IsNull(found));
-    return PyValue_XDUP(found);
+    return PyValue_DUP(found);
 }
 
 /* The oparg that the generic handler of COMPARE_OP or CONTAINS_OP, with

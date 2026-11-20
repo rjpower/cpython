@@ -1476,7 +1476,7 @@ is_unusable_slot(Py_ssize_t ix)
 /* Internal function to find slot for an item from its hash
    when it is known that the key is not present in the dict.
  */
-static Py_ssize_t
+static inline Py_ALWAYS_INLINE Py_ssize_t
 find_empty_slot(PyDictKeysObject *keys, Py_hash_t hash)
 {
     assert(keys != NULL);
@@ -1498,19 +1498,20 @@ insertion_resize(PyDictObject *mp, int unicode)
     return dictresize(mp, calculate_log2_keysize(GROWTH_RATE(mp)), unicode);
 }
 
-static inline int
-insert_combined_dict(PyDictObject *mp, Py_hash_t hash,
+static inline Py_ALWAYS_INLINE int
+insert_combined_dict(PyDictObject *mp, Py_hash_t hash, Py_ssize_t hashpos,
                      PyValue key, PyValue value)
 {
-    /* Caller has revalidated absence and capacity without a subsequent call.
-     * This pure commit consumes key and value only on success. */
+    /* Caller has revalidated absence and capacity without a subsequent call,
+     * and hashpos is the first free index slot of the key's probe sequence
+     * (find_empty_slot()). This pure commit consumes key and value only on
+     * success. */
     assert(mp->ma_values == NULL);
     assert(mp->ma_keys->dk_usable > 0);
     assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
     _PyValue_CheckHome(key);
     _PyValue_CheckHome(value);
     FT_ATOMIC_STORE_UINT32_RELAXED(mp->ma_keys->dk_version, 0);
-    Py_ssize_t hashpos = find_empty_slot(mp->ma_keys, hash);
     Py_ssize_t ix = mp->ma_keys->dk_nentries;
     if (DK_IS_UNICODE(mp->ma_keys)) {
         assert(value_is_exact_unicode(key));
@@ -1611,6 +1612,76 @@ replace_value(PyDictObject *mp, PyValueBorrow key, Py_ssize_t ix,
     PyValue_XCLOSE(owner);
 }
 
+/* One-pass insert of an exact str key into an unwatched combined table of
+   str keys: one probe finds either the entry to replace or the slot to fill.
+   Returns 1 if it stored the pair, consuming key and value; -1 on a memory
+   error while growing the table, consuming them too; and 0 with nothing
+   consumed when the general insertdict() must run: a split table, a watched
+   dict or a generic table. A table that is full, or the empty keys of a new
+   dict, grows first. Growth moves the entries and runs no Python code, so the
+   probe's miss stays valid and only the free slot is found again.
+
+   Nothing runs Python code between the probe and the store. Comparing two
+   exact str keys is a pointer test, a hash test and unicode_eq(), and a
+   watcher would be the only callback (none is set). So the probe cannot be
+   invalidated mid-way, which is what the retry loop of insertdict() guards
+   against. Only the release of a replaced value can run Python, and it comes
+   after the replacement is published, as in replace_value(). The slot to fill
+   is the first one in the probe sequence that is not in use, as
+   find_empty_slot() gives. */
+static inline Py_ALWAYS_INLINE int
+insertdict_unicode_key(PyDictObject *mp, PyValue key, Py_hash_t hash,
+                       PyValue value)
+{
+    PyDictKeysObject *keys = mp->ma_keys;
+    if (!value_is_exact_unicode(key) || mp->ma_values != NULL
+        || !DK_IS_UNICODE(keys)
+        || (mp->_ma_watcher_tag & DICT_WATCHER_MASK))
+    {
+        return 0;
+    }
+    PyObject *key_object = PyValue_AsKnownObjectBorrow(key);
+    PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
+    const size_t mask = DK_MASK(keys);
+    size_t i = (size_t)hash & mask;
+    Py_ssize_t free_slot = -1;
+    for (size_t perturb = hash;;) {
+        Py_ssize_t ix = dictkeys_get_index(keys, i);
+        if (ix >= 0) {
+            PyObject *ep_key = entries[ix].me_key;
+            if (ep_key == key_object
+                || (unicode_get_hash(ep_key) == hash
+                    && unicode_eq(ep_key, key_object)))
+            {
+                replace_value(mp, PyValue_Borrow(key), ix,
+                              PyValue_Borrow(entries[ix].me_value), value);
+                PyValue_CLOSE(key);
+                return 1;
+            }
+        }
+        else {
+            if (free_slot < 0) {
+                free_slot = (Py_ssize_t)i;
+            }
+            if (ix == DKIX_EMPTY) {
+                break;
+            }
+        }
+        perturb >>= PERTURB_SHIFT;
+        i = mask & (i*5 + perturb + 1);
+    }
+    if (keys->dk_usable <= 0) {
+        if (insertion_resize(mp, 1) < 0) {
+            PyValue_CLOSE(key);
+            PyValue_CLOSE(value);
+            return -1;
+        }
+        free_slot = find_empty_slot(mp->ma_keys, hash);
+    }
+    insert_combined_dict(mp, hash, free_slot, key, value);
+    return 1;
+}
+
 /*
 Internal routine to insert a new item into the table.
 Used both by the internal resize routine and by the public insert routine.
@@ -1622,6 +1693,10 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
 {
     assert(can_modify_dict(mp));
     assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
+    int fast = insertdict_unicode_key(mp, key, hash, value);
+    if (fast != 0) {
+        return fast < 0 ? -1 : 0;
+    }
     int notified = 0, classified = 0;
     PyDict_WatchEvent event = PyDict_EVENT_ADDED;
     int status = -1;
@@ -1697,7 +1772,8 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
             STORE_USED(mp, mp->ma_used + 1);
         }
         else {
-            insert_combined_dict(mp, hash, key, value);
+            insert_combined_dict(mp, hash, find_empty_slot(mp->ma_keys, hash),
+                                 key, value);
             key = value = PyValue_NULL;
         }
         status = 0;
@@ -2356,7 +2432,10 @@ setitem_take2_lock_held(PyDictObject *mp, PyValue key, PyValue value)
 {
     assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
     assert(PyAnyDict_Check(mp));
-    Py_hash_t hash = _PyValue_Hash(key);
+    /* An exact str has its hash cached or computed by its own type. */
+    Py_hash_t hash = value_is_exact_unicode(key)
+        ? hash_unicode_key(PyValue_AsKnownObjectBorrow(key))
+        : _PyValue_Hash(key);
     if (hash == -1) {
         if (PyValue_IsObject(key)) {
             dict_unhashable_type((PyObject *)mp, PyValue_AsKnownObjectBorrow(key));
@@ -2927,8 +3006,10 @@ PyDict_Clear(PyObject *op)
 
 /* Find the entry at or after *ppos without changing ownership: on success
  * store the dict's own key, value and hash, advance *ppos past the entry and
- * return 1; return 0 at the end. */
-static int
+ * return 1; return 0 at the end. The key of a split or unicode table is an
+ * exact str, which has no inline form, so it is borrowed without the number
+ * test of PyValue_FromObjectBorrow(). */
+static inline Py_ALWAYS_INLINE int
 dict_next_stored(PyDictObject *mp, Py_ssize_t *ppos, PyValueBorrow *pkey,
                  PyValueBorrow *pvalue, Py_hash_t *phash)
 {
@@ -2944,7 +3025,7 @@ dict_next_stored(PyDictObject *mp, Py_ssize_t *ppos, PyValueBorrow *pkey,
         value = PyValue_Borrow(mp->ma_values->values[index]);
         PyObject *key_object = LOAD_SHARED_KEY(
             DK_UNICODE_ENTRIES(mp->ma_keys)[index].me_key);
-        key = PyValue_FromObjectBorrow(key_object);
+        key = _PyValue_PointerBorrow(key_object);
         hash = unicode_get_hash(key_object);
     }
     else {
@@ -2960,7 +3041,7 @@ dict_next_stored(PyDictObject *mp, Py_ssize_t *ppos, PyValueBorrow *pkey,
             if (i >= n) {
                 return 0;
             }
-            key = PyValue_FromObjectBorrow(entries[i].me_key);
+            key = _PyValue_PointerBorrow(entries[i].me_key);
             value = PyValue_Borrow(entries[i].me_value);
             hash = unicode_get_hash(entries[i].me_key);
         }
@@ -3851,26 +3932,26 @@ dict_snapshot_values(PyObject *dict, int kind)
             continue;
         }
         Py_ssize_t pos = 0, index = 0;
-        PyValue key, value;
-        int found;
-        while ((found = _PyDict_NextValue((PyDictObject *)dict, &pos,
-                            kind != 1 ? &key : NULL,
-                            kind != 0 ? &value : NULL, NULL)) > 0)
+        PyValueBorrow key, value;
+        /* Borrowed iteration: the body only retains each word into the list
+           or pair made above, which allocates nothing and runs no Python, so
+           the dict cannot change under the borrow. */
+        while (_PyDict_NextBorrowed(dict, &pos,
+                                    kind != 1 ? &key : NULL,
+                                    kind != 0 ? &value : NULL))
         {
             assert(index < count);
             if (kind == 2) {
                 PyValueBorrow pair_value = PyList_GET_VALUE(result, index);
                 PyObject *pair = PyValue_AsKnownObjectBorrow(pair_value);
-                PyTuple_SET_VALUE(pair, 0, key);
-                PyTuple_SET_VALUE(pair, 1, value);
+                PyTuple_SET_VALUE(pair, 0, PyValue_DUP(key));
+                PyTuple_SET_VALUE(pair, 1, PyValue_DUP(value));
             }
             else {
-                PyList_SET_VALUE(result, index, kind == 0 ? key : value);
+                PyList_SET_VALUE(result, index,
+                                 PyValue_DUP(kind == 0 ? key : value));
             }
             index++;
-        }
-        if (found < 0) {
-            goto error;
         }
         assert(index == count);
         return result;
@@ -4691,7 +4772,8 @@ static int
             STORE_USED(mp, mp->ma_used + 1);
         }
         else {
-            insert_combined_dict(mp, hash, PyValue_DUP(key), PyValue_DUP(value));
+            insert_combined_dict(mp, hash, find_empty_slot(mp->ma_keys, hash),
+                                 PyValue_DUP(key), PyValue_DUP(value));
         }
         status = 0;
         break;
@@ -5632,12 +5714,11 @@ static PyMethodDef dictiter_methods[] = {
 
 
 static bool acquire_iter_result(PyObject *result);
-static int dictiter_iternextitem_lock_held(PyDictObject *, PyObject *,
-                                          PyValue *, PyValue *);
 
 /* Advance di over d: return 1 with the next entry, 0 at the end (where di
- * releases d) or -1 with an exception set. */
-static int
+ * releases d) or -1 with an exception set. Each iterator type's slot inlines
+ * it with its direction and the entry parts it takes constant. */
+static inline Py_ALWAYS_INLINE int
 dictiter_capture(PyDictObject *d, dictiterobject *di, int reverse,
                   PyValue *out_key, PyValue *out_value)
 {
@@ -5750,7 +5831,7 @@ dictiter_pair(dictiterobject *di, PyValue key, PyValue value)
  * run under the dict's critical section, as their object slot did. */
 enum { DICTITER_KEYS, DICTITER_VALUES, DICTITER_ITEMS };
 
-static _PyStatusValue
+static inline Py_ALWAYS_INLINE _PyStatusValue
 dictiter_next_value_impl(PyObject *self, dictiterobject *di, PyDictObject *d,
                          int kind, int reverse)
 {
@@ -5758,15 +5839,9 @@ dictiter_next_value_impl(PyObject *self, dictiterobject *di, PyDictObject *d,
     int values = kind == DICTITER_VALUES;
     int items = kind == DICTITER_ITEMS;
     PyValue key = PyValue_NULL, value = PyValue_NULL;
-    int found;
-    if (items && !reverse) {
-        found = dictiter_iternextitem_lock_held(d, self, &key, &value);
-    }
-    else {
-        found = dictiter_capture(d, di, reverse,
-                                keys || items ? &key : NULL,
-                                values || items ? &value : NULL);
-    }
+    int found = dictiter_capture(d, di, reverse,
+                                 keys || items ? &key : NULL,
+                                 values || items ? &value : NULL);
     if (found < 0) {
         return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
@@ -5787,7 +5862,7 @@ dictiter_next_value_impl(PyObject *self, dictiterobject *di, PyDictObject *d,
 
 /* Each iterator type has its own slot, so its kind is a constant, as in
    upstream's one function per kind. */
-static inline _PyStatusValue
+static inline Py_ALWAYS_INLINE _PyStatusValue
 dictiter_next_value(PyObject *self, int kind, int reverse)
 {
     dictiterobject *di = (dictiterobject *)self;
@@ -5894,14 +5969,6 @@ PyTypeObject PyDictIterValue_Type = {
         .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_val_value),
     },
 };
-
-static int
-dictiter_iternextitem_lock_held(PyDictObject *d, PyObject *self,
-                                PyValue *out_key, PyValue *out_value)
-{
-    return dictiter_capture(d, (dictiterobject *)self, 0, out_key, out_value);
-}
-
 
 static bool
 acquire_iter_result(PyObject *result)

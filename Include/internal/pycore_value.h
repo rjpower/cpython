@@ -696,6 +696,18 @@ PyValue_AsKnownObjectBorrow(PyValueBorrow ref)
 }
 #define PyValue_AsKnownObjectBorrow(V0) (PyValue_AsKnownObjectBorrow)(PyValue_Borrow(V0))
 
+/* PyValue_AsKnownObjectBorrow() of a ref that a guard has shown to be in
+   pointer space, which the cases generator knows (Local.known_object): no
+   test, since a guard that reads the slot does not let the compiler fold the
+   test of the loaded value into it. */
+static inline PyObject *
+_PyValue_AsKnownObjectBorrowPointer(PyValueBorrow ref)
+{
+    assert(PyValue_IsPointerSpace(ref));
+    return BITS_TO_PTR_MASKED(ref);
+}
+#define _PyValue_AsKnownObjectBorrowPointer(V0) (_PyValue_AsKnownObjectBorrowPointer)(PyValue_Borrow(V0))
+
 /* The object that v holds, borrowed, or NULL for PyValue_NULL, an inline
    value or an index: one range compare. GCC already folds the test of
    PyValue_AsKnownObjectBorrow() after PyValue_IsObject(), so replacing that
@@ -834,6 +846,20 @@ PyValue_FromObjectSteal(PyObject *obj)
         return _PyValue_FromNumberSteal(obj);
     }
     return _PyValue_PointerSteal(obj);
+}
+
+/* Consume obj and return its canonical value, which owns what obj owned.
+   An exact int or float whose value is held inline is returned inline and
+   its box is released at once; that release runs no Python and leaves the
+   current exception unchanged ("Release contract" above). NULL gives
+   PyValue_NULL. */
+static inline PyValue
+PyValue_PrepareOwned(PyObject *obj)
+{
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(obj);
 }
 
 static inline PyValue

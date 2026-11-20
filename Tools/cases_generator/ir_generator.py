@@ -780,6 +780,7 @@ INPLACE_READERS = {
     "_PyValue_SequenceTuple",
     # Attribute and subscript dispatchers (I4, I3)
     "_PyValue_GetAttr", "_PyValue_SetAttr", "_PyValue_GetMethod",
+    "_PyGetSet_ValueRead",
     "_PySuper_LookupValue", "value_import_level", "super_call",
     "_PyValue_GetItem", "_PyValue_SetItem", "_PyValue_DelItem",
     "_PyValue_Size", "_PyValue_GetOptionalItem", "_PyValue_Send",
@@ -2377,6 +2378,12 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     return STORE_NEVER
 
 
+def unpacks_elements_directly(inst: Instruction, fmt: "IRFormat") -> bool:
+    """Whether an unpack writes its elements one at a time to the output
+    window (IR_WRITE_OUTPUT), so that each can go straight to its local."""
+    return fmt.unpacks and "IR_WRITE_OUTPUT" in uop_tokens(inst)
+
+
 def uop_tokens(inst: Instruction) -> list[str]:
     return [t.text for part in inst.parts if isinstance(part, Uop)
             for t in part.body.tokens()]
@@ -2507,6 +2514,10 @@ class SlotLayout:
     native_entry: bool = False  # checked native interpreter-exit homes
     call_kind: str | None = None
     call_results: frozenset[str] = frozenset()  # names of a call's outputs
+    # Window: the slot, above the inputs', whose result goes to a dst that
+    # may name a local, and the dst's macro arguments
+    move_dst: int | None = None
+    move_dst_args: str = ""
 
     @staticmethod
     def empty() -> "SlotLayout":
@@ -2535,7 +2546,7 @@ ELEMENT_GUARDS = frozenset(("IR_GUARD_INLINE_INT", "IR_GUARD_ELEMENT_TYPE",
 ELEMENT_INTRINSICS = ELEMENT_GUARDS | {"IR_DUP_CANONICAL_ELEMENT"}
 ELEMENT_NATIVE_SYMBOLS = frozenset((
     "PyValue_IsInlineInt", "PyValue_InlineInt64", "PyValue_IsObject",
-    "PyValue_AsKnownObjectBorrow", "PyValue_XDUP", "PyList_CheckExact",
+    "PyValue_AsKnownObjectBorrow", "PyValue_XDUP", "PyValue_DUP", "PyList_CheckExact",
     "PyTuple_CheckExact", "PyList_GET_SIZE", "PyTuple_GET_SIZE",
     "PyList_GET_VALUE", "PyTuple_GET_VALUE",
 ))
@@ -2731,6 +2742,8 @@ class IRStack(Stack):
         # The IR_STORE_DST and IR_MOVE_TO_DST lines emitted for the handler,
         # which close ir_old after them.  Copies share the list.
         self.dst_stores: list[str] = []
+        # The result already went to dst (IR_MOVE_RESULT_TO_DST)
+        self.moved_dst = False
         # Must-NULL output facts follow the actual structured storage paths.
         # Distinct normal successors keep distinct facts until the final store.
         self.null_paths: dict[int, set[str]] = {0: set()}
@@ -3149,7 +3162,19 @@ class IRStack(Stack):
             if role is not None:
                 out.emit(f"if (call_state & {role}) {{\n")
             self.own_inplace(out, var)
-            out.emit(f"IR_SET_TEMP({self.window_slot(memory_offset)}, {var.name});\n")
+            slot = self.window_slot(memory_offset)
+            if (self.final and role is None and lay.move_dst is not None
+                    and slot == f"window[{lay.move_dst}]"):
+                # The result goes to the local that dst names, or to its
+                # slot, without the slot's store and reload; the slot is
+                # above the inputs, so it holds nothing to replace
+                expression = (f"IR_MOVE_RESULT_TO_DST({lay.move_dst_args}, "
+                              f"{slot}, {var.name})")
+                self.dst_stores.append(expression)
+                self.moved_dst = True
+                out.emit(f"{expression};\n")
+                return True
+            out.emit(f"IR_SET_TEMP({slot}, {var.name});\n")
             if role is not None:
                 out.emit("}\n")
             return True
@@ -3606,8 +3631,22 @@ class IREmitter(Emitter):
         local, index = self.checked_home_array(tkn, uop, storage)
         args, end = self.instruction_macro_args(tkn, tkn_iter)
         self.out.start_line()
-        self.out.emit_at(f"_PyFrame_WriteHome(frame, &{local.name}[{index}], "
-                         f"{tokens_text(args[2])})", tkn)
+        write = (f"_PyFrame_WriteHome(frame, &{local.name}[{index}], "
+                 f"{tokens_text(args[2])})")
+        if inst is not None and unpacks_elements_directly(inst, self.format_of(inst)):
+            # The element goes straight to its local; the local's old value
+            # takes the element's slot of the window, for the close after
+            # the last store (see unpack_to_locals())
+            fmt = self.format_of(inst)
+            dst = fmt.field_of(ROLE_DST)
+            write = (f"if ({is_local(dst)}) {{ "
+                     f"IR_UNPACK_DIRECT(&IR_SLOT({FIELD_VARS[dst]}), "
+                     f"&{local.name}[{index}], {index}, {UNPACKS[fmt.group]}, "
+                     f"{tokens_text(args[2])}); }} else {{ {write}; }}")
+            self.out.emit_at(write, tkn)
+            self.out.last_token = end
+            return True
+        self.out.emit_at(write, tkn)
         self.out.last_token = end
         return True
 
@@ -3712,7 +3751,7 @@ class IREmitter(Emitter):
             if field is not None:
                 self.spend_owner(field, tkn, storage)
                 self.ensure_consumed(field, storage)
-                value = f"IR_TAKEN({name}, {owner_name(field)})"
+                value = self.taken_view(name, field, storage)
                 storage.stack.taken(storage.stack.field_position(field))
             self.emit(f"PyValue {native} = {value};\n")
             self.value_kill(token, storage, False)
@@ -3862,11 +3901,11 @@ class IREmitter(Emitter):
                 self.statement.contents[0] is not tkn):
             raise analysis_error("shape guard requires unchanged typed attribute inputs", tkn)
         self.check_exit_inputs(tkn, storage)
-        pointer = f"PyValue_AsKnownObjectBorrow({name})"
+        pointer = f"_PyValue_AsKnownObjectBorrowPointer({name})"
         variant = self.execution_variant
         if variant is not None and variant.shape_cases:
             self.emit(f"(void){version}; (void){shape};\n")
-            self.emit(f"int64_t ir_selected_offset = shape_read_offset(_PyFrame_Exec(frame)->feedback, fb, {pointer});\n")
+            self.emit(f"int64_t ir_selected_offset = shape_read_offset(frame->ir_feedback, fb, {pointer});\n")
             self.emit("if (ir_selected_offset < 0) {\n")
             self.emit_jump_to_predicted(inst)
             self.emit("}\n")
@@ -3909,7 +3948,7 @@ class IREmitter(Emitter):
         storage.stack.shape_read_binding = None
         storage.stack.shape_read_complete = True
         self.shape_read_uses += 1
-        self.emit(f" shape_read_dup(PyValue_AsKnownObjectBorrow({name}), {offset})")
+        self.emit(f" shape_read_dup(_PyValue_AsKnownObjectBorrowPointer({name}), {offset})")
         return True
 
     def element_operation(self, tkn, tkn_iter, uop, storage, inst):
@@ -3964,9 +4003,17 @@ class IREmitter(Emitter):
                 self.emit_jump_to_predicted(inst)
                 self.emit("#endif\n")
             prefix = "PyList" if kind == "LIST" else "PyTuple"
-            miss(f"!PyValue_IsObject({value}) || !{prefix}_CheckExact(PyValue_AsKnownObjectBorrow({value}))")
+            # A slot that is read in place holds an object or an inline value,
+            # never NULL: a local that may be unbound is checked before it is
+            # read as an operand.  The test reads the slot's top bits.
+            var = find_local(value, storage)
+            if var.ir_inplace is not None:
+                pointer_test = f"PyValue_IsPointerSpaceAt(&IR_SLOT({FIELD_VARS[var.ir_inplace]}))"
+            else:
+                pointer_test = f"PyValue_IsObject({value})"
+            miss(f"!{pointer_test} || !{prefix}_CheckExact(_PyValue_AsKnownObjectBorrowPointer({value}))")
             stack.element_guards[("TYPE", owner)] = kind
-            find_local(value, storage).known_object = True
+            var.known_object = True
         elif tkn.text == "IR_GUARD_ELEMENT_INDEX":
             container, subscript, index, mode = names
             kind = stack.element_guards.get(("TYPE", owner))
@@ -3979,7 +4026,7 @@ class IREmitter(Emitter):
                     index in {var.name for var in self.current_value_locals(storage)}):
                 raise analysis_error("checked element index shadows a live identity", tkn)
             prefix = "PyList" if kind == "LIST" else "PyTuple"
-            size = f"{prefix}_GET_SIZE(PyValue_AsKnownObjectBorrow({container}))"
+            size = f"{prefix}_GET_SIZE(_PyValue_AsKnownObjectBorrowPointer({container}))"
             self.emit(f"Py_ssize_t {index} = PyValue_InlineInt64({subscript});\n")
             if kind == "LIST":
                 self.emit(f"if ({index} < 0) {{ {index} += {size}; }}\n")
@@ -3996,7 +4043,7 @@ class IREmitter(Emitter):
                     capability[3] != id(self.native_scopes[-1])):
                 raise analysis_error("element read lacks its current lexical bounds/anchor", tkn)
             prefix = "PyList" if kind == "LIST" else "PyTuple"
-            self.emit(f"PyValue_XDUP({prefix}_GET_VALUE(PyValue_AsKnownObjectBorrow({container}), {index}))")
+            self.emit(f"PyValue_DUP({prefix}_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer({container}), {index}))")
             self.element_result = HELPERS[tkn.text]
         return True
 
@@ -4124,8 +4171,13 @@ class IREmitter(Emitter):
             raise analysis_error("unsupported local unpack transport", inst.where)
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit(f"if ({is_local(fmt.field_of(ROLE_DST))}) {{\n")
-        self.emit(f"IR_UNPACK_TO_LOCALS(&IR_SLOT({dst}), window, {count});\n")
-        self.emit(f"IR_CLOSE_WINDOW(window, {count});\n")
+        if unpacks_elements_directly(inst, fmt):
+            # The elements are in their locals, and the window holds the
+            # old values that own an object, if any
+            self.emit(f"if (ir_unpack_owned) {{ IR_CLOSE_WINDOW(window, {count}); }}\n")
+        else:
+            self.emit(f"if (IR_UNPACK_TO_LOCALS(&IR_SLOT({dst}), window, {count})) "
+                      f"{{ IR_CLOSE_WINDOW(window, {count}); }}\n")
         self.unpack_local_drained = True
         self.emit("}\n")
 
@@ -4366,6 +4418,19 @@ class IREmitter(Emitter):
         var = find_local(name.text, storage)
         return (var is not None and var.known_object) or name.text == self.killed_pointer
 
+    def taken_view(self, name: str, field: str, storage: Storage) -> str:
+        """The IR_TAKEN of the view name of the input in field, with a count
+        of its own for a local.  A required input is not NULL, and a view that
+        a guard has shown to be in pointer space needs fewer tests still."""
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        macro = "IR_TAKEN"
+        if stack.read_fields.get(FIELDS.index(field)) is False:
+            var = find_local(name, storage)
+            pointer = (var is not None and var.known_object) or name == self.killed_pointer
+            macro = "IR_TAKEN_POINTER" if pointer else "IR_TAKEN_REQUIRED"
+        return f"{macro}({name}, {owner_name(field)})"
+
     def value_pointer_variant(self, tkn, tkn_iter, uop, storage, inst):
         lparen = next(tkn_iter)
         assert lparen.kind == "LPAREN"
@@ -4425,7 +4490,7 @@ class IREmitter(Emitter):
             # The object, with a count of its own for a local
             self.spend_owner(field, tkn, storage)
             self.ensure_consumed(field, storage)
-            owned = f"IR_TAKEN({name.text}, {owner_name(field)})"
+            owned = self.taken_view(name.text, field, storage)
             storage.stack.taken(storage.stack.field_position(field))
         steal = (POINTER_VARIANTS[tkn.text] if self.is_pointer(name, storage)
                  else tkn.text)
@@ -4461,7 +4526,7 @@ class IREmitter(Emitter):
             text = name.text
         elif tkn.text == "TAKE":
             self.ensure_consumed(field, storage)
-            text = f"IR_TAKEN({name.text}, {owner_name(field)})"
+            text = self.taken_view(name.text, field, storage)
             storage.stack.taken(storage.stack.field_position(field))
         else:
             self.ensure_consumed(field, storage)
@@ -5402,6 +5467,11 @@ class IREmitter(Emitter):
                 self.emit(f"UPDATE_MISS_STATS({inst.family.name});\n")
                 self.emit(f"JUMP_TO_PREDICTED({generator_word_entry(head, self.analysis)});\n")
                 return
+            if inst.name in self.analysis.ir_only:
+                # No opcode of its own: nothing to look up in _PyOpcode_Deopt
+                self.emit(f"UPDATE_MISS_STATS({inst.family.name});\n")
+                self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{inst.family.name});\n")
+                return
             super().emit_jump_to_predicted(inst)
             return
         raise analysis_error(f"{inst.name} deoptimises but has no family",
@@ -5452,11 +5522,7 @@ class IREmitter(Emitter):
         if self.generator_boundary is not None and kind in {"_PY_IR_SEND", "_PY_IR_SEND_THROW"}:
             self.emit(f"PyValue ir_completed = {value};\n")
             self.emit("assert(_PyValue_IsHome(ir_completed));\n")
-            self.emit("_PyIRGenStep *ir_completed_target = generator_outcome_target("
-                      "frame, this_instr, generator_completed_targets);\n")
-            self.emit("assert(ir_completed_target != NULL);\n")
-            self.emit("IR_GEN_JUMP_TO(ir_completed_target, "
-                      "frame, this_instr, ir_completed);\n")
+            self.emit("IR_GEN_COMPLETE(ir_completed);\n")
             self.emit("}\n")
             self.abrupt_operand_sources.add(id(tkn))
             self.error_terminal_sources.add(id(tkn))
@@ -5496,8 +5562,7 @@ class IREmitter(Emitter):
         value, dying = self.macro_args(tkn, tkn_iter, 2)
         if inst is None or not canonical_frame_transfer_input(inst):
             raise analysis_error("generator return needs canonical source transfer", tkn)
-        self.emit(f"IR_GEN_JUMP(GEN_RETURN_ROUTE, {dying}, "
-                  f"frame->instr_ptr, {value});\n")
+        self.emit(f"IR_GEN_RETURN({value}, {dying});\n")
         return False
 
     def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
@@ -5560,26 +5625,18 @@ class IREmitter(Emitter):
                       "frame->instr_ptr, ir_resume_input);\n")
             self.emit("}\n")
             self.emit("--tstate->py_recursion_remaining;\n")
-            self.emit("_PyInstr *ir_resume_site = frame->instr_ptr;\n")
-            self.emit("if (ir_resume_site > frame->ir_words) {\n")
-            self.emit("_PyIRGenStep *ir_resume_target = "
-                      "generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];\n")
-            self.emit("if (ir_resume_target != NULL) {\n")
-            self.emit("IR_GEN_JUMP_TO(ir_resume_target, frame, "
-                      "ir_resume_site, ir_resume_input);\n")
-            self.emit("}\n")
-            self.emit("}\n")
+            self.emit("IR_GEN_RESUME(ir_resume_input);\n")
         else:
             self.emit("if (_Py_EnterRecursivePy(tstate)) {\n")
             self.emit("PyValue_XCLOSE(ir_resume_input);\n")
             self.emit("PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);\n")
             self.emit("}\n")
-        self.emit("_PyFrame_SetReturnValue(frame, ir_resume_input);\n")
-        self.emit("LOAD_IP(0);\n")
-        self.emit("IR_SKIP_RESUME();\n")
-        self.emit("DTRACE_FUNCTION_ENTRY();\n")
-        self.emit("LLTRACE_RESUME_FRAME();\n")
-        self.emit("DISPATCH();\n")
+            self.emit("_PyFrame_SetReturnValue(frame, ir_resume_input);\n")
+            self.emit("LOAD_IP(0);\n")
+            self.emit("IR_SKIP_RESUME();\n")
+            self.emit("DTRACE_FUNCTION_ENTRY();\n")
+            self.emit("LLTRACE_RESUME_FRAME();\n")
+            self.emit("DISPATCH();\n")
         self.emit("}\n")
         # The entered heap frame cannot overlap the parent's values. Its
         # failed entry/return retires the child before error re-enters parent.
@@ -5621,7 +5678,11 @@ class IREmitter(Emitter):
             # value, which is cheaper (see _PyValue_TopBitsAt())
             ref = var.name
             at = ""
-            if var.memory_offset is not None and var.ir_inplace is None:
+            if var.ir_inplace is not None:
+                # A view of an input in place: the slot still holds its value
+                ref = f"&IR_SLOT({FIELD_VARS[var.ir_inplace]})"
+                at = "At"
+            elif var.memory_offset is not None:
                 ref = f"&{storage.stack.address(var.memory_offset)}"
                 at = "At"
             if guard:
@@ -5723,8 +5784,14 @@ def slot_layout(inst: Instruction, fmt: IRFormat, mode: str | None) -> SlotLayou
                      for k in range(fmt.n_inputs)}
         borrowable = frozenset(k - fmt.n_inputs for k in range(fmt.n_inputs)
                                if fmt.borrow_mask & (1 << k))
-        return SlotLayout(True, get_stack_effect(inst).base_offset, in_fields,
-                          borrowable)
+        base = get_stack_effect(inst).base_offset
+        # The inputs are window[0:n] when their number is constant
+        move = (mode == STORE_RESULT and fmt.operands == "_PyIR_OPERANDS_NONE"
+                and not base.positive and not base.negative
+                and fmt.dst_offset >= -base.numeric)
+        return SlotLayout(True, base, in_fields, borrowable,
+                          move_dst=fmt.dst_offset if move else None,
+                          move_dst_args=FIELD_ARGS[fmt.field_of(ROLE_DST)] if move else "")
     in_fields = {k - fmt.n_inputs: fmt.input_field(k)
                  for k in range(fmt.n_inputs) if k not in fmt.metadata_inputs}
     borrowable = frozenset(k - fmt.n_inputs for k in range(fmt.n_inputs)
@@ -6366,6 +6433,8 @@ def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> int | N
     stack.final = True
     stack.flush(out)
     if mode == STORE_RESULT and fmt.window and fmt.operands == "_PyIR_OPERANDS_NONE":
+        if stack.moved_dst:
+            return fmt.dst_offset
         dst = FIELD_ARGS[fmt.field_of(ROLE_DST)]
         expression = f"IR_MOVE_TO_DST({dst}, window[{fmt.dst_offset}])"
         stack.dst_stores.append(expression)
@@ -6690,6 +6759,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         # after its last store (IR_STORE_DST)
         out.emit("PyValue ir_old = PyValue_NULL;\n")
         out.emit("(void)ir_old;\n")
+    if unpacks_elements_directly(inst, fmt):
+        out.emit("bool ir_unpack_owned = false;\n")
     use_fb = fmt.fb != LOC_NONE and (
         uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
     emitter.call_has_feedback = use_fb
@@ -6835,7 +6906,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                     PointerOffset(fmt.dst_offset, (), ()))
         out.emit(f"assert(_PyValue_IsHome({result}));\n")
         out.emit("window[2] = PyValue_NULL;\n")
-        out.emit(f"IR_GEN_JUMP(GEN_SEND_YIELD, frame, this_instr, {result});\n")
+        out.emit(f"IR_GEN_YIELD({result});\n")
         stack.home_node = None
         emitter.native_window_out = True
         emitter.ownership_events.append(OwnershipEvent(
@@ -8546,7 +8617,8 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
                         outfile: TextIO) -> None:
     """The tables of the evaluator.  Python/ceval_generator.h includes this
     file at file scope with IR_GEN_TABLES defined, for the generator transfer
-    tables, which name the step that a word's handler transfers to.
+    tables, which give the kind of transfer that a word's handler makes (the
+    enums of that file).
     ir_evaluate() includes it at its start without, for the dispatch table,
     which is local to it and has the addresses of its labels."""
     ids = handler_ids(analysis)
@@ -8557,16 +8629,16 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     boundaries = generator_boundaries(analysis)
     out.emit("#ifdef IR_GEN_TABLES\n")
     for column in ("Yielded", "Completed", "Resume"):
-        out.emit(f"static _PyIRGenStep *const generator_{column.lower()}_targets[{n}] = {{\n")
+        out.emit(f"static const uint8_t generator_{column.lower()}_targets[{n}] = {{\n")
         for name, boundary in sorted(boundaries.items()):
             if not generator_boundary_source_closed(boundary, analysis, formats):
                 continue
             target = None
             if column == "Yielded" and boundary.yielded == "DELEGATED":
-                target = "GEN_SEND_YIELD"
+                target = "1"
             elif column == "Completed" and boundary.completed != "NONE":
-                target = ("GEN_THROW_COMPLETE_" if boundary.base == "CLEANUP_THROW"
-                          else "GEN_COMPLETE_") + {
+                target = ("GEN_THROWING | GEN_COMPLETE_"
+                          if boundary.base == "CLEANUP_THROW" else "GEN_COMPLETE_") + {
                     "STORE_LOCAL": "STORE", "RETURN": "RETURN",
                     "DISCARD": "DISCARD", "HOME": "HOME",
                     "STORE_FAST": "STORE_FAST", "POP_TOP": "POP_TOP"}[boundary.completed]
@@ -8578,7 +8650,12 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
                     target = ("GEN_SEND_INPUT" if boundary.base == "SEND_GEN"
                               else "GEN_SEND_INPUT_HOME")
             if target is not None:
-                out.emit(f"[{ids[name]}] = ir_{target},\n")
+                out.emit(f"[{ids[name]}] = {target},\n")
+        if column == "Completed":
+            # A generator that ends a FOR loop completes it with one outcome
+            for name in ("FOR_ITER", "FOR_ITER_GEN"):
+                if name in ids:
+                    out.emit(f"[{ids[name]}] = GEN_COMPLETE_FOR_ITER,\n")
         out.emit("};\n")
     out.emit("#else\n")
     # Dispatch masks the word with IR_HANDLER_MASK, so the table covers every

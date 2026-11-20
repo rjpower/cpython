@@ -23,16 +23,20 @@ _PyFrame_CopyCreatedGenerator(_PyInterpreterFrame *src, _PyInterpreterFrame *des
 {
     PyCodeObject *code = _PyFrame_GetCode(src);
     _PyCodeExec *exec = _PyFrame_Exec(src);
-    if (exec->semantic_plan == NULL ||
-        !(exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY))
-    {
+    if (!exec->all_created_empty) {
         copy_created_generator_control(src, dest);
         return;
     }
     int nl = code->co_nlocalsplus;
     int nslots = _PyFrame_NumSlotsForCodeObject(code);
     src->instr_ptr++;
-    _PyFrame_CopyHeader(src, dest);
+    /* The header as one copy; the generator's frame owns its slots, has no
+     * caller and starts outside any stack walk. */
+    memcpy(dest, src, offsetof(_PyInterpreterFrame, owned_slots));
+    dest->base = dest->owned_slots;
+    dest->previous = NULL;
+    dest->external = 0;
+    dest->visited = 0;
     for (int i = 0; i < nl; i++) {
         dest->base[i] = src->base[i];
         src->base[i] = PyValue_NULL;

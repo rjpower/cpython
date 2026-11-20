@@ -1,6 +1,7 @@
 /* Execute compiled code */
 
 #include "ceval.h"
+#include "pycore_descrobject.h"   // _PyGetSet_ValueRead()
 #include "pycore_dict.h"          // PyDict_GetValue()
 #include "pycore_function.h"      // FUNC_VERSION_FIRST_VALID
 #include "pycore_list.h"          // PyList_AppendValue()
@@ -790,6 +791,10 @@ typedef struct {
  * operand's slot if the word has one that is NULL at run time. */
 #define IR_CALL_ARG(K) \
     IR_OPERAND((K) + ((call_state & CALL_SELF_PRESENT) ? 0 : IR_CALL_HAS_SELF(ir_word)))
+/* The first operand that a native handler passes to the callee: operand 0,
+ * or operand 1 when the word has a self operand that is NULL at run time. */
+#define IR_CALL_FIRST() \
+    ((call_state & CALL_SELF_PRESENT) ? 0 : IR_CALL_HAS_SELF(ir_word))
 /* The tuple of a CALL_KW's keyword names: its last operand is the index in
  * co_consts, which the code keeps alive. */
 #define IR_CALL_KWNAMES() \
@@ -1097,7 +1102,7 @@ _PyEval_GetIter(PyValue iterable, int yield_from)
 {
     _PyValuePair result = {PyValue_NULL, PyValue_NULL};
     PyTypeObject *tp = PyValue_TYPE(iterable);
-    if (tp->_tp_iteritem != NULL) {
+    if (_PyType_IteratesByIndex(tp)) {
         /* Leave iterable on stack and push tagged index 0 */
         result.first = iterable;
         result.second = PyValue_TagIndex(0);
@@ -1212,6 +1217,10 @@ value_load_global(PyObject *globals, PyObject *builtins, PyObject *name)
 static _PyStatusValue
 _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                PyValue iter, PyValue *index_ptr);
+static inline Py_ALWAYS_INLINE _PyStatusValue
+_PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
+                                     _PyInterpreterFrame *frame,
+                                     PyValue iter, PyValue *index_ptr);
 
 #if (defined(__GNUC__) && __GNUC__ >= 10 && !defined(__clang__)) && defined(__x86_64__)
 /*
@@ -1480,6 +1489,18 @@ call_publish(_PyInterpreterFrame *frame, const _PyIRWord *head, PyValue result)
     return displaced;
 }
 
+/* Copy N operands of the call at HEAD, from operand FIRST on, to ARGS.  They
+ * are all in the first operand word (FIRST + N is at most
+ * IR_OPERANDS_PER_WORD), which is read once. */
+#define CALL_NATIVE_GATHER(HEAD, SLOTS, FIRST, N, ARGS) \
+    do { \
+        uint64_t fields_ = (HEAD)[1] >> (16 + 12 * (FIRST)); \
+        for (int i_ = 0; i_ < (N); i_++) { \
+            (ARGS)[i_] = (SLOTS)[fields_ & IR_FIELD_MAX]; \
+            fields_ >>= 12; \
+        } \
+    } while (0)
+
 /* The native vectorcall of a call, on its operands as they stand in their
  * homes: they are borrowed for the call, as a temporary cannot change and a
  * local's old value survives a write through its frame's proxy.  The caller
@@ -1512,8 +1533,13 @@ call_vector_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (lead) {
         args[0] = receiver;
     }
-    for (int i = 0; i < operands - first; i++) {
-        args[lead + i] = slots[_PyIR_CallOperand(head, first + i)];
+    if (operands <= IR_OPERANDS_PER_WORD) {
+        CALL_NATIVE_GATHER(head, slots, first, operands - first, args + lead);
+    }
+    else {
+        for (int i = 0; i < operands - first; i++) {
+            args[lead + i] = slots[_PyIR_CallOperand(head, first + i)];
+        }
     }
     PyObject *names = NULL;
     size_t positional = (size_t)nargs;
@@ -1536,6 +1562,129 @@ call_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
             const _PyIRWord *head, PyValue callable)
 {
     return call_vector_impl(tstate, frame, head, callable, PyValue_NULL, 0);
+}
+
+/* The native call of a specialized handler: the callee reads operands first
+ * to the end of the call's operand list, copied to a C array that the callee
+ * borrows for the call.  The copy is made before the callee runs, so the
+ * callee sees the operands as they stood at entry (the old value of a local
+ * that the callee rebinds through its frame's proxy stays alive in
+ * f_overwritten_fast_locals, and a temporary cannot change).  The handler
+ * publishes the result and releases the temporaries, as after call_vector().
+ *
+ * A callee written against the value API (METH_VALUE) is called through its
+ * value entry; an object-API callee through the object vectorcall of the
+ * function or descriptor, which boxes the inline words, as the dispatcher of
+ * _PyValue_VectorcallTstate() does.  The handler's guard checked the call
+ * flags, so the bridge is one test of METH_VALUE.  The recursion limit is
+ * checked by the guard (_CHECK_RECURSION_LIMIT), which deopts to the generic
+ * path that raises.
+ *
+ * More than IR_OPERANDS_PER_WORD operands are gathered by call_vector(). */
+
+/* The result of a native handler's call: the handler deoptimizes when miss is
+ * set, a guard that needs the operands having failed.  The guards of a builtin
+ * function here are its fixed-arity value forms' (METH_VALUE | METH_O or
+ * METH_NOARGS) number of arguments. */
+typedef struct {
+    PyValue value;
+    int miss;
+} _PyNativeCallResult;
+
+#define CALL_NATIVE_MISS ((_PyNativeCallResult){PyValue_NULL, 1})
+#define CALL_NATIVE_DONE(V) ((_PyNativeCallResult){(V), 0})
+
+static inline Py_ALWAYS_INLINE _PyNativeCallResult
+call_builtin_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    const _PyIRWord *head, PyValue callable, int first)
+{
+    PyCFunctionObject *func =
+        (PyCFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
+    int flags = func->m_ml->ml_flags;
+    int n = (int)IR_C(*head) - first;
+    if (((flags & METH_O) && n != 1) || ((flags & METH_NOARGS) && n != 0)) {
+        return CALL_NATIVE_MISS;
+    }
+    if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
+        return CALL_NATIVE_DONE(call_vector(tstate, frame, head, callable));
+    }
+    PyValue args[IR_OPERANDS_PER_WORD];
+    CALL_NATIVE_GATHER(head, _PyFrame_Slots(frame), first, n, args);
+    if (flags & METH_VALUE) {
+        _PyCFunctionValue meth = (_PyCFunctionValue)(void(*)(void))
+                                 func->m_ml->ml_meth;
+        PyValue result = meth(_PyCFunction_GET_SELF_VALUE((PyObject *)func),
+                              args, n, NULL);
+        _PyValue_ASSERT_RESULT(tstate, result);
+        return CALL_NATIVE_DONE(result);
+    }
+    return CALL_NATIVE_DONE(_PyValue_CallAdapter(
+        tstate, (PyObject *)func, func->vectorcall, args, (size_t)n, NULL));
+}
+
+/* A builtin class that has a vectorcall (its guard checked): the class's value
+ * vectorcall, else its object vectorcall through the adapter. */
+static inline Py_ALWAYS_INLINE PyValue
+call_class_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                  const _PyIRWord *head, PyValue callable, int first)
+{
+    int n = (int)IR_C(*head) - first;
+    if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
+        return call_vector(tstate, frame, head, callable);
+    }
+    PyValue args[IR_OPERANDS_PER_WORD];
+    CALL_NATIVE_GATHER(head, _PyFrame_Slots(frame), first, n, args);
+    PyTypeObject *cls = (PyTypeObject *)PyValue_AsKnownObjectBorrow(callable);
+    _Py_vectorcallvaluefunc value_call;
+    memcpy(&value_call, &cls->tp_value_vectorcall, sizeof(value_call));
+    if (value_call != NULL) {
+        PyValue result = value_call(tstate, (PyObject *)cls, args, (size_t)n,
+                                    NULL);
+        _PyValue_ASSERT_RESULT(tstate, result);
+        return result;
+    }
+    return _PyValue_CallAdapter(tstate, (PyObject *)cls, cls->tp_vectorcall,
+                                args, (size_t)n, NULL);
+}
+
+/* A method descriptor: the receiver is operand first, which must be an exact
+ * instance of the descriptor's type, and the callee takes it with the
+ * arguments. */
+static inline Py_ALWAYS_INLINE _PyNativeCallResult
+call_descriptor_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       const _PyIRWord *head, PyValue callable, int first)
+{
+    PyMethodDescrObject *descr =
+        (PyMethodDescrObject *)PyValue_AsKnownObjectBorrow(callable);
+    int flags = descr->d_method->ml_flags;
+    int n = (int)IR_C(*head) - first;
+    if (n == 0 || ((flags & METH_O) && n != 2)
+        || ((flags & METH_NOARGS) && n != 1))
+    {
+        return CALL_NATIVE_MISS;
+    }
+    PyValue *slots = _PyFrame_Slots(frame);
+    if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
+        PyValue receiver = slots[_PyIR_CallOperand(head, first)];
+        if (PyValue_TYPE(receiver) != descr->d_common.d_type) {
+            return CALL_NATIVE_MISS;
+        }
+        return CALL_NATIVE_DONE(call_vector(tstate, frame, head, callable));
+    }
+    PyValue args[IR_OPERANDS_PER_WORD];
+    CALL_NATIVE_GATHER(head, slots, first, n, args);
+    if (PyValue_TYPE(args[0]) != descr->d_common.d_type) {
+        return CALL_NATIVE_MISS;
+    }
+    if (flags & METH_VALUE) {
+        _PyCFunctionValue meth = (_PyCFunctionValue)(void(*)(void))
+                                 descr->d_method->ml_meth;
+        PyValue result = meth(PyValue_Borrow(args[0]), args + 1, n - 1, NULL);
+        _PyValue_ASSERT_RESULT(tstate, result);
+        return CALL_NATIVE_DONE(result);
+    }
+    return CALL_NATIVE_DONE(_PyValue_CallAdapter(
+        tstate, (PyObject *)descr, descr->vectorcall, args, (size_t)n, NULL));
 }
 
 /* Move or count the first count (at most four) operands of fields, the twelve
@@ -1998,41 +2147,45 @@ generator_control_generation(_PyInterpreterFrame *frame)
     return frame->frame_obj == NULL ? 0 : frame->frame_obj->f_lineno_generation;
 }
 
-/* Ordinary outcomes need one dispatch-table-shaped lookup. A transparent
- * monitor keeps the same word fields but resolves its source only here, on
- * the actual observation path. */
-static inline _PyIRGenStep *
-generator_outcome_target(_PyInterpreterFrame *frame, _PyInstr *site,
-                         _PyIRGenStep *const *targets)
+/* The kind that a generator table gives a word's handler (the enums of
+ * Python/ceval_generator.h), or 0 for none.  Ordinary outcomes need one
+ * dispatch-table-shaped lookup.  A transparent monitor keeps the same word
+ * fields but resolves its source only here, on the actual observation path. */
+static Py_NO_INLINE uint8_t
+generator_transparent_site_kind(_PyInterpreterFrame *frame, _PyInstr *site,
+                                const uint8_t *table)
 {
-    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
-        return NULL;
-    }
-    int handler = IR_HANDLER(*site);
-    _PyIRGenStep *target = targets[handler];
-    if (target == NULL && (_PyIR_Formats[handler].flags & _PyIR_TRANSPARENT)) {
-        target = targets[_PyIR_RealHandler(frame, site)];
-    }
-    return target;
+    return table[_PyIR_RealHandler(frame, site)];
 }
 
-/* This guard contains no effect. A monitored or redirected transfer publishes
- * its homes before running the ordinary source's callback boundary. */
+static inline uint8_t
+generator_site_kind(_PyInterpreterFrame *frame, _PyInstr *site,
+                    const uint8_t *table)
+{
+    /* The word of an interpreter entry frame is the trampoline's, which no
+     * table names and no monitor wraps. */
+    int handler = IR_HANDLER(*site);
+    uint8_t kind = table[handler];
+    if (kind == 0 && (_PyIR_Formats[handler].flags & _PyIR_TRANSPARENT)) {
+        return generator_transparent_site_kind(frame, site, table);
+    }
+    return kind;
+}
+
+/* The two halves of the plain-transfer test, which contain no effect.  A
+ * monitored or redirected transfer publishes its homes before running the
+ * ordinary source's callback boundary.  The thread's half cannot change
+ * while a transfer runs no callback, so a transfer that is a chain of
+ * levels tests it once and each level tests the frame's half. */
 static inline bool
-generator_transfer_is_plain(PyThreadState *tstate, _PyInterpreterFrame *frame)
+generator_thread_is_plain(PyThreadState *tstate)
 {
 #ifdef Py_GIL_DISABLED
     return false;
 #else
-    if (frame->pending_redirect || IS_PEP523_HOOKED(tstate) ||
-        _PyFrame_GetCode(frame)->_co_monitoring != NULL) {
+    if (IS_PEP523_HOOKED(tstate)) {
         return false;
     }
-#ifdef Py_DEBUG
-    if (frame->lltrace >= 5) {
-        return false;
-    }
-#endif
 #ifdef WITH_DTRACE
     if (PyDTrace_FUNCTION_ENTRY_ENABLED() || PyDTrace_FUNCTION_RETURN_ENABLED()) {
         return false;
@@ -2040,6 +2193,26 @@ generator_transfer_is_plain(PyThreadState *tstate, _PyInterpreterFrame *frame)
 #endif
     return true;
 #endif
+}
+
+static inline bool
+generator_frame_is_plain(_PyInterpreterFrame *frame)
+{
+    if (frame->pending_redirect || _PyFrame_GetCode(frame)->_co_monitoring != NULL) {
+        return false;
+    }
+#ifdef Py_DEBUG
+    if (frame->lltrace >= 5) {
+        return false;
+    }
+#endif
+    return true;
+}
+
+static inline bool
+generator_transfer_is_plain(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    return generator_thread_is_plain(tstate) && generator_frame_is_plain(frame);
 }
 
 /* The caller holds value in C, which is an external reference to the cyclic
@@ -2277,6 +2450,11 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
     /* What PROCESS_ERROR_AT passes to process_error */
     _PyInstr *ir_error_origin;
     uint32_t ir_error_entry;
+    /* What the IR_GEN_* macros pass to the generator labels
+     * (Python/ceval_generator_labels.h) */
+    PyValue ir_gen_value;
+    _PyInterpreterFrame *ir_gen_dying;
+    _PyIRTransfer ir_gen_transfer;
 #ifdef Py_STATS
     int lastopcode = 0;
 #endif
@@ -2291,6 +2469,8 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
     goto *&&LABEL_start_frame;
 
 #include "generated_ir_cases.c.h"
+
+#include "ceval_generator_labels.h"
 
     /* The shared tail of PROCESS_ERROR_AT */
     LABEL_process_error:
@@ -4269,16 +4449,42 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
     }
     PyValue result = call_vector_impl(tstate, frame, head, callable, receiver,
                                       keywords);
-    /* The call can run Python: check the frame before monitoring reads it. */
-    int refreshed = call_refresh(tstate, frame, head);
-    int failed = PyValue_IsNull(result);
-    if (instrumented) {
-        failed = call_monitor_result(tstate, frame, head, callable, first,
-                                     failed || refreshed < 0);
-        /* The event can run Python too. */
-        if (!failed && refreshed == 0) {
-            refreshed = call_refresh(tstate, frame, head);
+    if (!instrumented) {
+        /* The callee may have run Python, but nothing that the rest of the
+         * call reads can have changed.  A native callee returns on the C
+         * stack above this activation, so this frame is the current one;
+         * the executing copy of the code, and so the head, is fixed for the
+         * life of the code object (register-ir.md 1.10), as value_operation_
+         * refresh() asserts; and the frame's slots stay where they are.  The
+         * temporaries are owned by their homes and a local that the callee
+         * rebound keeps its old value alive, so publishing reads nothing
+         * stale.  A finalizer that the release runs is in the same position.
+         * Only an event's callback, below, reads the frame after the call. */
+        assert(tstate->current_frame == frame);
+        assert(_PyFrame_GetCode(frame)->_co_exec != NULL &&
+               frame->ir_words == _PyFrame_GetCode(frame)->_co_exec->words);
+        if (PyValue_IsNull(result)) {
+            return (_PyCallResult){-1, NULL};
         }
+        /* The keyword names operand of CALL_KW is not a slot. */
+        PyValue displaced = keywords
+            ? call_publish_result(frame, head, result,
+                                  (int)IR_C(word) - keywords)
+            : call_publish(frame, head, result);
+        PyValue_XCLOSE(displaced);
+        if ((flags & CALL_PERIODIC) && check_periodics_at_end(tstate, frame) < 0) {
+            return (_PyCallResult){-1, NULL};
+        }
+        return (_PyCallResult){0, NULL};
+    }
+    /* An instrumented call: the callee can run Python, so check the frame
+     * before the event's callback reads it, and again after the callback,
+     * which can run Python too. */
+    int refreshed = call_refresh(tstate, frame, head);
+    int failed = call_monitor_result(tstate, frame, head, callable, first,
+                                     PyValue_IsNull(result) || refreshed < 0);
+    if (!failed && refreshed == 0) {
+        refreshed = call_refresh(tstate, frame, head);
     }
     if (failed || refreshed < 0) {
         PyValue_XCLOSE(result);
@@ -6483,10 +6689,12 @@ _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *na
     return PyValue_NULL;
 }
 
-/* Out of line, as when it was exported. */
-static Py_NO_INLINE _PyStatusValue
-_PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                               PyValue iter, PyValue *index_ptr)
+/* FOR_ITER's step: the item and 1, the completion value and 0, or the
+ * error and -1; a StopIteration is the completion. */
+static inline Py_ALWAYS_INLINE _PyStatusValue
+_PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
+                                     _PyInterpreterFrame *frame,
+                                     PyValue iter, PyValue *index_ptr)
 {
     _PyStatusValue result = {0, PyValue_NULL};
     PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
@@ -6505,26 +6713,40 @@ _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame
         result.status = 1;
         return result;
     }
-    _PyStatusValue step = _PyValue_IterStep(iter_o);
-    if (step.status == PYGEN_NEXT) {
-        result.value = step.value;
-        result.status = 1;
-        return result;
+    PyTypeObject *iter_type = Py_TYPE(iter_o);
+    _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(iter_type, iternext);
+    _PyStatusValue step;
+    if (next_value != NULL) {
+        _PyType_CHECK_VALUE_ROW(iter_type, _Py_VALUE_SLOT_INDEX_iternext);
+        step = next_value(iter_o);
+        assert(step.status != PYGEN_NEXT || !PyValue_IsNull(step.value));
+        assert(step.status != PYGEN_ERROR || PyValue_IsNull(step.value));
     }
-    if (step.status == PYGEN_RETURN) {
-        /* The semantic completion reports an implicit StopIteration once.
-         * Keep the returned owner without fabricating a separate RAISE. */
-        result.value = step.value;
-        return result;
+    else {
+        step = _PyValue_IterStep(iter_o);
+    }
+    /* An item, or the semantic completion, which reports an implicit
+     * StopIteration once and keeps the returned owner without fabricating
+     * a separate RAISE. Both are the caller's status and value as they are. */
+    if (step.status != PYGEN_ERROR) {
+        return step;
     }
     if (_PyErr_ExceptionMatches(tstate, PyExc_StopIteration)) {
         _PyEval_MonitorRaise(tstate, frame, frame->instr_ptr);
         _PyErr_Clear(tstate);
+        return result;
     }
-    else {
-        result.status = -1;
-    }
+    result.status = -1;
     return result;
+}
+
+/* Out of line, as when it was exported, for the steps that are not
+ * FOR_ITER's own. */
+static Py_NO_INLINE _PyStatusValue
+_PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                               PyValue iter, PyValue *index_ptr)
+{
+    return _PyForIter_VirtualIteratorNextInline(tstate, frame, iter, index_ptr);
 }
 
 /* Check if a 'cls' provides the given special method. */

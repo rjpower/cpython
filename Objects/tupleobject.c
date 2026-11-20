@@ -263,34 +263,12 @@ PyTuple_Pack(Py_ssize_t n, ...)
     return (PyObject *)result;
 }
 
-/* A new tuple of the n owners, which it consumes on every exit. */
-static PyObject *
-tuple_from_owners(PyValue *owners, Py_ssize_t n)
-{
-    assert(n > 0);
-    PyTupleObject *tuple = tuple_alloc(n);
-    if (tuple == NULL) {
-        for (Py_ssize_t i = 0; i < n; i++) {
-            PyValue_CLOSE(owners[i]);
-        }
-        return NULL;
-    }
-    bool track = false;
-    for (Py_ssize_t i = 0; i < n; i++) {
-        assert(PyValue_IsLanguageValue(owners[i]));
-        tuple->ob_item[i] = owners[i];
-        _PyValue_CheckHome(tuple->ob_item[i]);
-        track |= maybe_tracked(tuple->ob_item[i]);
-    }
-    if (track) {
-        _PyObject_GC_TRACK(tuple);
-    }
-    return (PyObject *)tuple;
-}
-
-/* The value form of PyTuple_Pack(n, ...). It retains every input before it
-   allocates the tuple, since that allocation can run code that releases a
-   borrow's owner. */
+/* The value form of PyTuple_Pack(n, ...): each borrowed input is retained
+   straight into its slot. The allocation runs no Python: it only schedules a
+   collection for the next eval-breaker poll, and allocator hooks and
+   reference tracers never run Python (the release contract in
+   pycore_value.h). So nothing can release the owner of a borrow between the
+   caller's read of it and its retention here. */
 PyObject *
 _PyTuple_PackValues(Py_ssize_t n, const PyValueBorrow *items)
 {
@@ -301,29 +279,42 @@ _PyTuple_PackValues(Py_ssize_t n, const PyValueBorrow *items)
         PyErr_BadInternalCall();
         return NULL;
     }
-    PyValue small[8];
-    PyValue *owners = small;
-    if (n > (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
-        owners = PyMem_New(PyValue, n);
-        if (owners == NULL) {
-            return PyErr_NoMemory();
-        }
+    PyTupleObject *tuple = tuple_alloc(n);
+    if (tuple == NULL) {
+        return NULL;
     }
+    bool track = false;
     for (Py_ssize_t i = 0; i < n; i++) {
-        owners[i] = PyValue_DUP(items[i]);
+        assert(PyValue_IsLanguageValue(items[i]));
+        tuple->ob_item[i] = PyValue_DUP(items[i]);
+        _PyValue_CheckHome(tuple->ob_item[i]);
+        track |= maybe_tracked(tuple->ob_item[i]);
     }
-    PyObject *tuple = tuple_from_owners(owners, n);
-    if (owners != small) {
-        PyMem_Free(owners);
+    if (track) {
+        _PyObject_GC_TRACK(tuple);
     }
-    return tuple;
+    return (PyObject *)tuple;
 }
 
 PyObject *
 _PyTuple_FromPairTakeValue(PyValue first, PyValue second)
 {
-    PyValue owners[2] = {first, second};
-    return tuple_from_owners(owners, 2);
+    PyTupleObject *tuple = tuple_alloc(2);
+    if (tuple == NULL) {
+        PyValue_CLOSE(first);
+        PyValue_CLOSE(second);
+        return NULL;
+    }
+    assert(PyValue_IsLanguageValue(first));
+    assert(PyValue_IsLanguageValue(second));
+    tuple->ob_item[0] = first;
+    tuple->ob_item[1] = second;
+    _PyValue_CheckHome(first);
+    _PyValue_CheckHome(second);
+    if (maybe_tracked(first) || maybe_tracked(second)) {
+        _PyObject_GC_TRACK(tuple);
+    }
+    return (PyObject *)tuple;
 }
 
 PyObject *

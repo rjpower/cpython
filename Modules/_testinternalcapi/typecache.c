@@ -51,18 +51,18 @@ type_cache_lookup(PyObject *Py_UNUSED(self), PyObject *args)
     if (name == NULL) {
         return NULL;
     }
-    struct _PyTypeCacheLookupResult r =
-        _PyTypeCache_Lookup((PyTypeObject *)type_obj, name);
+    PyValueBorrow hit = PyValue_Borrow(PyValue_NULL);
+    unsigned int version = _PyTypeCache_Lookup((PyTypeObject *)type_obj, name, &hit);
     Py_DECREF(name);
-    PyObject *value = PyValue_IsNull(r.value)
-        ? Py_NewRef(Py_None) : _PyValue_AsObjectAt(r.value, BOX_SITE_TEST);
-    PyValue_XCLOSE(r.value);
+    // Nothing has run since the lookup, so the borrow is live.
+    PyValue owner = PyValue_XDUP(hit);
+    PyObject *value = PyValue_IsNull(owner)
+        ? Py_NewRef(Py_None) : _PyValue_AsObjectAt(owner, BOX_SITE_TEST);
+    PyValue_XCLOSE(owner);
     if (value == NULL) {
         return NULL;
     }
-    return Py_BuildValue("(iNk)",
-                         r.cache_hit, value,
-                         (unsigned long)r.version_tag);
+    return Py_BuildValue("(iNk)", version != 0, value, (unsigned long)version);
 }
 
 static PyObject *

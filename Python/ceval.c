@@ -1257,6 +1257,10 @@ value_load_global(PyObject *globals, PyObject *builtins, PyObject *name)
 static _PyStatusValue
 _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                PyValue iter, PyValue *index_ptr);
+static inline Py_ALWAYS_INLINE _PyStatusValue
+_PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
+                                     _PyInterpreterFrame *frame,
+                                     PyValue iter, PyValue *index_ptr);
 
 #if (defined(__GNUC__) && __GNUC__ >= 10 && !defined(__clang__)) && defined(__x86_64__)
 /*
@@ -7087,10 +7091,12 @@ _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *na
     return PyValue_NULL;
 }
 
-/* Out of line, as when it was exported. */
-static Py_NO_INLINE _PyStatusValue
-_PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                               PyValue iter, PyValue *index_ptr)
+/* FOR_ITER's step: the item and 1, the completion value and 0, or the
+ * error and -1; a StopIteration is the completion. */
+static inline Py_ALWAYS_INLINE _PyStatusValue
+_PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
+                                     _PyInterpreterFrame *frame,
+                                     PyValue iter, PyValue *index_ptr)
 {
     _PyStatusValue result = {0, PyValue_NULL};
     PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
@@ -7109,26 +7115,40 @@ _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame
         result.status = 1;
         return result;
     }
-    _PyStatusValue step = _PyValue_IterStep(iter_o);
-    if (step.status == PYGEN_NEXT) {
-        result.value = step.value;
-        result.status = 1;
-        return result;
+    PyTypeObject *iter_type = Py_TYPE(iter_o);
+    _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(iter_type, iternext);
+    _PyStatusValue step;
+    if (next_value != NULL) {
+        _PyType_CHECK_VALUE_ROW(iter_type, _Py_VALUE_SLOT_INDEX_iternext);
+        step = next_value(iter_o);
+        assert(step.status != PYGEN_NEXT || !PyValue_IsNull(step.value));
+        assert(step.status != PYGEN_ERROR || PyValue_IsNull(step.value));
     }
-    if (step.status == PYGEN_RETURN) {
-        /* The semantic completion reports an implicit StopIteration once.
-         * Keep the returned owner without fabricating a separate RAISE. */
-        result.value = step.value;
-        return result;
+    else {
+        step = _PyValue_IterStep(iter_o);
+    }
+    /* An item, or the semantic completion, which reports an implicit
+     * StopIteration once and keeps the returned owner without fabricating
+     * a separate RAISE. Both are the caller's status and value as they are. */
+    if (step.status != PYGEN_ERROR) {
+        return step;
     }
     if (_PyErr_ExceptionMatches(tstate, PyExc_StopIteration)) {
         _PyEval_MonitorRaise(tstate, frame, frame->instr_ptr);
         _PyErr_Clear(tstate);
+        return result;
     }
-    else {
-        result.status = -1;
-    }
+    result.status = -1;
     return result;
+}
+
+/* Out of line, as when it was exported, for the steps that are not
+ * FOR_ITER's own. */
+static Py_NO_INLINE _PyStatusValue
+_PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                               PyValue iter, PyValue *index_ptr)
+{
+    return _PyForIter_VirtualIteratorNextInline(tstate, frame, iter, index_ptr);
 }
 
 /* Check if a 'cls' provides the given special method. */

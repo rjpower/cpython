@@ -1570,7 +1570,7 @@ ir_run_FOR_ITER(
             }
             // _FOR_ITER
             {
-                _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &window[1]);
+                _PyStatusValue step = _PyForIter_VirtualIteratorNextInline(tstate, frame, iter, &window[1]);
                 null_or_index = window[1];
                 PyValue item = step.value;
                 int found = step.status;

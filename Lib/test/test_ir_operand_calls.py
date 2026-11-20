@@ -211,6 +211,24 @@ class OperandCallShapeTests(unittest.TestCase):
             del reference
 
 
+    def test_temporary_bound_method_is_released(self):
+        # The callable is a temporary bound method that the call replaces by
+        # its function and receiver: nothing may keep the receiver alive
+        class A:
+            def method(self, x):
+                return x
+
+        def call(receiver, name):
+            return getattr(receiver, name)(2)
+
+        receiver = A()
+        reference = weakref.ref(receiver)
+        for _ in range(WARM):
+            self.assertEqual(call(receiver, "method"), 2)
+        del receiver
+        self.assertIsNone(reference())
+
+
 class EvaluationOrderTests(unittest.TestCase):
     def test_call_sees_the_old_local(self):
         seen = []

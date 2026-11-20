@@ -781,6 +781,11 @@ typedef enum {
  * those, and no temporary home holds them. */
 #define CALL_VIEW_CALLABLE_NEW 512
 #define CALL_VIEW_TUPLE_NEW 1024
+/* The view owns every temporary operand, which gave up its home: a Python
+ * callee moves its arguments from the view.  Without it the view only
+ * borrows the temporaries, which stay in their homes until the call is
+ * over; a local operand and a replaced entry are the view's own count. */
+#define CALL_VIEW_OWNING 2048
 
 /* What a call handler reads from its word: whether the call has a self
  * operand (CALL and CALL_KW), whether it has a kwargs operand
@@ -817,8 +822,9 @@ typedef enum {
 /* The state of one call, which lives only in the frame of the out-of-line
  * call_transaction_run_*(), across the helpers it calls (R-c).  homes is the
  * call's window: an array that run_*() fills from the call's operand words
- * (call_view_take) and that owns every value in it, a temporary's taken from
- * its home and a local's counted, laid out as the DSL's positions are
+ * (call_view_take) and that owns the values of locals and of entries that a
+ * preparation replaced, and borrows the temporaries from their homes until a
+ * Python callee takes them (CALL_VIEW_OWNING), laid out as the DSL's positions are
  * (callable, self or NULL, the arguments, and the names of a CALL_KW or the
  * kwargs of a CALL_FUNCTION_EX last).  A preparation or a move leaves NULL
  * where the owner went; run_*() closes what remains when the call fails.
@@ -1411,9 +1417,26 @@ call_operand_take(_PyInterpreterFrame *frame, const _PyIRWord *head, int k)
     return owner;
 }
 
+/* Operand k as the view holds it: a local is counted, a temporary is read
+ * from its home, which keeps it, or, if the view owns, taken from it. */
+static inline PyValue
+call_operand_view(_PyInterpreterFrame *frame, const _PyIRWord *head, int k,
+                  int owning)
+{
+    if (owning) {
+        return call_operand_take(frame, head, k);
+    }
+    PyValue value = _PyFrame_Slots(frame)[_PyIR_CallOperand(head, k)];
+    if (head[1 + k / IR_OPERANDS_PER_WORD] &
+        (IR_F_LOCAL_A << (k % IR_OPERANDS_PER_WORD))) {
+        return PyValue_DUP(value);
+    }
+    return value;
+}
+
 static void
 call_view_take(_PyInterpreterFrame *frame, const _PyIRWord *head,
-               _PyCallTransactionKind kind, PyValue *view)
+               _PyCallTransactionKind kind, PyValue *view, int owning)
 {
     _PyIRWord word = *head;
     PyValue *callable = &_PyFrame_Slots(frame)[IR_B(word)];
@@ -1422,20 +1445,22 @@ call_view_take(_PyInterpreterFrame *frame, const _PyIRWord *head,
     }
     else {
         view[0] = *callable;
-        *callable = PyValue_NULL;
+        if (owning) {
+            *callable = PyValue_NULL;
+        }
     }
     if (kind == CALL_TRANSACTION_EX) {
         view[1] = PyValue_NULL;
-        view[2] = call_operand_take(frame, head, 0);
+        view[2] = call_operand_view(frame, head, 0, owning);
         view[3] = word & IR_F_NO_KW ? PyValue_NULL
-                                    : call_operand_take(frame, head, 1);
+                                    : call_operand_view(frame, head, 1, owning);
         return;
     }
     int has_self = (word & IR_F_NO_SELF) == 0;
-    view[1] = has_self ? call_operand_take(frame, head, 0) : PyValue_NULL;
+    view[1] = has_self ? call_operand_view(frame, head, 0, owning) : PyValue_NULL;
     int arguments = call_slot_operands(word, kind) - has_self;
     for (int i = 0; i < arguments; i++) {
-        view[2 + i] = call_operand_take(frame, head, has_self + i);
+        view[2 + i] = call_operand_view(frame, head, has_self + i, owning);
     }
     if (kind == CALL_TRANSACTION_KEYWORDS) {
         int names = _PyIR_CallOperand(head, (int)IR_C(word) - 1);
@@ -1591,12 +1616,20 @@ call_transaction_refresh(PyThreadState *tstate, _PyInterpreterFrame *frame,
 /* A native callee runs while the temporary operands are in their homes, as
  * the caller's frame shows them: to the garbage collector and to
  * PyUnstable_Object_IsUniqueReferencedTemporary they stay the caller's
- * temporaries until the call is over.  call_view_take moved them into the
- * view, so lend them back for the call and take them again after it.  The
- * view entries stay as borrowed copies in between.  A local is the view's
- * own count and an operand that preparation replaced has no home. */
+ * temporaries until the call is over, and the view only borrows them.  A
+ * Python callee moves its arguments, so it adopts them first: the homes give
+ * the temporaries up and the view owns them.  A local is the view's own count
+ * and an entry that preparation replaced has no home to give up; neither is
+ * touched here. */
+enum {
+    CALL_VIEW_ADOPT,    // the homes give up the temporaries to the view
+    CALL_VIEW_RESTORE,  // the view gives them back (a declined Python call)
+    CALL_VIEW_DISOWN,   // the view forgets the borrowed entries
+};
+
 static inline void
-call_view_each_temporary(_PyCallTransaction *call, int lend)
+call_view_each_temporary(_PyCallTransaction *call, int mode,
+                         PyValue *replaced)
 {
     const _PyIRWord *head = call->current;
     _PyIRWord word = *head;
@@ -1618,30 +1651,72 @@ call_view_each_temporary(_PyCallTransaction *call, int lend)
         if (call_operand_is_local(head, k) || PyValue_IsNull(view[entry])) {
             continue;
         }
-        if ((entry == 1 && (call->state & CALL_VIEW_CALLABLE_NEW)) ||
-            (call->kind == CALL_TRANSACTION_EX && entry == 2 &&
-             (call->state & CALL_VIEW_TUPLE_NEW))) {
+        PyValue *home = &slots[_PyIR_CallOperand(head, k)];
+        if (call->kind == CALL_TRANSACTION_EX && entry == 2 &&
+            (call->state & CALL_VIEW_TUPLE_NEW)) {
+            /* The home keeps the iterable that the tuple replaced, which
+             * the Python callee does not need */
+            if (mode == CALL_VIEW_ADOPT) {
+                replaced[1] = *home;
+                *home = PyValue_NULL;
+            }
             continue;
         }
-        PyValue *home = &slots[_PyIR_CallOperand(head, k)];
-        if (lend) {
-            *home = view[entry];
+        if (entry == 1 && (call->state & CALL_VIEW_CALLABLE_NEW)) {
+            continue;
         }
-        else {
-            view[entry] = *home;
+        switch (mode) {
+            case CALL_VIEW_ADOPT:
+                *home = PyValue_NULL;
+                break;
+            case CALL_VIEW_RESTORE:
+                *home = view[entry];
+                break;
+            case CALL_VIEW_DISOWN:
+                view[entry] = PyValue_NULL;
+                break;
+        }
+    }
+    if (!(word & IR_F_LOCAL_B) && (call->state & CALL_VIEW_CALLABLE_NEW)) {
+        /* The home keeps the bound method that the function and the
+         * receiver replaced */
+        if (mode == CALL_VIEW_ADOPT) {
+            PyValue *home = &slots[IR_B(word)];
+            replaced[0] = *home;
             *home = PyValue_NULL;
         }
     }
-    if (!(word & IR_F_LOCAL_B) && !(call->state & CALL_VIEW_CALLABLE_NEW)) {
+    else if (!(word & IR_F_LOCAL_B)) {
         PyValue *home = &slots[IR_B(word)];
-        if (lend) {
-            *home = view[0];
-        }
-        else {
-            view[0] = *home;
-            *home = PyValue_NULL;
+        switch (mode) {
+            case CALL_VIEW_ADOPT:
+                *home = PyValue_NULL;
+                break;
+            case CALL_VIEW_RESTORE:
+                *home = view[0];
+                break;
+            case CALL_VIEW_DISOWN:
+                view[0] = PyValue_NULL;
+                break;
         }
     }
+}
+
+/* The view takes the temporary operands, for a callee that moves them.  What
+ * preparation replaced is released with its home: a bound method, the
+ * iterable of a CALL_FUNCTION_EX, which can run Python. */
+static int
+call_view_adopt(_PyCallTransaction *call)
+{
+    PyValue replaced[2] = {PyValue_NULL, PyValue_NULL};
+    call_view_each_temporary(call, CALL_VIEW_ADOPT, replaced);
+    call->state |= CALL_VIEW_OWNING;
+    if (PyValue_IsNull(replaced[0]) && PyValue_IsNull(replaced[1])) {
+        return 0;
+    }
+    PyValue_XCLOSE(replaced[0]);
+    PyValue_XCLOSE(replaced[1]);
+    return call_transaction_refresh(call->tstate, call->frame, call->current);
 }
 
 /* Return the prepared state even on failure after effects. Promotion supplies
@@ -1657,7 +1732,10 @@ call_transaction_expand_method(PyThreadState *tstate, _PyInterpreterFrame *frame
     PyMethodObject *method = (PyMethodObject *)PyValue_AsKnownObjectBorrow(homes[0]);
     PyValue self = PyValue_DUP(method->im_self);
     PyValue function = PyValue_DUP(PyValue_FromObjectBorrow(method->im_func));
-    PyValue obsolete = homes[0];
+    /* A temporary method stays in its home, which releases it with the
+     * call's other operands; a local's count is the view's. */
+    PyValue obsolete = FT_ATOMIC_LOAD_UINT64_RELAXED(*current) & IR_F_LOCAL_B
+        ? homes[0] : PyValue_NULL;
     /* Publish both final input homes before the obsolete wrapper can run
      * a destructor. No pointer into the old window crosses that release. */
     homes[0] = function;
@@ -1666,7 +1744,7 @@ call_transaction_expand_method(PyThreadState *tstate, _PyInterpreterFrame *frame
              CALL_VIEW_CALLABLE_NEW;
     _PyValue_CheckHome(homes[0]);
     _PyValue_CheckHome(homes[1]);
-    PyValue_CLOSE(obsolete);
+    PyValue_XCLOSE(obsolete);
     int status = call_transaction_refresh(tstate, frame, current);
     return state | (status < 0 ? CALL_FAILED : 0);
 }
@@ -1712,7 +1790,11 @@ call_transaction_prepare_tuple(PyThreadState *tstate, _PyInterpreterFrame *frame
     if (tuple == NULL || call_transaction_refresh(tstate, frame, current) < 0) {
         goto done;
     }
-    obsolete = homes[2];
+    /* The iterable of a temporary stays in its home, a local's count is the
+     * view's */
+    if (current[1] & IR_F_LOCAL_A) {
+        obsolete = homes[2];
+    }
     /* A tuple is a heap object, so this pure owner transfer cannot retire a
      * scalar box. Only the final tuple home is visible during local cleanup. */
     homes[2] = PyValue_FromObjectSteal(tuple);
@@ -1843,28 +1925,46 @@ call_transaction_detach(_PyCallTransaction *call, PyValue *retired)
     }
 }
 
-static void
-call_transaction_retire(PyValue *retired, int count, PyValue *small)
+/* The result of a native call goes to the call's destination, then the
+ * temporary operands and the callable are released from their homes, which
+ * held them for the whole call, each read before it closes.  The result
+ * goes first, so a destination that is one of the homes, or a local,
+ * displaces its old value, which the caller closes last.  A local operand
+ * and a replaced entry are the view's, which closes them. */
+static PyValue
+call_transaction_publish(_PyCallTransaction *call, PyValue result)
 {
-    for (int i = count; i-- > 0;) {
-        PyValue_CLEAR(retired[i]);
+    const _PyIRWord *head = call->current;
+    _PyIRWord word = *head;
+    PyValue *slots = _PyFrame_Slots(call->frame);
+    uint32_t dst = (uint32_t)call->destination;
+    _PyValue_CheckHome(result);
+    _PyValue_RecheckHome(slots[dst]);
+    PyValue displaced = slots[dst];
+    slots[dst] = result;
+    int operands = call->kind == CALL_TRANSACTION_EX
+        ? 1 + ((word & IR_F_NO_KW) == 0) : call_slot_operands(word, call->kind);
+    for (int k = operands; k-- > 0;) {
+        uint32_t home = (uint32_t)_PyIR_CallOperand(head, k);
+        if (home != dst && !call_operand_is_local(head, k)) {
+            PyValue owner = slots[home];
+            slots[home] = PyValue_NULL;
+            PyValue_XCLOSE(owner);
+        }
     }
-    if (retired != small && retired != NULL) {
-        PyMem_Free(retired);
+    uint32_t callable = IR_B(word);
+    if (callable != dst && !(word & IR_F_LOCAL_B)) {
+        PyValue owner = slots[callable];
+        slots[callable] = PyValue_NULL;
+        PyValue_XCLOSE(owner);
     }
+    return displaced;
 }
 
-/* Result publication targets the captured destination itself when it is a
- * temporary, including an input overlap, before the window retires. A
- * folded LOCAL destination gets the result after the window retires and
- * the periodic check passes; on failure the result is left in window[0].
- * The producer must not move window[0] afterward, even on an error edge
- * after cleanup.
- *
- * The call is the value vectorcall (or the tuple call) on the window's
- * words: a callee with a value form sees an inline argument as it is, and
- * the call adapter of an object-form callee boxes it (pycore_value_call.h).
- * The window keeps its owners until the result is published. */
+/* The call is the value vectorcall (or the tuple call) on the view's words:
+ * a callee with a value form sees an inline argument as it is, and the call
+ * adapter of an object-form callee boxes it (pycore_value_call.h).  The
+ * temporary operands stay in their homes until the result is published. */
 static int
 call_transaction_native(_PyCallTransaction *call)
 {
@@ -1872,29 +1972,17 @@ call_transaction_native(_PyCallTransaction *call)
      * preparation, the CALL event, a declined Python push) refreshed after
      * its last callback, so the record is current on entry. The refreshes
      * below follow only a step that can run Python or that allocates. */
-    PyValue small[8];
-    PyValue *retired = small;
     PyValue result = PyValue_NULL;
     PyValue displaced = PyValue_NULL;
     PyValue callable = PyValue_NULL;
     PyValue monitor_argument = PyValue_NULL;
-    int retired_count = 0, call_status = -1;
+    int call_status = -1;
     if (call->instrumented && !call->monitored &&
         call_record_monitor(call) < 0) {
         return -1;
     }
-    if (call->count > (int)Py_ARRAY_LENGTH(small)) {
-        retired = PyMem_Malloc((size_t)call->count * sizeof(PyValue));
-        if (retired == NULL) {
-            PyErr_NoMemory();
-        }
-        /* Allocation is fallible preparation: refresh after it. */
-        if (retired == NULL || call_record_refresh(call) < 0) {
-            goto done;
-        }
-    }
     PyValue *homes = call->homes;
-    /* The call pins its callable: the window's owner can be replaced while
+    /* The call pins its callable: the home's owner can be replaced while
      * the callee runs. */
     callable = PyValue_DUP(homes[0]);
     if (call->instrumented) {
@@ -1916,8 +2004,6 @@ call_transaction_native(_PyCallTransaction *call)
         monitor_argument = PyValue_IsNull(first)
             ? borrowed_word(&_PyInstrumentation_MISSING) : first;
     }
-    /* Only counts were taken since entry: the record is still current. */
-    call_view_each_temporary(call, 1);
     if (call->kind == CALL_TRANSACTION_EX) {
         PyObject *tuple = PyValue_AsKnownObjectBorrow(homes[2]);
         PyObject *kwargs = call->state & CALL_KWARGS_PRESENT
@@ -1936,7 +2022,6 @@ call_transaction_native(_PyCallTransaction *call)
         result = _PyValue_VectorcallTstate(call->tstate, callable,
                                            homes + offset, nargsf, names);
     }
-    call_view_each_temporary(call, 0);
     /* The call can run Python: refresh before monitoring reads the frame. */
     int refreshed = call_record_refresh(call);
     int failed_call = PyValue_IsNull(result);
@@ -1962,39 +2047,24 @@ call_transaction_native(_PyCallTransaction *call)
         }
     }
     if (failed_call || refreshed < 0) {
-        goto abort;
+        PyValue_XCLOSE(result);
+        call_transaction_publish_pc(call);
+        goto done;
     }
-    call_transaction_detach(call, retired);
-    retired_count = call->count;
     /* The result goes to its destination, a temporary, a local or the
      * discard slot, with the releasing write: the old value is closed
-     * after the window's owners */
-    _PyValue_CheckHome(result);
-    {
-        PyValue *home = _PyFrame_Slots(call->frame) + call->destination;
-        _PyValue_RecheckHome(*home);
-        displaced = *home;
-        *home = result;
-    }
-    result = PyValue_NULL;
+     * after the operands' owners */
+    displaced = call_transaction_publish(call, result);
     call_transaction_publish_pc(call);
     call_status = 0;
-    goto done;
-abort:
-    PyValue_XCLOSE(result);
-    call_transaction_publish_pc(call);
 done:
-    assert(retired_count == 0 || retired != NULL);
     PyValue_XCLOSE(displaced);
     if (!PyValue_IsObject(monitor_argument) ||
         PyValue_AsKnownObjectBorrow(monitor_argument) != &_PyInstrumentation_MISSING) {
         PyValue_XCLOSE(monitor_argument);
     }
     PyValue_XCLOSE(callable);
-    if (retired != NULL) {
-        call_transaction_retire(retired, retired_count, small);
-    }
-    /* Retiring the window and the callable can run a finalizer. */
+    /* Releasing the operands can run a finalizer. */
     int failed = call_record_refresh(call);
     if (call_status < 0) {
         return -1;
@@ -4219,11 +4289,20 @@ call_transaction_invoke(_PyCallTransaction *call, _PyInterpreterFrame **child)
             !IS_PEP523_HOOKED(call->tstate) &&
             ((PyFunctionObject *)object)->vectorcall == _PyFunction_Vectorcall &&
             !(call->kind == CALL_TRANSACTION_EX && call->instrumented)) {
+            /* The callee takes the arguments: the view owns them first */
+            if (!(call->state & CALL_VIEW_OWNING) &&
+                call_view_adopt(call) < 0) {
+                return -1;
+            }
             int status = call_transaction_push_python(call, child);
             if (status <= 0) {
                 return status;
             }
         }
+    }
+    if (call->state & CALL_VIEW_OWNING) {
+        call_view_each_temporary(call, CALL_VIEW_RESTORE, NULL);
+        call->state &= ~CALL_VIEW_OWNING;
     }
     return call_transaction_native(call);
 }
@@ -4240,11 +4319,12 @@ typedef struct {
     int count;
 } _PyCallView;
 
-/* Take the call's operands, which are read once, here.  False (with the error
- * set) if the window did not fit in memory: nothing has been taken. */
+/* Read the call's operands, once, here: a local is counted, a temporary is
+ * borrowed from its home, or with owning taken from it.  False (with the
+ * error set) if the window did not fit in memory: nothing has been read. */
 static inline int
 call_view_open(_PyCallView *view, _PyInterpreterFrame *frame,
-               _PyInstr *current, _PyCallTransactionKind kind)
+               _PyInstr *current, _PyCallTransactionKind kind, int owning)
 {
     _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*current);
     view->count = call_view_count(word, kind);
@@ -4256,7 +4336,7 @@ call_view_open(_PyCallView *view, _PyInterpreterFrame *frame,
             return 0;
         }
     }
-    call_view_take(frame, current, kind, view->homes);
+    call_view_take(frame, current, kind, view->homes, owning);
     return 1;
 }
 
@@ -4269,6 +4349,16 @@ call_view_close(_PyCallView *view)
     }
     if (view->homes != view->small) {
         PyMem_Free(view->homes);
+    }
+}
+
+/* The temporaries that the view only borrows stay with their homes, which
+ * release them, or an unwind clears them: the view closes only its own. */
+static inline void
+call_view_disown(_PyCallTransaction *call)
+{
+    if (!(call->state & CALL_VIEW_OWNING)) {
+        call_view_each_temporary(call, CALL_VIEW_DISOWN, NULL);
     }
 }
 
@@ -4286,7 +4376,7 @@ call_transaction_init(PyThreadState *tstate, _PyInterpreterFrame *frame,
         .instrumented = (flags & CALL_INSTRUMENTED) != 0,
         .monitored = (flags & CALL_MONITORED) != 0,
         .periodic = (flags & CALL_PERIODIC) != 0,
-        .state = (flags & CALL_PREPARED) |
+        .state = (flags & (CALL_PREPARED | CALL_VIEW_OWNING)) |
                  (!PyValue_IsNull(view->homes[1]) ? CALL_SELF_PRESENT : 0) |
                  (kind == CALL_TRANSACTION_EX && !(word & IR_F_NO_KW)
                   ? CALL_KWARGS_PRESENT : 0),
@@ -4305,13 +4395,14 @@ call_transaction_run(PyThreadState *tstate, _PyInterpreterFrame *frame,
                      _PyInstr *current, _PyCallTransactionKind kind, int flags)
 {
     _PyCallView view;
-    if (!call_view_open(&view, frame, current, kind)) {
+    if (!call_view_open(&view, frame, current, kind, 0)) {
         return (_PyCallResult){-1, NULL};
     }
     _PyCallTransaction call = call_transaction_init(
         tstate, frame, current, &view, kind, flags);
     _PyInterpreterFrame *child;
     int status = call_transaction_invoke(&call, &child);
+    call_view_disown(&call);
     call_view_close(&view);
     return (_PyCallResult){status < 0 ? -1 : 0, status < 0 ? NULL : child};
 }
@@ -4528,7 +4619,7 @@ call_run_guarded(PyThreadState *tstate, _PyInterpreterFrame *frame,
                  const _PyFbCall *binding, int flags)
 {
     _PyCallView view;
-    if (!call_view_open(&view, frame, current, kind)) {
+    if (!call_view_open(&view, frame, current, kind, 1)) {
         return (_PyCallResult){-1, NULL};
     }
     _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*current);
@@ -4538,9 +4629,11 @@ call_run_guarded(PyThreadState *tstate, _PyInterpreterFrame *frame,
         PyValue_IsNull(view.homes[1]) ? 0 : CALL_SELF_PRESENT);
     if (result.status > 0) {
         _PyCallTransaction call = call_transaction_init(
-            tstate, frame, current, &view, kind, flags | CALL_PREPARED);
+            tstate, frame, current, &view, kind,
+            flags | CALL_PREPARED | CALL_VIEW_OWNING);
         _PyInterpreterFrame *child;
         int status = call_transaction_invoke(&call, &child);
+        call_view_disown(&call);
         result = (_PyCallResult){status < 0 ? -1 : 0, status < 0 ? NULL : child};
     }
     call_view_close(&view);

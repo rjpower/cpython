@@ -836,6 +836,20 @@ PyValue_FromObjectSteal(PyObject *obj)
     return _PyValue_PointerSteal(obj);
 }
 
+/* Consume obj and return its canonical value, which owns what obj owned.
+   An exact int or float whose value is held inline is returned inline and
+   its box is released at once; that release runs no Python and leaves the
+   current exception unchanged ("Release contract" above). NULL gives
+   PyValue_NULL. */
+static inline PyValue
+PyValue_PrepareOwned(PyObject *obj)
+{
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(obj);
+}
+
 static inline PyValue
 PyValue_DUP(PyValueBorrow ref)
 {

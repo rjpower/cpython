@@ -14,15 +14,6 @@
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 PyValue
-PyValue_PrepareOwned(PyObject *obj)
-{
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
-    return PyValue_FromObjectSteal(obj);
-}
-
-PyValue
 _PyValue_FromNumberSteal(PyObject *obj)
 {
     assert(PyLong_CheckExact(obj) || PyFloat_CheckExact(obj));

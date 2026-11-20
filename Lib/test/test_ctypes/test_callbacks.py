@@ -128,8 +128,12 @@ class Callbacks(unittest.TestCase):
             def __init__(self):
                 self.v = proto(self.func)
 
-        for i in range(32):
-            X()
+        def make():
+            # The last discarded result stays in its frame until the frame
+            # ends, so the instances are made in a frame that ends
+            for i in range(32):
+                X()
+        make()
         gc.collect()
         live = [x for x in gc.get_objects()
                 if isinstance(x, X)]

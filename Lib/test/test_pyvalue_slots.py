@@ -198,20 +198,27 @@ class PyValueSlotTests(unittest.TestCase):
         self.assertIn('STORE_ATTR_SLOT', executing_handlers(assign))
 
     def test_load_owner_retires_before_folded_local_replacement(self):
+        # The result is stored into the local, then the owner and the
+        # displaced value are released.  Each finalizer runs once and finds
+        # the result in the local; the order between them is free.
         events = []
         reenter = False
+
+        def check(events):
+            self.assertEqual(sorted(events),
+                             [('old', 1234567), ('owner', 1234567)])
 
         class Old:
             def __del__(self):
                 frame = sys._getframe(1)
-                events.append(('old', frame.f_locals['old'] == 1234567))
+                events.append(('old', frame.f_locals['old']))
 
         class Item:
             __slots__ = ('value',)
 
             def __del__(self):
                 frame = sys._getframe(1)
-                events.append(('owner', isinstance(frame.f_locals['old'], Old)))
+                events.append(('owner', frame.f_locals['old']))
                 if reenter:
                     sys.setprofile(lambda *args: None)
                     sys.setprofile(None)
@@ -229,7 +236,7 @@ class PyValueSlotTests(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             events.clear()
             self.assertEqual(read(), 1234567)
-            self.assertEqual(events, [('owner', True), ('old', True)])
+            check(events)
         self.assertIn('LOAD_ATTR_SLOT', executing_handlers(read))
         events.clear()
         reenter = True
@@ -237,7 +244,7 @@ class PyValueSlotTests(unittest.TestCase):
             self.assertEqual(read(), 1234567)
         finally:
             sys.setprofile(None)
-        self.assertEqual(events, [('owner', True), ('old', True)])
+        check(events)
 
     def test_field_and_receiver_alias_retirement(self):
         events = []

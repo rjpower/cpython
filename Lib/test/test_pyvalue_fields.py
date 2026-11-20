@@ -325,7 +325,10 @@ class SliceFieldTests(unittest.TestCase):
         # not see its fields.
         item = object()
         before = sys.getrefcount(item)
-        slice(item, item, item)
+        def drop_slice():
+            # The discarded slice stays in the frame that makes it
+            slice(item, item, item)
+        drop_slice()
         self.assertEqual(sys.getrefcount(item), before)
         s = slice(1, 2)
         self.assertEqual((s.start, s.stop, s.step), (1, 2, None))
@@ -1033,8 +1036,12 @@ class ModuleHomeTests(unittest.TestCase):
         self.assertEqual(sys.getrefcount(obj), base + 200)
         d.rotate(5)
         d.reverse()
-        d.popleft()
-        d.pop()
+        def drop_ends():
+            # A discarded result stays in its frame until the next discard
+            # or the frame's end, so they are popped in a frame that ends
+            d.popleft()
+            d.pop()
+        drop_ends()
         self.assertEqual(sys.getrefcount(obj), base + d.count(obj))
         del d
         self.assertEqual(sys.getrefcount(obj), base)
@@ -1078,9 +1085,12 @@ class ModuleHomeTests(unittest.TestCase):
         def g(x):
             return obj
 
-        g(1)
-        g(2)
-        g(3)            # evicts 1
+        def call_g():
+            # The discarded results stay in the frame that makes them
+            g(1)
+            g(2)
+            g(3)            # evicts 1
+        call_g()
         self.assertEqual(sys.getrefcount(obj), base + 2)
         g.cache_clear()
         self.assertEqual(sys.getrefcount(obj), base)

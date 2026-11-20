@@ -56,6 +56,13 @@ def assertNeverAwaited(test):
         gc.collect()
 
 
+def call_and_drop(func, *args, **kwargs):
+    # A discarded result stays in its frame until the next discard or the
+    # frame's end, so the call is made in a frame that ends, as the
+    # never-awaited warning is expected within the assertNeverAwaited block
+    func(*args, **kwargs)
+
+
 class AsyncPatchDecoratorTest(unittest.TestCase):
     def test_is_coroutine_function_patch(self):
         @patch.object(AsyncClass, 'async_method')
@@ -801,7 +808,7 @@ class AsyncMockAssert(unittest.TestCase):
     def test_assert_called_but_not_awaited(self):
         mock = AsyncMock(AsyncClass)
         with assertNeverAwaited(self):
-            mock.async_method()
+            call_and_drop(mock.async_method)
         self.assertTrue(inspect.iscoroutinefunction(mock.async_method))
         mock.async_method.assert_called()
         mock.async_method.assert_called_once()
@@ -844,7 +851,7 @@ class AsyncMockAssert(unittest.TestCase):
         # The first call will be awaited so no warning there
         # But this call will never get awaited, so it will warn here
         with assertNeverAwaited(self):
-            mock.async_method()
+            call_and_drop(mock.async_method)
         with self.assertRaises(AssertionError):
             mock.async_method.assert_awaited()
         mock.async_method.assert_called()
@@ -879,34 +886,34 @@ class AsyncMockAssert(unittest.TestCase):
     def test_assert_has_calls_not_awaits(self):
         kalls = [call('foo')]
         with assertNeverAwaited(self):
-            self.mock('foo')
+            call_and_drop(self.mock, 'foo')
         self.mock.assert_has_calls(kalls)
         with self.assertRaises(AssertionError):
             self.mock.assert_has_awaits(kalls)
 
     def test_assert_has_mock_calls_on_async_mock_no_spec(self):
         with assertNeverAwaited(self):
-            self.mock()
+            call_and_drop(self.mock)
         kalls_empty = [('', (), {})]
         self.assertEqual(self.mock.mock_calls, kalls_empty)
 
         with assertNeverAwaited(self):
-            self.mock('foo')
+            call_and_drop(self.mock, 'foo')
         with assertNeverAwaited(self):
-            self.mock('baz')
+            call_and_drop(self.mock, 'baz')
         mock_kalls = ([call(), call('foo'), call('baz')])
         self.assertEqual(self.mock.mock_calls, mock_kalls)
 
     def test_assert_has_mock_calls_on_async_mock_with_spec(self):
         a_class_mock = AsyncMock(AsyncClass)
         with assertNeverAwaited(self):
-            a_class_mock.async_method()
+            call_and_drop(a_class_mock.async_method)
         kalls_empty = [('', (), {})]
         self.assertEqual(a_class_mock.async_method.mock_calls, kalls_empty)
         self.assertEqual(a_class_mock.mock_calls, [call.async_method()])
 
         with assertNeverAwaited(self):
-            a_class_mock.async_method(1, 2, 3, a=4, b=5)
+            call_and_drop(a_class_mock.async_method, 1, 2, 3, a=4, b=5)
         method_kalls = [call(), call(1, 2, 3, a=4, b=5)]
         mock_kalls = [call.async_method(), call.async_method(1, 2, 3, a=4, b=5)]
         self.assertEqual(a_class_mock.async_method.mock_calls, method_kalls)
@@ -914,9 +921,9 @@ class AsyncMockAssert(unittest.TestCase):
 
     def test_async_method_calls_recorded(self):
         with assertNeverAwaited(self):
-            self.mock.something(3, fish=None)
+            call_and_drop(self.mock.something, 3, fish=None)
         with assertNeverAwaited(self):
-            self.mock.something_else.something(6, cake=sentinel.Cake)
+            call_and_drop(self.mock.something_else.something, 6, cake=sentinel.Cake)
 
         self.assertEqual(self.mock.method_calls, [
             ("something", (3,), {'fish': None}),
@@ -938,20 +945,20 @@ class AsyncMockAssert(unittest.TestCase):
 
         assert_attrs(self.mock)
         with assertNeverAwaited(self):
-            self.mock()
+            call_and_drop(self.mock)
         with assertNeverAwaited(self):
-            self.mock(1, 2)
+            call_and_drop(self.mock, 1, 2)
         with assertNeverAwaited(self):
-            self.mock(a=3)
+            call_and_drop(self.mock, a=3)
 
         self.mock.reset_mock()
         assert_attrs(self.mock)
 
         a_mock = AsyncMock(AsyncClass)
         with assertNeverAwaited(self):
-            a_mock.async_method()
+            call_and_drop(a_mock.async_method)
         with assertNeverAwaited(self):
-            a_mock.async_method(1, a=3)
+            call_and_drop(a_mock.async_method, 1, a=3)
 
         a_mock.reset_mock()
         assert_attrs(a_mock)

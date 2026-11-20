@@ -1609,6 +1609,38 @@ call_release_callable(_PyInterpreterFrame *frame, _PyIRWord word)
     }
 }
 
+/* The plain return, certified RETURN_VALUE_EMPTY: retire a thread frame whose
+ * scratch is empty, so that only the code's locals can own values, as
+ * upstream does.  The frame is already unlinked, the caller holds the result
+ * in C, and each owner is NULLed and closed in turn: a finalizer that runs
+ * sees a consistent frame, and nested calls may grow the arena but must
+ * restore this reservation, which stays until the code is closed.  The one
+ * routine for the common frame, in the handler: the clear loop, the function
+ * and the code, and the pop.  A frame that has a frame object leaves the
+ * locals to _PyFrame_ClearExceptCode(), which hands them to it. */
+static inline Py_ALWAYS_INLINE PyValue
+_PyEval_RetireThreadFrameWithResult(PyThreadState *tstate,
+                                    _PyInterpreterFrame *frame, PyValue result)
+{
+    assert(!PyValue_IsNull(result));
+    assert(frame->owner == FRAME_OWNED_BY_THREAD);
+    assert(tstate->current_frame != frame);
+    assert((PyObject **)frame == tstate->datastack_limit);
+    _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
+    int extent = _PyFrame_GetCode(frame)->co_nlocalsplus;
+    if (Py_UNLIKELY(frame->frame_obj != NULL)) {
+        assert(frame->frame_obj->f_frame == frame);
+        _PyFrame_ClearExceptCode(frame, extent);
+    }
+    else {
+        _PyFrame_ClearSlots(frame, extent);
+        Py_CLEAR(frame->f_funcobj);
+    }
+    Py_CLEAR(frame->f_executable);
+    _PyThreadState_PopFrame(tstate, frame);
+    return result;
+}
+
 /* Push the frame of the Python function callable for the call at head, whose
  * operands fill its first arguments: a temporary moves into the child and a
  * local is counted.  The guards checked the stack space and that the callee
@@ -3313,20 +3345,6 @@ _PyEval_FrameClearAndPopGeneralWithResult(PyThreadState *tstate,
     }
     _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
     return retire_thread_frame(tstate, frame, result, _PyFrame_NumSlots(frame));
-}
-
-/* Certified RETURN_VALUE_EMPTY retires a thread frame whose scratch is
- * empty, so only the code's locals can own values. The frame is already
- * unlinked before it is popped. */
-PyValue
-_PyEval_RetireThreadFrameWithResult(PyThreadState *tstate,
-                                    _PyInterpreterFrame *frame, PyValue result)
-{
-    assert(!PyValue_IsNull(result));
-    assert(tstate->current_frame != frame);
-    _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
-    return retire_thread_frame(tstate, frame, result,
-                               _PyFrame_GetCode(frame)->co_nlocalsplus);
 }
 
 void

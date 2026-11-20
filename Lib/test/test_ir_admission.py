@@ -160,7 +160,8 @@ class AdmissionTests(unittest.TestCase):
 
     def test_inline_constant_normalization(self):
         def f():
-            return 1000
+            # A list item is a window input, which keeps its load
+            return [1000]
         code = f.__code__
         words = _testinternalcapi.get_ir(code)
         self.assertIn("LOAD_CONST_INLINE_INT", [word[0] for word in words])
@@ -171,9 +172,9 @@ class AdmissionTests(unittest.TestCase):
                 changed = route(code, co_consts=constants)
                 self.assertNotIn("LOAD_CONST_INLINE_INT",
                     [word[0] for word in _testinternalcapi.get_ir(changed)])
-                self.assertEqual(types.FunctionType(changed, {})(), "x" * 1000)
+                self.assertEqual(types.FunctionType(changed, {})(), ["x" * 1000])
                 restored = marshal.loads(marshal.dumps(changed))
-                self.assertEqual(types.FunctionType(restored, {})(), "x" * 1000)
+                self.assertEqual(types.FunctionType(restored, {})(), ["x" * 1000])
 
         # Replace a same-sized constant record in a valid marshal stream,
         # retaining its original inline-int selector until common admission.
@@ -186,7 +187,7 @@ class AdmissionTests(unittest.TestCase):
         restored = marshal.loads(payload.replace(before, after, 1))
         self.assertNotIn("LOAD_CONST_INLINE_INT",
             [word[0] for word in _testinternalcapi.get_ir(restored)])
-        self.assertEqual(types.FunctionType(restored, {})(), replacement)
+        self.assertEqual(types.FunctionType(restored, {})(), [replacement])
 
     def test_valid_compiled_images_roundtrip(self):
         def f(a):

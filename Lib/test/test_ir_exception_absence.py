@@ -12,7 +12,7 @@ from test.support.ir_semantics import observation_tables, position_parts, semant
 from test.test_ir_admission import construct
 from test.test_ir_call_roles import routes
 from test.test_ir_completion import exception_entry
-from test.test_ir_transfer_admission import encoded
+from test.test_ir_transfer_admission import encoded, template_code
 
 
 class ExceptionAbsenceTests(unittest.TestCase):
@@ -27,7 +27,7 @@ class ExceptionAbsenceTests(unittest.TestCase):
         table = exception_entry(3, 1, 8, 6 << 1)
         # Raw images are constructed but never executed: payloads need not
         # actually be callable or awaitable for the ownership controls.
-        code = (lambda: None).__code__.replace(
+        code = template_code.replace(
             co_code=encoded(words), co_stacksize=7, co_linetable=b"",
             co_exceptiontable=table, co_fbinit=struct.pack("<I", 2))
         return code, words

@@ -4180,15 +4180,15 @@ class IREmitter(Emitter):
         self.call_reload(inst)
         return True
 
-    def call_completion(self, run_override=None):
+    def call_completion(self, guarded=False):
         self.call_normal_drained = True
         # One out-of-line call, which keeps the call's locals in its own
         # frame and returns {status, child} in two registers (R-c).  It reads
-        # the call's operands from the words after this_instr, once, and
-        # owns them from then on.
+        # the call's operands from the words after this_instr, in place, and
+        # releases or moves them itself.
         self.emit("assert(frame->instr_ptr == this_instr);\n")
         self.emit("{\n")
-        if run_override:
+        if guarded:
             # The cached binding plan fills the child from the operands; a
             # miss had no effect, and the call runs generically
             bind = ("call_bind_keywords" if self.call_kind == "CALL_KEYWORDS"
@@ -4213,11 +4213,10 @@ class IREmitter(Emitter):
 
     def invoke_call(self, tkn, tkn_iter, uop, storage, inst):
         self.macro_args(tkn, tkn_iter, 0)
-        run_override = ("call_run_guarded"
-                        if tkn.text == "IR_INVOKE_GUARDED_PYTHON_CALL" else None)
-        if run_override:
+        guarded = tkn.text == "IR_INVOKE_GUARDED_PYTHON_CALL"
+        if guarded:
             self.emit("assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);\n")
-        self.call_completion(run_override)
+        self.call_completion(guarded)
         self.call_finished = True
         return False
 

@@ -3822,7 +3822,7 @@ class TestShapeReadMetadata(unittest.TestCase):
         self.assertIn("[FIRST_ZERO] = { .nuops = 2, .uops = { { _FIRST_ZERO, 0, 1 }, { _FIRST_ZERO, OPERAND1_1, 1 } } }", table)
 
 
-class TestCallTransactionMarkers(unittest.TestCase):
+class TestCallMarkers(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         source = str(ir_generator.DEFAULT_INPUT)

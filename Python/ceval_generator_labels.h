@@ -24,13 +24,13 @@
         goto LABEL_gen_stepped; \
     } while (0)
 
-LABEL(gen_dispatch)
+HOT_LABEL(gen_dispatch)
 {
     int opcode;
     DISPATCH();
 }
 
-LABEL(gen_stepped)
+HOT_LABEL(gen_stepped)
 {
     frame = ir_gen_transfer.frame;
     next_instr = ir_gen_transfer.next;
@@ -44,7 +44,7 @@ LABEL(gen_stepped)
  * through every delegating frame above: each level suspends in its YIELD and
  * hands the value to the SEND that resumed it, until the resumer is not one
  * whose outcome is native, and then the value goes to its return slot. */
-LABEL(gen_yield)
+HOT_LABEL(gen_yield)
 {
     PyValue result = ir_gen_value;
     bool thread_plain = generator_thread_is_plain(tstate);
@@ -91,7 +91,7 @@ LABEL(gen_yield)
  * RESUME and the loop back to the SEND, and the SEND enters the next
  * generator, and so on.  If it suspended with a native value-taking
  * resume, the value goes to its STORE_FAST. */
-LABEL(gen_resume)
+HOT_LABEL(gen_resume)
 {
     PyValue value = ir_gen_value;
     bool thread_plain = generator_thread_is_plain(tstate);
@@ -173,7 +173,7 @@ LABEL(gen_resume)
  * the value to the resumer.  A finalizer that runs during the retirement can
  * redirect the resumer; a changed pc or control generation is taken as a
  * redirect. */
-LABEL(gen_return)
+HOT_LABEL(gen_return)
 {
     _PyInterpreterFrame *dying = ir_gen_dying;
     PyValue value = ir_gen_value;
@@ -247,7 +247,7 @@ LABEL(gen_return)
         } \
         frame->base[base + (K)] = PyValue_NULL; \
     } while (0)
-LABEL(gen_complete)
+HOT_LABEL(gen_complete)
 {
     PyValue result = ir_gen_value;
     _PyIRWord source_word = *next_instr;

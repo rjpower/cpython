@@ -73,6 +73,11 @@
 #define TARGET(op) TARGET_##op:
 #define LABEL(name) LABEL_##name:
 
+/* A label that the inline helpers of its code are to be inlined into: GCC
+ * estimates the target of a plain goto as unlikely and optimises the code
+ * for size, which outlines them. */
+#define HOT_LABEL(name) LABEL_##name: __attribute__((hot));
+
 /* The generator transfers.  The plain send, yield and return of a delegation
  * chain run in the evaluator, in the labels gen_resume, gen_yield, gen_return
  * and gen_complete (Python/ceval_generator_labels.h): a handler sets the

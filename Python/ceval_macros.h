@@ -50,7 +50,6 @@
  *
  *   frame       the executing frame, tstate->current_frame; a handler that
  *               switches frames assigns it before it dispatches;
- *   slots       its slots, _PyFrame_Slots(frame);
  *   tstate      the thread state;
  *   next_instr  the word to run next;
  *   ir_word     the word of the instruction, which dispatch loads and from
@@ -80,26 +79,31 @@
  * generator_outcome_target() or a generator_*_targets table gave.  The
  * arguments are evaluated before the state changes, as they were when they
  * were call arguments. */
-#define IR_GEN_SET(F, S, IP, V) \
+#define IR_GEN_SET(F, IP, V) \
     do { \
         _PyInterpreterFrame *ir_gen_frame = (F); \
-        PyValue *ir_gen_slots = (S); \
         _PyInstr *ir_gen_next = (IP); \
         PyValue ir_gen_value = (V); \
         frame = ir_gen_frame; \
-        slots = ir_gen_slots; \
         next_instr = ir_gen_next; \
         ir_word = ir_gen_value.bits; \
     } while (0)
-#define IR_GEN_JUMP(NAME, F, S, IP, V) \
+#define IR_GEN_JUMP(NAME, F, IP, V) \
     do { \
-        IR_GEN_SET(F, S, IP, V); \
+        IR_GEN_SET(F, IP, V); \
         goto TARGET_##NAME; \
     } while (0)
-#define IR_GEN_JUMP_TO(TARGET_ADDRESS, F, S, IP, V) \
+/* GEN_COMPLETE_EFFECT takes the count of send inputs that are still in their
+ * homes in ir_gen_remaining, which no dispatch carries. */
+#define IR_GEN_EFFECT(REMAINING, IP, V) \
+    do { \
+        ir_gen_remaining = (REMAINING); \
+        IR_GEN_JUMP(GEN_COMPLETE_EFFECT, frame, IP, V); \
+    } while (0)
+#define IR_GEN_JUMP_TO(TARGET_ADDRESS, F, IP, V) \
     do { \
         void *ir_gen_target = (TARGET_ADDRESS); \
-        IR_GEN_SET(F, S, IP, V); \
+        IR_GEN_SET(F, IP, V); \
         goto *ir_gen_target; \
     } while (0)
 
@@ -110,7 +114,7 @@
                 frame, frame->instr_ptr, generator_yielded_targets); \
             if (ir_yield_target != NULL && !frame->pending_redirect) { \
                 assert(_PyValue_IsHome(V)); \
-                IR_GEN_JUMP_TO(ir_yield_target, frame, _PyFrame_Slots(frame), \
+                IR_GEN_JUMP_TO(ir_yield_target, frame, \
                                frame->instr_ptr, (V)); \
             } \
         } \
@@ -242,8 +246,12 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 
 /* Local variable macros */
 
-#define LOCALS_ARRAY    (slots)
-#define GETLOCAL(i)     (slots[i])
+/* The frame's slots, which the IR's fields index.  Handlers read them from
+ * the frame where used: a register for them would be one more value live
+ * across every dispatch. */
+#define IR_SLOTS()      (frame->base)
+#define LOCALS_ARRAY    IR_SLOTS()
+#define GETLOCAL(i)     (IR_SLOTS()[i])
 
 
 #ifdef Py_STATS
@@ -489,9 +497,8 @@ gen_try_set_executing(PyGenObject *gen)
  * macros take the word W and the letter X of the field instead, so that they
  * test the word's slot-class flag. */
 
-/* The slot that a slot field names, an lvalue.  `slots` is the frame's
- * slots, _PyFrame_Slots(frame), which the handlers keep in a register. */
-#define IR_SLOT(F) (slots[(F)])
+/* The slot that a slot field names, an lvalue. */
+#define IR_SLOT(F) (IR_SLOTS()[(F)])
 
 /* Whether field F names a local, a cell, a free variable or the frame's
  * discard slot (a hidden local) rather than a temporary: the executing copy

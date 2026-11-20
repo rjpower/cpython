@@ -1334,7 +1334,7 @@ value_operation_refresh(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 /* The checks of a call's window, before the call has any effect; the
  * handler keeps base and destination in registers, and passes the window
- * from its own slots register. */
+ * from its own slots. */
 static inline int
 call_transaction_begin(_PyInterpreterFrame *frame, PyValue *homes, int base,
                        int count, int destination,
@@ -2191,17 +2191,18 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * activation record and the entry frame, whose addresses are taken, are in
  * the caller, _PyEval_EvalFrameLoop().  It runs the frame to its end: the
  * value that INTERPRETER_EXIT takes, or NULL with an exception set.
- * start_frame takes the word and slots from frame. */
+ * start_frame takes the word from frame. */
 static Py_NO_INLINE PyValue
 ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
 #include "ir_targets.h"
-    PyValue *slots = _PyFrame_Slots(frame);
     _PyInstr *next_instr = frame->instr_ptr;
     _PyIRWord ir_word = 0;
     /* The operation that the generic BINARY_OP handlers pass to their shared
      * body, which is not live across a dispatch. */
     int ir_binary_op;
+    /* The send inputs that GEN_COMPLETE_EFFECT finds still in their homes */
+    int ir_gen_remaining;
     /* What PROCESS_ERROR_AT passes to process_error */
     _PyInstr *ir_error_origin;
     uint32_t ir_error_entry;
@@ -2228,7 +2229,6 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
             tstate, frame, ir_error_origin, ir_error_entry);
         if (ir_error_result.disposition == _PyIR_ERROR_HANDLED) {
             frame = tstate->current_frame;
-            slots = _PyFrame_Slots(frame);
             next_instr = ir_error_result.next;
             int opcode;
             NEXTOPARG();

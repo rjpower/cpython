@@ -3365,7 +3365,6 @@ class IRStack(Stack):
         self.logical_sp = PointerOffset.zero()
         self.owner = {}
         self.reloaded = True
-        out.emit_str("slots = _PyFrame_Slots(frame);\n")
 
     def stack_bound_check(self, out: CWriter) -> None:
         pass
@@ -3602,7 +3601,6 @@ class IREmitter(Emitter):
         self.emit("((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;\n")
         self.emit("FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);\n")
         self.abrupt_prefix = True
-        self.emit("slots = _PyFrame_Slots(frame);\n")
         self.emit(f"IR_TRY_NATIVE_YIELD({value});\n")
         self.emit("next_instr = frame->return_pc;\n")
         self.emit(f"if (_PyFrame_SetReturnValue(frame, {value})) {{ next_instr = frame->return_pc; }}\n")
@@ -4056,7 +4054,6 @@ class IREmitter(Emitter):
     def reader_reload(self):
         self.emit("this_instr = frame->instr_ptr;\n")
         self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
-        self.emit("slots = _PyFrame_Slots(frame);\n")
 
     def try_dict_first_probe(self, tkn, tkn_iter, uop, storage, inst):
         self.macro_args(tkn, tkn_iter, 0)
@@ -4077,7 +4074,7 @@ class IREmitter(Emitter):
 
     def call_reload(self, inst):
         self.reader_reload()
-        self.emit("window = slots + call_base;\n")
+        self.emit("window = IR_SLOTS() + call_base;\n")
         if self.call_has_feedback:
             self.emit(f"fb = ({feedback_type(self.format_of(inst))} *)"
                       "(frame->ir_feedback + ((size_t)call_feedback << 3));\n")
@@ -4156,7 +4153,6 @@ class IREmitter(Emitter):
         # Both result and callback-current destination are already published.
         # No stack flush or delayed move from window[0] may consume stale C
         # inputs after this point.
-        self.emit("slots = _PyFrame_Slots(frame);\n")
         self.emit("DISPATCH();\n")
         self.emit("}\n")
 
@@ -4204,7 +4200,6 @@ class IREmitter(Emitter):
         self.emit("}\n")
         self.emit("this_instr = frame->instr_ptr;\n")
         self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
-        self.emit("slots = _PyFrame_Slots(frame);\n")
         if self.format_of(inst).window:
             base = FIELD_VARS[self.format_of(inst).field_of(ROLE_BASE)]
             self.emit(f"window = &IR_SLOT({base});\n")
@@ -4834,7 +4829,7 @@ class IREmitter(Emitter):
             # A failed Try leaves v intact for the rooted effect entry.
             self.emit("if (!_PyValue_TryXCloseNoReentry(v)) {\n")
             self.emit("assert(_PyValue_IsHome(sent.value));\n")
-            self.emit("IR_GEN_JUMP(GEN_YIELD_INPUT_EFFECT, frame, slots, "
+            self.emit("IR_GEN_JUMP(GEN_YIELD_INPUT_EFFECT, frame, "
                       "this_instr, sent.value);\n")
             self.emit("}\n")
             self.emit("window[2] = PyValue_NULL;\n")
@@ -5423,7 +5418,7 @@ class IREmitter(Emitter):
                       "frame, this_instr, generator_completed_targets);\n")
             self.emit("assert(ir_completed_target != NULL);\n")
             self.emit("IR_GEN_JUMP_TO(ir_completed_target, "
-                      "frame, slots, this_instr, ir_completed);\n")
+                      "frame, this_instr, ir_completed);\n")
             self.emit("}\n")
             self.abrupt_operand_sources.add(id(tkn))
             self.error_terminal_sources.add(id(tkn))
@@ -5464,7 +5459,7 @@ class IREmitter(Emitter):
         if inst is None or not canonical_frame_transfer_input(inst):
             raise analysis_error("generator return needs canonical source transfer", tkn)
         self.emit(f"IR_GEN_JUMP(GEN_RETURN_ROUTE, {dying}, "
-                  f"_PyFrame_Slots({dying}), frame->instr_ptr, {value});\n")
+                  f"frame->instr_ptr, {value});\n")
         return False
 
     def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
@@ -5521,10 +5516,9 @@ class IREmitter(Emitter):
         self.emit(f"{gen}->gi_exc_state.previous_item = tstate->exc_info;\n")
         self.emit(f"tstate->exc_info = &{gen}->gi_exc_state;\n")
         self.emit("frame = tstate->current_frame = ir_resumed_frame;\n")
-        self.emit("slots = _PyFrame_Slots(frame);\n")
         if self.generator_boundary is not None:
             self.emit("if (tstate->py_recursion_remaining <= 1) {\n")
-            self.emit("IR_GEN_JUMP(GEN_ENTRY_EFFECT, frame, slots, "
+            self.emit("IR_GEN_JUMP(GEN_ENTRY_EFFECT, frame, "
                       "frame->instr_ptr, ir_resume_input);\n")
             self.emit("}\n")
             self.emit("--tstate->py_recursion_remaining;\n")
@@ -5533,7 +5527,7 @@ class IREmitter(Emitter):
             self.emit("void *ir_resume_target = "
                       "generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];\n")
             self.emit("if (ir_resume_target != NULL) {\n")
-            self.emit("IR_GEN_JUMP_TO(ir_resume_target, frame, slots, "
+            self.emit("IR_GEN_JUMP_TO(ir_resume_target, frame, "
                       "ir_resume_site, ir_resume_input);\n")
             self.emit("}\n")
             self.emit("}\n")
@@ -6788,7 +6782,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                     PointerOffset(fmt.dst_offset, (), ()))
         out.emit(f"assert(_PyValue_IsHome({result}));\n")
         out.emit("window[2] = PyValue_NULL;\n")
-        out.emit(f"IR_GEN_JUMP(GEN_SEND_YIELD, frame, slots, this_instr, {result});\n")
+        out.emit(f"IR_GEN_JUMP(GEN_SEND_YIELD, frame, this_instr, {result});\n")
         stack.home_node = None
         emitter.native_window_out = True
         emitter.ownership_events.append(OwnershipEvent(

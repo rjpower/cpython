@@ -4648,8 +4648,7 @@ dummy_func(
             }
             this_instr = frame->instr_ptr;
             ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-            slots = _PyFrame_Slots(frame);
-            window = &slots[IR_BASE];
+            window = &IR_SLOTS()[IR_BASE];
             INPUTS_DEAD();
             res = result;
             SYNC_SP();

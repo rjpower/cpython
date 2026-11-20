@@ -1614,9 +1614,12 @@ replace_value(PyDictObject *mp, PyValueBorrow key, Py_ssize_t ix,
 
 /* One-pass insert of an exact str key into an unwatched combined table of
    str keys: one probe finds either the entry to replace or the slot to fill.
-   Returns 1 if it stored the pair (consuming key and value), and 0 with
-   nothing consumed when the general insertdict() must run: a split table, a
-   watched dict, a generic table, or a table that must grow first.
+   Returns 1 if it stored the pair, consuming key and value; -1 on a memory
+   error while growing the table, consuming them too; and 0 with nothing
+   consumed when the general insertdict() must run: a split table, a watched
+   dict or a generic table. A table that is full, or the empty keys of a new
+   dict, grows first. Growth moves the entries and runs no Python code, so the
+   probe's miss stays valid and only the free slot is found again.
 
    Nothing in here runs Python code. Comparing two exact str keys is a pointer
    test, a hash test and unicode_eq(), a watcher would be the only callback
@@ -1666,7 +1669,12 @@ insertdict_unicode_key(PyDictObject *mp, PyValue key, Py_hash_t hash,
         i = mask & (i*5 + perturb + 1);
     }
     if (keys->dk_usable <= 0) {
-        return 0;
+        if (insertion_resize(mp, 1) < 0) {
+            PyValue_CLOSE(key);
+            PyValue_CLOSE(value);
+            return -1;
+        }
+        free_slot = find_empty_slot(mp->ma_keys, hash);
     }
     insert_combined_dict(mp, hash, free_slot, key, value);
     return 1;
@@ -1683,8 +1691,9 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
 {
     assert(can_modify_dict(mp));
     assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
-    if (insertdict_unicode_key(mp, key, hash, value)) {
-        return 0;
+    int fast = insertdict_unicode_key(mp, key, hash, value);
+    if (fast != 0) {
+        return fast < 0 ? -1 : 0;
     }
     int notified = 0, classified = 0;
     PyDict_WatchEvent event = PyDict_EVENT_ADDED;

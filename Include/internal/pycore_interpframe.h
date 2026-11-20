@@ -408,6 +408,57 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 extern void _PyFrame_FillConstSlots(_PyInterpreterFrame *frame,
                                     PyCodeObject *code);
 
+/* The constant slots (CO_FAST_CONST) of a frame of exec, nconst from here.
+ * If exec has an image of them (const_image) they hold inline scalars and
+ * immortals and own no count: the push copies the image over them and the
+ * exit only NULLs them, each in a few vector moves, as there are at most
+ * eight (CONST_SLOTS_MAX).  With a mortal constant (no image) they own
+ * counts: _PyFrame_FillConstSlots() takes them, and the exit releases them
+ * like any local. */
+static inline PyValue *
+_PyFrame_ConstSlots(const _PyCodeExec *exec, PyValue *base)
+{
+    return base + exec->const_first;
+}
+
+/* Copy n slots, 1 <= n <= 8, with two overlapping moves of the widest
+ * power of two that fits, so that there is no loop and no call. */
+static inline void
+_PyFrame_CopyConstSlots(PyValue *dst, const PyValue *src, int n)
+{
+    assert(1 <= n && n <= 8);
+    if (n >= 4) {
+        memcpy(dst, src, 4 * sizeof(PyValue));
+        memcpy(dst + n - 4, src + n - 4, 4 * sizeof(PyValue));
+    }
+    else if (n >= 2) {
+        memcpy(dst, src, 2 * sizeof(PyValue));
+        memcpy(dst + n - 2, src + n - 2, 2 * sizeof(PyValue));
+    }
+    else {
+        *dst = *src;
+    }
+}
+
+/* NULL n slots, 1 <= n <= 8, likewise.  PyValue_NULL is all zero bits. */
+static inline void
+_PyFrame_NullConstSlots(PyValue *dst, int n)
+{
+    assert(1 <= n && n <= 8);
+    assert(PyValue_NULL_BITS == 0);
+    if (n >= 4) {
+        memset(dst, 0, 4 * sizeof(PyValue));
+        memset(dst + n - 4, 0, 4 * sizeof(PyValue));
+    }
+    else if (n >= 2) {
+        memset(dst, 0, 2 * sizeof(PyValue));
+        memset(dst + n - 2, 0, 2 * sizeof(PyValue));
+    }
+    else {
+        *dst = PyValue_NULL;
+    }
+}
+
 /* Consumes func and locals. The caller supplies initialized value storage. */
 static inline Py_ALWAYS_INLINE void
 _PyFrame_Initialize(
@@ -436,15 +487,13 @@ _PyFrame_Initialize(
     frame->lltrace = 0;
 #endif
 
-    // The constant slots (CO_FAST_CONST), owners of inline scalars and
-    // immortals, which own no count: copy the ready image of their values.
-    // A mortal constant, as after code.replace(co_consts=...), gets a count.
+    // The constant slots (CO_FAST_CONST), which are NULL: copy the ready
+    // image of their values if they own no count.  A mortal constant, as
+    // after code.replace(co_consts=...), gets a count.
     if (exec->nconst) {
         if (exec->const_image != NULL) {
-            PyValue *slots = base + exec->const_first;
-            for (int i = 0; i < exec->nconst; i++) {
-                slots[i] = exec->const_image[i];
-            }
+            _PyFrame_CopyConstSlots(_PyFrame_ConstSlots(exec, base),
+                                    exec->const_image, exec->nconst);
         }
         else {
             _PyFrame_FillConstSlots(frame, code);

@@ -233,10 +233,26 @@ _PyValue_CheckFrameExtent(_PyInterpreterFrame *frame, int extent)
 }
 #endif
 
+/* Release the slots [begin, end), from the top, each taken (NULL) before it
+ * is closed. */
+static inline void
+close_slots(PyValue *begin, PyValue *end)
+{
+    PyValue *sp = end;
+    while (sp > begin) {
+        sp--;
+        // a move: cleared below
+        PyValue ref = *sp;
+        *sp = PyValue_NULL;
+        PyValue_XCLOSE(ref);
+    }
+}
+
 /* Release the first n slots of frame, from the top, so that a finalizer
  * that looks at the frame finds the slots that it has not reached yet intact
  * and the rest NULL.  The n cover the locals, which include the discard
- * slot. */
+ * slot.  The constant slots that own no count are only NULLed: they are
+ * dead at exit, and no finalizer reads a hidden slot. */
 static inline void
 clear_slots(_PyInterpreterFrame *frame, int n)
 {
@@ -245,13 +261,16 @@ clear_slots(_PyInterpreterFrame *frame, int n)
 #endif
     PyValue *locals = frame->base;
     assert(n > _PyFrame_DiscardSlot(frame));
-    PyValue *sp = locals + n;
-    while (sp > locals) {
-        sp--;
-        // a move: cleared below
-        PyValue ref = *sp;
-        *sp = PyValue_NULL;
-        PyValue_XCLOSE(ref);
+    const _PyCodeExec *exec = _PyFrame_GetCode(frame)->_co_exec;
+    if (exec->const_image == NULL) {
+        close_slots(locals, locals + n);
+    }
+    else {
+        PyValue *consts = _PyFrame_ConstSlots(exec, locals);
+        assert(consts + exec->nconst <= locals + n);
+        close_slots(consts + exec->nconst, locals + n);
+        _PyFrame_NullConstSlots(consts, exec->nconst);
+        close_slots(locals, consts);
     }
     Py_CLEAR(frame->f_locals);
 }

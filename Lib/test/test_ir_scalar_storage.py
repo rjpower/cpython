@@ -152,7 +152,7 @@ class ScalarStorageTests(unittest.TestCase):
             emitter.handler_format = formats[name]
             emitter.allowed_error_checkpoints = None
             ir_generator.generate_handler(name, analysis.instructions[name],
-                                          formats[name], emitter, out, True)
+                                          formats[name], emitter, out)
             return tuple(cp for cp in emitter.error_checkpoint_sites.values() if cp.id)
 
         retained = emitted("GET_ANEXT")
@@ -176,16 +176,15 @@ class ScalarStorageTests(unittest.TestCase):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
         formats = ir_generator.compute_formats(analysis)
-        for record in (False, True):
-            with self.subTest(record=record):
-                stream = io.StringIO()
-                out = cwriter.CWriter(stream, 0, False)
-                emitter = ir_generator.IREmitter(out, analysis, formats)
-                name = "INSTRUMENTED_YIELD_VALUE"
-                emitter.handler_format = formats[name]
-                ir_generator.generate_handler(name, analysis.instructions[name],
-                                              formats[name], emitter, out, record)
-                self.assertIn("PROCESS_ERROR_AT(RAISE, 0, this_instr)", stream.getvalue())
+        with self.subTest():
+            stream = io.StringIO()
+            out = cwriter.CWriter(stream, 0, False)
+            emitter = ir_generator.IREmitter(out, analysis, formats)
+            name = "INSTRUMENTED_YIELD_VALUE"
+            emitter.handler_format = formats[name]
+            ir_generator.generate_handler(name, analysis.instructions[name],
+                                          formats[name], emitter, out)
+            self.assertIn("PROCESS_ERROR_AT(RAISE, 0, this_instr)", stream.getvalue())
 
 
 if __name__ == "__main__":

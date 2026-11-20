@@ -23,7 +23,7 @@ class CanonicalElementTests(unittest.TestCase):
     def source(self):
         return (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
 
-    def emit(self, source, name, record=False):
+    def emit(self, source, name):
         numbers = ir_numbers.load_table()
         if name == "RENAMED_ELEMENT":
             numbers = ir_numbers.NumberTable(
@@ -38,23 +38,22 @@ class CanonicalElementTests(unittest.TestCase):
         writer = cwriter.CWriter(out, 0, False)
         emitter = ir_generator.IREmitter(writer, analysis, formats)
         instruction = ir_generator.handler_instructions(analysis)[name]
-        ir_generator.generate_handler(name, instruction, formats[name], emitter, writer, record)
+        ir_generator.generate_handler(name, instruction, formats[name], emitter, writer)
         return out.getvalue()
 
     def test_list_and_tuple_use_the_same_canonical_token_consumer(self):
         source = self.source()
         for kind in ("LIST", "TUPLE"):
-            for record in (False, True):
-                with self.subTest(kind=kind, record=record):
-                    body = self.emit(source, f"BINARY_OP_SUBSCR_{kind}_INT", record)
-                    self.assertIn(f"PyValue_XDUP(Py{kind.title()}_GET_VALUE(", body)
-                    self.assertIn("IR_STORE_DST(ir_word, A, res);", body)
-                    self.assertNotIn("_PyValue_Publish", body)
-                    # The result is stored before the dying container is
-                    # released
-                    self.assertLess(body.index("IR_STORE_DST("),
-                                    body.index("_PyValue_XCLOSE_POINTER(ir_own_B);"))
-                    self.assertLess(body.index("index >= Py"), body.index("PyValue_XDUP(Py"))
+            with self.subTest(kind=kind):
+                body = self.emit(source, f"BINARY_OP_SUBSCR_{kind}_INT")
+                self.assertIn(f"PyValue_XDUP(Py{kind.title()}_GET_VALUE(", body)
+                self.assertIn("IR_STORE_DST(ir_word, A, res);", body)
+                self.assertNotIn("_PyValue_Publish", body)
+                # The result is stored before the dying container is
+                # released
+                self.assertLess(body.index("IR_STORE_DST("),
+                                body.index("_PyValue_XCLOSE_POINTER(ir_own_B);"))
+                self.assertLess(body.index("index >= Py"), body.index("PyValue_XDUP(Py"))
         renamed = source.replace("BINARY_OP_SUBSCR_LIST_INT", "RENAMED_ELEMENT")
         self.assertIn("IR_STORE_DST(", self.emit(renamed, "RENAMED_ELEMENT"))
 

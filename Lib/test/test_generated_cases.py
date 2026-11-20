@@ -344,20 +344,19 @@ class TestIRCases(unittest.TestCase):
                        for name, other in rows.items() if other.base == row.base}
             self.assertEqual(len(entries), 1)
         instructions = ir_generator.handler_instructions(analysis)
-        for record in (False, True):
-            output = io.StringIO()
-            out = CWriter(output, 0, False)
-            emitter = ir_generator.IREmitter(out, analysis, formats)
-            name = "SEND_GEN_XFER_DISCARD"
-            ir_generator.generate_handler(name, instructions[name], formats[name],
-                                          emitter, out, record)
-            body = output.getvalue()
-            self.assertIn("IR_GEN_TAIL(_TAIL_CALL_GEN_ENTRY_EFFECT", body)
-            self.assertNotIn("_Py_EnterRecursivePy(tstate)", body)
-            self.assertEqual(body.count("--tstate->py_recursion_remaining;"), 1)
-            self.assertIn("generator_resume_targets[", body)
-            self.assertTrue(any(event.kind == "_PyIR_OWNER_NATIVE_WINDOW_OUT"
-                                for event in emitter.ownership_events))
+        output = io.StringIO()
+        out = CWriter(output, 0, False)
+        emitter = ir_generator.IREmitter(out, analysis, formats)
+        name = "SEND_GEN_XFER_DISCARD"
+        ir_generator.generate_handler(name, instructions[name], formats[name],
+                                      emitter, out)
+        body = output.getvalue()
+        self.assertIn("IR_GEN_TAIL(_TAIL_CALL_GEN_ENTRY_EFFECT", body)
+        self.assertNotIn("_Py_EnterRecursivePy(tstate)", body)
+        self.assertEqual(body.count("--tstate->py_recursion_remaining;"), 1)
+        self.assertIn("generator_resume_targets[", body)
+        self.assertTrue(any(event.kind == "_PyIR_OWNER_NATIVE_WINDOW_OUT"
+                            for event in emitter.ownership_events))
 
     def test_generator_native_result_preserves_virtual_cursor(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -366,23 +365,22 @@ class TestIRCases(unittest.TestCase):
         analysis = analyzer.analyze_files([self.temp_input_filename])
         formats = ir_generator.compute_formats(analysis)
         instructions = ir_generator.handler_instructions(analysis)
-        for record in (False, True):
-            output = io.StringIO()
-            out = CWriter(output, 0, False)
-            emitter = ir_generator.IREmitter(out, analysis, formats)
-            name = "SEND_VIRTUAL_XFER_DISCARD"
-            ir_generator.generate_handler(name, instructions[name], formats[name],
-                                          emitter, out, record)
-            body = output.getvalue()
-            update = body.index("null_or_index = PyValue_TagIndex(index);")
-            publish = body.index("IR_SET_TEMP(window[1], null_or_index);", update)
-            clear = body.index("window[2] = PyValue_NULL;", publish)
-            transfer = body.index("IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD", clear)
-            self.assertLess(update, publish)
-            self.assertLess(publish, clear)
-            self.assertLess(clear, transfer)
-            self.assertNotIn("IR_SET_TEMP(window[2], next);", body)
-            self.assertNotIn("IR_MOVE_TO_DST", body)
+        output = io.StringIO()
+        out = CWriter(output, 0, False)
+        emitter = ir_generator.IREmitter(out, analysis, formats)
+        name = "SEND_VIRTUAL_XFER_DISCARD"
+        ir_generator.generate_handler(name, instructions[name], formats[name],
+                                      emitter, out)
+        body = output.getvalue()
+        update = body.index("null_or_index = PyValue_TagIndex(index);")
+        publish = body.index("IR_SET_TEMP(window[1], null_or_index);", update)
+        clear = body.index("window[2] = PyValue_NULL;", publish)
+        transfer = body.index("IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD", clear)
+        self.assertLess(update, publish)
+        self.assertLess(publish, clear)
+        self.assertLess(clear, transfer)
+        self.assertNotIn("IR_SET_TEMP(window[2], next);", body)
+        self.assertNotIn("IR_MOVE_TO_DST", body)
 
     def test_generator_provider_result_precedes_sent_input_effect(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -392,23 +390,22 @@ class TestIRCases(unittest.TestCase):
         formats = ir_generator.compute_formats(analysis)
         instructions = ir_generator.handler_instructions(analysis)
         for name in ("SEND_XFER_DISCARD", "SEND_ASYNC_GEN_XFER_DISCARD"):
-            for record in (False, True):
-                with self.subTest(name=name, record=record):
-                    output = io.StringIO()
-                    out = CWriter(output, 0, False)
-                    emitter = ir_generator.IREmitter(out, analysis, formats)
-                    ir_generator.generate_handler(name, instructions[name], formats[name],
-                                                  emitter, out, record)
-                    body = output.getvalue()
-                    provider = body.index("_PyValue_Send(")
-                    attempt = body.index("if (!_PyValue_TryXCloseNoReentry(v))", provider)
-                    effect = body.index("IR_GEN_TAIL(_TAIL_CALL_GEN_YIELD_INPUT_EFFECT", attempt)
-                    clear = body.index("window[2] = PyValue_NULL;", effect)
-                    self.assertLess(provider, attempt)
-                    self.assertLess(attempt, effect)
-                    self.assertLess(effect, clear)
-                    self.assertNotIn("PyValue_CLOSE(v);", body)
-                    self.assertIn("this_instr, sent.value);", body)
+            with self.subTest(name=name):
+                output = io.StringIO()
+                out = CWriter(output, 0, False)
+                emitter = ir_generator.IREmitter(out, analysis, formats)
+                ir_generator.generate_handler(name, instructions[name], formats[name],
+                                              emitter, out)
+                body = output.getvalue()
+                provider = body.index("_PyValue_Send(")
+                attempt = body.index("if (!_PyValue_TryXCloseNoReentry(v))", provider)
+                effect = body.index("IR_GEN_TAIL(_TAIL_CALL_GEN_YIELD_INPUT_EFFECT", attempt)
+                clear = body.index("window[2] = PyValue_NULL;", effect)
+                self.assertLess(provider, attempt)
+                self.assertLess(attempt, effect)
+                self.assertLess(effect, clear)
+                self.assertNotIn("PyValue_CLOSE(v);", body)
+                self.assertIn("this_instr, sent.value);", body)
 
     def test_generator_completion_resolves_actual_source(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -419,21 +416,20 @@ class TestIRCases(unittest.TestCase):
         instructions = ir_generator.handler_instructions(analysis)
         for name in ("SEND_XFER_DISCARD", "SEND_VIRTUAL_XFER_DISCARD",
                      "SEND_ASYNC_GEN_XFER_DISCARD", "CLEANUP_THROW_XFER_DISCARD"):
-            for record in (False, True):
-                with self.subTest(name=name, record=record):
-                    output = io.StringIO()
-                    out = CWriter(output, 0, False)
-                    emitter = ir_generator.IREmitter(out, analysis, formats)
-                    ir_generator.generate_handler(name, instructions[name], formats[name],
-                                                  emitter, out, record)
-                    body = output.getvalue()
-                    resolve = body.index("generator_outcome_target(frame, this_instr, "
-                                         "generator_completed_targets)")
-                    guard = body.index("assert(ir_completed_target != NULL);", resolve)
-                    tail = body.index("IR_GEN_TAIL(ir_completed_target,", guard)
-                    self.assertLess(resolve, guard)
-                    self.assertLess(guard, tail)
-                    self.assertNotIn("generator_completed_targets[IR_HANDLER(ir_word)]", body)
+            with self.subTest(name=name):
+                output = io.StringIO()
+                out = CWriter(output, 0, False)
+                emitter = ir_generator.IREmitter(out, analysis, formats)
+                ir_generator.generate_handler(name, instructions[name], formats[name],
+                                              emitter, out)
+                body = output.getvalue()
+                resolve = body.index("generator_outcome_target(frame, this_instr, "
+                                     "generator_completed_targets)")
+                guard = body.index("assert(ir_completed_target != NULL);", resolve)
+                tail = body.index("IR_GEN_TAIL(ir_completed_target,", guard)
+                self.assertLess(resolve, guard)
+                self.assertLess(guard, tail)
+                self.assertNotIn("generator_completed_targets[IR_HANDLER(ir_word)]", body)
 
     def test_generator_return_route_leaves_thread_return_unchanged(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -444,29 +440,28 @@ class TestIRCases(unittest.TestCase):
         instructions = ir_generator.handler_instructions(analysis)
         for name in ("RETURN_VALUE", "RETURN_VALUE_EMPTY",
                      "INSTRUMENTED_RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE_EMPTY"):
-            for record in (False, True):
-                with self.subTest(name=name, record=record):
-                    output = io.StringIO()
-                    out = CWriter(output, 0, False)
-                    emitter = ir_generator.IREmitter(out, analysis, formats)
-                    ir_generator.generate_handler(name, instructions[name], formats[name],
-                                                  emitter, out, record)
-                    body = output.getvalue()
-                    branch = body.index("if (generator_return) {")
-                    end = body.index("}\n", branch)
-                    route = body[branch:end]
-                    self.assertIn("IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, dying, "
-                                  "_PyFrame_Slots(dying), frame->instr_ptr, temp);", route)
-                    self.assertNotIn("generator_outcome_target(", body)
-                    self.assertNotIn("_PyEval_FrameClear", route)
-                    self.assertNotIn("_PyEval_CompleteGeneratorReturn", route)
-                    clear = ("_PyEval_RetireThreadFrameWithResult" if name.endswith("_EMPTY")
-                             else "_PyEval_FrameClearAndPopGeneralWithResult")
-                    self.assertEqual(body.count(f"temp = {clear}(tstate, dying, temp);"), 1)
-                    self.assertEqual(body.count("_PyFrame_SetReturnValue(frame, temp)"), 1)
-                    self.assertEqual(body.count("_Py_LeaveRecursiveCallPy(tstate);"), 1)
-                    self.assertEqual(body.count("DTRACE_FUNCTION_RETURN();"), 1)
-                    self.assertEqual(body.count("frame = tstate->current_frame = dying->previous;"), 1)
+            with self.subTest(name=name):
+                output = io.StringIO()
+                out = CWriter(output, 0, False)
+                emitter = ir_generator.IREmitter(out, analysis, formats)
+                ir_generator.generate_handler(name, instructions[name], formats[name],
+                                              emitter, out)
+                body = output.getvalue()
+                branch = body.index("if (generator_return) {")
+                end = body.index("}\n", branch)
+                route = body[branch:end]
+                self.assertIn("IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, dying, "
+                              "_PyFrame_Slots(dying), frame->instr_ptr, temp);", route)
+                self.assertNotIn("generator_outcome_target(", body)
+                self.assertNotIn("_PyEval_FrameClear", route)
+                self.assertNotIn("_PyEval_CompleteGeneratorReturn", route)
+                clear = ("_PyEval_RetireThreadFrameWithResult" if name.endswith("_EMPTY")
+                         else "_PyEval_FrameClearAndPopGeneralWithResult")
+                self.assertEqual(body.count(f"temp = {clear}(tstate, dying, temp);"), 1)
+                self.assertEqual(body.count("_PyFrame_SetReturnValue(frame, temp)"), 1)
+                self.assertEqual(body.count("_Py_LeaveRecursiveCallPy(tstate);"), 1)
+                self.assertEqual(body.count("DTRACE_FUNCTION_RETURN();"), 1)
+                self.assertEqual(body.count("frame = tstate->current_frame = dying->previous;"), 1)
 
     def test_generator_explicit_completion_consumer_targets(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -487,23 +482,26 @@ class TestIRCases(unittest.TestCase):
                              ir_generator.generator_word_entry(
                                  f"{row.base}_XFER_DISCARD", analysis))
 
-    def test_error_ingress_keeps_native_bridge_owners(self):
-        output = self.ir_output("""
+    def test_inline_input_read_as_object_needs_an_assert(self):
+        # No handler boxes an inline value (handlers81, H3): a uop that reads
+        # an input as an object, outside a guard, asserts that it is one
+        body = """
         inst(OP, (value -- result)) {
+            %s
             PyObject *object = PyValue_AsKnownObjectBorrow(value);
             PyObject *found = spam_call(object);
             DECREF_INPUTS();
             ERROR_IF(found == NULL);
             result = PyValue_FromObjectSteal(found);
         }
-        """)
-        body = self.handler(output, "OP")
-        self.assertIn("_PyValueTemps *value_temps = &value_owners;", body)
-        boxing = body.index("_PyValueTemps_Box(value_temps, value)")
-        failure = body.index("PROCESS_ERROR_AT(RAISE, 0, this_instr);", boxing)
-        self.assertLess(boxing, failure)
-        self.assertNotIn("JUMP_TO_LABEL(error)", body)
-        self.assertNotIn("finish_value_bridges", body)
+        """
+        with self.assertRaisesRegex(SyntaxError, "may be an inline value"):
+            self.ir_output(body % "")
+        output = self.ir_output(body % "assert(PyValue_IsObject(value));")
+        handler = self.handler(output, "OP")
+        self.assertNotIn("value_temps", handler)
+        self.assertNotIn("_PyValueTemps", handler)
+        self.assertNotIn("finish_value_bridges", handler)
 
     def test_error_labels_use_explicit_literal_ingresses(self):
         source = "\n" + "\n".join(
@@ -533,7 +531,7 @@ class TestIRCases(unittest.TestCase):
             out = CWriter(output, 0, False)
             emitter = ir_generator.IREmitter(out, analysis, formats)
             ir_generator.generate_handler(instruction.name, instruction,
-                                          formats[instruction.name], emitter, out, False)
+                                          formats[instruction.name], emitter, out)
             return output.getvalue()
 
         self.assertIsNotNone(ir_generator.observer_entry_source(
@@ -584,14 +582,6 @@ class TestIRCases(unittest.TestCase):
                 self.assertIn(old, source)
                 with self.assertRaises(SyntaxError):
                     generate(source.replace(old, new, 1))
-
-        boxes_into_record = ir_generator.boxes_into_record
-        def box_dict_reader(code):
-            return ("_PyDict_TryGetFirstProbeValue" in code or
-                    boxes_into_record(code))
-        with mock.patch.object(ir_generator, "boxes_into_record", box_dict_reader):
-            with self.assertRaisesRegex(SyntaxError, "cannot use a value record"):
-                generate(source)
 
     def test_guarded_python_call_contract(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -702,10 +692,6 @@ class TestIRCases(unittest.TestCase):
         output = self.ir_output(source)
         self.assertNotIn("value_boxes[", output)
         self.assertNotIn("value_owners", output)
-        self.assertFalse(ir_generator.boxes_into_record(
-            "_PyValueTemps_Close(value_temps);"))
-        self.assertTrue(ir_generator.boxes_into_record(
-            "unknown_helper(value_temps);"))
         changes = (
             ("res = held;", "PyValue_CLOSE(held);", "not defined"),
             ("PyValue held = TAKE(value);\n            res = held;",
@@ -895,7 +881,7 @@ class TestIRCases(unittest.TestCase):
             writer = CWriter(output, 0, False)
             emitter = ir_generator.IREmitter(writer, analysis, formats)
             ir_generator.generate_handler(name, analysis.instructions[name],
-                                          formats[name], emitter, writer, False)
+                                          formats[name], emitter, writer)
             self.assertIn(store, output.getvalue())
 
         renamed = source.replace('YIELD_VALUE', 'RENAMED_YIELD')
@@ -956,13 +942,13 @@ class TestIRCases(unittest.TestCase):
         analysis = analyzer.analyze_files([self.temp_input_filename])
         formats = ir_generator.compute_formats(analysis)
 
-        def emitted(name, record):
+        def emitted(name):
             output = io.StringIO()
             out = CWriter(output, 0, False)
             emitter = ir_generator.IREmitter(out, analysis, formats)
             instruction = ir_generator.all_instructions(analysis)[name]
             ir_generator.generate_handler(name, instruction,
-                                          formats[name], emitter, out, record)
+                                          formats[name], emitter, out)
             return output.getvalue()
 
         entries = {
@@ -972,34 +958,33 @@ class TestIRCases(unittest.TestCase):
             "SEND": "Send", "SEND_VIRTUAL": "Send",
             "SEND_ASYNC_GEN": "Send", "CLEANUP_THROW": "SendThrow",
         }
-        for record in (False, True):
-            for name, entry in entries.items():
-                with self.subTest(name=name, record=record):
-                    handler = emitted(name, record)
-                    self.assertIn("PyValue completed =", handler)
-                    self.assertIn("_PyIRStepResult ir_step_result =", handler)
-                    self.assertNotIn("&completed", handler)
-                    self.assertNotIn("_PyEval_CompleteStep(", handler)
-                    self.assertNotIn("_PyIRStepResult completed =", handler)
-                    target = ("_PyFrame_InstrAt(frame, oparg)"
-                              if name == "CLEANUP_THROW" else "next_instr + oparg")
-                    recipient = "" if entry == "ForIter" else "IR_A(ir_word), "
-                    self.assertIn(
-                        f"_PyEval_Complete{entry}(tstate, frame, this_instr, "
-                        f"IR_B(ir_word), {recipient}{target}, completed);", handler)
-                    if name == "CLEANUP_THROW":
-                        self.assertNotIn("assert(!IR_IS_LOCAL(dst)", handler)
-            for name in ("FOR_ITER_GEN", "SEND_GEN"):
-                handler = emitted(name, record)
-                self.assertNotIn("PyValue new_frame;", handler)
-                self.assertNotIn("_PyEval_CompleteForIter(", handler)
-                self.assertNotIn("_PyEval_CompleteSend(", handler)
-            for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE",
-                         "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"):
-                handler = emitted(name, record)
-                self.assertIn("_PyEval_CompleteGeneratorReturn(", handler)
-                self.assertNotIn("_PyEval_CompleteForIter(", handler)
-                self.assertNotIn("_PyEval_CompleteSend(", handler)
+        for name, entry in entries.items():
+            with self.subTest(name=name):
+                handler = emitted(name)
+                self.assertIn("PyValue completed =", handler)
+                self.assertIn("_PyIRStepResult ir_step_result =", handler)
+                self.assertNotIn("&completed", handler)
+                self.assertNotIn("_PyEval_CompleteStep(", handler)
+                self.assertNotIn("_PyIRStepResult completed =", handler)
+                target = ("_PyFrame_InstrAt(frame, oparg)"
+                          if name == "CLEANUP_THROW" else "next_instr + oparg")
+                recipient = "" if entry == "ForIter" else "IR_A(ir_word), "
+                self.assertIn(
+                    f"_PyEval_Complete{entry}(tstate, frame, this_instr, "
+                    f"IR_B(ir_word), {recipient}{target}, completed);", handler)
+                if name == "CLEANUP_THROW":
+                    self.assertNotIn("assert(!IR_IS_LOCAL(dst)", handler)
+        for name in ("FOR_ITER_GEN", "SEND_GEN"):
+            handler = emitted(name)
+            self.assertNotIn("PyValue new_frame;", handler)
+            self.assertNotIn("_PyEval_CompleteForIter(", handler)
+            self.assertNotIn("_PyEval_CompleteSend(", handler)
+        for name in ("RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE",
+                     "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"):
+            handler = emitted(name)
+            self.assertIn("_PyEval_CompleteGeneratorReturn(", handler)
+            self.assertNotIn("_PyEval_CompleteForIter(", handler)
+            self.assertNotIn("_PyEval_CompleteSend(", handler)
 
         marker = "IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);"
         Path(self.temp_input_filename).write_text(source.replace(
@@ -1007,7 +992,7 @@ class TestIRCases(unittest.TestCase):
         analysis = analyzer.analyze_files([self.temp_input_filename])
         formats = ir_generator.compute_formats(analysis)
         with self.assertRaisesRegex(SyntaxError, "unsupported completion kind"):
-            emitted("FOR_ITER", False)
+            emitted("FOR_ITER")
 
     def test_exact_coroutine_await_transfers_existing_owner(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -1030,28 +1015,27 @@ class TestIRCases(unittest.TestCase):
         self.assertFalse(effect.callback)
         self.assertFalse(effect.may_fail)
         self.assertEqual(effect.homes, ir_generator.HomeEffect.NO_ARENA_WRITE)
-        for record in (False, True):
-            with self.subTest(record=record):
-                output = io.StringIO()
-                out = CWriter(output, 0, False)
-                ir_generator.generate_handler("GET_AWAITABLE", instruction,
-                    formats["GET_AWAITABLE"], ir_generator.IREmitter(out, analysis, formats),
-                    out, record)
-                handler = output.getvalue()
-                start = handler.index("if (coro_awaitable_can_transfer(iterable))")
-                end = handler.index("}\n", start)
-                arm = handler[start:end]
-                self.assertIn("IR_DETACH(ir_word, B, iterable)", arm)
-                self.assertIn("iter = IR_TAKEN(iterable, ir_own_B)", arm)
-                self.assertNotIn("_PyEval_GetAwaitable", arm)
-                self.assertNotIn("PyValue_FromObjectSteal", arm)
-                self.assertEqual(handler.count("_PyEval_GetAwaitable("), 1)
-                self.assertIn("IR_STORE_DST(ir_word, A, iter);", handler)
+        with self.subTest():
+            output = io.StringIO()
+            out = CWriter(output, 0, False)
+            ir_generator.generate_handler("GET_AWAITABLE", instruction,
+                formats["GET_AWAITABLE"], ir_generator.IREmitter(out, analysis, formats),
+                out)
+            handler = output.getvalue()
+            start = handler.index("if (coro_awaitable_can_transfer(iterable))")
+            end = handler.index("}\n", start)
+            arm = handler[start:end]
+            self.assertIn("IR_DETACH(ir_word, B, iterable)", arm)
+            self.assertIn("iter = IR_TAKEN(iterable, ir_own_B)", arm)
+            self.assertNotIn("_PyEval_GetAwaitable", arm)
+            self.assertNotIn("PyValue_FromObjectSteal", arm)
+            self.assertEqual(handler.count("_PyEval_GetAwaitable("), 1)
+            self.assertIn("IR_STORE_DST(ir_word, A, iter);", handler)
         body = instruction.parts[0].body.body[0]
         self.assertIsInstance(body, ir_generator.IfStmt)
         fallback = [ir_generator._statement_text(stmt) for stmt in body.else_body.body]
         expected = ir_generator.Parser("""{
-            PyObject *iter_o = _PyEval_GetAwaitable(PyValue_AsKnownObjectBorrow(iterable), oparg);
+            PyObject *iter_o = _PyEval_GetAwaitable(iterable, oparg);
             PyValue_CLOSE(iterable);
             ERROR_IF(iter_o == NULL);
             iter = PyValue_FromObjectSteal(iter_o);
@@ -1065,7 +1049,7 @@ class TestIRCases(unittest.TestCase):
                 result = TAKE(value);
             }
             else {
-                PyObject *pointer = _PyEval_GetAwaitable(PyValue_AsKnownObjectBorrow(value), 0);
+                PyObject *pointer = _PyEval_GetAwaitable(value, 0);
                 PyValue_CLOSE(value);
                 ERROR_IF(pointer == NULL);
                 result = PyValue_FromObjectSteal(pointer);
@@ -1084,12 +1068,11 @@ class TestIRCases(unittest.TestCase):
         self.assertTrue(effect.may_fail)
         owning = ir_generator.owning_output_source(instruction)
         self.assertEqual(owning.owning_outputs, frozenset({"result"}))
-        for record in (False, True):
-            output = io.StringIO()
-            out = CWriter(output, 0, False)
-            ir_generator.generate_handler("OP", instruction, formats["OP"],
-                ir_generator.IREmitter(out, analysis, formats), out, record)
-            self.assertIn("IR_STORE_DST(ir_word, A, result);", output.getvalue())
+        output = io.StringIO()
+        out = CWriter(output, 0, False)
+        ir_generator.generate_handler("OP", instruction, formats["OP"],
+            ir_generator.IREmitter(out, analysis, formats), out)
+        self.assertIn("IR_STORE_DST(ir_word, A, result);", output.getvalue())
         mutations = (
             ("result = PyValue_FromObjectSteal(pointer);", "result = PyValue_NULL;"),
             ("result = PyValue_FromObjectSteal(pointer);", "result = value;"),
@@ -1125,7 +1108,7 @@ class TestIRCases(unittest.TestCase):
             out = CWriter(output, 0, False)
             with self.assertRaisesRegex(ir_generator.StackError, "final owning-result receipt"):
                 ir_generator.generate_handler("OP", instruction, formats["OP"],
-                    ir_generator.IREmitter(out, analysis, formats), out, False)
+                    ir_generator.IREmitter(out, analysis, formats), out)
 
     def test_generator_entry_recipient_uses_actual_terminal(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -1139,22 +1122,21 @@ class TestIRCases(unittest.TestCase):
             recipe = ir_generator.generator_entry_recipe(instruction)
             self.assertIsNotNone(recipe)
             self.assertEqual(recipe.kind, kind)
-            for record in (False, True):
-                with self.subTest(name=name, record=record):
-                    output = io.StringIO()
-                    out = CWriter(output, 0, False)
-                    emitter = ir_generator.IREmitter(out, analysis, formats)
-                    ir_generator.generate_handler(name, instruction, formats[name],
-                                                  emitter, out, record)
-                    handler = output.getvalue()
-                    self.assertNotIn("if (IR_IS_LOCAL_FIELD(ir_word, A)", handler)
-                    self.assertIn("frame->return_slot =", handler)
-                    self.assertIn(f"{kind} == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word)",
-                                  handler)
-                    self.assertLess(handler.index("frame->return_slot ="),
-                                    handler.index("frame = tstate->current_frame = ir_resumed_frame;"))
-                    self.assertIn("_PyFrame_SetReturnValue(frame, ir_resume_input)", handler)
-                    self.assertNotIn("_PyValue_Publish", handler)
+            with self.subTest(name=name):
+                output = io.StringIO()
+                out = CWriter(output, 0, False)
+                emitter = ir_generator.IREmitter(out, analysis, formats)
+                ir_generator.generate_handler(name, instruction, formats[name],
+                                              emitter, out)
+                handler = output.getvalue()
+                self.assertNotIn("if (IR_IS_LOCAL_FIELD(ir_word, A)", handler)
+                self.assertIn("frame->return_slot =", handler)
+                self.assertIn(f"{kind} == _PY_IR_SEND ? IR_B(ir_word) + 2 : IR_A(ir_word)",
+                              handler)
+                self.assertLess(handler.index("frame->return_slot ="),
+                                handler.index("frame = tstate->current_frame = ir_resumed_frame;"))
+                self.assertIn("_PyFrame_SetReturnValue(frame, ir_resume_input)", handler)
+                self.assertNotIn("_PyValue_Publish", handler)
         instruction = analysis.instructions["FOR_ITER_GEN"]
         recipe = ir_generator.generator_entry_recipe(instruction)
         self.assertEqual(ir_generator.store_mode(
@@ -1316,6 +1298,8 @@ class TestIRCases(unittest.TestCase):
         # code would be followed as derived from the objects, S7.)
         input = """
         inst(OP, (left, right -- res)) {
+            assert(PyValue_IsObject(left));
+            assert(PyValue_IsObject(right));
             PyObject *l = PyValue_AsKnownObjectBorrow(left);
             PyObject *r = PyValue_AsKnownObjectBorrow(right);
             PyObject *o = spam_call(l, r);
@@ -1333,10 +1317,6 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 5};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             PyValueBorrow left;
@@ -1346,44 +1326,24 @@ class TestIRCases(unittest.TestCase):
             (void)ir_own_B;
             PyValue ir_own_C = PyValue_NULL;
             (void)ir_own_C;
-            PyObject *ir_obj_left = NULL;
-            PyObject *ir_obj_right = NULL;
             right = IR_VIEW(IR_C(ir_word));
             left = IR_VIEW(IR_B(ir_word));
-            if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                ir_obj_left = _PyValueTemps_Box(value_temps, left);
-                if (ir_obj_left == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(OP);
-            }
-            else {
-                ir_obj_left = PyValue_AsKnownObjectBorrow(left);
-            }
-            if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                ir_obj_right = _PyValueTemps_Box(value_temps, right);
-                if (ir_obj_right == NULL) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                BOX_STAT_INC(OP);
-            }
-            else {
-                ir_obj_right = PyValue_AsKnownObjectBorrow(right);
-            }
-            PyObject *l = ir_obj_left;
-            PyObject *r = ir_obj_right;
+            assert(PyValue_IsObject(left));
+            assert(PyValue_IsObject(right));
+            PyObject *l = PyValue_AsKnownObjectBorrow(left);
+            PyObject *r = PyValue_AsKnownObjectBorrow(right);
             PyObject *o = spam_call(l, r);
             ir_own_C = IR_DETACH(ir_word, C, right);
             ir_own_B = IR_DETACH(ir_word, B, left);
             if (o == NULL) {
-                PyValue_XCLOSE(ir_own_C);
-                PyValue_XCLOSE(ir_own_B);
+                _PyValue_XCLOSE_POINTER(ir_own_C);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             res = PyValue_FromObjectSteal(o);
             IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_C);
-            PyValue_XCLOSE(ir_own_B);
+            _PyValue_XCLOSE_POINTER(ir_own_C);
+            _PyValue_XCLOSE_POINTER(ir_own_B);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -1403,13 +1363,16 @@ class TestIRCases(unittest.TestCase):
     def test_borrow_mask(self):
         input = """
         inst(OP_PASS, (value -- value, res)) {
+            assert(PyValue_IsObject(value));
             res = SPAM(PyValue_AsKnownObjectBorrow(value));
         }
         inst(OP_OBJ, (value -- res)) {
+            assert(PyValue_IsObject(value));
             res = SPAM(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
         }
         inst(OP_FAMILY, (value -- res)) {
+            assert(PyValue_IsObject(value));
             res = SPAM(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
         }
@@ -1451,6 +1414,7 @@ class TestIRCases(unittest.TestCase):
         # own, the owner's or a DUP of a local.
         input = """
         inst(OP_CLOSE, (value --)) {
+            assert(PyValue_IsObject(value));
             SPAM(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
         }
@@ -1458,10 +1422,12 @@ class TestIRCases(unittest.TestCase):
             res = TAKE(value);
         }
         inst(OP_STEAL, (value -- res)) {
+            assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectSteal(value);
             res = PyValue_FromObjectSteal(SPAM(o));
         }
         inst(OP_ALIAS, (value -- res)) {
+            assert(PyValue_IsObject(value));
             if (SPAM(PyValue_AsKnownObjectBorrow(value))) {
                 res = TAKE(value);
             }
@@ -1483,13 +1449,13 @@ class TestIRCases(unittest.TestCase):
         self.assertLess(close.index("SPAM("),
                         close.index("ir_own_A = IR_DETACH(ir_word, A, value);"))
         self.assertLess(close.index("ir_own_A = IR_DETACH(ir_word, A, value);"),
-                        close.index("PyValue_XCLOSE(ir_own_A);"))
+                        close.index("_PyValue_XCLOSE_POINTER(ir_own_A);"))
         # No release of a view
         self.assertNotRegex(output, r"\n\s*(_?PyValue_\w*CLOSE\w*)\(value")
         self.assertIn("ir_own_B = IR_DETACH(ir_word, B, value);\n"
                       "            res = IR_TAKEN(value, ir_own_B);",
                       self.handler(output, "OP_HELD"))
-        self.assertIn("PyValue_AsKnownObjectSteal(IR_TAKEN(value, ir_own_B))",
+        self.assertIn("_PyValue_AsPyObjectStealPointer(IR_TAKEN(value, ir_own_B))",
                       self.handler(output, "OP_STEAL"))
         alias = self.handler(output, "OP_ALIAS")
         self.assertIn("res = IR_TAKEN(value, ir_own_B);", alias)
@@ -1674,15 +1640,9 @@ class TestIRCases(unittest.TestCase):
                      "res = SPAM(o);\n"
                      "PyValue_CLOSE(value);\n"
                      "ERROR_IF(err);",
-                     # A cast of the object, and the object that
-                     # _PyValueTemps_Object() gives, are followed too
+                     # A cast of the object is followed too
                      "PyTupleObject *t = (PyTupleObject *)"
                      "PyValue_AsKnownObjectBorrow(value);\n"
-                     "int err = spam_call();\n"
-                     "res = SPAM(t);\n"
-                     "PyValue_CLOSE(value);\n"
-                     "ERROR_IF(err);",
-                     "PyObject *t = _PyValueTemps_Object(value_temps, value);\n"
                      "int err = spam_call();\n"
                      "res = SPAM(t);\n"
                      "PyValue_CLOSE(value);\n"
@@ -1721,6 +1681,7 @@ class TestIRCases(unittest.TestCase):
                 with self.assertRaisesRegex(SyntaxError, r"\(S7\)"):
                     self.ir_output(f"""
                     inst(OP, (value -- res)) {{
+                        assert(PyValue_IsObject(value));
                         {body}
                     }}
                 """)
@@ -1728,6 +1689,7 @@ class TestIRCases(unittest.TestCase):
         # call keeps the object alive
         output = self.handler(self.ir_output("""
         inst(OP, (value -- res)) {
+            assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             PyValue held = TAKE(value);
             int err = spam_call(o);
@@ -1736,6 +1698,7 @@ class TestIRCases(unittest.TestCase):
             ERROR_IF(err);
         }
         inst(OP_RELEASE, (value -- res)) {
+            assert(PyValue_IsObject(value));
             int err = spam_call(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
             ERROR_IF(err);
@@ -1748,10 +1711,12 @@ class TestIRCases(unittest.TestCase):
         # runs, and a number read from the object does not dangle
         input = """
         inst(OP, (value -- res)) {
+            assert(PyValue_IsObject(value));
             res = SPAM(spam_call(PyValue_AsKnownObjectBorrow(value)));
             PyValue_CLOSE(value);
         }
         inst(OP_POINTER, (value -- res)) {
+            assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             binaryfunc func = Py_TYPE(o)->tp_as_number->nb_add;
             Py_ssize_t n = Py_TYPE(o)->tp_basicsize;
@@ -1761,6 +1726,7 @@ class TestIRCases(unittest.TestCase):
             res = PyValue_None;
         }
         inst(OP_FIELD, (value -- res)) {
+            assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             PyObject *r = Py_TYPE(o)->tp_as_number->func(o, o);
             SPAM(r);
@@ -1772,7 +1738,7 @@ class TestIRCases(unittest.TestCase):
         for name in ("OP", "OP_POINTER", "OP_FIELD"):
             with self.subTest(name=name):
                 self.assertEqual(formats[name].borrow_mask, 1)
-        self.assertIn("res = SPAM(spam_call(ir_obj_value));",
+        self.assertIn("res = SPAM(spam_call(PyValue_AsKnownObjectBorrow(value)));",
                       self.handler(self.ir_output(input), "OP"))
 
     def test_owner_taken_once(self):
@@ -1806,6 +1772,7 @@ class TestIRCases(unittest.TestCase):
         # Exclusive branches spend it once each
         output = self.handler(self.ir_output("""
         inst(OP, (value -- res)) {
+            assert(PyValue_IsObject(value));
             if (SPAM_FLAG()) {
                 res = TAKE(value);
             }
@@ -1816,7 +1783,7 @@ class TestIRCases(unittest.TestCase):
         }
     """), "OP")
         self.assertIn("res = IR_TAKEN(value, ir_own_B);", output)
-        self.assertIn("PyValue_XCLOSE(ir_own_B);", output)
+        self.assertIn("_PyValue_XCLOSE_POINTER(ir_own_B);", output)
         # The take kills every view and copy of the input: one is not read
         # after it, and none needs DEAD()
         copy = """
@@ -1849,6 +1816,7 @@ class TestIRCases(unittest.TestCase):
                                     "DEOPT_IF after the handler took"):
             self.ir_output("""
             inst(OP, (value -- res)) {
+                assert(PyValue_IsObject(value));
                 res = SPAM(PyValue_AsKnownObjectBorrow(value));
                 PyValue_CLOSE(value);
             }
@@ -1950,43 +1918,6 @@ class TestIRCases(unittest.TestCase):
                     }}
                 """)
 
-    def test_object_local_refusals(self):
-        # An input with an object local has one on every path, is read in a
-        # condition through it, and is the whole argument of each read
-        cases = {
-            "'value' has an object local on some paths, but not all": """
-            inst(OP, (value -- value)) {
-                PyObject *o = PyValue_AsKnownObjectBorrow(value);
-                if (SPAM(o)) {
-                    PyValue_CLOSE(value);
-                    value = PyValue_None;
-                }
-            }
-            """,
-            "PyValue_AsKnownObjectSteal\\(value\\) in a condition": """
-            inst(OP, (value -- res)) {
-                PyObject *o = PyValue_AsKnownObjectBorrow(value);
-                if (PyValue_AsKnownObjectSteal(value) == NULL) {
-                    SPAM(o);
-                }
-                res = SPAM(o);
-                PyValue_CLOSE(value);
-            }
-            """,
-            "PyValue_AsKnownObjectBorrow\\(\\) of 'value' must be its "
-            "whole argument": """
-            inst(OP, (value -- res)) {
-                PyObject *o = PyValue_AsKnownObjectBorrow(value);
-                res = SPAM(o, PyValue_AsKnownObjectBorrow(value, 0));
-                PyValue_CLOSE(value);
-            }
-            """,
-        }
-        for message, input in cases.items():
-            with self.subTest(message=message):
-                with self.assertRaisesRegex(SyntaxError, message):
-                    self.ir_output(input)
-
     def test_view_backstops(self):
         # The emitter's own refusals of a view retired as an owner, or
         # copied to a variable that is not on the stack, are backstops:
@@ -1997,6 +1928,7 @@ class TestIRCases(unittest.TestCase):
                 copy = value;
             }
             op(_USE, (value, copy -- )) {
+                assert(PyValue_IsObject(value));
                 SPAM(PyValue_AsKnownObjectBorrow(value));
                 DEAD(value);
                 IR_RETIRE_PUBLISHED(copy);
@@ -2030,11 +1962,12 @@ class TestIRCases(unittest.TestCase):
         # for a local
         output = self.handler(self.ir_output("""
         inst(OP, (value -- res)) {
+            assert(PyValue_IsObject(value));
             res = SPAM(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
         }
     """), "OP")
-        self.assertIn("PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);",
+        self.assertIn("_PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyLong_ExactDealloc);",
                       output)
 
     def test_inplace_inputs_fail_closed(self):
@@ -2047,6 +1980,7 @@ class TestIRCases(unittest.TestCase):
             }
         }
         op(_USE, (value -- res)) {
+            assert(PyValue_IsObject(value));
             res = SPAM(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
         }
@@ -2061,6 +1995,7 @@ class TestIRCases(unittest.TestCase):
             value = TAKE(value);
         }
         op(_USE, (value -- res)) {
+            assert(PyValue_IsObject(value));
             res = SPAM(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
         }
@@ -2089,11 +2024,13 @@ class TestIRCases(unittest.TestCase):
             res = v2;
         }
         inst(OP_OBJECT_STEAL, (value -- res)) {
+            assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             DEAD(value);
             res = PyValue_FromObjectSteal(o);
         }
         inst(OP_OBJECT_COPY_RELEASE, (value --)) {
+            assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             PyObject *p;
             p = o;
@@ -2101,10 +2038,13 @@ class TestIRCases(unittest.TestCase):
             Py_DECREF(p);
         }
         inst(OP_OBJECT_NESTED_STEAL, (value -- res)) {
+            assert(PyValue_IsObject(value));
             res = PyValue_FromObjectSteal(PyValue_AsKnownObjectBorrow(value));
             DEAD(value);
         }
         inst(OP_OBJECT_TARGET, (value, item --)) {
+            assert(PyValue_IsObject(value));
+            assert(PyValue_IsObject(item));
             int err = SPAM_TakeRef((PyObject *)PyValue_AsKnownObjectBorrow(value),
                                    PyValue_AsKnownObjectSteal(item));
             PyValue_CLOSE(value);
@@ -2123,41 +2063,7 @@ class TestIRCases(unittest.TestCase):
                                ir_generator.OBJECT_READERS | {"SPAM_TakeRef"}):
             self.assertEqual(self.formats(input)["OP_OBJECT_TARGET"].borrow_mask, 0b11)
         output = self.handler(self.ir_output(input), "OP_OBJECT_TARGET")
-        self.assertIn("PyValue_AsKnownObjectSteal(IR_TAKEN(item, ir_own_B))", output)
-
-    def test_inplace_inputs_temps_object(self):
-        # _PyValueTemps_Object(temps, name) gives the object of name, uncounted
-        # like PyValue_AsKnownObjectBorrow's: reading it keeps the borrow,
-        # releasing or stealing it drops the borrow.
-        input = """
-        inst(OP_TEMPS_READ, (value --)) {
-            PyObject *o = _PyValueTemps_Object(value_temps, value);
-            int err = SPAM(o);
-            PyValue_CLOSE(value);
-            ERROR_IF(err);
-        }
-        inst(OP_TEMPS_RELEASE, (value --)) {
-            PyObject *o = _PyValueTemps_Object(value_temps, value);
-            DEAD(value);
-            Py_DECREF(o);
-        }
-        inst(OP_TEMPS_COPY_RELEASE, (value --)) {
-            PyObject *o = _PyValueTemps_Object(value_temps, value);
-            PyObject *p;
-            p = o;
-            DEAD(value);
-            Py_DECREF(p);
-        }
-        inst(OP_TEMPS_STEAL, (value -- res)) {
-            res = PyValue_FromObjectSteal(_PyValueTemps_Object(value_temps, value));
-            DEAD(value);
-        }
-    """
-        formats = self.formats(input)
-        self.assertEqual(formats["OP_TEMPS_READ"].borrow_mask, 1)
-        for name in ("OP_TEMPS_RELEASE", "OP_TEMPS_COPY_RELEASE",
-                     "OP_TEMPS_STEAL"):
-            self.assertEqual(formats[name].borrow_mask, 0, name)
+        self.assertIn("_PyValue_AsPyObjectStealPointer(IR_TAKEN(item, ir_own_B))", output)
 
     def test_consumed_inputs(self):
         # A handler takes the inputs that it consumes: the slot of a
@@ -2165,6 +2071,8 @@ class TestIRCases(unittest.TestCase):
         # has a stack pointer to keep.
         input = """
         inst(STORE, (owner, value --)) {
+            assert(PyValue_IsObject(owner));
+            assert(PyValue_IsObject(value));
             SPAM(PyValue_AsKnownObjectBorrow(owner),
                  PyValue_AsKnownObjectBorrow(value));
             DECREF_INPUTS();
@@ -2189,8 +2097,8 @@ class TestIRCases(unittest.TestCase):
         effect = store.index("SPAM(")
         detach_owner = store.index("ir_own_A = IR_DETACH(ir_word, A, owner);")
         detach_value = store.index("ir_own_B = IR_DETACH(ir_word, B, value);")
-        close_owner = store.index("PyValue_XCLOSE(ir_own_A);")
-        close_value = store.index("PyValue_XCLOSE(ir_own_B);")
+        close_owner = store.index("_PyValue_XCLOSE_POINTER(ir_own_A);")
+        close_value = store.index("_PyValue_XCLOSE_POINTER(ir_own_B);")
         self.assertLess(effect, min(detach_owner, detach_value))
         self.assertLess(max(detach_owner, detach_value),
                         min(close_owner, close_value))
@@ -2204,11 +2112,14 @@ class TestIRCases(unittest.TestCase):
         # from the top slot in a free field, or by counting.
         input = """
         inst(OP, (left, right -- res)) {
+            assert(PyValue_IsObject(left));
+            assert(PyValue_IsObject(right));
             res = SPAM(PyValue_AsKnownObjectBorrow(left),
                        PyValue_AsKnownObjectBorrow(right));
             DECREF_INPUTS();
         }
         inst(ATTR, (owner -- attr, null[oparg & 1])) {
+            assert(PyValue_IsObject(owner));
             attr = SPAM(PyValue_AsKnownObjectBorrow(owner));
             DECREF_INPUTS();
             if (oparg & 1) {
@@ -2216,6 +2127,7 @@ class TestIRCases(unittest.TestCase):
             }
         }
         no_fold inst(ALIAS, (value -- res)) {
+            assert(PyValue_IsObject(value));
             res = SPAM(PyValue_AsKnownObjectBorrow(value));
             DECREF_INPUTS();
         }
@@ -2268,6 +2180,7 @@ class TestIRCases(unittest.TestCase):
             EXIT_IF(!PyValue_IsObject(nos));
         }
         op(_USE, (left, right -- left, res)) {
+            assert(PyValue_IsObject(right));
             res = SPAM(PyValue_AsKnownObjectBorrow(right));
             PyValue_CLOSE(right);
         }
@@ -2292,8 +2205,6 @@ class TestIRCases(unittest.TestCase):
         TARGET(OP) {
             int opcode = OP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2365,19 +2276,20 @@ class TestIRCases(unittest.TestCase):
         self.assertTrue(formats["OP_ANNOTATED"].window)
         self.assertTrue(formats["OP_SWITCH"].window)
 
-    def test_boxed_input(self):
-        # An input that the body converts to an object gets an object local
-        # at entry: its object, or a box of an inline value that value_temps
-        # owns.  The input keeps its canonical value, so a use that keeps the
-        # value keeps that, and the conversions read the local.
+    def test_asserted_input_has_no_object_local(self):
+        # An input that the body converts to an object is asserted to be one:
+        # the conversions read it directly, with no object local and no box,
+        # and the owned input closes as a pointer.
         input = """
         inst(OP, (v -- res)) {
+            assert(PyValue_IsObject(v));
             PyObject *v_o = PyValue_AsKnownObjectBorrow(v);
             PyValue kept = TAKE(v);
             SPAM(v_o);
             res = kept;
         }
         window inst(OP_OWNED, (v -- res)) {
+            assert(PyValue_IsObject(v));
             if (PyValue_IsNone(v)) {
                 SPAM(PyValue_AsKnownObjectBorrow(v));
             }
@@ -2385,29 +2297,22 @@ class TestIRCases(unittest.TestCase):
         }
     """
         output = self.ir_output(input)
+        for name in ("OP", "OP_OWNED"):
+            handler = self.handler(output, name)
+            self.assertNotIn("ir_obj_", handler)
+            self.assertNotIn("_PyValueTemps", handler)
         op = self.handler(output, "OP")
-        self.assertIn("PyObject *ir_obj_v = NULL;", op)
-        self.assertIn("ir_obj_v = _PyValueTemps_Box(value_temps, v);", op)
-        self.assertIn("ir_obj_v = PyValue_AsKnownObjectBorrow(v);", op)
-        self.assertIn("PyObject *v_o = ir_obj_v;", op)
+        self.assertIn("PyObject *v_o = PyValue_AsKnownObjectBorrow(v);", op)
         self.assertIn("PyValue kept = IR_TAKEN(v, ir_own_B);", op)
-        self.assertNotIn("PyValue_Box(", output)
-        # An owned input: the condition reads the local, and a steal of an
-        # inline value gives a count of the box
         owned = self.handler(output, "OP_OWNED")
-        self.assertIn("PyValue v;", owned)
-        self.assertIn("SPAM(ir_obj_v);", owned)
-        self.assertIn("(PyValue_IsInline(v) ? Py_NewRef(ir_obj_v) : "
-                      "PyValue_AsKnownObjectSteal(v))", owned)
-        # A copy holds the value, which may be inline, so its object is read
-        # through the input
-        with self.assertRaisesRegex(SyntaxError, "is a copy of 'v'"):
+        self.assertIn("SPAM(PyValue_AsKnownObjectBorrow(v));", owned)
+        self.assertIn("_PyValue_AsPyObjectStealPointer(v)", owned)
+        # A conversion without the assert is refused
+        with self.assertRaisesRegex(SyntaxError, "may be an inline value"):
             self.ir_output("""
-            window inst(OP, (v -- res)) {
-                PyObject *v_o = PyValue_AsKnownObjectBorrow(v);
-                res = v;
-                DEAD(v);
-                SPAM(v_o, PyValue_AsKnownObjectBorrow(res));
+            inst(OP, (v --)) {
+                SPAM(PyValue_AsKnownObjectBorrow(v));
+                DECREF_INPUTS();
             }
         """)
 
@@ -2417,21 +2322,25 @@ class TestIRCases(unittest.TestCase):
         # checked list; any other use keeps the input out of borrow_mask
         input = """
         inst(OP_READ, (value -- res)) {
+            assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             res = Py_TYPE(o)->tp_flags & 1 ? PyValue_True : PyValue_False;
             PyValue_CLOSE(value);
         }
         inst(OP_FIELD, (value -- res)) {
+            assert(PyValue_IsObject(value));
             res = ((PyTupleObject *)PyValue_AsKnownObjectBorrow(value))->ob_item[0] == NULL
                 ? PyValue_True : PyValue_False;
             PyValue_CLOSE(value);
         }
         inst(OP_KEEP, (value -- res)) {
+            assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             res = SPAM_KEEP(o);
             PyValue_CLOSE(value);
         }
         inst(OP_STORE, (value -- )) {
+            assert(PyValue_IsObject(value));
             SPAM_STRUCT()->field = PyValue_AsKnownObjectBorrow(value);
             PyValue_CLOSE(value);
         }
@@ -2448,17 +2357,20 @@ class TestIRCases(unittest.TestCase):
         # chained assignment and an address passed on are not reads
         input = """
         inst(OP_DEREF_STORE, (value -- )) {
+            assert(PyValue_IsObject(value));
             PyObject **p = SPAM_SLOT();
             *p = PyValue_AsKnownObjectBorrow(value);
             PyValue_CLOSE(value);
         }
         inst(OP_COPY_STORE, (value -- )) {
+            assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             PyObject **p = SPAM_SLOT();
             *p = o;
             PyValue_CLOSE(value);
         }
         inst(OP_CHAINED, (value -- res)) {
+            assert(PyValue_IsObject(value));
             PyObject *a;
             PyObject *b;
             a = b = PyValue_AsKnownObjectBorrow(value);
@@ -2466,12 +2378,14 @@ class TestIRCases(unittest.TestCase):
             PyValue_CLOSE(value);
         }
         inst(OP_ARITHMETIC, (value -- res)) {
+            assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             PyObject *k = o + 0;
             res = SPAM_KEEP(k);
             PyValue_CLOSE(value);
         }
         inst(OP_FIELD_ADDRESS, (value -- res)) {
+            assert(PyValue_IsObject(value));
             char *addr = (char *)PyValue_AsKnownObjectBorrow(value) + 8;
             Py_ssize_t index = addr - (char *)SPAM_BASE();
             res = SPAM(*(PyObject **)addr, index);
@@ -2504,7 +2418,7 @@ class TestIRCases(unittest.TestCase):
                 output = io.StringIO()
                 out = CWriter(output, 0, False)
                 ir_generator.generate_handler(name, analysis.instructions[name], formats[name],
-                    ir_generator.IREmitter(out, analysis, formats), out, False)
+                    ir_generator.IREmitter(out, analysis, formats), out)
                 tokens = list(lexer.tokenize(output.getvalue()))
                 lowered.update(token.text for token, following in zip(tokens, tokens[1:])
                     if token.text in ir_generator.OBJECT_READERS and following.kind == "LPAREN")
@@ -2534,12 +2448,14 @@ class TestIRCases(unittest.TestCase):
             ADVANCE_ADAPTIVE_COUNTER(feedback);
         }
         op(_OP, (owner -- res)) {
+            assert(PyValue_IsObject(owner));
             PyObject *o = PyValue_AsKnownObjectBorrow(owner);
             res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
             DECREF_INPUTS();
         }
         macro(OP) = _SPECIALIZE_OP + _OP;
         op(_GUARD, (type_version/2, owner -- owner)) {
+            assert(PyValue_IsObject(owner));
             EXIT_IF(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_version_tag != type_version);
         }
         macro(OP_SPECIALIZED) = unused/1 + _GUARD + _OP;
@@ -2554,10 +2470,6 @@ class TestIRCases(unittest.TestCase):
             INSTRUCTION_STATS(OP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            PyObject *value_boxes[6];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 6};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
@@ -2567,7 +2479,6 @@ class TestIRCases(unittest.TestCase):
             PyValue res;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            PyObject *ir_obj_owner = NULL;
             // _SPECIALIZE_OP
             {
                 uint32_t counter = fb->counter;
@@ -2578,22 +2489,13 @@ class TestIRCases(unittest.TestCase):
             // _OP
             {
                 owner = IR_VIEW(IR_B(ir_word));
-                if (Py_UNLIKELY(PyValue_IsInline(owner))) {
-                    ir_obj_owner = _PyValueTemps_Box(value_temps, owner);
-                    if (ir_obj_owner == NULL) {
-                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                    }
-                    BOX_STAT_INC(OP);
-                }
-                else {
-                    ir_obj_owner = PyValue_AsKnownObjectBorrow(owner);
-                }
-                PyObject *o = ir_obj_owner;
+                assert(PyValue_IsObject(owner));
+                PyObject *o = PyValue_AsKnownObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
             IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE(ir_own_B);
+            _PyValue_XCLOSE_POINTER(ir_own_B);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -2601,8 +2503,6 @@ class TestIRCases(unittest.TestCase):
         TARGET(OP_SPECIALIZED) {
             int opcode = OP_SPECIALIZED;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2621,11 +2521,7 @@ class TestIRCases(unittest.TestCase):
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
-                    UPDATE_MISS_STATS(OP);
-                    assert(_PyOpcode_Deopt[opcode] == (OP));
-                    JUMP_TO_PREDICTED(OP);
-                }
+                assert(PyValue_IsObject(owner));
                 if (Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_version_tag != type_version) {
                     UPDATE_MISS_STATS(OP);
                     assert(_PyOpcode_Deopt[opcode] == (OP));
@@ -2634,6 +2530,7 @@ class TestIRCases(unittest.TestCase):
             }
             // _OP
             {
+                assert(PyValue_IsObject(owner));
                 PyObject *o = PyValue_AsKnownObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
                 ir_own_B = IR_DETACH(ir_word, B, owner);
@@ -2667,8 +2564,6 @@ class TestIRCases(unittest.TestCase):
         TARGET(OP) {
             int opcode = OP;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -2747,8 +2642,6 @@ class TestIRCases(unittest.TestCase):
         TARGET(IR_PASS) {
             int opcode = IR_PASS;
             (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -3288,7 +3181,7 @@ class TestIRCases(unittest.TestCase):
             analysis = self.analyze(source)
             formats = ir_generator.compute_formats(analysis)
             programs = {}
-            self.assertNotIn("OP", ir_generator.boxing_handlers(analysis, formats, programs))
+            ir_generator.analyze_handlers(analysis, formats, programs)
             self.assertEqual(programs["OP"][0].kind, "_PyIR_OWNER_NORMAL_CLEAR_INPUTS")
             output = self.ir_output(source)
             self.assertIn(f"{helper}(values, oparg)", output)
@@ -3580,8 +3473,8 @@ class TestIRCases(unittest.TestCase):
 
     def test_constructor_results_are_not_known_objects(self):
         # The PyValue_FromObject*() constructors make an exact int or
-        # float inline, so their results get the generic DUP and an inline
-        # test before an object read, not the _POINTER forms
+        # float inline, so their results get the generic DUP, not the
+        # _POINTER forms, although a later uop asserts an object
         for ctor in ("PyValue_FromObjectSteal(SPAM())",
                      "PyValue_DUP(PyValue_FromObjectBorrow(SPAM()))",
                      "PyValue_FromObjectBorrow(SPAM())"):
@@ -3594,6 +3487,7 @@ class TestIRCases(unittest.TestCase):
                     copy = PyValue_DUP(value);
                 }}
                 op(_USE, (value, copy --)) {{
+                    assert(PyValue_IsObject(value));
                     PyObject *o = PyValue_AsKnownObjectBorrow(value);
                     EGGS(o);
                     DECREF_INPUTS();
@@ -3602,8 +3496,7 @@ class TestIRCases(unittest.TestCase):
                 """)
                 self.assertIn("copy = PyValue_DUP(value);", output)
                 self.assertNotIn("_PyValue_DUP_POINTER", output)
-                self.assertLess(output.index("PyValue_IsInline(value)"),
-                                output.index("PyValue_AsKnownObjectBorrow(value)"))
+                self.assertNotIn("PyValue_IsInline(value)", output)
 
     def test_slot_roles(self):
         # The role of an oparg that names a local follows from the uses of
@@ -3754,10 +3647,6 @@ class TestIRCases(unittest.TestCase):
         self.assertIn('static_assert(BINARY_OP_ADD == _PyIR_BINARY_OP_FIRST + '
                       'NB_ADD, "BINARY_OP_ADD");', lines)
 
-# The box area's sites, which only the generator emits (R27 deletes them)
-BOX_AREA_SITES = ("&value_owners", "value_boxes[] (a local array)")
-
-
 def generated_address_sites(text):
     "The sites in each generated handler or label that take a local's address"
     parts = re.split(r"\n\s*(?:TARGET|LABEL)\((\w+)\)", text)
@@ -3777,7 +3666,7 @@ class TestShapeReadMetadata(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.temp_input_filename = str(Path(directory.name) / "source.c")
 
-    def shape_read_handler(self, source, name, record=False):
+    def shape_read_handler(self, source, name):
         Path(self.temp_input_filename).write_text(source)
         analysis = analyzer.analyze_files([self.temp_input_filename])
         formats = ir_generator.compute_formats(analysis)
@@ -3785,33 +3674,32 @@ class TestShapeReadMetadata(unittest.TestCase):
         out = CWriter(output, 0, False)
         emitter = ir_generator.IREmitter(out, analysis, formats)
         instruction = ir_generator.handler_instructions(analysis)[name]
-        ir_generator.generate_handler(name, instruction, formats[name], emitter, out, record)
-        return output.getvalue(), ir_generator.handler_effects(name, instruction, formats[name], record)
+        ir_generator.generate_handler(name, instruction, formats[name], emitter, out)
+        return output.getvalue(), ir_generator.handler_effects(name, instruction, formats[name])
 
     def test_shape_read_uses_checked_metadata_for_both_execution_forms(self):
         source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
-        for record in (False, True):
-            for suffix in ("", "_LOCAL_TEMP"):
-                for poly in (False, True):
-                    name = "LOAD_ATTR_SHAPE" + ("_POLY" if poly else "") + suffix
-                    with self.subTest(name=name, record=record):
-                        handler, effects = self.shape_read_handler(source, name, record)
-                        self.assertEqual("shape_read_offset(" in handler, poly)
-                        if poly:
-                            self.assertIn("shape_read_offset(_PyFrame_Exec(frame)->feedback, fb,", handler)
-                            self.assertNotIn("shape_read_offset(frame->ir_feedback", handler)
-                        self.assertEqual("_PyIR_LEARNED_ONLY" in effects, poly)
-                        self.assertIn("uint32_t offset = " +
-                                      ("ir_shape_offset" if poly else "fb->offset") + ";", handler)
-                        self.assertIn("attr = shape_read_dup(", handler)
-                        self.assertLess(handler.index("uint32_t offset ="),
-                                        handler.index("attr = shape_read_dup("))
-                        if not poly:
-                            self.assertLess(handler.index("tp->tp_version_tag"),
-                                            handler.index("_PyObject_Shape("))
-                        if suffix:
-                            self.assertIn("ir_own_B = PyValue_NULL;", handler)
-                            self.assertNotIn("IR_CONSUME_INPUT(B", handler)
+        for suffix in ("", "_LOCAL_TEMP"):
+            for poly in (False, True):
+                name = "LOAD_ATTR_SHAPE" + ("_POLY" if poly else "") + suffix
+                with self.subTest(name=name):
+                    handler, effects = self.shape_read_handler(source, name)
+                    self.assertEqual("shape_read_offset(" in handler, poly)
+                    if poly:
+                        self.assertIn("shape_read_offset(_PyFrame_Exec(frame)->feedback, fb,", handler)
+                        self.assertNotIn("shape_read_offset(frame->ir_feedback", handler)
+                    self.assertEqual("_PyIR_LEARNED_ONLY" in effects, poly)
+                    self.assertIn("uint32_t offset = " +
+                                  ("ir_shape_offset" if poly else "fb->offset") + ";", handler)
+                    self.assertIn("attr = shape_read_dup(", handler)
+                    self.assertLess(handler.index("uint32_t offset ="),
+                                    handler.index("attr = shape_read_dup("))
+                    if not poly:
+                        self.assertLess(handler.index("tp->tp_version_tag"),
+                                        handler.index("_PyObject_Shape("))
+                    if suffix:
+                        self.assertIn("ir_own_B = PyValue_NULL;", handler)
+                        self.assertNotIn("IR_CONSUME_INPUT(B", handler)
 
     def test_shape_read_rejects_a_missing_or_changed_guard(self):
         source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
@@ -3819,7 +3707,10 @@ class TestShapeReadMetadata(unittest.TestCase):
         for changed in ("(void)owner;", guard.replace("type_version, shape", "shape, type_version"),
                         guard + " offset++;", guard + " PyValue_CLOSE(owner);"):
             with self.subTest(changed=changed):
-                with self.assertRaisesRegex(SyntaxError, "shape (guard|read)"):
+                # A guard that releases its input is no guard, and reads
+                # the owner as an object without an assert
+                with self.assertRaisesRegex(
+                        SyntaxError, "shape (guard|read)|may be an inline value"):
                     self.shape_read_handler(source.replace(guard, changed, 1), "LOAD_ATTR_SHAPE_POLY")
 
     def test_shape_read_binding_expires_before_an_intervening_effect(self):
@@ -3856,10 +3747,9 @@ class TestShapeReadMetadata(unittest.TestCase):
                 changed = changed.replace("            _GUARD_SHAPE_READ +",
                                           "            _SHADOW_SHAPE_HELPER +\n"
                                           "            _GUARD_SHAPE_READ +", 1)
-                for record in (False, True):
-                    with self.subTest(name=name, declaration=declaration, record=record):
-                        with self.assertRaisesRegex(SyntaxError, "shape read reserved native name"):
-                            self.shape_read_handler(changed, "LOAD_ATTR_SHAPE_POLY", record)
+                with self.subTest(name=name, declaration=declaration):
+                    with self.assertRaisesRegex(SyntaxError, "shape read reserved native name"):
+                        self.shape_read_handler(changed, "LOAD_ATTR_SHAPE_POLY")
 
     def test_zero_width_second_cache_has_no_encoded_operand(self):
         source = """
@@ -3990,23 +3880,13 @@ class TestCallTransactionMarkers(unittest.TestCase):
 
     def test_handlers_take_no_local_address(self):
         # The generated handlers and labels take the address of none of
-        # their locals except the box area (register-ir-v2-a3.md 3.5): the
-        # check of the uop bodies, applied to what the generator emits.
-        # The box area is exactly in the handlers that box, and R27 deletes
-        # it, so their number may only fall.
+        # their locals: the check of the uop bodies, applied to what the
+        # generator emits.  No handler keeps a value record or a box area.
         _, rest = self.interpreter.split(ir_generator.INSTRUCTION_START_MARKER)
         sites = generated_address_sites(rest)
         self.assertGreater(len(sites), 200)
-        box_area = set()
         for name, found in sites.items():
-            others = [site for site in found if not site.endswith(BOX_AREA_SITES)]
-            self.assertEqual(others, [], name)
-            if len(others) < len(found):
-                box_area.add(name)
-        formats = ir_generator.compute_formats(self.analysis)
-        self.assertEqual(box_area,
-                         ir_generator.boxing_handlers(self.analysis, formats))
-        self.assertLessEqual(len(box_area), 97)
+            self.assertEqual(found, [], name)
 
     def test_forward_distance_is_signed(self):
         # A forward distance has 12 bits and a sign (register-ir-v2 section

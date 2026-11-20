@@ -669,32 +669,6 @@ class AnalyzerTests(unittest.TestCase):
                     self.assertEqual(bool(row.flags & _opcode.IR_RUNS_CODE),
                                      union)
 
-    def test_boxing(self):
-        # No macro boxes into value_temps without the generated code naming
-        # it: the handlers box through _PyValueTemps_Box(value_temps, x),
-        # which boxes_into_record() sees
-        path = os.path.join(test_tools.basepath, "Python", "ceval_macros.h")
-        with open(path) as f:
-            text = f.read().replace("\\\n", " ")
-        writers = {m.group(1) for m in re.finditer(
-            r"#\s*define\s+(\w+)[^\n]*\bvalue_temps->"
-            r"(?:count\s*(?:\+\+|[-+]?=(?!=))|objects\s*\[)", text)}
-        self.assertEqual(writers, set())
-        boxes = self.ir_generator.boxes_into_record
-        decl = "_PyValueTemps *value_temps = &value_owners;\n"
-        for code, expected in [
-            ("", False),
-            ("assert(value_temps->count == 0);", False),
-            ("ir_obj_left = _PyValueTemps_Box(value_temps, left);", True),
-            ("value_reader_complete(&s, next_instr, value_temps, &r);", False),
-            ("_PyValueTemps_Object(value_temps, l);", True),
-            ("spam(value_temps);", True),
-            ("value_temps->count++;", True),
-            ("_PyValueTemps *t = value_temps;", True),
-        ]:
-            with self.subTest(code=code):
-                self.assertEqual(boxes(decl + code), expected)
-
     def generated(self):
         "The generated handlers: the text and the bodies by name"
         if type(self)._generated is None:
@@ -710,29 +684,18 @@ class AnalyzerTests(unittest.TestCase):
             type(self)._generated = cases, handlers
         return type(self)._generated
 
-    def test_value_record(self):
-        # A handler sets up a value record, value_temps, only if the
-        # contract says it boxes (BOXES, IR v2 step A1).  Elsewhere
-        # value_temps is a NULL constant, so its dispatch finishes no
-        # bridges.
+    def test_no_value_record(self):
+        # No handler boxes an inline value (handlers81, H3): none declares
+        # or tests a value record, and no macro writes one
         _, handlers = self.generated()
-        entries = {name: self.ir_generator.generator_word_entry(name, self.analysis)
-                   for name in self.insts}
-        self.assertEqual(handlers.keys(), set(entries.values()))
-        record = "_PyValueTemps *value_temps = &value_owners;"
-        null = "_PyValueTemps *const value_temps = NULL;"
-        for name, entry in entries.items():
-            body = handlers[entry]
-            boxes = bool(CONTRACT[self.ids[name]].effects & _opcode.IR_BOXES)
-            with self.subTest(handler=name):
-                self.assertEqual(record in body, boxes)
-                if not boxes:
-                    self.assertNotIn("value_owners", body)
-                    self.assertNotIn("value_boxes", body)
-                    uses = {line.strip() for line in body.splitlines()
-                            if re.search(r"\bvalue_temps\b", line)}
-                    self.assertIn(null, uses)
-                    self.assertLessEqual(uses, {null, "(void)value_temps;"})
+        for entry, body in handlers.items():
+            with self.subTest(handler=entry):
+                for name in ("value_temps", "value_owners", "value_boxes",
+                             "_PyValueTemps"):
+                    self.assertNotIn(name, body)
+        path = os.path.join(test_tools.basepath, "Python", "ceval_macros.h")
+        with open(path) as f:
+            self.assertNotIn("value_temps", f.read())
 
     def test_next_instr_by_value(self):
         # No handler or dispatch macro takes the address of

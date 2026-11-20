@@ -219,19 +219,6 @@ class ErrorEffectTests(unittest.TestCase):
             self.assertFalse(contracts[name].error_routes)
             self.assertFalse(contracts[name].abrupt_operands)
 
-        classify_boxes = ir_generator.boxes_into_record
-
-        def resume_with_bridge(text):
-            return "int check_instrumentation" in text or classify_boxes(text)
-
-        # DISPATCH can release bridges after adopting a continuation. Its
-        # possible failure then needs that new origin, not this source PC.
-        with mock.patch.object(ir_generator, "boxes_into_record", resume_with_bridge):
-            contracts = ir_generator.handler_contracts(analysis, formats)
-        for name in ("RESUME", "INSTRUMENTED_RESUME"):
-            self.assertFalse(contracts[name].error_routes)
-            self.assertFalse(contracts[name].abrupt_operands)
-
         original = ir_generator.IREmitter.complete_step
 
         def missing_step_error_receipt(emitter, token, *args):
@@ -459,14 +446,6 @@ class ErrorEffectTests(unittest.TestCase):
         with mock.patch.object(ir_generator.IREmitter, "finish_stores", missing_binding_receipt):
             incomplete = ir_generator.handler_contracts(analysis, formats)
         self.assertFalse(incomplete["LOAD_COMMON_CONSTANT"].error_routes)
-        original_boxes = ir_generator.boxes_into_record
-
-        def has_bridge(text):
-            return "common_consts" in text or original_boxes(text)
-
-        with mock.patch.object(ir_generator, "boxes_into_record", has_bridge):
-            boxed = ir_generator.handler_contracts(analysis, formats)
-        self.assertIn("_PyIR_ERROR_BRIDGE", boxed["LOAD_COMMON_CONSTANT"].error_routes)
 
 
 if __name__ == "__main__":

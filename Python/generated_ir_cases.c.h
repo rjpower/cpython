@@ -11543,7 +11543,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 (void)type_version; (void)shape;
-                int64_t ir_selected_offset = shape_read_offset(_PyFrame_Exec(frame)->feedback, fb, _PyValue_AsKnownObjectBorrowPointer(owner));
+                int64_t ir_selected_offset = shape_read_offset(frame->ir_feedback, fb, _PyValue_AsKnownObjectBorrowPointer(owner));
                 if (ir_selected_offset < 0) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -11602,7 +11602,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 (void)type_version; (void)shape;
-                int64_t ir_selected_offset = shape_read_offset(_PyFrame_Exec(frame)->feedback, fb, _PyValue_AsKnownObjectBorrowPointer(owner));
+                int64_t ir_selected_offset = shape_read_offset(frame->ir_feedback, fb, _PyValue_AsKnownObjectBorrowPointer(owner));
                 if (ir_selected_offset < 0) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));

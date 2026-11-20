@@ -730,12 +730,17 @@ coro_awaitable_can_transfer(PyValueBorrow value)
 /* The feedback entry at index F. */
 #define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_feedback, (F)))
 
-/* Every executable row was nominated by the checked managed-shape lookup.
- * No pointer from the bank escapes this callback-free selection. */
+/* Every executable row was nominated by the checked managed-shape lookup
+ * (fb_shape_read_set()): its handler is LOAD_ATTR_SHAPE, its type version is
+ * not zero and its aux is a shape.  A row that is not in use has version zero
+ * and never matches the type's nonzero version.  ENTRIES is the frame's
+ * ir_feedback, whose block header precedes it.  No pointer from the bank
+ * escapes this callback-free selection. */
 static inline int64_t
-shape_read_offset(_PyFbBlock *block, _PyFbAttr *entry, PyObject *owner)
+shape_read_offset(char *entries, _PyFbAttr *entry, PyObject *owner)
 {
 #ifdef Py_SHAPES
+    _PyFbBlock *block = (_PyFbBlock *)entries - 1;
     assert(entry->h.poly != 0 && entry->h.poly <= block->npoly);
     const _PyFbPoly *poly = &block->poly[entry->h.poly - 1];
     uint32_t version = Py_TYPE(owner)->tp_version_tag;
@@ -744,16 +749,15 @@ shape_read_offset(_PyFbBlock *block, _PyFbAttr *entry, PyObject *owner)
     }
     for (int i = 0; i < FB_POLY_SIZE; i++) {
         if (poly->type_version[i] == version) {
-            if (poly->payload[i].read_kind != _Py_FB_READ_SHAPE ||
-                _PyObject_Shape(owner) != poly->aux[i])
-            {
+            assert(poly->payload[i].read_kind == _Py_FB_READ_SHAPE);
+            if (_PyObject_Shape(owner) != poly->aux[i]) {
                 return -1;
             }
             return poly->index[i];
         }
     }
 #else
-    (void)block;
+    (void)entries;
     (void)entry;
     (void)owner;
 #endif

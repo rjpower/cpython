@@ -7808,6 +7808,7 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             int flag = PyValue_Is{sense}(cond);
             DEAD(cond);
             RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
+            IR_REPORT_EDGE(flag);
             if (flag) {{ JUMPTO(oparg); }}
         }}"""
         return "_PyIR_TRANSFER_RETIRE" if scalar_shape(1, 0) and bodies_match(is_none, jump) else unknown

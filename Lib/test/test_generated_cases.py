@@ -47,6 +47,32 @@ with test_tools.imports_under_tool("cases_generator"):
     from stack import Local, Stack
 
 
+
+def expand_outlined(text: str) -> str:
+    """Put the body of each outlined handler where its stub is, so that a test
+    reads a handler as one text: the stub of an outlined handler calls the
+    function ir_run_NAME, which the generated file defines before, and the
+    function is dropped."""
+    functions = []
+    for match in re.finditer(
+            r"\nstatic Py_NO_INLINE _PyIRTransfer\nir_run_(\w+)\(\n[^{]*\n\{",
+            text):
+        start = match.end() - 1
+        ends = [e for e in (
+            text.find("\nstatic Py_NO_INLINE _PyIRTransfer\n", start),
+            text.find("\n#else", start)) if e >= 0]
+        end = min(ends) if ends else len(text)
+        functions.append((match.group(1), match.start(), start, end))
+    for name, first, start, end in functions:
+        body = text[start:end].rstrip()
+        stub = re.compile(r"TARGET\(%s\) \{\s*IR_RUN_OUTLINED\(ir_run_%s\);\s*\}"
+                          % (name, name))
+        text = stub.sub(lambda _: f"TARGET({name}) " + body, text, 1)
+    for name, first, start, end in sorted(functions, key=lambda f: -f[1]):
+        text = text[:first] + text[end:]
+    return text
+
+
 class SequentialNumbers(ir_numbers.NumberTable):
     """Numbers the definitions of a test input in order of request, in place
     of the pinned table, which lists only the handlers of Python/bytecodes.c"""
@@ -287,12 +313,14 @@ class TestIRCases(unittest.TestCase):
         analysis = self.analyze(input)
         out = io.StringIO()
         ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
-        _, rest = out.getvalue().split(ir_generator.INSTRUCTION_START_MARKER)
+        _, rest = expand_outlined(out.getvalue()).split(
+            ir_generator.INSTRUCTION_START_MARKER)
         instructions, _ = rest.split(ir_generator.INSTRUCTION_END_MARKER)
         return instructions
 
     def handler(self, output: str, name: str) -> str:
         "The handler of name in output"
+        output = expand_outlined(output)
         start = output.index(f"TARGET({name}) {{")
         end = output.find("TARGET(", start + 1)
         return output[start:end if end >= 0 else len(output)]
@@ -451,7 +479,7 @@ class TestIRCases(unittest.TestCase):
                 end = body.index("}\n", branch)
                 route = body[branch:end]
                 self.assertIn("IR_GEN_JUMP(GEN_RETURN_ROUTE, dying, "
-                              "_PyFrame_Slots(dying), frame->instr_ptr, temp);", route)
+                              "frame->instr_ptr, temp);", route)
                 self.assertNotIn("generator_outcome_target(", body)
                 self.assertNotIn("_PyEval_FrameClear", route)
                 self.assertNotIn("_PyEval_CompleteGeneratorReturn", route)
@@ -477,7 +505,7 @@ class TestIRCases(unittest.TestCase):
             if row.completed not in {"STORE_FAST", "POP_TOP"}:
                 continue
             prefix = "GEN_THROW_COMPLETE_" if row.base == "CLEANUP_THROW" else "GEN_COMPLETE_"
-            self.assertIn(f"[{ids[name]}] = &&TARGET_{prefix}{row.completed},", targets)
+            self.assertIn(f"[{ids[name]}] = ir_{prefix}{row.completed},", targets)
             self.assertEqual(ir_generator.generator_word_entry(name, analysis),
                              ir_generator.generator_word_entry(
                                  f"{row.base}_XFER_DISCARD", analysis))
@@ -798,10 +826,10 @@ class TestIRCases(unittest.TestCase):
         }
         """
         output = self.ir_output(iterator)
-        callback = output.index("_PyIR_ObserveCommittedBranch(")
-        self.assertIn("this_instr, prev_instr, ir_observer_next, "
-                      "PY_MONITORING_EVENT_BRANCH_RIGHT, 0", output)
-        self.assertLess(output.index("frame->return_pc ="), callback)
+        # The event runs in a cold function, which sets the return pc
+        callback = output.index("IR_OBSERVE_EDGE(")
+        self.assertIn("IR_OBSERVE_EDGE(prev_instr, ir_observer_next, "
+                      "PY_MONITORING_EVENT_BRANCH_RIGHT, 0);", output)
         # The deferred close comes after the last detach and before the callback
         self.assertLess(output.index("held = PyValue_NULL;"),
                         output.index("PyValue_XCLOSE(ir_close1)"))
@@ -1277,6 +1305,11 @@ class TestIRCases(unittest.TestCase):
                      "RETURN_VALUE_EMPTY", "INSTRUMENTED_RETURN_VALUE_EMPTY"):
             with self.subTest(name=name):
                 handler = self.handler(output.getvalue(), name)
+                if name.startswith("INSTRUMENTED_"):
+                    # The twin runs its event in a cold function and then
+                    # takes the base handler's body, which does the retirement.
+                    self.assertIn("IR_RUN_EVENT(ir_event_return,", handler)
+                    continue
                 helper = ("_PyEval_RetireThreadFrameWithResult" if name.endswith("_EMPTY")
                           else "_PyEval_FrameClearAndPopGeneralWithResult")
                 retired = handler.index(f"temp = {helper}(tstate, dying, temp);")
@@ -1315,6 +1348,7 @@ class TestIRCases(unittest.TestCase):
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(OP);
             PyValue ir_old = PyValue_NULL;
@@ -2208,6 +2242,7 @@ class TestIRCases(unittest.TestCase):
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(OP);
             PyValue ir_old = PyValue_NULL;
@@ -2466,6 +2501,7 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP;
             (void)(opcode);
             frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(OP);
             _PyIRWord* const this_instr = next_instr - 1;
@@ -2506,6 +2542,7 @@ class TestIRCases(unittest.TestCase):
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(OP_SPECIALIZED);
             PyValue ir_old = PyValue_NULL;
@@ -2567,6 +2604,7 @@ class TestIRCases(unittest.TestCase):
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(OP);
             PyValue ir_old = PyValue_NULL;
@@ -2645,6 +2683,7 @@ class TestIRCases(unittest.TestCase):
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(IR_PASS);
             PRE_DISPATCH_GOTO();
@@ -3628,10 +3667,17 @@ class TestIRCases(unittest.TestCase):
         ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
         code = out.getvalue()
         self.assertNotIn("TARGET(BINARY_OP)", code)
+        # The generic handlers set their operation and enter one body
         generic = code[code.index("TARGET(BINARY_OP_SUBTRACT)"):]
-        generic = generic[:generic.index("DISPATCH();")]
-        self.assertIn("int oparg = NB_SUBTRACT;", generic)
-        self.assertIn("INSTRUCTION_STATS(BINARY_OP_SUBTRACT);", generic)
+        generic = generic[:generic.index("}")]
+        self.assertIn("ir_binary_op = NB_SUBTRACT;", generic)
+        self.assertIn("goto LABEL_binary_op;", generic)
+        self.assertEqual(code.count("LABEL(binary_op)"), 1)
+        shared = code[code.index("LABEL(binary_op)"):]
+        shared = shared[:shared.index("DISPATCH();")]
+        self.assertIn("int oparg = ir_binary_op;", shared)
+        self.assertIn("INSTRUCTION_STATS(_PyIR_BINARY_OP_FIRST + ir_binary_op);",
+                      shared)
         handler = code[code.index("TARGET(BINARY_OP_ADD_INT)"):]
         handler = handler[:handler.index("DISPATCH();")]
         self.assertIn("IR_DEOPT_BINARY_OP(IR_D(ir_word));", handler)
@@ -3786,7 +3832,7 @@ class TestCallTransactionMarkers(unittest.TestCase):
         cls.analysis = analyzer.analyze_files([source])
         output = io.StringIO()
         ir_generator.generate_ir([source], cls.analysis, output, False)
-        cls.interpreter = output.getvalue()
+        cls.interpreter = expand_outlined(output.getvalue())
 
     def test_send_completion_events_without_instrumented_twin(self):
         output = io.StringIO()

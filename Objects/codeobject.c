@@ -5531,6 +5531,21 @@ _PyCode_CheckPureFunction(PyCodeObject *co, const char **p_errmsg)
     return 1;
 }
 
+/* Whether slot is a constant slot (CO_FAST_CONST) whose constant is None,
+ * which is what a return of None reads. */
+static int
+return_names_none_slot(PyCodeObject *co, int slot)
+{
+    const uint32_t *table = _PyCode_CONSTSLOTS(co);
+    for (int j = 0; j < co->co_nconstslots; j++) {
+        if (table[2 * j] == (uint32_t)slot) {
+            return PyValue_IsNone(PyTuple_GET_VALUE(co->co_consts,
+                                                    table[2 * j + 1]));
+        }
+    }
+    return 0;
+}
+
 /* Here "value" means a non-None value, since a bare return is identical
  * to returning None explicitly.  Likewise a missing return statement
  * at the end of the function is turned into "return None". */
@@ -5557,6 +5572,9 @@ code_returns_only_none(PyCodeObject *co)
             continue;
         }
         assert(previous >= 0);
+        if (return_names_none_slot(co, IR_A(_PyCode_WORDS(co)[i]))) {
+            continue;
+        }
         int prev = _PyIR_BaseOpcode(_PyCode_InstrHandler(co, previous));
         int prev_oparg = _PyCode_InstrOparg(co, previous);
         if (prev == LOAD_COMMON_CONSTANT && prev_oparg == CONSTANT_NONE) {

@@ -27,7 +27,7 @@
 static_assert(sizeof(_PyCodeExec) % sizeof(_PyIRWord) == 0,
               "words must follow the header aligned");
 static_assert(sizeof(_PyCodeExec) - offsetof(_PyCodeExec, nlocalsplus) ==
-              sizeof(void *) + sizeof(uint32_t),
+              sizeof(void *),
               "keep the local-count offset relative to executing words");
 static_assert(sizeof(_PyFbBlock) % sizeof(_PyIRWord) == 0,
               "entries must follow the feedback header aligned");
@@ -807,6 +807,14 @@ exec_discard_slot(_PyIRWord word, uint32_t discard)
     return word;
 }
 
+/* Whether a frame's slot may hold value without owning a count: an inline
+ * scalar or an immortal object. */
+static int
+const_needs_no_count(PyValueBorrow value)
+{
+    return !PyValue_IsNull(value) && !PyValue_RefcountOnObject(value);
+}
+
 static _PyCodeExec *
 make_exec(PyCodeObject *co)
 {
@@ -816,8 +824,19 @@ make_exec(PyCodeObject *co)
     size_t fb_size = nfb
         ? sizeof(_PyFbBlock) + ((size_t)_PyCode_FbUnits(co) << IR_FB_UNIT_SHIFT)
         : 0;
+    // The image of the constant slots follows the feedback, if every
+    // constant is immortal or inline
+    int nconst = co->co_nconstslots;
+    const uint32_t *table = _PyCode_CONSTSLOTS(co);
+    int image = nconst > 0;
+    for (int j = 0; j < nconst; j++) {
+        image &= const_needs_no_count(
+            PyTuple_GET_VALUE(co->co_consts, table[2 * j + 1]));
+    }
+    size_t image_size = image ? (size_t)nconst * sizeof(PyValue) : 0;
     // Feedback entries hold borrowed pointers only.
-    _PyCodeExec *exec = _PyMem_NoScanMalloc(sizeof(_PyCodeExec) + words_size + fb_size);
+    _PyCodeExec *exec = _PyMem_NoScanMalloc(
+        sizeof(_PyCodeExec) + words_size + fb_size + image_size);
     if (exec == NULL) {
         PyErr_NoMemory();
         return NULL;
@@ -827,7 +846,19 @@ make_exec(PyCodeObject *co)
         .words = words,
         .nwords = (uint32_t)nwords,
         .nlocalsplus = (uint32_t)co->co_nlocalsplus,
+        .nconst = (uint16_t)nconst,
     };
+    if (nconst > 0) {
+        exec->const_first = (uint16_t)table[0];
+    }
+    if (image) {
+        PyValue *values = (PyValue *)((char *)words + words_size + fb_size);
+        for (int j = 0; j < nconst; j++) {
+            values[j] = PyValue_XDUP(
+                PyTuple_GET_VALUE(co->co_consts, table[2 * j + 1]));
+        }
+        exec->const_image = values;
+    }
     if (_PyCode_BuildSemanticPlan(co, &exec->semantic_plan) < 0) {
         _PyMem_NoScanFree(exec);
         return NULL;
@@ -937,6 +968,9 @@ _PyCode_ExecSizeOf(PyCodeObject *co)
         return 0;
     }
     size_t res = sizeof(_PyCodeExec) + exec->nwords * sizeof(_PyIRWord);
+    if (exec->const_image != NULL) {
+        res += (size_t)exec->nconst * sizeof(PyValue);
+    }
     if (exec->semantic_plan != NULL &&
         exec->semantic_plan->nsites != 0) {
         res += _PyIR_PlanSize(exec->semantic_plan);

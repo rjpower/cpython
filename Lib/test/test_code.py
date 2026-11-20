@@ -87,7 +87,7 @@ cellvars: ()
 freevars: ()
 nlocals: 0
 flags: 67108867
-consts: ("'doc string'",)
+consts: ("'doc string'", 'None')
 
 >>> def keywordonly_args(a,b,*,k1):
 ...     return a,b,k1
@@ -589,7 +589,7 @@ class CodeTest(unittest.TestCase):
             ],
             [
                 ("PUSH_EXC_INFO", None),
-                ("LOAD_COMMON_CONSTANT", None), # artificial 'None'
+                # The artificial 'None' is a constant slot, with no load
                 ("STORE_NAME", "e"),  # XX: we know the location for this
                 ("STORE_NAME", "e"),
                 ("RERAISE", 1),
@@ -1250,7 +1250,8 @@ types_FunctionType = type(lambda: None)
 
 
 class ConstSlotsTest(unittest.TestCase):
-    """Inline scalar constants read in a loop live in hidden slots."""
+    """Inline scalar and immortal constants that an operand reads live in
+    hidden slots, at most eight to a code object."""
 
     @staticmethod
     def loop(n):
@@ -1280,10 +1281,98 @@ class ConstSlotsTest(unittest.TestCase):
         self.assertEqual(code.co_nlocals, 3)
         self.assertEqual(self.loop(10), 136.0)
 
-    def test_no_loop_no_slots(self):
+    def test_slots_outside_loops(self):
         def f(x):
             return x * 3 + 1.5
-        self.assertEqual(f.__code__.co_constslots, b'')
+        code = f.__code__
+        values = [code.co_consts[index] for _, index in self.slots(code)]
+        self.assertEqual(sorted(values), [1.5, 3])
+        self.assertEqual(code.co_varnames, ('x',))
+        self.assertEqual(f(2), 7.5)
+
+    def test_cap(self):
+        def f(a):
+            return (a + 1, a + 2, a + 3, a + 4, a + 5, a + 6, a + 7, a + 8,
+                    a + 9, a + 10, a + 11, a + 12)
+        code = f.__code__
+        slots = self.slots(code)
+        self.assertEqual(len(slots), 8)
+        # In order of use
+        self.assertEqual([code.co_consts[index] for _, index in slots],
+                         [1, 2, 3, 4, 5, 6, 7, 8])
+        self.assertEqual(f(0), tuple(range(1, 13)))
+
+    @cpython_only
+    def test_return_none(self):
+        def outside():
+            return None
+
+        def inside(n):
+            for i in range(n):
+                if i:
+                    return None
+            return None
+
+        for f in (outside, inside):
+            with self.subTest(f=f.__name__):
+                code = f.__code__
+                slots = dict(self.slots(code))
+                self.assertTrue(slots)
+                returns = [word for word in _testinternalcapi.get_ir(code)
+                           if word[0].startswith('RETURN_VALUE')]
+                self.assertTrue(returns)
+                for name, source, *_ in returns:
+                    # Certified as an empty return, reading the None slot
+                    self.assertEqual(name, 'RETURN_VALUE_EMPTY')
+                    self.assertIsNone(code.co_consts[slots[source]])
+                self.assertNotIn('LOAD_COMMON_CONSTANT',
+                                 [i.opname for i in dis.get_instructions(f)])
+        self.assertIsNone(outside())
+        self.assertIsNone(inside(3))
+        only_none = _testinternalcapi.code_returns_only_none
+        self.assertTrue(only_none(outside.__code__))
+        self.assertTrue(only_none(inside.__code__))
+
+    @cpython_only
+    def test_returns_value_is_not_none(self):
+        def f(x):
+            if x:
+                return 1
+            return None
+        self.assertFalse(_testinternalcapi.code_returns_only_none(f.__code__))
+        self.assertEqual((f(1), f(0)), (1, None))
+
+    def test_window_inputs_keep_loads(self):
+        # Window inputs are not read through a field that may name a slot
+        def f(x):
+            return [x, 5000]
+        names = [i.opname for i in dis.get_instructions(f)]
+        self.assertIn('LOAD_CONST', names)
+        self.assertEqual(f(1), [1, 5000])
+
+    def test_mortal_constant_after_replace(self):
+        # The ready image holds only constants that need no count; a mortal
+        # one is counted by each frame that holds it
+        def f(n):
+            return n - 1
+        code = f.__code__
+        (slot, index), = self.slots(code)
+        consts = list(code.co_consts)
+        mortal = 10 ** 20
+        consts[index] = mortal
+        g = types_FunctionType(code.replace(co_consts=tuple(consts)),
+                               globals())
+        before = sys.getrefcount(mortal)
+        for _ in range(10):
+            self.assertEqual(g(5), 5 - mortal)
+        self.assertEqual(sys.getrefcount(mortal), before)
+
+    def test_not_in_f_locals_outside_loops(self):
+        def g(n):
+            return n - 1, sorted(sys._getframe().f_locals)
+        self.assertEqual(g(3), (2, ['n']))
+        self.assertTrue(g.__code__.co_constslots)
+        self.assertEqual(g.__code__.co_varnames, ('n',))
 
     def test_not_in_f_locals(self):
         def f(n):
@@ -3668,7 +3757,9 @@ class CodeLocationTest(unittest.TestCase):
         # needs to be modified! Please update this test *and* PyCode_NewEmpty,
         # so that they both stay in sync.
         def f():
-            pass
+            # A bare `pass` returns None from a constant slot, before the
+            # discard slot; this code has none
+            return undefined
         PY_CODE_LOCATION_INFO_NO_COLUMNS = 13
         f.__code__ = f.__code__.replace(
             co_stacksize=1,

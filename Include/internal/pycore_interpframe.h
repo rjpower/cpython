@@ -61,8 +61,8 @@ _PyFrame_SetExec(_PyInterpreterFrame *frame, const _PyCodeExec *exec)
 }
 
 /* Start a frame of code, whose executing copy exists: _PyCode_GetExec()
- * has succeeded for it, which the call paths ensure. */
-static inline void
+ * has succeeded for it, which the call paths ensure.  Returns the copy. */
+static inline const _PyCodeExec *
 _PyFrame_InitIRInstrPtr(_PyInterpreterFrame *frame, PyCodeObject *code)
 {
     _PyCodeExec *exec = (_PyCodeExec *)FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
@@ -72,6 +72,7 @@ _PyFrame_InitIRInstrPtr(_PyInterpreterFrame *frame, PyCodeObject *code)
 #ifdef Py_GIL_DISABLED
     frame->tlbc_index = 0;
 #endif
+    return exec;
 }
 
 // Similar to _PyFrame_GetCode(), but return NULL if the frame is invalid or
@@ -401,18 +402,11 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 
 
 /* Write the constants of the constant slots of code (CO_FAST_CONST) into the
- * slots of frame: owners of inline scalars and immortals, which own no
- * count.  A mortal constant, as after code.replace(co_consts=...), gets
- * one. */
-static inline void
-_PyFrame_FillConstSlots(_PyInterpreterFrame *frame, PyCodeObject *code)
-{
-    const uint32_t *table = _PyCode_CONSTSLOTS(code);
-    for (int i = 0; i < code->co_nconstslots; i++) {
-        frame->base[table[2 * i]] =
-            PyValue_XDUP(PyTuple_GET_VALUE(code->co_consts, table[2 * i + 1]));
-    }
-}
+ * slots of frame, counting those that need a count.  The slow path of
+ * _PyFrame_Initialize(), for code with a mortal constant, as after
+ * code.replace(co_consts=...). */
+extern void _PyFrame_FillConstSlots(_PyInterpreterFrame *frame,
+                                    PyCodeObject *code);
 
 /* Consumes func and locals. The caller supplies initialized value storage. */
 static inline Py_ALWAYS_INLINE void
@@ -431,7 +425,7 @@ _PyFrame_Initialize(
     frame->f_locals = locals;
     frame->frame_obj = NULL;
     (void)tstate;
-    _PyFrame_InitIRInstrPtr(frame, code);
+    const _PyCodeExec *exec = _PyFrame_InitIRInstrPtr(frame, code);
     frame->return_pc = frame->instr_ptr;
     frame->return_slot = 0;
     frame->pending_kwargs = IR_NO_DST;
@@ -442,11 +436,19 @@ _PyFrame_Initialize(
     frame->lltrace = 0;
 #endif
 
-    // The constant slots (CO_FAST_CONST): owners of inline scalars and
-    // immortals, which own no count.  A mortal constant, as after
-    // code.replace(co_consts=...), gets one.
-    if (code->co_nconstslots) {
-        _PyFrame_FillConstSlots(frame, code);
+    // The constant slots (CO_FAST_CONST), owners of inline scalars and
+    // immortals, which own no count: copy the ready image of their values.
+    // A mortal constant, as after code.replace(co_consts=...), gets a count.
+    if (exec->nconst) {
+        if (exec->const_image != NULL) {
+            PyValue *slots = base + exec->const_first;
+            for (int i = 0; i < exec->nconst; i++) {
+                slots[i] = exec->const_image[i];
+            }
+        }
+        else {
+            _PyFrame_FillConstSlots(frame, code);
+        }
     }
 }
 
@@ -734,7 +736,7 @@ _PyFrame_InitializeTrampoline(_PyInterpreterFrame *frame, PyCodeObject *code,
     frame->f_globals = NULL;
     frame->f_locals = NULL;
     frame->frame_obj = NULL;
-    _PyFrame_InitIRInstrPtr(frame, code);
+    (void)_PyFrame_InitIRInstrPtr(frame, code);
     frame->owner = FRAME_OWNED_BY_THREAD;
     frame->visited = 0;
 #ifdef Py_DEBUG

@@ -26,9 +26,14 @@ def encoded(words, nlocals=0):
     return encode_words(*shift_for_discard_slot(words, nlocals))
 
 
+# The words of these tests name the slots of a frame with the discard slot
+# only, so the template reads no constant: `return None` would take a
+# constant slot.
+template_code = (lambda: undefined).__code__
+
+
 def make_code(words, *, slots=4, locals=(), consts=(None,)):
-    template = (lambda: None).__code__
-    return template.replace(co_code=encoded(words, len(locals)), co_stacksize=slots,
+    return template_code.replace(co_code=encoded(words, len(locals)), co_stacksize=slots,
                             co_linetable=b"", co_exceptiontable=b"",
                             co_fbinit=struct.pack("<I", 2), co_consts=consts,
                             co_nlocals=len(locals), co_varnames=locals)

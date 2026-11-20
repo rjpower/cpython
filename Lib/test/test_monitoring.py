@@ -1283,7 +1283,6 @@ class TestLineAndInstructionEvents(CheckEvents):
             ('line', 'func1', 3),
             ('instruction', 'func1', 3),
             ('instruction', 'func1', 4),
-            ('instruction', 'func1', 5),
             ('line', 'get_events', 11)])
 
     def test_c_call(self):
@@ -1301,13 +1300,11 @@ class TestLineAndInstructionEvents(CheckEvents):
             ('instruction', 'func2', 2),
             ('instruction', 'func2', 3),
             ('instruction', 'func2', 4),
-            ('instruction', 'func2', 5),
             # The call's operand word is not an instruction: no event
-            # for offset 6
+            # for offset 5
             ('line', 'func2', 3),
+            ('instruction', 'func2', 6),
             ('instruction', 'func2', 7),
-            ('instruction', 'func2', 8),
-            ('instruction', 'func2', 9),
             ('line', 'get_events', 11)])
 
     def test_try_except(self):
@@ -1337,7 +1334,6 @@ class TestLineAndInstructionEvents(CheckEvents):
             ('line', 'func3', 6),
             ('instruction', 'func3', 8),
             ('instruction', 'func3', 9),
-            ('instruction', 'func3', 10),
             ('line', 'get_events', 11)])
 
     def test_with_restart(self):
@@ -1355,7 +1351,6 @@ class TestLineAndInstructionEvents(CheckEvents):
             ('line', 'func1', 3),
             ('instruction', 'func1', 3),
             ('instruction', 'func1', 4),
-            ('instruction', 'func1', 5),
             ('line', 'get_events', 11)])
 
         sys.monitoring.restart_events()
@@ -1369,7 +1364,6 @@ class TestLineAndInstructionEvents(CheckEvents):
             ('line', 'func1', 3),
             ('instruction', 'func1', 3),
             ('instruction', 'func1', 4),
-            ('instruction', 'func1', 5),
             ('line', 'get_events', 11)])
 
     def test_turn_off_only_instruction(self):
@@ -1419,8 +1413,7 @@ class TestInstallIncrementally(MonitoringTestBase, unittest.TestCase):
     MUST_INCLUDE_LI = [
             ('instruction', 'func1', 1),
             ('line', 'func1', 2),
-            ('instruction', 'func1', 2),
-            ('instruction', 'func1', 3)]
+            ('instruction', 'func1', 2)]
 
     def test_line_then_instruction(self):
         recorders = [ LineRecorder, InstructionRecorder ]
@@ -1441,7 +1434,8 @@ class TestInstallIncrementally(MonitoringTestBase, unittest.TestCase):
             ('call', 'func2', sys.monitoring.MISSING),
             ('call', 'len', ()),
             ('instruction', 'func2', 2),
-            ('instruction', 'func2', 3)]
+            # The call's operand word, at offset 3, is not an instruction
+            ('instruction', 'func2', 4)]
 
 
 
@@ -1982,13 +1976,13 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('branch right', 'whilefunc', 1, 3)])
 
         loop = next(i for i in dis.get_instructions(func) if i.opname == 'FOR_ITER')
-        self.assertEqual((loop.offset, loop.jump_target), (7, 13))
+        self.assertEqual((loop.offset, loop.jump_target), (6, 12))
         self.check_events(func, recorders = BRANCH_OFFSET_RECORDERS, expected = [
+            ('branch left', 'func', 6, 7),
+            ('branch right', 'func', 7, 10),
+            ('branch left', 'func', 6, 7),
             ('branch left', 'func', 7, 8),
-            ('branch right', 'func', 8, 11),
-            ('branch left', 'func', 7, 8),
-            ('branch left', 'func', 8, 9),
-            ('branch right', 'func', 7, 13)])
+            ('branch right', 'func', 6, 12)])
 
     def test_except_star(self):
 

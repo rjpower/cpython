@@ -219,6 +219,9 @@ class SemanticCompletionTests(unittest.TestCase):
         def consume(values):
             for value in values:
                 pass
+            # The result is a temporary: the final return reads a scratch
+            # home, as a return of None (a constant slot) does not
+            return [0]
         code = consume.__code__
         words = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
         site = next(i.offset for i in dis.get_instructions(consume)

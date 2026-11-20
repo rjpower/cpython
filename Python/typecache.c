@@ -3,15 +3,12 @@
 
 #include "Python.h"
 #include "pycore_typecache.h"
-#include "pycore_fileutils.h"     // _Py_write_noraise()
 #include "pycore_interp.h"
 #include "pycore_pymem.h"
 #include "pycore_pystate.h"
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_typeobject.h"
 #include "pycore_stats.h"
-
-#include <stdlib.h>              // abort()
 
 // No entry of the shared empty sentinel is read: available and used are zero.
 // Its entries are zero, which is an empty name and PyValue_NULL.
@@ -21,15 +18,6 @@ static struct type_cache empty_cache = {
     .available = 0,
     .used = 0,
 };
-
-void _Py_NO_RETURN
-_PyType_AbortClosedLookup(void)
-{
-    static const char message[] =
-        "Fatal Python error: type lookup after type finalization\n";
-    (void)_Py_write_noraise(2, message, sizeof(message) - 1);
-    abort();
-}
 
 static inline uint32_t
 cache_size(struct type_cache *cache)
@@ -184,19 +172,43 @@ void
     cache_insert(cache, name, _PyValueGuarded_FromBorrow(value));
 }
 
-struct _PyTypeCacheLookupResult
-_PyTypeCache_Lookup(PyTypeObject *type, PyObject *name)
+/* The lookup path reads the version tag and nothing else; it does not ask the
+   type whether it is admitted. A nonzero cache->version_tag is stored only by
+   _PyTypeCache_Insert(), which admits the type (typeobject.c,
+   type_cache_admitted()) and installs the table for exactly the tag the type
+   has. A cache hit therefore needs only cache->version_tag == the type's
+   current tp_version_tag, nonzero. The rest of the proof is in typeobject.c
+   at "Version tags and the lookup cache".
+
+   A static builtin type shares its tag between interpreters but not its
+   table, so the table is read from this interpreter's state. A state that
+   does not belong to the type means the type is not ready here yet (or no
+   longer): there is no table. */
+static inline struct type_cache *
+cache_get_for_lookup(PyTypeObject *type)
+{
+    if (type->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN) {
+        managed_static_type_state *state =
+            _PyStaticType_GetState(_PyInterpreterState_GET(), type);
+        if (state->type != type) {
+            return NULL;
+        }
+        return (struct type_cache *)FT_ATOMIC_LOAD_PTR_ACQUIRE(state->_tp_cache);
+    }
+    return (struct type_cache *)FT_ATOMIC_LOAD_PTR_ACQUIRE(type->_tp_cache);
+}
+
+unsigned int
+_PyTypeCache_Lookup(PyTypeObject *type, PyObject *name, PyValueBorrow *out)
 {
     assert(PyUnicode_CheckExact(name) && PyUnicode_CHECK_INTERNED(name));
-    struct _PyTypeCacheLookupResult miss = {PyValue_NULL, 0, 0};
-    PyInterpreterState *interp = _PyInterpreterState_GET();
-    unsigned int version = _PyType_GetVersionForCurrentState(interp, type);
+    unsigned int version = FT_ATOMIC_LOAD_UINT_RELAXED(type->tp_version_tag);
     if (version == 0) {
-        return miss;
+        return 0;
     }
-    struct type_cache *cache = cache_get(type);
-    if (cache == NULL || cache == &empty_cache || cache->version_tag != version) {
-        return miss;
+    struct type_cache *cache = cache_get_for_lookup(type);
+    if (cache == NULL || cache->version_tag != version) {
+        return 0;
     }
     Py_hash_t hash = PyUnstable_Unicode_GET_CACHED_HASH(name);
     assert(hash != -1);
@@ -205,13 +217,11 @@ _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name)
         PyObject *entry_name = cache->hashtable[index].name;
         if (entry_name == name) {
             // Match before touching a potentially dead borrowed value.
-            // Promotion is nonallocating.
-            PyValueBorrow value = _PyValueGuarded_Load(cache->hashtable[index].value);
-            PyValue owner = PyValue_XDUP(value);
-            return (struct _PyTypeCacheLookupResult){owner, 1, version};
+            *out = _PyValueGuarded_Load(cache->hashtable[index].value);
+            return version;
         }
         if (entry_name == NULL) {
-            return miss;
+            return 0;
         }
         index = (index + 1) & cache->mask;
     }

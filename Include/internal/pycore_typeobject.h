@@ -48,7 +48,6 @@ extern unsigned int _PyType_GetVersionForCurrentState(
     PyInterpreterState *interp, PyTypeObject *type);
 extern int _PyType_MatchesVersion(PyInterpreterState *interp,
                                   PyTypeObject *type, unsigned int expected);
-extern void _Py_NO_RETURN _PyType_AbortClosedLookup(void);
 
 /* Positive-refcount mutation receiver. Keep this C-local scope active through
    writes, rollback and all displaced-owner cleanup. Begin only closes admission;

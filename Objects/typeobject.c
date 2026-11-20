@@ -550,12 +550,48 @@ is_readying(PyTypeObject *type)
 }
 
 
+/* Version tags and the lookup cache.
+
+   Admission is decided where a tag is assigned or a cache entry is stored,
+   by type_cache_admitted(), and not where a cache is read.
+   _PyTypeCache_Lookup() reads type->tp_version_tag and compares it with the
+   tag its table was installed for. That is sufficient because of these
+   invariants:
+
+   (1) A table with a nonzero version_tag is installed only by
+       _PyTypeCache_Insert(), after _PyType_MatchesVersion() admitted the
+       type at that tag: the type is ready in this interpreter and not being
+       readied, and no mutation scope is open.
+   (2) A heap type's tag is zero until assign_version_tag() gives it one, and
+       assign_version_tag() requires admission. So a type that is being
+       readied or mutated has tag 0 and every lookup misses. A static builtin
+       type's tag is assigned before it is readied and is shared by all
+       interpreters, but its table is per interpreter. The table is
+       installed in type_ready() as the empty table, and filled only by
+       (1), so a static type that is not ready in an interpreter has no
+       table with a version there. fini_static_type() invalidates the table.
+   (3) Tags are never reused: the counters only increase. A table whose
+       version_tag is not the type's current tag can never match again.
+   (4) Every writer that changes what a lookup on a type (or a type that
+       inherits from it) would find first calls _PyType_Modified_Unlocked(),
+       which sets the tag of the type and of every subclass with a tag to 0
+       and detaches the table, before the first write. Between that call and
+       the end of the mutation scope, (2) keeps the tag at 0: the scope
+       holds mutation_depth above zero, which fails admission. Tags of unrelated
+       types stay valid, as their lookups do not involve the mutated type.
+       This relies on a nonzero tag implying nonzero tags on all bases,
+       which assign_version_tag() establishes by tagging the bases first.
+       mro_internal() and type_set_bases() update tp_mro and tp_bases before
+       they call _PyType_Modified_Unlocked(), as upstream does; a lookup run
+       by Python code in that window is not protected by the old scheme
+       either.
+
+   Guards that compare a tag recorded earlier (specialised code, the type
+   version cache) keep using _PyType_GetVersionForCurrentState(), which also
+   applies admission: they have no table whose installation proves it. */
 static int
 type_cache_admitted(PyInterpreterState *interp, PyTypeObject *type)
 {
-    if (interp->types.lookup_closed) {
-        _PyType_AbortClosedLookup();
-    }
     if (interp->types.mutation_depth != 0 ||
         !(type->tp_flags & Py_TPFLAGS_READY)) {
         return 0;
@@ -1482,9 +1518,6 @@ PyTypeObject *
 _PyType_LookupByVersion(unsigned int version)
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    if (interp->types.lookup_closed) {
-        _PyType_AbortClosedLookup();
-    }
     if (interp->types.mutation_depth != 0 || version == 0) {
         return NULL;
     }
@@ -6988,12 +7021,14 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
     PyInterpreterState *interp = _PyInterpreterState_GET();
     int cacheable = MCACHE_CACHEABLE_NAME(name);
     if (cacheable) {
-        struct _PyTypeCacheLookupResult r = _PyTypeCache_Lookup(type, name);
-        if (r.cache_hit) {
+        PyValueBorrow hit;
+        unsigned int hit_version = _PyTypeCache_Lookup(type, name, &hit);
+        if (hit_version != 0) {
             OBJECT_STAT_INC_COND(type_cache_hits, !is_dunder_name(name));
             OBJECT_STAT_INC_COND(type_cache_dunder_hits, is_dunder_name(name));
-            *out = r.value;
-            return r.version_tag;
+            // The borrow is live now: nothing has run since the lookup.
+            *out = PyValue_XDUP(hit);
+            return hit_version;
         }
     }
     OBJECT_STAT_INC_COND(type_cache_misses, !is_dunder_name(name));

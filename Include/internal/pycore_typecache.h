@@ -15,7 +15,7 @@ extern "C" {
 #define _Py_TYPECACHE_MAXSIZE (1 << 16)
 
 /* The type dict (or a base's) owns the guarded word; _PyTypeCache_Lookup()
-   checks the type version before acquiring an owned result from it. */
+   checks the type version before loading it as a borrow. */
 struct type_cache_entry {
     PyObject *name;     // name of the attribute or method, interned string, NULL if the entry is empty
     _PyValueGuarded value;  // canonical value, PyValue_NULL's word for a miss
@@ -31,13 +31,6 @@ struct type_cache {
     struct type_cache_entry hashtable[_Py_TYPECACHE_MINSIZE];   // hashtable entries
 };
 
-struct _PyTypeCacheLookupResult {
-    PyValue value;      // owned hit result; PyValue_NULL for a negative hit or miss
-    int cache_hit;          // 1 if the cache entry is valid and matches the type's version tag, 0 otherwise
-    unsigned int version_tag;   // version tag of the type when the value was cached
-};
-
-
 extern void _PyTypeCache_InitType(PyTypeObject *type);
 /* type, name and the canonical semantic result stay independently owned by
    the caller through allocation and cleanup. Insertion never steals them and
@@ -46,7 +39,12 @@ extern void _PyTypeCache_Insert(PyTypeObject *type, PyObject *name,
                                 PyValueBorrow value, unsigned int expected_version);
 #define _PyTypeCache_Insert(T, N, V, E) \
     (_PyTypeCache_Insert)(T, N, PyValue_Borrow(V), E)
-PyAPI_FUNC(struct _PyTypeCacheLookupResult) _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name);
+/* Return the version tag the entry was found at, or 0 for a miss. A hit stores
+   in *out a borrow of the entry's value (PyValue_NULL's word for a cached
+   absence). The borrow is valid until Python code can run or a type is
+   mutated: see "Version tags and the lookup cache" in typeobject.c. */
+PyAPI_FUNC(unsigned int) _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name,
+                                             PyValueBorrow *out);
 /* Detach publishes an empty table and transfers a private retirement owner.
    Retire consumes it after watcher notification; both are legal during teardown. */
 extern struct type_cache *_PyTypeCache_Detach(PyTypeObject *type);

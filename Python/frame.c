@@ -23,9 +23,7 @@ _PyFrame_CopyCreatedGenerator(_PyInterpreterFrame *src, _PyInterpreterFrame *des
 {
     PyCodeObject *code = _PyFrame_GetCode(src);
     _PyCodeExec *exec = _PyFrame_Exec(src);
-    if (exec->semantic_plan == NULL ||
-        !(exec->semantic_plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY))
-    {
+    if (!exec->all_created_empty) {
         copy_created_generator_control(src, dest);
         return;
     }

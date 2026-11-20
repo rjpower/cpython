@@ -22,6 +22,13 @@ def warm(func, *args):
         func(*args)
 
 
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class CompactBoundaryTests(unittest.TestCase):
     def test_branch_guards_have_no_empty_words(self):
         def func(flag):

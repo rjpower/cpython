@@ -636,7 +636,6 @@ typedef struct _PyCodeExec {
     _PyIRWord *words;
     char *entries;          // feedback entry 0, or NULL if no instruction
                             // has an entry
-    const _PyIRCodePlan *semantic_plan;
     _PyFbBlock *feedback;   // the header before entries, or NULL
     /* The constant slots (CO_FAST_CONST), which are consecutive: nconst of
      * them from const_first.  const_image holds the PyValue of each, to be
@@ -652,6 +651,12 @@ typedef struct _PyCodeExec {
     uint16_t const_first;
     uint16_t nconst;
     uint32_t nlocalsplus;   // of the code, which IR_IS_LOCAL() reads
+    /* Every RETURN_GENERATOR site is reached with empty scratch, so the
+     * created generator takes only the locals (_PyFrame_CopyCreatedGenerator).
+     * Set only for code with such a site. The header ends with nlocalsplus
+     * and padding: handlers read nlocalsplus at a fixed offset from the
+     * words. */
+    uint8_t all_created_empty;
 } _PyCodeExec;
 
 /* The feedback table of a code object, which follows its words: per entry,
@@ -679,35 +684,28 @@ extern _PyIRStaticExec _PyIR_InitCleanup;
  * with an exception set. */
 PyAPI_FUNC(_PyCodeExec *) _PyCode_GetExec(PyCodeObject *co);
 
-/* Build from the admitted immutable image. NULL means no certified site;
- * allocation failure returns -1 with an exception. */
-int _PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan);
+/* Prove the admitted immutable image of co and build its plan. NULL means no
+ * certified site; allocation failure returns -1 with an exception. The caller
+ * owns the plan and releases it with _PyCode_FreeSemanticPlan(). The runtime
+ * does not keep plans: only tests and the shadow comparison below read them. */
+PyAPI_FUNC(int) _PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan);
+PyAPI_FUNC(void) _PyCode_FreeSemanticPlan(const _PyIRCodePlan *plan);
+
+/* Whether every RETURN_GENERATOR site of co is reached with empty scratch.
+ * Zero for code without such a site; -1 with an exception on failure. */
+PyAPI_FUNC(int) _PyCode_AllCreatedEmpty(PyCodeObject *co);
+
+/* The words of co with each return whose scratch the proof finds empty
+ * replaced by its empty form, or NULL with *words NULL if none is. This is
+ * the selection the compiler makes (_PyCodeConstructor.select_returns). */
+PyAPI_FUNC(int) _PyCode_SelectEmptyReturns(PyCodeObject *co, PyObject **words);
 
 /* No allocation or callback. Query once before retirement cursor changes;
  * this development comparison never changes NULL authority. */
 struct _PyInterpreterFrame;
 PyAPI_FUNC(uint8_t) _PyIR_ShadowRetirement(struct _PyInterpreterFrame *frame,
-                                        uint8_t reason);
-
-/* Nonzero while an observer (_testinternalcapi) reads retirement records.
- * Only then do they carry the comparison; assertion builds still run it. */
-PyAPI_DATA(int) _PyIR_ShadowRetirementObserved;
-
-static inline uint8_t
-_PyIR_ObserveShadowRetirement(struct _PyInterpreterFrame *frame,
-                              uint8_t reason)
-{
-#ifndef NDEBUG
-    uint8_t status = _PyIR_ShadowRetirement(frame, reason);
-    assert(status != _PyIR_SHADOW_MISMATCH);
-    return _PyIR_ShadowRetirementObserved ? status : _PyIR_SHADOW_UNCOVERED;
-#else
-    if (!_PyIR_ShadowRetirementObserved) {
-        return _PyIR_SHADOW_UNCOVERED;
-    }
-    return _PyIR_ShadowRetirement(frame, reason);
-#endif
-}
+                                        uint8_t reason,
+                                        const _PyIRCodePlan *plan);
 
 /* Scratch ranges are relative to nbindings. Bindings retain dynamic NULL
  * authority. Borrow ranges only while independently pinning code; a view does

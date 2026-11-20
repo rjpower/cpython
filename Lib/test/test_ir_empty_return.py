@@ -1,4 +1,4 @@
-"""The common immutable-image proof selects and validates empty returns."""
+"""The compiler's proof selects empty returns; validation checks any claim."""
 
 import marshal
 import sys
@@ -13,8 +13,15 @@ from test.test_ir_call_roles import routes
 from test.test_ir_transfer_admission import encoded, make_code
 
 
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class EmptyReturnTests(unittest.TestCase):
-    def test_all_admission_routes_select_the_proven_empty_form(self):
+    def test_compiler_selection_survives_every_admission_route(self):
         for slots in (1, 65, 4094):
             with self.subTest(slots=slots):
                 words = [("LOAD_CONST", 0), ("RETURN_VALUE", 0)]
@@ -27,11 +34,16 @@ class EmptyReturnTests(unittest.TestCase):
                     self.assertEqual(_testinternalcapi.get_ir(admitted)[-1][0],
                                      "RETURN_VALUE_EMPTY")
                     self.assertIsNone(types.FunctionType(admitted, {})())
-                # Replacing an explicitly general word must use the same
-                # proof, without modifying the caller's shared bytes object.
-                self.assertEqual(code.replace(co_code=supplied).co_code, code.co_code)
-                self.assertEqual(construct(code, co_code=supplied).co_code, code.co_code)
+                # Constructors keep the general word they are given, and
+                # never modify the caller's shared bytes object.
+                self.assertEqual(code.replace(co_code=supplied).co_code, supplied)
+                self.assertEqual(construct(code, co_code=supplied).co_code, supplied)
                 self.assertEqual(supplied, saved)
+                # The selection is the compiler's, and is idempotent.
+                self.assertEqual(_testinternalcapi.select_empty_returns(
+                    code.replace(co_code=supplied)), code.co_code)
+                self.assertEqual(_testinternalcapi.select_empty_returns(code),
+                                 code.co_code)
 
     def test_remaining_owner_keeps_general_return_and_forbids_empty_claim(self):
         words = [("LOAD_CONST", 1), ("LOAD_CONST", 0), ("RETURN_VALUE", 0)]

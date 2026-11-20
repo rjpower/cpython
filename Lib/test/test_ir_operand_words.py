@@ -116,6 +116,13 @@ def routes(code):
             marshal.loads(marshal.dumps(code)))
 
 
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class WordLengthTests(unittest.TestCase):
     def word(self, name, *fields):
         return int.from_bytes(encode_words((name, *fields)), "little")

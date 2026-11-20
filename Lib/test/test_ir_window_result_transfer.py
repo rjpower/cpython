@@ -10,6 +10,13 @@ from test.test_ir_call_roles import routes
 from test.test_ir_transfer_admission import encoded, make_code
 
 
+def setUpModule():
+    # These tests construct malformed images and expect the constructor to
+    # reject them; release builds only do so on request.
+    from test.support.ir_semantics import code_validation
+    unittest.enterModuleContext(code_validation())
+
+
 class WindowResultTransferTests(unittest.TestCase):
     def assert_rejected(self, code, words, message):
         replacement = encoded(words)

@@ -175,10 +175,10 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(calls, {name for name, row in BY_NAME.items()
                                  if row.base in (opcode.opmap["CALL"],
                                                  opcode.opmap["INSTRUMENTED_CALL"])})
-        # Every handler of the family admits the virtual self role, a flag
-        # of the word
+        # Every handler of the family admits the virtual self role and
+        # operand words, flags of the word
         self.assertEqual({BY_NAME[name].word_flags for name in calls},
-                         {_opcode.IR_F_NO_SELF})
+                         {_opcode.IR_F_NO_SELF | _opcode.IR_F_OPERANDS})
         virtual = {name + "+NO_SELF" for name in legacy}
         instrumented = {"INSTRUMENTED_CALL", "INSTRUMENTED_CALL+NO_SELF"}
         unknown = (2, -1)

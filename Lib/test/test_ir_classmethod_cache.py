@@ -354,7 +354,7 @@ class TestClassMethodCache(unittest.TestCase):
         self.assertIn("LOAD_ATTR_CLASSMETHOD", {
             i.opname for i in dis.get_instructions(invoke, adaptive=True)})
         self.assertEqual(importlib.util.MAGIC_NUMBER,
-                         (64429).to_bytes(2, "little") + b"\r\n")
+                         (64430).to_bytes(2, "little") + b"\r\n")
 
 
 if __name__ == "__main__":

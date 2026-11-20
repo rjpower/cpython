@@ -222,8 +222,7 @@ getset_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
     }
     if (descr->d_getset->get != NULL) {
         if (descr->d_value != NULL) {
-            const _PyValueGetSet *record = descr->d_value;
-            return record->get(obj, record->closure);
+            return _PyGetSet_ValueRead(self, obj);
         }
         PyObject *box = _PyValue_AdapterBox(obj, BOX_SITE_ATTRIBUTE, descr->d_getset->get);
         if (box == NULL) {

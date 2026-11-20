@@ -1453,6 +1453,10 @@ def analyze_forest(
     # do not see them, though their members keep inst.family.
     for name in [n for n in families if n in ir_only]:
         del families[name]
+    # An IR-only member of a real family (LOAD_ATTR_GETSET) has no opcode
+    # either, but keeps inst.family: it deoptimizes to the family head.
+    for family in families.values():
+        family.members = [m for m in family.members if m.name not in ir_only]
     for uop in uops.values():
         uop.instruction_size = get_instruction_size_for_uop(instructions, uop)
     # Special case BINARY_OP_INPLACE_ADD_UNICODE

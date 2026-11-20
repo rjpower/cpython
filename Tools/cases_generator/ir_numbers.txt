@@ -454,3 +454,6 @@ SEND_XFER_STORE_FAST 404
 
 # IR-only handler added after the generator numbers (never dispatched)
 IR_OPERANDS 405
+
+# LOAD_ATTR of a value getset, found on the owner's type.
+LOAD_ATTR_GETSET 406

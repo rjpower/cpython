@@ -780,6 +780,7 @@ INPLACE_READERS = {
     "_PyValue_SequenceTuple",
     # Attribute and subscript dispatchers (I4, I3)
     "_PyValue_GetAttr", "_PyValue_SetAttr", "_PyValue_GetMethod",
+    "_PyGetSet_ValueRead",
     "_PySuper_LookupValue", "value_import_level", "super_call",
     "_PyValue_GetItem", "_PyValue_SetItem", "_PyValue_DelItem",
     "_PyValue_Size", "_PyValue_GetOptionalItem", "_PyValue_Send",
@@ -5398,6 +5399,11 @@ class IREmitter(Emitter):
                     raise analysis_error("generator deopt has no complete source shape", inst.where)
                 self.emit(f"UPDATE_MISS_STATS({inst.family.name});\n")
                 self.emit(f"JUMP_TO_PREDICTED({generator_word_entry(head, self.analysis)});\n")
+                return
+            if inst.name in self.analysis.ir_only:
+                # No opcode of its own: nothing to look up in _PyOpcode_Deopt
+                self.emit(f"UPDATE_MISS_STATS({inst.family.name});\n")
+                self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{inst.family.name});\n")
                 return
             super().emit_jump_to_predicted(inst)
             return

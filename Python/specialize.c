@@ -276,8 +276,19 @@ static inline int
 instr_oparg(_PyInstr *instr)
 {
     _PyInterpreterFrame *frame = current_frame();
-    return _PyCode_InstrOparg(_PyFrame_GetCode(frame),
-                              _PyFrame_InstrOffset(frame, instr));
+    PyCodeObject *code = _PyFrame_GetCode(frame);
+    int offset = _PyFrame_InstrOffset(frame, instr);
+    int oparg = _PyCode_InstrOparg(code, offset);
+    _PyIRWord word = _PyCode_WORDS(code)[offset];
+    const _PyIRFormat *format = _PyIR_FormatOf(IR_HANDLER(word));
+    if (format->operands == _PyIR_OPERANDS_CALL
+        || format->operands == _PyIR_OPERANDS_KW)
+    {
+        // The count of a call is its operands: the arguments of the call are
+        // the operands without the self slot and the names
+        return _PyIR_CallSlotOperands(word) - _PyIR_CallHasSelf(word);
+    }
+    return oparg;
 }
 
 static inline _PyFbHeader *

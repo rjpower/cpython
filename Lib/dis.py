@@ -50,6 +50,8 @@ JUMP_BACKWARD = opmap['JUMP_BACKWARD']
 FOR_ITER = opmap['FOR_ITER']
 SEND = opmap['SEND']
 LOAD_ATTR = opmap['LOAD_ATTR']
+CALL = opmap['CALL']
+CALL_KW = opmap['CALL_KW']
 LOAD_SUPER_ATTR = opmap['LOAD_SUPER_ATTR']
 CALL_INTRINSIC_1 = opmap['CALL_INTRINSIC_1']
 CALL_INTRINSIC_2 = opmap['CALL_INTRINSIC_2']
@@ -81,8 +83,7 @@ _HANDLER_MASK = _opcode.IR_HANDLER_MASK
 # The canonical flags of the handler field, which the name of a word shows
 # after its handler's as +NAME: "CALL+NO_SELF" is a CALL whose self input is
 # virtual NULL.  The executing copy's slot-class flags are not shown.
-_WORD_FLAGS = {"NO_SELF": _opcode.IR_F_NO_SELF, "NO_KW": _opcode.IR_F_NO_KW,
-               "OPERANDS": _opcode.IR_F_OPERANDS}
+_WORD_FLAGS = {"NO_SELF": _opcode.IR_F_NO_SELF, "NO_KW": _opcode.IR_F_NO_KW}
 
 def _handler_name(field):
     """The name of a word's handler field: its handler's, then its flags"""
@@ -470,6 +471,20 @@ def _word_length(code, offset):
                           sys.byteorder)
     return _opcode.get_ir_word_length(word)
 
+def _call_operand(code, offset, k):
+    """The slot (or for the names of a CALL_KW, the constant) that operand k
+    of the call whose head is the word at offset names"""
+    word = int.from_bytes(
+        code[(offset + 1 + k // 4) * _WORD_SIZE:(offset + 2 + k // 4) * _WORD_SIZE],
+        sys.byteorder)
+    return _word_fields(word)[k % 4]
+
+def _call_operand_count(code, offset):
+    """The number of operands of the call whose head is the word at offset"""
+    word = int.from_bytes(code[offset * _WORD_SIZE:(offset + 1) * _WORD_SIZE],
+                          sys.byteorder)
+    return _word_fields(word)[2]
+
 def _unpack_opargs(code, fbinit=None):
     """Generate (offset, handler, arg, dst, srcs, fb) for the instructions of
     code.  A call head that has operand words comes once, with the slots
@@ -488,12 +503,18 @@ def _unpack_opargs(code, fbinit=None):
         length = _opcode.get_ir_word_length(word)
         if length > 1:
             skip = length - 1
-            operands = []
-            for k in range(skip):
-                operands.extend(_word_fields(int.from_bytes(
-                    code[(offset + 1 + k) * _WORD_SIZE:(offset + 2 + k) * _WORD_SIZE],
-                    sys.byteorder)))
-            srcs += tuple(operands[:fields[2]])
+            count = fields[2]
+            operands = [_call_operand(code, offset, k) for k in range(count)]
+            # The oparg is that of the stack instruction: the arguments
+            # (and for CALL_KW the keyword values) without the self; the
+            # last operand of a CALL_KW indexes its names in the constants
+            has_self = not word & _opcode.IR_F_NO_SELF
+            if _deoptop(handler) == CALL_KW:
+                operands.pop()
+                arg = count - 1 - has_self
+            elif _deoptop(handler) == CALL:
+                arg = count - has_self
+            srcs += tuple(operands)
         yield offset, handler, arg, dst, srcs, fb
 
 class Instruction(_Instruction):
@@ -980,6 +1001,11 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
                 argrepr = _fused_argrepr(handler, argrepr, _feedback_arg(fbinit, fb))
         else:
             argval, argrepr = arg, repr(arg)
+        if arg_resolver and length > 1 and _deoptop(handler) == CALL_KW:
+            # The keyword names are the constant that the last operand indexes
+            names = arg_resolver.co_consts[
+                _call_operand(original_code, offset, _call_operand_count(original_code, offset) - 1)]
+            argval, argrepr = names, repr(names)
 
         cache_info = _feedback_info(fb, fbinit, feedback)
         label = arg_resolver.get_label_for_offset(offset) if arg_resolver else None

@@ -18,51 +18,6 @@ from test.test_ir_transfer_admission import encoded, make_code
 
 
 class AbruptOperandTests(unittest.TestCase):
-    def image(self):
-        words = [("LOAD_CONST", 0), ("POP_TOP", 1), ("LOAD_CONST", 4),
-                 ("GET_ANEXT", 5, 4), ("POP_TOP", 5), ("POP_TOP", 4),
-                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0),
-                 ("POP_TOP", 6), ("POP_TOP", 4), ("POP_TOP", 5),
-                 ("IR_JUMP", 0, 0, 6)]
-        table = exception_entry(3, 1, 8, 6 << 1)
-        code = make_code(words, slots=7).replace(co_exceptiontable=table)
-        return code, words
-
-    def reject(self, code, **change):
-        for route in (construct, lambda co, **kw: co.replace(**kw)):
-            with self.assertRaisesRegex(ValueError, "virtual call input"):
-                route(code, **change)
-        key, replacement = next(iter(change.items()))
-        original = getattr(code, key)
-        self.assertEqual(len(original), len(replacement))
-        payload = marshal.dumps(code)
-        self.assertEqual(payload.count(original), 1)
-        with self.assertRaisesRegex(ValueError, "virtual call input"):
-            marshal.loads(payload.replace(original, replacement, 1))
-
-    def test_error_prefix_requires_prior_absence_below_every_operand(self):
-        code, words = self.image()
-        row = _opcode.get_ir_contract()[opcode.opmap["GET_ANEXT"]]
-        self.assertTrue(row.flags & _opcode.IR_ABRUPT_OPERANDS)
-        self.assertFalse(row.flags & _opcode.IR_ABRUPT_PREFIX)
-        for admitted in routes(code):
-            self.assertEqual(_testinternalcapi.get_ir(admitted, True),
-                             _testinternalcapi.get_ir(code))
-        live = words.copy()
-        live[1] = ("LOAD_CONST", 1)
-        self.reject(code, co_code=encoded(live))
-        # A scratch result recipient can be touched by publication/restore;
-        # it is not protected merely because it lies below the input.
-        lower = words.copy()
-        lower[3] = ("GET_ANEXT", 1, 4)
-        self.reject(code, co_code=encoded(lower))
-        # POP_TOP has no ordinary error route. Its PRE observer edge keeps
-        # the same prior absence; an inert extension does not poison it.
-        extended = code.replace(
-            co_exceptiontable=exception_entry(3, 2, 8, 6 << 1))
-        for admitted in routes(extended):
-            _testinternalcapi.get_ir(admitted, True)
-
     def test_nonwindow_peek_retains_its_input(self):
         for name in ("GET_LEN", "GET_ANEXT"):
             with self.subTest(handler=name):
@@ -70,20 +25,6 @@ class AbruptOperandTests(unittest.TestCase):
                                   ("POP_TOP", 2), ("RETURN_VALUE", 1)])
                 for admitted in routes(code):
                     _testinternalcapi.get_ir(admitted, True)
-                # Reading a kept input is allowed; treating that same live
-                # home as a virtual hole is not.
-                valid = [("LOAD_CONST", 0), ("LOAD_CONST", 1), (name, 2, 1),
-                         ("POP_TOP", 2), ("POP_TOP", 1),
-                         ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
-                base = make_code(valid)
-                for admitted in routes(base):
-                    _testinternalcapi.get_ir(admitted, True)
-                bad = valid.copy()
-                bad[4] = ("IR_JUMP", 0, 0, 5)
-                self.reject(base, co_code=encoded(bad))
-                # An output that aliases the input is independently a write.
-                bad[2] = (name, 1, 1)
-                self.reject(base, co_code=encoded(bad))
 
     def test_window_scalar_fields_are_trailing_inputs_not_through_indices(self):
         for name in ("LIST_APPEND", "SET_ADD"):
@@ -98,10 +39,6 @@ class AbruptOperandTests(unittest.TestCase):
                     code = make_code(words, slots=depth + 4)
                     for admitted in routes(code):
                         _testinternalcapi.get_ir(admitted, True)
-                    # The real collection at BASE remains owned until the
-                    # explicit retirement. It cannot itself become a hole.
-                    words[3] = ("IR_JUMP", 0, 0, 4)
-                    self.reject(code, co_code=encoded(words))
 
     def test_actual_anext_exception_keeps_a_held_keyword_call_hole(self):
         class Pause:

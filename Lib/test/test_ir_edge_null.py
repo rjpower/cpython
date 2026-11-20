@@ -30,19 +30,6 @@ class EdgeNullTests(unittest.TestCase):
                     code = make_code(words)
                     for admitted in routes(code):
                         _testinternalcapi.get_ir(admitted, True)
-                    bad = words.copy()
-                    bad[5] = ("IR_JUMP", 0, 0, 6)
-                    self.assert_rejected(words, bad, "virtual call input")
-                    if source == 2:
-                        # A NULL publication cannot erase an unrelated prior
-                        # owner merely because another input was consumed.
-                        prior = [("POP_TOP", 1), ("LOAD_CONST", 0), ("LOAD_CONST", 2),
-                                 (name, 1, 2, 6), ("IR_JUMP", 0, 0, 7),
-                                 ("IR_JUMP", 0, 0, 7), ("POP_TOP", 1),
-                                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
-                        bad = prior.copy()
-                        bad[0] = ("LOAD_CONST", 1)
-                        self.assert_rejected(prior, bad, "virtual call input|scratch owner")
 
     def test_actual_language_paths(self):
         def left(function, value):

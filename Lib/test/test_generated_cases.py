@@ -624,17 +624,16 @@ class TestIRCases(unittest.TestCase):
             return out.getvalue()
 
         output = generate(source)
+        # The guarded call is one helper, which binds the known function from
+        # the feedback entry and the operands, or runs the call generically
         body = self.handler(output, "CALL_PY_GENERAL")
-        success, fallback = body.split("call_transaction_fallback_CALL_PY_GENERAL:;")
-        self.assertIn("call_bind_known_python(", success)
-        self.assertIn("if (call_result.status > 0)", success)
-        self.assertIn("call_transaction_run_vector(", success)
-        self.assertIn("CALL_PREPARED", success)
-        self.assertIn("call_transaction_run_vector(", fallback)
-        self.assertNotIn("call_bind_known_python(", fallback)
+        self.assertIn("call_bind_direct(tstate, frame, this_instr, fb)", body)
+        self.assertIn("call_run_guarded_miss(", body)
+        self.assertIn("if (call_result.status < 0)", body)
+        self.assertNotIn("call_transaction_run_vector(", body)
         other = self.handler(output, "CALL_BOUND_METHOD_GENERAL")
         self.assertIn("call_transaction_run_vector(", other)
-        self.assertNotIn("call_bind_known_python(", other)
+        self.assertNotIn("call_bind_direct(", other)
 
         changes = (
             ("_CHECK_PEP_523 +\n            _CHECK_FUNCTION_VERSION +\n"
@@ -675,18 +674,13 @@ class TestIRCases(unittest.TestCase):
 
         output = generate(source)
         body = self.handler(output, "CALL_KW_PY")
-        success, fallback = body.split("call_transaction_fallback_CALL_KW_PY:;")
-        self.assertIn("call_bind_known_python(", success)
-        self.assertIn("CALL_TRANSACTION_KEYWORDS, fb, call_state)", success)
-        self.assertIn("if (call_result.status > 0)", success)
-        self.assertIn("call_transaction_run_keywords(", success)
-        self.assertNotIn("call_transaction_run_vector(", body)
-        self.assertIn("CALL_PREPARED", success)
-        self.assertIn("call_transaction_run_keywords(", fallback)
-        self.assertNotIn("call_bind_known_python(", fallback)
+        self.assertIn("call_bind_keywords(tstate, frame, this_instr, fb)", body)
+        self.assertIn("call_run_guarded_miss(", body)
+        self.assertIn("if (call_result.status < 0)", body)
+        self.assertNotIn("call_transaction_run_keywords(", body)
         for name in ("CALL_KW_BOUND_METHOD", "INSTRUMENTED_CALL_KW"):
             with self.subTest(name=name):
-                self.assertNotIn("call_bind_known_python(", self.handler(output, name))
+                self.assertNotIn("call_bind_keywords(", self.handler(output, name))
 
         changes = (
             ("_CHECK_PEP_523 +\n            _CHECK_FUNCTION_VERSION_KW +",
@@ -1261,10 +1255,10 @@ class TestIRCases(unittest.TestCase):
                 self.assertLess(handler.index("IR_MOVE_TO_DST("),
                                 handler.index("PyValue_XCLOSE(ir_old);"))
                 self.assertEqual(formats[name].dst_offset, 0)
+        # A call reads its inputs from operand words and writes its result to
+        # the destination register; it has no window.
         self.assertEqual(contracts["CALL"].output_kind,
-                         "_PyIR_OUTPUT_WINDOW_DST_FIRST")
-        self.assertIn("call_destination = IR_A(ir_word)",
-                      self.handler(output.getvalue(), "CALL"))
+                         "_PyIR_OUTPUT_REGISTER_DST")
         self.assertEqual(contracts["FOR_ITER_GEN"].output_kind,
                          "_PyIR_OUTPUT_OUTCOME")
         with mock.patch.object(ir_generator, "store_mode",
@@ -2733,6 +2727,7 @@ class TestIRCases(unittest.TestCase):
                 ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
                 ".owner_program = 0, .owner_events = 1, .word_flags = 0, "
                 ".error_routes = _PyIR_ERROR_COMPLETE | _PyIR_ERROR_LOCAL_DST, "
+                ".operands = _PyIR_OPERANDS_NONE, "
                 ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
                 ".reads = { 0, _PyIR_EXT_FIXED }, "
                 ".writes = { 1, _PyIR_EXT_FIXED }, "
@@ -2755,6 +2750,7 @@ class TestIRCases(unittest.TestCase):
             ".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
             ".transfer_kind = _PyIR_TRANSFER_UNKNOWN, "
             ".owner_program = 0, .owner_events = 0, .word_flags = 0, .error_routes = 0, "
+            ".operands = _PyIR_OPERANDS_NONE, "
             ".observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, "
             ".reads = { 0, _PyIR_EXT_FIXED }, "
             ".writes = { 0, _PyIR_EXT_FIXED }, "
@@ -2978,7 +2974,9 @@ class TestIRCases(unittest.TestCase):
         self.assertNotIn("IR_CLOSE_INPUTS", analyzer.IR_MARKER_EFFECTS)
         self.assertIn("IR_CLOSE_INPUTS", {escape.call.text
                                         for escape in part.properties.escaping_calls.values()})
-        self.assertTrue(ir_generator.releases_object(
+        self.assertTrue(ir_generator.releases_object(analysis.instructions["POP_TOP"]))
+        # A call reads its operands in place and releases nothing of its own
+        self.assertFalse(ir_generator.releases_object(
             analysis.instructions["CALL_BUILTIN_FAST_WITH_KEYWORDS"]))
 
     def test_nullable_annotations_are_input_only(self):
@@ -3433,8 +3431,9 @@ class TestIRCases(unittest.TestCase):
                  if contract.word_flags}
         self.assertEqual(len(roles), 31)
         self.assertEqual(set(roles.values()),
-                         {("IR_F_NO_SELF",), ("IR_F_NO_SELF", "IR_F_NO_KW")})
-        self.assertEqual({name for name, flags in roles.items() if len(flags) == 2},
+                         {("IR_F_NO_SELF",), ("IR_F_NO_KW",)})
+        self.assertEqual({name for name, flags in roles.items()
+                          if flags == ("IR_F_NO_KW",)},
                          {"CALL_FUNCTION_EX", "CALL_EX_PY", "CALL_EX_NON_PY_GENERAL",
                           "INSTRUMENTED_CALL_FUNCTION_EX"})
         for name in roles:
@@ -3881,7 +3880,7 @@ class TestCallTransactionMarkers(unittest.TestCase):
             self.assertFalse(properties.sync_sp)
 
     def test_prelude_and_actual_destination_terminal_paths(self):
-        for name in ("CALL", "CALL_NON_PY_GENERAL",
+        for name in ("CALL",
                      "CALL_PY_GENERAL", "CALL_BOUND_METHOD_GENERAL",
                      "CALL_KW", "CALL_KW_NON_PY", "CALL_KW_PY",
                      "CALL_FUNCTION_EX", "CALL_EX_NON_PY_GENERAL", "CALL_EX_PY",
@@ -3889,15 +3888,17 @@ class TestCallTransactionMarkers(unittest.TestCase):
                      "INSTRUMENTED_CALL_FUNCTION_EX"):
             with self.subTest(name=name):
                 body = self.interpreter.split(f"TARGET({name}) {{", 1)[1].split("TARGET(", 1)[0]
-                capture = body.index("call_transaction_begin(")
-                invoke = body.index("call_transaction_run_")
-                self.assertLess(capture, invoke)
+                # The out-of-line run reads the operand words; the handler
+                # keeps no transaction of its own
+                self.assertNotIn("call_transaction_begin(", body)
+                invoke = min(body.index(run) for run in (
+                    "call_transaction_run_", "call_bind_") if run in body)
                 for preparation in ("_Py_Specialize_Call",
                                     "call_transaction_expand_method(",
                                     "call_transaction_prepare_tuple(",
                                     "call_transaction_monitor("):
                     if preparation in body:
-                        self.assertLess(capture, body.index(preparation))
+                        self.assertLess(body.index(preparation), invoke)
                 self.assertNotIn("IR_MOVE_TO_DST", body[invoke:])
                 self.assertNotIn("IR_CLEAR_SLOTS", body[invoke:])
                 self.assertNotIn("_PyValue_Publish", body[invoke:])
@@ -3909,20 +3910,19 @@ class TestCallTransactionMarkers(unittest.TestCase):
         labels = re.findall(r"^\s*(call_transaction_fallback_\w+):", self.interpreter, re.M)
         self.assertEqual(len(labels), len(set(labels)))
 
-    def test_exact_method_post_effect_guards_forward_prepared_roles(self):
+    def test_exact_method_guards_precede_the_push(self):
+        # The bound method's function and receiver are adopted as borrows, so
+        # every guard runs before call_push_exact() counts or moves anything,
+        # and a failed guard falls back to the generic call with the operands
+        # untouched
         for name in ("CALL_BOUND_METHOD_EXACT_ARGS",):
             with self.subTest(handler=name):
                 body = self.interpreter.split(f"TARGET({name}) {{", 1)[1].split("TARGET(", 1)[0]
-                promoted = body.index("call_state |= CALL_SELF_PRESENT | CALL_EFFECTS")
-                wrapper_close = body.index("PyValue_CLOSE", promoted)
-                suffix = body[wrapper_close:]
-                guards = suffix.split("JUMP_TO_PREDICTED(")[:-1]
-                self.assertGreaterEqual(len(guards), 4)
-                for guard in guards:
-                    self.assertIn(f"if (call_state & CALL_EFFECTS) {{ goto call_transaction_fallback_{name}; }}", guard)
-                fallback = body.index(f"call_transaction_fallback_{name}:")
-                self.assertIn("call_transaction_run_vector(", body[fallback:])
-                self.assertIn("| call_state", body[fallback:])
+                push = body.index("call_push_exact(")
+                self.assertIn("call_state |= CALL_SELF_PRESENT | CALL_EXPANDED", body[:push])
+                self.assertGreaterEqual(body[:push].count("JUMP_TO_PREDICTED("), 4)
+                self.assertNotIn("JUMP_TO_PREDICTED(", body[push:])
+                self.assertNotIn("call_transaction_fallback_", body)
 
     def test_handlers_take_no_local_address(self):
         # The generated handlers and labels take the address of none of

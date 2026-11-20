@@ -30,7 +30,7 @@ class SuperCallTransportTests(unittest.TestCase):
         instance, method = self.make_method()
         rows = _testinternalcapi.get_ir(method.__code__)
         self.assertTrue(any(row[0] == "LOAD_SUPER_ATTR" for row in rows))
-        self.assertTrue(any(row[0] == "CALL_FUNCTION_EX+NO_SELF" for row in rows))
+        self.assertTrue(any(row[0] == "CALL_FUNCTION_EX" for row in rows))
         for code in routes(method.__code__):
             function = types.FunctionType(code, method.__globals__, closure=method.__closure__)
             with self.subTest(code=code):
@@ -48,11 +48,11 @@ class SuperCallTransportTests(unittest.TestCase):
         changed = raw_encoded(words)
         for route in (construct, lambda co, **kw: co.replace(**kw)):
             with self.subTest(route=route):
-                with self.assertRaisesRegex(ValueError, "virtual call input"):
+                with self.assertRaisesRegex(ValueError, "unproved empty return"):
                     route(code, co_code=changed)
         payload = marshal.dumps(code)
         self.assertEqual(payload.count(code.co_code), 1)
-        with self.assertRaisesRegex(ValueError, "virtual call input"):
+        with self.assertRaisesRegex(ValueError, "unproved empty return"):
             marshal.loads(payload.replace(code.co_code, changed, 1))
 
     def test_lookup_error_and_observer_local_mutation_keep_existing_routes(self):

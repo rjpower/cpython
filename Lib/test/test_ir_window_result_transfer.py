@@ -37,8 +37,6 @@ class WindowResultTransferTests(unittest.TestCase):
                         self.assertEqual(_testinternalcapi.get_ir(admitted, True),
                                          _testinternalcapi.get_ir(code))
                     bad = words.copy()
-                    bad[producer] = ("BUILD_LIST", 2, 2, count, 0)
-                    self.assert_rejected(code, bad, "virtual call input")
                     bad[producer] = ("BUILD_LIST", 3, 2, count, 0)
                     self.assert_rejected(code, bad, "window result destination")
 

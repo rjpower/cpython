@@ -278,18 +278,28 @@ def redispatch_cohorts(analysis: Analysis, formats: dict[str, "IRFormat"]):
     return groups.values()
 
 
-# The call families whose words carry role flags (Include/internal/pycore_ir.h):
-# IR_F_NO_SELF where the reserved self input is virtual NULL, and for
-# CALL_FUNCTION_EX IR_F_NO_KW where the kwargs input is too.  The CallRoles
-# pass proves them (Python/regcfg_passes.c) and the assembler encodes them; a
-# handler of the family computes the virtual inputs from its word, so
+# The call families, whose words are a head followed by operand words
+# (Include/internal/pycore_ir.h), by the _PyIRFormat.operands of their
+# format.  The handlers are generated as for any family.  Their stack model is
+# a window, so that the DSL of bytecodes.c keeps its positions (callable, self
+# or NULL, arguments, ...), but position p lives in the home that the operand
+# word of p names (IREmitter.window_slot), and the metadata sees the word's
+# real shape (operand_metadata()).
+OPERAND_CALLS = {
+    "CALL": "_PyIR_OPERANDS_CALL",
+    "CALL_KW": "_PyIR_OPERANDS_KW",
+    "CALL_FUNCTION_EX": "_PyIR_OPERANDS_EX",
+}
+
+# The role flags that a word of a call family may carry: IR_F_NO_SELF where
+# CALL and CALL_KW have no self operand (the CallRoles pass proves it,
+# Python/regcfg_passes.c), and IR_F_NO_KW where CALL_FUNCTION_EX has no kwargs
+# operand.  A handler of the family reads them from its word, so
 # specialisation and instrumentation keep them by keeping the flags.
-# They may also carry IR_F_OPERANDS, which says that operand words follow the
-# head (_PyIR_WordLength()); step 2b of calls80 deletes it with the window form.
 CALL_ROLE_FLAGS = {
-    "CALL": ("IR_F_NO_SELF", "IR_F_OPERANDS"),
-    "CALL_KW": ("IR_F_NO_SELF", "IR_F_OPERANDS"),
-    "CALL_FUNCTION_EX": ("IR_F_NO_SELF", "IR_F_NO_KW", "IR_F_OPERANDS"),
+    "CALL": ("IR_F_NO_SELF",),
+    "CALL_KW": ("IR_F_NO_SELF",),
+    "CALL_FUNCTION_EX": ("IR_F_NO_KW",),
 }
 
 
@@ -445,6 +455,7 @@ class IRFormat:
     fb_layout: str | None = None    # the entry type, see FEEDBACK_LAYOUTS
     fb_kind: str | None = None      # its _PyFbKind
     metadata_inputs: frozenset[int] = frozenset()
+    operands: str = "_PyIR_OPERANDS_NONE"   # a call: see OPERAND_CALLS
 
     def field_of(self, role: str) -> str | None:
         for name, r in zip(FIELDS, self.roles):
@@ -1604,6 +1615,18 @@ def metadata_only_passthroughs(inst: Instruction) -> frozenset[int]:
     return frozenset({1})
 
 
+def operand_metadata(fmt: IRFormat) -> IRFormat:
+    """The shape of a call family's words in the metadata: A is the dst, B
+    the callable (an input), C the number of operands and D the feedback
+    offset.  The other inputs are operand words that follow the head, which
+    no field names, so the format is not a window."""
+    assert fmt.operands != "_PyIR_OPERANDS_NONE"
+    return replace(
+        fmt, window=False,
+        roles=[ROLE_DST, f"{ROLE_IN0} + 0", ROLE_IMM, ROLE_FB],
+        inputs=["callable"], n_inputs=1, borrow_mask=1)
+
+
 def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     """The format of a group; members[0] is its head.
 
@@ -1673,6 +1696,10 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         slots = ([ROLE_DST] if dst_offset is not None else []) + [ROLE_BASE]
         n_inputs = APPEND_SOURCES.get(group, 0)
         slots += [f"{ROLE_IN0} + {k}" for k in range(n_inputs)]
+        # Every operand call has its count in C and its feedback index in D,
+        # also a CALL_FUNCTION_EX, which has no oparg of its own
+        if group in OPERAND_CALLS and imm_kind is None:
+            imm_kind = "narrow"
         placed = place_fields(slots, has_fb, imm_kind, True)
         if placed is None:
             raise analysis_error(
@@ -1766,6 +1793,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         names_target=jumps and names_target_only(head),
         fb_layout=fb_layout, fb_kind=fb_kind,
         metadata_inputs=metadata_inputs,
+        operands=OPERAND_CALLS.get(group, "_PyIR_OPERANDS_NONE"),
     )
 
 
@@ -2359,7 +2387,9 @@ def names_return_slot(inst: Instruction) -> bool:
     slot dst names.  A generator's frame also hands each value it yields to
     that slot, and its return value at the end of a FOR_ITER."""
     tokens = uop_tokens(inst)
+    # _PyEval_CreateInitFrame takes the return slot from the call's own word
     return ("IR_SUSPEND_DELEGATED" in tokens or
+            "_PyEval_CreateInitFrame" in tokens or
             "IR_DST_SLOT" in tokens and "gi_iframe" not in tokens)
 
 
@@ -2476,6 +2506,7 @@ class SlotLayout:
     owning_result: str | None = None  # first publication of a checked owning alias
     native_entry: bool = False  # checked native interpreter-exit homes
     call_kind: str | None = None
+    call_results: frozenset[str] = frozenset()  # names of a call's outputs
 
     @staticmethod
     def empty() -> "SlotLayout":
@@ -2691,9 +2722,8 @@ class IRStack(Stack):
         self.final = False
         self.reloaded = False
         self.error_exit = False
-        # Set by IR_WINDOW_TAKEN(): the handler disposed of its window, so
-        # that the slots of the dead inputs stay as it left them.
-        self.window_taken = False
+        # An error edge after the call finished: the result is published first
+        self.publish_on_error = False
         # The closes of the inputs that the handler detached, in order: rule
         # 7 runs them after the last store (IREmitter.emit_deferred).  Each
         # path has its own list, and the paths that join agree on it.
@@ -2738,7 +2768,6 @@ class IRStack(Stack):
         other.spent = dict(self.spent)
         other.spent_views = set(self.spent_views)
         other.roles = self.roles
-        other.window_taken = self.window_taken
         other.deferred = list(self.deferred)
         other.null_paths = {edge: set(names) for edge, names in self.null_paths.items()}
         other.null_stores = dict(self.null_stores)
@@ -2914,13 +2943,39 @@ class IRStack(Stack):
         return f"IR_SLOT({dst})" if k.as_int() == 0 else f"IR_SLOT({dst} + {k.to_c()})"
 
     def window_slot(self, p: PointerOffset) -> str:
+        if self.layout.call_kind is not None:
+            return self.call_operand(p)
         return f"window[{(p - self.layout.base).to_c()}]"
+
+    def call_operand(self, p: PointerOffset) -> str:
+        """Position p of a call's window, which the DSL numbers as the
+        callable, the self or NULL, then the arguments (CALL_KW: then the
+        names, CALL_FUNCTION_EX: the unused self, the positional tuple, the
+        kwargs).  A call has no window: the value lives in the home that
+        its word names, the callable in the head and the others in the
+        operand words (IR_OPERAND(k)), and it is read, not owned."""
+        relative = (p - self.layout.base).as_int()
+        if relative == 0:
+            return "IR_SLOT(IR_B(ir_word))"
+        kind = self.layout.call_kind
+        if kind == "CALL_TRANSACTION_EX":
+            if relative in (2, 3):
+                return f"IR_OPERAND({relative - 2})"
+            raise StackError(f"no operand for position {p} of a call")
+        if relative == 1:
+            return "IR_OPERAND(0)"
+        if relative is None:
+            if kind == "CALL_TRANSACTION_KEYWORDS" and (
+                    (p - self.layout.base).to_c() in ("oparg + 2", "2 + oparg")):
+                return "IR_CALL_KWNAMES()"
+            raise StackError(f"no operand for position {p} ({(p - self.layout.base).to_c()}) of a call")
+        return f"IR_OPERAND({relative - 2} + IR_CALL_HAS_SELF(ir_word))"
 
     def call_input_role(self, p: PointerOffset) -> str | None:
         if self.layout.call_kind is None:
             return None
         relative = (p - self.layout.base).as_int()
-        if relative == 1:
+        if relative == 1 and self.layout.call_kind != "CALL_TRANSACTION_EX":
             return "CALL_SELF_PRESENT"
         if relative == 3 and self.layout.call_kind == "CALL_TRANSACTION_EX":
             return "CALL_KWARGS_PRESENT"
@@ -2960,6 +3015,13 @@ class IRStack(Stack):
                     self.home_values[field] = self.loaded_value
             else:
                 self.unknown_read = True
+        if lay.call_kind is not None:
+            if var.is_array():
+                # The arguments are operands: a handler reads them with
+                # IR_OPERAND(k) or has a helper read the words
+                return "NULL"
+            if (memory_offset - lay.base).as_int() == 1 and lay.call_kind == "CALL_TRANSACTION_EX":
+                return "PyValue_NULL"
         if not var.is_array():
             role = self.call_input_role(memory_offset)
             if role is not None:
@@ -3056,6 +3118,31 @@ class IRStack(Stack):
             out.emit(f"IR_STORE_RETURN({var.name});\n")
             return True
         lay = self.layout
+        if lay.window and lay.call_kind is not None:
+            # The values of a call's positions are views of its operands,
+            # which stay in their homes: only the result is stored.  It is
+            # published with the call's final store, which releases the
+            # temporary operands; on an error edge a value that a uop made
+            # is closed.
+            self.home_node = None
+            if self.final:
+                expression = f"ir_old = call_publish(frame, this_instr, {var.name})"
+                self.dst_stores.append(expression)
+                out.emit(f"{expression};\n")
+            elif self.error_exit and var.name in lay.call_results:
+                if self.publish_on_error:
+                    # The periodic check follows the store, so the result
+                    # stays in its home when the check raises
+                    out.emit(f"ir_old = call_publish(frame, this_instr, {var.name});\n")
+                    out.emit("PyValue_XCLOSE(ir_old);\n")
+                else:
+                    out.emit(f"PyValue_XCLOSE({var.name});\n")
+            elif not self.error_exit:
+                # A spill at a uop boundary: the result stays in its C
+                # variable until the final store
+                self.home_writes -= 1
+                return False
+            return True
         if lay.window:
             self.home_node = None
             role = self.call_input_role(memory_offset)
@@ -3183,13 +3270,9 @@ class IRStack(Stack):
             else:
                 self.home_node = None
         if lay.window:
-            if self.window_taken:
-                return
             if lay.call_kind is not None:
-                assert not lay.in_fields
-                first = (low - lay.base).to_c()
-                out.emit(f"call_clear_owned_slots(window, {first}, {count.to_c()}, "
-                         f"{lay.call_kind}, call_state);\n")
+                # A call's positions are views of its operands, which its
+                # result's store releases (or a pushed frame took)
                 return
             if n is None:
                 out.emit(f"IR_CLEAR_SLOTS(&{self.window_slot(low)}, {count.to_c()});\n")
@@ -3386,6 +3469,7 @@ class IREmitter(Emitter):
         # They have no certifying source contract or per-handler receipts.
         self.null_outputs: frozenset[str] | None = None
         self.error_source = None
+        self.error_uop_name = None
         self.owning_output_source = None
         self.callback_current_identity = False
         self.error_unwind_sources = set()
@@ -3410,7 +3494,6 @@ class IREmitter(Emitter):
         self._replacers["IR_DST"] = self.ir_dst
         self._replacers["IR_DST_SLOT"] = self.ir_dst_slot
         self._replacers["IR_BASE"] = self.ir_base
-        self._replacers["IR_WINDOW_TAKEN"] = self.ir_window_taken
         self._replacers["IR_COMPLETE_STEP"] = self.complete_step
         self._replacers["IR_PROCESS_ERROR"] = self.process_error
         self._replacers["IR_OBSERVE_COMMITTED_BRANCH"] = self.observe_committed_branch
@@ -3962,7 +4045,9 @@ class IREmitter(Emitter):
         return True
 
     def reader_error(self):
-        self.emit("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);\n")
+        # A call is several words: its head is this_instr, not next_instr - 1
+        self.emit("PROCESS_ERROR_AT(RAISE, 0, this_instr);\n" if self.call_kind
+                  else "PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);\n")
 
     def finish_stores(self, stack: "IRStack") -> None:
         """Rule 7: after the handler's last store, close the inputs that it
@@ -4067,39 +4152,17 @@ class IREmitter(Emitter):
 
     def call_reload(self, inst):
         self.reader_reload()
-        self.emit("window = IR_SLOTS() + call_base;\n")
         if self.call_has_feedback:
             self.emit(f"fb = ({feedback_type(self.format_of(inst))} *)"
                       "(frame->ir_feedback + ((size_t)call_feedback << 3));\n")
 
     def prepare_call(self, tkn, tkn_iter, uop, storage, inst):
-        """A step of the call before its invocation, which records in the
-        register local call_state what it did (register-ir-v2-a3.md 3.5,
-        R-c): CALL_EFFECTS sends a later failed guard to the fallback"""
+        """The preparations of a call (the method form, the tuple of a
+        CALL_FUNCTION_EX, the CALL event) are steps of its transaction, which
+        runs them in this order on its window when the call is invoked: the
+        marker is where the DSL says that they come."""
         assert inst is not None
         self.macro_args(tkn, tkn_iter, 0)
-        storage.flush(self.out)
-        self.out.start_line()
-        if tkn.text == "IR_PREPARE_CALL_METHOD":
-            self.emit("{\n")
-            self.emit("call_state = call_transaction_expand_method(tstate, frame, this_instr, call_base, call_state);\n")
-            self.emit("if (call_state & CALL_FAILED) {\n")
-            self.reader_error()
-            self.emit("}\n")
-            self.emit("}\n")
-        else:
-            if tkn.text == "IR_PREPARE_CALL_TUPLE":
-                self.emit("call_state |= CALL_PREPARED | CALL_EFFECTS;\n")
-                call = "call_transaction_prepare_tuple(tstate, frame, this_instr, call_base)"
-            else:
-                assert tkn.text == "IR_MONITOR_CALL"
-                self.emit("call_state |= CALL_MONITORED | CALL_EFFECTS;\n")
-                call = (f"call_transaction_monitor(tstate, frame, this_instr, call_base, "
-                        f"{self.call_argc}, {self.call_kind}, call_state)")
-            self.emit(f"if ({call} < 0) {{\n")
-            self.reader_error()
-            self.emit("}\n")
-        self.call_reload(inst)
         return True
 
     def call_effects(self, tkn, tkn_iter, uop, storage, inst):
@@ -4120,23 +4183,24 @@ class IREmitter(Emitter):
     def call_completion(self, run_override=None):
         self.call_normal_drained = True
         # One out-of-line call, which keeps the transaction record in its own
-        # frame and returns {status, child} in two registers (R-c).  The run
-        # takes its current instruction from frame->instr_ptr: every
-        # preparation restores it to this_instr.
+        # frame and returns {status, child} in two registers (R-c).  It reads
+        # the call's operands from the words after this_instr, once, and
+        # owns them from then on.
         self.emit("assert(frame->instr_ptr == this_instr);\n")
         self.emit("{\n")
-        argc = f"{self.call_argc}, " if self.call_kind != "CALL_TRANSACTION_EX" else ""
         if run_override:
-            self.emit(f"_PyCallResult call_result = call_bind_known_python(tstate, frame, "
-                      f"call_base, call_destination, {argc}{self.call_kind}, fb, call_state);\n")
+            # The cached binding plan fills the child from the operands; a
+            # miss had no effect, and the call runs generically
+            bind = ("call_bind_keywords" if self.call_kind == "CALL_TRANSACTION_KEYWORDS"
+                    else "call_bind_direct")
+            self.emit(f"_PyCallResult call_result = {bind}(tstate, frame, this_instr, fb);\n")
             self.emit("if (call_result.status > 0) {\n")
-            self.emit(f"call_result = {self.call_run}(tstate, frame, "
-                      f"call_base, call_destination, {argc}"
-                      f"{self.call_flags} | call_state | CALL_PREPARED);\n")
+            self.emit(f"call_result = call_run_guarded_miss(tstate, frame, this_instr, "
+                      f"{self.call_kind}, {self.call_flags} | call_state);\n")
             self.emit("}\n")
         else:
             self.emit(f"_PyCallResult call_result = {self.call_run}(tstate, frame, "
-                      f"call_base, call_destination, {argc}{self.call_flags} | call_state);\n")
+                      f"this_instr, {self.call_flags} | call_state);\n")
         self.emit("if (call_result.status < 0) {\n")
         self.reader_error()
         self.emit("}\n")
@@ -4144,14 +4208,12 @@ class IREmitter(Emitter):
         self.emit("DISPATCH_INLINED(call_result.child);\n")
         self.emit("}\n")
         # Both result and callback-current destination are already published.
-        # No stack flush or delayed move from window[0] may consume stale C
-        # inputs after this point.
         self.emit("DISPATCH();\n")
         self.emit("}\n")
 
     def invoke_call(self, tkn, tkn_iter, uop, storage, inst):
         self.macro_args(tkn, tkn_iter, 0)
-        run_override = ("call_bind_known_python"
+        run_override = ("call_run_guarded"
                         if tkn.text == "IR_INVOKE_GUARDED_PYTHON_CALL" else None)
         if run_override:
             self.emit("assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);\n")
@@ -5035,6 +5097,7 @@ class IREmitter(Emitter):
                 # the original output identity used on normal continuation.
                 stack.refine_value(value.copy(), False)
         stack.error_exit = True
+        stack.publish_on_error = self.error_uop_name == "_CHECK_PERIODIC_AT_END"
         stack.flush(self.out)
         # Rule 9: the owners that C holds close before the unwind
         self.emit_deferred(stack)
@@ -5149,10 +5212,12 @@ class IREmitter(Emitter):
         self.check_error_outputs(tkn, storage)
         previous = self.abrupt_operand_origin
         self.abrupt_operand_origin = id(tkn)
+        self.error_uop_name = uop.name
         try:
             return super().error_if(tkn, tkn_iter, uop, storage, inst)
         finally:
             self.abrupt_operand_origin = previous
+            self.error_uop_name = None
 
     def goto_label(self, goto: Token, label: Token, storage: Storage) -> None:
         self.check_owner_exit(goto)
@@ -5287,7 +5352,7 @@ class IREmitter(Emitter):
         again; the path ends here"""
         assert inst is not None
         self.check_exit_inputs(tkn, storage)
-        if self.call_kind:
+        if self.call_kind and self.call_effects_possible:
             self.emit(f"if (call_state & CALL_EFFECTS) {{ goto {self.call_fallback}; }}\n")
             self.call_fallback_used = True
         self.error_terminal_sources.add(id(tkn))
@@ -5311,7 +5376,7 @@ class IREmitter(Emitter):
             self.error_terminal_sources.add(self.error_redispatch_origin)
         else:
             self.error_uncovered = True
-        if self.call_kind:
+        if self.call_kind and self.call_effects_possible:
             self.emit(f"if (call_state & CALL_EFFECTS) {{ goto {self.call_fallback}; }}\n")
             self.call_fallback_used = True
         binary_op = inst.family is not None and inst.family.name == BINARY_OP_FAMILY
@@ -5338,29 +5403,6 @@ class IREmitter(Emitter):
             return
         raise analysis_error(f"{inst.name} deoptimises but has no family",
                              inst.where)
-
-    def ir_window_taken(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-        """IR_WINDOW_TAKEN(): a window-style handler has cleared the slots of
-        its dead inputs, handed them to a pushed frame, or taken explicit
-        responsibility for draining private argument homes before any exit.
-        The producer must not auto-vacate those homes."""
-        next(tkn_iter)
-        next(tkn_iter)
-        next(tkn_iter)
-        stack = storage.stack
-        if not isinstance(stack, IRStack) or not stack.layout.window:
-            raise analysis_error("IR_WINDOW_TAKEN() needs a window-style handler", tkn)
-        stack.window_taken = True
-        if stack.layout.call_kind is not None:
-            self.call_normal_drained = True
-        return True
 
     def process_error(self, tkn, tkn_iter, uop, storage, inst):
         args, _ = self.instruction_macro_args(tkn, tkn_iter)
@@ -6320,7 +6362,7 @@ def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> int | N
     """The physical final publication shared by ordinary and observed paths."""
     stack.final = True
     stack.flush(out)
-    if mode == STORE_RESULT and fmt.window:
+    if mode == STORE_RESULT and fmt.window and fmt.operands == "_PyIR_OPERANDS_NONE":
         dst = FIELD_ARGS[fmt.field_of(ROLE_DST)]
         expression = f"IR_MOVE_TO_DST({dst}, window[{fmt.dst_offset}])"
         stack.dst_stores.append(expression)
@@ -6599,6 +6641,9 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
     transaction = uses_call_transaction(inst)
     emitter.call_finished = False
+    # Only a call whose DSL says IR_BEGIN_CALL_EFFECTS can have effects
+    # that a later deopt must not repeat (its specialisation)
+    emitter.call_effects_possible = "IR_BEGIN_CALL_EFFECTS" in set(uop_tokens(inst))
     emitter.call_fallback_used = False
     emitter.call_fallback = f"call_transaction_fallback_{name}"
     is_target = inst.is_target and name == inst.name
@@ -6626,11 +6671,15 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if not inst.properties.no_save_ip:
         out.emit(f"frame->instr_ptr = next_instr;\n")
     out.emit("IR_HOLD_NEXT();\n")
-    out.emit(f"next_instr += 1;\n")
+    # A call is a head and its operand words
+    out.emit("next_instr += IR_CALL_LENGTH(ir_word);\n" if fmt.operands != "_PyIR_OPERANDS_NONE"
+             else "next_instr += 1;\n")
     out.emit(f"INSTRUCTION_STATS({handler_id});\n")
     if is_target:
         qualifier = "" if transaction or emitter.result_publication is not None or inst.name == "BINARY_OP" or canonical_handler(name) in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_ATTR", "STORE_ATTR") else "const "
-        out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
+        back = ("IR_CALL_LENGTH(ir_word)" if fmt.operands != "_PyIR_OPERANDS_NONE"
+                else "1")
+        out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - {back};\n")
         out.emit("(void)this_instr;\n")
     if fmt.store_dst or fmt.window:
         # The old value of the slot that dst names, a local or the discard
@@ -6658,10 +6707,17 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         elif fmt.forward and field_expr(fmt.imm).startswith("IR_D("):
             # The distance has a sign, as _PyCode_InstrOparg() decodes it
             out.emit("int oparg = IR_DS(ir_word);\n")
+        elif fmt.operands != "_PyIR_OPERANDS_NONE":
+            # C is the number of operands; the DSL's oparg counts the
+            # arguments, among them the keyword values of a CALL_KW
+            out.emit("int oparg = (int)IR_C(ir_word)"
+                     + (" - IR_CALL_HAS_SELF(ir_word)" if fmt.operands != "_PyIR_OPERANDS_EX" else "")
+                     + (" - 1" if fmt.operands == "_PyIR_OPERANDS_KW" else "")
+                     + ";\n")
         else:
             out.emit(f"int oparg = (int){field_expr(fmt.imm)};\n")
         out.emit("(void)oparg;\n")
-    if fmt.window:
+    if fmt.window and fmt.operands == "_PyIR_OPERANDS_NONE":
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         out.emit(f"PyValue *window = &IR_SLOT({base});\n")
         out.emit("(void)window;\n")
@@ -6689,8 +6745,6 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         if transaction and (fixed, arrays) != expected:
             raise analysis_error(
                 f"{name}: a {kind} call with inputs {count}", inst.where)
-        base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
-        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         emitter.call_argc = "oparg" if inst.properties.oparg else "0"
         emitter.call_kind = kind
         emitter.call_run = {"CALL_TRANSACTION_VECTOR": "call_transaction_run_vector",
@@ -6702,18 +6756,17 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         if polls_at_end(name, inst):
             flags.append("CALL_PERIODIC")
         emitter.call_flags = "(" + (" | ".join(flags) or "0") + ")"
-        # The transaction's state is in registers: its numeric homes, read
-        # once, and what the handler did (register-ir-v2-a3.md 3.5, R-b)
-        out.emit(f"int call_base = {base};\n")
-        out.emit(f"int call_destination = {dst};\n")
-        # The virtual inputs are the word's role flags
-        holes = ("_PyIR_CallInputHoles(ir_word)" if call_role_flags(name, inst)
-                 else "0")
-        out.emit(f"int call_state = call_transaction_begin(frame, &IR_SLOT(call_base), call_base, {count}, "
-                 f"call_destination, {kind}, {holes});\n")
+        # What the call is, from its word: whether it has a self operand (or
+        # a kwargs operand), and what the handler did before the call
+        # (call_state, in a register).  The operands are the words after the
+        # head.
+        out.emit("int call_state = "
+                 + ("IR_CALL_KWARGS_STATE(ir_word)" if kind == "CALL_TRANSACTION_EX"
+                    else "IR_CALL_SELF_STATE(ir_word)") + ";\n")
         out.emit("(void)call_state;\n")
         if emitter.call_has_feedback:
             out.emit(f"uint32_t call_feedback = {field_expr(fmt.fb)};\n")
+            out.emit("(void)call_feedback;\n")
     if inst.properties.uses_opcode:
         out.emit(f"opcode = {canonical_handler(name)};\n")
     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
@@ -6739,7 +6792,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     layout = replace(layout, canonical_frame_transfer=canonical_frame_transfer_input(inst),
                      native_entry=native_entry_input_contract(inst),
                      owning_result=owned_alias_result(inst, external_io(inst)[1]),
-                     call_kind=emitter.call_kind if call_window else None)
+                     call_kind=emitter.call_kind if call_window else None,
+                     call_results=frozenset(o.item.name for o in external_io(inst)[1]) if call_window else frozenset())
     if emitter.execution_variant is not None:
         layout = replace(layout, local_fields=emitter.execution_variant.local_fields,
                          temp_fields=emitter.execution_variant.temp_fields)
@@ -6752,6 +6806,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         except SyntaxError as ex:
             ex.msg = f"{name}: {ex.msg}"
             raise
+        except StackError as ex:
+            raise StackError(f"{name}, {part.name}: {ex}") from ex
         if not reachable or emitter.call_finished:
             break
     if (emitter.execution_variant is not None and emitter.execution_variant.shape_cases and
@@ -7828,7 +7884,7 @@ def handler_output_kind(inst: Instruction, fmt: IRFormat) -> str:
     only the first result to dst; a variable trailing output stays in place.
     Frame-return forms use the same explicit recipient without that flush.
     """
-    if not fmt.window:
+    if not fmt.window or fmt.operands != "_PyIR_OPERANDS_NONE":
         return "_PyIR_OUTPUT_REGISTER_DST"
     if set(uop_tokens(inst)) & {"IR_COMPLETE_STEP", "IR_ENTER_GENERATOR"}:
         return "_PyIR_OUTPUT_OUTCOME"

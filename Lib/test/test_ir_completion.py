@@ -313,52 +313,6 @@ class SemanticCompletionTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'semantic recovery'):
                     code.replace(co_exceptiontable=data)
 
-    def test_constructor_rejects_preserved_receiver_as_nullable_call_self(self):
-        def delegate():
-            for values in ((),):
-                yield from values
-
-        code = delegate.__code__
-        original = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
-        site = next(i.offset for i in dis.get_instructions(delegate)
-                    if i.opname == 'SEND')
-        base = (original[site] >> 28) & 4095
-        self.assertGreater(base, len(_testinternalcapi.get_co_localskinds(code)))
-        table = exception_entry(site, 1, len(original) - 1, (base + 2) << 1)
-        handlers = ('CALL', 'CALL_KW', 'CALL_PY_EXACT_ARGS', 'INSTRUMENTED_CALL',
-                    'CALL_FUNCTION_EX', 'CALL_EX_PY', 'INSTRUMENTED_CALL_FUNCTION_EX')
-        for handler, destination in ((h, d) for h in handlers for d in (4095, base)):
-            with self.subTest(handler=handler, destination=destination):
-                words = original.copy()
-                words[site] = (words[site] & ~(4095 << 16)) | (destination << 16)
-                words[-1] = dis._all_opmap[handler] | (4095 << 16) | ((base - 1) << 28)
-                # B is preserved by PRE's handler and is neither an optional
-                # NULL self nor reconstructed by POST's completed result.
-                with self.assertRaisesRegex(ValueError, 'may_nonnull='):
-                    code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                                 co_exceptiontable=table, co_linetable=b'')
-
-    def test_call_ex_callable_and_argument_tuple_remain_required(self):
-        def delegate(values):
-            yield from values
-
-        code = delegate.__code__
-        original = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
-        site = next(i.offset for i in dis.get_instructions(delegate)
-                    if i.opname == 'CLEANUP_THROW')
-        base = (original[site] >> 28) & 4095
-        table = exception_entry(site, 1, len(original) - 1, base << 1)
-        for handler in ('CALL_FUNCTION_EX', 'CALL_EX_PY', 'INSTRUMENTED_CALL_FUNCTION_EX'):
-            for window in (base, base + 1):
-                with self.subTest(handler=handler, window=window):
-                    words = original.copy()
-                    words[-1] = dis._all_opmap[handler] | (4095 << 16) | (window << 28)
-                    with self.assertRaisesRegex(ValueError, 'may_nonnull=0'):
-                        code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                                     co_exceptiontable=table, co_linetable=b'',
-                                     co_stacksize=max(code.co_stacksize, base + 5 -
-                                                      len(_testinternalcapi.get_co_localskinds(code))))
-
     def test_completion_line_landing_survives_finalizer_observation_changes(self):
         # Exercise this VM's completion retirement path; Python does not
         # require every implementation to destroy this iterator immediately.

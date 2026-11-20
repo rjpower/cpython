@@ -522,14 +522,14 @@ class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
 
     def test_generic_handlers(self):
         self.check_site(positional_site, 'CALL+NO_SELF', cold=True)
-        self.check_site(star_site, 'CALL_FUNCTION_EX+NO_SELF+NO_KW', cold=True)
+        self.check_site(star_site, 'CALL_FUNCTION_EX+NO_KW', cold=True)
 
     def test_specialized_handlers(self):
         native = functools.partial(python_callee)
         for site, target, first, handler in (
                 (positional_site, native, None, 'CALL_NON_PY_GENERAL+NO_SELF'),
                 (keyword_site, native, None, 'CALL_KW_NON_PY+NO_SELF'),
-                (star_site, native, None, 'CALL_EX_NON_PY_GENERAL+NO_SELF+NO_KW'),
+                (star_site, native, None, 'CALL_EX_NON_PY_GENERAL+NO_KW'),
                 # The warm-up's pending calls to int() do nothing visible.
                 (single_site, _testinternalcapi.simple_pending_call, int,
                  'CALL_BUILTIN_O+NO_SELF')):
@@ -593,7 +593,7 @@ class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
         monitoring.register_callback(tool, monitoring.events.CALL,
                                      lambda *args: None)
         for site, handler in ((positional_site, 'INSTRUMENTED_CALL+NO_SELF'),
-                              (star_site, 'INSTRUMENTED_CALL_FUNCTION_EX+NO_SELF+NO_KW')):
+                              (star_site, 'INSTRUMENTED_CALL_FUNCTION_EX+NO_KW')):
             support.reset_code(site)
             monitoring.set_local_events(tool, site.__code__,
                                         monitoring.events.CALL)

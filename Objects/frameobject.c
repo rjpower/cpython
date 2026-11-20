@@ -1781,7 +1781,7 @@ register_resume_null_states(PyCodeObject *code, RegisterResumeAnalysis *analysis
             if (edge.floor < 0 && edge.phase >= 0) {
                 for (int j = 0; j < nt; j++) {
                     _PyIRPhysicalTransfer transfer = _PyIR_NormalPhysicalTransfer(
-                        word, arg, edge.phase, nl + j, nl, nl + nt);
+                        &code->co_words[pc], arg, edge.phase, nl + j, nl, nl + nt);
                     bool is_null = transfer.kind == _PyIR_PHYSICAL_SET_NULL;
                     int source = transfer.kind == _PyIR_PHYSICAL_TRANSPORT
                         ? transfer.source - nl : j;
@@ -1820,7 +1820,7 @@ register_resume_null_states(PyCodeObject *code, RegisterResumeAnalysis *analysis
 /* Map both demand kinds through the same simultaneous physical transport.
  * UNKNOWN is not an owner definition and cannot discharge a demand. */
 static void
-register_resume_transport_needs(_PyIRWord word, int arg, int outcome, int lane,
+register_resume_transport_needs(const _PyIRWord *word, int arg, int outcome, int lane,
                                RegisterResumeAnalysis *analysis,
                                uint64_t *needs, uint64_t *mapped)
 {
@@ -1998,7 +1998,7 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                             }
                         }
                         if (lane != REGISTER_REQUIRE_ALL) {
-                            register_resume_transport_needs(word, arg, k, lane, analysis,
+                            register_resume_transport_needs(&code->co_words[i], arg, k, lane, analysis,
                                                             edge, mapped);
                         }
                         _PyIRSlotOutcome outcome = _PyIR_Outcome(word, k == 1);
@@ -2007,7 +2007,7 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                                 int slot = (r < outcome.count ? outcome.first + r : outcome.dst) - nl;
                                 if (slot >= 0 && slot < nt && slot + nl != IR_NO_DST) {
                                     if (lane == REGISTER_REQUIRE_VALUE && _PyIR_NormalPhysicalTransfer(
-                                            word, arg, k, slot + nl, nl, nl + nt).kind ==
+                                            &code->co_words[i], arg, k, slot + nl, nl, nl + nt).kind ==
                                                 _PyIR_PHYSICAL_SET_NULL)
                                     {
                                         continue;
@@ -2045,11 +2045,11 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                 _PyIRWord actual = (word & ~(_PyIRWord)IR_HANDLER_MASK) | real_handler;
                 for (int j = 0; j < nt; j++) {
                     int home = nl + j;
-                    bool nullable = _PyIR_NullableHome(actual, arg, home);
+                    bool nullable = _PyIR_NullableHomeAs(actual, &code->co_words[i], arg, home);
                     bool path_null = analysis->null_states != NULL && nullable &&
                         (analysis->null_states[(size_t)i * stride + j / 64] &
                          ((uint64_t)1 << (j % 64)));
-                    if (_PyIR_ReadsHome(word, arg, home) && !(null_home[j] && nullable) &&
+                    if (_PyIR_ReadsHome(&code->co_words[i], arg, home) && !(null_home[j] && nullable) &&
                         (lane == REGISTER_REQUIRE_ALL ||
                          (lane == REGISTER_REQUIRE_VALUE && !path_null) ||
                          (lane == REGISTER_REQUIRE_NULL_ONLY && path_null)))
@@ -2173,8 +2173,11 @@ register_context_forget_reads(PyCodeObject *code, int pc,
     }
     for (int j = 0; j < analysis->nt; j++) {
         int home = analysis->nl + j;
-        if (_PyIR_ReadsHome(word, arg, home) ||
-            ((fmt->effects & _PyIR_PUSHES_FRAME) && (base < 0 || home >= base)))
+        if (_PyIR_ReadsHome(&code->co_words[pc], arg, home) ||
+            /* A call's child frame lies above the parent's, so it only
+             * takes the call's operands, which the read test covers */
+            (fmt->operands == _PyIR_OPERANDS_NONE &&
+             (fmt->effects & _PyIR_PUSHES_FRAME) && (base < 0 || home >= base)))
         {
             origins[j] = 0;
         }
@@ -2602,7 +2605,7 @@ register_anchor_cut(PyCodeObject *code, int i, int base)
     _PyIRWord word = code->co_words[i];
     int arg = _PyCode_InstrOparg(code, i);
     for (int home = base; home < base + 2; home++) {
-        if (_PyIR_ReadsHome(word, arg, home) ||
+        if (_PyIR_ReadsHome(&code->co_words[i], arg, home) ||
             _PyIR_DefinesHome(word, arg, home))
         {
             return true;
@@ -2822,7 +2825,7 @@ register_context_cut(PyCodeObject *code, RegisterResumeAnalysis *analysis,
         if (register_plan_has(plan, j)) {
             int home = analysis->nl + j;
             int arg = _PyCode_InstrOparg(code, pc);
-            if (_PyIR_ReadsHome(word, arg, home) || _PyIR_DefinesHome(word, arg, home)) {
+            if (_PyIR_ReadsHome(&code->co_words[pc], arg, home) || _PyIR_DefinesHome(word, arg, home)) {
                 return true;
             }
             for (int k = 0; k < 2; k++) {
@@ -2835,7 +2838,8 @@ register_context_cut(PyCodeObject *code, RegisterResumeAnalysis *analysis,
                 }
             }
             const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-            if (fmt->effects & _PyIR_PUSHES_FRAME) {
+            if (fmt->operands == _PyIR_OPERANDS_NONE &&
+                (fmt->effects & _PyIR_PUSHES_FRAME)) {
                 uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
                 int base = -1;
                 for (int f = 0; f < 4; f++) {
@@ -3041,7 +3045,7 @@ register_unbound_target_safe(PyCodeObject *code, RegisterResumeAnalysis *analysi
         int pc = queue[head++];
         _PyIRWord word = code->co_words[pc];
         int arg = _PyCode_InstrOparg(code, pc);
-        if (_PyIR_BindingRead(word, arg, local) == _PyIR_BINDING_REQUIRES_VALUE) {
+        if (_PyIR_BindingRead(&code->co_words[pc], arg, local) == _PyIR_BINDING_REQUIRES_VALUE) {
             result = 0;
             break;
         }

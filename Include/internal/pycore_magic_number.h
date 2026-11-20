@@ -358,8 +358,9 @@ Known values:
    64427: distinguish explicit generator STORE_FAST and POP_TOP consumers
    64428: call roles as word flags; 9-bit handler ids
    64429: the discard slot, a hidden local after the constant slots
-   64430: operand words: the IR_OPERANDS handler and IR_F_OPERANDS call heads */
-#define PYC_MAGIC_NUMBER 64430
+   64430: operand words: the IR_OPERANDS handler and IR_F_OPERANDS call heads
+   64431: calls read operand words: no window form, a CALL_KW's names are an immediate */
+#define PYC_MAGIC_NUMBER 64431
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

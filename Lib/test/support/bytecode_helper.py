@@ -13,11 +13,13 @@ _UNSPECIFIED = object()
 
 def instructions_with_positions(instrs, co_positions):
     # Return (instr, positions) pairs from the instrs list and co_positions
-    # iterator. Each instruction is one word, with one entry in co_positions.
+    # iterator. co_positions has one entry per word, and a call's operand
+    # words follow its head with the head's position.
 
-    co_positions = co_positions or iter(())
+    positions = list(co_positions or ())
     for instr in instrs:
-        yield instr, next(co_positions, ())
+        yield instr, (positions[instr.offset]
+                      if instr.offset < len(positions) else ())
 
 def encode_words(*words):
     """Return co_code bytes for the given (handler, a, b, c, d) words.
@@ -58,6 +60,9 @@ def shift_for_discard_slot(words, nlocals):
             handler = dis._handler_field(handler)
         fields = list(fields) + [0] * (4 - len(fields))
         roles = contract[handler & _opcode.IR_HANDLER_MASK].roles
+        if handler & _opcode.IR_HANDLER_MASK == _opcode.IR_OPERANDS:
+            # The operand words of a call name slots in all four fields
+            roles = (_opcode.IR_ROLE_IN0,) * 4
         for k, role in enumerate(roles):
             is_slot = (role in (_opcode.IR_ROLE_DST, _opcode.IR_ROLE_BASE)
                        or role >= _opcode.IR_ROLE_IN0)

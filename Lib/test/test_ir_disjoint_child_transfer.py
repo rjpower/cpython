@@ -61,7 +61,7 @@ class DisjointChildTransferTests(unittest.TestCase):
                         for _ in range(100):
                             self.assertEqual(function(owner, branch, 42), (42, {}))
 
-    def test_sibling_call_hole_survives_child_and_alias_result_does_not(self):
+    def test_sibling_call_operand_survives_child(self):
         def invoke(owner, args, kwargs):
             return identity(owner).call(*args, **kwargs)
 
@@ -69,24 +69,13 @@ class DisjointChildTransferTests(unittest.TestCase):
         site = next(i for i, row in enumerate(rows) if row[0] == 'LOAD_ATTR')
         name, dst, owner, feedback, arg = rows[site]
         self.assertFalse(arg & 1)
-        self.assertTrue(any(row[0] == 'CALL_FUNCTION_EX+NO_SELF' for row in rows))
+        self.assertTrue(any(row[0] == 'CALL_FUNCTION_EX' for row in rows))
         for admitted in routes(invoke.__code__):
             function = types.FunctionType(admitted, globals())
             for obj in (Plain(), Property(), Overridden()):
                 for _ in range(100):
                     self.assertEqual(function(obj, (42,), {'answer': 17}),
                                      (42, {'answer': 17}))
-        # Publishing a real result into the later virtual self home is not
-        # a consumed-input or untouched-prefix proof for that same home.
-        rows[site] = name, owner + 1, owner, feedback, arg
-        changed = raw_encoded(rows)
-        for route in (construct, lambda co, **kw: co.replace(**kw)):
-            with self.assertRaisesRegex(ValueError, 'virtual call input'):
-                route(invoke.__code__, co_code=changed)
-        payload = marshal.dumps(invoke.__code__)
-        self.assertEqual(payload.count(invoke.__code__.co_code), 1)
-        with self.assertRaisesRegex(ValueError, 'virtual call input'):
-            marshal.loads(payload.replace(invoke.__code__.co_code, changed, 1))
 
     def test_child_callback_updates_current_parent_bindings(self):
         class Mutating:

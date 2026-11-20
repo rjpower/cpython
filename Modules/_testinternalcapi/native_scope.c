@@ -505,17 +505,21 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
     Py_ssize_t word_index = frame->instr_ptr - exec->words;
     _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr);
     int handler = IR_HANDLER(word);
-    int argc = (int)IR_C(word), count;
     int semantic_handler = _PyCode_InstrHandler(code, (int)word_index);
+    /* The window of the stack instruction: the callable, the self or NULL,
+     * the arguments, and for CALL_KW its names or for CALL_FUNCTION_EX the
+     * tuple and the kwargs.  The temporary operands stand in their homes,
+     * as the callable does, while a native callee runs. */
+    int has_self = (word & IR_F_NO_SELF) == 0, count;
     switch (_PyIR_BaseOpcode(semantic_handler)) {
         case CALL_FUNCTION_EX:
             count = 4;
             break;
         case CALL_KW:
-            count = argc + 3;
+            count = 3 + (int)IR_C(word) - 1 - has_self;
             break;
         case CALL:
-            count = argc + 2;
+            count = 2 + (int)IR_C(word) - has_self;
             break;
         default:
             PyErr_SetString(PyExc_AssertionError, "frame is outside the selected call routes");
@@ -525,7 +529,7 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
     int nslots = _PyFrame_NumSlots(frame);
     PyValue snapshots[64];
     if (nslots > (int)Py_ARRAY_LENGTH(snapshots) ||
-        base < code->co_nlocalsplus || base > nslots - count ||
+        base < code->co_nlocalsplus || base >= nslots ||
         destination >= nslots) {
         PyErr_SetString(PyExc_AssertionError, "observer frame exceeds bounded call shape");
         return NULL;

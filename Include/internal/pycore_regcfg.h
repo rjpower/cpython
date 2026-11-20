@@ -70,10 +70,9 @@ extern "C" {
 #define _PyReg_UNPACK_LOCALS    128 // an unpack whose elements go to the run
                                     // of locals from dst; out[] stay as the
                                     // window's scratch registers
-#define _PyReg_OPERANDS        4096 // a call whose word has operand words
-                                    // (IR_F_OPERANDS): the last noperands of
-                                    // its inputs, one field each, and
-                                    // noperands in the C field of its head
+#define _PyReg_KWNAMES         4096 // an elided LOAD_CONST of the names of
+                                    // the CALL_KW that reads it: the call
+                                    // has the index in its kwnames
 
 typedef struct _PyRegOp {
     int opcode;             // the stack instruction, or _PyReg_DEAD
@@ -97,7 +96,11 @@ typedef struct _PyRegOp {
                             // the pair.  0: none.
     int completion;         // index + 1 of the frontend END_SEND whose
                             // allocated recipient this semantic producer owns
-    int noperands;          // with _PyReg_OPERANDS, the number of operands
+    int noperands;          // a call: the number of operand fields, set by
+                            // the assembler (IR_C of its head)
+    int kwnames;            // a CALL_KW: the index in co_consts of the tuple
+                            // of its names, plus one, set by
+                            // _PyRegPass_KwNames()
     _Py_SourceLocation loc;
     int base;               // the slot of a window, set by compaction
     /* Set by the assembler */
@@ -156,6 +159,27 @@ int _PyRegCfg_PrepareKwargs(_PyRegCfg *cfg, int slot);
     ((V) >= (CFG)->nlocalsplus && (V) < _PyReg_FRESH0(CFG))
 #define _PyReg_IN(CFG, OP)      (&(CFG)->operands[(OP)->in])
 #define _PyReg_OUT(CFG, OP)     (&(CFG)->operands[(OP)->out])
+
+/* The number of leading outputs of a register-style op that pass an input
+ * through, those below the output that dst names.  A call reads its inputs
+ * from operand words and has none: its one output is new. */
+static inline int
+_PyRegOp_Through(const _PyRegOp *op, const _PyIRFormat *fmt)
+{
+    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+        return 0;
+    }
+    return fmt->dst == _PyIR_NO_DST ? op->nout : op->npop + fmt->dst;
+}
+
+/* Whether op reads its input k through a field that may name a local: the
+ * callable, an argument or a call's iterable or kwargs.  The self input
+ * (always a temporary), and the names of CALL_KW, are not. */
+static inline int
+_PyRegOp_CallBorrows(const _PyRegOp *op, int k)
+{
+    return k != 1 && !(op->opcode == CALL_KW && k == op->nread - 1);
+}
 
 /* Whether op writes local z through its dst (a run of nout locals for an
  * unpack) */
@@ -241,6 +265,7 @@ int _PyRegPass_StoreElim(_PyRegCfg *cfg);
 int _PyRegPass_UnpackLocals(_PyRegCfg *cfg);
 int _PyRegPass_PopTop(_PyRegCfg *cfg);
 int _PyRegPass_Discard(_PyRegCfg *cfg);
+int _PyRegPass_KwNames(_PyRegCfg *cfg);
 int _PyRegPass_ElideNull(_PyRegCfg *cfg);
 int _PyRegPass_CallRoles(_PyRegCfg *cfg);
 int _PyRegCfg_VerifyCallRoles(_PyRegCfg *cfg);
@@ -249,13 +274,6 @@ int _PyRegPass_TruthFold(_PyRegCfg *cfg);
 int _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree);
 void _PyRegPass_DiscardSlot(_PyRegCfg *cfg, int nfree);
 int _PyRegPass_FuseJump(_PyRegCfg *cfg);
-
-/* For tests only (_testinternalcapi.compile_with_operand_calls()): while
- * set, the assembler gives every CALL its arguments as operand words, which
- * the window still holds, so that the walkers meet them in code that the
- * compiler made.  Returns the old setting.  Step 2b of calls80 makes the
- * compiler do it for every call and removes this. */
-PyAPI_FUNC(int) _PyAssemble_SetOperandCalls(int enable);
 
 /* For tests only (_testinternalcapi.compile_without_copyprop_kill()): if
  * keep is set, copy propagation keeps a pending load across an op that may

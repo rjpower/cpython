@@ -21,16 +21,6 @@ class FoldedInputTransferTests(unittest.TestCase):
         for admitted in routes(code):
             self.assertEqual(_testinternalcapi.get_ir(admitted, True),
                              _testinternalcapi.get_ir(code))
-        bad = words.copy()
-        bad[1] = ("LOAD_CONST", 3)
-        replacement = encoded(bad)
-        for route in (construct, lambda co, **kw: co.replace(**kw)):
-            with self.assertRaisesRegex(ValueError, "virtual call input"):
-                route(code, co_code=replacement)
-        payload = marshal.dumps(code)
-        self.assertEqual(payload.count(code.co_code), 1)
-        with self.assertRaisesRegex(ValueError, "virtual call input"):
-            marshal.loads(payload.replace(code.co_code, replacement, 1))
 
     def test_folded_input_preserves_only_prior_tail_absence(self):
         for name in ("LIST_APPEND", "SET_ADD"):
@@ -47,22 +37,10 @@ class FoldedInputTransferTests(unittest.TestCase):
                     for admitted in routes(code):
                         self.assertEqual(_testinternalcapi.get_ir(admitted, True),
                                          _testinternalcapi.get_ir(code))
-                    # The input comes from the explicit local field. The
-                    # vacate cannot empty its unrelated old scratch position.
-                    bad = words.copy()
-                    bad[1] = ("LOAD_CONST", tail)
-                    replacement = encoded(bad)
-                    for route in (construct, lambda co, **kw: co.replace(**kw)):
-                        with self.assertRaisesRegex(ValueError, "virtual call input"):
-                            route(code, co_code=replacement)
-                    payload = marshal.dumps(code)
-                    self.assertEqual(payload.count(code.co_code), 1)
-                    with self.assertRaisesRegex(ValueError, "virtual call input"):
-                        marshal.loads(payload.replace(code.co_code, replacement, 1))
-
                     # A real scratch input is consumed through its field,
                     # even when that field aliases the old window position.
-                    consumed = bad.copy()
+                    consumed = words.copy()
+                    consumed[1] = ("LOAD_CONST", tail)
                     consumed[2] = (name, base, tail, depth)
                     scratch_code = make_code(consumed, slots=depth + 3,
                                              locals=("value",))

@@ -32,37 +32,6 @@ class ExceptionAbsenceTests(unittest.TestCase):
             co_exceptiontable=table, co_fbinit=struct.pack("<I", 2))
         return code, words
 
-    def rejected(self, code, **change):
-        for route in (construct, lambda co, **kw: co.replace(**kw)):
-            with self.assertRaisesRegex(ValueError, "virtual call input"):
-                route(code, **change)
-        key, replacement = next(iter(change.items()))
-        original = getattr(code, key)
-        self.assertEqual(len(original), len(replacement))
-        payload = marshal.dumps(code)
-        self.assertEqual(payload.count(original), 1)
-        with self.assertRaisesRegex(ValueError, "virtual call input"):
-            marshal.loads(payload.replace(original, replacement, 1))
-
-    def test_suspension_retains_only_incoming_prefix_absence(self):
-        code, words = self.image()
-        contract = _opcode.get_ir_contract()[opcode.opmap["YIELD_VALUE"]]
-        self.assertTrue(contract.flags & _opcode.IR_ABRUPT_PREFIX)
-        for admitted in routes(code):
-            self.assertEqual(_testinternalcapi.get_ir(admitted, True),
-                             _testinternalcapi.get_ir(code))
-        live = words.copy()
-        live[1] = ("LOAD_CONST", 1)
-        self.rejected(code, co_code=encoded(live))
-        # Normal input retirement does not certify an exceptional footprint.
-        unknown = words.copy()
-        unknown[3] = ("UNARY_NEGATIVE", 4, 4)
-        self.rejected(code, co_code=encoded(unknown))
-        # An in-bounds resume recipient can itself clobber the held hole.
-        aliases = words.copy()
-        aliases[3] = ("YIELD_VALUE", 1, 4, 0)
-        self.rejected(code, co_code=encoded(aliases))
-
     def test_complete_inert_exception_predecessor_is_not_an_ingress(self):
         code, _ = self.image()
         contract = _opcode.get_ir_contract()[opcode.opmap["POP_TOP"]]
@@ -73,32 +42,6 @@ class ExceptionAbsenceTests(unittest.TestCase):
             co_exceptiontable=exception_entry(3, 2, 8, 6 << 1))
         for admitted in routes(extended):
             _testinternalcapi.get_ir(admitted, True)
-
-    def test_uncovered_exception_predecessor_poison_is_not_skipped(self):
-        code, words = self.image()
-        # Keep the normal path balanced while adding a genuinely uncovered
-        # protected producer. Its absence of a route census remains unknown.
-        words[4] = ("UNARY_NEGATIVE", 4, 4)
-        words[5] = ("POP_TOP", 4)
-        unknown = code.replace(co_code=encoded(words), co_linetable=b"")
-        self.assertFalse(_opcode.get_ir_contract()[
-            opcode.opmap["UNARY_NEGATIVE"]].error_routes & _opcode.IR_ERROR_COMPLETE)
-        self.rejected(unknown,
-                      co_exceptiontable=exception_entry(3, 2, 8, 6 << 1))
-
-    def test_unknown_source_recovery_is_an_independent_predecessor(self):
-        code, _ = self.image()
-        # Start with the same edge carrying no recovery handler, so the
-        # serialized negative can change only fixed-size record fields.
-        record = (3, 4, 0, 1, 1, 0, 1, -1, 0, 0)
-        locations, _ = position_parts(code.co_linetable)
-        exceptions, _ = semantic_parts(code.co_exceptiontable)
-        code = code.replace(**observation_tables(locations, [record], exceptions))
-        for admitted in routes(code):
-            _testinternalcapi.get_ir(admitted, True)
-        changed = bytearray(code.co_exceptiontable)
-        struct.pack_into("<iii", changed, len(changed) - 12, 8, 6, 0)
-        self.rejected(code, co_exceptiontable=bytes(changed))
 
     def test_real_keyword_call_held_across_await_and_throw_recovery(self):
         class Awaitable:

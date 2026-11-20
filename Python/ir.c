@@ -408,22 +408,45 @@ _PyIR_FieldOparg(_PyIRWord word)
         return 0;
     }
     assert(fmt->imm != _PyIR_LOC_FBARG);
+    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+        // The oparg of the stack instruction: the number of arguments
+        return fmt->operands == _PyIR_OPERANDS_EX
+            ? 0 : _PyIR_CallSlotOperands(word) - _PyIR_CallHasSelf(word);
+    }
     if (fmt->flags & _PyIR_FORWARD) {
         return IR_DS(word);
     }
     return (int)read_field(word, fmt->imm);
 }
 
+/* The depth of the stack entry that operand k of a call word names, from
+ * the call's callable at depth 0: the self input, virtual or not, sits
+ * between the callable and the arguments of CALL and CALL_KW, and
+ * CALL_FUNCTION_EX has a reserved one before its operands. */
+static int
+call_operand_position(_PyIRWord word, int k)
+{
+    int first = _PyIR_FormatOf(IR_HANDLER(word))->operands == _PyIR_OPERANDS_EX
+        ? 2 : 2 - _PyIR_CallHasSelf(word);
+    return first + k;
+}
+
 int
 _PyCode_InstrFoldedInputs(PyCodeObject *co, int i)
 {
     assert(i >= 0 && i < Py_SIZE(co));
-    _PyIRWord word = _PyCode_WORDS(co)[i];
+    const _PyIRWord *words = _PyCode_WORDS(co);
+    _PyIRWord word = words[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (fmt->borrow_mask == 0) {
         return 0;
     }
     int n = 0;
+    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+        for (int k = 0; k < _PyIR_CallSlotOperands(word); k++) {
+            n += _PyIR_CallOperand(&words[i], k) < co->co_nlocalsplus;
+        }
+    }
     for (int r = 0; r < 4; r++) {
         int k = fmt->roles[r] - _PyIR_ROLE_IN0;
         if (k >= 0 && (fmt->borrow_mask & (1 << k))
@@ -479,6 +502,17 @@ _PyCode_InstrDepthBefore(PyCodeObject *co, int i, int *floor)
     int lowest = INT_MAX;
     int highest = -1;
     *floor = 0;
+    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+        // The callable is the deepest input, and the extent of the call
+        // covers the rest, whether or not a local was folded into it
+        int callable = (int)IR_B(word);
+        if (callable < nl) {
+            return -1;
+        }
+        *floor = callable - nl;
+        return callable - nl + _PyIR_Extent(fmt->reads,
+                                            _PyCode_InstrOparg(co, i));
+    }
     for (int r = 0; r < 4; r++) {
         int role = fmt->roles[r];
         int slot = (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX);
@@ -537,9 +571,19 @@ _PyCode_InstrHoles(PyCodeObject *co, int i, int holes[4])
     if (named < 0) {
         return 0;
     }
-    _PyIRWord word = _PyCode_WORDS(co)[i];
+    const _PyIRWord *words = _PyCode_WORDS(co);
+    _PyIRWord word = words[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     int n = 0;
+    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+        int extent = _PyIR_Extent(fmt->reads, _PyCode_InstrOparg(co, i));
+        for (int k = 0; k < _PyIR_CallSlotOperands(word) && n < 4; k++) {
+            if (_PyIR_CallOperand(&words[i], k) < co->co_nlocalsplus) {
+                holes[n++] = named - extent + call_operand_position(word, k);
+            }
+        }
+        return n;
+    }
     for (int r = 0; r < 4; r++) {
         int k = fmt->roles[r] - _PyIR_ROLE_IN0;
         if (k >= 0 && (fmt->borrow_mask & (1 << k))

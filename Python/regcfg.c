@@ -542,7 +542,8 @@ convert_instr(converter *c, const _PyRegOp *instr)
     // Register style: the outputs below dst pass their inputs through
     int through = 0;
     if (!window) {
-        through = fmt->dst == _PyIR_NO_DST ? pushed : popped + fmt->dst;
+        through = fmt->operands != _PyIR_OPERANDS_NONE ? 0
+                : fmt->dst == _PyIR_NO_DST ? pushed : popped + fmt->dst;
         if (through < 0 || through > pushed) {
             PyErr_Format(PyExc_SystemError, "bad format for opcode %d",
                          instr->opcode);
@@ -838,6 +839,20 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
         return;
     }
     slots->base = top - op->npop;
+    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+        // The callable is the deepest input, and the rest are operand words
+        slots->in[0] = _PyRegCfg_Slot(cfg, in[0]);
+        if (op->flags & _PyReg_DISCARD) {
+            slots->dst = IR_NO_DST;
+        }
+        else if (op->dst >= 0) {
+            slots->dst = op->dst;
+        }
+        else {
+            slots->dst = _PyRegCfg_Slot(cfg, out[0]);
+        }
+        return;
+    }
     int first = op->nread - fmt->ninputs;
     for (int k = 0; k < fmt->ninputs && k < 4; k++) {
         slots->in[k] = first + k >= 0 ? _PyRegCfg_Slot(cfg, in[first + k]) : 0;
@@ -970,7 +985,7 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op)
     // A window without inputs starts at the stack top, above the values a
     // raise leaves for the unwinder
     int top_before = o->top;
-    int stored = window ? fmt->dst : op->npop + fmt->dst;
+    int stored = window ? fmt->dst : _PyRegOp_Through(op, fmt);
     // Inputs that the op takes free their slots: the popped ones, and
     // those a raise leaves for the unwinder.  A value that is no longer
     // read but not yet taken still holds its slot, as in a loop that
@@ -1014,8 +1029,7 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op)
         }
     }
     else {
-        int through = fmt->dst == _PyIR_NO_DST ? op->nout
-                                               : op->npop + fmt->dst;
+        int through = _PyRegOp_Through(op, fmt);
         if (through < op->nout && out[through] >= nl) {
             int dst;
             int v0 = out[through];
@@ -1027,8 +1041,12 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op)
                 // An output must not land on an input that the handler
                 // has not given up yet: only the input at its own stack
                 // position, which the handler consumes before writing it.
+                // A call is the exception: it reads its operands before it
+                // writes, and the store of its result releases the operand
+                // that it displaces.
                 int bump = 0;
-                for (int j = through; j < op->nout && !bump; j++) {
+                for (int j = through; j < op->nout && !bump &&
+                     fmt->operands == _PyIR_OPERANDS_NONE; j++) {
                     int pos = op->depth - op->npop + j;
                     for (int k = 0; k < op->nread; k++) {
                         int pin = op->depth - op->nread + k;
@@ -1099,6 +1117,10 @@ reserve_folded(_PyRegCfg *cfg, occupancy *o, _PyRegOp *load)
 {
     int nl = cfg->nlocalsplus;
     const _PyRegOp *reader = &cfg->ops[load->reader];
+    // A call reads its operands from words: no result has to clear them
+    if (_PyIR_HandlerHasOperands(reader->opcode)) {
+        return SUCCESS;
+    }
     const int *in = _PyReg_IN(cfg, reader);
     int above = 0;
     for (int k = load->reader_k + 1; k < reader->nread; k++) {
@@ -1365,6 +1387,14 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                     }
                 }
             }
+            else if (fmt->operands != _PyIR_OPERANDS_NONE) {
+                for (int k = 0; k < op->nread; k++) {
+                    if (in[k] < nl && !_PyRegOp_CallBorrows(op, k)) {
+                        err = verify_error(after, op, "a local in an input "
+                                           "that takes it");
+                    }
+                }
+            }
             else {
                 int first = op->nread - fmt->ninputs;
                 for (int k = 0; k < op->nread; k++) {
@@ -1398,10 +1428,10 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                 }
             }
             if ((op->flags & _PyReg_ELIDED)
-                && (op->opcode != PUSH_NULL || op->dst >= 0 || op->nout != 1
-                    || out[0] < nl)) {
+                && ((op->opcode != PUSH_NULL && !(op->flags & _PyReg_KWNAMES))
+                    || op->dst >= 0 || op->nout != 1 || out[0] < nl)) {
                 err = verify_error(after, op, "an elided op that is not a "
-                                   "PUSH_NULL of a temporary");
+                                   "PUSH_NULL or the names of a call");
             }
             if (op->flags & _PyReg_DISCARD) {
                 // A fresh register lives within its region
@@ -1630,6 +1660,7 @@ static const struct {
     {"truth folding", _PyRegPass_TruthFold},
     {"discard after truth folding", _PyRegPass_Discard},
     {"jump fusion", _PyRegPass_FuseJump},
+    {"call keyword names", _PyRegPass_KwNames},
     {"null elision", _PyRegPass_ElideNull},
     {"call input roles", _PyRegPass_CallRoles},
 };

@@ -45,18 +45,6 @@ class UnpackTransferTests(unittest.TestCase):
                 for admitted in routes(code):
                     self.assertEqual(_testinternalcapi.get_ir(admitted, True),
                                      _testinternalcapi.get_ir(code))
-                if count < 2:
-                    continue
-                bad = words.copy()
-                bad[1] = ("UNPACK_SEQUENCE", nl, count, 0, 4095)
-                replacement = encoded(bad)
-                for route in (construct, lambda co, **kw: co.replace(**kw)):
-                    with self.assertRaisesRegex(ValueError, "virtual call input"):
-                        route(code, co_code=replacement)
-                payload = marshal.dumps(code)
-                self.assertEqual(payload.count(code.co_code), 1)
-                with self.assertRaisesRegex(ValueError, "virtual call input"):
-                    marshal.loads(payload.replace(code.co_code, replacement, 1))
 
     def test_generic_and_specialized_local_transport_with_callbacks(self):
         observations = []

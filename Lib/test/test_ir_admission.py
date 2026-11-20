@@ -77,9 +77,13 @@ class AdmissionTests(unittest.TestCase):
             row = CONTRACT[HANDLERS[name.partition("+")[0]]]
             if name == "CALL":
                 reached.add(name)
-                base = row.roles.index(_opcode.IR_ROLE_BASE)
-                bad = replace_field(word, base, limit - 1)
-                self.assert_rejected(code, replace_word(code, index, bad), "window")
+                callable = row.roles.index(_opcode.IR_ROLE_IN0)
+                bad = replace_field(word, callable, limit)
+                self.assert_rejected(code, replace_word(code, index, bad), "slot")
+                # An operand word names its slots as the head names its own
+                bad = replace_field(words[index + 1], 0, limit)
+                self.assert_rejected(code, replace_word(code, index + 1, bad),
+                                     "operand at slot")
             if name == "LOAD_ATTR":
                 reached.add(name)
                 fb = row.roles.index(_opcode.IR_ROLE_FB)

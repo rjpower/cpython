@@ -1828,11 +1828,10 @@ get_ir(PyObject *self, PyObject *args)
             : _PyIR_OnlyNames[handler - IR_FIRST_ONLY_HANDLER];
         /* The canonical flags follow the name, as in dis; the executing
          * copy's slot-class flags are derived and not shown. */
-        const char *roles = (word & IR_F_NO_KW) ? "+NO_SELF+NO_KW"
-                          : (word & IR_F_NO_SELF) ? "+NO_SELF" : "";
-        const char *operands = (word & IR_F_OPERANDS) ? "+OPERANDS" : "";
+        const char *no_self = (word & IR_F_NO_SELF) ? "+NO_SELF" : "";
+        const char *no_kw = (word & IR_F_NO_KW) ? "+NO_KW" : "";
         PyObject *item = Py_BuildValue(
-            "(NIIII)", PyUnicode_FromFormat("%s%s%s", name, roles, operands),
+            "(NIIII)", PyUnicode_FromFormat("%s%s%s", name, no_self, no_kw),
             IR_A(word), IR_B(word), IR_C(word), IR_D(word));
         if (item == NULL || PyList_Append(result, item) < 0) {
             Py_XDECREF(item);
@@ -1848,8 +1847,10 @@ static PyObject *
 ir_normal_physical_transfer(PyObject *self, PyObject *args)
 {
     int handler, a, b, c, d, arg, edge, home, nl, limit;
-    if (!PyArg_ParseTuple(args, "iiiiiiiiii", &handler, &a, &b, &c, &d,
-                          &arg, &edge, &home, &nl, &limit)) {
+    PyObject *operands = NULL;
+    if (!PyArg_ParseTuple(args, "iiiiiiiiii|O!", &handler, &a, &b, &c, &d,
+                          &arg, &edge, &home, &nl, &limit,
+                          &PyTuple_Type, &operands)) {
         return NULL;
     }
     /* handler is the whole handler field, the id and its flags */
@@ -1859,9 +1860,31 @@ ir_normal_physical_transfer(PyObject *self, PyObject *args)
         PyErr_SetString(PyExc_ValueError, "invalid IR word field");
         return NULL;
     }
-    _PyIRWord word = IR_WORD(handler, a, b, c, d);
+    /* A call head is followed by the words that hold its operands: the
+     * optional tuple lists their slots, four to a word */
+    _PyIRWord words[1 + 16];
+    words[0] = IR_WORD(handler, a, b, c, d);
+    Py_ssize_t noperands = operands == NULL ? 0 : PyTuple_GET_SIZE(operands);
+    if (noperands > 4 * 16) {
+        PyErr_SetString(PyExc_ValueError, "too many operands");
+        return NULL;
+    }
+    for (Py_ssize_t k = 0; k < (noperands + 3) / 4; k++) {
+        uint32_t fields[4] = {IR_FIELD_MAX, IR_FIELD_MAX, IR_FIELD_MAX, IR_FIELD_MAX};
+        for (int f = 0; f < 4 && 4 * k + f < noperands; f++) {
+            long slot = PyLong_AsLong(_PyTuple_GET_OBJECT(operands, 4 * k + f));
+            if (slot < 0 || slot > IR_FIELD_MAX) {
+                if (!PyErr_Occurred()) {
+                    PyErr_SetString(PyExc_ValueError, "invalid operand slot");
+                }
+                return NULL;
+            }
+            fields[f] = (uint32_t)slot;
+        }
+        words[1 + k] = IR_WORD(IR_OPERANDS, fields[0], fields[1], fields[2], fields[3]);
+    }
     _PyIRPhysicalTransfer result =
-        _PyIR_NormalPhysicalTransfer(word, arg, edge, home, nl, limit);
+        _PyIR_NormalPhysicalTransfer(words, arg, edge, home, nl, limit);
     return Py_BuildValue("(ii)", result.kind, result.source);
 }
 
@@ -4616,23 +4639,6 @@ compile_without_copyprop_kill(PyObject *self, PyObject *args)
     return code;
 }
 
-/* Compile source with the arguments of every CALL as operand words, which
- * the call handlers do not read yet: the code is for the walkers over the
- * words, and does not run past a call. */
-static PyObject *
-compile_with_operand_calls(PyObject *self, PyObject *args)
-{
-    const char *source, *filename;
-    if (!PyArg_ParseTuple(args, "ss:compile_with_operand_calls",
-                          &source, &filename)) {
-        return NULL;
-    }
-    int old = _PyAssemble_SetOperandCalls(1);
-    PyObject *code = Py_CompileString(source, filename, Py_file_input);
-    _PyAssemble_SetOperandCalls(old);
-    return code;
-}
-
 static PyObject *
 set_inline_exception_value(PyObject *self, PyObject *exception)
 {
@@ -4943,7 +4949,6 @@ static PyMethodDef module_functions[] = {
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"remote_debug_layout", remote_debug_layout, METH_NOARGS},
     {"set_inline_exception_value", set_inline_exception_value, METH_O},
-    {"compile_with_operand_calls", compile_with_operand_calls, METH_VARARGS, NULL},
     {"compile_without_copyprop_kill", compile_without_copyprop_kill,
      METH_VARARGS, NULL},
     {"repr_guard_probe", repr_guard_probe, METH_O},

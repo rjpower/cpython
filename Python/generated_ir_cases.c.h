@@ -7014,7 +7014,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_bind_keywords(tstate, frame, this_instr, fb);
+                    _PyCallResult call_result = call_bind_keywords(tstate, frame, this_instr, IR_SLOT(IR_B(ir_word)), PyValue_NULL, fb);
                     if (call_result.status > 0) {
                         call_result = call_run_keywords(tstate, frame, this_instr, (0) | call_state);
                     }
@@ -7737,7 +7737,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_bind_direct(tstate, frame, this_instr, fb);
+                    _PyCallResult call_result = call_bind_positional(tstate, frame, this_instr, IR_SLOT(IR_B(ir_word)), PyValue_NULL);
                     if (call_result.status > 0) {
                         call_result = call_run_vector(tstate, frame, this_instr, (0) | call_state);
                     }

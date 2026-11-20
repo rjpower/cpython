@@ -2319,35 +2319,7 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
         return -1;
     }
     fb->func_version = version;
-    /* The hit path reads current defaults through the guarded function;
-     * the cache stores layout facts, never borrowed object pointers. */
     fb->binding_flags = 0;
-    int supplied = nargs + bound_method;
-    PyObject *defaults = func->func_defaults;
-    Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
-    Py_ssize_t first_default = code->co_argcount - ndefaults;
-    if (!bound_method && (code->co_flags & CO_OPTIMIZED) &&
-        !(code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) &&
-        code->co_kwonlyargcount == 0 && supplied <= code->co_argcount &&
-        supplied >= first_default && ndefaults <= UINT16_MAX &&
-        supplied - first_default <= UINT16_MAX)
-    {
-        fb->binding.positional.bound_count = (uint16_t)supplied;
-        fb->binding.positional.default_start = (uint16_t)(supplied - first_default);
-        int extra = code->co_argcount;
-        fb->binding_flags = _Py_CALL_BIND_DIRECT;
-        if (code->co_flags & CO_VARARGS) {
-            fb->binding_flags |= _Py_CALL_BIND_VARARGS;
-            extra++;
-        }
-        fb->binding.positional.kwargs_slot =
-            code->co_flags & CO_VARKEYWORDS ? extra : IR_NO_DST;
-        if ((code->co_flags & (CO_VARKEYWORDS | CO_VIRTUAL_KWARGS)) ==
-            (CO_VARKEYWORDS | CO_VIRTUAL_KWARGS))
-        {
-            fb->binding_flags |= _Py_CALL_BIND_VIRTUAL_KWARGS;
-        }
-    }
     uint8_t opcode;
     if (argcount == nargs + bound_method) {
         opcode =
@@ -2361,16 +2333,17 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
 }
 
 
-/* Cache only destinations: names and defaults remain owned by the guarded
- * function/code. Three destinations reuse the positional plan's payload. */
+/* Cache only destinations: names, defaults and keyword-only defaults remain
+ * owned by the guarded function, which the call reads each time.  A name that
+ * is no parameter goes to **kwargs: it must be interned, as every parameter
+ * name is, so that no other spelling of it names a parameter.  The binding
+ * rests on the code, which every function of the guarded version shares. */
 static void
 specialize_keyword_binding(PyFunctionObject *func, _PyFbCall *fb,
                            int nargs, bool has_self, PyValueBorrow names)
 {
     PyCodeObject *code = (PyCodeObject *)func->func_code;
     if (!(code->co_flags & CO_OPTIMIZED) ||
-        (code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR |
-                           CO_VARARGS | CO_VARKEYWORDS)) ||
         !PyValue_IsObject(names) ||
         !PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)))
     {
@@ -2383,11 +2356,7 @@ specialize_keyword_binding(PyFunctionObject *func, _PyFbCall *fb,
     }
     int positional = nargs + has_self - (int)kwcount;
     int total = code->co_argcount + code->co_kwonlyargcount;
-    PyObject *defaults = func->func_defaults;
-    Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
-    if (positional < 0 || positional > code->co_argcount ||
-        total > UINT16_MAX || ndefaults > UINT16_MAX)
-    {
+    if (positional < 0 || total >= _Py_CALL_BIND_TO_KWARGS) {
         return;
     }
     uint16_t destinations[_Py_CALL_BIND_KEYWORD_CAPACITY];
@@ -2402,13 +2371,24 @@ specialize_keyword_binding(PyFunctionObject *func, _PyFbCall *fb,
         for (destination = code->co_posonlyargcount; destination < total;
              destination++)
         {
-            if (PyValue_AsKnownObjectBorrow(name) ==
-                _PyTuple_GET_OBJECT(code->co_localsplusnames, destination))
-            {
+            PyObject *parameter =
+                _PyTuple_GET_OBJECT(code->co_localsplusnames, destination);
+            if (PyValue_AsKnownObjectBorrow(name) == parameter) {
                 break;
             }
+            if (!PyUnicode_CHECK_INTERNED(parameter) ||
+                !PyUnicode_CHECK_INTERNED(PyValue_AsKnownObjectBorrow(name)))
+            {
+                return;
+            }
         }
-        if (destination == total || destination < positional) {
+        if (destination == total) {
+            if (!(code->co_flags & CO_VARKEYWORDS)) {
+                return;
+            }
+            destination = _Py_CALL_BIND_TO_KWARGS;
+        }
+        else if (destination < positional && destination < code->co_argcount) {
             return;
         }
         for (int j = 0; j < i; j++) {
@@ -2418,22 +2398,8 @@ specialize_keyword_binding(PyFunctionObject *func, _PyFbCall *fb,
         }
         destinations[i] = (uint16_t)destination;
     }
-    Py_ssize_t first_default = code->co_argcount - ndefaults;
-    for (int slot = positional; slot < total; slot++) {
-        int i;
-        for (i = 0; i < kwcount; i++) {
-            if (destinations[i] == slot) {
-                break;
-            }
-        }
-        if (i == kwcount &&
-            (slot >= code->co_argcount || slot < first_default))
-        {
-            return;
-        }
-    }
     for (int i = 0; i < kwcount; i++) {
-        fb->binding.keyword_dest[i] = destinations[i];
+        fb->keyword_dest[i] = destinations[i];
     }
     fb->binding_flags = _Py_CALL_BIND_KEYWORDS |
         ((uint16_t)kwcount << _Py_CALL_BIND_KEYWORD_COUNT_SHIFT) |

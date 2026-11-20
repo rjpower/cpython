@@ -164,27 +164,21 @@ typedef struct {
         uint32_t type_version;      // CALL_ALLOC_AND_ENTER_INIT: the class
     };
     uint32_t callable_type_version; // recorded but not guarded
-    union {
-        struct {
-            uint16_t bound_count;
-            uint16_t default_start;
-            uint16_t kwargs_slot;
-        } positional;
-        uint16_t keyword_dest[_Py_CALL_BIND_KEYWORD_CAPACITY];
-    } binding;
+    /* The binding plan of a CALL_KW (binding_flags & _Py_CALL_BIND_KEYWORDS):
+     * where each keyword name goes, a parameter's slot or
+     * _Py_CALL_BIND_TO_KWARGS for a name that **kwargs takes. */
+    uint16_t keyword_dest[_Py_CALL_BIND_KEYWORD_CAPACITY];
     uint16_t binding_flags;        // _Py_CALL_BIND_*; scalar-only guarded plan
 } _PyFbCall;
 
 static_assert(sizeof(_PyFbCall) == sizeof(_PyFbHeader) + 16,
-              "keyword destinations reuse the positional binding payload");
+              "call feedback size changed");
 
-#define _Py_CALL_BIND_DIRECT 1
-#define _Py_CALL_BIND_VARARGS 2
-#define _Py_CALL_BIND_VIRTUAL_KWARGS 4
 #define _Py_CALL_BIND_KEYWORDS 8
 #define _Py_CALL_BIND_KEYWORD_COUNT_SHIFT 4
 #define _Py_CALL_BIND_KEYWORD_COUNT_MASK (3 << _Py_CALL_BIND_KEYWORD_COUNT_SHIFT)
 #define _Py_CALL_BIND_SELF 64
+#define _Py_CALL_BIND_TO_KWARGS UINT16_MAX
 
 /* One row per observation.  type_version[i] is the first version of the
  * observation and aux[i] the second: the operand types for BINARY, the

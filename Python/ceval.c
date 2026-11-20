@@ -1441,16 +1441,15 @@ call_publish_result(_PyInterpreterFrame *frame, const _PyIRWord *head,
  * included), which are all in the first operand word: no loop, no call.  The
  * result is stored, every temporary operand and the callable is detached from
  * its home, and only then are the detached owners closed, in reverse order, so
- * that a finalizer sees the frame as the call left it.  n is the number of
- * operands that name slots. */
+ * that a finalizer sees the frame as the call left it. */
 static inline Py_ALWAYS_INLINE PyValue
-call_publish_n(_PyInterpreterFrame *frame, const _PyIRWord *head,
-               PyValue result, unsigned int n)
+call_publish(_PyInterpreterFrame *frame, const _PyIRWord *head, PyValue result)
 {
+    _PyIRWord word = *head;
+    unsigned int n = IR_C(word);
     if (Py_UNLIKELY(n > IR_OPERANDS_PER_WORD)) {
         return call_publish_result(frame, head, result, (int)n);
     }
-    _PyIRWord word = *head;
     _PyIRWord ops = head[1];
     PyValue *slots = _PyFrame_Slots(frame);
     uint32_t dst = IR_A(word);
@@ -1483,12 +1482,6 @@ call_publish_n(_PyInterpreterFrame *frame, const _PyIRWord *head,
     PyValue_XCLOSE(o0);
     PyValue_XCLOSE(oc);
     return displaced;
-}
-
-static inline Py_ALWAYS_INLINE PyValue
-call_publish(_PyInterpreterFrame *frame, const _PyIRWord *head, PyValue result)
-{
-    return call_publish_n(frame, head, result, IR_C(*head));
 }
 
 /* Copy N operands of the call at HEAD, from operand FIRST on, to ARGS.  They
@@ -4262,8 +4255,11 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
         if (PyValue_IsNull(result)) {
             return (_PyCallResult){-1, NULL};
         }
-        PyValue displaced = call_publish_n(
-            frame, head, result, (unsigned int)((int)IR_C(word) - keywords));
+        /* The keyword names operand of CALL_KW is not a slot. */
+        PyValue displaced = keywords
+            ? call_publish_result(frame, head, result,
+                                  (int)IR_C(word) - keywords)
+            : call_publish(frame, head, result);
         PyValue_XCLOSE(displaced);
         if ((flags & CALL_PERIODIC) && check_periodics_at_end(tstate, frame) < 0) {
             return (_PyCallResult){-1, NULL};

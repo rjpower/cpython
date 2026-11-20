@@ -69,9 +69,10 @@ extern "C" {
 #define IR_CD_MAX       0xFFFFFF    // and of CD
 /* A frame has at most this many slots, so a slot field is 0 to 4094. */
 #define IR_MAX_SLOTS    IR_FIELD_MAX
-/* The dst field of a call whose result nothing reads: outside the slot range,
- * it tells the handler to release the result (_PyIR_DISCARDS), where a
- * CALL; POP_TOP pair took two words. */
+/* The dst field of a word whose result nothing reads (_PyIR_DISCARDS), where
+ * a CALL; POP_TOP pair took two words: outside the slot range.  The executing
+ * copy of the code replaces it with the frame's discard slot (_PyCodeExec),
+ * so no handler tests for it. */
 #define IR_NO_DST       IR_FIELD_MAX
 
 /* A private native transfer target receives an owned value instead of a word.
@@ -150,8 +151,9 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
  * variable, a slot below co_nlocalsplus, rather than a temporary.  They
  * depend only on the fields and co_nlocalsplus, so the executing copy
  * derives them (_PyIR_ExecLocalFlags()) and the code object's words, which
- * the .pyc holds, never carry them.  IR_NO_DST is never below
- * co_nlocalsplus, so a discarded result has no flag. */
+ * the .pyc holds, never carry them.  A word that discards its result names
+ * IR_NO_DST; the executing copy names the frame's discard slot instead, and
+ * flags it like a local. */
 #define IR_F_LOCAL_A    (1 << 9)
 #define IR_F_LOCAL_B    (1 << 10)
 #define IR_F_LOCAL_C    (1 << 11)

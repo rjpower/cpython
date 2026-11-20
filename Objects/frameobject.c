@@ -3524,7 +3524,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     if (child != NULL) {
         int opcode = _PyIR_EventOpcode(_PyCode_InstrHandler(code, current));
         if (child->external || _PyIRSemantic_Stored(code->co_exceptiontable).exceptions_size ||
-            self->f_frame->return_slot != IR_NO_DST ||
+            self->f_frame->return_slot != _PyFrame_DiscardSlot(self->f_frame) ||
             (opcode != CALL && opcode != CALL_KW))
         {
             PyMem_Free(lines);
@@ -3661,10 +3661,12 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     // in the new location. Rather than crashing or changing co_code, just bind
     // None instead:
     int unbound = 0;
+    int discard = _PyFrame_DiscardSlotForCodeObject(code);
     for (int i = 0; i < code->co_nlocalsplus; i++) {
         // Counting every unbound local is overly-cautious, but a full flow
-        // analysis (like we do in the compiler) is probably too expensive:
-        unbound += PyValue_IsNull(self->f_frame->base[i]) &&
+        // analysis (like we do in the compiler) is probably too expensive.
+        // The discard slot is no variable:
+        unbound += i != discard && PyValue_IsNull(self->f_frame->base[i]) &&
                    !register_plan_restores_local(&plan, i);
     }
     if (self->f_lineno_generation == UINT64_MAX) {
@@ -3783,7 +3785,9 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         }
     }
     for (int i = 0; i < code->co_nlocalsplus; i++) {
-        if (PyValue_IsNull(frame->base[i]) && !register_plan_restores_local(&plan, i)) {
+        if (i != discard && PyValue_IsNull(frame->base[i]) &&
+            !register_plan_restores_local(&plan, i))
+        {
             frame->base[i] = PyValue_None;
         }
     }

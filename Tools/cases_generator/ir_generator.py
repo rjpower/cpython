@@ -311,7 +311,7 @@ def canonical_handler(name: str) -> str:
 
 def owner_name(field: str) -> str:
     """The owner of the borrowable input read through field: the value that
-    IR_CONSUME_INPUT gives the handler, PyValue_NULL for a local"""
+    IR_DETACH gives the handler, PyValue_NULL for a local"""
     return f"ir_own_{field}"
 
 
@@ -327,7 +327,7 @@ VIEW_RELEASES = {
 # own for a local, to the caller (IREmitter.take_view())
 VIEW_TAKES = {"TAKE", "OWNER", "PyValue_AsKnownObjectSteal"}
 # The DSL calls that read a view's owner, so that the handler must have
-# taken the input (IR_CONSUME_INPUT) before the statement that holds them
+# taken the input (IR_DETACH) before the statement that holds them
 OWNER_READS = set(VIEW_RELEASES) | VIEW_TAKES
 
 # The IR forms of the instruction macros (see STACK_INSTRUCTION_MACROS).
@@ -729,7 +729,7 @@ def classify_inputs(inst: Instruction, n_inputs: int) -> list[str]:
 # A value read through a field that may name a local is a view: a
 # PyValueBorrow of the slot's bits, which owns no count and which only C
 # locals hold (pyjit/design/proposals/register-ir-v2-a5b.md, section 4).
-# Its owner is ir_own_<F>, the value that IR_CONSUME_INPUT gives the handler
+# Its owner is ir_own_<F>, the value that IR_DETACH gives the handler
 # for a temporary and PyValue_NULL for a local.  So the generator knows
 # each view (Local.ir_inplace) and what a handler does with it.  It may:
 # - release it: the release is of the owner (IREmitter.release_view());
@@ -753,9 +753,8 @@ INPLACE_READERS = {
     "IR_GUARD_INLINE_INT", "IR_GUARD_ELEMENT_TYPE", "IR_GUARD_ELEMENT_INDEX",
     "IR_DUP_CANONICAL_ELEMENT",
     "coro_awaitable_can_transfer",
-    # The structured provider TAKEs evaluated snapshots before any callback.
-    "IR_BINARY_READER",
-    "PyValue_DUP", "PyValue_XDUP", "IR_CANONICAL_HOME_DUP", "PyValue_AsObject",
+    "value_subscript", "value_binary_op",
+    "PyValue_DUP", "PyValue_XDUP", "PyValue_AsObject",
     "PyValue_AsKnownObjectBorrow", "PyValue_TYPE",
     "PyValue_BoolCheck", "PyValue_FloatOperandValues", "PyValue_InlineFloat",
     "PyValue_InlineInt64", "_PyValue_IntScaled", "PyValue_LongCheckExact",
@@ -838,7 +837,8 @@ OBJECT_READERS = {
     "PyFunction_New",
     "PyUnicode_Concat",
 
-    "_PyDict_SetValue_Take2", "_PyEval_CheckExceptStarTypeValid",
+    "_PyValue_GetAttr",
+    "_PyDict_SetValue_Take2", "_PyDict_SetValue", "_PyEval_CheckExceptStarTypeValid",
     "_PyEval_CheckExceptTypeValid", "value_exception_group_match",
     "_PyEval_GetAwaitable", "_PyList_SliceSubscript",
     "value_load_from_dict", "_PySet_Contains", "_PyTemplate_Build",
@@ -2667,7 +2667,7 @@ class IRStack(Stack):
         super().__init__()
         self.layout = layout if layout is not None else SlotLayout.empty()
         # The C variables that hold the view of each borrowable input, by
-        # position, the latest last: IR_CONSUME_INPUT adopts the bits that
+        # position, the latest last: IR_DETACH adopts the bits that
         # the handler loaded rather than reloading the slot.
         self.views: dict[int, list[str]] = {}
         # Views that may dangle: they were loaded before a call that can run
@@ -2702,16 +2702,13 @@ class IRStack(Stack):
         # Set by IR_WINDOW_TAKEN(): the handler disposed of its window, so
         # that the slots of the dead inputs stay as it left them.
         self.window_taken = False
-        # Attribute completion or retirement published the temporary result
-        # before receiver retirement. Only a folded local remains to write.
-        self.published_temporary_result = False
-        # The IR_STORE_DST and IR_MOVE_TO_DST lines emitted for the handler.
-        # Copies share the list: ir_displaced holds one displaced local and
-        # finish_displaced_local takes it by value, so a handler may store
-        # dst once (generate_handler checks).
+        # The closes of the inputs that the handler detached, in order: rule
+        # 7 runs them after the last store (IREmitter.emit_deferred).  Each
+        # path has its own list, and the paths that join agree on it.
+        self.deferred: list[str] = []
+        # The IR_STORE_DST and IR_MOVE_TO_DST lines emitted for the handler,
+        # which close ir_old after them.  Copies share the list.
         self.dst_stores: list[str] = []
-        self.observer_deferred: str | None = None
-        self.observer_inputs: list[str] = []
         # Must-NULL output facts follow the actual structured storage paths.
         # Distinct normal successors keep distinct facts until the final store.
         self.null_paths: dict[int, set[str]] = {0: set()}
@@ -2750,7 +2747,7 @@ class IRStack(Stack):
         other.spent_views = set(self.spent_views)
         other.roles = self.roles
         other.window_taken = self.window_taken
-        other.observer_inputs = list(self.observer_inputs)
+        other.deferred = list(self.deferred)
         other.null_paths = {edge: set(names) for edge, names in self.null_paths.items()}
         other.null_stores = dict(self.null_stores)
         other.null_uncovered = self.null_uncovered
@@ -3044,7 +3041,7 @@ class IRStack(Stack):
             raise StackError(f"no variable holds the view of the input "
                              f"in {f} when the handler takes it")
         field = self.layout.in_fields[p]
-        macro = "IR_CONSUME_NATIVE_INPUT" if self.layout.native_entry else "IR_CONSUME_INPUT"
+        macro = "IR_DETACH_NATIVE" if self.layout.native_entry else "IR_DETACH"
         consume = ("PyValue_NULL" if field in self.layout.local_fields else
                    f"{macro}({FIELD_ARGS[field]}, {names[-1]})")
         out.emit(f"{owner_name(field)} = {consume};\n")
@@ -3073,7 +3070,7 @@ class IRStack(Stack):
             if role is not None:
                 out.emit(f"if (call_state & {role}) {{\n")
             self.own_inplace(out, var)
-            out.emit(f"IR_PUBLISH_TEMP({self.window_slot(memory_offset)}, {var.name});\n")
+            out.emit(f"IR_SET_TEMP({self.window_slot(memory_offset)}, {var.name});\n")
             if role is not None:
                 out.emit("}\n")
             return True
@@ -3085,14 +3082,14 @@ class IRStack(Stack):
             if p in lay.borrowable:
                 raise StackError(f"'{var.name}' would be stored back to its "
                                  f"input's slot, which may name a local")
-            out.emit(f"IR_PUBLISH_TEMP(IR_SLOT({f}), {var.name});\n")
+            out.emit(f"IR_SET_TEMP(IR_SLOT({f}), {var.name});\n")
             self.publish_field(lay.in_fields[p], var)
             return True
         if p is not None and (lay.dst_offset is None or p < lay.dst_offset):
             if p in lay.in_fields and p not in lay.borrowable:
                 # An input that the instruction passes through, changed
                 self.own_inplace(out, var)
-                out.emit(f"IR_PUBLISH_TEMP(IR_SLOT({self.input_field(p)}), {var.name});\n")
+                out.emit(f"IR_SET_TEMP(IR_SLOT({self.input_field(p)}), {var.name});\n")
                 self.publish_field(lay.in_fields[p], var)
                 return True
             return self.keep(var, p)
@@ -3100,50 +3097,40 @@ class IRStack(Stack):
             # dst may name a local, so the slots after it are not ours
             return self.keep(var, p)
         self.own_inplace(out, var)
+        at_dst = lay.store_dst and p == lay.dst_offset
+        if at_dst and not self.final:
+            # Rules 6 and 7: the result is stored once, with the handler's
+            # last store, before any close; until then its C variable owns it.
+            if self.error_exit:
+                # The error path closes what C owns (rule 9)
+                out.emit(f"PyValue_XCLOSE({var.name});\n")
+                return True
+            # No store happens here: the final one counts
+            self.home_writes -= 1
+            return self.keep(var, p)
         previous = self.owner.get(p) if p is not None else "out"
         if previous == "in":
             self.consume(out, p)
             self.owner[p] = "out"
             previous = None
-        if self.final and p == lay.dst_offset and not self.published_temporary_result:
+        if self.final and p == lay.dst_offset:
             self.null_stores = {edge: not self.null_uncovered and var.name in names
                                 for edge, names in self.null_paths.items()}
         slot = self.out_slot(memory_offset)
-        if lay.store_dst and p == lay.dst_offset:
+        if at_dst:
             if var.name == lay.owning_result:
                 if not var.owns_value or var.ir_inplace is not None:
                     raise StackError(f"'{var.name}' lacks its final owning-result receipt")
-                # TEMP_DST may publish only on the scratch arm. No subsequent
-                # use may treat this as an unconditional native owner.
                 var.owns_value = False
             if lay.dst in lay.temp_fields:
-                if self.final and self.published_temporary_result:
-                    return True
                 out.emit(f"IR_STORE_TEMP({slot}, {var.name});\n")
-                self.publish_field(lay.dst, var)
-                return False
-            if self.final:
-                if self.published_temporary_result:
-                    field = FIELD_VARS[lay.dst]
-                    out.emit(f"if ({is_local(lay.dst)} || {field} == IR_NO_DST) {{\n")
-                macro = "IR_STORE_DST"
-                if self.observer_deferred is not None:
-                    macro = "IR_COMMIT_OBSERVED_DST"
-                    expression = f"{macro}({FIELD_ARGS[lay.dst]}, {var.name}, {self.observer_deferred})"
-                else:
-                    expression = f"{macro}({FIELD_ARGS[lay.dst]}, {var.name})"
+            else:
+                expression = f"IR_STORE_DST({FIELD_ARGS[lay.dst]}, {var.name})"
                 self.dst_stores.append(expression)
-                out.emit(f"{self.dst_stores[-1]};\n")
-                if self.published_temporary_result:
-                    out.emit("}\n")
-                self.publish_field(lay.dst, var)
-                return True
-            # Before the end, dst gets the result only if it is a
-            # temporary; a local gets it at the end, releasing its value.
-            out.emit(f"IR_STORE_TEMP_DST({FIELD_ARGS[lay.dst]}, {var.name});\n")
-            self.publish_field(lay.dst, var, temporary=True)
-            return False
-        macro = "IR_PUBLISH_TEMP" if previous == "out" else "IR_STORE_TEMP"
+                out.emit(f"{expression};\n")
+            self.publish_field(lay.dst, var)
+            return True
+        macro = "IR_SET_TEMP" if previous == "out" else "IR_STORE_TEMP"
         out.emit(f"{macro}({slot}, {var.name});\n")
         if p == lay.dst_offset and lay.dst is not None:
             self.publish_field(lay.dst, var)
@@ -3346,6 +3333,11 @@ class IRStack(Stack):
         other.stale = set(self.stale)
         self.view_objects |= other.view_objects
         other.view_objects = dict(self.view_objects)
+        # A close names a variable that the handler starts as NULL, so the
+        # join closes what either path detached
+        self.deferred += [close for close in other.deferred
+                          if close not in self.deferred]
+        other.deferred = list(self.deferred)
         # An owner is spent after the join if it is on either path
         self.spent = other.spent | self.spent
         other.spent = dict(self.spent)
@@ -3480,6 +3472,11 @@ class IREmitter(Emitter):
         # The variable that `PyValue NAME = OWNER(x);` assigned, which only
         # IR_RETIRE_PUBLISHED may read, with no call that runs code before
         self.pending_owner: Token | None = None
+        # The ir_close<N> variables that defer_close made: the first pass
+        # of generate_handler finds them and the second declares them
+        self.close_count = 0
+        self.close_names: set[str] = set()
+        self.declared_closes: set[str] = set()
         # The outputs that a statement `out = TAKE(in);` assigned in the
         # handler (check_error_outputs())
         self.taken_outputs: set[str] = set()
@@ -3651,7 +3648,7 @@ class IREmitter(Emitter):
             if field is not None:
                 self.spend_owner(field, tkn, storage)
                 self.ensure_consumed(field, storage)
-                value = f"IR_TAKE({name}, {owner_name(field)})"
+                value = f"IR_TAKEN({name}, {owner_name(field)})"
                 storage.stack.taken(storage.stack.field_position(field))
             self.emit(f"PyValue {native} = {value};\n")
             self.value_kill(token, storage, False)
@@ -3697,7 +3694,6 @@ class IREmitter(Emitter):
         stack = storage.stack
         assert isinstance(stack, IRStack)
         stack.bind(result, None)
-        stack.published_temporary_result = True
         stack.code_ran()
         return True
 
@@ -3743,55 +3739,15 @@ class IREmitter(Emitter):
                     f"{tkn.text}({retired.text}) of a view: retire its "
                     f"OWNER()", retired)
         storage.clear_inputs("before published receiver retirement")
-        storage.flush(self.out)
         self.pending_owner = None
-        failure_result = "PyValue_NULL"
-        if tkn.text == "IR_RETIRE_PUBLISHED_RESULT":
-            fmt = self.format_of(inst)
-            dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-            if (self.execution_variant is None or
-                    fmt.field_of(ROLE_DST) not in self.execution_variant.temp_fields):
-                failure_result = (
-                    f"(({is_local(fmt.field_of(ROLE_DST))} || {dst} == IR_NO_DST) "
-                    f"? {result_name} : PyValue_NULL)")
-            assert isinstance(storage.stack, IRStack)
-            storage.stack.published_temporary_result = True
-        window = (FIELD_VARS[self.format_of(inst).field_of(ROLE_BASE)]
-                  if self.format_of(inst).window else None)
-        self.emit_ordered_retirement(first.text, second.text if second else None,
-                                     failure_result, self.temps, window)
         stack = storage.stack
         assert isinstance(stack, IRStack)
+        # Rule 7: the owners close after the handler's last store
+        for retired in (first, second):
+            if retired is not None:
+                self.defer_close(stack, "PyValue_XCLOSE", retired.text)
         stack.code_ran()
         return True
-
-    def emit_ordered_retirement(self, first, second, failure_result, temps, window):
-        """Retire owners in order, checking each after the preceding close."""
-        self.emit("{\n")
-        boxes = " || value_temps->count != 0" if temps != "NULL" else ""
-        self.emit(f"int retire_needed = _PyValue_CloseMayReenter({first}){boxes};\n")
-        self.emit("if (!retire_needed) {\n")
-        self.emit(f"PyValue_XCLOSE({first}); {first} = PyValue_NULL;\n")
-        if second is not None:
-            self.emit(f"retire_needed = _PyValue_CloseMayReenter({second});\n")
-        self.emit("}\n")
-        self.emit("if (retire_needed) {\n")
-        # The values pass by value and are dead after the call (R-a)
-        second_value = "PyValue_NULL" if second is None else second
-        self.emit(f"int retire_failed = retire_published_values(tstate, frame, next_instr, {temps}, {first}, {second_value}, {failure_result});\n")
-        self.emit("if (retire_failed < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }\n")
-        self.emit("this_instr = frame->instr_ptr;\n")
-        self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
-        self.emit("slots = _PyFrame_Slots(frame);\n")
-        if window is not None:
-            base = window
-            self.emit(f"window = &IR_SLOT({base});\n")
-        self.emit("}\n")
-        if second is not None:
-            self.emit("else {\n")
-            self.emit(f"PyValue_XCLOSE({second}); {second} = PyValue_NULL;\n")
-            self.emit("}\n")
-        self.emit("}\n")
 
     def macro_args(self, tkn, tkn_iter, count: int) -> list[str]:
         "The count identifiers of the statement IR_X(a, b, ...);"
@@ -4009,7 +3965,6 @@ class IREmitter(Emitter):
         self.emit("}\n")
         self.reader_reload()
         assert isinstance(storage.stack, IRStack)
-        storage.stack.published_temporary_result = True
         return True
 
     def restore_value_inputs(self, tkn, tkn_iter, uop, storage, inst):
@@ -4033,29 +3988,24 @@ class IREmitter(Emitter):
     def reader_error(self):
         self.emit("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);\n")
 
-    def release_displaced(self):
-        """Release the local value that IR_STORE_DST or IR_MOVE_TO_DST
-        displaced, with the input boxes, then revalidate: the release can
-        run __del__ or a weakref callback, which can run any Python."""
-        self.error_local_dst = True
-        self.emit("if (!PyValue_IsNull(ir_displaced)) {\n")
-        self.emit("if (finish_displaced_local(tstate, frame, next_instr, "
-                  f"{self.temps}, ir_displaced) < 0) {{\n")
-        self.emit("next_instr = frame->instr_ptr + 1;\n")
-        self.reader_error()
-        self.emit("}\n")
-        self.emit("}\n")
+    def finish_stores(self, stack: "IRStack") -> None:
+        """Rule 7: after the handler's last store, close the inputs that it
+        detached and the old value that its releasing store displaced"""
+        self.emit_deferred(stack)
+        if stack.dst_stores:
+            # The old value of a local dst closes here, which runs
+            # finalizers: the route census covers a local destination
+            self.error_local_dst = True
+            self.out.emit("PyValue_XCLOSE(ir_old);\n")
 
     def defer_observer_input(self, tkn, tkn_iter, uop, storage, inst):
         owner, = self.macro_args(tkn, tkn_iter, 1)
         stack = storage.stack
         assert isinstance(stack, IRStack)
-        if owner in stack.observer_inputs:
-            raise analysis_error("duplicate deferred observer owner", tkn)
-        captured = f"ir_observer_input_{len(stack.observer_inputs)}"
-        self.emit(f"PyValue {captured} = {owner};\n")
+        # Rule 7: the owner closes after the last store, which precedes the
+        # observer terminal
+        self.defer_close(stack, "PyValue_XCLOSE", owner)
         self.emit(f"{owner} = PyValue_NULL;\n")
-        stack.observer_inputs.append(captured)
         return True
 
     def observe_committed_branch(self, tkn, tkn_iter, uop, storage, inst):
@@ -4071,19 +4021,16 @@ class IREmitter(Emitter):
         self.check_owner_exit(tkn)
         stack = storage.stack
         assert isinstance(stack, IRStack)
-        if stack.dst_stores or stack.observer_deferred is not None:
+        if stack.dst_stores:
             raise analysis_error("terminal observer has a prior destination commit", tkn)
         # Each exclusive path owns its own final commit, rather than adding
         # mutually exclusive stores to the ordinary shared counter.
         stack.dst_stores = list(stack.dst_stores)
-        reserved = {"ir_observer_deferred", "ir_observer_next", "ir_observer_result",
+        reserved = {"ir_observer_next", "ir_observer_result",
                     "ir_observer_exception"}
-        if reserved & set(uop_tokens(inst)) or any(
-                name.startswith("ir_observer_input_") for name in uop_tokens(inst)):
+        if reserved & set(uop_tokens(inst)):
             raise analysis_error("terminal observer reserved local name", tkn)
         self.emit("{\n")
-        self.emit("PyValue ir_observer_deferred = PyValue_NULL;\n")
-        stack.observer_deferred = "ir_observer_deferred"
         storage.push_outputs()
         fmt = self.format_of(inst)
         mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
@@ -4091,6 +4038,7 @@ class IREmitter(Emitter):
         stack.select_null_edge(edge)
         self.normal_result_offsets.add(emit_final_outputs(inst, fmt, mode, stack, self.out))
         self.normal_null_receipts.append({edge: stack.null_stores.get(edge, False)})
+        self.finish_stores(stack)
         self.emit(f"_PyInstr *ir_observer_next = {destination};\n")
         self.emit("frame->return_pc = ir_observer_next;\n")
         # This checked terminal path has performed its final owner commit.
@@ -4104,9 +4052,6 @@ class IREmitter(Emitter):
         self.emit("? PyErr_GetRaisedException() : NULL;\n")
         self.emit("assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);\n")
         self.emit("frame->instr_ptr = ir_observer_result.next;\n")
-        self.emit("PyValue_XCLOSE(ir_observer_deferred);\n")
-        for owner in stack.observer_inputs:
-            self.emit(f"PyValue_XCLOSE({owner});\n")
         self.emit(f"_PyValueTemps_Close({self.temps});\n")
         self.emit("if (ir_observer_result.status < 0) {\n")
         self.emit("PyErr_SetRaisedException(ir_observer_exception);\n")
@@ -4129,15 +4074,8 @@ class IREmitter(Emitter):
             raise analysis_error("unsupported local unpack transport", inst.where)
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         self.emit(f"if ({is_local(fmt.field_of(ROLE_DST))}) {{\n")
-        self.emit(f"int ir_n = {count};\n")
-        self.emit(f"int ir_rest = IR_UNPACK_TO_LOCALS(&IR_SLOT({dst}), "
-                  "window, ir_n);\n")
-        self.emit("if (ir_rest >= 0 &&\n")
-        self.emit("    finish_unpack_to_locals(tstate, frame, next_instr, "
-                  f"{self.temps}, &IR_SLOT({dst}), window, ir_n, ir_rest) < 0) {{\n")
-        self.emit("next_instr = frame->instr_ptr + 1;\n")
-        self.reader_error()
-        self.emit("}\n")
+        self.emit(f"IR_UNPACK_TO_LOCALS(&IR_SLOT({dst}), window, {count});\n")
+        self.emit(f"IR_CLOSE_WINDOW(window, {count});\n")
         self.unpack_local_drained = True
         self.emit("}\n")
 
@@ -4151,18 +4089,13 @@ class IREmitter(Emitter):
         self.emit("{\n")
         self.emit("PyValue ir_leaf_result = _PyDict_TryGetFirstProbeValue(dict_st, sub_st);\n")
         self.emit("if (!PyValue_IsNull(ir_leaf_result)) {\n")
-        self.emit("PyValue ir_leaf_dict = IR_CONSUME_INPUT(ir_word, B, dict_st);\n")
-        self.emit("PyValue ir_leaf_key = IR_CONSUME_INPUT(ir_word, C, sub_st);\n")
+        self.emit("PyValue ir_leaf_dict = IR_DETACH(ir_word, B, dict_st);\n")
+        self.emit("PyValue ir_leaf_key = IR_DETACH(ir_word, C, sub_st);\n")
         self.emit("STAT_INC(BINARY_OP, hit);\n")
-        self.emit("IR_STORE_TEMP_DST(ir_word, A, ir_leaf_result);\n")
-        self.emit_ordered_retirement(
-            "ir_leaf_key", "ir_leaf_dict",
-            "((IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) ? ir_leaf_result : PyValue_NULL)",
-            "NULL", None)
-        self.emit("if (IR_IS_LOCAL_FIELD(ir_word, A) || IR_A(ir_word) == IR_NO_DST) {\n")
         self.emit("IR_STORE_DST(ir_word, A, ir_leaf_result);\n")
-        self.release_displaced()
-        self.emit("}\n")
+        self.emit("PyValue_XCLOSE(ir_leaf_key);\n")
+        self.emit("PyValue_XCLOSE(ir_leaf_dict);\n")
+        self.emit("PyValue_XCLOSE(ir_old);\n")
         self.emit("DISPATCH();\n")
         self.emit("}\n")
         self.emit("}\n")
@@ -4367,6 +4300,32 @@ class IREmitter(Emitter):
                 "its input's owner, which killed it and every copy of it",
                 tkn)
 
+    def defer_close(self, stack: "IRStack", close: str, owned: str,
+                    dealloc: str | None = None) -> None:
+        """Rule 7: the handler closes OWNED, an owner that it detached or
+        loaded, after its last store (emit_deferred).  An owner that is not
+        a handler-wide ir_own_<F> is copied to a variable of its own, since
+        a later part may assign the name again."""
+        if not owned.startswith("ir_own_"):
+            self.close_count += 1
+            name = f"ir_close{self.close_count}"
+            self.close_names.add(name)
+            self.out.start_line()
+            self.emit(f"{name} = {owned};\n")
+            owned = name
+        args = owned if dealloc is None else f"{owned}, {dealloc}"
+        # The close tests for NULL: the owner is empty on a path that
+        # joins this one without detaching it
+        close = close.replace("CLOSE", "XCLOSE").replace("XXCLOSE", "XCLOSE")
+        stack.deferred.append(f"{close}({args});\n")
+
+    def emit_deferred(self, stack: "IRStack") -> None:
+        "The closes that rule 7 puts after the handler's last store"
+        self.out.start_line()
+        for close in stack.deferred:
+            self.out.emit(close)
+        stack.deferred = []
+
     def ensure_consumed(self, field: str, storage: Storage) -> None:
         """Before code that reads the owner of the input read through field:
         the handler takes the input, so ir_own_<field> holds its owner"""
@@ -4397,7 +4356,8 @@ class IREmitter(Emitter):
         self.spend_owner(field, tkn, storage)
         self.ensure_consumed(field, storage)
         release = VIEW_RELEASES[tkn.text][self.is_pointer(name, storage)]
-        self.out.emit_at(release, tkn)
+        self.defer_close(storage.stack, release, owner_name(field))
+        self.out.emit_at("(void)", tkn)
         self.out.emit(lparen)
         self.out.emit(owner_name(field))
         return True
@@ -4417,11 +4377,11 @@ class IREmitter(Emitter):
         self.spend_owner(field, tkn, storage)
         self.ensure_consumed(field, storage)
         release = VIEW_RELEASES[tkn.text][self.is_pointer(name, storage)]
-        self.out.emit_at(release, tkn)
+        self.defer_close(storage.stack, release, owner_name(field),
+                         dealloc.text)
+        self.out.emit_at("(void)", tkn)
         self.out.emit(lparen)
         self.out.emit(owner_name(field))
-        self.out.emit(comma)
-        self.out.emit(dealloc)
         return self.value_kill(name, storage,
                                dealloc.text not in NON_ESCAPING_DEALLOCS)
 
@@ -4446,7 +4406,7 @@ class IREmitter(Emitter):
             # The object, with a count of its own for a local
             self.spend_owner(field, tkn, storage)
             self.ensure_consumed(field, storage)
-            owned = f"IR_TAKE({name.text}, {owner_name(field)})"
+            owned = f"IR_TAKEN({name.text}, {owner_name(field)})"
             storage.stack.taken(storage.stack.field_position(field))
         steal = (POINTER_VARIANTS[tkn.text] if self.is_pointer(name, storage)
                  else tkn.text)
@@ -4492,7 +4452,7 @@ class IREmitter(Emitter):
             text = name.text
         elif tkn.text == "TAKE":
             self.ensure_consumed(field, storage)
-            text = f"IR_TAKE({name.text}, {owner_name(field)})"
+            text = f"IR_TAKEN({name.text}, {owner_name(field)})"
             storage.stack.taken(storage.stack.field_position(field))
         else:
             self.ensure_consumed(field, storage)
@@ -5174,7 +5134,7 @@ class IREmitter(Emitter):
             if p is not None and stack.owner.get(p) == "in":
                 stack.consume(self.out, p)
                 del stack.owner[p]
-            self.emit(f"{close}({name});\n")
+            self.defer_close(stack, close, name)
             var.kill()
         storage.clear_inputs("after DECREF_INPUTS")
         stack.code_ran()
@@ -5199,6 +5159,8 @@ class IREmitter(Emitter):
                 stack.refine_value(value.copy(), False)
         stack.error_exit = True
         stack.flush(self.out)
+        # Rule 9: the owners that C holds close before the unwind
+        self.emit_deferred(stack)
         self.operand_error_flush(stack)
         checkpoint = self.record_error_checkpoint(stack)
         return f"PROCESS_ERROR_AT(RAISE, {checkpoint}, this_instr);"
@@ -5334,6 +5296,7 @@ class IREmitter(Emitter):
             origin = ("frame->instr_ptr" if ingress in {"EXIT", "EXIT_NOTRACE"}
                       else "next_instr - 1")
             self.out.start_line()
+            self.out.emit("".join(storage.stack.deferred))
             self.emit(f"PROCESS_ERROR_AT({ingress}, 0, {origin})")
         else:
             super().goto_label(goto, label, storage)
@@ -5376,8 +5339,7 @@ class IREmitter(Emitter):
         assert isinstance(storage.stack, IRStack)
         storage.stack.final = True
         storage.stack.flush(self.out)
-        if inst is not None and self.format_of(inst).store_dst:
-            self.release_displaced()
+        self.finish_stores(storage.stack)
         self.error_terminal_sources.add(id(tkn))
         self.observer_terminals.add(id(tkn))
         self.error_finalized = True
@@ -6527,12 +6489,7 @@ def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> int | N
     stack.flush(out)
     if mode == STORE_RESULT and fmt.window:
         dst = FIELD_ARGS[fmt.field_of(ROLE_DST)]
-        if stack.observer_deferred is not None:
-            expression = (f"IR_MOVE_OBSERVED_DST({dst}, window[{fmt.dst_offset}], "
-                          f"{stack.observer_deferred})")
-        else:
-            macro = "IR_MOVE_TO_DST_OR_DISCARD" if fmt.discards else "IR_MOVE_TO_DST"
-            expression = f"{macro}({dst}, window[{fmt.dst_offset}])"
+        expression = f"IR_MOVE_TO_DST({dst}, window[{fmt.dst_offset}])"
         stack.dst_stores.append(expression)
         out.emit(f"{expression};\n")
         return fmt.dst_offset
@@ -6582,6 +6539,8 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     roles: dict[str, set[str]] = {}
     emitter.boxes = set()
     emitter.declared_roles = {}
+    emitter.close_names = set()
+    emitter.declared_closes = set()
     emitter.out = CWriter.null()
     try:
         emit_handler(name, inst, fmt, emitter, emitter.out, record, roles)
@@ -6594,6 +6553,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
                 f"(PyValue) in one handler; give one of them another name",
                 inst.where)
     emitter.declared_roles = roles
+    emitter.declared_closes = set(emitter.close_names)
     emit_handler(name, inst, fmt, emitter, out, record, {})
 
 
@@ -6762,6 +6722,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             emitter.generator_boundary, emitter.analysis, emitter.formats)):
         emitter.generator_boundary = None
     emitter.pending_owner = None
+    emitter.close_count = 0
     emitter.shape_read_guards = 0
     emitter.shape_read_uses = 0
     emitter.ownership_events = []
@@ -6852,11 +6813,12 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("_PyValueTemps value_owners;\n")
         out.emit(f"value_owners = (_PyValueTemps){{value_boxes, 0, {bridge_bound}}};\n")
         out.emit("_PyValueTemps *value_temps = &value_owners;\n")
-    if fmt.store_dst:
-        # The old value of a local that dst names, released after the
-        # result is stored (release_displaced)
-        out.emit("PyValue ir_displaced = PyValue_NULL;\n")
-        out.emit("(void)ir_displaced;\n")
+    if fmt.store_dst or fmt.window:
+        # The old value of the slot that dst names, a local or the discard
+        # slot, which the releasing store hands to the handler: it closes it
+        # after its last store (IR_STORE_DST)
+        out.emit("PyValue ir_old = PyValue_NULL;\n")
+        out.emit("(void)ir_old;\n")
     use_fb = fmt.fb != LOC_NONE and (
         uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
     emitter.call_has_feedback = use_fb
@@ -6937,13 +6899,15 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
     if mode == STORE_LEAVE:
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-        out.emit(f"if ({is_local(fmt.field_of(ROLE_DST))} || {dst} == IR_NO_DST) {{\n")
+        out.emit(f"if ({is_local(fmt.field_of(ROLE_DST))}) {{\n")
         emitter.emit_jump_to_predicted(inst)
         out.emit("}\n")
     elif mode == STORE_NEVER:
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-        out.emit(f"assert(!{is_local(fmt.field_of(ROLE_DST))} && {dst} != IR_NO_DST);\n")
+        out.emit(f"assert(!{is_local(fmt.field_of(ROLE_DST))});\n")
     declare_variables(inst, out, emitter.declared_roles)
+    for name in sorted(emitter.declared_closes):
+        out.emit(f"PyValue {name} = PyValue_NULL;\n")
     if emitter.execution_variant is not None and emitter.execution_variant.shape_cases:
         out.emit("uint32_t ir_shape_offset;\n")
     for k in range(fmt.n_inputs):
@@ -7016,15 +6980,15 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         # exits, outcome protocols and raw frame access need their own recipe.
         emitter.normal_inputs_cleared = (normal_vacate_capability(inst, fmt)
                                          or emitter.disjoint_child_drained)
-        if fmt.store_dst:
-            emitter.release_displaced()
-            # The reached displaced-binding cleanup may call Python after
-            # output publication. It preserves canonical cells but widens
-            # their non-NULL facts, just like the typed source callbacks.
-            stack.home_action("_PyIR_OWNER_STORAGE_CALLBACK",
-                              FIELDS.index(fmt.field_of(ROLE_DST)), flags=1)
         if fmt.unpacks:
             emitter.unpack_to_locals(inst, fmt, UNPACKS[fmt.group])
+        # Rule 7: the closes follow the last store.  A close may call
+        # Python, which preserves canonical cells but widens their non-NULL
+        # facts, just like the typed source callbacks.
+        emitter.finish_stores(stack)
+        if fmt.store_dst:
+            stack.home_action("_PyIR_OWNER_STORAGE_CALLBACK",
+                              FIELDS.index(fmt.field_of(ROLE_DST)), flags=1)
         source = emitter.error_source
         if (source is not None and source.native_exit_closed and
                 source.homes in {HomeEffect.NO_ARENA_WRITE,
@@ -7054,10 +7018,15 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit("}")
     out.emit("\n")
     assert isinstance(stack, IRStack)
-    if len(stack.dst_stores) > 1:
-        raise SyntaxError(f"{name}: {len(stack.dst_stores)} dst stores "
-                          f"({'; '.join(stack.dst_stores)}), but ir_displaced "
-                          "holds one displaced local")
+    if not emitter.ownership_events and inst.name == "BINARY_OP":
+        # The generic operation reads both inputs, detaches them and writes
+        # a fresh result: the program that the verifier proves homes with
+        for index in range(2):
+            emitter.ownership_events.append(OwnershipEvent("_PyIR_OWNER_READ", src=index))
+            emitter.ownership_events.append(OwnershipEvent(
+                "_PyIR_OWNER_TAKE", dst=index, src=index))
+        emitter.ownership_events.append(OwnershipEvent("_PyIR_OWNER_FRESH"))
+        emitter.ownership_events.append(OwnershipEvent("_PyIR_OWNER_NORMAL_EXIT"))
     if not emitter.ownership_events:
         kind = normal_transfer_kind(inst, fmt)
         if kind != "_PyIR_TRANSFER_UNKNOWN":
@@ -8210,188 +8179,8 @@ def _validate_publication_suffix(inst: Instruction, producer: Uop,
 def result_publication_contract(
     inst: Instruction, fmt: IRFormat,
 ) -> ResultPublicationContract | None:
-    "Validate the source of the first-output publication postcondition."
-    marker = "IR_RETIRE_PUBLISHED_RESULT"
-    canonical = "IR_CANONICAL_HOME_DUP"
-    shape = "IR_DUP_SHAPE_READ"
-    canonical_occurrences = [
-        (part, token) for part in inst.parts if isinstance(part, Uop)
-        for token in part.body.tokens() if token.text in {canonical, shape}]
-    if len(canonical_occurrences) > 1:
-        raise analysis_error(
-            f"{inst.name}: duplicate canonical home declaration", inst.where)
-    generic = "IR_COMPLETE_ATTR_READER"
-    marker_occurrences = [
-        (part, token) for part in inst.parts if isinstance(part, Uop)
-        for token in part.body.tokens() if token.text == marker]
-    generic_occurrences = [
-        (part, token) for part in inst.parts if isinstance(part, Uop)
-        for token in part.body.tokens() if token.text == generic]
-    if len(marker_occurrences) > 1 or len(generic_occurrences) > 1:
-        raise analysis_error(
-            f"{inst.name}: duplicate result publication declaration",
-            inst.where)
-    if marker_occurrences and generic_occurrences:
-        raise analysis_error(
-            f"{inst.name}: conflicting result publication declarations",
-            inst.where)
-    if not marker_occurrences and not generic_occurrences:
-        if canonical_occurrences:
-            raise analysis_error(
-                f"{inst.name}: canonical home declaration requires result marker",
-                canonical_occurrences[0][1])
-        return None
-
-    is_explicit = bool(marker_occurrences)
-    producer, token = (marker_occurrences or generic_occurrences)[0]
-    statements = producer.body.body
-    meaningful = [stmt for stmt in statements
-                  if not isinstance(stmt, SimpleStmt)
-                  or _statement_text(stmt)]
-    if is_explicit:
-        if not meaningful or not isinstance(meaningful[-1], SimpleStmt):
-            raise analysis_error(
-                f"{inst.name}: result marker must be a top-level final "
-                "statement", token)
-        declaration = meaningful[-1]
-        texts = _statement_text(declaration)
-        if (texts[0:2] != [marker, "("] or len(texts) != 7
-                or texts[3] != "," or texts[5:7] != [")", ";"]
-                or any(not re.fullmatch(r"[A-Za-z_]\w*", name)
-                       for name in (texts[2], texts[4]))):
-            raise analysis_error(
-                f"{inst.name}: expected {marker}(result, owner);", token)
-        result, owner = texts[2], texts[4]
-        if not _owned_result_assignment(producer, owner, "OWNER", declaration):
-            raise analysis_error(
-                f"{inst.name}: result marker owner must be an unmodified "
-                "top-level OWNER() result",
-                token)
-        result_assignment = _sole_top_level_assignment(producer, result)
-        if (result_assignment is None
-                or statements.index(result_assignment)
-                >= statements.index(declaration)):
-            raise analysis_error(
-                f"{inst.name}: result {result} must have one unconditional "
-                "top-level assignment before its marker",
-                token)
-        if sum(item.kind == "IDENTIFIER" and item.text == result
-               for item in result_assignment.contents) != 1:
-            raise analysis_error(
-                f"{inst.name}: result assignment must bind {result} only once",
-                token)
-        assignment_index = statements.index(result_assignment)
-        marker_index = statements.index(declaration)
-        if any(token.kind == "IDENTIFIER" and token.text == result
-               for stmt in statements[assignment_index + 1:marker_index]
-               for token in stmt.tokens()):
-            raise analysis_error(
-                f"{inst.name}: result {result} is used before receiver "
-                "retirement", token)
-        canonical_source = bool(canonical_occurrences)
-        if canonical_source:
-            canonical_producer, canonical_token = canonical_occurrences[0]
-            assignment = _statement_text(result_assignment)
-            producer_marker = canonical_token.text
-            inputs = {item.name for item in producer.stack.inputs}
-            args = (assignment[4:5] if producer_marker == canonical else
-                    assignment[4:7:2])
-            shape_args = (producer_marker != shape or
-                          (len(args) == 2 and args[0] in inputs and
-                           [(cache.name, cache.size) for cache in producer.caches] == [(args[1], 1)]))
-            if (canonical_producer is not producer
-                    or len(assignment) != (7 if producer_marker == canonical else 9)
-                    or assignment[:4] != [result, "=", producer_marker, "("]
-                    or not all(re.fullmatch(r"[A-Za-z_]\w*", arg) for arg in args)
-                    or not shape_args or assignment[-2:] != [")", ";"]):
-                raise analysis_error(
-                    f"{inst.name}: canonical home declaration must be the "
-                    "direct checked result assignment", canonical_token)
-        _publication_result(inst, fmt, result, producer)
-        outputs = external_io(inst)[1]
-        _validate_publication_suffix(inst, producer, outputs, result)
-        return ResultPublicationContract(
-            RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE,
-            result, owner, producer, "explicit", canonical_source)
-
-    if canonical_occurrences:
-        raise analysis_error(
-            f"{inst.name}: canonical home declaration requires result marker",
-            canonical_occurrences[0][1])
-
-    # The generic reader completes publication in a trusted helper, then
-    # assigns its first result to the handler output.
-    call_stmt = None
-    call_args: list[str] = []
-    for stmt in producer.body.body:
-        if not isinstance(stmt, SimpleStmt):
-            continue
-        items = [item.text for item in stmt.contents
-                 if item.kind != "COMMENT"]
-        if not items or items[0] != generic:
-            continue
-        if (len(items) != 11 or items[1] != "(" or items[-2:] != [")", ";"]
-                or items[3] != "," or items[5] != "," or items[7] != ","):
-            raise analysis_error(
-                f"{inst.name}: malformed {generic} arguments", token)
-        call_stmt = stmt
-        call_args = [items[2], items[4], items[6], items[8]]
-        break
-    if call_stmt is None:
-        raise analysis_error(
-            f"{inst.name}: {generic} must be a top-level statement", token)
-    call_position = producer.body.body.index(call_stmt)
-    following = [stmt for stmt in producer.body.body[call_position + 1:]
-                 if not isinstance(stmt, SimpleStmt)
-                 or _statement_text(stmt)]
-    if not following or not isinstance(following[0], SimpleStmt):
-        raise analysis_error(
-            f"{inst.name}: generic completion has no output assignment", token)
-    result_stmt = following[0]
-    assignment = _statement_text(result_stmt)
-    if (len(assignment) != 4 or assignment[1] != "="
-            or assignment[2] != call_args[0] or assignment[3] != ";"):
-        raise analysis_error(
-            f"{inst.name}: generic completion does not assign its first result",
-            token)
-    result = assignment[0]
-    if len(following) != 1:
-        raise analysis_error(
-            f"{inst.name}: generic completion must be followed directly by "
-            "its output assignment", token)
-    if result in call_args:
-        raise analysis_error(
-            f"{inst.name}: generic completion output must be distinct from "
-            "its inputs", token)
-    if _sole_top_level_assignment(producer, result) is not result_stmt:
-        raise analysis_error(
-            f"{inst.name}: generic output must have one unconditional "
-            "top-level assignment", token)
-    result_position = producer.body.body.index(result_stmt)
-    if any(token.kind == "IDENTIFIER" and token.text == result
-           for stmt in producer.body.body[:result_position]
-           for token in stmt.tokens()):
-        raise analysis_error(
-            f"{inst.name}: generic output {result} is used before completion",
-            token)
-    if (len(set(call_args)) != len(call_args)
-            or any(not re.fullmatch(r"[A-Za-z_]\w*", name)
-                   for name in call_args)):
-        raise analysis_error(
-            f"{inst.name}: {generic} arguments must name distinct values",
-            token)
-    receiver = call_args[2]
-    if not _owned_result_assignment(producer, receiver, "TAKE", call_stmt):
-        raise analysis_error(
-            f"{inst.name}: {generic} receiver must be an unmodified "
-            "top-level TAKE() result", token)
-    _validate_generic_reader_prefix(producer, call_stmt, call_args, token)
-    _publication_result(inst, fmt, result, producer)
-    outputs = external_io(inst)[1]
-    _validate_publication_suffix(inst, producer, outputs, result)
-    return ResultPublicationContract(
-        RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE,
-        result, None, producer, "generic")
+    "No handler publishes its result before its inputs close (rule 7)."
+    return None
 
 
 def writes_suspended_frame_state(inst: Instruction) -> bool:

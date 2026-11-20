@@ -78,17 +78,7 @@ generator_publish_redirected(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (frame->pending_redirect) {
         _PyFrame_CompleteRedirect(frame);
     }
-    PyValue old = PyValue_NULL;
-    if (frame->return_slot != IR_NO_DST) {
-        if (frame->return_slot < _PyFrame_GetCode(frame)->co_nlocalsplus) {
-            old = frame->base[frame->return_slot];
-        }
-        frame->base[frame->return_slot] = value;
-        _PyValue_CheckHome(value);
-        value = PyValue_NULL;
-    }
-    PyValue_XCLOSE(old);
-    PyValue_XCLOSE(value);
+    _PyFrame_PublishReturnSlot(frame, value);
 }
 
 /* The remaining-window cursor is an actual home address, not an encoded action.
@@ -139,18 +129,15 @@ TARGET(GEN_COMPLETE_EFFECT)
         detached[ndetached++] = frame->base[base + k];
         frame->base[base + k] = PyValue_NULL;
     }
-    PyValue displaced = PyValue_NULL;
-    if (destination != IR_NO_DST) {
-        if (destination < _PyFrame_GetCode(frame)->co_nlocalsplus) {
-            displaced = frame->base[destination];
-        }
-        else {
-            assert(PyValue_IsNull(frame->base[destination]));
-        }
-        frame->base[destination] = result;
-        _PyValue_CheckHome(result);
-        result = PyValue_NULL;
-    }
+    // The releasing write: a local's or the discard slot's old value closes
+    // with the detached owners
+    PyValue displaced = frame->base[destination];
+    assert(destination < _PyFrame_GetCode(frame)->co_nlocalsplus ||
+           destination == _PyFrame_DiscardSlot(frame) ||
+           PyValue_IsNull(displaced));
+    frame->base[destination] = result;
+    _PyValue_CheckHome(result);
+    result = PyValue_NULL;
     detached[ndetached++] = displaced;
     frame->return_pc = exit;
     _PyIRStepResult post = {.next = exit, .status = _PY_IR_STEP_EXIT};

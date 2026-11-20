@@ -899,7 +899,7 @@ value_import_level(PyValue level)
  * _PyValue_GetItem(). A dict miss raises KeyError with the key as it is.
  * The caller holds an owner of both. */
 static PyValue
-value_subscript(PyValue container, PyValue key)
+value_subscript(PyValueBorrow container, PyValueBorrow key)
 {
     PyObject *o = PyValue_ObjectOrNull(container);
     if (o != NULL) {
@@ -931,6 +931,16 @@ value_subscript(PyValue container, PyValue key)
         }
     }
     return _PyValue_GetItem(container, key);
+}
+
+/* lhs op rhs for BINARY_OP's operation oparg; both operands are borrowed. */
+static PyValue
+value_binary_op(int oparg, PyValueBorrow lhs, PyValueBorrow rhs)
+{
+    if (oparg == NB_SUBSCR) {
+        return value_subscript(lhs, rhs);
+    }
+    return _PyValue_BinaryOps[oparg](lhs, rhs);
 }
 
 /* The wrappers below keep a runtime-API out-parameter in their own C frame,
@@ -1415,8 +1425,7 @@ call_transaction_begin(_PyInterpreterFrame *frame, PyValue *homes, int base,
     assert(homes == _PyFrame_Slots(frame) + base);
     assert(base >= _PyFrame_GetCode(frame)->co_nlocalsplus);
     assert(count >= 0 && base <= _PyFrame_NumSlots(frame) - count);
-    assert((destination >= 0 && destination < _PyFrame_NumSlots(frame))
-           || destination == IR_NO_DST);
+    assert(destination >= 0 && destination < _PyFrame_NumSlots(frame));
     (void)destination;
     /* Every call input is an evaluated temporary, including snapshots of
      * locals, and owns its value. Callback-current LOCAL homes are never
@@ -1705,12 +1714,11 @@ call_transaction_native(_PyCallTransaction *call)
      * below follow only a step that can run Python or that allocates. */
     PyValue small[8];
     PyValue *retired = small;
-    PyValue local_result = PyValue_NULL;
     PyValue result = PyValue_NULL;
     PyValue displaced = PyValue_NULL;
     PyValue callable = PyValue_NULL;
     PyValue monitor_argument = PyValue_NULL;
-    int retired_count = 0, call_status = -1, to_local = 0;
+    int retired_count = 0, call_status = -1;
     if (call->instrumented && !call->monitored &&
         call_record_monitor(call) < 0) {
         return -1;
@@ -1796,14 +1804,11 @@ call_transaction_native(_PyCallTransaction *call)
     }
     call_transaction_detach(call, retired);
     retired_count = call->count;
-    // IR_NO_DST: the result waits in local_result until it is released
-    to_local = call->destination < _PyFrame_GetCode(call->frame)->co_nlocalsplus
-               || call->destination == IR_NO_DST;
+    /* The result goes to its destination, a temporary, a local or the
+     * discard slot, with the releasing write: the old value is closed
+     * after the window's owners */
     _PyValue_CheckHome(result);
-    if (to_local) {
-        local_result = result;
-    }
-    else {
+    {
         PyValue *home = _PyFrame_Slots(call->frame) + call->destination;
         _PyValue_RecheckHome(*home);
         displaced = *home;
@@ -1830,7 +1835,6 @@ done:
     /* Retiring the window and the callable can run a finalizer. */
     int failed = call_record_refresh(call);
     if (call_status < 0) {
-        assert(PyValue_IsNull(local_result));
         return -1;
     }
     if (failed == 0 && call->periodic) {
@@ -1841,32 +1845,6 @@ done:
         if (periodic < 0) {
             failed = -1;
         }
-    }
-    if (to_local) {
-        /* Upstream closes a call's inputs, runs its periodic check and only
-         * then stores the result with STORE_FAST. So a folded local gets
-         * the result after the window retires and the check passes, as
-         * IR_STORE_DST does in the specialised handlers, and its old value
-         * goes last. If the check raised, the local keeps its old value and
-         * the result waits in window[0], where the unwinder releases it after
-         * the traceback entry and the RAISE event, as upstream pops it. */
-        if (failed < 0) {
-            PyValue *window = _PyFrame_Slots(call->frame) + call->base;
-            assert(PyValue_IsNull(window[0]));
-            window[0] = local_result;
-            return -1;
-        }
-        if (call->destination == IR_NO_DST) {
-            PyValue_XCLOSE(local_result);   // may run __del__
-            return call_record_refresh(call);
-        }
-        PyValue *home = _PyFrame_Slots(call->frame) + call->destination;
-        // a move: replaced below
-        PyValue displaced_local = *home;
-        *home = local_result;
-        _PyValue_CheckHome(*home);
-        PyValue_XCLOSE(displaced_local);
-        failed = call_record_refresh(call);
     }
     return failed;
 }
@@ -3309,10 +3287,11 @@ complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
         window[3] = PyValue_NULL;
     }
     PyValue displaced = PyValue_NULL;
-    if (kind != _PY_IR_FOR_ITER && destination != IR_NO_DST) {
+    if (kind != _PY_IR_FOR_ITER) {
         assert(destination < _PyFrame_NumSlots(frame));
         displaced = frame->base[destination];
         assert(destination < _PyFrame_GetCode(frame)->co_nlocalsplus ||
+               destination == _PyFrame_DiscardSlot(frame) ||
                PyValue_IsNull(displaced));
         frame->base[destination] = value;
         _PyValue_CheckHome(value);

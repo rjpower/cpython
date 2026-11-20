@@ -629,7 +629,6 @@ NON_ESCAPING_FUNCTIONS = (
     "PyValue_Borrow",
     "PyValue_DUP",
     "PyValue_XDUP",
-    "IR_CANONICAL_HOME_DUP",
     "PyValue_FromObjectBorrow",
     "PyValue_DupImmortal",
     "PyValue_False",

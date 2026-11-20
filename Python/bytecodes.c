@@ -1187,19 +1187,10 @@ dummy_func(
 
         inline_ok op(_BINARY_OP_SUBSCR_DICT, (dict_st, sub_st -- res)) {
             IR_TRY_DICT_FIRST_PROBE();
-            PyValue held_dict = TAKE(dict_st);
-            PyValue held_sub = TAKE(sub_st);
-            INPUTS_DEAD();
-            SYNC_SP();
             STAT_INC(BINARY_OP, hit);
-            PyValue pending = value_subscript(held_dict, held_sub);
-            if (PyValue_IsNull(pending)) {
-                IR_RESTORE_VALUE_INPUTS(held_dict, held_sub);
-                value_operation_close3(held_sub, held_dict, PyValue_NULL);
-                IR_ABORT_VALUE_READER();
-            }
-            IR_COMPLETE_VALUE_READER(pending, held_sub, held_dict);
-            res = pending;
+            res = value_subscript(dict_st, sub_st);
+            DECREF_INPUTS();
+            ERROR_IF(PyValue_IsNull(res));
         }
 
         inline_ok op(_BINARY_OP_SUBSCR_CHECK_FUNC, (container, unused -- container, unused, getitem)) {
@@ -1268,14 +1259,8 @@ dummy_func(
 
         inline_ok op(_STORE_SUBSCR, (v, container, sub -- )) {
             /* container[sub] = v */
-            PyValue held_value = TAKE(v);
-            PyValue held_container = TAKE(container);
-            PyValue held_sub = TAKE(sub);
-            INPUTS_DEAD();
-            SYNC_SP();
-            int err = _PyValue_SetItem(held_container, held_sub, held_value);
-            value_operation_close3(held_sub, held_container, held_value);
-            IR_FINISH_VALUE_OPERATION();
+            int err = _PyValue_SetItem(container, sub, v);
+            DECREF_INPUTS();
             ERROR_IF(err);
         }
 
@@ -1322,14 +1307,8 @@ dummy_func(
             PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
             assert(Py_TYPE(dict)->tp_as_mapping->mp_ass_subscript == _PyDict_StoreSubscript);
             STAT_INC(STORE_SUBSCR, hit);
-            PyValue key = TAKE(sub);
-            PyValue stored = TAKE(value);
-            PyValue retained_dict = TAKE(dict_st);
-            INPUTS_DEAD();
-            SYNC_SP();
-            int err = _PyDict_SetValue_Take2((PyDictObject *)dict, key, stored);
-            value_operation_close3(retained_dict, PyValue_NULL, PyValue_NULL);
-            IR_FINISH_VALUE_OPERATION();
+            int err = _PyDict_SetValue((PyDictObject *)dict, sub, value);
+            DECREF_INPUTS();
             ERROR_IF(err);
         }
 
@@ -1366,56 +1345,38 @@ dummy_func(
 
         macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + POP_TOP;
 
-        inline_ok op(_CALL_INTRINSIC_2, (value2_st, value1_st -- res, vs1, vs2)) {
+        inst(CALL_INTRINSIC_2, (value2_st, value1_st -- res)) {
             assert(oparg <= MAX_INTRINSIC_2);
-            // Taken first: the calls below can run code that rebinds a local
-            PyValue first = TAKE(value1_st);
-            PyValue second = TAKE(value2_st);
-            INPUTS_DEAD();
             if (oparg == INTRINSIC_GETATTR) {
                 // The owner is a value; the name is a str
-                assert(PyValue_IsObject(first));
-                res = _PyValue_GetAttr(second, PyValue_AsKnownObjectBorrow(first));
-                if (PyValue_IsNull(res)) {
-                    value_operation_close3(first, second, PyValue_NULL);
-                    IR_ABORT_VALUE_READER();
-                }
+                PyObject *name = _PyValueTemps_Object(value_temps, value1_st);
+                assert(PyUnicode_CheckExact(name));
+                res = _PyValue_GetAttr(value2_st, name);
             }
             else if (oparg == INTRINSIC_SETATTR) {
-                // second is the value, NULL for a deletion; first is the
-                // tuple (owner, name)
-                PyObject *target = PyValue_AsKnownObjectBorrow(first);
+                // value2_st is the value, NULL for a deletion; value1_st is
+                // the tuple (owner, name), which stays in its slot
+                PyObject *target = _PyValueTemps_Object(value_temps, value1_st);
                 assert(PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
-                PyValue owner = _PyTuple_GetValue(target, 0);
-                PyValue attr_name = _PyTuple_GetValue(target, 1);
+                PyValueBorrow owner = PyTuple_GET_VALUE(target, 0);
+                PyValueBorrow attr_name = PyTuple_GET_VALUE(target, 1);
                 assert(PyValue_IsObject(attr_name));
                 int err = _PyValue_SetAttr(owner, PyValue_AsKnownObjectBorrow(attr_name),
-                                           second);
-                PyValue_CLOSE(owner);
-                PyValue_CLOSE(attr_name);
-                if (err < 0) {
-                    value_operation_close3(first, second, PyValue_NULL);
-                    IR_ABORT_VALUE_READER();
-                }
-                res = PyValue_None;
+                                           value2_st);
+                res = err < 0 ? PyValue_NULL : PyValue_None;
             }
             else {
-                PyObject *value1 = _PyValueTemps_Object(value_temps, first);
-                PyObject *value2 = value1 == NULL ? NULL :
-                    _PyValueTemps_Object(value_temps, second);
-                PyObject *res_o = value2 == NULL ? NULL :
-                    _PyIntrinsics_BinaryFunctions[oparg].func(tstate, value2, value1);
-                if (res_o == NULL) {
-                    value_operation_close3(first, second, PyValue_NULL);
-                    IR_ABORT_VALUE_READER();
+                PyObject *value1 = _PyValueTemps_Object(value_temps, value1_st);
+                PyObject *value2 = _PyValueTemps_Object(value_temps, value2_st);
+                PyObject *res_o = NULL;
+                if (value1 != NULL && value2 != NULL) {
+                    res_o = _PyIntrinsics_BinaryFunctions[oparg].func(tstate, value2, value1);
                 }
-                res = PyValue_FromObjectSteal(res_o);
+                res = res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
             }
-            vs1 = first;
-            vs2 = second;
+            DECREF_INPUTS();
+            ERROR_IF(PyValue_IsNull(res));
         }
-
-        macro(CALL_INTRINSIC_2) = _CALL_INTRINSIC_2 + POP_TOP + POP_TOP;
 
         tier1 inst(RAISE_VARARGS, (args[oparg] -- )) {
             assert(oparg < 3);
@@ -2001,13 +1962,8 @@ dummy_func(
 
         inline_ok op(_STORE_ATTR, (v, owner --)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyValue held_value = TAKE(v);
-            PyValue receiver = TAKE(owner);
-            INPUTS_DEAD();
-            SYNC_SP();
-            int err = _PyValue_SetAttr(receiver, name, held_value);
-            value_operation_close3(receiver, held_value, PyValue_NULL);
-            IR_FINISH_VALUE_OPERATION();
+            int err = _PyValue_SetAttr(owner, name, v);
+            DECREF_INPUTS();
             ERROR_IF(err);
         }
 
@@ -2088,7 +2044,6 @@ dummy_func(
         op(_LOAD_GLOBAL, ( -- res[1])) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
             IR_WRITE_OUTPUT(res, 0, value_load_global(GLOBALS(), BUILTINS(), name));
-            IR_FINISH_VALUE_OPERATION();
             ERROR_IF(PyValue_IsNull(res[0]));
         }
 
@@ -2385,7 +2340,6 @@ dummy_func(
             int failed = map_o == NULL;
             map = failed ? PyValue_NULL : PyValue_FromObjectSteal(map_o);
             SYNC_SP();
-            IR_FINISH_VALUE_OPERATION();
             ERROR_IF(failed);
         }
 
@@ -2636,30 +2590,32 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        inline_ok op(_LOAD_ATTR, (owner -- attr, unused[oparg&1])) {
+        inline_ok op(_LOAD_ATTR, (owner -- attr, self_or_null[oparg&1])) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
-            int method = oparg & 1;
-            PyValue receiver = TAKE(owner);
-            INPUTS_DEAD();
-            SYNC_SP();
-            PyValue pending = PyValue_NULL;
-            PyValue pending_self = PyValue_NULL;
-            if (method) {
+            PyValue found_attr;
+            PyValue found_self = PyValue_NULL;
+            if (oparg & 1) {
+                // A count of its own before the call, which can run code
+                // that rebinds the local that owner views
+                PyValue receiver = PyValue_DUP(owner);
                 _PyStatusValue found = _PyValue_GetMethod(receiver, name);
-                pending = found.value;
+                found_attr = found.value;
                 if (found.status > 0) {
-                    pending_self = PyValue_DUP(receiver);
+                    found_self = receiver;
+                }
+                else {
+                    PyValue_CLOSE(receiver);
                 }
             }
             else {
-                pending = _PyValue_GetAttr(receiver, name);
+                found_attr = _PyValue_GetAttr(owner, name);
             }
-            if (PyValue_IsNull(pending)) {
-                value_operation_close3(receiver, PyValue_NULL, PyValue_NULL);
-                IR_ABORT_VALUE_READER();
+            DECREF_INPUTS();
+            ERROR_IF(PyValue_IsNull(found_attr));
+            attr = found_attr;
+            if (oparg & 1) {
+                self_or_null[0] = found_self;
             }
-            IR_COMPLETE_ATTR_READER(pending, pending_self, receiver, method);
-            attr = pending;
         }
 
         macro(LOAD_ATTR) =
@@ -2697,8 +2653,7 @@ dummy_func(
             DEOPT_IF(PyValue_IsNull(found));
             attr = PyValue_XDUP(found);
             STAT_INC(LOAD_ATTR, hit);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+            DECREF_INPUTS();
         }
 
         macro(LOAD_ATTR_INSTANCE_VALUE) =
@@ -2726,8 +2681,7 @@ dummy_func(
         op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr)) {
             attr = IR_DUP_SHAPE_READ(owner, offset);
             STAT_INC(LOAD_ATTR, hit);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+            DECREF_INPUTS();
         }
 
         macro(LOAD_ATTR_SHAPE) =
@@ -2752,8 +2706,7 @@ dummy_func(
             EXIT_IF(PyValue_IsNull(found));
             attr = PyValue_XDUP(found);
             STAT_INC(LOAD_ATTR, hit);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+            DECREF_INPUTS();
         }
 
         macro(LOAD_ATTR_MODULE) =
@@ -2791,8 +2744,7 @@ dummy_func(
             }
             STAT_INC(LOAD_ATTR, hit);
             attr = PyValue_XDUP(found);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+            DECREF_INPUTS();
         }
 
         macro(LOAD_ATTR_WITH_HINT) =
@@ -2810,9 +2762,8 @@ dummy_func(
             EXIT_IF(PyValue_IsNull(value));
             _PyValue_RecheckHome(value);
             attr = PyValue_DUP(value);
-            PyValue receiver = OWNER(owner);
             STAT_INC(LOAD_ATTR, hit);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+            DECREF_INPUTS();
         }
 
         macro(LOAD_ATTR_SLOT) =
@@ -2834,9 +2785,8 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
             assert(!PyValue_IsNull(found));
-            attr = IR_CANONICAL_HOME_DUP(found);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+            attr = PyValue_XDUP(found);
+            DECREF_INPUTS();
         }
 
         macro(LOAD_ATTR_CLASS) =
@@ -2976,9 +2926,8 @@ dummy_func(
 #endif
             }
             UNLOCK_OBJECT(owner_o);
-            PyValue receiver = OWNER(owner);
-            SYNC_SP();
-            IR_RETIRE_PUBLISHED_PAIR(old_value, receiver);
+            PyValue_XCLOSE(owner);
+            PyValue_XCLOSE(old_value);
         }
 
         op(_LOCK_OBJECT, (value -- value)) {
@@ -2999,9 +2948,8 @@ dummy_func(
             assert(!PyValue_IsNull(old_value));
             *value_ptr = TAKE(value);
             STAT_INC(STORE_ATTR, hit);
-            PyValue receiver = OWNER(owner);
-            SYNC_SP();
-            IR_RETIRE_PUBLISHED_PAIR(old_value, receiver);
+            PyValue_XCLOSE(owner);
+            PyValue_XCLOSE(old_value);
         }
 
         macro(STORE_ATTR_SHAPE) =
@@ -3019,9 +2967,7 @@ dummy_func(
             _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
             _PyDictValues_SetShape(values, (uint8_t)shape_to);
             STAT_INC(STORE_ATTR, hit);
-            PyValue receiver = OWNER(owner);
-            SYNC_SP();
-            IR_RETIRE_PUBLISHED(receiver);
+            PyValue_XCLOSE(owner);
         }
 
         macro(STORE_ATTR_SHAPE_ADD) =
@@ -3063,33 +3009,17 @@ dummy_func(
             if (dict->_ma_watcher_tag & DICT_WATCHER_MASK) {
                 /* A watcher error's unraisable hook may reenter. Do not
                  * retain a raw slot pointer across the provider call. */
-                PyValue watched_dict = PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)dict));
-                PyValue release_value = TAKE(value);
-                PyValue receiver = TAKE(owner);
                 UNLOCK_OBJECT(dict);
-                INPUTS_DEAD();
-                SYNC_SP();
                 int err = _PyDict_SetValue(dict,
-                    PyValue_FromObjectBorrow(name), release_value);
-                if (err < 0) {
-                    /* ERROR_NO_POP kept these temporary owners until the
-                     * ordinary full-frame unwind, including deeper temps. */
-                    IR_RESTORE_VALUE_INPUTS(release_value, receiver);
-                    value_operation_close3(watched_dict, release_value, receiver);
-                }
-                else {
-                    value_operation_close3(release_value, watched_dict, receiver);
-                }
-                IR_FINISH_VALUE_OPERATION();
+                    PyValue_FromObjectBorrow(name), value);
+                DECREF_INPUTS();
                 ERROR_IF(err < 0);
             }
             else {
                 *value_ptr = TAKE(value);
-                PyValue receiver = OWNER(owner);
                 UNLOCK_OBJECT(dict);
-                INPUTS_DEAD();
-                SYNC_SP();
-                IR_RETIRE_PUBLISHED_PAIR(old_value, receiver);
+                PyValue_XCLOSE(owner);
+                PyValue_XCLOSE(old_value);
             }
             STAT_INC(STORE_ATTR, hit);
         }
@@ -3107,11 +3037,9 @@ dummy_func(
             STAT_INC(STORE_ATTR, hit);
             PyValue old_value = *(PyValue *)addr;  // a move: replaced below
             *(PyValue *)addr = TAKE(value);
-            PyValue receiver = OWNER(owner);
             UNLOCK_OBJECT(owner_o);
-            INPUTS_DEAD();
-            SYNC_SP();
-            IR_RETIRE_PUBLISHED_PAIR(old_value, receiver);
+            PyValue_XCLOSE(owner);
+            PyValue_XCLOSE(old_value);
         }
 
         macro(STORE_ATTR_SLOT) =
@@ -4124,9 +4052,8 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
             assert(!PyValue_IsNull(found));
-            attr = IR_CANONICAL_HOME_DUP(found);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+            attr = PyValue_XDUP(found);
+            DECREF_INPUTS();
         }
 
         macro(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES) =
@@ -4142,9 +4069,8 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
             assert(!PyValue_IsNull(found));
-            attr = IR_CANONICAL_HOME_DUP(found);
-            PyValue receiver = OWNER(owner);
-            IR_RETIRE_PUBLISHED_RESULT(attr, receiver);
+            attr = PyValue_XDUP(found);
+            DECREF_INPUTS();
         }
 
         macro(LOAD_ATTR_NONDESCRIPTOR_NO_DICT) =
@@ -5371,7 +5297,9 @@ dummy_func(
         }
 
         inline_ok op(_BINARY_OP, (lhs, rhs -- res)) {
-            IR_BINARY_READER(lhs, rhs, res);
+            res = value_binary_op(oparg, lhs, rhs);
+            DECREF_INPUTS();
+            ERROR_IF(PyValue_IsNull(res));
         }
 
         macro(BINARY_OP) = unused/1 + _SPECIALIZE_BINARY_OP + unused/4 + _BINARY_OP;

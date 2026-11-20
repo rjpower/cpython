@@ -686,7 +686,8 @@ specialize(_PyInstr *instr, uint8_t specialized_opcode)
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
         int nlocalsplus = _PyFrame_GetCode(current_frame())->co_nlocalsplus;
         if (IR_B(word) < (uint32_t)nlocalsplus &&
-            IR_A(word) >= (uint32_t)nlocalsplus && IR_A(word) != IR_NO_DST) {
+            IR_A(word) >= (uint32_t)nlocalsplus &&
+            IR_A(word) != (uint32_t)_PyFrame_DiscardSlot(current_frame())) {
             handler = LOAD_ATTR_SHAPE_LOCAL_TEMP;
         }
     }

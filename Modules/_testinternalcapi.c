@@ -4874,23 +4874,9 @@ check_frame_copy(PyObject *args, int mode)
     assert(selected_home >= 0 && selected_home < n);
     src->base[selected_home] = value;
     int scratch_home = 1;
-    const _PyIRPhaseRange selected = {
-        .begin = (uint16_t)scratch_home,
-        .end = (uint16_t)(scratch_home + 1),
-    };
-    const _PyIRHomeView view = {
-        .nbindings = (uint16_t)nl,
-        .scratch_limit = (uint16_t)selected.end,
-        .nranges = 1, .ranges = &selected,
-    };
-    if (created) {
-        src->ir_words = exec->words;
-        src->instr_ptr = exec->words + site;
-        _PyFrame_CopyCreatedGenerator(src, dst);
-    }
-    else {
-        _PyFrame_Copy(src, dst, &view, _PyIR_HOME_MUST_READABLE);
-    }
+    src->ir_words = exec->words;
+    src->instr_ptr = exec->words + site;
+    _PyFrame_CopyCreatedGenerator(src, dst);
     int correct = dst->base[selected_home].bits == value.bits &&
                   PyValue_IsNull(src->base[selected_home]);
     for (int i = nl; i < n; i++) {
@@ -4907,12 +4893,6 @@ check_frame_copy(PyObject *args, int mode)
         return NULL;
     }
     Py_RETURN_NONE;
-}
-
-static PyObject *
-check_frame_selected_copy(PyObject *self, PyObject *args)
-{
-    return check_frame_copy(args, 0);
 }
 
 static PyObject *
@@ -4939,7 +4919,6 @@ has_empty_created_copy_plan(PyObject *self, PyObject *arg)
 static PyMethodDef module_functions[] = {
     {"has_empty_created_copy_plan", has_empty_created_copy_plan, METH_O},
     {"check_created_frame_copy", check_created_frame_copy, METH_VARARGS},
-    {"check_frame_selected_copy", check_frame_selected_copy, METH_VARARGS},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"check_ir_retirement", _PyCFunction_CAST(check_ir_retirement),
      METH_VARARGS | METH_KEYWORDS, NULL},

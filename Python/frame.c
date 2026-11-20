@@ -9,29 +9,11 @@
 #include "pycore_pystate.h"       // HEAD_LOCK(), thread enumeration
 #include "pycore_value.h"      // _Py_VISIT_VALUE()
 
-void
-_PyFrame_GetNullControlHomeView(_PyInterpreterFrame *frame, int remaining,
-                               _PyIRHomeView *view)
-{
-    static const _PyIRPhaseRange all_scratch = {
-        .begin = 0, .end = IR_MAX_SLOTS, .flags = _PyIR_PHASE_RANGE_NULLABLE};
-    int nl = _PyFrame_GetCode(frame)->co_nlocalsplus;
-    assert(remaining >= 0 && remaining <= _PyFrame_NumSlots(frame));
-    *view = (_PyIRHomeView){
-        .nbindings = (uint16_t)nl,
-        .scratch_limit = (uint16_t)Py_MAX(remaining - nl, 0),
-        .nranges = remaining > nl,
-        .ranges = &all_scratch,
-    };
-}
-
 static Py_NO_INLINE void
 copy_created_generator_control(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 {
-    _PyIRHomeView view;
-    _PyFrame_GetNullControlHomeView(src, _PyFrame_NumSlots(src), &view);
     src->instr_ptr++;
-    _PyFrame_Copy(src, dest, &view, _PyIR_HOME_NULL_CONTROL_READABLE);
+    _PyFrame_Copy(src, dest);
 }
 
 /* Only the actual RETURN_GENERATOR marker calls this entry. The whole-image
@@ -65,7 +47,7 @@ void
 _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame)
 {
     assert(frame->pending_redirect);
-    assert(frame->return_slot == IR_NO_DST);
+    assert(frame->return_slot == _PyFrame_DiscardSlot(frame));
     /* The child has retired its overlap. Publish the new state before
      * closing remaining scratch owners, whose finalizers can inspect it. */
     frame->pending_redirect = 0;
@@ -143,19 +125,16 @@ _PyFrame_MaterializeKwargs(_PyInterpreterFrame *frame)
     return 0;
 }
 
-/* Move a frame that a frame object outlives into that object. Its first
- * extent slots are the possible owners; every slot holds a value or NULL. */
+/* Move a frame that a frame object outlives into that object. Every slot
+ * holds a value or NULL. */
 static void
-take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame, int extent)
+take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
 {
     Py_BEGIN_CRITICAL_SECTION(f);
     assert(frame->owner < FRAME_OWNED_BY_INTERPRETER);
     assert(frame->owner != FRAME_OWNED_BY_FRAME_OBJECT);
     _PyInterpreterFrame *new_frame = (_PyInterpreterFrame *)f->_f_frame_data;
-    _PyIRHomeView view;
-    _PyIRHomeAuthority authority = _PyIR_HOME_NULL_CONTROL_READABLE;
-    _PyFrame_GetNullControlHomeView(frame, extent, &view);
-    _PyFrame_Copy(frame, new_frame, &view, authority);
+    _PyFrame_Copy(frame, new_frame);
     // _PyFrame_Copy moves the reference to the executable, but the caller
     // still clears frame->f_executable, so give the source frame its own.
     frame->f_executable = (PyCodeObject *)Py_NewRef(new_frame->f_executable);
@@ -246,7 +225,8 @@ _PyValue_CheckFrameExtent(_PyInterpreterFrame *frame, int extent)
 
 /* Release the first n slots of frame, from the top, so that a finalizer
  * that looks at the frame finds the slots that it has not reached yet intact
- * and the rest NULL */
+ * and the rest NULL.  The n cover the locals, which include the discard
+ * slot. */
 static inline void
 clear_slots(_PyInterpreterFrame *frame, int n)
 {
@@ -254,6 +234,7 @@ clear_slots(_PyInterpreterFrame *frame, int n)
     _PyValue_CheckFrameExtent(frame, n);
 #endif
     PyValue *locals = frame->base;
+    assert(n > _PyFrame_DiscardSlot(frame));
     PyValue *sp = locals + n;
     while (sp > locals) {
         sp--;
@@ -286,7 +267,7 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame, int extent)
         f->f_line_next = -1;
         FT_ATOMIC_STORE_PTR_RELAXED(frame->frame_obj, NULL);
         if (!_PyObject_IsUniquelyReferenced((PyObject *)f)) {
-            take_ownership(f, frame, extent);
+            take_ownership(f, frame);
             Py_DECREF(f);
             return;
         }

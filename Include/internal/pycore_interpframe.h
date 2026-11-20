@@ -160,6 +160,22 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
     return _PyFrame_NumSlotsForCodeObject(_PyFrame_GetCode(f));
 }
 
+/* The slot that a result nothing reads goes to: the hidden local after the
+ * constant slots, the last before the free variables.  It holds the last
+ * discarded result until the next discard or the end of the frame, and
+ * f_locals never shows it. */
+static inline int
+_PyFrame_DiscardSlotForCodeObject(PyCodeObject *co)
+{
+    return co->co_nlocalsplus - co->co_nfreevars - 1;
+}
+
+static inline int
+_PyFrame_DiscardSlot(_PyInterpreterFrame *f)
+{
+    return _PyFrame_DiscardSlotForCodeObject(_PyFrame_GetCode(f));
+}
+
 /* A checked physical home capability, shared with the bitmap placement. */
 static inline void
 _PyFrame_WriteHome(_PyInterpreterFrame *frame, PyValue *home, PyValue value)
@@ -231,25 +247,15 @@ _PyFrame_CloseHomeRange(_PyInterpreterFrame *frame, PyValue *homes, int count)
 }
 
 /* Hand v to f, which a call returns to or a send resumes: it goes to the
- * slot that f named. A temporary destination has no owner; a local's old value,
- * where a call stores its result in a local, is released as STORE_FAST
- * releases it. */
+ * slot that f named, a temporary, a local or the discard slot.  The write
+ * releases the slot's old value after it, as STORE_FAST does.  A frame that
+ * the interpreter entry made receives once, into an empty slot. */
 static inline void
 _PyFrame_PublishReturnSlot(_PyInterpreterFrame *f, PyValue v)
 {
-#ifdef Py_DEBUG
-    if (f->owner != FRAME_OWNED_BY_INTERPRETER) {
-        assert(f->return_slot < _PyFrame_NumSlots(f));
-    }
-#endif
-    /* Caller publication reserves a vacant scratch recipient. Its physical
-     * word is not a displaced owner; interpreter entry also receives once. */
-    PyValue old = PyValue_NULL;
-    if (f->owner != FRAME_OWNED_BY_INTERPRETER &&
-        f->return_slot < _PyFrame_GetCode(f)->co_nlocalsplus)
-    {
-        old = f->base[f->return_slot];
-    }
+    assert(f->owner == FRAME_OWNED_BY_INTERPRETER ||
+           f->return_slot < _PyFrame_NumSlots(f));
+    PyValue old = f->base[f->return_slot];
     f->base[f->return_slot] = v;
     _PyValue_CheckHome(v);
     PyValue_XCLOSE(old);
@@ -263,10 +269,6 @@ _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
     int redirected = f->pending_redirect;
     if (redirected) {
         _PyFrame_CompleteRedirect(f);
-    }
-    if (f->return_slot == IR_NO_DST) {
-        PyValue_XCLOSE(v);
-        return redirected;
     }
     _PyFrame_PublishReturnSlot(f, v);
     return redirected;
@@ -350,8 +352,6 @@ _PyFrame_PreviousHomeRange(const _PyIRHomeView *view, uint32_t *cursor,
     return false;
 }
 
-void _PyFrame_GetNullControlHomeView(
-    _PyInterpreterFrame *frame, int remaining, _PyIRHomeView *view);
 PyAPI_FUNC(void) _PyFrame_CopyCreatedGenerator(
     _PyInterpreterFrame *src, _PyInterpreterFrame *dest);
 
@@ -387,33 +387,17 @@ _PyFrame_CopyHeader(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 #endif
 }
 
+/* Move the slots of src, the frame that departs, to dest.  Its slots above
+ * the locals that it still owns are NULL, except the discard slot's. */
 static inline void
-_PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest,
-              const _PyIRHomeView *view, _PyIRHomeAuthority authority)
+_PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 {
     int nslots = _PyFrame_NumSlots(src);
-    assert(authority == _PyIR_HOME_MUST_READABLE ||
-           authority == _PyIR_HOME_NULL_CONTROL_READABLE);
-    assert(view->nbindings == _PyFrame_GetCode(src)->co_nlocalsplus);
-    assert(view->nbindings + view->scratch_limit <= nslots);
     _PyFrame_CopyHeader(src, dest);
-    uint32_t cursor = 0;
-    int filled = 0, begin, end;
-    while (_PyFrame_NextHomeRange(view, &cursor, &begin, &end)) {
-        assert(begin >= filled && end <= nslots);
-        while (filled < begin) {
-            dest->base[filled++] = PyValue_NULL;
-        }
-        while (filled < end) {
-            // A move: the slots src leaves behind may be the caller's.
-            dest->base[filled] = src->base[filled];
-            src->base[filled++] = PyValue_NULL;
-        }
-    }
-    /* NULL shadow still initializes inactive destinations without loading the
-     * corresponding source words. M4 removes this fill with full authority. */
-    while (filled < nslots) {
-        dest->base[filled++] = PyValue_NULL;
+    for (int i = 0; i < nslots; i++) {
+        // A move: the slots src leaves behind may be the caller's.
+        dest->base[i] = src->base[i];
+        src->base[i] = PyValue_NULL;
     }
 }
 

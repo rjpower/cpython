@@ -1342,12 +1342,8 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
     Py_BEGIN_CRITICAL_SECTION(f);
     /* Like RETURN_GENERATOR, discard the first None input instead of using
      * the ordinary frame initializer's default slot zero. */
-    f->f_frame->return_slot = IR_NO_DST;
-    _PyIRHomeView copy_view;
-    _PyFrame_GetNullControlHomeView(f->f_frame, _PyFrame_NumSlots(f->f_frame),
-                                    &copy_view);
-    _PyFrame_Copy((_PyInterpreterFrame *)f->_f_frame_data, frame,
-                  &copy_view, _PyIR_HOME_NULL_CONTROL_READABLE);
+    f->f_frame->return_slot = _PyFrame_DiscardSlot(f->f_frame);
+    _PyFrame_Copy((_PyInterpreterFrame *)f->_f_frame_data, frame);
     gen->gi_frame_state = FRAME_CREATED;
     frame->frame_obj = (PyFrameObject *)Py_NewRef(f);
     frame->owner = FRAME_OWNED_BY_GENERATOR;

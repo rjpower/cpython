@@ -542,10 +542,13 @@ gen_try_set_executing(PyGenObject *gen)
  * slots, _PyFrame_Slots(frame), which the handlers keep in a register. */
 #define IR_SLOT(F) (slots[(F)])
 
-/* Whether field F names a local, a cell or a free variable rather than a
- * temporary: the executing copy keeps co_nlocalsplus in its header.  An
- * input read through a local is borrowed in place; one read through a
- * temporary is the handler's, which it takes, leaving NULL in the slot. */
+/* Whether field F names a local, a cell, a free variable or the frame's
+ * discard slot (a hidden local) rather than a temporary: the executing copy
+ * keeps co_nlocalsplus in its header.  An input read through
+ * a local is borrowed in place and never released; one read through a
+ * temporary dies with the instruction, and the handler detaches it
+ * (IR_DETACH) after its effect.  A result written through a local or the
+ * discard slot releases the slot's old value (IR_STORE_DST). */
 #define IR_NLOCALSPLUS() \
     ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
 #define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
@@ -562,209 +565,117 @@ gen_try_set_executing(PyGenObject *gen)
 /* The view of an input that the handler reads through field F, which may
  * name a local (the instruction's borrow_mask): the slot's bits, as a
  * PyValueBorrow, which only C locals hold and nothing releases.  The one
- * load of the slot (pyjit/design/proposals/register-ir-v2-a5b.md, 4.2). */
+ * load of the slot (pyjit/design/proposals/register-ir-v2-a5b.md, 4.2).
+ * Reads borrow: the input stays in its slot, where the collector and the
+ * unwinder see it, until the handler detaches it. */
 #define IR_VIEW(F) PyValue_Borrow(IR_SLOT(F))
 
-/* The handler takes the input V that it read through field X of W: the owner
- * of a temporary's value, whose slot becomes NULL, or PyValue_NULL for a
- * local, which keeps its value and owns it.  The generator assigns it to
- * ir_own_<F> (Tools/cases_generator/ir_generator.py, IRStack.consume). */
-#define IR_CONSUME_INPUT(W, X, V) \
+/* Detach, after the effect: the input V that the handler read through field
+ * X of W dies with the instruction if it is a temporary.  Its owner moves to
+ * a C local and its slot becomes NULL.  A local keeps its value, so it
+ * yields PyValue_NULL, which owns nothing.  The handler closes the owner
+ * after it stored its results. */
+#define IR_DETACH(W, X, V) \
     (IR_IS_LOCAL_FIELD(W, X) ? PyValue_NULL \
         : _PyFrame_TakeKnownHome(frame, &IR_SLOT(IR_FIELD(W, X)), PyValue_Borrow(V)))
 
 /* Selected only by the checked interpreter-exit native-home contract. */
-#define IR_CONSUME_NATIVE_INPUT(W, X, V) \
+#define IR_DETACH_NATIVE(W, X, V) \
     (assert(frame->owner == FRAME_OWNED_BY_INTERPRETER), \
      IR_SLOT(IR_FIELD(W, X)) = PyValue_NULL, _PyIR_AdoptTemp(V))
 
-/* The DSL's TAKE(V) of view V, whose field's owner is OWN: a value with a
- * count of its own, for a home.  A local's (OWN is NULL) takes a new
- * count; a temporary's is the handler's. */
-#define IR_TAKE(V, OWN) \
-    (PyValue_IsNull(OWN) ? PyValue_XDUP(V) : (OWN))
+/* The DSL's TAKE(V) of view V whose field's owner is OWN, detached before:
+ * a value with a count of its own, for a home that the handler stores
+ * elsewhere.  A dying input's count moves, and OWN is empty after, so the
+ * handler's close of it does nothing; a local's value, whose OWN is NULL,
+ * gets a new count. */
+static inline PyValue
+_PyIR_Taken(PyValueBorrow view, PyValue *owner)
+{
+    PyValue taken = *owner;
+    if (PyValue_IsNull(taken)) {
+        return PyValue_XDUP(view);
+    }
+    *owner = PyValue_NULL;
+    return taken;
+}
+#define IR_TAKEN(V, OWN) _PyIR_Taken(PyValue_Borrow(V), &(OWN))
 
 /* Values are canonical where they are made (the PyValue_From*()
  * constructors), so a store writes V as it is; the debug check proves it. */
 
-/* A handler writes a temporary into a slot that holds NULL. */
+/* A result whose format puts it only in a temporary: a plain store into a
+ * slot that owns nothing. */
 #define IR_STORE_TEMP(SLOT, V) \
     do { \
         assert(PyValue_IsNull(SLOT)); \
-        _PyFrame_PublishVacantHome(frame, &(SLOT), (V)); \
+        (SLOT) = (V); \
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
-/* A handler writes V into SLOT, a temporary of its window or one that it
- * wrote before. */
-#define IR_PUBLISH_TEMP(SLOT, V) \
+/* A handler writes a temporary of its window, or one that it wrote
+ * before. */
+#define IR_SET_TEMP(SLOT, V) \
     do { \
         (SLOT) = (V); \
         _PyValue_CheckTemp(SLOT); \
     } while (0)
 
-/* OLD, the last owner of an object that a result displaced from a local:
- * destroy the object now when that cannot run Python, and return NULL;
- * otherwise return OLD for the handler to release once it has finished.
- * Out of line, so that each handler keeps only the last-owner test. */
-static Py_NO_INLINE PyValue
-ir_retire_last_owner(PyValue old)
-{
-    if (_PyObject_DestroyMayReenter(BITS_TO_PTR(old))) {
-        return old;
-    }
-    PyValue_XCLOSE(old);
-    return PyValue_NULL;
-}
-
-/* OLD, the value that a result displaced from a local.  Releasing a last
- * owner can run Python, so ir_retire_last_owner() leaves such a value in
- * ir_displaced until the handler finishes (release_displaced in the
- * generator); any other value is released at once. */
-#define IR_RETIRE_LOCAL(OLD) \
-    do { \
-        if (_PyValue_IsLastOwner(OLD)) { \
-            assert(PyValue_IsNull(ir_displaced)); \
-            ir_displaced = ir_retire_last_owner(OLD); \
-        } \
-        else { \
-            PyValue_XCLOSE(OLD); \
-        } \
-    } while (0)
-
-/* The result V goes to dst field X of W, which may name a local (a folded
- * STORE_FAST, _PyIR_STORE_DST): the local's old value is released after
- * it, as STORE_FAST does (IR_RETIRE_LOCAL).  A temporary's slot holds
- * NULL, or V when the handler wrote it there before (IR_STORE_TEMP_DST). */
+/* The releasing write of result V to dst field X of W, a temporary, a local
+ * or the discard slot, which one test of the old value serves: the old value
+ * moves to the handler's ir_old, and the handler closes it after its last
+ * store, as STORE_FAST does.  A temporary's old value is NULL. */
 #define IR_STORE_DST(W, X, V) \
     do { \
-        if (IR_IS_LOCAL_FIELD(W, X)) { \
-            PyValue ir_old = IR_SLOT(IR_FIELD(W, X)); \
-            _PyFrame_ReplaceKnownHome(frame, &IR_SLOT(IR_FIELD(W, X)), PyValue_Borrow(ir_old), (V)); \
-            _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
-            IR_RETIRE_LOCAL(ir_old); \
-        } \
-        else if (IR_FIELD(W, X) == IR_NO_DST) { \
-            PyValue_XCLOSE(V); \
-        } \
-        else { \
-            assert(PyValue_IsNull(IR_SLOT(IR_FIELD(W, X))) \
-                   || PyValue_Is(IR_SLOT(IR_FIELD(W, X)), (V))); \
-            IR_SLOT(IR_FIELD(W, X)) = (V); \
-            _PyValue_CheckTemp(IR_SLOT(IR_FIELD(W, X))); \
-        } \
+        ir_old = IR_SLOT(IR_FIELD(W, X)); \
+        assert(IR_IS_LOCAL_FIELD(W, X) || PyValue_IsNull(ir_old)); \
+        IR_SLOT(IR_FIELD(W, X)) = (V); \
+        _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
     } while (0)
 
-/* Observation sees the committed binding; its displaced or ignored owner
- * stays in C until the terminal adapter has published its continuation. */
-#define IR_COMMIT_OBSERVED_DST(W, X, V, RETIRED) \
-    do { \
-        assert(PyValue_IsNull(RETIRED)); \
-        if (IR_IS_LOCAL_FIELD(W, X)) { \
-            (RETIRED) = IR_SLOT(IR_FIELD(W, X)); \
-            IR_SLOT(IR_FIELD(W, X)) = (V); \
-            _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
-        } \
-        else if (IR_FIELD(W, X) == IR_NO_DST) { \
-            (RETIRED) = (V); \
-        } \
-        else { \
-            assert(PyValue_IsNull(IR_SLOT(IR_FIELD(W, X))) || PyValue_Is(IR_SLOT(IR_FIELD(W, X)), (V))); \
-            IR_SLOT(IR_FIELD(W, X)) = (V); \
-            _PyValue_CheckTemp(IR_SLOT(IR_FIELD(W, X))); \
-        } \
-    } while (0)
-
-#define IR_MOVE_OBSERVED_DST(W, X, SLOT, RETIRED) \
-    do { \
-        assert(PyValue_IsNull(RETIRED)); \
-        if (IR_IS_LOCAL_FIELD(W, X)) { \
-            (RETIRED) = IR_SLOT(IR_FIELD(W, X)); \
-            IR_SLOT(IR_FIELD(W, X)) = (SLOT); \
-            (SLOT) = PyValue_NULL; \
-            _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
-        } \
-        else if (IR_FIELD(W, X) == IR_NO_DST) { \
-            (RETIRED) = (SLOT); \
-            (SLOT) = PyValue_NULL; \
-        } \
-    } while (0)
-
-/* The source is a borrowed value from a canonical home. */
-#define IR_CANONICAL_HOME_DUP(V) \
-    (assert(_PyValue_IsHome(V)), PyValue_XDUP(V))
-
-/* Before code that may run other code, the result V goes to dst field X
- * of W if it names a temporary.  A local gets it at the end, IR_STORE_DST. */
-#define IR_STORE_TEMP_DST(W, X, V) \
-    do { \
-        if (!IR_IS_LOCAL_FIELD(W, X) && IR_FIELD(W, X) != IR_NO_DST) { \
-            assert(PyValue_IsNull(IR_SLOT(IR_FIELD(W, X))) \
-                   || PyValue_Is(IR_SLOT(IR_FIELD(W, X)), (V))); \
-            IR_SLOT(IR_FIELD(W, X)) = (V); \
-            _PyValue_CheckTemp(IR_SLOT(IR_FIELD(W, X))); \
-        } \
-    } while (0)
-
-/* A window-style handler whose dst field X of W may name a local moves its
- * result from SLOT of its window there, releasing the local's old value
- * as IR_STORE_DST does. */
+/* A window-style handler whose dst field X of W may name a local or the
+ * discard slot moves its result from SLOT of its window there, with the
+ * releasing write of IR_STORE_DST.  A temporary dst is SLOT itself. */
 #define IR_MOVE_TO_DST(W, X, SLOT) \
     do { \
         if (IR_IS_LOCAL_FIELD(W, X)) { \
-            PyValue ir_old = IR_SLOT(IR_FIELD(W, X)); \
+            ir_old = IR_SLOT(IR_FIELD(W, X)); \
             assert(_PyValue_IsHome(SLOT)); \
             IR_SLOT(IR_FIELD(W, X)) = (SLOT); \
             _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
             (SLOT) = PyValue_NULL; \
-            IR_RETIRE_LOCAL(ir_old); \
-        } \
-    } while (0)
-
-/* IR_MOVE_TO_DST for a call, whose dst may be IR_NO_DST (_PyIR_DISCARDS):
- * nothing reads the result, which the handler releases from SLOT. */
-#define IR_MOVE_TO_DST_OR_DISCARD(W, X, SLOT) \
-    do { \
-        if (IR_IS_LOCAL_FIELD(W, X)) { \
-            PyValue ir_old = IR_SLOT(IR_FIELD(W, X)); \
-            assert(_PyValue_IsHome(SLOT)); \
-            IR_SLOT(IR_FIELD(W, X)) = (SLOT); \
-            _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
-            (SLOT) = PyValue_NULL; \
-            IR_RETIRE_LOCAL(ir_old); \
-        } \
-        else if (IR_FIELD(W, X) == IR_NO_DST) { \
-            PyValue ir_result = (SLOT); \
-            (SLOT) = PyValue_NULL; \
-            PyValue_XCLOSE(ir_result); \
         } \
     } while (0)
 
 /* The elements of an unpack, in WINDOW in stack order (element i in
- * WINDOW[N - 1 - i]), go to the locals LOCALS[0..N-1], one at a time as the
- * STORE_FAST words that the unpack replaces would store them.  The old value
- * of a local is released at once if that cannot run Python.  Returns -1 when
- * all are stored, or the index of the first element whose local's old value
- * may run Python (_PyValue_CloseMayReenter): nothing from it on is stored, and
- * finish_unpack_to_locals() does the rest out of line, so that the release
- * sees the locals as the STORE_FAST sequence leaves them. */
-static inline int
+ * WINDOW[N - 1 - i]), go to the locals LOCALS[0..N-1].  Each local's old
+ * value changes places with the element's slot, so the frame owns every
+ * value throughout.  The handler then closes the old values from the window
+ * (IR_CLOSE_WINDOW), after all the stores. */
+static inline void
 _PyIR_UnpackToLocals(PyValue *locals, PyValue *window, int n)
 {
     for (int i = 0; i < n; i++) {
-        PyValue old = locals[i];
-        if (_PyValue_CloseMayReenter(old)) {
-            return i;
-        }
         PyValue *element = &window[n - 1 - i];
+        PyValue old = locals[i];
         locals[i] = *element;
         _PyValue_CheckHome(locals[i]);
-        window[n - 1 - i] = PyValue_NULL;
-        PyValue_XCLOSE(old);
+        *element = old;
     }
-    return -1;
 }
 #define IR_UNPACK_TO_LOCALS(L, W, N) _PyIR_UnpackToLocals((L), (W), (N))
+
+/* Close the N owners in WINDOW, detaching each before it closes it. */
+static inline void
+_PyIR_CloseWindow(PyValue *window, int n)
+{
+    for (int i = 0; i < n; i++) {
+        PyValue owner = window[i];
+        window[i] = PyValue_NULL;
+        PyValue_XCLOSE(owner);
+    }
+}
+#define IR_CLOSE_WINDOW(W, N) _PyIR_CloseWindow((W), (N))
 
 /* Clear N slots from PTR on; N may be zero or less. */
 #define IR_CLEAR_SLOTS(PTR, N) \
@@ -838,7 +749,7 @@ shape_read_dup(PyObject *owner, uint32_t offset)
     PyValueBorrow found = PyValue_Borrow(*(PyValue *)((char *)owner + offset));
     /* The current type and shape guards prove that this slot is filled. */
     assert(!PyValue_IsNull(found));
-    return IR_CANONICAL_HOME_DUP(found);
+    return PyValue_XDUP(found);
 }
 
 /* The oparg that the generic handler of COMPARE_OP or CONTAINS_OP, with

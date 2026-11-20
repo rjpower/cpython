@@ -618,6 +618,34 @@ _PyIR_Taken(PyValueBorrow view, PyValue *owner)
 }
 #define IR_TAKEN(V, OWN) _PyIR_Taken(PyValue_Borrow(V), &(OWN))
 
+/* IR_TAKEN() of a view of a required input, which is not PyValue_NULL, and
+ * of one that a guard has shown to be in pointer space: a local's value then
+ * gets its count with one test fewer (see PyValue_DUP() and
+ * _PyValue_DUP_POINTER()). */
+static inline PyValue
+_PyIR_TakenRequired(PyValueBorrow view, PyValue *owner)
+{
+    PyValue taken = *owner;
+    if (PyValue_IsNull(taken)) {
+        return PyValue_DUP(view);
+    }
+    *owner = PyValue_NULL;
+    return taken;
+}
+#define IR_TAKEN_REQUIRED(V, OWN) _PyIR_TakenRequired(PyValue_Borrow(V), &(OWN))
+
+static inline PyValue
+_PyIR_TakenPointer(PyValueBorrow view, PyValue *owner)
+{
+    PyValue taken = *owner;
+    if (PyValue_IsNull(taken)) {
+        return _PyValue_DUP_POINTER(view);
+    }
+    *owner = PyValue_NULL;
+    return taken;
+}
+#define IR_TAKEN_POINTER(V, OWN) _PyIR_TakenPointer(PyValue_Borrow(V), &(OWN))
+
 /* Values are canonical where they are made (the PyValue_From*()
  * constructors), so a store writes V as it is; the debug check proves it. */
 
@@ -730,30 +758,33 @@ coro_awaitable_can_transfer(PyValueBorrow value)
 /* The feedback entry at index F. */
 #define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_feedback, (F)))
 
-/* Every executable row was nominated by the checked managed-shape lookup.
- * No pointer from the bank escapes this callback-free selection. */
+/* Every executable row was nominated by the checked managed-shape lookup
+ * (fb_shape_read_set()): its handler is LOAD_ATTR_SHAPE, its type version is
+ * not zero and its aux is a shape.  A row that is not in use has version zero
+ * and never matches the type's nonzero version.  ENTRIES is the frame's
+ * ir_feedback, whose block header precedes it.  No pointer from the bank
+ * escapes this callback-free selection. */
 static inline int64_t
-shape_read_offset(_PyFbBlock *block, _PyFbAttr *entry, PyObject *owner)
+shape_read_offset(char *entries, _PyFbAttr *entry, PyObject *owner)
 {
 #ifdef Py_SHAPES
-    assert(entry->h.poly != 0 && entry->h.poly <= block->npoly);
-    const _PyFbPoly *poly = &block->poly[entry->h.poly - 1];
+    _PyFbBlock *block = (_PyFbBlock *)entries - 1;
+    const _PyFbPoly *poly = _PyFb_PolyOf(block, &entry->h);
     uint32_t version = Py_TYPE(owner)->tp_version_tag;
     if (version == 0) {
         return -1;
     }
     for (int i = 0; i < FB_POLY_SIZE; i++) {
         if (poly->type_version[i] == version) {
-            if (poly->payload[i].read_kind != _Py_FB_READ_SHAPE ||
-                _PyObject_Shape(owner) != poly->aux[i])
-            {
+            assert(poly->payload[i].read_kind == _Py_FB_READ_SHAPE);
+            if (_PyObject_Shape(owner) != poly->aux[i]) {
                 return -1;
             }
             return poly->index[i];
         }
     }
 #else
-    (void)block;
+    (void)entries;
     (void)entry;
     (void)owner;
 #endif
@@ -766,7 +797,7 @@ shape_read_dup(PyObject *owner, uint32_t offset)
     PyValueBorrow found = PyValue_Borrow(*(PyValue *)((char *)owner + offset));
     /* The current type and shape guards prove that this slot is filled. */
     assert(!PyValue_IsNull(found));
-    return PyValue_XDUP(found);
+    return PyValue_DUP(found);
 }
 
 /* The oparg that the generic handler of COMPARE_OP or CONTAINS_OP, with

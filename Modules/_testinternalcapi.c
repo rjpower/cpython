@@ -1777,7 +1777,7 @@ get_feedback(PyObject *self, PyObject *args)
         return NULL;
     }
     if (h->poly) {
-        _PyFbPoly *poly = &exec->feedback->poly[h->poly - 1];
+        _PyFbPoly *poly = _PyFb_PolyOf(exec->feedback, h);
         for (int r = 0; r < FB_POLY_SIZE && poly->handler[r]; r++) {
             PyObject *row = Py_BuildValue("(IIi)", poly->type_version[r],
                                           poly->aux[r], poly->handler[r]);

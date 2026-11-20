@@ -2535,7 +2535,7 @@ ELEMENT_GUARDS = frozenset(("IR_GUARD_INLINE_INT", "IR_GUARD_ELEMENT_TYPE",
 ELEMENT_INTRINSICS = ELEMENT_GUARDS | {"IR_DUP_CANONICAL_ELEMENT"}
 ELEMENT_NATIVE_SYMBOLS = frozenset((
     "PyValue_IsInlineInt", "PyValue_InlineInt64", "PyValue_IsObject",
-    "PyValue_AsKnownObjectBorrow", "PyValue_XDUP", "PyList_CheckExact",
+    "PyValue_AsKnownObjectBorrow", "PyValue_XDUP", "PyValue_DUP", "PyList_CheckExact",
     "PyTuple_CheckExact", "PyList_GET_SIZE", "PyTuple_GET_SIZE",
     "PyList_GET_VALUE", "PyTuple_GET_VALUE",
 ))
@@ -3712,7 +3712,7 @@ class IREmitter(Emitter):
             if field is not None:
                 self.spend_owner(field, tkn, storage)
                 self.ensure_consumed(field, storage)
-                value = f"IR_TAKEN({name}, {owner_name(field)})"
+                value = self.taken_view(name, field, storage)
                 storage.stack.taken(storage.stack.field_position(field))
             self.emit(f"PyValue {native} = {value};\n")
             self.value_kill(token, storage, False)
@@ -3862,11 +3862,11 @@ class IREmitter(Emitter):
                 self.statement.contents[0] is not tkn):
             raise analysis_error("shape guard requires unchanged typed attribute inputs", tkn)
         self.check_exit_inputs(tkn, storage)
-        pointer = f"PyValue_AsKnownObjectBorrow({name})"
+        pointer = f"_PyValue_AsKnownObjectBorrowPointer({name})"
         variant = self.execution_variant
         if variant is not None and variant.shape_cases:
             self.emit(f"(void){version}; (void){shape};\n")
-            self.emit(f"int64_t ir_selected_offset = shape_read_offset(_PyFrame_Exec(frame)->feedback, fb, {pointer});\n")
+            self.emit(f"int64_t ir_selected_offset = shape_read_offset(frame->ir_feedback, fb, {pointer});\n")
             self.emit("if (ir_selected_offset < 0) {\n")
             self.emit_jump_to_predicted(inst)
             self.emit("}\n")
@@ -3909,7 +3909,7 @@ class IREmitter(Emitter):
         storage.stack.shape_read_binding = None
         storage.stack.shape_read_complete = True
         self.shape_read_uses += 1
-        self.emit(f" shape_read_dup(PyValue_AsKnownObjectBorrow({name}), {offset})")
+        self.emit(f" shape_read_dup(_PyValue_AsKnownObjectBorrowPointer({name}), {offset})")
         return True
 
     def element_operation(self, tkn, tkn_iter, uop, storage, inst):
@@ -3964,9 +3964,17 @@ class IREmitter(Emitter):
                 self.emit_jump_to_predicted(inst)
                 self.emit("#endif\n")
             prefix = "PyList" if kind == "LIST" else "PyTuple"
-            miss(f"!PyValue_IsObject({value}) || !{prefix}_CheckExact(PyValue_AsKnownObjectBorrow({value}))")
+            # A slot that is read in place holds an object or an inline value,
+            # never NULL: a local that may be unbound is checked before it is
+            # read as an operand.  The test reads the slot's top bits.
+            var = find_local(value, storage)
+            if var.ir_inplace is not None:
+                pointer_test = f"PyValue_IsPointerSpaceAt(&IR_SLOT({FIELD_VARS[var.ir_inplace]}))"
+            else:
+                pointer_test = f"PyValue_IsObject({value})"
+            miss(f"!{pointer_test} || !{prefix}_CheckExact(_PyValue_AsKnownObjectBorrowPointer({value}))")
             stack.element_guards[("TYPE", owner)] = kind
-            find_local(value, storage).known_object = True
+            var.known_object = True
         elif tkn.text == "IR_GUARD_ELEMENT_INDEX":
             container, subscript, index, mode = names
             kind = stack.element_guards.get(("TYPE", owner))
@@ -3979,7 +3987,7 @@ class IREmitter(Emitter):
                     index in {var.name for var in self.current_value_locals(storage)}):
                 raise analysis_error("checked element index shadows a live identity", tkn)
             prefix = "PyList" if kind == "LIST" else "PyTuple"
-            size = f"{prefix}_GET_SIZE(PyValue_AsKnownObjectBorrow({container}))"
+            size = f"{prefix}_GET_SIZE(_PyValue_AsKnownObjectBorrowPointer({container}))"
             self.emit(f"Py_ssize_t {index} = PyValue_InlineInt64({subscript});\n")
             if kind == "LIST":
                 self.emit(f"if ({index} < 0) {{ {index} += {size}; }}\n")
@@ -3996,7 +4004,7 @@ class IREmitter(Emitter):
                     capability[3] != id(self.native_scopes[-1])):
                 raise analysis_error("element read lacks its current lexical bounds/anchor", tkn)
             prefix = "PyList" if kind == "LIST" else "PyTuple"
-            self.emit(f"PyValue_XDUP({prefix}_GET_VALUE(PyValue_AsKnownObjectBorrow({container}), {index}))")
+            self.emit(f"PyValue_DUP({prefix}_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer({container}), {index}))")
             self.element_result = HELPERS[tkn.text]
         return True
 
@@ -4362,6 +4370,19 @@ class IREmitter(Emitter):
         var = find_local(name.text, storage)
         return (var is not None and var.known_object) or name.text == self.killed_pointer
 
+    def taken_view(self, name: str, field: str, storage: Storage) -> str:
+        """The IR_TAKEN of the view name of the input in field, with a count
+        of its own for a local.  A required input is not NULL, and a view that
+        a guard has shown to be in pointer space needs fewer tests still."""
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        macro = "IR_TAKEN"
+        if stack.read_fields.get(FIELDS.index(field)) is False:
+            var = find_local(name, storage)
+            pointer = (var is not None and var.known_object) or name == self.killed_pointer
+            macro = "IR_TAKEN_POINTER" if pointer else "IR_TAKEN_REQUIRED"
+        return f"{macro}({name}, {owner_name(field)})"
+
     def value_pointer_variant(self, tkn, tkn_iter, uop, storage, inst):
         lparen = next(tkn_iter)
         assert lparen.kind == "LPAREN"
@@ -4421,7 +4442,7 @@ class IREmitter(Emitter):
             # The object, with a count of its own for a local
             self.spend_owner(field, tkn, storage)
             self.ensure_consumed(field, storage)
-            owned = f"IR_TAKEN({name.text}, {owner_name(field)})"
+            owned = self.taken_view(name.text, field, storage)
             storage.stack.taken(storage.stack.field_position(field))
         steal = (POINTER_VARIANTS[tkn.text] if self.is_pointer(name, storage)
                  else tkn.text)
@@ -4457,7 +4478,7 @@ class IREmitter(Emitter):
             text = name.text
         elif tkn.text == "TAKE":
             self.ensure_consumed(field, storage)
-            text = f"IR_TAKEN({name.text}, {owner_name(field)})"
+            text = self.taken_view(name.text, field, storage)
             storage.stack.taken(storage.stack.field_position(field))
         else:
             self.ensure_consumed(field, storage)
@@ -5617,7 +5638,11 @@ class IREmitter(Emitter):
             # value, which is cheaper (see _PyValue_TopBitsAt())
             ref = var.name
             at = ""
-            if var.memory_offset is not None and var.ir_inplace is None:
+            if var.ir_inplace is not None:
+                # A view of an input in place: the slot still holds its value
+                ref = f"&IR_SLOT({FIELD_VARS[var.ir_inplace]})"
+                at = "At"
+            elif var.memory_offset is not None:
                 ref = f"&{storage.stack.address(var.memory_offset)}"
                 at = "At"
             if guard:

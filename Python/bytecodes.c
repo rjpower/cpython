@@ -1340,7 +1340,7 @@ dummy_func(
 
         outlined macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + POP_TOP;
 
-        outlined inst(CALL_INTRINSIC_2, (value2_st, value1_st -- res)) {
+        outlined inst(CALL_INTRINSIC_2, (value2_st:nullable, value1_st -- res)) {
             assert(oparg <= MAX_INTRINSIC_2);
             // Taken before the calls, which can run code
             PyValue held2 = TAKE(value2_st);
@@ -2871,7 +2871,7 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
             assert(!PyValue_IsNull(found));
-            attr = PyValue_XDUP(found);
+            attr = PyValue_DUP(found);
             DECREF_INPUTS();
         }
 
@@ -3035,7 +3035,7 @@ dummy_func(
             *value_ptr = TAKE(value);
             STAT_INC(STORE_ATTR, hit);
             PyValue_XCLOSE(owner);
-            PyValue_XCLOSE(old_value);
+            PyValue_CLOSE(old_value);
         }
 
         macro(STORE_ATTR_SHAPE) =
@@ -4152,7 +4152,7 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
             assert(!PyValue_IsNull(found));
-            attr = PyValue_XDUP(found);
+            attr = PyValue_DUP(found);
             DECREF_INPUTS();
         }
 
@@ -4169,7 +4169,7 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
             assert(!PyValue_IsNull(found));
-            attr = PyValue_XDUP(found);
+            attr = PyValue_DUP(found);
             DECREF_INPUTS();
         }
 

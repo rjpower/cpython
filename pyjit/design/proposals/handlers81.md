@@ -498,6 +498,28 @@ and some real work. Examples: `LOAD_GLOBAL_MODULE`'s builtins guard,
 helper. Heavy handlers (generators, generic calls) must follow rule 4 for
 the result to hold. That is what H4's stop checks test (§6).
 
+**Measured at H4 (2026-11-19).** The first full conversion
+(`pyjit/handlers81-h4`, `138703c158e`) was correct but failed the shape and
+kernel checks (kernels +7 to +11% against H3). The diagnosis
+(`E59/handlers81/h4-diag/`) found three causes, none visible in the probe:
+
+- *Zero profile.* Unless the evaluator is entered through a computed goto,
+  GCC's guessed profile gives every handler label count 0, and every handler
+  is optimized for size: the value primitives stay out of line.
+- *Allocator cliff.* GCC 15.2 switches IRA to a one-region allocation with no
+  conflict graph (`lra_simple_p`) when used pseudos × basic blocks reaches
+  2^26. The state then lives in memory in every handler. With the profile
+  fixed the evaluator measured 83M; upstream's measures 13M (about 12 blocks
+  per handler against our 25). The boundary was observed between 68M and 71M.
+- *Six values across dispatch* for five callee-saved registers: `slots` and
+  a `next_instr + 8` that RTL PRE hoists into every dispatch block.
+
+A runnable model with a computed-goto entry, no `slots` state, no hoist and 50
+unexecuted handlers outlined cleared all six checks (hot fast path −6.4%,
+kernels −0.6 to −3.9% against H3) at 65.6M. So the evaluator's size is a
+design constraint: rules 4, 12 and 13 keep it under the cliff with margin
+(target 50M), and the shape tool checks the allocator mode at every step.
+
 ### Decision
 
 **Computed goto, one function, GCC.** Detail:

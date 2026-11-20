@@ -1867,9 +1867,9 @@ class SizeofTest(unittest.TestCase):
             return sys._getframe()
         x = func()
         if support.Py_GIL_DISABLED:
-            INTERPRETER_FRAME = '13Pi2HccP'
+            INTERPRETER_FRAME = '12Pi2HccP'
         else:
-            INTERPRETER_FRAME = '13P2HccP'
+            INTERPRETER_FRAME = '12P2HccP'
         # The last 'P' is the hidden discard slot that every code object has.
         check(x, size('3P5i2Q2c4P' + INTERPRETER_FRAME + 'PP'))
         # function

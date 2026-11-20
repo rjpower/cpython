@@ -58,6 +58,9 @@ typedef struct _stack_chunk {
     struct _stack_chunk *previous;
     size_t size;
     size_t top;
+    /* The top of the value stack before the first frame of this chunk was
+     * pushed, which popping that frame restores. */
+    PyObject **value_top;
     /* Cells below this frontier have defined values; inactive cells are NULL.
      * A frame header write truncates it before reusing that storage. */
     PyObject **initialized;

@@ -6347,20 +6347,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 int has_self = (call_state & CALL_SELF_PRESENT) != 0;
                 STAT_INC(CALL, hit);
                 PyValue *window_base = args - 2;
-                PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
-                PyCodeObject *code = (PyCodeObject *)func->func_code;
-                _PyInterpreterFrame *pushed_frame;
-                if (frame->owner == FRAME_OWNED_BY_THREAD) {
-                    PyValue *base = args - has_self;
-                    pushed_frame = _PyFrame_ReserveForCall(
-                        tstate, code, base, oparg + has_self, frame);
-                    _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
-                                    code, base, frame);
-                }
-                else {
-                    pushed_frame = call_push_moved_exact_args(
-                        tstate, frame, callable, code, window_base, oparg, has_self);
-                }
+                _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(
+                    tstate, callable, frame);
+                _PyFrame_MoveArgs(pushed_frame, args - has_self, oparg + has_self);
                 window_base[0] = PyValue_NULL;
                 new_frame = PyValue_Wrap(pushed_frame);
             }
@@ -8475,20 +8464,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 int has_self = (call_state & CALL_SELF_PRESENT) != 0;
                 STAT_INC(CALL, hit);
                 PyValue *window_base = args - 2;
-                PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
-                PyCodeObject *code = (PyCodeObject *)func->func_code;
-                _PyInterpreterFrame *pushed_frame;
-                if (frame->owner == FRAME_OWNED_BY_THREAD) {
-                    PyValue *base = args - has_self;
-                    pushed_frame = _PyFrame_ReserveForCall(
-                        tstate, code, base, oparg + has_self, frame);
-                    _PyFrame_Initialize(tstate, pushed_frame, callable, NULL,
-                                    code, base, frame);
-                }
-                else {
-                    pushed_frame = call_push_moved_exact_args(
-                        tstate, frame, callable, code, window_base, oparg, has_self);
-                }
+                _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(
+                    tstate, callable, frame);
+                _PyFrame_MoveArgs(pushed_frame, args - has_self, oparg + has_self);
                 window_base[0] = PyValue_NULL;
                 new_frame = PyValue_Wrap(pushed_frame);
             }

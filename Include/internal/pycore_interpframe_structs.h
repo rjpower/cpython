@@ -37,9 +37,6 @@ struct _PyInterpreterFrame {
      * thread's value stack; a generator and a frame object keep them in
      * owned_slots. */
     PyValue *base;
-    /* For a frame on the frame stack, the top of the value stack before it
-     * was pushed, which popping it restores */
-    PyValue *saved_top;
     /* Strong reference, NULL for interpreter entry and trampoline frames. */
     PyFunctionObject *f_funcobj;
     PyObject *f_globals; /* Borrowed reference. Only valid if not on C stack */
@@ -76,7 +73,7 @@ struct _PyInterpreterFrame {
 };
 
 #if SIZEOF_VOID_P == 8 && !defined(Py_GIL_DISABLED)
-static_assert(offsetof(_PyInterpreterFrame, owned_slots) == 112,
+static_assert(offsetof(_PyInterpreterFrame, owned_slots) == 104,
               "the frame header must keep its fixed size");
 #endif
 

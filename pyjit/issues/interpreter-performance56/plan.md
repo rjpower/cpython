@@ -18,9 +18,9 @@ Branch `pyjit/handlers81` from checkpoint78 `99a04733128`; builds
 | H0 | Shape tool `Tools/pyjit/handler_shape.py`; checkpoint78 baseline | done, `ea164548495`; handler bodies are 55–69% of kernel instructions |
 | H1a | Canonical by construction; no publication at stores | done, `ef2efa83c95`..`3f6cb5e89aa`; kernels −1.8 to −4.9% alone |
 | H1b | No `phase_state` in handlers; GC scans all slots | done; the field and all lifecycle bits are deleted; kernels −1.6 to −2.4% alone |
-| H2 | Ownership rules 3, 5–7; `IR_F_DIES_*`; discard slot; upstream frame clear; transition roots deleted | done, `81a2cea8cc2`. H2f: retirement overhead 166 → 3 instructions per call. H2 core: every handler emits effect, detach, store, release; a hidden `.discard` local replaces `IR_NO_DST` (magic 64429); the release protocol is deleted. Kernels −6.6 to −14.6% against checkpoint78; hot-set fast path 1,776 → 1,670; ownership harness unchanged |
-| H3 | Bridge records and canaries out of handlers | started on sibling `pyjit/handlers81-h3`; 45 handlers had canaries at the H1 merge; also removes H2's dead markers if time allows |
-| H4 | One computed-goto evaluator; tail-call backend deleted | |
+| H2 | Ownership rules 3, 5–7; `IR_F_DIES_*`; discard slot; upstream frame clear; transition roots deleted | done, `81a2cea8cc2`. H2f: retirement overhead 166 → 3 instructions per call. H2 core: every handler emits effect, detach, store, release; a hidden `.discard` local replaces `IR_NO_DST` (magic 64429); the release protocol is deleted. Kernels −6.6 to −14.6% against checkpoint78; hot-set fast path 1,776 → 1,670; ownership harness unchanged. The full suite found 164/166 failures that the ladder missed (C-built code objects without the discard slot, `test_dis` registers, magic number, order pins, discard-slot liveness in five stdlib tests); fixed by six commits after `81a2cea8cc2` |
+| H3 | Bridge records and canaries out of handlers | in progress on sibling `pyjit/handlers81-h3`: the value record and handler boxing are deleted, 0 of 326 handlers have a canary (46 at its base); ladders running |
+| H4 | One computed-goto evaluator; tail-call backend deleted | started 2026-11-19 on sibling `pyjit/handlers81-h4` from H3's `c746f83a4ca`, in parallel with H3's ladders; brief `E59/handlers81/brief-h4.md`; root merges H3's remaining commits and the H2 fixes |
 | H5 | Calls80 steps 1, 2a–2c, 3 written in the new shape | |
 | Report | Kernel instructions, PMU, timed geomean against checkpoint78, golden73 and upstream | |
 

@@ -408,6 +408,33 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 extern void _PyFrame_FillConstSlots(_PyInterpreterFrame *frame,
                                     PyCodeObject *code);
 
+/* Copy the image of the constant slots (CO_FAST_CONST) of an exec to dst, the
+ * first of them in a new frame: n of them, 1 <= n <= IR_CONST_IMAGE_MAX, two
+ * slots at a time.
+ * The image holds inline scalars and immortals, which own no count, and has
+ * an even number of entries: for an odd n the last pair also writes the
+ * slot after the last constant, the discard slot, which is NULL in a new
+ * frame, from the NULL that pads the image.  Each test takes the next pair
+ * only when there are constants for it: no loop and no call.  The exit needs
+ * no counterpart: it closes the constant slots with the other locals, and
+ * closing an inline or immortal value is a no-op. */
+static inline void
+_PyFrame_CopyConstSlots(PyValue *dst, const PyValue *src, int n)
+{
+    static_assert(IR_CONST_IMAGE_MAX == 8, "the copy has four pairs");
+    assert(1 <= n && n <= IR_CONST_IMAGE_MAX);
+    memcpy(dst, src, 2 * sizeof(PyValue));
+    if (n > 2) {
+        memcpy(dst + 2, src + 2, 2 * sizeof(PyValue));
+        if (n > 4) {
+            memcpy(dst + 4, src + 4, 2 * sizeof(PyValue));
+            if (n > 6) {
+                memcpy(dst + 6, src + 6, 2 * sizeof(PyValue));
+            }
+        }
+    }
+}
+
 /* Consumes func and locals. The caller supplies initialized value storage. */
 static inline Py_ALWAYS_INLINE void
 _PyFrame_Initialize(
@@ -436,15 +463,13 @@ _PyFrame_Initialize(
     frame->lltrace = 0;
 #endif
 
-    // The constant slots (CO_FAST_CONST), owners of inline scalars and
-    // immortals, which own no count: copy the ready image of their values.
-    // A mortal constant, as after code.replace(co_consts=...), gets a count.
+    // The constant slots (CO_FAST_CONST), which are NULL: copy the ready
+    // image of their values if they own no count.  A mortal constant, as
+    // after code.replace(co_consts=...), gets a count.
     if (exec->nconst) {
         if (exec->const_image != NULL) {
-            PyValue *slots = base + exec->const_first;
-            for (int i = 0; i < exec->nconst; i++) {
-                slots[i] = exec->const_image[i];
-            }
+            _PyFrame_CopyConstSlots(base + exec->const_first, exec->const_image,
+                                    exec->nconst);
         }
         else {
             _PyFrame_FillConstSlots(frame, code);

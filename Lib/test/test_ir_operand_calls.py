@@ -349,6 +349,131 @@ class ConstantSlotOperandTests(unittest.TestCase):
         self.assertEqual(f.__code__.co_varnames, names)
 
 
+class ConstantSlotFrameTests(unittest.TestCase):
+    """The constant slots of a frame are filled at the push and closed at
+    the exit like any local: no later frame of another code object finds a
+    constant in what it takes for an unbound local, and no frame shows
+    them."""
+
+    def test_exit_leaves_no_constant_for_the_next_frame(self):
+        def with_constants(g):
+            return g(10, 11, 12, 13, 14, 15, 16)
+
+        def probe():
+            # Takes the stack space that the constant slots held.  An
+            # unbound local must stay unbound.
+            try:
+                a = b = c = d = e = f = h = i = 0
+                del a, b, c, d, e, f, h, i
+                return a
+            except UnboundLocalError:
+                return "unbound"
+
+        for _ in range(WARM):
+            with_constants(lambda *a: a)
+            self.assertEqual(probe(), "unbound")
+
+        def reads_unbound(flag):
+            if flag:
+                x = 1
+            return x
+
+        for _ in range(WARM):
+            with_constants(lambda *a: a)
+            with self.assertRaises(UnboundLocalError):
+                reads_unbound(False)
+
+    def test_every_count_of_constant_slots(self):
+        # The fill moves the slots two at a time: an odd count reaches the
+        # discard slot after the last constant
+        for count in range(1, 9):
+            args = ", ".join(str(100 + i) for i in range(count))
+            namespace = {}
+            exec(f"def f(g, flag):\n"
+                 f"    if flag:\n"
+                 f"        x = 1\n"
+                 f"    y = g({args})\n"
+                 f"    return y, x\n", namespace)
+            f = namespace["f"]
+            self.assertEqual(
+                len(ConstantSlotOperandTests.const_slots(f.__code__)), count)
+            expected = tuple(range(100, 100 + count))
+            for _ in range(WARM):
+                self.assertEqual(f(lambda *a: a, True), (expected, 1), count)
+                with self.assertRaises(UnboundLocalError):
+                    f(lambda *a: a, False)
+
+    def test_generator_and_coroutine_keep_their_constants(self):
+        def gen(g):
+            yield g(1, 2, 3)
+            yield g(4, 5, 6)
+            yield g(1, 2, 3)
+
+        async def coro(g):
+            return g(7, 8, 9) + g(1, 2, 3)
+
+        for _ in range(WARM):
+            it = gen(lambda *a: a)
+            self.assertEqual(list(it), [(1, 2, 3), (4, 5, 6), (1, 2, 3)])
+            # Closed before it finishes: the exit of the generator frame
+            it = gen(lambda *a: a)
+            next(it)
+            it.close()
+            # Never started
+            gen(lambda *a: a).close()
+            c = coro(lambda *a: a)
+            try:
+                c.send(None)
+            except StopIteration as stop:
+                self.assertEqual(stop.value, (7, 8, 9, 1, 2, 3))
+            coro(lambda *a: a).close()
+
+    def test_frame_outlives_the_call(self):
+        def f(g):
+            x = g(1, 2, 3)
+            raise ValueError(x)
+
+        for _ in range(WARM):
+            try:
+                f(lambda *a: a)
+            except ValueError as exc:
+                frame = exc.__traceback__.tb_next.tb_frame
+                self.assertEqual(frame.f_locals["x"], (1, 2, 3))
+                self.assertEqual(sorted(frame.f_locals),
+                                 sorted(f.__code__.co_varnames))
+                del exc, frame
+
+    def test_f_locals_of_a_live_frame(self):
+        def f(g):
+            x = g(1, None)
+            return sys._getframe().f_locals, x
+
+        for _ in range(WARM):
+            local, x = f(lambda *a: a)
+            self.assertEqual(sorted(local), ["g", "x"])
+            self.assertEqual(x, (1, None))
+
+    def test_frame_of_a_mortal_constant_in_a_generator(self):
+        def gen(g):
+            yield g(1, 2)
+
+        raw = gen.__code__.co_constslots
+        table = struct.unpack("%dI" % (len(raw) // 4), raw)
+        big = 10 ** 30
+        consts = list(gen.__code__.co_consts)
+        consts[table[1]] = big
+        replaced = types.FunctionType(
+            gen.__code__.replace(co_consts=tuple(consts)), {})
+        for _ in range(WARM):
+            list(replaced(lambda *a: a))
+            replaced(lambda *a: a).close()
+        before = sys.getrefcount(big)
+        for _ in range(WARM):
+            list(replaced(lambda *a: a))
+            replaced(lambda *a: a).close()
+        self.assertEqual(sys.getrefcount(big), before)
+
+
 class EvaluationOrderTests(unittest.TestCase):
     def test_call_sees_the_old_local(self):
         seen = []

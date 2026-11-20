@@ -825,15 +825,18 @@ make_exec(PyCodeObject *co)
         ? sizeof(_PyFbBlock) + ((size_t)_PyCode_FbUnits(co) << IR_FB_UNIT_SHIFT)
         : 0;
     // The image of the constant slots follows the feedback, if every
-    // constant is immortal or inline
+    // constant is immortal or inline and there are at most
+    // IR_CONST_IMAGE_MAX of them
     int nconst = co->co_nconstslots;
     const uint32_t *table = _PyCode_CONSTSLOTS(co);
-    int image = nconst > 0;
+    int image = 0 < nconst && nconst <= IR_CONST_IMAGE_MAX;
     for (int j = 0; j < nconst; j++) {
         image &= const_needs_no_count(
             PyTuple_GET_VALUE(co->co_consts, table[2 * j + 1]));
     }
-    size_t image_size = image ? (size_t)nconst * sizeof(PyValue) : 0;
+    // The image has an even number of entries: the fill copies two at a
+    // time, and the entry after an odd count is NULL
+    size_t image_size = image ? (size_t)(nconst + (nconst & 1)) * sizeof(PyValue) : 0;
     // Feedback entries hold borrowed pointers only.
     _PyCodeExec *exec = _PyMem_NoScanMalloc(
         sizeof(_PyCodeExec) + words_size + fb_size + image_size);
@@ -856,6 +859,9 @@ make_exec(PyCodeObject *co)
         for (int j = 0; j < nconst; j++) {
             values[j] = PyValue_XDUP(
                 PyTuple_GET_VALUE(co->co_consts, table[2 * j + 1]));
+        }
+        if (nconst & 1) {
+            values[nconst] = PyValue_NULL;
         }
         exec->const_image = values;
     }
@@ -969,7 +975,7 @@ _PyCode_ExecSizeOf(PyCodeObject *co)
     }
     size_t res = sizeof(_PyCodeExec) + exec->nwords * sizeof(_PyIRWord);
     if (exec->const_image != NULL) {
-        res += (size_t)exec->nconst * sizeof(PyValue);
+        res += (size_t)(exec->nconst + (exec->nconst & 1)) * sizeof(PyValue);
     }
     if (exec->semantic_plan != NULL &&
         exec->semantic_plan->nsites != 0) {

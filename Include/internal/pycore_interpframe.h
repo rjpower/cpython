@@ -411,8 +411,8 @@ extern void _PyFrame_FillConstSlots(_PyInterpreterFrame *frame,
 /* The constant slots (CO_FAST_CONST) of a frame of exec, nconst from here.
  * If exec has an image of them (const_image) they hold inline scalars and
  * immortals and own no count: the push copies the image over them and the
- * exit only NULLs them, each in a few vector moves, as there are at most
- * eight (CONST_SLOTS_MAX).  With a mortal constant (no image) they own
+ * exit only NULLs them, two slots at a time, as there are at most eight
+ * (CONST_SLOTS_MAX).  With a mortal constant (no image) they own
  * counts: _PyFrame_FillConstSlots() takes them, and the exit releases them
  * like any local. */
 static inline PyValue *
@@ -425,8 +425,7 @@ _PyFrame_ConstSlots(const _PyCodeExec *exec, PyValue *base)
  * a time, so that an odd n also writes the slot after the last constant.
  * That slot is the discard slot, which holds NULL at the push, and the image
  * has a NULL for it.  Each test takes the next two slots only when there
- * are constants for them: no loop, no call, and two instructions per slot
- * after the first pair plus two per test. */
+ * are constants for them: no loop and no call. */
 static inline void
 _PyFrame_CopyConstSlots(PyValue *dst, const PyValue *src, int n)
 {

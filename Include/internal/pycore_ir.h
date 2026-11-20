@@ -634,12 +634,13 @@ typedef struct _PyCodeExec {
     const _PyIRCodePlan *semantic_plan;
     _PyFbBlock *feedback;   // the header before entries, or NULL
     /* The constant slots (CO_FAST_CONST), which are consecutive: nconst of
-     * them from const_first.  const_image holds the PyValue of each, padded
-     * with a NULL to an even count, to be copied into the slots of a new
-     * frame (the slot after the last constant is the discard slot, which is
-     * NULL at the push and at the exit when the copy reaches it), or is NULL if some constant is
+     * them from const_first.  const_image holds the PyValue of each, to be
+     * copied into the slots of a new frame, or is NULL if some constant is
      * mortal (as after code.replace(co_consts=...)): a frame then counts
-     * the constants it holds (_PyFrame_FillConstSlots()). */
+     * the constants it holds (_PyFrame_FillConstSlots()).  The image is
+     * padded with a NULL to an even count, because the copy takes two slots
+     * at a time: an odd count writes the slot after the last constant, the
+     * discard slot, which is NULL at the push. */
     const PyValue *const_image;
     uint32_t nwords;
     uint16_t const_first;

@@ -39,10 +39,10 @@ class NativeOnlyTests(unittest.TestCase):
         fmt = ir_generator.compute_formats(analysis)[inst.name]
         self.assertTrue(ir_generator.native_entry_input_contract(inst))
         self.assertIn("_PyIR_NATIVE_ONLY",
-            ir_generator.handler_effects(inst.name, inst, fmt, False))
+            ir_generator.handler_effects(inst.name, inst, fmt))
         with mock.patch.object(ir_generator, "native_entry_input_contract", return_value=False):
             self.assertNotIn("_PyIR_NATIVE_ONLY",
-                ir_generator.handler_effects(inst.name, inst, fmt, False))
+                ir_generator.handler_effects(inst.name, inst, fmt))
         ids = {**opcode.opmap, **opcode._ir_opmap}
         self.assertTrue(_opcode.get_ir_contract()[ids[inst.name]].effects & _opcode.IR_NATIVE_ONLY)
 

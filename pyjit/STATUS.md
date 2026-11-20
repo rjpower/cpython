@@ -65,8 +65,8 @@ What these rounds established:
   dispatch), deletes those protocols, and compiles the handlers into one
   computed-goto function. A compile probe of 336 labels kept a 40-byte frame,
   no canary and one dispatch jump per site. Estimated −8 to −17% of
-  upstream's instructions per kernel before calls80. **In progress**
-  (approved 2026-11-19, no performance gate): H0–H4 have landed on
+  upstream's instructions per kernel before calls80. **Landed**
+  (approved 2026-11-19, no performance gate): H0–H4 on
   `pyjit/handlers81`, and calls80 as H5 (`d6d1ed5ac93`). Kernels run
   7.9–10.4% fewer instructions than checkpoint78; against upstream,
   richards runs 0.4% fewer, raytrace 4.5% more, and deltablue, coroutines
@@ -77,8 +77,19 @@ What these rounds established:
   checkpoint78's time, 0.944 of golden73's and 1.065 of upstream's
   (checkpoint78: 1.112). logging_silent is 31% slower than checkpoint78,
   from H4's front-end stalls ([record](issues/register-semantics59/handlers81.md)). The
-  [active plan](issues/interpreter-performance56/plan.md#current-rollout-handlers81-then-calls80)
-  tracks the steps.
+  [plan](issues/interpreter-performance56/plan.md#previous-rollout-handlers81-then-calls80-landed)
+  lists the steps.
+- **Gap82** ([record](issues/register-semantics59/gap82.md), approved
+  2026-11-20): H5's remaining gap to upstream sits mostly outside the
+  evaluator. Twelve library-heavy cases (xml_etree, json, pickle, deepcopy,
+  logging_format and logging_simple) hold more log-excess than the whole
+  geomean gap; generators and iteration hold about half as much. **In
+  progress:**
+  - phase 1: two analysis units (the evaluator and the library-heavy cases
+    against upstream) and three implementation units (H6 layout, constant
+    slots with no fixed cost, and deleting the call transaction);
+  - phase 2: implementation briefed from the analyses;
+  - full suites and timed all-29 campaigns at two integration points.
 - **A complete value-slot table**, kept in step with every object-slot write,
   was implemented and reverted: it falls out of step in four ways, two of
   them crashes, and saved no instructions. A value field is now an optional

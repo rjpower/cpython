@@ -8,7 +8,7 @@ builds `BASE/handlers81-{release,debug}`. Evidence and agent logs are in
 The rollout follows the [handlers81 proposal](../../design/proposals/handlers81.md)
 and then [operand-encoded calls](../../design/proposals/operand-calls80.md).
 The user approved both with no performance gate. The
-[plan](../interpreter-performance56/plan.md#current-rollout-handlers81-then-calls80)
+[plan](../interpreter-performance56/plan.md#previous-rollout-handlers81-then-calls80-landed)
 has one row per step.
 
 ## Contents

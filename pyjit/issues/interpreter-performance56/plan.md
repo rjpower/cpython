@@ -1,6 +1,29 @@
 # Interpreter performance: combined plan
 
-## Current rollout: handlers81, then calls80
+## Current wave: gap82, the gap to upstream after H5
+
+Approved 2026-11-20. After H5, the user asked to pursue every area of the
+post-H5 analysis, with analysis and implementation fanned out to agents and
+root integrating, benchmarking and reporting. The
+[gap82 record](../register-semantics59/gap82.md) holds the units, their
+state and, later, the results. Base: `pyjit/handlers81` at `d6d1ed5ac93`;
+integration branch `pyjit/gap82`; evidence `E59/gap82/`.
+
+- **Phase 1:**
+  - analysis: A1 for the evaluator against upstream, A2 for the
+    library-heavy cases;
+  - implementation: H6 (layout), CS (constant slots with no fixed cost) and
+    TX (delete the call transaction).
+- **Integration point 1:** merge, full suites, timed all-29 against H5.
+- **Phase 2:** G (generators and iteration) and K (attribute and call
+  handler costs), both briefed from A1, and N (library side), briefed from
+  A2.
+- **Integration point 2:** full suites, timed all-29 against H5, golden73,
+  upstream and checkpoint78, then the report.
+
+Gates are correctness. H6 alone must pay for itself in time.
+
+## Previous rollout: handlers81, then calls80 (landed)
 
 Approved 2026-11-19. The user asked to land
 [handlers81](../../design/proposals/handlers81.md) and then

@@ -1635,27 +1635,38 @@ call_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return result;
 }
 
-/* Release the callable operand of a call, a temporary that the call owns. */
-static inline void
-call_release_callable(_PyInterpreterFrame *frame, _PyIRWord word)
+/* Move or count the first count (at most four) operands of fields, the twelve
+ * bit slot fields of an operand word, and locals, its local bits, into dest:
+ * a local is counted, a temporary moves out of its home. */
+static inline Py_ALWAYS_INLINE void
+call_take_fields(PyValue *slots, uint64_t fields, unsigned int locals,
+                 int count, PyValue *dest)
 {
-    if (!(word & IR_F_LOCAL_B)) {
-        PyValue *home = &_PyFrame_Slots(frame)[IR_B(word)];
-        PyValue owner = *home;
-        *home = PyValue_NULL;
-        PyValue_XCLOSE(owner);
+#define CALL_TAKE(K) \
+    if (count > (K)) { \
+        PyValue *home = &slots[(fields >> (12 * (K))) & IR_FIELD_MAX]; \
+        PyValue value = *home; \
+        if (locals & (1u << (K))) { \
+            value = PyValue_DUP(value); \
+        } \
+        else { \
+            *home = PyValue_NULL; \
+        } \
+        dest[K] = value; \
     }
+    CALL_TAKE(0)
+    CALL_TAKE(1)
+    CALL_TAKE(2)
+    CALL_TAKE(3)
+#undef CALL_TAKE
 }
 
-/* The arguments of a call with more than four operands, which the operand
- * words after the first hold: arguments[0..] takes the operands from skip
- * on; a local is counted, a temporary moves. */
+/* The same for any count, across the operand words after head. */
 static Py_NO_INLINE void
-call_fill_more(PyValue *slots, const _PyIRWord *head, int skip,
-               PyValue *arguments)
+call_take_loop(PyValue *slots, const _PyIRWord *head, int first, int count,
+               PyValue *dest)
 {
-    int n = (int)IR_C(*head);
-    for (int k = skip; k < n; k++) {
+    for (int k = first; k < first + count; k++) {
         _PyIRWord ops = head[1 + k / IR_OPERANDS_PER_WORD];
         int s = k % IR_OPERANDS_PER_WORD;
         PyValue *home = &slots[(ops >> (16 + 12 * s)) & IR_FIELD_MAX];
@@ -1666,7 +1677,32 @@ call_fill_more(PyValue *slots, const _PyIRWord *head, int skip,
         else {
             *home = PyValue_NULL;
         }
-        *arguments++ = value;
+        *dest++ = value;
+    }
+}
+
+static inline Py_ALWAYS_INLINE void
+call_take_operands(PyValue *slots, const _PyIRWord *head, int first, int count,
+                   PyValue *dest)
+{
+    if (!Py_UNLIKELY(first + count > IR_OPERANDS_PER_WORD)) {
+        _PyIRWord ops = head[1];
+        call_take_fields(slots, ops >> (16 + 12 * first),
+                         (unsigned int)(ops >> (9 + first)), count, dest);
+        return;
+    }
+    call_take_loop(slots, head, first, count, dest);
+}
+
+/* Release the callable operand of a call, a temporary that the call owns. */
+static inline void
+call_release_callable(_PyInterpreterFrame *frame, _PyIRWord word)
+{
+    if (!(word & IR_F_LOCAL_B)) {
+        PyValue *home = &_PyFrame_Slots(frame)[IR_B(word)];
+        PyValue owner = *home;
+        *home = PyValue_NULL;
+        PyValue_XCLOSE(owner);
     }
 }
 
@@ -1711,11 +1747,11 @@ call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
     int skip = (word & IR_F_NO_SELF) == 0 &&
         (expanded || !(call_state & CALL_SELF_PRESENT));
     if (Py_UNLIKELY(n > IR_OPERANDS_PER_WORD)) {
-        call_fill_more(slots, head, skip, arguments);
+        call_take_loop(slots, head, skip, n - skip, arguments);
     }
     else {
-        // All the operands are in the first operand word: a local is
-        // counted, a temporary moves
+        // All the operands are in the first operand word; a skipped self
+        // slot is its first field
         _PyIRWord ops = head[1];
         uint64_t fields = ops >> 16;
         unsigned int locals = (unsigned int)(ops >> 9) & 15;
@@ -1724,23 +1760,7 @@ call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
             locals >>= 1;
             n--;
         }
-#define CALL_FILL(K) \
-        if (n > (K)) { \
-            PyValue *home = &slots[(fields >> (12 * (K))) & IR_FIELD_MAX]; \
-            PyValue value = *home; \
-            if (locals & (1u << (K))) { \
-                value = PyValue_DUP(value); \
-            } \
-            else { \
-                *home = PyValue_NULL; \
-            } \
-            arguments[K] = value; \
-        }
-        CALL_FILL(0)
-        CALL_FILL(1)
-        CALL_FILL(2)
-        CALL_FILL(3)
-#undef CALL_FILL
+        call_take_fields(slots, fields, locals, n, arguments);
     }
     if (expanded) {
         call_release_callable(frame, word);
@@ -4128,6 +4148,30 @@ _PyEval_CreateInitFrame(PyThreadState *tstate, _PyInterpreterFrame *caller,
      * self that was NULL at run time, which is not an argument. */
     int first = (word & IR_F_NO_SELF) ? 0 : 1;
     int nargs = (int)IR_C(word) - first;
+    PyFunctionObject *init_func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(init);
+    PyCodeObject *init_code = (PyCodeObject *)init_func->func_code;
+    if ((init_code->co_flags & CO_OPTIMIZED) &&
+        !(init_code->co_flags & (CO_VARARGS | CO_VARKEYWORDS)) &&
+        !init_code->co_kwonlyargcount && init_code->co_argcount == nargs + 1 &&
+        init_code->_co_exec != NULL &&
+        _PyThreadState_HasStackSpace(tstate,
+            init_code->co_framesize + _Py_InitCleanup.co_framesize))
+    {
+        /* The arguments fill the child straight from the operands: the
+         * receiver is its first, a temporary moves and a local is counted. */
+        PyValue *slots = _PyFrame_Slots(caller);
+        _PyInterpreterFrame *shim = _PyFrame_PushTrampolineUnchecked(
+            tstate, (PyCodeObject *)&_Py_InitCleanup, 1, caller);
+        shim->base[0] = PyValue_DUP(self);
+        _PyInterpreterFrame *child = _PyFrame_PushUnchecked(tstate, init, shim);
+        child->base[0] = self;
+        call_take_operands(slots, current, first, nargs, child->base + 1);
+        call_release_callable(caller, word);
+        caller->return_slot = (uint16_t)IR_A(word);
+        caller->return_pc = next;
+        tstate->py_recursion_remaining--;
+        return child;
+    }
     PyValue small[8];
     PyValue *window = small;
     if (nargs + 2 > (int)Py_ARRAY_LENGTH(small)) {
@@ -4726,27 +4770,6 @@ call_transaction_run_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
     }
     return call_transaction_run(tstate, frame, current,
                                 CALL_TRANSACTION_VECTOR, flags);
-}
-
-/* Move or count operands first, first + 1, ... of the call at head into
- * dest: a local is counted, a temporary moves out of its home. */
-static inline Py_ALWAYS_INLINE void
-call_take_operands(PyValue *slots, const _PyIRWord *head, int first, int count,
-                   PyValue *dest)
-{
-    for (int k = first; k < first + count; k++) {
-        _PyIRWord ops = head[1 + k / IR_OPERANDS_PER_WORD];
-        int s = k % IR_OPERANDS_PER_WORD;
-        PyValue *home = &slots[(ops >> (16 + 12 * s)) & IR_FIELD_MAX];
-        PyValue value = *home;
-        if (ops & (IR_F_LOCAL_A << s)) {
-            value = PyValue_DUP(value);
-        }
-        else {
-            *home = PyValue_NULL;
-        }
-        *dest++ = value;
-    }
 }
 
 /* Push the frame of a call to a plain Python function, filling it from the

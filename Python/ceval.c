@@ -3977,7 +3977,7 @@ call_commit(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * parameters, that the binding below handles: it holds their values in
  * arrays. */
 #define CALL_BIND_EXTRAS_MAX 8
-#define CALL_BIND_KWONLY_MAX 8
+#define CALL_BIND_KWONLY_MAX 16
 
 /* Release what the binding below prepared before it pushed anything. */
 static Py_NO_INLINE void
@@ -4026,8 +4026,12 @@ call_bind_kwdefaults(PyFunctionObject *func, PyCodeObject *code,
         if (covered & (1u << j)) {
             continue;
         }
-        PyValue name = _PyTuple_ITEMS(code->co_localsplusnames)[argcount + j];
-        if (_PyDict_GetValue((PyDictObject *)kwdefs, name, &kwdefaults[j]) <= 0) {
+        /* Parameter names are interned, and their hash is cached. */
+        PyObject *name = _PyTuple_GET_OBJECT(code->co_localsplusnames,
+                                             argcount + j);
+        if (PyUnstable_Unicode_GET_CACHED_HASH(name) == -1 ||
+            !_PyDict_GetUnicodeValue((PyDictObject *)kwdefs, name,
+                                     &kwdefaults[j])) {
             for (int i = 0; i < j; i++) {
                 PyValue_XCLOSE(kwdefaults[i]);
             }

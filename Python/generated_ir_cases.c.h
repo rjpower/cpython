@@ -1589,8 +1589,7 @@ ir_run_FOR_ITER(
                 next = item;
             }
             IR_SET_TEMP(window[1], null_or_index);
-            IR_SET_TEMP(window[2], next);
-            IR_MOVE_TO_DST(ir_word, A, window[2]);
+            IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -9141,8 +9140,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             IR_SET_TEMP(window[1], null_or_index);
-            IR_SET_TEMP(window[2], next);
-            IR_MOVE_TO_DST(ir_word, A, window[2]);
+            IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -9215,8 +9213,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            IR_SET_TEMP(window[2], next);
-            IR_MOVE_TO_DST(ir_word, A, window[2]);
+            IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -9278,8 +9275,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             IR_SET_TEMP(window[1], null_or_index);
-            IR_SET_TEMP(window[2], next);
-            IR_MOVE_TO_DST(ir_word, A, window[2]);
+            IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -9334,8 +9330,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 next = next_index.value;
             }
             IR_SET_TEMP(window[1], null_or_index);
-            IR_SET_TEMP(window[2], next);
-            IR_MOVE_TO_DST(ir_word, A, window[2]);
+            IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }

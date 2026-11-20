@@ -2513,6 +2513,10 @@ class SlotLayout:
     native_entry: bool = False  # checked native interpreter-exit homes
     call_kind: str | None = None
     call_results: frozenset[str] = frozenset()  # names of a call's outputs
+    # Window: the slot, above the inputs', whose result goes to a dst that
+    # may name a local, and the dst's macro arguments
+    move_dst: int | None = None
+    move_dst_args: str = ""
 
     @staticmethod
     def empty() -> "SlotLayout":
@@ -2737,6 +2741,8 @@ class IRStack(Stack):
         # The IR_STORE_DST and IR_MOVE_TO_DST lines emitted for the handler,
         # which close ir_old after them.  Copies share the list.
         self.dst_stores: list[str] = []
+        # The result already went to dst (IR_MOVE_RESULT_TO_DST)
+        self.moved_dst = False
         # Must-NULL output facts follow the actual structured storage paths.
         # Distinct normal successors keep distinct facts until the final store.
         self.null_paths: dict[int, set[str]] = {0: set()}
@@ -3155,7 +3161,19 @@ class IRStack(Stack):
             if role is not None:
                 out.emit(f"if (call_state & {role}) {{\n")
             self.own_inplace(out, var)
-            out.emit(f"IR_SET_TEMP({self.window_slot(memory_offset)}, {var.name});\n")
+            slot = self.window_slot(memory_offset)
+            if (self.final and role is None and lay.move_dst is not None
+                    and slot == f"window[{lay.move_dst}]"):
+                # The result goes to the local that dst names, or to its
+                # slot, without the slot's store and reload; the slot is
+                # above the inputs, so it holds nothing to replace
+                expression = (f"IR_MOVE_RESULT_TO_DST({lay.move_dst_args}, "
+                              f"{slot}, {var.name})")
+                self.dst_stores.append(expression)
+                self.moved_dst = True
+                out.emit(f"{expression};\n")
+                return True
+            out.emit(f"IR_SET_TEMP({slot}, {var.name});\n")
             if role is not None:
                 out.emit("}\n")
             return True
@@ -5732,8 +5750,14 @@ def slot_layout(inst: Instruction, fmt: IRFormat, mode: str | None) -> SlotLayou
                      for k in range(fmt.n_inputs)}
         borrowable = frozenset(k - fmt.n_inputs for k in range(fmt.n_inputs)
                                if fmt.borrow_mask & (1 << k))
-        return SlotLayout(True, get_stack_effect(inst).base_offset, in_fields,
-                          borrowable)
+        base = get_stack_effect(inst).base_offset
+        # The inputs are window[0:n] when their number is constant
+        move = (mode == STORE_RESULT and fmt.operands == "_PyIR_OPERANDS_NONE"
+                and not base.positive and not base.negative
+                and fmt.dst_offset >= -base.numeric)
+        return SlotLayout(True, base, in_fields, borrowable,
+                          move_dst=fmt.dst_offset if move else None,
+                          move_dst_args=FIELD_ARGS[fmt.field_of(ROLE_DST)] if move else "")
     in_fields = {k - fmt.n_inputs: fmt.input_field(k)
                  for k in range(fmt.n_inputs) if k not in fmt.metadata_inputs}
     borrowable = frozenset(k - fmt.n_inputs for k in range(fmt.n_inputs)
@@ -6375,6 +6399,8 @@ def emit_final_outputs(inst, fmt, mode, stack: IRStack, out: CWriter) -> int | N
     stack.final = True
     stack.flush(out)
     if mode == STORE_RESULT and fmt.window and fmt.operands == "_PyIR_OPERANDS_NONE":
+        if stack.moved_dst:
+            return fmt.dst_offset
         dst = FIELD_ARGS[fmt.field_of(ROLE_DST)]
         expression = f"IR_MOVE_TO_DST({dst}, window[{fmt.dst_offset}])"
         stack.dst_stores.append(expression)

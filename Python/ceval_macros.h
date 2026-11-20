@@ -700,6 +700,22 @@ _PyIR_Taken(PyValueBorrow view, PyValue *owner)
         } \
     } while (0)
 
+/* IR_MOVE_TO_DST for the result V of a window-style handler, which the
+ * slot SLOT above the inputs' would only pass on: a local gets V directly
+ * and the slot stays empty. */
+#define IR_MOVE_RESULT_TO_DST(W, X, SLOT, V) \
+    do { \
+        if (IR_IS_LOCAL_FIELD(W, X)) { \
+            ir_old = IR_SLOT(IR_FIELD(W, X)); \
+            assert(_PyValue_IsHome(V)); \
+            IR_SLOT(IR_FIELD(W, X)) = (V); \
+            _PyValue_CheckHome(IR_SLOT(IR_FIELD(W, X))); \
+        } \
+        else { \
+            IR_SET_TEMP(SLOT, V); \
+        } \
+    } while (0)
+
 /* The elements of an unpack go to the locals LOCALS[0..N-1], the first of
  * a run: element I goes to LOCALS[N - 1 - I] (the elements are in stack
  * order) and the old value of that local to the window's slot SLOT, if it

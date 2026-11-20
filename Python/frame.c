@@ -267,8 +267,17 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame, int extent)
         f->f_line_next = -1;
         FT_ATOMIC_STORE_PTR_RELAXED(frame->frame_obj, NULL);
         if (!_PyObject_IsUniquelyReferenced((PyObject *)f)) {
+            // The frame object keeps the locals, but nothing reads the
+            // discard slot: release its value, or a traceback would keep a
+            // discarded result (and what it refers to) alive.  The frame
+            // moves into its object first, and the value closes last, as no
+            // finalizer may run before the frame writes are done.
+            PyValue *slot = frame->base + _PyFrame_DiscardSlot(frame);
+            PyValue discarded = *slot;
+            *slot = PyValue_NULL;
             take_ownership(f, frame);
             Py_DECREF(f);
+            PyValue_XCLOSE(discarded);
             return;
         }
         Py_DECREF(f);

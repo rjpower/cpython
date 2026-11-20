@@ -9138,7 +9138,7 @@
             assert(PyValue_IsObject(aiter));
             PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(aiter));
             if (awaitable_o == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                PROCESS_ERROR_AT(RAISE, 1, this_instr);
             }
             awaitable = PyValue_FromObjectSteal(awaitable_o);
             IR_STORE_DST(ir_word, A, awaitable);

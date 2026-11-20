@@ -88,6 +88,8 @@ HELPERS = {
     "TAKE": native_helper((Kind.VALUE,), Kind.VALUE),
     "PyValue_IsNull": native_helper((Kind.VALUE,), Kind.SCALAR),
     "PyValue_IsNone": native_helper((Kind.VALUE,), Kind.SCALAR),
+    "PyValue_IsObject": native_helper((Kind.VALUE,), Kind.SCALAR),
+    "PyValue_IsObjectOrNull": native_helper((Kind.VALUE,), Kind.SCALAR),
     "PyValue_IsInlineInt": native_helper((Kind.VALUE,), Kind.SCALAR),
     "PyValue_IsInlineFloat": native_helper((Kind.VALUE,), Kind.SCALAR),
     "_PyValue_IsTrue": native_helper((Kind.VALUE,), Kind.SCALAR, True, True,

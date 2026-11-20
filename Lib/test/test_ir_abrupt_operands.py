@@ -202,9 +202,9 @@ class AbruptOperandTests(unittest.TestCase):
             missing = next(iter(sources))
             original_flush = ir_generator.IREmitter.operand_error_flush
 
-            def suppress_one(emitter, stack, bridge=None):
+            def suppress_one(emitter, stack):
                 if emitter.abrupt_operand_origin != missing:
-                    original_flush(emitter, stack, bridge)
+                    original_flush(emitter, stack)
 
             with mock.patch.object(ir_generator.IREmitter, "operand_error_flush", suppress_one):
                 self.assertFalse(ir_generator.handler_contracts(multiple, multiple_formats)["GET_ANEXT"].abrupt_operands)

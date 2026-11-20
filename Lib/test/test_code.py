@@ -716,6 +716,7 @@ class CodeTest(unittest.TestCase):
 
     @unittest.skipIf(_testinternalcapi is None, "missing _testinternalcapi")
     def test_local_kinds(self):
+        CO_FAST_CONST = 0x01
         CO_FAST_ARG_POS = 0x02
         CO_FAST_ARG_KW = 0x04
         CO_FAST_ARG_VAR = 0x08
@@ -907,6 +908,9 @@ class CodeTest(unittest.TestCase):
             with self.subTest(func):
                 expected = funcs[func]
                 kinds = _testinternalcapi.get_co_localskinds(func.__code__)
+                # The constant slots and the discard slot are no variables
+                kinds = {name: kind for name, kind in kinds.items()
+                         if kind != CO_FAST_CONST | CO_FAST_HIDDEN}
                 self.assertEqual(kinds, expected)
 
     @unittest.skipIf(_testinternalcapi is None, "missing _testinternalcapi")
@@ -3667,8 +3671,9 @@ class CodeLocationTest(unittest.TestCase):
             co_firstlineno=42,
             co_code=encode_words(
                 ("RESUME", 0),
-                ("LOAD_COMMON_CONSTANT", 0, 0),
-                ("RAISE_VARARGS", 0, 1),
+                # Slot 0 is the discard slot; the temporary is slot 1
+                ("LOAD_COMMON_CONSTANT", 1, 0),
+                ("RAISE_VARARGS", 1, 1),
             ),
             co_linetable=bytes(
                 [

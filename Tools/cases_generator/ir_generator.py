@@ -6269,6 +6269,7 @@ def async_exit_transport(inst: Instruction, fmt: IRFormat) -> bool:
     expected = """{
         JUMPBY(0);
         (void)oparg;
+        assert(PyValue_IsObject(exc_st));
         PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
         assert(exc && PyExceptionInstance_Check(exc));
         int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);

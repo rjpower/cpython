@@ -156,7 +156,7 @@ class ScalarStorageTests(unittest.TestCase):
             return tuple(cp for cp in emitter.error_checkpoint_sites.values() if cp.id)
 
         retained = emitted("GET_ANEXT")
-        self.assertEqual([checkpoint.id for checkpoint in retained], [1, 2])
+        self.assertEqual([checkpoint.id for checkpoint in retained], [1])
         self.assertFalse(any(event.kind == "_PyIR_OWNER_STORAGE_VACATE"
                              for checkpoint in retained for event in checkpoint.actions))
         retired = emitted("UNARY_NOT")

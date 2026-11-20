@@ -15,8 +15,11 @@ with test_tools.imports_under_tool("cases_generator"):
 
 class ScalarResultTests(unittest.TestCase):
     def program(self, body, **kw):
+        # A conversion to an object needs the input asserted to be one
+        assertion = ("assert(PyValue_IsObject(value)); "
+                     if "AsKnownObject" in body else "")
         return test_ir_scalar_storage.ScalarStorageTests().program(
-            "inst(SAMPLE, (value -- out)) { " + body + " }", **kw)
+            "inst(SAMPLE, (value -- out)) { " + assertion + body + " }", **kw)
 
     def test_nullable_native_result_uses_distinct_selected_guard_arms(self):
         contract = self.program("""

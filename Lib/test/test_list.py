@@ -104,6 +104,33 @@ class ListTest(list_tests.CommonTest):
         x[:] = x
         self.assertEqual(x, [])
 
+    def test_slice_assign_source_mutated_by_del(self):
+        # A __del__ run while the old items are released may mutate the
+        # source list; the new items were already copied.
+        class Mutator:
+            def __init__(self, action):
+                self.action = action
+            def __del__(self):
+                self.action()
+
+        src = [1, 2, 3]
+        dst = [Mutator(lambda: (src.clear(), src.append(99))), 5, 6]
+        dst[0:1] = src
+        self.assertEqual(dst, [1, 2, 3, 5, 6])
+        self.assertEqual(src, [99])
+
+        src = [1, 2]
+        dst = [Mutator(src.clear), 5, Mutator(src.clear), 7]
+        dst[::2] = src
+        self.assertEqual(dst, [1, 5, 2, 7])
+        self.assertEqual(src, [])
+
+        src = [1, 2, 3]
+        dst = [Mutator(src.reverse), Mutator(lambda: src.append(4)), 4]
+        dst[0:2] = src
+        self.assertEqual(dst, [1, 2, 3, 4])
+        self.assertEqual(src, [4, 3, 2, 1])
+
     def test_list_resize_overflow(self):
         # gh-97616: test new_allocated * sizeof(PyObject*) overflow
         # check in list_resize()

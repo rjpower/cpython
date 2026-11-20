@@ -800,15 +800,15 @@ list_ass_slice_lock_held(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh, PyO
     if (v == NULL)
         n = 0;
     else {
-        /* A tuple snapshot keeps the items while this list changes. */
+        /* v is not a: list_ass_slice() snapshots that case. Every new item
+           is retained before any recycled one is released, so v is not
+           reachable by user code while its items are read. */
         v_as_SF = _PyValue_SequenceFast(PyValue_FromObjectBorrow(v), "can only assign an iterable");
-        if (v_as_SF != NULL && PyList_CheckExact(v_as_SF)) {
-            Py_SETREF(v_as_SF, PyList_AsTuple(v_as_SF));
-        }
         if(v_as_SF == NULL)
             goto Error;
         n = PySequence_Fast_GET_SIZE(v_as_SF);
-        vitem = _PyTuple_ITEMS(v_as_SF);
+        vitem = PyList_CheckExact(v_as_SF) ? _PyList_ITEMS(v_as_SF)
+                                           : _PyTuple_ITEMS(v_as_SF);
     }
     if (ilow < 0)
         ilow = 0;
@@ -3557,11 +3557,7 @@ allocate_garbage:;
                                         Py_SIZE(value));
         }
         else {
-            /* A tuple snapshot keeps the items while this list changes. */
             seq = _PyValue_SequenceFast(PyValue_FromObjectBorrow(value), "must assign iterable to extended slice");
-            if (seq != NULL && PyList_CheckExact(seq)) {
-                Py_SETREF(seq, PyList_AsTuple(seq));
-            }
         }
         if (!seq)
             return -1;

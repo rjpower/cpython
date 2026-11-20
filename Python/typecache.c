@@ -201,7 +201,9 @@ cache_get_for_lookup(PyTypeObject *type)
 unsigned int
 _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name, PyValueBorrow *out)
 {
-    assert(PyUnicode_CheckExact(name) && PyUnicode_CHECK_INTERNED(name));
+    if (!_Py_TYPECACHE_CACHEABLE_NAME(name)) {
+        return 0;
+    }
     unsigned int version = FT_ATOMIC_LOAD_UINT_RELAXED(type->tp_version_tag);
     if (version == 0) {
         return 0;
@@ -218,6 +220,8 @@ _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name, PyValueBorrow *out)
         if (entry_name == name) {
             // Match before touching a potentially dead borrowed value.
             *out = _PyValueGuarded_Load(cache->hashtable[index].value);
+            OBJECT_STAT_INC_COND(type_cache_hits, !_PyType_IsDunderName(name));
+            OBJECT_STAT_INC_COND(type_cache_dunder_hits, _PyType_IsDunderName(name));
             return version;
         }
         if (entry_name == NULL) {

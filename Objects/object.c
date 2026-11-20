@@ -35,6 +35,7 @@
 #include "pycore_symtable.h"      // PySTEntry_Type
 #include "pycore_template.h"      // _PyTemplate_Type _PyTemplateIter_Type
 #include "pycore_tuple.h"         // _PyTuple_DebugMallocStats()
+#include "pycore_typecache.h"     // _PyTypeCache_Lookup()
 #include "pycore_typeobject.h"    // _PyBufferWrapper_Type
 #include "pycore_typevarobject.h" // _PyTypeAlias_Type
 #include "pycore_value.h"         // PyValue_FromObjectSteal
@@ -1957,6 +1958,41 @@ int
 
 /* Generic GetAttr functions - put these in your tp_[gs]etattro slot. */
 
+/* Lifetime of a class attribute found for a lookup.
+
+   A type-cache hit borrows the attribute from the cache entry, which borrows
+   it from a type dict on the MRO. That borrow is valid until Python code can
+   run: Python can mutate a type, and a mutation may drop the dict's reference
+   (the entry's version tag is then 0 and its table is retired, so the borrow
+   is never read again, but the object may be freed). Everything between the
+   lookup and a PIN() runs no Python: it reads types, flags and the instance
+   dict of an inline-value or managed-dict object.
+
+   Before a step that can run Python, PIN() takes an owner of the attribute
+   and of the type of the receiver. The receiver keeps its type alive only
+   while Python has not run: it may reassign __class__ and release the type.
+   A type-cache miss pins at once: the MRO walk compares keys of a general
+   dict with arbitrary __eq__. The caller owns the receiver and the name for
+   the whole call, as for any borrowed argument.
+
+   A descriptor type whose descr_get leaves the descriptor unused once it
+   calls out needs no pin even when the callout runs Python (a getset getter,
+   or the audit hook of a member): it copies the getter, the closure and the
+   member offset out of the descriptor before the callout, and the
+   PyGetSetDef or PyMemberDef they point into belongs to the extension and is
+   not freed with the descriptor. Function and method descriptors create a
+   bound object, taking their own references, and run no Python. */
+static inline int
+descr_get_leaves_descr_unused(PyObject *descr)
+{
+    PyTypeObject *dt = Py_TYPE(descr);
+    if (dt == &PyFunction_Type || dt == &PyGetSetDescr_Type ||
+        dt == &PyMethodDescr_Type) {
+        return 1;
+    }
+    return dt == &PyMemberDescr_Type;
+}
+
 /* The generic attribute read of v (_PyObject_GenericGetAttrWithDict()).
    When suppress is 1, an AttributeError is suppressed: PyValue_NULL with no
    exception set means the attribute is missing. An inline v has no
@@ -1982,22 +2018,32 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
        reached from _PyValue_GetAttr(), which has. */
     assert(PyUnicode_Check(name));
 
-    Py_INCREF(tp);
-    if (!_PyType_IsReady(tp)) {
-        if (PyType_Ready(tp) < 0) {
+    /* See "Lifetime of a class attribute": descr_value is borrowed from the
+       type cache until pinned, then owned by owner, as is tp. */
+    PyValueBorrow descr_value;
+    PyValue owner = PyValue_NULL;
+    int pinned = 0;
+#define PIN() \
+    do { \
+        if (!pinned) { \
+            owner = PyValue_XDUP(descr_value); \
+            Py_INCREF(tp); \
+            pinned = 1; \
+        } \
+    } while (0)
+
+    if (_PyTypeCache_Lookup(tp, name, &descr_value) == 0) {
+        // A type that is not ready has no table, so only a miss is here.
+        Py_INCREF(tp);
+        pinned = 1;
+        if (!_PyType_IsReady(tp) && PyType_Ready(tp) < 0) {
             Py_DECREF(tp);
             return PyValue_NULL;
         }
+        (void)_PyType_LookupValueAndVersion(tp, name, &owner);
+        descr_value = PyValue_Borrow(owner);
     }
-
-    Py_INCREF(name);
-
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyCValue cref;
-    _PyThreadState_PushCValue(tstate, &cref);
-
-    (void)_PyType_LookupValueAndVersion(tp, name, &cref.ref);
-    descr = PyValue_ObjectOrNull(cref.ref);
+    descr = PyValue_ObjectOrNull(descr_value);
 
     if (descr != NULL) {
         has_get = Py_TYPE(descr)->tp_descr_get != NULL;
@@ -2018,6 +2064,9 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
                         goto done;
                     }
                 }
+            }
+            if (!descr_get_leaves_descr_unused(descr)) {
+                PIN();
             }
             res = (_PyValue_DescrGet)(descr, v, tp);
             if (PyValue_IsNull(res) && suppress &&
@@ -2063,6 +2112,8 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
         }
     }
     if (dict != NULL) {
+        // A dict with general keys runs their __eq__.
+        PIN();
         Py_INCREF(dict);
         int rc = _PyDict_GetValue((PyDictObject *)dict, PyValue_FromObjectBorrow(name), &res);
         /* Suppress the lookup's AttributeError before retirement, so a
@@ -2079,6 +2130,9 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
     }
 
     if (has_get) {
+        if (!descr_get_leaves_descr_unused(descr)) {
+            PIN();
+        }
         res = (_PyValue_DescrGet)(descr, v, tp);
         if (PyValue_IsNull(res) && suppress &&
                 PyErr_ExceptionMatches(PyExc_AttributeError)) {
@@ -2087,10 +2141,15 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
         goto done;
     }
 
-    if (!PyValue_IsNull(cref.ref)) {
+    if (!PyValue_IsNull(descr_value)) {
         // A class attribute, perhaps inline: the result owns the lookup's.
-        res = cref.ref;
-        cref.ref = PyValue_NULL;
+        if (pinned) {
+            res = owner;
+            owner = PyValue_NULL;
+        }
+        else {
+            res = PyValue_XDUP(descr_value);
+        }
         goto done;
     }
 
@@ -2102,9 +2161,11 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
         value_attribute_error_context(v, name);
     }
   done:
-    _PyThreadState_PopCValue(tstate, &cref);
-    Py_CLEAR(name);
-    Py_DECREF(tp);
+    if (pinned) {
+        PyValue_XCLOSE(owner);
+        Py_DECREF(tp);
+    }
+#undef PIN
     return res;
 }
 

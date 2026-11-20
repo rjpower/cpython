@@ -14,6 +14,10 @@ extern "C" {
 #define _Py_TYPECACHE_MINSIZE (1 << 3)
 #define _Py_TYPECACHE_MAXSIZE (1 << 16)
 
+// Only interned exact strings are looked up and stored.
+#define _Py_TYPECACHE_CACHEABLE_NAME(name) \
+    (PyUnicode_CheckExact(name) && PyUnicode_CHECK_INTERNED(name))
+
 /* The type dict (or a base's) owns the guarded word; _PyTypeCache_Lookup()
    checks the type version before loading it as a borrow. */
 struct type_cache_entry {
@@ -39,7 +43,8 @@ extern void _PyTypeCache_Insert(PyTypeObject *type, PyObject *name,
                                 PyValueBorrow value, unsigned int expected_version);
 #define _PyTypeCache_Insert(T, N, V, E) \
     (_PyTypeCache_Insert)(T, N, PyValue_Borrow(V), E)
-/* Return the version tag the entry was found at, or 0 for a miss. A hit stores
+/* Return the version tag the entry was found at, or 0 for a miss or a name
+   that is not cacheable. A hit stores
    in *out a borrow of the entry's value (PyValue_NULL's word for a cached
    absence). The borrow is valid until Python code can run or a type is
    mutated: see "Version tags and the lookup cache" in typeobject.c. */

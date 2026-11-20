@@ -60,8 +60,6 @@ class object "PyValueBorrow" "&PyBaseObject_Type"
 
 /* Support type attribute lookup cache */
 
-#define MCACHE_CACHEABLE_NAME(name) (PyUnicode_CheckExact(name) && PyUnicode_CHECK_INTERNED(name))
-
 #define NEXT_VERSION_TAG(interp) \
     (interp)->types.next_version_tag
 
@@ -6967,8 +6965,8 @@ _PyType_TryLookupValueNoAlloc(PyTypeObject *type, PyObject *name,
 
 /* Check if the "readied" PyUnicode name
    is a double-underscore special name. */
-static int
-is_dunder_name(PyObject *name)
+int
+_PyType_IsDunderName(PyObject *name)
 {
     Py_ssize_t length = PyUnicode_GET_LENGTH(name);
     int kind = PyUnicode_KIND(name);
@@ -7011,7 +7009,7 @@ should_assign_version_tag(PyTypeObject *type, PyObject *name, unsigned int versi
 {
     return (version_tag == 0
         && FT_ATOMIC_LOAD_UINT16_RELAXED(type->tp_versions_used) < MAX_VERSIONS_PER_CLASS
-        && MCACHE_CACHEABLE_NAME(name));
+        && _Py_TYPECACHE_CACHEABLE_NAME(name));
 }
 
 unsigned int
@@ -7019,20 +7017,18 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
 {
     *out = PyValue_NULL;
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    int cacheable = MCACHE_CACHEABLE_NAME(name);
+    int cacheable = _Py_TYPECACHE_CACHEABLE_NAME(name);
     if (cacheable) {
         PyValueBorrow hit;
         unsigned int hit_version = _PyTypeCache_Lookup(type, name, &hit);
         if (hit_version != 0) {
-            OBJECT_STAT_INC_COND(type_cache_hits, !is_dunder_name(name));
-            OBJECT_STAT_INC_COND(type_cache_dunder_hits, is_dunder_name(name));
             // The borrow is live now: nothing has run since the lookup.
             *out = PyValue_XDUP(hit);
             return hit_version;
         }
     }
-    OBJECT_STAT_INC_COND(type_cache_misses, !is_dunder_name(name));
-    OBJECT_STAT_INC_COND(type_cache_dunder_misses, is_dunder_name(name));
+    OBJECT_STAT_INC_COND(type_cache_misses, !_PyType_IsDunderName(name));
+    OBJECT_STAT_INC_COND(type_cache_dunder_misses, _PyType_IsDunderName(name));
 
     /* We may end up clearing live exceptions below, so make sure it's ours. */
     assert(!PyErr_Occurred());
@@ -7499,7 +7495,7 @@ type_setattro_value(PyValueBorrow self_value, PyObject *name, PyValueBorrow valu
     BEGIN_TYPE_DICT_LOCK(dict);
     res = type_update_dict(type, (PyDictObject *)dict, name, value, &old_value);
     assert(_PyType_CheckConsistency(type));
-    if (res == 0 && is_dunder_name(name) && has_slotdef(name)) {
+    if (res == 0 && _PyType_IsDunderName(name) && has_slotdef(name)) {
         res = update_slot_after_setattr(type, name);
     }
     END_TYPE_DICT_LOCK();
@@ -14372,7 +14368,7 @@ slotptr(PyTypeObject *type, int ioffset)
 }
 
 // Return true if "name" corresponds to at least one slot definition.  This is
-// a more accurate but more expensive test compared to is_dunder_name().
+// a more accurate but more expensive test compared to _PyType_IsDunderName().
 static bool
 has_slotdef(PyObject *name)
 {

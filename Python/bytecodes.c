@@ -1584,6 +1584,7 @@ dummy_func(
         }
 
         tier1 window op(_SEND, (receiver, null_or_index, v -- receiver, null_or_index, retval)) {
+            // GET_AWAITABLE and GET_YIELD_FROM_ITER returned an iterator object
             assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
@@ -1653,6 +1654,7 @@ dummy_func(
         }
 
         replaced op(_SEND_VIRTUAL, (iter, null_or_index, none -- iter, null_or_index, next)) {
+            // SEND specialized on an iterator object with _tp_iteritem
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             Py_ssize_t index = PyValue_UntagIndex(null_or_index);
@@ -1783,6 +1785,7 @@ dummy_func(
             _YIELD_VALUE_EVENT + _YIELD_DELEGATED;
 
         outlined inst(POP_EXCEPT, (exc_value -- )) {
+            // PUSH_EXC_INFO saved an exception instance or None: always an object
             assert(PyValue_IsObject(exc_value));
             _PyErr_StackItem *exc_info = tstate->exc_info;
             Py_XSETREF(exc_info->exc_value,
@@ -1791,6 +1794,7 @@ dummy_func(
         }
 
         outlined tier1 inst(RERAISE, (values[oparg], exc_st -- values[oparg])) {
+            // An exception being handled is an instance of BaseException
             assert(PyValue_IsObject(exc_st));
             PyObject *exc = PyValue_AsKnownObjectSteal(exc_st);
 
@@ -1807,6 +1811,7 @@ dummy_func(
         tier1 window op(_END_ASYNC_FOR, (awaitable_st, exc_st -- )) {
             JUMPBY(0); // Pretend jump as we need source offset for monitoring
             (void)oparg;
+            // An exception being handled is an instance of BaseException
             assert(PyValue_IsObject(exc_st));
             PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
 
@@ -1835,6 +1840,7 @@ dummy_func(
         outlined macro(END_ASYNC_FOR) = _END_ASYNC_FOR;
 
         tier1 inst(CLEANUP_THROW, (sub_iter, null_in, last_sent_val, exc_value_st -- none, null_out, value)) {
+            // An exception being handled is an instance of BaseException
             assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
@@ -2040,6 +2046,7 @@ dummy_func(
 
         outlined inst(LOAD_FROM_DICT_OR_GLOBALS, (mod_or_class_dict -- v)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
+            // The class namespace, which type.__build_class__ checked as a mapping
             assert(PyValue_IsObject(mod_or_class_dict));
             PyObject *namespace = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
             // Taken before the lookup, which can run code
@@ -2196,6 +2203,7 @@ dummy_func(
 
         outlined inst(LOAD_FROM_DICT_OR_DEREF, (class_dict_st -- value)) {
             PyObject *name;
+            // The class namespace, which type.__build_class__ checked as a mapping
             assert(PyValue_IsObject(class_dict_st));
             PyObject *class_dict = PyValue_AsKnownObjectBorrow(class_dict_st);
             // Taken before the lookup, which can run code
@@ -2286,6 +2294,7 @@ dummy_func(
         }
 
         outlined inst(BUILD_TEMPLATE, (strings, interpolations -- template)) {
+            // Both are tuples that the compiler built
             assert(PyValue_IsObject(strings));
             assert(PyValue_IsObject(interpolations));
             PyObject *strings_o = PyValue_AsKnownObjectBorrow(strings);
@@ -3444,6 +3453,7 @@ dummy_func(
         outlined inst(IMPORT_NAME, (level, fromlist -- res)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
+            // The compiler loads fromlist from a constant: None or a tuple of str
             assert(PyValue_IsObject(fromlist));
             // The level is an inline int: read it without a box
             int ilevel = value_import_level(level);
@@ -5239,6 +5249,7 @@ dummy_func(
             _CHECK_PERIODIC_AT_END;
 
         op(_MAKE_FUNCTION, (codeobj_st -- func, co)) {
+            // The compiler loads the code object from a constant
             assert(PyValue_IsObject(codeobj_st));
             PyObject *codeobj = PyValue_AsKnownObjectBorrow(codeobj_st);
 
@@ -5260,6 +5271,7 @@ dummy_func(
         outlined macro(MAKE_FUNCTION) = _MAKE_FUNCTION + POP_TOP;
 
         outlined inst(SET_FUNCTION_ATTRIBUTE, (attr_st, func_in -- func_out)) {
+            // The attribute is a tuple, dict or function that the compiler built
             assert(PyValue_IsObject(func_in));
             assert(PyValue_IsObject(attr_st));
             PyObject *func = PyValue_AsKnownObjectBorrow(func_in);

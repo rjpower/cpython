@@ -9138,7 +9138,7 @@
             assert(PyValue_IsObject(aiter));
             PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(aiter));
             if (awaitable_o == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                PROCESS_ERROR_AT(RAISE, 1, this_instr);
             }
             awaitable = PyValue_FromObjectSteal(awaitable_o);
             IR_STORE_DST(ir_word, A, awaitable);
@@ -9154,6 +9154,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_AWAITABLE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
             int oparg = (int)IR_C(ir_word);
             (void)oparg;
             PyValueBorrow iterable;
@@ -9175,8 +9177,9 @@
                 }
                 iter = PyValue_FromObjectSteal(iter_o);
             }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), iter);
+            IR_STORE_DST(ir_word, A, iter);
             PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
 

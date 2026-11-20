@@ -628,11 +628,10 @@ class TestIRCases(unittest.TestCase):
         # the feedback entry and the operands, or runs the call generically
         body = self.handler(output, "CALL_PY_GENERAL")
         self.assertIn("call_bind_direct(tstate, frame, this_instr, fb)", body)
-        self.assertIn("call_run_guarded_miss(", body)
+        self.assertIn("call_run_vector(", body)
         self.assertIn("if (call_result.status < 0)", body)
-        self.assertNotIn("call_transaction_run_vector(", body)
         other = self.handler(output, "CALL_BOUND_METHOD_GENERAL")
-        self.assertIn("call_transaction_run_vector(", other)
+        self.assertIn("call_run_vector(", other)
         self.assertNotIn("call_bind_direct(", other)
 
         changes = (
@@ -675,9 +674,8 @@ class TestIRCases(unittest.TestCase):
         output = generate(source)
         body = self.handler(output, "CALL_KW_PY")
         self.assertIn("call_bind_keywords(tstate, frame, this_instr, fb)", body)
-        self.assertIn("call_run_guarded_miss(", body)
+        self.assertIn("call_run_keywords(", body)
         self.assertIn("if (call_result.status < 0)", body)
-        self.assertNotIn("call_transaction_run_keywords(", body)
         for name in ("CALL_KW_BOUND_METHOD", "INSTRUMENTED_CALL_KW"):
             with self.subTest(name=name):
                 self.assertNotIn("call_bind_keywords(", self.handler(output, name))
@@ -3824,7 +3822,7 @@ class TestShapeReadMetadata(unittest.TestCase):
         self.assertIn("[FIRST_ZERO] = { .nuops = 2, .uops = { { _FIRST_ZERO, 0, 1 }, { _FIRST_ZERO, OPERAND1_1, 1 } } }", table)
 
 
-class TestCallTransactionMarkers(unittest.TestCase):
+class TestCallMarkers(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         source = str(ir_generator.DEFAULT_INPUT)
@@ -3889,14 +3887,10 @@ class TestCallTransactionMarkers(unittest.TestCase):
             with self.subTest(name=name):
                 body = self.interpreter.split(f"TARGET({name}) {{", 1)[1].split("TARGET(", 1)[0]
                 # The out-of-line run reads the operand words; the handler
-                # keeps no transaction of its own
-                self.assertNotIn("call_transaction_begin(", body)
+                # keeps no record of the call of its own
                 invoke = min(body.index(run) for run in (
-                    "call_transaction_run_", "call_bind_") if run in body)
-                for preparation in ("_Py_Specialize_Call",
-                                    "call_transaction_expand_method(",
-                                    "call_transaction_prepare_tuple(",
-                                    "call_transaction_monitor("):
+                    "call_run_", "call_bind_") if run in body)
+                for preparation in ("_Py_Specialize_Call",):
                     if preparation in body:
                         self.assertLess(body.index(preparation), invoke)
                 self.assertNotIn("IR_MOVE_TO_DST", body[invoke:])
@@ -3904,10 +3898,9 @@ class TestCallTransactionMarkers(unittest.TestCase):
                 self.assertNotIn("_PyValue_Publish", body[invoke:])
                 self.assertNotIn("_Py_VectorCall", body)
                 self.assertIn("DISPATCH_INLINED(call_result.child)", body)
-                # The transaction lives in the out-of-line run (R-c)
-                self.assertNotIn("_PyCallTransaction", body)
+                # The call's locals live in the out-of-line run (R-c)
                 self.assertNotIn("&call", body)
-        labels = re.findall(r"^\s*(call_transaction_fallback_\w+):", self.interpreter, re.M)
+        labels = re.findall(r"^\s*(call_fallback_\w+):", self.interpreter, re.M)
         self.assertEqual(len(labels), len(set(labels)))
 
     def test_exact_method_guards_precede_the_push(self):
@@ -3922,7 +3915,7 @@ class TestCallTransactionMarkers(unittest.TestCase):
                 self.assertIn("call_state |= CALL_SELF_PRESENT | CALL_EXPANDED", body[:push])
                 self.assertGreaterEqual(body[:push].count("JUMP_TO_PREDICTED("), 4)
                 self.assertNotIn("JUMP_TO_PREDICTED(", body[push:])
-                self.assertNotIn("call_transaction_fallback_", body)
+                self.assertNotIn("call_fallback_", body)
 
     def test_handlers_take_no_local_address(self):
         # The generated handlers and labels take the address of none of

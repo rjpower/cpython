@@ -2358,7 +2358,7 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
         # Completion owns its explicit recipient; frontend output aliases
         # describe stack conversion, not stores performed after the marker.
         return None
-    if uses_call_transaction(inst):
+    if uses_generic_call(inst):
         return STORE_RESULT
     if inst.properties.switches_frame:
         if not names_return_slot(inst):
@@ -2958,14 +2958,14 @@ class IRStack(Stack):
         if relative == 0:
             return "IR_SLOT(IR_B(ir_word))"
         kind = self.layout.call_kind
-        if kind == "CALL_TRANSACTION_EX":
+        if kind == "CALL_EX":
             if relative in (2, 3):
                 return f"IR_OPERAND({relative - 2})"
             raise StackError(f"no operand for position {p} of a call")
         if relative == 1:
             return "IR_OPERAND(0)"
         if relative is None:
-            if kind == "CALL_TRANSACTION_KEYWORDS" and (
+            if kind == "CALL_KEYWORDS" and (
                     (p - self.layout.base).to_c() in ("oparg + 2", "2 + oparg")):
                 return "IR_CALL_KWNAMES()"
             raise StackError(f"no operand for position {p} ({(p - self.layout.base).to_c()}) of a call")
@@ -2975,9 +2975,9 @@ class IRStack(Stack):
         if self.layout.call_kind is None:
             return None
         relative = (p - self.layout.base).as_int()
-        if relative == 1 and self.layout.call_kind != "CALL_TRANSACTION_EX":
+        if relative == 1 and self.layout.call_kind != "CALL_EX":
             return "CALL_SELF_PRESENT"
-        if relative == 3 and self.layout.call_kind == "CALL_TRANSACTION_EX":
+        if relative == 3 and self.layout.call_kind == "CALL_EX":
             return "CALL_KWARGS_PRESENT"
         return None
 
@@ -3020,7 +3020,7 @@ class IRStack(Stack):
                 # The arguments are operands: a handler reads them with
                 # IR_OPERAND(k) or has a helper read the words
                 return "NULL"
-            if (memory_offset - lay.base).as_int() == 1 and lay.call_kind == "CALL_TRANSACTION_EX":
+            if (memory_offset - lay.base).as_int() == 1 and lay.call_kind == "CALL_EX":
                 return "PyValue_NULL"
         if not var.is_array():
             role = self.call_input_role(memory_offset)
@@ -3561,7 +3561,7 @@ class IREmitter(Emitter):
         self.call_fallback_used = False
         self.call_fallback = ""
         self.call_has_feedback = False
-        # The handler's call_transaction_run_*() and its constant arguments
+        # The handler's call_run_*() and its constant arguments
         self.call_run = ""
         self.call_argc = ""
         self.call_kind = ""
@@ -4158,9 +4158,9 @@ class IREmitter(Emitter):
 
     def prepare_call(self, tkn, tkn_iter, uop, storage, inst):
         """The preparations of a call (the method form, the tuple of a
-        CALL_FUNCTION_EX, the CALL event) are steps of its transaction, which
-        runs them in this order on its window when the call is invoked: the
-        marker is where the DSL says that they come."""
+        CALL_FUNCTION_EX, the CALL event) are steps of call_run_*(), which
+        runs them in this order on the call's operands when the call is
+        invoked: the marker is where the DSL says that they come."""
         assert inst is not None
         self.macro_args(tkn, tkn_iter, 0)
         return True
@@ -4174,29 +4174,29 @@ class IREmitter(Emitter):
     def refresh_call(self, tkn, tkn_iter, uop, storage, inst):
         self.macro_args(tkn, tkn_iter, 0)
         self.out.start_line()
-        self.emit("if (call_transaction_refresh(tstate, frame, this_instr) < 0) {\n")
+        self.emit("if (call_refresh(tstate, frame, this_instr) < 0) {\n")
         self.reader_error()
         self.emit("}\n")
         self.call_reload(inst)
         return True
 
-    def call_completion(self, run_override=None):
+    def call_completion(self, guarded=False):
         self.call_normal_drained = True
-        # One out-of-line call, which keeps the transaction record in its own
+        # One out-of-line call, which keeps the call's locals in its own
         # frame and returns {status, child} in two registers (R-c).  It reads
-        # the call's operands from the words after this_instr, once, and
-        # owns them from then on.
+        # the call's operands from the words after this_instr, in place, and
+        # releases or moves them itself.
         self.emit("assert(frame->instr_ptr == this_instr);\n")
         self.emit("{\n")
-        if run_override:
+        if guarded:
             # The cached binding plan fills the child from the operands; a
             # miss had no effect, and the call runs generically
-            bind = ("call_bind_keywords" if self.call_kind == "CALL_TRANSACTION_KEYWORDS"
+            bind = ("call_bind_keywords" if self.call_kind == "CALL_KEYWORDS"
                     else "call_bind_direct")
             self.emit(f"_PyCallResult call_result = {bind}(tstate, frame, this_instr, fb);\n")
             self.emit("if (call_result.status > 0) {\n")
-            self.emit(f"call_result = call_run_guarded_miss(tstate, frame, this_instr, "
-                      f"{self.call_kind}, {self.call_flags} | call_state);\n")
+            self.emit(f"call_result = {self.call_run}(tstate, frame, this_instr, "
+                      f"{self.call_flags} | call_state);\n")
             self.emit("}\n")
         else:
             self.emit(f"_PyCallResult call_result = {self.call_run}(tstate, frame, "
@@ -4213,11 +4213,10 @@ class IREmitter(Emitter):
 
     def invoke_call(self, tkn, tkn_iter, uop, storage, inst):
         self.macro_args(tkn, tkn_iter, 0)
-        run_override = ("call_run_guarded"
-                        if tkn.text == "IR_INVOKE_GUARDED_PYTHON_CALL" else None)
-        if run_override:
+        guarded = tkn.text == "IR_INVOKE_GUARDED_PYTHON_CALL"
+        if guarded:
             self.emit("assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);\n")
-        self.call_completion(run_override)
+        self.call_completion(guarded)
         self.call_finished = True
         return False
 
@@ -4898,7 +4897,7 @@ class IREmitter(Emitter):
         leaf_marker = any(t.text == "IR_TRY_DICT_FIRST_PROBE" for t in stmt.contents)
         transaction_marker = any(t.text in IR_MARKER_EFFECTS
                                  for t in stmt.contents)
-        if inst is not None and uses_call_transaction(inst):
+        if inst is not None and uses_generic_call(inst):
             transaction_marker |= any(t.text in {
                 "_Py_Specialize_Call", "_Py_Specialize_CallKw",
                 "_Py_Specialize_CallFunctionEx"} for t in stmt.contents)
@@ -5732,13 +5731,13 @@ def slot_layout(inst: Instruction, fmt: IRFormat, mode: str | None) -> SlotLayou
 
 
 def polls_at_end(name: str, inst: Instruction) -> bool:
-    """Whether the call transaction of handler name polls the eval breaker
+    """Whether the generic call of handler name polls the eval breaker
     when the call returns, as _CHECK_PERIODIC_AT_END does"""
     return any(isinstance(p, Uop) and p.name == "_CHECK_PERIODIC_AT_END"
                for p in inst.parts) or canonical_handler(name) == "CALL_KW_NON_PY"
 
 
-def uses_call_transaction(inst: Instruction) -> bool:
+def uses_generic_call(inst: Instruction) -> bool:
     return any(isinstance(part, Uop) and
                any(token.text in CALL_INVOKE_MARKERS for token in part.body.tokens())
                for part in inst.parts)
@@ -6639,13 +6638,13 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if (name != inst.name and name not in EXECUTION_VARIANTS
             and emitter.generator_boundary is None):
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
-    transaction = uses_call_transaction(inst)
+    transaction = uses_generic_call(inst)
     emitter.call_finished = False
     # Only a call whose DSL says IR_BEGIN_CALL_EFFECTS can have effects
     # that a later deopt must not repeat (its specialisation)
     emitter.call_effects_possible = "IR_BEGIN_CALL_EFFECTS" in set(uop_tokens(inst))
     emitter.call_fallback_used = False
-    emitter.call_fallback = f"call_transaction_fallback_{name}"
+    emitter.call_fallback = f"call_fallback_{name}"
     is_target = inst.is_target and name == inst.name
     out.emit("\n")
     if emitter.shared_binary_op:
@@ -6732,24 +6731,24 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         assert fmt.window
         inputs, _ = external_io(inst)
         count = " + ".join(f"({item.size or '1'})" for item in inputs)
-        kind = ("CALL_TRANSACTION_EX" if call_family in
+        kind = ("CALL_EX" if call_family in
                 ("CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX") else
-                "CALL_TRANSACTION_KEYWORDS" if call_family == "CALL_KW" else
-                "CALL_TRANSACTION_VECTOR")
-        # call_transaction_run_*() derives the window's size from its kind
+                "CALL_KEYWORDS" if call_family == "CALL_KW" else
+                "CALL_VECTOR")
+        # call_run_*() derives the operand count from its kind
         fixed = sum(1 for item in inputs if not item.size)
         arrays = [item.size for item in inputs if item.size]
-        expected = {"CALL_TRANSACTION_VECTOR": (2, ["oparg"]),
-                    "CALL_TRANSACTION_KEYWORDS": (3, ["oparg"]),
-                    "CALL_TRANSACTION_EX": (4, [])}[kind]
+        expected = {"CALL_VECTOR": (2, ["oparg"]),
+                    "CALL_KEYWORDS": (3, ["oparg"]),
+                    "CALL_EX": (4, [])}[kind]
         if transaction and (fixed, arrays) != expected:
             raise analysis_error(
                 f"{name}: a {kind} call with inputs {count}", inst.where)
         emitter.call_argc = "oparg" if inst.properties.oparg else "0"
         emitter.call_kind = kind
-        emitter.call_run = {"CALL_TRANSACTION_VECTOR": "call_transaction_run_vector",
-                            "CALL_TRANSACTION_KEYWORDS": "call_transaction_run_keywords",
-                            "CALL_TRANSACTION_EX": "call_transaction_run_ex"}[kind]
+        emitter.call_run = {"CALL_VECTOR": "call_run_vector",
+                            "CALL_KEYWORDS": "call_run_keywords",
+                            "CALL_EX": "call_run_ex"}[kind]
         flags = []
         if name.startswith("INSTRUMENTED_"):
             flags.append("CALL_INSTRUMENTED")
@@ -6761,7 +6760,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         # (call_state, in a register).  The operands are the words after the
         # head.
         out.emit("int call_state = "
-                 + ("IR_CALL_KWARGS_STATE(ir_word)" if kind == "CALL_TRANSACTION_EX"
+                 + ("IR_CALL_KWARGS_STATE(ir_word)" if kind == "CALL_EX"
                     else "IR_CALL_SELF_STATE(ir_word)") + ";\n")
         out.emit("(void)call_state;\n")
         if emitter.call_has_feedback:
@@ -6944,7 +6943,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
 # What an outlined body cannot contain: a jump into the evaluator (other than
 # the call fallback inside the body), or state that only the evaluator has.
 OUTLINE_BLOCKERS = re.compile(
-    r"\bgoto\s+(?!call_transaction_fallback_)|JUMP_TO_LABEL|lastopcode|"
+    r"\bgoto\s+(?!call_fallback_)|JUMP_TO_LABEL|lastopcode|"
     r"ir_binary_op")
 DEOPT_TARGET = re.compile(r"\bJUMP_TO_PREDICTED\((\w+)\)")
 
@@ -7311,9 +7310,9 @@ MONITORING_HELPERS = {
     "_Py_call_instrumentation_line": ("LINE",),
     "_Py_call_instrumentation_instruction": ("INSTRUCTION",),
 }
-# An instrumented call transaction (call_transaction_monitor() and
-# call_transaction_invoke() in Python/ceval.c)
-TRANSACTION_EVENTS = ("CALL", "C_RETURN", "C_RAISE")
+# An instrumented generic call (call_monitor(), call_monitor_result() and
+# call_run_*() in Python/ceval.c)
+CALL_EVENTS = ("CALL", "C_RETURN", "C_RAISE")
 EVENT_PREFIX = "PY_MONITORING_EVENT_"
 
 
@@ -7324,8 +7323,8 @@ def monitoring_events(name: str, inst: Instruction) -> list[str]:
         if tkn.text.startswith(EVENT_PREFIX):
             events.add(tkn.text)
         events.update(EVENT_PREFIX + e for e in MONITORING_HELPERS.get(tkn.text, ()))
-    if name.startswith("INSTRUMENTED_") and uses_call_transaction(inst):
-        events.update(EVENT_PREFIX + e for e in TRANSACTION_EVENTS)
+    if name.startswith("INSTRUMENTED_") and uses_generic_call(inst):
+        events.update(EVENT_PREFIX + e for e in CALL_EVENTS)
     # Completion has one semantic site, including when the producer is a
     # specialized native iterator or a Python generator returning to it.
     if any(t.text in {"IR_COMPLETE_STEP", "IR_ENTER_GENERATOR"}

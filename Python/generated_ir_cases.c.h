@@ -374,13 +374,13 @@ ir_run_CALL(
                     if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                         call_state |= CALL_EFFECTS;
                         _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + ((call_state & CALL_SELF_PRESENT) != 0));
-                        if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
+                        if (call_refresh(tstate, frame, this_instr) < 0) {
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                         fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
-                        if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL; }
+                        if (call_state & CALL_EFFECTS) { goto call_fallback_CALL; }
                         DISPATCH_SAME_OPARG();
                     }
                     OPCODE_DEFERRED_INC(CALL);
@@ -395,7 +395,7 @@ ir_run_CALL(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
+                    _PyCallResult call_result = call_run_vector(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
@@ -405,10 +405,10 @@ ir_run_CALL(
                     DISPATCH();
                 }
             }
-            call_transaction_fallback_CALL:;
+            call_fallback_CALL:;
             assert(frame->instr_ptr == this_instr);
             {
-                _PyCallResult call_result = call_transaction_run_vector(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
+                _PyCallResult call_result = call_run_vector(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -449,13 +449,13 @@ ir_run_CALL_FUNCTION_EX(
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     call_state |= CALL_EFFECTS;
                     _Py_Specialize_CallFunctionEx(func, this_instr);
-                    if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
+                    if (call_refresh(tstate, frame, this_instr) < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                     fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
-                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_FUNCTION_EX; }
+                    if (call_state & CALL_EFFECTS) { goto call_fallback_CALL_FUNCTION_EX; }
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
@@ -469,7 +469,7 @@ ir_run_CALL_FUNCTION_EX(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
+                    _PyCallResult call_result = call_run_ex(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
@@ -479,10 +479,10 @@ ir_run_CALL_FUNCTION_EX(
                     DISPATCH();
                 }
             }
-            call_transaction_fallback_CALL_FUNCTION_EX:;
+            call_fallback_CALL_FUNCTION_EX:;
             assert(frame->instr_ptr == this_instr);
             {
-                _PyCallResult call_result = call_transaction_run_ex(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
+                _PyCallResult call_result = call_run_ex(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
                 if (call_result.status < 0) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -644,13 +644,13 @@ ir_run_CALL_KW(
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     call_state |= CALL_EFFECTS;
                     _Py_Specialize_CallKw(callable, self_or_null, kwnames, this_instr, oparg);
-                    if (call_transaction_refresh(tstate, frame, this_instr) < 0) {
+                    if (call_refresh(tstate, frame, this_instr) < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
                     fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
-                    if (call_state & CALL_EFFECTS) { goto call_transaction_fallback_CALL_KW; }
+                    if (call_state & CALL_EFFECTS) { goto call_fallback_CALL_KW; }
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CALL_KW);
@@ -664,7 +664,7 @@ ir_run_CALL_KW(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, this_instr, (0) | call_state);
+                    _PyCallResult call_result = call_run_keywords(tstate, frame, this_instr, (0) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
@@ -674,10 +674,10 @@ ir_run_CALL_KW(
                     DISPATCH();
                 }
             }
-            call_transaction_fallback_CALL_KW:;
+            call_fallback_CALL_KW:;
             assert(frame->instr_ptr == this_instr);
             {
-                _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, this_instr, (0) | call_state);
+                _PyCallResult call_result = call_run_keywords(tstate, frame, this_instr, (0) | call_state);
                 if (call_result.status < 0) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -6341,7 +6341,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, this_instr, (0) | call_state);
+                    _PyCallResult call_result = call_run_vector(tstate, frame, this_instr, (0) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
@@ -6665,7 +6665,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
+                    _PyCallResult call_result = call_run_ex(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
@@ -6740,7 +6740,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, this_instr, (0) | call_state);
+                    _PyCallResult call_result = call_run_ex(tstate, frame, this_instr, (0) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
@@ -6899,7 +6899,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, this_instr, (0) | call_state);
+                    _PyCallResult call_result = call_run_keywords(tstate, frame, this_instr, (0) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
@@ -6948,7 +6948,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
+                    _PyCallResult call_result = call_run_keywords(tstate, frame, this_instr, (CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
@@ -7024,7 +7024,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 {
                     _PyCallResult call_result = call_bind_keywords(tstate, frame, this_instr, fb);
                     if (call_result.status > 0) {
-                        call_result = call_run_guarded_miss(tstate, frame, this_instr, CALL_TRANSACTION_KEYWORDS, (0) | call_state);
+                        call_result = call_run_keywords(tstate, frame, this_instr, (0) | call_state);
                     }
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -7747,7 +7747,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 {
                     _PyCallResult call_result = call_bind_direct(tstate, frame, this_instr, fb);
                     if (call_result.status > 0) {
-                        call_result = call_run_guarded_miss(tstate, frame, this_instr, CALL_TRANSACTION_VECTOR, (0) | call_state);
+                        call_result = call_run_vector(tstate, frame, this_instr, (0) | call_state);
                     }
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -9458,7 +9458,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_vector(tstate, frame, this_instr, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
+                    _PyCallResult call_result = call_run_vector(tstate, frame, this_instr, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
@@ -9490,7 +9490,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_ex(tstate, frame, this_instr, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
+                    _PyCallResult call_result = call_run_ex(tstate, frame, this_instr, (CALL_INSTRUMENTED | CALL_PERIODIC) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
@@ -9527,7 +9527,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_transaction_run_keywords(tstate, frame, this_instr, (CALL_INSTRUMENTED) | call_state);
+                    _PyCallResult call_result = call_run_keywords(tstate, frame, this_instr, (CALL_INSTRUMENTED) | call_state);
                     if (call_result.status < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }

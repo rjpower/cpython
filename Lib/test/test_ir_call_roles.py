@@ -376,8 +376,10 @@ class CallRoleTests(unittest.TestCase):
         active = True
         result = invoke(payload)
         self.assertEqual(len(callbacks), 1)
-        self.assertIs(result[0], owner)
-        self.assertIs(result[1], payload)
+        # The method operand is released after the call bound the function
+        # and the receiver, with the callee's frame current and not started:
+        # the callback that replaces the code runs too late to change it
+        self.assertIs(result, payload)
 
 
 if __name__ == "__main__":

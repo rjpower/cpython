@@ -5396,6 +5396,7 @@ dummy_func(
                 PyCodeObject *code = _PyFrame_GetCode(frame);
                 int index = INSTR_OFFSET_OF(this_instr);
                 original_opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);
+                next_instr = this_instr;
             } else {
                 original_opcode = _Py_call_instrumentation_line(
                         tstate, frame, this_instr, prev_instr);
@@ -5408,12 +5409,11 @@ dummy_func(
                 if (next_instr != this_instr) {
                     DISPATCH();
                 }
-                next_instr = this_instr + 1;
             }
             if (_PyFb_HasEntry(original_opcode)) {
                 /* Prevent the underlying instruction from specializing
                 * and overwriting the instrumentation. */
-                PAUSE_ADAPTIVE_COUNTER(FB_HEADER_OF(this_instr, original_opcode));
+                PAUSE_ADAPTIVE_COUNTER(FB_HEADER_OF(next_instr, original_opcode));
             }
             opcode = ORIGINAL_HANDLER(original_opcode);
             PRE_DISPATCH_GOTO();
@@ -5424,8 +5424,9 @@ dummy_func(
             int next_opcode = _Py_call_instrumentation_instruction(
                 tstate, frame, this_instr);
             ERROR_IF(next_opcode < 0);
+            next_instr = this_instr;
             if (_PyFb_HasEntry(next_opcode)) {
-                PAUSE_ADAPTIVE_COUNTER(FB_HEADER_OF(this_instr, next_opcode));
+                PAUSE_ADAPTIVE_COUNTER(FB_HEADER_OF(next_instr, next_opcode));
             }
             assert(next_opcode > 0 && next_opcode < 256);
             opcode = ORIGINAL_HANDLER(next_opcode);

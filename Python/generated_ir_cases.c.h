@@ -16,9 +16,11 @@ ir_run_BINARY_SLICE(
 {
             int opcode = BINARY_SLICE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_SLICE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -70,9 +72,11 @@ ir_run_BUILD_INTERPOLATION(
 {
             int opcode = BUILD_INTERPOLATION;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BUILD_INTERPOLATION);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -123,9 +127,11 @@ ir_run_BUILD_MAP(
 {
             int opcode = BUILD_MAP;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BUILD_MAP);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -157,9 +163,11 @@ ir_run_BUILD_SET(
 {
             int opcode = BUILD_SET;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BUILD_SET);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -213,9 +221,11 @@ ir_run_BUILD_SLICE(
 {
             int opcode = BUILD_SLICE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BUILD_SLICE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -254,9 +264,11 @@ ir_run_BUILD_STRING(
 {
             int opcode = BUILD_STRING;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BUILD_STRING);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -288,9 +300,11 @@ ir_run_BUILD_TEMPLATE(
 {
             int opcode = BUILD_TEMPLATE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BUILD_TEMPLATE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -333,7 +347,9 @@ ir_run_CALL(
 {
             int opcode = CALL;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
@@ -427,7 +443,9 @@ ir_run_CALL_FUNCTION_EX(
 {
             int opcode = CALL_FUNCTION_EX;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_FUNCTION_EX);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
@@ -518,9 +536,11 @@ ir_run_CALL_INTRINSIC_1(
 {
             int opcode = CALL_INTRINSIC_1;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_INTRINSIC_1);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -570,9 +590,11 @@ ir_run_CALL_INTRINSIC_2(
 {
             int opcode = CALL_INTRINSIC_2;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_INTRINSIC_2);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -629,7 +651,9 @@ ir_run_CALL_KW(
 {
             int opcode = CALL_KW;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_KW);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
@@ -723,9 +747,11 @@ ir_run_CHECK_EG_MATCH(
 {
             int opcode = CHECK_EG_MATCH;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CHECK_EG_MATCH);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -779,9 +805,11 @@ ir_run_CHECK_EXC_MATCH(
 {
             int opcode = CHECK_EXC_MATCH;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CHECK_EXC_MATCH);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -819,7 +847,9 @@ ir_run_COMPARE_OP(
 {
             int opcode = COMPARE_OP;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
@@ -890,7 +920,9 @@ ir_run_COMPARE_OP_JUMP(
 {
             int opcode = COMPARE_OP_JUMP;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_JUMP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
@@ -969,7 +1001,9 @@ ir_run_CONTAINS_OP(
 {
             int opcode = CONTAINS_OP;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
@@ -1042,7 +1076,9 @@ ir_run_CONTAINS_OP_JUMP(
 {
             int opcode = CONTAINS_OP_JUMP;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_JUMP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
@@ -1123,9 +1159,11 @@ ir_run_CONVERT_VALUE(
 {
             int opcode = CONVERT_VALUE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CONVERT_VALUE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -1168,9 +1206,11 @@ ir_run_COPY_FREE_VARS(
 {
             int opcode = COPY_FREE_VARS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(COPY_FREE_VARS);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
@@ -1193,9 +1233,11 @@ ir_run_DELETE_DEREF(
 {
             int opcode = DELETE_DEREF;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(DELETE_DEREF);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
@@ -1217,9 +1259,11 @@ ir_run_DELETE_FAST(
 {
             int opcode = DELETE_FAST;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(DELETE_FAST);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
@@ -1245,9 +1289,11 @@ ir_run_DELETE_SUBSCR(
 {
             int opcode = DELETE_SUBSCR;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(DELETE_SUBSCR);
             PyValueBorrow container;
             PyValueBorrow sub;
@@ -1278,9 +1324,11 @@ ir_run_DICT_MERGE(
 {
             int opcode = DICT_MERGE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(DICT_MERGE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -1333,9 +1381,11 @@ ir_run_DICT_UPDATE(
 {
             int opcode = DICT_UPDATE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(DICT_UPDATE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -1398,9 +1448,11 @@ ir_run_END_ASYNC_FOR(
 {
             int opcode = END_ASYNC_FOR;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(END_ASYNC_FOR);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -1447,9 +1499,11 @@ ir_run_FORMAT_SIMPLE(
 {
             int opcode = FORMAT_SIMPLE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(FORMAT_SIMPLE);
             PyValueBorrow value;
             PyValue res;
@@ -1493,9 +1547,11 @@ ir_run_FORMAT_WITH_SPEC(
 {
             int opcode = FORMAT_WITH_SPEC;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(FORMAT_WITH_SPEC);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -1532,7 +1588,9 @@ ir_run_FOR_ITER(
 {
             int opcode = FOR_ITER;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
@@ -1596,9 +1654,11 @@ ir_run_GET_AITER(
 {
             int opcode = GET_AITER;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(GET_AITER);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -1665,9 +1725,11 @@ ir_run_GET_ANEXT(
 {
             int opcode = GET_ANEXT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(GET_ANEXT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -1693,9 +1755,11 @@ ir_run_GET_AWAITABLE(
 {
             int opcode = GET_AWAITABLE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(GET_AWAITABLE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -1734,7 +1798,9 @@ ir_run_GET_ITER(
 {
             int opcode = GET_ITER;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(GET_ITER);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
@@ -1781,9 +1847,11 @@ ir_run_GET_LEN(
 {
             int opcode = GET_LEN;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(GET_LEN);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -1811,9 +1879,11 @@ ir_run_IMPORT_FROM(
 {
             int opcode = IMPORT_FROM;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(IMPORT_FROM);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -1852,9 +1922,11 @@ ir_run_IMPORT_NAME(
 {
             int opcode = IMPORT_NAME;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(IMPORT_NAME);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -1924,9 +1996,11 @@ ir_run_LIST_EXTEND(
 {
             int opcode = LIST_EXTEND;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LIST_EXTEND);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -1985,7 +2059,9 @@ ir_run_LOAD_ATTR(
 {
             int opcode = LOAD_ATTR;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
@@ -2058,9 +2134,11 @@ ir_run_LOAD_BUILD_CLASS(
 {
             int opcode = LOAD_BUILD_CLASS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_BUILD_CLASS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -2090,9 +2168,11 @@ ir_run_LOAD_FROM_DICT_OR_DEREF(
 {
             int opcode = LOAD_FROM_DICT_OR_DEREF;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_FROM_DICT_OR_DEREF);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -2144,9 +2224,11 @@ ir_run_LOAD_FROM_DICT_OR_GLOBALS(
 {
             int opcode = LOAD_FROM_DICT_OR_GLOBALS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_FROM_DICT_OR_GLOBALS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -2189,7 +2271,9 @@ ir_run_LOAD_GLOBAL(
 {
             int opcode = LOAD_GLOBAL;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
@@ -2234,9 +2318,11 @@ ir_run_LOAD_LOCALS(
 {
             int opcode = LOAD_LOCALS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_LOCALS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -2261,9 +2347,11 @@ ir_run_LOAD_NAME(
 {
             int opcode = LOAD_NAME;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_NAME);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -2288,9 +2376,11 @@ ir_run_LOAD_SPECIAL(
 {
             int opcode = LOAD_SPECIAL;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_SPECIAL);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -2336,7 +2426,9 @@ ir_run_LOAD_SUPER_ATTR(
 {
             int opcode = LOAD_SUPER_ATTR;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_SUPER_ATTR);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
@@ -2460,9 +2552,11 @@ ir_run_MAKE_CELL(
 {
             int opcode = MAKE_CELL;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(MAKE_CELL);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
@@ -2484,9 +2578,11 @@ ir_run_MAKE_FUNCTION(
 {
             int opcode = MAKE_FUNCTION;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(MAKE_FUNCTION);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -2532,9 +2628,11 @@ ir_run_MATCH_CLASS(
 {
             int opcode = MATCH_CLASS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(MATCH_CLASS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -2608,9 +2706,11 @@ ir_run_MATCH_KEYS(
 {
             int opcode = MATCH_KEYS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(MATCH_KEYS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -2640,9 +2740,11 @@ ir_run_MATCH_MAPPING(
 {
             int opcode = MATCH_MAPPING;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(MATCH_MAPPING);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -2664,9 +2766,11 @@ ir_run_MATCH_SEQUENCE(
 {
             int opcode = MATCH_SEQUENCE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(MATCH_SEQUENCE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -2688,9 +2792,11 @@ ir_run_MATERIALIZE_KWARGS(
 {
             int opcode = MATERIALIZE_KWARGS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(MATERIALIZE_KWARGS);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
@@ -2711,9 +2817,11 @@ ir_run_POP_EXCEPT(
 {
             int opcode = POP_EXCEPT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_EXCEPT);
             PyValueBorrow exc_value;
             PyValue ir_own_A = PyValue_NULL;
@@ -2736,7 +2844,9 @@ ir_run_POP_JUMP_IF_FALSE(
 {
             int opcode = POP_JUMP_IF_FALSE;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
@@ -2796,7 +2906,9 @@ ir_run_POP_JUMP_IF_TRUE(
 {
             int opcode = POP_JUMP_IF_TRUE;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
@@ -2856,9 +2968,11 @@ ir_run_PUSH_EXC_INFO(
 {
             int opcode = PUSH_EXC_INFO;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(PUSH_EXC_INFO);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -2893,9 +3007,11 @@ ir_run_RAISE_VARARGS(
 {
             int opcode = RAISE_VARARGS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(RAISE_VARARGS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -2947,9 +3063,11 @@ ir_run_RERAISE(
 {
             int opcode = RERAISE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(RERAISE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -2982,7 +3100,9 @@ ir_run_SEND(
 {
             int opcode = SEND;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(SEND);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
@@ -3098,9 +3218,11 @@ ir_run_SETUP_ANNOTATIONS(
 {
             int opcode = SETUP_ANNOTATIONS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(SETUP_ANNOTATIONS);
             if (LOCALS() == NULL) {
                 _PyErr_Format(tstate, PyExc_SystemError,
@@ -3142,9 +3264,11 @@ ir_run_SET_FUNCTION_ATTRIBUTE(
 {
             int opcode = SET_FUNCTION_ATTRIBUTE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(SET_FUNCTION_ATTRIBUTE);
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
@@ -3182,9 +3306,11 @@ ir_run_SET_UPDATE(
 {
             int opcode = SET_UPDATE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(SET_UPDATE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -3232,7 +3358,9 @@ ir_run_STORE_ATTR(
 {
             int opcode = STORE_ATTR;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
@@ -3288,9 +3416,11 @@ ir_run_STORE_GLOBAL(
 {
             int opcode = STORE_GLOBAL;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(STORE_GLOBAL);
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -3330,9 +3460,11 @@ ir_run_STORE_NAME(
 {
             int opcode = STORE_NAME;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(STORE_NAME);
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -3361,9 +3493,11 @@ ir_run_STORE_SLICE(
 {
             int opcode = STORE_SLICE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(STORE_SLICE);
             PyValueBorrow v;
             PyValueBorrow container;
@@ -3417,7 +3551,9 @@ ir_run_STORE_SUBSCR(
 {
             int opcode = STORE_SUBSCR;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
@@ -3474,7 +3610,9 @@ ir_run_TO_BOOL(
 {
             int opcode = TO_BOOL;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
@@ -3517,9 +3655,11 @@ ir_run_UNPACK_EX(
 {
             int opcode = UNPACK_EX;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(UNPACK_EX);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -3560,7 +3700,9 @@ ir_run_UNPACK_SEQUENCE(
 {
             int opcode = UNPACK_SEQUENCE;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(UNPACK_SEQUENCE);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
@@ -3621,9 +3763,11 @@ ir_run_WITH_EXCEPT_START(
 {
             int opcode = WITH_EXCEPT_START;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(WITH_EXCEPT_START);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -3671,7 +3815,7 @@ ir_run_INSTRUMENTED_COMPARE_OP_JUMP(
     PyThreadState *tstate, _PyInterpreterFrame *frame,
     _PyInstr *next_instr, _PyIRWord ir_word)
 {
-    _PyInstr *this_instr = next_instr - 1;
+    _PyInstr *this_instr = next_instr;
     /* The base would specialise the word and overwrite the instrumentation. */
     PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, this_instr, COMPARE_OP_JUMP));
     _PyIRTransfer base = ir_run_COMPARE_OP_JUMP(tstate, frame, next_instr, ir_word);
@@ -3690,7 +3834,7 @@ ir_run_INSTRUMENTED_CONTAINS_OP_JUMP(
     PyThreadState *tstate, _PyInterpreterFrame *frame,
     _PyInstr *next_instr, _PyIRWord ir_word)
 {
-    _PyInstr *this_instr = next_instr - 1;
+    _PyInstr *this_instr = next_instr;
     /* The base would specialise the word and overwrite the instrumentation. */
     PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, this_instr, CONTAINS_OP_JUMP));
     _PyIRTransfer base = ir_run_CONTAINS_OP_JUMP(tstate, frame, next_instr, ir_word);
@@ -3709,7 +3853,7 @@ ir_run_INSTRUMENTED_FOR_ITER(
     PyThreadState *tstate, _PyInterpreterFrame *frame,
     _PyInstr *next_instr, _PyIRWord ir_word)
 {
-    _PyInstr *this_instr = next_instr - 1;
+    _PyInstr *this_instr = next_instr;
     /* The base would specialise the word and overwrite the instrumentation. */
     PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, this_instr, FOR_ITER));
     _PyIRTransfer base = ir_run_FOR_ITER(tstate, frame, next_instr, ir_word);
@@ -3728,7 +3872,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_FALSE(
     PyThreadState *tstate, _PyInterpreterFrame *frame,
     _PyInstr *next_instr, _PyIRWord ir_word)
 {
-    _PyInstr *this_instr = next_instr - 1;
+    _PyInstr *this_instr = next_instr;
     /* The base would specialise the word and overwrite the instrumentation. */
     PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, this_instr, POP_JUMP_IF_FALSE));
     _PyIRTransfer base = ir_run_POP_JUMP_IF_FALSE(tstate, frame, next_instr, ir_word);
@@ -3747,7 +3891,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
     PyThreadState *tstate, _PyInterpreterFrame *frame,
     _PyInstr *next_instr, _PyIRWord ir_word)
 {
-    _PyInstr *this_instr = next_instr - 1;
+    _PyInstr *this_instr = next_instr;
     /* The base would specialise the word and overwrite the instrumentation. */
     PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, this_instr, POP_JUMP_IF_TRUE));
     _PyIRTransfer base = ir_run_POP_JUMP_IF_TRUE(tstate, frame, next_instr, ir_word);
@@ -3772,9 +3916,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         LABEL(binary_op) {
             int opcode = _PyIR_BINARY_OP_FIRST + ir_binary_op;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(_PyIR_BINARY_OP_FIRST + ir_binary_op);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -3826,9 +3972,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_ADD_FLOAT) {
             int opcode = BINARY_OP_ADD_FLOAT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_ADD_FLOAT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -3885,9 +4033,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_ADD_INT) {
             int opcode = BINARY_OP_ADD_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_ADD_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -3963,9 +4113,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_ADD_UNICODE) {
             int opcode = BINARY_OP_ADD_UNICODE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_ADD_UNICODE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -4055,9 +4207,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_AND_INT) {
             int opcode = BINARY_OP_AND_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_AND_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -4125,9 +4279,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_EXTEND) {
             int opcode = BINARY_OP_EXTEND;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_EXTEND);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -4199,9 +4355,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_FLOOR_DIVIDE_INT) {
             int opcode = BINARY_OP_FLOOR_DIVIDE_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_FLOOR_DIVIDE_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -4283,9 +4441,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_INPLACE_ADD_UNICODE) {
             int opcode = BINARY_OP_INPLACE_ADD_UNICODE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_INPLACE_ADD_UNICODE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -4417,9 +4577,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_LSHIFT_INT) {
             int opcode = BINARY_OP_LSHIFT_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_LSHIFT_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -4510,9 +4672,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_MULTIPLY_FLOAT) {
             int opcode = BINARY_OP_MULTIPLY_FLOAT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_FLOAT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -4569,9 +4733,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_MULTIPLY_INT) {
             int opcode = BINARY_OP_MULTIPLY_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -4651,9 +4817,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_OR_INT) {
             int opcode = BINARY_OP_OR_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_OR_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -4729,9 +4897,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_REMAINDER_INT) {
             int opcode = BINARY_OP_REMAINDER_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_REMAINDER_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -4813,9 +4983,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_RSHIFT_INT) {
             int opcode = BINARY_OP_RSHIFT_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_RSHIFT_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -4893,9 +5065,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_SUBSCR_DICT) {
             int opcode = BINARY_OP_SUBSCR_DICT;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_DICT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -4962,9 +5136,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_SUBSCR_GETITEM) {
             int opcode = BINARY_OP_SUBSCR_GETITEM;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_GETITEM);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -5047,9 +5223,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_SUBSCR_LIST_INT) {
             int opcode = BINARY_OP_SUBSCR_LIST_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -5127,9 +5305,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_SUBSCR_LIST_SLICE) {
             int opcode = BINARY_OP_SUBSCR_LIST_SLICE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_SLICE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -5214,9 +5394,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_SUBSCR_STR_INT) {
             int opcode = BINARY_OP_SUBSCR_STR_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_STR_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -5307,9 +5489,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_SUBSCR_TUPLE_INT) {
             int opcode = BINARY_OP_SUBSCR_TUPLE_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_TUPLE_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -5386,9 +5570,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_SUBSCR_USTR_INT) {
             int opcode = BINARY_OP_SUBSCR_USTR_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_USTR_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -5482,9 +5668,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_SUBTRACT_FLOAT) {
             int opcode = BINARY_OP_SUBTRACT_FLOAT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_FLOAT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -5541,9 +5729,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_SUBTRACT_INT) {
             int opcode = BINARY_OP_SUBTRACT_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -5619,9 +5809,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_TRUEDIV_FLOAT) {
             int opcode = BINARY_OP_TRUEDIV_FLOAT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_TRUEDIV_FLOAT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -5690,9 +5882,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BINARY_OP_XOR_INT) {
             int opcode = BINARY_OP_XOR_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_XOR_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -5766,9 +5960,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BUILD_LIST) {
             int opcode = BUILD_LIST;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BUILD_LIST);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -5809,9 +6005,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(BUILD_TUPLE) {
             int opcode = BUILD_TUPLE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(BUILD_TUPLE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -5837,9 +6035,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CACHE) {
             int opcode = CACHE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CACHE);
             assert(0 && "Executing a cache.");
             Py_FatalError("Executing a cache.");
@@ -5852,9 +6052,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_ALLOC_AND_ENTER_INIT) {
             int opcode = CALL_ALLOC_AND_ENTER_INIT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_ALLOC_AND_ENTER_INIT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -6011,9 +6213,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_BOUND_METHOD_EXACT_ARGS) {
             int opcode = CALL_BOUND_METHOD_EXACT_ARGS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_BOUND_METHOD_EXACT_ARGS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -6196,9 +6400,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_BOUND_METHOD_GENERAL) {
             int opcode = CALL_BOUND_METHOD_GENERAL;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_BOUND_METHOD_GENERAL);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -6321,9 +6527,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_BUILTIN_CLASS) {
             int opcode = CALL_BUILTIN_CLASS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_BUILTIN_CLASS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -6420,9 +6628,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_BUILTIN_FAST) {
             int opcode = CALL_BUILTIN_FAST;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_BUILTIN_FAST);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -6520,9 +6730,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_BUILTIN_FAST_WITH_KEYWORDS) {
             int opcode = CALL_BUILTIN_FAST_WITH_KEYWORDS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_BUILTIN_FAST_WITH_KEYWORDS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -6620,9 +6832,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_BUILTIN_O) {
             int opcode = CALL_BUILTIN_O;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_BUILTIN_O);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -6727,9 +6941,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_EX_NON_PY_GENERAL) {
             int opcode = CALL_EX_NON_PY_GENERAL;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_EX_NON_PY_GENERAL);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -6824,9 +7040,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_EX_PY) {
             int opcode = CALL_EX_PY;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_EX_PY);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -6951,9 +7169,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_ISINSTANCE) {
             int opcode = CALL_ISINSTANCE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_ISINSTANCE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -7047,9 +7267,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_KW_BOUND_METHOD) {
             int opcode = CALL_KW_BOUND_METHOD;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_KW_BOUND_METHOD);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -7163,9 +7385,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_KW_NON_PY) {
             int opcode = CALL_KW_NON_PY;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_KW_NON_PY);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -7228,9 +7452,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_KW_PY) {
             int opcode = CALL_KW_PY;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_KW_PY);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -7323,9 +7549,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_LEN) {
             int opcode = CALL_LEN;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_LEN);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -7420,9 +7648,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_LIST_APPEND) {
             int opcode = CALL_LIST_APPEND;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_LIST_APPEND);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -7557,9 +7787,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_METHOD_DESCRIPTOR_FAST) {
             int opcode = CALL_METHOD_DESCRIPTOR_FAST;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_FAST);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -7676,9 +7908,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS) {
             int opcode = CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -7794,9 +8028,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_METHOD_DESCRIPTOR_NOARGS) {
             int opcode = CALL_METHOD_DESCRIPTOR_NOARGS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_NOARGS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -7930,9 +8166,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_METHOD_DESCRIPTOR_O) {
             int opcode = CALL_METHOD_DESCRIPTOR_O;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_O);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -8075,9 +8313,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_NON_PY_GENERAL) {
             int opcode = CALL_NON_PY_GENERAL;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_NON_PY_GENERAL);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -8140,9 +8380,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_PY_EXACT_ARGS) {
             int opcode = CALL_PY_EXACT_ARGS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_PY_EXACT_ARGS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -8286,9 +8528,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_PY_GENERAL) {
             int opcode = CALL_PY_GENERAL;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_PY_GENERAL);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -8381,9 +8625,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_STR_1) {
             int opcode = CALL_STR_1;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_STR_1);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -8472,9 +8718,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_TUPLE_1) {
             int opcode = CALL_TUPLE_1;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_TUPLE_1);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -8563,9 +8811,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CALL_TYPE_1) {
             int opcode = CALL_TYPE_1;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CALL_TYPE_1);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -8649,9 +8899,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CLEANUP_THROW) {
             int opcode = CLEANUP_THROW;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CLEANUP_THROW);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -8682,9 +8934,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CLEANUP_THROW_XFER_DISCARD) {
             int opcode = CLEANUP_THROW;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CLEANUP_THROW);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -8719,9 +8973,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(COMPARE_OP_FLOAT) {
             int opcode = COMPARE_OP_FLOAT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_FLOAT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -8794,9 +9050,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(COMPARE_OP_INT) {
             int opcode = COMPARE_OP_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -8872,9 +9130,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(COMPARE_OP_JUMP_FLOAT) {
             int opcode = COMPARE_OP_JUMP_FLOAT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_JUMP_FLOAT);
             _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
@@ -8953,9 +9213,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(COMPARE_OP_JUMP_INT) {
             int opcode = COMPARE_OP_JUMP_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_JUMP_INT);
             _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
@@ -9034,9 +9296,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(COMPARE_OP_JUMP_STR) {
             int opcode = COMPARE_OP_JUMP_STR;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_JUMP_STR);
             _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
@@ -9132,9 +9396,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(COMPARE_OP_STR) {
             int opcode = COMPARE_OP_STR;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_STR);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -9229,9 +9495,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CONTAINS_OP_DICT) {
             int opcode = CONTAINS_OP_DICT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_DICT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -9307,9 +9575,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CONTAINS_OP_JUMP_DICT) {
             int opcode = CONTAINS_OP_JUMP_DICT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_JUMP_DICT);
             _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
@@ -9388,9 +9658,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CONTAINS_OP_JUMP_SET) {
             int opcode = CONTAINS_OP_JUMP_SET;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_JUMP_SET);
             _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
@@ -9476,9 +9748,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(CONTAINS_OP_SET) {
             int opcode = CONTAINS_OP_SET;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_SET);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -9561,9 +9835,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(COPY) {
             int opcode = COPY;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(COPY);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -9603,8 +9879,10 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(END_FOR) {
             int opcode = END_FOR;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(END_FOR);
             PyValueBorrow value;
             PyValue ir_own_C = PyValue_NULL;
@@ -9619,9 +9897,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(END_SEND) {
             int opcode = END_SEND;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(END_SEND);
             PyValueBorrow receiver;
             PyValueBorrow index_or_null;
@@ -9650,9 +9930,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(EXIT_INIT_CHECK) {
             int opcode = EXIT_INIT_CHECK;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(EXIT_INIT_CHECK);
             PyValueBorrow should_be_none;
             PyValue ir_own_A = PyValue_NULL;
@@ -9680,9 +9962,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(FOR_ITER_GEN) {
             int opcode = FOR_ITER_GEN;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_GEN);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -9742,9 +10026,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(FOR_ITER_LIST) {
             int opcode = FOR_ITER_LIST;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_LIST);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -9811,9 +10097,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(FOR_ITER_RANGE) {
             int opcode = FOR_ITER_RANGE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_RANGE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -9883,9 +10171,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(FOR_ITER_TUPLE) {
             int opcode = FOR_ITER_TUPLE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_TUPLE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -9944,9 +10234,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(FOR_ITER_VIRTUAL) {
             int opcode = FOR_ITER_VIRTUAL;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_VIRTUAL);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -10010,9 +10302,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(GET_ITER_SELF) {
             int opcode = GET_ITER_SELF;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(GET_ITER_SELF);
             PyValue iterable;
             PyValue res;
@@ -10043,9 +10337,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(GET_ITER_VIRTUAL) {
             int opcode = GET_ITER_VIRTUAL;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(GET_ITER_VIRTUAL);
             PyValue iterable;
             PyValue zero;
@@ -10085,9 +10381,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_CALL) {
             int opcode = INSTRUMENTED_CALL;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_CALL);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -10159,9 +10457,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_CALL_FUNCTION_EX) {
             int opcode = INSTRUMENTED_CALL_FUNCTION_EX;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_CALL_FUNCTION_EX);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -10209,9 +10509,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_CALL_KW) {
             int opcode = INSTRUMENTED_CALL_KW;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_CALL_KW);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -10285,9 +10587,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_END_ASYNC_FOR) {
             int opcode = INSTRUMENTED_END_ASYNC_FOR;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_END_ASYNC_FOR);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -10340,9 +10644,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_END_SEND) {
             int opcode = INSTRUMENTED_END_SEND;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_END_SEND);
             PyValueBorrow receiver;
             PyValueBorrow index_or_null;
@@ -10394,9 +10700,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_INSTRUCTION) {
             int opcode = INSTRUMENTED_INSTRUCTION;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_INSTRUCTION);
             opcode = INSTRUMENTED_INSTRUCTION;
             int next_opcode = _Py_call_instrumentation_instruction(
@@ -10404,8 +10712,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             if (next_opcode < 0) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
+            next_instr = this_instr;
             if (_PyFb_HasEntry(next_opcode)) {
-                PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, this_instr, next_opcode));
+                PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, next_instr, next_opcode));
             }
             assert(next_opcode > 0 && next_opcode < 256);
             opcode = _PyIR_OriginalHandler(frame, this_instr, next_opcode);
@@ -10415,9 +10724,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_IS_OP_JUMP) {
             int opcode = INSTRUMENTED_IS_OP_JUMP;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_IS_OP_JUMP);
             _PyFb_IS_OP_JUMP *fb = (_PyFb_IS_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
@@ -10482,9 +10793,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_JUMP_BACKWARD) {
             int opcode = INSTRUMENTED_JUMP_BACKWARD;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_BACKWARD);
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -10507,9 +10820,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_JUMP_FORWARD) {
             int opcode = INSTRUMENTED_JUMP_FORWARD;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_FORWARD);
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -10522,9 +10837,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_JUMP_IF_FALSE_OR_POP) {
             int opcode = INSTRUMENTED_JUMP_IF_FALSE_OR_POP;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_IF_FALSE_OR_POP);
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -10563,9 +10880,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_JUMP_IF_TRUE_OR_POP) {
             int opcode = INSTRUMENTED_JUMP_IF_TRUE_OR_POP;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_IF_TRUE_OR_POP);
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -10605,9 +10924,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             int opcode = INSTRUMENTED_LINE;
             (void)(opcode);
             _PyIRWord* const prev_instr = frame->instr_ptr;
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_LINE);
             opcode = INSTRUMENTED_LINE;
             int original_opcode = 0;
@@ -10615,6 +10936,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 PyCodeObject *code = _PyFrame_GetCode(frame);
                 int index = _PyFrame_InstrOffset(frame, this_instr);
                 original_opcode = _PyCode_GetOriginalOpcode(code->_co_monitoring->lines, index);
+                next_instr = this_instr;
             } else {
                 original_opcode = _Py_call_instrumentation_line(
                     tstate, frame, this_instr, prev_instr);
@@ -10627,10 +10949,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 if (next_instr != this_instr) {
                     DISPATCH();
                 }
-                next_instr = this_instr + 1;
             }
             if (_PyFb_HasEntry(original_opcode)) {
-                PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, this_instr, original_opcode));
+                PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, next_instr, original_opcode));
             }
             opcode = _PyIR_OriginalHandler(frame, this_instr, original_opcode);
             PRE_DISPATCH_GOTO();
@@ -10640,9 +10961,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_LOAD_SUPER_ATTR) {
             int opcode = INSTRUMENTED_LOAD_SUPER_ATTR;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_LOAD_SUPER_ATTR);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -10745,9 +11068,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             int opcode = INSTRUMENTED_POP_ITER;
             (void)(opcode);
             _PyIRWord* const prev_instr = frame->instr_ptr;
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_ITER);
             PyValueBorrow iter;
             PyValueBorrow index_or_null;
@@ -10777,9 +11102,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_POP_JUMP_IF_NONE) {
             int opcode = INSTRUMENTED_POP_JUMP_IF_NONE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_NONE);
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -10811,9 +11138,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_POP_JUMP_IF_NOT_NONE) {
             int opcode = INSTRUMENTED_POP_JUMP_IF_NOT_NONE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_NOT_NONE);
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -10848,9 +11177,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INSTRUMENTED_RESUME) {
             int opcode = INSTRUMENTED_RESUME;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_RESUME);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
@@ -10914,9 +11245,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(INTERPRETER_EXIT) {
             int opcode = INTERPRETER_EXIT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(INTERPRETER_EXIT);
             PyValueBorrow retval;
             PyValue ir_own_A = PyValue_NULL;
@@ -10936,8 +11269,10 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(IR_JUMP) {
             int opcode = IR_JUMP;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(IR_JUMP);
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -10948,9 +11283,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(IS_OP) {
             int opcode = IS_OP;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(IS_OP);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -10999,9 +11336,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(IS_OP_JUMP) {
             int opcode = IS_OP_JUMP;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(IS_OP_JUMP);
             _PyFb_IS_OP_JUMP *fb = (_PyFb_IS_OP_JUMP *)IR_FB(IR_C(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
@@ -11059,9 +11398,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(JUMP_BACKWARD) {
             int opcode = JUMP_BACKWARD;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(JUMP_BACKWARD);
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -11083,9 +11424,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(JUMP_BACKWARD_NO_INTERRUPT) {
             int opcode = JUMP_BACKWARD_NO_INTERRUPT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(JUMP_BACKWARD_NO_INTERRUPT);
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -11097,9 +11440,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(JUMP_FORWARD) {
             int opcode = JUMP_FORWARD;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(JUMP_FORWARD);
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -11110,9 +11455,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(JUMP_IF_FALSE_OR_POP) {
             int opcode = JUMP_IF_FALSE_OR_POP;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(JUMP_IF_FALSE_OR_POP);
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -11143,9 +11490,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(JUMP_IF_TRUE_OR_POP) {
             int opcode = JUMP_IF_TRUE_OR_POP;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(JUMP_IF_TRUE_OR_POP);
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
@@ -11176,9 +11525,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LIST_APPEND) {
             int opcode = LIST_APPEND;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LIST_APPEND);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -11210,9 +11561,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_CLASS) {
             int opcode = LOAD_ATTR_CLASS;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_CLASS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -11271,9 +11624,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_CLASSMETHOD) {
             int opcode = LOAD_ATTR_CLASSMETHOD;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_CLASSMETHOD);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -11358,9 +11713,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK) {
             int opcode = LOAD_ATTR_CLASS_WITH_METACLASS_CHECK;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -11430,9 +11787,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN) {
             int opcode = LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -11521,9 +11880,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_INSTANCE_VALUE) {
             int opcode = LOAD_ATTR_INSTANCE_VALUE;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_INSTANCE_VALUE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -11594,9 +11955,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_METHOD_LAZY_DICT) {
             int opcode = LOAD_ATTR_METHOD_LAZY_DICT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_LAZY_DICT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -11658,9 +12021,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_METHOD_NO_DICT) {
             int opcode = LOAD_ATTR_METHOD_NO_DICT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_NO_DICT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -11712,9 +12077,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_METHOD_WITH_VALUES) {
             int opcode = LOAD_ATTR_METHOD_WITH_VALUES;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_WITH_VALUES);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -11776,9 +12143,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_MODULE) {
             int opcode = LOAD_ATTR_MODULE;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_MODULE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -11847,9 +12216,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_NONDESCRIPTOR_NO_DICT) {
             int opcode = LOAD_ATTR_NONDESCRIPTOR_NO_DICT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_NO_DICT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -11897,9 +12268,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES) {
             int opcode = LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -11957,9 +12330,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_PROPERTY) {
             int opcode = LOAD_ATTR_PROPERTY;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_PROPERTY);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12043,9 +12418,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_SHAPE) {
             int opcode = LOAD_ATTR_SHAPE;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12103,9 +12480,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_SHAPE_LOCAL_TEMP) {
             int opcode = LOAD_ATTR_SHAPE;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12162,9 +12541,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_SHAPE_POLY) {
             int opcode = LOAD_ATTR_SHAPE;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12219,9 +12600,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP) {
             int opcode = LOAD_ATTR_SHAPE;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12275,9 +12658,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_SLOT) {
             int opcode = LOAD_ATTR_SLOT;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_SLOT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12338,9 +12723,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_ATTR_WITH_HINT) {
             int opcode = LOAD_ATTR_WITH_HINT;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_WITH_HINT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12444,9 +12831,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_COMMON_CONSTANT) {
             int opcode = LOAD_COMMON_CONSTANT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_COMMON_CONSTANT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12463,7 +12852,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_CONST) {
             int opcode = LOAD_CONST;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
@@ -12481,9 +12872,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_CONST_INLINE_FLOAT) {
             int opcode = LOAD_CONST_INLINE_FLOAT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST_INLINE_FLOAT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12500,9 +12893,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_CONST_INLINE_INT) {
             int opcode = LOAD_CONST_INLINE_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST_INLINE_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12519,9 +12914,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_DEREF) {
             int opcode = LOAD_DEREF;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_DEREF);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12543,9 +12940,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_FAST) {
             int opcode = LOAD_FAST;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12562,9 +12961,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_FAST_AND_CLEAR) {
             int opcode = LOAD_FAST_AND_CLEAR;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_AND_CLEAR);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12581,9 +12982,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_FAST_BORROW) {
             int opcode = LOAD_FAST_BORROW;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_BORROW);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12600,9 +13003,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_FAST_CHECK) {
             int opcode = LOAD_FAST_CHECK;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_CHECK);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12635,9 +13040,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_GLOBAL_BUILTIN) {
             int opcode = LOAD_GLOBAL_BUILTIN;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL_BUILTIN);
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -12702,9 +13109,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_GLOBAL_MODULE) {
             int opcode = LOAD_GLOBAL_MODULE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL_MODULE);
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -12758,7 +13167,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_SMALL_INT) {
             int opcode = LOAD_SMALL_INT;
             (void)(opcode);
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_SMALL_INT);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
@@ -12777,9 +13188,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_SMALL_INT_INLINE) {
             int opcode = LOAD_SMALL_INT_INLINE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_SMALL_INT_INLINE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12805,9 +13218,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_SUPER_ATTR_ATTR) {
             int opcode = LOAD_SUPER_ATTR_ATTR;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_SUPER_ATTR_ATTR);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12871,9 +13286,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(LOAD_SUPER_ATTR_METHOD) {
             int opcode = LOAD_SUPER_ATTR_METHOD;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(LOAD_SUPER_ATTR_METHOD);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -12961,9 +13378,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(MAP_ADD) {
             int opcode = MAP_ADD;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(MAP_ADD);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -13013,9 +13432,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(NOP) {
             int opcode = NOP;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(NOP);
             DISPATCH();
         }
@@ -13026,9 +13447,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_ITER) {
             int opcode = POP_ITER;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_ITER);
             PyValueBorrow iter;
             PyValueBorrow index_or_null;
@@ -13052,9 +13475,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_JUMP_IF_FALSE_ALWAYS_TRUE) {
             int opcode = POP_JUMP_IF_FALSE_ALWAYS_TRUE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_ALWAYS_TRUE);
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -13115,9 +13540,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_JUMP_IF_FALSE_BOOL) {
             int opcode = POP_JUMP_IF_FALSE_BOOL;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_BOOL);
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -13155,9 +13582,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_JUMP_IF_FALSE_INT) {
             int opcode = POP_JUMP_IF_FALSE_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_INT);
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -13216,9 +13645,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_JUMP_IF_FALSE_LIST) {
             int opcode = POP_JUMP_IF_FALSE_LIST;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_LIST);
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -13280,9 +13711,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_JUMP_IF_FALSE_NONE) {
             int opcode = POP_JUMP_IF_FALSE_NONE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_NONE);
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -13321,9 +13754,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_JUMP_IF_FALSE_STR) {
             int opcode = POP_JUMP_IF_FALSE_STR;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_STR);
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -13382,9 +13817,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_JUMP_IF_NONE) {
             int opcode = POP_JUMP_IF_NONE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_NONE);
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -13424,9 +13861,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_JUMP_IF_NOT_NONE) {
             int opcode = POP_JUMP_IF_NOT_NONE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_NOT_NONE);
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -13469,9 +13908,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_JUMP_IF_TRUE_ALWAYS_TRUE) {
             int opcode = POP_JUMP_IF_TRUE_ALWAYS_TRUE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_ALWAYS_TRUE);
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -13532,9 +13973,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_JUMP_IF_TRUE_BOOL) {
             int opcode = POP_JUMP_IF_TRUE_BOOL;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_BOOL);
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -13572,9 +14015,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_JUMP_IF_TRUE_INT) {
             int opcode = POP_JUMP_IF_TRUE_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_INT);
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -13633,9 +14078,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_JUMP_IF_TRUE_LIST) {
             int opcode = POP_JUMP_IF_TRUE_LIST;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_LIST);
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -13697,9 +14144,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_JUMP_IF_TRUE_NONE) {
             int opcode = POP_JUMP_IF_TRUE_NONE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_NONE);
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -13738,9 +14187,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_JUMP_IF_TRUE_STR) {
             int opcode = POP_JUMP_IF_TRUE_STR;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_STR);
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
@@ -13799,9 +14250,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(POP_TOP) {
             int opcode = POP_TOP;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(POP_TOP);
             PyValueBorrow value;
             PyValue ir_own_A = PyValue_NULL;
@@ -13825,9 +14278,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(RESERVED) {
             int opcode = RESERVED;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(RESERVED);
             assert(0 && "Executing RESERVED instruction.");
             Py_FatalError("Executing RESERVED instruction.");
@@ -13837,9 +14292,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(RESUME) {
             int opcode = RESUME;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(RESUME);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
@@ -13879,9 +14336,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(RETURN_GENERATOR) {
             int opcode = RETURN_GENERATOR;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(RETURN_GENERATOR);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -13915,9 +14374,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(RETURN_VALUE) {
             int opcode = RETURN_VALUE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(RETURN_VALUE);
             PyValueBorrow value;
             PyValue taken;
@@ -13961,9 +14422,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(RETURN_VALUE_EMPTY) {
             int opcode = RETURN_VALUE_EMPTY;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(RETURN_VALUE_EMPTY);
             PyValueBorrow value;
             PyValue taken;
@@ -14010,9 +14473,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(SEND_ASYNC_GEN) {
             int opcode = SEND_ASYNC_GEN;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(SEND_ASYNC_GEN);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -14075,9 +14540,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(SEND_ASYNC_GEN_XFER_DISCARD) {
             int opcode = SEND_ASYNC_GEN;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(SEND_ASYNC_GEN);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -14142,9 +14609,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(SEND_GEN) {
             int opcode = SEND_GEN;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(SEND_GEN);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -14215,9 +14684,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(SEND_GEN_XFER_DISCARD) {
             int opcode = SEND_GEN;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(SEND_GEN);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -14290,9 +14761,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(SEND_VIRTUAL) {
             int opcode = SEND_VIRTUAL;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(SEND_VIRTUAL);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -14356,9 +14829,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(SEND_VIRTUAL_XFER_DISCARD) {
             int opcode = SEND_VIRTUAL;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(SEND_VIRTUAL);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -14422,9 +14897,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(SEND_XFER_DISCARD) {
             int opcode = SEND;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(SEND);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -14548,9 +15025,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(SET_ADD) {
             int opcode = SET_ADD;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(SET_ADD);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -14585,9 +15064,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(STORE_ATTR_INSTANCE_VALUE) {
             int opcode = STORE_ATTR_INSTANCE_VALUE;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_INSTANCE_VALUE);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
             PyValueBorrow value;
@@ -14689,9 +15170,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(STORE_ATTR_SHAPE) {
             int opcode = STORE_ATTR_SHAPE;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
             PyValueBorrow owner;
@@ -14748,9 +15231,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(STORE_ATTR_SHAPE_ADD) {
             int opcode = STORE_ATTR_SHAPE_ADD;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE_ADD);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
             PyValueBorrow owner;
@@ -14809,9 +15294,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(STORE_ATTR_SLOT) {
             int opcode = STORE_ATTR_SLOT;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SLOT);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
             PyValueBorrow owner;
@@ -14864,9 +15351,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(STORE_ATTR_WITH_HINT) {
             int opcode = STORE_ATTR_WITH_HINT;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_WITH_HINT);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
@@ -14973,9 +15462,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(STORE_DEREF) {
             int opcode = STORE_DEREF;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(STORE_DEREF);
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
@@ -14991,9 +15482,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(STORE_FAST) {
             int opcode = STORE_FAST;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(STORE_FAST);
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
@@ -15031,9 +15524,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(STORE_SUBSCR_DICT) {
             int opcode = STORE_SUBSCR_DICT;
             (void)(opcode);
-            _PyIRWord* this_instr = next_instr - 1;
+            _PyIRWord* this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR_DICT);
             PyValueBorrow nos;
             PyValueBorrow value;
@@ -15094,9 +15589,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(STORE_SUBSCR_LIST_INT) {
             int opcode = STORE_SUBSCR_LIST_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR_LIST_INT);
             PyValueBorrow value;
             PyValueBorrow nos;
@@ -15193,9 +15690,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(SWAP) {
             int opcode = SWAP;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(SWAP);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -15221,9 +15720,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(TO_BOOL_ALWAYS_TRUE) {
             int opcode = TO_BOOL_ALWAYS_TRUE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_ALWAYS_TRUE);
             _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_C(ir_word));
             PyValue owner;
@@ -15266,9 +15767,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(TO_BOOL_BOOL) {
             int opcode = TO_BOOL_BOOL;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_BOOL);
             PyValue value;
             value = IR_SLOT(IR_B(ir_word));
@@ -15284,9 +15787,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(TO_BOOL_INT) {
             int opcode = TO_BOOL_INT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_INT);
             PyValue value;
             PyValue res;
@@ -15327,9 +15832,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(TO_BOOL_LIST) {
             int opcode = TO_BOOL_LIST;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_LIST);
             PyValue tos;
             PyValue value;
@@ -15372,9 +15879,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(TO_BOOL_NONE) {
             int opcode = TO_BOOL_NONE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_NONE);
             PyValue value;
             PyValue res;
@@ -15394,9 +15903,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(TO_BOOL_STR) {
             int opcode = TO_BOOL_STR;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_STR);
             PyValue value;
             PyValue res;
@@ -15437,9 +15948,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(UNARY_INVERT) {
             int opcode = UNARY_INVERT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(UNARY_INVERT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -15473,9 +15986,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(UNARY_NEGATIVE) {
             int opcode = UNARY_NEGATIVE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(UNARY_NEGATIVE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -15517,9 +16032,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(UNARY_NOT) {
             int opcode = UNARY_NOT;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(UNARY_NOT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -15551,9 +16068,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(UNPACK_SEQUENCE_LIST) {
             int opcode = UNPACK_SEQUENCE_LIST;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(UNPACK_SEQUENCE_LIST);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -15617,9 +16136,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(UNPACK_SEQUENCE_TUPLE) {
             int opcode = UNPACK_SEQUENCE_TUPLE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(UNPACK_SEQUENCE_TUPLE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -15674,9 +16195,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(UNPACK_SEQUENCE_TWO_TUPLE) {
             int opcode = UNPACK_SEQUENCE_TWO_TUPLE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(UNPACK_SEQUENCE_TWO_TUPLE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -15734,9 +16257,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(YIELD_DELEGATED) {
             int opcode = YIELD_DELEGATED;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(YIELD_DELEGATED);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -15769,9 +16294,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         TARGET(YIELD_VALUE) {
             int opcode = YIELD_VALUE;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr - 1;
+            _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
-            frame->instr_ptr = next_instr - 1;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
             INSTRUCTION_STATS(YIELD_VALUE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
@@ -15906,7 +16433,7 @@ PROCESS_ERROR_AT(RAISE, 0, next_instr);
             case _PyIR_EXIT_START_FRAME:
                 goto LABEL_start_frame;
             case _PyIR_EXIT_DEOPT:
-                next_instr = activation->exit_next + 1;
+                next_instr = activation->exit_next;
                 switch (activation->exit_target) {
                 case IR_DEOPT_TARGET_BINARY_OP:
                     ir_binary_op = (int)activation->exit_entry;

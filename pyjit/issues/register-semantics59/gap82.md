@@ -39,16 +39,18 @@ roughly doubled.
 
 | Unit | Content | Branch | State |
 | --- | --- | --- | --- |
-| A1 | Analysis: H5's evaluator against upstream, by category, call case and handler ledger; the two H4 hypotheses (outlined generic heads, the generator steps' calls) | — | running |
+| A1 | Analysis: H5's evaluator against upstream, by category, call case and handler ledger; the two H4 hypotheses (outlined generic heads, the generator steps' calls) | — | done: ten ranked items (`E59/gap82/a1/report.md`); generic heads small overall; the generator cost is the step protocol, not its calls |
 | A2 | Analysis: the 12 library-heavy cases against upstream, by symbol and DSO; causes; units for N | — | running |
 | H6 | Hot-code layout of `ir_evaluate`: diagnose logging_silent's front-end stalls; hot/cold separation, hot-handler order, alignment. Lands only if logging_silent improves clearly and the screen geomean and every screen case hold | `pyjit/gap82-h6` | running |
-| CS | Constant slots with no fixed cost: 0/1/3/7 slots at about 502/505/507/511 instructions per call (H5: 502/522/551/606) | `pyjit/gap82-cs` | starting |
-| TX | One call mechanism: generic, keyword, `CALL_FUNCTION_EX`, instrumented and guarded-miss calls on the operand helpers; the call transaction, view and record deleted | `pyjit/gap82-tx` | starting |
-| G | Generator, coroutine and iteration path, briefed from A1 | | phase 2 |
-| K | Attribute and call handler fixed costs, briefed from A1 | | phase 2 |
+| CS | Constant slots with no fixed cost: 0/1/3/7 slots at about 502/505/507/511 instructions per call (H5: 502/522/551/606) | `pyjit/gap82-cs` | running |
+| TX | One call mechanism: generic, keyword, `CALL_FUNCTION_EX`, instrumented and guarded-miss calls on the operand helpers; the call transaction, view and record deleted | `pyjit/gap82-tx` | running |
+| SL | List slice assignment: snapshot only `a[i:j] = a`, as upstream does (A1 item 1: about 10% of fannkuch's instructions) | `pyjit/gap82-sl` | running |
+| G | Plain generator transfers inline with one plain-transfer test; cheaper generic `FOR_ITER` and list-subclass iteration; unpack straight into local homes (A1 items 4, 7, 8) | `pyjit/gap82-g` | running |
+| K1 | Operand reads and releases: a proved per-site bit for plain local object operands, skipped releases of non-owners, fresh destinations (H2's dead markers), the polymorphic shape guard (A1 item 6) | `pyjit/gap82-k1` | running |
+| K2 | Calls: decode once, single-pass argument fill, native call gather and publish, one plain retire path, C-to-Python re-entry (A1 items 2, 3, 5, 10); after IP1 because it builds on TX and CS | | after IP1 |
 | N | Library-side excess, briefed from A2 | | phase 2 |
-| IP1 | Merge CS, TX and an accepted H6; full suites, release then debug; kernels; per-call figures; timed all-29 against H5 | `pyjit/gap82` | |
-| IP2 | Merge G, K and N; full suites; timed all-29 against H5, golden73, upstream and checkpoint78; this record's results; the report | `pyjit/gap82` | |
+| IP1 | Merge CS, TX, SL and an accepted H6 (and G and K1 if ready); full suites, release then debug; kernels; per-call figures; timed all-29 against H5 | `pyjit/gap82` | |
+| IP2 | Merge the remaining units (G, K1, K2, N); full suites; timed all-29 against H5, golden73, upstream and checkpoint78; this record's results; the report | `pyjit/gap82` | |
 
 Each unit is one Sonnet agent with:
 - a time budget (3–4 hours);

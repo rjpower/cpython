@@ -6931,6 +6931,8 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
     # the body is in the evaluator once, not once per operation.
     binary_ops = frozenset(binary_op_handlers(analysis))
     shared_binary_op_done = False
+    family_heads = {inst.family.name for inst in all_instructions(analysis).values()
+                    if inst.family is not None} | set(analysis.families)
     for name, inst in sorted(handler_instructions(analysis).items()):
         if generator_word_entry(name, analysis) != name:
             continue
@@ -6950,7 +6952,7 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         emitter.execution_variant = EXECUTION_VARIANTS.get(name)
         # The generic path of an adaptive family runs only until a
         # specialisation replaces it, or if it cannot
-        generic_head = (name in analysis.families
+        generic_head = (name in family_heads
                         and any(isinstance(part, Uop) and
                                 "specializing" in part.annotations
                                 for part in inst.parts))

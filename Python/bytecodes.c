@@ -3329,6 +3329,7 @@ dummy_func(
             int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
             DEAD(cond);
             RECORD_BRANCH_TAKEN(FB_TAKEN(), flag);
+            IR_REPORT_EDGE(flag);
             if (flag) {
                 JUMPBY(IR_FUSED_DISTANCE());
             }
@@ -3517,6 +3518,7 @@ dummy_func(
             int flag = PyValue_IsFalse(cond);
             DEAD(cond);
             RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
+            IR_REPORT_EDGE(flag);
             if (flag) {
                 JUMPTO(oparg);
             }
@@ -3527,6 +3529,7 @@ dummy_func(
             int flag = PyValue_IsTrue(cond);
             DEAD(cond);
             RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
+            IR_REPORT_EDGE(flag);
             if (flag) {
                 JUMPTO(oparg);
             }

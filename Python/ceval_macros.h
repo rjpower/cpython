@@ -212,6 +212,44 @@ do { \
         DISPATCH(); \
     } while (0)
 
+/* A conditional jump of an outlined handler reports whether it jumped, which
+ * its instrumented twin needs for its event and cannot tell from the word it
+ * is to run when the jump is of no distance (rule 12).  The evaluator's own
+ * handlers do not report. */
+#define IR_REPORT_EDGE(TAKEN) ((void)(TAKEN))
+
+/* The event of an instrumented instruction that follows its effect (rule 12)
+ * runs in a cold function, ir_event_edge(), which returns the word to run or
+ * no word for an error that the activation describes. */
+#define IR_OBSERVE_EDGE(SOURCE, NEXT, EVENT, EDGE) \
+    do { \
+        _PyIRTransfer ir_t = ir_event_edge(tstate, frame, this_instr, \
+                                           (SOURCE), (NEXT), (EVENT), (EDGE)); \
+        next_instr = ir_t.next; \
+        if (next_instr == NULL) { \
+            goto LABEL_outlined_exit; \
+        } \
+        DISPATCH(); \
+    } while (0)
+
+/* The handler of an instrumented twin whose event precedes the effect (rule
+ * 12): the event runs in the cold function FN, then the twin goes to the
+ * handler of its base with the same word.  FN returns the word to run, the
+ * twin's own word to go on, or no word for an error. */
+#define IR_RUN_EVENT(FN, BASE) \
+    do { \
+        _PyIRTransfer ir_t = FN(tstate, frame, next_instr, ir_word); \
+        if (ir_t.next == NULL) { \
+            goto LABEL_outlined_exit; \
+        } \
+        if (ir_t.next != next_instr) { \
+            next_instr = ir_t.next; \
+            int opcode; \
+            DISPATCH(); \
+        } \
+        goto TARGET_##BASE; \
+    } while (0)
+
 #define DISPATCH_INLINED(NEW_FRAME)                              \
     do {                                                         \
         assert(!IS_PEP523_HOOKED(tstate));                       \

@@ -353,6 +353,9 @@ typedef struct _PyEvalActivation {
     int exit_target;
     uint32_t exit_entry;
     _PyInstr *exit_next;
+    /* Whether the outlined conditional jump that ran last jumped
+     * (IR_REPORT_EDGE()), for the event of its instrumented twin. */
+    int edge;
 } _PyEvalActivation;
 
 /* What an outlined handler returns: the frame to run and its next word, or

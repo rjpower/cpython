@@ -2239,6 +2239,93 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
         ir_exit->exit_next = this_instr; \
         return (_PyIRTransfer){frame, NULL}; \
     } while (0)
+#pragma push_macro("IR_OBSERVE_EDGE")
+#pragma push_macro("IR_REPORT_EDGE")
+#undef IR_REPORT_EDGE
+#define IR_REPORT_EDGE(TAKEN) (IR_ACTIVATION()->edge = (TAKEN))
+#undef IR_OBSERVE_EDGE
+#define IR_OBSERVE_EDGE(SOURCE, NEXT, EVENT, EDGE) \
+    return ir_event_edge(tstate, frame, this_instr, (SOURCE), (NEXT), (EVENT), (EDGE))
+
+/* The event of an instrumented branch, jump or loop step, after the effect
+ * (rule 12).  It is out of the evaluator, where the instrumented handlers
+ * only call it.  Its result is the word to run (the callbacks can redirect
+ * it) or no word for an error. */
+static Py_NO_INLINE _PyIRTransfer
+ir_event_edge(PyThreadState *tstate, _PyInterpreterFrame *frame,
+              _PyInstr *this_instr, _PyInstr *source, _PyInstr *next,
+              int event, int edge)
+{
+    frame->return_pc = next;
+    _PyIRObserverResult result = _PyIR_ObserveCommittedBranch(
+        tstate, frame, this_instr, source, next, event, edge);
+    PyObject *exception = result.status < 0 ? PyErr_GetRaisedException() : NULL;
+    assert(result.status >= 0 || exception != NULL);
+    frame->instr_ptr = result.next;
+    if (result.status < 0) {
+        PyErr_SetRaisedException(exception);
+        PROCESS_ERROR_AT(RAISE, 0, result.next);
+    }
+    return (_PyIRTransfer){frame, result.next};
+}
+
+/* The events that precede the effect of an instrumented twin (rule 12).  Each
+ * leaves the state as the twin's handler left it at the event: an error
+ * unwinds with the operand as the event took it. */
+static Py_NO_INLINE _PyIRTransfer
+ir_event_return(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    _PyInstr *this_instr = next_instr;
+    frame->instr_ptr = this_instr;
+    PyValueBorrow val = IR_VIEW(IR_A(ir_word));
+    /* The callbacks can run code, so the event holds the value. */
+    PyValue held = PyValue_DUP(val);
+    int err = _Py_call_instrumentation_arg(
+        tstate, PY_MONITORING_EVENT_PY_RETURN, frame, this_instr, held);
+    if (err) {
+        /* The base would have taken the operand: so does the error. */
+        PyValue operand = IR_DETACH(ir_word, A, val);
+        PyValue_XCLOSE(operand);
+        PyValue_CLOSE(held);
+        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+    }
+    PyValue_CLOSE(held);
+    return (_PyIRTransfer){frame, this_instr};
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_event_yield(PyThreadState *tstate, _PyInterpreterFrame *frame,
+               _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    _PyInstr *this_instr = next_instr;
+    frame->instr_ptr = this_instr;
+    PyValue val = IR_SLOT(IR_B(ir_word));
+    int err = _Py_call_instrumentation_arg(
+        tstate, PY_MONITORING_EVENT_PY_YIELD, frame, this_instr, val);
+    if (err) {
+        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+    }
+    /* The callbacks can have jumped. */
+    return (_PyIRTransfer){frame, frame->instr_ptr};
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_event_end_for(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    _PyInstr *this_instr = next_instr;
+    PyValueBorrow value = IR_VIEW(IR_C(ir_word));
+    PyValue receiver = IR_SLOT(IR_A(ir_word));
+    if (PyValue_GenCheck(receiver)) {
+        int err = monitor_stop_iteration(tstate, frame, this_instr, value);
+        if (err) {
+            PROCESS_ERROR_AT(RAISE, 0, this_instr);
+        }
+    }
+    return (_PyIRTransfer){frame, this_instr};
+}
+
 #define IR_OUTLINED_FUNCTIONS
 #include "generated_ir_cases.c.h"
 #undef IR_OUTLINED_FUNCTIONS
@@ -2248,6 +2335,8 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #pragma pop_macro("PROCESS_ERROR_AT")
 #pragma pop_macro("JUMP_TO_PREDICTED")
 #pragma pop_macro("IR_DEOPT_BINARY_OP")
+#pragma pop_macro("IR_OBSERVE_EDGE")
+#pragma pop_macro("IR_REPORT_EDGE")
 
 /* The evaluator: every handler and label of the interpreter in one
  * function, which dispatches by computed goto (Python/ceval_macros.h).  Its

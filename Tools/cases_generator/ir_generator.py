@@ -4001,7 +4001,7 @@ class IREmitter(Emitter):
         # mutually exclusive stores to the ordinary shared counter.
         stack.dst_stores = list(stack.dst_stores)
         reserved = {"ir_observer_next", "ir_observer_result",
-                    "ir_observer_exception"}
+                    "ir_observer_exception", "ir_t"}
         if reserved & set(uop_tokens(inst)):
             raise analysis_error("terminal observer reserved local name", tkn)
         self.emit("{\n")
@@ -4014,25 +4014,15 @@ class IREmitter(Emitter):
         self.normal_null_receipts.append({edge: stack.null_stores.get(edge, False)})
         self.finish_stores(stack)
         self.emit(f"_PyInstr *ir_observer_next = {destination};\n")
-        self.emit("frame->return_pc = ir_observer_next;\n")
         # This checked terminal path has performed its final owner commit.
         # Only its successful intended normal edge gets the normal recipe;
         # callback errors/redirects retain their separate recovery protocols.
         if normal_vacate_capability(inst, fmt):
             self.normal_observer_edges.add(edge)
-        self.emit("_PyIRObserverResult ir_observer_result = _PyIR_ObserveCommittedBranch(\n")
-        self.emit(f"tstate, frame, this_instr, {source}, ir_observer_next, {event}, {edge});\n")
-        self.emit("PyObject *ir_observer_exception = ir_observer_result.status < 0\n")
-        self.emit("? PyErr_GetRaisedException() : NULL;\n")
-        self.emit("assert(ir_observer_result.status >= 0 || ir_observer_exception != NULL);\n")
-        self.emit("frame->instr_ptr = ir_observer_result.next;\n")
-        self.emit("if (ir_observer_result.status < 0) {\n")
-        self.emit("PyErr_SetRaisedException(ir_observer_exception);\n")
-        self.emit("next_instr = frame->instr_ptr + 1;\n")
-        self.reader_error()
+        # The event runs in a cold function (rule 12), which returns the word
+        # to run or the error that the stub's exit describes.
+        self.emit(f"IR_OBSERVE_EDGE({source}, ir_observer_next, {event}, {edge});\n")
         self.emit("}\n")
-        self.emit("next_instr = frame->instr_ptr;\n")
-        self.emit("DISPATCH();\n}\n")
         return False
 
     def unpack_to_locals(self, inst, fmt, count):
@@ -6901,6 +6891,69 @@ OUTLINE_BLOCKERS = re.compile(
 DEOPT_TARGET = re.compile(r"\bJUMP_TO_PREDICTED\((\w+)\)")
 
 
+# Rule 12.  The instrumented twin of an outlined instruction whose event
+# follows the effect is a function that runs the base function, then fires
+# the event for the edge that the base took.  It is not a copy of the base:
+# the DSL bodies of the twins stay as the contract that their metadata is
+# derived from.  Value: the base, and whether the base is a conditional jump
+# that reports its edge (a loop step has an event only for its next item, and
+# its edge is the word that the base returns).
+EDGE_TWINS = {
+    "INSTRUMENTED_POP_JUMP_IF_TRUE": ("POP_JUMP_IF_TRUE", True),
+    "INSTRUMENTED_POP_JUMP_IF_FALSE": ("POP_JUMP_IF_FALSE", True),
+    "INSTRUMENTED_COMPARE_OP_JUMP": ("COMPARE_OP_JUMP", True),
+    "INSTRUMENTED_CONTAINS_OP_JUMP": ("CONTAINS_OP_JUMP", True),
+    "INSTRUMENTED_FOR_ITER": ("FOR_ITER", False),
+}
+
+
+# Rule 12, twins whose event precedes the effect: the event is a function of
+# Python/ceval.c, and the twin goes on to the base's handler with the same
+# word.  The event is the twin's first part in the DSL.
+EVENT_TWINS = {
+    "INSTRUMENTED_RETURN_VALUE": ("ir_event_return", "RETURN_VALUE"),
+    "INSTRUMENTED_RETURN_VALUE_EMPTY": ("ir_event_return", "RETURN_VALUE_EMPTY"),
+    "INSTRUMENTED_YIELD_VALUE": ("ir_event_yield", "YIELD_VALUE"),
+    "INSTRUMENTED_YIELD_DELEGATED": ("ir_event_yield", "YIELD_DELEGATED"),
+    "INSTRUMENTED_END_FOR": ("ir_event_end_for", "END_FOR"),
+}
+
+
+def edge_twin_function(name: str, base: str, reports_edge: bool) -> str:
+    "The function of the twin `name` of the outlined instruction `base`"
+    if reports_edge:
+        taken = "IR_ACTIVATION()->edge"
+        branch = f"""    /* A jump of no distance runs the next word either way. */
+    int taken = IR_ACTIVATION()->edge;
+    return ir_event_edge(tstate, frame, this_instr, this_instr, base.next,
+        taken ? PY_MONITORING_EVENT_BRANCH_RIGHT : PY_MONITORING_EVENT_BRANCH_LEFT,
+        taken ? _PyIR_EDGE_TAKEN : _PyIR_EDGE_FALLTHROUGH);
+"""
+    else:
+        # A loop step has an event only for the next item
+        branch = """    if (base.next != this_instr + 1) {
+        return base;
+    }
+    return ir_event_edge(tstate, frame, this_instr, this_instr, base.next,
+                         PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
+"""
+    return f"""
+static Py_NO_INLINE _PyIRTransfer
+ir_run_{name}(
+    PyThreadState *tstate, _PyInterpreterFrame *frame,
+    _PyInstr *next_instr, _PyIRWord ir_word)
+{{
+    _PyInstr *this_instr = next_instr;
+    /* The base would specialise the word and overwrite the instrumentation. */
+    PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, this_instr, {base}));
+    _PyIRTransfer base = ir_run_{base}(tstate, frame, next_instr, ir_word);
+    if (base.next == NULL) {{
+        return base;
+    }}
+{branch}}}
+"""
+
+
 def outlined_function(name: str, text: str) -> str:
     """The function that runs the body of handler `name`, emitted as a
     handler.  It takes the evaluator's state that handlers use, and its
@@ -6925,6 +6978,8 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
     emitter = IREmitter(out, analysis, formats)
     out.emit("\n")
     functions: list[str] = []
+    twin_functions: list[str] = []
+    outlined_names: set[str] = set()
     deopt_heads: set[str] = set()
     # The generic handlers of BINARY_OP differ only in the operation.  Each
     # sets it and enters the one body, which handles any operation, so that
@@ -6946,6 +7001,19 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
                 continue
             shared_binary_op_done = True
             emitter.shared_binary_op = True
+        if name in EDGE_TWINS:
+            base, taken_event = EDGE_TWINS[name]
+            twin_functions.append(edge_twin_function(name, base, taken_event))
+            out.emit(f"TARGET({name}) {{\n")
+            out.emit(f"IR_RUN_OUTLINED(ir_run_{name});\n")
+            out.emit("}\n")
+            continue
+        if name in EVENT_TWINS:
+            event, base = EVENT_TWINS[name]
+            out.emit(f"TARGET({name}) {{\n")
+            out.emit(f"IR_RUN_EVENT({event}, {base});\n")
+            out.emit("}\n")
+            continue
         emitter.handler_format = formats[name]
         emitter.allowed_error_checkpoints = frozenset(
             checkpoint.id for checkpoint in (checkpoints or {}).get(name, ()))
@@ -6977,6 +7045,7 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         if text is not None:
             deopt_heads.update(DEOPT_TARGET.findall(text))
             functions.append(outlined_function(name, text))
+            outlined_names.add(name)
             out.emit(f"TARGET({name}) {{\n")
             out.emit(f"IR_RUN_OUTLINED(ir_run_{name});\n")
             out.emit("}\n")
@@ -6988,7 +7057,11 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         emitter.handler_format = None
         emitter.execution_variant = None
         emitter.shared_binary_op = False
-    return functions, deopt_heads
+    for twin, (base, _) in EDGE_TWINS.items():
+        if base not in outlined_names:
+            raise analysis_error(f"the base {base} of {twin} is not outlined",
+                                 analysis.instructions[twin].where)
+    return functions + twin_functions, deopt_heads
 
 
 def outlined_exit_label(deopt_heads: set[str]) -> str:

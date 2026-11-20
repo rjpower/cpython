@@ -2592,12 +2592,12 @@ error:
 
 /* A pair survives only untouched physical operations. Even a read is a
  * conservative cut: COPY and moves cannot manufacture the original owner.
- * Unknown child overlap is a cut unless the pair lies below its window. */
+ * A child frame is at the top of the value stack and never shares the
+ * caller's slots, so a call cuts only through the homes it reads or defines. */
 static bool
 register_anchor_cut(PyCodeObject *code, int i, int base)
 {
     _PyIRWord word = code->co_words[i];
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     int arg = _PyCode_InstrOparg(code, i);
     for (int home = base; home < base + 2; home++) {
         if (_PyIR_ReadsHome(word, arg, home) ||
@@ -2614,15 +2614,6 @@ register_anchor_cut(PyCodeObject *code, int i, int base)
                 return true;
             }
         }
-    }
-    if (fmt->effects & _PyIR_PUSHES_FRAME) {
-        uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-        for (int f = 0; f < 4; f++) {
-            if (fmt->roles[f] == _PyIR_ROLE_BASE) {
-                return (int)fields[f] <= base + 1;
-            }
-        }
-        return true;
     }
     return false;
 }
@@ -3532,7 +3523,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
                             "jump requires an unsupported active call recipe");
             return -1;
         }
-        /* The child owns the argument window. Its successful completion,
+        /* The child consumed the argument window. Its successful completion,
          * rather than the consumed CALL input state, is the source state. */
         current = _PyFrame_InstrOffset(self->f_frame, self->f_frame->return_pc);
         pending_call = true;

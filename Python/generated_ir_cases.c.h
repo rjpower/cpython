@@ -9407,7 +9407,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMP_TO_PREDICTED(GET_ITER);
                 }
                 PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
-                if (tp->_tp_iteritem == NULL) {
+                if (!_PyType_IteratesByIndex(tp)) {
                     UPDATE_MISS_STATS(GET_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (GET_ITER));
                     JUMP_TO_PREDICTED(GET_ITER);

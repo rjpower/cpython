@@ -9819,6 +9819,12 @@ inherit_slots(PyTypeObject *type, PyTypeObject *base)
     {
         COPYSLOT(tp_iter);
         COPYSLOT(tp_iternext);
+        /* A subtype iterates by index as its base does while it iterates
+           as its base does: a Python-level __iter__ is told apart by its
+           tp_iter, _PyType_IteratesByIndex(). */
+        if (type->tp_iter == base->tp_iter) {
+            COPYSLOT(_tp_iteritem);
+        }
     }
     {
         COPYSLOT(tp_descr_get);
@@ -13245,8 +13251,8 @@ has_dunder_getitem(PyObject *self)
     return result;
 }
 
-static PyObject *
-slot_tp_iter(PyObject *self)
+PyObject *
+_PyType_SlotIter(PyObject *self)
 {
     int attr_is_none = 0;
     PyObject *res = maybe_call_special_no_args(self, &_Py_ID(__iter__),
@@ -13898,7 +13904,7 @@ static pytype_slotdef slotdefs[] = {
            "__gt__($self, value, /)\n--\n\nReturn self>value."),
     TPSLOT(__ge__, tp_richcompare, slot_tp_richcompare, richcmp_ge,
            "__ge__($self, value, /)\n--\n\nReturn self>=value."),
-    TPSLOT(__iter__, tp_iter, slot_tp_iter, wrap_unaryfunc,
+    TPSLOT(__iter__, tp_iter, _PyType_SlotIter, wrap_unaryfunc,
            "__iter__($self, /)\n--\n\nImplement iter(self)."),
     TPSLOT(__next__, tp_iternext, slot_tp_iternext, wrap_next,
            "__next__($self, /)\n--\n\nImplement next(self)."),

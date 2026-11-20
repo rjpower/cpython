@@ -3778,7 +3778,7 @@ dummy_func(
 
         op(_GUARD_ITER_VIRTUAL, (iterable -- iterable)) {
             PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
-            EXIT_IF(tp->_tp_iteritem == NULL);
+            EXIT_IF(!_PyType_IteratesByIndex(tp));
             STAT_INC(GET_ITER, hit);
         }
 

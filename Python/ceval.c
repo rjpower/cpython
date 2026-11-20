@@ -1142,7 +1142,7 @@ _PyEval_GetIter(PyValue iterable, int yield_from)
 {
     _PyValuePair result = {PyValue_NULL, PyValue_NULL};
     PyTypeObject *tp = PyValue_TYPE(iterable);
-    if (tp->_tp_iteritem != NULL) {
+    if (_PyType_IteratesByIndex(tp)) {
         /* Leave iterable on stack and push tagged index 0 */
         result.first = iterable;
         result.second = PyValue_TagIndex(0);

@@ -351,7 +351,7 @@ class TestIRCases(unittest.TestCase):
         ir_generator.generate_handler(name, instructions[name], formats[name],
                                       emitter, out)
         body = output.getvalue()
-        self.assertIn("IR_GEN_TAIL(_TAIL_CALL_GEN_ENTRY_EFFECT", body)
+        self.assertIn("IR_GEN_JUMP(GEN_ENTRY_EFFECT", body)
         self.assertNotIn("_Py_EnterRecursivePy(tstate)", body)
         self.assertEqual(body.count("--tstate->py_recursion_remaining;"), 1)
         self.assertIn("generator_resume_targets[", body)
@@ -375,7 +375,7 @@ class TestIRCases(unittest.TestCase):
         update = body.index("null_or_index = PyValue_TagIndex(index);")
         publish = body.index("IR_SET_TEMP(window[1], null_or_index);", update)
         clear = body.index("window[2] = PyValue_NULL;", publish)
-        transfer = body.index("IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD", clear)
+        transfer = body.index("IR_GEN_JUMP(GEN_SEND_YIELD", clear)
         self.assertLess(update, publish)
         self.assertLess(publish, clear)
         self.assertLess(clear, transfer)
@@ -399,7 +399,7 @@ class TestIRCases(unittest.TestCase):
                 body = output.getvalue()
                 provider = body.index("_PyValue_Send(")
                 attempt = body.index("if (!_PyValue_TryXCloseNoReentry(v))", provider)
-                effect = body.index("IR_GEN_TAIL(_TAIL_CALL_GEN_YIELD_INPUT_EFFECT", attempt)
+                effect = body.index("IR_GEN_JUMP(GEN_YIELD_INPUT_EFFECT", attempt)
                 clear = body.index("window[2] = PyValue_NULL;", effect)
                 self.assertLess(provider, attempt)
                 self.assertLess(attempt, effect)
@@ -426,7 +426,7 @@ class TestIRCases(unittest.TestCase):
                 resolve = body.index("generator_outcome_target(frame, this_instr, "
                                      "generator_completed_targets)")
                 guard = body.index("assert(ir_completed_target != NULL);", resolve)
-                tail = body.index("IR_GEN_TAIL(ir_completed_target,", guard)
+                tail = body.index("IR_GEN_JUMP_TO(ir_completed_target,", guard)
                 self.assertLess(resolve, guard)
                 self.assertLess(guard, tail)
                 self.assertNotIn("generator_completed_targets[IR_HANDLER(ir_word)]", body)
@@ -450,7 +450,7 @@ class TestIRCases(unittest.TestCase):
                 branch = body.index("if (generator_return) {")
                 end = body.index("}\n", branch)
                 route = body[branch:end]
-                self.assertIn("IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, dying, "
+                self.assertIn("IR_GEN_JUMP(GEN_RETURN_ROUTE, dying, "
                               "_PyFrame_Slots(dying), frame->instr_ptr, temp);", route)
                 self.assertNotIn("generator_outcome_target(", body)
                 self.assertNotIn("_PyEval_FrameClear", route)
@@ -477,7 +477,7 @@ class TestIRCases(unittest.TestCase):
             if row.completed not in {"STORE_FAST", "POP_TOP"}:
                 continue
             prefix = "GEN_THROW_COMPLETE_" if row.base == "CLEANUP_THROW" else "GEN_COMPLETE_"
-            self.assertIn(f"[{ids[name]}] = _TAIL_CALL_{prefix}{row.completed},", targets)
+            self.assertIn(f"[{ids[name]}] = &&TARGET_{prefix}{row.completed},", targets)
             self.assertEqual(ir_generator.generator_word_entry(name, analysis),
                              ir_generator.generator_word_entry(
                                  f"{row.base}_XFER_DISCARD", analysis))

@@ -7084,9 +7084,9 @@
             PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);{
                 PyValue ir_completed = completed;
                 assert(_PyValue_IsHome(ir_completed));
-                py_tail_call_funcptr ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                void *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
                 assert(ir_completed_target != NULL);
-                IR_GEN_TAIL(ir_completed_target, frame, slots, this_instr, ir_completed);
+                IR_GEN_JUMP_TO(ir_completed_target, frame, slots, this_instr, ir_completed);
             }
         }
 
@@ -9154,6 +9154,8 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_AWAITABLE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
             int oparg = (int)IR_C(ir_word);
             (void)oparg;
             PyValueBorrow iterable;
@@ -9175,8 +9177,9 @@
                 }
                 iter = PyValue_FromObjectSteal(iter_o);
             }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), iter);
+            IR_STORE_DST(ir_word, A, iter);
             PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
 
@@ -10880,7 +10883,7 @@
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
-                if (generator_return) {IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
+                if (generator_return) {IR_GEN_JUMP(GEN_RETURN_ROUTE, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
                 }
                 temp = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, temp);
                 slots = _PyFrame_Slots(frame);
@@ -10936,7 +10939,7 @@
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
-                if (generator_return) {IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
+                if (generator_return) {IR_GEN_JUMP(GEN_RETURN_ROUTE, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
                 }
                 temp = _PyEval_RetireThreadFrameWithResult(tstate, dying, temp);
                 slots = _PyFrame_Slots(frame);
@@ -15072,7 +15075,7 @@
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
-                if (generator_return) {IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
+                if (generator_return) {IR_GEN_JUMP(GEN_RETURN_ROUTE, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
                 }
                 temp = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, temp);
                 slots = _PyFrame_Slots(frame);
@@ -15120,7 +15123,7 @@
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
-                if (generator_return) {IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
+                if (generator_return) {IR_GEN_JUMP(GEN_RETURN_ROUTE, dying, _PyFrame_Slots(dying), frame->instr_ptr, temp);
                 }
                 temp = _PyEval_RetireThreadFrameWithResult(tstate, dying, temp);
                 slots = _PyFrame_Slots(frame);
@@ -15366,13 +15369,13 @@
                     PyValue completed = sent.value;{
                         PyValue ir_completed = completed;
                         assert(_PyValue_IsHome(ir_completed));
-                        py_tail_call_funcptr ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                        void *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
                         assert(ir_completed_target != NULL);
-                        IR_GEN_TAIL(ir_completed_target, frame, slots, this_instr, ir_completed);
+                        IR_GEN_JUMP_TO(ir_completed_target, frame, slots, this_instr, ir_completed);
                     }
                 }if (!_PyValue_TryXCloseNoReentry(v)) {
                     assert(_PyValue_IsHome(sent.value));
-                    IR_GEN_TAIL(_TAIL_CALL_GEN_YIELD_INPUT_EFFECT, frame, slots, this_instr, sent.value);
+                    IR_GEN_JUMP(GEN_YIELD_INPUT_EFFECT, frame, slots, this_instr, sent.value);
                 }
                 window[2] = PyValue_NULL;
                 asend = iter;
@@ -15383,7 +15386,7 @@
             IR_SET_TEMP(window[1], null_out);
             assert(_PyValue_IsHome(retval));
             window[2] = PyValue_NULL;
-            IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD, frame, slots, this_instr, retval);
+            IR_GEN_JUMP(GEN_SEND_YIELD, frame, slots, this_instr, retval);
         }
 
         TARGET(SEND_GEN) {
@@ -15518,14 +15521,14 @@
                     frame = tstate->current_frame = ir_resumed_frame;
                     slots = _PyFrame_Slots(frame);
                     if (tstate->py_recursion_remaining <= 1) {
-                        IR_GEN_TAIL(_TAIL_CALL_GEN_ENTRY_EFFECT, frame, slots, frame->instr_ptr, ir_resume_input);
+                        IR_GEN_JUMP(GEN_ENTRY_EFFECT, frame, slots, frame->instr_ptr, ir_resume_input);
                     }
                     --tstate->py_recursion_remaining;
                     _PyInstr *ir_resume_site = frame->instr_ptr;
                     if (ir_resume_site > frame->ir_words) {
-                        py_tail_call_funcptr ir_resume_target = generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];
+                        void *ir_resume_target = generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];
                         if (ir_resume_target != NULL) {
-                            IR_GEN_TAIL(ir_resume_target, frame, slots, ir_resume_site, ir_resume_input);
+                            IR_GEN_JUMP_TO(ir_resume_target, frame, slots, ir_resume_site, ir_resume_input);
                         }
                     }
                     _PyFrame_SetReturnValue(frame, ir_resume_input);
@@ -15658,9 +15661,9 @@
                     PyValue completed = PyValue_None;{
                         PyValue ir_completed = completed;
                         assert(_PyValue_IsHome(ir_completed));
-                        py_tail_call_funcptr ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                        void *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
                         assert(ir_completed_target != NULL);
-                        IR_GEN_TAIL(ir_completed_target, frame, slots, this_instr, ir_completed);
+                        IR_GEN_JUMP_TO(ir_completed_target, frame, slots, this_instr, ir_completed);
                     }
                 }
                 next = next_index.value;
@@ -15669,7 +15672,7 @@
             IR_SET_TEMP(window[1], null_or_index);
             assert(_PyValue_IsHome(next));
             window[2] = PyValue_NULL;
-            IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD, frame, slots, this_instr, next);
+            IR_GEN_JUMP(GEN_SEND_YIELD, frame, slots, this_instr, next);
         }
 
         TARGET(SEND_XFER_DISCARD) {
@@ -15732,14 +15735,14 @@
                         frame = tstate->current_frame = ir_resumed_frame;
                         slots = _PyFrame_Slots(frame);
                         if (tstate->py_recursion_remaining <= 1) {
-                            IR_GEN_TAIL(_TAIL_CALL_GEN_ENTRY_EFFECT, frame, slots, frame->instr_ptr, ir_resume_input);
+                            IR_GEN_JUMP(GEN_ENTRY_EFFECT, frame, slots, frame->instr_ptr, ir_resume_input);
                         }
                         --tstate->py_recursion_remaining;
                         _PyInstr *ir_resume_site = frame->instr_ptr;
                         if (ir_resume_site > frame->ir_words) {
-                            py_tail_call_funcptr ir_resume_target = generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];
+                            void *ir_resume_target = generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];
                             if (ir_resume_target != NULL) {
-                                IR_GEN_TAIL(ir_resume_target, frame, slots, ir_resume_site, ir_resume_input);
+                                IR_GEN_JUMP_TO(ir_resume_target, frame, slots, ir_resume_site, ir_resume_input);
                             }
                         }
                         _PyFrame_SetReturnValue(frame, ir_resume_input);
@@ -15763,9 +15766,9 @@
                         PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;{
                             PyValue ir_completed = completed;
                             assert(_PyValue_IsHome(ir_completed));
-                            py_tail_call_funcptr ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                            void *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
                             assert(ir_completed_target != NULL);
-                            IR_GEN_TAIL(ir_completed_target, frame, slots, this_instr, ir_completed);
+                            IR_GEN_JUMP_TO(ir_completed_target, frame, slots, this_instr, ir_completed);
                         }
                     }
                     retval = item;
@@ -15779,13 +15782,13 @@
                         PyValue completed = sent.value;{
                             PyValue ir_completed = completed;
                             assert(_PyValue_IsHome(ir_completed));
-                            py_tail_call_funcptr ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
+                            void *ir_completed_target = generator_outcome_target(frame, this_instr, generator_completed_targets);
                             assert(ir_completed_target != NULL);
-                            IR_GEN_TAIL(ir_completed_target, frame, slots, this_instr, ir_completed);
+                            IR_GEN_JUMP_TO(ir_completed_target, frame, slots, this_instr, ir_completed);
                         }
                     }if (!_PyValue_TryXCloseNoReentry(v)) {
                         assert(_PyValue_IsHome(sent.value));
-                        IR_GEN_TAIL(_TAIL_CALL_GEN_YIELD_INPUT_EFFECT, frame, slots, this_instr, sent.value);
+                        IR_GEN_JUMP(GEN_YIELD_INPUT_EFFECT, frame, slots, this_instr, sent.value);
                     }
                     window[2] = PyValue_NULL;
                     retval = sent.value;
@@ -15794,7 +15797,7 @@
             IR_SET_TEMP(window[1], null_or_index);
             assert(_PyValue_IsHome(retval));
             window[2] = PyValue_NULL;
-            IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD, frame, slots, this_instr, retval);
+            IR_GEN_JUMP(GEN_SEND_YIELD, frame, slots, this_instr, retval);
         }
 
         TARGET(SETUP_ANNOTATIONS) {
@@ -17656,5 +17659,16 @@
                 int opcode;
                 DISPATCH();
             }}
+
+        TARGET(UNKNOWN_OPCODE)
+        {
+            int opcode = IR_HANDLER(*next_instr);
+            _PyErr_Format(tstate, PyExc_SystemError,
+              "%U:%d: unknown opcode %d",
+              _PyFrame_GetCode(frame)->co_filename,
+              PyUnstable_InterpreterFrame_GetLine(frame),
+              opcode);
+PROCESS_ERROR_AT(RAISE, 0, next_instr);
+        }
 
 /* END LABELS */

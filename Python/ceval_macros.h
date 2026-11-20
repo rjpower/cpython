@@ -41,11 +41,12 @@
 #define INSTRUCTION_STATS(op) ((void)0)
 #endif
 
-/* The interpreter is a set of handlers, one C function per handler index
- * and per label, which dispatch to the next by a guaranteed tail call
- * (musttail) through instruction_funcptr_handler_table.  They pass the
- * interpreter's state in registers (pyjit/design/proposals/
- * register-ir-v2-a3.md, section 2):
+/* The interpreter is one function, ir_evaluate() (Python/ceval.c), with a
+ * label for each handler and each shared label, and dispatch is a computed
+ * goto through opcode_targets (Python/ir_targets.h).  GCC and Clang keep the
+ * interpreter's state in registers for the whole activation, so a handler
+ * that makes a call on a cold path costs nothing on its fast path
+ * (pyjit/design/proposals/handlers81.md, section 3).  The state is:
  *
  *   frame       the executing frame, tstate->current_frame; a handler that
  *               switches frames assigns it before it dispatches;
@@ -57,109 +58,81 @@
  *               on (Include/internal/pycore_ir.h);
  *   lastopcode  under Py_STATS, the previous handler, for pair counts.
  *
+ * These are locals of ir_evaluate(), and none has its address taken: that
+ * would put it in memory in every handler and add a stack-protector canary.
+ * A handler never reloads one after a call that cannot change it.  Helpers
+ * take values and return a value, a status or a {frame, next} pair; none
+ * jumps into the evaluator.
+ *
  * A handler that runs another on the same word, as INSTRUMENTED_LINE does
- * and a specialisation that deoptimises to its family head, passes ir_word
- * on, so the other handler finds the same fields. */
-#ifdef Py_STATS
-#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, PyValue *slots, \
-        PyThreadState *tstate, _PyInstr *next_instr, _PyIRWord ir_word, \
-        int lastopcode
-#   define TAIL_CALL_ARGS frame, slots, tstate, next_instr, ir_word, lastopcode
-#   define TAIL_CALL_ARGS_AT(INSTR) \
-        frame, slots, tstate, (INSTR), ir_word, lastopcode
-#else
-#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, PyValue *slots, \
-        PyThreadState *tstate, _PyInstr *next_instr, _PyIRWord ir_word
-#   define TAIL_CALL_ARGS frame, slots, tstate, next_instr, ir_word
-#   define TAIL_CALL_ARGS_AT(INSTR) frame, slots, tstate, (INSTR), ir_word
+ * and a specialisation that deoptimises to its family head, jumps to it with
+ * ir_word unchanged, so the other handler finds the same fields. */
+#if !defined(__GNUC__) && !defined(__clang__)
+#   error "The interpreter needs a C compiler with computed gotos."
 #endif
 
-/* The calling convention of the handlers.  Only the attribute differs
- * between the arms, which configure records as PY_TAIL_CALL_CC
- * (preserve_none, no_callee_saved_registers or none).  MSVC comes first,
- * because _Py__has_attribute is 0 there; it is untested.  preserve_none
- * (Clang, and GCC once it ships it) keeps the state in registers that
- * survive C calls; GCC's no_callee_saved_registers keeps it in the argument
- * registers.  The last arm is plain musttail, which configure accepts and
- * the measurement harness refuses. */
-#if defined(_MSC_VER) && !defined(__clang__)
-#   if _MSC_VER < 1950
-#       error "You need at least VS 2026 / PlatformToolset v145 for tail calling."
-#   endif
-#   define Py_MUSTTAIL [[msvc::musttail]]
-#   define Py_PRESERVE_NONE_CC __preserve_none
-#else
-#   if !_Py__has_attribute(musttail)
-#       error "The interpreter needs a C compiler with the musttail attribute."
-#   endif
-#   define Py_MUSTTAIL __attribute__((musttail))
-#   if _Py__has_attribute(preserve_none)
-#       define Py_PRESERVE_NONE_CC __attribute__((preserve_none))
-#   elif _Py__has_attribute(no_callee_saved_registers)
-#       define Py_PRESERVE_NONE_CC __attribute__((no_callee_saved_registers))
-#   else
-#       define Py_PRESERVE_NONE_CC
-#   endif
-#endif
-/* A handler returns the value of the frame that INTERPRETER_EXIT leaves, or
- * PyValue_NULL with an exception set. */
-typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
+#define TARGET(op) TARGET_##op:
+#define LABEL(name) LABEL_##name:
 
-#define TARGET(op) Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
-#define LABEL(name) TARGET(name)
-
-#ifdef Py_STATS
-#  define IR_GEN_ARGS(F, S, IP, V) (F), (S), tstate, (IP), (V).bits, lastopcode
-#else
-#  define IR_GEN_ARGS(F, S, IP, V) (F), (S), tstate, (IP), (V).bits
-#endif
-#define IR_GEN_TAIL(target, F, S, IP, V) \
+/* The private generator targets (Python/ceval_generator.h) take the value
+ * that they transfer in ir_word, and set the other state before they run:
+ * IR_GEN_JUMP() to a target by name, IR_GEN_JUMP_TO() to the address that
+ * generator_outcome_target() or a generator_*_targets table gave.  The
+ * arguments are evaluated before the state changes, as they were when they
+ * were call arguments. */
+#define IR_GEN_SET(F, S, IP, V) \
     do { \
-        Py_MUSTTAIL return (target)(IR_GEN_ARGS(F, S, IP, V)); \
+        _PyInterpreterFrame *ir_gen_frame = (F); \
+        PyValue *ir_gen_slots = (S); \
+        _PyInstr *ir_gen_next = (IP); \
+        PyValue ir_gen_value = (V); \
+        frame = ir_gen_frame; \
+        slots = ir_gen_slots; \
+        next_instr = ir_gen_next; \
+        ir_word = ir_gen_value.bits; \
+    } while (0)
+#define IR_GEN_JUMP(NAME, F, S, IP, V) \
+    do { \
+        IR_GEN_SET(F, S, IP, V); \
+        goto TARGET_##NAME; \
+    } while (0)
+#define IR_GEN_JUMP_TO(TARGET_ADDRESS, F, S, IP, V) \
+    do { \
+        void *ir_gen_target = (TARGET_ADDRESS); \
+        IR_GEN_SET(F, S, IP, V); \
+        goto *ir_gen_target; \
     } while (0)
 
 #define IR_TRY_NATIVE_YIELD(V) \
     do { \
         if (frame->owner != FRAME_OWNED_BY_INTERPRETER) { \
-            py_tail_call_funcptr ir_yield_target = generator_outcome_target( \
+            void *ir_yield_target = generator_outcome_target( \
                 frame, frame->instr_ptr, generator_yielded_targets); \
             if (ir_yield_target != NULL && !frame->pending_redirect) { \
                 assert(_PyValue_IsHome(V)); \
-                IR_GEN_TAIL(ir_yield_target, frame, _PyFrame_Slots(frame), \
-                            frame->instr_ptr, (V)); \
+                IR_GEN_JUMP_TO(ir_yield_target, frame, _PyFrame_Slots(frame), \
+                               frame->instr_ptr, (V)); \
             } \
         } \
     } while (0)
 
-#define DISPATCH_GOTO() \
-    do { \
-        Py_MUSTTAIL return (instruction_funcptr_handler_table[opcode])(TAIL_CALL_ARGS); \
-    } while (0)
+#define DISPATCH_GOTO() goto *opcode_targets[opcode]
+/* An error leaves the handler for the shared label process_error, which
+ * unwinds by the exception table and either dispatches at the handler found
+ * or leaves the evaluator. */
 #define PROCESS_ERROR_AT(ingress, checkpoint, origin) \
     do { \
-        _PyIRErrorResult ir_error_result = _PyEval_ProcessError( \
-            tstate, frame, (origin), \
-            _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint)); \
-        if (ir_error_result.disposition == _PyIR_ERROR_HANDLED) { \
-            frame = tstate->current_frame; \
-            slots = _PyFrame_Slots(frame); \
-            next_instr = ir_error_result.next; \
-            int opcode; \
-            NEXTOPARG(); \
-            PRE_DISPATCH_GOTO(); \
-            DISPATCH_GOTO(); \
-        } \
-        return PyValue_NULL; \
+        ir_error_origin = (origin); \
+        ir_error_entry = _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint); \
+        goto LABEL_process_error; \
     } while (0)
-#define JUMP_TO_LABEL(name) \
-    do { \
-        Py_MUSTTAIL return (_TAIL_CALL_##name)(TAIL_CALL_ARGS); \
-    } while (0)
+#define JUMP_TO_LABEL(name) goto LABEL_##name
 /* A specialisation deoptimises to its family head, which runs the word
  * again from its start. */
 #define JUMP_TO_PREDICTED(name) \
     do { \
-        Py_MUSTTAIL return (_TAIL_CALL_##name)(TAIL_CALL_ARGS_AT(this_instr)); \
+        next_instr = this_instr; \
+        goto TARGET_##name; \
     } while (0)
 
 /* The activation of the evaluation loop that runs the handler
@@ -175,9 +148,8 @@ typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
       (frame)->ir_words == _PyFrame_GetCode(frame)->_co_exec->words))
 
 /* PRE_DISPATCH_GOTO() checks the handlers' state and does lltrace if
- * enabled, in a debug build.  Normally a no-op.  frame is a parameter of
- * the handlers, so the first check fails if a handler switches frames
- * without passing the new one on. */
+ * enabled, in a debug build.  Normally a no-op.  The first check fails if a
+ * handler switches frames without assigning the new one to frame. */
 #ifdef Py_DEBUG
 #define PRE_DISPATCH_GOTO() \
     assert(frame == tstate->current_frame); \

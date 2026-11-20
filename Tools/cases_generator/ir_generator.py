@@ -12,8 +12,8 @@ Include/internal/pycore_ir.h the word layout. In short, an instruction is one
 64-bit word: a 16-bit handler index and four 12-bit fields A, B, C and D, of
 which C and D also form a 24-bit field CD. A field names a frame slot, the
 feedback entry (its index in the block's feedback vector) or the oparg.
-Each handler and label is a C function, which dispatches to the next by a
-guaranteed tail call (Python/ceval_macros.h).  Handlers read the fields they
+Each handler and label is a label in one C function, which dispatches to the
+next by a computed goto (Python/ceval_macros.h).  Handlers read the fields they
 use with IR_A(ir_word) and so on, from ir_word, the word that dispatch loads
 and passes on.
 
@@ -67,7 +67,7 @@ Invariants:
   canonical slot only where code that reads the stack may run.
 - Instruction macros of the DSL (generators_common.STACK_INSTRUCTION_MACROS)
   expand to the IR forms of IR_INSTRUCTION_MACROS.
-- A specialisation deoptimises by a tail call to its family head, which
+- A specialisation deoptimises by a jump to its family head, which
   runs the word again (JUMP_TO_PREDICTED, Python/ceval_macros.h).
 """
 
@@ -4832,7 +4832,7 @@ class IREmitter(Emitter):
             # A failed Try leaves v intact for the rooted effect entry.
             self.emit("if (!_PyValue_TryXCloseNoReentry(v)) {\n")
             self.emit("assert(_PyValue_IsHome(sent.value));\n")
-            self.emit("IR_GEN_TAIL(_TAIL_CALL_GEN_YIELD_INPUT_EFFECT, frame, slots, "
+            self.emit("IR_GEN_JUMP(GEN_YIELD_INPUT_EFFECT, frame, slots, "
                       "this_instr, sent.value);\n")
             self.emit("}\n")
             self.emit("window[2] = PyValue_NULL;\n")
@@ -5417,10 +5417,10 @@ class IREmitter(Emitter):
         if self.generator_boundary is not None and kind in {"_PY_IR_SEND", "_PY_IR_SEND_THROW"}:
             self.emit(f"PyValue ir_completed = {value};\n")
             self.emit("assert(_PyValue_IsHome(ir_completed));\n")
-            self.emit("py_tail_call_funcptr ir_completed_target = generator_outcome_target("
+            self.emit("void *ir_completed_target = generator_outcome_target("
                       "frame, this_instr, generator_completed_targets);\n")
             self.emit("assert(ir_completed_target != NULL);\n")
-            self.emit("IR_GEN_TAIL(ir_completed_target, "
+            self.emit("IR_GEN_JUMP_TO(ir_completed_target, "
                       "frame, slots, this_instr, ir_completed);\n")
             self.emit("}\n")
             self.abrupt_operand_sources.add(id(tkn))
@@ -5461,7 +5461,7 @@ class IREmitter(Emitter):
         value, dying = self.macro_args(tkn, tkn_iter, 2)
         if inst is None or not canonical_frame_transfer_input(inst):
             raise analysis_error("generator return needs canonical source transfer", tkn)
-        self.emit(f"IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_ROUTE, {dying}, "
+        self.emit(f"IR_GEN_JUMP(GEN_RETURN_ROUTE, {dying}, "
                   f"_PyFrame_Slots({dying}), frame->instr_ptr, {value});\n")
         return False
 
@@ -5522,16 +5522,16 @@ class IREmitter(Emitter):
         self.emit("slots = _PyFrame_Slots(frame);\n")
         if self.generator_boundary is not None:
             self.emit("if (tstate->py_recursion_remaining <= 1) {\n")
-            self.emit("IR_GEN_TAIL(_TAIL_CALL_GEN_ENTRY_EFFECT, frame, slots, "
+            self.emit("IR_GEN_JUMP(GEN_ENTRY_EFFECT, frame, slots, "
                       "frame->instr_ptr, ir_resume_input);\n")
             self.emit("}\n")
             self.emit("--tstate->py_recursion_remaining;\n")
             self.emit("_PyInstr *ir_resume_site = frame->instr_ptr;\n")
             self.emit("if (ir_resume_site > frame->ir_words) {\n")
-            self.emit("py_tail_call_funcptr ir_resume_target = "
+            self.emit("void *ir_resume_target = "
                       "generator_resume_targets[IR_HANDLER(ir_resume_site[-1])];\n")
             self.emit("if (ir_resume_target != NULL) {\n")
-            self.emit("IR_GEN_TAIL(ir_resume_target, frame, slots, "
+            self.emit("IR_GEN_JUMP_TO(ir_resume_target, frame, slots, "
                       "ir_resume_site, ir_resume_input);\n")
             self.emit("}\n")
             self.emit("}\n")
@@ -6779,7 +6779,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                     PointerOffset(fmt.dst_offset, (), ()))
         out.emit(f"assert(_PyValue_IsHome({result}));\n")
         out.emit("window[2] = PyValue_NULL;\n")
-        out.emit(f"IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_YIELD, frame, slots, this_instr, {result});\n")
+        out.emit(f"IR_GEN_JUMP(GEN_SEND_YIELD, frame, slots, this_instr, {result});\n")
         stack.home_node = None
         emitter.native_window_out = True
         emitter.ownership_events.append(OwnershipEvent(
@@ -6920,6 +6920,12 @@ def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
             storage.stack.physical_sp = None
         emitter.emit_tokens(label, storage, None)
         emitter.emit("}\n\n")
+    # The target of every id without a handler
+    emitter.emit("TARGET(UNKNOWN_OPCODE)\n")
+    emitter.emit("{\n")
+    emitter.emit("int opcode = IR_HANDLER(*next_instr);\n")
+    emitter.emit(UNKNOWN_OPCODE_HANDLER)
+    emitter.emit("}\n\n")
 
 
 # The columns of the instruction contract (pycore_ir.h, _PyIRFormat) that
@@ -8273,10 +8279,6 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
     outfile.write(f"{LABEL_END_MARKER}\n")
 
 
-def function_proto(name: str, prefix: str = "_TAIL_CALL_") -> str:
-    return f"static PyValue Py_PRESERVE_NONE_CC {prefix}{name}(TAIL_CALL_PARAMS)"
-
-
 def num_handlers(analysis: Analysis) -> int:
     "One past the highest pinned number, with the reserved ranges"
     return analysis.numbers.num_handlers
@@ -8284,42 +8286,17 @@ def num_handlers(analysis: Analysis) -> int:
 
 def generate_ir_targets(filenames: list[str], analysis: Analysis,
                         outfile: TextIO) -> None:
-    "The prototypes of the handlers and labels, and the dispatch table"
+    """The label-address tables of the evaluator: the dispatch table and the
+    generator transfer tables.  ir_evaluate() includes this file at its
+    start, so the tables are local to it and the addresses are of its labels."""
     ids = handler_ids(analysis)
     formats = compute_formats(analysis)
     n = num_handlers(analysis)
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
-    # Dispatch masks the word with IR_HANDLER_MASK, so the table covers every
-    # id the mask yields; ids past n are UNKNOWN_OPCODE.
-    out.emit("static py_tail_call_funcptr "
-             f"instruction_funcptr_handler_table[{ir_numbers.IR_LIMIT}];\n")
-    out.emit("\n")
-    for name in analysis.labels:
-        out.emit(f"{function_proto(name)};\n")
-    out.emit("\n")
-    for name in sorted({generator_word_entry(name, analysis) for name in ids}):
-        out.emit(f"{function_proto(name)};\n")
-    private = ("GEN_SEND_YIELD", "GEN_SEND_INPUT", "GEN_SEND_INPUT_HOME",
-               "GEN_YIELD_INPUT_EFFECT",
-               "GEN_RESUME_SEND", "GEN_RESUME_STORE", "GEN_RESUME_EFFECT",
-               "GEN_ENTRY_EFFECT",
-               "GEN_COMPLETE_RETURN", "GEN_COMPLETE_STORE", "GEN_COMPLETE_DISCARD",
-               "GEN_COMPLETE_HOME", "GEN_COMPLETE_EFFECT", "GEN_RETURN",
-               "GEN_COMPLETE_STORE_FAST", "GEN_COMPLETE_POP_TOP",
-               "GEN_THROW_COMPLETE_RETURN", "GEN_THROW_COMPLETE_STORE",
-               "GEN_THROW_COMPLETE_DISCARD", "GEN_THROW_COMPLETE_HOME",
-               "GEN_THROW_COMPLETE_STORE_FAST", "GEN_THROW_COMPLETE_POP_TOP",
-               "GEN_RETURN_ROUTE", "GEN_RETURN_RETIRED", "GEN_RETURN_PARENT",
-               "GEN_REDIRECT_EFFECT",
-               "GEN_RETIRE_EFFECT_SLOTS", "GEN_RETIRE_EFFECT_ASSOCIATION",
-               "GEN_RETIRE_EFFECT_LOCALS", "GEN_RETIRE_EFFECT_FUNCTION",
-               "GEN_RETIRE_EFFECT_EXCEPTION")
-    for name in private:
-        out.emit(f"{function_proto(name)};\n")
     boundaries = generator_boundaries(analysis)
     for column in ("Yielded", "Completed", "Resume"):
-        out.emit(f"static py_tail_call_funcptr generator_{column.lower()}_targets[{n}] = {{\n")
+        out.emit(f"static void *const generator_{column.lower()}_targets[{n}] = {{\n")
         for name, boundary in sorted(boundaries.items()):
             if not generator_boundary_source_closed(boundary, analysis, formats):
                 continue
@@ -8340,22 +8317,19 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
                     target = ("GEN_SEND_INPUT" if boundary.base == "SEND_GEN"
                               else "GEN_SEND_INPUT_HOME")
             if target is not None:
-                out.emit(f"[{ids[name]}] = _TAIL_CALL_{target},\n")
+                out.emit(f"[{ids[name]}] = &&TARGET_{target},\n")
         out.emit("};\n")
     out.emit("\n")
-    out.emit(function_proto("UNKNOWN_OPCODE"))
-    out.emit(" {\n")
-    out.emit("int opcode = IR_HANDLER(*next_instr);\n")
-    out.emit(UNKNOWN_OPCODE_HANDLER)
-    out.emit("}\n")
-    out.emit("\n")
+    # Dispatch masks the word with IR_HANDLER_MASK, so the table covers every
+    # id the mask yields; ids past n are UNKNOWN_OPCODE.
     by_index = {i: name for name, i in ids.items()}
-    out.emit("static py_tail_call_funcptr "
-             f"instruction_funcptr_handler_table[{ir_numbers.IR_LIMIT}] = {{\n")
+    out.emit(f"static void *const opcode_targets[{ir_numbers.IR_LIMIT}] = {{\n")
     for i in range(ir_numbers.IR_LIMIT):
         name = generator_word_entry(by_index.get(i, "UNKNOWN_OPCODE"), analysis)
-        out.emit(f"[{i}] = _TAIL_CALL_{name},\n")
+        out.emit(f"[{i}] = &&TARGET_{name},\n")
     out.emit("};\n")
+    out.emit(f"static_assert(Py_ARRAY_LENGTH(opcode_targets) == IR_HANDLER_MASK + 1,\n")
+    out.emit('              "dispatch covers every id that IR_HANDLER yields");\n')
 
 
 def generate_ir_from_files(filenames: list[str], outfilename: str,

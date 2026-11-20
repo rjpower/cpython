@@ -2069,30 +2069,167 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
     }
 }
 
-/* The handlers, after the helpers that they call, and their table */
+/* The helpers of the generator transfer labels (Python/ceval_generator.h),
+ * which are in the evaluator below. */
+
+static inline PyValue
+generator_payload(_PyIRWord payload)
+{
+    return (PyValue){.bits = payload};
+}
+
+static inline uint64_t
+generator_control_generation(_PyInterpreterFrame *frame)
+{
+    /* Interpreter entry frames do not initialize frame_obj. */
+    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
+        return 0;
+    }
+    return frame->frame_obj == NULL ? 0 : frame->frame_obj->f_lineno_generation;
+}
+
+/* Ordinary outcomes need one dispatch-table-shaped lookup. A transparent
+ * monitor keeps the same word fields but resolves its source only here, on
+ * the actual observation path. */
+static inline void *
+generator_outcome_target(_PyInterpreterFrame *frame, _PyInstr *site,
+                         void *const *targets)
+{
+    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
+        return NULL;
+    }
+    int handler = IR_HANDLER(*site);
+    void *target = targets[handler];
+    if (target == NULL && (_PyIR_Formats[handler].flags & _PyIR_TRANSPARENT)) {
+        target = targets[_PyIR_RealHandler(frame, site)];
+    }
+    return target;
+}
+
+/* This guard contains no effect. A monitored or redirected transfer publishes
+ * its homes before running the ordinary source's callback boundary. */
+static inline bool
+generator_transfer_is_plain(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+#ifdef Py_GIL_DISABLED
+    return false;
+#else
+    if (frame->pending_redirect || IS_PEP523_HOOKED(tstate) ||
+        _PyFrame_GetCode(frame)->_co_monitoring != NULL) {
+        return false;
+    }
+#ifdef Py_DEBUG
+    if (frame->lltrace >= 5) {
+        return false;
+    }
+#endif
+#ifdef WITH_DTRACE
+    if (PyDTrace_FUNCTION_ENTRY_ENABLED() || PyDTrace_FUNCTION_RETURN_ENABLED()) {
+        return false;
+    }
+#endif
+    return true;
+#endif
+}
+
+/* The caller holds value in C, which is an external reference to the cyclic
+ * collector. Every frame write precedes the first close. */
+static inline void
+generator_publish_redirected(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                             PyValue value)
+{
+    if (frame->pending_redirect) {
+        _PyFrame_CompleteRedirect(frame);
+    }
+    _PyFrame_PublishReturnSlot(frame, value);
+}
+
+/* The publication of GEN_COMPLETE_EFFECT, out of line: the detached owners
+ * are an array, which would be the handler's. Detaches the remaining
+ * owners, writes result to the destination, observes the completed step,
+ * and closes everything detached. Returns the exception that observation
+ * raised, or NULL. */
+static Py_NO_INLINE PyObject *
+generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                           _PyInstr *site, _PyInstr *exit, int base,
+                           int remaining_count, int destination,
+                           bool throwing, PyValue result)
+{
+    /* Detach every remaining owner before an overlapping A publication. */
+    PyValue detached[5];
+    int ndetached = 0;
+    for (int k = remaining_count; k-- > 0;) {
+        detached[ndetached++] = frame->base[base + k];
+        frame->base[base + k] = PyValue_NULL;
+    }
+    // The releasing write: a local's or the discard slot's old value closes
+    // with the detached owners
+    PyValue displaced = frame->base[destination];
+    assert(destination < _PyFrame_GetCode(frame)->co_nlocalsplus ||
+           destination == _PyFrame_DiscardSlot(frame) ||
+           PyValue_IsNull(displaced));
+    frame->base[destination] = result;
+    _PyValue_CheckHome(result);
+    detached[ndetached++] = displaced;
+    frame->return_pc = exit;
+    _PyIRStepResult post = {.next = exit, .status = _PY_IR_STEP_EXIT};
+    if (_PyFrame_GetCode(frame)->_co_monitoring != NULL) {
+        post = _PyIR_ObserveStep(tstate, frame, site, exit,
+            PyValue_Borrow(PyValue_None), throwing ? _PY_IR_SEND_THROW : _PY_IR_SEND, 1);
+    }
+    if (post.status >= 0) { frame->instr_ptr = post.next; }
+    PyObject *error = post.status < 0 ? PyErr_GetRaisedException() : NULL;
+    for (int k = 0; k < ndetached; k++) {
+        PyValue_XCLOSE(detached[k]);
+    }
+    return error;
+}
+
+/* The evaluator: every handler and label of the interpreter in one
+ * function, which dispatches by computed goto (Python/ceval_macros.h).  Its
+ * locals are the interpreter's state and are never address-taken; the
+ * activation record and the entry frame, whose addresses are taken, are in
+ * the caller, _PyEval_EvalFrameLoop().  It runs the frame to its end: the
+ * value that INTERPRETER_EXIT takes, or NULL with an exception set.
+ * start_frame takes the word and slots from frame. */
+static Py_NO_INLINE PyValue
+ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
+{
 #include "ir_targets.h"
-static_assert(Py_ARRAY_LENGTH(instruction_funcptr_handler_table)
-              == IR_HANDLER_MASK + 1,
-              "dispatch covers every id that IR_HANDLER yields");
+    PyValue *slots = _PyFrame_Slots(frame);
+    _PyInstr *next_instr = frame->instr_ptr;
+    _PyIRWord ir_word = 0;
+    /* What PROCESS_ERROR_AT passes to process_error */
+    _PyInstr *ir_error_origin;
+    uint32_t ir_error_entry;
+#ifdef Py_STATS
+    int lastopcode = 0;
+#endif
+
+    if (throwflag) {
+        goto LABEL_throw_error;
+    }
+    goto LABEL_start_frame;
+
 #include "ceval_generator.h"
 #include "generated_ir_cases.c.h"
 
-/* The only non-tail call into the handlers.  GCC 15.2 miscompiles a call
-   to a no_callee_saved_registers function that has a value live across it,
-   at -Og to -O3: it reloads the value from a callee-saved register that it
-   never set (reproducer: build/pyjit-link-wave1/a3/gcc-ncsr-bug.c in the
-   pyjit build tree).  This function has the normal ABI and nothing live
-   across the call, so it saves the callee-saved registers itself, and the
-   caller keeps its values across a normal call.  It is not inlined, and the
-   call is not a tail call: a handler does not preserve the registers that
-   our own caller expects.  Clang's preserve_none is not known to have the
-   bug; both compilers take this path, so there is one form.  The object
-   check (a3/step2/objcheck.sh) refuses any other non-tail call to a
-   _TAIL_CALL_* function. */
-static Py_NO_INLINE PyValue
-enter_handlers(py_tail_call_funcptr handler, TAIL_CALL_PARAMS)
-{
-    return handler(TAIL_CALL_ARGS);
+    /* The shared tail of PROCESS_ERROR_AT */
+    LABEL_process_error:
+    {
+        _PyIRErrorResult ir_error_result = _PyEval_ProcessError(
+            tstate, frame, ir_error_origin, ir_error_entry);
+        if (ir_error_result.disposition == _PyIR_ERROR_HANDLED) {
+            frame = tstate->current_frame;
+            slots = _PyFrame_Slots(frame);
+            next_instr = ir_error_result.next;
+            int opcode;
+            NEXTOPARG();
+            PRE_DISPATCH_GOTO();
+            DISPATCH_GOTO();
+        }
+        return PyValue_NULL;
+    }
 }
 
 void
@@ -2164,10 +2301,10 @@ _PyEval_GetObserverContext(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 /* The evaluation loop.  _PyEval_EvalFrameDefault() wraps each activation in
-   its borrow floor.  The loop sets up the activation and calls the first
-   handler, and the handlers run the frames by tail calls until one of them
-   returns.  It keeps an external name so that debuggers and profilers
-   (Tools/gdb/libpython.py) can find its frames. */
+   its borrow floor.  The loop sets up the activation and calls the
+   evaluator, ir_evaluate(), which runs the frames until INTERPRETER_EXIT or
+   an unhandled error leaves it.  It keeps an external name so that debuggers
+   and profilers (Tools/gdb/libpython.py) can find its frames. */
 PyValue _PyEval_EvalFrameLoop(PyThreadState *tstate,
                               _PyInterpreterFrame *frame, int throwflag);
 
@@ -2177,10 +2314,6 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     _Py_EnsureTstateNotNULL(tstate);
     check_invalid_reentrancy();
     CALL_STAT_INC(pyeval_calls);
-
-#ifdef Py_STATS
-    int lastopcode = 0;
-#endif
 
     if (_Py_EnterRecursiveCallTstate(tstate, "")) {
         assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
@@ -2239,7 +2372,6 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     frame->previous = &entry->frame;
     tstate->current_frame = frame;
 
-    PyValue result;
     if (throwflag) {
         /* support for generator.throw() */
         if (_Py_EnterRecursivePy(tstate)) {
@@ -2247,18 +2379,8 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
         }
         /* Because this avoids the RESUME, we need to update instrumentation */
         _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
-        _PyInstr *next_instr = frame->instr_ptr;
-        PyValue *slots = _PyFrame_Slots(frame);
-        _PyIRWord ir_word = 0;
-        result = enter_handlers(_TAIL_CALL_throw_error, TAIL_CALL_ARGS);
     }
-    else {
-        /* start_frame takes its word and slots from the frame */
-        PyValue *slots = NULL;
-        _PyInstr *next_instr = NULL;
-        _PyIRWord ir_word = 0;
-        result = enter_handlers(_TAIL_CALL_start_frame, TAIL_CALL_ARGS);
-    }
+    PyValue result = ir_evaluate(tstate, frame, throwflag);
     /* The handler that returned, INTERPRETER_EXIT or exit_unwind_notrace,
      * left the entry frame */
     assert(tstate_impl->eval_activation == &activation);

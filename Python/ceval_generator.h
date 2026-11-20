@@ -1,126 +1,14 @@
-/* Generator transfer entries. Included after ir_targets.h so every outgoing
- * native target has its configured calling convention declared. */
-
-/* Private entries carry a value rather than a word. Ordinary dispatch first
+/* Generator transfer entries: the private labels of the evaluator,
+ * ir_evaluate() in Python/ceval.c, which includes this file and the
+ * generated handlers inside the function.  Their helpers are above it.
+ *
+ * Private entries carry a value rather than a word. Ordinary dispatch first
  * reloads the word and needs its own local handler index. */
 #define GENERATOR_DISPATCH() \
     do { \
         int opcode; \
         DISPATCH(); \
     } while (0)
-
-static inline PyValue
-generator_payload(_PyIRWord payload)
-{
-    return (PyValue){.bits = payload};
-}
-
-static inline uint64_t
-generator_control_generation(_PyInterpreterFrame *frame)
-{
-    /* Interpreter entry frames do not initialize frame_obj. */
-    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
-        return 0;
-    }
-    return frame->frame_obj == NULL ? 0 : frame->frame_obj->f_lineno_generation;
-}
-
-/* Ordinary outcomes need one dispatch-table-shaped lookup. A transparent
- * monitor keeps the same word fields but resolves its source only here, on
- * the actual observation path. */
-static inline py_tail_call_funcptr
-generator_outcome_target(_PyInterpreterFrame *frame, _PyInstr *site,
-                         py_tail_call_funcptr *targets)
-{
-    if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
-        return NULL;
-    }
-    int handler = IR_HANDLER(*site);
-    py_tail_call_funcptr target = targets[handler];
-    if (target == NULL && (_PyIR_Formats[handler].flags & _PyIR_TRANSPARENT)) {
-        target = targets[_PyIR_RealHandler(frame, site)];
-    }
-    return target;
-}
-
-/* This guard contains no effect. A monitored or redirected transfer publishes
- * its homes before running the ordinary source's callback boundary. */
-static inline bool
-generator_transfer_is_plain(PyThreadState *tstate, _PyInterpreterFrame *frame)
-{
-#ifdef Py_GIL_DISABLED
-    return false;
-#else
-    if (frame->pending_redirect || IS_PEP523_HOOKED(tstate) ||
-        _PyFrame_GetCode(frame)->_co_monitoring != NULL) {
-        return false;
-    }
-#ifdef Py_DEBUG
-    if (frame->lltrace >= 5) {
-        return false;
-    }
-#endif
-#ifdef WITH_DTRACE
-    if (PyDTrace_FUNCTION_ENTRY_ENABLED() || PyDTrace_FUNCTION_RETURN_ENABLED()) {
-        return false;
-    }
-#endif
-    return true;
-#endif
-}
-
-/* The caller holds value in C, which is an external reference to the cyclic
- * collector. Every frame write precedes the first close. */
-static inline void
-generator_publish_redirected(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                             PyValue value)
-{
-    if (frame->pending_redirect) {
-        _PyFrame_CompleteRedirect(frame);
-    }
-    _PyFrame_PublishReturnSlot(frame, value);
-}
-
-/* The publication of GEN_COMPLETE_EFFECT, out of line: the detached owners
- * are an array, which would be the handler's. Detaches the remaining
- * owners, writes result to the destination, observes the completed step,
- * and closes everything detached. Returns the exception that observation
- * raised, or NULL. */
-static Py_NO_INLINE PyObject *
-generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                           _PyInstr *site, _PyInstr *exit, int base,
-                           int remaining_count, int destination,
-                           bool throwing, PyValue result)
-{
-    /* Detach every remaining owner before an overlapping A publication. */
-    PyValue detached[5];
-    int ndetached = 0;
-    for (int k = remaining_count; k-- > 0;) {
-        detached[ndetached++] = frame->base[base + k];
-        frame->base[base + k] = PyValue_NULL;
-    }
-    // The releasing write: a local's or the discard slot's old value closes
-    // with the detached owners
-    PyValue displaced = frame->base[destination];
-    assert(destination < _PyFrame_GetCode(frame)->co_nlocalsplus ||
-           destination == _PyFrame_DiscardSlot(frame) ||
-           PyValue_IsNull(displaced));
-    frame->base[destination] = result;
-    _PyValue_CheckHome(result);
-    detached[ndetached++] = displaced;
-    frame->return_pc = exit;
-    _PyIRStepResult post = {.next = exit, .status = _PY_IR_STEP_EXIT};
-    if (_PyFrame_GetCode(frame)->_co_monitoring != NULL) {
-        post = _PyIR_ObserveStep(tstate, frame, site, exit,
-            PyValue_Borrow(PyValue_None), throwing ? _PY_IR_SEND_THROW : _PY_IR_SEND, 1);
-    }
-    if (post.status >= 0) { frame->instr_ptr = post.next; }
-    PyObject *error = post.status < 0 ? PyErr_GetRaisedException() : NULL;
-    for (int k = 0; k < ndetached; k++) {
-        PyValue_XCLOSE(detached[k]);
-    }
-    return error;
-}
 
 /* The remaining-window cursor is an actual home address, not an encoded action.
  * Only this effect entry decodes the source outcome. Earlier successful closes
@@ -182,7 +70,7 @@ TARGET(GEN_COMPLETE_EFFECT)
         if (!_PyValue_TryXCloseNoReentry(input) && \
             !((K) == 0 && PyValue_RefcountOnObject(input) && \
               _PyGen_TryCloseClearedNoReentry(PyValue_AsKnownObjectBorrow(input)))) { \
-            IR_GEN_TAIL(_TAIL_CALL_GEN_COMPLETE_EFFECT, frame, \
+            IR_GEN_JUMP(GEN_COMPLETE_EFFECT, frame, \
                         frame->base + base + (K) + 1, next_instr, result); \
         } \
         frame->base[base + (K)] = PyValue_NULL; \
@@ -192,7 +80,7 @@ TARGET(GEN_COMPLETE_EFFECT)
     _PyIRWord source_word = *next_instr; \
     int base = IR_B(source_word); \
     if (!generator_transfer_is_plain(tstate, frame)) { \
-        IR_GEN_TAIL(_TAIL_CALL_GEN_COMPLETE_EFFECT, frame, \
+        IR_GEN_JUMP(GEN_COMPLETE_EFFECT, frame, \
                     frame->base + base + ((THROW) ? 4 : 3), next_instr, result); \
     } \
     if (THROW) { GENERATOR_CLOSE_INPUT(3); } \
@@ -207,7 +95,7 @@ TARGET(NAME) \
 { \
     GENERATOR_RETIRE_SEND_INPUTS(THROW); \
     next_instr = GENERATOR_COMPLETED_EXIT(THROW); \
-    IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN, frame, slots, next_instr, result); \
+    IR_GEN_JUMP(GEN_RETURN, frame, slots, next_instr, result); \
 }
 #define GENERATOR_COMPLETE_HOME(NAME, THROW) \
 TARGET(NAME) \
@@ -230,7 +118,7 @@ TARGET(NAME) \
     PyValue old = frame->base[destination]; \
     if (_PyFrame_ObjectMayReenter(PyValue_IsObject(old) \
             ? PyValue_AsKnownObjectBorrow(old) : NULL)) { \
-        IR_GEN_TAIL(_TAIL_CALL_GEN_COMPLETE_EFFECT, frame, frame->base + base, next_instr, result); \
+        IR_GEN_JUMP(GEN_COMPLETE_EFFECT, frame, frame->base + base, next_instr, result); \
     } \
     if (EXPLICIT) { INSTRUCTION_STATS(STORE_FAST); } \
     frame->base[destination] = result; \
@@ -247,7 +135,7 @@ TARGET(NAME) \
 { \
     GENERATOR_RETIRE_SEND_INPUTS(THROW); \
     if (!_PyValue_TryXCloseNoReentry(result)) { \
-        IR_GEN_TAIL(_TAIL_CALL_GEN_COMPLETE_EFFECT, frame, frame->base + base, next_instr, result); \
+        IR_GEN_JUMP(GEN_COMPLETE_EFFECT, frame, frame->base + base, next_instr, result); \
     } \
     next_instr = GENERATOR_COMPLETED_EXIT(THROW); \
     frame->instr_ptr = frame->return_pc = next_instr; \
@@ -301,10 +189,10 @@ TARGET(GEN_SEND_YIELD)
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
     FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
     slots = _PyFrame_Slots(frame);
-    py_tail_call_funcptr target = generator_outcome_target(
+    void *target = generator_outcome_target(
         frame, frame->instr_ptr, generator_yielded_targets);
     if (target != NULL && !frame->pending_redirect) {
-        IR_GEN_TAIL(target, frame, slots, frame->instr_ptr, result);
+        IR_GEN_JUMP_TO(target, frame, slots, frame->instr_ptr, result);
     }
     next_instr = frame->return_pc;
     if (_PyFrame_SetReturnValue(frame, result)) { next_instr = frame->return_pc; }
@@ -351,7 +239,7 @@ TARGET(GEN_ENTRY_EFFECT)
         PyValue_XCLOSE(value);
         PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
     }
-    IR_GEN_TAIL(_TAIL_CALL_GEN_RESUME_EFFECT, frame, slots,
+    IR_GEN_JUMP(GEN_RESUME_EFFECT, frame, slots,
                 frame->instr_ptr, value);
 }
 
@@ -375,19 +263,19 @@ TARGET(GEN_RESUME_SEND)
     PyValue value = generator_payload(ir_word);
     _PyInstr *resume = next_instr;
     if (!generator_transfer_is_plain(tstate, frame)) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_RESUME_EFFECT, frame, slots, resume, value);
+        IR_GEN_JUMP(GEN_RESUME_EFFECT, frame, slots, resume, value);
     }
     IR_SKIP_RESUME();
     if (next_instr == resume) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_RESUME_EFFECT, frame, slots, resume, value);
+        IR_GEN_JUMP(GEN_RESUME_EFFECT, frame, slots, resume, value);
     }
     _PyIRWord jump = *next_instr;
     assert(IR_HANDLER(jump) == JUMP_BACKWARD_NO_INTERRUPT);
     INSTRUCTION_STATS(JUMP_BACKWARD_NO_INTERRUPT);
     next_instr = frame->ir_words + IR_CD(jump);
-    py_tail_call_funcptr target = generator_resume_targets[IR_HANDLER(*next_instr)];
+    void *target = generator_resume_targets[IR_HANDLER(*next_instr)];
     assert(target != NULL);
-    IR_GEN_TAIL(target, frame, slots, next_instr, value);
+    IR_GEN_JUMP_TO(target, frame, slots, next_instr, value);
 }
 
 TARGET(GEN_RESUME_STORE)
@@ -395,18 +283,18 @@ TARGET(GEN_RESUME_STORE)
     PyValue value = generator_payload(ir_word);
     _PyInstr *resume = next_instr;
     if (!generator_transfer_is_plain(tstate, frame)) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_RESUME_EFFECT, frame, slots, resume, value);
+        IR_GEN_JUMP(GEN_RESUME_EFFECT, frame, slots, resume, value);
     }
     IR_SKIP_RESUME();
     if (next_instr == resume) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_RESUME_EFFECT, frame, slots, next_instr, value);
+        IR_GEN_JUMP(GEN_RESUME_EFFECT, frame, slots, next_instr, value);
     }
     _PyIRWord store = *next_instr;
     int destination = IR_B(store);
     PyValue old = frame->base[destination];
     if (_PyFrame_ObjectMayReenter(PyValue_IsObject(old)
             ? PyValue_AsKnownObjectBorrow(old) : NULL)) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_RESUME_EFFECT, frame, slots, next_instr, value);
+        IR_GEN_JUMP(GEN_RESUME_EFFECT, frame, slots, next_instr, value);
     }
     INSTRUCTION_STATS(STORE_FAST);
     frame->base[destination] = value;
@@ -427,13 +315,13 @@ TARGET(GEN_SEND_INPUT)
     PyValue receiver = frame->base[base];
     if (!generator_transfer_is_plain(tstate, frame) ||
         !PyValue_IsObject(receiver) || tstate->py_recursion_remaining <= 1) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_INPUT_HOME, frame, slots, next_instr, value);
+        IR_GEN_JUMP(GEN_SEND_INPUT_HOME, frame, slots, next_instr, value);
     }
     PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
     if ((Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type) ||
         (FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED &&
          !PyValue_IsNone(value)) || !gen_try_set_executing(gen)) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_SEND_INPUT_HOME, frame, slots, next_instr, value);
+        IR_GEN_JUMP(GEN_SEND_INPUT_HOME, frame, slots, next_instr, value);
     }
     INSTRUCTION_STATS(SEND_GEN);
     STAT_INC(SEND, hit);
@@ -449,12 +337,12 @@ TARGET(GEN_SEND_INPUT)
     --tstate->py_recursion_remaining;
     next_instr = frame->instr_ptr;
     if (next_instr > frame->ir_words) {
-        py_tail_call_funcptr target = generator_resume_targets[IR_HANDLER(next_instr[-1])];
+        void *target = generator_resume_targets[IR_HANDLER(next_instr[-1])];
         if (target != NULL) {
-            IR_GEN_TAIL(target, frame, slots, next_instr, value);
+            IR_GEN_JUMP_TO(target, frame, slots, next_instr, value);
         }
     }
-    IR_GEN_TAIL(_TAIL_CALL_GEN_RESUME_EFFECT, frame, slots, next_instr, value);
+    IR_GEN_JUMP(GEN_RESUME_EFFECT, frame, slots, next_instr, value);
 }
 
 TARGET(GEN_REDIRECT_EFFECT)
@@ -472,13 +360,13 @@ TARGET(GEN_RETURN_PARENT)
     PyValue value = generator_payload(ir_word);
     if (frame->owner != FRAME_OWNED_BY_INTERPRETER) {
         if (frame->pending_redirect) {
-            IR_GEN_TAIL(_TAIL_CALL_GEN_REDIRECT_EFFECT, frame, slots,
+            IR_GEN_JUMP(GEN_REDIRECT_EFFECT, frame, slots,
                         frame->instr_ptr, value);
         }
-        py_tail_call_funcptr target = generator_outcome_target(
+        void *target = generator_outcome_target(
             frame, frame->instr_ptr, generator_completed_targets);
         if (target != NULL) {
-            IR_GEN_TAIL(target, frame, slots, frame->instr_ptr, value);
+            IR_GEN_JUMP_TO(target, frame, slots, frame->instr_ptr, value);
         }
     }
     /* Nonadmitted FOR/SEND and interpreter entry retain their own contract. */
@@ -500,7 +388,7 @@ TARGET(GEN_RETURN_ROUTE)
     frame = tstate->current_frame;
     if (generator_outcome_target(frame, frame->instr_ptr,
                                  generator_completed_targets) != NULL) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_RETIRED, dying, slots,
+        IR_GEN_JUMP(GEN_RETURN_RETIRED, dying, slots,
                     frame->instr_ptr, value);
     }
     value = _PyEval_FrameClearAndPopWithResult(tstate, dying, value);
@@ -542,10 +430,10 @@ TARGET(GEN_RETURN_RETIRED)
     if (placed &&
         (frame->pending_redirect || frame->instr_ptr != site ||
          generator_control_generation(frame) != generation)) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_REDIRECT_EFFECT, frame, slots,
+        IR_GEN_JUMP(GEN_REDIRECT_EFFECT, frame, slots,
                     frame->instr_ptr, value);
     }
-    IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_PARENT, frame, slots, site, value);
+    IR_GEN_JUMP(GEN_RETURN_PARENT, frame, slots, site, value);
 }
 
 /* The already-validated RETURN consumes the payload without an A home. The
@@ -567,7 +455,7 @@ TARGET(GEN_RETURN)
     int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
     frame = tstate->current_frame = dying->previous;
     if (generator_return) {
-        IR_GEN_TAIL(_TAIL_CALL_GEN_RETURN_RETIRED, dying, _PyFrame_Slots(dying),
+        IR_GEN_JUMP(GEN_RETURN_RETIRED, dying, _PyFrame_Slots(dying),
                     frame->instr_ptr, value);
     }
     value = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, value);

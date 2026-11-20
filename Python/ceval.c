@@ -2240,6 +2240,9 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
         return (_PyIRTransfer){frame, NULL}; \
     } while (0)
 #pragma push_macro("IR_OBSERVE_EDGE")
+#pragma push_macro("IR_HOLD_NEXT")
+#undef IR_HOLD_NEXT
+#define IR_HOLD_NEXT() ((void)0)
 #pragma push_macro("IR_STEP_DONE")
 #undef IR_STEP_DONE
 #define IR_STEP_DONE(STEP) return (STEP)
@@ -2341,6 +2344,7 @@ ir_event_end_for(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #pragma pop_macro("JUMP_TO_PREDICTED")
 #pragma pop_macro("IR_DEOPT_BINARY_OP")
 #pragma pop_macro("IR_OBSERVE_EDGE")
+#pragma pop_macro("IR_HOLD_NEXT")
 #pragma pop_macro("IR_STEP_DONE")
 #pragma pop_macro("IR_REPORT_EDGE")
 

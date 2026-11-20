@@ -114,6 +114,13 @@
         } \
     } while (0)
 
+/* Every handler advances next_instr at its start.  Left alone, the
+ * optimiser (partial redundancy elimination) computes next_instr + 1 in the
+ * dispatch, so that the evaluator keeps two values for the word where it
+ * needs one, and has no register for the sixth value live across a dispatch.
+ * The empty statement makes the handler's advance a change to a value that
+ * the optimiser cannot see through, so that the advance stays in the handler. */
+#define IR_HOLD_NEXT() __asm__("" : "+r"(next_instr))
 #define DISPATCH_GOTO() goto *opcode_targets[opcode]
 /* An error leaves the handler for the shared label process_error, which
  * unwinds by the exception table and either dispatches at the handler found

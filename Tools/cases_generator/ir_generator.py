@@ -6623,6 +6623,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("(void)this_instr;\n")
     if not inst.properties.no_save_ip:
         out.emit(f"frame->instr_ptr = next_instr;\n")
+    out.emit("IR_HOLD_NEXT();\n")
     out.emit(f"next_instr += 1;\n")
     out.emit(f"INSTRUCTION_STATS({handler_id});\n")
     if is_target:

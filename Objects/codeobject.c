@@ -4072,12 +4072,15 @@ PyUnstable_Code_New(int argcount, int kwonlyargcount,
 // NOTE: When modifying the construction of PyCode_NewEmpty, please also change
 // test.test_code.CodeLocationTest.test_code_new_empty to keep it in sync!
 
-// Slot 0 is the only temporary
+// Slot 0 is the discard slot, the only local; slot 1 is the only temporary
 static const _PyIRWord assert0[3] = {
     IR_WORD(RESUME, RESUME_AT_FUNC_START, 0, 0, 0),
-    IR_WORD(LOAD_COMMON_CONSTANT, 0, CONSTANT_ASSERTIONERROR, 0, 0),
-    IR_WORD(RAISE_VARARGS, 0, 1, 0, 0),
+    IR_WORD(LOAD_COMMON_CONSTANT, 1, CONSTANT_ASSERTIONERROR, 0, 0),
+    IR_WORD(RAISE_VARARGS, 1, 1, 0, 0),
 };
+
+// The kinds of the locals of PyCode_NewEmpty: every code has the discard slot
+static const char discard_kinds[1] = {CO_FAST_CONST | CO_FAST_HIDDEN};
 
 static const uint8_t linetable[2] = {
     (1 << 7)  // New entry.
@@ -4094,10 +4097,21 @@ PyCode_NewEmpty(const char *filename, const char *funcname, int firstlineno)
     PyObject *funcname_ob = NULL;
     PyObject *code_ob = NULL;
     PyObject *linetable_ob = NULL;
+    PyObject *localsplusnames_ob = NULL;
+    PyObject *localspluskinds_ob = NULL;
     PyCodeObject *result = NULL;
 
     nulltuple = PyTuple_New(0);
     if (nulltuple == NULL) {
+        goto failed;
+    }
+    localsplusnames_ob = Py_BuildValue("(s)", ".discard");
+    if (localsplusnames_ob == NULL) {
+        goto failed;
+    }
+    localspluskinds_ob = PyBytes_FromStringAndSize(discard_kinds,
+                                                   sizeof(discard_kinds));
+    if (localspluskinds_ob == NULL) {
         goto failed;
     }
     funcname_ob = PyUnicode_FromString(funcname);
@@ -4127,8 +4141,8 @@ PyCode_NewEmpty(const char *filename, const char *funcname, int firstlineno)
         .linetable = linetable_ob,
         .consts = nulltuple,
         .names = nulltuple,
-        .localsplusnames = nulltuple,
-        .localspluskinds = emptystring,
+        .localsplusnames = localsplusnames_ob,
+        .localspluskinds = localspluskinds_ob,
         .exceptiontable = emptystring,
         .stacksize = 1,
     };
@@ -4136,6 +4150,8 @@ PyCode_NewEmpty(const char *filename, const char *funcname, int firstlineno)
 
 failed:
     Py_XDECREF(nulltuple);
+    Py_XDECREF(localsplusnames_ob);
+    Py_XDECREF(localspluskinds_ob);
     Py_XDECREF(funcname_ob);
     Py_XDECREF(filename_ob);
     Py_XDECREF(code_ob);

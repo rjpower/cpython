@@ -161,27 +161,32 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
 #define IR_F_LOCAL_MASK (IR_F_LOCAL_A | IR_F_LOCAL_B | IR_F_LOCAL_C | IR_F_LOCAL_D)
 
 /* Call-role flags of a call-family word, which the code object's words and
- * the .pyc carry: the reserved self input of the window is virtual NULL
- * (IR_F_NO_SELF), and for CALL_FUNCTION_EX so is the kwargs input
- * (IR_F_NO_KW, only with IR_F_NO_SELF).  The handler neither reads nor
- * rechecks a virtual input (_PyIR_CallInputHoles()).  The handlers that
- * admit them have them in _PyIRFormat.word_flags.  Bit 15 is IR_F_OPERANDS. */
+ * the .pyc carry.  IR_F_NO_SELF, on CALL and CALL_KW: the call has no self
+ * operand (the compiler proved it NULL), so operand 0 is its first argument.
+ * IR_F_NO_KW, on CALL_FUNCTION_EX: it has no kwargs operand.  A handler of
+ * the family reads them from its word, so specialisation and instrumentation
+ * keep them by keeping the flags (_PyIRFormat.word_flags). */
 #define IR_F_NO_SELF    (1 << 13)
 #define IR_F_NO_KW      (1 << 14)
 #define IR_F_CALL_ROLES (IR_F_NO_SELF | IR_F_NO_KW)
 
-/* Operand words (pyjit/design/proposals/operand-calls80.md section 1).  A
- * call head that has them is followed by ceil(n / 4) words with handler
- * IR_OPERANDS, where n is the head's C field: fields A to D of operand word
- * i name operands 4i to 4i + 3, and an unused field holds IR_FIELD_MAX.
- * Those words are part of the call's instruction: a jump never targets one
- * and no handler is dispatched on one.  IR_F_OPERANDS marks a head that has
- * them.  It is a transition: until the compiler stops emitting window calls
- * (step 2b) a call has no operand words and its C field is the argument
- * count of its window.  Then every call head has operand words, and the
- * flag and the window form go: the length follows from the call family
- * alone.  Only _PyIR_WordLength() reads it. */
-#define IR_F_OPERANDS   (1 << 15)
+/* Operand words (pyjit/design/proposals/operand-calls80.md section 1).  Every
+ * member of the CALL, CALL_KW and CALL_FUNCTION_EX families is a head word
+ * followed by ceil(n / 4) words with handler IR_OPERANDS, where n is the
+ * head's C field: fields A to D of operand word i name operands 4i to 4i + 3,
+ * and an unused field holds IR_FIELD_MAX.  The head's A is the dst, B the
+ * callable and D the feedback offset.  The operands are
+ *
+ *   CALL         the self slot (unless IR_F_NO_SELF), then the arguments;
+ *   CALL_KW      the same, then the keyword values, then the index in
+ *                co_consts of the tuple of their names (not a slot);
+ *   CALL_FUNCTION_EX
+ *                the positional iterable or tuple, then the kwargs mapping
+ *                unless IR_F_NO_KW.
+ *
+ * A slot below co_nlocalsplus is a borrowed local, any other a temporary that
+ * the call owns.  Those words are part of the call's instruction: a jump never
+ * targets one and no handler is dispatched on one. */
 #define IR_OPERANDS_PER_WORD 4
 
 #define IR_A(W)         ((uint32_t)((W) >> 16) & IR_FIELD_MAX)
@@ -191,21 +196,6 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
 #define IR_CD(W)        ((uint32_t)((W) >> 40))
 /* D as a signed distance */
 #define IR_DS(W)        ((int)(IR_D(W) ^ 0x800) - 0x800)
-
-/* The number of words of the instruction that starts with word: 1, or for
- * a call head with operand words, 1 + ceil(n / 4).  Every walker over the
- * words, of the code object or of an executing copy, steps by it, and none
- * keeps a length of its own.  It reads the head's flags and C field, which
- * specialisation and instrumentation keep. */
-static inline int
-_PyIR_WordLength(_PyIRWord word)
-{
-    if (!(word & IR_F_OPERANDS)) {
-        return 1;
-    }
-    return 1 + (int)((IR_C(word) + IR_OPERANDS_PER_WORD - 1)
-                     / IR_OPERANDS_PER_WORD);
-}
 
 #define IR_WORD(H, A, B, C, D) \
     ((_PyIRWord)(uint16_t)(H) | (_PyIRWord)((A) & IR_FIELD_MAX) << 16 | \
@@ -480,6 +470,14 @@ enum {
     _PyIR_OBSERVER_COMPLETION,
 };
 
+/* _PyIRFormat.operands */
+enum {
+    _PyIR_OPERANDS_NONE,
+    _PyIR_OPERANDS_CALL,
+    _PyIR_OPERANDS_KW,
+    _PyIR_OPERANDS_EX,
+};
+
 typedef struct _PyIRFormat {
     uint16_t flags;         // _PyIR_VALID, ...: the format
     uint16_t effects;       // _PyIR_RAISES, ...: the handler
@@ -506,6 +504,8 @@ typedef struct _PyIRFormat {
     uint16_t word_flags;    // the canonical flags a word of the handler
                             // may carry: IR_F_CALL_ROLES or a subset
     uint8_t error_routes;   // _PyIR_ERROR_*; conditional native error routes
+    uint8_t operands;       // _PyIR_OPERANDS_*: the words of the format have
+                            // operand words after the head (a call)
     _PyIRExtent reads;      // the stack inputs, from the deepest
     _PyIRExtent writes;     // the stack outputs, from the same slot
     _PyIRExtent through;    // the deepest inputs that the handler leaves
@@ -523,30 +523,12 @@ typedef struct _PyIRFormat {
     uint32_t events;        // bit e: semantic handler or twin can fire event e
 } _PyIRFormat;
 
-#define _PyIR_CALL_HOLE_SELF (1u << 1)
-#define _PyIR_CALL_HOLE_KWARGS (1u << 3)
-
-typedef enum {
-    _PyIR_CALL_INPUT_VALUE,
-    _PyIR_CALL_INPUT_VIRTUAL_NULL,
-} _PyIRCallInputRole;
-
-/* The window inputs of a call word that are virtual NULL, from its role
- * flags: bit k is input k. */
-static inline unsigned int
-_PyIR_CallInputHoles(_PyIRWord word)
-{
-    return ((word & IR_F_NO_SELF) ? _PyIR_CALL_HOLE_SELF : 0)
-         | ((word & IR_F_NO_KW) ? _PyIR_CALL_HOLE_KWARGS : 0);
-}
-
-static inline _PyIRCallInputRole
-_PyIR_CallInputRole(_PyIRWord word, int offset)
-{
-    return (offset == 1 || offset == 3) &&
-        (_PyIR_CallInputHoles(word) & (1u << offset))
-        ? _PyIR_CALL_INPUT_VIRTUAL_NULL : _PyIR_CALL_INPUT_VALUE;
-}
+/* The number of words of the instruction that starts with word: 1, or for
+ * a call head 1 + ceil(n / 4).  Every walker over the words, of the code
+ * object or of an executing copy, steps by it, and none keeps a length of
+ * its own.  It reads the head's C field, which specialisation and
+ * instrumentation keep. */
+static inline int _PyIR_WordLength(_PyIRWord word);
 
 #include "pycore_ir_metadata.h"
 
@@ -875,14 +857,67 @@ _PyIR_FormatOf(int handler)
 }
 
 /* Whether the flags of a canonical word, whose handler is valid, are ones
- * its handler admits: call-role flags on a call-family handler, IR_F_NO_KW
- * only with IR_F_NO_SELF.  The slot-class flags are the executing copy's. */
+ * its handler admits: call-role flags on a call-family handler.  The
+ * slot-class flags are the executing copy's. */
 static inline int
 _PyIR_CanonicalFlagsValid(_PyIRWord word)
 {
-    int flags = IR_FLAGS(word);
-    return (flags & ~_PyIR_FormatOf(IR_HANDLER(word))->word_flags) == 0
-        && (!(flags & IR_F_NO_KW) || (flags & IR_F_NO_SELF));
+    return (IR_FLAGS(word) & ~_PyIR_FormatOf(IR_HANDLER(word))->word_flags) == 0;
+}
+
+/* Whether the handler is a member of the CALL, CALL_KW or CALL_FUNCTION_EX
+ * family or one of their instrumented twins: its words have operand words. */
+static inline int
+_PyIR_HandlerHasOperands(int handler)
+{
+    return handler >= 0 && handler < IR_NUM_HANDLERS
+           && _PyIR_Formats[handler].operands != 0;
+}
+
+/* The words of the call whose head is word: the head and its operand words.
+ * The head's handler is not consulted, so it is right for a head that an
+ * INSTRUMENTED_LINE or INSTRUMENTED_INSTRUCTION word has replaced in the
+ * executing copy (which keeps every other field). */
+static inline int
+_PyIR_CallWordLength(_PyIRWord word)
+{
+    return 1 + (int)((IR_C(word) + IR_OPERANDS_PER_WORD - 1)
+                     / IR_OPERANDS_PER_WORD);
+}
+
+static inline int
+_PyIR_WordLength(_PyIRWord word)
+{
+    if (!_PyIR_HandlerHasOperands(IR_HANDLER(word))) {
+        return 1;
+    }
+    return _PyIR_CallWordLength(word);
+}
+
+/* Operand k of the call whose head is at head: the slot that it names, or for
+ * the names of a CALL_KW the index in co_consts. */
+static inline int
+_PyIR_CallOperand(const _PyIRWord *head, int k)
+{
+    return (int)((head[1 + k / IR_OPERANDS_PER_WORD]
+                  >> (16 + 12 * (k % IR_OPERANDS_PER_WORD))) & IR_FIELD_MAX);
+}
+
+/* The calls' operand layouts, from the base opcode of the head: whether the
+ * first operand is the self slot, and how many trailing operands of the
+ * head's C field are not slots (the names of a CALL_KW). */
+static inline int
+_PyIR_CallHasSelf(_PyIRWord word)
+{
+    return !(word & IR_F_NO_SELF)
+           && _PyIR_Formats[IR_HANDLER(word)].operands != _PyIR_OPERANDS_EX;
+}
+
+static inline int
+_PyIR_CallSlotOperands(_PyIRWord word)
+{
+    return (int)IR_C(word)
+           - (_PyIR_Formats[IR_HANDLER(word)].operands == _PyIR_OPERANDS_KW);
 }
 
 /* The slot-class flags of word in an executing copy of code with

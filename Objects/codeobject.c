@@ -826,9 +826,8 @@ kwargs_word_access(_PyIRWord word, int slot)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (IR_HANDLER(word) == IR_OPERANDS) {
-        // Each field names an operand, which the call reads
-        return IR_A(word) == (uint32_t)slot || IR_B(word) == (uint32_t)slot ||
-               IR_C(word) == (uint32_t)slot || IR_D(word) == (uint32_t)slot;
+        // The call that owns it checks its operands (validate_virtual_kwargs)
+        return 0;
     }
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int reads = 0;
@@ -956,10 +955,13 @@ validate_virtual_kwargs(struct _PyCodeConstructor *con)
         if (kwargs_word_access(word, slot)) {
             goto invalid_allocated;
         }
-        // The operands of a call are read by the call
-        for (int j = 1; j < _PyIR_WordLength(word); j++) {
-            if (kwargs_word_access(words[i + j], slot)) {
-                goto invalid_allocated;
+        // The call reads its operands.  The last of a CALL_KW is the index
+        // of its names in co_consts, not a slot.
+        if (_PyIR_WordLength(word) > 1) {
+            for (int k = 0; k < _PyIR_CallSlotOperands(word); k++) {
+                if (_PyIR_CallOperand(&words[i], k) == slot) {
+                    goto invalid_allocated;
+                }
             }
         }
         const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
@@ -1122,10 +1124,10 @@ owner_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
         unsigned int reads = 0, defs = 0, nullable = 0;
         for (int k = 0; k < count; k++) {
             int home = work.homes[k];
-            if (!(nonnull & (1u << k)) && _PyIR_NullableHome(word, arg, home)) {
+            if (!(nonnull & (1u << k)) && _PyIR_NullableHome(&words[i], arg, home)) {
                 nullable |= 1u << k;
             }
-            if (_PyIR_ReadsHome(word, arg, home)) {
+            if (_PyIR_ReadsHome(&words[i], arg, home)) {
                 reads |= 1u << k;
             }
             if (_PyIR_DefinesHome(word, arg, home)) {
@@ -1959,7 +1961,8 @@ error:
  * them: handler IR_OPERANDS and no flags, the first n fields (n is the C
  * field of the head) name slots of the frame, unused fields hold
  * IR_FIELD_MAX, and no operand names a cell or a free variable, since
- * only a load of one reads it.  The last operand of a CALL_KW is the index of
+ * only a load of one reads it (a local that is also a cell is the variable
+ * of an inlined comprehension).  The last operand of a CALL_KW is the index of
  * its names in co_consts. */
 static int
 check_operand_words(struct _PyCodeConstructor *con, const char *bytes,
@@ -2012,9 +2015,13 @@ check_operand_words(struct _PyCodeConstructor *con, const char *bytes,
                          value, nslots);
             return -1;
         }
-        if (value < (uint32_t)PyTuple_GET_SIZE(con->localsplusnames) &&
-            (_PyLocals_GetKind(con->localspluskinds, (int)value)
-             & (CO_FAST_CELL | CO_FAST_FREE)))
+        /* A slot that is both a local and a cell is the variable of an
+         * inlined comprehension that a closure of the function also
+         * captures: inside the comprehension it holds the plain value. */
+        int kind = value < (uint32_t)PyTuple_GET_SIZE(con->localsplusnames)
+            ? _PyLocals_GetKind(con->localspluskinds, (int)value) : 0;
+        if ((kind & CO_FAST_FREE) ||
+            (kind & (CO_FAST_LOCAL | CO_FAST_CELL)) == CO_FAST_CELL)
         {
             PyErr_Format(PyExc_ValueError,
                          "code: word %zd has a cell or free variable as an operand", i);
@@ -2653,12 +2660,12 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
         for (int bit = 0; bit < image->scratch; bit++) {
             uint64_t mask = UINT64_C(1) << (bit % 64);
             _PyIRPhysicalTransfer physical = _PyIR_NormalPhysicalTransfer(
-                word, arg, 0, nl + bit, nl, nl + image->scratch);
+                &image->words[pc], arg, 0, nl + bit, nl, nl + image->scratch);
             if (physical.kind != _PyIR_PHYSICAL_PRESERVE) {
                 state[SEM_NULL * work->nwords + bit / 64] &= ~mask;
             }
             int absence = _PyIR_NormalCallAbsence(
-                word, arg, nl + bit, nl, nl + image->scratch);
+                &image->words[pc], arg, nl + bit, nl, nl + image->scratch);
             uint64_t *empty = &state[SEM_NO_HOME * work->nwords + bit / 64];
             if (absence == _PyIR_ABSENCE_SET_EMPTY) {
                 *empty |= mask;
@@ -2705,15 +2712,15 @@ semantic_leaf_step(const semantic_image *image, semantic_worklist *work,
         int accepts_empty = IR_HANDLER(word) == POP_TOP ||
             (fmt->transfer_kind == _PyIR_TRANSFER_LOCAL_STORE &&
              (old & (1u << SEM_INITIALIZED)));
-        if (_PyIR_ReadsHome(word, arg, home) && !accepts_empty &&
-            !_PyIR_NullableHome(word, arg, home) &&
+        if (_PyIR_ReadsHome(&image->words[pc], arg, home) && !accepts_empty &&
+            !_PyIR_NullableHome(&image->words[pc], arg, home) &&
             !(old & (1u << SEM_INITIALIZED)))
         {
             *complete = 0;
         }
         if (inspect && semantic_absent(old) &&
-            _PyIR_ReadsHome(word, arg, home) && !accepts_empty &&
-            !_PyIR_NullableHome(word, arg, home))
+            _PyIR_ReadsHome(&image->words[pc], arg, home) && !accepts_empty &&
+            !_PyIR_NullableHome(&image->words[pc], arg, home))
         {
             PyErr_Format(PyExc_ValueError,
                          "code: word %d reads unavailable scratch home %d", pc, home);
@@ -2873,7 +2880,7 @@ semantic_delegated_step(const semantic_image *image, semantic_worklist *work,
     }
     int homes[] = {work->delegated.receiver, work->delegated.outgoing};
     for (int i = 0; i < 2; i++) {
-        if (_PyIR_NormalPhysicalTransfer(word, arg, 0, homes[i], image->nl,
+        if (_PyIR_NormalPhysicalTransfer(&image->words[pc], arg, 0, homes[i], image->nl,
                 image->nl + image->scratch).kind != _PyIR_PHYSICAL_PRESERVE)
         {
             work->delegated = (semantic_delegated){.kind = SEM_DELEGATED_UNKNOWN};
@@ -2889,24 +2896,13 @@ semantic_step_core(const semantic_image *image, semantic_worklist *work,
 {
     _PyIRWord word = image->words[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (inspect && _PyIR_CallInputHoles(word)) {
-        int base = (int)IR_B(word);
-        int arg = admitted_word_arg(word, image->fbinit, image->nfb);
-        for (int k = 0; k < _PyIR_Extent(fmt->reads, arg); k++) {
-            if (_PyIR_CallInputRole(word, k) == _PyIR_CALL_INPUT_VIRTUAL_NULL &&
-                !(semantic_home_facts(work, state, base + k, image->nl) &
-                  (1u << SEM_NO_HOME)))
-            {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %d has an unproved virtual call input %d",
-                             pc, base + k);
-                return -1;
-            }
-        }
-        int count = _PyIR_Extent(fmt->reads, arg);
+    if (inspect && _PyIR_IsCallWord(word)) {
+        // The result may take the home of an input that the call consumes;
+        // any other home must be free.
         int dst = (int)IR_A(word);
-        if (dst >= image->nl && dst != IR_NO_DST &&
-            (dst < base || dst >= base + count) &&
+        int nullable;
+        if (dst >= image->nl && dst != IR_NO_DST && dst != (int)IR_B(word) &&
+            !_PyIR_CallReadsOperandHome(&image->words[pc], dst, &nullable) &&
             !(semantic_home_facts(work, state, dst, image->nl) & (1u << SEM_NO_HOME)))
         {
             PyErr_Format(PyExc_ValueError,
@@ -3045,7 +3041,7 @@ semantic_step_core(const semantic_image *image, semantic_worklist *work,
                     return -1;
                 }
                 for (int home = nl; home < nl + image->scratch; home++) {
-                    if (_PyIR_ConsumesNormalInput(word, arg, home) &&
+                    if (_PyIR_ConsumesNormalInput(&image->words[pc], arg, home) &&
                         !_PyIR_DefinesHome(word, arg, home))
                     {
                         uint64_t mask = UINT64_C(1) << ((home - nl) % 64);
@@ -3144,7 +3140,7 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
                 (event->flags & (_PyIR_NORMAL_NULL_FALLTHROUGH | _PyIR_NORMAL_NULL_TAKEN)) &&
                 dst >= image->nl && dst != IR_NO_DST &&
                 ((semantic_home_facts(work, state, dst, image->nl) & (1u << SEM_NO_HOME)) ||
-                 _PyIR_ConsumesNormalInput(word, arg, dst));
+                 _PyIR_ConsumesNormalInput(&image->words[pc], arg, dst));
         }
     }
     semantic_scalar_state normal = {0};
@@ -3749,12 +3745,6 @@ normal_transfer_proof(const semantic_image *image,
                 if (is_delegated_yield_handler(IR_HANDLER(words[i]))) {
                     PyErr_Format(PyExc_ValueError,
                                  "code: word %d has no delegated entry proof", i);
-                    result = -1;
-                    break;
-                }
-                if (_PyIR_CallInputHoles(words[i])) {
-                    PyErr_Format(PyExc_ValueError,
-                                 "code: word %d has no virtual call entry proof", i);
                     result = -1;
                     break;
                 }

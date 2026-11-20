@@ -883,17 +883,6 @@ too_large(const char *what, int value)
     return ERROR;
 }
 
-/* Test knob: see _PyAssemble_SetOperandCalls() */
-static int operand_calls;
-
-int
-_PyAssemble_SetOperandCalls(int enable)
-{
-    int old = operand_calls;
-    operand_calls = enable;
-    return old;
-}
-
 /* The operand words of a call head with n operands */
 static int
 operand_word_count(int n)
@@ -901,41 +890,71 @@ operand_word_count(int n)
     return (n + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD;
 }
 
-/* The words that follow the head of op, which has _PyReg_OPERANDS: fields
- * A to D of word k name the slots of operands 4k to 4k + 3, from the last
- * noperands inputs of op, and an unused field holds IR_FIELD_MAX. */
+/* The operands of a call (calls80, section 1), after the callable, which
+ * the head names.  CALL and CALL_KW take the self input unless it is
+ * virtual NULL, then the arguments, then for CALL_KW the names, which are
+ * an immediate; CALL_FUNCTION_EX takes the positional arguments and, unless
+ * it is virtual NULL, the keyword arguments. */
+static int
+call_has_self(const _PyRegOp *op)
+{
+    return op->opcode != CALL_FUNCTION_EX &&
+           !(op->flags & _PyReg_CALL_NO_SELF);
+}
+
+static int
+call_noperands(const _PyRegOp *op)
+{
+    if (op->opcode == CALL_FUNCTION_EX) {
+        return 1 + !(op->flags & _PyReg_CALL_NO_KWARGS);
+    }
+    return op->nread - 1 - !call_has_self(op);
+}
+
+/* The field of operand k of op: a slot, or for the names of a CALL_KW the
+ * index of their tuple in co_consts. */
+static uint32_t
+call_operand_field(_PyRegCfg *cfg, const _PyRegOp *op, int k, int n)
+{
+    if (op->opcode == CALL_KW && k == n - 1) {
+        return op->kwnames > 0 ? (uint32_t)(op->kwnames - 1) : 0;
+    }
+    const int *in = _PyReg_IN(cfg, op);
+    int first = op->opcode == CALL_FUNCTION_EX ? 2 : 2 - call_has_self(op);
+    return (uint32_t)_PyRegCfg_Slot(cfg, in[first + k]);
+}
+
+/* The words that follow the head of op: fields A to D of word k name
+ * operands 4k to 4k + 3, and an unused field holds IR_FIELD_MAX. */
 static void
 encode_operand_words(_PyRegCfg *cfg, _PyRegOp *op, _PyIRWord *words)
 {
-    const int *in = _PyReg_IN(cfg, op);
-    assert(op->noperands <= op->nread);
-    for (int k = 0; k < operand_word_count(op->noperands); k++) {
+    int n = op->noperands;
+    for (int k = 0; k < operand_word_count(n); k++) {
         uint32_t fields[IR_OPERANDS_PER_WORD];
         for (int f = 0; f < IR_OPERANDS_PER_WORD; f++) {
-            int n = k * IR_OPERANDS_PER_WORD + f;
-            fields[f] = n < op->noperands
-                ? (uint32_t)_PyRegCfg_Slot(cfg, in[op->nread - op->noperands + n])
-                : IR_FIELD_MAX;
+            int i = k * IR_OPERANDS_PER_WORD + f;
+            fields[f] = i < n ? call_operand_field(cfg, op, i, n)
+                              : IR_FIELD_MAX;
         }
         words[k] = IR_WORD(IR_OPERANDS, fields[0], fields[1], fields[2], fields[3]);
     }
 }
 
 /* The call-role flags of op's word, which the CallRoles pass proved
- * (Python/regcfg_passes.c): IR_F_NO_SELF, and for CALL_FUNCTION_EX
- * IR_F_NO_KW as well when the kwargs input is also virtual NULL. */
+ * (Python/regcfg_passes.c): IR_F_NO_SELF for CALL and CALL_KW,
+ * IR_F_NO_KW for CALL_FUNCTION_EX. */
 static int
 call_role_flags(const _PyRegOp *op)
 {
-    if (!(op->flags & _PyReg_CALL_NO_SELF)) {
-        return 0;
+    if (op->opcode == CALL_FUNCTION_EX) {
+        return (op->flags & _PyReg_CALL_NO_KWARGS) ? IR_F_NO_KW : 0;
     }
-    assert(op->opcode == CALL || op->opcode == CALL_KW ||
-           op->opcode == CALL_FUNCTION_EX);
-    if (op->opcode == CALL_FUNCTION_EX && (op->flags & _PyReg_CALL_NO_KWARGS)) {
-        return IR_F_NO_SELF | IR_F_NO_KW;
+    if (op->opcode == CALL || op->opcode == CALL_KW) {
+        return (op->flags & _PyReg_CALL_NO_SELF) ? IR_F_NO_SELF : 0;
     }
-    return IR_F_NO_SELF;
+    assert(!(op->flags & (_PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS)));
+    return 0;
 }
 
 /* The generic handler of op: its opcode, a form that pushes its constant
@@ -1004,6 +1023,9 @@ handler_oparg(_PyRegCfg *cfg, _PyRegOp *op)
         // A fused word jumps where the jump after the compare did
         _PyRegOp *jump = (fmt->flags & _PyIR_FUSED) ? &cfg->ops[op->fuse] : op;
         return jump_target(cfg, jump) - (op->word + 1);
+    }
+    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+        return call_noperands(op);
     }
     if (op->opcode == LOAD_GLOBAL) {
         // The NULL bit is only the stack model's: the slot is NULL already
@@ -1403,13 +1425,14 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
             return ERROR;
         }
         op->nwords = 1;
-        if (operand_calls && op->opcode == CALL && op->nread >= op->oparg) {
-            // The head's C field is its operand count, which for the
-            // window form is its oparg
-            op->flags |= _PyReg_OPERANDS;
-            op->noperands = op->oparg;
-        }
-        if (op->flags & _PyReg_OPERANDS) {
+        if (_PyIR_FormatOf(op->handler)->operands != _PyIR_OPERANDS_NONE) {
+            op->noperands = call_noperands(op);
+            if (op->noperands > IR_FIELD_MAX) {
+                return too_large("call operands", op->noperands);
+            }
+            if (op->opcode == CALL_KW && op->kwnames - 1 >= IR_FIELD_MAX) {
+                return too_large("call keyword names constant", op->kwnames - 1);
+            }
             op->nwords += operand_word_count(op->noperands);
         }
     }
@@ -1662,12 +1685,6 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
         }
     }
     int flags = call_role_flags(op);
-    if (op->flags & _PyReg_OPERANDS) {
-        assert(fmt->word_flags & IR_F_OPERANDS);
-        assert(fmt->imm == _PyIR_LOC_C);
-        flags |= IR_F_OPERANDS;
-        fields[2] = (uint32_t)op->noperands;
-    }
     *word = IR_WORD(op->handler | flags,
                     fields[0], fields[1], fields[2], fields[3]);
     return SUCCESS;
@@ -1761,7 +1778,7 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                 continue;
             }
             RETURN_IF_ERROR(encode(cfg, op, blk->reachable, &words[w]));
-            if (op->flags & _PyReg_OPERANDS) {
+            if (_PyIR_FormatOf(op->handler)->operands != _PyIR_OPERANDS_NONE) {
                 encode_operand_words(cfg, op, &words[w + 1]);
             }
             else if (op->nwords > 1) {

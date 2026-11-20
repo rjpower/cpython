@@ -299,10 +299,53 @@ _PyIR_ObservedHomes(_PyIRWord word, int edge, int nl, int limit,
     return 1;
 }
 
+/* The operands of a call word (calls80): the slots that its operand words
+ * name, which no field of the head does.  Operand k is the self slot only
+ * if the word has one, and for CALL_FUNCTION_EX the second operand is the
+ * keyword arguments.  Both may be NULL at run time; no other operand is. */
+static inline int
+_PyIR_IsCallWord(_PyIRWord word)
+{
+    return _PyIR_FormatOf(IR_HANDLER(word))->operands != _PyIR_OPERANDS_NONE;
+}
+
+static inline int
+_PyIR_CallNumSlots(_PyIRWord word)
+{
+    return _PyIR_CallSlotOperands(word);
+}
+
+static inline int
+_PyIR_CallOperandNullable(_PyIRWord word, int k)
+{
+    if (_PyIR_FormatOf(IR_HANDLER(word))->operands == _PyIR_OPERANDS_EX) {
+        return k == 1;
+    }
+    return k == 0 && _PyIR_CallHasSelf(word);
+}
+
+/* Whether a call word reads home as one of its operands, and whether every
+ * such read accepts NULL */
+static inline int
+_PyIR_CallReadsOperandHome(const _PyIRWord *wp, int home, int *nullable)
+{
+    int found = 0;
+    *nullable = 1;
+    int n = _PyIR_CallNumSlots(*wp);
+    for (int k = 0; k < n; k++) {
+        if (_PyIR_CallOperand(wp, k) == home) {
+            found = 1;
+            *nullable &= _PyIR_CallOperandNullable(*wp, k);
+        }
+    }
+    return found;
+}
+
 /* Inputs whose ABI accepts NULL: window-relative positions for WINDOW rows,
  * semantic IN0+k positions for register rows. This is a read capability,
  * not a definition or retirement: cold consumers must independently prove
- * the home is NULL. CALL_EX still requires its callable and argument tuple. */
+ * the home is NULL. A call's callable is not nullable; its operands are
+ * judged by _PyIR_CallOperandNullable(). */
 static inline uint32_t
 _PyIR_NullableInputs(_PyIRWord word)
 {
@@ -314,9 +357,8 @@ _PyIR_NullableInputs(_PyIRWord word)
     switch (_PyIR_BaseOpcode(IR_HANDLER(word))) {
         case CALL:
         case CALL_KW:
-            return 1u << 1;  /* Optional method receiver. */
         case CALL_FUNCTION_EX:
-            return (1u << 1) | (1u << 3);  /* NULL self, optional kwargs. */
+            return 0;  /* Only operands accept NULL: see above. */
         case FOR_ITER:
         case SEND:
         case POP_ITER:
@@ -378,9 +420,6 @@ _PyIR_ReadsWindowHome(_PyIRWord word, int arg, int home)
     if (window < 0 || relative < 0 || relative >= _PyIR_Extent(fmt->reads, arg)) {
         return 0;
     }
-    if (_PyIR_CallInputRole(word, relative) == _PyIR_CALL_INPUT_VIRTUAL_NULL) {
-        return 0;
-    }
     switch (_PyIR_BaseOpcode(IR_HANDLER(word))) {
         case LIST_APPEND:
         case SET_ADD:
@@ -406,7 +445,7 @@ _PyIR_ReadsWindowHome(_PyIRWord word, int arg, int home)
 /* A physical home can alias several semantic inputs. Every actual read,
  * including an independent window use, must accept NULL. */
 static inline int
-_PyIR_NullableHome(_PyIRWord word, int arg, int home)
+_PyIR_NullableHomeAs(_PyIRWord word, const _PyIRWord *wp, int arg, int home)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     uint32_t inputs = _PyIR_NullableInputs(word);
@@ -431,18 +470,40 @@ _PyIR_NullableHome(_PyIRWord word, int arg, int home)
             seen = 1;
         }
     }
+    if (_PyIR_IsCallWord(word)) {
+        int nullable;
+        if (_PyIR_CallReadsOperandHome(wp, home, &nullable)) {
+            if (!nullable) {
+                return 0;
+            }
+            seen = 1;
+        }
+    }
     return seen;
 }
 
+/* The head of the word at wp as it would read with handler word, which is
+ * wp's own except where transparent observation hides the real handler */
 static inline int
-_PyIR_ReadsHome(_PyIRWord word, int arg, int home)
+_PyIR_NullableHome(const _PyIRWord *wp, int arg, int home)
 {
+    return _PyIR_NullableHomeAs(*wp, wp, arg, home);
+}
+
+static inline int
+_PyIR_ReadsHome(const _PyIRWord *wp, int arg, int home)
+{
+    _PyIRWord word = *wp;
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     for (int f = 0; f < 4; f++) {
         if (fmt->roles[f] >= _PyIR_ROLE_IN0 && (int)fields[f] == home) {
             return 1;
         }
+    }
+    if (_PyIR_IsCallWord(word)) {
+        int nullable;
+        return _PyIR_CallReadsOperandHome(wp, home, &nullable);
     }
     return _PyIR_ReadsWindowHome(word, arg, home);
 }
@@ -451,8 +512,9 @@ _PyIR_ReadsHome(_PyIRWord word, int arg, int home)
  * window prefix. Through homes retain their logical values even when they
  * are read; fresh outputs are handled independently by the caller. */
 static inline int
-_PyIR_ConsumesNormalInput(_PyIRWord word, int arg, int home)
+_PyIR_ConsumesNormalInput(const _PyIRWord *wp, int arg, int home)
 {
+    _PyIRWord word = *wp;
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int through = _PyIR_Extent(fmt->through, arg);
@@ -469,7 +531,7 @@ _PyIR_ConsumesNormalInput(_PyIRWord word, int arg, int home)
             return 0;
         }
     }
-    return _PyIR_ReadsHome(word, arg, home);
+    return _PyIR_ReadsHome(wp, arg, home);
 }
 
 enum {
@@ -481,8 +543,9 @@ enum {
 /* A saved NULL fast-local can reach a checked read, but not an unchecked
  * local borrow or any other physical alias that requires a value. */
 static inline int
-_PyIR_BindingRead(_PyIRWord word, int arg, int home)
+_PyIR_BindingRead(const _PyIRWord *wp, int arg, int home)
 {
+    _PyIRWord word = *wp;
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
@@ -513,7 +576,7 @@ _PyIR_BindingRead(_PyIRWord word, int arg, int home)
                 return _PyIR_BINDING_REQUIRES_VALUE;
         }
     }
-    if (_PyIR_ReadsHome(word, arg, home)) {
+    if (_PyIR_ReadsHome(wp, arg, home)) {
         return _PyIR_BINDING_REQUIRES_VALUE;
     }
     return result;
@@ -595,9 +658,10 @@ typedef struct {
  * incoming row: callers must calculate all destinations before changing it.
  * This does not prove that a source is a valid executable input owner. */
 static inline _PyIRPhysicalTransfer
-_PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
+_PyIR_NormalPhysicalTransfer(const _PyIRWord *wp, int arg, int edge, int home,
                              int nl, int limit)
 {
+    _PyIRWord word = *wp;
     const _PyIRPhysicalTransfer unknown = {_PyIR_PHYSICAL_UNKNOWN, -1};
     const _PyIRPhysicalTransfer preserve = {_PyIR_PHYSICAL_PRESERVE, -1};
     int handler = IR_HANDLER(word);
@@ -653,6 +717,34 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
         return unknown;
     }
 
+    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+        /* Every successful call route takes its callable and operand
+         * homes: native retirement clears them, and a Python child moves
+         * them into its frame, which lies above the parent's.  Only the
+         * result's home is rewritten besides, and it is no NULL fact. */
+        if (edge || fmt->roles[0] != _PyIR_ROLE_DST ||
+            fmt->roles[1] != _PyIR_ROLE_IN0 || arg < 0 ||
+            (dst >= nl && dst != IR_NO_DST && dst >= limit))
+        {
+            return unknown;
+        }
+        int n = _PyIR_CallNumSlots(word);
+        for (int k = 0; k < n; k++) {
+            if (_PyIR_CallOperand(wp, k) >= limit) {
+                return unknown;
+            }
+        }
+        if (home == dst) {
+            return unknown;
+        }
+        int nullable;
+        if (home == (int)IR_B(word) ||
+            _PyIR_CallReadsOperandHome(wp, home, &nullable))
+        {
+            return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_SET_NULL, -1};
+        }
+        return preserve;
+    }
     switch (_PyIR_BaseOpcode(handler)) {
         case POP_TOP:
             /* The emitted scalar retirement detaches scratch A before
@@ -675,34 +767,6 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
                 return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_SET_NULL, -1};
             }
             return preserve;
-        case CALL:
-            /* Every successful vector-CALL route drains its input window:
-             * native retirement clears it, and a Python child consumes the
-             * moved arguments before publishing the parent's recipient.
-             * Direct specializations leave a temporary result at BASE. */
-            if (edge || fmt->roles[0] != _PyIR_ROLE_DST ||
-                fmt->roles[1] != _PyIR_ROLE_BASE ||
-                fmt->roles[2] != _PyIR_ROLE_IMM ||
-                fmt->roles[3] != _PyIR_ROLE_FB ||
-                arg < 0 || arg != (int)IR_C(word) ||
-                reads != arg + 2 || writes > 1 || through != 0 ||
-                fmt->dst != 0 || base < 0 ||
-                fmt->output_kind != _PyIR_OUTPUT_WINDOW_DST_FIRST ||
-                (dst >= nl && dst != IR_NO_DST && dst != base))
-            {
-                return unknown;
-            }
-            if (home >= base && home - base < reads && home != dst) {
-                if (_PyIR_CallInputRole(word, home - base) ==
-                    _PyIR_CALL_INPUT_VIRTUAL_NULL)
-                {
-                    return preserve;
-                }
-                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_SET_NULL, -1};
-            }
-            /* Neither a new result nor a child frame supplies a must-NULL
-             * fact. */
-            return unknown;
         case COPY:
             if (edge || fmt->roles[0] != _PyIR_ROLE_BASE ||
                 fmt->roles[1] != _PyIR_ROLE_IMM || arg != (int)IR_B(word) ||
@@ -854,17 +918,17 @@ enum {
  * Native calls touch only their own window, so outside it this can preserve
  * a prior absence fact but cannot create one. */
 static inline int
-_PyIR_NormalCallAbsence(_PyIRWord word, int arg, int home, int nl, int limit)
+_PyIR_NormalCallAbsence(const _PyIRWord *wp, int arg, int home, int nl, int limit)
 {
+    _PyIRWord word = *wp;
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (home < nl || home >= limit) {
         return _PyIR_ABSENCE_UNKNOWN;
     }
     int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
-    int extra = opcode == CALL ? 2 : opcode == CALL_KW ? 3 :
-        opcode == CALL_FUNCTION_EX ? 4 : -1;
+    int is_call = fmt->operands != _PyIR_OPERANDS_NONE;
     int base = (int)IR_B(word), dst = (int)IR_A(word);
-    if (extra < 0) {
+    if (!is_call) {
         /* Reached suspension/child outcomes leave their new recipient live.
          * Cursor/receiver updates have their own protocols, so the whole
          * affected window loses absence; no completion slot is guessed empty.
@@ -907,26 +971,19 @@ _PyIR_NormalCallAbsence(_PyIRWord word, int arg, int home, int nl, int limit)
     {
         return _PyIR_ABSENCE_UNKNOWN;
     }
-    int count = opcode == CALL_FUNCTION_EX ? 4 : arg + extra;
-    if (arg < 0 || count < extra || base < nl || base > limit - count ||
-        home < nl || home >= limit ||
-        fmt->roles[0] != _PyIR_ROLE_DST || fmt->roles[1] != _PyIR_ROLE_BASE ||
-        (opcode == CALL_FUNCTION_EX
-            ? fmt->roles[2] != _PyIR_ROLE_FB || fmt->roles[3] != _PyIR_ROLE_NONE
-            : fmt->roles[2] != _PyIR_ROLE_IMM || fmt->roles[3] != _PyIR_ROLE_FB) ||
-        _PyIR_Extent(fmt->reads, arg) != count ||
+    if (arg < 0 || fmt->roles[0] != _PyIR_ROLE_DST ||
+        fmt->roles[1] != _PyIR_ROLE_IN0 || fmt->roles[2] != _PyIR_ROLE_IMM ||
         _PyIR_Extent(fmt->writes, arg) > 1 ||
         _PyIR_Extent(fmt->through, arg) != 0 || fmt->dst != 0 ||
-        fmt->output_kind != _PyIR_OUTPUT_WINDOW_DST_FIRST)
+        fmt->output_kind != _PyIR_OUTPUT_REGISTER_DST)
     {
         return _PyIR_ABSENCE_UNKNOWN;
     }
     if (home == dst) {
         return _PyIR_ABSENCE_SET_VALUE;
     }
-    if (home >= base && home - base < count &&
-        _PyIR_CallInputRole(word, home - base) != _PyIR_CALL_INPUT_VIRTUAL_NULL)
-    {
+    int nullable;
+    if (home == base || _PyIR_CallReadsOperandHome(wp, home, &nullable)) {
         return _PyIR_ABSENCE_SET_EMPTY;
     }
     return _PyIR_ABSENCE_PRESERVE;

@@ -115,7 +115,7 @@ swap_rename_region(_PyRegCfg *cfg, int start, int end)
             continue;
         }
         const _PyIRFormat *fmt = _PyRegCfg_FormatOf(reader->opcode, reader->oparg);
-        if (fmt->flags & _PyIR_WINDOW) {
+        if ((fmt->flags & _PyIR_WINDOW) || fmt->operands != _PyIR_OPERANDS_NONE) {
             continue;
         }
         int *in = _PyReg_IN(cfg, reader);
@@ -188,6 +188,11 @@ static int
 borrow_field(const _PyRegCfg *cfg, const _PyRegOp *op, int k)
 {
     const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
+    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+        // A call's operand words name any local that its handler reads
+        // before it can run Python code (calls80, section 2)
+        return k < op->nread && _PyRegOp_CallBorrows(op, k) ? k : -1;
+    }
     if (fmt->borrow_mask == 0) {
         return -1;
     }
@@ -398,7 +403,8 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
             if (!(fmt->flags & _PyIR_STORE_DST) || fmt->dst == _PyIR_NO_DST) {
                 continue;
             }
-            int j = fmt->flags & _PyIR_WINDOW ? fmt->dst : p->npop + fmt->dst;
+            int j = fmt->flags & _PyIR_WINDOW ? fmt->dst
+                                              : _PyRegOp_Through(p, fmt);
             // The result is the producer's last output, on top
             if (j != p->nout - 1) {
                 continue;
@@ -1205,6 +1211,46 @@ _PyRegPass_FuseJump(_PyRegCfg *cfg)
 }
 
 
+/* The names of a CALL_KW (pass f0).
+ *
+ * The call's last input is the tuple of its keyword names, which the
+ * LOAD_CONST just before it pushes.  The call's word names the tuple by its
+ * index in co_consts (calls80, section 1), so that load has no word of its
+ * own: it is elided like a PUSH_NULL, which keeps its register and so its
+ * slot, which nothing writes.  A call whose names are not so loaded cannot
+ * be compiled. */
+
+static int
+kw_names_region(_PyRegCfg *cfg, int start, int end)
+{
+    for (int i = start; i < end; i++) {
+        _PyRegOp *call = &cfg->ops[i];
+        if (call->opcode != CALL_KW) {
+            continue;
+        }
+        int v = _PyReg_IN(cfg, call)[call->nread - 1];
+        _PyRegOp *load = live_neighbour(cfg, start, end, i, -1);
+        if (load == NULL || load->opcode != LOAD_CONST || load->dst >= 0
+            || load->nout != 1 || _PyReg_OUT(cfg, load)[0] != v
+            || load->except != call->except)
+        {
+            PyErr_Format(PyExc_SystemError, "the names of the call at line "
+                         "%d are not a constant", call->loc.lineno);
+            return ERROR;
+        }
+        call->kwnames = load->oparg + 1;
+        load->flags |= _PyReg_KWNAMES;
+    }
+    return SUCCESS;
+}
+
+int
+_PyRegPass_KwNames(_PyRegCfg *cfg)
+{
+    return for_each_region_backward(cfg, kw_names_region);
+}
+
+
 /* PUSH_NULL goes (pass f).
  *
  * PUSH_NULL writes NULL into a temporary, and the NULL invariant
@@ -1219,7 +1265,7 @@ elide_null_region(_PyRegCfg *cfg, int start, int end)
 {
     for (int i = start; i < end; i++) {
         _PyRegOp *op = &cfg->ops[i];
-        if (op->opcode != PUSH_NULL) {
+        if (op->opcode != PUSH_NULL && !(op->flags & _PyReg_KWNAMES)) {
             continue;
         }
         assert(op->dst < 0 && op->nout == 1);
@@ -1436,14 +1482,16 @@ call_roles(_PyRegCfg *cfg, int verify)
             if (proof.reached[b] && (op->opcode == CALL || op->opcode == CALL_KW ||
                                     op->opcode == CALL_FUNCTION_EX))
             {
+                // CALL_FUNCTION_EX has no self operand, whatever its
+                // reserved input is; its kwargs input may be absent
                 int *in = _PyReg_IN(cfg, op);
-                if (call_null_get(cfg, state, in[1])) {
-                    roles |= _PyReg_CALL_NO_SELF;
-                    if (op->opcode == CALL_FUNCTION_EX &&
-                        call_null_get(cfg, state, in[3]))
-                    {
+                if (op->opcode == CALL_FUNCTION_EX) {
+                    if (call_null_get(cfg, state, in[3])) {
                         roles |= _PyReg_CALL_NO_KWARGS;
                     }
+                }
+                else if (call_null_get(cfg, state, in[1])) {
+                    roles |= _PyReg_CALL_NO_SELF;
                 }
             }
             int mask = _PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS;

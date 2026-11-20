@@ -412,7 +412,7 @@ static PyStructSequence_Field ir_contract_fields[] = {
     {"base", "the opcode that the handler stands for"},
     {"twin", "the handler that instrumentation runs, or None"},
     {"events", "bit e: the semantic handler or its twin can fire monitoring event e"},
-    {"word_flags", "the canonical word flags the handler admits (IR_F_NO_SELF, IR_F_NO_KW, IR_F_OPERANDS)"},
+    {"word_flags", "the canonical word flags the handler admits (IR_F_NO_SELF, IR_F_NO_KW)"},
     {"error_routes", "complete exceptional routes, including conditional bridges and local publication"},
     {"ordinary_handler", "source handler before generator boundary placement"},
     {"generator_yielded_consumer", "statically selected yielded consumer"},
@@ -660,7 +660,7 @@ _opcode_exec(PyObject *m) {
     ADD_IR_CONSTANT("IR_FLAGS_MASK", IR_FLAGS_MASK);
     ADD_IR_CONSTANT("IR_F_NO_SELF", IR_F_NO_SELF);
     ADD_IR_CONSTANT("IR_F_NO_KW", IR_F_NO_KW);
-    ADD_IR_CONSTANT("IR_F_OPERANDS", IR_F_OPERANDS);
+    ADD_IR_CONSTANT("IR_OPERANDS", IR_OPERANDS);
     ADD_IR_CONSTANT("IR_RESULT_PHASE_NONE", _PyIR_RESULT_PHASE_NONE);
     ADD_IR_CONSTANT("IR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE",
                     _PyIR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE);

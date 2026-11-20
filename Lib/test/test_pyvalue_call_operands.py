@@ -530,5 +530,139 @@ class CallOperandOwnershipTests(unittest.TestCase):
                     sys.monitoring.free_tool_id(tool)
 
 
+class SpecializedNativeCallTests(unittest.TestCase):
+    """The specialized builtin and method-descriptor handlers read their
+    operands in place, copy them once to an array that the callee borrows, and
+    call the callee's value entry or its object vectorcall."""
+
+    WARM = 40
+
+    def run_site(self, site, *args):
+        # Warm the site so that it specializes, then call it once more
+        for _ in range(self.WARM):
+            site(*args)
+        return site(*args)
+
+    def test_callee_rebinding_a_local_operand(self):
+        # The callee runs Python that rebinds the caller's local through its
+        # frame proxy: the call still holds the value that it read
+        seen = []
+        armed = []
+
+        class Rebinder:
+            def __getattr__(self, name):
+                sys._getframe(1).f_locals["target"] = "replaced"
+                raise AttributeError(name)
+
+            def __hash__(self):
+                if armed:
+                    sys._getframe(1).f_locals["key"] = "replaced"
+                return 1
+
+            def __eq__(self, other):
+                return True
+
+        def has(n):
+            target = Rebinder()
+            result = hasattr(target, "missing")
+            seen.append(target)
+            return result
+
+        def get(n):
+            key = Rebinder()
+            table = {key: 7}
+            armed.append(True)
+            try:
+                result = table.get(key)
+            finally:
+                armed.clear()
+            seen.append(key)
+            return result
+
+        self.assertIs(self.run_site(has, 0), False)
+        self.assertEqual(self.run_site(get, 0), 7)
+        self.assertEqual(seen, ["replaced"] * len(seen))
+        self.assertTrue(seen)
+
+    def test_native_forms_with_object_and_value_entries(self):
+        # METH_VALUE builtins and methods, an object METH_FASTCALL builtin
+        # and method, and a keyword form, from one site shape each
+        def builtins_(x, text):
+            return (abs(x), len(text), hasattr(text, "upper"), max(x, 3),
+                    isinstance(x, int), divmod(x, 3), pow(x, 2))
+
+        def methods(text, table):
+            return (text.upper(), text.startswith("a"), table.get("k"),
+                    table.get("z", 5), text.find("b"), text.split("b"),
+                    text.replace("a", "z", 1), table.keys())
+
+        self.assertEqual(self.run_site(builtins_, -5, "abc"),
+                         (5, 3, True, 3, True, (-2, 1), 25))
+        self.assertEqual(self.run_site(methods, "abc", {"k": 1}),
+                         ("ABC", True, 1, 5, 1, ["a", "c"], "zbc",
+                          {"k": 1}.keys()))
+
+    def test_wide_calls(self):
+        # More operands than one operand word holds
+        def site(text, items):
+            return (text.replace("a", "z", 1), max(1, 2, 3, 4, 5, 6),
+                    items.index(5, 1, 6), "{} {} {} {}".format(1, 2, 3, 4),
+                    text.split(" ", 2))
+
+        self.assertEqual(
+            self.run_site(site, "a a a", (1, 2, 3, 4, 5, 6)),
+            ("z a a", 6, 4, "1 2 3 4", ["a", "a", "a"]))
+
+    def test_wrong_arity_raises_the_callee_error(self):
+        # A site that specialized on one builtin meets a fixed-arity value
+        # builtin called with the wrong number of arguments: the handler
+        # leaves for the generic call, which raises the vectorcall's error
+        def site(target, x, y):
+            return target(x, y)
+
+        self.assertEqual(self.run_site(site, divmod, 7, 2), (3, 1))
+        with self.assertRaisesRegex(TypeError, "abs.*exactly one argument"):
+            site(abs, 1, 2)
+        with self.assertRaisesRegex(TypeError, "len.*exactly one argument"):
+            site(len, 1, 2)
+        self.assertEqual(site(divmod, 9, 4), (2, 1))
+
+    def test_method_arity_and_receiver_type_misses(self):
+        def site(receiver, argument):
+            return receiver.count(argument)
+
+        self.assertEqual(self.run_site(site, "abca", "a"), 2)
+        self.assertEqual(site([1, 1, 2], 1), 2)
+        self.assertEqual(site((1, 2, 1), 1), 2)
+        with self.assertRaises(TypeError):
+            site("abc", 1)
+
+    def test_unbound_method_descriptor_and_null_self(self):
+        # The self slot of a call to a class attribute is NULL at run time
+        # and the arguments follow it
+        def site(table, text):
+            return (dict.get(table, "k"), str.upper(text), str.startswith(text, "a"))
+
+        self.assertEqual(self.run_site(site, {"k": 3}, "abc"), (3, "ABC", True))
+
+    def test_native_errors_release_operands(self):
+        class Tracked:
+            pass
+
+        for name, call in (
+            ("builtin", lambda value: hasattr(value)),
+            ("method", lambda value: {}.get()),
+            ("value method", lambda value: [].index(value, "x")),
+        ):
+            with self.subTest(name):
+                value = Tracked()
+                before = sys.getrefcount(value)
+                for _ in range(self.WARM):
+                    with self.assertRaises(TypeError):
+                        call(value)
+                gc.collect()
+                self.assertEqual(sys.getrefcount(value), before)
+
+
 if __name__ == "__main__":
     unittest.main()

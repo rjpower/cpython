@@ -4471,13 +4471,17 @@ dummy_func(
             EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
 
+        op(_GUARD_CALL_SELF_PRESENT, (unused, unused -- unused, unused)) {
+            EXIT_IF(!(call_state & CALL_SELF_PRESENT));
+        }
+
         op(_GUARD_THIRD_NULL, (null, unused, unused -- null, unused, unused)) {
             EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
 
         op(_GUARD_CALLABLE_TYPE_1, (callable, unused, unused -- callable, unused, unused)) {
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-            EXIT_IF(callable_o != (PyObject *)&PyType_Type);
+            // A word that names the type, ignoring the ownership bit, is it
+            EXIT_IF((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyType_Type);
         }
 
         inline_ok op(_CALL_TYPE_1, (callable, null, arg -- res)) {
@@ -4495,8 +4499,8 @@ dummy_func(
             _CALL_TYPE_1;
 
         op(_GUARD_CALLABLE_STR_1, (callable, unused, unused -- callable, unused, unused)) {
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-            EXIT_IF(callable_o != (PyObject *)&PyUnicode_Type);
+            // A word that names the type, ignoring the ownership bit, is it
+            EXIT_IF((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyUnicode_Type);
         }
 
         op(_CALL_STR_1, (callable, null, arg -- res)) {
@@ -4519,8 +4523,8 @@ dummy_func(
             _CHECK_PERIODIC_AT_END;
 
         op(_GUARD_CALLABLE_TUPLE_1, (callable, unused, unused -- callable, unused, unused)) {
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-            EXIT_IF(callable_o != (PyObject *)&PyTuple_Type);
+            // A word that names the type, ignoring the ownership bit, is it
+            EXIT_IF((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyTuple_Type);
         }
 
         op(_CALL_TUPLE_1, (callable, null, arg -- res)) {
@@ -4619,12 +4623,13 @@ dummy_func(
             EXIT_IF(tp->tp_vectorcall == NULL);
         }
 
-        // The vectorcalls of the builtin and method-descriptor forms read
-        // their operands, borrowed from their homes, in call_vector(); the
-        // handler publishes the result and releases the temporaries.
+        // The builtin and method-descriptor forms read their operands, borrowed
+        // from their homes, and call the callee directly (call_*_values());
+        // the handler publishes the result and releases the temporaries.
         inline_ok op(_CALL_BUILTIN_CLASS, (callable, self_or_null, args[oparg] -- res)) {
             STAT_INC(CALL, hit);
-            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            PyValue result = call_class_values(
+                tstate, frame, this_instr, callable, IR_CALL_FIRST());
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -4636,6 +4641,7 @@ dummy_func(
             unused/1 +
             unused/2 +
             _GUARD_CALLABLE_BUILTIN_CLASS +
+            _CHECK_RECURSION_LIMIT +
             _CALL_BUILTIN_CLASS +
             _CHECK_PERIODIC_AT_END;
 
@@ -4690,7 +4696,10 @@ dummy_func(
         inline_ok op(_CALL_BUILTIN_FAST, (callable, self_or_null, args[oparg] -- res)) {
             /* Builtin METH_FASTCALL functions, without keywords */
             STAT_INC(CALL, hit);
-            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            _PyNativeCallResult call = call_builtin_values(
+                tstate, frame, this_instr, callable, IR_CALL_FIRST());
+            DEOPT_IF(call.miss);
+            PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -4702,6 +4711,7 @@ dummy_func(
             unused/1 +
             unused/2 +
             _GUARD_CALLABLE_BUILTIN_FAST +
+            _CHECK_RECURSION_LIMIT +
             _CALL_BUILTIN_FAST +
             _CHECK_PERIODIC_AT_END;
 
@@ -4716,7 +4726,10 @@ dummy_func(
         inline_ok op(_CALL_BUILTIN_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- res)) {
             /* Builtin METH_FASTCALL | METH_KEYWORDS functions */
             STAT_INC(CALL, hit);
-            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            _PyNativeCallResult call = call_builtin_values(
+                tstate, frame, this_instr, callable, IR_CALL_FIRST());
+            DEOPT_IF(call.miss);
+            PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -4728,6 +4741,7 @@ dummy_func(
             unused/1 +
             unused/2 +
             _GUARD_CALLABLE_BUILTIN_FAST_WITH_KEYWORDS +
+            _CHECK_RECURSION_LIMIT +
             _CALL_BUILTIN_FAST_WITH_KEYWORDS +
             _CHECK_PERIODIC_AT_END;
 
@@ -4739,11 +4753,11 @@ dummy_func(
             _CALL_LEN;
 
         op(_GUARD_CALLABLE_LEN, (callable, unused, unused -- callable, unused, unused)){
-            // A rebinding to an inline value must exit before the borrow.
+            // The cached builtin is an object, so a word that names it is
+            // one (a rebinding to an inline value exits here).
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF(!PyValue_IsObject(callable)
-                    || PyValue_AsKnownObjectBorrow(callable)
-                       != interp->callable_cache.len);
+            EXIT_IF((callable.bits & ~(uintptr_t)1)
+                    != (uintptr_t)interp->callable_cache.len);
         }
 
         op(_CALL_LEN, (callable, null, arg -- res)) {
@@ -4762,11 +4776,11 @@ dummy_func(
         }
 
         op(_GUARD_CALLABLE_ISINSTANCE, (callable, unused, unused, unused -- callable, unused, unused, unused)) {
-            // A rebinding to an inline value must exit before the borrow.
+            // The cached builtin is an object, so a word that names it is
+            // one (a rebinding to an inline value exits here).
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF(!PyValue_IsObject(callable)
-                    || PyValue_AsKnownObjectBorrow(callable)
-                       != interp->callable_cache.isinstance);
+            EXIT_IF((callable.bits & ~(uintptr_t)1)
+                    != (uintptr_t)interp->callable_cache.isinstance);
         }
 
         inline_ok op(_CALL_ISINSTANCE, (callable, null, instance, cls -- res)) {
@@ -4800,16 +4814,16 @@ dummy_func(
             unused/1 +
             unused/2 +
             _GUARD_CALLABLE_LIST_APPEND +
-            _GUARD_NOS_NOT_NULL +
+            _GUARD_CALL_SELF_PRESENT +
             _GUARD_NOS_LIST +
             _CALL_LIST_APPEND;
 
         op(_GUARD_CALLABLE_LIST_APPEND, (callable, unused, unused -- callable, unused, unused)){
-            // A rebinding to an inline value must exit before the borrow.
+            // The cached builtin is an object, so a word that names it is
+            // one (a rebinding to an inline value exits here).
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF(!PyValue_IsObject(callable)
-                    || PyValue_AsKnownObjectBorrow(callable)
-                       != interp->callable_cache.list_append);
+            EXIT_IF((callable.bits & ~(uintptr_t)1)
+                    != (uintptr_t)interp->callable_cache.list_append);
         }
 
         inline_ok op(_CALL_LIST_APPEND, (callable, self, arg -- none)) {
@@ -4881,18 +4895,14 @@ dummy_func(
             int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
             EXIT_IF(flags != (METH_FASTCALL | METH_KEYWORDS)
                     && flags != (METH_VALUE | METH_KEYWORDS));
-            int total_args = oparg;
-            if (call_state & CALL_SELF_PRESENT) {
-                total_args++;
-            }
-            EXIT_IF(total_args == 0);
-            EXIT_IF(PyValue_TYPE(IR_CALL_ARG(0)) != method->d_common.d_type);
         }
 
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- res)) {
-            
             STAT_INC(CALL, hit);
-            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            _PyNativeCallResult call = call_descriptor_values(
+                tstate, frame, this_instr, callable, IR_CALL_FIRST());
+            DEOPT_IF(call.miss);
+            PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -4904,6 +4914,7 @@ dummy_func(
             unused/1 +
             unused/2 +
             _GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS +
+            _CHECK_RECURSION_LIMIT +
             _CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS +
             _CHECK_PERIODIC_AT_END;
 
@@ -4955,19 +4966,14 @@ dummy_func(
             int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
             EXIT_IF(flags != METH_FASTCALL
                     && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE);
-            int total_args = oparg;
-            if (call_state & CALL_SELF_PRESENT) {
-                total_args++;
-            }
-            EXIT_IF(total_args == 0);
-            PyValue self = IR_CALL_ARG(0);
-            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
         }
 
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST, (callable, self_or_null, args[oparg] -- res)) {
-            
             STAT_INC(CALL, hit);
-            PyValue result = call_vector(tstate, frame, this_instr, callable);
+            _PyNativeCallResult call = call_descriptor_values(
+                tstate, frame, this_instr, callable, IR_CALL_FIRST());
+            DEOPT_IF(call.miss);
+            PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -4979,6 +4985,7 @@ dummy_func(
             unused/1 +
             unused/2 +
             _GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST +
+            _CHECK_RECURSION_LIMIT +
             _CALL_METHOD_DESCRIPTOR_FAST +
             _CHECK_PERIODIC_AT_END;
 

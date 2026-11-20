@@ -3,7 +3,7 @@
 //   Python/bytecodes.c
 // Do not edit!
 #ifdef IR_GEN_TABLES
-static _PyIRGenStep *const generator_yielded_targets[405] = {
+static _PyIRGenStep *const generator_yielded_targets[406] = {
     [375] = ir_GEN_SEND_YIELD,
     [376] = ir_GEN_SEND_YIELD,
     [397] = ir_GEN_SEND_YIELD,
@@ -29,7 +29,7 @@ static _PyIRGenStep *const generator_yielded_targets[405] = {
     [404] = ir_GEN_SEND_YIELD,
     [390] = ir_GEN_SEND_YIELD,
 };
-static _PyIRGenStep *const generator_completed_targets[405] = {
+static _PyIRGenStep *const generator_completed_targets[406] = {
     [367] = ir_GEN_THROW_COMPLETE_DISCARD,
     [368] = ir_GEN_THROW_COMPLETE_HOME,
     [395] = ir_GEN_THROW_COMPLETE_POP_TOP,
@@ -61,7 +61,7 @@ static _PyIRGenStep *const generator_completed_targets[405] = {
     [404] = ir_GEN_COMPLETE_STORE_FAST,
     [390] = ir_GEN_COMPLETE_STORE,
 };
-static _PyIRGenStep *const generator_resume_targets[405] = {
+static _PyIRGenStep *const generator_resume_targets[406] = {
     [371] = ir_GEN_RESUME_SEND,
     [372] = ir_GEN_RESUME_STORE,
     [373] = ir_GEN_RESUME_SEND,
@@ -502,7 +502,7 @@ static void *const opcode_targets[512] = {
     [402] = &&TARGET_SEND_VIRTUAL_XFER_DISCARD,
     [403] = &&TARGET_SEND_XFER_DISCARD,
     [404] = &&TARGET_SEND_XFER_DISCARD,
-    [405] = &&TARGET_UNKNOWN_OPCODE,
+    [405] = &&TARGET_IR_OPERANDS,
     [406] = &&TARGET_UNKNOWN_OPCODE,
     [407] = &&TARGET_UNKNOWN_OPCODE,
     [408] = &&TARGET_UNKNOWN_OPCODE,

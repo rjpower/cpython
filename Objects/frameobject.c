@@ -1344,7 +1344,8 @@ register_resume_successors(PyCodeObject *code, int i, int next[2])
 {
     _PyIRWord word = code->co_words[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    next[0] = i + 1;
+    // A call head takes its operand words with it
+    next[0] = i + _PyIR_WordLength(word);
     next[1] = -1;
     if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
         !(fmt->flags & _PyIR_NAMES_TARGET))
@@ -1658,7 +1659,8 @@ register_resume_graph(PyCodeObject *code, RegisterResumeAnalysis *analysis)
     for (int i = 0; i < analysis->n; i++) {
         analysis->edge_heads[i] = analysis->reverse_heads[i] = analysis->source_heads[i] = -1;
     }
-    for (int i = 0; i < analysis->n; i++) {
+    // The operand words of a call have no edges: nothing reaches or leaves them
+    for (int i = 0; i < analysis->n; i += _PyIR_WordLength(code->co_words[i])) {
         int next[2];
         register_resume_successors(code, i, next);
         for (int k = 0; k < 2; k++) {

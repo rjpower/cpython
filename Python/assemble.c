@@ -883,6 +883,44 @@ too_large(const char *what, int value)
     return ERROR;
 }
 
+/* Test knob: see _PyAssemble_SetOperandCalls() */
+static int operand_calls;
+
+int
+_PyAssemble_SetOperandCalls(int enable)
+{
+    int old = operand_calls;
+    operand_calls = enable;
+    return old;
+}
+
+/* The operand words of a call head with n operands */
+static int
+operand_word_count(int n)
+{
+    return (n + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD;
+}
+
+/* The words that follow the head of op, which has _PyReg_OPERANDS: fields
+ * A to D of word k name the slots of operands 4k to 4k + 3, from the last
+ * noperands inputs of op, and an unused field holds IR_FIELD_MAX. */
+static void
+encode_operand_words(_PyRegCfg *cfg, _PyRegOp *op, _PyIRWord *words)
+{
+    const int *in = _PyReg_IN(cfg, op);
+    assert(op->noperands <= op->nread);
+    for (int k = 0; k < operand_word_count(op->noperands); k++) {
+        uint32_t fields[IR_OPERANDS_PER_WORD];
+        for (int f = 0; f < IR_OPERANDS_PER_WORD; f++) {
+            int n = k * IR_OPERANDS_PER_WORD + f;
+            fields[f] = n < op->noperands
+                ? (uint32_t)_PyRegCfg_Slot(cfg, in[op->nread - op->noperands + n])
+                : IR_FIELD_MAX;
+        }
+        words[k] = IR_WORD(IR_OPERANDS, fields[0], fields[1], fields[2], fields[3]);
+    }
+}
+
 /* The call-role flags of op's word, which the CallRoles pass proved
  * (Python/regcfg_passes.c): IR_F_NO_SELF, and for CALL_FUNCTION_EX
  * IR_F_NO_KW as well when the kwargs input is also virtual NULL. */
@@ -1365,6 +1403,15 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
             return ERROR;
         }
         op->nwords = 1;
+        if (operand_calls && op->opcode == CALL && op->nread >= op->oparg) {
+            // The head's C field is its operand count, which for the
+            // window form is its oparg
+            op->flags |= _PyReg_OPERANDS;
+            op->noperands = op->oparg;
+        }
+        if (op->flags & _PyReg_OPERANDS) {
+            op->nwords += operand_word_count(op->noperands);
+        }
     }
     for (int i = 0; i < cfg->nops; i++) {
         _PyRegOp *op = &cfg->ops[i];
@@ -1614,7 +1661,14 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
             fields[r] = 0;
         }
     }
-    *word = IR_WORD(op->handler | call_role_flags(op),
+    int flags = call_role_flags(op);
+    if (op->flags & _PyReg_OPERANDS) {
+        assert(fmt->word_flags & IR_F_OPERANDS);
+        assert(fmt->imm == _PyIR_LOC_C);
+        flags |= IR_F_OPERANDS;
+        fields[2] = (uint32_t)op->noperands;
+    }
+    *word = IR_WORD(op->handler | flags,
                     fields[0], fields[1], fields[2], fields[3]);
     return SUCCESS;
 }
@@ -1707,7 +1761,10 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                 continue;
             }
             RETURN_IF_ERROR(encode(cfg, op, blk->reachable, &words[w]));
-            if (op->nwords > 1) {
+            if (op->flags & _PyReg_OPERANDS) {
+                encode_operand_words(cfg, op, &words[w + 1]);
+            }
+            else if (op->nwords > 1) {
                 int exit = jump_target(cfg, op);
                 if (op->opcode == FOR_ITER) {
                     words[w + 1] = jump_word(w + RELAXED_FOR_ITER_WORDS);

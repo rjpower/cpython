@@ -94,10 +94,11 @@ set_word_opcode(PyCodeObject *code, _PyIRWord *words, int i, int opcode)
     _PyIR_SetHandler(&words[i], _PyCode_HandlerFor(code, i, opcode));
 }
 
-/* Only the assembler's exact relaxation adapter shares LINE/branch
- * grouping with a semantic step. Each helper still has INSTRUCTION events. */
+/* The words of the assembler's exact relaxation adapter, which shares
+ * LINE/branch grouping with a semantic step: 3 for a FOR_ITER or SEND and the
+ * two jumps after it, else 1.  Each helper still has INSTRUCTION events. */
 static inline int
-instr_length(PyCodeObject *code, int i)
+relaxed_length(PyCodeObject *code, int i)
 {
     int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(code, i));
     if ((opcode == FOR_ITER || opcode == SEND) && i + 2 < Py_SIZE(code) &&
@@ -111,12 +112,22 @@ instr_length(PyCodeObject *code, int i)
     return 1;
 }
 
+/* The number of words of the instruction at index i, which tables keyed by
+ * word index give one entry and one event: a call head with its operand
+ * words (_PyIR_WordLength()), or a relaxation adapter. */
+static inline int
+instr_length(PyCodeObject *code, int i)
+{
+    int length = _PyCode_InstrLength(code, i);
+    return length > 1 ? length : relaxed_length(code, i);
+}
+
 static inline int
 line_landing(PyCodeObject *code, int dest)
 {
     if (_PyCode_InstrHandler(code, dest) == IR_JUMP &&
-        ((dest >= 1 && instr_length(code, dest - 1) == 3) ||
-         (dest >= 2 && instr_length(code, dest - 2) == 3)))
+        ((dest >= 1 && relaxed_length(code, dest - 1) == 3) ||
+         (dest >= 2 && relaxed_length(code, dest - 2) == 3)))
     {
         return _PyCode_InstrTarget(code, dest);
     }
@@ -2623,7 +2634,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
         }
     }
     if (removed_per_instruction_tools) {
-        for (int i = code->_co_firsttraceable; i < code_len; i++) {
+        for (int i = code->_co_firsttraceable; i < code_len; i += _PyCode_InstrLength(code, i)) {
             int opcode = base_opcode(code, i);
             if (opcode == RESUME || opcode == END_FOR) {
                 continue;
@@ -2648,7 +2659,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
         }
     }
     if (new_per_instruction_tools) {
-        for (int i = code->_co_firsttraceable; i < code_len; i++) {
+        for (int i = code->_co_firsttraceable; i < code_len; i += _PyCode_InstrLength(code, i)) {
             int opcode = base_opcode(code, i);
             if (opcode == RESUME || opcode == END_FOR) {
                 continue;
@@ -2701,7 +2712,7 @@ done:;
         /* Restoring a forced wrapper above must not remove unchanged ordinary
          * branch monitoring when LINE itself has just been disabled. */
         if (!line_tools) {
-            for (int i = code->_co_firsttraceable; i < code_len; i++) {
+            for (int i = code->_co_firsttraceable; i < code_len; i += _PyCode_InstrLength(code, i)) {
                 int base = base_opcode(code, i);
                 if (opcode_has_event(base)) {
                     int event = EVENT_FOR_OPCODE[base];

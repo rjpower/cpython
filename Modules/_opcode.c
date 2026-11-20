@@ -412,7 +412,7 @@ static PyStructSequence_Field ir_contract_fields[] = {
     {"base", "the opcode that the handler stands for"},
     {"twin", "the handler that instrumentation runs, or None"},
     {"events", "bit e: the semantic handler or its twin can fire monitoring event e"},
-    {"word_flags", "the canonical word flags the handler admits (IR_F_NO_SELF, IR_F_NO_KW)"},
+    {"word_flags", "the canonical word flags the handler admits (IR_F_NO_SELF, IR_F_NO_KW, IR_F_OPERANDS)"},
     {"error_routes", "complete exceptional routes, including conditional bridges and local publication"},
     {"ordinary_handler", "source handler before generator boundary placement"},
     {"generator_yielded_consumer", "statically selected yielded consumer"},
@@ -600,6 +600,18 @@ _opcode_get_recovery_entries_impl(PyObject *module, PyCodeObject *code)
     return _PyValue_FromObjectResult(result);
 }
 
+/* The number of words of the instruction that starts with an IR word:
+ * _PyIR_WordLength(), for the Python tools that walk the words. */
+static PyObject *
+_opcode_get_ir_word_length(PyObject *module, PyObject *arg)
+{
+    unsigned long long word;
+    if (!PyArg_Parse(arg, "K:get_ir_word_length", &word)) {
+        return NULL;
+    }
+    return PyLong_FromLong(_PyIR_WordLength((_PyIRWord)word));
+}
+
 static PyMethodDef
 opcode_functions[] =  {
     _OPCODE_STACK_EFFECT_METHODDEF
@@ -619,6 +631,9 @@ opcode_functions[] =  {
     _OPCODE_GET_IR_CONTRACT_METHODDEF
     _OPCODE_GET_EXCEPTION_ENTRIES_METHODDEF
     _OPCODE_GET_RECOVERY_ENTRIES_METHODDEF
+    {"get_ir_word_length", _opcode_get_ir_word_length, METH_O,
+     "get_ir_word_length(word, /)\n--\n\n"
+     "Return the number of words of the instruction whose first word is word."},
     {NULL, NULL, 0, NULL}
 };
 
@@ -645,6 +660,7 @@ _opcode_exec(PyObject *m) {
     ADD_IR_CONSTANT("IR_FLAGS_MASK", IR_FLAGS_MASK);
     ADD_IR_CONSTANT("IR_F_NO_SELF", IR_F_NO_SELF);
     ADD_IR_CONSTANT("IR_F_NO_KW", IR_F_NO_KW);
+    ADD_IR_CONSTANT("IR_F_OPERANDS", IR_F_OPERANDS);
     ADD_IR_CONSTANT("IR_RESULT_PHASE_NONE", _PyIR_RESULT_PHASE_NONE);
     ADD_IR_CONSTANT("IR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE",
                     _PyIR_RESULT_PHASE_DST_TEMP_CANONICAL_BEFORE_RETIRE);

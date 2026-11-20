@@ -81,7 +81,8 @@ _HANDLER_MASK = _opcode.IR_HANDLER_MASK
 # The canonical flags of the handler field, which the name of a word shows
 # after its handler's as +NAME: "CALL+NO_SELF" is a CALL whose self input is
 # virtual NULL.  The executing copy's slot-class flags are not shown.
-_WORD_FLAGS = {"NO_SELF": _opcode.IR_F_NO_SELF, "NO_KW": _opcode.IR_F_NO_KW}
+_WORD_FLAGS = {"NO_SELF": _opcode.IR_F_NO_SELF, "NO_KW": _opcode.IR_F_NO_KW,
+               "OPERANDS": _opcode.IR_F_OPERANDS}
 
 def _handler_name(field):
     """The name of a word's handler field: its handler's, then its flags"""
@@ -334,8 +335,9 @@ _Instruction = collections.namedtuple(
         'dst',
         'srcs',
         'fb',
+        'length',
     ],
-    defaults=[None, None, None, None, None, (), None]
+    defaults=[None, None, None, None, None, (), None, 1]
 )
 
 _Instruction.opname.__doc__ = "Human readable name for operation"
@@ -345,7 +347,7 @@ _Instruction.argval.__doc__ = "Resolved arg value (if known), otherwise same as 
 _Instruction.argrepr.__doc__ = "Human readable description of operation argument"
 _Instruction.offset.__doc__ = "Index of the instruction's word within the code"
 _Instruction.start_offset.__doc__ = (
-    "Equal to Instruction.offset, since an instruction has one word"
+    "Equal to Instruction.offset, since an instruction starts at its first word"
 )
 _Instruction.starts_line.__doc__ = "True if this opcode starts a source line, otherwise False"
 _Instruction.line_number.__doc__ = "source line number associated with this opcode (if any), otherwise None"
@@ -354,8 +356,10 @@ _Instruction.positions.__doc__ = "dis.Positions object holding the span of sourc
 _Instruction.cache_info.__doc__ = "list of (name, size, data), one for each field of the instruction's feedback entry"
 _Instruction.handler.__doc__ = "Name of the handler of the instruction's word"
 _Instruction.dst.__doc__ = "Frame slot that the instruction writes (if any), otherwise None"
-_Instruction.srcs.__doc__ = "Frame slots that the instruction reads, or for a window the first slot of the window"
+_Instruction.srcs.__doc__ = ("Frame slots that the instruction reads, or for a window the first slot of the window; "
+                            "for a call with operand words, those of its fields, then its operands")
 _Instruction.fb.__doc__ = "Index of the instruction's feedback entry (if any), otherwise None"
+_Instruction.length.__doc__ = "Number of words of the instruction: 1, or more for a call with operand words"
 
 _ExceptionTableEntryBase = collections.namedtuple("_ExceptionTableEntryBase",
     "start end target slot lasti")
@@ -451,20 +455,46 @@ def _decode_word(handler, fields, fbinit=None):
     return arg, dst, tuple(srcs), fb
 
 def _unpack_words(code):
-    """Generate (offset, handler, fields) for the words of code"""
+    """Generate (offset, word) for the words of code"""
     for offset in range(len(code) // _WORD_SIZE):
-        word = int.from_bytes(code[offset * _WORD_SIZE:(offset + 1) * _WORD_SIZE],
-                              sys.byteorder)
-        fields = tuple((word >> shift) & _FIELD_MAX for shift in (16, 28, 40, 52))
-        yield offset, word & _HANDLER_MASK, fields
+        yield offset, int.from_bytes(code[offset * _WORD_SIZE:(offset + 1) * _WORD_SIZE],
+                                     sys.byteorder)
+
+def _word_fields(word):
+    return tuple((word >> shift) & _FIELD_MAX for shift in (16, 28, 40, 52))
+
+def _word_length(code, offset):
+    """The number of words of the instruction at offset of code: a call head
+    with operand words has them as part of it"""
+    word = int.from_bytes(code[offset * _WORD_SIZE:(offset + 1) * _WORD_SIZE],
+                          sys.byteorder)
+    return _opcode.get_ir_word_length(word)
 
 def _unpack_opargs(code, fbinit=None):
-    """Generate (offset, handler, arg, dst, srcs, fb) for the words of code"""
-    for offset, handler, fields in _unpack_words(code):
+    """Generate (offset, handler, arg, dst, srcs, fb) for the instructions of
+    code.  A call head that has operand words comes once, with the slots
+    that its operand words name after those of its own fields in srcs."""
+    skip = 0
+    for offset, word in _unpack_words(code):
+        if skip:
+            skip -= 1
+            continue
+        handler = word & _HANDLER_MASK
+        fields = _word_fields(word)
         if _ir_contract[handler] is None:
             yield offset, handler, None, None, (), None
-        else:
-            yield (offset, handler, *_decode_word(handler, fields, fbinit))
+            continue
+        arg, dst, srcs, fb = _decode_word(handler, fields, fbinit)
+        length = _opcode.get_ir_word_length(word)
+        if length > 1:
+            skip = length - 1
+            operands = []
+            for k in range(skip):
+                operands.extend(_word_fields(int.from_bytes(
+                    code[(offset + 1 + k) * _WORD_SIZE:(offset + 2 + k) * _WORD_SIZE],
+                    sys.byteorder)))
+            srcs += tuple(operands[:fields[2]])
+        yield offset, handler, arg, dst, srcs, fb
 
 class Instruction(_Instruction):
     """Details for a bytecode operation.
@@ -477,7 +507,7 @@ class Instruction(_Instruction):
          argrepr - human readable description of operation argument
          offset - index of the instruction's word within the code
          start_offset - equal to Instruction.offset, since an instruction
-                        has one word
+                        starts at its first word
          starts_line - True if this opcode starts a source line, otherwise False
          line_number - source line number associated with this opcode (if any), otherwise None
          label - A label if this instruction is a jump target, otherwise None
@@ -488,19 +518,21 @@ class Instruction(_Instruction):
          dst - frame slot that the instruction writes (if any), otherwise None
          srcs - frame slots that the instruction reads
          fb - index of the instruction's feedback entry (if any), otherwise None
+         length - number of words of the instruction, more than 1 for a call
+                  that has operand words, which srcs lists after its fields
     """
 
     @staticmethod
     def make(
         opname, arg, argval, argrepr, offset, start_offset, starts_line,
         line_number, label=None, positions=None, cache_info=None,
-        handler=None, dst=None, srcs=(), fb=None
+        handler=None, dst=None, srcs=(), fb=None, length=1
     ):
         if handler is None:
             handler = opname
         return Instruction(opname, _all_opmap[opname], arg, argval, argrepr, offset,
                            start_offset, starts_line, line_number, label, positions, cache_info,
-                           handler, dst, srcs, fb)
+                           handler, dst, srcs, fb, length)
 
     @property
     def oparg(self):
@@ -526,12 +558,12 @@ class Instruction(_Instruction):
     @property
     def cache_offset(self):
         """Index of the word after the operation, which has no inline cache."""
-        return self.offset + 1
+        return self.offset + self.length
 
     @property
     def end_offset(self):
         """Index of the word after the operation."""
-        return self.offset + 1
+        return self.offset + self.length
 
     @property
     def jump_target(self):
@@ -915,6 +947,10 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
             else:
                 line_number = None
         positions = Positions(*next(co_positions, ()))
+        # The operand words of a call have the positions of its head
+        length = _word_length(original_code, offset)
+        for _ in range(length - 1):
+            next(co_positions, ())
         if code is original_code:
             runs = handler
             op = handler if _is_fused(handler) else _deoptop(handler)
@@ -953,7 +989,7 @@ def _get_instructions_bytes(code, linestarts=None, line_offset=0, co_positions=N
         yield Instruction(_all_opname[op], op, arg, argval, argrepr,
                           offset, offset, starts_line, line_number,
                           label, positions, cache_info,
-                          _handler_name(runs | flags), dst, srcs, fb)
+                          _handler_name(runs | flags), dst, srcs, fb, length)
 
 
 def disassemble(co, lasti=-1, *, file=None, show_caches=False, adaptive=False,

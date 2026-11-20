@@ -165,10 +165,25 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
  * (IR_F_NO_SELF), and for CALL_FUNCTION_EX so is the kwargs input
  * (IR_F_NO_KW, only with IR_F_NO_SELF).  The handler neither reads nor
  * rechecks a virtual input (_PyIR_CallInputHoles()).  The handlers that
- * admit them have them in _PyIRFormat.word_flags.  Bit 15 is reserved. */
+ * admit them have them in _PyIRFormat.word_flags.  Bit 15 is IR_F_OPERANDS. */
 #define IR_F_NO_SELF    (1 << 13)
 #define IR_F_NO_KW      (1 << 14)
 #define IR_F_CALL_ROLES (IR_F_NO_SELF | IR_F_NO_KW)
+
+/* Operand words (pyjit/design/proposals/operand-calls80.md section 1).  A
+ * call head that has them is followed by ceil(n / 4) words with handler
+ * IR_OPERANDS, where n is the head's C field: fields A to D of operand word
+ * i name operands 4i to 4i + 3, and an unused field holds IR_FIELD_MAX.
+ * Those words are part of the call's instruction: a jump never targets one
+ * and no handler is dispatched on one.  IR_F_OPERANDS marks a head that has
+ * them.  It is a transition: until the compiler stops emitting window calls
+ * (step 2b) a call has no operand words and its C field is the argument
+ * count of its window.  Then every call head has operand words, and the
+ * flag and the window form go: the length follows from the call family
+ * alone.  Only _PyIR_WordLength() reads it. */
+#define IR_F_OPERANDS   (1 << 15)
+#define IR_OPERANDS_PER_WORD 4
+
 #define IR_A(W)         ((uint32_t)((W) >> 16) & IR_FIELD_MAX)
 #define IR_B(W)         ((uint32_t)((W) >> 28) & IR_FIELD_MAX)
 #define IR_C(W)         ((uint32_t)((W) >> 40) & IR_FIELD_MAX)
@@ -176,6 +191,21 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
 #define IR_CD(W)        ((uint32_t)((W) >> 40))
 /* D as a signed distance */
 #define IR_DS(W)        ((int)(IR_D(W) ^ 0x800) - 0x800)
+
+/* The number of words of the instruction that starts with word: 1, or for
+ * a call head with operand words, 1 + ceil(n / 4).  Every walker over the
+ * words, of the code object or of an executing copy, steps by it, and none
+ * keeps a length of its own.  It reads the head's flags and C field, which
+ * specialisation and instrumentation keep. */
+static inline int
+_PyIR_WordLength(_PyIRWord word)
+{
+    if (!(word & IR_F_OPERANDS)) {
+        return 1;
+    }
+    return 1 + (int)((IR_C(word) + IR_OPERANDS_PER_WORD - 1)
+                     / IR_OPERANDS_PER_WORD);
+}
 
 #define IR_WORD(H, A, B, C, D) \
     ((_PyIRWord)(uint16_t)(H) | (_PyIRWord)((A) & IR_FIELD_MAX) << 16 | \
@@ -721,6 +751,15 @@ static inline int
 _PyCode_InstrHandler(PyCodeObject *co, int i)
 {
     return IR_HANDLER(((const _PyIRWord *)co->co_words)[i]);
+}
+
+/* The number of words of the instruction at index i of co: 1, or a call
+ * head's operand words too.  It is _PyIR_WordLength() of the code object's
+ * word, which every walker over the words steps by. */
+static inline int
+_PyCode_InstrLength(PyCodeObject *co, int i)
+{
+    return _PyIR_WordLength(((const _PyIRWord *)co->co_words)[i]);
 }
 
 /* The opcode of the stack instruction that handler stands for, without

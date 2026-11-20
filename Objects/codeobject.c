@@ -676,6 +676,7 @@ normalize_positions(const _PyIRPositions *map, uint32_t nwords)
     return result;
 }
 
+static int mark_operand_words(const char *, Py_ssize_t, unsigned char **);
 static int completion_handler_safe(struct _PyCodeConstructor *, int, int, int,
                                    int, int);
 static int observer_handler_safe(struct _PyCodeConstructor *, _PyIRWord, int,
@@ -715,6 +716,40 @@ validate_semantic_and_position_maps(struct _PyCodeConstructor *con)
         PyErr_SetString(PyExc_ValueError,
                         "code: position IDs do not match semantic recovery");
         return -1;
+    }
+    /* A call and its operand words are one instruction: nothing starts or
+     * ends a protected range, recovers or handles between them. */
+    unsigned char *operand_words;
+    if (mark_operand_words(PyBytes_AS_STRING(con->code), nwords, &operand_words) < 0) {
+        return -1;
+    }
+    if (operand_words != NULL) {
+        const unsigned char *p = map.exceptions;
+        const unsigned char *end = p + map.exceptions_size;
+        int split = 0;
+        while (p < end) {
+            _PyIRExceptionEntry entry = {0};
+            int valid = _PyIR_ExceptionNext(&p, end, &entry);
+            assert(valid == 0);
+            (void)valid;
+            split |= (entry.start < nwords && operand_words[entry.start]) ||
+                     (entry.target < nwords && operand_words[entry.target]) ||
+                     (entry.end < nwords && operand_words[entry.end]);
+        }
+        for (uint32_t i = 0; i < map.nrecords; i++) {
+            _PyIRRecoveryEvent event;
+            _PyIRSemantic_Event(&map, i, &event);
+            split |= (event.from >= 0 && event.from < nwords && operand_words[event.from]) ||
+                     (event.to >= 0 && event.to < nwords && operand_words[event.to]) ||
+                     (event.handler >= 0 && event.handler < nwords &&
+                      operand_words[event.handler]);
+        }
+        PyMem_Free(operand_words);
+        if (split) {
+            PyErr_SetString(PyExc_ValueError,
+                            "code: a call and its operands are split by recovery");
+            return -1;
+        }
     }
     for (uint32_t i = 0; i < map.nrecords; i++) {
         _PyIRRecoveryEvent event;
@@ -790,6 +825,11 @@ static int
 kwargs_word_access(_PyIRWord word, int slot)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (IR_HANDLER(word) == IR_OPERANDS) {
+        // Each field names an operand, which the call reads
+        return IR_A(word) == (uint32_t)slot || IR_B(word) == (uint32_t)slot ||
+               IR_C(word) == (uint32_t)slot || IR_D(word) == (uint32_t)slot;
+    }
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int reads = 0;
     for (int f = 0; f < 4; f++) {
@@ -916,9 +956,15 @@ validate_virtual_kwargs(struct _PyCodeConstructor *con)
         if (kwargs_word_access(word, slot)) {
             goto invalid_allocated;
         }
+        // The operands of a call are read by the call
+        for (int j = 1; j < _PyIR_WordLength(word); j++) {
+            if (kwargs_word_access(words[i + j], slot)) {
+                goto invalid_allocated;
+            }
+        }
         const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
         int base = _PyIR_HandlerBase[_PyIR_BaseOpcode(handler)];
-        int next[2] = {i + 1, -1};
+        int next[2] = {i + _PyIR_WordLength(word), -1};
         if (fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) {
             if (!(fmt->flags & _PyIR_NAMES_TARGET)) {
                 next[1] = fmt->flags & (_PyIR_FORWARD | _PyIR_FUSED)
@@ -1126,7 +1172,7 @@ owner_handler_safe(struct _PyCodeConstructor *con, int entry, int exc_slot,
             {
                 continue;
             }
-            int next = !taken ? i + 1
+            int next = !taken ? i + _PyIR_WordLength(word)
                 : fmt->flags & (_PyIR_FORWARD | _PyIR_FUSED)
                     ? i + 1 + IR_DS(word) : (int)IR_CD(word);
             unsigned int edge = mask;
@@ -1872,6 +1918,112 @@ is_delegated_yield_handler(int handler)
            boundary->ordinary == INSTRUMENTED_YIELD_DELEGATED;
 }
 
+/* Mark the operand words that call heads claim, with 1, in a new array of
+ * nwords bytes, which *marks receives: NULL if no head has any.  Returns -1
+ * with an exception set if a head claims words past the end.  A walker steps
+ * from head to head by _PyIR_WordLength(); the marks are for the checks that
+ * start from an index, a jump target or the end of an exception range. */
+static int
+mark_operand_words(const char *bytes, Py_ssize_t nwords, unsigned char **marks)
+{
+    *marks = NULL;
+    for (Py_ssize_t i = 0; i < nwords;) {
+        _PyIRWord word;
+        memcpy(&word, bytes + i * sizeof(_PyIRWord), sizeof(word));
+        Py_ssize_t length = _PyIR_WordLength(word);
+        if (length > nwords - i) {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has operand words past the end", i);
+            goto error;
+        }
+        if (length > 1) {
+            if (*marks == NULL) {
+                *marks = PyMem_Calloc((size_t)nwords, 1);
+                if (*marks == NULL) {
+                    PyErr_NoMemory();
+                    return -1;
+                }
+            }
+            memset(*marks + i + 1, 1, (size_t)(length - 1));
+        }
+        i += length;
+    }
+    return 0;
+error:
+    PyMem_Free(*marks);
+    *marks = NULL;
+    return -1;
+}
+
+/* The operand words of the call head at index i, which has length - 1 of
+ * them: handler IR_OPERANDS and no flags, the first n fields (n is the C
+ * field of the head) name slots of the frame, unused fields hold
+ * IR_FIELD_MAX, and no operand names a cell or a free variable, since
+ * only a load of one reads it.  The last operand of a CALL_KW is the index of
+ * its names in co_consts. */
+static int
+check_operand_words(struct _PyCodeConstructor *con, const char *bytes,
+                    Py_ssize_t i, _PyIRWord head, int nslots)
+{
+    int n = (int)IR_C(head);
+    int nwords_operand = _PyIR_WordLength(head) - 1;
+    int has_names = _PyIR_BaseOpcode(IR_HANDLER(head)) == CALL_KW;
+    if (has_names && n < 1) {
+        PyErr_Format(PyExc_ValueError,
+                     "code: word %zd needs the names of its keywords", i);
+        return -1;
+    }
+    for (int k = 0; k < nwords_operand * IR_OPERANDS_PER_WORD; k++) {
+        if (k % IR_OPERANDS_PER_WORD == 0) {
+            _PyIRWord word;
+            memcpy(&word, bytes + (i + 1 + k / IR_OPERANDS_PER_WORD) * sizeof(_PyIRWord),
+                   sizeof(word));
+            if (IR_HANDLER(word) != IR_OPERANDS || IR_FLAGS(word) != 0) {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd has no operand word at %zd", i,
+                             i + 1 + k / IR_OPERANDS_PER_WORD);
+                return -1;
+            }
+        }
+        _PyIRWord word;
+        memcpy(&word, bytes + (i + 1 + k / IR_OPERANDS_PER_WORD) * sizeof(_PyIRWord),
+               sizeof(word));
+        uint32_t value = (uint32_t)(word >> (16 + 12 * (k % IR_OPERANDS_PER_WORD)))
+                         & IR_FIELD_MAX;
+        if (k >= n) {
+            if (value != IR_FIELD_MAX) {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd has an unused operand that is not empty", i);
+                return -1;
+            }
+            continue;
+        }
+        if (has_names && k == n - 1) {
+            if (value >= (uint32_t)PyTuple_GET_SIZE(con->consts)) {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd has an invalid constant index", i);
+                return -1;
+            }
+            continue;
+        }
+        if (value >= (uint32_t)nslots) {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has an operand at slot %u of %d", i,
+                         value, nslots);
+            return -1;
+        }
+        if (value < (uint32_t)PyTuple_GET_SIZE(con->localsplusnames) &&
+            (_PyLocals_GetKind(con->localspluskinds, (int)value)
+             & (CO_FAST_CELL | CO_FAST_FREE)))
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has a cell or free variable as an operand", i);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 /* Check the fields of every admitted image that the
  * interpreter uses as indices without checking them: each handler exists,
  * each slot is in the frame, and each feedback index has an entry, which
@@ -1897,9 +2049,16 @@ check_words(struct _PyCodeConstructor *con)
         : (const uint32_t *)PyBytes_AS_STRING(fbinit);
     int nfb = fbinit == NULL ? 0
         : (int)(PyBytes_GET_SIZE(fbinit) / (Py_ssize_t)sizeof(uint32_t));
-    for (Py_ssize_t i = 0; i < nwords; i++) {
+    unsigned char *operand_words;
+    if (mark_operand_words(bytes, nwords, &operand_words) < 0) {
+        Py_DECREF(result);
+        return NULL;
+    }
+    // Each step is one instruction: a call head takes its operand words
+    for (Py_ssize_t i = 0, length; i < nwords; i += length) {
         _PyIRWord word;
         memcpy(&word, bytes + i * sizeof(_PyIRWord), sizeof(word));
+        length = _PyIR_WordLength(word);
         int handler = IR_HANDLER(word);
         if (handler >= IR_NUM_HANDLERS
             || !(_PyIR_Formats[handler].flags & _PyIR_VALID))
@@ -1912,6 +2071,14 @@ check_words(struct _PyCodeConstructor *con)
             PyErr_Format(PyExc_ValueError,
                          "code: word %zd has invalid flags 0x%x for handler %d",
                          i, IR_FLAGS(word), handler);
+            goto error;
+        }
+        if (handler == IR_OPERANDS) {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd is an operand word that no call claims", i);
+            goto error;
+        }
+        if (length > 1 && check_operand_words(con, bytes, i, word, nslots) < 0) {
             goto error;
         }
         const _PyIRFormat *fmt = &_PyIR_Formats[handler];
@@ -2021,7 +2188,9 @@ check_words(struct _PyCodeConstructor *con)
         }
         if (fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD | _PyIR_NAMES_TARGET)) {
             Py_ssize_t target = fmt->flags & _PyIR_FORWARD ? i + 1 + arg : arg;
-            if (target < 0 || target >= nwords) {
+            if (target < 0 || target >= nwords ||
+                (operand_words != NULL && operand_words[target]))
+            {
                 PyErr_Format(PyExc_ValueError,
                              "code: word %zd has an invalid branch target", i);
                 goto error;
@@ -2075,6 +2244,7 @@ check_words(struct _PyCodeConstructor *con)
                 Py_SETREF(result, PyBytes_FromStringAndSize(
                     PyBytes_AS_STRING(code), PyBytes_GET_SIZE(code)));
                 if (result == NULL) {
+                    PyMem_Free(operand_words);
                     return NULL;
                 }
             }
@@ -2083,9 +2253,11 @@ check_words(struct _PyCodeConstructor *con)
                    sizeof(word));
         }
     }
+    PyMem_Free(operand_words);
     return result;
 
 error:
+    PyMem_Free(operand_words);
     Py_DECREF(result);
     return NULL;
 }
@@ -3316,21 +3488,22 @@ normal_transfer_proof(const semantic_image *image,
         return -1;
     }
     block_at[0] = 1;
-    for (int i = 0; i < n; i++) {
+    for (int i = 0, length; i < n; i += length) {
+        length = _PyIR_WordLength(words[i]);
         const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[i]));
         if ((fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
             !(fmt->flags & _PyIR_NAMES_TARGET))
         {
             int target = fmt->flags & _PyIR_FORWARD ? i + 1 + IR_DS(words[i]) : (int)IR_CD(words[i]);
             block_at[target] = 1;
-            if (i + 1 < n) {
-                block_at[i + 1] = 1;
+            if (i + length < n) {
+                block_at[i + length] = 1;
             }
         }
         if (IS_SCOPE_EXIT_OPCODE(_PyIR_HandlerBase[
-                _PyIR_BaseOpcode(IR_HANDLER(words[i]))]) && i + 1 < n)
+                _PyIR_BaseOpcode(IR_HANDLER(words[i]))]) && i + length < n)
         {
-            block_at[i + 1] = 1;
+            block_at[i + length] = 1;
         }
     }
     int nexceptions = 0;
@@ -3501,7 +3674,9 @@ normal_transfer_proof(const semantic_image *image,
                 }
             }
             int end = work.blocks[b].end;
-            for (int i = work.blocks[b].start; i < end; i++) {
+            int last = -1;
+            for (int i = work.blocks[b].start; i < end; i += _PyIR_WordLength(words[i])) {
+                last = i;
                 const _PyIRExceptionEntry *entry =
                     semantic_exception_at(handlers, nexceptions, i);
                 if (entry != NULL) {
@@ -3524,7 +3699,6 @@ normal_transfer_proof(const semantic_image *image,
                 }
                 (void)semantic_step(image, &work, state, i, 0, &complete);
             }
-            int last = end - 1;
             const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[last]));
             int opcode = _PyIR_BaseOpcode(IR_HANDLER(words[last]));
             memcpy(work.branch, state, state_words * sizeof(uint64_t));
@@ -3555,7 +3729,7 @@ normal_transfer_proof(const semantic_image *image,
     work.build_plan = plan != NULL;
     uint32_t nreturns = 0, ncertified = 0, ncreated = 0, ncreated_empty = 0;
     if (plan != NULL) {
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < n; i += _PyIR_WordLength(words[i])) {
             nreturns += _PyIR_FormatOf(IR_HANDLER(words[i]))->transfer_kind ==
                 _PyIR_TRANSFER_EXIT;
             ncreated += semantic_has_created_copy(_PyIR_FormatOf(IR_HANDLER(words[i])));
@@ -3563,7 +3737,9 @@ normal_transfer_proof(const semantic_image *image,
     }
     for (int b = 0; b < nblocks && result == 0; b++) {
         if (!work.blocks[b].reached) {
-            for (int i = work.blocks[b].start; i < work.blocks[b].end; i++) {
+            for (int i = work.blocks[b].start; i < work.blocks[b].end;
+                 i += _PyIR_WordLength(words[i]))
+            {
                 if (semantic_empty_return(IR_HANDLER(words[i]))) {
                     PyErr_Format(PyExc_ValueError,
                                  "code: word %d has an unproved empty return", i);
@@ -3588,7 +3764,9 @@ normal_transfer_proof(const semantic_image *image,
         memcpy(state, work.facts + (size_t)b * state_words, state_words * sizeof(uint64_t));
         int complete = work.blocks[b].complete;
         work.delegated = work.blocks[b].delegated;
-        for (int i = work.blocks[b].start; i < work.blocks[b].end; i++) {
+        for (int i = work.blocks[b].start; i < work.blocks[b].end;
+             i += _PyIR_WordLength(words[i]))
+        {
             if (semantic_step(image, &work, state, i, 1, &complete) < 0) {
                 result = -1;
                 break;
@@ -3664,8 +3842,8 @@ normal_transfer_proof(const semantic_image *image,
                            state_words * sizeof(uint64_t));
                     int complete = work.blocks[b].complete;
                     work.delegated = work.blocks[b].delegated;
-                    for (int i = work.blocks[b].start;
-                         i < work.blocks[b].end; i++)
+                    for (int i = work.blocks[b].start; i < work.blocks[b].end;
+                         i += _PyIR_WordLength(words[i]))
                     {
                         (void)semantic_step(image, &work, state, i, 0, &complete);
                         if (semantic_exact_return(image, &work, state, i, complete)) {
@@ -3949,9 +4127,10 @@ code_new_with_fbinit(
     if (!(flags & CO_OPTIMIZED)) {
         Py_ssize_t nwords = PyBytes_GET_SIZE(code) / sizeof(_PyIRWord);
         const char *words = PyBytes_AS_STRING(code);
-        for (Py_ssize_t i = 0; i < nwords; i++) {
+        for (Py_ssize_t i = 0, length; i < nwords; i += length) {
             _PyIRWord word;
             memcpy(&word, words + i * sizeof(_PyIRWord), sizeof(word));
+            length = _PyIR_WordLength(word);
             if (IR_HANDLER(word) == LOAD_FAST_AND_CLEAR) {
                 int oparg = _PyIR_FieldOparg(word);
                 if (oparg >= nlocalsplus) {
@@ -5004,7 +5183,7 @@ identify_unbound_names(PyThreadState *tstate, PyCodeObject *co,
     struct co_unbound_counts unbound = {0};
     int numdupes = 0;
     Py_ssize_t len = Py_SIZE(co);
-    for (int i = 0; i < len; i++) {
+    for (int i = 0; i < len; i += _PyCode_InstrLength(co, i)) {
         int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(co, i));
         if (opcode == LOAD_ATTR) {
             int oparg = _PyCode_InstrOparg(co, i);
@@ -5382,13 +5561,14 @@ code_returns_only_none(PyCodeObject *co)
             break;
         }
     }
-    for (int i = 0; i < len; i++) {
+    int previous = -1;  // the instruction before the one at i
+    for (int i = 0; i < len; previous = i, i += _PyCode_InstrLength(co, i)) {
         if (!IS_RETURN_OPCODE(_PyIR_BaseOpcode(_PyCode_InstrHandler(co, i)))) {
             continue;
         }
-        assert(i != 0);
-        int prev = _PyIR_BaseOpcode(_PyCode_InstrHandler(co, i - 1));
-        int prev_oparg = _PyCode_InstrOparg(co, i - 1);
+        assert(previous >= 0);
+        int prev = _PyIR_BaseOpcode(_PyCode_InstrHandler(co, previous));
+        int prev_oparg = _PyCode_InstrOparg(co, previous);
         if (prev == LOAD_COMMON_CONSTANT && prev_oparg == CONSTANT_NONE) {
             continue;
         }

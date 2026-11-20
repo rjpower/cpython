@@ -1952,8 +1952,9 @@ _encoder_iterate_dict_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
     PyValue keyv, valuev;
     Py_ssize_t pos = 0;
     int rc;
-    // gh-145244: encoder_encode_key_value() can invoke user code
-    // that mutates the dict; the owning iterator snapshots each entry.
+    // gh-145244: encoder_encode_key_value() can invoke user code (the
+    // default hook, a Python-level string encoder) that mutates the dict; the owning iterator snapshots each entry, so a
+    // borrow would dangle.
     while ((rc = _PyDict_NextValue((PyDictObject *)dct, &pos, &keyv, &valuev, NULL)) > 0) {
         int rv = encoder_encode_key_value(s, writer, first, dct,
                                           PyValue_Borrow(keyv),

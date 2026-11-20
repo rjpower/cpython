@@ -451,3 +451,6 @@ SEND_VIRTUAL_XFER_POP_TOP 401
 SEND_VIRTUAL_XFER_STORE_FAST 402
 SEND_XFER_POP_TOP 403
 SEND_XFER_STORE_FAST 404
+
+# IR-only handler added after the generator numbers (never dispatched)
+IR_OPERANDS 405

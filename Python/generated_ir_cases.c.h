@@ -11280,6 +11280,19 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             DISPATCH();
         }
 
+        TARGET(IR_OPERANDS) {
+            int opcode = IR_OPERANDS;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(IR_OPERANDS);
+            assert(0 && "Executing operand words.");
+            Py_FatalError("Executing operand words.");
+            DISPATCH();
+        }
+
         TARGET(IS_OP) {
             int opcode = IS_OP;
             (void)(opcode);

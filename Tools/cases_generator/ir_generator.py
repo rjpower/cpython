@@ -284,10 +284,12 @@ def redispatch_cohorts(analysis: Analysis, formats: dict[str, "IRFormat"]):
 # pass proves them (Python/regcfg_passes.c) and the assembler encodes them; a
 # handler of the family computes the virtual inputs from its word, so
 # specialisation and instrumentation keep them by keeping the flags.
+# They may also carry IR_F_OPERANDS, which says that operand words follow the
+# head (_PyIR_WordLength()); step 2b of calls80 deletes it with the window form.
 CALL_ROLE_FLAGS = {
-    "CALL": ("IR_F_NO_SELF",),
-    "CALL_KW": ("IR_F_NO_SELF",),
-    "CALL_FUNCTION_EX": ("IR_F_NO_SELF", "IR_F_NO_KW"),
+    "CALL": ("IR_F_NO_SELF", "IR_F_OPERANDS"),
+    "CALL_KW": ("IR_F_NO_SELF", "IR_F_OPERANDS"),
+    "CALL_FUNCTION_EX": ("IR_F_NO_SELF", "IR_F_NO_KW", "IR_F_OPERANDS"),
 }
 
 

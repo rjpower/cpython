@@ -362,6 +362,10 @@ _PyIR_BaseOpcode(int handler)
     if (handler == IR_JUMP) {
         return JUMP_FORWARD;
     }
+    if (handler == IR_OPERANDS) {
+        // Part of the instruction before it, as a CACHE is upstream
+        return CACHE;
+    }
     if (handler >= IR_FIRST_ONLY_HANDLER) {
         handler = _PyIR_Formats[handler].shadow;
         assert(handler < IR_FIRST_ONLY_HANDLER);

@@ -5565,6 +5565,14 @@ dummy_func(
             JUMPTO(oparg);
         }
 
+        // The words after a call head that name its operands, four slots
+        // each (_PyIR_WordLength()).  The head consumes them, so no
+        // dispatch reaches one.
+        ir_only no_save_ip inst(IR_OPERANDS, ( -- )) {
+            assert(0 && "Executing operand words.");
+            Py_FatalError("Executing operand words.");
+        }
+
         op(_SAVE_RETURN_SLOT, (--)) {
             frame->return_slot = (uint16_t)IR_DST_SLOT;
             frame->return_pc = next_instr;

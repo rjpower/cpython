@@ -3712,7 +3712,7 @@ class IREmitter(Emitter):
             if field is not None:
                 self.spend_owner(field, tkn, storage)
                 self.ensure_consumed(field, storage)
-                value = f"IR_TAKEN({name}, {owner_name(field)})"
+                value = self.taken_view(name, field, storage)
                 storage.stack.taken(storage.stack.field_position(field))
             self.emit(f"PyValue {native} = {value};\n")
             self.value_kill(token, storage, False)
@@ -4371,6 +4371,19 @@ class IREmitter(Emitter):
         var = find_local(name.text, storage)
         return (var is not None and var.known_object) or name.text == self.killed_pointer
 
+    def taken_view(self, name: str, field: str, storage: Storage) -> str:
+        """The IR_TAKEN of the view name of the input in field, with a count
+        of its own for a local.  A required input is not NULL, and a view that
+        a guard has shown to be in pointer space needs fewer tests still."""
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        macro = "IR_TAKEN"
+        if stack.read_fields.get(FIELDS.index(field)) is False:
+            var = find_local(name, storage)
+            pointer = (var is not None and var.known_object) or name == self.killed_pointer
+            macro = "IR_TAKEN_POINTER" if pointer else "IR_TAKEN_REQUIRED"
+        return f"{macro}({name}, {owner_name(field)})"
+
     def value_pointer_variant(self, tkn, tkn_iter, uop, storage, inst):
         lparen = next(tkn_iter)
         assert lparen.kind == "LPAREN"
@@ -4430,7 +4443,7 @@ class IREmitter(Emitter):
             # The object, with a count of its own for a local
             self.spend_owner(field, tkn, storage)
             self.ensure_consumed(field, storage)
-            owned = f"IR_TAKEN({name.text}, {owner_name(field)})"
+            owned = self.taken_view(name.text, field, storage)
             storage.stack.taken(storage.stack.field_position(field))
         steal = (POINTER_VARIANTS[tkn.text] if self.is_pointer(name, storage)
                  else tkn.text)
@@ -4466,7 +4479,7 @@ class IREmitter(Emitter):
             text = name.text
         elif tkn.text == "TAKE":
             self.ensure_consumed(field, storage)
-            text = f"IR_TAKEN({name.text}, {owner_name(field)})"
+            text = self.taken_view(name.text, field, storage)
             storage.stack.taken(storage.stack.field_position(field))
         else:
             self.ensure_consumed(field, storage)

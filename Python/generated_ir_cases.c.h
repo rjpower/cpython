@@ -576,9 +576,9 @@ ir_run_CALL_INTRINSIC_2(
             value2_st = IR_VIEW(IR_B(ir_word));
             assert(oparg <= MAX_INTRINSIC_2);
             ir_own_B = IR_DETACH(ir_word, B, value2_st);
-            PyValue held2 = IR_TAKEN(value2_st, ir_own_B);
+            PyValue held2 = IR_TAKEN_REQUIRED(value2_st, ir_own_B);
             ir_own_C = IR_DETACH(ir_word, C, value1_st);
-            PyValue held1 = IR_TAKEN(value1_st, ir_own_C);
+            PyValue held1 = IR_TAKEN_REQUIRED(value1_st, ir_own_C);
             if (oparg == INTRINSIC_GETATTR) {
                 PyObject *name = PyValue_ObjectOrNull(held1);
                 assert(name != NULL && PyUnicode_CheckExact(name));
@@ -718,9 +718,9 @@ ir_run_CHECK_EG_MATCH(
             assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             ir_own_B = IR_DETACH(ir_word, B, exc_value_st);
-            PyValue held_exc = IR_TAKEN(exc_value_st, ir_own_B);
+            PyValue held_exc = IR_TAKEN_POINTER(exc_value_st, ir_own_B);
             ir_own_C = IR_DETACH(ir_word, C, match_type_st);
-            PyValue held_type = IR_TAKEN(match_type_st, ir_own_C);
+            PyValue held_type = IR_TAKEN_REQUIRED(match_type_st, ir_own_C);
             int err = _PyEval_CheckExceptStarTypeValidValue(tstate, held_type);
             if (err < 0) {
                 PyValue_CLOSE(held_type);
@@ -772,7 +772,7 @@ ir_run_CHECK_EXC_MATCH(
             assert(PyValue_IsObject(left));
             PyObject *left_o = _PyValue_AsKnownObjectBorrowPointer(left);
             ir_own_C = IR_DETACH(ir_word, C, right);
-            PyValue held_right = IR_TAKEN(right, ir_own_C);
+            PyValue held_right = IR_TAKEN_REQUIRED(right, ir_own_C);
             assert(PyExceptionInstance_Check(left_o));
             int err = _PyEval_CheckExceptTypeValidValue(tstate, held_right);
             if (err < 0) {
@@ -1481,7 +1481,7 @@ ir_run_FORMAT_SIMPLE(
             }
             else {
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                res = IR_TAKEN(value, ir_own_B);
+                res = IR_TAKEN_REQUIRED(value, ir_own_B);
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             PyValue_XCLOSE(ir_own_B);
@@ -1721,7 +1721,7 @@ ir_run_GET_AWAITABLE(
             iterable = IR_VIEW(IR_B(ir_word));
             if (coro_awaitable_can_transfer(iterable)) {
                 ir_own_B = IR_DETACH(ir_word, B, iterable);
-                iter = IR_TAKEN(iterable, ir_own_B);
+                iter = IR_TAKEN_REQUIRED(iterable, ir_own_B);
             }
             else {
                 PyObject *iter_o = _PyEval_GetAwaitable(iterable, oparg);
@@ -2136,7 +2136,7 @@ ir_run_LOAD_FROM_DICT_OR_DEREF(
             assert(PyValue_IsObject(class_dict_st));
             PyObject *class_dict = _PyValue_AsKnownObjectBorrowPointer(class_dict_st);
             ir_own_B = IR_DETACH(ir_word, B, class_dict_st);
-            PyValue held_class_dict = IR_TAKEN(class_dict_st, ir_own_B);
+            PyValue held_class_dict = IR_TAKEN_POINTER(class_dict_st, ir_own_B);
             assert(class_dict);
             assert(oparg >= 0 && oparg < _PyFrame_GetCode(frame)->co_nlocalsplus);
             name = _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
@@ -2192,7 +2192,7 @@ ir_run_LOAD_FROM_DICT_OR_GLOBALS(
             assert(PyValue_IsObject(mod_or_class_dict));
             PyObject *namespace = _PyValue_AsKnownObjectBorrowPointer(mod_or_class_dict);
             ir_own_B = IR_DETACH(ir_word, B, mod_or_class_dict);
-            PyValue held_namespace = IR_TAKEN(mod_or_class_dict, ir_own_B);
+            PyValue held_namespace = IR_TAKEN_POINTER(mod_or_class_dict, ir_own_B);
             _PyStatusValue found = value_load_from_dict(tstate, namespace, name);
             PyValue_CLOSE(held_namespace);
             if (found.status < 0) {
@@ -2781,7 +2781,7 @@ ir_run_POP_EXCEPT(
             ir_own_A = IR_DETACH(ir_word, A, exc_value);
             Py_XSETREF(exc_info->exc_value,
                        PyValue_IsNone(exc_value)
-                       ? NULL : _PyValue_AsPyObjectStealPointer(IR_TAKEN(exc_value, ir_own_A)));
+                       ? NULL : _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(exc_value, ir_own_A)));
             DISPATCH();
         }
 
@@ -3234,9 +3234,9 @@ ir_run_SET_FUNCTION_ATTRIBUTE(
             assert(PyValue_IsObject(attr_st));
             PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_in);
             ir_own_B = IR_DETACH(ir_word, B, attr_st);
-            PyObject *attr = _PyValue_AsPyObjectStealPointer(IR_TAKEN(attr_st, ir_own_B));
+            PyObject *attr = _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(attr_st, ir_own_B));
             ir_own_C = IR_DETACH(ir_word, C, func_in);
-            func_out = IR_TAKEN(func_in, ir_own_C);
+            func_out = IR_TAKEN_POINTER(func_in, ir_own_C);
             assert(PyFunction_Check(func));
             size_t offset = _Py_FunctionAttributeOffsets[oparg];
             assert(offset != 0);
@@ -4450,7 +4450,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 assert(Py_REFCNT(left_o) >= 1);
                 PyObject *temp = PyValue_AsKnownObjectSteal(*target_local);
                 ir_own_C = IR_DETACH(ir_word, C, right);
-                PyObject *right_o = _PyValue_AsPyObjectStealPointer(IR_TAKEN(right, ir_own_C));
+                PyObject *right_o = _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(right, ir_own_C));
                 temp = value_unicode_append(temp, right_o);
                 _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
                 *target_local = PyValue_NULL;
@@ -5141,9 +5141,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(BINARY_OP, hit);
                 _PyInterpreterFrame* pushed_frame = _PyFrame_PushUnchecked(tstate, getitem, frame);
                 ir_own_B = IR_DETACH(ir_word, B, container);
-                pushed_frame->base[0] = IR_TAKEN(container, ir_own_B);
+                pushed_frame->base[0] = IR_TAKEN_REQUIRED(container, ir_own_B);
                 ir_own_C = IR_DETACH(ir_word, C, sub);
-                pushed_frame->base[1] = IR_TAKEN(sub, ir_own_C);
+                pushed_frame->base[1] = IR_TAKEN_REQUIRED(sub, ir_own_C);
                 frame->return_slot = (uint16_t)IR_A(ir_word);
                 frame->return_pc = next_instr;
                 new_frame = PyValue_Wrap(pushed_frame);
@@ -8972,7 +8972,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             index_or_null = IR_VIEW(IR_C(ir_word));
             receiver = IR_VIEW(IR_B(ir_word));
             ir_own_D = IR_DETACH(ir_word, D, value);
-            val = IR_TAKEN(value, ir_own_D);
+            val = IR_TAKEN_REQUIRED(value, ir_own_D);
             (void)index_or_null;
             ir_own_C = IR_DETACH(ir_word, C, index_or_null);
             ir_own_B = IR_DETACH(ir_word, B, receiver);
@@ -9627,7 +9627,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = _PyValue_AsKnownObjectBorrowPointer(receiver);
             ir_own_D = IR_DETACH(ir_word, D, value);
-            PyValue held = IR_TAKEN(value, ir_own_D);
+            PyValue held = IR_TAKEN_REQUIRED(value, ir_own_D);
             if (PyGen_Check(receiver_o) || PyCoro_CheckExact(receiver_o)) {
                 int err = monitor_stop_iteration(tstate, frame, this_instr, held);
                 if (err) {
@@ -9813,7 +9813,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)ir_own_B;
             cond = IR_VIEW(IR_B(ir_word));
             ir_own_B = IR_DETACH(ir_word, B, cond);
-            PyValue held = IR_TAKEN(cond, ir_own_B);
+            PyValue held = IR_TAKEN_REQUIRED(cond, ir_own_B);
             int truth = _PyValue_IsTrue(held);
             if (truth < 0) {
                 PyValue_CLOSE(held);
@@ -9856,7 +9856,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)ir_own_B;
             cond = IR_VIEW(IR_B(ir_word));
             ir_own_B = IR_DETACH(ir_word, B, cond);
-            PyValue held = IR_TAKEN(cond, ir_own_B);
+            PyValue held = IR_TAKEN_REQUIRED(cond, ir_own_B);
             int truth = _PyValue_IsTrue(held);
             if (truth < 0) {
                 PyValue_CLOSE(held);
@@ -10045,7 +10045,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             index_or_null = IR_VIEW(IR_B(ir_word));
             iter = IR_VIEW(IR_A(ir_word));
             ir_own_A = IR_DETACH(ir_word, A, iter);
-            PyValue held = IR_TAKEN(iter, ir_own_A);
+            PyValue held = IR_TAKEN_REQUIRED(iter, ir_own_A);
             (void)index_or_null;
             ir_own_B = IR_DETACH(ir_word, B, index_or_null);
             ir_close1 = held;
@@ -10221,7 +10221,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             tstate->current_frame = frame->previous;
             assert(!_PyErr_Occurred(tstate));
             ir_own_A = IR_DETACH_NATIVE(ir_word, A, retval);
-            PyValue result = IR_TAKEN(retval, ir_own_A);
+            PyValue result = IR_TAKEN_REQUIRED(retval, ir_own_A);
             assert(frame == &IR_ACTIVATION()->entry.frame);
             LLTRACE_RESUME_FRAME();
             return result;
@@ -10443,7 +10443,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)ir_own_B;
             cond = IR_VIEW(IR_B(ir_word));
             ir_own_B = IR_DETACH(ir_word, B, cond);
-            PyValue held = IR_TAKEN(cond, ir_own_B);
+            PyValue held = IR_TAKEN_REQUIRED(cond, ir_own_B);
             int truth = _PyValue_IsTrue(held);
             if (truth < 0) {
                 PyValue_CLOSE(held);
@@ -10478,7 +10478,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)ir_own_B;
             cond = IR_VIEW(IR_B(ir_word));
             ir_own_B = IR_DETACH(ir_word, B, cond);
-            PyValue held = IR_TAKEN(cond, ir_own_B);
+            PyValue held = IR_TAKEN_REQUIRED(cond, ir_own_B);
             int truth = _PyValue_IsTrue(held);
             if (truth < 0) {
                 PyValue_CLOSE(held);
@@ -10518,7 +10518,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             v = IR_VIEW(IR_B(ir_word));
             list = window[0];
             ir_own_B = IR_DETACH(ir_word, B, v);
-            PyValue item = IR_TAKEN(v, ir_own_B);
+            PyValue item = IR_TAKEN_REQUIRED(v, ir_own_B);
             int err = _PyList_AppendTakeValue((PyListObject *)PyValue_AsKnownObjectBorrow(list), item);
             if (err < 0) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -10676,7 +10676,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 }
                 attr = PyValue_DUP(PyValue_FromObjectBorrow(target));
                 ir_own_B = IR_DETACH(ir_word, B, owner);
-                self = IR_TAKEN(owner, ir_own_B);
+                self = IR_TAKEN_POINTER(owner, ir_own_B);
                 STAT_INC(LOAD_ATTR, hit);
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);
@@ -10826,7 +10826,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(
                     tstate, PyValue_DUP(PyValue_FromObjectBorrow(f)), frame);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
-                pushed_frame->base[0] = IR_TAKEN(owner, ir_own_B);
+                pushed_frame->base[0] = IR_TAKEN_POINTER(owner, ir_own_B);
                 pushed_frame->base[1] = PyValue_DUP(PyValue_FromObjectBorrow(name));
                 new_frame = PyValue_Wrap(pushed_frame);
             }
@@ -10985,7 +10985,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                                       Py_TPFLAGS_METHOD_DESCRIPTOR));
                 attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
                 ir_own_B = IR_DETACH(ir_word, B, owner);
-                self = IR_TAKEN(owner, ir_own_B);
+                self = IR_TAKEN_POINTER(owner, ir_own_B);
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), self);
@@ -11041,7 +11041,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                                       Py_TPFLAGS_METHOD_DESCRIPTOR));
                 attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
                 ir_own_B = IR_DETACH(ir_word, B, owner);
-                self = IR_TAKEN(owner, ir_own_B);
+                self = IR_TAKEN_POINTER(owner, ir_own_B);
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), self);
@@ -11107,7 +11107,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                                       Py_TPFLAGS_METHOD_DESCRIPTOR));
                 attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
                 ir_own_B = IR_DETACH(ir_word, B, owner);
-                self = IR_TAKEN(owner, ir_own_B);
+                self = IR_TAKEN_POINTER(owner, ir_own_B);
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), self);
@@ -11365,7 +11365,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyValue_DUP(PyValue_FromObjectBorrow(fget)), frame);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
-                pushed_frame->base[0] = IR_TAKEN(owner, ir_own_B);
+                pushed_frame->base[0] = IR_TAKEN_POINTER(owner, ir_own_B);
                 new_frame = PyValue_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -12377,9 +12377,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
             assert(PyDict_CheckExact(dict));
             ir_own_B = IR_DETACH(ir_word, B, key);
-            PyValue stored_key = IR_TAKEN(key, ir_own_B);
+            PyValue stored_key = IR_TAKEN_REQUIRED(key, ir_own_B);
             ir_own_C = IR_DETACH(ir_word, C, value);
-            PyValue stored_value = IR_TAKEN(value, ir_own_C);
+            PyValue stored_value = IR_TAKEN_REQUIRED(value, ir_own_C);
             int err = _PyDict_SetValue_Take2(
                 (PyDictObject *)dict, stored_key, stored_value);
             if (err != 0) {
@@ -13363,7 +13363,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = IR_VIEW(IR_A(ir_word));
                 ir_own_A = IR_DETACH(ir_word, A, value);
-                taken = IR_TAKEN(value, ir_own_A);
+                taken = IR_TAKEN_REQUIRED(value, ir_own_A);
             }
             // _RETURN_VALUE
             {
@@ -13411,7 +13411,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 value = IR_VIEW(IR_A(ir_word));
                 ir_own_A = IR_DETACH(ir_word, A, value);
-                taken = IR_TAKEN(value, ir_own_A);
+                taken = IR_TAKEN_REQUIRED(value, ir_own_A);
             }
             // _RETURN_VALUE_EMPTY
             {
@@ -14018,7 +14018,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             v = IR_VIEW(IR_B(ir_word));
             set = window[0];
             ir_own_B = IR_DETACH(ir_word, B, v);
-            PyValue item = IR_TAKEN(v, ir_own_B);
+            PyValue item = IR_TAKEN_REQUIRED(v, ir_own_B);
             int err = _PySet_AddValueTakeRef((PySetObject *)PyValue_AsKnownObjectBorrow(set), item);
             if (err) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -14122,7 +14122,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 #endif
                 STAT_INC(STORE_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN(value, ir_own_B);
+                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
                 if (PyValue_IsNull(old_value)) {
                     PyDictValues *values = _PyObject_InlineValues(owner_o);
                     Py_ssize_t index = value_ptr - values->values;
@@ -14192,7 +14192,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 PyValue old_value = *value_ptr;
                 assert(!PyValue_IsNull(old_value));
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN(value, ir_own_B);
+                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
                 STAT_INC(STORE_ATTR, hit);
                 ir_own_A = IR_DETACH(ir_word, A, owner);
                 (void)(ir_own_A);
@@ -14253,7 +14253,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
                 assert(PyValue_IsNull(*value_ptr));
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN(value, ir_own_B);
+                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
                 _PyDictValues_SetShape(values, (uint8_t)shape_to);
@@ -14312,7 +14312,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(STORE_ATTR, hit);
                 PyValue old_value = *(PyValue *)addr;
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *(PyValue *)addr = IR_TAKEN(value, ir_own_B);
+                *(PyValue *)addr = IR_TAKEN_REQUIRED(value, ir_own_B);
                 UNLOCK_OBJECT(owner_o);
                 ir_own_A = IR_DETACH(ir_word, A, owner);
                 (void)(ir_own_A);
@@ -14420,7 +14420,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 }
                 else {
                     ir_own_B = IR_DETACH(ir_word, B, value);
-                    *value_ptr = IR_TAKEN(value, ir_own_B);
+                    *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
                     UNLOCK_OBJECT(dict);
                     ir_own_A = IR_DETACH(ir_word, A, owner);
                     (void)(ir_own_A);
@@ -14635,7 +14635,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(STORE_SUBSCR, hit);
                 PyValue old_value = _PyList_ITEMS(list)[index];
                 ir_own_C = IR_DETACH(ir_word, C, value);
-                _PyList_ITEMS(list)[index] = IR_TAKEN(value, ir_own_C);
+                _PyList_ITEMS(list)[index] = IR_TAKEN_REQUIRED(value, ir_own_C);
                 assert(!PyValue_IsNull(old_value));
                 UNLOCK_OBJECT(list);
                 ir_own_A = IR_DETACH(ir_word, A, list_st);

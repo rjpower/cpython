@@ -618,6 +618,34 @@ _PyIR_Taken(PyValueBorrow view, PyValue *owner)
 }
 #define IR_TAKEN(V, OWN) _PyIR_Taken(PyValue_Borrow(V), &(OWN))
 
+/* IR_TAKEN() of a view of a required input, which is not PyValue_NULL, and
+ * of one that a guard has shown to be in pointer space: a local's value then
+ * gets its count with one test fewer (see PyValue_DUP() and
+ * _PyValue_DUP_POINTER()). */
+static inline PyValue
+_PyIR_TakenRequired(PyValueBorrow view, PyValue *owner)
+{
+    PyValue taken = *owner;
+    if (PyValue_IsNull(taken)) {
+        return PyValue_DUP(view);
+    }
+    *owner = PyValue_NULL;
+    return taken;
+}
+#define IR_TAKEN_REQUIRED(V, OWN) _PyIR_TakenRequired(PyValue_Borrow(V), &(OWN))
+
+static inline PyValue
+_PyIR_TakenPointer(PyValueBorrow view, PyValue *owner)
+{
+    PyValue taken = *owner;
+    if (PyValue_IsNull(taken)) {
+        return _PyValue_DUP_POINTER(view);
+    }
+    *owner = PyValue_NULL;
+    return taken;
+}
+#define IR_TAKEN_POINTER(V, OWN) _PyIR_TakenPointer(PyValue_Borrow(V), &(OWN))
+
 /* Values are canonical where they are made (the PyValue_From*()
  * constructors), so a store writes V as it is; the debug check proves it. */
 

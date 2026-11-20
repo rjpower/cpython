@@ -1241,14 +1241,6 @@ verify_error(const char *after, const _PyRegOp *op, const char *what)
     return ERROR;
 }
 
-/* The calls that may push the callee's frame over their window
- * (CALL_PY_EXACT_ARGS and CALL_BOUND_METHOD_EXACT_ARGS, Python/bytecodes.c) */
-static inline int
-overlapping_call(int opcode)
-{
-    return opcode == CALL;
-}
-
 /* A folded load's reader reads the local when it runs, not when the load
  * would have, so no live op in between may write the local or run Python
  * code, which may rebind it through frame.f_locals (G1).  "May run Python"
@@ -1453,7 +1445,6 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                 // work is the set live after op: those live across it
                 // are live after it and not written by it
                 int *out = _PyReg_OUT(cfg, op);
-                int *in = _PyReg_IN(cfg, op);
                 if (op->except >= 0) {
                     int hd = handler_base(cfg, op->except);
                     int first = nl + hd;
@@ -1499,26 +1490,6 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                     }
                     else {
                         seen[s >> 6] |= (uint64_t)1 << (s & 63);
-                    }
-                }
-                if (err == SUCCESS && overlapping_call(op->opcode) && op->nread > 0) {
-                    int base = _PyRegCfg_Slot(cfg, in[0]);
-                    for (int bit = 0; bit < lv.nwords * 64; bit++) {
-                        if (!BIT_GET(work, bit)) {
-                            continue;
-                        }
-                        int v = bit < IR_MAX_SLOTS ? nl + bit
-                                : _PyReg_FRESH0(cfg) + bit - IR_MAX_SLOTS;
-                        int is_out = 0;
-                        for (int j = 0; j < op->nout; j++) {
-                            is_out |= out[j] == v;
-                        }
-                        if (!is_out && _PyRegCfg_Slot(cfg, v) >= base) {
-                            err = verify_error(after, op, "a temporary live "
-                                               "across a call above its "
-                                               "window");
-                            break;
-                        }
                     }
                 }
                 transfer(cfg, &lv, op, work, NULL);

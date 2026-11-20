@@ -41,9 +41,6 @@ class WindowResultTransferTests(unittest.TestCase):
                     self.assert_rejected(code, bad, "virtual call input")
                     bad[producer] = ("BUILD_LIST", 3, 2, count, 0)
                     self.assert_rejected(code, bad, "window result destination")
-                    bad = words.copy()
-                    bad[0] = ("LOAD_CONST", 4)
-                    self.assert_rejected(code, bad, "child clobber home")
 
     def test_parallel_empty_list_assignment_then_call(self):
         def prepare(predicate):

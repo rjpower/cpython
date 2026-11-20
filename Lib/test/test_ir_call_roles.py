@@ -244,12 +244,11 @@ class CallRoleTests(unittest.TestCase):
         bad[1] = ("YIELD_VALUE", 1, 0, 0)
         self.assert_rejected(words, bad, "virtual call input")
 
-    def test_live_parent_suffix_and_recipient_are_not_child_workspace(self):
+    def test_live_call_recipient_is_rejected(self):
         words = [("LOAD_CONST", 0), ("POP_TOP", 3),
                  ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
         bad = words.copy()
         bad[1] = ("LOAD_CONST", 3)
-        self.assert_rejected(words, bad, "child clobber home")
         bad[2] = ("CALL+NO_SELF", 3, 0, 0, 0)
         bad[3] = ("RETURN_VALUE", 3)
         self.assert_rejected(words, bad, "call recipient")
@@ -327,9 +326,6 @@ class CallRoleTests(unittest.TestCase):
                  ("LOAD_CONST", 1), ("CALL+NO_SELF", 1, 1, 0, 0),
                  ("RETURN_VALUE", 1)]
         self.assert_admitted(words, locals=("value",))
-        bad = words.copy()
-        bad[1] = ("LOAD_CONST", 3)
-        self.assert_rejected(words, bad, "child clobber home", locals=("value",))
 
         def invoke(fn, values):
             for value in values:

@@ -2741,20 +2741,6 @@ semantic_step_core(const semantic_image *image, semantic_worklist *work,
                          "code: word %d overwrites an unproved call recipient %d", pc, dst);
             return -1;
         }
-        if (fmt->effects & _PyIR_PUSHES_FRAME) {
-            int first = base + count;
-            for (int home = first; home < image->nl + image->scratch; home++) {
-                if (home != (int)IR_A(word) &&
-                    !(semantic_home_facts(work, state, home, image->nl) &
-                      (1u << SEM_NO_HOME)))
-                {
-                    PyErr_Format(PyExc_ValueError,
-                                 "code: word %d has an unproved child clobber home %d",
-                                 pc, home);
-                    return -1;
-                }
-            }
-        }
     }
     if (fmt->owner_events == 0) {
         assert(fmt->transfer_kind == _PyIR_TRANSFER_UNKNOWN);

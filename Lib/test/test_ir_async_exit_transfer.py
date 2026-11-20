@@ -1,15 +1,13 @@
 """Only a successfully matched async-loop exit retires its input window."""
 
-import marshal
 from pathlib import Path
 import tempfile
 import types
 import unittest
 
 import _testinternalcapi
-from test.test_ir_admission import construct
 from test.test_ir_call_roles import routes
-from test.test_ir_transfer_admission import encoded, make_code
+from test.test_ir_transfer_admission import make_code
 
 
 class AsyncExitTransferTests(unittest.TestCase):
@@ -25,15 +23,6 @@ class AsyncExitTransferTests(unittest.TestCase):
         for admitted in routes(code):
             self.assertEqual(_testinternalcapi.get_ir(admitted, True),
                              _testinternalcapi.get_ir(code))
-        words[2] = ("LOAD_CONST", 2)
-        changed = encoded(words)
-        for route in (construct, lambda co, **kw: co.replace(**kw)):
-            with self.assertRaisesRegex(ValueError, "child clobber home"):
-                route(code, co_code=changed)
-        payload = marshal.dumps(code)
-        self.assertEqual(payload.count(code.co_code), 1)
-        with self.assertRaisesRegex(ValueError, "child clobber home"):
-            marshal.loads(payload.replace(code.co_code, changed, 1))
 
     def test_nested_async_loop_reuses_call_window_on_exhaustion(self):
         class Pause:

@@ -700,8 +700,8 @@ _PyIR_NormalPhysicalTransfer(_PyIRWord word, int arg, int edge, int home,
                 }
                 return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_SET_NULL, -1};
             }
-            /* Neither a new result nor an overlapping child's unused tail
-             * supplies a must-NULL fact. */
+            /* Neither a new result nor a child frame supplies a must-NULL
+             * fact. */
             return unknown;
         case COPY:
             if (edge || fmt->roles[0] != _PyIR_ROLE_BASE ||

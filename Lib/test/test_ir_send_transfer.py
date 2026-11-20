@@ -60,9 +60,6 @@ class SendTransferTests(unittest.TestCase):
             self.assertEqual(_testinternalcapi.get_ir(admitted, True),
                              _testinternalcapi.get_ir(code))
         bad = words.copy()
-        bad[3] = ("LOAD_CONST", 4)
-        self.assert_rejected(code, bad, "child clobber home")
-        bad = words.copy()
         bad[4] = ("CLEANUP_THROW", 1, 0, 5, 0)
         self.assert_rejected(code, bad, "virtual call input")
 

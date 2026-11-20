@@ -387,15 +387,13 @@ _PyFrame_CopyHeader(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 #endif
 }
 
-/* Move the slots of src, the frame that departs, to dest.  Its slots above
- * the locals that it still owns are NULL, except the discard slot's. */
+/* Move the slots of src, the frame that departs, to dest. */
 static inline void
 _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 {
     int nslots = _PyFrame_NumSlots(src);
     _PyFrame_CopyHeader(src, dest);
     for (int i = 0; i < nslots; i++) {
-        // A move: the slots src leaves behind may be the caller's.
         dest->base[i] = src->base[i];
         src->base[i] = PyValue_NULL;
     }
@@ -650,7 +648,6 @@ _PyThreadState_PushFrameUnchecked(PyThreadState *tstate, int nslots)
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)header;
     frame->base = _PyDataStack_Slots(tstate->datastack_top);
-    frame->saved_top = frame->base;
     tstate->datastack_limit = (PyObject **)frame;
     tstate->datastack_top = end;
     assert(tstate->datastack_top < tstate->datastack_limit);
@@ -675,8 +672,7 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
     assert(chunk);
     assert((PyObject **)frame == tstate->datastack_limit);
 #ifndef NDEBUG
-    /* The code owner may already be cleared. Check the physical departing
-     * suffix, including an overlapping caller's previously NULL tail. */
+    /* The code owner may already be cleared. Check the departing slots. */
     for (PyValue *p = frame->base;
          p < _PyDataStack_Slots(tstate->datastack_top); p++)
     {
@@ -692,11 +688,12 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
         return;
     }
     tstate->datastack_limit = (PyObject **)frame + FRAME_SPECIALS_SIZE;
-    tstate->datastack_top = _PyDataStack_Address(frame->saved_top);
+    tstate->datastack_top = _PyDataStack_Address(frame->base);
     assert(tstate->datastack_top < tstate->datastack_limit);
 }
 
-/* Pushes a frame without checking for space.
+/* Pushes a frame without checking for space, at the top of the value stack:
+ * the child of a call never shares the slots of its caller.
  * Must be guarded by _PyThreadState_HasStackSpace()
  * Consumes reference to func. */
 static inline _PyInterpreterFrame *
@@ -712,71 +709,18 @@ _PyFrame_PushUnchecked(PyThreadState *tstate, PyValue func, _PyInterpreterFrame 
     return new_frame;
 }
 
-/* Reserve a call's final homes without constructing its header. A thread
- * caller transfers its argument homes in place; a generator caller uses the
- * current thread-stack top, separate from its heap-owned argument window.
- * Must be guarded by _PyThreadState_HasStackSpace(), for co_framesize. */
-static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
-_PyFrame_ReserveForCall(PyThreadState *tstate, PyCodeObject *code,
-                        PyValue *base, int nargs,
-                        _PyInterpreterFrame *previous)
+/* Move n values from the caller's argument window to the first slots of
+ * child, a frame that _PyFrame_PushUnchecked pushed at the top of the value
+ * stack, for a thread or a heap-owned caller alike. Each home is left NULL,
+ * the empty-home authority: the child owns the values. */
+static inline Py_ALWAYS_INLINE void
+_PyFrame_MoveArgs(_PyInterpreterFrame *child, PyValue *args, int n)
 {
-    CALL_STAT_INC(frames_pushed);
-    int nslots = _PyFrame_NumSlotsForCodeObject(code);
-#ifndef NDEBUG
-    assert(nargs <= nslots);
-    if (previous->owner == FRAME_OWNED_BY_THREAD) {
-        assert(base > previous->base &&
-               base <= _PyDataStack_Slots(tstate->datastack_top));
-        PyValue *previous_end = previous->base +
-            _PyFrame_NumSlotsForCodeObject(_PyFrame_GetCode(previous));
-        assert(base + nargs <= previous_end);
-        Py_ssize_t known = previous_end - base;
-        int shared = known < nslots ? (int)known : nslots;
-        assert(shared >= nargs);
-        for (int i = nargs; i < shared; i++) {
-            assert(PyValue_IsNull(base[i]));
-        }
+    PyValue *base = child->base;
+    for (int i = 0; i < n; i++) {
+        base[i] = args[i];
+        args[i] = PyValue_NULL;
     }
-    else {
-        assert(base == _PyDataStack_Slots(tstate->datastack_top));
-    }
-#endif
-    PyValue *saved_top = _PyDataStack_Slots(tstate->datastack_top);
-    PyValue *end = base + nslots;
-    PyValue *physical_end = end > saved_top ? end : saved_top;
-    _PyInterpreterFrame *frame =
-        (_PyInterpreterFrame *)(tstate->datastack_limit - FRAME_SPECIALS_SIZE);
-    _PyStackChunk_EnsureFrameStorage(tstate->datastack_chunk,
-        (PyObject **)frame, _PyDataStack_Address(physical_end));
-    frame->saved_top = saved_top;
-    tstate->datastack_limit = (PyObject **)frame;
-    if (end > saved_top) {
-        tstate->datastack_top = _PyDataStack_Address(end);
-    }
-    assert(tstate->datastack_top < tstate->datastack_limit);
-    return frame;
-}
-
-/* Pushes a frame for the function func whose slots start at base, among the
- * slots of previous, the current frame, where its nargs arguments already
- * are: the frame overlaps the window of the call. Argument owners transfer
- * to child homes in the same cells; the parent no longer owns those aliases.
- * The remaining caller homes from base + nargs to its slot end are NULL,
- * and the callee leaves the overlap NULL on retirement. Must be guarded by
- * _PyThreadState_HasStackSpace(), for co_framesize. Consumes func. */
-static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
-_PyFrame_PushOverlapping(PyThreadState *tstate, PyValue func,
-                         PyValue *base, int nargs,
-                         _PyInterpreterFrame *previous)
-{
-    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
-    PyCodeObject *code = (PyCodeObject *)func_obj->func_code;
-    assert(previous->owner == FRAME_OWNED_BY_THREAD);
-    _PyInterpreterFrame *frame = _PyFrame_ReserveForCall(
-        tstate, code, base, nargs, previous);
-    _PyFrame_Initialize(tstate, frame, func, NULL, code, base, previous);
-    return frame;
 }
 
 static inline void

@@ -1774,42 +1774,6 @@ done:
     return failed;
 }
 
-/* Exact calls from heap-owned frames cannot overlap thread-stack homes.
- * Move their arguments after initialization, preserving any constant homes
- * beyond the actual arguments. No owner is retired and no callback can run. */
-static Py_NO_INLINE void
-call_transfer_exact_args(PyValue *base, PyValue *window, int nargs,
-                         _PyCallSelfRole self_role)
-{
-    int has_self = self_role == CALL_SELF_SUPPLIED;
-    if (has_self) {
-        base[0] = window[1];
-    }
-    for (int i = 0; i < nargs; i++) {
-        base[has_self + i] = window[2 + i];
-    }
-    for (int i = has_self ? 1 : 2; i < 2 + nargs; i++) {
-        window[i] = PyValue_NULL;
-    }
-}
-
-/* An exact call from a heap-owned frame reserves its child at the arena top
- * and moves the arguments there, out of the handler's hot path. */
-static Py_NO_INLINE _PyInterpreterFrame *
-call_push_moved_exact_args(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                           PyValue callable, PyCodeObject *code,
-                           PyValue *window, int nargs, int has_self)
-{
-    assert(frame->owner != FRAME_OWNED_BY_THREAD);
-    PyValue *base = _PyDataStack_Slots(tstate->datastack_top);
-    _PyInterpreterFrame *pushed = _PyFrame_ReserveForCall(
-        tstate, code, base, nargs + has_self, frame);
-    _PyFrame_Initialize(tstate, pushed, callable, NULL, code, base, frame);
-    call_transfer_exact_args(base, window, nargs,
-                             has_self ? CALL_SELF_SUPPLIED : CALL_SELF_ABSENT);
-    return pushed;
-}
-
 /* The handlers' calls (call_transaction_run_*), after
  * _PyEvalFramePushAndInit and its kin, which they use. */
 static _PyCallResult call_transaction_run_vector(
@@ -3216,7 +3180,6 @@ retire_thread_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
     _PyStackChunk *chunk = tstate->datastack_chunk;
     PyObject **top = tstate->datastack_top;
     PyObject **limit = tstate->datastack_limit;
-    PyValue *saved_top = frame->saved_top;
 #endif
     _PyFrame_ClearExceptCode(frame, extent);
     Py_CLEAR(frame->f_executable);
@@ -3224,7 +3187,6 @@ retire_thread_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
     assert(tstate->datastack_chunk == chunk);
     assert(tstate->datastack_top == top);
     assert(tstate->datastack_limit == limit);
-    assert(frame->saved_top == saved_top);
 #endif
     _PyThreadState_PopFrame(tstate, frame);
     return result;
@@ -3696,7 +3658,7 @@ _PyEval_CreateInitFrame(PyThreadState *tstate, _PyInterpreterFrame *caller,
     PyValue function = window[0];
     window[0] = PyValue_NULL;
     _PyInterpreterFrame *child = _PyFrame_PushUnchecked(tstate, function, shim);
-    call_transfer_exact_args(child->base, window, nargs, CALL_SELF_SUPPLIED);
+    _PyFrame_MoveArgs(child, window + 1, nargs + 1);
     caller->return_slot = (uint16_t)destination;
     caller->return_pc = next;
     tstate->py_recursion_remaining--;
@@ -3707,8 +3669,8 @@ _PyEval_CreateInitFrame(PyThreadState *tstate, _PyInterpreterFrame *caller,
  * preparing kwargs; no window owner has been detached yet. Returns 0 with
  * *kwdict set, 1 to fall back and -1 on error, refreshed in both cases. */
 static Py_NO_INLINE int
-call_overlap_prepare_kwargs(_PyCallTransaction *call, PyFunctionObject *func,
-                            PyCodeObject *code, int nargs, PyObject **kwdict)
+call_exact_prepare_kwargs(_PyCallTransaction *call, PyFunctionObject *func,
+                          PyCodeObject *code, int nargs, PyObject **kwdict)
 {
     int status = 1;
     Py_INCREF(code);
@@ -3747,14 +3709,13 @@ cleanup:
 
 /* The caller owns its whole window until the final non-reentrant commit. */
 static int
-call_transaction_overlap_python(_PyCallTransaction *call,
-                                _PyInterpreterFrame **out)
+call_transaction_push_exact_python(_PyCallTransaction *call,
+                                   _PyInterpreterFrame **out)
 {
 #ifdef Py_GIL_DISABLED
     return 1;
 #else
-    if (call->kind != CALL_TRANSACTION_VECTOR || call->instrumented ||
-        call->frame->owner != FRAME_OWNED_BY_THREAD) {
+    if (call->kind != CALL_TRANSACTION_VECTOR || call->instrumented) {
         return 1;
     }
     PyValue *homes = _PyFrame_Slots(call->frame) + call->base;
@@ -3780,8 +3741,8 @@ call_transaction_overlap_python(_PyCallTransaction *call,
      * providers"). */
     PyObject *kwdict = NULL;
     if (flags & CO_VARKEYWORDS) {
-        int status = call_overlap_prepare_kwargs(call, func, code, nargs,
-                                                 &kwdict);
+        int status = call_exact_prepare_kwargs(call, func, code, nargs,
+                                               &kwdict);
         if (status != 0) {
             return status;
         }
@@ -3793,8 +3754,9 @@ call_transaction_overlap_python(_PyCallTransaction *call,
     /* No callback, release or failure is allowed until child is current. */
     PyValue function = homes[0];
     homes[0] = PyValue_NULL;
-    _PyInterpreterFrame *child = _PyFrame_PushOverlapping(
-        call->tstate, function, homes + offset, nargs, call->frame);
+    _PyInterpreterFrame *child = _PyFrame_PushUnchecked(
+        call->tstate, function, call->frame);
+    _PyFrame_MoveArgs(child, homes + offset, nargs);
     for (int i = nargs; i < code->co_argcount; i++) {
         child->base[i] = PyValue_XDUP(
             _PyTuple_ITEMS(defaults)[i - (code->co_argcount - ndefaults)]);
@@ -3960,9 +3922,9 @@ static int
 call_transaction_push_python(_PyCallTransaction *call,
                              _PyInterpreterFrame **out)
 {
-    int overlap = call_transaction_overlap_python(call, out);
-    if (overlap <= 0) {
-        return overlap;
+    int exact = call_transaction_push_exact_python(call, out);
+    if (exact <= 0) {
+        return exact;
     }
     return call_transaction_push_python_fallback(call, out);
 }
@@ -4062,8 +4024,7 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return (_PyCallResult){1, NULL};
 #else
     if (kind == CALL_TRANSACTION_KEYWORDS &&
-        (binding->binding_flags & _Py_CALL_BIND_KEYWORDS) &&
-        frame->owner == FRAME_OWNED_BY_THREAD)
+        (binding->binding_flags & _Py_CALL_BIND_KEYWORDS))
     {
         int kwcount = (binding->binding_flags & _Py_CALL_BIND_KEYWORD_COUNT_MASK)
             >> _Py_CALL_BIND_KEYWORD_COUNT_SHIFT;
@@ -4129,22 +4090,19 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
             }
         }
 
-        /* All guards precede this transfer. Detach the keyword suffix and
-         * names before initialization can fill overlapping constant slots. */
-        PyValue keywords[_Py_CALL_BIND_KEYWORD_CAPACITY];
-        for (int i = 0; i < kwcount; i++) {
-            keywords[i] = homes[offset + positional + i];
-            homes[offset + positional + i] = PyValue_NULL;
-        }
+        /* All guards precede this transfer. The child is complete before it
+         * becomes current: nothing fails, calls back or releases. */
         PyValue names_owner = homes[argument_count + 2];
         homes[argument_count + 2] = PyValue_NULL;
         PyValue function = homes[0];
         homes[0] = PyValue_NULL;
-        /* No failure, callback or release until the child is complete. */
-        _PyInterpreterFrame *child = _PyFrame_PushOverlapping(
-            tstate, function, homes + offset, positional, frame);
+        _PyInterpreterFrame *child = _PyFrame_PushUnchecked(
+            tstate, function, frame);
+        _PyFrame_MoveArgs(child, homes + offset, positional);
         for (int i = 0; i < kwcount; i++) {
-            child->base[binding->binding.keyword_dest[i]] = keywords[i];
+            PyValue *home = &homes[offset + positional + i];
+            child->base[binding->binding.keyword_dest[i]] = *home;
+            *home = PyValue_NULL;
         }
         for (int i = positional; i < code->co_argcount; i++) {
             if (PyValue_IsNull(child->base[i])) {
@@ -4162,8 +4120,7 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
         return (_PyCallResult){0, child};
     }
     if (kind == CALL_TRANSACTION_VECTOR &&
-        (binding->binding_flags & _Py_CALL_BIND_DIRECT) &&
-        frame->owner == FRAME_OWNED_BY_THREAD)
+        (binding->binding_flags & _Py_CALL_BIND_DIRECT))
     {
         PyValue *homes = frame->base + base;
         PyFunctionObject *func = (PyFunctionObject *)
@@ -4199,8 +4156,9 @@ call_bind_known_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
             }
             PyValue function = homes[0];
             homes[0] = PyValue_NULL;
-            _PyInterpreterFrame *child = _PyFrame_PushOverlapping(
-                tstate, function, homes + offset, supplied, frame);
+            _PyInterpreterFrame *child = _PyFrame_PushUnchecked(
+                tstate, function, frame);
+            _PyFrame_MoveArgs(child, homes + offset, supplied);
             if (supplied < code->co_argcount) {
                 PyValue *defaults = _PyTuple_ITEMS(func->func_defaults);
                 for (int i = supplied; i < code->co_argcount; i++) {

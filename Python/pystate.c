@@ -3157,11 +3157,10 @@ push_chunk(PyThreadState *tstate, int nslots)
         }
     }
     // The root chunk's value stack starts empty
-    PyValue *saved_top = new->previous == NULL ?
-        _PyDataStack_Slots(&new->data[0])
-        : _PyDataStack_Slots(tstate->datastack_top);
+    new->value_top = new->previous == NULL
+        ? &new->data[0] : tstate->datastack_top;
     if (tstate->datastack_chunk) {
-        // What popping the frame restores, with saved_top
+        // What popping the frame restores, with value_top
         tstate->datastack_chunk->top = tstate->datastack_limit -
                                        &tstate->datastack_chunk->data[0];
     }
@@ -3171,7 +3170,6 @@ push_chunk(PyThreadState *tstate, int nslots)
     PyObject **value_end = &new->data[nslots];
     _PyStackChunk_EnsureFrameStorage(new, (PyObject **)frame, value_end);
     frame->base = _PyDataStack_Slots(&new->data[0]);
-    frame->saved_top = saved_top;
     tstate->datastack_limit = (PyObject **)frame;
     tstate->datastack_top = _PyDataStack_Address(frame->base + nslots);
     return frame;
@@ -3204,7 +3202,7 @@ _PyThreadState_PopChunk(PyThreadState *tstate, _PyInterpreterFrame *frame)
         _PyObject_VirtualFree(cached, cached->size);
     }
     tstate->datastack_cached_chunk = chunk;
-    tstate->datastack_top = _PyDataStack_Address(frame->saved_top);
+    tstate->datastack_top = chunk->value_top;
     assert(tstate->datastack_top < tstate->datastack_limit);
 }
 

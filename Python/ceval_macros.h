@@ -769,8 +769,7 @@ shape_read_offset(char *entries, _PyFbAttr *entry, PyObject *owner)
 {
 #ifdef Py_SHAPES
     _PyFbBlock *block = (_PyFbBlock *)entries - 1;
-    assert(entry->h.poly != 0 && entry->h.poly <= block->npoly);
-    const _PyFbPoly *poly = &block->poly[entry->h.poly - 1];
+    const _PyFbPoly *poly = _PyFb_PolyOf(block, &entry->h);
     uint32_t version = Py_TYPE(owner)->tp_version_tag;
     if (version == 0) {
         return -1;

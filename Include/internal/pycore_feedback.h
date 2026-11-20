@@ -92,7 +92,8 @@ typedef struct {
         uint32_t arg;               // the oparg, for IR formats that keep it here
         uint16_t history;           // BRANCH entries of the IR: see FB_BRANCH()
     };
-    uint32_t poly;                  // 0, or 1 + index into the block's poly tables
+    uint32_t poly;                  // 0, or the byte offset of the site's poly table plus
+                                    // sizeof(_PyFbPoly): see _PyFb_PolyOf()
 } _PyFbHeader;
 
 // TO_BOOL, UNPACK_SEQUENCE, FOR_ITER, GET_ITER, SEND
@@ -217,6 +218,16 @@ typedef struct _PyFbBlock {
     uint32_t npoly;         // poly tables in use; capacity is npoly rounded up to a power of 2
     _PyFbPoly *poly;
 } _PyFbBlock;
+
+/* The poly table of a site whose header has H->poly set.  The header holds the
+ * table's byte offset plus one table size, so that zero means none and the
+ * evaluator's read is one add with the subtraction folded into the load. */
+static inline _PyFbPoly *
+_PyFb_PolyOf(_PyFbBlock *block, const _PyFbHeader *h)
+{
+    assert(h->poly >= sizeof(_PyFbPoly));
+    return (_PyFbPoly *)((char *)block->poly + h->poly - sizeof(_PyFbPoly));
+}
 
 /* The entry type and kind of each family (_PyFb_LOAD_ATTR and so on) are
  * in the instruction contract: Include/internal/pycore_ir_metadata.h, from

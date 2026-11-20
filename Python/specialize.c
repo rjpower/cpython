@@ -504,7 +504,7 @@ fb_save_mono(_PyInstr *instr, _PyFbHeader *h, int opcode, bool may_allocate)
     memset(&block->poly[n], 0, sizeof(_PyFbPoly));
     fb_put_row(&block->poly[n], 0, fb_row_of(h, opcode), opcode);
     block->npoly = n + 1;
-    h->poly = n + 1;
+    h->poly = (n + 1) * sizeof(_PyFbPoly);
 }
 
 /* Called by each specialiser of a site that keeps poly rows, before it
@@ -610,7 +610,7 @@ fb_record(_PyInstr *instr, _PyFbHeader *h, int opcode)
     if (h->state == FB_MEGA) {
         return;
     }
-    _PyFbPoly *poly = &fb_block(instr)->poly[h->poly - 1];
+    _PyFbPoly *poly = _PyFb_PolyOf(fb_block(instr), h);
     fb_row row = fb_row_of(h, opcode);
     int i = 0;
     while (i < FB_POLY_SIZE && poly->handler[i] != 0 &&
@@ -635,7 +635,7 @@ fb_shape_read_set(_PyInstr *instr, _PyFbHeader *h)
     if (h->state != FB_POLY || h->poly == 0) {
         return 0;
     }
-    _PyFbPoly *poly = &fb_block(instr)->poly[h->poly - 1];
+    _PyFbPoly *poly = _PyFb_PolyOf(fb_block(instr), h);
     int count = 0;
     for (; count < FB_POLY_SIZE && poly->handler[count] != 0; count++) {
         if (poly->handler[count] != LOAD_ATTR_SHAPE ||
@@ -995,7 +995,7 @@ fb_saw_other_shape(_PyInstr *instr, unsigned int tp_version, uint8_t shape)
     if (h->poly == 0) {
         return false;
     }
-    _PyFbPoly *poly = &fb_block(instr)->poly[h->poly - 1];
+    _PyFbPoly *poly = _PyFb_PolyOf(fb_block(instr), h);
     for (int i = 0; i < FB_POLY_SIZE && poly->handler[i] != 0; i++) {
         int opcode = poly->handler[i];
         if ((opcode == LOAD_ATTR_SHAPE || opcode == STORE_ATTR_SHAPE ||

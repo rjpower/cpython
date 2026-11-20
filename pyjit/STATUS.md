@@ -83,13 +83,19 @@ What these rounds established:
   2026-11-20): H5's remaining gap to upstream sits mostly outside the
   evaluator. Twelve library-heavy cases (xml_etree, json, pickle, deepcopy,
   logging_format and logging_simple) hold more log-excess than the whole
-  geomean gap; generators and iteration hold about half as much. **In
-  progress:**
-  - phase 1: two analysis units (the evaluator and the library-heavy cases
-    against upstream) and three implementation units (H6 layout, constant
-    slots with no fixed cost, and deleting the call transaction);
-  - phase 2: implementation briefed from the analyses;
-  - full suites and timed all-29 campaigns at two integration points.
+  geomean gap; generators and iteration hold about half as much.
+  **Integrated** as `pyjit/gap82` at `5194e957c5d`: two analyses and ten
+  implementation units. H6 (layout) was parked.
+  - Full suites fail exactly H5's counts.
+  - Timed all-29 geomeans: 0.992 of upstream's time (H5: 1.065), 0.928 of
+    H5's, 0.884 of golden73's and 0.899 of checkpoint78's.
+  - Ten cases beat upstream. Generators (1.34), deepcopy (1.20–1.22),
+    logging_format, logging_simple and three xml cases (1.10–1.14) remain
+    furthest above it.
+  - Instructions are 0.912× H5's, and `-c pass` startup runs 63.6M
+    instructions against H5's 530M.
+  - Code placement now limits small hot sets: logging_silent is 1.15× H5
+    and 1.48× checkpoint78.
 - **A complete value-slot table**, kept in step with every object-slot write,
   was implemented and reverted: it falls out of step in four ways, two of
   them crashes, and saved no instructions. A value field is now an optional

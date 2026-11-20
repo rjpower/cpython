@@ -16,8 +16,10 @@ H5's remaining gap to upstream. The
 [handlers81](design/proposals/handlers81.md) rollout and
 [operand-encoded calls](design/proposals/operand-calls80.md) landed as H0–H5
 on `pyjit/handlers81` (`d6d1ed5ac93`,
-[record](issues/register-semantics59/handlers81.md)). Gap82 fans analysis and
-implementation out to agents from there. The
+[record](issues/register-semantics59/handlers81.md)). Gap82 fanned analysis
+and implementation out to agents from there. It is integrated as
+`pyjit/gap82` at `5194e957c5d`, with a timed all-29 geomean of 0.992 of
+upstream's time ([results](issues/register-semantics59/gap82.md#results)). The
 [active plan](issues/interpreter-performance56/plan.md#current-wave-gap82-the-gap-to-upstream-after-h5)
 lists the phases and [handoff](HANDOFF.md) the worktrees.
 

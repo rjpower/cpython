@@ -23,6 +23,20 @@ integration branch `pyjit/gap82`; evidence `E59/gap82/`.
 
 Gates are correctness. H6 alone must pay for itself in time.
 
+**State (2026-11-20): both integration points done.** `pyjit/gap82` at
+`5194e957c5d` holds every unit except H6, which was parked with no commits.
+Its full suites fail exactly H5's counts. Timed all-29 geomeans:
+- 0.992 against upstream (H5: 1.065);
+- 0.928 against H5;
+- 0.884 against golden73;
+- 0.899 against checkpoint78.
+
+Instructions are 0.912× H5, and startup is 63.6M instructions against
+H5's 530M. Code placement now limits the call-heavy cases with small hot
+sets: logging_silent is 1.15× H5, and generators lost time while running
+the same instructions. The [record's results](../register-semantics59/gap82.md#results)
+list what is still open.
+
 ## Previous rollout: handlers81, then calls80 (landed)
 
 Approved 2026-11-19. The user asked to land

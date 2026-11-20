@@ -825,10 +825,11 @@ make_exec(PyCodeObject *co)
         ? sizeof(_PyFbBlock) + ((size_t)_PyCode_FbUnits(co) << IR_FB_UNIT_SHIFT)
         : 0;
     // The image of the constant slots follows the feedback, if every
-    // constant is immortal or inline
+    // constant is immortal or inline and there are at most
+    // IR_CONST_IMAGE_MAX of them
     int nconst = co->co_nconstslots;
     const uint32_t *table = _PyCode_CONSTSLOTS(co);
-    int image = nconst > 0;
+    int image = 0 < nconst && nconst <= IR_CONST_IMAGE_MAX;
     for (int j = 0; j < nconst; j++) {
         image &= const_needs_no_count(
             PyTuple_GET_VALUE(co->co_consts, table[2 * j + 1]));

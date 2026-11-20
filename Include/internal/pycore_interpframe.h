@@ -409,7 +409,8 @@ extern void _PyFrame_FillConstSlots(_PyInterpreterFrame *frame,
                                     PyCodeObject *code);
 
 /* Copy the image of the constant slots (CO_FAST_CONST) of an exec to dst, the
- * first of them in a new frame: n of them, 1 <= n <= 8, two slots at a time.
+ * first of them in a new frame: n of them, 1 <= n <= IR_CONST_IMAGE_MAX, two
+ * slots at a time.
  * The image holds inline scalars and immortals, which own no count, and has
  * an even number of entries: for an odd n the last pair also writes the
  * slot after the last constant, the discard slot, which is NULL in a new
@@ -420,7 +421,8 @@ extern void _PyFrame_FillConstSlots(_PyInterpreterFrame *frame,
 static inline void
 _PyFrame_CopyConstSlots(PyValue *dst, const PyValue *src, int n)
 {
-    assert(1 <= n && n <= 8);
+    static_assert(IR_CONST_IMAGE_MAX == 8, "the copy has four pairs");
+    assert(1 <= n && n <= IR_CONST_IMAGE_MAX);
     memcpy(dst, src, 2 * sizeof(PyValue));
     if (n > 2) {
         memcpy(dst + 2, src + 2, 2 * sizeof(PyValue));

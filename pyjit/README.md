@@ -16,7 +16,8 @@ and [handoff](HANDOFF.md) explain development and runtime coordination.
 [operand-encoded calls](design/proposals/operand-calls80.md), on
 `pyjit/handlers81` from checkpoint78. The
 [active plan](issues/interpreter-performance56/plan.md#current-rollout-handlers81-then-calls80)
-lists the steps and [handoff](HANDOFF.md) the worktrees.
+lists the steps and [handoff](HANDOFF.md) the worktrees. H0–H5 have landed
+([record](issues/register-semantics59/handlers81.md), which lists the follow-ups).
 
 The selected runtime is golden73 at `44f066f5fd5`, branch `pyjit/round73-golden`.
 Both independently implemented

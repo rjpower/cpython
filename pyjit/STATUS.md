@@ -71,9 +71,12 @@ What these rounds established:
   7.9–10.4% fewer instructions than checkpoint78; against upstream,
   richards runs 0.4% fewer, raytrace 4.5% more, and deltablue, coroutines
   and deepcopy_memo 16–19% more. Operand calls and constant slots cost
-  0.5–6.5% more instructions than step 1: after H4 an argument load costs
+  0.5–6.4% more instructions than step 1: after H4 an argument load costs
   about what its operand fill costs. GCC's register-allocator limit bounds
-  the evaluator (41.9M of 50M). Timed all-29 campaigns are running. The
+  the evaluator (41.9M of 50M). Timed all-29 geomeans: 0.958 of
+  checkpoint78's time, 0.944 of golden73's and 1.065 of upstream's
+  (checkpoint78: 1.112). logging_silent is 31% slower than checkpoint78,
+  from H4's front-end stalls ([record](issues/register-semantics59/handlers81.md)). The
   [active plan](issues/interpreter-performance56/plan.md#current-rollout-handlers81-then-calls80)
   tracks the steps.
 - **A complete value-slot table**, kept in step with every object-slot write,

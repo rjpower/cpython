@@ -114,12 +114,16 @@
         } \
     } while (0)
 
-/* Every handler advances next_instr at its start.  Left alone, the
- * optimiser (partial redundancy elimination) computes next_instr + 1 in the
- * dispatch, so that the evaluator keeps two values for the word where it
- * needs one, and has no register for the sixth value live across a dispatch.
- * The empty statement makes the handler's advance a change to a value that
- * the optimiser cannot see through, so that the advance stays in the handler. */
+/* Every IR word is one word, so every handler's entry computes the same
+ * next_instr + 1.  Left alone, RTL partial redundancy elimination hoists that
+ * addition into the dispatch blocks, where it is a sixth value live across
+ * the dispatch (frame, tstate, next_instr, ir_word and next_instr + 1), more
+ * than the callee-saved registers hold.  The empty asm changes next_instr in
+ * a way that the optimiser cannot see through, so the advance stays in the
+ * handler.  The structural alternative, where DISPATCH advances and a handler
+ * uses next_instr - 1 (8957f9fc4dd, reverted by 2052561d888), clears the
+ * hoist too but costs one more instruction per dispatched word: it measured
+ * about 1% more instructions on every kernel than this form (29c4c49c650). */
 #define IR_HOLD_NEXT() __asm__("" : "+r"(next_instr))
 #define DISPATCH_GOTO() goto *opcode_targets[opcode]
 /* An error leaves the handler for the shared label process_error, which

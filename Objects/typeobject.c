@@ -1365,7 +1365,9 @@ type_modified_recursive(PyTypeObject *type)
         PyHeapTypeObject *heap = (PyHeapTypeObject *)type;
         FT_ATOMIC_STORE_PTR_RELAXED(heap->_spec_cache.getitem, NULL);
         FT_ATOMIC_STORE_PTR_RELAXED(heap->_spec_cache.init, NULL);
+        FT_ATOMIC_STORE_PTR_RELAXED(heap->_spec_cache.iter, NULL);
         FT_ATOMIC_STORE_UINT32_RELAXED(heap->_spec_cache.getitem_version, 0);
+        FT_ATOMIC_STORE_UINT32_RELAXED(heap->_spec_cache.iter_version, 0);
     }
     struct type_cache *retired = _PyTypeCache_Detach(type);
     // Watchers may run with an exception pending and must keep it; their
@@ -1491,6 +1493,8 @@ type_mro_modified(PyTypeObject *type, PyObject *bases)
         // comment on struct _specialization_cache):
         FT_ATOMIC_STORE_PTR_RELAXED(
             ((PyHeapTypeObject *)type)->_spec_cache.getitem, NULL);
+        FT_ATOMIC_STORE_PTR_RELAXED(
+            ((PyHeapTypeObject *)type)->_spec_cache.iter, NULL);
     }
 }
 
@@ -7129,6 +7133,35 @@ _PyType_CacheGetItemForSpecialization(PyHeapTypeObject *ht, PyObject *descriptor
     if (can_cache) {
         FT_ATOMIC_STORE_PTR_RELEASE(ht->_spec_cache.getitem, descriptor);
         FT_ATOMIC_STORE_UINT32_RELAXED(ht->_spec_cache.getitem_version, version);
+    }
+    END_TYPE_LOCK();
+    return can_cache;
+}
+
+int
+_PyType_CacheIterForSpecialization(PyHeapTypeObject *ht, PyObject *descriptor,
+                                   uint32_t tp_version)
+{
+    (void)_PyType_GetVersionForCurrentState(_PyInterpreterState_GET(),
+                                          (PyTypeObject *)ht);
+    if (!descriptor || !tp_version) {
+        return 0;
+    }
+    int can_cache;
+    BEGIN_TYPE_LOCK();
+    can_cache = _PyType_MatchesVersion(_PyInterpreterState_GET(),
+                                        (PyTypeObject *)ht, tp_version);
+    // This pointer is invalidated by PyType_Modified (see the comment on
+    // struct _specialization_cache):
+    PyFunctionObject *func = (PyFunctionObject *)descriptor;
+    uint32_t version = _PyFunction_GetVersionForCurrentState(func);
+    can_cache = can_cache && _PyFunction_IsVersionValid(version);
+#ifdef Py_GIL_DISABLED
+    can_cache = can_cache && _PyObject_HasDeferredRefcount(descriptor);
+#endif
+    if (can_cache) {
+        FT_ATOMIC_STORE_PTR_RELEASE(ht->_spec_cache.iter, descriptor);
+        FT_ATOMIC_STORE_UINT32_RELAXED(ht->_spec_cache.iter_version, version);
     }
     END_TYPE_LOCK();
     return can_cache;

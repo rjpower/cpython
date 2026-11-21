@@ -1264,8 +1264,11 @@ make_gen(PyTypeObject *type, PyFunctionObject *func, PyCodeObject *code)
     return (PyObject *)gen;
 }
 
+/* caller is the frame that the new object is created for: the one that is
+ * running, or the one below the frame that RETURN_GENERATOR runs in. */
 PyObject *
-_Py_MakeCoro(PyFunctionObject *func, PyCodeObject *code)
+_Py_MakeCoro(PyFunctionObject *func, PyCodeObject *code,
+             _PyInterpreterFrame *caller)
 {
     /* The executing frame pins code independently of mutable func_code. */
     int coro_flags = code->co_flags &
@@ -1298,10 +1301,7 @@ _Py_MakeCoro(PyFunctionObject *func, PyCodeObject *code)
     if (origin_depth == 0) {
         ((PyCoroObject *)coro)->cr_origin_or_finalizer = NULL;
     } else {
-        _PyInterpreterFrame *frame = tstate->current_frame;
-        assert(frame);
-        assert(_PyFrame_IsIncomplete(frame));
-        frame = _PyFrame_GetFirstComplete(frame->previous);
+        _PyInterpreterFrame *frame = _PyFrame_GetFirstComplete(caller);
         PyObject *cr_origin = _PyCoro_ComputeOrigin(origin_depth, frame);
         ((PyCoroObject *)coro)->cr_origin_or_finalizer = cr_origin;
         if (!cr_origin) {
@@ -1310,6 +1310,48 @@ _Py_MakeCoro(PyFunctionObject *func, PyCodeObject *code)
         }
     }
     return coro;
+}
+
+/* The generator, coroutine or async generator that a call of the function
+ * creates, for code that begins at its RETURN_GENERATOR (the executing copy's
+ * generator_direct): no frame runs.  The frame of the new object is complete
+ * as RETURN_GENERATOR leaves it, except for the arguments, which the caller
+ * moves into gen->gi_iframe.base before anything that can fail, run code or
+ * collect.  Consumes function, which the frame owns; on failure it is
+ * closed.  caller is the frame that makes the call. */
+PyGenObject *
+_PyGen_NewCall(PyThreadState *tstate, PyValue function, PyCodeObject *code,
+               _PyInterpreterFrame *caller)
+{
+    PyFunctionObject *func =
+        (PyFunctionObject *)PyValue_AsKnownObjectBorrow(function);
+    PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func, code, caller);
+    if (gen == NULL) {
+        PyValue_CLOSE(function);
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = &gen->gi_iframe;
+    memset(frame->owned_slots, 0,
+           (size_t)_PyFrame_NumSlotsForCodeObject(code) * sizeof(PyValue));
+    _PyFrame_Initialize(tstate, frame, function, NULL, code,
+                        frame->owned_slots, NULL);
+    frame->owner = FRAME_OWNED_BY_GENERATOR;
+    // The first send resumes after RETURN_GENERATOR and its value goes to
+    // the discard slot
+    frame->instr_ptr++;
+    frame->return_slot = (uint16_t)_PyFrame_DiscardSlotForCodeObject(code);
+    gen->gi_frame_state = FRAME_CREATED;
+    return gen;
+}
+
+/* Abandon a generator from _PyGen_NewCall whose arguments could not be bound:
+ * it never ran and is not a coroutine that was never awaited. */
+void
+_PyGen_DiscardCall(PyGenObject *gen)
+{
+    gen->gi_frame_state = FRAME_CLEARED;
+    gen_clear_frame(gen);
+    Py_DECREF(gen);
 }
 
 static PyObject *

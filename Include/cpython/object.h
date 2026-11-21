@@ -345,6 +345,12 @@ struct _specialization_cache {
     PyObject *getitem;
     uint32_t getitem_version;
     PyObject *init;
+    // The same for __iter__ (GET_ITER_PY_GENERATOR): if iter is non-NULL it
+    // is the Python function that PyType_Lookup(cls, "__iter__") would
+    // return, a generator function of one argument, and
+    // iter->func_version == iter_version says it is unchanged.
+    PyObject *iter;
+    uint32_t iter_version;
 };
 
 /* The *real* layout of a type object when allocated on the heap */

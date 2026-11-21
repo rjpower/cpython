@@ -7759,7 +7759,7 @@ def created_copy_contract(inst: Instruction, fmt: IRFormat) -> bool:
         return False
     expected = """{
         PyFunctionObject *func = _PyFrame_GetFunction(frame);
-        PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func, _PyFrame_GetCode(frame));
+        PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func, _PyFrame_GetCode(frame), frame->previous);
         ERROR_IF(gen == NULL);
         SAVE_STACK();
         _PyInterpreterFrame *gen_frame = &gen->gi_iframe;

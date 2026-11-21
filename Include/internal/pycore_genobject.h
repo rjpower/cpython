@@ -30,6 +30,16 @@ _PyGen_FinalizerIsNoop(PyObject *op)
         FRAME_STATE_FINISHED(((PyGenObject *)op)->gi_frame_state);
 }
 
+/* The generator that a call creates, for code whose executing copy is
+ * generator_direct: its frame is ready but for the arguments, which the
+ * caller moves into gen->gi_iframe.base at once.  Consumes function; NULL
+ * with an exception set on failure.  _PyGen_DiscardCall() abandons it when
+ * the arguments cannot be bound. */
+extern PyGenObject *_PyGen_NewCall(
+    PyThreadState *tstate, PyValue function, PyCodeObject *code,
+    _PyInterpreterFrame *caller);
+extern void _PyGen_DiscardCall(PyGenObject *gen);
+
 PyAPI_FUNC(PyObject *)_PyGen_yf(PyGenObject *);
 extern int _PyGen_ClearFrame(PyGenObject *self);
 /* Consume a last owner only when cleared-container destruction cannot reenter.

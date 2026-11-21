@@ -1081,9 +1081,12 @@ lookdict_index(PyDictKeysObject *k, Py_hash_t hash, Py_ssize_t index)
     Py_UNREACHABLE();
 }
 
+/* key is a pointer to the key as its comparison reads it: a PyValueBorrow for
+   the generic ones, the PyObject * of an exact str for compare_unicode_unicode,
+   which then needs no decode. */
 static inline Py_ALWAYS_INLINE Py_ssize_t
-do_lookup(PyDictObject *mp, PyDictKeysObject *dk, PyValueBorrow key, Py_hash_t hash,
-          int (*check_lookup)(PyDictObject *, PyDictKeysObject *, void *, Py_ssize_t ix, PyValueBorrow key, Py_hash_t))
+do_lookup(PyDictObject *mp, PyDictKeysObject *dk, const void *key, Py_hash_t hash,
+          int (*check_lookup)(PyDictObject *, PyDictKeysObject *, void *, Py_ssize_t ix, const void *key, Py_hash_t))
 {
     void *ep0 = _DK_ENTRIES(dk);
     size_t mask = DK_MASK(dk);
@@ -1127,8 +1130,9 @@ do_lookup(PyDictObject *mp, PyDictKeysObject *dk, PyValueBorrow key, Py_hash_t h
 
 static inline int
 compare_unicode_generic(PyDictObject *mp, PyDictKeysObject *dk,
-                        void *ep0, Py_ssize_t ix, PyValueBorrow key, Py_hash_t hash)
+                        void *ep0, Py_ssize_t ix, const void *key_ptr, Py_hash_t hash)
 {
+    PyValueBorrow key = *(const PyValueBorrow *)key_ptr;
     PyDictUnicodeEntry *ep = &((PyDictUnicodeEntry *)ep0)[ix];
     assert(ep->me_key != NULL);
     assert(PyUnicode_CheckExact(ep->me_key));
@@ -1157,15 +1161,15 @@ compare_unicode_generic(PyDictObject *mp, PyDictKeysObject *dk,
 static Py_ssize_t
 unicodekeys_lookup_generic(PyDictObject *mp, PyDictKeysObject* dk, PyValueBorrow key, Py_hash_t hash)
 {
-    return do_lookup(mp, dk, key, hash, compare_unicode_generic);
+    return do_lookup(mp, dk, &key, hash, compare_unicode_generic);
 }
 
 static inline int
 compare_unicode_unicode(PyDictObject *mp, PyDictKeysObject *dk,
-                        void *ep0, Py_ssize_t ix, PyValueBorrow key, Py_hash_t hash)
+                        void *ep0, Py_ssize_t ix, const void *key_ptr, Py_hash_t hash)
 {
     PyDictUnicodeEntry *ep = &((PyDictUnicodeEntry *)ep0)[ix];
-    PyObject *key_object = PyValue_AsKnownObjectBorrow(key);
+    PyObject *key_object = (PyObject *)key_ptr;
     PyObject *ep_key = FT_ATOMIC_LOAD_PTR_CONSUME(ep->me_key);
     assert(ep_key != NULL);
     assert(PyUnicode_CheckExact(ep_key));
@@ -1179,13 +1183,15 @@ compare_unicode_unicode(PyDictObject *mp, PyDictKeysObject *dk,
 static Py_ssize_t _Py_HOT_FUNCTION
 unicodekeys_lookup_unicode(PyDictKeysObject* dk, PyObject *key, Py_hash_t hash)
 {
-    return do_lookup(NULL, dk, PyValue_FromObjectBorrow(key), hash, compare_unicode_unicode);
+    assert(PyUnicode_CheckExact(key));
+    return do_lookup(NULL, dk, key, hash, compare_unicode_unicode);
 }
 
 static inline int
 compare_generic(PyDictObject *mp, PyDictKeysObject *dk,
-                void *ep0, Py_ssize_t ix, PyValueBorrow key, Py_hash_t hash)
+                void *ep0, Py_ssize_t ix, const void *key_ptr, Py_hash_t hash)
 {
+    PyValueBorrow key = *(const PyValueBorrow *)key_ptr;
     PyDictKeyEntry *ep = &((PyDictKeyEntry *)ep0)[ix];
     assert(!PyValue_IsNull(ep->me_key));
     if (PyValue_Is(ep->me_key, key)) return 1;
@@ -1204,7 +1210,7 @@ compare_generic(PyDictObject *mp, PyDictKeysObject *dk,
 static Py_ssize_t
 dictkeys_generic_lookup(PyDictObject *mp, PyDictKeysObject* dk, PyValueBorrow key, Py_hash_t hash)
 {
-    return do_lookup(mp, dk, key, hash, compare_generic);
+    return do_lookup(mp, dk, &key, hash, compare_generic);
 }
 
 static bool
@@ -1811,13 +1817,47 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
     return status;
 }
 
-// Same as insertdict but specialized for ma_keys == Py_EMPTY_KEYS.
+// Same as insertdict but specialized for ma_keys == Py_EMPTY_KEYS: the entry
+// goes to the first slot of a new table of the minimum size. A watched dict
+// takes insertdict(), which notifies the watchers before it stores.
 // Consumes key and value references.
 static int
 insert_to_emptydict(PyDictObject *mp, PyValue key, Py_hash_t hash,
                     PyValue value)
 {
-    return insertdict(mp, key, hash, value);
+    assert(mp->ma_keys == Py_EMPTY_KEYS);
+    assert(mp->ma_values == NULL);
+    assert(mp->ma_used == 0);
+    if (mp->_ma_watcher_tag & DICT_WATCHER_MASK) {
+        return insertdict(mp, key, hash, value);
+    }
+    bool unicode = value_is_exact_unicode(key);
+    PyDictKeysObject *newkeys = new_keys_object(PyDict_LOG_MINSIZE, unicode);
+    if (newkeys == NULL) {
+        PyValue_CLOSE(key);
+        PyValue_CLOSE(value);
+        return -1;
+    }
+    _PyValue_CheckHome(key);
+    _PyValue_CheckHome(value);
+    dictkeys_set_index(newkeys, (size_t)hash & (PyDict_MINSIZE - 1), 0);
+    if (unicode) {
+        PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(newkeys);
+        STORE_KEY(ep, PyValue_AsKnownObjectSteal(key));
+        STORE_VALUE(ep, value);
+    }
+    else {
+        PyDictKeyEntry *ep = DK_ENTRIES(newkeys);
+        STORE_KEY(ep, key);
+        STORE_VALUE(ep, value);
+        STORE_HASH(ep, hash);
+    }
+    STORE_KEYS_USABLE(newkeys, newkeys->dk_usable - 1);
+    STORE_KEYS_NENTRIES(newkeys, 1);
+    STORE_USED(mp, 1);
+    // The empty keys are immortal, so there is no count to release.
+    set_keys(mp, newkeys);
+    return 0;
 }
 
 /*

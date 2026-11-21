@@ -13314,13 +13314,14 @@ _PyType_SlotIter(PyObject *self)
 static _PyStatusValue
 slot_tp_iternext_value(PyObject *self)
 {
-    PyObject *stack[1] = {self};
-    PyObject *res = vectorcall_method(&_Py_ID(__next__), stack, 1);
-    if (res == NULL) {
+    PyValue stack[1];
+    _PyValue_WindowPut(&stack[0], PyValue_FromObjectBorrow(self));
+    PyValue res = vectorcall_method_value(&_Py_ID(__next__), stack, 1);
+    if (PyValue_IsNull(res)) {
         return (_PyStatusValue){PyErr_Occurred() ? PYGEN_ERROR : PYGEN_RETURN,
                                 PyValue_NULL};
     }
-    return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(res)};
+    return (_PyStatusValue){PYGEN_NEXT, res};
 }
 
 _Py_VALUE_THUNK_ITERNEXT(slot_tp_iternext, slot_tp_iternext_value)

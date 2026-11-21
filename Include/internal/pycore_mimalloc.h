@@ -52,6 +52,7 @@ extern "C++" {
 #include "mimalloc/mimalloc.h"
 #include "mimalloc/mimalloc/types.h"
 #include "mimalloc/mimalloc/internal.h"
+#include "mimalloc/mimalloc/prim.h"   // _mi_prim_thread_id()
 
 #ifdef __cplusplus
 }

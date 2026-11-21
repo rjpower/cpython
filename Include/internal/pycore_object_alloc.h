@@ -30,31 +30,50 @@ _PyObject_GetAllocationHeap(_PyThreadStateImpl *tstate, PyTypeObject *tp)
 }
 #endif
 
-// Sets the heap used for PyObject_Malloc(), PyObject_Realloc(), etc. calls
-// when mimalloc is built in. We use different heaps depending on if the object
-// supports GC and if it has a pre-header, so that a collector visiting a heap
-// knows where its objects start. We smuggle the choice of heap through the
-// _mimalloc_thread_state. Without mimalloc, this simply calls
-// PyObject_Malloc().  In the default build a thread state may not have bound
-// its heaps yet; the allocation then takes the default path.
+#if defined(WITH_MIMALLOC) && !defined(Py_GIL_DISABLED)
+// The object allocator's slow route, for an allocator that is not the stock
+// mimalloc one (the debug hooks, tracemalloc, PyMem_SetAllocator()) and for
+// a thread that has no heap of its own; see _PyObject_MallocWithType().
+extern void *_PyObject_MallocWithTypeHooked(PyTypeObject *tp, size_t size);
+extern void *_PyObject_MiMalloc(void *ctx, size_t size);
+#endif
+
+// Allocate size bytes for an object of type tp from the mimalloc heap that
+// matches it. We use different heaps depending on if the object supports GC
+// and if it has a pre-header, so that a collector visiting a heap knows
+// where its objects start.
+//
+// In the default build the stock allocator is called directly with the heap
+// that tp selects. An allocator that hooks the object domain takes no heap
+// argument, so there the choice is smuggled through the thread state's
+// current_object_heap (_PyObject_MallocWithTypeHooked()).
 static inline void *
 _PyObject_MallocWithType(PyTypeObject *tp, size_t size)
 {
 #ifdef WITH_MIMALLOC
-    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
 #  ifndef Py_GIL_DISABLED
-    if (tstate == NULL || tstate->mimalloc.current_object_heap == NULL) {
-        return PyObject_Malloc(size);
+    if (_PyRuntime.allocators.standard.obj.malloc == _PyObject_MiMalloc) {
+        _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
+        // An unbound thread state has zeroed heaps, which no thread owns.
+        if (tstate != NULL) {
+            mi_heap_t *heap = _PyObject_GetAllocationHeap(tstate, tp);
+            if (heap->thread_id == _mi_prim_thread_id()) {
+                return mi_heap_malloc(heap, size);
+            }
+        }
     }
-#  endif
+    return _PyObject_MallocWithTypeHooked(tp, size);
+#  else
+    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
     struct _mimalloc_thread_state *m = &tstate->mimalloc;
     m->current_object_heap = _PyObject_GetAllocationHeap(tstate, tp);
-#endif
     void *mem = PyObject_Malloc(size);
-#ifdef WITH_MIMALLOC
     m->current_object_heap = &m->heaps[_Py_MIMALLOC_HEAP_OBJECT];
-#endif
     return mem;
+#  endif
+#else
+    return PyObject_Malloc(size);
+#endif
 }
 
 static inline void *

@@ -9373,23 +9373,35 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            PyValue null_or_index;
             PyValue iter;
+            PyValue null_or_index;
             PyValue next;
-            // _GUARD_TOS_NOT_NULL
-            {
-                null_or_index = window[1];
-                if (PyValue_IsNull(null_or_index)) {
+            null_or_index = window[1];
+            iter = window[0];
+            assert(PyValue_IsObject(iter));
+            PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
+            if (PyValue_IsNull(null_or_index)) {
+                _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(Py_TYPE(iter_o), iternext);
+                if (next_value == NULL) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
+                _PyStatusValue step = next_value(iter_o);
+                if (step.status != PYGEN_NEXT) {
+                    if (step.status == PYGEN_ERROR && !_PyForIter_StopIsExhaustion(tstate, frame)) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                    PyValue completed = PyValue_IsNull(step.value) ? PyValue_None : step.value;{
+                        _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, completed);
+                        next_instr = ir_step_result.next;
+                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
+                        DISPATCH();
+                    }
+                }
+                next = step.value;
             }
-            // _FOR_ITER_VIRTUAL
-            {
-                iter = window[0];
-                assert(PyValue_IsObject(iter));
-                PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
+            else {
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
                 _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
                 index = next_index.index;

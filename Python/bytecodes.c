@@ -3863,30 +3863,46 @@ dummy_func(
 
         macro(FOR_ITER) = unused/1 + _SPECIALIZE_FOR_ITER + _FOR_ITER;
 
-        op(_GUARD_TOS_NOT_NULL, (null_or_index -- null_or_index)) {
-            EXIT_IF(PyValue_IsNull(null_or_index));
-        }
-
+        // One form for both cursor protocols. A tagged cursor steps an
+        // index-protocol iterator; a NULL cursor steps an object-protocol
+        // iterator through its C value slot, and a type without the slot
+        // exits.
         replaced op(_FOR_ITER_VIRTUAL, (iter, null_or_index -- iter, null_or_index, next)) {
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-            _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
-            index = next_index.index;
-            if (PyValue_IsNull(next_index.value)) {
-                if (index < 0) {
-                    ERROR_NO_POP();
+            if (PyValue_IsNull(null_or_index)) {
+                _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(Py_TYPE(iter_o), iternext);
+                EXIT_IF(next_value == NULL);
+                _PyStatusValue step = next_value(iter_o);
+                if (step.status != PYGEN_NEXT) {
+                    // A StopIteration is the exhaustion; any other error
+                    // propagates.
+                    if (step.status == PYGEN_ERROR && !_PyForIter_StopIsExhaustion(tstate, frame)) {
+                        ERROR_NO_POP();
+                    }
+                    PyValue completed = PyValue_IsNull(step.value) ? PyValue_None : step.value;
+                    IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
                 }
-                PyValue completed = PyValue_None;
-                IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
+                next = step.value;
             }
-            null_or_index = PyValue_TagIndex(index);
-            next = next_index.value;
+            else {
+                Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                index = next_index.index;
+                if (PyValue_IsNull(next_index.value)) {
+                    if (index < 0) {
+                        ERROR_NO_POP();
+                    }
+                    PyValue completed = PyValue_None;
+                    IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
+                }
+                null_or_index = PyValue_TagIndex(index);
+                next = next_index.value;
+            }
         }
 
         macro(FOR_ITER_VIRTUAL) =
             unused/1 +  // Skip over the entry distance
-            _GUARD_TOS_NOT_NULL +
             _FOR_ITER_VIRTUAL;
 
         inst(INSTRUMENTED_FOR_ITER, (unused/1, iter, null_or_index -- iter, null_or_index, next)) {

@@ -3358,6 +3358,10 @@ _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int
             specialize(instr, FOR_ITER_GEN);
             return;
         }
+        else if (_PyType_VALUE_SLOT(tp, iternext) != NULL) {
+            specialize(instr, FOR_ITER_VIRTUAL);
+            return;
+        }
     }
     else {
         if (tp->_tp_iteritem != NULL) {

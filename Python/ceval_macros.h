@@ -913,12 +913,16 @@ shape_read_dup(PyObject *owner, uint32_t offset)
 #define IR_SKIP_RESUME() \
     do { \
         assert(next_instr == frame->instr_ptr); \
-        /* Arithmetic, not a branch: nearly every entry skips. */ \
-        next_instr += (IR_HANDLER(*next_instr) == RESUME) & \
-            (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) == \
+        /* A predicted branch, not arithmetic on the three loads: dispatch \
+         * from the next word does not wait on them. */ \
+        if (IR_HANDLER(*next_instr) == RESUME && \
+            _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) == \
                 FT_ATOMIC_LOAD_UINTPTR_ACQUIRE( \
-                    _PyFrame_GetCode(frame)->_co_instrumentation_version)) & \
-            IR_SKIP_RESUME_TLBC() & IR_SKIP_RESUME_EMSCRIPTEN(); \
+                    _PyFrame_GetCode(frame)->_co_instrumentation_version) && \
+            IR_SKIP_RESUME_TLBC() && IR_SKIP_RESUME_EMSCRIPTEN()) \
+        { \
+            next_instr++; \
+        } \
     } while (0)
 
 /* After a frame switch, V goes to the slot of the frame that control came

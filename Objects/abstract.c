@@ -1676,11 +1676,13 @@ ternary_op(PyValueBorrow v,
     return PyValue_NULL;
 }
 
-/* A dispatcher and its thunk, the object function. */
-#define BINARY_FUNC(func, name, op, op_name) \
+/* A dispatcher and its thunk, the object function. FAST is a statement run
+   first, empty for most operators. */
+#define BINARY_FUNC_FAST(func, name, op, op_name, FAST) \
     PyValue \
     (_PyValue_##name)(PyValueBorrow v, PyValueBorrow w) \
     { \
+        FAST \
         return binary_op(v, w, NB_SLOT(op), NB_ROW(op), op_name); \
     } \
     \
@@ -1691,9 +1693,22 @@ ternary_op(PyValueBorrow v,
             BOX_SITE_NUMBER); \
     }
 
-BINARY_FUNC(PyNumber_Or, Or, nb_or, "|")
-BINARY_FUNC(PyNumber_Xor, Xor, nb_xor, "^")
-BINARY_FUNC(PyNumber_And, And, nb_and, "&")
+#define BINARY_FUNC(func, name, op, op_name) \
+    BINARY_FUNC_FAST(func, name, op, op_name, )
+
+/* Two exact ints go straight to int's value routine, which is what the slot
+   lookup would find. */
+#define EXACT_INTS_FAST(long_func) \
+    if (PyValue_LongCheckExact(v) && PyValue_LongCheckExact(w)) { \
+        return long_func(v, w); \
+    }
+
+#define BINARY_FUNC_INT(func, name, op, op_name, long_func) \
+    BINARY_FUNC_FAST(func, name, op, op_name, EXACT_INTS_FAST(long_func))
+
+BINARY_FUNC_INT(PyNumber_Or, Or, nb_or, "|", _PyLong_ValueOr)
+BINARY_FUNC_INT(PyNumber_Xor, Xor, nb_xor, "^", _PyLong_ValueXor)
+BINARY_FUNC_INT(PyNumber_And, And, nb_and, "&", _PyLong_ValueAnd)
 BINARY_FUNC(PyNumber_Lshift, Lshift, nb_lshift, "<<")
 BINARY_FUNC(PyNumber_Rshift, Rshift, nb_rshift, ">>")
 BINARY_FUNC(PyNumber_Subtract, Subtract, nb_subtract, "-")
@@ -1881,10 +1896,11 @@ ternary_iop(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z,
     return ternary_op(v, w, z, op_slot, op_row, op_name);
 }
 
-#define INPLACE_BINOP(func, name, iop, op, op_name) \
+#define INPLACE_BINOP_FAST(func, name, iop, op, op_name, FAST) \
     PyValue \
     (_PyValue_InPlace##name)(PyValueBorrow v, PyValueBorrow w) \
     { \
+        FAST \
         return binary_iop(v, w, NB_SLOT(iop), NB_ROW(iop), \
                           NB_SLOT(op), NB_ROW(op), op_name); \
     } \
@@ -1896,9 +1912,17 @@ ternary_iop(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z,
             BOX_SITE_NUMBER); \
     }
 
-INPLACE_BINOP(PyNumber_InPlaceOr, Or, nb_inplace_or, nb_or, "|=")
-INPLACE_BINOP(PyNumber_InPlaceXor, Xor, nb_inplace_xor, nb_xor, "^=")
-INPLACE_BINOP(PyNumber_InPlaceAnd, And, nb_inplace_and, nb_and, "&=")
+#define INPLACE_BINOP(func, name, iop, op, op_name) \
+    INPLACE_BINOP_FAST(func, name, iop, op, op_name, )
+
+/* As BINARY_FUNC_INT(): int has no in-place slots, so two exact ints take
+   the same routine as the plain operator. */
+#define INPLACE_BINOP_INT(func, name, iop, op, op_name, long_func) \
+    INPLACE_BINOP_FAST(func, name, iop, op, op_name, EXACT_INTS_FAST(long_func))
+
+INPLACE_BINOP_INT(PyNumber_InPlaceOr, Or, nb_inplace_or, nb_or, "|=", _PyLong_ValueOr)
+INPLACE_BINOP_INT(PyNumber_InPlaceXor, Xor, nb_inplace_xor, nb_xor, "^=", _PyLong_ValueXor)
+INPLACE_BINOP_INT(PyNumber_InPlaceAnd, And, nb_inplace_and, nb_and, "&=", _PyLong_ValueAnd)
 INPLACE_BINOP(PyNumber_InPlaceLshift, Lshift, nb_inplace_lshift, nb_lshift, "<<=")
 INPLACE_BINOP(PyNumber_InPlaceRshift, Rshift, nb_inplace_rshift, nb_rshift, ">>=")
 INPLACE_BINOP(PyNumber_InPlaceSubtract, Subtract, nb_inplace_subtract, nb_subtract, "-=")

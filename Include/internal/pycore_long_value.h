@@ -28,7 +28,7 @@ extern "C" {
 /* Spans of values, and results as values. */
 
 // The span of v, an int value: an inline int's word in buf, else its digits.
-static inline _PyLongSpan
+static inline Py_ALWAYS_INLINE _PyLongSpan
 _PyLong_SpanOfValue(PyValueBorrow v, digit buf[_PyLong_WORD_DIGITS])
 {
     if (PyValue_IsInlineInt(v)) {

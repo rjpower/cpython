@@ -10,7 +10,14 @@ through the generator. Source attribution belongs to observation; execution and
 exception recovery use semantic state. Source positions do not grant ownership
 or initialization facts.
 
-Latest checkpoint: [execution-boundary73](design/proposals/execution-boundary73.md)
+Selected runtime: golden82, `5194e957c5d` (`pyjit/round82-golden`), selected
+on 2026-11-20. It integrates the [gap82](issues/register-semantics59/gap82.md#results)
+wave over the handlers81 and operand-call rollouts and runs 0.992 of
+upstream's time on the timed all-29 geomean (H5: 1.065). Generators,
+deepcopy, logging_format, logging_simple and the xml cases remain furthest
+above upstream; code placement limits small hot sets.
+
+Previous selection: [execution-boundary73](design/proposals/execution-boundary73.md)
 and its RETURN isolation correction are implemented, protocol-qualified and
 measured at `44f066f5fd5`. Coroutines improve 8.70% and generators 6.73% versus
 selected57. The user accepted logging's 13.73% regression and selected golden73
@@ -48,8 +55,8 @@ saving and retained specialization coverage. No third72 lane is adopted.
 Smaller source or native frames alone do not predict throughput. The selected
 runtime retains its contracts until a measured winner lands.
 
-Golden73 is the runtime baseline; selected57 remains an immutable comparison
-control. Round68 and earlier losing packets
+Golden82 is the runtime baseline; golden73 and selected57 remain immutable
+comparison controls. Round68 and earlier losing packets
 also remain closed. Preserve their evidence without making them prerequisites
 or claiming a combined parity budget. The
 [trial report](issues/register-semantics59/report.md) owns those outcomes.
@@ -63,7 +70,7 @@ not complete this stage.
 
 Remove repeated work from ordinary execution and improve unchanged workloads
 toward upstream parity while recovering logging performance and retaining
-golden73's gains. Frame clearing is
+golden82's gains. Frame clearing is
 one hypothesis, not an established explanation for the gap. PyValue integration
 is complete; remaining work concerns transport, ownership and how established
 facts survive lowering and native boundaries.

@@ -2,11 +2,15 @@
 
 ## Live state
 
-**Latest: [checkpoint78](issues/register-semantics59/checkpoint78.md), 2026-11-18.**
-`99a04733128` (`pyjit/checkpoint78`, pushed) measures **0.9856 against
-golden73** (17 of 29 workloads faster) and **1.1123 against upstream**. The
-full suite passes in both roles apart from known failures. Golden73 remains
-the selected baseline; no checkpoint has been selected over it.
+**Selected: golden82, 2026-11-20.** `5194e957c5d` (`pyjit/round82-golden`,
+tag `pyjit-golden-20261120-gap82`, pushed) is the
+[gap82](issues/register-semantics59/gap82.md#results) integration. Its timed
+all-29 geomean is **0.992 of upstream's time**, 0.884 of golden73's and 0.899
+of checkpoint78's; ten cases beat upstream. Full suites fail only known
+failures. Profile83, an analysis pass, is measuring what remains against
+upstream ([plan](issues/interpreter-performance56/plan.md)).
+
+The checkpoints between golden73 and gap82, each measured against golden73:
 
 | Checkpoint | Adds | vs golden73 | vs upstream |
 | --- | --- | ---: | ---: |
@@ -85,7 +89,8 @@ What these rounds established:
   logging_format and logging_simple) hold more log-excess than the whole
   geomean gap; generators and iteration hold about half as much.
   **Integrated** as `pyjit/gap82` at `5194e957c5d`: two analyses and ten
-  implementation units. H6 (layout) was parked.
+  implementation units. H6 (layout) was parked. Selected as golden82 on
+  2026-11-20.
   - Full suites fail exactly H5's counts.
   - Timed all-29 geomeans: 0.992 of upstream's time (H5: 1.065), 0.928 of
     H5's, 0.884 of golden73's and 0.899 of checkpoint78's.
@@ -149,10 +154,12 @@ records the remaining common call/return cycle-cost problem. The older
 and does not reopen its selection decision.
 
 The current stage is [interpreter performance](issues/interpreter-performance56/plan.md).
-The active runtime is golden73 at
-`44f066f5fd55947edf709bbcf9bf17c607307e4b`, branch `pyjit/round73-golden`,
-tag `pyjit-golden-20261116-generator-boundaries`, pushed to origin. Selected57
-`0dcba75bb3df40c32137db453b001f7e8f101de0` and its refs remain immutable controls.
+The active runtime is golden82 at
+`5194e957c5d573ef2b6112508a7b0990b7de656d`, branch `pyjit/round82-golden`,
+tag `pyjit-golden-20261120-gap82`, pushed to origin. Golden73
+`44f066f5fd55947edf709bbcf9bf17c607307e4b` (branch `pyjit/round73-golden`, tag
+`pyjit-golden-20261116-generator-boundaries`) and selected57
+`0dcba75bb3df40c32137db453b001f7e8f101de0` and their refs remain immutable controls.
 
 Execution72 is complete and unselected. Sol 6.1 workers implemented and
 cross-reviewed the compiler/validation and runtime/generator changes; root

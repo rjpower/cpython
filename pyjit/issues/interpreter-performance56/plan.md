@@ -1,6 +1,25 @@
 # Interpreter performance: combined plan
 
-## Current wave: gap82, the gap to upstream after H5
+## Current: golden82 and the profile83 pass
+
+On 2026-11-20 the user promoted gap82's integration to golden and asked for a
+profiling pass: where is there still room for clean improvements? Golden82 is
+`5194e957c5d`, branch `pyjit/round82-golden`, tag
+`pyjit-golden-20261120-gap82`. Its source (`worktrees/gap82`, detached at the
+tag) and builds (`BASE/gap82-{release,debug}`, aliased as
+`BASE/golden82-{release,debug}`) are frozen controls.
+
+Profile83 is analysis only, in `E59/profile83/`. Three agents compare
+golden82 with upstream:
+- P1, the evaluator kernels: categories, per-call costs and handler ledgers;
+- P2, the library-heavy cases and startup: per-symbol excess;
+- P3, cycles and the front end on CPU 15: each case's gap split into
+  executed work and cycles per instruction, the hot footprint and the
+  structural levers that shrink it.
+
+Root merges their ranked lists into the next wave's proposal.
+
+## Previous wave: gap82, the gap to upstream after H5
 
 Approved 2026-11-20. After H5, the user asked to pursue every area of the
 post-H5 analysis, with analysis and implementation fanned out to agents and
@@ -147,8 +166,10 @@ fresh evidence tags. Do not combine the best cases from boundary10 and final73.
 
 ## Selected baseline and closed work
 
-Golden73 is selected. The [current report](../register-semantics59/report.md)
-owns its measurements and accepted tradeoff. The [selected57 report](../comprehensions57/report.md)
+Golden82 is selected (2026-11-20); the [gap82 record](../register-semantics59/gap82.md#results)
+owns its measurements. Golden73 (`44f066f5fd5`) remains a comparison control;
+the [trial report](../register-semantics59/report.md) owns its measurements and
+accepted tradeoff. The [selected57 report](../comprehensions57/report.md)
 owns the prior control's qualification and upstream comparison. The
 [trial report](../register-semantics59/report.md) owns rounds59–73, their
 mechanism successes, incomplete gates and measured rejections. Those packets

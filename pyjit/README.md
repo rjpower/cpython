@@ -23,7 +23,10 @@ upstream's time ([results](issues/register-semantics59/gap82.md#results)). The
 [active plan](issues/interpreter-performance56/plan.md#current-wave-gap82-the-gap-to-upstream-after-h5)
 lists the phases and [handoff](HANDOFF.md) the worktrees.
 
-The selected runtime is golden73 at `44f066f5fd5`, branch `pyjit/round73-golden`.
+The selected runtime is golden82 at `5194e957c5d`, branch `pyjit/round82-golden`,
+selected on 2026-11-20. A profiling pass, profile83, is measuring where it
+still trails upstream. Golden73 (`44f066f5fd5`, `pyjit/round73-golden`) remains
+a comparison control.
 Both independently implemented
 [execution-state72](design/proposals/execution-state72.md) units are closed and
 rejected: cold ownership maps demonstrated no packing benefit, and carried-value

@@ -66,7 +66,9 @@ for its PMU probes and screens. Root runs no campaign until H6 reports.
 
 ## Results
 
-IP2 is `pyjit/gap82` at `5194e957c5d`: H5 plus every unit except H6. The
+IP2 is `pyjit/gap82` at `5194e957c5d`: H5 plus every unit except H6. The user
+selected it as golden82 on 2026-11-20 (branch `pyjit/round82-golden`, tag
+`pyjit-golden-20261120-gap82`). The
 merged allocator product is 45.45M of 50M (H5: 41.9M).
 
 ### Timed all-29

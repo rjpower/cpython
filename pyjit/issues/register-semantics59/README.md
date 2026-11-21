@@ -1,9 +1,12 @@
 # Register semantics and interpreter parity
 
-Status: stage remains open; execution73 selected on 2026-11-16. Golden73
-`44f066f5fd55947edf709bbcf9bf17c607307e4b` is pushed as `pyjit/round73-golden`.
-The user explicitly accepted its logging regression; selected57 remains a
-control. Root coordinates
+Status: stage remains open. Golden82
+`5194e957c5d573ef2b6112508a7b0990b7de656d`, the [gap82](gap82.md) integration,
+was selected on 2026-11-20 and is pushed as `pyjit/round82-golden`; it runs
+0.992 of upstream's time on the timed all-29 geomean. Golden73
+`44f066f5fd55947edf709bbcf9bf17c607307e4b` (`pyjit/round73-golden`, selected
+2026-11-16 with an accepted logging regression) and selected57 remain
+controls. Root coordinates
 integration and native validation; Sol 6.1 workers implement and cross-review.
 
 Both [execution72](../../design/proposals/execution-state72.md) units are

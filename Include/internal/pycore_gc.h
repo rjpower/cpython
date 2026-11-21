@@ -350,7 +350,13 @@ PyAPI_FUNC(int) _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visi
             }                                                       \
         }                                                           \
     } while (0)
+#ifdef Py_GIL_DISABLED
 PyAPI_FUNC(int) _PyGC_VisitValue(PyValue *ref, visitproc visit, void *arg);
+#else
+// The cycle collector's callback that subtracts references; _PyGC_VisitValue()
+// (pycore_value.h) skips values that own no count when it is the visitor.
+PyAPI_FUNC(int) _PyGC_VisitDecref(PyObject *op, void *parent);
+#endif
 
 #ifdef Py_GIL_DISABLED
 extern void _PyGC_VisitObjectsWorldStopped(PyInterpreterState *interp,

@@ -5101,21 +5101,18 @@ dict_traverse(PyObject *op, visitproc visit, void *arg)
     PyDictKeysObject *keys = mp->ma_keys;
     Py_ssize_t i, n = keys->dk_nentries;
 
-    /* The keys of a unicode-keyed table are strings, which the cycle
-       collector ignores, but the tracing collector must see them.  A split
-       table's keys are shared and owned by the keys object; visiting them
-       from each dict is harmless for both collectors. */
+    /* The keys of a unicode-keyed table are strings, which are never part of
+       a cycle.  The tracing verifier visits them with
+       _PyDict_TraverseUnicodeKeys(). */
     if (DK_IS_UNICODE(keys)) {
         PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
         if (_PyDict_HasSplitTable(mp)) {
             for (i = 0; i < n; i++) {
-                _Py_VISIT_ATOMIC(entries[i].me_key);
                 _Py_VISIT_VALUE(mp->ma_values->values[i]);
             }
         }
         else {
             for (i = 0; i < n; i++) {
-                _Py_VISIT_ATOMIC(entries[i].me_key);
                 _Py_VISIT_VALUE(entries[i].me_value);
             }
         }
@@ -5128,6 +5125,24 @@ dict_traverse(PyObject *op, visitproc visit, void *arg)
                 _Py_VISIT_VALUE(entries[i].me_key);
             }
         }
+    }
+    return 0;
+}
+
+/* Visit the keys that dict_traverse() leaves out, for the tracing verifier
+   (Python/gc_trace.c), which must see every reference an object owns.  A
+   split table's keys are shared and owned by the keys object; visiting them
+   from each dict is harmless. */
+int
+_PyDict_TraverseUnicodeKeys(PyObject *op, visitproc visit, void *arg)
+{
+    PyDictKeysObject *keys = ((PyDictObject *)op)->ma_keys;
+    if (!DK_IS_UNICODE(keys)) {
+        return 0;
+    }
+    PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
+    for (Py_ssize_t i = 0, n = keys->dk_nentries; i < n; i++) {
+        _Py_VISIT_ATOMIC(entries[i].me_key);
     }
     return 0;
 }

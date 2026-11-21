@@ -1,6 +1,28 @@
 # Interpreter performance: combined plan
 
-## Current: golden82 and the profile83 pass
+## Current wave: parity84, the clean changes profile83 ranked
+
+Approved 2026-11-21. The [parity84 record](../register-semantics59/parity84.md)
+holds the units and their state. Base: golden82 (`5194e957c5d`); integration
+branch `pyjit/parity84`; evidence `E59/parity84/`.
+
+- **Phase 1**, four implementation units from golden82:
+  - NB: native-call publication, one native→Python entry, thunks,
+    exceptions, `isinstance`;
+  - GL: the generators stall test, `GET_ITER` over a Python `__iter__`,
+    creation at the call, plain finishing, resume;
+  - IT: membership, compare exits, `FOR_ITER`, truth tests, the unpack loop;
+  - RM: allocation entry, GC visits, dicts, `makeuniversal`, json ints, the
+    borrow stack, big-int ops, `MAKE_FUNCTION`.
+- **Integration point 1:** merge, full suites, instructions for all 29,
+  timed all-29 against golden82 and upstream.
+- **Phase 2:** BD, per-site bind plans and `CALL_FUNCTION_EX` with a dict, on
+  NB's entry routine.
+- **Integration point 2:** full suites, timed all-29, the record, the report.
+
+Gates are correctness and the allocator limit (50M; golden82 is at 45.45M).
+
+## Previous: golden82 and the profile83 pass
 
 On 2026-11-20 the user promoted gap82's integration to golden and asked for a
 profiling pass: where is there still room for clean improvements? Golden82 is

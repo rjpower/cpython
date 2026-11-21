@@ -11,6 +11,8 @@ failures. The [profile83](issues/register-semantics59/profile83.md) analysis
 finds the remaining gap is executed work at boundaries (native-call publish,
 C entering Python, generator creation and finishing, the non-exact binder,
 membership, allocation and GC entry), each with a clean change.
+[Parity84](issues/register-semantics59/parity84.md) (approved 2026-11-21) is
+implementing them.
 
 The checkpoints between golden73 and gap82, each measured against golden73:
 

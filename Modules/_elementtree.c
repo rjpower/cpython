@@ -3504,14 +3504,16 @@ makeuniversal(XMLParserObject* self, const char* string)
     if (!key)
         return NULL;
 
+    // The key is bytes and the cached names are str, so neither is an inline
+    // value to convert.
     PyValue cached = PyValue_NULL;
-    if (PyDict_GetValue(self->names, PyValue_FromObjectBorrow(key), &cached) != 0) {
+    if (PyDict_GetValue(self->names, _PyValue_PointerBorrow(key), &cached) != 0) {
         // The key exists or an error occurred
         Py_DECREF(key);
         if (PyValue_IsNull(cached)) {
             return NULL;
         }
-        return _PyValue_AsObjectStealAt(cached, BOX_SITE_DICT);
+        return PyValue_AsKnownObjectSteal(cached);
     }
 
     /* new name.  convert to universal name, and decode as

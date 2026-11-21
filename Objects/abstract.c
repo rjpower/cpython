@@ -3912,7 +3912,16 @@ object_recursive_isinstance_value(PyThreadState *tstate, PyValueBorrow inst,
         int r = 0;
         for (Py_ssize_t i = 0; i < n; ++i) {
             PyValueBorrow item = PyTuple_GET_VALUE(cls, i);
-            r = object_recursive_isinstance_value(tstate, inst, obj, tp, item);
+            PyObject *item_cls = PyValue_ObjectOrNull(item);
+            if (item_cls != NULL && PyType_CheckExact(item_cls)) {
+                /* An exact type decides at once, as the entry does */
+                r = tp == (PyTypeObject *)item_cls ||
+                    object_isinstance_value(inst, obj, item_cls);
+            }
+            else {
+                r = object_recursive_isinstance_value(tstate, inst, obj, tp,
+                                                      item);
+            }
             if (r != 0) {
                 /* either found it, or got an error */
                 break;

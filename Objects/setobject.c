@@ -668,8 +668,18 @@ set_add_key(PySetObject *so, PyObject *key)
 static int
 (set_contains_value)(PySetObject *so, PyValueBorrow key)
 {
-    /* The caller owns key for the whole call, as upstream. */
-    Py_hash_t hash = _PyValue_Hash(key);
+    /* The caller owns key for the whole call, as upstream. An exact str
+       with its hash cached, the common key, needs no dispatch. */
+    Py_hash_t hash = -1;
+    if (PyValue_IsPointerSpace(key)
+        && PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)))
+    {
+        hash = PyUnstable_Unicode_GET_CACHED_HASH(
+            PyValue_AsKnownObjectBorrow(key));
+    }
+    if (hash == -1) {
+        hash = _PyValue_Hash(key);
+    }
     if (hash == -1) {
         set_unhashable_type(key);
         return -1;

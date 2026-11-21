@@ -8701,6 +8701,90 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             DISPATCH();
         }
 
+        TARGET(CONTAINS_OP_JUMP_SEQUENCE) {
+            int opcode = CONTAINS_OP_JUMP_SEQUENCE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(CONTAINS_OP_JUMP_SEQUENCE);
+            _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
+            int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
+            (void)oparg;
+            PyValueBorrow tos;
+            PyValueBorrow left;
+            PyValueBorrow right;
+            PyValue b;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValueBorrow value;
+            PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            // _GUARD_TOS_STR_TUPLE_LIST
+            {
+                tos = IR_VIEW(IR_B(ir_word));
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
+                    UPDATE_MISS_STATS(CONTAINS_OP);
+                    JUMP_TO_PREDICTED(CONTAINS_OP_JUMP);
+                }
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
+                if (!PyUnicode_CheckExact(o) && !PyTuple_CheckExact(o)
+                    && !PyList_CheckExact(o)) {
+                    UPDATE_MISS_STATS(CONTAINS_OP);
+                    JUMP_TO_PREDICTED(CONTAINS_OP_JUMP);
+                }
+            }
+            // _CONTAINS_OP_SEQUENCE
+            {
+                right = tos;
+                (void)right;
+                left = IR_VIEW(IR_A(ir_word));
+                PyObject *right_o = _PyValue_AsKnownObjectBorrowPointer(right);
+                STAT_INC(CONTAINS_OP, hit);
+                _Py_containsvaluefunc contains_slot = _PyType_VALUE_SLOT(Py_TYPE(right_o), contains);
+                int res = contains_slot(right_o, PyValue_Borrow(left));
+                if (res < 0) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                b = (res ^ oparg) ? PyValue_True : PyValue_False;
+                l = left;
+                r = right;
+                ir_own_A = IR_DETACH(ir_word, A, l);
+                ir_own_B = IR_DETACH(ir_word, B, r);
+            }
+            // _POP_TOP
+            {
+                value = r;
+                (void)value;
+                (void)(ir_own_B);
+            }
+            // _POP_TOP
+            {
+                value = l;
+                (void)value;
+                (void)(ir_own_A);
+            }
+            // _JUMP_IF_COND
+            {
+                cond = b;
+                assert(PyValue_BoolCheck(cond));
+                int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
+                IR_REPORT_EDGE(flag);
+                if (flag) {
+                    JUMPBY(IR_FUSED_DISTANCE());
+                }
+            }
+            _PyValue_XCLOSE_POINTER(ir_own_B);
+            PyValue_XCLOSE(ir_own_A);
+            DISPATCH();
+        }
+
         TARGET(CONTAINS_OP_JUMP_SET) {
             int opcode = CONTAINS_OP_JUMP_SET;
             (void)(opcode);

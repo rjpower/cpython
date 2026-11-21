@@ -2211,10 +2211,19 @@ int
     assert(PyValue_IsLanguageValue(key));
     Py_hash_t cached = cached_str_hash(key);
     if (can_use_cached_str_lookup(mp, cached)) {
-        /* As dict_contains(): no result copy, no extra owners. */
-        return _PyDict_Contains_KnownHash((PyObject *)mp,
-                                          PyValue_AsKnownObjectBorrow(key),
-                                          cached);
+        /* One probe of the keys, which compares exact strings without
+         * callbacks; the value is only tested for presence (a split
+         * table keeps the key of a deleted entry). */
+        PyDictKeysObject *dk = mp->ma_keys;
+        Py_ssize_t ix = unicodekeys_lookup_unicode(
+            dk, PyValue_AsKnownObjectBorrow(key), cached);
+        if (ix < 0) {
+            return 0;
+        }
+        PyValue value = dk->dk_kind == DICT_KEYS_SPLIT
+            ? mp->ma_values->values[ix]
+            : DK_UNICODE_ENTRIES(dk)[ix].me_value;
+        return !PyValue_IsNull(value);
     }
     PyValue value = PyValue_NULL;
     int status = dict_get_value(mp, key, &value);

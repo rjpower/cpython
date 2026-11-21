@@ -662,6 +662,7 @@ NON_ESCAPING_FUNCTIONS = (
     "PyType_FastSubclass",
     "PyType_HasFeature",
     "_PyType_IteratesByIndex",
+    "_PyType_VALUE_SLOT",
     "PyUnicode_Concat",
     "PyUnicode_GET_LENGTH",
     "PyUnicode_READ_CHAR",

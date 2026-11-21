@@ -792,6 +792,9 @@ INPLACE_READERS = {
     "PyDict_ContainsValue", "PySet_ContainsValue", "PyDict_DelValue",
     "_PyDict_ContainsValue", "_PySet_ContainsValue",
     "_PyValue_RichCompareObject",
+    # The contains function of an exact str, tuple or list, called through
+    # the type's value slot (CONTAINS_OP_JUMP_SEQUENCE)
+    "contains_slot",
     # Not a reader: PyDict_SetValue keeps counted copies of its key and
     # value (PyValue_XDUP of a borrow), so it neither keeps nor releases the
     # caller's count and a borrowed local may be passed to it; nor is its
@@ -866,6 +869,8 @@ OBJECT_READERS = {
     # that read their operands, and of GET_AITER, through the type's
     # am_aiter slot
     "action", "getter",
+    # CONTAINS_OP_JUMP_SEQUENCE: the contains function of the container's type
+    "contains_slot",
 }
 # The names of OBJECT_READERS that S3 let receive the object of a view,
 # collected while this is a set

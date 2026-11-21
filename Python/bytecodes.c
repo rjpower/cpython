@@ -3379,9 +3379,35 @@ dummy_func(
         macro(INSTRUMENTED_COMPARE_OP_JUMP) =
             unused/1 + _COMPARE_OP + _INSTRUMENTED_JUMP_IF_COND;
 
+        /* An exact str, tuple or list container: the type's contains
+         * function is called by value from the handler, with no slot lookup
+         * and no dispatcher. The guard is the exact type, so a subclass that
+         * overrides __contains__ takes the generic handler. Only the fused
+         * words have this form. */
+        op(_GUARD_TOS_STR_TUPLE_LIST, (tos -- tos)) {
+            PyObject *o = PyValue_AsKnownObjectBorrow(tos);
+            EXIT_IF(!PyUnicode_CheckExact(o) && !PyTuple_CheckExact(o)
+                    && !PyList_CheckExact(o));
+        }
+
+        op(_CONTAINS_OP_SEQUENCE, (left, right -- b, l, r)) {
+            PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+            STAT_INC(CONTAINS_OP, hit);
+            _Py_containsvaluefunc contains_slot = _PyType_VALUE_SLOT(Py_TYPE(right_o), contains);
+            int res = contains_slot(right_o, PyValue_Borrow(left));
+            if (res < 0) {
+                ERROR_NO_POP();
+            }
+            b = (res ^ oparg) ? PyValue_True : PyValue_False;
+            l = left;
+            r = right;
+            INPUTS_DEAD();
+        }
+
         family(CONTAINS_OP_JUMP, INLINE_CACHE_ENTRIES_CONTAINS_OP) = {
             CONTAINS_OP_JUMP_DICT,
             CONTAINS_OP_JUMP_SET,
+            CONTAINS_OP_JUMP_SEQUENCE,
         };
 
         macro(CONTAINS_OP_JUMP) =
@@ -3392,6 +3418,9 @@ dummy_func(
 
         macro(CONTAINS_OP_JUMP_DICT) =
             _GUARD_TOS_ANY_DICT + unused/1 + _CONTAINS_OP_DICT + POP_TOP + POP_TOP + _JUMP_IF_COND;
+
+        macro(CONTAINS_OP_JUMP_SEQUENCE) =
+            _GUARD_TOS_STR_TUPLE_LIST + unused/1 + _CONTAINS_OP_SEQUENCE + POP_TOP + POP_TOP + _JUMP_IF_COND;
 
         macro(INSTRUMENTED_CONTAINS_OP_JUMP) =
             unused/1 + _CONTAINS_OP + POP_TOP + POP_TOP + _INSTRUMENTED_JUMP_IF_COND;

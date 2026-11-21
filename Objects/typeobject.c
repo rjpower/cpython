@@ -3398,6 +3398,51 @@ lookup_method(PyObject *self, PyObject *attr, PyObject **out)
     return lookup_method_ex(self, attr, out, 1);
 }
 
+/* lookup_method_ex() for a caller that calls the method through the value
+   vectorcall: *out is the owner of the method, an int or float attribute
+   included, which the call then reports as not callable. */
+static int
+lookup_method_value_ex(PyObject *self, PyObject *attr, PyValue *out,
+                       int raise_attribute_error)
+{
+    *out = PyValue_NULL;
+    PyValue found = PyValue_NULL;
+    (void)_PyType_LookupValueAndVersion(Py_TYPE(self), attr, &found);
+    if (PyValue_IsNull(found)) {
+        if (raise_attribute_error) {
+            PyErr_SetObject(PyExc_AttributeError, attr);
+        }
+        return -1;
+    }
+    if (!PyValue_IsObject(found)) {
+        *out = found;
+        return 0;
+    }
+    PyObject *value = PyValue_AsKnownObjectBorrow(found);
+    if (_PyType_HasFeature(Py_TYPE(value), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
+        /* Avoid temporary PyMethodObject */
+        *out = found;
+        return 1;
+    }
+    descrgetfunc f = Py_TYPE(value)->tp_descr_get;
+    if (f == NULL) {
+        *out = found;
+        return 0;
+    }
+    PyObject *bound = f(value, self, (PyObject *)(Py_TYPE(self)));
+    PyValue_CLOSE(found);
+    if (bound == NULL) {
+        if (!raise_attribute_error &&
+            PyErr_ExceptionMatches(PyExc_AttributeError))
+        {
+            PyErr_Clear();
+        }
+        return -1;
+    }
+    *out = PyValue_FromObjectSteal(bound);
+    return 0;
+}
+
 
 static inline PyObject*
 vectorcall_unbound(PyThreadState *tstate, int unbound, PyObject *func,
@@ -3490,7 +3535,7 @@ vectorcall_method(PyObject *name, PyObject *const *args, Py_ssize_t nargs)
    dunder is looked up on that receiver, as the object forms do, and called
    through the value vectorcall. */
 static PyValue
-vectorcall_unbound_value(PyThreadState *tstate, int unbound, PyObject *func,
+vectorcall_unbound_value(PyThreadState *tstate, int unbound, PyValue func,
                          const PyValue *args, Py_ssize_t nargs)
 {
     size_t nargsf = nargs;
@@ -3500,9 +3545,11 @@ vectorcall_unbound_value(PyThreadState *tstate, int unbound, PyObject *func,
         args++;
         nargsf = nargsf - 1 + PY_VECTORCALL_ARGUMENTS_OFFSET;
     }
-    EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_SLOT, func);
-    return _PyValue_VectorcallTstate(tstate, PyValue_FromObjectBorrow(func),
-                                     args, nargsf, NULL);
+    if (PyValue_IsObject(func)) {
+        EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_SLOT,
+                                       PyValue_AsKnownObjectBorrow(func));
+    }
+    return _PyValue_VectorcallTstate(tstate, func, args, nargsf, NULL);
 }
 
 static PyValue
@@ -3511,13 +3558,13 @@ vectorcall_method_value(PyObject *name, const PyValue *args, Py_ssize_t nargs)
     assert(nargs >= 1);
     PyThreadState *tstate = _PyThreadState_GET();
     PyObject *self = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
-    PyObject *func = NULL;
+    PyValue func;
     PyValue result = PyValue_NULL;
-    int unbound = lookup_method(self, name, &func);
+    int unbound = lookup_method_value_ex(self, name, &func, 1);
     if (unbound >= 0) {
         result = vectorcall_unbound_value(tstate, unbound, func, args, nargs);
     }
-    Py_XDECREF(func);
+    PyValue_XCLOSE(func);
     return result;
 }
 
@@ -3528,9 +3575,9 @@ vectorcall_maybe_value(PyThreadState *tstate, PyObject *name,
 {
     assert(nargs >= 1);
     PyObject *self = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
-    PyObject *func = NULL;
+    PyValue func;
     PyValue result = PyValue_NULL;
-    int unbound = lookup_maybe_method(self, name, &func);
+    int unbound = lookup_method_value_ex(self, name, &func, 0);
     if (unbound < 0) {
         if (!PyErr_Occurred()) {
             result = PyValue_NotImplemented;
@@ -3539,7 +3586,7 @@ vectorcall_maybe_value(PyThreadState *tstate, PyObject *name,
     else {
         result = vectorcall_unbound_value(tstate, unbound, func, args, nargs);
     }
-    Py_XDECREF(func);
+    PyValue_XCLOSE(func);
     return result;
 }
 
@@ -3552,22 +3599,24 @@ maybe_call_special_value(PyObject *attr, const PyValue *args, Py_ssize_t nargs,
 {
     PyThreadState *tstate = _PyThreadState_GET();
     PyObject *self = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
-    PyObject *func = NULL;
+    PyValue func;
     PyValue result = PyValue_NULL;
     if (attr_is_none != NULL) {
         *attr_is_none = 0;
     }
-    int unbound = lookup_maybe_method(self, attr, &func);
+    int unbound = lookup_method_value_ex(self, attr, &func, 0);
     if (unbound >= 0) {
+        int is_none = PyValue_IsObject(func) &&
+            PyValue_AsKnownObjectBorrow(func) == Py_None;
         if (attr_is_none != NULL) {
-            *attr_is_none = (func == Py_None);
+            *attr_is_none = is_none;
         }
-        if (func != Py_None || attr_is_none == NULL) {
+        if (!is_none || attr_is_none == NULL) {
             result = vectorcall_unbound_value(tstate, unbound, func, args,
                                               nargs);
         }
     }
-    Py_XDECREF(func);
+    PyValue_XCLOSE(func);
     return result;
 }
 

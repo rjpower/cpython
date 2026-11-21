@@ -2185,6 +2185,20 @@ generator_control_generation(_PyInterpreterFrame *frame)
     return frame->frame_obj == NULL ? 0 : frame->frame_obj->f_lineno_generation;
 }
 
+/* Close one input of a completed send.  The receiver is the generator that
+ * has just completed (or an awaited coroutine): its last owner frees it
+ * without running code if it is plain. */
+static inline bool
+gen_close_input(PyValue input, bool receiver)
+{
+    if (receiver && PyValue_RefcountOnObject(input) &&
+        _PyGen_TryCloseClearedNoReentry(PyValue_AsKnownObjectBorrow(input)))
+    {
+        return true;
+    }
+    return _PyValue_TryXCloseNoReentry(input);
+}
+
 /* The kind that a generator table gives a word's handler (the enums of
  * Python/ceval_generator.h), or 0 for none.  Ordinary outcomes need one
  * dispatch-table-shaped lookup.  A transparent monitor keeps the same word

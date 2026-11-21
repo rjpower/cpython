@@ -3475,7 +3475,7 @@ class TestIRCases(unittest.TestCase):
         # The handlers of the call families take the role flags in the word
         roles = {name: contract.word_flags for name, contract in contracts.items()
                  if contract.word_flags}
-        self.assertEqual(len(roles), 31)
+        self.assertEqual(len(roles), 32)
         self.assertEqual(set(roles.values()),
                          {("IR_F_NO_SELF",), ("IR_F_NO_KW",)})
         self.assertEqual({name for name, flags in roles.items()

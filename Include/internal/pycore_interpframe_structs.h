@@ -95,6 +95,12 @@ static_assert(offsetof(_PyInterpreterFrame, owned_slots) == 104,
     int8_t prefix##_running_async;                                          \
     /* The frame */                                                         \
     int8_t prefix##_frame_state;                                            \
+    /* A generator or coroutine that nothing has made more than the object   \
+     * its call creates: its names are those of its code, it has no origin   \
+     * and it is not an async generator.  Once its frame is retired and no   \
+     * one else refers to it, it can be freed without running code.  Set     \
+     * when it is created and cleared where one of these is given. */        \
+    int8_t prefix##_plain;                                                  \
     _PyInterpreterFrame prefix##_iframe;                                    \
 
 struct _PyGenObject {

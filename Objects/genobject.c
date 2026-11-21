@@ -250,29 +250,29 @@ _PyGen_TryCloseClearedNoReentry(PyObject *self)
     }
     PyGenObject *gen = _PyGen_CAST(self);
     _PyInterpreterFrame *frame = &gen->gi_iframe;
-    /* CLEARED is published before retirement callbacks. No pending headers
-     * may remain when consuming the container. */
-    if (gen->gi_frame_state != FRAME_CLEARED ||
-        gen->gi_weakreflist != NULL || gen->gi_exc_state.exc_value != NULL)
+    /* CLEARED is published before retirement callbacks, and the retirement
+     * leaves the function and the exception state last: a generator in
+     * which either remains is still being retired.  No pending headers may
+     * remain when consuming the container. */
+    if (!gen->gi_plain || gen->gi_frame_state != FRAME_CLEARED ||
+        gen->gi_weakreflist != NULL || frame->f_funcobj != NULL ||
+        gen->gi_exc_state.exc_value != NULL)
     {
         return false;
     }
+    /* The retirement has cleared the rest of the frame, which the generator
+     * linked to nothing. */
+    assert(frame->frame_obj == NULL && frame->f_locals == NULL &&
+           frame->previous == NULL &&
+           gen->gi_exc_state.previous_item == NULL);
     PyCodeObject *code = frame->f_executable;
-    /* make_gen has not populated the other frame fields when code is NULL. */
-    if (code == NULL || Py_REFCNT(code) <= 1) {
-        return false;
-    }
-    if (frame->frame_obj != NULL || frame->f_locals != NULL ||
-        frame->f_funcobj != NULL || frame->previous != NULL ||
-        gen->gi_exc_state.previous_item != NULL ||
-        gen->gi_name != code->co_name || gen->gi_qualname != code->co_qualname ||
-        (PyCoro_CheckExact(self) &&
-         ((PyCoroObject *)self)->cr_origin_or_finalizer != NULL))
-    {
-        return false;
-    }
+    assert(code != NULL);
     /* The code owner survives its decrement and pins both canonical names,
-     * including when those names alias. None of the three closes can finalize. */
+     * which a plain generator shares, including when those names alias.
+     * None of the three closes can finalize. */
+    if (Py_REFCNT(code) <= 1) {
+        return false;
+    }
     Py_DECREF_MORTAL_SPECIALIZED(self, gen_dealloc_cleared_no_reentry);
     return true;
 #endif
@@ -986,6 +986,7 @@ gen_set_name(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     // gh-133931: To prevent use-after-free from other threads that reference
     // the gi_name.
     _PyObject_XSetRefDelayed(&op->gi_name, Py_NewRef(value));
+    op->gi_plain = 0;
     Py_END_CRITICAL_SECTION();
     return 0;
 }
@@ -1013,6 +1014,7 @@ gen_set_qualname(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     // gh-133931: To prevent use-after-free from other threads that reference
     // the gi_qualname.
     _PyObject_XSetRefDelayed(&op->gi_qualname, Py_NewRef(value));
+    op->gi_plain = 0;
     Py_END_CRITICAL_SECTION();
     return 0;
 }
@@ -1260,6 +1262,8 @@ make_gen(PyTypeObject *type, PyFunctionObject *func, PyCodeObject *code)
     PyObject *qualname = FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_qualname);
     assert(qualname != NULL);
     gen->gi_qualname = Py_NewRef(qualname);
+    gen->gi_plain = type != &PyAsyncGen_Type && name == code->co_name &&
+        qualname == code->co_qualname;
     _PyObject_GC_TRACK(gen);
     return (PyObject *)gen;
 }
@@ -1308,6 +1312,7 @@ _Py_MakeCoro(PyFunctionObject *func, PyCodeObject *code,
             Py_DECREF(coro);
             return NULL;
         }
+        ((PyCoroObject *)coro)->cr_plain = 0;
     }
     return coro;
 }
@@ -1397,6 +1402,8 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
     gen->gi_closed = 0;
     gen->gi_hooks_inited = 0;
     gen->gi_running_async = 0;
+    // It has a frame object
+    gen->gi_plain = 0;
     if (name != NULL)
         gen->gi_name = Py_NewRef(name);
     else

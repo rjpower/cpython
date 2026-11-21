@@ -1415,6 +1415,35 @@ _PyDict_GetUnicodeValue(PyDictObject *mp, PyObject *key, PyValue *result)
 }
 #endif
 
+/* The value of the exact str key (with a cached hash) in any dict or
+ * frozendict, as an owner in *result: 1, or 0 and PyValue_NULL if the key is
+ * absent, or -1 on an error from comparing a non-str key. */
+int
+_PyDict_GetStrValue(PyDictObject *mp, PyObject *key, PyValue *result)
+{
+    assert(PyAnyDict_Check(mp));
+    assert(PyUnicode_CheckExact(key));
+    Py_hash_t hash = PyUnstable_Unicode_GET_CACHED_HASH(key);
+    assert(hash != -1);
+#ifndef Py_GIL_DISABLED
+    PyDictKeysObject *dk = mp->ma_keys;
+    if (dk->dk_kind != DICT_KEYS_GENERAL) {
+        Py_ssize_t ix = unicodekeys_lookup_unicode(dk, key, hash);
+        if (ix < 0) {
+            *result = PyValue_NULL;
+            return 0;
+        }
+        PyValue value = dk->dk_kind == DICT_KEYS_SPLIT
+            ? mp->ma_values->values[ix]
+            : DK_UNICODE_ENTRIES(dk)[ix].me_value;
+        _PyValue_RecheckHome(value);
+        *result = PyValue_DUP(value);
+        return 1;
+    }
+#endif
+    return dict_lookup_value(mp, PyValue_FromObjectBorrow(key), hash, result);
+}
+
 int
 (_PyDict_GetValue_KnownHash)(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
                            PyValue *result)
@@ -2448,15 +2477,12 @@ _PyDict_LoadBuiltinsFromGlobals(PyObject *globals)
     }
 
     PyDictObject *mp = (PyDictObject *)globals;
-    PyObject *key = &_Py_ID(__builtins__);
-    Py_hash_t hash = unicode_get_hash(key);
-
     PyValue ref;
-    Py_ssize_t ix = _Py_dict_lookup_threadsafe_value(mp, key, hash, &ref);
-    if (ix == DKIX_ERROR) {
+    int found = _PyDict_GetStrValue(mp, &_Py_ID(__builtins__), &ref);
+    if (found < 0) {
         return NULL;
     }
-    if (PyValue_IsNull(ref)) {
+    if (!found) {
         return Py_NewRef(PyEval_GetBuiltins());
     }
     PyObject *object = _PyValue_AsObjectAt(ref, BOX_SITE_DICT);

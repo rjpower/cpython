@@ -425,9 +425,6 @@ PyAPI_FUNC(PyValue) _PyEval_BinarySlice(PyValueBorrow container, PyValueBorrow s
 PyAPI_FUNC(int) _PyEval_StoreSlice(PyValueBorrow v, PyValueBorrow container, PyValueBorrow start, PyValueBorrow stop);
 #define _PyEval_StoreSlice(V0, V1, V2, V3) \
     (_PyEval_StoreSlice)(PyValue_Borrow(V0), PyValue_Borrow(V1), PyValue_Borrow(V2), PyValue_Borrow(V3))
-PyAPI_FUNC(int) _PyEval_IsInstanceValue(PyValueBorrow inst, PyValueBorrow cls);
-#define _PyEval_IsInstanceValue(V0, V1) \
-    (_PyEval_IsInstanceValue)(PyValue_Borrow(V0), PyValue_Borrow(V1))
 
 /*
  * Indicate whether a special method of given 'oparg' can use the (improved)

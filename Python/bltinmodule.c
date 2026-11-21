@@ -3503,7 +3503,7 @@ builtin_isinstance_impl(PyObject *module, PyValueBorrow obj,
 {
     int retval;
 
-    retval = _PyEval_IsInstanceValue(obj, class_or_tuple);
+    retval = _PyValue_IsInstance(obj, class_or_tuple);
     if (retval < 0)
         return PyValue_NULL;
     return PyValue_FromBool(retval);

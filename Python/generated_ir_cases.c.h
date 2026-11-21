@@ -6832,13 +6832,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 instance = IR_OPERAND(0 + IR_CALL_HAS_SELF(ir_word));
                 null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 STAT_INC(CALL, hit);
-                int retval;
-                if (PyValue_IsInline(instance) || PyValue_IsInline(cls)) {
-                    retval = _PyEval_IsInstanceValue(instance, cls);
-                }
-                else {
-                    retval = PyObject_IsInstance(PyValue_AsKnownObjectBorrow(instance),
-                        PyValue_AsKnownObjectBorrow(cls));
+                int retval = 1;
+                if ((cls.bits & ~(uintptr_t)1) != (uintptr_t)PyValue_TYPE(instance)) {
+                    retval = _PyValue_IsInstance(instance, cls);
                 }
                 if (retval < 0) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);

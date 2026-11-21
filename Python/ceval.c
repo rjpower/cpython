@@ -558,7 +558,7 @@ PyObject*
     PyObject *type = PyValue_AsKnownObjectBorrow(type_value);
     assert(PyTuple_CheckExact(kwargs));
     // First, an isinstance check:
-    int isinstance = _PyEval_IsInstanceValue(subject, PyValue_FromObjectBorrow(type));
+    int isinstance = _PyValue_IsInstance(subject, PyValue_FromObjectBorrow(type));
     if (isinstance <= 0) {
         return NULL;
     }
@@ -5773,40 +5773,6 @@ int
     int err = _PyValue_SetItem(container_st, PyValue_FromObjectBorrow(slice), v_st);
     Py_DECREF(slice);
     return err;
-}
-
-/* isinstance(inst, cls), for CALL_ISINSTANCE when inst or cls may be inline.
-   An int or float has no __class__ of its own, so against an exact type, or
-   a tuple of them, the answer is that of PyObject_IsInstance(), whose
-   object_isinstance() then tests the subtype relation alone. */
-int
-(_PyEval_IsInstanceValue)(PyValueBorrow inst_st, PyValueBorrow cls_st)
-{
-    if (PyValue_IsInline(inst_st) && PyValue_IsPointerSpace(cls_st)) {
-        PyTypeObject *type = PyValue_TYPE(inst_st);
-        PyObject *cls = PyValue_AsKnownObjectBorrow(cls_st);
-        if (PyType_CheckExact(cls)) {
-            return PyType_IsSubtype(type, (PyTypeObject *)cls);
-        }
-        if (PyTuple_CheckExact(cls)) {
-            Py_ssize_t n = PyTuple_GET_SIZE(cls);
-            Py_ssize_t i = 0;
-            for (; i < n; i++) {
-                PyValueBorrow item = PyTuple_GET_VALUE(cls, i);
-                if (!PyValue_IsObject(item) ||
-                    !PyType_CheckExact(PyValue_AsKnownObjectBorrow(item))) {
-                    break;
-                }
-                if (PyType_IsSubtype(type, (PyTypeObject *)PyValue_AsKnownObjectBorrow(item))) {
-                    return 1;
-                }
-            }
-            if (i == n) {
-                return 0;
-            }
-        }
-    }
-    return _PyValue_IsInstance(inst_st, cls_st);
 }
 
 PyObject *

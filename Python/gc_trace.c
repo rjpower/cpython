@@ -789,7 +789,7 @@ _PyGC_TraceTraverse(PyObject *op, visitproc visit, void *arg)
     if ((tp->tp_flags & Py_TPFLAGS_HEAPTYPE) && !_PyType_IS_GC(tp)) {
         Py_VISIT(tp);
     }
-    if (PyDict_Check(op)) {
+    if (PyAnyDict_Check(op)) {
         /* dict_traverse() skips the keys of a unicode-keyed table, which the
            cycle collector never needs. */
         int err = _PyDict_TraverseUnicodeKeys(op, visit, arg);

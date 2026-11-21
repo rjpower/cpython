@@ -2562,11 +2562,21 @@ _PyEval_GetObserverContext(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return 0;
 }
 
-/* The evaluation loop.  _PyEval_EvalFrameDefault() wraps each activation in
-   its borrow floor.  The loop sets up the activation and calls the
-   evaluator, ir_evaluate(), which runs the frames until INTERPRETER_EXIT or
-   an unhandled error leaves it.  It keeps an external name so that debuggers
-   and profilers (Tools/gdb/libpython.py) can find its frames. */
+/* The evaluation loop: one activation.  It is a borrow scope with a floor
+ * (pyjit/design/native-boundary.md, section 2).
+ *
+ * The release invariant: when _Py_HandlePending() releases the entries above
+ * eval_floor, no live C frame between the floor and the current instruction
+ * holds a mark or a borrow.  Every caller of _Py_HandlePending() is at an
+ * instruction boundary of this activation, where all native code it called
+ * has returned.  So the floor is set here, around the evaluator, and not in
+ * _PyEval_EvalFrame(): a PEP 523 hook runs C code between the two, and
+ * anything it pushed would be released while still live.
+ *
+ * The loop sets up the activation and calls the evaluator, ir_evaluate(),
+ * which runs the frames until INTERPRETER_EXIT or an unhandled error leaves
+ * it.  It keeps an external name so that debuggers and profilers
+ * (Tools/gdb/libpython.py) can find its frames. */
 PyValue _PyEval_EvalFrameLoop(PyThreadState *tstate,
                               _PyInterpreterFrame *frame, int throwflag);
 
@@ -2582,6 +2592,17 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
         _PyEval_FrameClearAndPop(tstate, frame);
         return PyValue_NULL;
     }
+
+    _PyBorrowStack *borrow = &((_PyThreadStateImpl *)tstate)->borrow;
+    PyObject **outer_floor = borrow->eval_floor;
+    /* Entries below this activation's floor can only have requested a
+       release before it started, so the only request of theirs that its
+       instruction boundaries can consume is one pending now. */
+    int outer_request = _Py_eval_breaker_bit_is_set(tstate,
+                                                    _PY_BORROW_RELEASE_BIT);
+    PyObject **floor = borrow->top;
+    borrow->eval_floor = floor;
+    PyValue result;
 
     /* The activation's record, linked from the thread state until it
      * returns.  It lies on this C stack between the stack pointer and the
@@ -2642,12 +2663,12 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
         /* Because this avoids the RESUME, we need to update instrumentation */
         _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
     }
-    PyValue result = ir_evaluate(tstate, frame, throwflag);
+    result = ir_evaluate(tstate, frame, throwflag);
     /* The handler that returned, INTERPRETER_EXIT or exit_unwind_notrace,
      * left the entry frame */
     assert(tstate_impl->eval_activation == &activation);
     tstate_impl->eval_activation = activation.previous;
-    return result;
+    goto leave;
 
 early_exit:
     assert(_PyErr_Occurred(tstate));
@@ -2661,38 +2682,9 @@ early_exit:
     /* Restore previous frame and exit */
     tstate->current_frame = frame->previous;
     tstate_impl->eval_activation = activation.previous;
-    return PyValue_NULL;
-}
+    result = PyValue_NULL;
 
-
-#ifdef DO_NOT_OPTIMIZE_INTERP_LOOP
-#  pragma optimize("", on)
-#endif
-
-/* Each activation of the evaluation loop is a borrow scope with a floor
- * (pyjit/design/native-boundary.md, section 2).
- *
- * The release invariant: when _Py_HandlePending() releases the entries above
- * eval_floor, no live C frame between the floor and the current instruction
- * holds a mark or a borrow.  Every caller of _Py_HandlePending() is at an
- * instruction boundary of this activation, where all native code it called
- * has returned.  So the floor is set here, around the loop, and not in
- * _PyEval_EvalFrame(): a PEP 523 hook runs C code between the two, and
- * anything it pushed would be released while still live. */
-static PyValue
-eval_frame_default_value(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
-{
-    _Py_EnsureTstateNotNULL(tstate);
-    _PyBorrowStack *borrow = &((_PyThreadStateImpl *)tstate)->borrow;
-    PyObject **outer_floor = borrow->eval_floor;
-    /* Entries below this activation's floor can only have requested a
-       release before it started, so the only request of theirs that its
-       instruction boundaries can consume is one pending now. */
-    int outer_request = _Py_eval_breaker_bit_is_set(tstate,
-                                                    _PY_BORROW_RELEASE_BIT);
-    PyObject **floor = borrow->top;
-    borrow->eval_floor = floor;
-    PyValue result = _PyEval_EvalFrameLoop(tstate, frame, throwflag);
+leave:
     assert(borrow->eval_floor == floor);
     _PyBorrowScope_Exit(tstate, floor);
     borrow->eval_floor = outer_floor;
@@ -2706,18 +2698,30 @@ eval_frame_default_value(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     return result;
 }
 
+
+#ifdef DO_NOT_OPTIMIZE_INTERP_LOOP
+#  pragma optimize("", on)
+#endif
+
 /* The evaluation loop for callers that take the value of the frame as it is
  * (the value vectorcall of a Python function, generators).  A PEP 523 hook
  * returns an object, which it steals back. */
+static inline Py_ALWAYS_INLINE PyValue
+eval_frame_value(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 int throwflag)
+{
+    if (tstate->interp->eval_frame == NULL) {
+        EVAL_CALL_STAT_INC(EVAL_CALL_TOTAL);
+        return _PyEval_EvalFrameLoop(tstate, frame, throwflag);
+    }
+    return _PyValue_FromObjectResult(_PyEval_EvalFrame(tstate, frame, throwflag));
+}
+
 PyValue
 _PyEval_EvalFrameValue(PyThreadState *tstate, _PyInterpreterFrame *frame,
                        int throwflag)
 {
-    if (tstate->interp->eval_frame == NULL) {
-        EVAL_CALL_STAT_INC(EVAL_CALL_TOTAL);
-        return eval_frame_default_value(tstate, frame, throwflag);
-    }
-    return _PyValue_FromObjectResult(_PyEval_EvalFrame(tstate, frame, throwflag));
+    return eval_frame_value(tstate, frame, throwflag);
 }
 
 /* The exported evaluation loop and the PEP 523 default: an object result,
@@ -2725,7 +2729,7 @@ _PyEval_EvalFrameValue(PyThreadState *tstate, _PyInterpreterFrame *frame,
 PyObject *
 _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
-    PyValue result = eval_frame_default_value(tstate, frame, throwflag);
+    PyValue result = _PyEval_EvalFrameLoop(tstate, frame, throwflag);
     if (PyValue_IsNull(result)) {
         return NULL;
     }
@@ -4718,6 +4722,22 @@ _PyEval_Vector(PyThreadState *tstate, PyFunctionObject *func,
     return result;
 }
 
+/* Whether a call of code with nargs positional arguments and no keywords
+ * binds each argument to its own local: no *args, **kwargs, keyword-only
+ * parameter or default to fill. */
+static inline Py_ALWAYS_INLINE int
+code_binds_exactly(PyCodeObject *code, Py_ssize_t nargs)
+{
+    return nargs == code->co_argcount && code->co_kwonlyargcount == 0 &&
+           !(code->co_flags & (CO_VARARGS | CO_VARKEYWORDS));
+}
+
+/* The entry of every native caller of a Python function that holds its
+ * arguments as a window of borrowed words (the value vectorcall of a
+ * function, the slot dunders, the method calls): it pushes the frame, binds
+ * the arguments and runs it.  A call that binds exactly dups each argument
+ * into its local; any other gathers owners for the general binder.  The
+ * frame is current for the evaluator, which consumes it. */
 Py_NO_INLINE PyValue
 _PyEval_VectorValue(PyThreadState *tstate, PyFunctionObject *func,
                      const PyValue *args, size_t nargsf, PyObject *kwnames)
@@ -4731,34 +4751,61 @@ _PyEval_VectorValue(PyThreadState *tstate, PyFunctionObject *func,
     assert(nargs >= 0);
     assert(nargs == 0 || args != NULL);
     EVAL_CALL_STAT_INC(EVAL_CALL_FUNCTION_VECTORCALL);
-    Py_ssize_t total = nargs + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
-    PyValue small[8];
-    PyValue *owners = small;
-    if (total > (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
-        owners = PyMem_Malloc(sizeof(PyValue) * (size_t)total);
-        if (owners == NULL) {
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    _PyInterpreterFrame *frame;
+    if (kwnames == NULL && code_binds_exactly(code, nargs)) {
+        /* Nothing here runs Python, so func's code cannot change before
+         * the frame holds a count of it. */
+        CALL_STAT_INC(frames_pushed);
+        if (_PyCode_GetExec(code) == NULL) {
+            return PyValue_NULL;
+        }
+        frame = _PyThreadState_PushFrame(tstate, code->co_framesize);
+        if (frame == NULL) {
             _PyErr_NoMemory(tstate);
             return PyValue_NULL;
         }
+        PyObject *locals = code->co_flags & CO_OPTIMIZED ? NULL
+            : Py_NewRef(func->func_globals);
+        _PyFrame_Initialize(tstate, frame,
+                            PyValue_DUP(PyValue_FromObjectBorrow(func)),
+                            locals, code, frame->base, NULL);
+        for (Py_ssize_t i = 0; i < nargs; i++) {
+            frame->base[i] = PyValue_DUP(args[i]);
+        }
     }
-    for (Py_ssize_t i = 0; i < total; i++) {
-        owners[i] = PyValue_DUP(args[i]);
-    }
-    PyCodeObject *code = (PyCodeObject *)Py_NewRef(func->func_code);
-    PyObject *locals = code->co_flags & CO_OPTIMIZED ? NULL
-        : Py_NewRef(func->func_globals);
-    _PyInterpreterFrame *frame = eval_frame_push_and_init_code(
-        tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
-        owners, nargs, kwnames, NULL, code);
-    Py_DECREF(code);
-    if (owners != small) {
-        PyMem_Free(owners);
-    }
-    if (frame == NULL) {
-        return PyValue_NULL;
+    else {
+        Py_ssize_t total = nargs + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
+        PyValue small[8];
+        PyValue *owners = small;
+        if (total > (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
+            owners = PyMem_Malloc(sizeof(PyValue) * (size_t)total);
+            if (owners == NULL) {
+                _PyErr_NoMemory(tstate);
+                return PyValue_NULL;
+            }
+        }
+        for (Py_ssize_t i = 0; i < total; i++) {
+            owners[i] = PyValue_DUP(args[i]);
+        }
+        /* The code is pinned across the binding, which the function's mutable
+         * code could outlive. */
+        Py_INCREF(code);
+        PyObject *locals = code->co_flags & CO_OPTIMIZED ? NULL
+            : Py_NewRef(func->func_globals);
+        frame = eval_frame_push_and_init_code(
+            tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
+            owners, nargs, kwnames, NULL, code);
+        Py_DECREF(code);
+        if (owners != small) {
+            PyMem_Free(owners);
+        }
+        if (frame == NULL) {
+            return PyValue_NULL;
+        }
     }
     EVAL_CALL_STAT_INC(EVAL_CALL_VECTOR);
-    PyValue result = _PyEval_EvalFrameValue(tstate, frame, 0);
+    PyValue result = eval_frame_value(tstate, frame, 0);
 #ifndef NDEBUG
     /* The first root chunk is retained even after its initial frame exits. */
     assert(chunk == NULL || tstate->datastack_chunk == chunk);

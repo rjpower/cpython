@@ -43,9 +43,9 @@ _PyBorrowStack_Init(_PyBorrowStack *s)
     base->previous_top = NULL;
     base->end = s->base.base_slots + _PY_BORROW_BASE_SLOTS;
     base->base_depth = 0;
-    assert(base->slots == s->base.base_slots);
+    assert(_PyBorrowChunk_Slots(base) == s->base.base_slots);
     s->chunk = base;
-    s->top = base->slots;
+    s->top = _PyBorrowChunk_Slots(base);
     s->end = base->end;
     s->eval_floor = NULL;
     s->spare = NULL;
@@ -59,8 +59,8 @@ borrow_depth(const _PyBorrowStack *s, PyObject **p)
 {
     PyObject **limit = s->top;
     for (const _PyBorrowChunk *c = s->chunk; c != NULL; c = c->previous) {
-        if (c->slots <= p && p <= limit) {
-            return c->base_depth + (p - c->slots);
+        if (_PyBorrowChunk_Slots(c) <= p && p <= limit) {
+            return c->base_depth + (p - _PyBorrowChunk_Slots(c));
         }
         limit = c->previous_top;
     }
@@ -72,7 +72,7 @@ Py_ssize_t
 _PyBorrow_Depth(PyThreadState *tstate)
 {
     _PyBorrowStack *s = borrow_stack(tstate);
-    return s->chunk->base_depth + (s->top - s->chunk->slots);
+    return s->chunk->base_depth + (s->top - _PyBorrowChunk_Slots(s->chunk));
 }
 
 static void borrow_release(_PyBorrowStack *s, _PyBorrowMark mark);
@@ -90,7 +90,7 @@ _PyBorrowStack_ReleaseAll(PyThreadState *tstate)
 {
     if (!borrow_thread_has_frame(tstate)) {
         _PyBorrowStack *s = borrow_stack(tstate);
-        borrow_release(s, s->base.chunk.slots);
+        borrow_release(s, _PyBorrowChunk_Slots(&s->base.chunk));
     }
 }
 
@@ -123,7 +123,7 @@ _PyBorrowStack_Visit(PyThreadState *tstate, visitproc visit, void *arg)
     for (const _PyBorrowChunk *c = s->chunk; c != NULL; c = c->previous) {
         /* Downward, as release walks, to find each vector's skip entry
            before its slots. */
-        for (PyObject **q = top; q > c->slots;) {
+        for (PyObject **q = top; q > _PyBorrowChunk_Slots(c);) {
             PyObject *o = *--q;
             if (BORROW_IS_SKIP(o)) {
                 q -= BORROW_SKIP_COUNT(o);
@@ -149,7 +149,7 @@ static int
 borrow_grow(_PyBorrowStack *s, Py_ssize_t n)
 {
     _PyBorrowChunk *chunk = s->spare;
-    if (chunk != NULL && chunk->end - chunk->slots >= n) {
+    if (chunk != NULL && chunk->end - _PyBorrowChunk_Slots(chunk) >= n) {
         s->spare = NULL;
     }
     else {
@@ -165,13 +165,14 @@ borrow_grow(_PyBorrowStack *s, Py_ssize_t n)
             PyErr_NoMemory();
             return -1;
         }
-        chunk->end = chunk->slots + size;
+        chunk->end = _PyBorrowChunk_Slots(chunk) + size;
     }
     chunk->previous = s->chunk;
     chunk->previous_top = s->top;
-    chunk->base_depth = s->chunk->base_depth + (s->top - s->chunk->slots);
+    chunk->base_depth = s->chunk->base_depth
+                        + (s->top - _PyBorrowChunk_Slots(s->chunk));
     s->chunk = chunk;
-    s->top = chunk->slots;
+    s->top = _PyBorrowChunk_Slots(chunk);
     s->end = chunk->end;
     return 0;
 }
@@ -181,7 +182,8 @@ borrow_grow(_PyBorrowStack *s, Py_ssize_t n)
 static void
 borrow_chunk_retire(_PyBorrowStack *s, _PyBorrowChunk *chunk)
 {
-    if (s->spare == NULL && chunk->end - chunk->slots == BORROW_CHUNK_SLOTS) {
+    if (s->spare == NULL
+        && chunk->end - _PyBorrowChunk_Slots(chunk) == BORROW_CHUNK_SLOTS) {
         s->spare = chunk;
     }
     else {
@@ -194,7 +196,7 @@ borrow_release(_PyBorrowStack *s, _PyBorrowMark mark)
 {
     /* Re-read the stack on every iteration: a deallocator may push or pop. */
     while (s->top != mark) {
-        if (s->top == s->chunk->slots) {
+        if (s->top == _PyBorrowChunk_Slots(s->chunk)) {
             /* The chunk is empty: pop it. */
             _PyBorrowChunk *done = s->chunk;
             assert(done != &s->base.chunk);
@@ -209,8 +211,8 @@ borrow_release(_PyBorrowStack *s, _PyBorrowMark mark)
             /* A vector lies wholly in one chunk and holds no mark: stepping
                over it never passes a mark in this chunk. */
             PyObject **vector = s->top - BORROW_SKIP_COUNT(o);
-            assert(vector >= s->chunk->slots);
-            assert(!(s->chunk->slots <= mark && mark <= s->top) ||
+            assert(vector >= _PyBorrowChunk_Slots(s->chunk));
+            assert(!(_PyBorrowChunk_Slots(s->chunk) <= mark && mark <= s->top) ||
                    vector >= mark);
             s->top = vector;
             continue;

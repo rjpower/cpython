@@ -31,8 +31,14 @@ typedef struct _PyBorrowChunk {
     PyObject **previous_top;    // previous chunk's top when this one opened
     PyObject **end;
     Py_ssize_t base_depth;      // entries in the chunks below this one
-    PyObject *slots[];
+    // The slots follow the header; see _PyBorrowChunk_Slots().
 } _PyBorrowChunk;
+
+static inline PyObject **
+_PyBorrowChunk_Slots(const _PyBorrowChunk *chunk)
+{
+    return (PyObject **)(chunk + 1);
+}
 
 // The slots of the first chunk, which the thread state embeds.  The first
 // scope of a thread, which is also the outermost one, then opens without
@@ -40,7 +46,7 @@ typedef struct _PyBorrowChunk {
 #define _PY_BORROW_BASE_SLOTS 1024
 
 typedef struct {
-    _PyBorrowChunk chunk;       // its slots[] are base_slots, which follow it
+    _PyBorrowChunk chunk;       // its slots are base_slots, which follow it
     PyObject *base_slots[_PY_BORROW_BASE_SLOTS];
 } _PyBorrowBase;
 

@@ -5,6 +5,7 @@
 #include "Python.h"
 #include "pycore_long_value.h"    // _PyLong_ValueHash()
 #include "pycore_object.h"        // _Py_SwappedOp
+#include "pycore_unicodeobject.h"  // _PyUnicode_Equal()
 #include "pycore_typeobject.h"    // _PyType_IsReady()
 #include "pycore_value_ops.h"
 #include "pycore_value_slots.h"   // _PyType_VALUE_FIELD_AT()
@@ -90,6 +91,36 @@ richcompare_bool_dispatch(PyValueBorrow left, PyValueBorrow right, int op)
     return ok;
 }
 
+/* The compare of two objects of one type whose richcompare slot is str's or
+   int's: no Python code can run, so, as with the inline exits below, no
+   recursion guard and no result value. Returns 0 or 1, or -1 when the
+   operands need the full dispatch (an ordering of str, an int beyond a
+   word). The slot is compared, not the type, so a subclass that does not
+   override the comparison (re's _NamedIntConstant) takes the exit too. */
+static inline int
+richcompare_bool_same_type(PyValueBorrow left, PyValueBorrow right, int op)
+{
+    PyObject *a = PyValue_AsKnownObjectBorrow(left);
+    PyObject *b = PyValue_AsKnownObjectBorrow(right);
+    PyTypeObject *t = Py_TYPE(a);
+    if (t != Py_TYPE(b)) {
+        return -1;
+    }
+    if (t->tp_richcompare == PyUnicode_RichCompare) {
+        if (op == Py_EQ || op == Py_NE) {
+            return _PyUnicode_Equal(a, b) ^ (op == Py_NE);
+        }
+        return -1;
+    }
+    if (t->tp_richcompare == PyLong_Type.tp_richcompare) {
+        int64_t x, y;
+        if (_PyLong_WordOperands(left, right, &x, &y)) {
+            return _PyLong_CompareOp(_PyLong_WordCompare(x, y), op);
+        }
+    }
+    return -1;
+}
+
 int
 (_PyValue_RichCompareBool)(PyValueBorrow left, PyValueBorrow right, int op)
 {
@@ -116,6 +147,12 @@ int
         assert(floats);
         (void)floats;
         return _PyFloat_CompareOp(a, b, op);
+    }
+    if (PyValue_IsPointerSpace(left) && PyValue_IsPointerSpace(right)) {
+        int res = richcompare_bool_same_type(left, right, op);
+        if (res >= 0) {
+            return res;
+        }
     }
     return richcompare_bool_dispatch(left, right, op);
 }

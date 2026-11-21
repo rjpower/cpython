@@ -7,8 +7,10 @@ tag `pyjit-golden-20261120-gap82`, pushed) is the
 [gap82](issues/register-semantics59/gap82.md#results) integration. Its timed
 all-29 geomean is **0.992 of upstream's time**, 0.884 of golden73's and 0.899
 of checkpoint78's; ten cases beat upstream. Full suites fail only known
-failures. Profile83, an analysis pass, is measuring what remains against
-upstream ([plan](issues/interpreter-performance56/plan.md)).
+failures. The [profile83](issues/register-semantics59/profile83.md) analysis
+finds the remaining gap is executed work at boundaries (native-call publish,
+C entering Python, generator creation and finishing, the non-exact binder,
+membership, allocation and GC entry), each with a clean change.
 
 The checkpoints between golden73 and gap82, each measured against golden73:
 

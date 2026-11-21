@@ -17,7 +17,22 @@ golden82 with upstream:
   executed work and cycles per instruction, the hot footprint and the
   structural levers that shrink it.
 
-Root merges their ranked lists into the next wave's proposal.
+**Result (2026-11-20).** The [profile83 record](../register-semantics59/profile83.md)
+holds the ranked list. The remaining gap is executed work, not stalls: over
+the 19 cases with more cycles than upstream, instructions explain 2.02 of the
+2.03 summed log-excess. Ordinary calls, returns, attribute accesses and
+generator steps are at parity or ahead. What remains is fixed cost per
+event at boundaries:
+- native-call publish;
+- C code entering Python (eight layers against four);
+- generator creation and finishing, and `GET_ITER` over a Python `__iter__`;
+- the non-exact binder;
+- membership tests and the generic `FOR_ITER`;
+- allocation entry, GC visits and the dict's first insert.
+
+Generators' extra 13% of cycles against unit G is a back-end stall, probably
+K2a's branch-free `IR_SKIP_RESUME`; that is untested. The next wave is the
+user's choice.
 
 ## Previous wave: gap82, the gap to upstream after H5
 

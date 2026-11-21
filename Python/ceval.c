@@ -1387,105 +1387,111 @@ call_return_pc(_PyInstr *current)
     return current + _PyIR_CallWordLength(FT_ATOMIC_LOAD_UINT64_RELAXED(*current));
 }
 
-/* Whether operand k of the call at head names a local, which the call only
- * borrows, and the home that it names. */
+/* The release pass over what the call whose head is HEAD (WORD, its first
+ * word) owns: its temporary operands and its callable, each taken from its
+ * home before it closes.  OPERANDS is the number of operands that name slots:
+ * all of the word's, but the names of a CALL_KW.  A local is only borrowed,
+ * and so is the home named DST, which the caller has written.  One loop
+ * serves every operand count: the operand words are read once each.
+ *
+ * With DEFER, an owner that holds the last count is left in its home, which
+ * keeps the loop free of deallocations (and so of the registers that a call
+ * would cost every handler); the others close at once.  The return value says
+ * whether a pass is still owed, and call_release_rest() makes it.  Without
+ * DEFER every owner closes, a deallocation that can run Python included, and
+ * the frame shows the operands not yet reached in their homes. */
 static inline Py_ALWAYS_INLINE int
-call_operand_is_local(const _PyIRWord *head, int k)
+call_release_pass(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
+                  int operands, int nwords, uint32_t dst, int defer)
 {
-    return (head[1 + k / IR_OPERANDS_PER_WORD] &
-            (IR_F_LOCAL_A << (k % IR_OPERANDS_PER_WORD))) != 0;
-}
-
-/* Release the temporary operands of the call at head, the first operands of
- * its operand words, and the callable, which the call owns, each taken from
- * its home before it closes.  A local is only borrowed, and so is the home
- * named dst, which the caller has written.  The releases can run Python. */
-static Py_NO_INLINE void
-call_release_operands(_PyInterpreterFrame *frame, const _PyIRWord *head,
-                      int operands, uint32_t dst)
-{
-    _PyIRWord word = *head;
-    PyValue *slots = _PyFrame_Slots(frame);
-    for (int k = operands; k-- > 0;) {
-        uint32_t home = (uint32_t)_PyIR_CallOperand(head, k);
-        if (home != dst && !call_operand_is_local(head, k)) {
+    int owed = 0;
+    for (int w = 0, left = operands; w < nwords; w++, left -= IR_OPERANDS_PER_WORD) {
+        _PyIRWord ops = head[1 + w];
+        uint64_t homes = ops >> 16;
+        int count = left < IR_OPERANDS_PER_WORD ? left : IR_OPERANDS_PER_WORD;
+        for (int k = 0; k < count; k++, homes >>= 12) {
+            uint32_t home = (uint32_t)(homes & IR_FIELD_MAX);
+            if (home == dst || (ops & (IR_F_LOCAL_A << k))) {
+                continue;
+            }
             PyValue owner = slots[home];
-            slots[home] = PyValue_NULL;
-            PyValue_XCLOSE(owner);
+            if (defer) {
+                if (PyValue_RefcountOnObject(owner)) {
+                    if (Py_REFCNT(BITS_TO_PTR(owner)) <= 1) {
+                        owed = 1;
+                        continue;
+                    }
+                    Py_DECREF_MORTAL(BITS_TO_PTR(owner));
+                }
+                slots[home] = PyValue_NULL;
+            }
+            else {
+                slots[home] = PyValue_NULL;
+                PyValue_XCLOSE(owner);
+            }
         }
     }
     uint32_t callable = IR_B(word);
     if (callable != dst && !(word & IR_F_LOCAL_B)) {
         PyValue owner = slots[callable];
-        slots[callable] = PyValue_NULL;
-        PyValue_XCLOSE(owner);
+        if (defer) {
+            if (PyValue_RefcountOnObject(owner)) {
+                if (Py_REFCNT(BITS_TO_PTR(owner)) <= 1) {
+                    return 1;
+                }
+                Py_DECREF_MORTAL(BITS_TO_PTR(owner));
+            }
+            slots[callable] = PyValue_NULL;
+        }
+        else {
+            slots[callable] = PyValue_NULL;
+            PyValue_XCLOSE(owner);
+        }
+    }
+    return owed;
+}
+
+/* The pass that call_release_pass() owes: close every owner still in its
+ * home, the last counts among them. */
+static Py_NO_INLINE void
+call_release_rest(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
+                  int operands, uint32_t dst)
+{
+    call_release_pass(slots, head, word, operands,
+                      (operands + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD,
+                      dst, 0);
+}
+
+/* Release the temporary operands and the callable of a call: its owners that
+ * hold other counts at once, and the rest out of line.  A call of at most
+ * IR_OPERANDS_PER_WORD operands has them all in its first operand word, which
+ * the inline pass knows, and so has no loop over words; a longer call is all
+ * out of line. */
+static inline Py_ALWAYS_INLINE void
+call_release_operands(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
+                      int operands, uint32_t dst)
+{
+    if (Py_UNLIKELY(operands > IR_OPERANDS_PER_WORD ||
+                    call_release_pass(slots, head, word, operands, 1, dst, 1))) {
+        call_release_rest(slots, head, word, operands, dst);
     }
 }
 
-/* The result of a call that a handler computed from the operand homes
- * themselves: store it in dst, then release the temporary operands and the
- * callable (call_release_operands).  The result goes first (handlers81 rules
- * 6 and 7), so a dst that is one of the temporary homes, or a local,
- * displaces its old value, which the handler closes last (ir_old).  operands
- * is the number of operands that name slots: all of the word's, but the
- * names of a CALL_KW. */
-static Py_NO_INLINE PyValue
-call_publish_result(_PyInterpreterFrame *frame, const _PyIRWord *head,
-                    PyValue result, int operands)
-{
-    PyValue *slots = _PyFrame_Slots(frame);
-    uint32_t dst = IR_A(*head);
-    PyValue displaced = slots[dst];
-    _PyValue_CheckHome(result);
-    slots[dst] = result;
-    call_release_operands(frame, head, operands, dst);
-    return displaced;
-}
-
-/* call_publish_result for the calls with at most four operands (the self slot
- * included), which are all in the first operand word: no loop, no call.  The
- * result is stored, every temporary operand and the callable is detached from
- * its home, and only then are the detached owners closed, in reverse order, so
- * that a finalizer sees the frame as the call left it. */
+/* The result of a native call, which the handler computed from the operand
+ * homes themselves: store it in dst, then release the call's temporaries
+ * (call_release_operands).  The result goes first (handlers81 rules 6 and 7),
+ * so a dst that is one of the temporary homes, or a local, displaces its old
+ * value, which the caller closes last (ir_old). */
 static inline Py_ALWAYS_INLINE PyValue
-call_publish(_PyInterpreterFrame *frame, const _PyIRWord *head, PyValue result)
+call_publish(_PyInterpreterFrame *frame, const _PyIRWord *head, _PyIRWord word,
+             PyValue result, int operands)
 {
-    _PyIRWord word = *head;
-    unsigned int n = IR_C(word);
-    if (Py_UNLIKELY(n > IR_OPERANDS_PER_WORD)) {
-        return call_publish_result(frame, head, result, (int)n);
-    }
-    _PyIRWord ops = head[1];
     PyValue *slots = _PyFrame_Slots(frame);
     uint32_t dst = IR_A(word);
     PyValue displaced = slots[dst];
     _PyValue_CheckHome(result);
     slots[dst] = result;
-    PyValue o0 = PyValue_NULL, o1 = PyValue_NULL, o2 = PyValue_NULL,
-            o3 = PyValue_NULL, oc = PyValue_NULL;
-#define CALL_PUBLISH_TAKE(K) \
-    if (n > (K)) { \
-        uint32_t home = (uint32_t)((ops >> (16 + 12 * (K))) & IR_FIELD_MAX); \
-        if (home != dst && !(ops & (IR_F_LOCAL_A << (K)))) { \
-            o##K = slots[home]; \
-            slots[home] = PyValue_NULL; \
-        } \
-    }
-    CALL_PUBLISH_TAKE(0)
-    CALL_PUBLISH_TAKE(1)
-    CALL_PUBLISH_TAKE(2)
-    CALL_PUBLISH_TAKE(3)
-#undef CALL_PUBLISH_TAKE
-    uint32_t callable = IR_B(word);
-    if (callable != dst && !(word & IR_F_LOCAL_B)) {
-        oc = slots[callable];
-        slots[callable] = PyValue_NULL;
-    }
-    PyValue_XCLOSE(o3);
-    PyValue_XCLOSE(o2);
-    PyValue_XCLOSE(o1);
-    PyValue_XCLOSE(o0);
-    PyValue_XCLOSE(oc);
+    call_release_operands(slots, head, word, operands, dst);
     return displaced;
 }
 
@@ -3860,7 +3866,7 @@ _PyEval_CreateInitFrame(PyThreadState *tstate, _PyInterpreterFrame *caller,
  * A Python callee takes its arguments from the operands (a temporary moves,
  * a local is counted) after every test, and the child is current before the
  * first release, which is the method operand's.  A native callee borrows
- * them, and the result is published first (call_publish_result).  An error
+ * them, and the result is published first (call_publish).  An error
  * leaves the operands that the call did not move in their homes, which the
  * unwinder clears. */
 
@@ -4470,10 +4476,8 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
             return (_PyCallResult){-1, NULL};
         }
         /* The keyword names operand of CALL_KW is not a slot. */
-        PyValue displaced = keywords
-            ? call_publish_result(frame, head, result,
-                                  (int)IR_C(word) - keywords)
-            : call_publish(frame, head, result);
+        PyValue displaced = call_publish(frame, head, word, result,
+                                         (int)IR_C(word) - keywords);
         PyValue_XCLOSE(displaced);
         if ((flags & CALL_PERIODIC) && check_periodics_at_end(tstate, frame) < 0) {
             return (_PyCallResult){-1, NULL};
@@ -4493,8 +4497,8 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
         PyValue_XCLOSE(result);
         return (_PyCallResult){-1, NULL};
     }
-    PyValue displaced = call_publish_result(
-        frame, head, result, (int)IR_C(word) - keywords);
+    PyValue displaced = call_publish(frame, head, word, result,
+                                     (int)IR_C(word) - keywords);
     PyValue_XCLOSE(displaced);
     /* Releasing the operands can run a finalizer. */
     int status = call_refresh(tstate, frame, head);
@@ -4593,7 +4597,7 @@ call_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
                 return pushed;
             }
             if (pushed.status == 0) {
-                call_release_operands(frame, head, operands, UINT32_MAX);
+                call_release_operands(_PyFrame_Slots(frame), head, word, operands, UINT32_MAX);
                 Py_XDECREF(tuple);
                 return pushed;
             }
@@ -4616,7 +4620,7 @@ call_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
             return (_PyCallResult){-1, NULL};
         }
         call_commit(tstate, frame, head, child);
-        call_release_operands(frame, head, operands, UINT32_MAX);
+        call_release_operands(_PyFrame_Slots(frame), head, word, operands, UINT32_MAX);
         return (_PyCallResult){0, child};
     }
     PyValue result = _PyValue_Call(tstate, callable, callargs, kwargs);
@@ -4639,7 +4643,7 @@ call_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
         Py_XDECREF(tuple);
         return (_PyCallResult){-1, NULL};
     }
-    PyValue displaced = call_publish_result(frame, head, result, operands);
+    PyValue displaced = call_publish(frame, head, word, result, operands);
     PyValue_XCLOSE(displaced);
     Py_XDECREF(tuple);
     /* Releasing the operands can run a finalizer. */

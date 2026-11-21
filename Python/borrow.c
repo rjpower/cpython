@@ -19,15 +19,6 @@
 
 #define BORROW_CHUNK_SLOTS 1024
 
-/* Zero slots, shared by every thread: a new thread allocates nothing, and a
-   mark is never NULL. */
-static _PyBorrowChunk empty_chunk = {
-    .previous = NULL,
-    .previous_top = NULL,
-    .end = empty_chunk.slots,
-    .base_depth = 0,
-};
-
 /* The run returned for an empty tuple.  It is never read. */
 static PyObject *const empty_run[1] = {NULL};
 
@@ -47,8 +38,15 @@ borrow_stack(PyThreadState *tstate)
 void
 _PyBorrowStack_Init(_PyBorrowStack *s)
 {
-    s->chunk = &empty_chunk;
-    s->top = s->end = empty_chunk.slots;
+    _PyBorrowChunk *base = &s->base.chunk;
+    base->previous = NULL;
+    base->previous_top = NULL;
+    base->end = s->base.base_slots + _PY_BORROW_BASE_SLOTS;
+    base->base_depth = 0;
+    assert(base->slots == s->base.base_slots);
+    s->chunk = base;
+    s->top = base->slots;
+    s->end = base->end;
     s->eval_floor = NULL;
     s->spare = NULL;
 }
@@ -91,7 +89,8 @@ void
 _PyBorrowStack_ReleaseAll(PyThreadState *tstate)
 {
     if (!borrow_thread_has_frame(tstate)) {
-        borrow_release(borrow_stack(tstate), empty_chunk.slots);
+        _PyBorrowStack *s = borrow_stack(tstate);
+        borrow_release(s, s->base.chunk.slots);
     }
 }
 
@@ -107,7 +106,7 @@ _PyBorrowStack_Fini(PyThreadState *tstate)
        entries, as it keeps its frames, and they are not released here. */
     assert(chunk == NULL || borrow_thread_has_frame(tstate) ||
            _PyBorrow_Depth(tstate) == 0);
-    while (chunk != NULL && chunk != &empty_chunk) {
+    while (chunk != NULL && chunk != &s->base.chunk) {
         _PyBorrowChunk *previous = chunk->previous;
         PyMem_RawFree(chunk);
         chunk = previous;
@@ -198,7 +197,7 @@ borrow_release(_PyBorrowStack *s, _PyBorrowMark mark)
         if (s->top == s->chunk->slots) {
             /* The chunk is empty: pop it. */
             _PyBorrowChunk *done = s->chunk;
-            assert(done != &empty_chunk);
+            assert(done != &s->base.chunk);
             s->chunk = done->previous;
             s->top = done->previous_top;
             s->end = s->chunk->end;

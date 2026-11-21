@@ -34,13 +34,24 @@ typedef struct _PyBorrowChunk {
     PyObject *slots[];
 } _PyBorrowChunk;
 
+// The slots of the first chunk, which the thread state embeds.  The first
+// scope of a thread, which is also the outermost one, then opens without
+// allocating or growing the stack.
+#define _PY_BORROW_BASE_SLOTS 1024
+
+typedef struct {
+    _PyBorrowChunk chunk;       // its slots[] are base_slots, which follow it
+    PyObject *base_slots[_PY_BORROW_BASE_SLOTS];
+} _PyBorrowBase;
+
 typedef struct {
     PyObject **top;             // next free slot
     PyObject **end;             // end of the current chunk
     PyObject **eval_floor;      // top when the innermost eval loop was
                                 // entered; NULL outside any eval loop
-    _PyBorrowChunk *chunk;      // initially the empty chunk in borrow.c
+    _PyBorrowChunk *chunk;      // initially base.chunk
     _PyBorrowChunk *spare;      // one cached chunk
+    _PyBorrowBase base;
 } _PyBorrowStack;
 
 

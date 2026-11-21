@@ -1396,13 +1396,15 @@ call_return_pc(_PyInstr *current)
  *
  * With DEFER, an owner that holds the last count is left in its home, which
  * keeps the loop free of deallocations (and so of the registers that a call
- * would cost every handler); the others close at once.  The return value says
- * whether a pass is still owed, and call_release_rest() makes it.  Without
- * DEFER every owner closes, a deallocation that can run Python included, and
- * the frame shows the operands not yet reached in their homes. */
+ * would cost every handler); the others close at once, which runs nothing.
+ * The return value says whether a pass is still owed, and call_release_rest()
+ * makes it.  Without DEFER every owner still in its home moves to OWNERS,
+ * which the caller then closes, so that all of them have left the frame
+ * before the first deallocation can run Python (handlers81 rule 5). */
 static inline Py_ALWAYS_INLINE int
 call_release_pass(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
-                  int operands, int nwords, uint32_t dst, int defer)
+                  int operands, int nwords, uint32_t dst, int defer,
+                  PyValue *owners)
 {
     int owed = 0;
     for (int w = 0, left = operands; w < nwords; w++, left -= IR_OPERANDS_PER_WORD) {
@@ -1427,7 +1429,7 @@ call_release_pass(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
             }
             else {
                 slots[home] = PyValue_NULL;
-                PyValue_XCLOSE(owner);
+                *owners++ = owner;
             }
         }
     }
@@ -1445,21 +1447,28 @@ call_release_pass(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
         }
         else {
             slots[callable] = PyValue_NULL;
-            PyValue_XCLOSE(owner);
+            *owners++ = owner;
         }
     }
     return owed;
 }
 
-/* The pass that call_release_pass() owes: close every owner still in its
- * home, the last counts among them. */
+/* The pass that call_release_pass() owes: every owner still in its home
+ * leaves the frame, and then the last counts close, in reverse order. */
 static Py_NO_INLINE void
 call_release_rest(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
                   int operands, uint32_t dst)
 {
-    call_release_pass(slots, head, word, operands,
-                      (operands + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD,
-                      dst, 0);
+    /* The operands and the callable; a call has at most IR_FIELD_MAX */
+    PyValue owners[operands + 1];
+    int nwords = (operands + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD;
+    for (int k = 0; k < operands + 1; k++) {
+        owners[k] = PyValue_NULL;
+    }
+    call_release_pass(slots, head, word, operands, nwords, dst, 0, owners);
+    for (int k = operands + 1; k-- > 0;) {
+        PyValue_XCLOSE(owners[k]);
+    }
 }
 
 /* Release the temporary operands and the callable of a call: its owners that
@@ -1472,7 +1481,7 @@ call_release_operands(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
                       int operands, uint32_t dst)
 {
     if (Py_UNLIKELY(operands > IR_OPERANDS_PER_WORD ||
-                    call_release_pass(slots, head, word, operands, 1, dst, 1))) {
+                    call_release_pass(slots, head, word, operands, 1, dst, 1, NULL))) {
         call_release_rest(slots, head, word, operands, dst);
     }
 }

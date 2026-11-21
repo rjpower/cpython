@@ -3146,7 +3146,7 @@ class IRStack(Stack):
                 if self.publish_on_error:
                     # The periodic check follows the store, so the result
                     # stays in its home when the check raises
-                    out.emit(f"ir_old = call_publish(frame, this_instr, ir_word, {var.name}, (int)IR_C(ir_word));\n")
+                    out.emit(f"ir_old = call_publish_cold(frame, this_instr, ir_word, {var.name}, (int)IR_C(ir_word));\n")
                     out.emit("PyValue_XCLOSE(ir_old);\n")
                 else:
                     out.emit(f"PyValue_XCLOSE({var.name});\n")

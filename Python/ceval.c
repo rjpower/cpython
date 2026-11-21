@@ -1504,6 +1504,16 @@ call_publish(_PyInterpreterFrame *frame, const _PyIRWord *head, _PyIRWord word,
     return displaced;
 }
 
+/* call_publish out of line, for the error edges of a handler that publishes
+ * its result before the periodic check: one copy of the loop instead of one
+ * per handler. */
+static Py_NO_INLINE PyValue
+call_publish_cold(_PyInterpreterFrame *frame, const _PyIRWord *head,
+                  _PyIRWord word, PyValue result, int operands)
+{
+    return call_publish(frame, head, word, result, operands);
+}
+
 /* Copy N operands of the call at HEAD, from operand FIRST on, to ARGS.  They
  * are all in the first operand word (FIRST + N is at most
  * IR_OPERANDS_PER_WORD), which is read once. */

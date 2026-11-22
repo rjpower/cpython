@@ -3563,6 +3563,7 @@ dummy_func(
             POP_JUMP_IF_FALSE_INT,
             POP_JUMP_IF_FALSE_LIST,
             POP_JUMP_IF_FALSE_NONE,
+            POP_JUMP_IF_FALSE_SLOT,
             POP_JUMP_IF_FALSE_STR,
         };
 
@@ -3572,6 +3573,7 @@ dummy_func(
             POP_JUMP_IF_TRUE_INT,
             POP_JUMP_IF_TRUE_LIST,
             POP_JUMP_IF_TRUE_NONE,
+            POP_JUMP_IF_TRUE_SLOT,
             POP_JUMP_IF_TRUE_STR,
         };
 
@@ -3643,6 +3645,27 @@ dummy_func(
             unused/1 + _GUARD_NONE_OR_TYPE_VERSION + _POP_JUMP_IF_FALSE_NONE_OR_PLAIN + POP_TOP;
         macro(POP_JUMP_IF_TRUE_ALWAYS_TRUE) =
             unused/1 + _GUARD_NONE_OR_TYPE_VERSION + _POP_JUMP_IF_TRUE_NONE_OR_PLAIN + POP_TOP;
+
+        // The truth of an instance of a type that the other forms do not
+        // take: after the guard on the type's version, which covers its
+        // slots, the type's own slot decides (a dict, set, tuple, deque,
+        // a class with __len__ or __bool__).  The test is the generic
+        // one's without its decision of the inline kinds, and the site
+        // keeps no counter.
+        op(_TO_BOOL_SLOT, (value -- res, v)) {
+            int truth = _PyValue_IsTrueSlow(value);
+            if (truth < 0) {
+                ERROR_NO_POP();
+            }
+            res = truth ? PyValue_True : PyValue_False;
+            v = value;
+            DEAD(value);
+        }
+
+        macro(POP_JUMP_IF_FALSE_SLOT) =
+            unused/1 + _GUARD_TYPE_VERSION + _TO_BOOL_SLOT + POP_TOP + _POP_JUMP_IF_FALSE;
+        macro(POP_JUMP_IF_TRUE_SLOT) =
+            unused/1 + _GUARD_TYPE_VERSION + _TO_BOOL_SLOT + POP_TOP + _POP_JUMP_IF_TRUE;
 
         macro(POP_JUMP_IF_NONE) = unused/1 + _IS_NONE + _POP_JUMP_IF_TRUE;
 

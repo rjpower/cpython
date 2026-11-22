@@ -118,6 +118,7 @@ extern "C" {
 #define STORE_DEREF                            109
 #define STORE_FAST                             110
 #define LOAD_ATTR_CLASSMETHOD                  111
+#define POP_JUMP_IF_TRUE_SLOT                  112
 #define STORE_GLOBAL                           113
 #define STORE_NAME                             114
 #define SWAP                                   115
@@ -131,6 +132,7 @@ extern "C" {
 #define TO_BOOL_STR                            123
 #define UNPACK_SEQUENCE_LIST                   124
 #define UNPACK_SEQUENCE_TUPLE                  125
+#define POP_JUMP_IF_FALSE_SLOT                 126
 #define MATERIALIZE_KWARGS                     127
 #define RESUME                                 128
 #define BINARY_OP_ADD_FLOAT                    129

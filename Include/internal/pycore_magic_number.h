@@ -362,8 +362,10 @@ Known values:
    64431: calls read operand words: no window form, a CALL_KW's names are an immediate
    64432: constant slots for every inline or immortal register input, the
           constant image in the executing copy
-   64433: LOAD_ATTR_GETSET, IR handler 406 */
-#define PYC_MAGIC_NUMBER 64433
+   64433: LOAD_ATTR_GETSET, IR handler 406
+   64434: parity84 GL: CALL_PY_GENERATOR and GET_ITER_PY_GENERATOR, IR
+          handlers 407 and 408 */
+#define PYC_MAGIC_NUMBER 64434
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

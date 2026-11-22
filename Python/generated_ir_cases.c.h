@@ -7767,6 +7767,78 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
         }
 
+        TARGET(CALL_PY_GENERATOR) {
+            int opcode = CALL_PY_GENERATOR;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += IR_CALL_LENGTH(ir_word);
+            INSTRUCTION_STATS(CALL_PY_GENERATOR);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            int oparg = (int)IR_C(ir_word) - IR_CALL_HAS_SELF(ir_word);
+            (void)oparg;
+            int call_state = IR_CALL_SELF_STATE(ir_word);
+            (void)call_state;
+            uint32_t call_feedback = IR_D(ir_word);
+            (void)call_feedback;
+            PyValue callable;
+            PyValue res;
+            // _CHECK_PEP_523
+            {
+                if (IS_PEP523_HOOKED(tstate)) {
+                    UPDATE_MISS_STATS(CALL);
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_FUNCTION_VERSION
+            {
+                callable = IR_SLOT(IR_B(ir_word));
+                uint32_t func_version = fb->func_version;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
+                    UPDATE_MISS_STATS(CALL);
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
+                if (!PyFunction_Check(callable_o)) {
+                    UPDATE_MISS_STATS(CALL);
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                if (func->func_version != func_version) {
+                    UPDATE_MISS_STATS(CALL);
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CHECK_FUNCTION_EXACT_ARGS
+            {
+                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
+                assert(PyFunction_Check(callable_o));
+                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                PyCodeObject *code = (PyCodeObject *)func->func_code;
+                if (code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0)) {
+                    UPDATE_MISS_STATS(CALL);
+                    JUMP_TO_PREDICTED(CALL);
+                }
+            }
+            // _CALL_PY_GENERATOR
+            {
+                STAT_INC(CALL, hit);
+                PyValue generator = call_new_generator(
+                    tstate, frame, this_instr, ir_word, callable, call_state);
+                if (PyValue_IsNull(generator)) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                res = generator;
+            }
+            ir_old = call_publish(frame, this_instr, res);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
         TARGET(CALL_STR_1) {
             int opcode = CALL_STR_1;
             (void)(opcode);
@@ -9335,6 +9407,73 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
         }
         TARGET(GET_ITER) {
             IR_RUN_OUTLINED(ir_run_GET_ITER);
+        }
+
+        TARGET(GET_ITER_PY_GENERATOR) {
+            int opcode = GET_ITER_PY_GENERATOR;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(GET_ITER_PY_GENERATOR);
+            PyValue iterable;
+            PyValue iter;
+            PyValue index_or_null;
+            // _CHECK_PEP_523
+            {
+                if (IS_PEP523_HOOKED(tstate)) {
+                    UPDATE_MISS_STATS(GET_ITER);
+                    JUMP_TO_PREDICTED(GET_ITER);
+                }
+            }
+            // _GUARD_ITER_PY_GENERATOR
+            {
+                iterable = IR_SLOT(IR_B(ir_word));
+                if (!PyValue_IsObject(iterable)) {
+                    UPDATE_MISS_STATS(GET_ITER);
+                    JUMP_TO_PREDICTED(GET_ITER);
+                }
+                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
+                if (!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE)) {
+                    UPDATE_MISS_STATS(GET_ITER);
+                    JUMP_TO_PREDICTED(GET_ITER);
+                }
+                PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
+                PyObject *iter_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.iter);
+                if (iter_o == NULL) {
+                    UPDATE_MISS_STATS(GET_ITER);
+                    JUMP_TO_PREDICTED(GET_ITER);
+                }
+                assert(PyFunction_Check(iter_o));
+                if (((PyFunctionObject *)iter_o)->func_version !=
+                    FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.iter_version)) {
+                    UPDATE_MISS_STATS(GET_ITER);
+                    JUMP_TO_PREDICTED(GET_ITER);
+                }
+            }
+            // _GET_ITER_PY_GENERATOR
+            {
+                STAT_INC(GET_ITER, hit);
+                assert(PyValue_IsObject(iterable));
+                PyHeapTypeObject *ht =
+                (PyHeapTypeObject *)Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(iterable));
+                PyFunctionObject *func = (PyFunctionObject *)ht->_spec_cache.iter;
+                PyGenObject *gen = _PyGen_NewCall(
+                    tstate, PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)func)),
+                    (PyCodeObject *)func->func_code, frame);
+                if (gen == NULL) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                gen->gi_iframe.base[0] = iterable;
+                _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
+                iter = PyValue_FromObjectSteal((PyObject *)gen);
+                index_or_null = PyValue_NULL;
+            }
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), iter);
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), index_or_null);
+            DISPATCH();
         }
 
         TARGET(GET_ITER_SELF) {
@@ -13369,7 +13508,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             PyValue res;
             PyFunctionObject *func = _PyFrame_GetFunction(frame);
             PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(
-                func, _PyFrame_GetCode(frame));
+                func, _PyFrame_GetCode(frame), frame->previous);
             if (gen == NULL) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }

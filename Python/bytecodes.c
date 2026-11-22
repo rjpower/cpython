@@ -3739,6 +3739,7 @@ dummy_func(
         family(GET_ITER, INLINE_CACHE_ENTRIES_GET_ITER) = {
             GET_ITER_SELF,
             GET_ITER_VIRTUAL,
+            GET_ITER_PY_GENERATOR,
         };
 
         specializing op(_SPECIALIZE_GET_ITER, (iterable -- iterable)) {
@@ -3791,6 +3792,48 @@ dummy_func(
             unused/1 +
             _GUARD_ITER_VIRTUAL +
             _PUSH_TAGGED_ZERO;
+
+        // The iterable's class defines __iter__ as a generator function of
+        // the one argument: the type caches the function under its version
+        // (as for __getitem__), which PyType_Modified() invalidates.  The
+        // iterator is the generator, created at once with the iterable as its
+        // argument and no call of the function.
+        inline_ok op(_GUARD_ITER_PY_GENERATOR, (iterable -- iterable)) {
+            EXIT_IF(!PyValue_IsObject(iterable));
+            PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
+            EXIT_IF(!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE));
+            PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
+            PyObject *iter_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.iter);
+            EXIT_IF(iter_o == NULL);
+            assert(PyFunction_Check(iter_o));
+            EXIT_IF(((PyFunctionObject *)iter_o)->func_version !=
+                    FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.iter_version));
+        }
+
+        ir_only op(_GET_ITER_PY_GENERATOR, (iterable -- iter, index_or_null)) {
+            STAT_INC(GET_ITER, hit);
+            assert(PyValue_IsObject(iterable));
+            PyHeapTypeObject *ht =
+                (PyHeapTypeObject *)Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
+            PyFunctionObject *func = (PyFunctionObject *)ht->_spec_cache.iter;
+            PyGenObject *gen = _PyGen_NewCall(
+                tstate, PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)func)),
+                (PyCodeObject *)func->func_code, frame);
+            if (gen == NULL) {
+                // The iterable is still in its home, for the unwinder
+                ERROR_NO_POP();
+            }
+            gen->gi_iframe.base[0] = TAKE(iterable);
+            INPUTS_DEAD();
+            iter = PyValue_FromObjectSteal((PyObject *)gen);
+            index_or_null = PyValue_NULL;
+        }
+
+        macro(GET_ITER_PY_GENERATOR) =
+            unused/1 +
+            _CHECK_PEP_523 +
+            _GUARD_ITER_PY_GENERATOR +
+            _GET_ITER_PY_GENERATOR;
 
         // The body outcome preserves the iterator/cursor pair and defines
         // the item recipient. Exhaustion retires the pair, preserves the
@@ -4238,6 +4281,7 @@ dummy_func(
         family(CALL, INLINE_CACHE_ENTRIES_CALL) = {
             CALL_BOUND_METHOD_EXACT_ARGS,
             CALL_PY_EXACT_ARGS,
+            CALL_PY_GENERATOR,
             CALL_TYPE_1,
             CALL_STR_1,
             CALL_TUPLE_1,
@@ -4466,6 +4510,28 @@ dummy_func(
             _INIT_CALL_PY_EXACT_ARGS +
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
+
+        // A generator function whose code begins at RETURN_GENERATOR and takes
+        // exactly these arguments: the call creates the generator and fills
+        // its frame from the operands.  No frame of the thread is pushed or
+        // entered, so no stack or recursion check applies.
+        ir_only op(_CALL_PY_GENERATOR, (callable, self_or_null, args[oparg] -- res)) {
+            STAT_INC(CALL, hit);
+            PyValue generator = call_new_generator(
+                tstate, frame, this_instr, ir_word, callable, call_state);
+            if (PyValue_IsNull(generator)) {
+                ERROR_NO_POP();
+            }
+            INPUTS_DEAD();
+            res = generator;
+        }
+
+        macro(CALL_PY_GENERATOR) =
+            unused/1 + // Skip over the entry distance
+            _CHECK_PEP_523 +
+            _CHECK_FUNCTION_VERSION +
+            _CHECK_FUNCTION_EXACT_ARGS +
+            _CALL_PY_GENERATOR;
 
         op(_GUARD_NOS_NULL, (null, unused -- null, unused)) {
             EXIT_IF(call_state & CALL_SELF_PRESENT);
@@ -5217,7 +5283,7 @@ dummy_func(
         window inst(RETURN_GENERATOR, (-- res)) {
             PyFunctionObject *func = _PyFrame_GetFunction(frame);
             PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(
-                func, _PyFrame_GetCode(frame));
+                func, _PyFrame_GetCode(frame), frame->previous);
             ERROR_IF(gen == NULL);
             SAVE_STACK();
             _PyInterpreterFrame *gen_frame = &gen->gi_iframe;

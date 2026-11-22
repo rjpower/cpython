@@ -657,6 +657,12 @@ typedef struct _PyCodeExec {
      * and padding: handlers read nlocalsplus at a fixed offset from the
      * words. */
     uint8_t all_created_empty;
+    /* A generator, coroutine or async generator whose first word is its
+     * RETURN_GENERATOR: nothing runs before the object exists, so a call
+     * creates it without a frame (_PyGen_NewCall()).  Code with a prologue
+     * (cell and free variable setup, a generator expression's iterator)
+     * runs it in a frame of the thread, which RETURN_GENERATOR then copies. */
+    uint8_t generator_direct;
 } _PyCodeExec;
 
 /* The feedback table of a code object, which follows its words: per entry,

@@ -250,29 +250,29 @@ _PyGen_TryCloseClearedNoReentry(PyObject *self)
     }
     PyGenObject *gen = _PyGen_CAST(self);
     _PyInterpreterFrame *frame = &gen->gi_iframe;
-    /* CLEARED is published before retirement callbacks. No pending headers
-     * may remain when consuming the container. */
-    if (gen->gi_frame_state != FRAME_CLEARED ||
-        gen->gi_weakreflist != NULL || gen->gi_exc_state.exc_value != NULL)
+    /* CLEARED is published before retirement callbacks, and the retirement
+     * leaves the function and the exception state last: a generator in
+     * which either remains is still being retired.  No pending headers may
+     * remain when consuming the container. */
+    if (!gen->gi_plain || gen->gi_frame_state != FRAME_CLEARED ||
+        gen->gi_weakreflist != NULL || frame->f_funcobj != NULL ||
+        gen->gi_exc_state.exc_value != NULL)
     {
         return false;
     }
+    /* The retirement has cleared the rest of the frame, which the generator
+     * linked to nothing. */
+    assert(frame->frame_obj == NULL && frame->f_locals == NULL &&
+           frame->previous == NULL &&
+           gen->gi_exc_state.previous_item == NULL);
     PyCodeObject *code = frame->f_executable;
-    /* make_gen has not populated the other frame fields when code is NULL. */
-    if (code == NULL || Py_REFCNT(code) <= 1) {
-        return false;
-    }
-    if (frame->frame_obj != NULL || frame->f_locals != NULL ||
-        frame->f_funcobj != NULL || frame->previous != NULL ||
-        gen->gi_exc_state.previous_item != NULL ||
-        gen->gi_name != code->co_name || gen->gi_qualname != code->co_qualname ||
-        (PyCoro_CheckExact(self) &&
-         ((PyCoroObject *)self)->cr_origin_or_finalizer != NULL))
-    {
-        return false;
-    }
+    assert(code != NULL);
     /* The code owner survives its decrement and pins both canonical names,
-     * including when those names alias. None of the three closes can finalize. */
+     * which a plain generator shares, including when those names alias.
+     * None of the three closes can finalize. */
+    if (Py_REFCNT(code) <= 1) {
+        return false;
+    }
     Py_DECREF_MORTAL_SPECIALIZED(self, gen_dealloc_cleared_no_reentry);
     return true;
 #endif
@@ -986,6 +986,7 @@ gen_set_name(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     // gh-133931: To prevent use-after-free from other threads that reference
     // the gi_name.
     _PyObject_XSetRefDelayed(&op->gi_name, Py_NewRef(value));
+    op->gi_plain = 0;
     Py_END_CRITICAL_SECTION();
     return 0;
 }
@@ -1013,6 +1014,7 @@ gen_set_qualname(PyObject *self, PyObject *value, void *Py_UNUSED(ignored))
     // gh-133931: To prevent use-after-free from other threads that reference
     // the gi_qualname.
     _PyObject_XSetRefDelayed(&op->gi_qualname, Py_NewRef(value));
+    op->gi_plain = 0;
     Py_END_CRITICAL_SECTION();
     return 0;
 }
@@ -1260,12 +1262,17 @@ make_gen(PyTypeObject *type, PyFunctionObject *func, PyCodeObject *code)
     PyObject *qualname = FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_qualname);
     assert(qualname != NULL);
     gen->gi_qualname = Py_NewRef(qualname);
+    gen->gi_plain = type != &PyAsyncGen_Type && name == code->co_name &&
+        qualname == code->co_qualname;
     _PyObject_GC_TRACK(gen);
     return (PyObject *)gen;
 }
 
+/* caller is the frame that the new object is created for: the one that is
+ * running, or the one below the frame that RETURN_GENERATOR runs in. */
 PyObject *
-_Py_MakeCoro(PyFunctionObject *func, PyCodeObject *code)
+_Py_MakeCoro(PyFunctionObject *func, PyCodeObject *code,
+             _PyInterpreterFrame *caller)
 {
     /* The executing frame pins code independently of mutable func_code. */
     int coro_flags = code->co_flags &
@@ -1298,18 +1305,58 @@ _Py_MakeCoro(PyFunctionObject *func, PyCodeObject *code)
     if (origin_depth == 0) {
         ((PyCoroObject *)coro)->cr_origin_or_finalizer = NULL;
     } else {
-        _PyInterpreterFrame *frame = tstate->current_frame;
-        assert(frame);
-        assert(_PyFrame_IsIncomplete(frame));
-        frame = _PyFrame_GetFirstComplete(frame->previous);
+        _PyInterpreterFrame *frame = _PyFrame_GetFirstComplete(caller);
         PyObject *cr_origin = _PyCoro_ComputeOrigin(origin_depth, frame);
         ((PyCoroObject *)coro)->cr_origin_or_finalizer = cr_origin;
         if (!cr_origin) {
             Py_DECREF(coro);
             return NULL;
         }
+        ((PyCoroObject *)coro)->cr_plain = 0;
     }
     return coro;
+}
+
+/* The generator, coroutine or async generator that a call of the function
+ * creates, for code that begins at its RETURN_GENERATOR (the executing copy's
+ * generator_direct): no frame runs.  The frame of the new object is complete
+ * as RETURN_GENERATOR leaves it, except for the arguments, which the caller
+ * moves into gen->gi_iframe.base before anything that can fail, run code or
+ * collect.  Consumes function, which the frame owns; on failure it is
+ * closed.  caller is the frame that makes the call. */
+PyGenObject *
+_PyGen_NewCall(PyThreadState *tstate, PyValue function, PyCodeObject *code,
+               _PyInterpreterFrame *caller)
+{
+    PyFunctionObject *func =
+        (PyFunctionObject *)PyValue_AsKnownObjectBorrow(function);
+    PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func, code, caller);
+    if (gen == NULL) {
+        PyValue_CLOSE(function);
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = &gen->gi_iframe;
+    memset(frame->owned_slots, 0,
+           (size_t)_PyFrame_NumSlotsForCodeObject(code) * sizeof(PyValue));
+    _PyFrame_Initialize(tstate, frame, function, NULL, code,
+                        frame->owned_slots, NULL);
+    frame->owner = FRAME_OWNED_BY_GENERATOR;
+    // The first send resumes after RETURN_GENERATOR and its value goes to
+    // the discard slot
+    frame->instr_ptr++;
+    frame->return_slot = (uint16_t)_PyFrame_DiscardSlotForCodeObject(code);
+    gen->gi_frame_state = FRAME_CREATED;
+    return gen;
+}
+
+/* Abandon a generator from _PyGen_NewCall whose arguments could not be bound:
+ * it never ran and is not a coroutine that was never awaited. */
+void
+_PyGen_DiscardCall(PyGenObject *gen)
+{
+    gen->gi_frame_state = FRAME_CLEARED;
+    gen_clear_frame(gen);
+    Py_DECREF(gen);
 }
 
 static PyObject *
@@ -1355,6 +1402,8 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
     gen->gi_closed = 0;
     gen->gi_hooks_inited = 0;
     gen->gi_running_async = 0;
+    // It has a frame object
+    gen->gi_plain = 0;
     if (name != NULL)
         gen->gi_name = Py_NewRef(name);
     else

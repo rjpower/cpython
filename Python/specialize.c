@@ -2352,10 +2352,17 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
     }
     fb->func_version = version;
     fb->binding_flags = 0;
-    uint8_t opcode;
+    int opcode;
     if (argcount == nargs + bound_method) {
-        opcode =
-            bound_method ? CALL_BOUND_METHOD_EXACT_ARGS : CALL_PY_EXACT_ARGS;
+        if (bound_method) {
+            opcode = CALL_BOUND_METHOD_EXACT_ARGS;
+        }
+        else if (code->_co_exec->generator_direct) {
+            opcode = CALL_PY_GENERATOR;
+        }
+        else {
+            opcode = CALL_PY_EXACT_ARGS;
+        }
     }
     else {
         opcode = bound_method ? CALL_BOUND_METHOD_GENERAL : CALL_PY_GENERAL;
@@ -2907,6 +2914,49 @@ specialize_subscr_getitem(PyTypeObject *container_type, _PyInstr *instr)
                 (PyHeapTypeObject *)container_type, getitem, tp_version))
         {
             specialize(instr, BINARY_OP_SUBSCR_GETITEM);
+            nominated = true;
+        }
+    }
+    PyValue_XCLOSE(descriptor);
+    return nominated;
+}
+
+/* Nominate GET_ITER_PY_GENERATOR for a heap type whose __iter__ is a
+ * generator function of one argument whose code begins at RETURN_GENERATOR.
+ * The lookup neither allocates nor runs code; the type caches the function
+ * under its version, which PyType_Modified() invalidates. */
+static bool
+specialize_iter_generator(PyTypeObject *tp, _PyInstr *instr)
+{
+    if (!(tp->tp_flags & Py_TPFLAGS_HEAPTYPE) ||
+        tp->tp_iter != _PyType_SlotIter ||
+        !_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
+    {
+        return false;
+    }
+    PyValue descriptor = PyValue_NULL;
+    unsigned int tp_version = 0;
+    bool nominated = false;
+    if (_PyType_TryLookupValueNoAlloc(tp, &_Py_ID(__iter__), &descriptor,
+                                      &tp_version) == 1 &&
+        PyValue_IsObject(descriptor) &&
+        PyFunction_Check(PyValue_AsKnownObjectBorrow(descriptor)))
+    {
+        PyObject *iter = PyValue_AsKnownObjectBorrow(descriptor);
+        PyFunctionObject *func = (PyFunctionObject *)iter;
+        PyCodeObject *code = (PyCodeObject *)func->func_code;
+        // An async generator or coroutine is no iterator, and GET_ITER
+        // reports it
+        if (func->vectorcall == _PyFunction_Vectorcall &&
+            (code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR))
+                == CO_GENERATOR &&
+            function_signature(code) == SIMPLE_SIGNATURE &&
+            code->co_argcount == 1 && prepare_function_for_inline(code) &&
+            code->_co_exec->generator_direct &&
+            _PyType_CacheIterForSpecialization((PyHeapTypeObject *)tp, iter,
+                                               tp_version))
+        {
+            specialize(instr, GET_ITER_PY_GENERATOR);
             nominated = true;
         }
     }
@@ -3640,6 +3690,9 @@ _Py_Specialize_GetIter(PyValue iterable, _PyInstr *instr)
     }
     if (tp->tp_iter == PyObject_SelfIter) {
         specialize(instr, GET_ITER_SELF);
+        return;
+    }
+    if (specialize_iter_generator(tp, instr)) {
         return;
     }
     SPECIALIZATION_FAIL(GET_ITER,

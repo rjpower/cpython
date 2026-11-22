@@ -236,17 +236,8 @@ HOT_LABEL(gen_return)
  * the consumer of the word says.
  *
  * Sequential tests matter: one alias's decrement can make the next alias
- * final, so the inputs close one at a time, from the last. */
-#define GEN_CLOSE_INPUT(K) \
-    do { \
-        PyValue input = frame->base[base + (K)]; \
-        if (!_PyValue_TryXCloseNoReentry(input) && \
-            !((K) == 0 && PyValue_RefcountOnObject(input) && \
-              _PyGen_TryCloseClearedNoReentry(PyValue_AsKnownObjectBorrow(input)))) { \
-            GEN_STEP_EFFECT((K) + 1, next_instr, result); \
-        } \
-        frame->base[base + (K)] = PyValue_NULL; \
-    } while (0)
+ * final, so the inputs close one at a time, from the last.  The first input
+ * is the receiver (gen_close_input). */
 HOT_LABEL(gen_complete)
 {
     PyValue result = ir_gen_value;
@@ -258,12 +249,12 @@ HOT_LABEL(gen_complete)
     if (!generator_transfer_is_plain(tstate, frame)) {
         GEN_STEP_EFFECT(throwing ? 4 : 3, next_instr, result);
     }
-    if (throwing) {
-        GEN_CLOSE_INPUT(3);
+    for (int k = throwing ? 3 : 2; k >= 0; k--) {
+        if (!gen_close_input(frame->base[base + k], k == 0)) {
+            GEN_STEP_EFFECT(k + 1, next_instr, result);
+        }
+        frame->base[base + k] = PyValue_NULL;
     }
-    GEN_CLOSE_INPUT(2);
-    GEN_CLOSE_INPUT(1);
-    GEN_CLOSE_INPUT(0);
     _PyInstr *exit = throwing ? frame->ir_words + IR_CD(source_word)
                               : next_instr + 1 + IR_DS(source_word);
     switch (kind & ~GEN_THROWING) {
@@ -331,4 +322,3 @@ HOT_LABEL(gen_complete)
     }
     }
 }
-#undef GEN_CLOSE_INPUT

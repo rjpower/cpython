@@ -3341,6 +3341,47 @@ class BasicElementTest(ElementTestCase, unittest.TestCase):
                 mod.SubElement(root, 'c0')
                 self.assertEqual(list(root), ['x', 'y', 'z'])
 
+    def test_text_tail_values(self):
+        # text and tail hold any object; itertext() yields the true ones
+        for mod in self.modules:
+            with self.subTest(mod=mod.__name__):
+                big = 2**70
+                for value in (7, 1.5, big, 'str', [1, 2]):
+                    e = mod.Element('e')
+                    e.text = value
+                    e.tail = value
+                    self.assertEqual(e.text, value)
+                    self.assertEqual(e.tail, value)
+                e = mod.Element('e')
+                e.text = 7
+                child = mod.SubElement(e, 'c')
+                child.text = 0
+                child.tail = 2.5
+                e.tail = 'ignored'
+                self.assertEqual(list(e.itertext()), [7, 2.5])
+                self.assertEqual(list(e.iter()), [e, child])
+
+    def test_joined_text_tail(self):
+        # text collected by the tree builder in pieces is joined on first read
+        builder = ET.TreeBuilder()
+        builder.start('root', {})
+        builder.data('a')
+        builder.data('b')
+        builder.start('child', {})
+        builder.data('c')
+        builder.data('d')
+        builder.end('child')
+        builder.data('e')
+        builder.data('f')
+        builder.end('root')
+        root = builder.close()
+        child = root[0]
+        self.assertEqual(root.text, 'ab')
+        self.assertEqual(child.text, 'cd')
+        self.assertEqual(child.tail, 'ef')
+        self.assertEqual(root.text, 'ab')
+        self.assertEqual(list(root.itertext()), ['ab', 'cd', 'ef'])
+
     def test_iter_children_pickle(self):
         for mod in self.modules:
             with self.subTest(mod=mod.__name__):

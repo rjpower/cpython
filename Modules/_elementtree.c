@@ -73,13 +73,13 @@ _joined_init(PyValue *p, unsigned char *joined)
     *joined = 0;
 }
 
-/* Store new_obj (a strong reference, consumed) and the flag; release the
-   previous value. */
+/* Store new_value (an owner, consumed) and the flag; release the previous
+   value. */
 static void
-_set_joined(PyValue *p, unsigned char *joined_p, PyObject *new_obj, int joined)
+_set_joined(PyValue *p, unsigned char *joined_p, PyValue new_value, int joined)
 {
     PyValue old = *p;
-    *p = PyValue_PrepareOwned(new_obj);
+    *p = new_value;
     *joined_p = (unsigned char)joined;
     _PyValue_CheckHome(*p);
     PyValue_XCLOSE(old);
@@ -489,8 +489,8 @@ element_init(PyObject *self, PyObject *args, PyObject *kwds)
     /* Replace the objects already pointed to by tag, text and tail. */
     Py_XSETREF(self_elem->tag, Py_NewRef(tag));
 
-    _set_joined(&self_elem->text, &self_elem->text_joined, Py_NewRef(Py_None), 0);
-    _set_joined(&self_elem->tail, &self_elem->tail_joined, Py_NewRef(Py_None), 0);
+    _set_joined(&self_elem->text, &self_elem->text_joined, PyValue_None, 0);
+    _set_joined(&self_elem->tail, &self_elem->tail_joined, PyValue_None, 0);
 
     return 0;
 }
@@ -597,52 +597,41 @@ element_get_attrib(ElementObject* self)
     return res;
 }
 
-LOCAL(PyObject*)
-element_get_text(ElementObject* self)
+/* The str that joins the list in a joined text or tail home replaces the
+   list there. Returns an owner of the str, or PyValue_NULL with an exception
+   set. */
+static PyValue
+joined_get(PyValue *home, unsigned char *joined)
 {
-    /* return new reference to text attribute */
-
-    PyValueBorrow res_v = PyValue_Borrow(self->text);
-    PyObject *res = PyValue_IsNull(res_v) ? NULL : _PyValue_AsObjectAt(res_v, BOX_SITE_FIELD);
-    if (res == NULL) {
-        return NULL;
+    PyValue list = PyValue_DUP(*home);
+    PyObject *str = list_join(PyValue_AsKnownObjectBorrow(list));
+    PyValue_CLOSE(list);
+    if (str == NULL) {
+        return PyValue_NULL;
     }
-
-    if (self->text_joined && PyList_CheckExact(res)) {
-        PyObject *tmp = list_join(res);
-        Py_DECREF(res);
-        if (!tmp)
-            return NULL;
-        /* The joined string replaces the list; the flag is cleared. */
-        _set_joined(&self->text, &self->text_joined, Py_NewRef(tmp), 0);
-        res = tmp;
-    }
-
+    PyValue res = PyValue_PrepareOwned(str);
+    _set_joined(home, joined, PyValue_DUP(res), 0);
     return res;
 }
 
-LOCAL(PyObject*)
+LOCAL(PyValue)
+element_get_text(ElementObject* self)
+{
+    /* return a new owner of the text attribute */
+    if (self->text_joined) {
+        return joined_get(&self->text, &self->text_joined);
+    }
+    return PyValue_XDUP(PyValue_Borrow(self->text));
+}
+
+LOCAL(PyValue)
 element_get_tail(ElementObject* self)
 {
-    /* return new reference to tail attribute */
-
-    PyValueBorrow res_v2 = PyValue_Borrow(self->tail);
-    PyObject *res = PyValue_IsNull(res_v2) ? NULL : _PyValue_AsObjectAt(res_v2, BOX_SITE_FIELD);
-    if (res == NULL) {
-        return NULL;
+    /* return a new owner of the tail attribute */
+    if (self->tail_joined) {
+        return joined_get(&self->tail, &self->tail_joined);
     }
-
-    if (self->tail_joined && PyList_CheckExact(res)) {
-        PyObject *tmp = list_join(res);
-        Py_DECREF(res);
-        if (!tmp)
-            return NULL;
-        /* The joined string replaces the list; the flag is cleared. */
-        _set_joined(&self->tail, &self->tail_joined, Py_NewRef(tmp), 0);
-        res = tmp;
-    }
-
-    return res;
+    return PyValue_XDUP(PyValue_Borrow(self->tail));
 }
 
 /*[clinic input]
@@ -801,8 +790,8 @@ _elementtree_Element_clear_impl(ElementObject *self)
 {
     clear_extra(self);
 
-    _set_joined(&self->text, &self->text_joined, Py_NewRef(Py_None), 0);
-    _set_joined(&self->tail, &self->tail_joined, Py_NewRef(Py_None), 0);
+    _set_joined(&self->text, &self->text_joined, PyValue_None, 0);
+    _set_joined(&self->tail, &self->tail_joined, PyValue_None, 0);
 
     return PyValue_None;
 }
@@ -918,7 +907,7 @@ _elementtree_Element___deepcopy___impl(ElementObject *self, PyObject *memo)
     Py_DECREF(text_obj);
     if (!text)
         goto error;
-    _set_joined(&element->text, &element->text_joined, text, self->text_joined);
+    _set_joined(&element->text, &element->text_joined, PyValue_PrepareOwned(text), self->text_joined);
 
     PyValueBorrow tail_obj_v = PyValue_Borrow(self->tail);
     PyObject *tail_obj = PyValue_IsNull(tail_obj_v) ? NULL : _PyValue_AsObjectAt(tail_obj_v, BOX_SITE_FIELD);
@@ -928,7 +917,7 @@ _elementtree_Element___deepcopy___impl(ElementObject *self, PyObject *memo)
     Py_DECREF(tail_obj);
     if (!tail)
         goto error;
-    _set_joined(&element->tail, &element->tail_joined, tail, self->tail_joined);
+    _set_joined(&element->tail, &element->tail_joined, PyValue_PrepareOwned(tail), self->tail_joined);
 
     assert(!element->extra || !element->extra->length);
     if (self->extra) {
@@ -1160,12 +1149,12 @@ element_setstate_from_attributes(elementtreestate *st,
     if (!text) {
         text = Py_None;
     }
-    _set_joined(&self->text, &self->text_joined, Py_NewRef(text), PyList_CheckExact(text));
+    _set_joined(&self->text, &self->text_joined, PyValue_PrepareOwned(Py_NewRef(text)), PyList_CheckExact(text));
 
     if (!tail) {
         tail = Py_None;
     }
-    _set_joined(&self->tail, &self->tail_joined, Py_NewRef(tail), PyList_CheckExact(tail));
+    _set_joined(&self->tail, &self->tail_joined, PyValue_PrepareOwned(Py_NewRef(tail)), PyList_CheckExact(tail));
 
     /* Handle ATTRIB and CHILDREN. */
     if (!children && !attrib) {
@@ -1520,13 +1509,12 @@ _elementtree_Element_findtext_impl(ElementObject *self, PyTypeObject *cls,
         int rc = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(tag), path, Py_EQ);
         Py_DECREF(tag);
         if (rc > 0) {
-            PyObject *text = element_get_text((ElementObject *)item);
+            PyValue text = element_get_text((ElementObject *)item);
             Py_DECREF(item);
-            if (text == Py_None) {
-                Py_DECREF(text);
+            if (PyValue_IsNone(text)) {
                 return _PyValue_FromObjectResult(Py_GetConstant(Py_CONSTANT_EMPTY_STR));
             }
-            return _PyValue_FromObjectResult(text);
+            return text;
         }
         Py_DECREF(item);
         if (rc < 0) {
@@ -2373,21 +2361,13 @@ element_tag_getter(PyValueBorrow op, void *closure)
 static PyValue
 element_text_getter(PyValueBorrow op, void *closure)
 {
-    ElementObject *self = _Element_CAST(PyValue_AsKnownObjectBorrow(op));
-    if (!self->text_joined) {
-        return PyValue_XDUP(PyValue_Borrow(self->text));
-    }
-    return _PyValue_FromObjectResult(element_get_text(self));
+    return element_get_text(_Element_CAST(PyValue_AsKnownObjectBorrow(op)));
 }
 
 static PyValue
 element_tail_getter(PyValueBorrow op, void *closure)
 {
-    ElementObject *self = _Element_CAST(PyValue_AsKnownObjectBorrow(op));
-    if (!self->tail_joined) {
-        return PyValue_XDUP(PyValue_Borrow(self->tail));
-    }
-    return _PyValue_FromObjectResult(element_get_tail(self));
+    return element_get_tail(_Element_CAST(PyValue_AsKnownObjectBorrow(op)));
 }
 
 static PyValue
@@ -2432,11 +2412,7 @@ element_text_setter(PyValueBorrow op, PyValueBorrow value, void *closure)
 {
     _VALIDATE_ATTR_VALUE(value);
     ElementObject *self = _Element_CAST(PyValue_AsKnownObjectBorrow(op));
-    PyObject *text = _PyValue_AsObjectAt(value, BOX_SITE_FIELD);
-    if (text == NULL) {
-        return -1;
-    }
-    _set_joined(&self->text, &self->text_joined, text, 0);
+    _set_joined(&self->text, &self->text_joined, PyValue_DUP(value), 0);
     return 0;
 }
 
@@ -2445,11 +2421,7 @@ element_tail_setter(PyValueBorrow op, PyValueBorrow value, void *closure)
 {
     _VALIDATE_ATTR_VALUE(value);
     ElementObject *self = _Element_CAST(PyValue_AsKnownObjectBorrow(op));
-    PyObject *tail = _PyValue_AsObjectAt(value, BOX_SITE_FIELD);
-    if (tail == NULL) {
-        return -1;
-    }
-    _set_joined(&self->tail, &self->tail_joined, tail, 0);
+    _set_joined(&self->tail, &self->tail_joined, PyValue_DUP(value), 0);
     return 0;
 }
 
@@ -2563,8 +2535,8 @@ parent_stack_push_new(ElementIterObject *it, ElementObject *parent)
     return 0;
 }
 
-static PyObject *
-elementiter_next(PyObject *op)
+static _PyStatusValue
+elementiter_next_value(PyObject *op)
 {
     ElementIterObject *it = _ElementIter_CAST(op);
     /* Sub-element iterator.
@@ -2580,7 +2552,7 @@ elementiter_next(PyObject *op)
      */
     int rc;
     ElementObject *elem;
-    PyObject *text;
+    PyValue text;
 
     while (1) {
         /* Handle the case reached in the beginning and end of iteration, where
@@ -2589,8 +2561,7 @@ elementiter_next(PyObject *op)
          */
         if (!it->parent_stack_used) {
             if (!it->root_element) {
-                PyErr_SetNone(PyExc_StopIteration);
-                return NULL;
+                return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
             }
 
             elem = it->root_element;  /* steals a reference */
@@ -2631,7 +2602,7 @@ elementiter_next(PyObject *op)
         if (parent_stack_push_new(it, elem) < 0) {
             Py_DECREF(elem);
             PyErr_NoMemory();
-            return NULL;
+            return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
         }
         if (it->gettext) {
             if (elem->tag != Py_None && !PyUnicode_Check(elem->tag)) {
@@ -2643,43 +2614,41 @@ elementiter_next(PyObject *op)
         }
 
         if (it->sought_tag == Py_None)
-            return (PyObject *)elem;
+            return (_PyStatusValue){PYGEN_NEXT, _PyValue_PointerSteal((PyObject *)elem)};
 
         rc = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(elem->tag), PyValue_FromObjectBorrow(it->sought_tag), Py_EQ);
         if (rc > 0)
-            return (PyObject *)elem;
+            return (_PyStatusValue){PYGEN_NEXT, _PyValue_PointerSteal((PyObject *)elem)};
 
         Py_DECREF(elem);
         if (rc < 0)
-            return NULL;
+            return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
         continue;
 
 gettext:
         Py_DECREF(elem);
-        if (!text) {
-            return NULL;
+        if (PyValue_IsNull(text)) {
+            return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
         }
-        if (text == Py_None) {
-            Py_DECREF(text);
-        }
-        else {
-            rc = _PyValue_IsTrue(PyValue_FromObjectBorrow(text));
+        if (!PyValue_IsNone(text)) {
+            rc = _PyValue_IsTrue(PyValue_Borrow(text));
             if (rc > 0)
-                return text;
-            Py_DECREF(text);
+                return (_PyStatusValue){PYGEN_NEXT, text};
+            PyValue_CLOSE(text);
             if (rc < 0)
-                return NULL;
+                return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
         }
     }
-
-    return NULL;
 }
+
+_Py_VALUE_THUNK_ITERNEXT(elementiter_next, elementiter_next_value)
 
 static PyType_Slot elementiter_slots[] = {
     {Py_tp_dealloc, elementiter_dealloc},
     {Py_tp_traverse, elementiter_traverse},
     {Py_tp_iter, PyObject_SelfIter},
     {Py_tp_iternext, elementiter_next},
+    {_Py_value_iternext, elementiter_next_value},
     {0, NULL},
 };
 
@@ -3132,7 +3101,7 @@ treebuilder_extend_element_text_or_tail(elementtreestate *st, PyObject *element,
             int joined = PyList_CheckExact(*data);
             PyObject *moved = *data;
             *data = NULL;
-            _set_joined(dest, dest_joined, moved, joined);
+            _set_joined(dest, dest_joined, PyValue_PrepareOwned(moved), joined);
             return 0;
         }
         else if (*dest_joined) {

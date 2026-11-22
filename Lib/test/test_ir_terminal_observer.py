@@ -1,6 +1,6 @@
 """Terminal observers see published results and cannot strand C owners."""
 
-import dis
+from test.support import ir_dis as dis
 import gc
 import sys
 import unittest

@@ -2,13 +2,13 @@
 
 import gc
 import marshal
-import opcode
+from test.support import ir_dis as opcode
 import sys
 import types
 import unittest
 import weakref
 
-import dis
+from test.support import ir_dis as dis
 import _opcode
 import _testinternalcapi
 from test import support

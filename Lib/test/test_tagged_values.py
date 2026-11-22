@@ -1,6 +1,6 @@
 """Tests for the inline int and float encoding of interpreter stack values."""
 
-import dis
+from test.support import ir_dis as dis
 import gc
 import math
 import operator

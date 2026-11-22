@@ -1,6 +1,6 @@
 """Learned shape cases share the guarded canonical attribute-read action."""
 
-import dis
+from test.support import ir_dis as dis
 import gc
 import marshal
 import sys

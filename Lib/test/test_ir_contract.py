@@ -8,9 +8,9 @@ compiler uses, with the generator's analysis of the instruction, with the
 feedback layouts and with sys.monitoring.
 """
 
-import dis
+from test.support import ir_dis as dis
 import io
-import opcode
+from test.support import ir_dis as opcode
 import os
 import re
 import sys

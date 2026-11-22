@@ -117,11 +117,10 @@ class StackEffectTests(unittest.TestCase):
 class SpecializationStatsTests(unittest.TestCase):
     def test_specialization_stats(self):
         stat_names = ["success", "failure", "hit", "deferred", "miss", "deopt"]
-        contract = _opcode.get_ir_contract()
         specialized_opcodes = [
             op.lower()
             for op in opcode._specializations
-            if _opcode.IR_ROLE_FB in contract[opcode.opmap[op]].roles
+            if opcode._inline_cache_entries.get(op, 0)
         ]
         self.assertIn('load_attr', specialized_opcodes)
         self.assertIn('binary_op', specialized_opcodes)

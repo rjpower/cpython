@@ -2,7 +2,7 @@
 
 import gc
 import marshal
-import opcode
+from test.support import ir_dis as opcode
 import struct
 import sys
 import types

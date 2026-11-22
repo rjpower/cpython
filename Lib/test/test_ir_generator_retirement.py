@@ -1,7 +1,7 @@
 """Completed receiver destruction preserves owners across callbacks."""
 
 import gc
-import opcode
+from test.support import ir_dis as opcode
 import sys
 import types
 import unittest

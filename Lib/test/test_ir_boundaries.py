@@ -1,7 +1,7 @@
 """Compact executable offsets and source-only LINE edges."""
 
 import _opcode
-import dis
+from test.support import ir_dis as dis
 import marshal
 import struct
 import sys

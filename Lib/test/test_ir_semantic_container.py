@@ -1,6 +1,6 @@
 """Optional positions cannot supply or erase semantic recovery authority."""
 
-import dis
+from test.support import ir_dis as dis
 import marshal
 import struct
 import sys

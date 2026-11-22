@@ -1,6 +1,6 @@
 """Loop/send outcomes own their results and real continuations."""
 
-import dis
+from test.support import ir_dis as dis
 import sys
 import unittest
 

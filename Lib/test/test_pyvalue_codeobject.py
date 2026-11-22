@@ -1,13 +1,13 @@
 """Canonical constant interning and code-object input validation."""
 
 import math
-import opcode
+from test.support import ir_dis as opcode
 import sys
 import types
 import unittest
 
 from test.support import import_helper
-from test.support.bytecode_helper import encode_words
+from test.support.ir_dis import encode_words
 
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
 

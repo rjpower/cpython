@@ -4643,7 +4643,7 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
             import os
             import _testinternalcapi
             from _remote_debugging import RemoteUnwinder
-            from test.support.bytecode_helper import encode_words
+            from test.support.ir_dis import encode_words
 
             async def delegate():
                 await asyncio.Future()

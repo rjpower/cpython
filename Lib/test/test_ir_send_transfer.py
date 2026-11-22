@@ -1,7 +1,7 @@
 """Normal SEND and throw completion retire their input windows."""
 
 import marshal
-import opcode
+from test.support import ir_dis as opcode
 from pathlib import Path
 import tempfile
 import types

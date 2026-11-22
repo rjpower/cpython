@@ -1,7 +1,7 @@
 """Observation readers join optional positions with immutable recovery IDs."""
 
 from contextlib import contextmanager
-import dis
+from test.support import ir_dis as dis
 import sys
 import types
 import unittest

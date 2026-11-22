@@ -1,7 +1,7 @@
 """Exceptional prefix absence needs an independent abrupt-write contract."""
 
 import marshal
-import opcode
+from test.support import ir_dis as opcode
 import struct
 import types
 import unittest

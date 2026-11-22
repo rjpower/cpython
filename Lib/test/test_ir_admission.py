@@ -1,15 +1,15 @@
 """Encoded register-image admission through public and serialized code paths."""
 
-import dis
+from test.support import ir_dis as dis
 import marshal
-import opcode
+from test.support import ir_dis as opcode
 import struct
 import types
 import unittest
 
 import _opcode
 from test.support import import_helper
-from test.support.bytecode_helper import encode_words
+from test.support.ir_dis import encode_words
 
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")

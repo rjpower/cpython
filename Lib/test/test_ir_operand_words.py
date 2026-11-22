@@ -5,16 +5,16 @@ them.  The code under test never runs past a call that the test does not
 mean to run: g is a function that fails the test.
 """
 
-import dis
+from test.support import ir_dis as dis
 import marshal
-import opcode
+from test.support import ir_dis as opcode
 import sys
 import types
 import unittest
 
 import _opcode
 from test.support import import_helper
-from test.support.bytecode_helper import encode_words
+from test.support.ir_dis import encode_words
 from test.test_ir_admission import construct
 from test.test_ir_completion import exception_entry
 from test.test_ir_transfer_admission import raw_encoded

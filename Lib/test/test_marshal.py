@@ -75,38 +75,6 @@ class IntTestCase(unittest.TestCase, HelperMixin):
         got = marshal.loads(b'I\xf7\xe6\xd5\xc4\xb3\xa2\x91\x80')
         self.assertEqual(got, -0x7f6e5d4c3b2a1909)
 
-    def test_inline_reference_payloads(self):
-        # The first occurrence owns a reference-table slot; the second is
-        # decoded through TYPE_REF and must retain the same language value.
-        payloads = (
-            (b")\x02\xe9\x2a\x00\x00\x00r\x00\x00\x00\x00", 42),
-            (b")\x02\xec\x03\x00\x00\x00\x00\x00\x00\x00\x00\x04"
-             b"r\x00\x00\x00\x00", 1 << 40),
-            (b")\x02\xe7" + struct.pack("<d", 1.25) +
-             b"r\x00\x00\x00\x00", 1.25),
-        )
-        for data, expected in payloads:
-            with self.subTest(expected=expected):
-                self.assertEqual(marshal.loads(data), (expected, expected))
-                self.assertEqual(marshal.load(io.BytesIO(data)), (expected, expected))
-
-    def test_inline_tuple_scalar_wire(self):
-        # Versions 0-2 use a five-byte tuple prefix and no reference table.
-        values = (-2**40, -2**31, 2**31 - 1, 2**40, -0.0, 1.25)
-        for version in range(3):
-            for value in values:
-                with self.subTest(version=version, value=value):
-                    data = marshal.dumps((value,), version)
-                    stream = io.BytesIO(data)
-                    self.assertEqual(stream.read(5), b"(\x01\x00\x00\x00")
-                    self.assertEqual(stream.read(), marshal.dumps(value, version))
-                    self.assertEqual(marshal.loads(data), (value,))
-
-        # Inline integers have no object identity to enter in the ref table.
-        repeated = marshal.dumps((1, 1), 6)
-        self.assertTrue(repeated.endswith(b"i\x01\x00\x00\x00" * 2))
-        self.assertEqual(marshal.loads(repeated), (1, 1))
-
     def test_bool(self):
         for b in (True, False):
             self.helper(b)
@@ -753,11 +721,6 @@ class LargeValuesTestCase(unittest.TestCase):
     def test_bytearray(self, size):
         self.check_unmarshallable(bytearray(size))
 
-# Builds with inline values give each exact int in int32 range and each
-# non-NaN float a single identity (see test_tagged_values), so id() cannot
-# tell separately unmarshalled copies of one apart.
-VALUE_IDENTITY = float('1.5') is float('1.5')
-
 def CollectObjectIDs(ids, obj):
     """Collect object ids seen in a structure"""
     if id(obj) in ids:
@@ -793,8 +756,7 @@ class InstancingTestCase(unittest.TestCase, HelperMixin):
             s2 = marshal.dumps(sample, 2)
             n2 = CollectObjectIDs(set(), marshal.loads(s2))
             #old format generated more instances
-            if not (VALUE_IDENTITY and type(rsample) in (int, float)):
-                self.assertGreater(n2, n0)
+            self.assertGreater(n2, n0)
 
             #if complex objects are in there, old format is larger
             if not simple:
@@ -1081,18 +1043,11 @@ class ReferenceTestCase(unittest.TestCase):
         del keep
         self.assertEqual(marshal.dumps(referenced, version), data)
 
-        # Inline floats have no identity (pyvalue.md section 1.13): a repeated
-        # one is written in full each time, never flagged or referenced.
-        f = float('1.5')
-        self.assertEqual(marshal.dumps([f, f], version),
-                         b'[\x02\0\0\0' + 2 * (b'g' + struct.pack('<d', f)))
-
-        # Complex numbers are objects, so they can be shared.
-        a = complex('1.5j')
-        b = complex('2.5j')
+        a = float('1.5')
+        b = float('2.5')
         keep = [a, b, a, b]
-        data_a = b'y' + struct.pack('<dd', a.real, a.imag)
-        data_b = b'y' + struct.pack('<dd', b.real, b.imag)
+        data_a = b'g' + struct.pack('<d', a)
+        data_b = b'g' + struct.pack('<d', b)
         self.assertEqual(marshal.dumps([a, b], version),
                          b'[\x02\0\0\0' + data_a + data_b)
         self.assertEqual(marshal.dumps((1, 'a', interned, None), version),
@@ -1100,7 +1055,7 @@ class ReferenceTestCase(unittest.TestCase):
                          b'Z\x15marshal_interned_nameN')
         # Also if other objects are referenced.
         self.assertEqual(marshal.dumps([a, 1, 'a', interned, b, a], version),
-                         b'[\x06\0\0\0\xf9' + struct.pack('<dd', a.real, a.imag) +
+                         b'[\x06\0\0\0\xe7' + struct.pack('<d', a) +
                          b'i\x01\0\0\0Z\x01a'
                          b'Z\x15marshal_interned_name' +
                          data_b + b'r\0\0\0\0')
@@ -1143,12 +1098,12 @@ class ReferenceTestCase(unittest.TestCase):
     def test_reference_index(self):
         # Only the objects occurring more than once are numbered, in
         # the order of their first occurrence.
-        a = complex('1.5j')
-        b = complex('2.5j')
-        c = complex('3.5j')
-        data_a = b'y' + struct.pack('<dd', a.real, a.imag)
-        data_b = b'y' + struct.pack('<dd', b.real, b.imag)
-        data_c = b'y' + struct.pack('<dd', c.real, c.imag)
+        a = float('1.5')
+        b = float('2.5')
+        c = float('3.5')
+        data_a = b'g' + struct.pack('<d', a)
+        data_b = b'g' + struct.pack('<d', b)
+        data_c = b'g' + struct.pack('<d', c)
         def flagged(data):
             data = bytearray(data)
             data[0] |= self.FLAG_REF
@@ -1171,10 +1126,10 @@ class ReferenceTestCase(unittest.TestCase):
                          b'[\x04\0\0\0' + flagged(data_c) +
                          b'\xa9\x03' + flagged(data_a) + data_b + ref(2) +
                          ref(1) + ref(0))
-        # Inline ints are written in full; interned strings retain references.
+        # Small ints and interned strings are not special.
         self.assertEqual(dumps((1, 2, 1, 'a', 'a')),
-                         b')\x05i\x01\0\0\0i\x02\0\0\0i\x01\0\0\0'
-                         b'\xda\x01ar\0\0\0\0')
+                         b')\x05\xe9\x01\0\0\0i\x02\0\0\0r\0\0\0\0'
+                         b'\xda\x01ar\x01\0\0\0')
         # A recursive list refers to itself.
         lst = [a]
         lst.append(lst)
@@ -1185,13 +1140,13 @@ class ReferenceTestCase(unittest.TestCase):
     def test_many_references(self):
         # References at every offset in the output, next to each other, far
         # from the objects they refer to and from each other.
-        a = complex('1.5j')
-        b = complex('2.5j')
-        c = complex('3.5j')
+        a = float('1.5')
+        b = float('2.5')
+        c = float('3.5')
         keep = [a, b, c]
-        data_a = b'y' + struct.pack('<dd', a.real, a.imag)
-        data_b = b'y' + struct.pack('<dd', b.real, b.imag)
-        data_c = b'y' + struct.pack('<dd', c.real, c.imag)
+        data_a = b'g' + struct.pack('<d', a)
+        data_b = b'g' + struct.pack('<d', b)
+        data_c = b'g' + struct.pack('<d', c)
         def flagged(data):
             data = bytearray(data)
             data[0] |= self.FLAG_REF

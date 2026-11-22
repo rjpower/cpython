@@ -1,6 +1,6 @@
 """Class-receiver classmethod capture through the ordinary owned call pair."""
 
-import dis
+from test.support import ir_dis as dis
 import importlib.util
 import sys
 import unittest

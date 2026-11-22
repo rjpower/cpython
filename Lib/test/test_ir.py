@@ -1,11 +1,11 @@
 """Tests for the register IR (Include/internal/pycore_ir.h) that the
 assembler (Python/assemble.c) emits."""
 
-import dis
+from test.support import ir_dis as dis
 import gc
 import io
 import math
-import opcode
+from test.support import ir_dis as opcode
 import sys
 import types
 import unittest
@@ -14,7 +14,8 @@ import weakref
 import _opcode
 from test import support
 from test.support import import_helper
-from test.support.bytecode_helper import AssemblerTestCase, encode_words
+from test.support.bytecode_helper import AssemblerTestCase
+from test.support.ir_dis import encode_words
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 get_ir = _testinternalcapi.get_ir

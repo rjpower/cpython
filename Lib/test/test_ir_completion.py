@@ -1,7 +1,7 @@
 """Semantic iterator completion and explicit generator resume recipients."""
 
 import _opcode
-import dis
+from test.support import ir_dis as dis
 import gc
 import struct
 import sys

@@ -1,6 +1,6 @@
 """Python child completion owns ignored results without a temporary POP."""
 
-import dis
+from test.support import ir_dis as dis
 import gc
 import io
 from pathlib import Path

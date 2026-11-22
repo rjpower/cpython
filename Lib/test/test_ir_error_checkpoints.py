@@ -8,7 +8,7 @@ from unittest import mock
 
 import _testinternalcapi
 import _opcode
-import opcode
+from test.support import ir_dis as opcode
 
 from test.support.ir_semantics import position_table
 from test.test_ir_call_roles import routes

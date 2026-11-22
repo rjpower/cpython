@@ -523,7 +523,7 @@ class EmbeddingTests(EmbeddingTestsMixin, unittest.TestCase):
         _testinternalcapi = import_helper.import_module("_testinternalcapi")
 
         code = textwrap.dedent(f"""\
-            import dis
+            from test.support import ir_dis as dis
             import importlib._bootstrap
             import opcode
             import test.test_dis

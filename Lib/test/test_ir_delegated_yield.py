@@ -1,7 +1,7 @@
 """Delegated suspension carries an admitted explicit receiver role."""
 
 import marshal
-import opcode
+from test.support import ir_dis as opcode
 import sys
 from pathlib import Path
 import tempfile

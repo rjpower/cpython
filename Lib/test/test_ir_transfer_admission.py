@@ -1,15 +1,15 @@
 """Normal-edge initialization and owner transport under NULL shadow authority."""
 
-import dis
+from test.support import ir_dis as dis
 import marshal
-import opcode
+from test.support import ir_dis as opcode
 import struct
 import types
 import unittest
 
 import _testinternalcapi
 
-from test.support.bytecode_helper import encode_words, shift_for_discard_slot
+from test.support.ir_dis import encode_words
 from test.test_ir_admission import construct
 
 

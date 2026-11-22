@@ -2,7 +2,7 @@
 section 1.3 and the value format conversions of section 4."""
 
 import contextvars
-import dis
+from test.support import ir_dis as dis
 import gc
 import math
 import sys

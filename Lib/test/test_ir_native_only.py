@@ -1,7 +1,7 @@
 """Synthetic native homes cannot become an ordinary code image."""
 
 import marshal
-import opcode
+from test.support import ir_dis as opcode
 from pathlib import Path
 import unittest
 from unittest import mock

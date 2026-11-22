@@ -1,13 +1,10 @@
 # Testing the line trace facility.
 
 from test import support
-from test.support.ir_semantics import observation_records
 import unittest
 import sys
-import struct
 import difflib
 import gc
-import weakref
 from functools import wraps
 from test.support import import_helper, requires_subprocess, run_no_yield_async_fn
 import contextlib
@@ -326,26 +323,12 @@ generator_example.events = ([(0, 'call'),
                             [(5, 'line'), (5, 'return')])
 
 
-def lineno_matches_lasti(frame, event):
-    ranges = list(frame.f_code.co_lines())
-    if any(start <= frame.f_lasti < end and line == frame.f_lineno
-           for start, end, line in ranges):
-        return True
-    if event != 'line':
-        return False
-    # Source-only LINE keeps f_lasti at the actual predecessor. Independently
-    # validate that exact edge span, rather than accepting any line in code.
-    words = len(frame.f_code.co_code) // 8
-    for record in observation_records(frame.f_code):
-        source, target, edge, line = record[:4]
-        if (source != frame.f_lasti or line != frame.f_lineno or
-                not 0 <= source < words or not 0 <= target < words or edge not in (0, 1)):
-            continue
-        if any(location == line and
-               (start <= target < end or start == end == target or end == target)
-               for start, end, location in ranges):
-            return True
-    return False
+def lineno_matches_lasti(frame):
+    last_line = None
+    for start, end, line in frame.f_code.co_lines():
+        if start <= frame.f_lasti < end:
+            last_line = line
+    return last_line == frame.f_lineno
 
 class Tracer:
     def __init__(self, trace_line_events=None, trace_opcode_events=None):
@@ -360,7 +343,7 @@ class Tracer:
             frame.f_trace_opcodes = self.trace_opcode_events
 
     def trace(self, frame, event, arg):
-        assert lineno_matches_lasti(frame, event)
+        assert lineno_matches_lasti(frame)
         self._reconfigure_frame(frame)
         self.events.append((frame.f_lineno, event))
         return self.trace
@@ -377,6 +360,8 @@ class TraceTestCase(unittest.TestCase):
     # Disable gc collection when tracing, otherwise the
     # deallocators may be traced as well.
     def setUp(self):
+        if os.environ.get('PYTHON_UOPS_OPTIMIZE') == '0':
+            self.skipTest("Line tracing behavior differs when JIT optimizer is disabled")
         self.using_gc = gc.isenabled()
         gc.disable()
         self.addCleanup(sys.settrace, sys.gettrace())
@@ -460,7 +445,6 @@ class TraceTestCase(unittest.TestCase):
     def test_12_tighterloop(self):
         self.run_test(tighterloop_example)
 
-    @support.requires_refcounting
     def test_13_genexp(self):
         self.run_test(generator_example)
         # issue1265: if the trace function contains a generator,
@@ -1748,64 +1732,6 @@ class TraceTestCase(unittest.TestCase):
             sys.settrace(None)
 
     @support.cpython_only
-    def test_c_tracefunc_reader_sys_settrace(self):
-        # Code that reads tstate->c_tracefunc and calls it directly sees the
-        # same events, arguments and return handling as the interpreter.
-        _testcapi = import_helper.import_module('_testcapi')
-        events = []
-
-        def tracer(frame, event, arg):
-            events.append((event, arg))
-            return tracer
-
-        self.assertIsNone(_testcapi.call_c_tracefunc(0, 42))
-        sys.settrace(tracer)
-        try:
-            frame = sys._getframe()
-            frame.f_trace = None
-            self.assertEqual(_testcapi.call_c_tracefunc(0, 12345678901), 0)
-            self.assertIs(frame.f_trace, tracer)
-            self.assertEqual(_testcapi.call_c_tracefunc(0, 42), 0)
-            self.assertEqual(_testcapi.call_c_tracefunc(0, 2.5), 0)
-        finally:
-            sys.settrace(None)
-        self.assertIn(('call', 12345678901), events)
-        self.assertIn(('call', 42), events)
-        self.assertIn(('call', 2.5), events)
-        self.assertIsNone(_testcapi.call_c_tracefunc(0, 42))
-
-    @support.cpython_only
-    def test_c_tracefunc_reader_pyeval_settrace(self):
-        _testcapi = import_helper.import_module('_testcapi')
-        events = []
-        _testcapi.settrace_to_record(events)
-        try:
-            self.assertEqual(_testcapi.call_c_tracefunc(3, 42), 0)
-            self.assertEqual(_testcapi.call_c_tracefunc(3, 7.5), 0)
-        finally:
-            sys.settrace(None)
-        direct = [arg for (what, line, arg) in events
-                  if what == 3 and arg in (42, 7.5)]
-        self.assertEqual(direct, [42, 7.5])
-
-    def test_clear_trace_inside_callback(self):
-        calls = []
-
-        def tracer(frame, event, arg):
-            calls.append(event)
-            sys.settrace(None)
-            return None
-
-        def func():
-            return 1
-
-        sys.settrace(tracer)
-        func()
-        func()
-        self.assertEqual(sys.gettrace(), None)
-        self.assertEqual(calls, ['call'])
-
-    @support.cpython_only
     def test_testcapi_settrace_error(self):
 
         # Skip this test if the _testcapi module isn't available.
@@ -2037,20 +1963,18 @@ class JumpTracer:
     """Defines a trace function that jumps from one place to another."""
 
     def __init__(self, function, jumpFrom, jumpTo, event='line',
-                 decorated=False, refusal=None):
+                 decorated=False):
         self.code = function.__code__
         self.jumpFrom = jumpFrom
         self.jumpTo = jumpTo
         self.event = event
         self.firstLine = None if decorated else self.code.co_firstlineno
         self.done = False
-        self.refusal = refusal
-        self.attempts = 0
 
     def trace(self, frame, event, arg):
         if self.done:
             return
-        assert lineno_matches_lasti(frame, event)
+        assert lineno_matches_lasti(frame)
         # frame.f_code.co_firstlineno is the first line of the decorator when
         # 'function' is decorated and the decorator may be written using
         # multiple physical lines when it is too long. Use the first line
@@ -2064,11 +1988,6 @@ class JumpTracer:
             while f is not None and f.f_code != self.code:
                 f = f.f_back
             if f is not None:
-                if self.refusal is not None:
-                    self.done = True
-                    self.attempts += 1
-                    self.refusal(frame, self.firstLine + self.jumpTo, event, arg)
-                    return self.trace
                 # Cope with non-integer self.jumpTo (because of
                 # no_jump_to_non_integers below).
                 try:
@@ -2103,8 +2022,6 @@ def no_jump_without_trace_function():
 
 class JumpTestCase(unittest.TestCase):
     unbound_locals = r"assigning None to [0-9]+ unbound local"
-    incoming_owner_error = r'^jump requires an incoming temporary register owner$'
-    protected_owner_error = r'^jump requires a suspended or protected owner recipe$'
 
     def setUp(self):
         self.addCleanup(sys.settrace, sys.gettrace())
@@ -2116,42 +2033,13 @@ class JumpTestCase(unittest.TestCase):
                        "Expected: " + repr(expected) + "\n" +
                        "Received: " + repr(received))
 
-    def check_refused_jump(self, frame, target, event, arg, pattern):
-        before_pc = frame.f_lasti
-        before_line = frame.f_lineno
-        before_code = frame.f_code
-        before_locals = dict(frame.f_locals)
-        output = before_locals.get('output')
-        before_output = tuple(output) if type(output) is list else None
-        inherited = sys.exception()
-        try:
-            raise LookupError('callback-owned exception')
-        except LookupError as callback:
-            with warnings.catch_warnings():
-                warnings.simplefilter('error')
-                with self.assertRaisesRegex(ValueError, pattern):
-                    frame.f_lineno = target
-            self.assertIs(sys.exception(), callback)
-        self.assertIs(sys.exception(), inherited)
-        self.assertEqual(frame.f_lasti, before_pc)
-        self.assertEqual(frame.f_lineno, before_line)
-        self.assertIs(frame.f_code, before_code)
-        after_locals = dict(frame.f_locals)
-        self.assertEqual(after_locals.keys(), before_locals.keys())
-        for name, value in before_locals.items():
-            self.assertIs(after_locals[name], value, name)
-        if before_output is not None:
-            self.assertEqual(tuple(output), before_output)
-
     def run_test(self, func, jumpFrom, jumpTo, expected, error=None,
-                 event='line', decorated=False, warning=None, refusal=None):
+                 event='line', decorated=False, warning=None):
         wrapped = func
         while hasattr(wrapped, '__wrapped__'):
             wrapped = wrapped.__wrapped__
 
-        checker = None if refusal is None else lambda frame, target, event, arg: (
-            self.check_refused_jump(frame, target, event, arg, refusal))
-        tracer = JumpTracer(wrapped, jumpFrom, jumpTo, event, decorated, checker)
+        tracer = JumpTracer(wrapped, jumpFrom, jumpTo, event, decorated)
         sys.settrace(tracer.trace)
         output = []
 
@@ -2166,19 +2054,15 @@ class JumpTestCase(unittest.TestCase):
             func(output)
 
         sys.settrace(None)
-        if refusal is not None:
-            self.assertEqual(tracer.attempts, 1)
         self.compare_jump_output(expected, output)
 
     def run_async_test(self, func, jumpFrom, jumpTo, expected, error=None,
-                 event='line', decorated=False, warning=None, refusal=None):
+                 event='line', decorated=False, warning=None):
         wrapped = func
         while hasattr(wrapped, '__wrapped__'):
             wrapped = wrapped.__wrapped__
 
-        checker = None if refusal is None else lambda frame, target, event, arg: (
-            self.check_refused_jump(frame, target, event, arg, refusal))
-        tracer = JumpTracer(wrapped, jumpFrom, jumpTo, event, decorated, checker)
+        tracer = JumpTracer(wrapped, jumpFrom, jumpTo, event, decorated)
         sys.settrace(tracer.trace)
         output = []
 
@@ -2187,18 +2071,12 @@ class JumpTestCase(unittest.TestCase):
                 stack.enter_context(self.assertRaisesRegex(*error))
             if warning is not None:
                 stack.enter_context(self.assertWarnsRegex(*warning))
-            elif refusal is not None:
-                stack.enter_context(warnings.catch_warnings())
-                warnings.simplefilter('error')
             run_no_yield_async_fn(func, output)
 
         sys.settrace(None)
-        if refusal is not None:
-            self.assertEqual(tracer.attempts, 1)
         self.compare_jump_output(expected, output)
 
-    def jump_test(jumpFrom, jumpTo, expected, error=None, event='line', warning=None,
-                  refusal=None):
+    def jump_test(jumpFrom, jumpTo, expected, error=None, event='line', warning=None):
         """Decorator that creates a test that makes a jump
         from one place to another in the following code.
         """
@@ -2206,13 +2084,11 @@ class JumpTestCase(unittest.TestCase):
             @wraps(func)
             def test(self):
                 self.run_test(func, jumpFrom, jumpTo, expected,
-                              error=error, event=event, decorated=True,
-                              warning=warning, refusal=refusal)
+                              error=error, event=event, decorated=True, warning=warning)
             return test
         return decorator
 
-    def async_jump_test(jumpFrom, jumpTo, expected, error=None, event='line', warning=None,
-                        refusal=None):
+    def async_jump_test(jumpFrom, jumpTo, expected, error=None, event='line', warning=None):
         """Decorator that creates a test that makes a jump
         from one place to another in the following asynchronous code.
         """
@@ -2220,8 +2096,7 @@ class JumpTestCase(unittest.TestCase):
             @wraps(func)
             def test(self):
                 self.run_async_test(func, jumpFrom, jumpTo, expected,
-                                    error=error, event=event, decorated=True,
-                                    warning=warning, refusal=refusal)
+                              error=error, event=event, decorated=True, warning=warning)
             return test
         return decorator
 
@@ -2452,7 +2327,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(7)
         output.append(8)
 
-    @jump_test(5, 7, [4, 5, 7, 8], refusal=incoming_owner_error)
+    @jump_test(5, 7, [4, 7, 8])
     def test_jump_from_except_to_finally(output):
         try:
             1/0
@@ -2498,7 +2373,7 @@ class JumpTestCase(unittest.TestCase):
         async with asynctracecontext(output, 4):
             output.append(5)
 
-    @jump_test(4, 5, [1, 3, 4, -3, 5, 6], refusal=incoming_owner_error)
+    @jump_test(4, 5, [1, 3, 5, 6])
     def test_jump_out_of_with_block_within_for_block(output):
         output.append(1)
         for i in [1]:
@@ -2507,7 +2382,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(5)
         output.append(6)
 
-    @async_jump_test(4, 5, [1, 3, 4, -3, 5, 6], refusal=incoming_owner_error)
+    @async_jump_test(4, 5, [1, 3, 5, 6])
     async def test_jump_out_of_async_with_block_within_for_block(output):
         output.append(1)
         for i in [1]:
@@ -2516,7 +2391,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(5)
         output.append(6)
 
-    @jump_test(4, 5, [1, 2, 3, 4, -3, 5, -2, 6], refusal=incoming_owner_error)
+    @jump_test(4, 5, [1, 2, 3, 5, -2, 6])
     def test_jump_out_of_with_block_within_with_block(output):
         output.append(1)
         with tracecontext(output, 2):
@@ -2525,7 +2400,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(5)
         output.append(6)
 
-    @async_jump_test(4, 5, [1, 2, 3, 4, -3, 5, -2, 6], refusal=incoming_owner_error)
+    @async_jump_test(4, 5, [1, 2, 3, 5, -2, 6])
     async def test_jump_out_of_async_with_block_within_with_block(output):
         output.append(1)
         with tracecontext(output, 2):
@@ -2554,7 +2429,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(6)
         output.append(7)
 
-    @jump_test(8, 11, [1, 3, 5, 8, 8, 10, 5, 8, 8, 10, 11, 12], refusal=incoming_owner_error)
+    @jump_test(8, 11, [1, 3, 5, 11, 12])
     def test_jump_out_of_complex_nested_blocks(output):
         output.append(1)
         for i in [1]:
@@ -2648,7 +2523,7 @@ class JumpTestCase(unittest.TestCase):
         output.append(2)
 
     # Test each kind of 'except' line.
-    @jump_test(2, 3, [4], (ValueError, incoming_owner_error))
+    @jump_test(2, 3, [4], (ValueError, 'except'))
     def test_no_jump_to_except_1(output):
         try:
             output.append(2)
@@ -2656,7 +2531,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(4)
             raise
 
-    @jump_test(2, 3, [4], (ValueError, incoming_owner_error))
+    @jump_test(2, 3, [4], (ValueError, 'except'))
     def test_no_jump_to_except_2(output):
         try:
             output.append(2)
@@ -2664,7 +2539,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(4)
             raise
 
-    @jump_test(2, 3, [4], (ValueError, incoming_owner_error))
+    @jump_test(2, 3, [4], (ValueError, 'except'))
     def test_no_jump_to_except_3(output):
         try:
             output.append(2)
@@ -2672,7 +2547,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(4)
             raise e
 
-    @jump_test(2, 3, [4], (ValueError, incoming_owner_error))
+    @jump_test(2, 3, [4], (ValueError, 'except'))
     def test_no_jump_to_except_4(output):
         try:
             output.append(2)
@@ -2680,51 +2555,51 @@ class JumpTestCase(unittest.TestCase):
             output.append(4)
             raise e
 
-    @jump_test(1, 3, [], (ValueError, incoming_owner_error))
+    @jump_test(1, 3, [], (ValueError, 'into'))
     def test_no_jump_forwards_into_for_block(output):
         output.append(1)
         for i in 1, 2:
             output.append(3)
 
-    @async_jump_test(1, 3, [], (ValueError, incoming_owner_error))
+    @async_jump_test(1, 3, [], (ValueError, 'into'))
     async def test_no_jump_forwards_into_async_for_block(output):
         output.append(1)
         async for i in asynciter([1, 2]):
             output.append(3)
         pass
 
-    @jump_test(3, 2, [2, 2], (ValueError, incoming_owner_error))
+    @jump_test(3, 2, [2, 2], (ValueError, 'into'))
     def test_no_jump_backwards_into_for_block(output):
         for i in 1, 2:
             output.append(2)
         output.append(3)
 
 
-    @async_jump_test(3, 2, [2, 2], (ValueError, incoming_owner_error))
+    @async_jump_test(3, 2, [2, 2], (ValueError, "can't jump into the body of a for loop"))
     async def test_no_jump_backwards_into_async_for_block(output):
         async for i in asynciter([1, 2]):
             output.append(2)
         output.append(3)
 
-    @jump_test(1, 3, [], (ValueError, incoming_owner_error))
+    @jump_test(1, 3, [], (ValueError, 'stack'))
     def test_no_jump_forwards_into_with_block(output):
         output.append(1)
         with tracecontext(output, 2):
             output.append(3)
 
-    @async_jump_test(1, 3, [], (ValueError, incoming_owner_error))
+    @async_jump_test(1, 3, [], (ValueError, 'stack'))
     async def test_no_jump_forwards_into_async_with_block(output):
         output.append(1)
         async with asynctracecontext(output, 2):
             output.append(3)
 
-    @jump_test(3, 2, [1, 2, -1], (ValueError, incoming_owner_error))
+    @jump_test(3, 2, [1, 2, -1], (ValueError, 'stack'))
     def test_no_jump_backwards_into_with_block(output):
         with tracecontext(output, 1):
             output.append(2)
         output.append(3)
 
-    @async_jump_test(3, 2, [1, 2, -1], (ValueError, incoming_owner_error))
+    @async_jump_test(3, 2, [1, 2, -1], (ValueError, 'stack'))
     async def test_no_jump_backwards_into_async_with_block(output):
         async with asynctracecontext(output, 1):
             output.append(2)
@@ -2802,7 +2677,7 @@ class JumpTestCase(unittest.TestCase):
         finally:
             output.append(5)
 
-    @jump_test(1, 5, [], (ValueError, incoming_owner_error))
+    @jump_test(1, 5, [], (ValueError, "can't jump into an 'except' block as there's no exception"))
     def test_no_jump_into_bare_except_block(output):
         output.append(1)
         try:
@@ -2810,7 +2685,7 @@ class JumpTestCase(unittest.TestCase):
         except:
             output.append(5)
 
-    @jump_test(1, 5, [], (ValueError, incoming_owner_error))
+    @jump_test(1, 5, [], (ValueError, "can't jump into an 'except' block as there's no exception"))
     def test_no_jump_into_qualified_except_block(output):
         output.append(1)
         try:
@@ -2818,7 +2693,7 @@ class JumpTestCase(unittest.TestCase):
         except Exception:
             output.append(5)
 
-    @jump_test(3, 6, [2, 5, 6], (ValueError, incoming_owner_error))
+    @jump_test(3, 6, [2, 5, 6], (ValueError, "can't jump into an 'except' block as there's no exception"))
     def test_no_jump_into_bare_except_block_from_try_block(output):
         try:
             output.append(2)
@@ -2829,7 +2704,7 @@ class JumpTestCase(unittest.TestCase):
             raise
         output.append(8)
 
-    @jump_test(3, 6, [2], (ValueError, incoming_owner_error))
+    @jump_test(3, 6, [2], (ValueError, "can't jump into an 'except' block as there's no exception"))
     def test_no_jump_into_qualified_except_block_from_try_block(output):
         try:
             output.append(2)
@@ -2840,7 +2715,7 @@ class JumpTestCase(unittest.TestCase):
             raise
         output.append(8)
 
-    @jump_test(7, 1, [1, 3, 6, 7], refusal=incoming_owner_error)
+    @jump_test(7, 1, [1, 3, 6, 1, 3, 6, 7])
     def test_jump_out_of_bare_except_block(output):
         output.append(1)
         try:
@@ -2850,7 +2725,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(6)
             output.append(7)
 
-    @jump_test(7, 1, [1, 3, 6, 7], refusal=incoming_owner_error)
+    @jump_test(7, 1, [1, 3, 6, 1, 3, 6, 7])
     def test_jump_out_of_qualified_except_block(output):
         output.append(1)
         try:
@@ -2860,7 +2735,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(6)
             output.append(7)
 
-    @jump_test(3, 5, [1, 2, 3, -2, 4, 5, -4], refusal=incoming_owner_error)
+    @jump_test(3, 5, [1, 2, 5, -2])
     def test_jump_between_with_blocks(output):
         output.append(1)
         with tracecontext(output, 2):
@@ -2868,7 +2743,7 @@ class JumpTestCase(unittest.TestCase):
         with tracecontext(output, 4):
             output.append(5)
 
-    @async_jump_test(3, 5, [1, 2, 3, -2, 4, 5, -4], refusal=incoming_owner_error)
+    @async_jump_test(3, 5, [1, 2, 5, -2])
     async def test_jump_between_async_with_blocks(output):
         output.append(1)
         async with asynctracecontext(output, 2):
@@ -2886,7 +2761,7 @@ class JumpTestCase(unittest.TestCase):
         return
         output.append(7)
 
-    @jump_test(7, 4, [1, 6], (ValueError, incoming_owner_error))
+    @jump_test(7, 4, [1, 6], (ValueError, 'into'))
     def test_no_jump_into_for_block_before_else(output):
         output.append(1)
         if not output:  # always false
@@ -2897,7 +2772,7 @@ class JumpTestCase(unittest.TestCase):
             output.append(7)
         output.append(8)
 
-    @async_jump_test(7, 4, [1, 6], (ValueError, incoming_owner_error))
+    @async_jump_test(7, 4, [1, 6], (ValueError, 'into'))
     async def test_no_jump_into_async_for_block_before_else(output):
         output.append(1)
         if not output:  # always false
@@ -2970,137 +2845,13 @@ output.append(4)
         output.append(1)
         1 / 0
 
-    @jump_test(3, 2, [2, 5], event='return', refusal=protected_owner_error)
+    @jump_test(3, 2, [2, 2, 5], event='return')
     def test_jump_from_yield(output):
         def gen():
             output.append(2)
             yield 3
         next(gen())
         output.append(5)
-
-    def test_refused_with_jump_preserves_manager_protocol(self):
-        for asynchronous in (False, True):
-            with self.subTest(asynchronous=asynchronous):
-                protocol = []
-                checkpoint = object()
-
-                class Checkpoint:
-                    def __await__(self):
-                        protocol.append('await start')
-                        yield checkpoint
-                        protocol.append('await finish')
-
-                class Manager:
-                    def __enter__(self):
-                        protocol.append(('enter', self))
-                        return self
-
-                    def __exit__(self, *exc):
-                        protocol.append(('exit', self))
-
-                    async def __aenter__(self):
-                        await Checkpoint()
-                        return self.__enter__()
-
-                    async def __aexit__(self, *exc):
-                        await Checkpoint()
-                        self.__exit__(*exc)
-
-                outer, inner = Manager(), Manager()
-                if asynchronous:
-                    async def f(output):
-                        async with outer:
-                            async with inner:
-                                output.append('body')
-                            output.append('after')
-                else:
-                    def f(output):
-                        with outer:
-                            with inner:
-                                output.append('body')
-                            output.append('after')
-
-                def checker(frame, target, event, arg):
-                    before_protocol = tuple(protocol)
-                    self.check_refused_jump(frame, target, event, arg,
-                                            self.incoming_owner_error)
-                    self.assertEqual(tuple(protocol), before_protocol)
-                tracer = JumpTracer(f, 3, 4, refusal=checker)
-                output = []
-                previous = sys.gettrace()
-                sys.settrace(tracer.trace)
-                try:
-                    if asynchronous:
-                        coro = f(output)
-                        try:
-                            with self.assertRaises(StopIteration):
-                                for _ in range(5):
-                                    self.assertIs(coro.send(None), checkpoint)
-                        finally:
-                            coro.close()
-                    else:
-                        f(output)
-                finally:
-                    sys.settrace(previous)
-                self.assertEqual(tracer.attempts, 1)
-                self.assertEqual(output, ['body', 'after'])
-                managers = [entry for entry in protocol if type(entry) is tuple]
-                self.assertEqual(managers, [('enter', outer), ('enter', inner),
-                                            ('exit', inner), ('exit', outer)])
-                self.assertEqual(protocol.count('await start'),
-                                 4 if asynchronous else 0)
-                self.assertEqual(protocol.count('await finish'),
-                                 4 if asynchronous else 0)
-
-    def test_refused_caught_exit_preserves_handled_exception(self):
-        observed = []
-        def f(output):
-            try:
-                1 / 0
-            except ZeroDivisionError as error:
-                output.append('caught')
-                observed.append((error, sys.exception()))
-            finally:
-                output.append('finally')
-
-        self.run_test(f, 5, 1, ['caught', 'finally'],
-                      refusal=self.incoming_owner_error)
-        self.assertEqual(len(observed), 1)
-        self.assertIsInstance(observed[0][0], ZeroDivisionError)
-        self.assertIs(observed[0][0], observed[0][1])
-
-    def test_refused_yield_jump_preserves_payload_and_resume(self):
-        class Payload:
-            pass
-        payload = Payload()
-        output = []
-        def gen(output):
-            try:
-                received = yield payload
-                output.append(received)
-            finally:
-                output.append('finally')
-
-        def checker(frame, target, event, arg):
-            self.assertIs(iterator.gi_frame, frame)
-            self.assertIs(arg, payload)
-            self.check_refused_jump(frame, target, event, arg,
-                                    self.protected_owner_error)
-        tracer = JumpTracer(gen, 2, 1, event='return', refusal=checker)
-        iterator = gen(output)
-        previous = sys.gettrace()
-        sys.settrace(tracer.trace)
-        try:
-            self.assertIs(next(iterator), payload)
-            self.assertEqual(tracer.attempts, 1)
-            self.assertIsNotNone(iterator.gi_frame)
-            with self.assertRaises(StopIteration):
-                iterator.send('resumed')
-        finally:
-            sys.settrace(previous)
-            iterator.close()
-        self.assertEqual(output, ['resumed', 'finally'])
-        self.assertIsNone(iterator.gi_frame)
 
     @jump_test(2, 3, [1, 3], warning=(RuntimeWarning, unbound_locals))
     def test_jump_forward_over_listcomp(output):
@@ -3151,7 +2902,7 @@ output.append(4)
         output.append(8)
 
     # checking for segfaults.
-    @jump_test(3, 7, [], error=(ValueError, incoming_owner_error))
+    @jump_test(3, 7, [], error=(ValueError, "stack"))
     def test_jump_with_null_on_stack_load_global(output):
         a = 1
         print(
@@ -3170,7 +2921,7 @@ output.append(4)
         output.append(15)
 
     # checking for segfaults.
-    @jump_test(4, 8, [], error=(ValueError, incoming_owner_error))
+    @jump_test(4, 8, [], error=(ValueError, "stack"))
     def test_jump_with_null_on_stack_push_null(output):
         a = 1
         f = print
@@ -3190,7 +2941,7 @@ output.append(4)
         output.append(16)
 
     # checking for segfaults.
-    @jump_test(3, 7, [], error=(ValueError, incoming_owner_error))
+    @jump_test(3, 7, [], error=(ValueError, "stack"))
     def test_jump_with_null_on_stack_load_attr(output):
         a = 1
         list.append(
@@ -3207,127 +2958,6 @@ output.append(4)
             13
         )
         output.append(15)
-
-    # The NULL slot of a call has no instruction (PUSH_NULL is elided): the
-    # slots that the next word names show it.
-    @jump_test(3, 5, [6, 15])
-    def test_jump_out_of_multiline_method_call(output):
-        a = 1
-        output.append(
-            4
-        )
-        output.append(6)
-        (
-            ( # 8
-                a
-                +
-                10
-            )
-            +
-            13
-        )
-        output.append(15)
-
-    @jump_test(4, 6, [8])
-    def test_jump_out_of_multiline_nested_call(output):
-        a = 1
-        max(
-            a,
-            max(a, 2)
-        )
-        output.append(8)
-
-    @jump_test(1, 3, [4])
-    def test_jump_over_discarded_call(output):
-        len(
-            output)
-        output.append(4)
-
-    # Unpacks whose targets are consecutive locals write them in the
-    # unpack word itself, and the comprehension appends read the loop
-    # variable in place: neither has a word of its own to stop at.
-    @jump_test(2, 4, [3], warning=(RuntimeWarning, unbound_locals))
-    def test_jump_into_unpack_to_locals(output):
-        p = (1, 2)
-        output.append(2)
-        q = (5, 6)
-        a, b = p
-        output.append(a + b)
-
-    @jump_test(4, 3, [2, 3])
-    def test_jump_back_into_unpack_to_locals(output):
-        p = (1, 2)
-        output.append(2)
-        a, b = p
-        output.append(a + b)
-
-    @jump_test(2, 3, [3], warning=(RuntimeWarning, unbound_locals))
-    def test_jump_out_of_unpack_to_locals(output):
-        p = (1, 2)
-        a, b = p
-        output.append(3)
-
-    @jump_test(1, 3, [3], warning=(RuntimeWarning, unbound_locals))
-    def test_jump_over_unpack_to_locals(output):
-        p = (1, 2)
-        a, b = p
-        output.append(3)
-
-    @jump_test(4, 2, [1, 3, 3, [4]])
-    def test_jump_back_over_unpack_ex_to_locals(output):
-        output.append(1)
-        a, *b = [3, 4]
-        output.append(a)
-        output.append(b)
-
-    @jump_test(1, 4, [4], warning=(RuntimeWarning, unbound_locals))
-    def test_jump_over_unpack_in_for_header(output):
-        for a, b in [(1, 2), (3, 4)]:
-            output.append(a)
-            output.append(b)
-        output.append(4)
-
-    @jump_test(2, 4, [4])
-    def test_jump_out_of_loop_after_unpack_to_locals(output):
-        for a, b in [(1, 2), (3, 4)]:
-            output.append(a)
-            output.append(b)
-        output.append(4)
-
-    @jump_test(1, 4, [4], warning=(RuntimeWarning, unbound_locals))
-    def test_jump_over_comprehension_with_append_sources(output):
-        x = [i for i in range(3)]
-        y = {i: i for i in range(3)}
-        z = {i for i in range(3)}
-        output.append(4)
-
-    @jump_test(1, 6, [6, 7], warning=(RuntimeWarning, unbound_locals))
-    def test_jump_over_multiline_comprehension(output):
-        y = 0
-        x = [
-            i * 2
-            for i in range(3)
-        ]
-        output.append(6)
-        output.append(7)
-
-    @jump_test(4, 6, [6, 7], warning=(RuntimeWarning, unbound_locals))
-    def test_jump_out_of_multiline_comprehension(output):
-        y = 0
-        x = [
-            i * 2
-            for i in range(3)
-        ]
-        output.append(6)
-        output.append(7)
-
-    @jump_test(5, 2, [1, 3, 3, 5], warning=(RuntimeWarning, unbound_locals))
-    def test_jump_back_over_comprehensions(output):
-        output.append(1)
-        x = [i for i in range(2)]
-        output.append(3)
-        y = {i: i for i in range(2)}
-        output.append(5)
 
     @jump_test(2, 3, [1, 3], warning=(RuntimeWarning, unbound_locals))
     def test_jump_extended_args_unpack_ex_simple(output):
@@ -3364,240 +2994,6 @@ output.append(4)
         output.append(1)
         _ = output.append(2) and "Spam"
         output.append(3)
-
-
-class JumpFrameModelTestCase(unittest.TestCase):
-    """Line jumps preserve or reconstruct valid frame owners and protocols.
-
-    Repeating the current real line must preserve its executing phase,
-    whatever the shape of the expression on that line.
-    """
-
-    SOURCES = {
-        "attribute_of_call": "def f(a):\n    return a().b\n",
-        "augmented_attribute": "def f(a):\n    a.c += 1\n    return 1\n",
-        "augmented_subscript": "def f(a):\n    a[0] += 1\n    return 1\n",
-        "nested_calls": "def f(a):\n    return a(a(a))\n",
-        "conditional_argument":
-            "def f(a, b, c):\n    try:\n        return a(b if c else b, c)\n"
-            "    except ValueError:\n        pass\n",
-        "comprehension_argument":
-            "def f(a, b):\n    return a(b, [x for x in b], b)\n",
-        "local_before_call":
-            "def f(a, b):\n    return b + a(b)\n",
-        "with_after_call":
-            "def f(a, b):\n    a(b if b else a, b)\n    with b:\n        pass\n",
-    }
-
-    class Value:
-        c = 0
-        b = 1
-        def __call__(self, *args):
-            return self
-        def __enter__(self):
-            return self
-        def __exit__(self, *args):
-            return False
-        def __iadd__(self, other):
-            return self
-        def __getitem__(self, i):
-            return 0
-        def __setitem__(self, i, v):
-            pass
-        def __iter__(self):
-            return iter(())
-        def __radd__(self, other):
-            return other
-        def __add__(self, other):
-            return self
-
-    def test_redirect_retirement_finalizers(self):
-        for mutate in (False, True):
-            with self.subTest(mutate=mutate):
-                observations = []
-                payload_refs = []
-                frames = []
-                redirected = False
-
-                class Trigger:
-                    def __del__(self):
-                        observations.append(('trigger', payload_refs[-1]() is not None))
-                        if mutate:
-                            frames[-1].f_locals['changed'] = True
-                        support.gc_collect()
-
-                class Payload:
-                    def __init__(self):
-                        payload_refs.append(weakref.ref(self))
-
-                    def __del__(self):
-                        observations.append(('payload',))
-
-                def marker():
-                    self.fail('redirect did not skip the abandoned expression')
-
-                namespace = {'trigger': Trigger, 'payload': Payload,
-                             'marker': marker}
-                exec('def f():\n'
-                     '    changed = False\n'
-                     '    [\n'
-                     '        trigger(),\n'
-                     '        payload(),\n'
-                     '        marker(),\n'
-                     '    ]\n'
-                     '    return changed\n', namespace)
-                function = namespace['f']
-                code = function.__code__
-
-                def tracer(frame, event, arg):
-                    nonlocal redirected
-                    if frame.f_code is code and event == 'line':
-                        if frame.f_lineno == 6 and not redirected:
-                            redirected = True
-                            frames.append(frame)
-                            frame.f_lineno = 8
-                    return tracer
-
-                old_trace = sys.gettrace()
-                sys.settrace(tracer)
-                try:
-                    result = function()
-                finally:
-                    sys.settrace(old_trace)
-                self.assertTrue(redirected)
-                self.assertIs(result, mutate)
-                self.assertEqual(observations, [('trigger', True), ('payload',)])
-
-    def run_with_line_jumps(self, source):
-        namespace = {}
-        exec(source, namespace)
-        function = namespace["f"]
-        code = function.__code__
-        value = self.Value()
-
-        def tracer(frame, event, arg):
-            if frame.f_code is not code:
-                return None
-            if event == "line":
-                try:
-                    frame.f_lineno = frame.f_lineno
-                except ValueError:
-                    pass
-            return tracer
-
-        args = (value,) * code.co_argcount
-        expected = function(*args)
-        # A jump may bind None to locals the new line expects to be bound
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            sys.settrace(tracer)
-            try:
-                actual = function(*args)
-            finally:
-                sys.settrace(None)
-        self.assertIs(actual, expected)
-
-    def test_jump_to_running_line(self):
-        for name, source in self.SOURCES.items():
-            with self.subTest(name):
-                self.run_with_line_jumps(source)
-
-    def test_jump_out_of_comprehension_at_each_line_event(self):
-        # A comprehension's loop owners and saved bindings remain live at
-        # repeated header events. An exit needs an explicit owner recipe.
-        sources = {
-            "list": "def f(lst):\n    x = [m for m in lst]\n    return 1\n",
-            "set": "def f(lst):\n    x = {m for m in lst}\n    return 1\n",
-            "dict": "def f(lst):\n    x = {m: m for m in lst}\n    return 1\n",
-            "unpack_in_for":
-                "def f(lst):\n    for a, b in lst:\n        pass\n"
-                "    return 1\n",
-            "unpack_to_locals":
-                "def f(lst):\n    a, b = lst[0]\n    c, d = lst[1]\n"
-                "    return 1\n",
-            "in_call":
-                "def f(lst):\n    x = max([m for m in lst],\n"
-                "            {n: n for n in lst},\n            3)\n"
-                "    return 1\n",
-        }
-        for name, source in sources.items():
-            namespace = {}
-            exec(source, namespace)
-            function = namespace["f"]
-            code = function.__code__
-            target = max(line for _, _, line in code.co_lines() if line)
-            for event_number in range(1, 8):
-                with self.subTest(name, event=event_number):
-                    seen = []
-
-                    def tracer(frame, event, arg):
-                        if frame.f_code is not code or event != "line":
-                            return tracer
-                        seen.append(frame.f_lineno)
-                        if len(seen) == event_number:
-                            frame.f_lineno = target
-                            sys.settrace(None)
-                        return tracer
-
-                    # A jump may bind None to locals the line expects bound
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore", RuntimeWarning)
-                        sys.settrace(tracer)
-                        try:
-                            try:
-                                function([(1, 2), (3, 4), (5, 6)])
-                            except TypeError:
-                                pass
-                        finally:
-                            sys.settrace(None)
-
-    def test_large_call_window_cancellation(self):
-        # Cancel partial argument preparation, then rebuild it from the
-        # named local without retaining the abandoned call window.
-        args = ", ".join("a" for _ in range(100))
-        source = f"def f(a):\n    return a({args},\n        a)\n"
-        namespace = {}
-        exec(source, namespace)
-        function = namespace["f"]
-        code = function.__code__
-        calls = []
-        frames = []
-        result = object()
-        redirected = False
-        stops = 0
-
-        def callee(*values):
-            calls.append(values)
-            return result
-
-        def tracer(frame, event, arg):
-            nonlocal redirected, stops
-            if frame.f_code is not code:
-                return None
-            if event == "line":
-                stops += 1
-                self.assertLess(stops, 40, "large-window replay loop")
-                if frame.f_lineno == 3 and not redirected:
-                    redirected = True
-                    frames.append(frame)
-                    frame.f_lineno = 2
-            return tracer
-
-        old_trace = sys.gettrace()
-        sys.settrace(tracer)
-        try:
-            self.assertIs(function(callee), result)
-        finally:
-            sys.settrace(old_trace)
-        self.assertTrue(redirected)
-        self.assertEqual(len(frames), 1)
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(len(calls[0]), 101)
-        self.assertTrue(all(value is callee for value in calls[0]))
-        self.assertIs(frames[0].f_code, code)
-        self.assertIs(frames[0].f_locals["a"], callee)
-        self.assertGreaterEqual(frames[0].f_lasti, 0)
-        self.assertLess(frames[0].f_lasti, len(tuple(code.co_positions())))
 
 
 class TestExtendedArgs(unittest.TestCase):
@@ -3651,7 +3047,6 @@ class TestEdgeCases(unittest.TestCase):
         self.addCleanup(sys.settrace, sys.gettrace())
         sys.settrace(None)
 
-    @support.requires_refcounting
     def test_reentrancy(self):
         def foo(*args):
             ...

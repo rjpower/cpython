@@ -4,7 +4,7 @@ Each shape runs cold, through the generic handlers, and warm, through the
 specialized ones; the results are those of the stack interpreter.
 """
 
-import dis
+from test.support import ir_dis as dis
 import struct
 import sys
 import types

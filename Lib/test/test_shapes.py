@@ -3,7 +3,7 @@
 Built with --with-shapes; see boil/design/04-shapes.md.
 """
 
-import dis
+from test.support import ir_dis as dis
 import itertools
 import unittest
 from test.support import (Py_SHAPES, cpython_only, requires_specialization,

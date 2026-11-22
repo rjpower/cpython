@@ -7,7 +7,7 @@ import unittest
 
 import _opcode
 import _testinternalcapi
-import opcode
+from test.support import ir_dis as opcode
 
 from test.test_ir_call_roles import routes
 from test.test_ir_transfer_admission import TransferAdmissionTests, make_code

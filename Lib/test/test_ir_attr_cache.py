@@ -1,6 +1,6 @@
 """Guarded canonical class values and their result-retirement transaction."""
 
-import dis
+from test.support import ir_dis as dis
 import sys
 import types
 import unittest

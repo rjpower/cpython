@@ -1,9 +1,9 @@
 """Static ownership modes of executable register-IR handlers."""
 
-import dis
+from test.support import ir_dis as dis
 import gc
 import io
-import opcode
+from test.support import ir_dis as opcode
 from pathlib import Path
 import sys
 import unittest

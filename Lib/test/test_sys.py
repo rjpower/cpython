@@ -1995,7 +1995,7 @@ class SizeofTest(unittest.TestCase):
                   '10P'                 # PySequenceMethods
                   '2P'                  # PyBufferProcs
                   '7P'
-                  '1PIP'                # Specializer cache
+                  '1PIPPI'              # Specializer cache
                   'Q'                   # ht_mro_epoch (fork-specific)
                   + typeid              # heap type id (free-threaded only)
                   )

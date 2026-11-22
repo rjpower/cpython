@@ -329,28 +329,48 @@ BORROW_BODY(_PyBorrow_ValueVector)(const PyValue *values, Py_ssize_t n
     assert(!PyErr_Occurred());
     PyThreadState *tstate = _PyThreadState_GET();
     _PyBorrowStack *s = borrow_stack(tstate);
-    Py_ssize_t boxes = 0;
-    for (Py_ssize_t i = 0; i < n; i++) {
-        assert(PyValue_IsLanguageValue(values[i]));
-        _PyValue_RecheckHome(values[i]);
-        boxes += PyValue_IsInline(values[i]);
-    }
-    /* The OFFSET slot, the vector, its skip entry and the boxes share one
-       chunk, so filling them cannot fail on growth. */
-    Py_ssize_t size = n + 2 + boxes;
+    /* The OFFSET slot, the vector and its skip entry share one chunk with the
+       boxes, so filling them cannot fail on growth.  A vector of objects is
+       filled in one pass; the first inline word counts the boxes, and when
+       the chunk has no room for them the vector is filled again in a chunk
+       that has. */
+    Py_ssize_t size = n + 2;
     if (s->end - s->top < size && borrow_grow(s, size) < 0) {
         return NULL;
     }
+    PyObject **vector;
+    Py_ssize_t boxes;
+    for (;;) {
+        vector = s->top + 1;
+        boxes = 0;
+        for (Py_ssize_t i = 0; i < n; i++) {
+            assert(PyValue_IsLanguageValue(values[i]));
+            _PyValue_RecheckHome(values[i]);
+            if (PyValue_IsInline(values[i])) {
+                vector[i] = NULL;
+                boxes++;
+            }
+            else {
+                vector[i] = PyValue_AsKnownObjectBorrow(values[i]);
+            }
+        }
+        size = n + 2 + boxes;
+        if (s->end - s->top >= size) {
+            break;
+        }
+        if (borrow_grow(s, size) < 0) {
+            return NULL;
+        }
+    }
     /* Every caller exits its own scope after the call, so a release request
        would only cost an atomic OR now and a pending-call check later. */
-    PyObject **vector = s->top + 1;
     vector[-1] = NULL;
-    for (Py_ssize_t i = 0; i < n; i++) {
-        vector[i] = PyValue_IsInline(values[i])
-            ? NULL : PyValue_AsKnownObjectBorrow(values[i]);
-    }
     vector[n] = BORROW_SKIP(n + 1);
     s->top = vector + n + 1;
+    if (boxes == 0) {
+        BORROW_CHECK_SIZE(tstate, s);
+        return vector;
+    }
     /* Boxing allocates, and an object allocator hook (PyMem_SetAllocator)
        may run any code, including Python code.  What that code calls exits
        its own scope or activation, so the top comes back and the reserved

@@ -6337,7 +6337,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 STAT_INC(CALL, hit);
                 PyValue result = call_class_values(
-                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                    tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -6408,7 +6408,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 STAT_INC(CALL, hit);
                 _PyNativeCallResult call = call_builtin_values(
-                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                    tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
                 if (call.miss) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -6485,7 +6485,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 STAT_INC(CALL, hit);
                 _PyNativeCallResult call = call_builtin_values(
-                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                    tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
                 if (call.miss) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7184,7 +7184,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 STAT_INC(CALL, hit);
                 _PyNativeCallResult call = call_descriptor_values(
-                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                    tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
                 if (call.miss) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7262,7 +7262,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 STAT_INC(CALL, hit);
                 _PyNativeCallResult call = call_descriptor_values(
-                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                    tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
                 if (call.miss) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7944,7 +7944,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 arg = IR_OPERAND(0 + IR_CALL_HAS_SELF(ir_word));
                 assert(oparg == 1);
                 STAT_INC(CALL, hit);
-                res = PyValue_DUP(PyValue_FromObjectBorrow(PyValue_TYPE(arg)));
+                res = PyValue_DUP(_PyValue_PointerBorrow((PyObject *)PyValue_TYPE(arg)));
             }
             ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);

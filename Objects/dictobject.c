@@ -2286,13 +2286,9 @@ static int
 dict_get_value(PyDictObject *mp, PyValueBorrow key, PyValue *result)
 {
     *result = PyValue_NULL;
-    Py_hash_t cached = cached_str_hash(key);
-    if (can_use_cached_str_lookup(mp, cached)) {
-        return _PyDict_GetValue_KnownHash(mp, key, cached, result);
-    }
     /* The caller owns the dictionary and the key for the whole call, so
      * hashing and equality need no pins here. */
-    Py_hash_t hash = cached;
+    Py_hash_t hash = cached_str_hash(key);
     if (hash == -1) {
         hash = _PyValue_Hash(key);
     }

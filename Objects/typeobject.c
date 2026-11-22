@@ -6917,21 +6917,12 @@ should_assign_version_tag(PyTypeObject *type, PyObject *name, unsigned int versi
         && _Py_TYPECACHE_CACHEABLE_NAME(name));
 }
 
-unsigned int
-_PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
+/* The lookup that the type cache did not answer. */
+static Py_NO_INLINE unsigned int
+type_lookup_value_uncached(PyTypeObject *type, PyObject *name, PyValue *out,
+                           int cacheable)
 {
-    *out = PyValue_NULL;
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    int cacheable = _Py_TYPECACHE_CACHEABLE_NAME(name);
-    if (cacheable) {
-        PyValueBorrow hit;
-        unsigned int hit_version = _PyTypeCache_Lookup(type, name, &hit);
-        if (hit_version != 0) {
-            // The borrow is live now: nothing has run since the lookup.
-            *out = PyValue_XDUP(hit);
-            return hit_version;
-        }
-    }
     OBJECT_STAT_INC_COND(type_cache_misses, !_PyType_IsDunderName(name));
     OBJECT_STAT_INC_COND(type_cache_dunder_misses, _PyType_IsDunderName(name));
 
@@ -6968,6 +6959,23 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
     /* The __eq__ of a non-string key in a type dict can run Python during
        the lookup and modify the type: return only a still-current version. */
     return _PyType_MatchesVersion(interp, type, expected) ? expected : 0;
+}
+
+unsigned int
+_PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
+{
+    *out = PyValue_NULL;
+    int cacheable = _Py_TYPECACHE_CACHEABLE_NAME(name);
+    if (cacheable) {
+        PyValueBorrow hit;
+        unsigned int hit_version = _PyTypeCache_Lookup(type, name, &hit);
+        if (hit_version != 0) {
+            // The borrow is live now: nothing has run since the lookup.
+            *out = PyValue_XDUP(hit);
+            return hit_version;
+        }
+    }
+    return type_lookup_value_uncached(type, name, out, cacheable);
 }
 
 _PyStatusValue

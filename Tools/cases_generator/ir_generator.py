@@ -346,8 +346,6 @@ OWNER_READS = set(VIEW_RELEASES) | VIEW_TAKES
 # The IR forms of the instruction macros (see STACK_INSTRUCTION_MACROS).
 IR_INSTRUCTION_MACROS = {
     "FB_COUNTER": "((_PyFbHeader *)fb)",
-    "FB_BRANCH": "((_PyFbHeader *)fb)->history",
-    "FB_TAKEN": "((_PyFbHeader *)fb)->taken",
     "FB_HEADER_OF": "_PyIR_FbHeaderOf(frame, {0}, {1})",
     "INSTR_OPCODE": "IR_HANDLER(*{0p})",
     "INSTR_OPARG": "_PyIR_Oparg(frame, {0})",
@@ -613,7 +611,7 @@ def uses_feedback(inst: Instruction) -> bool:
         if any(cache.name != "unused" for cache in part.caches):
             return True
         for tkn in part.body.tokens():
-            if tkn.kind == "IDENTIFIER" and tkn.text in ("FB_COUNTER", "FB_BRANCH", "FB_TAKEN"):
+            if tkn.kind == "IDENTIFIER" and tkn.text == "FB_COUNTER":
                 return True
     return False
 
@@ -1664,7 +1662,8 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     jumps = completes_step or any(m.properties.jumps for m in members)
     fused = group in FUSED_JUMPS
     forward = jumps and (group in FORWARD_JUMPS or fused)
-    has_fb = any(uses_feedback(m) for m in members)
+    # A fused word's entry holds its operation and the sense of its jump
+    has_fb = fused or any(uses_feedback(m) for m in members)
     has_imm = any(m.properties.oparg for m in members)
     if not has_imm:
         imm_kind = None
@@ -1780,9 +1779,8 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
                 f"{group} has a feedback entry but no layout in "
                 "FEEDBACK_LAYOUTS (ir_generator.py)", head.where)
         fb_layout = FEEDBACK_LAYOUTS[group]
-        branch = any(tkn.text == "FB_BRANCH" for m in members
-                     for tkn in uop_token_list(m))
-        fb_kind = "FB_BRANCH" if branch else LAYOUT_KINDS[fb_layout]
+        fb_kind = ("FB_BRANCH" if group in BRANCH_FAMILIES
+                   else LAYOUT_KINDS[fb_layout])
     return IRFormat(
         group=group, window=window, roles=roles, inputs=names,
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
@@ -1806,8 +1804,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
 # by the head of the family; the C code names it _PyFb_<head>.  This is the
 # only list: the contract's fb_kind and fb_size and the typedefs come from
 # it.  A family that has an entry must be listed.  Its kind follows from
-# the type, except that the entries of a family that records branches
-# (FB_BRANCH()) are FB_BRANCH.
+# the type, except that the entries of the conditional jumps are FB_BRANCH.
 FB_HEADER = "_PyFbHeader"
 FEEDBACK_LAYOUTS = {
     "TO_BOOL": "_PyFbUnary",
@@ -1835,6 +1832,8 @@ FEEDBACK_LAYOUTS = {
     # No specialisation; the entry is as large as that of a branch
     "IS_OP_JUMP": "_PyFbUnary",
 }
+BRANCH_FAMILIES = {"POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE",
+                   "POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE"}
 LAYOUT_KINDS = {
     FB_HEADER: "FB_COUNTER",
     "_PyFbUnary": "FB_UNARY",
@@ -6806,7 +6805,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if unpacks_elements_directly(inst, fmt):
         out.emit("bool ir_unpack_owned = false;\n")
     use_fb = fmt.fb != LOC_NONE and (
-        uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
+        uses_feedback(inst) or reads_fb_arg(inst, fmt, operation) or fmt.fused)
     emitter.call_has_feedback = use_fb
     if use_fb:
         out.emit(f"{feedback_type(fmt)} *fb = ({feedback_type(fmt)} *)"
@@ -7966,7 +7965,6 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_Is{sense}(cond);
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
             IR_REPORT_EDGE(flag);
             if (flag) {{ JUMPTO(oparg); }}
         }}"""

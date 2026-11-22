@@ -3310,16 +3310,14 @@ dummy_func(
          * one line and the target is within IR_MAX_FORWARD).  The word is
          * {lhs, rhs, fb, D}: D is the signed distance from the next word, and
          * the arg of the entry holds the operation in bits 0 to 7 (the oparg
-         * of the compare) and IR_FUSED_IF_FALSE.  The history of the jump is
-         * in the entry's taken half-word.  There is no backward form, so the
-         * handlers never poll the eval breaker.  The handlers stand for the
+         * of the compare) and IR_FUSED_IF_FALSE.  There is no backward form, so
+         * the handlers never poll the eval breaker.  The handlers stand for the
          * compare (their shadow, see ir_metadata_generator.py), and the
          * specialisations are those of the compare, in families of their own. */
         ir_only op(_JUMP_IF_COND, (cond -- )) {
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(FB_TAKEN(), flag);
             IR_REPORT_EDGE(flag);
             if (flag) {
                 JUMPBY(IR_FUSED_DISTANCE());
@@ -3330,7 +3328,6 @@ dummy_func(
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(FB_TAKEN(), flag);
             if (flag) {
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr + IR_FUSED_DISTANCE(), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
             }
@@ -3538,7 +3535,6 @@ dummy_func(
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsFalse(cond);
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
             IR_REPORT_EDGE(flag);
             if (flag) {
                 JUMPTO(oparg);
@@ -3549,7 +3545,6 @@ dummy_func(
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsTrue(cond);
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
             IR_REPORT_EDGE(flag);
             if (flag) {
                 JUMPTO(oparg);
@@ -3569,8 +3564,8 @@ dummy_func(
 
         // A conditional jump tests the truth of any value: the compiler
         // drops the TO_BOOL before it (Python/flowgraph.c), so the jumps
-        // specialise as TO_BOOL does, and their entries keep the branch
-        // history with the specialisation counter.
+        // specialise as TO_BOOL does, and their entries keep the
+        // specialisation counter.
         family(POP_JUMP_IF_FALSE, INLINE_CACHE_ENTRIES_TO_BOOL) = {
             POP_JUMP_IF_FALSE_ALWAYS_TRUE,
             POP_JUMP_IF_FALSE_BOOL,
@@ -3635,7 +3630,6 @@ dummy_func(
         // result to select.
         op(_POP_JUMP_IF_FALSE_NONE_OR_PLAIN, (value -- v)) {
             int flag = PyValue_IsNone(value);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
             IR_REPORT_EDGE(flag);
             v = value;
             DEAD(value);
@@ -3646,7 +3640,6 @@ dummy_func(
 
         op(_POP_JUMP_IF_TRUE_NONE_OR_PLAIN, (value -- v)) {
             int flag = !PyValue_IsNone(value);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
             IR_REPORT_EDGE(flag);
             v = value;
             DEAD(value);
@@ -5518,7 +5511,6 @@ dummy_func(
             assert(PyValue_BoolCheck(cond));
             int jump = PyValue_IsTrue(cond);
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
             }
@@ -5531,7 +5523,6 @@ dummy_func(
             assert(PyValue_BoolCheck(cond));
             int jump = PyValue_IsFalse(cond);
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
             }
@@ -5548,7 +5539,6 @@ dummy_func(
 
         inst(INSTRUMENTED_POP_JUMP_IF_NONE, (unused/1, value -- )) {
             int jump = PyValue_IsNone(value);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 DEAD(value);
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
@@ -5599,7 +5589,6 @@ dummy_func(
 
         inst(INSTRUMENTED_POP_JUMP_IF_NOT_NONE, (unused/1, value -- )) {
             int jump = !PyValue_IsNone(value);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 PyValue_CLOSE(value);
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);

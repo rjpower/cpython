@@ -1085,7 +1085,6 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         eval_breaker="CHECK_PERIODIC" in op.name,
         needs_this=(variable_used(op, "this_instr")
                     or variable_used(op, "FB_COUNTER")
-                    or variable_used(op, "FB_BRANCH")
                     or "pc" in call_properties),
         always_exits=always_exits(op),
         sync_sp=(variable_used(op, "SYNC_SP")

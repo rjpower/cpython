@@ -37,10 +37,10 @@ extern "C" {
  * contract's fb_kind and fb_size (Include/internal/pycore_ir.h) and the
  * _PyFb_<family> typedefs come.  Entry 0 is a header of kind COUNTER.
  *
- * A branch keeps its 16-bit taken history, newest in bit 0, in arg.
  * POP_JUMP_IF_FALSE and _TRUE test the truth of any value and specialise
  * as TO_BOOL does, so their entries are UNARY entries of kind BRANCH: the
- * counter drives specialisation, and the history replaces the oparg.
+ * counter drives specialisation, and no oparg is kept.  A conditional
+ * jump records nothing else: no handler writes a taken history.
  *
  * Fields carry the names of the cache effects in Python/bytecodes.c, which
  * is how the cases generator maps "type_version/2" to fb->type_version.
@@ -82,16 +82,9 @@ typedef struct {
     uint8_t kind;                   // _PyFbKind
     uint8_t state;                  // _PyFbState
     _Py_BackoffCounter counter;     // warmup, cooldown and backoff
-    union {
-        uint16_t misses;            // reserved: the counter holds them, see above
-        uint16_t taken;             // fused compare-and-jumps: the 16-bit taken
-                                    // history of the jump, newest in bit 0
-    };
+    uint16_t misses;                // reserved: the counter holds them, see above
     uint16_t hits;                  // reserved: call-site heat for the JIT stage
-    union {
-        uint32_t arg;               // the oparg, for IR formats that keep it here
-        uint16_t history;           // BRANCH entries of the IR: see FB_BRANCH()
-    };
+    uint32_t arg;                   // the oparg, for IR formats that keep it here
     uint32_t poly;                  // 0, or the byte offset of the site's poly table plus
                                     // sizeof(_PyFbPoly): see _PyFb_PolyOf()
 } _PyFbHeader;

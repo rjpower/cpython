@@ -9080,6 +9080,53 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_RUN_OUTLINED(ir_run_FOR_ITER);
         }
 
+        TARGET(FOR_ITER_DICT_ITEMS) {
+            int opcode = FOR_ITER_DICT_ITEMS;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(FOR_ITER_DICT_ITEMS);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = IR_DS(ir_word);
+            (void)oparg;
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
+            (void)window;
+            assert(!IR_IS_LOCAL_FIELD(ir_word, A));
+            PyValue iter;
+            iter = window[0];
+            assert(PyValue_IsObject(iter));
+            PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
+            if (Py_TYPE(iter_o) != &PyDictIterItem_Type) {
+                UPDATE_MISS_STATS(FOR_ITER);
+                JUMP_TO_PREDICTED(FOR_ITER);
+            }
+            _PyIRWord unpack = *next_instr;
+            if (_PyIR_HandlerFlags[IR_HANDLER(unpack)] & _PyIR_H_INSTRUMENTED) {
+                UPDATE_MISS_STATS(FOR_ITER);
+                JUMP_TO_PREDICTED(FOR_ITER);
+            }
+            PyValue key = PyValue_NULL;
+            PyValue value = PyValue_NULL;
+            int found = _PyDictIterItem_Next(iter_o, &key, &value);
+            if (found <= 0) {
+                if (found < 0) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }{
+                    _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, PyValue_None);
+                    next_instr = ir_step_result.next;
+                    if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
+                    DISPATCH();
+                }
+            }
+            IR_STORE_ITEM_PAIR(&IR_SLOT(IR_D(unpack)), key, value);
+            next_instr++;
+            DISPATCH();
+        }
+
         TARGET(FOR_ITER_GEN) {
             int opcode = FOR_ITER_GEN;
             (void)(opcode);

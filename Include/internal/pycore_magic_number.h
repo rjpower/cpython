@@ -380,8 +380,9 @@ Known values:
    64440: hot85 AT and EV (unit branches, both numbered 64440): AT's
           LOAD_ATTR_SLOT_POINTER, IR handler 410; EV's POP_JUMP_IF_FALSE_SLOT
           and POP_JUMP_IF_TRUE_SLOT in retired slots 126 and 112
-   64441: hot85 integration of AT and EV */
-#define PYC_MAGIC_NUMBER 64441
+   64441: hot85 integration of AT and EV
+   64442: tight86 IA: FOR_ITER_DICT_ITEMS, IR handler 411 */
+#define PYC_MAGIC_NUMBER 64442
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

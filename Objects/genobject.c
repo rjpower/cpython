@@ -1243,103 +1243,67 @@ PyTypeObject PyGen_Type = {
     },
 };
 
-static PyObject *
-make_gen(PyTypeObject *type, PyFunctionObject *func, PyCodeObject *code)
-{
-    int slots = _PyFrame_NumSlotsForCodeObject(code);
-    PyGenObject *gen = PyObject_GC_NewVar(PyGenObject, type, slots);
-    if (gen == NULL) {
-        return NULL;
-    }
-    gen->gi_frame_state = FRAME_CLEARED;
-    gen->gi_weakreflist = NULL;
-    gen->gi_exc_state.exc_value = NULL;
-    gen->gi_exc_state.previous_item = NULL;
-    gen->gi_iframe.f_executable = NULL;
-    PyObject *name = FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_name);
-    assert(name != NULL);
-    gen->gi_name = Py_NewRef(name);
-    PyObject *qualname = FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_qualname);
-    assert(qualname != NULL);
-    gen->gi_qualname = Py_NewRef(qualname);
-    gen->gi_plain = type != &PyAsyncGen_Type && name == code->co_name &&
-        qualname == code->co_qualname;
-    _PyObject_GC_TRACK(gen);
-    return (PyObject *)gen;
-}
-
-/* caller is the frame that the new object is created for: the one that is
- * running, or the one below the frame that RETURN_GENERATOR runs in. */
-PyObject *
-_Py_MakeCoro(PyFunctionObject *func, PyCodeObject *code,
-             _PyInterpreterFrame *caller)
-{
-    /* The executing frame pins code independently of mutable func_code. */
-    int coro_flags = code->co_flags &
-        (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR);
-    assert(coro_flags);
-    if (coro_flags == CO_GENERATOR) {
-        return make_gen(&PyGen_Type, func, code);
-    }
-    if (coro_flags == CO_ASYNC_GENERATOR) {
-        PyAsyncGenObject *ag;
-        ag = (PyAsyncGenObject *)make_gen(&PyAsyncGen_Type, func, code);
-        if (ag == NULL) {
-            return NULL;
-        }
-        ag->ag_origin_or_finalizer = NULL;
-        ag->ag_closed = 0;
-        ag->ag_hooks_inited = 0;
-        ag->ag_running_async = 0;
-        return (PyObject*)ag;
-    }
-
-    assert (coro_flags == CO_COROUTINE);
-    PyObject *coro = make_gen(&PyCoro_Type, func, code);
-    if (!coro) {
-        return NULL;
-    }
-    PyThreadState *tstate = _PyThreadState_GET();
-    int origin_depth = tstate->coroutine_origin_tracking_depth;
-
-    if (origin_depth == 0) {
-        ((PyCoroObject *)coro)->cr_origin_or_finalizer = NULL;
-    } else {
-        _PyInterpreterFrame *frame = _PyFrame_GetFirstComplete(caller);
-        PyObject *cr_origin = _PyCoro_ComputeOrigin(origin_depth, frame);
-        ((PyCoroObject *)coro)->cr_origin_or_finalizer = cr_origin;
-        if (!cr_origin) {
-            Py_DECREF(coro);
-            return NULL;
-        }
-        ((PyCoroObject *)coro)->cr_plain = 0;
-    }
-    return coro;
-}
-
 /* The generator, coroutine or async generator that a call of the function
- * creates: no frame runs.  The frame of the new object is complete as
+ * creates: no frame runs.  One pass allocates the object, makes its frame as
  * RETURN_GENERATOR would leave it, except for the arguments, which the caller
  * moves into gen->gi_iframe.base before anything that can fail, run code or
  * collect, and the prologue of the code (gen_prologue() in Python/ceval.c).
  * Consumes function and locals, which the frame owns; on failure they are
  * closed.  locals is the mapping of an unoptimized code's frame (top-level
- * await), NULL for optimized code.  caller is the frame that makes the call. */
+ * await), NULL for optimized code.  caller is the frame that makes the call.
+ * The slots are cleared and the free variables copied here, so that the
+ * prologue is left only what depends on the arguments. */
 PyGenObject *
 _PyGen_NewCall(PyThreadState *tstate, PyValue function, PyObject *locals,
                PyCodeObject *code, _PyInterpreterFrame *caller)
 {
     PyFunctionObject *func =
         (PyFunctionObject *)PyValue_AsKnownObjectBorrow(function);
-    PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func, code, caller);
+    int coro_flags = code->co_flags &
+        (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR);
+    assert(coro_flags);
+    PyTypeObject *type = coro_flags == CO_GENERATOR ? &PyGen_Type :
+        coro_flags == CO_COROUTINE ? &PyCoro_Type : &PyAsyncGen_Type;
+    /* A coroutine's origin is computed first, so that its failure has no
+     * object to unwind. */
+    PyObject *origin = NULL;
+    if (Py_UNLIKELY(coro_flags == CO_COROUTINE &&
+                    tstate->coroutine_origin_tracking_depth != 0)) {
+        origin = _PyCoro_ComputeOrigin(tstate->coroutine_origin_tracking_depth,
+                                       _PyFrame_GetFirstComplete(caller));
+        if (origin == NULL) {
+            PyValue_CLOSE(function);
+            Py_XDECREF(locals);
+            return NULL;
+        }
+    }
+    int nslots = _PyFrame_NumSlotsForCodeObject(code);
+    PyGenObject *gen = PyObject_GC_NewVar(PyGenObject, type, nslots);
     if (gen == NULL) {
+        Py_XDECREF(origin);
         PyValue_CLOSE(function);
         Py_XDECREF(locals);
         return NULL;
     }
+    gen->gi_weakreflist = NULL;
+    gen->gi_exc_state.exc_value = NULL;
+    gen->gi_exc_state.previous_item = NULL;
+    PyObject *name = FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_name);
+    assert(name != NULL);
+    gen->gi_name = Py_NewRef(name);
+    PyObject *qualname = FT_ATOMIC_LOAD_PTR_ACQUIRE(func->func_qualname);
+    assert(qualname != NULL);
+    gen->gi_qualname = Py_NewRef(qualname);
+    gen->gi_plain = coro_flags != CO_ASYNC_GENERATOR && origin == NULL &&
+        name == code->co_name && qualname == code->co_qualname;
+    gen->gi_origin_or_finalizer = origin;
+    if (coro_flags == CO_ASYNC_GENERATOR) {
+        gen->gi_hooks_inited = 0;
+        gen->gi_closed = 0;
+        gen->gi_running_async = 0;
+    }
     _PyInterpreterFrame *frame = &gen->gi_iframe;
-    memset(frame->owned_slots, 0,
-           (size_t)_PyFrame_NumSlotsForCodeObject(code) * sizeof(PyValue));
+    memset(frame->owned_slots, 0, (size_t)nslots * sizeof(PyValue));
     _PyFrame_Initialize(tstate, frame, function, locals, code,
                         frame->owned_slots, NULL);
     frame->owner = FRAME_OWNED_BY_GENERATOR;
@@ -1348,6 +1312,15 @@ _PyGen_NewCall(PyThreadState *tstate, PyValue function, PyObject *locals,
     frame->instr_ptr = frame->ir_words + code->_co_firsttraceable;
     frame->return_slot = (uint16_t)_PyFrame_DiscardSlotForCodeObject(code);
     gen->gi_frame_state = FRAME_CREATED;
+    int nfree = code->co_nfreevars;
+    if (nfree) {
+        PyObject *closure = func->func_closure;
+        PyValue *free = frame->owned_slots + code->co_nlocalsplus - nfree;
+        for (int i = 0; i < nfree; i++) {
+            free[i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
+        }
+    }
+    _PyObject_GC_TRACK(gen);
     return gen;
 }
 

@@ -299,9 +299,6 @@ extern int _PyEval_EnsureBuiltinsWithModule(
     PyObject *,
     PyObject **p_builtins);
 
-PyAPI_FUNC(PyObject *)_Py_MakeCoro(PyFunctionObject *func, PyCodeObject *code,
-                                   _PyInterpreterFrame *caller);
-
 /* Handle signals, pending calls, GIL drop request
    and asynchronous exception */
 PyAPI_FUNC(int) _Py_HandlePending(PyThreadState *tstate);

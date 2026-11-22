@@ -2012,23 +2012,15 @@ call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 /* The prologue of the code of a generator, coroutine or async generator that
  * _PyGen_NewCall() made and whose arguments are bound, which the first send
- * does not run: the free variables from the closure, a cell for each cell
- * variable (an argument moves into its cell) and, for a generator expression,
- * the iterator of its argument.  0, or -1 with an exception set and the
- * object discarded. */
+ * does not run: a cell for each cell variable (an argument moves into its
+ * cell) and, for a generator expression, the iterator of its argument.  The
+ * free variables are already in the frame.  0, or -1 with an exception set
+ * and the object discarded. */
 static Py_NO_INLINE int
 gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
 {
     _PyInterpreterFrame *frame = &gen->gi_iframe;
-    int nfree = code->co_nfreevars;
     int ncell = code->co_ncellvars;
-    if (nfree) {
-        PyObject *closure = _PyFrame_GetFunction(frame)->func_closure;
-        PyValue *free = frame->base + code->co_nlocalsplus - nfree;
-        for (int i = 0; i < nfree; i++) {
-            free[i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
-        }
-    }
     const char *kinds = PyBytes_AS_STRING(code->co_localspluskinds);
     for (int i = 0; ncell > 0; i++) {
         if (!(kinds[i] & CO_FAST_CELL)) {
@@ -2078,13 +2070,12 @@ gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
 }
 
 /* gen_prologue_run() for the code that has one: most generator functions have
- * neither free variables nor cell variables, and are not generator expressions
- * (whose first traceable word follows the prelude). */
+ * no cell variables and are not generator expressions (whose first traceable
+ * word follows the prelude). */
 static inline Py_ALWAYS_INLINE int
 gen_prologue(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
 {
-    if ((code->co_nfreevars | code->co_ncellvars) == 0 &&
-        code->_co_firsttraceable == 1) {
+    if (code->co_ncellvars == 0 && code->_co_firsttraceable == 1) {
         return 0;
     }
     return gen_prologue_run(tstate, gen, code);

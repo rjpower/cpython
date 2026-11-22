@@ -65,7 +65,7 @@ _PyRegCfg_Free(_PyRegCfg *cfg)
     PyMem_Free(cfg->operands);
     PyMem_Free(cfg->blocks);
     PyMem_Free(cfg->slot);
-    PyMem_Free(cfg->const_index);
+    PyMem_Free(cfg->const_values);
     PyMem_Free(cfg);
 }
 
@@ -118,6 +118,7 @@ _PyRegCfg_PrepareKwargs(_PyRegCfg *cfg, int slot)
                     .except = op->except,
                     .dst = -1,
                     .loc = op->loc,
+                    .srcoff = op->srcoff,
                 };
             }
             ops[next++] = *op;
@@ -179,7 +180,7 @@ _PyRegCfg_AddBlock(_PyRegCfg *cfg, int handler_depth, int preserve_lasti,
  * indices or -1. */
 int
 _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
-                   _Py_SourceLocation loc, int target, int except)
+                   _Py_SourceLocation loc, int srcoff, int target, int except)
 {
     assert(cfg->nblocks > 0);
     RETURN_IF_ERROR(grow((void **)&cfg->ops, &cfg->aops, cfg->nops + 1,
@@ -198,6 +199,7 @@ _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
     op->opcode = opcode;
     op->oparg = oparg;
     op->loc = loc;
+    op->srcoff = srcoff;
     // The oparg names a word: the target, or for END_ASYNC_FOR the SEND
     op->target = (_PyRegCfg_FormatOf(opcode, oparg)->flags
                   & (_PyIR_JUMPS | _PyIR_FORWARD)) ? target : -1;
@@ -1700,11 +1702,11 @@ _PyRegCfg_Build(_PyRegCfg *cfg)
 /* Constant slots (G6), after the passes and compaction have run */
 
 int
-_PyRegCfg_AssignConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
+_PyRegCfg_AssignConstSlots(_PyRegCfg *cfg, PyObject *consts)
 {
-    int n = _PyRegPass_ConstSlots(cfg, consts, nfree);
+    int n = _PyRegPass_ConstSlots(cfg, consts);
     RETURN_IF_ERROR(n);
-    _PyRegPass_DiscardSlot(cfg, nfree);
+    _PyRegPass_DiscardSlot(cfg);
     DUMP(cfg, "constant slots");
     if (verify_wanted()) {
         RETURN_IF_ERROR(_PyRegCfg_Verify(cfg, "constant slots", 0));

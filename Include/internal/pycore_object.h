@@ -291,15 +291,15 @@ _Py_DECREF_SPECIALIZED(PyObject *op, const destructor destruct)
 #ifdef Py_REF_DEBUG
     _Py_DEC_REFTOTAL(PyInterpreterState_Get());
 #endif
-    if (--op->ob_refcnt != 0) {
-        assert(op->ob_refcnt > 0);
-    }
-    else {
+    if (Py_UNLIKELY(--op->ob_refcnt == 0)) {
 #ifdef Py_TRACE_REFS
         _Py_ForgetReference(op);
 #endif
         _PyReftracerTrack(op, PyRefTracer_DESTROY);
         destruct(op);
+    }
+    else {
+        assert(op->ob_refcnt > 0);
     }
 }
 
@@ -464,7 +464,7 @@ static inline void Py_DECREF_MORTAL(const char *filename, int lineno, PyObject *
     if (!_Py_IsImmortal(op)) {
         _Py_DECREF_DecRefTotal();
     }
-    if (--op->ob_refcnt == 0) {
+    if (Py_UNLIKELY(--op->ob_refcnt == 0)) {
         _Py_Dealloc(op);
     }
 }
@@ -480,7 +480,7 @@ static inline void _Py_DECREF_MORTAL_SPECIALIZED(const char *filename, int linen
     if (!_Py_IsImmortal(op)) {
         _Py_DECREF_DecRefTotal();
     }
-    if (--op->ob_refcnt == 0) {
+    if (Py_UNLIKELY(--op->ob_refcnt == 0)) {
 #ifdef Py_TRACE_REFS
         _Py_ForgetReference(op);
 #endif
@@ -496,7 +496,9 @@ static inline void Py_DECREF_MORTAL(PyObject *op)
 {
     assert(!_Py_IsStaticImmortal(op));
     _Py_DECREF_STAT_INC();
-    if (--op->ob_refcnt == 0) {
+    // The last count is the rare end: the dealloc block stays out of the
+    // line that the caller's handler runs.
+    if (Py_UNLIKELY(--op->ob_refcnt == 0)) {
         _Py_Dealloc(op);
     }
 }
@@ -506,7 +508,7 @@ static inline void Py_DECREF_MORTAL_SPECIALIZED(PyObject *op, destructor destruc
 {
     assert(!_Py_IsStaticImmortal(op));
     _Py_DECREF_STAT_INC();
-    if (--op->ob_refcnt == 0) {
+    if (Py_UNLIKELY(--op->ob_refcnt == 0)) {
         _PyReftracerTrack(op, PyRefTracer_DESTROY);
         destruct(op);
     }

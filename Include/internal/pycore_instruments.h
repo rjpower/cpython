@@ -35,19 +35,22 @@ int _PyMonitoring_GetLocalEvents(PyCodeObject *code, int tool_id, _PyMonitoringE
 
 
 // these are exported only for other re-generated interpreters to call
-PyAPI_FUNC(int)
+//
+// The calls into the monitoring tools are cold: a handler reaches them only
+// when a tool has registered for the event.
+PyAPI_FUNC(int) _Py_COLD_FUNCTION
 _Py_call_instrumentation(PyThreadState *tstate, int event,
     _PyInterpreterFrame *frame, _PyInstr *instr);
 
-PyAPI_FUNC(int)
+PyAPI_FUNC(int) _Py_COLD_FUNCTION
 _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
                               _PyInstr *instr, _PyInstr *prev);
 
-PyAPI_FUNC(int)
+PyAPI_FUNC(int) _Py_COLD_FUNCTION
 _Py_call_instrumentation_instruction(
     PyThreadState *tstate, _PyInterpreterFrame* frame, _PyInstr *instr);
 
-PyAPI_FUNC(_PyInstr *)
+PyAPI_FUNC(_PyInstr *) _Py_COLD_FUNCTION
 _Py_call_instrumentation_jump(
     _PyInstr *instr, PyThreadState *tstate, int event,
     _PyInterpreterFrame *frame, _PyInstr *src, _PyInstr *dest);
@@ -55,16 +58,16 @@ _Py_call_instrumentation_jump(
 /* The arguments are borrowed for the call; the macros take owners and
    borrows alike. An absent argument is PyValue_FromObjectBorrow(
    &_PyInstrumentation_MISSING). */
-PyAPI_FUNC(int)
+PyAPI_FUNC(int) _Py_COLD_FUNCTION
 (_Py_call_instrumentation_arg)(PyThreadState *tstate, int event,
     _PyInterpreterFrame *frame, _PyInstr *instr, PyValueBorrow arg);
 
-PyAPI_FUNC(int)
+PyAPI_FUNC(int) _Py_COLD_FUNCTION
 (_Py_call_instrumentation_2args)(PyThreadState *tstate, int event,
     _PyInterpreterFrame *frame, _PyInstr *instr,
     PyValueBorrow arg0, PyValueBorrow arg1);
 
-PyAPI_FUNC(void)
+PyAPI_FUNC(void) _Py_COLD_FUNCTION
 (_Py_call_instrumentation_exc2)(PyThreadState *tstate, int event,
     _PyInterpreterFrame *frame, _PyInstr *instr,
     PyValueBorrow arg0, PyValueBorrow arg1);

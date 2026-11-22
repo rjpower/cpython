@@ -83,7 +83,7 @@
             break; \
         } \
         _Py_DECREF_STAT_INC(); \
-        if (--op->ob_refcnt == 0) { \
+        if (Py_UNLIKELY(--op->ob_refcnt == 0)) { \
             _PyReftracerTrack(op, PyRefTracer_DESTROY); \
             destructor dealloc = Py_TYPE(op)->tp_dealloc; \
             (*dealloc)(op); \
@@ -99,7 +99,7 @@
             break; \
         } \
         _Py_DECREF_STAT_INC(); \
-        if (--op->ob_refcnt == 0) { \
+        if (Py_UNLIKELY(--op->ob_refcnt == 0)) { \
             _PyReftracerTrack(op, PyRefTracer_DESTROY); \
             destructor d = (destructor)(dealloc); \
             d(op); \
@@ -399,7 +399,7 @@ enum {
 static_assert(sizeof(_PyIRErrorResult) == 16, "error return has no owning payload");
 #endif
 
-static int
+static _Py_COLD_FUNCTION int
 do_monitor_exc(PyThreadState *tstate, _PyInterpreterFrame *frame,
                _PyInstr *instr, int event)
 {

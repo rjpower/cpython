@@ -12,14 +12,6 @@
 #define OR_DTRACE_LINE
 #endif
 
-// Branch hint for generated code, such as the test before boxing an inline
-// value.
-#if defined(__GNUC__) || defined(__clang__)
-#  define Py_UNLIKELY(x) __builtin_expect(!!(x), 0)
-#else
-#  define Py_UNLIKELY(x) (x)
-#endif
-
 #ifdef Py_STATS
 /* Count the entered handler, including IR-only and specialized targets. */
 #define INSTRUCTION_STATS(op) \
@@ -540,18 +532,25 @@ check_periodics(PyThreadState *tstate) {
     return 0;
 }
 
+/* The handling of a pending event after an instruction: the flag test stays
+ * in the handler and the rest runs here, out of line. */
+static Py_NO_INLINE _Py_COLD_FUNCTION int
+handle_periodics_at_end(PyThreadState *tstate, _PyInterpreterFrame *frame) {
+    // Do not handle pending interrupts if the previous instruction was LOAD_SPECIAL
+    // This may also not handle interrupts if a cache looks like LOAD_SPECIAL,
+    // but this is benign as we won't skip periodic checks indefinitely.
+    if (IR_HANDLER(frame->instr_ptr[-1]) == LOAD_SPECIAL) {
+        return 0;
+    }
+    return _Py_HandlePending(tstate);
+}
+
 static inline int
 check_periodics_at_end(PyThreadState *tstate, _PyInterpreterFrame *frame) {
     _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
     QSBR_QUIESCENT_STATE(tstate);
-    if (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & _PY_EVAL_EVENTS_MASK) {
-        // Do not handle pending interrupts if the previous instruction was LOAD_SPECIAL
-        // This may also not handle interrupts if a cache looks like LOAD_SPECIAL,
-        // but this is benign as we won't skip periodic checks indefinitely.
-        if (IR_HANDLER(frame->instr_ptr[-1]) == LOAD_SPECIAL) {
-            return 0;
-        }
-        return _Py_HandlePending(tstate);
+    if (Py_UNLIKELY(_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & _PY_EVAL_EVENTS_MASK)) {
+        return handle_periodics_at_end(tstate, frame);
     }
     return 0;
 }

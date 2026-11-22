@@ -290,6 +290,30 @@ is_left_jump(int base)
            base == JUMP_IF_FALSE_OR_POP || base == JUMP_IF_TRUE_OR_POP;
 }
 
+/* The byte offset in co_code that an event of the word at index `word`
+ * reports.  A branch word that fuses a test with its jump stands for the
+ * test's offset in the pcmap, but the branch events belong to the jump: find
+ * it among the stack instructions the word covers. */
+static int
+event_offset(PyCodeObject *code, int word, int event)
+{
+    int offset = _PyCode_WordOffset(code, word);
+    if (event != PY_MONITORING_EVENT_BRANCH_LEFT &&
+        event != PY_MONITORING_EVENT_BRANCH_RIGHT) {
+        return offset;
+    }
+    int end = _PyCode_WordOffset(code, word + 1) / (int)sizeof(_Py_CODEUNIT);
+    _Py_CODEUNIT *units = _PyCode_CODE(code);
+    for (int u = offset / (int)sizeof(_Py_CODEUNIT); u < end; ) {
+        int opcode = _PyOpcode_Deopt[units[u].op.code];
+        if (is_left_jump(opcode) || opcode == FOR_ITER || opcode == SEND) {
+            return u * (int)sizeof(_Py_CODEUNIT);
+        }
+        u += 1 + _PyOpcode_Caches[opcode];
+    }
+    return offset;
+}
+
 /* Does `event` at word index i of code live in monitoring->left_tools? */
 static inline bool
 in_left_tools(PyCodeObject *code, int i, int event)
@@ -1387,7 +1411,7 @@ call_instrumentation_vector_context(
      * dis and of the line and exception tables. They are inline ints: no
      * allocation. */
     assert(PyValue_IsNull(args[2]));
-    args[2] = PyValue_FromInt64(_PyCode_WordOffset(code, instr_offset(frame, arg2)));
+    args[2] = PyValue_FromInt64(event_offset(code, instr_offset(frame, arg2), event));
     PyInterpreterState *interp = tstate->interp;
     uint8_t tools = get_tools_for_instruction(code, interp, offset, event);
     size_t nargsf = (size_t) nargs | PY_VECTORCALL_ARGUMENTS_OFFSET;
@@ -2069,7 +2093,7 @@ _Py_call_instrumentation_instruction(PyThreadState *tstate, _PyInterpreterFrame*
          code->_co_monitoring->local_monitors.tools[PY_MONITORING_EVENT_INSTRUCTION]
         );
     PyValue args[3] = { PyValue_NULL, _borrowed_word(code),
-                        PyValue_FromInt64(offset) };
+                        PyValue_FromInt64(_PyCode_WordOffset(code, offset)) };
     while (tools) {
         int tool = most_significant_bit(tools);
         assert(tool >= 0 && tool < 8);
@@ -3794,6 +3818,23 @@ static PyTypeObject _PyLegacyBranchEventHandler_Type = {
 };
 
 
+/* The word of the branch that reports byte offset `offset` of co_code: the
+ * first word of that instruction that is instrumented or is a branch. */
+static int
+branch_word(PyCodeObject *code, int offset)
+{
+    int first = _PyCode_OffsetWord(code, offset);
+    for (int w = first; w < (int)code->_co_exec->nwords &&
+                        _PyCode_WordOffset(code, w) == offset; w++) {
+        int base = base_opcode(code, w);
+        if (is_instrumented(word_opcode(exec_words(code), w)) ||
+            base == SEND || base == FOR_ITER || IS_CONDITIONAL_JUMP_OPCODE(base)) {
+            return w;
+        }
+    }
+    return first;
+}
+
 static PyValue
 branch_handler_vectorcall(
     PyThreadState *tstate, PyObject *op, const PyValue *args,
@@ -3819,7 +3860,11 @@ branch_handler_vectorcall(
     }
     PyValue disable = _borrowed_word(&_PyInstrumentation_DISABLE);
     if (code->_co_exec == NULL || src_offset < 0 ||
-        src_offset >= (int)code->_co_exec->nwords) {
+        src_offset >= (int)(Py_SIZE(code) * sizeof(_Py_CODEUNIT))) {
+        return disable;
+    }
+    src_offset = branch_word(code, src_offset);
+    if (src_offset >= (int)code->_co_exec->nwords) {
         return disable;
     }
     int opcode = word_opcode(exec_words(code), src_offset);
@@ -3928,7 +3973,7 @@ typedef struct {
 /* The tuple of three word indices of code, as byte offsets into co_code */
 static PyObject *
 int_triple(PyCodeObject *code, int a, int b, int c) {
-    a = _PyCode_WordOffset(code, a);
+    a = event_offset(code, a, PY_MONITORING_EVENT_BRANCH_LEFT);
     b = _PyCode_WordOffset(code, b);
     c = _PyCode_WordOffset(code, c);
     PyObject *obja = PyLong_FromLong(a);

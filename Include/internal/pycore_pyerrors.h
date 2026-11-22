@@ -47,12 +47,12 @@ extern void _PyErr_GetExcInfo(PyThreadState *, PyObject **, PyObject **, PyObjec
 // Export for '_testinternalcapi' shared extension
 PyAPI_FUNC(void) _PyErr_SetKeyError(PyObject *);
 /* The vectorcall of the exception classes that BaseException constructs
-   (tp_value_vectorcall), and its construction without a call.  Export for
+   (tp_value_vectorcall), and the construction of common classes without a call.  Export for
    Python/errors.c. */
 extern PyValue _PyBaseException_Vectorcall(PyThreadState *, PyObject *,
                                            const PyValue *, size_t, PyObject *);
-extern PyObject *_PyBaseException_NewFromArray(PyTypeObject *,
-                                               const PyValue *, Py_ssize_t);
+extern int _PyExc_BuildFromArray(PyTypeObject *, const PyValue *, Py_ssize_t,
+                                 PyObject **);
 
 /* _PyErr_SetKeyError() for a value: KeyError's args tuple holds the word,
    so an inline key is not boxed. */

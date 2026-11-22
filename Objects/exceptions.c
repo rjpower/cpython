@@ -103,17 +103,13 @@ BaseException_init(PyObject *op, PyObject *args, PyObject *kwds)
 }
 
 
-/* The instance that calling type(*args) builds, for a class whose tp_new and
- * tp_init are BaseException's (the ones _PyExc_InitTypes() gives
- * _PyBaseException_Vectorcall).  The runtime builds its own exceptions with it,
- * without the call: see _PyErr_CreateExceptionFromArray(). */
-PyObject *
-_PyBaseException_NewFromArray(PyTypeObject *type, const PyValue *args,
-                              Py_ssize_t nargs)
+/* An untracked instance of a static exception class with the BaseException
+ * fields set and args made from the array, or NULL with an exception set.
+ * The class need not be sized, zeroed or given a heap by tp_alloc; the
+ * caller sets the fields beyond the base ones and tracks the object. */
+static PyBaseExceptionObject *
+new_exception_base(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs)
 {
-    /* The class is a static one with the base layout: no tp_alloc is
-     * needed to size, zero or find a heap for the object. */
-    assert(type->tp_basicsize == sizeof(PyBaseExceptionObject));
     assert(type->tp_itemsize == 0 && PyType_IS_GC(type));
     PyBaseExceptionObject *self = PyObject_GC_New(PyBaseExceptionObject, type);
     if (!self) {
@@ -129,11 +125,53 @@ _PyBaseException_NewFromArray(PyTypeObject *type, const PyValue *args,
     self->suppress_context = 0;
     self->args = _PyTuple_FromValueArray(args, nargs);
     if (!self->args) {
-        Py_DECREF(self);
+        PyObject_GC_Del(self);
         return NULL;
     }
-    PyObject_GC_Track(self);
-    return (PyObject *)self;
+    return self;
+}
+
+/* The instance that calling type(*args) builds, for the classes that the
+ * runtime raises most: those BaseException constructs, StopIteration and
+ * AttributeError.  Another class is not handled: the result is 0 and the
+ * caller calls it.  Otherwise the result is 1 and *out is the instance, or
+ * NULL with an exception set.  The runtime builds its own exceptions with
+ * it: see _PyErr_CreateExceptionFromArray(). */
+int
+_PyExc_BuildFromArray(PyTypeObject *type, const PyValue *args,
+                      Py_ssize_t nargs, PyObject **out)
+{
+    if (type->tp_value_vectorcall == (_Py_valuefunc)_PyBaseException_Vectorcall) {
+        assert(type->tp_basicsize == sizeof(PyBaseExceptionObject));
+        PyBaseExceptionObject *self = new_exception_base(type, args, nargs);
+        if (self) {
+            PyObject_GC_Track(self);
+        }
+        *out = (PyObject *)self;
+        return 1;
+    }
+    if ((PyObject *)type == PyExc_StopIteration) {
+        PyStopIterationObject *self =
+            (PyStopIterationObject *)new_exception_base(type, args, nargs);
+        if (self) {
+            self->value = nargs > 0 ? PyValue_DUP(args[0]) : PyValue_None;
+            PyObject_GC_Track(self);
+        }
+        *out = (PyObject *)self;
+        return 1;
+    }
+    if ((PyObject *)type == PyExc_AttributeError) {
+        PyAttributeErrorObject *self =
+            (PyAttributeErrorObject *)new_exception_base(type, args, nargs);
+        if (self) {
+            self->obj = NULL;
+            self->name = NULL;
+            PyObject_GC_Track(self);
+        }
+        *out = (PyObject *)self;
+        return 1;
+    }
+    return 0;
 }
 
 PyValue
@@ -145,8 +183,12 @@ _PyBaseException_Vectorcall(PyThreadState *tstate, PyObject *type_obj,
     if (!_PyArg_NoKwnames(type->tp_name, kwnames)) {
         return PyValue_NULL;
     }
-    return PyValue_PrepareOwned(_PyBaseException_NewFromArray(
-        type, args, PyVectorcall_NARGS(nargsf)));
+    PyBaseExceptionObject *self = new_exception_base(
+        type, args, PyVectorcall_NARGS(nargsf));
+    if (self) {
+        PyObject_GC_Track(self);
+    }
+    return PyValue_PrepareOwned((PyObject *)self);
 }
 
 

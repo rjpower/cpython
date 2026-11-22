@@ -33,8 +33,6 @@ PyAPI_FUNC(int) _PySet_Update(PyObject *set, PyObject *iterable);
 // Export for the gdb plugin's (python-gdb.py) benefit
 PyAPI_DATA(PyObject *) _PySet_Dummy;
 
-PyAPI_FUNC(int) _PySet_Contains(PySetObject *so, PyObject *key);
-
 // The value forms of PySet_Contains(), PySet_Add() and PySet_Discard(): they
 // borrow the key (AddValue takes a count of its own). Internal, like every
 // function that takes or returns a PyValueBorrow; each reader macro lets the
@@ -50,6 +48,10 @@ PyAPI_FUNC(int) PySet_DiscardValue(PyObject *set, PyValueBorrow key);
 // _PySet_AddValue() is for a set, not a frozenset.
 PyAPI_FUNC(int) _PySet_ContainsValue(PySetObject *so, PyValueBorrow key);
 #define _PySet_ContainsValue(S, K) (_PySet_ContainsValue)(S, PyValue_Borrow(K))
+// The membership test of the `in` operator: as _PySet_ContainsValue(), and a
+// set or frozenset key, which is unhashable, is looked up by its contents.
+PyAPI_FUNC(int) _PySet_Contains(PySetObject *so, PyValueBorrow key);
+#define _PySet_Contains(S, K) (_PySet_Contains)(S, PyValue_Borrow(K))
 PyAPI_FUNC(int) _PySet_AddValue(PySetObject *so, PyValueBorrow key);
 #define _PySet_AddValue(S, K) (_PySet_AddValue)(S, PyValue_Borrow(K))
 PyAPI_FUNC(int) _PySet_DiscardValue(PySetObject *so, PyValueBorrow key);

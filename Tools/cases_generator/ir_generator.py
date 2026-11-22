@@ -790,7 +790,7 @@ INPLACE_READERS = {
     "_Py_call_instrumentation_exc2",
     # Value-form container calls: they only read their key argument
     "PyDict_ContainsValue", "PySet_ContainsValue", "PyDict_DelValue",
-    "_PyDict_ContainsValue", "_PySet_ContainsValue",
+    "_PyDict_ContainsValue", "_PySet_ContainsValue", "_PySet_Contains",
     "_PyValue_RichCompareObject",
     # The contains function of an exact str, tuple or list, called through
     # the type's value slot (CONTAINS_OP_JUMP_SEQUENCE)

@@ -3230,24 +3230,14 @@ dummy_func(
 
         macro(CONTAINS_OP_SET) = _GUARD_TOS_ANY_SET + unused/1 + _CONTAINS_OP_SET + POP_TOP + POP_TOP;
 
-        // inline_ok: left is handled by value if inline, so only a pointer
-        // is ever read as an object and nothing is boxed.
+        // inline_ok: left is tested as a value, so nothing is boxed.
         inline_ok op(_CONTAINS_OP_SET, (left, right -- b, l, r)) {
             PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
 
             assert(PyAnySet_CheckExact(right_o));
             STAT_INC(CONTAINS_OP, hit);
             // Note: both set and frozenset use the same seq_contains method!
-            int res;
-            if (PyValue_IsInline(left)) {
-                // An inline int or float is hashable and never a set, so
-                // _PySet_Contains()'s frozenset fallback cannot apply.
-                res = _PySet_ContainsValue((PySetObject *)right_o, left);
-            }
-            else {
-                res = _PySet_Contains((PySetObject *)right_o,
-                                      PyValue_AsKnownObjectBorrow(left));
-            }
+            int res = _PySet_Contains((PySetObject *)right_o, left);
             if (res < 0) {
                 ERROR_NO_POP();
             }

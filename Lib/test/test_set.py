@@ -299,6 +299,55 @@ class TestJointOps:
             elem.sub = elem
             elem.set = set([elem])
 
+    def test_contains_default_hash_keys(self):
+        # Objects with the default hash are hashed by address.
+        class Plain:
+            pass
+
+        class Sub(Plain):
+            pass
+
+        class Reset(int):
+            __hash__ = object.__hash__
+
+        class Eq:
+            def __eq__(self, other):
+                return self is other
+
+        class Hashed:
+            def __hash__(self):
+                return 3
+
+        plain, sub, reset = Plain(), Sub(), Reset(5)
+        keys = [plain, sub, reset, Plain, int, len, Plain.__init__]
+        s = set(keys)
+        f = frozenset(keys)
+        for container in (s, f):
+            for key in keys:
+                self.assertIn(key, container)
+            self.assertNotIn(Plain(), container)
+            self.assertNotIn(Sub(), container)
+            self.assertNotIn(Reset(5), container)
+            self.assertEqual(hash(plain), object.__hash__(plain))
+            self.assertEqual(hash(reset), object.__hash__(reset))
+            with self.assertRaises(TypeError):
+                Eq() in container
+            self.assertNotIn(Hashed(), container)
+        self.assertNotIn(Eq, f)
+        self.assertEqual(hash(Plain), object.__hash__(Plain))
+        self.assertEqual(hash(plain), hash(plain))
+        self.assertNotEqual(hash(plain), hash(Plain()))
+
+    def test_contains_set_key(self):
+        # A set is unhashable, but `in` looks it up as a frozenset.
+        s = {frozenset({1, 2}), 3}
+        self.assertIn({1, 2}, s)
+        self.assertIn(frozenset({1, 2}), s)
+        self.assertNotIn({1, 3}, s)
+        with self.assertRaises(TypeError):
+            [] in s
+        with self.assertRaises(TypeError):
+            {} in s
     def test_subclass_with_custom_hash(self):
         # Bug #1257731
         class H(self.thetype):

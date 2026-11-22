@@ -66,16 +66,24 @@ _PyIRSemantic_Decode(const char *bytes, Py_ssize_t size, _PyIRSemanticMap *map)
     return 1;
 }
 
+/* The map of a code object's exception table, which its constructor has
+ * validated (_PyIRSemantic_Decode()): only the sections are located here. */
 static inline _PyIRSemanticMap
 _PyIRSemantic_Stored(PyObject *exceptiontable)
 {
-    _PyIRSemanticMap map;
-    if (_PyIRSemantic_Decode(PyBytes_AS_STRING(exceptiontable),
-                            PyBytes_GET_SIZE(exceptiontable), &map) != 1)
-    {
-        Py_FatalError("invalid normalized IR semantic map");
+    const unsigned char *p = (const unsigned char *)PyBytes_AS_STRING(exceptiontable);
+#ifndef NDEBUG
+    _PyIRSemanticMap checked;
+    assert(_PyIRSemantic_Decode((const char *)p, PyBytes_GET_SIZE(exceptiontable),
+                                &checked) == 1);
+#endif
+    if (PyBytes_GET_SIZE(exceptiontable) == 0) {
+        return (_PyIRSemanticMap){p, 0, NULL, 0};
     }
-    return map;
+    uint32_t nexceptions = _PyIRSemantic_Read32(p + 8);
+    return (_PyIRSemanticMap){p + _PyIR_SEMANTIC_HEADER, nexceptions,
+                              p + _PyIR_SEMANTIC_HEADER + nexceptions,
+                              _PyIRSemantic_Read32(p + 12)};
 }
 
 static inline void

@@ -2265,6 +2265,9 @@ error_clear_slots(_PyInterpreterFrame *frame, int first)
 {
     assert(first >= 0 && first <= _PyFrame_NumSlots(frame));
     for (int home = _PyFrame_NumSlots(frame); home-- > first;) {
+        if (PyValue_IsNull(frame->base[home])) {
+            continue;
+        }
         PyValue owner = _PyFrame_TakeHome(frame, &frame->base[home]);
         PyValue_XCLOSE(owner);
     }
@@ -2272,7 +2275,7 @@ error_clear_slots(_PyInterpreterFrame *frame, int first)
 
 /* All descriptors are local to this reached cold scope; no successful handler
  * gains an owner record. */
-static _Py_COLD_FUNCTION Py_NO_INLINE _PyIRErrorResult
+static Py_NO_INLINE _PyIRErrorResult
 _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
                      _PyInstr *origin, uint32_t entry)
 {

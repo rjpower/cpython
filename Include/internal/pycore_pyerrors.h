@@ -46,6 +46,12 @@ extern void _PyErr_GetExcInfo(PyThreadState *, PyObject **, PyObject **, PyObjec
 
 // Export for '_testinternalcapi' shared extension
 PyAPI_FUNC(void) _PyErr_SetKeyError(PyObject *);
+/* The instance that calling exception_type with the arguments builds, which
+   a call must return an instance of; NULL with an exception set on failure. */
+extern PyObject *_PyErr_CreateExceptionFromArray(PyObject *exception_type,
+                                                 const PyValue *args,
+                                                 Py_ssize_t nargs);
+
 /* _PyErr_SetKeyError() for a value: KeyError's args tuple holds the word,
    so an inline key is not boxed. */
 PyAPI_FUNC(void) _PyErr_SetKeyErrorValue(PyValueBorrow key);

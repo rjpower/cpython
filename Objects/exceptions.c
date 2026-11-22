@@ -103,20 +103,19 @@ BaseException_init(PyObject *op, PyObject *args, PyObject *kwds)
 }
 
 
-static PyValue
-BaseException_vectorcall(PyThreadState *tstate, PyObject *type_obj,
-                         const PyValue *args, size_t nargsf,
-                         PyObject *kwnames)
+/* An untracked instance of a static exception class with the BaseException
+ * fields set and args made from the array, or NULL with an exception set.
+ * The class need not be sized, zeroed or given a heap by tp_alloc; the
+ * caller sets the fields beyond the base ones and tracks the object. */
+static PyBaseExceptionObject *
+new_exception_base(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs)
 {
-    PyTypeObject *type = _PyType_CAST(type_obj);
-    if (!_PyArg_NoKwnames(type->tp_name, kwnames)) {
-        return PyValue_NULL;
-    }
-
-    PyBaseExceptionObject *self;
-    self = (PyBaseExceptionObject *)type->tp_alloc(type, 0);
+    /* PyObject_GC_Del below does not release a heap type's reference. */
+    assert(type->tp_itemsize == 0 && PyType_IS_GC(type));
+    assert(!(type->tp_flags & Py_TPFLAGS_HEAPTYPE));
+    PyBaseExceptionObject *self = PyObject_GC_New(PyBaseExceptionObject, type);
     if (!self) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     // The dict is created on the fly in PyObject_GenericSetAttr()
@@ -126,14 +125,65 @@ BaseException_vectorcall(PyThreadState *tstate, PyObject *type_obj,
     self->cause = NULL;
     self->context = NULL;
     self->suppress_context = 0;
-
-    self->args = _PyTuple_FromValueArray(args, PyVectorcall_NARGS(nargsf));
+    self->args = _PyTuple_FromValueArray(args, nargs);
     if (!self->args) {
-        Py_DECREF(self);
+        PyObject_GC_Del(self);
+        return NULL;
+    }
+    return self;
+}
+
+static PyValue
+_PyBaseException_Vectorcall(PyThreadState *tstate, PyObject *type_obj,
+                            const PyValue *args, size_t nargsf,
+                            PyObject *kwnames)
+{
+    PyTypeObject *type = _PyType_CAST(type_obj);
+    if (!_PyArg_NoKwnames(type->tp_name, kwnames)) {
         return PyValue_NULL;
     }
+    PyBaseExceptionObject *self = new_exception_base(
+        type, args, PyVectorcall_NARGS(nargsf));
+    if (self) {
+        PyObject_GC_Track(self);
+    }
+    return PyValue_PrepareOwned((PyObject *)self);
+}
 
-    return PyValue_FromObjectSteal((PyObject *)self);
+/* A call with keywords is the class's tp_new and tp_init (AttributeError_init
+ * is the one parser of name and obj). */
+static PyValue
+StopIteration_vectorcall(PyThreadState *tstate, PyObject *type_obj,
+                         const PyValue *args, size_t nargsf, PyObject *kwnames)
+{
+    if (kwnames != NULL) {
+        return _Py_type_call_value(tstate, type_obj, args, nargsf, kwnames);
+    }
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    PyStopIterationObject *self = (PyStopIterationObject *)new_exception_base(
+        _PyType_CAST(type_obj), args, nargs);
+    if (self) {
+        self->value = nargs > 0 ? PyValue_DUP(args[0]) : PyValue_None;
+        PyObject_GC_Track(self);
+    }
+    return PyValue_PrepareOwned((PyObject *)self);
+}
+
+static PyValue
+AttributeError_vectorcall(PyThreadState *tstate, PyObject *type_obj,
+                          const PyValue *args, size_t nargsf, PyObject *kwnames)
+{
+    if (kwnames != NULL) {
+        return _Py_type_call_value(tstate, type_obj, args, nargsf, kwnames);
+    }
+    PyAttributeErrorObject *self = (PyAttributeErrorObject *)new_exception_base(
+        _PyType_CAST(type_obj), args, PyVectorcall_NARGS(nargsf));
+    if (self) {
+        self->obj = NULL;
+        self->name = NULL;
+        PyObject_GC_Track(self);
+    }
+    return PyValue_PrepareOwned((PyObject *)self);
 }
 
 
@@ -671,7 +721,7 @@ static PyTypeObject _PyExc_BaseException = {
     0,                          /* tp_alloc */
     BaseException_new,          /* tp_new */
     .tp_vectorcall = _PyValue_VectorcallThunk,
-    .tp_value_vectorcall = (_Py_valuefunc)BaseException_vectorcall,
+    .tp_value_vectorcall = (_Py_valuefunc)_PyBaseException_Vectorcall,
 };
 /* the CPython API expects exceptions to be (PyObject *) - both a hold-over
 from the previous implementation and also allowing Python objects to be used
@@ -715,9 +765,12 @@ PyTypeObject _PyExc_ ## EXCNAME = { \
         EXCBASE, EXCNAME, EXCNAME, EXCSTORE, EXCDOC); \
     PyObject *PyExc_ ## EXCNAME = (PyObject *)&_PyExc_ ## EXCNAME
 
-#define ComplexExtendsException(EXCBASE, EXCNAME, EXCSTORE, EXCNEW, \
-                                EXCMETHODS, EXCMEMBERS, EXCGETSET, \
-                                EXCSTR, EXCREPR, EXCDOC) \
+/* EXCEXTRA is a parenthesised list of further designated initializers, such
+   as a value vectorcall. */
+#define EXC_UNPAREN(...) __VA_ARGS__
+#define ComplexExtendsExceptionEx(EXCBASE, EXCNAME, EXCSTORE, EXCNEW, \
+                                  EXCMETHODS, EXCMEMBERS, EXCGETSET, \
+                                  EXCSTR, EXCREPR, EXCDOC, EXCEXTRA) \
 static PyTypeObject _PyExc_ ## EXCNAME = { \
     PyVarObject_HEAD_INIT(NULL, 0) \
     # EXCNAME, \
@@ -729,9 +782,17 @@ static PyTypeObject _PyExc_ ## EXCNAME = { \
     EXCSTORE ## _clear, 0, 0, 0, 0, EXCMETHODS, \
     EXCMEMBERS, EXCGETSET, &_ ## EXCBASE, \
     0, 0, 0, offsetof(Py ## EXCSTORE ## Object, dict), \
-    EXCSTORE ## _init, 0, EXCNEW,\
+    EXCSTORE ## _init, 0, EXCNEW, \
+    EXC_UNPAREN EXCEXTRA \
 }; \
 PyObject *PyExc_ ## EXCNAME = (PyObject *)&_PyExc_ ## EXCNAME
+
+#define ComplexExtendsException(EXCBASE, EXCNAME, EXCSTORE, EXCNEW, \
+                                EXCMETHODS, EXCMEMBERS, EXCGETSET, \
+                                EXCSTR, EXCREPR, EXCDOC) \
+    ComplexExtendsExceptionEx(EXCBASE, EXCNAME, EXCSTORE, EXCNEW, \
+                              EXCMETHODS, EXCMEMBERS, EXCGETSET, \
+                              EXCSTR, EXCREPR, EXCDOC, ())
 
 
 /*
@@ -811,9 +872,12 @@ StopIteration_traverse(PyObject *op, visitproc visit, void *arg)
     return BaseException_traverse(op, visit, arg);
 }
 
-ComplexExtendsException(PyExc_Exception, StopIteration, StopIteration,
-                        0, 0, StopIteration_members, 0, 0, 0,
-                        "Signal the end from iterator.__next__().");
+ComplexExtendsExceptionEx(PyExc_Exception, StopIteration, StopIteration,
+                          0, 0, StopIteration_members, 0, 0, 0,
+                          "Signal the end from iterator.__next__().",
+                          (.tp_vectorcall = _PyValue_VectorcallThunk,
+                           .tp_value_vectorcall =
+                               (_Py_valuefunc)StopIteration_vectorcall));
 
 
 /*
@@ -2966,10 +3030,13 @@ static PyMethodDef AttributeError_methods[] = {
     {NULL}
 };
 
-ComplexExtendsException(PyExc_Exception, AttributeError,
-                        AttributeError, 0,
-                        AttributeError_methods, AttributeError_members,
-                        0, AttributeError_str, 0, "Attribute not found.");
+ComplexExtendsExceptionEx(PyExc_Exception, AttributeError,
+                          AttributeError, 0,
+                          AttributeError_methods, AttributeError_members,
+                          0, AttributeError_str, 0, "Attribute not found.",
+                          (.tp_vectorcall = _PyValue_VectorcallThunk,
+                           .tp_value_vectorcall =
+                               (_Py_valuefunc)AttributeError_vectorcall));
 
 /*
  *    SyntaxError extends Exception
@@ -4711,7 +4778,7 @@ _PyExc_InitTypes(PyInterpreterState *interp)
             && exc->tp_init == BaseException_init)
         {
             exc->tp_vectorcall = _PyValue_VectorcallThunk;
-            exc->tp_value_vectorcall = (_Py_valuefunc)BaseException_vectorcall;
+            exc->tp_value_vectorcall = (_Py_valuefunc)_PyBaseException_Vectorcall;
         }
     }
     return 0;

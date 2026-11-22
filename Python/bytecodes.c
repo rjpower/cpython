@@ -2895,7 +2895,7 @@ dummy_func(
             EXIT_IF(Py_TYPE(owner_o) != &PyType_Type);
         }
 
-        op(_LOAD_ATTR_CLASSMETHOD, (class_value/4, owner -- attr, self)) {
+        ir_only op(_LOAD_ATTR_CLASSMETHOD, (class_value/4, owner -- attr, self)) {
             assert(oparg & 1);
             PyValueBorrow descriptor = _PyValueGuarded_Load(class_value);
             assert(PyValue_IsObject(descriptor));
@@ -3569,7 +3569,7 @@ dummy_func(
         // drops the TO_BOOL before it (Python/flowgraph.c), so the jumps
         // specialise as TO_BOOL does, and their entries keep the
         // specialisation counter.
-        family(POP_JUMP_IF_FALSE, INLINE_CACHE_ENTRIES_TO_BOOL) = {
+        family(POP_JUMP_IF_FALSE, 1) = {
             POP_JUMP_IF_FALSE_ALWAYS_TRUE,
             POP_JUMP_IF_FALSE_BOOL,
             POP_JUMP_IF_FALSE_INT,
@@ -3579,7 +3579,7 @@ dummy_func(
             POP_JUMP_IF_FALSE_STR,
         };
 
-        family(POP_JUMP_IF_TRUE, INLINE_CACHE_ENTRIES_TO_BOOL) = {
+        family(POP_JUMP_IF_TRUE, 1) = {
             POP_JUMP_IF_TRUE_ALWAYS_TRUE,
             POP_JUMP_IF_TRUE_BOOL,
             POP_JUMP_IF_TRUE_INT,
@@ -3603,31 +3603,31 @@ dummy_func(
         }
 
         macro(POP_JUMP_IF_TRUE) =
-            unused/1 + _SPECIALIZE_POP_JUMP_IF + unused/2 + _TO_BOOL + _POP_JUMP_IF_TRUE;
+            unused/1 + _SPECIALIZE_POP_JUMP_IF + _TO_BOOL + _POP_JUMP_IF_TRUE;
 
         macro(POP_JUMP_IF_FALSE) =
-            unused/1 + _SPECIALIZE_POP_JUMP_IF + unused/2 + _TO_BOOL + _POP_JUMP_IF_FALSE;
+            unused/1 + _SPECIALIZE_POP_JUMP_IF + _TO_BOOL + _POP_JUMP_IF_FALSE;
 
         macro(POP_JUMP_IF_FALSE_BOOL) =
-            unused/1 + unused/2 + _GUARD_TOS_BOOL + _POP_JUMP_IF_FALSE;
+            unused/1 + _GUARD_TOS_BOOL + _POP_JUMP_IF_FALSE;
         macro(POP_JUMP_IF_TRUE_BOOL) =
-            unused/1 + unused/2 + _GUARD_TOS_BOOL + _POP_JUMP_IF_TRUE;
+            unused/1 + _GUARD_TOS_BOOL + _POP_JUMP_IF_TRUE;
         macro(POP_JUMP_IF_FALSE_INT) =
-            _GUARD_TOS_EXACT_INT + unused/1 + unused/2 + _TO_BOOL_INT + _POP_TOP_INT + _POP_JUMP_IF_FALSE;
+            _GUARD_TOS_EXACT_INT + unused/1 + _TO_BOOL_INT + _POP_TOP_INT + _POP_JUMP_IF_FALSE;
         macro(POP_JUMP_IF_TRUE_INT) =
-            _GUARD_TOS_EXACT_INT + unused/1 + unused/2 + _TO_BOOL_INT + _POP_TOP_INT + _POP_JUMP_IF_TRUE;
+            _GUARD_TOS_EXACT_INT + unused/1 + _TO_BOOL_INT + _POP_TOP_INT + _POP_JUMP_IF_TRUE;
         macro(POP_JUMP_IF_FALSE_LIST) =
-            _GUARD_TOS_LIST + unused/1 + unused/2 + _TO_BOOL_LIST + POP_TOP + _POP_JUMP_IF_FALSE;
+            _GUARD_TOS_LIST + unused/1 + _TO_BOOL_LIST + POP_TOP + _POP_JUMP_IF_FALSE;
         macro(POP_JUMP_IF_TRUE_LIST) =
-            _GUARD_TOS_LIST + unused/1 + unused/2 + _TO_BOOL_LIST + POP_TOP + _POP_JUMP_IF_TRUE;
+            _GUARD_TOS_LIST + unused/1 + _TO_BOOL_LIST + POP_TOP + _POP_JUMP_IF_TRUE;
         macro(POP_JUMP_IF_FALSE_NONE) =
-            unused/1 + unused/2 + _TO_BOOL_NONE + _POP_JUMP_IF_FALSE;
+            unused/1 + _TO_BOOL_NONE + _POP_JUMP_IF_FALSE;
         macro(POP_JUMP_IF_TRUE_NONE) =
-            unused/1 + unused/2 + _TO_BOOL_NONE + _POP_JUMP_IF_TRUE;
+            unused/1 + _TO_BOOL_NONE + _POP_JUMP_IF_TRUE;
         macro(POP_JUMP_IF_FALSE_STR) =
-            _GUARD_TOS_UNICODE + unused/1 + unused/2 + _TO_BOOL_STR + _POP_TOP_UNICODE + _POP_JUMP_IF_FALSE;
+            _GUARD_TOS_UNICODE + unused/1 + _TO_BOOL_STR + _POP_TOP_UNICODE + _POP_JUMP_IF_FALSE;
         macro(POP_JUMP_IF_TRUE_STR) =
-            _GUARD_TOS_UNICODE + unused/1 + unused/2 + _TO_BOOL_STR + _POP_TOP_UNICODE + _POP_JUMP_IF_TRUE;
+            _GUARD_TOS_UNICODE + unused/1 + _TO_BOOL_STR + _POP_TOP_UNICODE + _POP_JUMP_IF_TRUE;
         // The jump of the None-or-plain form tests the None the guard
         // allowed, without forming the bool: the object path then carries no
         // result to select.
@@ -3662,7 +3662,7 @@ dummy_func(
         // a class with __len__ or __bool__).  The test is the generic
         // one's without its decision of the inline kinds, and the site
         // keeps no counter.
-        op(_TO_BOOL_SLOT, (value -- res, v)) {
+        ir_only op(_TO_BOOL_SLOT, (value -- res, v)) {
             int truth = _PyValue_IsTrueSlow(value);
             if (truth < 0) {
                 ERROR_NO_POP();
@@ -5639,6 +5639,46 @@ dummy_func(
         tier1 inst(RESERVED, (--)) {
             assert(0 && "Executing RESERVED instruction.");
             Py_FatalError("Executing RESERVED instruction.");
+        }
+
+        /* Opcodes of the stack bytecode in co_code that no word of the
+         * register IR has (STACK_ONLY in Tools/cases_generator/ir_generator.py):
+         * lowering (Python/flowgraph.c, _PyCfg_FromCode()) folds EXTENDED_ARG,
+         * drops NOT_TAKEN and splits the superinstructions.  The stack
+         * effects are the compiler's. */
+        tier1 inst(EXTENDED_ARG, ( -- )) {
+            assert(oparg);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(NOT_TAKEN, ( -- )) {
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(LOAD_FAST_LOAD_FAST, ( -- value1, value2)) {
+            assert(oparg);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(LOAD_FAST_BORROW_LOAD_FAST_BORROW, ( -- value1, value2)) {
+            assert(oparg);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(STORE_FAST_LOAD_FAST, (value1 -- value2)) {
+            assert(oparg);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+        }
+
+        tier1 inst(STORE_FAST_STORE_FAST, (value2, value1 --)) {
+            assert(oparg);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         /* Handlers of the register IR only (Include/internal/pycore_ir.h).

@@ -1744,7 +1744,7 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
             return -1;
         }
     }
-    uint8_t opcode = metaclass_check ? LOAD_ATTR_CLASS_WITH_METACLASS_CHECK
+    int opcode = metaclass_check ? LOAD_ATTR_CLASS_WITH_METACLASS_CHECK
                                     : LOAD_ATTR_CLASS;
     switch (kind) {
         case MUTABLE:
@@ -3741,7 +3741,7 @@ enum { TRUTH_BOOL, TRUTH_INT, TRUTH_LIST, TRUTH_NONE, TRUTH_STR,
 /* TO_BOOL and the conditional jumps, which test the truth of a value the
  * same way, choose a specialisation from their own row of ops. */
 static void
-specialize_truth(PyValueBorrow value_o, _PyInstr *instr, const uint8_t *ops)
+specialize_truth(PyValueBorrow value_o, _PyInstr *instr, const uint16_t *ops)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[TO_BOOL] == INLINE_CACHE_ENTRIES_TO_BOOL);
@@ -3756,7 +3756,7 @@ specialize_truth(PyValueBorrow value_o, _PyInstr *instr, const uint8_t *ops)
         return;
     }
     PyObject *value = PyValue_AsKnownObjectBorrow(value_o);
-    uint8_t specialized_op;
+    int specialized_op;
     if (PyBool_Check(value)) {
         specialized_op = ops[TRUTH_BOOL];
         goto success;
@@ -3812,7 +3812,7 @@ success:
 Py_NO_INLINE void
 _Py_Specialize_ToBool(PyValue value_o, _PyInstr *instr)
 {
-    static const uint8_t ops[TRUTH_COUNT] = {
+    static const uint16_t ops[TRUTH_COUNT] = {
         TO_BOOL_BOOL, TO_BOOL_INT, TO_BOOL_LIST, TO_BOOL_NONE, TO_BOOL_STR,
         TO_BOOL_ALWAYS_TRUE, 0,
     };
@@ -3822,12 +3822,12 @@ _Py_Specialize_ToBool(PyValue value_o, _PyInstr *instr)
 Py_NO_INLINE void
 (_Py_Specialize_PopJumpIf)(PyValueBorrow value_o, _PyInstr *instr)
 {
-    static const uint8_t if_false[TRUTH_COUNT] = {
+    static const uint16_t if_false[TRUTH_COUNT] = {
         POP_JUMP_IF_FALSE_BOOL, POP_JUMP_IF_FALSE_INT, POP_JUMP_IF_FALSE_LIST,
         POP_JUMP_IF_FALSE_NONE, POP_JUMP_IF_FALSE_STR,
         POP_JUMP_IF_FALSE_ALWAYS_TRUE, POP_JUMP_IF_FALSE_SLOT,
     };
-    static const uint8_t if_true[TRUTH_COUNT] = {
+    static const uint16_t if_true[TRUTH_COUNT] = {
         POP_JUMP_IF_TRUE_BOOL, POP_JUMP_IF_TRUE_INT, POP_JUMP_IF_TRUE_LIST,
         POP_JUMP_IF_TRUE_NONE, POP_JUMP_IF_TRUE_STR,
         POP_JUMP_IF_TRUE_ALWAYS_TRUE, POP_JUMP_IF_TRUE_SLOT,

@@ -10793,7 +10793,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 owner = IR_VIEW(IR_B(ir_word));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 #ifdef Py_GIL_DISABLED
@@ -10803,13 +10802,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 #endif
                 if (gil_disabled) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 if (Py_TYPE(owner_o) != &PyType_Type) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
             }
@@ -10819,13 +10816,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 if (!PyType_Check(owner_o)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 assert(class_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
             }
@@ -10838,13 +10833,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 PyObject *cm = PyValue_AsKnownObjectBorrow(descriptor);
                 if (!Py_IS_TYPE(cm, &PyClassMethod_Type)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 PyObject *target = _PyClassMethod_GetFunc(cm);
                 if (target == NULL || !Py_IS_TYPE(target, &PyFunction_Type)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 attr = PyValue_DUP(PyValue_FromObjectBorrow(target));
@@ -12966,14 +12959,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
-                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
                 }
                 PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
-                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
                 }
             }
@@ -13443,14 +13434,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
-                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
                 }
                 PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
                 if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
-                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
                 }
             }

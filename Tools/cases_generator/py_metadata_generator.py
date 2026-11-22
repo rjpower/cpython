@@ -15,7 +15,7 @@ from generators_common import (
     write_header,
 )
 from cwriter import CWriter
-from ir_generator import first_ir_only_handler, handler_ids
+from ir_generator import IR_BASE_ONLY, first_ir_only_handler, handler_ids
 from typing import TextIO
 
 
@@ -65,7 +65,7 @@ def generate_opmap(analysis: Analysis, out: CWriter) -> None:
     specialized = get_specialized(analysis)
     out.emit("opmap = frozendict(\n")
     for inst, op in analysis.opmap.items():
-        if inst not in specialized:
+        if inst not in specialized and inst not in IR_BASE_ONLY:
             out.emit(f"{inst}={analysis.opmap[inst]},\n")
     out.emit(")\n\n")
 
@@ -75,7 +75,7 @@ def generate_ir_opmap(analysis: Analysis, out: CWriter) -> None:
     out.emit("_ir_opmap = frozendict(\n")
     ids = handler_ids(analysis)
     for name, handler in sorted(ids.items(), key=lambda item: item[1]):
-        if handler >= first_ir_only_handler(analysis):
+        if handler >= first_ir_only_handler(analysis) or name in IR_BASE_ONLY:
             out.emit(f"{name}={handler},\n")
     out.emit(")\n\n")
 

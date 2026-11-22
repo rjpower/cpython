@@ -1259,7 +1259,17 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 # CFG omits them (PUSH_NULL writes NULL into a temporary that the NULL
 # invariant already guarantees is NULL, register-ir.md G4).  They keep their
 # opcode number and their format, which the CFG reads, but have no handler.
-STACK_ONLY = ("PUSH_NULL",)
+STACK_ONLY = ("PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN", "LOAD_FAST_LOAD_FAST",
+              "LOAD_FAST_BORROW_LOAD_FAST_BORROW", "STORE_FAST_LOAD_FAST",
+              "STORE_FAST_STORE_FAST")
+
+# Handlers that the register passes make and that no stack bytecode has, but
+# whose opcode numbers lie in the opcode space (their instrumented forms are
+# tables indexed by opcode).  They are not in opcode.opmap, which lists what
+# co_code can hold.
+IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
+                "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
+                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
 
 
 def handler_ids(analysis: Analysis) -> dict[str, int]:

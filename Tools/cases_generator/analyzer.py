@@ -639,6 +639,7 @@ NON_ESCAPING_FUNCTIONS = (
     "PyValue_DUP",
     "PyValue_XDUP",
     "PyValue_FromObjectBorrow",
+    "_PyValue_PointerBorrow",
     "PyValue_DupImmortal",
     "PyValue_False",
     "PyValue_FromObjectSteal",

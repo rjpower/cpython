@@ -4633,7 +4633,8 @@ dummy_func(
         inline_ok op(_CALL_TYPE_1, (callable, null, arg -- res)) {
             assert(oparg == 1);
             STAT_INC(CALL, hit);
-            res = PyValue_DUP(PyValue_FromObjectBorrow(PyValue_TYPE(arg)));
+            // A type is never an exact int or float, so it has no inline form
+            res = PyValue_DUP(_PyValue_PointerBorrow((PyObject *)PyValue_TYPE(arg)));
             INPUTS_DEAD();
         }
 

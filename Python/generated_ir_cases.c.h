@@ -7944,7 +7944,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 arg = IR_OPERAND(0 + IR_CALL_HAS_SELF(ir_word));
                 assert(oparg == 1);
                 STAT_INC(CALL, hit);
-                res = PyValue_DUP(PyValue_FromObjectBorrow(PyValue_TYPE(arg)));
+                res = PyValue_DUP(_PyValue_PointerBorrow((PyObject *)PyValue_TYPE(arg)));
             }
             ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);

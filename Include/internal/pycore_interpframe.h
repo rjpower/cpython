@@ -353,9 +353,6 @@ _PyFrame_PreviousHomeRange(const _PyIRHomeView *view, uint32_t *cursor,
     return false;
 }
 
-PyAPI_FUNC(void) _PyFrame_CopyCreatedGenerator(
-    _PyInterpreterFrame *src, _PyInterpreterFrame *dest);
-
 static inline void
 _PyFrame_CopyHeader(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 {
@@ -821,16 +818,6 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code,
     _PyFrame_InitializeTrampoline(frame, code, return_slot, previous);
     return frame;
 }
-
-PyAPI_FUNC(_PyInterpreterFrame *)
-_PyEvalFramePushAndInit(PyThreadState *tstate, PyValue func,
-                        PyObject *locals, PyValue *args,
-                        size_t argcount, PyObject *kwnames,
-                        _PyInterpreterFrame *previous);
-
-PyAPI_FUNC(_PyInterpreterFrame *)
-_PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
-    PyObject *locals, Py_ssize_t nargs, PyObject *callargs, PyObject *kwargs, _PyInterpreterFrame *previous);
 
 #ifdef __cplusplus
 }

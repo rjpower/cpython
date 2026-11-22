@@ -368,8 +368,12 @@ Known values:
    64435: parity84 IT (unit branch): the fused CONTAINS_OP form for str, tuple
           and list containers; UNPACK_SEQUENCE_TWO_TUPLE removed (handler 126)
    64436: parity84 integration of NB, GL, IT and RM: GL's handlers 407 and
-          408, IT's CONTAINS_OP_JUMP_SEQUENCE as 409, handler 126 removed */
-#define PYC_MAGIC_NUMBER 64436
+          408, IT's CONTAINS_OP_JUMP_SEQUENCE as 409, handler 126 removed
+   64438: parity84 GN (unit branch): a generator's code has no COPY_FREE_VARS
+          or MAKE_CELL before its RETURN_GENERATOR, and nothing executes a
+          generator expression's prelude: the creating call makes the free
+          variables, the cells and the iterator */
+#define PYC_MAGIC_NUMBER 64438
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

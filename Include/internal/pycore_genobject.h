@@ -30,11 +30,13 @@ _PyGen_FinalizerIsNoop(PyObject *op)
         FRAME_STATE_FINISHED(((PyGenObject *)op)->gi_frame_state);
 }
 
-/* The generator that a call creates, for code whose executing copy is
- * generator_direct: its frame is ready but for the arguments, which the
- * caller moves into gen->gi_iframe.base at once.  Consumes function; NULL
- * with an exception set on failure.  _PyGen_DiscardCall() abandons it when
- * the arguments cannot be bound. */
+/* The generator, coroutine or async generator that a call of a function
+ * creates: no frame of the thread runs before the object exists.  Its frame
+ * is ready but for the arguments, which the caller moves into
+ * gen->gi_iframe.base at once, and then the prologue of the code (the
+ * evaluator's gen_prologue()).  Consumes
+ * function; NULL with an exception set on failure.  _PyGen_DiscardCall()
+ * abandons it when the arguments or the prologue fail. */
 extern PyGenObject *_PyGen_NewCall(
     PyThreadState *tstate, PyValue function, PyCodeObject *code,
     _PyInterpreterFrame *caller);

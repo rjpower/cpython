@@ -1567,57 +1567,16 @@ ir_run_GET_AITER(
             INSTRUCTION_STATS(GET_AITER);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            PyValueBorrow obj;
+            PyValue obj;
             PyValue iter;
-            PyValue ir_own_B = PyValue_NULL;
-            (void)ir_own_B;
-            obj = IR_VIEW(IR_B(ir_word));
-            unaryfunc getter = NULL;
-            PyObject *iter_o;
-            if (!PyValue_IsObject(obj)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "'async for' requires an object with "
-                              "__aiter__ method, got %.100s",
-                              PyValue_TYPE(obj)->tp_name);
-                ir_own_B = IR_DETACH(ir_word, B, obj);
+            obj = IR_SLOT(IR_B(ir_word));
+            PyValue iterator = _PyEval_GetAIter(tstate, obj);
+            _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
+            if (PyValue_IsNull(iterator)) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
-            assert(PyValue_IsObject(obj));
-            PyObject *obj_o = _PyValue_AsKnownObjectBorrowPointer(obj);
-            PyTypeObject *type = Py_TYPE(obj_o);
-            if (type->tp_as_async != NULL) {
-                getter = type->tp_as_async->am_aiter;
-            }
-            if (getter == NULL) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "'async for' requires an object with "
-                              "__aiter__ method, got %.100s",
-                              type->tp_name);
-                ir_own_B = IR_DETACH(ir_word, B, obj);
-                (void)(ir_own_B);
-                _PyValue_XCLOSE_POINTER(ir_own_B);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            iter_o = (*getter)(obj_o);
-            ir_own_B = IR_DETACH(ir_word, B, obj);
-            (void)(ir_own_B);
-            if (iter_o == NULL) {
-                _PyValue_XCLOSE_POINTER(ir_own_B);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            if (Py_TYPE(iter_o)->tp_as_async == NULL ||
-                Py_TYPE(iter_o)->tp_as_async->am_anext == NULL) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "'async for' received an object from __aiter__ "
-                              "that does not implement __anext__: %.100s",
-                              Py_TYPE(iter_o)->tp_name);
-                Py_DECREF(iter_o);
-                _PyValue_XCLOSE_POINTER(ir_own_B);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            iter = PyValue_FromObjectSteal(iter_o);
+            iter = iterator;
             IR_STORE_DST(ir_word, A, iter);
-            _PyValue_XCLOSE_POINTER(ir_own_B);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -9564,6 +9523,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 }
                 gen->gi_iframe.base[0] = iterable;
                 _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
+                if (gen_prologue(tstate, gen, (PyCodeObject *)func->func_code) < 0) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
                 iter = PyValue_FromObjectSteal((PyObject *)gen);
                 index_or_null = PyValue_NULL;
             }
@@ -13584,27 +13546,10 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue res;
-            PyFunctionObject *func = _PyFrame_GetFunction(frame);
-            PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(
-                func, _PyFrame_GetCode(frame), frame->previous);
-            if (gen == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
-            _PyFrame_CopyCreatedGenerator(frame, gen_frame);
-            gen_frame->return_slot = (uint16_t)IR_A(ir_word);
-            assert(frame->frame_obj == NULL);
-            gen->gi_frame_state = FRAME_CREATED;
-            gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
-            _Py_LeaveRecursiveCallPy(tstate);
-            _PyInterpreterFrame *prev = frame->previous;
-            _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);
-            _PyThreadState_PopFrame(tstate, frame);
-            frame = tstate->current_frame = prev;
-            next_instr = frame->return_pc;
-            res = PyValue_FromObjectSteal((PyObject *)gen);
-            LLTRACE_RESUME_FRAME();
-            IR_STORE_RETURN(res);
+            Py_UNREACHABLE();
+            res = PyValue_NULL;
+            IR_MOVE_RESULT_TO_DST(ir_word, A, window[0], res);
+            PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
 

@@ -5234,8 +5234,13 @@ codegen_comprehension(compiler *c, expr_ty e, int type,
             goto error;
         }
         if (type == COMP_GENEXP) {
-            /* Insert GET_ITER before RETURN_GENERATOR.
-               https://docs.python.org/3/reference/expressions.html#generator-expressions */
+            /* iter() of the outermost iterable is evaluated at the creation
+             * of the generator, which raises its errors there, and the
+             * iterator is the bottom of the generator's stack.  These
+             * instructions describe that to the compiler: the creation of
+             * the object does the work (gen_prologue() in Python/ceval.c) and nothing
+             * executes them.
+             * https://docs.python.org/3/reference/expressions.html#generator-expressions */
             if(_PyInstructionSequence_InsertInstruction(
                     INSTR_SEQUENCE(c), 0,
                     RESUME, RESUME_AT_GEN_EXPR_START, NO_LOCATION) < 0) {

@@ -6,7 +6,7 @@
 #include "pycore_dict.h"          // _PyDict_NewPresized()
 #include "pycore_function.h"      // _PyFunction_Vectorcall() definition
 #include "pycore_list.h"          // PyList_GET_VALUE()
-#include "pycore_interpframe.h"   // _PyEvalFramePushAndInit()
+#include "pycore_interpframe.h"   // _PyInterpreterFrame
 #include "pycore_modsupport.h"    // _Py_VaBuildStack()
 #include "pycore_object.h"        // _PyCFunctionWithKeywords_TrampolineCall()
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()

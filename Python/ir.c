@@ -865,12 +865,6 @@ make_exec(PyCodeObject *co)
         }
         exec->const_image = values;
     }
-    int created_empty = _PyCode_AllCreatedEmpty(co);
-    if (created_empty < 0) {
-        _PyMem_NoScanFree(exec);
-        return NULL;
-    }
-    exec->all_created_empty = (uint8_t)created_empty;
     /* The slot-class flags are a cache of the fields and nlocalsplus,
      * which handlers test in the word instead of loading nlocalsplus. */
     const _PyIRWord *source = _PyCode_WORDS(co);
@@ -880,9 +874,6 @@ make_exec(PyCodeObject *co)
         words[i] = exec_discard_slot(source[i], discard);
         words[i] |= _PyIR_ExecLocalFlags(words[i], exec->nlocalsplus);
     }
-    exec->generator_direct = (co->co_flags & CO_OPTIMIZED) &&
-        (co->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) &&
-        nwords > 0 && IR_HANDLER(words[0]) == RETURN_GENERATOR;
     if (fb_size == 0) {
         return exec;
     }

@@ -5196,70 +5196,6 @@ call_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
     return (_PyCallResult){status, NULL};
 }
 
-Py_NO_INLINE PyObject *
-_PyEval_Vector(PyThreadState *tstate, PyFunctionObject *func,
-               PyObject *locals,
-               PyObject* const* args, size_t argcount,
-               PyObject *kwnames)
-{
-#ifndef NDEBUG
-    _PyStackChunk *chunk = tstate->datastack_chunk;
-    PyObject **top = tstate->datastack_top;
-    PyObject **limit = tstate->datastack_limit;
-#endif
-    size_t total_args = argcount;
-    if (kwnames) {
-        total_args += PyTuple_GET_SIZE(kwnames);
-    }
-    PyValue stack_array[8] = {0};
-    PyValue *arguments;
-    if (total_args <= 8) {
-        arguments = stack_array;
-    }
-    else {
-        arguments = PyMem_Malloc(sizeof(PyValue) * total_args);
-        if (arguments == NULL) {
-            return PyErr_NoMemory();
-        }
-    }
-    /* The constructor consumes func, locals and every argument owner. */
-    Py_XINCREF(locals);
-    for (size_t i = 0; i < argcount; i++) {
-        arguments[i] = PyValue_XDUP(PyValue_FromObjectBorrow(args[i]));
-    }
-    if (kwnames) {
-        Py_ssize_t kwcount = PyTuple_GET_SIZE(kwnames);
-        for (Py_ssize_t i = 0; i < kwcount; i++) {
-            arguments[i+argcount] = PyValue_XDUP(PyValue_FromObjectBorrow(args[i+argcount]));
-        }
-    }
-    PyCodeObject *code = (PyCodeObject *)Py_NewRef(func->func_code);
-    _PyBound bound = eval_frame_push_and_init_code(
-        tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
-        arguments, argcount, kwnames, NULL, code);
-    Py_DECREF(code);
-    if (total_args > 8) {
-        PyMem_Free(arguments);
-    }
-    if (bound.gen != NULL) {
-        return (PyObject *)bound.gen;
-    }
-    _PyInterpreterFrame *frame = bound.frame;
-    if (frame == NULL) {
-        return NULL;
-    }
-    EVAL_CALL_STAT_INC(EVAL_CALL_VECTOR);
-    /* The evaluator consumes the frame, as upstream's hooks must. */
-    PyObject *result = _PyEval_EvalFrame(tstate, frame, 0);
-#ifndef NDEBUG
-    /* The first root chunk is retained even after its initial frame exits. */
-    assert(chunk == NULL || tstate->datastack_chunk == chunk);
-    assert(chunk == NULL || tstate->datastack_top == top);
-    assert(chunk == NULL || tstate->datastack_limit == limit);
-#endif
-    return result;
-}
-
 /* Whether a call of code with nargs positional arguments and no keywords
  * binds each argument to its own local: no *args, **kwargs, keyword-only
  * parameter or default to fill. */
@@ -5270,15 +5206,27 @@ code_binds_exactly(PyCodeObject *code, Py_ssize_t nargs)
            !(code->co_flags & (CO_VARARGS | CO_VARKEYWORDS));
 }
 
-/* The entry of every native caller of a Python function that holds its
- * arguments as a window of borrowed words (the value vectorcall of a
- * function, the slot dunders, the method calls): it pushes the frame, binds
- * the arguments and runs it.  A call that binds exactly dups each argument
- * into its local; any other gathers owners for the general binder.  The
- * frame is current for the evaluator, which consumes it. */
-Py_NO_INLINE PyValue
-_PyEval_VectorValue(PyThreadState *tstate, PyFunctionObject *func,
-                     const PyValue *args, size_t nargsf, PyObject *kwnames)
+/* Argument i of a call as a borrowed word: the window word, or the word of
+ * the object of an object vector. */
+static inline Py_ALWAYS_INLINE PyValueBorrow
+vector_arg(const void *args, Py_ssize_t i, int objects)
+{
+    if (objects) {
+        return PyValue_FromObjectBorrow(((PyObject *const *)args)[i]);
+    }
+    return PyValue_Borrow(((const PyValue *)args)[i]);
+}
+
+/* The entry of every native caller of a Python function: it pushes the
+ * frame, binds the arguments and runs it.  The arguments are the window of
+ * words that value code holds, or the vector of objects that the object API
+ * holds (objects is a constant of each caller).  A call that binds exactly
+ * dups each argument into its local; any other gathers owners for the
+ * general binder.  locals is a new reference, or NULL, that the frame
+ * consumes.  The frame is current for the evaluator, which consumes it. */
+static inline Py_ALWAYS_INLINE PyValue
+eval_vector(PyThreadState *tstate, PyFunctionObject *func, PyObject *locals,
+            const void *args, int objects, size_t nargsf, PyObject *kwnames)
 {
 #ifndef NDEBUG
     _PyStackChunk *chunk = tstate->datastack_chunk;
@@ -5288,7 +5236,6 @@ _PyEval_VectorValue(PyThreadState *tstate, PyFunctionObject *func,
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     assert(nargs >= 0);
     assert(nargs == 0 || args != NULL);
-    EVAL_CALL_STAT_INC(EVAL_CALL_FUNCTION_VECTORCALL);
     PyCodeObject *code = (PyCodeObject *)func->func_code;
     _PyInterpreterFrame *frame;
     /* A generator function's call creates its generator, not a frame to
@@ -5300,20 +5247,20 @@ _PyEval_VectorValue(PyThreadState *tstate, PyFunctionObject *func,
          * the frame holds a count of it. */
         CALL_STAT_INC(frames_pushed);
         if (_PyCode_GetExec(code) == NULL) {
+            Py_XDECREF(locals);
             return PyValue_NULL;
         }
         frame = _PyThreadState_PushFrame(tstate, code->co_framesize);
         if (frame == NULL) {
+            Py_XDECREF(locals);
             _PyErr_NoMemory(tstate);
             return PyValue_NULL;
         }
-        PyObject *locals = code->co_flags & CO_OPTIMIZED ? NULL
-            : Py_NewRef(func->func_globals);
         _PyFrame_Initialize(tstate, frame,
                             PyValue_DUP(PyValue_FromObjectBorrow(func)),
                             locals, code, frame->base, NULL);
         for (Py_ssize_t i = 0; i < nargs; i++) {
-            frame->base[i] = PyValue_DUP(args[i]);
+            frame->base[i] = PyValue_DUP(vector_arg(args, i, objects));
         }
     }
     else {
@@ -5323,18 +5270,17 @@ _PyEval_VectorValue(PyThreadState *tstate, PyFunctionObject *func,
         if (total > (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
             owners = PyMem_Malloc(sizeof(PyValue) * (size_t)total);
             if (owners == NULL) {
+                Py_XDECREF(locals);
                 _PyErr_NoMemory(tstate);
                 return PyValue_NULL;
             }
         }
         for (Py_ssize_t i = 0; i < total; i++) {
-            owners[i] = PyValue_DUP(args[i]);
+            owners[i] = PyValue_DUP(vector_arg(args, i, objects));
         }
         /* The code is pinned across the binding, which the function's mutable
          * code could outlive. */
         Py_INCREF(code);
-        PyObject *locals = code->co_flags & CO_OPTIMIZED ? NULL
-            : Py_NewRef(func->func_globals);
         _PyBound bound = eval_frame_push_and_init_code(
             tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
             owners, nargs, kwnames, NULL, code);
@@ -5359,6 +5305,57 @@ _PyEval_VectorValue(PyThreadState *tstate, PyFunctionObject *func,
     assert(chunk == NULL || tstate->datastack_limit == limit);
 #endif
     return result;
+}
+
+static inline Py_ALWAYS_INLINE PyObject *
+function_locals(PyFunctionObject *func)
+{
+    return ((PyCodeObject *)func->func_code)->co_flags & CO_OPTIMIZED ? NULL
+        : Py_NewRef(func->func_globals);
+}
+
+/* The value vectorcall of a Python function (func_value_vectorcall). */
+Py_NO_INLINE PyValue
+_PyEval_VectorValue(PyThreadState *tstate, PyObject *func,
+                    const PyValue *args, size_t nargsf, PyObject *kwnames)
+{
+    EVAL_CALL_STAT_INC(EVAL_CALL_FUNCTION_VECTORCALL);
+    PyFunctionObject *function = (PyFunctionObject *)func;
+    return eval_vector(tstate, function, function_locals(function), args, 0,
+                       nargsf, kwnames);
+}
+
+/* The object vectorcall of a Python function.  A function whose vectorcall
+ * was replaced (PyFunction_SetVectorcall()) has no value form: an extension
+ * that cached this entry before the replacement reaches the new one. */
+Py_VALUE_ENTRY PyObject *
+_PyFunction_Vectorcall(PyObject *func, PyObject *const *stack, size_t nargsf,
+                       PyObject *kwnames)
+{
+    PyFunctionObject *function = (PyFunctionObject *)func;
+    assert((function->vectorcall == _PyFunction_Vectorcall)
+           == (function->func_value_vectorcall != NULL));
+    if (function->func_value_vectorcall == NULL) {
+        return function->vectorcall(func, stack, nargsf, kwnames);
+    }
+    EVAL_CALL_STAT_INC(EVAL_CALL_FUNCTION_VECTORCALL);
+    PyValue result = eval_vector(_PyThreadState_GET(), function,
+                                 function_locals(function), stack, 1, nargsf,
+                                 kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
+}
+
+/* The entry of code that runs with its own locals (a module or class body,
+ * exec): its arguments are objects. */
+Py_NO_INLINE PyObject *
+_PyEval_Vector(PyThreadState *tstate, PyFunctionObject *func,
+               PyObject *locals,
+               PyObject* const* args, size_t argcount,
+               PyObject *kwnames)
+{
+    PyValue result = eval_vector(tstate, func, Py_XNewRef(locals), args, 1,
+                                 argcount, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 /* Legacy API */

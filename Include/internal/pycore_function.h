@@ -19,12 +19,6 @@ PyAPI_FUNC(PyObject *) _PyFunction_Vectorcall(
     size_t nargsf,
     PyObject *kwnames);
 
-/* The value vectorcall of a Python function: DUPs the window into a C
-   array, pushes a frame and runs it with _PyEval_EvalFrameValue(). */
-extern PyValue _PyFunction_ValueVectorcall(
-    PyThreadState *tstate, PyObject *func,
-    const PyValue *args, size_t nargsf, PyObject *kwnames);
-
 
 #define FUNC_VERSION_UNSET 0
 #define FUNC_VERSION_CLEARED 1

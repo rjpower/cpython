@@ -849,7 +849,8 @@ _buffered_raw_seek(buffered *self, Py_off_t target, int whence)
     _PyValue_WindowPut(&stack[0], _PyValue_FromObjectKnown(self->raw));
     _PyValue_WindowPut(&stack[1], pos);
     _PyValue_WindowPut(&stack[2], PyValue_FromInt64(whence));
-    PyValue res = _PyValue_VectorcallMethod(&_Py_ID(seek), stack, 3, NULL);
+    PyValue res = _PyValue_VectorcallMethod(_PyThreadState_GET(), &_Py_ID(seek),
+                                         stack, 3, NULL);
     PyValue_CLOSE(pos);
     if (PyValue_IsNull(res))
         return -1;

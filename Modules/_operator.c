@@ -1698,14 +1698,14 @@ methodcaller_value_vectorcall(PyThreadState *tstate, PyObject *op,
         }
         else {
             result = _PyValue_VectorcallMethod(
-                mc->name, window, npos | PY_VECTORCALL_ARGUMENTS_OFFSET,
+                _PyThreadState_GET(), mc->name, window, npos | PY_VECTORCALL_ARGUMENTS_OFFSET,
                 call_kwnames);
             _PyValue_StackUnpackDict_Free(window, npos, call_kwnames);
         }
     }
     else {
         result = _PyValue_VectorcallMethod(
-            mc->name, callargs,
+            _PyThreadState_GET(), mc->name, callargs,
             npos | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
     }
     for (Py_ssize_t i = 0; i < npos; i++) {

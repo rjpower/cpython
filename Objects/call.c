@@ -345,73 +345,17 @@ PyObject_CallOneArg(PyObject *func, PyObject *arg)
 
 /* --- PyFunction call functions ---------------------------------- */
 
-PyValue
-_PyFunction_ValueVectorcall(PyThreadState *tstate, PyObject *func,
-                            const PyValue *args, size_t nargsf,
-                            PyObject *kwnames)
+/* The object form of a value call (D8): the object vector becomes a
+   call-scratch window with a reserved slot before it (an exact int or float
+   inline, every other object its borrowed word: no box), call runs on the
+   window with the offset flag, and an inline result is boxed on the way out
+   (kind THUNK). callee is the first argument of call. Core code never uses
+   this; the object call API and extensions do. */
+static inline Py_ALWAYS_INLINE PyObject *
+call_with_window(PyThreadState *tstate, _Py_vectorcallvaluefunc call,
+                 PyObject *callee, PyObject *const *args, size_t nargsf,
+                 PyObject *kwnames)
 {
-    assert(PyFunction_Check(func));
-    return _PyEval_VectorValue(tstate, (PyFunctionObject *)func, args,
-                               nargsf, kwnames);
-}
-
-/* The object vectorcall of a core callable with a value vectorcall (D8):
-   the object vector becomes a call-scratch window with a reserved slot
-   before it (an exact int or float inline, every other object its borrowed
-   word: no box), the instance's value vectorcall runs with the offset
-   flag, and an inline result is boxed on the way out (kind THUNK). Core
-   code never calls a thunk; the object call API and extensions do. */
-/* The thunk boxes for the caller of the exported wrapper, so the wrapper is
-   the entry and the body is inlined into it. */
-#ifdef Py_STATS
-#  define _PyValue_THUNK_INLINE static inline Py_ALWAYS_INLINE
-#else
-#  define _PyValue_THUNK_INLINE static inline
-#endif
-
-#ifdef Py_DEBUG
-void
-_PyValue_CheckInstanceInvariant(PyObject *callable)
-{
-    if (!PyFunction_Check(callable)) {
-        return;
-    }
-    PyFunctionObject *func = (PyFunctionObject *)callable;
-    assert((func->vectorcall == _PyFunction_Vectorcall)
-           == (func->func_value_vectorcall != NULL));
-}
-#endif
-
-_PyValue_THUNK_INLINE PyObject *
-value_vectorcall_thunk(PyObject *callable, PyObject *const *args,
-                       size_t nargsf, PyObject *kwnames)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyTypeObject *tp = Py_TYPE(callable);
-    _PyValue_ASSERT_INSTANCE(callable);
-    _Py_vectorcallvaluefunc f = NULL;
-    if (tp->tp_value_vectorcall_offset != 0) {
-        memcpy(&f, (char *)callable + tp->tp_value_vectorcall_offset,
-               sizeof(f));
-    }
-    if (f == NULL) {
-        /* An extension cached the thunk before PyFunction_SetVectorcall()
-           replaced the value form (R1): call the object field. */
-        vectorcallfunc of = NULL;
-        if (tp->tp_vectorcall_offset > 0) {
-            memcpy(&of, (char *)callable + tp->tp_vectorcall_offset,
-                   sizeof(of));
-        }
-        if (of == NULL || of == _PyFunction_Vectorcall
-            || of == _PyValue_VectorcallThunk)
-        {
-            _PyErr_Format(tstate, PyExc_SystemError,
-                          "'%.200s' object has no value vectorcall",
-                          tp->tp_name);
-            return NULL;
-        }
-        return of(callable, args, nargsf, kwnames);
-    }
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     Py_ssize_t total = nargs + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
     PyValue small[_PY_FASTCALL_SMALL_STACK + 1];
@@ -429,8 +373,8 @@ value_vectorcall_thunk(PyObject *callable, PyObject *const *args,
     }
     buf[0] = PyValue_NULL;
     _PyValue_WindowFromObjects(buf + 1, args, total);
-    PyValue res = f(tstate, callable, buf + 1,
-                    nargs | PY_VECTORCALL_ARGUMENTS_OFFSET, kwnames);
+    PyValue res = call(tstate, callee, buf + 1,
+                       nargs | PY_VECTORCALL_ARGUMENTS_OFFSET, kwnames);
     _PyValue_ASSERT_RESULT(tstate, res);
     if (buf != small) {
         PyMem_Free(buf);
@@ -438,18 +382,34 @@ value_vectorcall_thunk(PyObject *callable, PyObject *const *args,
     return _PyValue_THUNK_EXIT(res, BOX_SITE_CALL);
 }
 
-#define _Py_VALUE_VECTORCALL_THUNK(NAME) \
-    Py_VALUE_ENTRY PyObject * \
-    NAME(PyObject *callable, PyObject *const *args, size_t nargsf, \
-         PyObject *kwnames) \
-    { \
-        return value_vectorcall_thunk(callable, args, nargsf, kwnames); \
+#ifdef Py_DEBUG
+void
+_PyValue_CheckInstanceInvariant(PyObject *callable)
+{
+    if (!PyFunction_Check(callable)) {
+        return;
     }
+    PyFunctionObject *func = (PyFunctionObject *)callable;
+    assert((func->vectorcall == _PyFunction_Vectorcall)
+           == (func->func_value_vectorcall != NULL));
+}
+#endif
 
-/* The exported name stays: the interpreter's guard and
-   PyFunction_SetVectorcall() compare against it. */
-_Py_VALUE_VECTORCALL_THUNK(_PyFunction_Vectorcall)
-_Py_VALUE_VECTORCALL_THUNK(_PyValue_VectorcallThunk)
+/* The object vectorcall of a core callable with a value vectorcall; a Python
+   function has its own (Python/ceval.c). */
+Py_VALUE_ENTRY PyObject *
+_PyValue_VectorcallThunk(PyObject *callable, PyObject *const *args,
+                         size_t nargsf, PyObject *kwnames)
+{
+    PyTypeObject *tp = Py_TYPE(callable);
+    _PyValue_ASSERT_INSTANCE(callable);
+    assert(tp->tp_value_vectorcall_offset != 0);
+    _Py_vectorcallvaluefunc f;
+    memcpy(&f, (char *)callable + tp->tp_value_vectorcall_offset, sizeof(f));
+    assert(f != NULL);
+    return call_with_window(_PyThreadState_GET(), f, callable, args, nargsf,
+                            kwnames);
+}
 
 /* --- More complex call functions -------------------------------- */
 
@@ -972,67 +932,27 @@ _PyObject_VectorcallPrepend(PyThreadState *tstate, PyObject *callable,
     return result;
 }
 
+/* The method call by name of the object API: the value form over a window of
+   the objects. */
 PyObject *
 PyObject_VectorcallMethod(PyObject *name, PyObject *const *args,
                            size_t nargsf, PyObject *kwnames)
 {
     assert(name != NULL && args != NULL && PyVectorcall_NARGS(nargsf) >= 1);
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *boxes[4];
-    _PyValueTemps temps = {boxes, 0, 4};
-    PyObject *result = NULL;
-    _PyCValue self, method;
-    _PyThreadState_PushCValue(tstate, &self);
-    _PyThreadState_PushCValue(tstate, &method);
-    _PyStatusValue found = _PyValue_GetMethod(PyValue_FromObjectBorrow(args[0]), name);
-    if (found.status < 0) {
-        goto done;
-    }
-    method.ref = found.value;
-    if (found.status == 1) {
-        self.ref = PyValue_DUP(PyValue_FromObjectBorrow(args[0]));
-    }
-    PyObject *callable = _PyValueTemps_ObjectAt(&temps, method.ref, BOX_SITE_CALL);
-    if (callable == NULL) {
-        goto done;
-    }
-    PyObject *receiver = NULL;
-    if (!PyValue_IsNull(self.ref)) {
-        receiver = _PyValueTemps_ObjectAt(&temps, self.ref, BOX_SITE_CALL);
-        if (receiver == NULL) {
-            goto done;
-        }
-    }
-    EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_METHOD, callable);
-    if (receiver == NULL) {
-        result = _PyObject_VectorcallTstate(tstate, callable, args + 1, nargsf - 1, kwnames);
-    }
-    else if (receiver == args[0]) {
-        result = _PyObject_VectorcallTstate(tstate, callable, args,
-                                           nargsf & ~PY_VECTORCALL_ARGUMENTS_OFFSET, kwnames);
-    }
-    else {
-        result = _PyObject_VectorcallPrepend(tstate, callable, receiver, args + 1,
-                                            nargsf - 1, kwnames);
-    }
-done:
-    _PyThreadState_PopCValue(tstate, &method);
-    _PyThreadState_PopCValue(tstate, &self);
-    _PyValueTemps_Close(&temps);
-    return result;
+    return call_with_window(_PyThreadState_GET(), _PyValue_VectorcallMethod,
+                            name, args, nargsf, kwnames);
 }
-
 
 /* The value form of PyObject_VectorcallMethod(): args is a window of words
    that the caller keeps, args[0] the receiver and the rest the arguments, so
    an inline operand reaches the method without a box. With the offset flag,
    args[-1] may be used for a bound callee. The result is owned. */
 PyValue
-_PyValue_VectorcallMethod(PyObject *name, const PyValue *args, size_t nargsf,
+_PyValue_VectorcallMethod(PyThreadState *tstate, PyObject *name,
+                          const PyValue *args, size_t nargsf,
                           PyObject *kwnames)
 {
     assert(name != NULL && args != NULL && PyVectorcall_NARGS(nargsf) >= 1);
-    PyThreadState *tstate = _PyThreadState_GET();
     PyValue result = PyValue_NULL;
     _PyCValue method;
     _PyThreadState_PushCValue(tstate, &method);
@@ -1065,7 +985,8 @@ PyValue
 {
     PyValue stack[1];
     _PyValue_WindowPut(&stack[0], self);
-    return _PyValue_VectorcallMethod(name, stack, 1, NULL);
+    return _PyValue_VectorcallMethod(_PyThreadState_GET(), name, stack, 1,
+                                     NULL);
 }
 
 PyValue
@@ -1075,7 +996,8 @@ PyValue
     PyValue stack[2];
     _PyValue_WindowPut(&stack[0], self);
     _PyValue_WindowPut(&stack[1], arg);
-    return _PyValue_VectorcallMethod(name, stack, 2, NULL);
+    return _PyValue_VectorcallMethod(_PyThreadState_GET(), name, stack, 2,
+                                     NULL);
 }
 
 

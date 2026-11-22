@@ -179,7 +179,7 @@ _PyEval_Vector(PyThreadState *tstate,
  * given: run it with _PyEval_EvalFrameDefault() or retire it with
  * _PyEval_FrameClearAndPop(). */
 PyAPI_FUNC(PyValue) _PyEval_VectorValue(PyThreadState *tstate,
-                                       PyFunctionObject *func,
+                                       PyObject *func,
                                        const PyValue *args, size_t nargsf,
                                        PyObject *kwnames);
 

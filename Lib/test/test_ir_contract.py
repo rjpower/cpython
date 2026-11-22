@@ -53,9 +53,9 @@ FEEDBACK = {
     "STORE_ATTR": ("ATTR", 48),
     "LOAD_SUPER_ATTR": ("ATTR", 48),
     "LOAD_GLOBAL": ("GLOBAL", 32),
-    "CALL": ("CALL", 32),
-    "CALL_KW": ("CALL", 32),
-    "CALL_FUNCTION_EX": ("CALL", 32),
+    "CALL": ("CALL", 40),
+    "CALL_KW": ("CALL", 40),
+    "CALL_FUNCTION_EX": ("CALL", 40),
 }
 # Branches whose entries keep only the taken history
 NOT_SPECIALIZING = {"POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE"}

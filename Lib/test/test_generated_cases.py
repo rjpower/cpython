@@ -656,7 +656,7 @@ class TestIRCases(unittest.TestCase):
         # The guarded call is one helper, which binds the known function from
         # the feedback entry and the operands, or runs the call generically
         body = self.handler(output, "CALL_PY_GENERAL")
-        self.assertIn("call_bind_positional(tstate, frame, this_instr, IR_SLOT(IR_B(ir_word)), PyValue_NULL)", body)
+        self.assertIn("call_bind_positional(tstate, frame, this_instr, IR_SLOT(IR_B(ir_word)), PyValue_NULL, &fb->plan)", body)
         self.assertIn("call_run_vector(", body)
         self.assertIn("if (call_result.status < 0)", body)
         other = self.handler(output, "CALL_BOUND_METHOD_GENERAL")
@@ -702,12 +702,12 @@ class TestIRCases(unittest.TestCase):
 
         output = generate(source)
         body = self.handler(output, "CALL_KW_PY")
-        self.assertIn("call_bind_keywords(tstate, frame, this_instr, IR_SLOT(IR_B(ir_word)), PyValue_NULL, fb)", body)
+        self.assertIn("call_bind_positional(tstate, frame, this_instr, IR_SLOT(IR_B(ir_word)), PyValue_NULL, &fb->plan)", body)
         self.assertIn("call_run_keywords(", body)
         self.assertIn("if (call_result.status < 0)", body)
         for name in ("CALL_KW_BOUND_METHOD", "INSTRUMENTED_CALL_KW"):
             with self.subTest(name=name):
-                self.assertNotIn("call_bind_keywords(", self.handler(output, name))
+                self.assertNotIn("call_bind_positional(", self.handler(output, name))
 
         changes = (
             ("_CHECK_PEP_523 +\n            _CHECK_FUNCTION_VERSION_KW +",

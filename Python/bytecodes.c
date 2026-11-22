@@ -5203,13 +5203,13 @@ dummy_func(
             IR_INVOKE_CALL();
         }
 
-        specializing op(_SPECIALIZE_CALL_FUNCTION_EX, (func, unused, unused, unused -- func, unused, unused, unused)) {
+        specializing op(_SPECIALIZE_CALL_FUNCTION_EX, (func, unused, callargs, unused -- func, unused, callargs, unused)) {
         #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 /* As in _SPECIALIZE_CALL */
                 IR_BEGIN_CALL_EFFECTS();
-                _Py_Specialize_CallFunctionEx(func, this_instr);
+                _Py_Specialize_CallFunctionEx(func, callargs, this_instr);
                 IR_REFRESH_CALL();
                 DISPATCH_SAME_OPARG();
             }

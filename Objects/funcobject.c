@@ -1,6 +1,7 @@
 /* Function object implementation */
 
 #include "Python.h"
+#include "pycore_ceval.h"         // _PyEval_VectorValue()
 #include "pycore_classobject.h"   // _PyMethod_NewValue()
 #include "pycore_code.h"          // _PyCode_VerifyStateless()
 #include "pycore_dict.h"          // _Py_INCREF_DICT()
@@ -153,7 +154,7 @@ _PyFunction_FromConstructor(PyFrameConstructor *constr)
     op->func_annotate = NULL;
     op->func_typeparams = NULL;
     op->vectorcall = _PyFunction_Vectorcall;
-    op->func_value_vectorcall = (_Py_valuefunc)_PyFunction_ValueVectorcall;
+    op->func_value_vectorcall = (_Py_valuefunc)_PyEval_VectorValue;
     op->func_version = FUNC_VERSION_UNSET;
     // NOTE: functions created via FrameConstructor do not use deferred
     // reference counting because they are typically not part of cycles
@@ -242,7 +243,7 @@ PyFunction_NewWithQualName(PyObject *code, PyObject *globals, PyObject *qualname
     op->func_annotate = NULL;
     op->func_typeparams = NULL;
     op->vectorcall = _PyFunction_Vectorcall;
-    op->func_value_vectorcall = (_Py_valuefunc)_PyFunction_ValueVectorcall;
+    op->func_value_vectorcall = (_Py_valuefunc)_PyEval_VectorValue;
     op->func_version = FUNC_VERSION_UNSET;
     if (((code_obj->co_flags & CO_NESTED) == 0) ||
         (code_obj->co_flags & CO_METHOD)) {
@@ -478,7 +479,7 @@ PyFunction_SetVectorcall(PyFunctionObject *func, vectorcallfunc vectorcall)
     /* The default restores the value form; any other function is reached
        through the call adapter (value-api-m3.md, section 1.4). */
     func->func_value_vectorcall = vectorcall == _PyFunction_Vectorcall
-        ? (_Py_valuefunc)_PyFunction_ValueVectorcall : NULL;
+        ? (_Py_valuefunc)_PyEval_VectorValue : NULL;
     _PyEval_StartTheWorld(interp);
 }
 

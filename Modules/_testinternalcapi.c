@@ -1312,7 +1312,7 @@ run_staged_provider(PyObject *module, PyObject *args)
     }
     else {
         PyValue argument = PyValue_DUP(PyValue_FromObjectBorrow(payload));
-        PyValue value = _PyEval_VectorValue(tstate, (PyFunctionObject *)function,
+        PyValue value = _PyEval_VectorValue(tstate, function,
                                             &argument, 1, NULL);
         PyValue_CLOSE(argument);
         result = PyValue_IsNull(value) ? NULL : PyValue_AsObject(value);

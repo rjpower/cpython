@@ -202,7 +202,8 @@ PyAPI_FUNC(PyValue) _PyValue_CallOneArg(PyThreadState *tstate,
  * PyObject_CallMethodOneArg(). */
 // Export for built-in and shared extensions with value-native method calls.
 PyAPI_FUNC(PyValue) _PyValue_VectorcallMethod(
-    PyObject *name, const PyValue *args, size_t nargsf, PyObject *kwnames);
+    PyThreadState *tstate, PyObject *name, const PyValue *args,
+    size_t nargsf, PyObject *kwnames);
 PyAPI_FUNC(PyValue) _PyValue_CallMethodNoArgs(PyValueBorrow self,
                                               PyObject *name);
 PyAPI_FUNC(PyValue) _PyValue_CallMethodOneArg(PyValueBorrow self,

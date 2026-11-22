@@ -6,7 +6,9 @@ was selected on 2026-11-20 and is pushed as `pyjit/round82-golden`; it runs
 0.992 of upstream's time on the timed all-29 geomean. Golden73
 `44f066f5fd55947edf709bbcf9bf17c607307e4b` (`pyjit/round73-golden`, selected
 2026-11-16 with an accepted logging regression) and selected57 remain
-controls. Root coordinates
+controls. [Parity84](parity84.md) (2026-11-21) integrates profile83's clean
+changes as IP2 (`4be2eb5d31f`, `pyjit/parity84`): 0.961 of golden82's time
+and 0.953 of upstream's, awaiting selection. Root coordinates
 integration and native validation; Sol 6.1 workers implement and cross-review.
 
 Both [execution72](../../design/proposals/execution-state72.md) units are

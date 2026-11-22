@@ -11,7 +11,12 @@ Read the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md
 in that order. The [roadmap](ROADMAP.md) gives stage outcomes; [process](PROCESS.md)
 and [handoff](HANDOFF.md) explain development and runtime coordination.
 
-**Current work (2026-11-20):** [gap82](issues/register-semantics59/gap82.md),
+**Current work (2026-11-21):** [parity84](issues/register-semantics59/parity84.md)
+implemented profile83's clean changes in six units. Its integration IP2
+(`4be2eb5d31f`, `pyjit/parity84`) runs 0.961 of golden82's time and 0.953 of
+upstream's, and awaits selection.
+
+**Previous (2026-11-20):** [gap82](issues/register-semantics59/gap82.md),
 H5's remaining gap to upstream. The
 [handlers81](design/proposals/handlers81.md) rollout and
 [operand-encoded calls](design/proposals/operand-calls80.md) landed as H0–H5

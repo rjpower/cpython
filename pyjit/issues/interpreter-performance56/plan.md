@@ -16,11 +16,24 @@ branch `pyjit/parity84`; evidence `E59/parity84/`.
     borrow stack, big-int ops, `MAKE_FUNCTION`.
 - **Integration point 1:** merge, full suites, instructions for all 29,
   timed all-29 against golden82 and upstream.
-- **Phase 2:** BD, per-site bind plans and `CALL_FUNCTION_EX` with a dict, on
-  NB's entry routine.
+- **Phase 2**, two units from IP1:
+  - BD: per-site bind plans, `CALL_FUNCTION_EX` with a dict, generator
+    callees bound into the new generator;
+  - GN: one generator creation path; GL's remainder.
 - **Integration point 2:** full suites, timed all-29, the record, the report.
 
 Gates are correctness and the allocator limit (50M; golden82 is at 45.45M).
+
+Result (2026-11-21):
+- IP1 (`5a51846ce16`) runs 0.948 of golden82's time and 0.949 of upstream's.
+- IP2 (`4be2eb5d31f`) runs 0.961 and 0.953, and executes 0.962 of golden82's
+  instructions.
+- Both pass the full suites with golden82's known failures only.
+- IP2's difference from IP1 is spectral_norm's op-cache placement. Without
+  spectral_norm, IP2 runs 0.950 of golden82's time and IP1 0.948.
+
+The record lists the open items. Hot-code size (profile83 group F) is the
+structural lever for the placement sensitivity.
 
 ## Previous: golden82 and the profile83 pass
 

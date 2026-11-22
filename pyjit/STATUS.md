@@ -11,8 +11,14 @@ failures. The [profile83](issues/register-semantics59/profile83.md) analysis
 finds the remaining gap is executed work at boundaries (native-call publish,
 C entering Python, generator creation and finishing, the non-exact binder,
 membership, allocation and GC entry), each with a clean change.
-[Parity84](issues/register-semantics59/parity84.md) (approved 2026-11-21) is
-implementing them.
+[Parity84](issues/register-semantics59/parity84.md) (approved 2026-11-21)
+implemented them in six units. Its integration, IP2 (`4be2eb5d31f`,
+`pyjit/parity84`), passes the full suites with golden82's known failures
+only. It executes 0.962 of golden82's instructions and 0.995 of upstream's,
+and runs **0.961 of golden82's time and 0.953 of upstream's**. IP1, with the
+first four units, ran 0.948 and 0.949. The difference is spectral_norm, whose
+loop misses the op cache at constant instructions (20–40 times golden82's
+legacy-decoder µops): placement, not work. IP2 awaits the user's selection.
 
 The checkpoints between golden73 and gap82, each measured against golden73:
 

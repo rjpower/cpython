@@ -9,7 +9,8 @@ timed all-29 geomean and 0.961 of golden82's. Golden82 (`5194e957c5d`,
 `44f066f5fd55947edf709bbcf9bf17c607307e4b` (`pyjit/round73-golden`, selected
 2026-11-16 with an accepted logging regression) and selected57 remain
 controls. [Hot85](hot85.md) is the current wave: the remaining slow cases
-by opcode and code structure, then hot-code size. Root coordinates
+by opcode and code structure, then hot-code size. Its integration IP3
+(`2a9ea8c4f69`) runs 0.949 of golden84's time and 0.900 of upstream's. Root coordinates
 integration and native validation; Sol 6.1 workers implement and cross-review.
 
 Both [execution72](../../design/proposals/execution-state72.md) units are

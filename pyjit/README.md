@@ -11,9 +11,11 @@ Read the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md
 in that order. The [roadmap](ROADMAP.md) gives stage outcomes; [process](PROCESS.md)
 and [handoff](HANDOFF.md) explain development and runtime coordination.
 
-**Current work (2026-11-21):** [hot85](issues/register-semantics59/hot85.md)
-breaks golden84's remaining slow cases down by opcode family and code
-structure, then moves rare paths in hot handlers and helpers out of line.
+**Current work (2026-11-22):** [hot85](issues/register-semantics59/hot85.md)
+broke golden84's remaining slow cases down by opcode family and code
+structure and implemented the clean changes in seven units. Its integration
+IP3 (`2a9ea8c4f69`, `pyjit/hot85`) runs 0.949 of golden84's time and 0.900
+of upstream's and awaits the user's promotion decision.
 
 **Previous (2026-11-21):** [parity84](issues/register-semantics59/parity84.md)
 implemented profile83's clean changes in six units. Its integration IP2

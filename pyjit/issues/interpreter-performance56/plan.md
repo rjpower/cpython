@@ -27,6 +27,28 @@ Evidence `E59/hot85/`.
 
 Gates are correctness and the allocator limit (50M; golden84 is at 44.84M).
 
+Phase B1 is integrated as IP3 (`2a9ea8c4f69`): seven units, with RT not
+merged. It runs 0.949 of golden84's time and 0.900 of upstream's, with
+known failures only and an allocator product of 44.39M. Next, if the user
+promotes it:
+- **Phase B2**, the items B1 deferred:
+  - the C-to-Python entry;
+  - generator creation, resume and yield, which is nqueens' genexpr;
+  - int-subclass operands;
+  - `CALL_KW_PY`;
+  - the `_json`/`_pickle` ports;
+  - regcfg folding of `LOAD_FAST_BORROW` across a generic `LOAD_GLOBAL`, so
+    that more call sites qualify for `IR_F_CALL_LOCALS`;
+  - an exact-bytes exit in `richcompare_bool_same_type`.
+- **Design list:**
+  - constants as an operand class read from the exec image (RT);
+  - mimalloc retire hysteresis for one-page size classes (CP's json_loads
+    finding);
+  - the op-cache sensitivity of small hot sets (spectral_norm, nbody,
+    coroutines). Their decoder µops range from 0.03 to 1.75 of golden84's
+    across one-unit builds, and neither the hint nor the smaller handlers
+    made them robust. Any remedy must be structural, not placement tuning.
+
 ## Previous: parity84, the clean changes profile83 ranked
 
 Approved 2026-11-21. The [parity84 record](../register-semantics59/parity84.md)

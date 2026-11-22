@@ -16,12 +16,17 @@ misses the op cache at constant instructions (20–40 times golden82's
 legacy-decoder µops): placement, not work. Golden82 (`5194e957c5d`, 0.992 of
 upstream's time) is a frozen control.
 
-[Hot85](issues/register-semantics59/hot85.md) (approved 2026-11-21) is the
-current wave. Phase A breaks the remaining slow cases (deepcopy 1.181,
-deepcopy_reduce 1.126, logging_format, the xml cases, json_dumps, nqueens and
-comprehensions at 1.06–1.08) down by opcode family, native symbol and source
-construct, and measures golden84's hot code and the rare paths inside it.
-Phase B moves those rare paths out of line.
+**Candidate: hot85 IP3, 2026-11-22.** `2a9ea8c4f69` (`pyjit/hot85`) is
+golden84 plus [hot85](issues/register-semantics59/hot85.md) phase B1's
+seven units: attribute members, float operand closes, the call-operand
+protocol, dicts, `_elementtree`, the one branch hint with cold callees, and
+small unpacks and truth-slot jumps. It runs **0.949 of golden84's time and
+0.900 of upstream's** on the timed all-29 geomean and executes 0.961 of
+golden84's instructions. `ir_evaluate` shrinks from 92.1 KB to 89.0 KB. The
+full suites show known failures only. Still slower than upstream: deepcopy_reduce
+1.095, deepcopy 1.087, nqueens 1.073, pickle 1.067, comprehensions 1.046,
+json_dumps 1.016 and json_loads 1.013. spectral_norm's op-cache cliff
+persists in the integrated layout. Promotion awaits the user.
 
 The checkpoints between golden73 and gap82, each measured against golden73:
 

@@ -847,8 +847,10 @@ init_keys_object(PyDictKeysObject* dk, uint8_t log2_size, int log2_bytes, int ki
     }
 }
 
-static PyDictKeysObject*
-new_keys_object(uint8_t log2_size, bool unicode)
+/* The body is inline so that insert_to_emptydict(), whose size is a constant,
+   folds the sizes and the entry loops away. */
+static inline Py_ALWAYS_INLINE PyDictKeysObject*
+new_keys_object_inline(uint8_t log2_size, bool unicode)
 {
     Py_ssize_t usable = USABLE_FRACTION((size_t)1<<log2_size);
     size_t entry_size = unicode ? sizeof(PyDictUnicodeEntry) : sizeof(PyDictKeyEntry);
@@ -872,6 +874,12 @@ new_keys_object(uint8_t log2_size, bool unicode)
                      unicode ? DICT_KEYS_UNICODE : DICT_KEYS_GENERAL,
                      usable, entry_size);
     return dk;
+}
+
+static PyDictKeysObject*
+new_keys_object(uint8_t log2_size, bool unicode)
+{
+    return new_keys_object_inline(log2_size, unicode);
 }
 
 static void
@@ -1850,7 +1858,7 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
 // goes to the first slot of a new table of the minimum size. A watched dict
 // takes insertdict(), which notifies the watchers before it stores.
 // Consumes key and value references.
-static int
+static Py_NO_INLINE int
 insert_to_emptydict(PyDictObject *mp, PyValue key, Py_hash_t hash,
                     PyValue value)
 {
@@ -1861,7 +1869,7 @@ insert_to_emptydict(PyDictObject *mp, PyValue key, Py_hash_t hash,
         return insertdict(mp, key, hash, value);
     }
     bool unicode = value_is_exact_unicode(key);
-    PyDictKeysObject *newkeys = new_keys_object(PyDict_LOG_MINSIZE, unicode);
+    PyDictKeysObject *newkeys = new_keys_object_inline(PyDict_LOG_MINSIZE, unicode);
     if (newkeys == NULL) {
         PyValue_CLOSE(key);
         PyValue_CLOSE(value);
@@ -2553,6 +2561,18 @@ setitem_take2_lock_held_known_hash(PyDictObject *mp, PyValue key,
     return insertdict(mp, key, hash, value);
 }
 
+/* The key has no hash: report it and release both owners. */
+static _Py_COLD_FUNCTION Py_NO_INLINE int
+setitem_unhashable(PyDictObject *mp, PyValue key, PyValue value)
+{
+    if (PyValue_IsObject(key)) {
+        dict_unhashable_type((PyObject *)mp, PyValue_AsKnownObjectBorrow(key));
+    }
+    PyValue_XCLOSE(value);
+    PyValue_XCLOSE(key);
+    return -1;
+}
+
 static int
 setitem_take2_lock_held(PyDictObject *mp, PyValue key, PyValue value)
 {
@@ -2563,12 +2583,7 @@ setitem_take2_lock_held(PyDictObject *mp, PyValue key, PyValue value)
         ? hash_unicode_key(PyValue_AsKnownObjectBorrow(key))
         : _PyValue_Hash(key);
     if (hash == -1) {
-        if (PyValue_IsObject(key)) {
-            dict_unhashable_type((PyObject *)mp, PyValue_AsKnownObjectBorrow(key));
-        }
-        PyValue_XCLOSE(value);
-        PyValue_XCLOSE(key);
-        return -1;
+        return setitem_unhashable(mp, key, value);
     }
     return setitem_take2_lock_held_known_hash(mp, key, value, hash);
 }

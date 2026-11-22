@@ -4764,6 +4764,17 @@ call_bind_general(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 static Py_NO_INLINE _PyCallResult
+call_bind_simple(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 _PyInstr *head, PyValue callable, PyValue receiver,
+                 const _PyBindPlan *plan)
+{
+    return call_bind_core(tstate, frame, head, callable, receiver, plan, NULL, NULL, 1);
+}
+
+/* Both bindings are tail calls from here: with call_bind_core inlined into
+ * this function the compiler gave it a frame before the test, which cost a
+ * general plan (a callee with *args or **kwargs) the prologue and epilogue. */
+static Py_NO_INLINE _PyCallResult
 call_bind_positional(PyThreadState *tstate, _PyInterpreterFrame *frame,
                      _PyInstr *head, PyValue callable, PyValue receiver,
                      const _PyBindPlan *plan)
@@ -4771,7 +4782,7 @@ call_bind_positional(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (plan->flags & _Py_CALL_BIND_GENERAL) {
         return call_bind_general(tstate, frame, head, callable, receiver, plan);
     }
-    return call_bind_core(tstate, frame, head, callable, receiver, plan, NULL, NULL, 1);
+    return call_bind_simple(tstate, frame, head, callable, receiver, plan);
 }
 
 static Py_NO_INLINE _PyCallResult

@@ -283,12 +283,12 @@ PyUnstable_InterpreterFrame_GetCode(struct _PyInterpreterFrame *frame)
 int _Py_NO_SANITIZE_THREAD
 PyUnstable_InterpreterFrame_GetLasti(struct _PyInterpreterFrame *frame)
 {
-    return _PyInterpreterFrame_LASTI(frame);
+    return _PyFrame_InstrOffset(frame, frame->instr_ptr);
 }
 
 int _Py_NO_SANITIZE_THREAD
 PyUnstable_InterpreterFrame_GetLine(_PyInterpreterFrame *frame)
 {
-    int addr = _PyInterpreterFrame_LASTI(frame);
+    int addr = _PyFrame_InstrOffset(frame, frame->instr_ptr);
     return PyCode_Addr2Line(_PyFrame_GetCode(frame), addr);
 }

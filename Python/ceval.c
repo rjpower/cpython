@@ -2337,7 +2337,7 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
             error_clear_slots(frame, first);
             if (found.lasti) {
                 _PyFrame_WriteHome(frame, &frame->base[first],
-                    PyValue_TagIndex(_PyInterpreterFrame_LASTI(frame)));
+                    PyValue_TagIndex(_PyFrame_InstrOffset(frame, frame->instr_ptr)));
             }
             PyObject *exc = _PyErr_GetRaisedException(tstate);
             _PyFrame_WriteHome(frame, &frame->base[found.exc_slot],

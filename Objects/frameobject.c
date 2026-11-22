@@ -3466,7 +3466,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
      * and can carry another EH recipe, so logical offset equality is not this
      * proof. Keep every owner and the handled-exception link unchanged. */
     _PyInterpreterFrame *frame_at_line = self->f_frame;
-    int real_current = _PyInterpreterFrame_LASTI(frame_at_line);
+    int real_current = _PyFrame_InstrOffset(frame_at_line, frame_at_line->instr_ptr);
     _PyThreadStateImpl *line_tstate = (_PyThreadStateImpl *)PyThreadState_GET();
     RegisterStoppedState identity_phase = register_stopped_state(
         self, real_current, what_event, false, line_tstate->observed_frame);
@@ -3496,7 +3496,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
     RegisterResumeAnalysis analysis = {0};
     RegisterResumePlan plan = {0};
-    int current = _PyInterpreterFrame_LASTI(self->f_frame);
+    int current = _PyFrame_InstrOffset(self->f_frame, self->f_frame->instr_ptr);
     bool pending_call = false;
     _PyInterpreterFrame *observed =
         ((_PyThreadStateImpl *)PyThreadState_GET())->observed_frame;
@@ -4181,7 +4181,7 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
     // COPY_FREE_VARS has no quickened forms, so no need to use _PyOpcode_Deopt
     // here:
     PyCodeObject *co = _PyFrame_GetCode(frame);
-    int lasti = _PyInterpreterFrame_LASTI(frame);
+    int lasti = _PyFrame_InstrOffset(frame, frame->instr_ptr);
     if (!(lasti < 0
           && _PyCode_InstrHandler(co, 0) == COPY_FREE_VARS
           && frame->f_funcobj != NULL))
@@ -4466,7 +4466,7 @@ PyFrame_GetLasti(PyFrameObject *frame)
     int ret;
     Py_BEGIN_CRITICAL_SECTION(frame);
     assert(!_PyFrame_IsIncomplete(frame->f_frame));
-    int lasti = _PyInterpreterFrame_LASTI(frame->f_frame);
+    int lasti = _PyFrame_InstrOffset(frame->f_frame, frame->f_frame->instr_ptr);
     ret = lasti;
     Py_END_CRITICAL_SECTION();
     return ret;

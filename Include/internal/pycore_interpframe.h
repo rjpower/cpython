@@ -17,9 +17,6 @@
 extern "C" {
 #endif
 
-#define _PyInterpreterFrame_LASTI(IF) \
-    _PyFrame_InstrOffset((IF), (IF)->instr_ptr)
-
 static inline PyCodeObject *_PyFrame_GetCode(_PyInterpreterFrame *f) {
     assert(f->f_executable != NULL);
     assert(PyCode_Check(f->f_executable));

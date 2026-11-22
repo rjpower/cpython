@@ -830,8 +830,8 @@ _PyIR_UnpackItemsToWindow(_PyInterpreterFrame *frame, PyValue *window,
 /* The key and the value of a dict item, owners, go to the locals LOCALS[0]
  * and LOCALS[1], as the two stores of an unpack do. The frame owns every
  * value throughout; the old values close after both stores, the first
- * local's first. */
-static inline void
+ * local's first. A leaf function, as _PyIR_UnpackItemsToLocals is. */
+static Py_NO_INLINE void
 _PyIR_StoreItemPairToLocals(PyValue *locals, PyValue key, PyValue value)
 {
     PyValue old_key = locals[0];

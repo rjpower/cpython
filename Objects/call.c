@@ -1208,6 +1208,39 @@ PyValue
     return PyValue_NULL;
 }
 
+#define ADAPTER_SMALL_STACK 16
+
+/* The object vector of an adapter call: each word of args as the object it
+   holds, which the vector lends, or a box of the inline word (kind
+   CALL_ADAPTER), which the vector owns.  Returns -1 with the exception set
+   when a box fails, after releasing the boxes it made. */
+static inline int
+adapter_fill_vector(PyObject **vector, const PyValue *args, Py_ssize_t total,
+                    PyObject *callable, int *boxed)
+{
+    for (Py_ssize_t i = 0; i < total; i++) {
+        PyValue v = args[i];
+        assert(PyValue_IsLanguageValue(v));
+        _PyValue_RecheckHome(v);
+        if (!PyValue_IsInline(v)) {
+            vector[i] = PyValue_AsKnownObjectBorrow(v);
+            continue;
+        }
+        PyObject *box = _PyValue_AsObjectFor(v, _PyBox_CALL_ADAPTER(callable));
+        if (box == NULL) {
+            while (--i >= 0) {
+                if (PyValue_IsInline(args[i])) {
+                    Py_DECREF(vector[i]);
+                }
+            }
+            return -1;
+        }
+        vector[i] = box;
+        *boxed = 1;
+    }
+    return 0;
+}
+
 PyValue
 _PyValue_CallAdapter(PyThreadState *tstate, PyObject *callable,
                      vectorcallfunc of, const PyValue *args, size_t nargsf,
@@ -1215,18 +1248,39 @@ _PyValue_CallAdapter(PyThreadState *tstate, PyObject *callable,
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     Py_ssize_t total = nargs + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
-    /* The vector lends each object word and boxes each inline one on the
-       borrow stack (kind CALL_ADAPTER); it has its own offset slot. */
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    /* The callee may use PY_VECTORCALL_ARGUMENTS_OFFSET, so the vector has
+       its own offset slot.  It is borrowed words, which the GC does not read
+       (the frames own the objects), so it lives on the C stack. */
+    PyObject *small[ADAPTER_SMALL_STACK + 1];
+    PyObject **slots = small;
+    if (total >= (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
+        slots = PyMem_Malloc((size_t)(total + 1) * sizeof(PyObject *));
+        if (slots == NULL) {
+            PyErr_NoMemory();
+            return PyValue_NULL;
+        }
+    }
+    PyObject **vector = slots + 1;
+    int boxed = 0;
     PyObject *res = NULL;
-    PyObject **vector = _PyBorrow_ValueVectorFor(args, total,
-                                                  _PyBox_CALL_ADAPTER(callable));
-    if (vector != NULL) {
+    if (adapter_fill_vector(vector, args, total, callable, &boxed) == 0) {
+        slots[0] = NULL;
+        _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
         res = of(callable, vector, nargs | PY_VECTORCALL_ARGUMENTS_OFFSET,
                  kwnames);
+        _PyBorrowScope_Exit(tstate, mark);
+        if (boxed) {
+            for (Py_ssize_t i = 0; i < total; i++) {
+                if (PyValue_IsInline(args[i])) {
+                    Py_DECREF(vector[i]);
+                }
+            }
+        }
+        res = _Py_CheckFunctionResult(tstate, callable, res, NULL);
     }
-    _PyBorrowScope_Exit(tstate, mark);
-    res = _Py_CheckFunctionResult(tstate, callable, res, NULL);
+    if (slots != small) {
+        PyMem_Free(slots);
+    }
     return _PyValue_FromObjectResult(res);
 }
 

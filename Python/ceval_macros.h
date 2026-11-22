@@ -455,19 +455,6 @@ static void dtrace_function_return(_PyInterpreterFrame *);
     } while (0);
 #endif
 
-#ifdef ENABLE_SPECIALIZATION
-/* Multiple threads may execute these concurrently if thread-local bytecode is
- * disabled and they all execute the main copy of the bytecode. Specialization
- * is disabled in that case so the value is unused, but the RMW cycle should be
- * free of data races.
- */
-#define RECORD_BRANCH_TAKEN(bitset, flag) \
-    FT_ATOMIC_STORE_UINT16_RELAXED(       \
-        bitset, (FT_ATOMIC_LOAD_UINT16_RELAXED(bitset) << 1) | (flag))
-#else
-#define RECORD_BRANCH_TAKEN(bitset, flag)
-#endif
-
 /* The sense and the distance of a fused compare-and-jump, from the arg of
  * its entry and its word (Include/internal/pycore_ir.h) */
 #define IR_FUSED_IF_FALSE() \

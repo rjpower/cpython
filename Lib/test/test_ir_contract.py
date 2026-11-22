@@ -36,8 +36,6 @@ FIELD_LOCS = (_opcode.IR_LOC_A, _opcode.IR_LOC_B, _opcode.IR_LOC_C,
 # The feedback entry of each family (Include/internal/pycore_feedback.h):
 # its kind and size in bytes
 FEEDBACK = {
-    "POP_JUMP_IF_NONE": ("BRANCH", 16),
-    "POP_JUMP_IF_NOT_NONE": ("BRANCH", 16),
     "POP_JUMP_IF_FALSE": ("BRANCH", 24),
     "POP_JUMP_IF_TRUE": ("BRANCH", 24),
     "TO_BOOL": ("UNARY", 24),
@@ -57,8 +55,6 @@ FEEDBACK = {
     "CALL_KW": ("CALL", 40),
     "CALL_FUNCTION_EX": ("CALL", 40),
 }
-# Branches whose entries keep only the taken history
-NOT_SPECIALIZING = {"POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE"}
 
 OPARGS = (0, 1, 2, 3, 7, 0x102)
 
@@ -384,7 +380,7 @@ class ContractTests(unittest.TestCase):
             {opcode.opname[op] for op in range(opcode.MIN_INSTRUMENTED_OPCODE)
              if CONTRACT[op] is not None
              and CONTRACT[op].effects & _opcode.IR_SPECIALIZES},
-            set(FEEDBACK) - NOT_SPECIALIZING)
+            set(FEEDBACK))
 
     def test_feedback_tables(self):
         # The assembler writes each entry's kind into the code object's

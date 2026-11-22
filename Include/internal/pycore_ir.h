@@ -291,7 +291,7 @@ enum {
 
 /* The arg of the entry of a fused word: the operation of the compare (its
  * oparg, or the invert bit of CONTAINS_OP and IS_OP) and the sense of the
- * jump.  The first call seeds the taken history of its entry. */
+ * jump. */
 #define IR_FUSED_OP_MASK    0xFF
 #define _PyIR_FUSED_IF_FALSE 0x100  // jump where the condition is false
 #define _PyIR_DISCARDS      0x800   // dst may be IR_NO_DST: the handler

@@ -2066,12 +2066,6 @@ dummy_func(
             ERROR_IF(PyValue_IsNull(res[0]));
         }
 
-        op(_PUSH_NULL_CONDITIONAL, ( -- null[oparg & 1])) {
-            if (oparg & 1) {
-                IR_WRITE_OUTPUT(null, 0, PyValue_NULL);
-            }
-        }
-
         // The NULL of a call's window needs no write: the slot is NULL by the
         // NULL invariant, and the assembler clears the bit in the word
         // (register-ir.md G4).  The stack model keeps the output.
@@ -2085,9 +2079,13 @@ dummy_func(
             _LOAD_GLOBAL +
             _NULL_SLOT_CONDITIONAL;
 
+        // Globals are always a dict, and a keys object has one owner and a
+        // version that is never reused, so a match on the keys version
+        // names the dict the specialiser saw.  Builtins can be any object,
+        // so _LOAD_GLOBAL_BUILTINS still checks the type before it reads
+        // the keys.
         op(_GUARD_GLOBALS_VERSION, (globals_version/1 --)) {
             PyDictObject *dict = (PyDictObject *)GLOBALS();
-            DEOPT_IF(!PyDict_CheckExact(dict));
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
             DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version);
             assert(keys->dk_kind == DICT_KEYS_UNICODE);
@@ -2096,7 +2094,6 @@ dummy_func(
         op(_LOAD_GLOBAL_MODULE, (globals_version/1, unused/1, index/1 -- res))
         {
             PyDictObject *dict = (PyDictObject *)GLOBALS();
-            DEOPT_IF(!PyDict_CheckExact(dict));
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
             DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version);
             assert(keys->dk_kind == DICT_KEYS_UNICODE);
@@ -2494,7 +2491,7 @@ dummy_func(
         macro(INSTRUMENTED_LOAD_SUPER_ATTR) =
             unused/1 +
             _LOAD_SUPER_ATTR +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         family(LOAD_SUPER_ATTR, INLINE_CACHE_ENTRIES_LOAD_SUPER_ATTR) = {
             LOAD_SUPER_ATTR_ATTR,
@@ -2559,7 +2556,7 @@ dummy_func(
         macro(LOAD_SUPER_ATTR) =
             unused/1 + _SPECIALIZE_LOAD_SUPER_ATTR +
             _LOAD_SUPER_ATTR +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         inline_ok inst(LOAD_SUPER_ATTR_ATTR, (unused/1, global_super_st, class_st, self_st -- attr_st)) {
             EXIT_IF(!PyValue_IsObject(global_super_st) || !PyValue_IsObject(class_st));
@@ -2721,7 +2718,7 @@ dummy_func(
             _CHECK_MANAGED_OBJECT_HAS_VALUES +
             _LOAD_ATTR_INSTANCE_VALUE +
             unused/5 +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         /* The shape handlers (Py_SHAPES, see pycore_dict.h).  They follow a
          * type version guard, which proves that the owner has inline values
@@ -2748,12 +2745,14 @@ dummy_func(
             _GUARD_SHAPE_READ +
             _LOAD_ATTR_SHAPE +
             unused/5 +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
-        inline_ok op(_LOAD_ATTR_MODULE, (dict_version/2, index/1, owner -- attr)) {
-            EXIT_IF(!PyValue_IsObject(owner));
+        op(_GUARD_MODULE_EXACT, (owner -- owner)) {
+            EXIT_IF(!PyModule_CheckExact(PyValue_AsKnownObjectBorrow(owner)));
+        }
+
+        op(_LOAD_ATTR_MODULE, (dict_version/2, index/1, owner -- attr)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            EXIT_IF(!PyModule_CheckExact(owner_o));
             PyDictObject *dict = (PyDictObject *)((PyModuleObject *)owner_o)->md_dict;
             assert(dict != NULL);
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
@@ -2770,9 +2769,10 @@ dummy_func(
 
         macro(LOAD_ATTR_MODULE) =
             unused/1 +
+            _GUARD_MODULE_EXACT +
             _LOAD_ATTR_MODULE +
             unused/5 +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         op(_LOAD_ATTR_WITH_HINT, (hint/1, owner -- attr)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
@@ -2811,7 +2811,7 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             _LOAD_ATTR_WITH_HINT +
             unused/5 +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         op(_LOAD_ATTR_SLOT, (index/1, owner -- attr)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
@@ -2830,7 +2830,7 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             _LOAD_ATTR_SLOT +  // NOTE: This action may also deopt
             unused/5 +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         /* A PyObject * field of the owner, read where LOAD_ATTR_SLOT reads a
          * value: a _Py_T_OBJECT member, or the type pointer that __class__
@@ -2852,7 +2852,7 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             _LOAD_ATTR_SLOT_POINTER +
             unused/5 +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         op(_CHECK_ATTR_CLASS, (class_version/2, owner -- owner)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
@@ -2875,14 +2875,14 @@ dummy_func(
             _CHECK_ATTR_CLASS +
             unused/2 +
             _LOAD_ATTR_CLASS +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         macro(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK) =
             unused/1 +
             _GUARD_TYPE_VERSION +
             _CHECK_ATTR_CLASS +
             _LOAD_ATTR_CLASS +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         op(_GUARD_BUILTIN_METACLASS, (owner -- owner)) {
             #ifdef Py_GIL_DISABLED
@@ -3313,16 +3313,14 @@ dummy_func(
          * one line and the target is within IR_MAX_FORWARD).  The word is
          * {lhs, rhs, fb, D}: D is the signed distance from the next word, and
          * the arg of the entry holds the operation in bits 0 to 7 (the oparg
-         * of the compare) and IR_FUSED_IF_FALSE.  The history of the jump is
-         * in the entry's taken half-word.  There is no backward form, so the
-         * handlers never poll the eval breaker.  The handlers stand for the
+         * of the compare) and IR_FUSED_IF_FALSE.  There is no backward form, so
+         * the handlers never poll the eval breaker.  The handlers stand for the
          * compare (their shadow, see ir_metadata_generator.py), and the
          * specialisations are those of the compare, in families of their own. */
         ir_only op(_JUMP_IF_COND, (cond -- )) {
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(FB_TAKEN(), flag);
             IR_REPORT_EDGE(flag);
             if (flag) {
                 JUMPBY(IR_FUSED_DISTANCE());
@@ -3333,7 +3331,6 @@ dummy_func(
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(FB_TAKEN(), flag);
             if (flag) {
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr + IR_FUSED_DISTANCE(), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
             }
@@ -3541,7 +3538,6 @@ dummy_func(
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsFalse(cond);
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
             IR_REPORT_EDGE(flag);
             if (flag) {
                 JUMPTO(oparg);
@@ -3552,7 +3548,6 @@ dummy_func(
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsTrue(cond);
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
             IR_REPORT_EDGE(flag);
             if (flag) {
                 JUMPTO(oparg);
@@ -3572,8 +3567,8 @@ dummy_func(
 
         // A conditional jump tests the truth of any value: the compiler
         // drops the TO_BOOL before it (Python/flowgraph.c), so the jumps
-        // specialise as TO_BOOL does, and their entries keep the branch
-        // history with the specialisation counter.
+        // specialise as TO_BOOL does, and their entries keep the
+        // specialisation counter.
         family(POP_JUMP_IF_FALSE, INLINE_CACHE_ENTRIES_TO_BOOL) = {
             POP_JUMP_IF_FALSE_ALWAYS_TRUE,
             POP_JUMP_IF_FALSE_BOOL,
@@ -3638,7 +3633,6 @@ dummy_func(
         // result to select.
         op(_POP_JUMP_IF_FALSE_NONE_OR_PLAIN, (value -- v)) {
             int flag = PyValue_IsNone(value);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
             IR_REPORT_EDGE(flag);
             v = value;
             DEAD(value);
@@ -3649,7 +3643,6 @@ dummy_func(
 
         op(_POP_JUMP_IF_TRUE_NONE_OR_PLAIN, (value -- v)) {
             int flag = !PyValue_IsNone(value);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
             IR_REPORT_EDGE(flag);
             v = value;
             DEAD(value);
@@ -4329,7 +4322,7 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             unused/2 +
             _LOAD_ATTR_GETSET +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         op(_CHECK_ATTR_METHOD_LAZY_DICT, (dictoffset/1, owner -- owner)) {
             char *ptr = ((char *)PyValue_AsKnownObjectBorrow(owner)) + MANAGED_DICT_OFFSET + dictoffset;
@@ -5522,7 +5515,6 @@ dummy_func(
             assert(PyValue_BoolCheck(cond));
             int jump = PyValue_IsTrue(cond);
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
             }
@@ -5535,7 +5527,6 @@ dummy_func(
             assert(PyValue_BoolCheck(cond));
             int jump = PyValue_IsFalse(cond);
             DEAD(cond);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
             }
@@ -5552,7 +5543,6 @@ dummy_func(
 
         inst(INSTRUMENTED_POP_JUMP_IF_NONE, (unused/1, value -- )) {
             int jump = PyValue_IsNone(value);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 DEAD(value);
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
@@ -5603,7 +5593,6 @@ dummy_func(
 
         inst(INSTRUMENTED_POP_JUMP_IF_NOT_NONE, (unused/1, value -- )) {
             int jump = !PyValue_IsNone(value);
-            RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 PyValue_CLOSE(value);
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);

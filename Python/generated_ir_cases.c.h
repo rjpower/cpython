@@ -890,7 +890,6 @@ ir_run_COMPARE_OP_JUMP(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPBY(IR_FUSED_DISTANCE());
@@ -1048,7 +1047,6 @@ ir_run_CONTAINS_OP_JUMP(
                 cond = b;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPBY(IR_FUSED_DISTANCE());
@@ -2310,7 +2308,6 @@ ir_run_LOAD_SUPER_ATTR(
             PyValue class_st;
             PyValue self_st;
             PyValue attr;
-            PyValue *null;
             // _SPECIALIZE_LOAD_SUPER_ATTR
             {
                 class_st = window[1];
@@ -2398,12 +2395,8 @@ ir_run_LOAD_SUPER_ATTR(
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = &window[1];
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_MOVE_TO_DST(ir_word, A, window[0]);
             PyValue_XCLOSE(ir_old);
@@ -2754,7 +2747,6 @@ ir_run_POP_JUMP_IF_FALSE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsFalse(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -2816,7 +2808,6 @@ ir_run_POP_JUMP_IF_TRUE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -8252,7 +8243,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPBY(IR_FUSED_DISTANCE());
@@ -8333,7 +8323,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPBY(IR_FUSED_DISTANCE());
@@ -8433,7 +8422,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPBY(IR_FUSED_DISTANCE());
@@ -8695,7 +8683,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = b;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPBY(IR_FUSED_DISTANCE());
@@ -8779,7 +8766,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = b;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPBY(IR_FUSED_DISTANCE());
@@ -8862,7 +8848,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = b;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPBY(IR_FUSED_DISTANCE());
@@ -9877,7 +9862,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = b;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
                 if (flag) {{
                         PyValue_XCLOSE(ir_own_B);
                         PyValue_XCLOSE(ir_own_A);
@@ -10083,7 +10067,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             PyValue class_st;
             PyValue self_st;
             PyValue attr;
-            PyValue *null;
             // _LOAD_SUPER_ATTR
             {
                 self_st = window[2];
@@ -10157,12 +10140,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = &window[1];
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_MOVE_TO_DST(ir_word, A, window[0]);
             PyValue_XCLOSE(ir_old);
@@ -10213,7 +10192,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_NONE);
-            _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -10221,7 +10199,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)ir_own_A;
             value = IR_VIEW(IR_A(ir_word));
             int jump = PyValue_IsNone(value);
-            RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
             if (jump) {
                 ir_own_A = IR_DETACH(ir_word, A, value);
                 {
@@ -10249,7 +10226,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_NOT_NONE);
-            _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -10257,7 +10233,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)ir_own_A;
             value = IR_VIEW(IR_A(ir_word));
             int jump = !PyValue_IsNone(value);
-            RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
             if (jump) {
                 ir_own_A = IR_DETACH(ir_word, A, value);
                 (void)(ir_own_A);
@@ -10502,7 +10477,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = b;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPBY(IR_FUSED_DISTANCE());
@@ -10707,7 +10681,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _CHECK_ATTR_CLASS
@@ -10741,12 +10714,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 attr = PyValue_DUP(found);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -10859,7 +10828,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_TYPE_VERSION
@@ -10904,12 +10872,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 attr = PyValue_DUP(found);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11026,7 +10990,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_TYPE_VERSION
@@ -11060,12 +11023,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 }
                 attr = found;
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11089,7 +11048,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_TYPE_VERSION
@@ -11135,12 +11093,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11352,25 +11306,27 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            // _LOAD_ATTR_MODULE
+            // _GUARD_MODULE_EXACT
             {
                 owner = IR_VIEW(IR_B(ir_word));
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                if (!PyModule_CheckExact(_PyValue_AsKnownObjectBorrowPointer(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _LOAD_ATTR_MODULE
+            {
                 uint32_t dict_version = fb->dict_version;
                 uint32_t index = fb->index;
-                if (!PyValue_IsObject(owner)) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-                if (!PyModule_CheckExact(owner_o)) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 PyDictObject *dict = (PyDictObject *)((PyModuleObject *)owner_o)->md_dict;
                 assert(dict != NULL);
                 PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
@@ -11396,15 +11352,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
-            PyValue_XCLOSE(ir_own_B);
+            _PyValue_XCLOSE_POINTER(ir_own_B);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -11627,7 +11579,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_SHAPE_READ
@@ -11660,12 +11611,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11689,7 +11636,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_SHAPE_READ
@@ -11722,12 +11668,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11750,7 +11692,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             uint32_t ir_shape_offset;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
@@ -11780,12 +11721,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11809,7 +11746,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             uint32_t ir_shape_offset;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
@@ -11839,12 +11775,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11867,7 +11799,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_TYPE_VERSION
@@ -11903,12 +11834,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11932,7 +11859,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_TYPE_VERSION
@@ -11963,12 +11889,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11992,7 +11914,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_TYPE_VERSION
@@ -12068,12 +11989,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 attr = PyValue_XDUP(found);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -12310,11 +12227,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 uint32_t globals_version = fb->globals_version;
                 PyDictObject *dict = (PyDictObject *)GLOBALS();
-                if (!PyDict_CheckExact(dict)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
                 PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
                 if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
@@ -12380,11 +12292,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 uint32_t globals_version = fb->globals_version;
                 uint32_t index = fb->index;
                 PyDictObject *dict = (PyDictObject *)GLOBALS();
-                if (!PyDict_CheckExact(dict)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
                 PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
                 if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
@@ -12766,7 +12673,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _POP_JUMP_IF_FALSE_NONE_OR_PLAIN
             {
                 int flag = PyValue_IsNone(value);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 v = value;
                 ir_own_A = IR_DETACH(ir_word, A, v);
@@ -12793,7 +12699,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_BOOL);
-            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -12817,7 +12722,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsFalse(cond);
                 ir_own_A = IR_DETACH(ir_word, A, cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -12835,7 +12739,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_INT);
-            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -12879,7 +12782,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsFalse(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -12898,7 +12800,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_LIST);
-            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow tos;
@@ -12945,7 +12846,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsFalse(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -12964,7 +12864,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_NONE);
-            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -12989,7 +12888,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsFalse(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -13057,7 +12955,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsFalse(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -13076,7 +12973,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_STR);
-            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -13120,7 +13016,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsFalse(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -13139,7 +13034,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_NONE);
-            _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -13164,7 +13058,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = b;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -13183,7 +13076,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_NOT_NONE);
-            _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -13208,7 +13100,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = b;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsFalse(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -13259,7 +13150,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             // _POP_JUMP_IF_TRUE_NONE_OR_PLAIN
             {
                 int flag = !PyValue_IsNone(value);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 v = value;
                 ir_own_A = IR_DETACH(ir_word, A, v);
@@ -13286,7 +13176,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_BOOL);
-            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -13310,7 +13199,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond);
                 ir_own_A = IR_DETACH(ir_word, A, cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -13328,7 +13216,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_INT);
-            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -13372,7 +13259,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -13391,7 +13277,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_LIST);
-            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow tos;
@@ -13438,7 +13323,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -13457,7 +13341,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_NONE);
-            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -13482,7 +13365,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -13550,7 +13432,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -13569,7 +13450,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_STR);
-            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -13613,7 +13493,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 cond = res;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 IR_REPORT_EDGE(flag);
                 if (flag) {
                     JUMPTO(oparg);

@@ -124,8 +124,6 @@ POINTER_VARIANTS = {
 STACK_INSTRUCTION_MACROS = {
     # The header of the instruction's feedback entry, which holds its counter.
     "FB_COUNTER": "_PyFb_Header(this_instr)",
-    # The 16-bit taken history of a conditional branch.
-    "FB_BRANCH": "this_instr[1].cache",
     # The entry header of the instruction at {0} once it runs as opcode {1}.
     "FB_HEADER_OF": "_PyFb_Header({0})",
     # The opcode and oparg of the instruction at {0}.

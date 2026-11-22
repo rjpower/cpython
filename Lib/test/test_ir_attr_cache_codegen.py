@@ -118,7 +118,6 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
                 if name.startswith("LOAD_ATTR_CLASS"):
                     self.assertIn("class_version = fb->class_version", handler)
                     self.assertNotIn("fb->descr", handler)
-                    self.assertIn("if (oparg & 1)", handler)
                 if name == "LOAD_ATTR_CLASS_WITH_METACLASS_CHECK":
                     self.assertLess(handler.index("type_version = fb->type_version"),
                                     handler.index("class_version = fb->class_version"))
@@ -169,7 +168,6 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
         self.assertLess(handler.index("if (gil_disabled)"),
                         handler.index("_PyValueGuarded_Load(class_value)"))
         self.assertNotIn("retire_published_values(", handler)
-        self.assertNotIn("_PUSH_NULL_CONDITIONAL", handler)
         self.assertNotIn("PyObject *class_value", handler)
 
     def test_classmethod_family_extent_and_number(self):

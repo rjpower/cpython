@@ -895,22 +895,7 @@ make_exec(PyCodeObject *co)
                                        _PyIR_FBINIT_UNIT(fbinit[i]));
         h->kind = (uint8_t)_PyIR_FBINIT_KIND(fbinit[i]);
         h->counter = counter;
-        if (h->kind == FB_BRANCH) {
-            h->history = 0x5555;    // alternating taken and not taken
-        }
-        else {
-            h->arg = _PyIR_FBINIT_ARG(fbinit[i]);
-        }
-    }
-    // The entry of a fused word keeps the taken history of its jump, seeded
-    // as for a BRANCH entry
-    for (Py_ssize_t i = 0; i < nwords; i++) {
-        const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[i]));
-        if (fmt->flags & _PyIR_FUSED) {
-            int fb = (int)read_field(words[i], fmt->fb);
-            assert(fb >= IR_FB_FIRST_UNIT);
-            _PyIR_FbEntry(exec->entries, (uint32_t)fb)->taken = 0x5555;
-        }
+        h->arg = _PyIR_FBINIT_ARG(fbinit[i]);
     }
     return exec;
 }

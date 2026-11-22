@@ -3405,7 +3405,7 @@ lookup_method(PyObject *self, PyObject *attr, PyObject **out)
 /* lookup_method_ex() for a caller that calls the method through the value
    vectorcall: *out is the owner of the method, an int or float attribute
    included, which the call then reports as not callable. */
-static int
+static inline Py_ALWAYS_INLINE int
 lookup_method_value_ex(PyObject *self, PyObject *attr, PyValue *out,
                        int raise_attribute_error)
 {

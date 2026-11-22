@@ -653,9 +653,15 @@ typedef struct _PyCodeExec {
      * at a time: an odd count writes the slot after the last constant, the
      * discard slot, which is NULL at the push. */
     const PyValue *const_image;
+    /* The bind plan of the last call of this code that has no keyword and
+     * whose site holds no plan (_PyBindPlan_ForCall()), and the shape it was
+     * made for, or 0.  A plan follows from the code and the shape alone, so
+     * it lasts as long as the code. */
+    _PyBindPlan call_plan;
     uint32_t nwords;
     uint16_t const_first;
     uint16_t nconst;
+    uint64_t call_plan_shape;
     uint32_t nlocalsplus;   // of the code, which IR_IS_LOCAL() reads
 } _PyCodeExec;
 

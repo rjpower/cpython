@@ -4844,9 +4844,9 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
             int skip = call_skipped_operands(slots, head, word);
             PyFunctionObject *func =
                 (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
-            if (_PyBindPlan_Init(&plan, (PyCodeObject *)func->func_code,
-                                 !PyValue_IsNull(receiver) + (int)IR_C(word) - skip,
-                                 skip, !PyValue_IsNull(receiver), NULL, 0))
+            if (_PyBindPlan_ForCall(&plan, (PyCodeObject *)func->func_code,
+                                    !PyValue_IsNull(receiver) + (int)IR_C(word) - skip,
+                                    skip, !PyValue_IsNull(receiver)))
             {
                 _PyCallResult pushed = call_bind_positional(
                     tstate, frame, head, callable, receiver, &plan);
@@ -5026,9 +5026,10 @@ call_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
             planned = &fb->plan;
         }
         else if (!plannable ||
-                 !_PyBindPlan_Init(&plan, callee_code, count, 0, lead,
-                                   dict_items != NULL ? items.dests : NULL,
-                                   dict_items != NULL ? items.count : 0))
+                 !(dict_items != NULL
+                   ? _PyBindPlan_Init(&plan, callee_code, count, 0, lead,
+                                      items.dests, items.count)
+                   : _PyBindPlan_ForCall(&plan, callee_code, count, 0, lead)))
         {
             planned = NULL;
         }

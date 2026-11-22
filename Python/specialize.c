@@ -2482,6 +2482,27 @@ _PyBindPlan_Init(_PyBindPlan *plan, PyCodeObject *code, int positional,
     return 1;
 }
 
+int
+_PyBindPlan_ForCall(_PyBindPlan *plan, PyCodeObject *code, int positional,
+                    int skip, int lead)
+{
+    _PyCodeExec *exec = code->_co_exec;
+    if (exec == NULL || exec == &_PyIR_InitCleanupExec || positional < 0 ||
+        positional > UINT8_MAX)
+    {
+        return _PyBindPlan_Init(plan, code, positional, skip, lead, NULL, 0);
+    }
+    uint64_t shape = 1 + ((uint64_t)positional | (uint64_t)skip << 8 |
+                          (uint64_t)lead << 9);
+    if (exec->call_plan_shape != shape) {
+        _PyBindPlan fresh;
+        _PyBindPlan_Init(&fresh, code, positional, skip, lead, NULL, 0);
+        exec->call_plan = fresh;
+        exec->call_plan_shape = shape;
+    }
+    *plan = exec->call_plan;
+    return (plan->flags & _Py_CALL_BIND_VALID) != 0;
+}
 
 /* Cache only destinations: names, defaults and keyword-only defaults remain
  * owned by the guarded function, which the call reads each time.  A name that

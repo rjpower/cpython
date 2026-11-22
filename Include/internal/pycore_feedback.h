@@ -229,6 +229,13 @@ extern int _PyBindPlan_Init(_PyBindPlan *plan, PyCodeObject *code,
                             int positional, int skip, int lead,
                             const uint16_t *dests, int kwcount);
 
+/* _PyBindPlan_Init() for a call without keywords, from the executing copy of
+ * code when it holds the plan of the same shape, which it keeps for the next
+ * call: the generic CALL and CALL_FUNCTION_EX of a site that does not hold a
+ * plan (a polymorphic callee) derive it once per code and shape. */
+extern int _PyBindPlan_ForCall(_PyBindPlan *plan, PyCodeObject *code,
+                               int positional, int skip, int lead);
+
 /* One row per observation.  type_version[i] is the first version of the
  * observation and aux[i] the second: the operand types for BINARY, the
  * receiver type and the dict, function or class version for ATTR, the

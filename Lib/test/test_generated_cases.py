@@ -3775,6 +3775,8 @@ class TestShapeReadMetadata(unittest.TestCase):
         source = (root / "Python/bytecodes.c").read_text()
         start = (root / "Python/ceval_macros.h").read_text().index("shape_read_offset(char *entries")
         macros = (root / "Python/ceval_macros.h").read_text()[start:][:600]
+        poly_start = (root / "Python/ceval_macros.h").read_text().index("poly_row_index(char *entries")
+        poly_rows = (root / "Python/ceval_macros.h").read_text()[poly_start:][:300]
         for suffix in ("", "_LOCAL_TEMP"):
             for poly in (False, True):
                 name = "LOAD_ATTR_SHAPE" + ("_POLY" if poly else "") + suffix
@@ -3783,12 +3785,13 @@ class TestShapeReadMetadata(unittest.TestCase):
                     self.assertEqual("shape_read_offset(" in handler, poly)
                     if poly:
                         # The handler passes the entries of the frame's
-                        # feedback bank; the function steps back over the
+                        # feedback bank; the row finder steps back over the
                         # block header to the poly tables
                         self.assertIn("shape_read_offset(frame->ir_feedback, fb,", handler)
                         self.assertNotIn("_PyFrame_Exec(frame)->feedback", handler)
-                        self.assertIn("_PyFbBlock *block = (_PyFbBlock *)entries - 1;", macros)
-                        self.assertIn("_PyFb_PolyOf(block, &entry->h)", macros)
+                        self.assertIn("poly_row_index(entries, h, version)", macros)
+                        self.assertIn("_PyFb_PolyOf(block, h)", macros)
+                        self.assertIn("_PyFbBlock *block = (_PyFbBlock *)entries - 1;", poly_rows)
                     self.assertEqual("_PyIR_LEARNED_ONLY" in effects, poly)
                     self.assertIn("uint32_t offset = " +
                                   ("ir_shape_offset" if poly else "fb->offset") + ";", handler)

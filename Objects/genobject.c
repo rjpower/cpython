@@ -1312,7 +1312,7 @@ _PyGen_NewCall(PyThreadState *tstate, PyValue function, PyObject *locals,
     frame->owner = FRAME_OWNED_BY_GENERATOR;
     // The first send resumes after RETURN_GENERATOR, the word before the
     // first traceable one, and its value goes to the discard slot
-    frame->instr_ptr = frame->ir_words + code->_co_firsttraceable;
+    frame->instr_ptr = frame->ir_words + _PyCode_FirstTraceable(code);
     frame->return_slot = (uint16_t)_PyFrame_DiscardSlotForCodeObject(code);
     gen->gi_frame_state = FRAME_CREATED;
     int nfree = code->co_nfreevars;
@@ -1342,7 +1342,7 @@ gen_new_with_qualname(PyTypeObject *type, PyFrameObject *f,
                       PyObject *name, PyObject *qualname)
 {
     PyCodeObject *code = _PyFrame_GetCode(f->f_frame);
-    int size = code->co_nlocalsplus + code->co_stacksize;
+    int size = _PyFrame_NumSlotsForCodeObject(code);
     PyGenObject *gen = PyObject_GC_NewVar(PyGenObject, type, size);
     if (gen == NULL) {
         Py_DECREF(f);

@@ -540,7 +540,7 @@ static PyValue
 _opcode_get_exception_entries_impl(PyObject *module, PyCodeObject *code)
 /*[clinic end generated code: output=05d34b778bd6dfb2 input=2edb896bcdc0d4be]*/
 {
-    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code->co_exceptiontable);
+    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code);
     const unsigned char *p = semantic.exceptions;
     const unsigned char *end = p + semantic.exceptions_size;
     PyObject *result = PyList_New(0);
@@ -581,7 +581,7 @@ static PyValue
 _opcode_get_recovery_entries_impl(PyObject *module, PyCodeObject *code)
 /*[clinic end generated code: output=b4d0ef6562b1c562 input=d1c948c4bb399c17]*/
 {
-    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code->co_exceptiontable);
+    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code);
     PyObject *result = PyTuple_New(semantic.nrecords);
     if (result == NULL) {
         return PyValue_NULL;

@@ -529,7 +529,7 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
     int nslots = _PyFrame_NumSlots(frame);
     PyValue snapshots[64];
     if (nslots > (int)Py_ARRAY_LENGTH(snapshots) ||
-        base < code->co_nlocalsplus || base >= nslots ||
+        base < (int)code->_co_exec->nfixed || base >= nslots ||
         destination >= nslots) {
         PyErr_SetString(PyExc_AssertionError, "observer frame exceeds bounded call shape");
         return NULL;
@@ -548,7 +548,7 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
         }
         snapshots[i] = PyValue_XDUP(value);
     }
-    int nlocals = code->co_nlocalsplus;
+    int nlocals = (int)code->_co_exec->nfixed;
     PyObject *values = PyTuple_New(nslots);
     PyObject *report = NULL;
     if (values != NULL) {

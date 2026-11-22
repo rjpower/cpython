@@ -183,7 +183,7 @@ static void
 dump_stack(_PyInterpreterFrame *frame)
 {
     PyValue *slots = _PyFrame_Slots(frame);
-    int nlocalsplus = _PyFrame_GetCode(frame)->co_nlocalsplus;
+    int nlocalsplus = (int)_PyFrame_Exec(frame)->nfixed;
     int nslots = _PyFrame_NumSlots(frame);
     PyObject *exc = PyErr_GetRaisedException();
     printf("    locals=[");
@@ -530,7 +530,7 @@ static Py_NO_INLINE _PyExceptionHandler
 get_exception_handler(PyCodeObject *code, int index)
 {
     _PyExceptionHandler none = {0, 0, 0, 0};
-    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code->co_exceptiontable);
+    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code);
     unsigned char *start = (unsigned char *)semantic.exceptions;
     unsigned char *end = start + semantic.exceptions_size;
     /* Invariants:

@@ -279,7 +279,7 @@ instr_oparg(_PyInstr *instr)
     PyCodeObject *code = _PyFrame_GetCode(frame);
     int offset = _PyFrame_InstrOffset(frame, instr);
     int oparg = _PyCode_InstrOparg(code, offset);
-    _PyIRWord word = _PyCode_WORDS(code)[offset];
+    _PyIRWord word = _PyCode_IRWords(code)[offset];
     const _PyIRFormat *format = _PyIR_FormatOf(IR_HANDLER(word));
     if (format->operands == _PyIR_OPERANDS_CALL
         || format->operands == _PyIR_OPERANDS_KW)
@@ -696,7 +696,7 @@ specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
     assert(!PyErr_Occurred());
     if (handler == LOAD_ATTR_SHAPE) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
-        int nlocalsplus = _PyFrame_GetCode(current_frame())->co_nlocalsplus;
+        int nlocalsplus = (int)_PyFrame_Exec(current_frame())->nfixed;
         if (IR_B(word) < (uint32_t)nlocalsplus &&
             IR_A(word) >= (uint32_t)nlocalsplus &&
             IR_A(word) != (uint32_t)_PyFrame_DiscardSlot(current_frame())) {
@@ -2490,7 +2490,7 @@ _PyBindPlan_Init(_PyBindPlan *plan, PyCodeObject *code, int positional,
         bits |= _Py_CALL_BIND_VARARGS;
     }
     if (flags & CO_VARKEYWORDS) {
-        bits |= routed == 0 && (flags & CO_VIRTUAL_KWARGS)
+        bits |= routed == 0 && (code->_co_ir->flags & _PyIR_CODE_VIRTUAL_KWARGS)
             ? _Py_CALL_BIND_VIRTUAL_KWARGS : _Py_CALL_BIND_NEW_KWARGS;
     }
     if (bits & (_Py_CALL_BIND_VARARGS | _Py_CALL_BIND_NEW_KWARGS |
@@ -4013,14 +4013,14 @@ const struct _PyCode2 _Py_InitCleanup = {
     .co_name = &_Py_ID(__init__),
     .co_qualname = &_Py_ID(__init__),
     .co_linetable = (PyObject *)&no_location,
-    ._co_firsttraceable = 2,
     .co_stacksize = 2,
     .co_framesize = 2 + FRAME_SPECIALS_SIZE,
-    // The same words as _PyIR_InitCleanupExec (Python/ir.c), which this
-    // static code object starts with as its executing copy
+    // The register form of these two instructions is _PyIR_InitCleanupExec
+    // (Python/ir.c), which this static code object holds already lowered
+    ._co_ir = &_PyIR_InitCleanupIR,
     ._co_exec = &_PyIR_InitCleanupExec,
-    .co_words = {
-        IR_WORD(EXIT_INIT_CHECK, 1, 0, 0, 0),
-        IR_WORD(RETURN_VALUE, 0, 0, 0, 0),
+    .co_code_adaptive = {
+        EXIT_INIT_CHECK, 0,
+        RETURN_VALUE, 0,
     }
 };

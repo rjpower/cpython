@@ -5,7 +5,7 @@
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#include "pycore_code.h"          // _PyCode_WORDS()
+#include "pycore_code.h"          // _PyCode_CODE()
 #include "pycore_interpframe_structs.h" // _PyInterpreterFrame
 #include "pycore_ir.h"            // _PyCodeExec
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_PTR_ACQUIRE()
@@ -118,11 +118,11 @@ _PyFrame_SafeGetLasti(struct _PyInterpreterFrame *f)
     }
 
     _PyCodeExec *exec = co->_co_exec;
-    if (exec == NULL || f->instr_ptr < exec->words
+    if (exec == NULL || co->_co_ir == NULL || f->instr_ptr < exec->words
         || f->instr_ptr >= exec->words + exec->nwords) {
         return -1;
     }
-    return (int)(f->instr_ptr - exec->words);
+    return _PyCode_WordOffset(co, (int)(f->instr_ptr - exec->words));
 }
 
 static inline PyFunctionObject *_PyFrame_GetFunction(_PyInterpreterFrame *f) {
@@ -132,7 +132,7 @@ static inline PyFunctionObject *_PyFrame_GetFunction(_PyInterpreterFrame *f) {
 }
 
 static inline PyValue *_PyFrame_Stackbase(_PyInterpreterFrame *f) {
-    return (f->base + _PyFrame_GetCode(f)->co_nlocalsplus);
+    return f->base + _PyFrame_Exec(f)->nfixed;
 }
 
 #define FRAME_SPECIALS_SIZE ((int)((sizeof(_PyInterpreterFrame)-1)/sizeof(PyObject *)))
@@ -140,8 +140,7 @@ static inline PyValue *_PyFrame_Stackbase(_PyInterpreterFrame *f) {
 static inline int
 _PyFrame_NumSlotsForCodeObject(PyCodeObject *code)
 {
-    /* This function needs to remain in sync with the calculation of
-     * co_framesize in Tools/build/deepfreeze.py */
+    /* co_framesize is set when the code is lowered (_PyCode_GetExec()) */
     assert(code->co_framesize >= FRAME_SPECIALS_SIZE);
     return code->co_framesize - FRAME_SPECIALS_SIZE;
 }
@@ -153,7 +152,7 @@ _PyFrame_Slots(_PyInterpreterFrame *f)
     return f->base;
 }
 
-/* co_nlocalsplus + co_stacksize: the number of slots of f */
+/* The number of slots of f: the fixed slots and the temporaries */
 static inline int
 _PyFrame_NumSlots(_PyInterpreterFrame *f)
 {
@@ -161,13 +160,13 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
 }
 
 /* The slot that a result nothing reads goes to: the hidden local after the
- * constant slots, the last before the free variables.  It holds the last
+ * constant slots, the last below the temporaries.  It holds the last
  * discarded result until the next discard or the end of the frame, and
  * f_locals never shows it. */
 static inline int
 _PyFrame_DiscardSlotForCodeObject(PyCodeObject *co)
 {
-    return co->co_nlocalsplus - co->co_nfreevars - 1;
+    return (int)co->_co_exec->nfixed - 1;
 }
 
 static inline int
@@ -405,7 +404,7 @@ extern void _PyFrame_CopyConstSlotsMore(PyValue *dst, const PyValueBorrow *src,
                                         int n);
 extern void _PyFrame_ZeroConstSlotsMore(PyValue *dst, int n);
 
-/* Copy the image of the constant slots (CO_FAST_CONST) of an exec to dst, the
+/* Copy the image of the constant slots of an exec to dst, the
  * first of them in a new frame: n >= 1 of them, two slots at a time.  The
  * constants are not owned (the frame borrows them from co_consts through the
  * code that it holds), so the copy takes no count and the exit closes
@@ -485,7 +484,7 @@ _PyFrame_Initialize(
     frame->lltrace = 0;
 #endif
 
-    // The constant slots (CO_FAST_CONST), which are NULL: copy the image
+    // The constant slots, which are NULL: copy the image
     if (exec->nconst) {
         _PyFrame_CopyConstSlots(base + exec->const_first, exec->const_image,
                                 exec->nconst);
@@ -520,7 +519,7 @@ _PyFrame_IsIncomplete(_PyInterpreterFrame *frame)
     }
     return frame->owner != FRAME_OWNED_BY_GENERATOR &&
            _PyFrame_InstrOffset(frame, frame->instr_ptr) <
-               _PyFrame_GetCode(frame)->_co_firsttraceable;
+               (int)_PyFrame_Exec(frame)->first_traceable;
 }
 
 static inline _PyInterpreterFrame *
@@ -653,7 +652,7 @@ _PyFrame_ClearSlots(_PyInterpreterFrame *frame, int n)
 #endif
     PyValue *locals = frame->base;
     const _PyCodeExec *exec = _PyFrame_Exec(frame);
-    assert(n >= (int)exec->nlocalsplus);
+    assert(n >= (int)exec->nfixed);
     PyValue *consts = locals + exec->const_first;
     PyValue *discard = consts + exec->nconst;
     // The cleanup shim of __init__ has no discard slot: its block is empty

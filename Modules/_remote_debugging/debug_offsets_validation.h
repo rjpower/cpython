@@ -31,7 +31,7 @@
 #define FIELD_SIZE(type, member) sizeof(((type *)0)->member)
 
 enum {
-    PY_REMOTE_DEBUG_OFFSETS_TOTAL_SIZE = 1072,
+    PY_REMOTE_DEBUG_OFFSETS_TOTAL_SIZE = 1104,
     PY_REMOTE_ASYNC_DEBUG_OFFSETS_TOTAL_SIZE = 104,
 };
 
@@ -300,9 +300,9 @@ validate_fixed_field(
     APPLY(code_object, firstlineno, sizeof(int), _Alignof(int), buffer_size); \
     APPLY(code_object, nlocalsplus, sizeof(int), _Alignof(int), buffer_size); \
     APPLY(code_object, stacksize, sizeof(int), _Alignof(int), buffer_size); \
-    APPLY(code_object, co_words, sizeof(uint64_t), _Alignof(uint64_t), buffer_size); \
+    APPLY(code_object, framesize, sizeof(int), _Alignof(int), buffer_size); \
     APPLY(code_object, exec, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
-    APPLY(code_object, nwords, sizeof(Py_ssize_t), _Alignof(Py_ssize_t), buffer_size); \
+    APPLY(code_object, ir, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
     APPLY(code_object, co_tlbc, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size)
 
 #define PY_REMOTE_DEBUG_SET_OBJECT_FIELDS(APPLY, buffer_size) \
@@ -312,7 +312,12 @@ validate_fixed_field(
 
 #define PY_REMOTE_DEBUG_CODE_EXEC_FIELDS(APPLY, buffer_size) \
     APPLY(code_exec, words, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
-    APPLY(code_exec, nwords, sizeof(uint32_t), _Alignof(uint32_t), buffer_size)
+    APPLY(code_exec, nwords, sizeof(uint32_t), _Alignof(uint32_t), buffer_size); \
+    APPLY(code_exec, nfixed, sizeof(uint32_t), _Alignof(uint32_t), buffer_size)
+
+#define PY_REMOTE_DEBUG_CODE_IR_FIELDS(APPLY, buffer_size) \
+    APPLY(code_ir, nwords, sizeof(uint32_t), _Alignof(uint32_t), buffer_size); \
+    APPLY(code_ir, pcmap, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size)
 
 #define PY_REMOTE_DEBUG_LONG_OBJECT_FIELDS(APPLY, buffer_size) \
     APPLY(long_object, lv_tag, sizeof(uintptr_t), _Alignof(uintptr_t), buffer_size); \
@@ -446,6 +451,11 @@ _PyRemoteDebug_ValidateDebugOffsetsLayout(struct _Py_DebugOffsets *debug_offsets
     PY_REMOTE_DEBUG_CODE_EXEC_FIELDS(
         PY_REMOTE_DEBUG_VALIDATE_FIELD,
         SIZEOF_CODE_EXEC);
+
+    PY_REMOTE_DEBUG_VALIDATE_READ_SECTION(code_ir, SIZEOF_CODE_IR);
+    PY_REMOTE_DEBUG_CODE_IR_FIELDS(
+        PY_REMOTE_DEBUG_VALIDATE_FIELD,
+        SIZEOF_CODE_IR);
 
     PY_REMOTE_DEBUG_VALIDATE_SECTION(pyobject);
     PY_REMOTE_DEBUG_VALIDATE_FIELD(

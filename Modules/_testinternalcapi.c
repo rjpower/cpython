@@ -1775,12 +1775,12 @@ get_feedback(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "O!i", &PyCode_Type, &code, &i)) {
         return NULL;
     }
-    if (i < 0 || i >= Py_SIZE(code)) {
-        PyErr_SetString(PyExc_ValueError, "index out of range");
-        return NULL;
-    }
     _PyCodeExec *exec = _PyCode_GetExec(code);
     if (exec == NULL) {
+        return NULL;
+    }
+    if (i < 0 || i >= (int)exec->nwords) {
+        PyErr_SetString(PyExc_ValueError, "index out of range");
         return NULL;
     }
     if (_PyCode_InstrFbIndex(code, i) <= 0) {
@@ -1814,11 +1814,11 @@ get_feedback(PyObject *self, PyObject *args)
                          fields[0], fields[1], rows);
 }
 
-/* The words of CODE as the compiler emitted them, or with ADAPTIVE those of
- * its executing copy, which specialisation and instrumentation rewrite:
+/* The words that the lowering of CODE made, or with ADAPTIVE those of its
+ * executing copy, which specialisation and instrumentation rewrite:
  * per word a tuple (handler, a, b, c, d) of the name of its handler and its
  * fields.  The operand words of a call follow its head as words of their own,
- * named IR_OPERANDS.  The executing copy of code that has never run is co_code's. */
+ * named IR_OPERANDS.  Code that has never run is lowered by the call. */
 static PyObject *
 get_ir(PyObject *self, PyObject *args)
 {
@@ -1827,7 +1827,11 @@ get_ir(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "O!|p", &PyCode_Type, &code, &adaptive)) {
         return NULL;
     }
-    const _PyIRWord *words = _PyCode_WORDS(code);
+    const _PyCodeIR *ir = _PyCode_GetIR(code);
+    if (ir == NULL) {
+        return NULL;
+    }
+    const _PyIRWord *words = ir->words;
     if (adaptive && code->_co_exec != NULL) {
         words = code->_co_exec->words;
     }
@@ -1835,7 +1839,7 @@ get_ir(PyObject *self, PyObject *args)
     if (result == NULL) {
         return NULL;
     }
-    for (Py_ssize_t w = 0; w < Py_SIZE(code); w++) {
+    for (Py_ssize_t w = 0; w < (Py_ssize_t)ir->nwords; w++) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(words[w]);
         int handler = IR_HANDLER(word);
         const char *name = handler < IR_FIRST_ONLY_HANDLER
@@ -3423,7 +3427,6 @@ inline_locals(PyObject *self, PyObject *frame)
     }
     for (int i = 0; i < co->co_nlocalsplus; i++) {
         if (PyValue_IsInline(f->base[i]) &&
-            !(_PyLocals_GetKind(co->co_localspluskinds, i) & CO_FAST_CONST) &&
             PySet_Add(names, _PyTuple_GET_OBJECT(co->co_localsplusnames, i)) < 0)
         {
             Py_DECREF(names);
@@ -4809,17 +4812,17 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
         return NULL;
     }
     PyCodeObject *code = (PyCodeObject *)code_object;
-    int nslots = _PyFrame_NumSlotsForCodeObject(code);
-    if (site < 0 || site > Py_SIZE(code) ||
-        reason < _PyIR_RETIRE_NONE || reason > _PyIR_RETIRE_STAGED_FAILURE ||
-        (dirty_home != -1 &&
-         (dirty_home < code->co_nlocalsplus || dirty_home >= nslots)))
-    {
-        PyErr_SetString(PyExc_ValueError, "invalid retirement control probe");
-        return NULL;
-    }
     _PyCodeExec *exec = _PyCode_GetExec(code);
     if (exec == NULL) {
+        return NULL;
+    }
+    int nslots = _PyFrame_NumSlotsForCodeObject(code);
+    if (site < 0 || site > (int)exec->nwords ||
+        reason < _PyIR_RETIRE_NONE || reason > _PyIR_RETIRE_STAGED_FAILURE ||
+        (dirty_home != -1 &&
+         (dirty_home < (int)exec->nfixed || dirty_home >= nslots)))
+    {
+        PyErr_SetString(PyExc_ValueError, "invalid retirement control probe");
         return NULL;
     }
     const _PyIRCodePlan *plan;
@@ -4852,27 +4855,7 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
     return PyLong_FromLong(status);
 }
 
-/* The words of a code object with the compiler's return selection applied to
- * a code object built by hand. */
-static PyObject *
-select_empty_returns(PyObject *self, PyObject *arg)
-{
-    if (!PyCode_Check(arg)) {
-        PyErr_SetString(PyExc_TypeError, "expected code");
-        return NULL;
-    }
-    PyObject *words;
-    if (_PyCode_SelectEmptyReturns((PyCodeObject *)arg, &words) < 0) {
-        return NULL;
-    }
-    if (words == NULL) {
-        return PyObject_GetAttrString(arg, "co_code");
-    }
-    return words;
-}
-
 static PyMethodDef module_functions[] = {
-    {"select_empty_returns", select_empty_returns, METH_O},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"check_ir_retirement", _PyCFunction_CAST(check_ir_retirement),
      METH_VARARGS | METH_KEYWORDS, NULL},

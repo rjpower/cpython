@@ -1067,7 +1067,7 @@ static const struct {
     _PyCodeExec exec;
     _PyIRWord words[1];
 } entry_trampoline = {
-    .exec = { .nwords = 1, .nlocalsplus = 1 },
+    .exec = { .nwords = 1, .nfixed = 1 },
     .words = {
         IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),  /* reached on return and yield */
     },
@@ -1928,7 +1928,7 @@ _PyEval_RetireThreadFrameWithResult(PyThreadState *tstate,
                     || tstate->last_profiled_frame == frame)) {
         return _PyEval_FrameClearAndPopGeneralWithResult(tstate, frame, result);
     }
-    _PyFrame_ClearSlots(frame, (int)_PyFrame_Exec(frame)->nlocalsplus);
+    _PyFrame_ClearSlots(frame, (int)_PyFrame_Exec(frame)->nfixed);
     // The frame holds both, and is dead: nothing reads the pointers again
     assert(frame->f_funcobj != NULL);
     Py_DECREF(frame->f_funcobj);
@@ -2040,7 +2040,8 @@ gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
         frame->base[i] = PyValue_FromObjectSteal(cell);
         PyValue_XCLOSE(argument);
     }
-    if (code->_co_firsttraceable > 1) {
+    _PyCodeExec *exec = code->_co_exec;
+    if (exec->first_traceable > 1) {
         /* A generator expression: its code begins with RESUME, LOAD_FAST of
          * the argument and GET_ITER or GET_AITER, before its RETURN_GENERATOR,
          * and nothing executes them.  The iterator, and for GET_ITER the
@@ -2048,13 +2049,12 @@ gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
          * them: iter() of the outermost iterable runs here, at creation, as
          * the language requires, and the code takes any iterable as its
          * argument.  Its errors are those of the call. */
-        _PyCodeExec *exec = code->_co_exec;
         int handler = _PyIR_BaseOpcode(IR_HANDLER(exec->words[2]));
         assert(_PyIR_BaseOpcode(IR_HANDLER(exec->words[1])) == LOAD_FAST ||
                _PyIR_BaseOpcode(IR_HANDLER(exec->words[1])) == LOAD_FAST_BORROW);
         assert(handler == GET_ITER || handler == GET_AITER);
-        assert(IR_A(exec->words[2]) == (uint32_t)code->co_nlocalsplus);
-        PyValue *stack = frame->base + code->co_nlocalsplus;
+        assert(IR_A(exec->words[2]) == exec->nfixed);
+        PyValue *stack = frame->base + exec->nfixed;
         PyValue iterable = PyValue_DUP(frame->base[0]);
         if (handler == GET_AITER) {
             stack[0] = _PyEval_GetAIter(tstate, iterable);
@@ -2078,7 +2078,7 @@ gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
 static inline Py_ALWAYS_INLINE int
 gen_prologue(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
 {
-    if (code->co_ncellvars == 0 && code->_co_firsttraceable == 1) {
+    if (code->co_ncellvars == 0 && code->_co_exec->first_traceable == 1) {
         return 0;
     }
     return gen_prologue_run(tstate, gen, code);
@@ -2287,7 +2287,6 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
     for (;;) {
         assert(frame == tstate->current_frame);
         assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-        PyCodeObject *code = _PyFrame_GetCode(frame);
 
         /* Retain a source callback's immutable recovery triple across bridge
          * cleanup. Its visible source location survives until traceback and
@@ -2362,7 +2361,7 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
         assert(_PyErr_Occurred(tstate));
         /* Even a direct evaluator exit owns its remaining scratch. Pass only
          * bindings to M2, rather than asking GEN retirement to scan old N. */
-        error_clear_slots(frame, code->co_nlocalsplus);
+        error_clear_slots(frame, (int)_PyFrame_Exec(frame)->nfixed);
         if (!exiting) {
             monitor_unwind(tstate, frame, origin);
         }
@@ -2522,7 +2521,7 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
     // The releasing write: a local's or the discard slot's old value closes
     // with the detached owners
     PyValue displaced = frame->base[destination];
-    assert(destination < _PyFrame_GetCode(frame)->co_nlocalsplus ||
+    assert(destination < (int)_PyFrame_Exec(frame)->nfixed ||
            destination == _PyFrame_DiscardSlot(frame) ||
            PyValue_IsNull(displaced));
     frame->base[destination] = result;
@@ -3607,7 +3606,7 @@ clear_thread_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
                    PyValue result)
 {
     return retire_thread_frame(tstate, frame, result,
-                               _PyFrame_GetCode(frame)->co_nlocalsplus);
+                               (int)_PyFrame_Exec(frame)->nfixed);
 }
 
 static PyValue
@@ -3643,7 +3642,7 @@ clear_error_frame(PyThreadState *tstate, _PyInterpreterFrame *frame)
     tstate->exc_info = gen->gi_exc_state.previous_item;
     gen->gi_exc_state.previous_item = NULL;
     frame->previous = NULL;
-    _PyFrame_ClearGenerator(gen, _PyFrame_GetCode(frame)->co_nlocalsplus);
+    _PyFrame_ClearGenerator(gen, (int)_PyFrame_Exec(frame)->nfixed);
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
 }
 
@@ -3699,7 +3698,7 @@ complete_step_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
     if (kind != _PY_IR_FOR_ITER) {
         assert(destination < _PyFrame_NumSlots(frame));
         displaced = frame->base[destination];
-        assert(destination < _PyFrame_GetCode(frame)->co_nlocalsplus ||
+        assert(destination < (int)_PyFrame_Exec(frame)->nfixed ||
                destination == _PyFrame_DiscardSlot(frame) ||
                PyValue_IsNull(displaced));
         frame->base[destination] = value;
@@ -3771,10 +3770,10 @@ _PyEval_CompleteGeneratorReturn(PyThreadState *tstate,
     _PyInstr *site = frame->instr_ptr;
     PyCodeObject *code = _PyFrame_GetCode(frame);
     int offset = (int)_PyFrame_InstrOffset(frame, site);
-    assert(offset >= 0 && offset < Py_SIZE(code));
+    assert(offset >= 0 && offset < _PyCode_IRSize(code));
     /* SEND/FOR completion uses the immutable A/B/signed-D layout, including
      * when the executing site has a transparent instrumentation wrapper. */
-    _PyIRWord word = code->co_words[offset];
+    _PyIRWord word = _PyCode_IRWords(code)[offset];
     int opcode = _PyIR_HandlerBase[IR_HANDLER(word)];
     assert(opcode == SEND || opcode == FOR_ITER);
     _PyInstr *exit = frame->return_pc + IR_DS(word);

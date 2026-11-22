@@ -355,24 +355,12 @@ get_awaited_coro_address(
     {
         return -1;
     }
-    int locals = GET_MEMBER(int, code, unwinder->debug_offsets.code_object.nlocalsplus);
-    int stack = GET_MEMBER(int, code, unwinder->debug_offsets.code_object.stacksize);
-    if (locals < 0 || stack < 0 || locals >= IR_NO_DST ||
-        Py_MAX(stack, 1) > IR_NO_DST - locals ||
-        (return_slot != IR_NO_DST && return_slot >= locals + Py_MAX(stack, 1)))
-    {
-        PyErr_SetString(PyExc_RuntimeError, "Invalid awaited frame return slot");
-        return -1;
-    }
+    int framesize = GET_MEMBER(int, code, unwinder->debug_offsets.code_object.framesize);
     uintptr_t exec_addr = GET_MEMBER(uintptr_t, code,
         unwinder->debug_offsets.code_object.exec);
-    Py_ssize_t nwords = GET_MEMBER(Py_ssize_t, code,
-        unwinder->debug_offsets.code_object.nwords);
     char exec[SIZEOF_CODE_EXEC];
     if (exec_addr == 0 || exec_addr >= Py_PTR_LIMIT ||
-        exec_addr > UINTPTR_MAX - sizeof(exec) ||
-        nwords <= 0 || (uint64_t)nwords > UINT32_MAX ||
-        (uint64_t)nwords > UINTPTR_MAX / sizeof(_PyIRWord))
+        exec_addr > UINTPTR_MAX - sizeof(exec))
     {
         PyErr_SetString(PyExc_RuntimeError, "Invalid awaited executing image");
         return -1;
@@ -380,6 +368,16 @@ get_awaited_coro_address(
     if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle,
                                             exec_addr, sizeof(exec), exec) < 0)
     {
+        return -1;
+    }
+    // The slots below the temporaries, and all of them
+    int locals = (int)GET_MEMBER(uint32_t, exec,
+        unwinder->debug_offsets.code_exec.nfixed);
+    int slots = framesize - FRAME_SPECIALS_SIZE;
+    if (locals < 0 || slots <= locals || slots >= IR_NO_DST ||
+        (return_slot != IR_NO_DST && return_slot >= slots))
+    {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid awaited frame return slot");
         return -1;
     }
     uintptr_t words = GET_MEMBER(uintptr_t, exec,
@@ -391,26 +389,19 @@ get_awaited_coro_address(
     uint32_t exec_nwords = GET_MEMBER(uint32_t, exec,
         unwinder->debug_offsets.code_exec.nwords);
     if (words == 0 || words >= Py_PTR_LIMIT || words != frame_words ||
-        exec_nwords != (uint32_t)nwords || pc < words ||
+        exec_nwords == 0 || pc < words ||
         pc - words < sizeof(_PyIRWord) ||
         (pc - words) % sizeof(_PyIRWord) != 0 ||
-        (pc - words) / sizeof(_PyIRWord) >= (uintptr_t)nwords)
+        (pc - words) / sizeof(_PyIRWord) >= (uintptr_t)exec_nwords)
     {
         PyErr_SetString(PyExc_RuntimeError, "Invalid awaited continuation");
         return -1;
     }
     /* Every canonical delegated site passed positive role admission.
-     * The reached marker and matched immutable word retain that finite
-     * certificate; the words' contents are never inferred from homes. */
-    uintptr_t word_delta = pc - words - sizeof(_PyIRWord);
-    size_t words_offset = (size_t)unwinder->debug_offsets.code_object.co_words;
-    if (code_addr > UINTPTR_MAX - words_offset - sizeof(_PyIRWord) ||
-        word_delta > UINTPTR_MAX - code_addr - words_offset - sizeof(_PyIRWord))
-    {
-        PyErr_SetString(PyExc_RuntimeError, "Invalid awaited instruction address");
-        return -1;
-    }
-    uintptr_t word_addr = code_addr + words_offset + word_delta;
+     * The reached marker and the matched word of the executing copy (an
+     * instrumented variant maps to its ordinary handler below) retain that
+     * finite certificate; the words' contents are never inferred from homes. */
+    uintptr_t word_addr = pc - sizeof(_PyIRWord);
     if (word_addr >= Py_PTR_LIMIT) {
         PyErr_SetString(PyExc_RuntimeError, "Invalid awaited instruction address");
         return -1;
@@ -430,8 +421,8 @@ get_awaited_coro_address(
     if ((handler != YIELD_DELEGATED && handler != INSTRUMENTED_YIELD_DELEGATED) ||
         IR_A(word) != return_slot ||
         IR_B(word) < (uint32_t)locals ||
-        IR_B(word) >= (uint32_t)(locals + Py_MAX(stack, 1)) ||
-        receiver < locals || receiver >= locals + Py_MAX(stack, 1) ||
+        IR_B(word) >= (uint32_t)slots ||
+        receiver < locals || receiver >= slots ||
         receiver == return_slot ||
         receiver == (int)IR_B(word))
     {

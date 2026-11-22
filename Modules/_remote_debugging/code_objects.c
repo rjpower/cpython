@@ -7,7 +7,6 @@
 
 #define Py_VALUE_CORE 1
 #include "_remote_debugging.h"
-#include "pycore_ir_source.h"
 
 #define MAX_LINETABLE_SIZE (64 * 1024)
 
@@ -187,12 +186,8 @@ parse_linetable(const uintptr_t addrq, const char* linetable, Py_ssize_t linetab
         return false;
     }
 
-    _PyIRPositions source;
-    if (_PyIRPositions_Decode(linetable, linetable_size, &source) != 1) {
-        return false;
-    }
-    const uint8_t* ptr = source.locations;
-    const uint8_t* end = ptr + source.locations_size;
+    const uint8_t* ptr = (const uint8_t*)(linetable);
+    const uint8_t* end = ptr + linetable_size;
     uintptr_t addr = 0;
     int computed_line = firstlineno;  // Running accumulator, separate from output
     int val;  // Temporary for varint results
@@ -342,6 +337,26 @@ make_frame_info(RemoteUnwinderObject *unwinder, PyObject *file, PyObject *locati
     return info;
 }
 
+// Read where the pcmap of the code's IR is and how long it is, for meta. A
+// code that has no IR yet, or whose IR is unreadable, has no location.
+static void
+read_code_pcmap(RemoteUnwinderObject *unwinder, uintptr_t ir_addr,
+                CachedCodeMetadata *meta)
+{
+    if (ir_addr == 0 || ir_addr >= Py_PTR_LIMIT) {
+        return;
+    }
+    char ir[SIZEOF_CODE_IR];
+    if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle, ir_addr,
+                                              sizeof(ir), ir) < 0)
+    {
+        PyErr_Clear();
+        return;
+    }
+    meta->pcmap = GET_MEMBER(uintptr_t, ir, unwinder->debug_offsets.code_ir.pcmap);
+    meta->nwords = GET_MEMBER(uint32_t, ir, unwinder->debug_offsets.code_ir.nwords);
+}
+
 int
 parse_code_object(RemoteUnwinderObject *unwinder,
                   PyObject **result,
@@ -438,6 +453,10 @@ parse_code_object(RemoteUnwinderObject *unwinder,
         meta->linetable = linetable;
         meta->last_frame_info = NULL;
         meta->last_addrq = -1;
+        meta->pcmap = 0;
+        meta->nwords = 0;
+        read_code_pcmap(unwinder, GET_MEMBER(uintptr_t, code_object,
+                        unwinder->debug_offsets.code_object.ir), meta);
         meta->first_lineno = GET_MEMBER(int, code_object, unwinder->debug_offsets.code_object.firstlineno);
 
         if (unwinder && unwinder->code_object_cache && _Py_hashtable_set(unwinder->code_object_cache, key, meta) < 0) {
@@ -460,9 +479,26 @@ parse_code_object(RemoteUnwinderObject *unwinder,
     }
 
     // The frame runs the executing copy of the code object's words, which
-    // ir_words points to, and the line table counts words.
+    // ir_words points to; the line table counts the code units of the stack
+    // bytecode, which the pcmap of the code's IR maps each word to.
     uintptr_t ip = ctx->instruction_pointer;
-    ptrdiff_t addrq = (ptrdiff_t)(ip - ctx->ir_words) / (ptrdiff_t)sizeof(uint64_t);
+    ptrdiff_t word = (ptrdiff_t)(ip - ctx->ir_words) / (ptrdiff_t)sizeof(uint64_t);
+    ptrdiff_t addrq = -1;
+    if (meta->pcmap != 0 && word >= 0 && (uint64_t)word < meta->nwords) {
+        uint32_t unit;
+        if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle,
+                meta->pcmap + (uintptr_t)word * sizeof(uint32_t),
+                sizeof(unit), &unit) < 0)
+        {
+            if (_Py_RemoteDebug_IsFatalReadError()) {
+                goto error;
+            }
+            PyErr_Clear();
+        }
+        else {
+            addrq = unit;
+        }
+    }
 
     if (!unwinder->opcodes && meta->last_frame_info != NULL && meta->last_addrq == addrq) {
         *result = Py_NewRef(meta->last_frame_info);
@@ -470,7 +506,8 @@ parse_code_object(RemoteUnwinderObject *unwinder,
     }
 
     LocationInfo info = {0};
-    bool ok = parse_linetable(addrq, PyBytes_AS_STRING(meta->linetable),
+    bool ok = addrq >= 0 &&
+              parse_linetable(addrq, PyBytes_AS_STRING(meta->linetable),
                               PyBytes_GET_SIZE(meta->linetable),
                               meta->first_lineno, &info);
     // Create the LocationInfo structseq: (lineno, end_lineno, col_offset, end_col_offset)

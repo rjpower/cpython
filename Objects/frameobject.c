@@ -64,10 +64,6 @@ framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
     PyValue *fast = _PyFrame_GetLocalsArray(frame);
     _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
 
-    if (kind & CO_FAST_CONST) {
-        // A constant slot is not a variable
-        return NULL;
-    }
     if (PyValue_IsInline(fast[i])) {
         return _PyValue_AsObjectAt(fast[i], BOX_SITE_FRAME);
     }
@@ -111,9 +107,6 @@ framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 static bool
 framelocalsproxy_hasval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 {
-    if (_PyLocals_GetKind(co->co_localspluskinds, i) & CO_FAST_CONST) {
-        return false;
-    }
     if (PyValue_IsInline(_PyFrame_GetLocalsArray(frame)[i])) {
         return true;
     }
@@ -1338,7 +1331,7 @@ frame_trace_opcodes_set_impl(PyFrameObject *self, PyObject *value)
 static void
 register_resume_successors(PyCodeObject *code, int i, int next[2])
 {
-    _PyIRWord word = code->co_words[i];
+    _PyIRWord word = _PyCode_IRWords(code)[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     // A call head takes its operand words with it
     next[0] = i + _PyIR_WordLength(word);
@@ -1436,7 +1429,7 @@ register_committed_scope(_PyInterpreterFrame *frame,
     PyCodeObject *code = _PyFrame_GetCode(frame);
     uintptr_t first = (uintptr_t)frame->ir_words;
     uintptr_t site = (uintptr_t)scope->site;
-    size_t size = (size_t)Py_SIZE(code) * sizeof(_PyIRWord);
+    size_t size = (size_t)_PyCode_IRSize(code) * sizeof(_PyIRWord);
     if (scope->phase != _PY_IR_OBSERVER_POST_COMMITTED ||
         scope->edge < 0 || scope->edge > 1 || site < first ||
         site - first >= size || (site - first) % sizeof(_PyIRWord))
@@ -1444,11 +1437,11 @@ register_committed_scope(_PyInterpreterFrame *frame,
         return false;
     }
     int pc = (int)((site - first) / sizeof(_PyIRWord));
-    _PyIRWord word = code->co_words[pc];
+    _PyIRWord word = _PyCode_IRWords(code)[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     _PyIRObservedHomes homes;
     if ((fmt->effects & (_PyIR_PUSHES_FRAME | _PyIR_SUSPENDS)) ||
-        !_PyIR_ObservedHomes(word, scope->edge, code->co_nlocalsplus,
+        !_PyIR_ObservedHomes(word, scope->edge, _PyCode_IRFixed(code),
                             code->co_framesize - FRAME_SPECIALS_SIZE, &homes))
     {
         return false;
@@ -1456,7 +1449,7 @@ register_committed_scope(_PyInterpreterFrame *frame,
     int successors[2];
     register_resume_successors(code, pc, successors);
     int next = successors[scope->edge];
-    return next >= 0 && next < Py_SIZE(code) &&
+    return next >= 0 && next < _PyCode_IRSize(code) &&
            scope->next == _PyFrame_InstrAt(frame, next);
 }
 
@@ -1505,7 +1498,7 @@ register_stopped_state(PyFrameObject *self, int current, int what_event,
     {
         int pc = _PyFrame_InstrOffset(frame, context.site);
         PyCodeObject *code = _PyFrame_GetCode(frame);
-        neutral_jump = register_neutral_jump_word(code->co_words[pc],
+        neutral_jump = register_neutral_jump_word(_PyCode_IRWords(code)[pc],
                                                   _PyCode_InstrOparg(code, pc));
     }
     bool original_pre = context.phase == _PY_IR_OBSERVER_PRE_WORD &&
@@ -1525,7 +1518,7 @@ register_stopped_state(PyFrameObject *self, int current, int what_event,
     if ((line_phase || fresh_committed_landing) && observed == frame &&
         !pending_call && !frame->pending_redirect &&
         self->f_source_event < 0 && self->f_source_event_error < 0 &&
-        current >= 0 && current < Py_SIZE(_PyFrame_GetCode(frame)) &&
+        current >= 0 && current < _PyCode_IRSize(_PyFrame_GetCode(frame)) &&
         frame->instr_ptr == _PyFrame_InstrAt(frame, current) &&
         IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr)) == INSTRUMENTED_LINE)
     {
@@ -1536,7 +1529,7 @@ register_stopped_state(PyFrameObject *self, int current, int what_event,
              self->f_source_event < 0 && self->f_source_event_error < 0 &&
              context.generation == self->f_lineno_generation &&
              frame->instr_ptr == context.site && frame->return_pc == context.next &&
-             current >= 0 && current < Py_SIZE(_PyFrame_GetCode(frame)) &&
+             current >= 0 && current < _PyCode_IRSize(_PyFrame_GetCode(frame)) &&
              context.site == _PyFrame_InstrAt(frame, current))
     {
         phase.kind = REGISTER_RESUME_COMMITTED_NEUTRAL;
@@ -1546,7 +1539,7 @@ register_stopped_state(PyFrameObject *self, int current, int what_event,
              self->f_source_event_error < 0 &&
              context.generation == self->f_lineno_generation &&
              frame->instr_ptr == context.site && frame->return_pc == context.next &&
-             current >= 0 && current < Py_SIZE(_PyFrame_GetCode(frame)) &&
+             current >= 0 && current < _PyCode_IRSize(_PyFrame_GetCode(frame)) &&
              context.site == _PyFrame_InstrAt(frame, current))
     {
         phase.kind = REGISTER_RESUME_COMMITTED;
@@ -1582,7 +1575,7 @@ register_resume_analysis_clear(RegisterResumeAnalysis *analysis)
 static int
 register_resume_handlers(PyCodeObject *code, RegisterResumeAnalysis *analysis)
 {
-    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code->co_exceptiontable);
+    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code);
     const unsigned char *cursor = semantic.exceptions;
     const unsigned char *end = cursor + semantic.exceptions_size;
     if (!_PyIR_ExceptionTableValid(cursor, end, analysis->n, analysis->nl,
@@ -1627,7 +1620,7 @@ register_resume_add_edge(RegisterResumeAnalysis *analysis, int from, int to,
 static int
 register_resume_graph(PyCodeObject *code, RegisterResumeAnalysis *analysis)
 {
-    _PyIRSemanticMap source = _PyIRSemantic_Stored(code->co_exceptiontable);
+    _PyIRSemanticMap source = _PyIRSemantic_Stored(code);
     size_t n = (size_t)Py_MAX(analysis->n, 1);
     size_t r = (size_t)source.nrecords;
     size_t budget = 16 * 1024 * 1024;
@@ -1656,7 +1649,7 @@ register_resume_graph(PyCodeObject *code, RegisterResumeAnalysis *analysis)
         analysis->edge_heads[i] = analysis->reverse_heads[i] = analysis->source_heads[i] = -1;
     }
     // The operand words of a call have no edges: nothing reaches or leaves them
-    for (int i = 0; i < analysis->n; i += _PyIR_WordLength(code->co_words[i])) {
+    for (int i = 0; i < analysis->n; i += _PyIR_WordLength(_PyCode_IRWords(code)[i])) {
         int next[2];
         register_resume_successors(code, i, next);
         for (int k = 0; k < 2; k++) {
@@ -1749,13 +1742,6 @@ register_resume_null_states(PyCodeObject *code, RegisterResumeAnalysis *analysis
     for (int j = 0; j < nt; j++) {
         entry[j / 64] |= (uint64_t)1 << (j % 64);
     }
-    const uint32_t *constants = _PyCode_CONSTSLOTS(code);
-    for (int j = 0; j < code->co_nconstslots; j++) {
-        int slot = (int)constants[j * 2] - nl;
-        if (slot >= 0 && slot < nt) {
-            entry[slot / 64] &= ~((uint64_t)1 << (slot % 64));
-        }
-    }
     int head = 0, tail = 1 % n, count = 1;
     queue[0] = 0;
     reached[0] = queued[0] = 1;
@@ -1765,7 +1751,7 @@ register_resume_null_states(PyCodeObject *code, RegisterResumeAnalysis *analysis
         count--;
         queued[pc] = 0;
         const uint64_t *before = analysis->null_states + (size_t)pc * stride;
-        _PyIRWord word = code->co_words[pc];
+        _PyIRWord word = _PyCode_IRWords(code)[pc];
         int arg = _PyCode_InstrOparg(code, pc);
         for (int e = analysis->edge_heads[pc]; e >= 0;
              e = analysis->edges[e].next)
@@ -1777,7 +1763,7 @@ register_resume_null_states(PyCodeObject *code, RegisterResumeAnalysis *analysis
             if (edge.floor < 0 && edge.phase >= 0) {
                 for (int j = 0; j < nt; j++) {
                     _PyIRPhysicalTransfer transfer = _PyIR_NormalPhysicalTransfer(
-                        &code->co_words[pc], arg, edge.phase, nl + j, nl, nl + nt);
+                        &_PyCode_IRWords(code)[pc], arg, edge.phase, nl + j, nl, nl + nt);
                     bool is_null = transfer.kind == _PyIR_PHYSICAL_SET_NULL;
                     int source = transfer.kind == _PyIR_PHYSICAL_TRANSPORT
                         ? transfer.source - nl : j;
@@ -1855,7 +1841,7 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                           RegisterResumeAnalysis *analysis)
 {
     PyCodeObject *code = _PyFrame_GetCode(frame);
-    int n = (int)Py_SIZE(code), nl = code->co_nlocalsplus;
+    int n = (int)_PyCode_IRSize(code), nl = _PyCode_IRFixed(code);
     int nt = code->co_framesize - FRAME_SPECIALS_SIZE - nl;
     int nb = (nt + 63) / 64;
     size_t stride = (size_t)Py_MAX(nb, 1);
@@ -1889,7 +1875,7 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
     if (allow_null) {
         memset(null_home, 1, (size_t)nt);
         for (int i = 0; i < n; i++) {
-            _PyIRWord word = code->co_words[i];
+            _PyIRWord word = _PyCode_IRWords(code)[i];
             const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
             int arg = _PyCode_InstrOparg(code, i);
             int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
@@ -1972,7 +1958,7 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
         for (int i = n; i-- > 0;) {
             for (int lane = REGISTER_REQUIRE_ALL; lane < lanes; lane++) {
                 uint64_t *lane_live = live + (size_t)lane * rows;
-                _PyIRWord word = code->co_words[i];
+                _PyIRWord word = _PyCode_IRWords(code)[i];
                 const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
                 int arg = _PyCode_InstrOparg(code, i);
                 memset(work, 0, stride * sizeof(uint64_t));
@@ -1994,7 +1980,7 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                             }
                         }
                         if (lane != REGISTER_REQUIRE_ALL) {
-                            register_resume_transport_needs(&code->co_words[i], arg, k, lane, analysis,
+                            register_resume_transport_needs(&_PyCode_IRWords(code)[i], arg, k, lane, analysis,
                                                             edge, mapped);
                         }
                         _PyIRSlotOutcome outcome = _PyIR_Outcome(word, k == 1);
@@ -2003,7 +1989,7 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                                 int slot = (r < outcome.count ? outcome.first + r : outcome.dst) - nl;
                                 if (slot >= 0 && slot < nt && slot + nl != IR_NO_DST) {
                                     if (lane == REGISTER_REQUIRE_VALUE && _PyIR_NormalPhysicalTransfer(
-                                            &code->co_words[i], arg, k, slot + nl, nl, nl + nt).kind ==
+                                            &_PyCode_IRWords(code)[i], arg, k, slot + nl, nl, nl + nt).kind ==
                                                 _PyIR_PHYSICAL_SET_NULL)
                                     {
                                         continue;
@@ -2041,24 +2027,16 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                 _PyIRWord actual = (word & ~(_PyIRWord)IR_HANDLER_MASK) | real_handler;
                 for (int j = 0; j < nt; j++) {
                     int home = nl + j;
-                    bool nullable = _PyIR_NullableHomeAs(actual, &code->co_words[i], arg, home);
+                    bool nullable = _PyIR_NullableHomeAs(actual, &_PyCode_IRWords(code)[i], arg, home);
                     bool path_null = analysis->null_states != NULL && nullable &&
                         (analysis->null_states[(size_t)i * stride + j / 64] &
                          ((uint64_t)1 << (j % 64)));
-                    if (_PyIR_ReadsHome(&code->co_words[i], arg, home) && !(null_home[j] && nullable) &&
+                    if (_PyIR_ReadsHome(&_PyCode_IRWords(code)[i], arg, home) && !(null_home[j] && nullable) &&
                         (lane == REGISTER_REQUIRE_ALL ||
                          (lane == REGISTER_REQUIRE_VALUE && !path_null) ||
                          (lane == REGISTER_REQUIRE_NULL_ONLY && path_null)))
                     {
                         work[j / 64] |= (uint64_t)1 << (j % 64);
-                    }
-                }
-                /* Immutable entry constants have a valid home at every site. */
-                const uint32_t *constants = _PyCode_CONSTSLOTS(code);
-                for (int j = 0; j < code->co_nconstslots; j++) {
-                    int slot = (int)constants[j * 2] - nl;
-                    if (slot >= 0 && slot < nt) {
-                        work[slot / 64] &= ~((uint64_t)1 << (slot % 64));
                     }
                 }
                 uint64_t *before = lane_live + (size_t)i * stride;
@@ -2157,7 +2135,7 @@ static void
 register_context_forget_reads(PyCodeObject *code, int pc,
                               RegisterResumeAnalysis *analysis, int *origins)
 {
-    _PyIRWord word = code->co_words[pc];
+    _PyIRWord word = _PyCode_IRWords(code)[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     int arg = _PyCode_InstrOparg(code, pc);
     int base = -1;
@@ -2169,7 +2147,7 @@ register_context_forget_reads(PyCodeObject *code, int pc,
     }
     for (int j = 0; j < analysis->nt; j++) {
         int home = analysis->nl + j;
-        if (_PyIR_ReadsHome(&code->co_words[pc], arg, home) ||
+        if (_PyIR_ReadsHome(&_PyCode_IRWords(code)[pc], arg, home) ||
             /* A call's child frame lies above the parent's, so it only
              * takes the call's operands, which the read test covers */
             (fmt->operands == _PyIR_OPERANDS_NONE &&
@@ -2185,7 +2163,7 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
                          RegisterResumeAnalysis *analysis, int context,
                          int *save_tops, int *origins)
 {
-    _PyIRWord word = code->co_words[pc];
+    _PyIRWord word = _PyCode_IRWords(code)[pc];
     int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
     int arg = _PyCode_InstrOparg(code, pc);
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
@@ -2241,8 +2219,8 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
             if (top <= 0 || input_origin != -top ||
                 !register_origin_chain(analysis->save_parents, analysis->n, top, -1,
                                         analysis->n) ||
-                _PyIR_BaseOpcode(IR_HANDLER(code->co_words[top - 1])) != LOAD_FAST_AND_CLEAR ||
-                local != (int)IR_B(code->co_words[top - 1]))
+                _PyIR_BaseOpcode(IR_HANDLER(_PyCode_IRWords(code)[top - 1])) != LOAD_FAST_AND_CLEAR ||
+                local != (int)IR_B(_PyCode_IRWords(code)[top - 1]))
             {
                 /* Independent locals commute. Only a younger save of this
                  * same local prevents restoring an ancestor's token. */
@@ -2360,7 +2338,7 @@ register_stopped_state_bind(PyFrameObject *self, RegisterResumeAnalysis *analysi
         return 0;
     }
     PyCodeObject *code = _PyFrame_GetCode(frame);
-    _PyIRWord word = code->co_words[pc];
+    _PyIRWord word = _PyCode_IRWords(code)[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (_PyIR_HandlerBase[IR_HANDLER(word)] == PUSH_EXC_INFO) {
         return 0;
@@ -2453,7 +2431,7 @@ register_resume_contexts(PyCodeObject *code, RegisterResumeAnalysis *analysis)
         analysis->save_columns[local] = -1;
     }
     for (int i = 0; i < n; i++) {
-        _PyIRWord word = code->co_words[i];
+        _PyIRWord word = _PyCode_IRWords(code)[i];
         if (_PyIR_BaseOpcode(IR_HANDLER(word)) == LOAD_FAST_AND_CLEAR) {
             int local = (int)IR_B(word);
             if (local < 0 || local >= analysis->nl) {
@@ -2548,16 +2526,16 @@ register_resume_analyze(_PyInterpreterFrame *frame, bool allow_null, bool path_n
 {
     PyCodeObject *code = _PyFrame_GetCode(frame);
     *analysis = (RegisterResumeAnalysis){0};
-    if (Py_SIZE(code) > INT_MAX) {
+    if (_PyCode_IRSize(code) > INT_MAX) {
         PyErr_SetString(PyExc_ValueError, "debugger context analysis is too large");
         return -1;
     }
-    analysis->n = (int)Py_SIZE(code);
-    analysis->nl = code->co_nlocalsplus;
+    analysis->n = (int)_PyCode_IRSize(code);
+    analysis->nl = _PyCode_IRFixed(code);
     analysis->nt = code->co_framesize - FRAME_SPECIALS_SIZE - analysis->nl;
     analysis->stride = (size_t)Py_MAX((analysis->nt + 63) / 64, 1);
     for (int i = 0; i < analysis->n; i++) {
-        _PyIRWord word = code->co_words[i];
+        _PyIRWord word = _PyCode_IRWords(code)[i];
         const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
         uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
         for (int f = 0; f < 4; f++) {
@@ -2598,10 +2576,10 @@ error:
 static bool
 register_anchor_cut(PyCodeObject *code, int i, int base)
 {
-    _PyIRWord word = code->co_words[i];
+    _PyIRWord word = _PyCode_IRWords(code)[i];
     int arg = _PyCode_InstrOparg(code, i);
     for (int home = base; home < base + 2; home++) {
-        if (_PyIR_ReadsHome(&code->co_words[i], arg, home) ||
+        if (_PyIR_ReadsHome(&_PyCode_IRWords(code)[i], arg, home) ||
             _PyIR_DefinesHome(word, arg, home))
         {
             return true;
@@ -2626,7 +2604,7 @@ static bool
 register_anchor_phase(PyCodeObject *code, int header, int base,
                       int current, int target, unsigned char *phase)
 {
-    int n = (int)Py_SIZE(code);
+    int n = (int)_PyCode_IRSize(code);
     memset(phase, 0, (size_t)n);
     phase[0] = 1;  /* reachable without a surviving candidate body anchor */
     bool changed;
@@ -2666,7 +2644,7 @@ static bool
 register_anchor_slice(PyCodeObject *code, int header, int base,
                       int current, int target, unsigned char *seen, int *queue)
 {
-    int n = (int)Py_SIZE(code);
+    int n = (int)_PyCode_IRSize(code);
     for (int pass = 0; pass < 2; pass++) {
         memset(seen, 0, (size_t)n);
         int head = 0, tail = 0;
@@ -2736,14 +2714,14 @@ register_resume_recipe(_PyInterpreterFrame *frame, int current, int target,
         return 0;
     }
     PyCodeObject *code = _PyFrame_GetCode(frame);
-    int n = (int)Py_SIZE(code), nl = code->co_nlocalsplus;
+    int n = (int)_PyCode_IRSize(code), nl = _PyCode_IRFixed(code);
     int nt = code->co_framesize - FRAME_SPECIALS_SIZE - nl;
     size_t stride = (size_t)Py_MAX((nt + 63) / 64, 1);
     unsigned char *phase = NULL;
     int *queue = NULL;
     int result = 0;
     for (int header = 0; header < n; header++) {
-        _PyIRWord word = code->co_words[header];
+        _PyIRWord word = _PyCode_IRWords(code)[header];
         if (_PyIR_BaseOpcode(IR_HANDLER(word)) != FOR_ITER) {
             continue;
         }
@@ -2812,7 +2790,7 @@ static bool
 register_context_cut(PyCodeObject *code, RegisterResumeAnalysis *analysis,
                       RegisterResumePlan *plan, int pc)
 {
-    _PyIRWord word = code->co_words[pc];
+    _PyIRWord word = _PyCode_IRWords(code)[pc];
     int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
     if (opcode == PUSH_EXC_INFO || opcode == POP_EXCEPT) {
         return true;
@@ -2821,7 +2799,7 @@ register_context_cut(PyCodeObject *code, RegisterResumeAnalysis *analysis,
         if (register_plan_has(plan, j)) {
             int home = analysis->nl + j;
             int arg = _PyCode_InstrOparg(code, pc);
-            if (_PyIR_ReadsHome(&code->co_words[pc], arg, home) || _PyIR_DefinesHome(word, arg, home)) {
+            if (_PyIR_ReadsHome(&_PyCode_IRWords(code)[pc], arg, home) || _PyIR_DefinesHome(word, arg, home)) {
                 return true;
             }
             for (int k = 0; k < 2; k++) {
@@ -3039,9 +3017,9 @@ register_unbound_target_safe(PyCodeObject *code, RegisterResumeAnalysis *analysi
     queue[tail++] = target;
     while (head < tail && result) {
         int pc = queue[head++];
-        _PyIRWord word = code->co_words[pc];
+        _PyIRWord word = _PyCode_IRWords(code)[pc];
         int arg = _PyCode_InstrOparg(code, pc);
-        if (_PyIR_BindingRead(&code->co_words[pc], arg, local) == _PyIR_BINDING_REQUIRES_VALUE) {
+        if (_PyIR_BindingRead(&_PyCode_IRWords(code)[pc], arg, local) == _PyIR_BINDING_REQUIRES_VALUE) {
             result = 0;
             break;
         }
@@ -3088,7 +3066,7 @@ register_saved_locals_plan(_PyInterpreterFrame *frame, int target,
         }
         _PyLocals_Kind kind = _PyLocals_GetKind(code->co_localspluskinds, local);
         if (!can_restore || !(kind & CO_FAST_LOCAL) ||
-            (kind & (CO_FAST_CELL | CO_FAST_FREE | CO_FAST_CONST)) ||
+            (kind & (CO_FAST_CELL | CO_FAST_FREE)) ||
             !register_origin_chain(analysis->save_parents, analysis->n, top, -1,
                                      analysis->n))
         {
@@ -3096,7 +3074,7 @@ register_saved_locals_plan(_PyInterpreterFrame *frame, int target,
         }
         int selected = -1;
         for (int node = top; node > 0; node = analysis->save_parents[node - 1]) {
-            _PyIRWord word = code->co_words[node - 1];
+            _PyIRWord word = _PyCode_IRWords(code)[node - 1];
             if (_PyIR_BaseOpcode(IR_HANDLER(word)) != LOAD_FAST_AND_CLEAR ||
                 (int)IR_B(word) != local)
             {
@@ -3136,12 +3114,6 @@ register_saved_locals_plan(_PyInterpreterFrame *frame, int target,
             ((uint64_t)1 << (relative % 64)))
         {
             return 0;
-        }
-        const uint32_t *constants = _PyCode_CONSTSLOTS(code);
-        for (int i = 0; i < code->co_nconstslots; i++) {
-            if (constants[i * 2] == (uint32_t)selected) {
-                return 0;
-            }
         }
         for (int i = 0; i < plan->nrestores; i++) {
             if (plan->restores[i].home == selected) {
@@ -3225,7 +3197,7 @@ register_resume_plan(_PyInterpreterFrame *frame, int current, int target,
          * Keep that adapter bounded until its own exceptional survival proof
          * is extended; empty inherited recipes already include EH liveness. */
         bool ordinary_anchor = allow_anchor && _PyIRSemantic_Stored(
-            _PyFrame_GetCode(frame)->co_exceptiontable).exceptions_size == 0;
+            _PyFrame_GetCode(frame)).exceptions_size == 0;
         int result = register_resume_recipe(frame, current, target, analysis->safe,
                                              analysis->required, ordinary_anchor, &pair);
         if (result > 0 && pair >= 0) {
@@ -3303,10 +3275,14 @@ marklines(PyCodeObject *code, int len)
         linestarts[i] = -1;
     }
 
+    // The line table counts the code units of co_code; a line starts at the
+    // first word of its first instruction that has one
     while (_PyLineTable_NextAddressRange(&bounds)) {
-        assert(bounds.ar_start < len);
         if (bounds.ar_line != last_line && bounds.ar_line != -1) {
-            linestarts[bounds.ar_start] = bounds.ar_line;
+            int word = _PyCode_OffsetWord(code, bounds.ar_start);
+            if (word < len) {
+                linestarts[word] = bounds.ar_line;
+            }
             last_line = bounds.ar_line;
         }
     }
@@ -3435,7 +3411,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
 
     /* PyCode_NewWithPosOnlyArgs limits co_code to be under INT_MAX so this
      * should never overflow. */
-    int len = (int)Py_SIZE(code);
+    int len = (int)_PyCode_IRSize(code);
     int *lines = marklines(code, len);
     if (lines == NULL) {
         return -1;
@@ -3471,7 +3447,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     RegisterStoppedState identity_phase = register_stopped_state(
         self, real_current, what_event, false, line_tstate->observed_frame);
     if (!is_suspended && identity_phase.kind == REGISTER_RESUME_PRE_WORD &&
-        PyCode_Addr2Line(code, real_current) == new_lineno)
+        PyCode_Addr2Line(code, _PyCode_WordOffset(code, real_current)) == new_lineno)
     {
         PyMem_Free(lines);
         if (self->f_lineno_generation == UINT64_MAX) {
@@ -3516,7 +3492,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     }
     if (child != NULL) {
         int opcode = _PyIR_EventOpcode(_PyCode_InstrHandler(code, current));
-        if (child->external || _PyIRSemantic_Stored(code->co_exceptiontable).exceptions_size ||
+        if (child->external || _PyIRSemantic_Stored(code).exceptions_size ||
             self->f_frame->return_slot != _PyFrame_DiscardSlot(self->f_frame) ||
             (opcode != CALL && opcode != CALL_KW))
         {
@@ -3654,12 +3630,10 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     // in the new location. Rather than crashing or changing co_code, just bind
     // None instead:
     int unbound = 0;
-    int discard = _PyFrame_DiscardSlotForCodeObject(code);
     for (int i = 0; i < code->co_nlocalsplus; i++) {
         // Counting every unbound local is overly-cautious, but a full flow
         // analysis (like we do in the compiler) is probably too expensive.
-        // The discard slot is no variable:
-        unbound += i != discard && PyValue_IsNull(self->f_frame->base[i]) &&
+        unbound += PyValue_IsNull(self->f_frame->base[i]) &&
                    !register_plan_restores_local(&plan, i);
     }
     if (self->f_lineno_generation == UINT64_MAX) {
@@ -3740,7 +3714,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     PyValue *retired = NULL;
     PyValue *restored_values = NULL;
     if (!pending_call) {
-        size_t count = (size_t)(nslots - code->co_nlocalsplus) + plan.nrestores;
+        size_t count = (size_t)(nslots - _PyCode_IRFixed(code)) + plan.nrestores;
         if (count > SIZE_MAX / sizeof(PyValue)) {
             register_resume_plan_clear(&plan);
             PyErr_NoMemory();
@@ -3765,20 +3739,16 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         frame->base[action.local] = PyValue_NULL;
     }
     if (!pending_call) {
-        const uint32_t *constants = _PyCode_CONSTSLOTS(code);
-        for (int slot = code->co_nlocalsplus; slot < nslots; slot++) {
-            bool constant = false;
-            for (int j = 0; j < code->co_nconstslots; j++) {
-                constant |= constants[j * 2] == (uint32_t)slot;
-            }
-            if (!constant && !register_plan_has(&plan, slot - code->co_nlocalsplus)) {
+        int fixed = _PyCode_IRFixed(code);
+        for (int slot = fixed; slot < nslots; slot++) {
+            if (!register_plan_has(&plan, slot - fixed)) {
                 retired[nretired++] = frame->base[slot];
                 frame->base[slot] = PyValue_NULL;
             }
         }
     }
     for (int i = 0; i < code->co_nlocalsplus; i++) {
-        if (i != discard && PyValue_IsNull(frame->base[i]) &&
+        if (PyValue_IsNull(frame->base[i]) &&
             !register_plan_restores_local(&plan, i))
         {
             frame->base[i] = PyValue_None;
@@ -4107,7 +4077,7 @@ PyFrameObject*
 _PyFrame_New_NoTrack(PyCodeObject *code)
 {
     CALL_STAT_INC(frame_objects_created);
-    int slots = code->co_nlocalsplus + code->co_stacksize;
+    int slots = _PyFrame_NumSlotsForCodeObject(code);
     PyFrameObject *f = PyObject_GC_NewVar(PyFrameObject, &PyFrame_Type, slots);
     if (f == NULL) {
         return NULL;
@@ -4167,7 +4137,7 @@ PyFrame_New(PyThreadState *tstate, PyCodeObject *code,
     f->f_frame = (_PyInterpreterFrame *)f->_f_frame_data;
     f->f_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
     // This frame needs to be "complete", so pretend that the first RESUME ran:
-    f->f_frame->instr_ptr = f->f_frame->ir_words + code->_co_firsttraceable + 1;
+    f->f_frame->instr_ptr = f->f_frame->ir_words + _PyCode_FirstTraceable(code) + 1;
     assert(!_PyFrame_IsIncomplete(f->f_frame));
     Py_DECREF(func);
     _PyObject_GC_TRACK(f);
@@ -4218,9 +4188,6 @@ frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
        We don't want to accidentally copy free variables
        into the locals dict used by the class.
     */
-    if (kind & CO_FAST_CONST) {
-        return 0;
-    }
     if (kind & CO_FAST_FREE && !(co->co_flags & CO_OPTIMIZED)) {
         return 0;
     }
@@ -4466,8 +4433,7 @@ PyFrame_GetLasti(PyFrameObject *frame)
     int ret;
     Py_BEGIN_CRITICAL_SECTION(frame);
     assert(!_PyFrame_IsIncomplete(frame->f_frame));
-    int lasti = _PyFrame_InstrOffset(frame->f_frame, frame->f_frame->instr_ptr);
-    ret = lasti;
+    ret = PyUnstable_InterpreterFrame_GetLasti(frame->f_frame);
     Py_END_CRITICAL_SECTION();
     return ret;
 }

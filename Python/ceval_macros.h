@@ -587,14 +587,14 @@ gen_try_set_executing(PyGenObject *gen)
 
 /* Whether field F names a local, a cell, a free variable or the frame's
  * discard slot (a hidden local) rather than a temporary: the executing copy
- * keeps co_nlocalsplus in its header.  An input read through
+ * keeps the count of such slots in its header.  An input read through
  * a local is borrowed in place and never released; one read through a
  * temporary dies with the instruction, and the handler detaches it
  * (IR_DETACH) after its effect.  A result written through a local or the
  * discard slot releases the slot's old value (IR_STORE_DST). */
-#define IR_NLOCALSPLUS() \
-    ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
-#define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
+#define IR_NFIXED() \
+    ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nfixed)
+#define IR_IS_LOCAL(F) ((int)(F) < IR_NFIXED())
 
 /* The value of field X of word W */
 #define IR_FIELD(W, X) IR_##X(W)

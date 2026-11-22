@@ -1497,12 +1497,10 @@ call_release_pass(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
  * owners that hold the last count to OWNERS, which then close in reverse
  * order, so that all of them have left the frame before the first
  * deallocation can run Python (handlers81 rule 5). */
-static Py_NO_INLINE void
-call_release_rest(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
-                  int operands, uint32_t dst)
+static inline Py_ALWAYS_INLINE void
+call_release_owners(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
+                    int operands, uint32_t dst, PyValue *owners)
 {
-    /* The operands and the callable; a call has at most IR_FIELD_MAX */
-    PyValue owners[operands + 1];
     int last = 0;
 #define CALL_DETACH(HOME) \
     do { \
@@ -1541,6 +1539,39 @@ call_release_rest(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
     while (last > 0) {
         PyValue_XCLOSE(owners[--last]);
     }
+}
+
+/* The pass for a call of at most IR_OPERANDS_PER_WORD operands, whose owners
+ * are in a fixed array: no variable-length array, so no stack check. */
+static Py_NO_INLINE void
+call_release_small(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
+                   int operands, uint32_t dst)
+{
+    PyValue owners[IR_OPERANDS_PER_WORD + 1];
+    call_release_owners(slots, head, word, operands, dst, owners);
+}
+
+/* The pass for a longer call.  The operands and the callable are at most
+ * IR_FIELD_MAX + 1. */
+static Py_NO_INLINE void
+call_release_wide(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
+                  int operands, uint32_t dst)
+{
+    PyValue owners[operands + 1];
+    call_release_owners(slots, head, word, operands, dst, owners);
+}
+
+/* The pass that call_release_pass() owes, and the one for a longer call:
+ * the handlers call this one entry. */
+static Py_NO_INLINE void
+call_release_rest(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
+                  int operands, uint32_t dst)
+{
+    if (operands > IR_OPERANDS_PER_WORD) {
+        call_release_wide(slots, head, word, operands, dst);
+        return;
+    }
+    call_release_small(slots, head, word, operands, dst);
 }
 
 /* Release the temporary operands and the callable of a call: its owners that

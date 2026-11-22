@@ -513,7 +513,7 @@ Pdata_clear(Pdata *self, Py_ssize_t clearto)
     return 0;
 }
 
-static int
+static Py_NO_INLINE int
 Pdata_grow(Pdata *self)
 {
     PyValue *data = self->data;
@@ -572,10 +572,12 @@ Pdata_peek(Pdata *self, Py_ssize_t from_top)
 
 /* Push an owner, transferring its ownership to the stack.  On failure the
  * owner is closed. */
-static int
+static inline int
 Pdata_push_value(Pdata *self, PyValue item)
 {
-    if (Py_SIZE(self) == self->allocated && Pdata_grow(self) < 0) {
+    if (Py_UNLIKELY(Py_SIZE(self) == self->allocated)
+        && Pdata_grow(self) < 0)
+    {
         PyValue_CLOSE(item);
         return -1;
     }
@@ -586,7 +588,7 @@ Pdata_push_value(Pdata *self, PyValue item)
 }
 
 /* Push an object, transferring its ownership to the stack. */
-static int
+static inline int
 Pdata_push(Pdata *self, PyObject *obj)
 {
     return Pdata_push_value(self, PyValue_PrepareOwned(obj));
@@ -1109,36 +1111,44 @@ _Pickler_FlushToFile(PicklerObject *self)
     return (result == NULL) ? -1 : 0;
 }
 
-static int
-_Pickler_OpcodeBoundary(PicklerObject *self)
+/* The frame has reached FRAME_SIZE_TARGET: commit it and, when writing to a
+ * file, flush it. */
+static Py_NO_INLINE int
+_Pickler_CommitBoundary(PicklerObject *self)
 {
-    Py_ssize_t frame_len;
-
-    if (!self->framing || self->frame_start == -1) {
-        return 0;
+    if (_Pickler_CommitFrame(self)) {
+        return -1;
     }
-    frame_len = self->output_len - self->frame_start - FRAME_HEADER_SIZE;
-    if (frame_len >= FRAME_SIZE_TARGET) {
-        if(_Pickler_CommitFrame(self)) {
+    /* Flush the content of the committed frame to the underlying
+     * file and reuse the pickler buffer for the next frame so as
+     * to limit memory usage when dumping large complex objects to
+     * a file.
+     *
+     * self->write is NULL when called via dumps.
+     */
+    if (self->write != NULL) {
+        if (_Pickler_FlushToFile(self) < 0) {
             return -1;
         }
-        /* Flush the content of the committed frame to the underlying
-         * file and reuse the pickler buffer for the next frame so as
-         * to limit memory usage when dumping large complex objects to
-         * a file.
-         *
-         * self->write is NULL when called via dumps.
-         */
-        if (self->write != NULL) {
-            if (_Pickler_FlushToFile(self) < 0) {
-                return -1;
-            }
-            if (_Pickler_ClearBuffer(self) < 0) {
-                return -1;
-            }
+        if (_Pickler_ClearBuffer(self) < 0) {
+            return -1;
         }
     }
     return 0;
+}
+
+/* Called before each opcode is saved: only the length test is inline. */
+static inline int
+_Pickler_OpcodeBoundary(PicklerObject *self)
+{
+    if (!self->framing || self->frame_start == -1) {
+        return 0;
+    }
+    Py_ssize_t frame_len = self->output_len - self->frame_start - FRAME_HEADER_SIZE;
+    if (frame_len < FRAME_SIZE_TARGET) {
+        return 0;
+    }
+    return _Pickler_CommitBoundary(self);
 }
 
 static Py_ssize_t
@@ -6513,7 +6523,7 @@ load_counted_binbytes(PickleState *state, UnpicklerObject *self, int nbytes)
         }
     }
 
-    PDATA_PUSH(self->stack, bytes, -1);
+    PDATA_PUSH_VALUE(self->stack, PyValue_FromNonNumberSteal(bytes), -1);
     return 0;
 }
 
@@ -6559,7 +6569,7 @@ load_counted_bytearray(PickleState *state, UnpicklerObject *self)
         }
     }
 
-    PDATA_PUSH(self->stack, bytearray, -1);
+    PDATA_PUSH_VALUE(self->stack, PyValue_FromNonNumberSteal(bytearray), -1);
     return 0;
 }
 
@@ -6634,7 +6644,7 @@ load_unicode(PickleState *state, UnpicklerObject *self)
     if (str == NULL)
         return -1;
 
-    PDATA_PUSH(self->stack, str, -1);
+    PDATA_PUSH_VALUE(self->stack, PyValue_FromNonNumberSteal(str), -1);
     return 0;
 }
 
@@ -6663,7 +6673,7 @@ load_counted_binunicode(PickleState *state, UnpicklerObject *self, int nbytes)
     if (str == NULL)
         return -1;
 
-    PDATA_PUSH(self->stack, str, -1);
+    PDATA_PUSH_VALUE(self->stack, PyValue_FromNonNumberSteal(str), -1);
     return 0;
 }
 
@@ -6678,7 +6688,7 @@ load_counted_tuple(PickleState *state, UnpicklerObject *self, Py_ssize_t len)
     tuple = Pdata_poptuple(state, self->stack, Py_SIZE(self->stack) - len);
     if (tuple == NULL)
         return -1;
-    PDATA_PUSH(self->stack, tuple, -1);
+    PDATA_PUSH_VALUE(self->stack, PyValue_FromNonNumberSteal(tuple), -1);
     return 0;
 }
 
@@ -6700,7 +6710,7 @@ load_empty_list(PickleState *state, UnpicklerObject *self)
 
     if ((list = PyList_New(0)) == NULL)
         return -1;
-    PDATA_PUSH(self->stack, list, -1);
+    PDATA_PUSH_VALUE(self->stack, PyValue_FromNonNumberSteal(list), -1);
     return 0;
 }
 
@@ -6711,7 +6721,7 @@ load_empty_dict(PickleState *state, UnpicklerObject *self)
 
     if ((dict = PyDict_New()) == NULL)
         return -1;
-    PDATA_PUSH(self->stack, dict, -1);
+    PDATA_PUSH_VALUE(self->stack, PyValue_FromNonNumberSteal(dict), -1);
     return 0;
 }
 
@@ -6722,7 +6732,7 @@ load_empty_set(PickleState *state, UnpicklerObject *self)
 
     if ((set = PySet_New(NULL)) == NULL)
         return -1;
-    PDATA_PUSH(self->stack, set, -1);
+    PDATA_PUSH_VALUE(self->stack, PyValue_FromNonNumberSteal(set), -1);
     return 0;
 }
 
@@ -6738,7 +6748,7 @@ load_list(PickleState *state, UnpicklerObject *self)
     list = Pdata_poplist(self->stack, i);
     if (list == NULL)
         return -1;
-    PDATA_PUSH(self->stack, list, -1);
+    PDATA_PUSH_VALUE(self->stack, PyValue_FromNonNumberSteal(list), -1);
     return 0;
 }
 
@@ -6769,7 +6779,7 @@ load_dict(PickleState *st, UnpicklerObject *self)
         }
     }
     Pdata_clear(self->stack, i);
-    PDATA_PUSH(self->stack, dict, -1);
+    PDATA_PUSH_VALUE(self->stack, PyValue_FromNonNumberSteal(dict), -1);
     return 0;
 }
 
@@ -6792,7 +6802,7 @@ load_frozenset(PickleState *state, UnpicklerObject *self)
     if (frozenset == NULL)
         return -1;
 
-    PDATA_PUSH(self->stack, frozenset, -1);
+    PDATA_PUSH_VALUE(self->stack, PyValue_FromNonNumberSteal(frozenset), -1);
     return 0;
 }
 

@@ -3642,17 +3642,14 @@ makeuniversal(XMLParserObject* self, const char* string)
     /* convert a UTF-8 tag/attribute name from the expat parser
        to a universal name string */
 
-    Py_ssize_t size = (Py_ssize_t) strlen(string);
-    PyObject* key;
-    PyObject* value;
-
-    /* look the 'raw' name up in the names dictionary */
-    key = PyBytes_FromStringAndSize(string, size);
-    if (!key)
+    /* look the 'raw' name up in the names dictionary. Its keys are str, so
+       the lookup takes the dict's str path rather than comparing bytes. */
+    PyObject *key = PyUnicode_DecodeUTF8(string, (Py_ssize_t)strlen(string),
+                                         "strict");
+    if (key == NULL) {
         return NULL;
+    }
 
-    // The key is bytes and the cached names are str, so neither is an inline
-    // value to convert.
     PyValue cached = PyValue_NULL;
     if (PyDict_GetValue(self->names, _PyValue_PointerBorrow(key), &cached) != 0) {
         // The key exists or an error occurred
@@ -3663,49 +3660,21 @@ makeuniversal(XMLParserObject* self, const char* string)
         return PyValue_AsKnownObjectSteal(cached);
     }
 
-    /* new name.  convert to universal name, and decode as
-       necessary */
-
-    PyObject* tag;
-    Py_ssize_t i;
-
-    /* look for namespace separator */
-    for (i = 0; i < size; i++)
-        if (string[i] == '}')
-            break;
-    if (i != size) {
-        /* convert to universal name */
-        PyBytesWriter *writer = PyBytesWriter_Create(1 + size);
-        if (writer == NULL) {
-            Py_DECREF(key);
-            return NULL;
-        }
-        char *p = PyBytesWriter_GetData(writer);
-        p[0] = '{';
-        memcpy(p+1, string, size);
-        size++;
-
-        tag = PyBytesWriter_Finish(writer);
-        if (tag == NULL) {
+    /* new name.  a namespaced name "uri}local" becomes the universal name
+       "{uri}local"; any other name is its own universal name. */
+    PyObject *value;
+    if (strchr(string, '}') != NULL) {
+        value = PyUnicode_FromFormat("{%U", key);
+        if (value == NULL) {
             Py_DECREF(key);
             return NULL;
         }
     } else {
-        /* plain name; use key as tag */
-        tag = Py_NewRef(key);
-    }
-
-    /* decode universal name */
-    const char *p = PyBytes_AS_STRING(tag);
-    value = PyUnicode_DecodeUTF8(p, size, "strict");
-    Py_DECREF(tag);
-    if (!value) {
-        Py_DECREF(key);
-        return NULL;
+        value = Py_NewRef(key);
     }
 
     /* add to names dictionary */
-    if (PyDict_SetValue(self->names, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value)) < 0) {
+    if (PyDict_SetValue(self->names, _PyValue_PointerBorrow(key), _PyValue_PointerBorrow(value)) < 0) {
         Py_DECREF(key);
         Py_DECREF(value);
         return NULL;

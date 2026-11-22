@@ -2401,18 +2401,21 @@ generator_control_generation(_PyInterpreterFrame *frame)
     return frame->frame_obj == NULL ? 0 : frame->frame_obj->f_lineno_generation;
 }
 
-/* Close one input of a completed send.  The receiver is the generator that
- * has just completed (or an awaited coroutine): its last owner frees it
- * without running code if it is plain. */
+/* The generator that has just completed (or an awaited coroutine) is closed
+ * by its last owner, which frees it without running code if it is plain. */
+static inline bool
+gen_try_close_completed(PyValue receiver)
+{
+    return PyValue_RefcountOnObject(receiver) &&
+        _PyGen_TryCloseClearedNoReentry(PyValue_AsKnownObjectBorrow(receiver));
+}
+
+/* Close one input of a completed send. */
 static inline bool
 gen_close_input(PyValue input, bool receiver)
 {
-    if (receiver && PyValue_RefcountOnObject(input) &&
-        _PyGen_TryCloseClearedNoReentry(PyValue_AsKnownObjectBorrow(input)))
-    {
-        return true;
-    }
-    return _PyValue_TryXCloseNoReentry(input);
+    return (receiver && gen_try_close_completed(input)) ||
+        _PyValue_TryXCloseNoReentry(input);
 }
 
 /* The kind that a generator table gives a word's handler (the enums of
@@ -3616,7 +3619,7 @@ clear_gen_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
     gen->gi_exc_state.previous_item = NULL;
     frame->previous = NULL;
     assert(frame->frame_obj == NULL || frame->frame_obj->f_frame == frame);
-    result = _PyFrame_ClearGenerator(gen, result);
+    _PyFrame_ClearGenerator(gen, _PyFrame_NumSlots(frame));
     // No escaping call may follow this store before evaluator return.
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
     return result;
@@ -3637,7 +3640,7 @@ clear_error_frame(PyThreadState *tstate, _PyInterpreterFrame *frame)
     tstate->exc_info = gen->gi_exc_state.previous_item;
     gen->gi_exc_state.previous_item = NULL;
     frame->previous = NULL;
-    _PyFrame_ClearGeneratorBindings(gen);
+    _PyFrame_ClearGenerator(gen, _PyFrame_GetCode(frame)->co_nlocalsplus);
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
 }
 

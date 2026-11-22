@@ -186,7 +186,7 @@ gen_clear_frame(PyGenObject *gen)
     _PyInterpreterFrame *frame = &gen->gi_iframe;
     _PyThreadState_UpdateLastProfiledFrame(_PyThreadState_GET(), frame, frame->previous);
     frame->previous = NULL;
-    (void)_PyFrame_ClearGenerator(gen, PyValue_NULL);
+    _PyFrame_ClearGenerator(gen, _PyFrame_NumSlots(frame));
 }
 
 int
@@ -287,12 +287,15 @@ gen_dealloc(PyObject *self)
 
     FT_CLEAR_WEAKREFS(self, gen->gi_weakreflist);
 
-    _PyObject_GC_TRACK(self);
+    // A finished generator has nothing to finalize
+    if (!FRAME_STATE_FINISHED(gen->gi_frame_state)) {
+        _PyObject_GC_TRACK(self);
 
-    if (PyObject_CallFinalizerFromDealloc(self))
-        return;                     /* resurrected.  :( */
+        if (PyObject_CallFinalizerFromDealloc(self))
+            return;                     /* resurrected.  :( */
 
-    _PyObject_GC_UNTRACK(self);
+        _PyObject_GC_UNTRACK(self);
+    }
     if (PyAsyncGen_CheckExact(gen)) {
         /* We have to handle this case for asynchronous generators
            right here, because this code has to be between UNTRACK

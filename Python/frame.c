@@ -239,49 +239,23 @@ _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame, int extent)
     Py_CLEAR(frame->f_funcobj);
 }
 
-static inline PyValue
-clear_generator_at_extent(PyGenObject *gen, PyValue result, int extent)
-{
-    Py_BEGIN_CRITICAL_SECTION(gen);
-    _PyFrame_ClearExceptCode(&gen->gi_iframe, extent);
-    Py_END_CRITICAL_SECTION();
-    _PyErr_ClearExcState(&gen->gi_exc_state);
-    return result;
-}
-
-PyValue
-_PyFrame_ClearGenerator(PyGenObject *gen, PyValue result)
-{
-    return clear_generator_at_extent(gen, result,
-                                     _PyFrame_NumSlots(&gen->gi_iframe));
-}
-
-PyValue
-_PyFrame_ClearGeneratorLocals(PyGenObject *gen, PyValue result)
-{
-    /* The return that is certified RETURN_VALUE_EMPTY leaves the scratch
-     * empty, as for a thread frame: only the locals own values. */
-    _PyInterpreterFrame *frame = &gen->gi_iframe;
-    if (frame->frame_obj != NULL) {
-        return clear_generator_at_extent(gen, result,
-            _PyFrame_GetCode(frame)->co_nlocalsplus);
-    }
-    assert(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CLEARED);
-    Py_BEGIN_CRITICAL_SECTION(gen);
-    _PyFrame_ClearSlots(frame, _PyFrame_GetCode(frame)->co_nlocalsplus);
-    Py_CLEAR(frame->f_funcobj);
-    Py_END_CRITICAL_SECTION();
-    _PyErr_ClearExcState(&gen->gi_exc_state);
-    return result;
-}
-
 void
-_PyFrame_ClearGeneratorBindings(PyGenObject *gen)
+_PyFrame_ClearGenerator(PyGenObject *gen, int extent)
 {
-    /* The error processor has drained selected scratch. Do not reconstruct
-     * an N-sized view from the generator's allocation or its public PC. */
-    (void)clear_generator_at_extent(gen, PyValue_NULL,
-        _PyFrame_GetCode(&gen->gi_iframe)->co_nlocalsplus);
+    _PyInterpreterFrame *frame = &gen->gi_iframe;
+    assert(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CLEARED);
+    // GH-99729: a finalizer can expose the stack, so the frame is unlinked
+    assert(_PyThreadState_GET()->current_frame != frame);
+    Py_BEGIN_CRITICAL_SECTION(gen);
+    if (Py_UNLIKELY(frame->frame_obj != NULL)) {
+        _PyFrame_ClearExceptCode(frame, extent);
+    }
+    else {
+        _PyFrame_ClearSlots(frame, extent);
+        Py_CLEAR(frame->f_funcobj);
+    }
+    Py_END_CRITICAL_SECTION();
+    _PyErr_ClearExcState(&gen->gi_exc_state);
 }
 
 /* Unstable API functions */

@@ -628,16 +628,14 @@ _PyFrame_ClearSlots(_PyInterpreterFrame *frame, int n)
  * closes the code. */
 void _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame, int extent);
 
-/* Retire a generator's frame and exception state, keeping the result the
- * caller detached. The code remains owned by the generator. Close and
- * deallocation pass NULL. */
-PyAPI_FUNC(PyValue) _PyFrame_ClearGenerator(PyGenObject *gen, PyValue result);
-/* The same, for the return that leaves the scratch empty
- * (RETURN_VALUE_EMPTY): only the locals own values. */
-PyAPI_FUNC(PyValue) _PyFrame_ClearGeneratorLocals(PyGenObject *gen, PyValue result);
-/* The same, for a frame whose scratch the error processor already drained:
- * only the bindings remain. */
-void _PyFrame_ClearGeneratorBindings(PyGenObject *gen);
+/* Retire a generator's frame and exception state, whose state is already
+ * CLEARED: the frame as _PyFrame_ClearExceptCode() does for the first extent
+ * slots (every slot, or for the return that leaves the scratch empty,
+ * RETURN_VALUE_EMPTY, only the locals; or only the bindings, when the error
+ * processor already drained the scratch), and the exception state.  The code
+ * remains owned by the generator.  Whatever the caller holds in C (a result)
+ * is an external reference. */
+PyAPI_FUNC(void) _PyFrame_ClearGenerator(PyGenObject *gen, int extent);
 
 int
 _PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg);

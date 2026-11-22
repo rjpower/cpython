@@ -1093,7 +1093,6 @@ basicblock_remove_redundant_nops(basicblock *bb) {
     /* Remove NOPs when legal to do so. */
     int dest = 0;
     int prev_lineno = -1;
-    basicblock *prev_except = NULL;
     for (int src = 0; src < bb->b_iused; src++) {
         int lineno = bb->b_instr[src].i_loc.lineno;
         if (bb->b_instr[src].i_opcode == NOP) {
@@ -1101,27 +1100,19 @@ basicblock_remove_redundant_nops(basicblock *bb) {
             if (lineno < 0) {
                 continue;
             }
-            /* Equal source lines do not imply equal observer exception state.
-             * In particular, line propagation can cross POP_BLOCK. */
-            if (prev_lineno == lineno &&
-                prev_except == bb->b_instr[src].i_except)
-            {
+            /* or, if the previous instruction had the same line number. */
+            if (prev_lineno == lineno) {
                 bb->b_instr[dest - 1].i_source |= bb->b_instr[src].i_source;
                 continue;
             }
             /* or, if the next instruction has same line number or no line number */
             if (src < bb->b_iused - 1) {
                 int next_lineno = bb->b_instr[src+1].i_loc.lineno;
-                if (next_lineno == lineno &&
-                    bb->b_instr[src+1].i_except == bb->b_instr[src].i_except)
-                {
+                if (next_lineno == lineno) {
                     bb->b_instr[src+1].i_source |= bb->b_instr[src].i_source;
                     continue;
                 }
-                if (next_lineno < 0 &&
-                    bb->b_instr[src+1].i_opcode != POP_BLOCK &&
-                    bb->b_instr[src+1].i_except == bb->b_instr[src].i_except)
-                {
+                if (next_lineno < 0) {
                     bb->b_instr[src+1].i_loc = bb->b_instr[src].i_loc;
                     bb->b_instr[src+1].i_source |= bb->b_instr[src].i_source;
                     continue;
@@ -1132,7 +1123,6 @@ basicblock_remove_redundant_nops(basicblock *bb) {
                 /* or if last instruction in BB and next BB has same line number */
                 if (next) {
                     location next_loc = NO_LOCATION;
-                    basicblock *next_except = NULL;
                     cfg_instr *next_source = NULL;
                     for (int next_i=0; next_i < next->b_iused; next_i++) {
                         cfg_instr *instr = &next->b_instr[next_i];
@@ -1141,13 +1131,10 @@ basicblock_remove_redundant_nops(basicblock *bb) {
                             continue;
                         }
                         next_loc = instr->i_loc;
-                        next_except = instr->i_except;
                         next_source = instr;
                         break;
                     }
-                    if (lineno == next_loc.lineno &&
-                        next_except == bb->b_instr[src].i_except)
-                    {
+                    if (lineno == next_loc.lineno) {
                         assert(next_source != NULL);
                         next_source->i_source |= bb->b_instr[src].i_source;
                         continue;
@@ -1159,7 +1146,6 @@ basicblock_remove_redundant_nops(basicblock *bb) {
         if (dest != src) {
             bb->b_instr[dest] = bb->b_instr[src];
         }
-        prev_except = bb->b_instr[dest].i_except;
         dest++;
         prev_lineno = lineno;
     }
@@ -4570,11 +4556,14 @@ decode_instructions(PyCodeObject *co, decoded_instr **instrs, int *ninstrs,
         oparg |= code[i].op.arg;
         // Only the stack bytecode of the compiler, which is not specialised
         // or instrumented, has a meaning here
-        if (!IS_VALID_OPCODE(opcode) || IS_PSEUDO_INSTR(opcode) ||
+        if (!IS_STACK_OPCODE(opcode) || IS_PSEUDO_INSTR(opcode) ||
             _PyOpcode_Deopt[opcode] != opcode ||
             opcode >= MIN_INSTRUMENTED_OPCODE)
         {
-            goto malformed;
+            PyMem_Free(array);
+            PyMem_Free(index);
+            PyErr_Format(PyExc_SystemError, "unknown opcode %d", opcode);
+            return ERROR;
         }
         int next = i + 1 + _PyOpcode_Caches[opcode];
         if (next > units) {
@@ -4657,7 +4646,12 @@ decode_locations(PyCodeObject *co, decoded_instr *instrs, int ninstrs)
             if (!_PyLineTable_NextLocation(&range, &line, &endline, &col,
                                            &endcol))
             {
-                return lowering_error(co, "the location table ends early");
+                // Code whose bytes were edited may outrun its table; the
+                // rest has no location, as in PyCode_Addr2Line
+                for (; k < ninstrs; k++) {
+                    instrs[k].loc = NO_LOCATION;
+                }
+                return SUCCESS;
             }
             have = 1;
         }

@@ -9095,7 +9095,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            assert(!IR_IS_LOCAL_FIELD(ir_word, A));
             PyValue iter;
             iter = window[0];
             assert(PyValue_IsObject(iter));
@@ -9124,6 +9123,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             IR_STORE_ITEM_PAIR(&IR_SLOT(IR_D(unpack)), key, value);
             next_instr++;
+            IR_MOVE_TO_DST(ir_word, A, window[2]);
+            PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
 

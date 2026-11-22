@@ -3991,7 +3991,7 @@ dummy_func(
         // the handler then continues after that word, which stays in place
         // for the generic form.  Instrumentation may replace that word, and
         // then the generic form runs it.
-        ir_only op(_FOR_ITER_DICT_ITEMS, (iter, null_or_index -- iter, null_or_index, unused, unused)) {
+        ir_only op(_FOR_ITER_DICT_ITEMS, (iter, null_or_index -- iter, null_or_index, unused)) {
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(Py_TYPE(iter_o) != &PyDictIterItem_Type);

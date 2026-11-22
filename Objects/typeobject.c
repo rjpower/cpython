@@ -9289,31 +9289,37 @@ object___reduce___impl(PyValueBorrow self)
 static PyValue
 object___reduce_ex___object(PyObject *self, int protocol)
 {
-    PyObject *reduce;
-    if (PyObject_GetOptionalAttr(self, &_Py_ID(__reduce__), &reduce) < 0) {
+    /* The method is found as a call by name finds it: a method on the type
+     * is not bound. */
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyStatusValue found = _PyValue_GetMethod(PyValue_FromObjectBorrow(self),
+                                              &_Py_ID(__reduce__));
+    if (found.status < 0 && !_PyErr_ExceptionMatches(tstate, PyExc_AttributeError)) {
         return PyValue_NULL;
     }
-    if (reduce != NULL) {
-        PyObject *cls, *clsreduce;
-        int override;
-
-        cls = (PyObject *) Py_TYPE(self);
-        clsreduce = _PyValue_AsObjectResultAt(_PyValue_GetAttr(_PyValue_FromObjectKnown(cls), &_Py_ID(__reduce__)), BOX_SITE_ATTRIBUTE);
+    if (found.status < 0) {
+        _PyErr_Clear(tstate);
+    }
+    else {
+        PyObject *cls = (PyObject *) Py_TYPE(self);
+        PyObject *clsreduce = _PyValue_AsObjectResultAt(_PyValue_GetAttr(_PyValue_FromObjectKnown(cls), &_Py_ID(__reduce__)), BOX_SITE_ATTRIBUTE);
         if (clsreduce == NULL) {
-            Py_DECREF(reduce);
+            PyValue_CLOSE(found.value);
             return PyValue_NULL;
         }
 
         PyInterpreterState *interp = _PyInterpreterState_GET();
-        override = (clsreduce != _Py_INTERP_CACHED_OBJECT(interp, objreduce));
+        int override = (clsreduce != _Py_INTERP_CACHED_OBJECT(interp, objreduce));
         Py_DECREF(clsreduce);
         if (override) {
-            PyObject *res = _PyObject_CallNoArgs(reduce);
-            Py_DECREF(reduce);
-            return _PyValue_FromObjectResult(res);
+            PyValue res = found.status == 1
+                ? _PyValue_CallOneArg(tstate, found.value,
+                                      PyValue_FromObjectBorrow(self))
+                : _PyValue_CallNoArgs(tstate, found.value);
+            PyValue_CLOSE(found.value);
+            return res;
         }
-        else
-            Py_DECREF(reduce);
+        PyValue_CLOSE(found.value);
     }
 
     return _PyValue_FromObjectResult(_common_reduce(self, protocol));

@@ -968,6 +968,95 @@ class DictTest(unittest.TestCase):
         resizing = True
         d[9] = 6
 
+    def test_resize_moves_entries(self):
+        # Growing a combined table moves its entries: str keys, general keys
+        # and the conversion of a str table to a general one, each with and
+        # without deleted entries.
+        for make_keys in (lambda i: 'k%d' % i, lambda i: i,
+                          lambda i: (i, 'x')):
+            for deleted in (0, 3):
+                with self.subTest(deleted=deleted, key=make_keys(1)):
+                    d = {}
+                    expected = {}
+                    for i in range(200):
+                        d[make_keys(i)] = [i]
+                        expected[make_keys(i)] = d[make_keys(i)]
+                        if deleted and i % 7 == 0:
+                            for j in range(deleted):
+                                k = make_keys(i - j)
+                                if k in d:
+                                    del d[k]
+                                    del expected[k]
+                    self.assertEqual(d, expected)
+                    self.assertEqual(list(d), list(expected))
+                    for k, v in expected.items():
+                        self.assertIs(d[k], v)
+
+    def test_resize_str_to_general_keeps_keys(self):
+        class Key(str):
+            pass
+
+        d = {}
+        for i in range(5):
+            d['k%d' % i] = i
+        del d['k2']
+        d[1] = 'one'        # a non-str key turns the table into a general one
+        d[Key('k9')] = 9
+        for i in range(100):
+            d[i + 10] = i
+        self.assertEqual(d['k0'], 0)
+        self.assertNotIn('k2', d)
+        self.assertEqual(d['k9'], 9)
+        self.assertEqual(list(d)[:4], ['k0', 'k1', 'k3', 'k4'])
+        self.assertEqual(len(d), 4 + 1 + 1 + 100)
+
+    def test_resize_releases_each_entry_once(self):
+        class Tracked:
+            pass
+
+        refs = []
+        d = {}
+        for i in range(100):
+            key, value = Tracked(), Tracked()
+            refs.append((weakref.ref(key), weakref.ref(value)))
+            d[key] = value
+            key = value = None
+            if i % 10 == 0:
+                del d[next(iter(d))]
+        self.assertEqual(sum(k() is not None for k, v in refs), len(d))
+        self.assertEqual(sum(v() is not None for k, v in refs), len(d))
+        d.clear()
+        self.assertEqual(sum(k() is not None for k, v in refs), 0)
+        self.assertEqual(sum(v() is not None for k, v in refs), 0)
+
+    def test_resize_during_iteration(self):
+        for keys in (['a', 'b', 'c'], [1, 2, 3]):
+            d = dict.fromkeys(keys)
+            with self.assertRaises(RuntimeError):
+                for k in d:
+                    for i in range(100, 130):
+                        d[i] = None
+            d = dict.fromkeys(keys)
+            with self.assertRaises(RuntimeError):
+                for k, v in d.items():
+                    for i in range(100, 130):
+                        d[i] = None
+
+    def test_resize_split_table(self):
+        class C:
+            def __init__(self):
+                self.a = 1
+                self.b = 2
+        objs = [C() for i in range(3)]
+        d = objs[0].__dict__
+        for i in range(40):
+            d['x%d' % i] = i
+        d[7] = 'seven'
+        self.assertEqual(objs[0].a, 1)
+        self.assertEqual(objs[0].x39, 39)
+        self.assertEqual(vars(objs[1]), {'a': 1, 'b': 2})
+        self.assertEqual(len(d), 2 + 40 + 1)
+
     def test_empty_presized_dict_in_freelist(self):
         # Bug #3537: if an empty but presized dict with a size larger
         # than 7 was in the freelist, it triggered an assertion failure

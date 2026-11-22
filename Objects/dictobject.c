@@ -2009,42 +2009,53 @@ dictresize(PyDictObject *mp, uint8_t log2_newsize, int unicode)
         assert(newkeys->dk_kind == DICT_KEYS_GENERAL);
         PyDictKeyEntry *oldentries = DK_ENTRIES(oldkeys);
         PyDictKeyEntry *entries = DK_ENTRIES(newkeys);
-        Py_ssize_t next = 0;
-        for (Py_ssize_t i = 0; i < oldkeys->dk_nentries; i++) {
-            if (!PyValue_IsNull(oldentries[i].me_value)) {
-                entries[next++] = oldentries[i];
-                oldentries[i].me_key = PyValue_NULL;
-                oldentries[i].me_value = PyValue_NULL;
-            }
+        if (oldkeys->dk_nentries == numentries) {
+            memcpy(entries, oldentries, numentries * sizeof(PyDictKeyEntry));
         }
-        assert(next == numentries);
+        else {
+            Py_ssize_t next = 0;
+            for (Py_ssize_t i = 0; i < oldkeys->dk_nentries; i++) {
+                if (!PyValue_IsNull(oldentries[i].me_value)) {
+                    entries[next++] = oldentries[i];
+                }
+            }
+            assert(next == numentries);
+        }
         build_indices_generic(newkeys, entries, numentries);
     }
     else {
         PyDictUnicodeEntry *oldentries = DK_UNICODE_ENTRIES(oldkeys);
-        Py_ssize_t next = 0;
-        for (Py_ssize_t i = 0; i < oldkeys->dk_nentries; i++) {
-            if (PyValue_IsNull(oldentries[i].me_value)) {
-                continue;
-            }
-            if (newkeys->dk_kind == DICT_KEYS_GENERAL) {
-                PyDictKeyEntry *entry = &DK_ENTRIES(newkeys)[next++];
-                entry->me_hash = unicode_get_hash(oldentries[i].me_key);
-                entry->me_key = dict_take_unicode_key(oldentries[i].me_key);
-                entry->me_value = oldentries[i].me_value;
-            }
-            else {
-                DK_UNICODE_ENTRIES(newkeys)[next++] = oldentries[i];
-            }
-            oldentries[i].me_key = NULL;
-            oldentries[i].me_value = PyValue_NULL;
-        }
-        assert(next == numentries);
         if (newkeys->dk_kind == DICT_KEYS_GENERAL) {
-            build_indices_generic(newkeys, DK_ENTRIES(newkeys), numentries);
+            // combined unicode -> generic: the keys move as owners
+            PyDictKeyEntry *entries = DK_ENTRIES(newkeys);
+            Py_ssize_t next = 0;
+            for (Py_ssize_t i = 0; i < oldkeys->dk_nentries; i++) {
+                if (PyValue_IsNull(oldentries[i].me_value)) {
+                    continue;
+                }
+                entries[next].me_hash = unicode_get_hash(oldentries[i].me_key);
+                entries[next].me_key = dict_take_unicode_key(oldentries[i].me_key);
+                entries[next].me_value = oldentries[i].me_value;
+                next++;
+            }
+            assert(next == numentries);
+            build_indices_generic(newkeys, entries, numentries);
         }
         else {
-            build_indices_unicode(newkeys, DK_UNICODE_ENTRIES(newkeys), numentries);
+            PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(newkeys);
+            if (oldkeys->dk_nentries == numentries) {
+                memcpy(entries, oldentries, numentries * sizeof(PyDictUnicodeEntry));
+            }
+            else {
+                Py_ssize_t next = 0;
+                for (Py_ssize_t i = 0; i < oldkeys->dk_nentries; i++) {
+                    if (!PyValue_IsNull(oldentries[i].me_value)) {
+                        entries[next++] = oldentries[i];
+                    }
+                }
+                assert(next == numentries);
+            }
+            build_indices_unicode(newkeys, entries, numentries);
         }
     }
 
@@ -2055,8 +2066,21 @@ dictresize(PyDictObject *mp, uint8_t log2_newsize, int unicode)
     if (oldvalues != NULL && !embedded) {
         free_values(oldvalues, shared);
     }
-    if (oldkeys != Py_EMPTY_KEYS) {
+    if (oldkeys == Py_EMPTY_KEYS) {
+        return 0;
+    }
+    if (oldvalues != NULL) {
+        // The shared keys of a split table stay alive for the other instances.
         dictkeys_decref(oldkeys, shared);
+    }
+    else {
+        // A combined table's entries now belong to the new table, and its
+        // deleted entries own nothing, so there is nothing to walk.
+        assert(oldkeys->dk_refcnt == 1);
+#ifdef Py_REF_DEBUG
+        _Py_DecRefTotal(_PyThreadState_GET());
+#endif
+        free_keys_object(oldkeys, shared);
     }
     return 0;
 }

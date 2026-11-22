@@ -4481,10 +4481,11 @@ call_publish_object(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * child is current.  A tuple call leaves the operands and the tuple to the
  * caller.
  *
- * A generator function whose code the call creates directly
- * (_Py_CALL_BIND_GENERATOR) takes the arguments into the new generator's
- * frame, and the call's result is the generator: it is published as a native
- * call's is, and the status is 0 with no child. */
+ * A call of a generator function (_Py_CALL_BIND_GENERATOR) creates the
+ * generator with _PyGen_NewCall, the one creation routine, binds the
+ * arguments into its frame and runs gen_prologue; the call's result is the
+ * generator, published by call_publish_object as the generic path publishes
+ * it, and the status is 0 with no child. */
 static inline Py_ALWAYS_INLINE _PyCallResult
 call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
                _PyInstr *head, PyValue callable, PyValue receiver,

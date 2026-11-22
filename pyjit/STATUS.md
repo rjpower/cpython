@@ -17,11 +17,13 @@ logging_simple 1.015. nbody's 1.016 of golden85 is branch prediction of
 unchanged code at new addresses; the user chose no layout rule. Golden85
 (`2a9ea8c4f69`, 0.900 of upstream's time) is a frozen control.
 
-**Proposed: [tiers87](design/proposals/tiers87.md), 2026-11-22.** The next
-steps: contract87, the interpreter's last wave (an operation contract
-exported by the generator, function forms for every handler, and shared
-runtime work); then a Sparkplug-style baseline method JIT; then a tracing JIT
-on the same contract. Awaiting the user's approval.
+**Active: contract87, 2026-11-22**, the first phase of the approved
+[tiers87](design/proposals/tiers87.md) plan (then a Sparkplug-style baseline
+method JIT, then a tracing JIT on the same contract). Units from golden86: CR
+(operation records, guard facts, effect classes, feedback schema), SB (stack
+bytecode recovery), NV (one native call adapter), FR (one IR pointer per
+frame), EH (raise and catch) and AT (attribute misses); TR and LS follow CR.
+XP's iteration change is done.
 
 The checkpoints between golden73 and gap82, each measured against golden73:
 

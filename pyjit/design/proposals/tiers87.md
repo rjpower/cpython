@@ -1,6 +1,7 @@
 # Tiers87: the interpreter's last wave, a baseline method JIT and a tracing JIT
 
-Proposal, 2026-11-22. Base: golden86 (`3cac420ddbf`, `pyjit/round86-golden`).
+Approved by the user on 2026-11-22, with the optimizing method tier
+deferred as proposed. Base: golden86 (`3cac420ddbf`, `pyjit/round86-golden`).
 It updates the selected [JIT system design](../jit-e2e-system.md) with what
 the register interpreter now provides, and answers one question: what
 structure should the interpreter impose so that the method and tracing JITs

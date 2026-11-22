@@ -1,8 +1,8 @@
 # Interpreter performance: combined plan
 
-## Next: tiers87, proposed
+## Current wave: contract87, the first phase of tiers87
 
-Proposed 2026-11-22, awaiting approval. The user promoted tight86's IP1 as
+Approved 2026-11-22, with the optimizing method tier deferred. The user promoted tight86's IP1 as
 golden86 (`3cac420ddbf`, `pyjit/round86-golden`, tag
 `pyjit-golden-20261122-tight86`), chose no layout rule, and asked for a plan
 for the last interpreter optimizations, a method JIT and then a tracing JIT,

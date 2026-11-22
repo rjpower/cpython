@@ -1368,9 +1368,9 @@ dict_lookup_general(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
     return ix;
 }
 
-Py_ssize_t
-(_Py_dict_lookup)(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
-                  PyValueBorrow *value_addr)
+static inline Py_ALWAYS_INLINE Py_ssize_t
+dict_lookup_inline(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
+                   PyValueBorrow *value_addr)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(mp);
     PyDictKeysObject *dk = mp->ma_keys;
@@ -1391,6 +1391,13 @@ Py_ssize_t
         *value_addr = PyValue_Borrow(DK_UNICODE_ENTRIES(dk)[ix].me_value);
     }
     return ix;
+}
+
+Py_ssize_t
+(_Py_dict_lookup)(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
+                  PyValueBorrow *value_addr)
+{
+    return dict_lookup_inline(mp, key, hash, value_addr);
 }
 
 /* The caller keeps the dictionary and query alive through equality callbacks.
@@ -1796,7 +1803,7 @@ insertdict_general(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
     int status = -1;
     for (;;) {
         PyValueBorrow old_value = PyValue_Borrow(PyValue_NULL);
-        Py_ssize_t ix = _Py_dict_lookup(mp, key, hash, &old_value);
+        Py_ssize_t ix = dict_lookup_inline(mp, PyValue_Borrow(key), hash, &old_value);
         if (ix == DKIX_ERROR) {
             break;
         }

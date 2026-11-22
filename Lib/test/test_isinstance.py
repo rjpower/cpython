@@ -254,6 +254,28 @@ class TestIsInstanceIsSubclass(unittest.TestCase):
             for inst, cls, expected in cases:
                 with self.subTest(inst=inst, cls=cls):
                     self.assertIs(isinstance(inst, cls), expected)
+        # Tuples of classes, ABCs and mock objects reach the same test.
+        import abc
+        from unittest import mock
+
+        class Meta(abc.ABCMeta):
+            pass
+
+        class Abstract(metaclass=Meta):
+            @classmethod
+            def __subclasshook__(cls, other):
+                return other is Plain or NotImplemented
+
+        mocked = mock.Mock(spec=Super)
+        for _ in range(10):
+            self.assertIs(isinstance(plain, (Super, Child)), False)
+            self.assertIs(isinstance(plain, (Super, Plain)), True)
+            self.assertIs(isinstance(Liar(), (Plain, Super)), True)
+            self.assertIs(isinstance(plain, Abstract), True)
+            self.assertIs(isinstance(3, Abstract), False)
+            self.assertIs(isinstance(mocked, Super), True)
+            self.assertIs(isinstance(mocked, Child), False)
+
         # A type whose attribute protocol changes after the cache is warm
         def getattribute(self, name):
             if name == '__class__':

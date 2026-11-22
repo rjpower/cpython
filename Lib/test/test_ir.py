@@ -878,7 +878,7 @@ class FeedbackLayoutTest(unittest.TestCase):
         total = int.from_bytes(code.co_fbinit[:4], sys.byteorder) & 0xFFFF
         position = 2
         sizes = {"UNARY": (24,), "BINARY": (32,), "ATTR": (48,),
-                 "GLOBAL": (32,), "CALL": (32,), "BRANCH": (16, 24)}
+                 "GLOBAL": (32,), "CALL": (40,), "BRANCH": (16, 24)}
         for kind, unit, arg, units in entries[1:]:
             self.assertEqual(unit, position)
             self.assertIn(units * 8, sizes[kinds[kind]])
@@ -1055,7 +1055,7 @@ class FeedbackLayoutTest(unittest.TestCase):
                     c.replace(co_fbinit=fbinit)
         # A word that names a unit that starts no entry, or whose entry is
         # too small for its handler
-        short = table(word(0, 0, 6), word(dis._FEEDBACK_KINDS.index("CALL"), 2, 0))
+        short = table(word(0, 0, 7), word(dis._FEEDBACK_KINDS.index("CALL"), 2, 0))
         with self.assertRaisesRegex(ValueError, "feedback"):
             c.replace(co_fbinit=short)
 

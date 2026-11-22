@@ -3207,12 +3207,10 @@ is_subtype_with_mro(PyObject *a_mro, PyTypeObject *a, PyTypeObject *b)
         return type_is_subtype_base_chain(a, b);
     }
     assert(PyTuple_Check(a_mro));
-    /* An mro entry is a type, so its word is the address with the immortal
-       tag, which no scalar or index word shares: compare the address. */
-    uintptr_t target = (uintptr_t)b;
+    /* An mro entry is always a type object, so no object test is needed. */
     for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(a_mro); i++) {
-        if ((_PyValue_BITS(PyTuple_GET_VALUE(a_mro, i)) & ~(uintptr_t)Py_TAG_REFCNT)
-                == target) {
+        if (PyValue_AsKnownObjectBorrow(PyTuple_GET_VALUE(a_mro, i))
+                == (PyObject *)b) {
             return 1;
         }
     }

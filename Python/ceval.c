@@ -1143,6 +1143,55 @@ _PyEval_GetIter(PyValue iterable, int yield_from)
     return result;
 }
 
+/* The asynchronous iterator of obj, as GET_AITER pushes it, or the null value
+ * with an exception set.  Consumes obj. */
+static PyValue
+_PyEval_GetAIter(PyThreadState *tstate, PyValue obj)
+{
+    unaryfunc getter = NULL;
+    // A number has no __aiter__
+    if (!PyValue_IsObject(obj)) {
+        _PyErr_Format(tstate, PyExc_TypeError,
+                      "'async for' requires an object with "
+                      "__aiter__ method, got %.100s",
+                      PyValue_TYPE(obj)->tp_name);
+        return PyValue_NULL;
+    }
+    PyObject *obj_o = PyValue_AsKnownObjectBorrow(obj);
+    PyTypeObject *type = Py_TYPE(obj_o);
+
+    if (type->tp_as_async != NULL) {
+        getter = type->tp_as_async->am_aiter;
+    }
+
+    if (getter == NULL) {
+        _PyErr_Format(tstate, PyExc_TypeError,
+                      "'async for' requires an object with "
+                      "__aiter__ method, got %.100s",
+                      type->tp_name);
+        PyValue_CLOSE(obj);
+        return PyValue_NULL;
+    }
+
+    PyObject *iter_o = (*getter)(obj_o);
+    PyValue_CLOSE(obj);
+    if (iter_o == NULL) {
+        return PyValue_NULL;
+    }
+
+    if (Py_TYPE(iter_o)->tp_as_async == NULL ||
+            Py_TYPE(iter_o)->tp_as_async->am_anext == NULL) {
+
+        _PyErr_Format(tstate, PyExc_TypeError,
+                      "'async for' received an object from __aiter__ "
+                      "that does not implement __anext__: %.100s",
+                      Py_TYPE(iter_o)->tp_name);
+        Py_DECREF(iter_o);
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(iter_o);
+}
+
 int (_PyEval_StoreName)(PyThreadState *tstate, PyValueBorrow v, PyObject *name, PyObject* ns)
 {
     int deletion = PyValue_IsNull(v);
@@ -1893,8 +1942,88 @@ call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return pushed;
 }
 
+/* The prologue of the code of a generator, coroutine or async generator that
+ * _PyGen_NewCall() made and whose arguments are bound, which the first send
+ * does not run: the free variables from the closure, a cell for each cell
+ * variable (an argument moves into its cell) and, for a generator expression,
+ * the iterator of its argument.  0, or -1 with an exception set and the
+ * object discarded. */
+static Py_NO_INLINE int
+gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
+{
+    _PyInterpreterFrame *frame = &gen->gi_iframe;
+    int nfree = code->co_nfreevars;
+    int ncell = code->co_ncellvars;
+    if (nfree) {
+        PyObject *closure = _PyFrame_GetFunction(frame)->func_closure;
+        PyValue *free = frame->base + code->co_nlocalsplus - nfree;
+        for (int i = 0; i < nfree; i++) {
+            free[i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
+        }
+    }
+    const char *kinds = PyBytes_AS_STRING(code->co_localspluskinds);
+    for (int i = 0; ncell > 0; i++) {
+        if (!(kinds[i] & CO_FAST_CELL)) {
+            continue;
+        }
+        ncell--;
+        // The slot holds the argument, or nothing for a cell variable
+        PyObject *cell = PyCell_NewValue(frame->base[i]);
+        if (cell == NULL) {
+            _PyGen_DiscardCall(gen);
+            return -1;
+        }
+        PyValue argument = frame->base[i];
+        frame->base[i] = PyValue_FromObjectSteal(cell);
+        PyValue_XCLOSE(argument);
+    }
+    if (code->_co_firsttraceable > 1) {
+        /* A generator expression: its code begins with RESUME, LOAD_FAST of
+         * the argument and GET_ITER or GET_AITER, before its RETURN_GENERATOR,
+         * and nothing executes them.  The iterator, and for GET_ITER the
+         * index, are the first two slots of the stack, where the loop reads
+         * them: iter() of the outermost iterable runs here, at creation, as
+         * the language requires, and the code takes any iterable as its
+         * argument.  Its errors are those of the call. */
+        _PyCodeExec *exec = code->_co_exec;
+        int handler = _PyIR_BaseOpcode(IR_HANDLER(exec->words[2]));
+        assert(_PyIR_BaseOpcode(IR_HANDLER(exec->words[1])) == LOAD_FAST ||
+               _PyIR_BaseOpcode(IR_HANDLER(exec->words[1])) == LOAD_FAST_BORROW);
+        assert(handler == GET_ITER || handler == GET_AITER);
+        assert(IR_A(exec->words[2]) == (uint32_t)code->co_nlocalsplus);
+        PyValue *stack = frame->base + code->co_nlocalsplus;
+        PyValue iterable = PyValue_DUP(frame->base[0]);
+        if (handler == GET_AITER) {
+            stack[0] = _PyEval_GetAIter(tstate, iterable);
+        }
+        else {
+            _PyValuePair got = _PyEval_GetIter(iterable, 0);
+            stack[0] = got.first;
+            stack[1] = got.second;
+        }
+        if (PyValue_IsNull(stack[0])) {
+            _PyGen_DiscardCall(gen);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+/* gen_prologue_run() for the code that has one: most generator functions have
+ * neither free variables nor cell variables, and are not generator expressions
+ * (whose first traceable word follows the prelude). */
+static inline Py_ALWAYS_INLINE int
+gen_prologue(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
+{
+    if ((code->co_nfreevars | code->co_ncellvars) == 0 &&
+        code->_co_firsttraceable == 1) {
+        return 0;
+    }
+    return gen_prologue_run(tstate, gen, code);
+}
+
 /* The generator that the call at head creates, when the callee is a generator
- * function whose code starts at RETURN_GENERATOR (CALL_PY_GENERATOR): the
+ * function that takes exactly these arguments (CALL_PY_GENERATOR): the
  * operands fill its frame, with no frame of the thread.  The method operand
  * of an expanded call is not a form of it.  The null value is an error. */
 static inline Py_ALWAYS_INLINE PyValue
@@ -1914,6 +2043,9 @@ call_new_generator(PyThreadState *tstate, _PyInterpreterFrame *frame,
     }
     call_fill_exact(slots, frame, head, word, PyValue_NULL, call_state,
                     gen->gi_iframe.base);
+    if (gen_prologue(tstate, gen, code) < 0) {
+        return PyValue_NULL;
+    }
     return PyValue_FromObjectSteal((PyObject *)gen);
 }
 
@@ -1943,8 +2075,8 @@ borrowed_word(PyObject *obj)
     return word;
 }
 
-/* The handlers' calls (call_run_*), after _PyEvalFramePushAndInit and its
- * kin, which they use. */
+/* The handlers' calls (call_run_*), after the binder
+ * (eval_frame_push_and_init_code), which they use. */
 static _PyCallResult call_run_vector(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
 static _PyCallResult call_run_keywords(
@@ -2531,6 +2663,7 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
      * (Python/ceval_generator_labels.h) */
     PyValue ir_gen_value;
     _PyInterpreterFrame *ir_gen_dying;
+    int ir_gen_empty;
     _PyIRTransfer ir_gen_transfer;
 #ifdef Py_STATS
     int lastopcode = 0;
@@ -3615,9 +3748,73 @@ _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame)
     (void)frame_clear_and_pop(tstate, frame, PyValue_NULL);
 }
 
-/* code is independently pinned through preparation and binding. Consumes
- * func, locals and args, but never reselects the function's mutable code. */
-static _PyInterpreterFrame *
+/* Whether a call of the function creates an object (a generator, coroutine or
+ * async generator) instead of running its code in a frame. */
+static inline int
+code_creates_generator(PyCodeObject *code)
+{
+    return (code->co_flags &
+            (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) != 0;
+}
+
+/* What the binding of a call makes: the frame of a function, which the
+ * evaluator runs, or the object that a call of a generator function creates
+ * (a generator, coroutine or async generator, whose frame no thread runs).
+ * Neither is an error, with the exception set. */
+typedef struct {
+    _PyInterpreterFrame *frame;
+    PyGenObject *gen;
+} _PyBound;
+
+static void
+bound_close_arguments(PyObject *locals, PyValue *args, size_t argcount,
+                      PyObject *kwnames)
+{
+    Py_XDECREF(locals);
+    size_t total = argcount +
+        (kwnames == NULL ? 0 : (size_t)PyTuple_GET_SIZE(kwnames));
+    for (size_t i = 0; i < total; i++) {
+        PyValue_CLOSE(args[i]);
+    }
+}
+
+/* The generator of a call of the generator function func with the given
+ * arguments: the object is created first, the arguments are bound into its
+ * frame and then its prologue runs.  Consumes func, locals and the arguments
+ * on both outcomes. */
+static PyGenObject *
+eval_new_generator(PyThreadState *tstate, PyValue func, PyObject *locals,
+                   PyValue *args, size_t argcount, PyObject *kwnames,
+                   PyCodeObject *code)
+{
+    PyFunctionObject *func_obj =
+        (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
+    CALL_STAT_INC(frames_pushed);
+    // The frame of a generator holds no mapping of locals
+    Py_XDECREF(locals);
+    PyGenObject *gen = _PyGen_NewCall(tstate, func, code, tstate->current_frame);
+    if (gen == NULL) {
+        bound_close_arguments(NULL, args, argcount, kwnames);
+        return NULL;
+    }
+    if (initialize_locals(tstate, func_obj, code, gen->gi_iframe.base, args,
+                          argcount, kwnames))
+    {
+        _PyGen_DiscardCall(gen);
+        return NULL;
+    }
+    if (gen_prologue(tstate, gen, code) < 0) {
+        return NULL;
+    }
+    return gen;
+}
+
+/* The binding of every call of a Python function that has no plan of its
+ * own: code is independently pinned through preparation and binding.
+ * Consumes func, locals and args, but never reselects the function's mutable
+ * code.  A generator function's call creates its generator here, the one
+ * place that does for the calls that bind generally. */
+static _PyBound
 eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
                         PyObject *locals, PyValue *args,
                         size_t argcount, PyObject *kwnames,
@@ -3627,6 +3824,10 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
     CALL_STAT_INC(frames_pushed);
     if (_PyCode_GetExec(code) == NULL) {
         goto fail;
+    }
+    if (code_creates_generator(code)) {
+        return (_PyBound){NULL, eval_new_generator(
+            tstate, func, locals, args, argcount, kwnames, code)};
     }
     _PyInterpreterFrame *frame = _PyThreadState_PushFrame(tstate, code->co_framesize);
     if (frame == NULL) {
@@ -3638,84 +3839,20 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
         assert(frame->owner == FRAME_OWNED_BY_THREAD);
         _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
         (void)clear_thread_frame(tstate, frame, PyValue_NULL);
-        return NULL;
+        return (_PyBound){NULL, NULL};
     }
-    return frame;
+    return (_PyBound){frame, NULL};
 fail:
     /* Consume the references */
     PyValue_CLOSE(func);
-    Py_XDECREF(locals);
-    for (size_t i = 0; i < argcount; i++) {
-        PyValue_CLOSE(args[i]);
-    }
-    if (kwnames) {
-        Py_ssize_t kwcount = PyTuple_GET_SIZE(kwnames);
-        for (Py_ssize_t i = 0; i < kwcount; i++) {
-            PyValue_CLOSE(args[i+argcount]);
-        }
-    }
-    return NULL;
-}
-
-/* Whether a native call of the function with code creates its generator
- * without a frame (_PyGen_NewCall()): the code has no prologue, no mapping
- * of locals is given and no hook runs the frame. */
-static inline int
-eval_creates_generator(PyThreadState *tstate, PyCodeObject *code,
-                       PyObject *locals)
-{
-    _PyCodeExec *exec = code->_co_exec;
-    return exec != NULL && exec->generator_direct && locals == NULL &&
-        !IS_PEP523_HOOKED(tstate);
-}
-
-/* The generator of a native call of func (eval_creates_generator()), as
- * eval_frame_push_and_init_code() consumes: func and every argument, on both
- * outcomes.  NULL with an exception set on failure. */
-static PyGenObject *
-eval_new_generator(PyThreadState *tstate, PyValue func, PyValue *args,
-                   size_t argcount, PyObject *kwnames, PyCodeObject *code)
-{
-    PyFunctionObject *func_obj =
-        (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
-    CALL_STAT_INC(frames_pushed);
-    PyGenObject *gen = _PyGen_NewCall(tstate, func, code, tstate->current_frame);
-    if (gen == NULL) {
-        size_t total = argcount +
-            (kwnames == NULL ? 0 : (size_t)PyTuple_GET_SIZE(kwnames));
-        for (size_t i = 0; i < total; i++) {
-            PyValue_CLOSE(args[i]);
-        }
-        return NULL;
-    }
-    if (initialize_locals(tstate, func_obj, code, gen->gi_iframe.base, args,
-                          argcount, kwnames))
-    {
-        _PyGen_DiscardCall(gen);
-        return NULL;
-    }
-    return gen;
-}
-
-/* Consumes references to func, locals and all the args. Explicit locals is
- * an input of this public provider; inferred policy belongs to its caller. */
-Py_NO_INLINE _PyInterpreterFrame *
-_PyEvalFramePushAndInit(PyThreadState *tstate, PyValue func,
-                      PyObject *locals, PyValue *args, size_t argcount,
-                      PyObject *kwnames, _PyInterpreterFrame *previous)
-{
-    PyFunctionObject *function = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
-    PyCodeObject *code = (PyCodeObject *)Py_NewRef(function->func_code);
-    _PyInterpreterFrame *frame = eval_frame_push_and_init_code(
-        tstate, func, locals, args, argcount, kwnames, previous, code);
-    Py_DECREF(code);
-    return frame;
+    bound_close_arguments(locals, args, argcount, kwnames);
+    return (_PyBound){NULL, NULL};
 }
 
 /* Same as eval_frame_push_and_init_code but takes an args tuple and kwargs dict.
    Steals references to func, callargs and kwargs.
 */
-static _PyInterpreterFrame *
+static _PyBound
 eval_frame_push_and_init_ex_code(PyThreadState *tstate, PyValue func,
     PyObject *locals, Py_ssize_t nargs, PyObject *callargs, PyObject *kwargs,
     _PyInterpreterFrame *previous, PyCodeObject *code)
@@ -3726,7 +3863,7 @@ eval_frame_push_and_init_ex_code(PyThreadState *tstate, PyValue func,
     PyObject *const *object_array = NULL;
     PyValue stack_array[8] = {0};
     Py_ssize_t total = nargs;
-    _PyInterpreterFrame *new_frame = NULL;
+    _PyBound bound = {NULL, NULL};
     /* The positional objects for _PyStack_UnpackDict() live in this scope. */
     _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     if (has_dict) {
@@ -3757,7 +3894,7 @@ eval_frame_push_and_init_ex_code(PyThreadState *tstate, PyValue func,
                                     : PyTuple_GET_VALUE(callargs, i);
         newargs[i] = PyValue_XDUP(borrowed);
     }
-    new_frame = eval_frame_push_and_init_code(
+    bound = eval_frame_push_and_init_code(
         tstate, func, locals,
         newargs, nargs, kwnames, previous, code
     );
@@ -3775,20 +3912,7 @@ done:
     }
     Py_DECREF(callargs);
     Py_XDECREF(kwargs);
-    return new_frame;
-}
-
-Py_NO_INLINE _PyInterpreterFrame *
-_PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
-    PyObject *locals, Py_ssize_t nargs, PyObject *callargs, PyObject *kwargs,
-    _PyInterpreterFrame *previous)
-{
-    PyFunctionObject *function = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
-    PyCodeObject *code = (PyCodeObject *)Py_NewRef(function->func_code);
-    _PyInterpreterFrame *frame = eval_frame_push_and_init_ex_code(
-        tstate, func, locals, nargs, callargs, kwargs, previous, code);
-    Py_DECREF(code);
-    return frame;
+    return bound;
 }
 
 /* Retire the shim when binding the __init__ frame failed. Its self owner
@@ -3841,13 +3965,25 @@ create_init_frame_slow(PyThreadState *tstate, _PyInterpreterFrame *caller,
         arguments[i] = window[i + 1];
         window[i + 1] = PyValue_NULL;
     }
-    _PyInterpreterFrame *child = eval_frame_push_and_init_code(
+    _PyBound bound = eval_frame_push_and_init_code(
         tstate, function, NULL, arguments, argcount, NULL, shim, code);
     /* The binder consumed every argument on both outcomes. */
     if (arguments != small) {
         PyMem_Free(arguments);
     }
     Py_DECREF(code);
+    _PyInterpreterFrame *child = bound.frame;
+    if (bound.gen != NULL) {
+        /* A generator function as __init__ returns its object, and the
+         * shim's check of the result would reject it. */
+        PyTypeObject *result_type = Py_TYPE(bound.gen);
+        Py_DECREF(bound.gen);
+        PyErr_Format(PyExc_TypeError,
+                     "__init__() should return None, not '%.200s'",
+                     result_type->tp_name);
+        clear_init_shim(tstate, shim);
+        return NULL;
+    }
     if (child == NULL) {
         clear_init_shim(tstate, shim);
         return NULL;
@@ -3868,7 +4004,7 @@ create_init_frame(PyThreadState *tstate, _PyInterpreterFrame *caller,
     PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(window[0]);
     PyCodeObject *code = (PyCodeObject *)func->func_code;
     assert(func->vectorcall == _PyFunction_Vectorcall);
-    if (!(code->co_flags & CO_OPTIMIZED) ||
+    if (!(code->co_flags & CO_OPTIMIZED) || code_creates_generator(code) ||
         (code->co_flags & (CO_VARARGS | CO_VARKEYWORDS)) ||
         code->co_kwonlyargcount || code->co_argcount != nargs + 1 ||
         code->_co_exec == NULL ||
@@ -3910,6 +4046,7 @@ _PyEval_CreateInitFrame(PyThreadState *tstate, _PyInterpreterFrame *caller,
     PyFunctionObject *init_func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(init);
     PyCodeObject *init_code = (PyCodeObject *)init_func->func_code;
     if ((init_code->co_flags & CO_OPTIMIZED) &&
+        !code_creates_generator(init_code) &&
         !(init_code->co_flags & (CO_VARARGS | CO_VARKEYWORDS)) &&
         !init_code->co_kwonlyargcount && init_code->co_argcount == nargs + 1 &&
         init_code->_co_exec != NULL &&
@@ -4305,6 +4442,21 @@ call_bind_dict_kwargs(const _CallDict *items)
     return _PyDict_FromValueItems(keys, 1, values, 1, count);
 }
 
+/* The call is done and its result is the object that it created, a
+ * generator that has taken the operands: store it in the destination and
+ * release the callable and whatever operands the call still holds. */
+static Py_NO_INLINE _PyCallResult
+call_publish_object(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                    _PyInstr *head, _PyIRWord word, PyGenObject *gen,
+                    int operands)
+{
+    PyValue displaced = call_publish(
+        frame, head, word, PyValue_FromObjectSteal((PyObject *)gen), operands);
+    PyValue_XCLOSE(displaced);
+    /* Releasing the operands can run a finalizer. */
+    return (_PyCallResult){call_refresh(tstate, frame, head), NULL};
+}
+
 /* Push the frame of the Python function callable, and fill it as the
  * evaluator binds a call, from the positional arguments (the receiver of an
  * expanded bound method, then the operands of the call at head after the
@@ -4499,11 +4651,11 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
         CALL_STAT_INC(keyword_plan_hits);
     }
     if (!simple && generator) {
-        PyValue displaced = call_publish(
-            frame, head, word, PyValue_FromObjectSteal((PyObject *)gen),
-            (int)IR_C(word) - (kwcount != 0));
-        PyValue_XCLOSE(displaced);
-        return (_PyCallResult){0, NULL};
+        if (gen_prologue(tstate, gen, code) < 0) {
+            return (_PyCallResult){-1, NULL};
+        }
+        return call_publish_object(tstate, frame, head, word, gen,
+                                   (int)IR_C(word) - (kwcount != 0));
     }
     call_commit(tstate, frame, head, target);
     if (lead && tuple == NULL) {
@@ -4603,13 +4755,19 @@ call_push_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
         storage[0] = PyValue_DUP(receiver);
     }
     call_take_operands(slots, head, skip, operands - skip, storage + lead);
-    _PyInterpreterFrame *child = eval_frame_push_and_init_code(
+    _PyBound bound = eval_frame_push_and_init_code(
         tstate, function, locals, storage, (size_t)positional, names, frame,
         code);
     if (storage != small) {
         PyMem_Free(storage);
     }
     Py_DECREF(code);
+    if (bound.gen != NULL) {
+        /* The call is done: its object is the result */
+        return call_publish_object(tstate, frame, head, word, bound.gen,
+                                   (int)IR_C(word) - keywords);
+    }
+    _PyInterpreterFrame *child = bound.frame;
     if (child == NULL) {
         (void)call_refresh(tstate, frame, head);
         return (_PyCallResult){-1, NULL};
@@ -4865,10 +5023,17 @@ call_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
         /* The binding consumes these on both outcomes */
         PyObject *owned_args = tuple != NULL ? tuple : Py_NewRef(callargs);
         PyObject *owned_kwargs = Py_XNewRef(kwargs);
-        _PyInterpreterFrame *child = eval_frame_push_and_init_ex_code(
+        _PyBound bound = eval_frame_push_and_init_ex_code(
             tstate, function, locals, nargs, owned_args, owned_kwargs, frame,
             code);
         Py_DECREF(code);
+        if (bound.gen != NULL) {
+            /* The call is done: its object is the result, and the
+             * operands are still in their homes. */
+            return call_publish_object(tstate, frame, head, word, bound.gen,
+                                       operands);
+        }
+        _PyInterpreterFrame *child = bound.frame;
         if (child == NULL) {
             (void)call_refresh(tstate, frame, head);
             return (_PyCallResult){-1, NULL};
@@ -4950,23 +5115,17 @@ _PyEval_Vector(PyThreadState *tstate, PyFunctionObject *func,
         }
     }
     PyCodeObject *code = (PyCodeObject *)Py_NewRef(func->func_code);
-    if (eval_creates_generator(tstate, code, locals)) {
-        PyGenObject *gen = eval_new_generator(
-            tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), arguments,
-            argcount, kwnames, code);
-        Py_DECREF(code);
-        if (total_args > 8) {
-            PyMem_Free(arguments);
-        }
-        return (PyObject *)gen;
-    }
-    _PyInterpreterFrame *frame = eval_frame_push_and_init_code(
+    _PyBound bound = eval_frame_push_and_init_code(
         tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
         arguments, argcount, kwnames, NULL, code);
     Py_DECREF(code);
     if (total_args > 8) {
         PyMem_Free(arguments);
     }
+    if (bound.gen != NULL) {
+        return (PyObject *)bound.gen;
+    }
+    _PyInterpreterFrame *frame = bound.frame;
     if (frame == NULL) {
         return NULL;
     }
@@ -5016,7 +5175,7 @@ _PyEval_VectorValue(PyThreadState *tstate, PyFunctionObject *func,
     /* A generator function's call creates its generator, not a frame to
      * run: it takes the general path, which binds into the generator. */
     if (kwnames == NULL && code_binds_exactly(code, nargs) &&
-        !(code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)))
+        !code_creates_generator(code))
     {
         /* Nothing here runs Python, so func's code cannot change before
          * the frame holds a count of it. */
@@ -5057,24 +5216,17 @@ _PyEval_VectorValue(PyThreadState *tstate, PyFunctionObject *func,
         Py_INCREF(code);
         PyObject *locals = code->co_flags & CO_OPTIMIZED ? NULL
             : Py_NewRef(func->func_globals);
-        if (eval_creates_generator(tstate, code, locals)) {
-            PyGenObject *gen = eval_new_generator(
-                tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), owners,
-                nargs, kwnames, code);
-            Py_DECREF(code);
-            if (owners != small) {
-                PyMem_Free(owners);
-            }
-            return gen == NULL ? PyValue_NULL
-                               : PyValue_FromObjectSteal((PyObject *)gen);
-        }
-        frame = eval_frame_push_and_init_code(
+        _PyBound bound = eval_frame_push_and_init_code(
             tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
             owners, nargs, kwnames, NULL, code);
         Py_DECREF(code);
         if (owners != small) {
             PyMem_Free(owners);
         }
+        if (bound.gen != NULL) {
+            return PyValue_FromObjectSteal((PyObject *)bound.gen);
+        }
+        frame = bound.frame;
         if (frame == NULL) {
             return PyValue_NULL;
         }

@@ -353,9 +353,6 @@ _PyFrame_PreviousHomeRange(const _PyIRHomeView *view, uint32_t *cursor,
     return false;
 }
 
-PyAPI_FUNC(void) _PyFrame_CopyCreatedGenerator(
-    _PyInterpreterFrame *src, _PyInterpreterFrame *dest);
-
 static inline void
 _PyFrame_CopyHeader(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 {
@@ -633,6 +630,9 @@ void _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame, int extent);
  * caller detached. The code remains owned by the generator. Close and
  * deallocation pass NULL. */
 PyAPI_FUNC(PyValue) _PyFrame_ClearGenerator(PyGenObject *gen, PyValue result);
+/* The same, for the return that leaves the scratch empty
+ * (RETURN_VALUE_EMPTY): only the locals own values. */
+PyAPI_FUNC(PyValue) _PyFrame_ClearGeneratorLocals(PyGenObject *gen, PyValue result);
 /* The same, for a frame whose scratch the error processor already drained:
  * only the bindings remain. */
 void _PyFrame_ClearGeneratorBindings(PyGenObject *gen);
@@ -821,16 +821,6 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code,
     _PyFrame_InitializeTrampoline(frame, code, return_slot, previous);
     return frame;
 }
-
-PyAPI_FUNC(_PyInterpreterFrame *)
-_PyEvalFramePushAndInit(PyThreadState *tstate, PyValue func,
-                        PyObject *locals, PyValue *args,
-                        size_t argcount, PyObject *kwnames,
-                        _PyInterpreterFrame *previous);
-
-PyAPI_FUNC(_PyInterpreterFrame *)
-_PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
-    PyObject *locals, Py_ssize_t nargs, PyObject *callargs, PyObject *kwargs, _PyInterpreterFrame *previous);
 
 #ifdef __cplusplus
 }

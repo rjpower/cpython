@@ -1318,12 +1318,12 @@ _Py_MakeCoro(PyFunctionObject *func, PyCodeObject *code,
 }
 
 /* The generator, coroutine or async generator that a call of the function
- * creates, for code that begins at its RETURN_GENERATOR (the executing copy's
- * generator_direct): no frame runs.  The frame of the new object is complete
- * as RETURN_GENERATOR leaves it, except for the arguments, which the caller
+ * creates: no frame runs.  The frame of the new object is complete as
+ * RETURN_GENERATOR would leave it, except for the arguments, which the caller
  * moves into gen->gi_iframe.base before anything that can fail, run code or
- * collect.  Consumes function, which the frame owns; on failure it is
- * closed.  caller is the frame that makes the call. */
+ * collect, and the prologue of the code (gen_prologue() in Python/ceval.c).
+ * Consumes function, which the frame owns; on failure it is closed.  caller is the frame that makes
+ * the call. */
 PyGenObject *
 _PyGen_NewCall(PyThreadState *tstate, PyValue function, PyCodeObject *code,
                _PyInterpreterFrame *caller)
@@ -1341,9 +1341,9 @@ _PyGen_NewCall(PyThreadState *tstate, PyValue function, PyCodeObject *code,
     _PyFrame_Initialize(tstate, frame, function, NULL, code,
                         frame->owned_slots, NULL);
     frame->owner = FRAME_OWNED_BY_GENERATOR;
-    // The first send resumes after RETURN_GENERATOR and its value goes to
-    // the discard slot
-    frame->instr_ptr++;
+    // The first send resumes after RETURN_GENERATOR, the word before the
+    // first traceable one, and its value goes to the discard slot
+    frame->instr_ptr = frame->ir_words + code->_co_firsttraceable;
     frame->return_slot = (uint16_t)_PyFrame_DiscardSlotForCodeObject(code);
     gen->gi_frame_state = FRAME_CREATED;
     return gen;

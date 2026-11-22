@@ -866,9 +866,8 @@ OBJECT_READERS = {
     "value_load_from_dict", "_PySet_Contains", "_PyTemplate_Build",
     "_PyUnicode_Equal",
     # The indirect calls of BINARY_OP_EXTEND, through a table of functions
-    # that read their operands, and of GET_AITER, through the type's
-    # am_aiter slot
-    "action", "getter",
+    # that read their operands
+    "action",
     # CONTAINS_OP_JUMP_SEQUENCE: the contains function of the container's type
     "contains_slot",
 }
@@ -3531,6 +3530,7 @@ class IREmitter(Emitter):
         self._replacers["IR_DEFER_CLOSE"] = self.defer_observer_input
         self._replacers["IR_RETURN_TO_CALLER"] = self.return_to_caller
         self._replacers["IR_FINISH_GENERATOR_RETURN"] = self.finish_generator_return
+        self._replacers["IR_FINISH_GENERATOR_RETURN_EMPTY"] = self.finish_generator_return
         self._replacers["IR_ENTER_GENERATOR"] = self.enter_generator
         self._replacers["IR_TRY_DICT_FIRST_PROBE"] = self.try_dict_first_probe
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
@@ -3544,7 +3544,7 @@ class IREmitter(Emitter):
         self._replacers["IR_ABORT_VALUE_READER"] = self.abort_value_reader
         self._replacers["IR_COMPLETE_ATTR_READER"] = self.complete_attr_reader
         self._replacers["IR_BINARY_READER"] = self.binary_reader
-        self._replacers["IR_CREATED_COPY"] = self.created_copy
+        self._replacers["IR_GENERATOR_MARKER"] = self.generator_marker
         self._replacers["IR_METADATA_PASSTHROUGH"] = self.metadata_passthrough
         self._replacers["IR_SUSPEND_DELEGATED"] = self.suspend_delegated
         self._replacers["IR_WRITE_OUTPUT"] = self.write_output_home
@@ -3715,15 +3715,14 @@ class IREmitter(Emitter):
         local.kill()
         return True
 
-    def created_copy(self, tkn, tkn_iter, uop, storage, inst):
+    def generator_marker(self, tkn, tkn_iter, uop, storage, inst):
         assert inst is not None
-        args = self.macro_args(tkn, tkn_iter, 2)
-        if args != ["frame", "gen_frame"] or not created_copy_contract(
-                inst, self.format_of(inst)):
-            raise analysis_error("IR_CREATED_COPY needs its checked copy contract", tkn)
-        self.ownership_event("CREATED_COPY")
+        args = self.macro_args(tkn, tkn_iter, 0)
+        if args or not generator_marker_contract(inst, self.format_of(inst)):
+            raise analysis_error("IR_GENERATOR_MARKER needs its checked contract", tkn)
+        self.ownership_event("GENERATOR_MARKER")
         self.out.start_line()
-        self.emit("_PyFrame_CopyCreatedGenerator(frame, gen_frame);\n")
+        self.emit("Py_UNREACHABLE();\n")
         return True
 
     def metadata_passthrough(self, tkn, tkn_iter, uop, storage, inst):
@@ -5588,7 +5587,8 @@ class IREmitter(Emitter):
         value, dying = self.macro_args(tkn, tkn_iter, 2)
         if inst is None or not canonical_frame_transfer_input(inst):
             raise analysis_error("generator return needs canonical source transfer", tkn)
-        self.emit(f"IR_GEN_RETURN({value}, {dying});\n")
+        empty = 1 if tkn.text.endswith("_EMPTY") else 0
+        self.emit(f"IR_GEN_RETURN({value}, {dying}, {empty});\n")
         return False
 
     def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
@@ -6662,6 +6662,9 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
         RELOAD_STACK();
         IR_RETURN_TO_CALLER(temp, generator_return);
     }"""
+    if parts[1].name == "_RETURN_VALUE_EMPTY":
+        expected_body = expected_body.replace(
+            "IR_FINISH_GENERATOR_RETURN(", "IR_FINISH_GENERATOR_RETURN_EMPTY(")
     expected_body = expected_body.replace("RETIRE_HELPER", (
         "_PyEval_FrameClearAndPopGeneralWithResult"
         if parts[1].name == "_RETURN_VALUE"
@@ -7790,8 +7793,8 @@ def binary_reader_contract(inst: Instruction, fmt: IRFormat) -> bool:
                 Parser(specialize, "<binary specialization contract>").block()))
 
 
-def created_copy_contract(inst: Instruction, fmt: IRFormat) -> bool:
-    """The actual copy boundary has no preceding scratch transport."""
+def generator_marker_contract(inst: Instruction, fmt: IRFormat) -> bool:
+    """The marker at the start of a generator's code is never executed."""
     inputs, outputs = external_io(inst)
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     if (inst.name != "RETURN_GENERATOR" or not fmt.window or inputs
@@ -7799,28 +7802,11 @@ def created_copy_contract(inst: Instruction, fmt: IRFormat) -> bool:
             or len(inst.parts) != 1):
         return False
     expected = """{
-        PyFunctionObject *func = _PyFrame_GetFunction(frame);
-        PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func, _PyFrame_GetCode(frame), frame->previous);
-        ERROR_IF(gen == NULL);
-        SAVE_STACK();
-        _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
-        IR_CREATED_COPY(frame, gen_frame);
-        gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
-        assert(frame->frame_obj == NULL);
-        gen->gi_frame_state = FRAME_CREATED;
-        gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
-        _Py_LeaveRecursiveCallPy(tstate);
-        _PyInterpreterFrame *prev = frame->previous;
-        _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);
-        _PyThreadState_PopFrame(tstate, frame);
-        frame = tstate->current_frame = prev;
-        next_instr = frame->return_pc;
-        RELOAD_STACK();
-        res = PyValue_FromObjectSteal((PyObject *)gen);
-        LLTRACE_RESUME_FRAME();
+        IR_GENERATOR_MARKER();
+        res = PyValue_NULL;
     }"""
     return statement_shape(parts[0].body) == statement_shape(
-        Parser(expected, "<created copy contract>").block())
+        Parser(expected, "<generator marker contract>").block())
 
 
 def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:

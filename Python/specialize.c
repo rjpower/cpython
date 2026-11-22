@@ -1999,16 +1999,32 @@ function_signature(PyCodeObject *code)
     return SIMPLE_SIGNATURE;
 }
 
+/* A call of a generator function creates its object: no frame runs, so no
+ * specialization may push one. */
+static bool
+code_creates_generator(PyCodeObject *code)
+{
+    return (code->co_flags &
+            (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) != 0;
+}
+
 /* An optional specialization may fail without failing the current operation.
  * Cache nomination still requires a positive execution-image readiness proof. */
 static bool
-prepare_function_for_inline(PyCodeObject *code)
+prepare_function_exec(PyCodeObject *code)
 {
     if (_PyCode_GetExec(code) == NULL) {
         PyErr_Clear();
         return false;
     }
     return true;
+}
+
+/* The same for a specialization that pushes the frame of the function. */
+static bool
+prepare_function_for_inline(PyCodeObject *code)
+{
+    return !code_creates_generator(code) && prepare_function_exec(code);
 }
 
 /* Returning false indicates a failure. */
@@ -2349,7 +2365,7 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
     if (signature == SIMPLE_SIGNATURE) {
         argcount = code->co_argcount;
     }
-    if (!prepare_function_for_inline(code)) {
+    if (!prepare_function_exec(code)) {
         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OTHER);
         return -1;
     }
@@ -2361,11 +2377,13 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
     fb->func_version = version;
     memset(&fb->plan, 0, sizeof(fb->plan));
     int opcode;
+    bool creates = code_creates_generator(code);
     if (argcount == nargs + bound_method) {
         if (bound_method) {
-            opcode = CALL_BOUND_METHOD_EXACT_ARGS;
+            opcode = creates ? CALL_BOUND_METHOD_GENERAL
+                             : CALL_BOUND_METHOD_EXACT_ARGS;
         }
-        else if (code->_co_exec->generator_direct) {
+        else if (creates) {
             opcode = CALL_PY_GENERATOR;
         }
         else {
@@ -2410,11 +2428,9 @@ _PyBindPlan_Init(_PyBindPlan *plan, PyCodeObject *code, int positional,
     }
     uint16_t bits = 0;
     if (flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) {
-        /* A generator whose code has a prologue is created from a frame
-         * that runs it: the generic binder's. */
-        if (!code->_co_exec->generator_direct) {
-            return 0;
-        }
+        /* The call creates the object and binds into its frame; its
+         * prologue (free variables, cells, the iterator of a generator
+         * expression) runs after the binding */
         bits |= _Py_CALL_BIND_GENERATOR;
     }
     int filled = positional < argcount ? positional : argcount;
@@ -3020,7 +3036,7 @@ specialize_subscr_getitem(PyTypeObject *container_type, _PyInstr *instr)
 }
 
 /* Nominate GET_ITER_PY_GENERATOR for a heap type whose __iter__ is a
- * generator function of one argument whose code begins at RETURN_GENERATOR.
+ * generator function of one argument.
  * The lookup neither allocates nor runs code; the type caches the function
  * under its version, which PyType_Modified() invalidates. */
 static bool
@@ -3049,8 +3065,7 @@ specialize_iter_generator(PyTypeObject *tp, _PyInstr *instr)
             (code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR))
                 == CO_GENERATOR &&
             function_signature(code) == SIMPLE_SIGNATURE &&
-            code->co_argcount == 1 && prepare_function_for_inline(code) &&
-            code->_co_exec->generator_direct &&
+            code->co_argcount == 1 && prepare_function_exec(code) &&
             _PyType_CacheIterForSpecialization((PyHeapTypeObject *)tp, iter,
                                                tp_version))
         {

@@ -4251,7 +4251,8 @@ fix_cell_offsets(_PyCompile_CodeUnitMetadata *umd, basicblock *entryblock, int *
 }
 
 static int
-prepare_localsplus(_PyCompile_CodeUnitMetadata *umd, cfg_builder *g)
+prepare_localsplus(_PyCompile_CodeUnitMetadata *umd, cfg_builder *g,
+                   int code_flags)
 {
     assert(PyDict_GET_SIZE(umd->u_varnames) < INT_MAX);
     assert(PyDict_GET_SIZE(umd->u_cellvars) < INT_MAX);
@@ -4267,8 +4268,11 @@ prepare_localsplus(_PyCompile_CodeUnitMetadata *umd, cfg_builder *g)
         return ERROR;
     }
 
-    // This must be called before fix_cell_offsets().
-    if (insert_prefix_instructions(umd, g->g_entryblock, cellfixedoffsets, nfreevars)) {
+    /* A generator's free variables and cells are made when the object is
+     * created (_PyGen_NewCall()), not by instructions of its code.  This must
+     * be called before fix_cell_offsets(). */
+    if (!IS_GENERATOR(code_flags) &&
+        insert_prefix_instructions(umd, g->g_entryblock, cellfixedoffsets, nfreevars)) {
         PyMem_Free(cellfixedoffsets);
         return ERROR;
     }
@@ -4462,7 +4466,7 @@ _PyCfg_OptimizedCfgToRegCfg(cfg_builder *g, _PyCompile_CodeUnitMetadata *umd,
         return ERROR;
     }
 
-    *nlocalsplus = prepare_localsplus(umd, g);
+    *nlocalsplus = prepare_localsplus(umd, g, code_flags);
     if (*nlocalsplus < 0) {
         return ERROR;
     }

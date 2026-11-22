@@ -2449,7 +2449,6 @@ typedef struct {
     int build_plan;
     semantic_scalar_state *error_nodes;
     uint32_t error_capacity;
-    int created_empty;
     int completion_destination_empty;
     int normal_null_destination_empty;
     semantic_delegated delegated;
@@ -2939,36 +2938,6 @@ semantic_input_home(_PyIRWord word, const _PyIRFormat *fmt, int input)
     Py_UNREACHABLE();
 }
 
-/* The event census includes unreachable sites; only the fixed-point replay
- * can certify a reached site's incoming shape. */
-static int
-semantic_has_created_copy(const _PyIRFormat *fmt)
-{
-    for (int i = 0; i < fmt->owner_events; i++) {
-        if (_PyIR_OwnerPrograms[fmt->owner_program + i].kind ==
-            _PyIR_OWNER_CREATED_COPY)
-        {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static int
-semantic_empty_scratch(const semantic_image *image,
-                       const semantic_worklist *work, const uint64_t *state)
-{
-    for (int bit = 0; bit < image->scratch; bit++) {
-        unsigned int facts = semantic_home_facts(work, state, image->nl + bit, image->nl);
-        if (!semantic_absent(facts) ||
-            (facts & ((1u << SEM_INITIALIZED) | (1u << SEM_MAY_OWNER))))
-        {
-            return 0;
-        }
-    }
-    return 1;
-}
-
 /* One pending pair suffices for the frontend SEND -> delegated-yield
  * protocol. It denotes role homes, not object identity or a complete map. */
 static int
@@ -3235,14 +3204,11 @@ semantic_step_core(const semantic_image *image, semantic_worklist *work,
                 }
                 return 0;
             }
-            case _PyIR_OWNER_CREATED_COPY:
-                work->created_empty = inspect && exact &&
-                    semantic_empty_scratch(image, work, state);
-                /* A future activation installs a new send home. It is not
-                 * the ordinary successor of the created copy snapshot. */
+            case _PyIR_OWNER_GENERATOR_MARKER:
+                /* The first send starts a new activation, which supplies the
+                 * explicit send recipient: it is not the ordinary successor
+                 * of the marker. */
                 *complete = 0;
-                /* The next activation supplies the explicit send recipient.
-                 * The empty certificate describes the earlier copy only. */
                 home = (int)IR_A(word);
                 if (home >= nl && home != IR_NO_DST) {
                     semantic_set_facts(work, state, home, nl,
@@ -3262,7 +3228,6 @@ semantic_step(const semantic_image *image, semantic_worklist *work,
 {
     _PyIRWord word = image->words[pc];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    work->created_empty = 0;
     work->completion_destination_empty = 0;
     work->normal_null_destination_empty = 0;
     if (semantic_delegated_step(image, work, state, pc, inspect) < 0) {
@@ -3411,24 +3376,6 @@ semantic_normal_edge(const semantic_image *image, semantic_worklist *work,
  * only plans with actual site rows. Cover every nonempty flag subset. */
 static const _PyIRCodePlan all_normal_returns = {
     .flags = _PyIR_PLAN_ALL_RETURNS};
-static const _PyIRCodePlan all_created_empty = {
-    .flags = _PyIR_PLAN_ALL_CREATED_EMPTY};
-static const _PyIRCodePlan all_returns_created_empty = {
-    .flags = _PyIR_PLAN_ALL_RETURNS | _PyIR_PLAN_ALL_CREATED_EMPTY};
-
-static const _PyIRCodePlan *
-flag_only_plan(uint32_t flags)
-{
-    switch (flags) {
-        case _PyIR_PLAN_ALL_RETURNS:
-            return &all_normal_returns;
-        case _PyIR_PLAN_ALL_CREATED_EMPTY:
-            return &all_created_empty;
-        default:
-            assert(flags == (_PyIR_PLAN_ALL_RETURNS | _PyIR_PLAN_ALL_CREATED_EMPTY));
-            return &all_returns_created_empty;
-    }
-}
 
 /* This certificate omits ownerless scratch; the cold shadow comparison still
  * checks actual physical NULL and reports a dirty cell as a mismatch. */
@@ -3860,12 +3807,11 @@ normal_transfer_proof(const semantic_image *image,
     /* Allocate persistent storage only for mixed coverage. First count exact
      * sites without retaining a per-word map or another scratch-state array. */
     work.build_plan = plan != NULL;
-    uint32_t nreturns = 0, ncertified = 0, ncreated = 0, ncreated_empty = 0;
+    uint32_t nreturns = 0, ncertified = 0;
     if (plan != NULL) {
         for (int i = 0; i < n; i += _PyIR_WordLength(words[i])) {
             nreturns += _PyIR_FormatOf(IR_HANDLER(words[i]))->transfer_kind ==
                 _PyIR_TRANSFER_EXIT;
-            ncreated += semantic_has_created_copy(_PyIR_FormatOf(IR_HANDLER(words[i])));
         }
     }
     for (int b = 0; b < nblocks && result == 0; b++) {
@@ -3931,17 +3877,15 @@ normal_transfer_proof(const semantic_image *image,
             }
             if (plan != NULL) {
                 ncertified += semantic_exact_return(image, &work, state, i, complete);
-                ncreated_empty += work.created_empty;
             }
         }
     }
     uint32_t flags =
-        (ncertified && ncertified == nreturns ? _PyIR_PLAN_ALL_RETURNS : 0) |
-        (ncreated && ncreated == ncreated_empty ? _PyIR_PLAN_ALL_CREATED_EMPTY : 0);
+        ncertified && ncertified == nreturns ? _PyIR_PLAN_ALL_RETURNS : 0;
     if (result == 0 && plan != NULL && (ncertified || flags)) {
         uint32_t nsites = flags & _PyIR_PLAN_ALL_RETURNS ? 0 : ncertified;
         if (nsites == 0) {
-            *plan = flag_only_plan(flags);
+            *plan = &all_normal_returns;
         }
         else {
             size_t bytes = sizeof(_PyIRCodePlan);
@@ -4064,29 +4008,6 @@ _PyCode_FreeSemanticPlan(const _PyIRCodePlan *plan)
     if (plan != NULL && plan->nsites != 0) {
         PyMem_Free((void *)plan);
     }
-}
-
-int
-_PyCode_AllCreatedEmpty(PyCodeObject *co)
-{
-    // The census is cheap; the proof is not, and few codes create generators
-    int created = 0;
-    for (Py_ssize_t i = 0; i < Py_SIZE(co) && !created;
-         i += _PyIR_WordLength(_PyCode_WORDS(co)[i]))
-    {
-        created = semantic_has_created_copy(
-            _PyIR_FormatOf(IR_HANDLER(_PyCode_WORDS(co)[i])));
-    }
-    if (!created) {
-        return 0;
-    }
-    const _PyIRCodePlan *plan;
-    if (_PyCode_BuildSemanticPlan(co, &plan) < 0) {
-        return -1;
-    }
-    int empty = plan != NULL && (plan->flags & _PyIR_PLAN_ALL_CREATED_EMPTY);
-    _PyCode_FreeSemanticPlan(plan);
-    return empty;
 }
 
 int

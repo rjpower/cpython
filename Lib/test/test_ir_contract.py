@@ -531,8 +531,7 @@ class ContractTests(unittest.TestCase):
         suspends = {opcode.opname[row.ordinary_handler] for row in ROWS.values()
                     if row.effects & _opcode.IR_SUSPENDS}
         self.assertEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
-                                    "YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED",
-                                    "RETURN_GENERATOR"})
+                                    "YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"})
         for name in ("CALL_PY_EXACT_ARGS", "SEND", "SEND_GEN", "FOR_ITER_GEN",
                      "LOAD_ATTR_PROPERTY"):
             self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,

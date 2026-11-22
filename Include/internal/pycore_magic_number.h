@@ -371,8 +371,13 @@ Known values:
           408, IT's CONTAINS_OP_JUMP_SEQUENCE as 409, handler 126 removed
    64437: parity84 BD (unit branch): the call feedback entry carries a binding
           plan (_PyBindPlan), 40 bytes; the entry offsets of every code object
-          change */
-#define PYC_MAGIC_NUMBER 64437
+          change
+   64438: parity84 GN (unit branch): a generator's code has no COPY_FREE_VARS
+          or MAKE_CELL before its RETURN_GENERATOR, and nothing executes a
+          generator expression's prelude: the creating call makes the free
+          variables, the cells and the iterator
+   64439: parity84 BD merged with GN (the merge renumbers; see 64437, 64438) */
+#define PYC_MAGIC_NUMBER 64439
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

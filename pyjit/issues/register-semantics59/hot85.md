@@ -61,11 +61,36 @@ attributed to handler, native function and Python line.
   the common path contiguous rather than calling out; in helpers, split
   cold halves out of line.
 
-**XK**: due 02:00.
+**XK** (`E59/hot85/xk/report.md`). The same method on the xml cases,
+nqueens, comprehensions, coroutines and regex_compile.
+- xml_etree_iterparse: +706 instructions per event (+144M per loop).
+  - The Python consumer is +437:
+    - `FOR_ITER` on a Python class whose `__next__` is a generator's
+      (C re-enters the evaluator): +183;
+    - a negative `isinstance(event, Exception)`, which falls back to
+      reading `__class__`: +163;
+    - the deque truth test, the `yield from` relay, the pair unpack,
+      `popleft` and the tuple build: +60 to +80 each;
+    - golden84's specialized `elem.tag`: -177.
+  - Parsing and event delivery in `_elementtree` are +269.
+- nqueens: +753 per permutation (+30.4M per loop).
+  - 95% is `tuple(pool[i] for i in indices[:r])`:
+    - generator-expression creation and finish: +705;
+    - the list-then-tuple build and builtin calls: +769;
+    - per-item resume and yield: +507;
+    - element loads and slices: +580.
+  - These are against a register-IR move credit of -1,525.
+- coroutines: 0.987 of upstream's instructions; the time loss is not
+  footprint.
+- Further items: the C-to-Python entry behind `TextIOWrapper.write`
+  (+93M); the two-element unpack after parity84's single-loop form
+  (+38M); `KeyError` in regex_compile (+32M); int-subclass operands
+  (+23M); `Element` iteration through a sequence iterator and an
+  `IndexError` per loop.
 
 ## Phase B1
 
-Six units from golden84 (briefs `E59/hot85/common-b.md`, `brief-*.md`):
+Eight units from golden84 (briefs `E59/hot85/common-b.md`, `brief-*.md`):
 
 | Unit | Content | Source |
 | --- | --- | --- |
@@ -75,9 +100,12 @@ Six units from golden84 (briefs `E59/hot85/common-b.md`, `brief-*.md`):
 | DT | `dictresize` with `memcpy`; pointer hash for default-hash objects; inserts; `_PyDict_NextValue`; `insertdict`/`_Py_dict_lookup` splits | LB6, LB7, LB2; HC U4 |
 | AT | `_Py_T_OBJECT` member loads in one specialized form; `__class__` lookup; attribute helper splits | LB10; HC U4 |
 | FL | Rare float and int operand cases out of line, counted first | HC U3 |
+| XP | `Element` iterates natively; the `_elementtree` parse and event append do upstream's work | XK 2, 13 |
+| EV | Small unpacks inline in the one handler; `LIST_APPEND` inline; intrinsic, slice and truth-test layers removed; list and range steps; dict-items step | XK 6, 9, 14, 15; LB8 |
 
 Integration on `pyjit/hot85`: full suites, instructions for all 29, the
 timed all-29 against golden84 and upstream, and cycles and decoder µops on
 CPU 15 over golden84 and shifted diagnostic builds (HC U6), recorded, not
-gated. Deferred to B2: dict-items iteration, the `_json`/`_pickle` ports,
-XK's items.
+gated. Deferred to B2, after B1's integration because they overlap B1's
+files: the C-to-Python entry, generator creation and resume, int-subclass
+operands, `CALL_KW_PY`, and the `_json`/`_pickle` ports.

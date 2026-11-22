@@ -116,11 +116,11 @@ encoder_dealloc(PyObject *self);
 static int
 encoder_clear(PyObject *self);
 static int
-encoder_listencode_list(PyEncoderObject *s, PyUnicodeWriter *writer, PyObject *seq, Py_ssize_t indent_level, PyObject *indent_cache);
+encoder_listencode_list(PyEncoderObject *s, PyUnicodeWriter *writer, PyValueBorrow seq_value, Py_ssize_t indent_level, PyObject *indent_cache);
 static int
 encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer, PyValueBorrow obj, Py_ssize_t indent_level, PyObject *indent_cache);
 static int
-encoder_listencode_dict(PyEncoderObject *s, PyUnicodeWriter *writer, PyObject *dct, Py_ssize_t indent_level, PyObject *indent_cache);
+encoder_listencode_dict(PyEncoderObject *s, PyUnicodeWriter *writer, PyValueBorrow dct_value, Py_ssize_t indent_level, PyObject *indent_cache);
 static PyObject *
 _encoded_const(PyObject *obj);
 static void
@@ -1685,25 +1685,76 @@ write_inline_int(PyUnicodeWriter *writer, PyValueBorrow obj)
     return _PyLong_WriteDecimal((_PyUnicodeWriter *)writer, obj);
 }
 
+/* An object of none of the types above: encode what the default function
+   makes of it. */
+static Py_NO_INLINE int
+encoder_encode_default(PyEncoderObject *s, PyUnicodeWriter *writer,
+                       PyValueBorrow obj_value,
+                       Py_ssize_t indent_level, PyObject *indent_cache)
+{
+    PyObject *obj = PyValue_AsKnownObjectBorrow(obj_value);
+    PyValue newobj;
+    int rv;
+    PyValue ident = PyValue_NULL;
+    if (s->markers != Py_None) {
+        int has_key;
+        ident = encoder_marker_key(obj);
+        has_key = PyDict_ContainsValue(s->markers, ident);
+        if (has_key) {
+            if (has_key != -1)
+                PyErr_SetString(PyExc_ValueError, "Circular reference detected");
+            return -1;
+        }
+        if (PyDict_SetValue(s->markers, ident, PyValue_FromObjectBorrow(obj))) {
+            return -1;
+        }
+    }
+    newobj = _PyValue_CallOneArg(_PyThreadState_GET(),
+                                 PyValue_FromObjectBorrow(s->defaultfn),
+                                 obj_value);
+    if (PyValue_IsNull(newobj)) {
+        return -1;
+    }
+
+    if (_Py_EnterRecursiveCall(" while encoding a JSON object")) {
+        PyValue_CLOSE(newobj);
+        return -1;
+    }
+    rv = encoder_listencode_obj(s, writer, PyValue_Borrow(newobj),
+                                indent_level, indent_cache);
+    _Py_LeaveRecursiveCall();
+
+    PyValue_CLOSE(newobj);
+    if (rv) {
+        _PyErr_FormatNote("when serializing %T object", obj);
+        return -1;
+    }
+    if (!PyValue_IsNull(ident)) {
+        if (PyDict_DelValue(s->markers, ident)) {
+            return -1;
+        }
+    }
+    return rv;
+}
+
 static int
 encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
                        PyValueBorrow obj_value,
                        Py_ssize_t indent_level, PyObject *indent_cache)
 {
     /* Encode Python object obj to a JSON term */
-    PyValue newobj;
     int rv;
 
-    if (PyValue_IsInlineInt(obj_value)) {
-        return write_inline_int(writer, obj_value);
-    }
-    if (PyValue_IsInlineFloat(obj_value)) {
+    PyObject *obj = PyValue_ObjectOrNull(obj_value);
+    if (obj == NULL) {
+        if (PyValue_IsInlineInt(obj_value)) {
+            return write_inline_int(writer, obj_value);
+        }
         PyObject *encoded = encoder_encode_float(s, obj_value);
         if (encoded == NULL)
             return -1;
         return _steal_accumulate(writer, encoded);
     }
-    PyObject *obj = PyValue_AsKnownObjectBorrow(obj_value);
 
     if (obj == Py_None) {
       return PyUnicodeWriter_WriteASCII(writer, "null", 4);
@@ -1738,59 +1789,18 @@ encoder_listencode_obj(PyEncoderObject *s, PyUnicodeWriter *writer,
     else if (PyList_Check(obj) || PyTuple_Check(obj)) {
         if (_Py_EnterRecursiveCall(" while encoding a JSON object"))
             return -1;
-        rv = encoder_listencode_list(s, writer, obj, indent_level, indent_cache);
+        rv = encoder_listencode_list(s, writer, obj_value, indent_level, indent_cache);
         _Py_LeaveRecursiveCall();
         return rv;
     }
     else if (PyAnyDict_Check(obj)) {
         if (_Py_EnterRecursiveCall(" while encoding a JSON object"))
             return -1;
-        rv = encoder_listencode_dict(s, writer, obj, indent_level, indent_cache);
+        rv = encoder_listencode_dict(s, writer, obj_value, indent_level, indent_cache);
         _Py_LeaveRecursiveCall();
         return rv;
     }
-    else {
-        PyValue ident = PyValue_NULL;
-        if (s->markers != Py_None) {
-            int has_key;
-            ident = encoder_marker_key(obj);
-            has_key = PyDict_ContainsValue(s->markers, ident);
-            if (has_key) {
-                if (has_key != -1)
-                    PyErr_SetString(PyExc_ValueError, "Circular reference detected");
-                return -1;
-            }
-            if (PyDict_SetValue(s->markers, ident, PyValue_FromObjectBorrow(obj))) {
-                return -1;
-            }
-        }
-        newobj = _PyValue_CallOneArg(_PyThreadState_GET(),
-                                     PyValue_FromObjectBorrow(s->defaultfn),
-                                     obj_value);
-        if (PyValue_IsNull(newobj)) {
-            return -1;
-        }
-
-        if (_Py_EnterRecursiveCall(" while encoding a JSON object")) {
-            PyValue_CLOSE(newobj);
-            return -1;
-        }
-        rv = encoder_listencode_obj(s, writer, PyValue_Borrow(newobj),
-                                    indent_level, indent_cache);
-        _Py_LeaveRecursiveCall();
-
-        PyValue_CLOSE(newobj);
-        if (rv) {
-            _PyErr_FormatNote("when serializing %T object", obj);
-            return -1;
-        }
-        if (!PyValue_IsNull(ident)) {
-            if (PyDict_DelValue(s->markers, ident)) {
-                return -1;
-            }
-        }
-        return rv;
-    }
+    return encoder_encode_default(s, writer, obj_value, indent_level, indent_cache);
 }
 
 /* Cold: the text of an inline int or float key. */
@@ -1798,8 +1808,7 @@ static PyObject *
 encoder_inline_key(PyEncoderObject *s, PyValueBorrow key_value)
 {
     if (PyValue_IsInlineInt(key_value)) {
-        return PyUnicode_FromFormat(
-            "%lld", (long long)PyValue_InlineInt64(key_value));
+        return _PyLong_ValueRepr(key_value);
     }
     return encoder_encode_float(s, key_value);
 }
@@ -1813,13 +1822,13 @@ encoder_encode_key_value(PyEncoderObject *s, PyUnicodeWriter *writer, bool *firs
 {
     PyObject *keystr = NULL;
     int rv;
-    PyObject *key = NULL;  // the key as an object; NULL for an inline key
+    PyObject *key;  // the key as an object; NULL for an inline key
 
-    if (PyValue_IsInline(key_value)) {
+    key = PyValue_ObjectOrNull(key_value);
+    if (key == NULL) {
         keystr = encoder_inline_key(s, key_value);
     }
-    else if ((key = PyValue_AsKnownObjectBorrow(key_value),
-              PyUnicode_Check(key))) {
+    else if (PyUnicode_Check(key)) {
         keystr = Py_NewRef(key);
     }
     else if (PyFloat_Check(key)) {
@@ -1959,12 +1968,13 @@ _encoder_iterate_dict_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
     return rc < 0 ? -1 : 0;
 }
 
-static int
+static Py_NO_INLINE int
 encoder_listencode_dict(PyEncoderObject *s, PyUnicodeWriter *writer,
-                       PyObject *dct,
+                       PyValueBorrow dct_value,
                        Py_ssize_t indent_level, PyObject *indent_cache)
 {
     /* Encode Python dict dct a JSON term */
+    PyObject *dct = _PyValue_AsKnownObjectBorrowPointer(dct_value);
     PyValue ident = PyValue_NULL;
     bool first = true;
 
@@ -1982,7 +1992,7 @@ encoder_listencode_dict(PyEncoderObject *s, PyUnicodeWriter *writer,
                 PyErr_SetString(PyExc_ValueError, "Circular reference detected");
             goto bail;
         }
-        if (PyDict_SetValue(s->markers, ident, PyValue_FromObjectBorrow(dct))) {
+        if (PyDict_SetValue(s->markers, ident, dct_value)) {
             goto bail;
         }
     }
@@ -2000,7 +2010,7 @@ encoder_listencode_dict(PyEncoderObject *s, PyUnicodeWriter *writer,
     }
 
     if (s->sort_keys || !PyAnyDict_CheckExact(dct)) {
-        PyObject *items = _PyValue_MappingItems(PyValue_FromObjectBorrow(dct));
+        PyObject *items = _PyValue_MappingItems(dct_value);
         if (items == NULL || (s->sort_keys && PyList_Sort(items) < 0)) {
             Py_XDECREF(items);
             goto bail;
@@ -2077,15 +2087,16 @@ _encoder_iterate_fast_seq_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
     return 0;
 }
 
-static int
+static Py_NO_INLINE int
 encoder_listencode_list(PyEncoderObject *s, PyUnicodeWriter *writer,
-                        PyObject *seq,
+                        PyValueBorrow seq_value,
                         Py_ssize_t indent_level, PyObject *indent_cache)
 {
+    PyObject *seq = _PyValue_AsKnownObjectBorrowPointer(seq_value);
     PyValue ident = PyValue_NULL;
     PyObject *s_fast = NULL;
 
-    s_fast = _PyValue_SequenceFast(PyValue_FromObjectBorrow(seq), "encoder_listencode_list needs a sequence");
+    s_fast = _PyValue_SequenceFast(seq_value, "encoder_listencode_list needs a sequence");
     if (s_fast == NULL)
         return -1;
     if (PySequence_Fast_GET_SIZE(s_fast) == 0) {
@@ -2102,7 +2113,7 @@ encoder_listencode_list(PyEncoderObject *s, PyUnicodeWriter *writer,
                 PyErr_SetString(PyExc_ValueError, "Circular reference detected");
             goto bail;
         }
-        if (PyDict_SetValue(s->markers, ident, PyValue_FromObjectBorrow(seq))) {
+        if (PyDict_SetValue(s->markers, ident, seq_value)) {
             goto bail;
         }
     }

@@ -183,6 +183,7 @@ const _PyIROwnershipEvent _PyIR_OwnerPrograms[69] = {
 #define CONTAINS_OP_JUMP_SEQUENCE                      409
 #define LOAD_ATTR_SLOT_POINTER                         410
 #define FOR_ITER_DICT_ITEMS                            411
+#define LOAD_ATTR_METHOD_POLY                          412
 
 #define _PyIR_H_SPECIALIZED 1
 #define _PyIR_H_INSTRUMENTED 2
@@ -552,6 +553,7 @@ const uint16_t _PyIR_HandlerFlags[IR_NUM_HANDLERS] = {
     [409] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* CONTAINS_OP_JUMP_SEQUENCE */
     [410] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* LOAD_ATTR_SLOT_POINTER */
     [411] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* FOR_ITER_DICT_ITEMS */
+    [412] = _PyIR_H_METADATA | _PyIR_H_DISPATCH | _PyIR_H_SAVES_IP | _PyIR_H_SPECIALIZED | _PyIR_H_IR_ONLY, /* LOAD_ATTR_METHOD_POLY */
 };
 #endif
 
@@ -911,6 +913,7 @@ const uint16_t _PyIR_HandlerBase[IR_NUM_HANDLERS] = {
     [409] = 304, /* CONTAINS_OP_JUMP_SEQUENCE */
     [410] = 78, /* LOAD_ATTR_SLOT_POINTER */
     [411] = 65, /* FOR_ITER_DICT_ITEMS */
+    [412] = 78, /* LOAD_ATTR_METHOD_POLY */
 };
 #endif
 
@@ -1269,6 +1272,7 @@ const _PyIRGeneratorBoundary _PyIR_GeneratorBoundaries[IR_NUM_HANDLERS] = {
     [409] = { 409, 409, 0, 0, 0, 0 },
     [410] = { 410, 410, 0, 0, 0, 0 },
     [411] = { 411, 411, 0, 0, 0, 0 },
+    [412] = { 412, 412, 0, 0, 0, 0 },
 };
 #endif
 
@@ -1329,9 +1333,9 @@ typedef _PyFbBinary _PyFb_STORE_SUBSCR;
 typedef _PyFbUnary _PyFb_TO_BOOL;
 typedef _PyFbUnary _PyFb_UNPACK_SEQUENCE;
 
-PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[412];
+PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[413];
 #ifdef NEED_IR_METADATA
-const _PyIRFormat _PyIR_Formats[412] = {
+const _PyIRFormat _PyIR_Formats[413] = {
     [CACHE] = { .flags = _PyIR_VALID, .effects = 0, .roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, .fb_kind = 0, .fb_size = 0, .result_phase = _PyIR_RESULT_PHASE_NONE, .output_kind = _PyIR_OUTPUT_REGISTER_DST, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .owner_program = 6, .owner_events = 1, .word_flags = 0, .error_routes = 0, .operands = _PyIR_OPERANDS_NONE, .observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, .reads = { 0, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = CACHE, .twin = 0, .events = 0 },
     [BINARY_SLICE] = { .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE | _PyIR_DISCARDS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IN0 + 2 }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 3, .dst = -3, .borrow_mask = 0x7, .fb_kind = 0, .fb_size = 0, .result_phase = _PyIR_RESULT_PHASE_NONE, .output_kind = _PyIR_OUTPUT_REGISTER_DST, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .owner_program = 6, .owner_events = 1, .word_flags = 0, .error_routes = 0, .operands = _PyIR_OPERANDS_NONE, .observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, .reads = { 3, _PyIR_EXT_FIXED }, .writes = { 1, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = BINARY_SLICE, .twin = 0, .events = 0 },
     [BUILD_TEMPLATE] = { .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE | _PyIR_DISCARDS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, .ninputs = 2, .dst = -2, .borrow_mask = 0x3, .fb_kind = 0, .fb_size = 0, .result_phase = _PyIR_RESULT_PHASE_NONE, .output_kind = _PyIR_OUTPUT_REGISTER_DST, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .owner_program = 6, .owner_events = 1, .word_flags = 0, .error_routes = 0, .operands = _PyIR_OPERANDS_NONE, .observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 1, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = BUILD_TEMPLATE, .twin = 0, .events = 0 },
@@ -1674,12 +1678,13 @@ const _PyIRFormat _PyIR_Formats[412] = {
     [CONTAINS_OP_JUMP_SEQUENCE] = { .flags = _PyIR_VALID | _PyIR_FORWARD | _PyIR_RUNS_CODE | _PyIR_FUSED, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 2, .dst = _PyIR_NO_DST, .borrow_mask = 0x3, .fb_kind = FB_BINARY, .fb_size = sizeof(_PyFbBinary), .result_phase = _PyIR_RESULT_PHASE_NONE, .output_kind = _PyIR_OUTPUT_REGISTER_DST, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .owner_program = 6, .owner_events = 1, .word_flags = 0, .error_routes = 0, .operands = _PyIR_OPERANDS_NONE, .observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 0, _PyIR_EXT_FIXED }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = CONTAINS_OP, .twin = INSTRUMENTED_CONTAINS_OP_JUMP, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) },
     [LOAD_ATTR_SLOT_POINTER] = { .flags = _PyIR_VALID | _PyIR_NO_FOLD | _PyIR_STORE_DST | _PyIR_RUNS_CODE | _PyIR_DISCARDS, .effects = _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 1, .dst = -1, .borrow_mask = 0x1, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .result_phase = _PyIR_RESULT_PHASE_NONE, .output_kind = _PyIR_OUTPUT_REGISTER_DST, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .owner_program = 6, .owner_events = 1, .word_flags = 0, .error_routes = 0, .operands = _PyIR_OPERANDS_NONE, .observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, .reads = { 1, _PyIR_EXT_FIXED }, .writes = { 1, _PyIR_EXT_BIT0 }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = LOAD_ATTR, .twin = 0, .events = 0 },
     [FOR_ITER_DICT_ITEMS] = { .flags = _PyIR_VALID | _PyIR_WINDOW | _PyIR_FORWARD | _PyIR_STORE_DST | _PyIR_RUNS_CODE | _PyIR_DISCARDS, .effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON | _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_BASE, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 0, .dst = 2, .borrow_mask = 0x0, .fb_kind = FB_UNARY, .fb_size = sizeof(_PyFbUnary), .result_phase = _PyIR_RESULT_PHASE_NONE, .output_kind = _PyIR_OUTPUT_OUTCOME, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .owner_program = 14, .owner_events = 1, .word_flags = 0, .error_routes = 0, .operands = _PyIR_OPERANDS_NONE, .observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_COMPLETION }, .reads = { 2, _PyIR_EXT_FIXED }, .writes = { 3, _PyIR_EXT_FIXED }, .through = { 2, _PyIR_EXT_FIXED }, .shadow = FOR_ITER, .twin = INSTRUMENTED_FOR_ITER, .events = (1u << PY_MONITORING_EVENT_BRANCH_LEFT) | (1u << PY_MONITORING_EVENT_BRANCH_RIGHT) | (1u << PY_MONITORING_EVENT_STOP_ITERATION) },
+    [LOAD_ATTR_METHOD_POLY] = { .flags = _PyIR_VALID | _PyIR_NO_FOLD | _PyIR_STORE_DST | _PyIR_RUNS_CODE | _PyIR_DISCARDS, .effects = _PyIR_DEOPTS, .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_FB, _PyIR_ROLE_IMM }, .imm = _PyIR_LOC_D, .fb = _PyIR_LOC_C, .ninputs = 1, .dst = -1, .borrow_mask = 0x1, .fb_kind = FB_ATTR, .fb_size = sizeof(_PyFbAttr), .result_phase = _PyIR_RESULT_PHASE_NONE, .output_kind = _PyIR_OUTPUT_REGISTER_DST, .transfer_kind = _PyIR_TRANSFER_UNKNOWN, .owner_program = 6, .owner_events = 1, .word_flags = 0, .error_routes = 0, .operands = _PyIR_OPERANDS_NONE, .observer_outcome = { _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }, .reads = { 1, _PyIR_EXT_FIXED }, .writes = { 1, _PyIR_EXT_BIT0 }, .through = { 0, _PyIR_EXT_FIXED }, .shadow = LOAD_ATTR, .twin = 0, .events = 0 },
 };
 #endif
 
-PyAPI_DATA(const char *const) _PyIR_OnlyNames[145];
+PyAPI_DATA(const char *const) _PyIR_OnlyNames[146];
 #ifdef NEED_IR_METADATA
-const char *const _PyIR_OnlyNames[145] = {
+const char *const _PyIR_OnlyNames[146] = {
     [IR_JUMP - IR_FIRST_ONLY_HANDLER] = "IR_JUMP",
     [BINARY_OP_ADD - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_ADD",
     [BINARY_OP_AND - IR_FIRST_ONLY_HANDLER] = "BINARY_OP_AND",
@@ -1771,6 +1776,7 @@ const char *const _PyIR_OnlyNames[145] = {
     [CONTAINS_OP_JUMP_SEQUENCE - IR_FIRST_ONLY_HANDLER] = "CONTAINS_OP_JUMP_SEQUENCE",
     [LOAD_ATTR_SLOT_POINTER - IR_FIRST_ONLY_HANDLER] = "LOAD_ATTR_SLOT_POINTER",
     [FOR_ITER_DICT_ITEMS - IR_FIRST_ONLY_HANDLER] = "FOR_ITER_DICT_ITEMS",
+    [LOAD_ATTR_METHOD_POLY - IR_FIRST_ONLY_HANDLER] = "LOAD_ATTR_METHOD_POLY",
 };
 #endif
 

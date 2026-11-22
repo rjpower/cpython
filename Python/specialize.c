@@ -660,6 +660,34 @@ fb_shape_read_set(_PyInstr *instr, _PyFbHeader *h)
 #endif
 }
 
+/* Nomination of LOAD_ATTR_METHOD_POLY: the site has recorded two or more
+ * receiver types, and every row (written by fb_record() through
+ * fb_put_row(), as the shape rows are) is a method observation with a
+ * distinct type version. */
+static int
+fb_method_poly_set(_PyInstr *instr, _PyFbHeader *h)
+{
+    if (h->state != FB_POLY || h->poly == 0) {
+        return 0;
+    }
+    _PyFbPoly *poly = _PyFb_PolyOf(fb_block(instr), h);
+    int count = 0;
+    for (; count < FB_POLY_SIZE && poly->handler[count] != 0; count++) {
+        if ((poly->handler[count] != LOAD_ATTR_METHOD_WITH_VALUES &&
+             poly->handler[count] != LOAD_ATTR_METHOD_NO_DICT) ||
+            poly->type_version[count] == 0)
+        {
+            return 0;
+        }
+        for (int earlier = 0; earlier < count; earlier++) {
+            if (poly->type_version[earlier] == poly->type_version[count]) {
+                return 0;
+            }
+        }
+    }
+    return count >= 2;
+}
+
 /* The specialisation of a fused compare-and-jump that runs the compare's
  * specialised_opcode, for the words whose handler is fused. */
 static inline int
@@ -722,6 +750,12 @@ specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
         int poly_handler = handler == LOAD_ATTR_SHAPE_LOCAL_TEMP
             ? LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP : LOAD_ATTR_SHAPE_POLY;
         (void)set_opcode(instr, poly_handler);
+    }
+    else if ((handler == LOAD_ATTR_METHOD_WITH_VALUES ||
+              handler == LOAD_ATTR_METHOD_NO_DICT) &&
+             fb_method_poly_set(instr, h))
+    {
+        (void)set_opcode(instr, LOAD_ATTR_METHOD_POLY);
     }
 }
 

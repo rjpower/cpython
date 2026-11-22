@@ -2633,6 +2633,7 @@ dummy_func(
             LOAD_ATTR_SHAPE,
             LOAD_ATTR_GETSET,
             LOAD_ATTR_SLOT_POINTER,
+            LOAD_ATTR_METHOD_POLY,
         };
 
         specializing op(_SPECIALIZE_LOAD_ATTR, (owner -- owner)) {
@@ -4296,6 +4297,31 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             unused/2 +
             _LOAD_ATTR_METHOD_NO_DICT;
+
+        /* A type without a version has no row in a poly table. */
+        ir_only op(_GUARD_TYPE_HAS_VERSION, (owner -- owner)) {
+            EXIT_IF(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_version_tag == 0);
+        }
+
+        /* A method load whose site saw several receiver types: the site's
+         * poly rows (up to FB_POLY_SIZE, each a LOAD_ATTR_METHOD_WITH_VALUES
+         * or _NO_DICT observation) replace the one cached type version.  The
+         * row of the receiver's type holds the method; a receiver of any other
+         * type deoptimizes and the specializer adds its row. */
+        ir_only op(_LOAD_ATTR_METHOD_POLY, (owner -- attr, self_or_null[oparg&1])) {
+            assert(oparg & 1);
+            PyValueBorrow method = IR_METHOD_POLY_LOOKUP(
+                FB_COUNTER(), PyValue_AsKnownObjectBorrow(owner));
+            EXIT_IF(PyValue_IsNull(method));
+            STAT_INC(LOAD_ATTR, hit);
+            attr = PyValue_DUP(method);
+            self_or_null[0] = TAKE(owner);
+        }
+
+        macro(LOAD_ATTR_METHOD_POLY) =
+            unused/9 +
+            _GUARD_TYPE_HAS_VERSION +
+            _LOAD_ATTR_METHOD_POLY;
 
         op(_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES, (class_value/4, owner -- attr)) {
             assert((oparg & 1) == 0);

@@ -710,7 +710,7 @@ OBJECT_RELEASES = {"Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF",
 # (OBJECT_READERS_SEEN); that a name only reads is checked by review.
 # Uses inside assert() vanish from release builds and are not checked.
 OBJECT_READERS = {
-    "IR_GUARD_SHAPE_READ",
+    "IR_GUARD_SHAPE_READ", "IR_METHOD_POLY_LOOKUP",
     # Statements
     "LOCK_OBJECT", "UNLOCK_OBJECT",
     # Type tests and accessors

@@ -4776,7 +4776,7 @@ dummy_func(
         inline_ok op(_CALL_BUILTIN_CLASS, (callable, self_or_null, args[oparg] -- res)) {
             STAT_INC(CALL, hit);
             PyValue result = call_class_values(
-                tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -4844,7 +4844,7 @@ dummy_func(
             /* Builtin METH_FASTCALL functions, without keywords */
             STAT_INC(CALL, hit);
             _PyNativeCallResult call = call_builtin_values(
-                tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
             DEOPT_IF(call.miss);
             PyValue result = call.value;
             if (PyValue_IsNull(result)) {
@@ -4874,7 +4874,7 @@ dummy_func(
             /* Builtin METH_FASTCALL | METH_KEYWORDS functions */
             STAT_INC(CALL, hit);
             _PyNativeCallResult call = call_builtin_values(
-                tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
             DEOPT_IF(call.miss);
             PyValue result = call.value;
             if (PyValue_IsNull(result)) {

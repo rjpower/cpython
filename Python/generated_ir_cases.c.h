@@ -6337,7 +6337,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 STAT_INC(CALL, hit);
                 PyValue result = call_class_values(
-                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                    tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -6408,7 +6408,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 STAT_INC(CALL, hit);
                 _PyNativeCallResult call = call_builtin_values(
-                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                    tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
                 if (call.miss) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -6485,7 +6485,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 STAT_INC(CALL, hit);
                 _PyNativeCallResult call = call_builtin_values(
-                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                    tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
                 if (call.miss) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));

@@ -1740,13 +1740,14 @@ typedef struct {
 
 static inline Py_ALWAYS_INLINE _PyNativeCallResult
 call_builtin_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                    const _PyIRWord *head, PyValue callable, int first)
+                    const _PyIRWord *head, _PyIRWord word,
+                    PyValue callable, int first)
 {
     PyCFunctionObject *func =
         (PyCFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
     int flags = func->m_ml->ml_flags;
-    int n = (int)IR_C(*head) - first;
-    if (((flags & METH_O) && n != 1) || ((flags & METH_NOARGS) && n != 0)) {
+    int n = (int)IR_C(word) - first;
+    if ((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 1 : 0)) {
         return CALL_NATIVE_MISS;
     }
     if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
@@ -1770,9 +1771,10 @@ call_builtin_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * vectorcall, else its object vectorcall through the adapter. */
 static inline Py_ALWAYS_INLINE PyValue
 call_class_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                  const _PyIRWord *head, PyValue callable, int first)
+                  const _PyIRWord *head, _PyIRWord word, PyValue callable,
+                  int first)
 {
-    int n = (int)IR_C(*head) - first;
+    int n = (int)IR_C(word) - first;
     if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
         return call_vector(tstate, frame, head, callable);
     }

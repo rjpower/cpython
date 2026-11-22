@@ -1226,8 +1226,9 @@ do_richcompare(PyValueBorrow v, PyValueBorrow w, int op)
    The exits are keyed on the operands' comparison slots, not their types:
    two operands with one slot get that slot's answer from either operand's
    call, and a subclass that overrides nothing (re's _NamedIntConstant, an
-   enum member) keeps its base's slot. An operand with another slot, or a
-   subclass that overrides a comparison, takes the protocol. */
+   enum member) keeps its base's slot. An operand with another slot, a
+   subclass that overrides a comparison, and a pair of which exactly one is
+   an inline value, take the protocol. */
 static inline int
 richcompare_exit(PyValueBorrow left, PyValueBorrow right, int op)
 {
@@ -1355,8 +1356,8 @@ int
 }
 
 /* Perform a rich comparison with integer result, returning -1 for error,
-   0 for false, 1 for true: value_ops.c's _PyValue_RichCompareBool(), which
-   also guarantees that identity implies equality. */
+   0 for false, 1 for true: _PyValue_RichCompareBool(), which also guarantees
+   that identity implies equality. */
 int
 PyObject_RichCompareBool(PyObject *v, PyObject *w, int op)
 {

@@ -874,6 +874,12 @@ make_exec(PyCodeObject *co)
         words[i] = exec_discard_slot(source[i], discard);
         words[i] |= _PyIR_ExecLocalFlags(words[i], exec->nlocalsplus);
     }
+    /* A call is a head and its operand words, whose fields name its operands */
+    for (Py_ssize_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
+        if (_PyIR_HandlerHasOperands(IR_HANDLER(words[i]))) {
+            words[i] |= _PyIR_ExecCallFlags(&words[i], exec->nlocalsplus);
+        }
+    }
     if (fb_size == 0) {
         return exec;
     }

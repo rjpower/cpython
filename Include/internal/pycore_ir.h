@@ -170,6 +170,13 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
 #define IR_F_NO_KW      (1 << 14)
 #define IR_F_CALL_ROLES (IR_F_NO_SELF | IR_F_NO_KW)
 
+/* IR_F_CALL_LOCALS, on the head of a call-family word: every operand that
+ * names a slot names a local, which the call only borrows, so the call owes
+ * no operand a release.  Like the slot-class flags it is a fact of the fields
+ * and co_nlocalsplus that the executing copy derives (_PyIR_ExecCallFlags()),
+ * and the code object's words never carry it. */
+#define IR_F_CALL_LOCALS (1 << 15)
+
 /* Operand words (pyjit/design/proposals/operand-calls80.md section 1).  Every
  * member of the CALL, CALL_KW and CALL_FUNCTION_EX families is a head word
  * followed by ceil(n / 4) words with handler IR_OPERANDS, where n is the
@@ -933,6 +940,21 @@ _PyIR_ExecLocalFlags(_PyIRWord word, uint32_t nlocalsplus)
          | (IR_B(word) < nlocalsplus ? IR_F_LOCAL_B : 0)
          | (IR_C(word) < nlocalsplus ? IR_F_LOCAL_C : 0)
          | (IR_D(word) < nlocalsplus ? IR_F_LOCAL_D : 0);
+}
+
+/* IR_F_CALL_LOCALS for the call whose head is at head in an executing copy
+ * of code with nlocalsplus locals: the operand words have their own fields,
+ * not yet carrying slot-class flags, and a CALL_KW's names are not slots. */
+static inline _PyIRWord
+_PyIR_ExecCallFlags(const _PyIRWord *head, uint32_t nlocalsplus)
+{
+    int slots = _PyIR_CallSlotOperands(*head);
+    for (int k = 0; k < slots; k++) {
+        if ((uint32_t)_PyIR_CallOperand(head, k) >= nlocalsplus) {
+            return 0;
+        }
+    }
+    return IR_F_CALL_LOCALS;
 }
 
 /* The feedback entry at unit I of a vector whose entry 0 is at ENTRIES */

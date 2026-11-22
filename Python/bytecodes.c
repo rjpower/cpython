@@ -1893,7 +1893,6 @@ dummy_func(
         }
 
         family(UNPACK_SEQUENCE, INLINE_CACHE_ENTRIES_UNPACK_SEQUENCE) = {
-            UNPACK_SEQUENCE_TWO_TUPLE,
             UNPACK_SEQUENCE_TUPLE,
             UNPACK_SEQUENCE_LIST,
         };
@@ -1929,20 +1928,6 @@ dummy_func(
 
         macro(UNPACK_SEQUENCE) = unused/1 + _SPECIALIZE_UNPACK_SEQUENCE + _UNPACK_SEQUENCE;
 
-        macro(UNPACK_SEQUENCE_TWO_TUPLE) =
-            _GUARD_TOS_TUPLE + unused/1 + _UNPACK_SEQUENCE_TWO_TUPLE;
-
-        op(_UNPACK_SEQUENCE_TWO_TUPLE, (seq -- values[2])) {
-            assert(oparg == 2);
-            PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
-            assert(PyTuple_CheckExact(seq_o));
-            EXIT_IF(PyTuple_GET_SIZE(seq_o) != 2);
-            STAT_INC(UNPACK_SEQUENCE, hit);
-            IR_WRITE_OUTPUT(values, 0, PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1)));
-            IR_WRITE_OUTPUT(values, 1, PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0)));
-            DECREF_INPUTS();
-        }
-
         macro(UNPACK_SEQUENCE_TUPLE) =
             _GUARD_TOS_TUPLE + unused/1 + _UNPACK_SEQUENCE_TUPLE;
 
@@ -1951,10 +1936,7 @@ dummy_func(
             assert(PyTuple_CheckExact(seq_o));
             EXIT_IF(PyTuple_GET_SIZE(seq_o) != oparg);
             STAT_INC(UNPACK_SEQUENCE, hit);
-            PyValue *items = _PyTuple_ITEMS(seq_o);
-            for (int i = 0; i < oparg; i++) {
-                IR_WRITE_OUTPUT(values, i, PyValue_XDUP(items[oparg - 1 - i]));
-            }
+            IR_UNPACK_ITEMS(values, _PyTuple_ITEMS(seq_o), oparg);
             DECREF_INPUTS();
         }
 
@@ -1970,10 +1952,7 @@ dummy_func(
                 DEOPT_IF(true);
             }
             STAT_INC(UNPACK_SEQUENCE, hit);
-            PyValue *items = _PyList_ITEMS(seq_o);
-            for (int i = 0; i < oparg; i++) {
-                IR_WRITE_OUTPUT(values, i, PyValue_XDUP(items[oparg - 1 - i]));
-            }
+            IR_UNPACK_ITEMS(values, _PyList_ITEMS(seq_o), oparg);
             UNLOCK_OBJECT(seq_o);
             DECREF_INPUTS();
         }

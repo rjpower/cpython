@@ -1971,7 +1971,7 @@ class TestSpecializer(TestBase):
 
         unpack_sequence_two_tuple()
         self.assert_specialized(unpack_sequence_two_tuple,
-                                "UNPACK_SEQUENCE_TWO_TUPLE")
+                                "UNPACK_SEQUENCE_TUPLE")
         self.assert_no_opcode(unpack_sequence_two_tuple, "UNPACK_SEQUENCE")
 
         def unpack_sequence_tuple():

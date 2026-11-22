@@ -131,7 +131,6 @@ extern "C" {
 #define TO_BOOL_STR                            123
 #define UNPACK_SEQUENCE_LIST                   124
 #define UNPACK_SEQUENCE_TUPLE                  125
-#define UNPACK_SEQUENCE_TWO_TUPLE              126
 #define MATERIALIZE_KWARGS                     127
 #define RESUME                                 128
 #define BINARY_OP_ADD_FLOAT                    129

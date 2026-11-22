@@ -565,6 +565,7 @@ IR_HELPER_EFFECTS = {
     **{name: frozenset() for name in IR_HELPER_CALLEES},
     "IR_LOOKUP_SPECIAL": frozenset(("escapes",)),
     "IR_WRITE_OUTPUT": frozenset(),
+    "IR_UNPACK_ITEMS": frozenset(),
     "IR_TAKE_INPUT": frozenset(),
     "IR_CLOSE_INPUTS": frozenset(("escapes",)),
     **dict.fromkeys(("IR_GUARD_INLINE_INT", "IR_GUARD_ELEMENT_TYPE",

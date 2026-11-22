@@ -2386,7 +2386,8 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
 def unpacks_elements_directly(inst: Instruction, fmt: "IRFormat") -> bool:
     """Whether an unpack writes its elements one at a time to the output
     window (IR_WRITE_OUTPUT), so that each can go straight to its local."""
-    return fmt.unpacks and "IR_WRITE_OUTPUT" in uop_tokens(inst)
+    tokens = uop_tokens(inst)
+    return fmt.unpacks and ("IR_WRITE_OUTPUT" in tokens or "IR_UNPACK_ITEMS" in tokens)
 
 
 def uop_tokens(inst: Instruction) -> list[str]:
@@ -3547,6 +3548,7 @@ class IREmitter(Emitter):
         self._replacers["IR_METADATA_PASSTHROUGH"] = self.metadata_passthrough
         self._replacers["IR_SUSPEND_DELEGATED"] = self.suspend_delegated
         self._replacers["IR_WRITE_OUTPUT"] = self.write_output_home
+        self._replacers["IR_UNPACK_ITEMS"] = self.unpack_items_home
         self._replacers["IR_TAKE_INPUT"] = self.take_input_home
         self._replacers["IR_CLOSE_INPUTS"] = self.close_input_homes
         self._replacers["IR_BUILD_STRING"] = self.home_helper
@@ -3651,6 +3653,29 @@ class IREmitter(Emitter):
             self.out.emit_at(write, tkn)
             self.out.last_token = end
             return True
+        self.out.emit_at(write, tkn)
+        self.out.last_token = end
+        return True
+
+    def unpack_items_home(self, tkn, tkn_iter, uop, storage, inst):
+        """All the elements of an unpack, written by one leaf function: to
+        the locals that dst names, whose old values that own an object go to
+        the window for the close (see unpack_to_locals()), or else to the
+        window's homes."""
+        local, _ = self.checked_home_array(tkn, uop, storage)
+        args, end = self.instruction_macro_args(tkn, tkn_iter)
+        items, count = tokens_text(args[1]), tokens_text(args[2])
+        write = f"_PyIR_UnpackItemsToWindow(frame, {local.name}, {items}, {count})"
+        fmt = self.format_of(inst)
+        if inst is not None and unpacks_elements_directly(inst, fmt):
+            dst = fmt.field_of(ROLE_DST)
+            write = (f"if ({is_local(dst)}) {{ "
+                     f"ir_unpack_owned = _PyIR_UnpackItemsToLocals("
+                     f"&IR_SLOT({FIELD_VARS[dst]}), {local.name}, {items}, {count}); }} "
+                     f"else {{ {write}; }}")
+        else:
+            write += ";"
+        self.out.start_line()
         self.out.emit_at(write, tkn)
         self.out.last_token = end
         return True
@@ -6073,6 +6098,21 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
                     raise analysis_error("output home cannot be published twice", token)
                 covered.add(id(args[0][0]))
                 writes.append((array, index, guards, order[id(end)]))
+            elif token.text == "IR_UNPACK_ITEMS":
+                statement = [t for t in tokens if t.kind != "COMMENT"]
+                if (statement[0] is not token or statement[-1].text != ";" or
+                        statement[-2] is not end):
+                    raise analysis_error("unpack items must be a statement", token)
+                array = name(args[0]) if len(args) == 3 else None
+                item = outputs.get(array)
+                if (item is None or not item.is_array() or item.size != "oparg" or
+                        guards or [t.text for t in args[2]] != ["oparg"] or
+                        any(previous == array for previous, _, _, _ in writes)):
+                    raise analysis_error(
+                        "unpack items needs the whole output array once, unguarded", token)
+                covered.add(id(args[0][0]))
+                writes.append((array, 0, guards, order[id(end)]))
+                index = 0
             elif token.text == "IR_TAKE_INPUT":
                 array = name(args[0]) if len(args) == 2 else None
                 item = inputs.get(array)

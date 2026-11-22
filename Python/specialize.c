@@ -3231,10 +3231,6 @@ _Py_Specialize_UnpackSequence(PyValue seq_st, _PyInstr *instr, int oparg)
             unspecialize(instr);
             return;
         }
-        if (PyTuple_GET_SIZE(seq) == 2) {
-            specialize(instr, UNPACK_SEQUENCE_TWO_TUPLE);
-            return;
-        }
         specialize(instr, UNPACK_SEQUENCE_TUPLE);
         return;
     }

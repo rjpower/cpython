@@ -54,7 +54,6 @@ _specializations = frozendict(
             "SEND_ASYNC_GEN",
     ),
     UNPACK_SEQUENCE=(
-            "UNPACK_SEQUENCE_TWO_TUPLE",
             "UNPACK_SEQUENCE_TUPLE",
             "UNPACK_SEQUENCE_LIST",
     ),
@@ -273,7 +272,6 @@ _specialized_opmap = frozendict(
     TO_BOOL_STR=123,
     UNPACK_SEQUENCE_LIST=124,
     UNPACK_SEQUENCE_TUPLE=125,
-    UNPACK_SEQUENCE_TWO_TUPLE=126,
 )
 
 opmap = frozendict(

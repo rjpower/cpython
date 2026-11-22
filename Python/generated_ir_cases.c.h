@@ -15189,10 +15189,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     }
                 }
                 STAT_INC(UNPACK_SEQUENCE, hit);
-                PyValue *items = _PyList_ITEMS(seq_o);
-                for (int i = 0; i < oparg; i++) {
-                    if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[i], i, oparg, PyValue_XDUP(items[oparg - 1 - i])); } else { _PyFrame_WriteHome(frame, &values[i], PyValue_XDUP(items[oparg - 1 - i])); };
-                }
+                if (IR_IS_LOCAL_FIELD(ir_word, D)) { ir_unpack_owned = _PyIR_UnpackItemsToLocals(&IR_SLOT(IR_D(ir_word)), values, _PyList_ITEMS(seq_o), oparg); } else { _PyIR_UnpackItemsToWindow(frame, values, _PyList_ITEMS(seq_o), oparg); };
                 UNLOCK_OBJECT(seq_o);
                 IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
                 _PyValue_CLOSE_POINTER(seq);
@@ -15249,68 +15246,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
                 STAT_INC(UNPACK_SEQUENCE, hit);
-                PyValue *items = _PyTuple_ITEMS(seq_o);
-                for (int i = 0; i < oparg; i++) {
-                    if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[i], i, oparg, PyValue_XDUP(items[oparg - 1 - i])); } else { _PyFrame_WriteHome(frame, &values[i], PyValue_XDUP(items[oparg - 1 - i])); };
-                }
+                if (IR_IS_LOCAL_FIELD(ir_word, D)) { ir_unpack_owned = _PyIR_UnpackItemsToLocals(&IR_SLOT(IR_D(ir_word)), values, _PyTuple_ITEMS(seq_o), oparg); } else { _PyIR_UnpackItemsToWindow(frame, values, _PyTuple_ITEMS(seq_o), oparg); };
                 IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
-                _PyValue_CLOSE_POINTER(seq);
-            }
-            if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                if (ir_unpack_owned) { IR_CLOSE_WINDOW(window, oparg); }
-            }
-            DISPATCH();
-        }
-
-        TARGET(UNPACK_SEQUENCE_TWO_TUPLE) {
-            int opcode = UNPACK_SEQUENCE_TWO_TUPLE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(UNPACK_SEQUENCE_TWO_TUPLE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            bool ir_unpack_owned = false;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue tos;
-            PyValue seq;
-            PyValue *values;
-            // _GUARD_TOS_TUPLE
-            {
-                tos = window[0];
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
-                if (!PyTuple_CheckExact(o)) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-            }
-            // _UNPACK_SEQUENCE_TWO_TUPLE
-            {
-                seq = tos;
-                values = &window[0];
-                assert(oparg == 2);
-                PyObject *seq_o = _PyValue_AsKnownObjectBorrowPointer(seq);
-                assert(PyTuple_CheckExact(seq_o));
-                if (PyTuple_GET_SIZE(seq_o) != 2) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-                STAT_INC(UNPACK_SEQUENCE, hit);
-                if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[0], 0, oparg, PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1))); } else { _PyFrame_WriteHome(frame, &values[0], PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1))); };
-                if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[1], 1, oparg, PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0))); } else { _PyFrame_WriteHome(frame, &values[1], PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0))); };
                 _PyValue_CLOSE_POINTER(seq);
             }
             if (IR_IS_LOCAL_FIELD(ir_word, D)) {

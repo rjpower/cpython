@@ -364,8 +364,10 @@ Known values:
           constant image in the executing copy
    64433: LOAD_ATTR_GETSET, IR handler 406
    64434: parity84 IT: the fused CONTAINS_OP form for str, tuple and list
-          containers, IR handler 407 */
-#define PYC_MAGIC_NUMBER 64434
+          containers, IR handler 407
+   64435: parity84 IT: UNPACK_SEQUENCE_TWO_TUPLE removed (handler 126); one
+          unpack loop form */
+#define PYC_MAGIC_NUMBER 64435
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

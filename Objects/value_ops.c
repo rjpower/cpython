@@ -76,6 +76,11 @@ Py_hash_t
                identity. */
             return _Py_HashPointerInline(op);
         }
+        if (Py_TYPE(op)->tp_hash == PyLong_Type.tp_hash) {
+            /* An int, or a subclass that keeps int's hash (re's
+               _NamedIntConstant): hashed from its digits, as an int. */
+            return _PyLong_ValueHash(value);
+        }
         return hash_object_value(op, value);
     }
     /* Inline int keys are common (ids, counters, indexes), so their hash

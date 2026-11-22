@@ -343,8 +343,12 @@ _PyLong_ValueHash(PyValueBorrow v)
     if (PyValue_IsInlineInt(v)) {
         return _PyLong_WordHash(PyValue_InlineInt64(v));
     }
-    PyObject *op = PyValue_AsKnownObjectBorrow(v);
-    return _PyLong_SpanHash(_PyLong_SpanOf((PyLongObject *)op));
+    const PyLongObject *op = (const PyLongObject *)PyValue_AsKnownObjectBorrow(v);
+    if (_PyLong_IsCompact(op)) {
+        /* One digit, below the modulus: the hash is the value. */
+        return _PyLong_WordHash(_PyLong_CompactValue(op));
+    }
+    return _PyLong_SpanHash(_PyLong_SpanOf(op));
 }
 
 

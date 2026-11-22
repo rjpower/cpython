@@ -1,6 +1,31 @@
 # Interpreter performance: combined plan
 
-## Current wave: tight86, hot85's deferred items as tight code
+## Next: tiers87, proposed
+
+Proposed 2026-11-22, awaiting approval. The user promoted tight86's IP1 as
+golden86 (`3cac420ddbf`, `pyjit/round86-golden`, tag
+`pyjit-golden-20261122-tight86`), chose no layout rule, and asked for a plan
+for the last interpreter optimizations, a method JIT and then a tracing JIT,
+including the structure the interpreter should impose so that the JITs are
+generated from it. The [tiers87 proposal](../../design/proposals/tiers87.md)
+answers:
+- **Contract87**, the interpreter's last wave, from golden86:
+  - CR: operation records, guard facts, effect classes and feedback schema;
+  - TR: typed transfers, VM routines for the evaluator's labels and a
+    function form for every handler;
+  - LS: the leaf-uop subset, the value primitives and the leaf IR;
+  - NV: the native call chain;
+  - EH: raise and catch;
+  - AT: attribute misses (richards' generic `LOAD_ATTR`, `__dict__`,
+    `dict.update`);
+  - FR: the frame reads `ir_words` and `ir_feedback` through the exec;
+  - SB: stack bytecode recovery;
+  - XP's iteration change, done (`pyjit/contract87-xp`, `7909372888c`).
+- **Baseline method JIT**, Sparkplug style, steps B0–B3.
+- **Tracing JIT** on the same contract, steps T0–T3. An optimizing method
+  tier waits for evidence.
+
+## Previous: tight86, hot85's deferred items as tight code
 
 Approved 2026-11-22. The user promoted hot85's IP3 as golden85
 (`2a9ea8c4f69`, `pyjit/round85-golden`, tag `pyjit-golden-20261122-hot85`)
@@ -33,7 +58,8 @@ Evidence `E59/tight86/`.
   of upstream's; seven cases remain above upstream. Only nbody shows a
   consistent layout loss (1.016, unchanged code predicting worse), so no
   layout rule is proposed. Details in the
-  [tight86 record](../register-semantics59/tight86.md#ip1-results).
+  [tight86 record](../register-semantics59/tight86.md#ip1-results). The
+  user promoted IP1 as golden86 on 2026-11-22.
 
 The gates are correctness, the allocator limit (50M; golden85 is at 44.39M)
 and root's review of each diff. Review returns a diff that has any of these:
@@ -42,7 +68,7 @@ and root's review of each diff. Review returns a diff that has any of these:
 - benchmark-keyed cases;
 - single-user layers.
 
-## Previous: hot85, the remaining slow cases and hot-code size
+## Earlier: hot85, the remaining slow cases and hot-code size
 
 Approved 2026-11-21. The user promoted parity84's IP2 as golden84
 (`4be2eb5d31f`, `pyjit/round84-golden`, tag

@@ -1,5 +1,9 @@
 # One method and tracing JIT system
 
+[Tiers87](proposals/tiers87.md) (proposed 2026-11-22) updates this design: one
+operation contract generated from `bytecodes.c`, a Sparkplug-style baseline
+first, tracing next, and the optimizing method frontend deferred.
+
 Selected system design, initially responding to Loom review36. Partial source
 experiments exist; the [work board](../issues/README.md) owns implementation state
 and assignments. The qualified interim RC images contain no new native tier.

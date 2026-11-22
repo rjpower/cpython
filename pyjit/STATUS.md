@@ -2,34 +2,26 @@
 
 ## Live state
 
-**Selected: golden85, 2026-11-22.** `2a9ea8c4f69` (`pyjit/round85-golden`,
-tag `pyjit-golden-20261122-hot85`, pushed) is
-[hot85](issues/register-semantics59/hot85.md)'s IP3: golden84 plus phase
-B1's seven units (attribute members, float operand closes, the call-operand
-protocol, dicts, `_elementtree`, the one branch hint with cold callees, and
-small unpacks and truth-slot jumps) and two root fixes. It runs **0.949 of
-golden84's time and 0.900 of upstream's** on the timed all-29 geomean and
-executes 0.961 of golden84's instructions. `ir_evaluate` shrinks from 92.1 KB
-to 89.0 KB. The full suites show known failures only. Still slower than
-upstream: deepcopy_reduce 1.095, deepcopy 1.087, nqueens 1.073, pickle 1.067,
-comprehensions 1.046, json_dumps 1.016 and json_loads 1.013. Small hot sets
-(spectral_norm, nbody, coroutines) remain sensitive to where the hottest
-handlers land. Golden84 (`4be2eb5d31f`, 0.953 of upstream's time) is a
-frozen control.
+**Selected: golden86, 2026-11-22.** `3cac420ddbf` (`pyjit/round86-golden`,
+tag `pyjit-golden-20261122-tight86`, pushed) is
+[tight86](issues/register-semantics59/tight86.md)'s IP1: golden85 plus eight
+units (the handler skeleton, generator life, Python call and return under one
+frame slot contract, native calls, the C-to-Python entry, compare and
+membership, the json and pickle cases, and instance attributes). It runs
+**0.970 of golden85's time and 0.877 of upstream's** on the timed all-29
+geomean and executes 0.969 of golden85's instructions. `ir_evaluate` is
+88.3 KB and the allocator product 43.77M. The full suites show known failures
+only. Still slower than upstream: comprehensions 1.107, deepcopy_reduce 1.051,
+deepcopy 1.049, nqueens 1.041, json_dumps 1.017, pickle 1.017 and
+logging_simple 1.015. nbody's 1.016 of golden85 is branch prediction of
+unchanged code at new addresses; the user chose no layout rule. Golden85
+(`2a9ea8c4f69`, 0.900 of upstream's time) is a frozen control.
 
-**Active: [tight86](issues/register-semantics59/tight86.md), 2026-11-22.**
-Eight units from golden85 land hot85's deferred items as tight code: the
-handler skeleton, generator life, Python call and return with one frame slot
-contract, native calls, the C-to-Python entry, compare and membership, the
-json and pickle cases, and instance attributes. The user asked for clean,
-tightly defined code and for tighter hot code before any layout rule.
-IP1 (`3cac420ddbf`, `pyjit/tight86`) runs **0.970 of golden85's time and
-0.877 of upstream's** on the timed all-29 geomean and executes 0.969 of
-golden85's instructions. Still slower than upstream: comprehensions 1.107,
-deepcopy_reduce 1.051, deepcopy 1.049, nqueens 1.041, json_dumps 1.017,
-pickle 1.017 and logging_simple 1.015. nbody's 1.016 comes from branch
-prediction of unchanged code at new addresses; no layout rule is proposed.
-Promotion awaits the user.
+**Proposed: [tiers87](design/proposals/tiers87.md), 2026-11-22.** The next
+steps: contract87, the interpreter's last wave (an operation contract
+exported by the generator, function forms for every handler, and shared
+runtime work); then a Sparkplug-style baseline method JIT; then a tracing JIT
+on the same contract. Awaiting the user's approval.
 
 The checkpoints between golden73 and gap82, each measured against golden73:
 

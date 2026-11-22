@@ -4,8 +4,9 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
-The selected runtime is golden85, the [hot85](issues/register-semantics59/hot85.md)
-integration at `2a9ea8c4f69`, selected by the user on 2026-11-22. Golden84
+The selected runtime is golden86, the [tight86](issues/register-semantics59/tight86.md)
+integration at `3cac420ddbf`, selected by the user on 2026-11-22. Golden85
+(`2a9ea8c4f69`, [hot85](issues/register-semantics59/hot85.md)), golden84
 (`4be2eb5d31f`, [parity84](issues/register-semantics59/parity84.md)) and
 golden82 (`5194e957c5d`, [gap82](issues/register-semantics59/gap82.md)) are
 earlier goldens and frozen controls. The earlier
@@ -44,7 +45,8 @@ to future protection rules. Preserve both original screen verdicts.
 | `worktrees/gap82` | detached at `pyjit-golden-20261120-gap82` | **Frozen golden82** `5194e957c5d` ([gap82](issues/register-semantics59/gap82.md) integration, pushed as `pyjit/gap82` and `pyjit/round82-golden`): H5 + TX, SL, CS, K1, N34, ST, N56, G, K2b, K2a and two test follow-ups. Builds `BASE/gap82-{release,debug}`, aliased `BASE/golden82-{release,debug}`; never rebuild or relink them. Evidence `E59/gap82/` (`coordinator.md` is the log; `int/` holds integration builds, smoke, instruction counts, full suites and probes; `bench/` holds the campaigns). New work branches from the tag in a new worktree |
 | `worktrees/parity84` | detached at `pyjit-golden-20261121-parity84` | **Frozen golden84** `4be2eb5d31f` ([parity84](issues/register-semantics59/parity84.md) IP2, pushed as `pyjit/parity84` and `pyjit/round84-golden`). Builds `BASE/parity84-{release,debug}`, aliased `BASE/golden84-{release,debug}`; never rebuild or relink them. Evidence `E59/parity84/` (`coordinator.md` is the log). New work branches from the tag in a new worktree |
 | `worktrees/hot85` | detached at `pyjit-golden-20261122-hot85` | **Frozen golden85** `2a9ea8c4f69` ([hot85](issues/register-semantics59/hot85.md) IP3, pushed as `pyjit/hot85` and `pyjit/round85-golden`): golden84 + AT, FL, CP, DT, XP, HN, EV and two root fixes. Builds `BASE/hot85-{release,debug}`, aliased `BASE/golden85-{release,debug}`; never rebuild or relink them. Evidence `E59/hot85/` (`coordinator.md` is the log; `int/` and `bench/`). New work branches from the tag in a new worktree |
-| `worktrees/tight86` | `pyjit/tight86` (pushed) | [Tight86](issues/register-semantics59/tight86.md) integration: IP1 `3cac420ddbf`, all eight units on golden85, magic 64442. Builds `BASE/tight86-{release,debug}` (`E59/tight86/int/build2.sh`); IP1 evidence `E59/tight86/int/ip1/`, `bench/ip1-*`, `int/cycles/ip1-A*` and `diag1-*` |
+| `worktrees/tight86` | detached at `pyjit-golden-20261122-tight86` | **Frozen golden86** `3cac420ddbf` ([tight86](issues/register-semantics59/tight86.md) IP1, pushed as `pyjit/tight86` and `pyjit/round86-golden`): golden85 + HT, GE, PC, NC, NE, CM, EX, IA. Magic 64442. Builds `BASE/tight86-{release,debug}`, aliased `BASE/golden86-{release,debug}`; never rebuild or relink them. Evidence `E59/tight86/` (`coordinator.md` is the log; IP1 in `int/ip1/`, `bench/ip1-*`, `int/cycles/ip1-A*` and `diag1-*`). New work branches from the tag in a new worktree |
+| `worktrees/contract87-<unit>` | `pyjit/contract87-<unit>` | Contract87 units from golden86, made by `E59/contract87/mkbuild.sh UNIT COMMIT`; builds `BASE/contract87<unit>-{release,debug}`. XP (`7909372888c`, pushed): Element iterates its children whatever `__getitem__` does |
 | `worktrees/tight86-<unit>` | `pyjit/tight86-<unit>` | [Tight86](issues/register-semantics59/tight86.md) units HT, GE, PC, NC, NE, CM, EX, IA, from golden85, made by `E59/tight86/mkbuild.sh UNIT COMMIT` (`mkbuild-all.sh`); builds `BASE/tight86<unit>-{release,debug}`. Evidence `E59/tight86/` (`coordinator.md` is the log; `common.md` and `brief-*.md` are the briefs) |
 | `worktrees/hot85-<unit>` | `pyjit/hot85-<unit>` | [Hot85](issues/register-semantics59/hot85.md) units, from golden84, made by `E59/hot85/mkbuild.sh UNIT COMMIT`; builds `BASE/hot85<unit>-{release,debug}`. All merged except RT (`6eb44a40113`, rejected: no instruction gain). `hot85-hc` is phase A's prototype. Evidence `E59/hot85/` (`coordinator.md` is the log) |
 | `worktrees/parity84-{nb,gl,it,rm}` | `pyjit/parity84-<unit>` | Parity84 phase-1 units, from golden82; all merged into `pyjit/parity84` (IP1, `5a51846ce16`). Builds `BASE/parity84<unit>-{release,debug}` |
@@ -130,7 +132,8 @@ A=`R/parity61-ascent`, I=`R/call55-integrated`.
 
 | Control | Source commit / tree | Release build | Module record |
 | --- | --- | --- | --- |
-| Golden85 | `2a9ea8c4f69902ab398c6e872a54a25290f96e90`, `R/round85-golden` | `BASE/hot85-release` (alias `BASE/golden85-release`) | `E59/hot85/int/ip3/build-release.log`, 79 extensions; use with `--control-role golden --control-head` |
+| Golden86 | `3cac420ddbf5c489909e3c2a4a987e1b45aa5c31`, `R/round86-golden` | `BASE/tight86-release` (alias `BASE/golden86-release`) | `E59/tight86/int/ip1/build-release.log`, 79 extensions; use with `--control-role golden --control-head` |
+| Golden85 | `2a9ea8c4f69902ab398c6e872a54a25290f96e90`, `R/round85-golden` | `BASE/hot85-release` (alias `BASE/golden85-release`) | `E59/hot85/int/ip3/build-release.log`, 79 extensions |
 | Golden84 | `4be2eb5d31f3e06e39d158740b46666a3b8c2810`, `R/round84-golden` | `BASE/parity84-release` (alias `BASE/golden84-release`) | `E59/parity84/int/ip2b/build-release.log`, 79 extensions |
 | Golden82 | `5194e957c5d573ef2b6112508a7b0990b7de656d`, `R/gap82` | `BASE/gap82-release` (alias `BASE/golden82-release`) | `E59/gap82/int/k2a/build-release.log`, 79 extensions |
 | Golden73 | `44f066f5fd55947edf709bbcf9bf17c607307e4b`, G | `BASE/reg59-results-release` | `E59/execution73-boundary11-release-build.log`, 117/79 |

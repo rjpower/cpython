@@ -1,5 +1,10 @@
 # Tight86: hot85's deferred items, as tight code
 
+**Selected:** the user promoted IP1 (`3cac420ddbf`) as golden86 on
+2026-11-22 (tag `pyjit-golden-20261122-tight86`, branch
+`pyjit/round86-golden`), with no layout rule, and approved dropping XP's
+subclass check (`pyjit/contract87-xp`, `7909372888c`).
+
 Approved 2026-11-22. The user promoted [hot85](hot85.md)'s IP3 as golden85
 (`2a9ea8c4f69`) and asked for three things:
 - land the remaining fixes;

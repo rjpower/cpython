@@ -1,7 +1,9 @@
 # Stage 3: shared compiler and method JIT
 
-State: selected design with prior research/prototype evidence. Further native
-implementation and measurement wait for the unified interpreter baseline.
+State: planned in [tiers87](../../design/proposals/tiers87.md) (proposed
+2026-11-22): a Sparkplug-style baseline compiled from the interpreter's
+operation contract, after contract87. An optimizing method tier waits for
+evidence that traces leave a gap. The text below predates that plan.
 
 Deliver a cohesive method compiler with layered optimizations, shared typed
 SSA/effect semantics, register allocation, backend and recovery. Existing

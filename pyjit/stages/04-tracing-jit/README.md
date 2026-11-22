@@ -1,7 +1,9 @@
 # Stage 4: tracing JIT
 
-State: selected direction; deferred implementation. It shares compiler machinery
-with the method tier rather than introducing a second value or recovery system.
+State: planned in [tiers87](../../design/proposals/tiers87.md) (proposed
+2026-11-22), after the baseline method JIT. It shares the operation contract,
+assembler, code cache and exit model with the baseline rather than introducing
+a second value or recovery system.
 
 Deliver hot-path compilation through the shared typed IR, optimization and
 native backend. Define recording boundaries, loop/side-trace policy, guards,

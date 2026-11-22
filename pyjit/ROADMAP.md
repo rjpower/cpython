@@ -17,10 +17,11 @@ flowchart LR
 | --- | --- | --- |
 | [1. Runtime](stages/01-runtime/README.md) | Canonical-value runtime under RC | Integrated runtime passes behavior and ownership gates |
 | [2. Baseline](stages/02-baseline/README.md) | Trustworthy register interpreter | Qualified behavior and measured performance, with limits recorded |
-| [3. Method JIT](stages/03-method-jit/README.md) | Method compilation through shared optimizing IR | Native transitions, recovery, ownership and workloads validated |
-| [4. Tracing](stages/04-tracing-jit/README.md) | Hot-path compilation using the same compiler core | Guards, exits, recovery and method-code interactions validated |
+| [3. Method JIT](stages/03-method-jit/README.md) | A baseline method JIT generated from the interpreter's operation contract | Native transitions, exceptions, generators, observation and ownership validated with every code object compiled; workloads measured |
+| [4. Tracing](stages/04-tracing-jit/README.md) | Hot-loop compilation through SSA from the same contract, sharing the baseline's backend | Guards, exits, recovery and baseline interactions validated |
 | [5. Extensions](stages/05-extensions/README.md) | Incremental source ports and opaque interfaces | Declared extensions rebuild and pass behavior and lifetime tests |
 
 Workstreams can proceed in parallel when ownership is disjoint. The coordinator
-validates composition and stage exit evidence. The [active plan](issues/interpreter-performance56/plan.md)
-describes the reviewed target and migration; [designs](design/runtime-architecture.md) describe contracts.
+validates composition and stage exit evidence. The [tiers87 proposal](design/proposals/tiers87.md) sets the path from the
+interpreter's last wave through both JITs; the
+[active plan](issues/interpreter-performance56/plan.md) describes the work; [designs](design/runtime-architecture.md) describe contracts.

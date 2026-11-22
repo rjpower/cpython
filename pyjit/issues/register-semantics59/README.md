@@ -1,17 +1,17 @@
 # Register semantics and interpreter parity
 
-Status: stage remains open. Golden85
-`2a9ea8c4f69902ab398c6e872a54a25290f96e90`, [hot85](hot85.md)'s IP3
-(golden84 plus seven phase B1 units), was selected on 2026-11-22 and is
-pushed as `pyjit/round85-golden`; it runs 0.900 of upstream's time on the
-timed all-29 geomean and 0.949 of golden84's. Golden84 (`4be2eb5d31f`,
-[parity84](parity84.md), 0.953), golden82 (`5194e957c5d`, [gap82](gap82.md),
-0.992), golden73 `44f066f5fd55947edf709bbcf9bf17c607307e4b`
-(`pyjit/round73-golden`, selected 2026-11-16 with an accepted logging
-regression) and selected57 remain controls. [Tight86](tight86.md) is the
-current wave: hot85's deferred items as clean, tight code; its IP1
-(`3cac420ddbf`) runs 0.877 of upstream's time. Root coordinates
-integration and native validation; Sol 6.1 workers implement and cross-review.
+Status: stage remains open. Golden86
+`3cac420ddbf5c489909e3c2a4a987e1b45aa5c31`, [tight86](tight86.md)'s IP1
+(golden85 plus eight units), was selected on 2026-11-22 and is pushed as
+`pyjit/round86-golden`; it runs 0.877 of upstream's time on the timed all-29
+geomean and 0.970 of golden85's. Golden85 (`2a9ea8c4f69`, [hot85](hot85.md),
+0.900), golden84 (`4be2eb5d31f`, [parity84](parity84.md), 0.953), golden82
+(`5194e957c5d`, [gap82](gap82.md), 0.992), golden73
+`44f066f5fd55947edf709bbcf9bf17c607307e4b` (`pyjit/round73-golden`, selected
+2026-11-16 with an accepted logging regression) and selected57 remain
+controls. The proposed next wave is contract87, the first phase of
+[tiers87](../../design/proposals/tiers87.md). Root coordinates integration and
+native validation; workers implement bounded units.
 
 Both [execution72](../../design/proposals/execution-state72.md) units are
 implemented and rejected. The cold-layout unit demonstrated no packing gain.

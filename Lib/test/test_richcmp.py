@@ -273,6 +273,224 @@ class MiscTest(unittest.TestCase):
                     test[0]()
 
 
+class IntSub(int):
+    pass
+
+class IntSubEq(int):
+    def __eq__(self, other):
+        return True
+    __hash__ = int.__hash__
+
+class IntSubHash(int):
+    def __hash__(self):
+        return 42
+
+class IntSubEqOnly(int):
+    def __eq__(self, other):
+        return int.__eq__(self, other)
+
+class Plain:
+    pass
+
+class Reflected(Plain):
+    def __eq__(self, other):
+        return "reflected"
+    def __ne__(self, other):
+        return "reflected ne"
+    __hash__ = object.__hash__
+
+class Declines:
+    def __eq__(self, other):
+        return NotImplemented
+
+class BytesSub(bytes):
+    pass
+
+class BytesSubEq(bytes):
+    def __eq__(self, other):
+        return True
+    __hash__ = bytes.__hash__
+
+
+class SlotExitTest(unittest.TestCase):
+    # Operands that share a comparison slot are decided without the
+    # protocol; an operand with another slot, or an override, is not.
+
+    def test_int_subclass(self):
+        self.assertTrue(IntSub(5) == IntSub(5))
+        self.assertTrue(IntSub(5) != IntSub(6))
+        self.assertTrue(IntSub(5) == 5)
+        self.assertTrue(5 == IntSub(5))
+        self.assertTrue(IntSub(2**70) == 2**70)
+        self.assertTrue(IntSub(2**70) < 2**71)
+        self.assertTrue(IntSub(-3) < IntSub(2))
+        self.assertTrue(IntSub(1) == True)
+        self.assertTrue(IntSub(5) == 5.0)
+
+    def test_int_subclass_overrides(self):
+        self.assertTrue(IntSubEq(1) == IntSubEq(2))
+        self.assertTrue(IntSubEq(1) == 3)
+        self.assertTrue(3 == IntSubEq(1))
+        self.assertTrue(IntSubEqOnly(1) == IntSubEqOnly(1))
+        self.assertFalse(IntSubEqOnly(1) == IntSubEqOnly(2))
+        self.assertRaises(TypeError, hash, IntSubEqOnly(1))
+        self.assertTrue(IntSubEq(7) in {IntSubEq(7)})
+        self.assertTrue(IntSubEq(7) in {7})
+
+    def test_int_subclass_hash(self):
+        for n in (0, 1, -1, 5, -2**30, 2**30, 2**70):
+            self.assertEqual(hash(IntSub(n)), hash(n))
+        self.assertEqual(hash(IntSubHash(3)), 42)
+        self.assertIn(IntSubHash(3), {IntSubHash(3)})
+        self.assertNotIn(3, {IntSubHash(3)})
+        members = {IntSub(1), IntSub(2**70)}
+        self.assertIn(IntSub(1), members)
+        self.assertIn(1, members)
+        self.assertIn(2**70, members)
+        self.assertNotIn(IntSub(3), members)
+        keys = {IntSub(1): "a", IntSub(2**70): "b"}
+        self.assertIn(1, keys)
+        self.assertIn(IntSub(2**70), keys)
+        self.assertNotIn(IntSub(3), keys)
+        self.assertIn(IntSub(3), (IntSub(1), IntSub(2), 3))
+
+    def test_nan_identity(self):
+        nan = float("nan")
+        self.assertFalse(nan == nan)
+        self.assertTrue(nan != nan)
+        self.assertIn(nan, [nan])
+        self.assertIn(nan, {nan})
+        self.assertNotIn(float("nan"), [float("nan")])
+
+    def test_default_equality(self):
+        a, b = Plain(), Plain()
+        self.assertTrue(a == a)
+        self.assertFalse(a == b)
+        self.assertFalse(a != a)
+        self.assertTrue(a != b)
+        self.assertFalse(a == None)
+        self.assertTrue(a != None)
+        self.assertFalse(1 == a)
+        self.assertTrue(None != a)
+        for op in opmap["lt"] + opmap["le"] + opmap["gt"] + opmap["ge"]:
+            self.assertRaises(TypeError, op, a, b)
+
+    def test_default_equality_then_override(self):
+        class Late:
+            pass
+        a, b = Late(), Late()
+        self.assertFalse(a == b)
+        Late.__eq__ = lambda self, other: True
+        self.assertTrue(a == b)
+        del Late.__eq__
+        self.assertFalse(a == b)
+
+    def test_default_equality_class_assignment(self):
+        class A: pass
+        class B:
+            def __eq__(self, other):
+                return True
+        a = A()
+        a.__class__ = B
+        self.assertTrue(a == B())
+
+    def test_reflected_and_declined(self):
+        a = Plain()
+        self.assertEqual(a == Reflected(), "reflected")
+        self.assertEqual(a != Reflected(), "reflected ne")
+        self.assertEqual(Reflected() == a, "reflected")
+        d = Declines()
+        self.assertTrue(d == d)
+        self.assertFalse(d == Declines())
+        self.assertFalse(1 == d)
+        self.assertFalse(IntSub(1) == d)
+        self.assertFalse(d == IntSub(1))
+        self.assertTrue(d != Declines())
+
+    def test_enum(self):
+        import enum
+        class Kind(enum.Enum):
+            A = 1
+            B = 2
+        class Other(enum.Enum):
+            A = 1
+        class Loose(enum.Enum):
+            A = 1
+            B = 2
+            def __eq__(self, other):
+                return True
+            __hash__ = enum.Enum.__hash__
+        class Number(enum.IntEnum):
+            X = 1
+            Y = 2
+        self.assertTrue(Kind.A == Kind.A)
+        self.assertFalse(Kind.A == Kind.B)
+        self.assertTrue(Kind.A != Kind.B)
+        self.assertFalse(Kind.A != Kind.A)
+        self.assertFalse(Kind.A == Other.A)
+        self.assertFalse(Kind.A == 1)
+        self.assertTrue(Loose.A == Loose.B)
+        self.assertFalse(Loose.A != Loose.B)
+        self.assertTrue(Number.X == 1)
+        self.assertTrue(1 == Number.X)
+        self.assertTrue(Number.X < Number.Y)
+        self.assertIn(Number.X, {1})
+        self.assertIn(1, {Number.X})
+        self.assertIn(Kind.A, {Kind.A: 1})
+        self.assertNotIn(Kind.B, {Kind.A})
+
+    def test_bytes(self):
+        a = bytes(bytearray(b"hello"))
+        b = bytes(bytearray(b"hello"))
+        self.assertTrue(a == b)
+        self.assertFalse(a != b)
+        self.assertFalse(a == b"hellp")
+        self.assertFalse(a == b"hell")
+        self.assertTrue(a < b"hellp")
+        self.assertTrue(a >= b)
+        self.assertTrue(a == bytearray(b"hello"))
+        self.assertTrue(bytearray(b"hello") == a)
+        self.assertTrue(a == memoryview(b"hello"))
+        self.assertTrue(memoryview(b"hello") == a)
+        self.assertFalse(a == "hello")
+        self.assertFalse(a == 5)
+        self.assertTrue(BytesSub(b"x") == b"x")
+        self.assertTrue(b"x" == BytesSub(b"x"))
+        self.assertFalse(BytesSub(b"x") == BytesSub(b"y"))
+        self.assertTrue(BytesSubEq(b"x") == b"y")
+        self.assertTrue(b"y" == BytesSubEq(b"x"))
+        self.assertIn(b, {a: 1})
+        self.assertIn(BytesSub(b"hello"), {a: 1})
+        self.assertIn(b, (b"a", a))
+
+    def test_str(self):
+        class StrSub(str):
+            pass
+        self.assertTrue("ab" == "ab")
+        self.assertFalse("ab" != "ab")
+        self.assertTrue("ab" < "b")
+        self.assertFalse("ab" == b"ab")
+        self.assertTrue(StrSub("a") == "a")
+        self.assertTrue("a" == StrSub("a"))
+        self.assertIn(StrSub("a"), {"a"})
+
+    def test_mutating_eq(self):
+        class Key:
+            def __init__(self, v, container=None):
+                self.v = v
+                self.container = container
+            def __hash__(self):
+                return self.v
+            def __eq__(self, other):
+                if self.container is not None:
+                    self.container.add(Key(99))
+                    self.container.discard(self)
+                return isinstance(other, Key) and other.v == self.v
+        members = set()
+        members.add(Key(1, members))
+        self.assertNotIn(Key(1), members)
+
+
 class DictTest(unittest.TestCase):
 
     def test_dicts(self):

@@ -147,8 +147,8 @@ _PyValue_IndexCheck(PyValueBorrow v)
 }
 #define _PyValue_IndexCheck(V) (_PyValue_IndexCheck)(PyValue_Borrow(V))
 
-/* PyObject_RichCompare() and PyObject_RichCompareBool(); the latter
-   compares two inline values by R-inline (value_ops.c). */
+/* PyObject_RichCompare() and PyObject_RichCompareBool() (object.c); both
+   decide the pairs that run no Python code before the protocol. */
 PyAPI_FUNC(PyValue) _PyValue_RichCompare(PyValueBorrow v, PyValueBorrow w,
                                          int op);
 PyAPI_FUNC(int) _PyValue_RichCompareBool(PyValueBorrow v, PyValueBorrow w,

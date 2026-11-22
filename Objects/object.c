@@ -1168,25 +1168,27 @@ do_richcompare(PyValueBorrow v, PyValueBorrow w, int op)
     /* The steps: the reflected comparison of a subtype, v's, then w's. One
        call site serves the three. */
     for (int step = 0; step < 3; step++) {
-        PyTypeObject *tv = richcompare_type(v);
-        PyTypeObject *tw = richcompare_type(w);
         PyTypeObject *t;
         PyValueBorrow a, b;
         int aop;
         if (step == 0) {
-            if (tv == tw || !PyType_IsSubtype(tw, tv)) {
+            PyTypeObject *tv = richcompare_type(v);
+            t = richcompare_type(w);
+            if (tv == t || !PyType_IsSubtype(t, tv)) {
                 continue;
             }
-            t = tw; a = w; b = v; aop = _Py_SwappedOp[op];
+            a = w; b = v; aop = _Py_SwappedOp[op];
         }
         else if (step == 1) {
-            t = tv; a = v; b = w; aop = op;
+            t = richcompare_type(v);
+            a = v; b = w; aop = op;
         }
         else {
             if (checked_reverse_op) {
                 continue;
             }
-            t = tw; a = w; b = v; aop = _Py_SwappedOp[op];
+            t = richcompare_type(w);
+            a = w; b = v; aop = _Py_SwappedOp[op];
         }
         richcmpfunc f = t->tp_richcompare;
         if (f == NULL) {

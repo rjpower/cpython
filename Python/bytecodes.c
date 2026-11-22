@@ -4014,7 +4014,7 @@ dummy_func(
         replaced op(_ITER_NEXT_LIST, (iter, null_or_index -- iter, null_or_index, next)) {
             PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
             assert(PyList_CheckExact(list_o));
-            next = PyValue_XDUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
+            next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
             null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
         }
 

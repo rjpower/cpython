@@ -9243,7 +9243,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 PyObject *list_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(PyList_CheckExact(list_o));
-                next = PyValue_XDUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
+                next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
                 null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             IR_SET_TEMP(window[1], null_or_index);

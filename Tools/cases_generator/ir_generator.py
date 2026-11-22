@@ -3755,7 +3755,6 @@ class IREmitter(Emitter):
         self.emit("((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;\n")
         self.emit("FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);\n")
         self.abrupt_prefix = True
-        self.emit(f"IR_TRY_NATIVE_YIELD({value});\n")
         self.emit("next_instr = frame->return_pc;\n")
         self.emit(f"if (_PyFrame_SetReturnValue(frame, {value})) {{ next_instr = frame->return_pc; }}\n")
         self.emit("LLTRACE_RESUME_FRAME();\n")
@@ -6933,9 +6932,6 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
              not stack.shape_read_complete)):
         raise analysis_error("polymorphic shape execution needs one dominating checked read", inst.where)
     out.start_line()
-    if reachable and canonical_frame_transfer_input(inst) and any(
-            isinstance(part, Uop) and part.name == "_YIELD_VALUE" for part in inst.parts):
-        out.emit("IR_TRY_NATIVE_YIELD(value);\n")
     if (reachable and emitter.generator_boundary is not None
             and emitter.generator_boundary.yielded == "DELEGATED"):
         if emitter.send_source_parts is None or not fmt.window or fmt.dst_offset != 2:

@@ -15546,7 +15546,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             ir_yield_frame->previous = NULL;
             ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;
             FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
-            IR_TRY_NATIVE_YIELD(outgoing);
             next_instr = frame->return_pc;
             if (_PyFrame_SetReturnValue(frame, outgoing)) { next_instr = frame->return_pc; }
             LLTRACE_RESUME_FRAME();
@@ -15611,7 +15610,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = temp;
                 LLTRACE_RESUME_FRAME();
             }
-            IR_TRY_NATIVE_YIELD(value);
             IR_STORE_RETURN(value);
             DISPATCH();
         }

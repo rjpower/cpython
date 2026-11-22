@@ -70,6 +70,10 @@ def global_targets(d):
     return result
 
 
+class Dict(dict):
+    pass
+
+
 class DictItemsLoopTest(unittest.TestCase):
 
     def test_pairs(self):
@@ -376,6 +380,66 @@ class DictItemsLoopTest(unittest.TestCase):
         for _ in range(WARMUP):
             list(gen(d))
         self.assertEqual(list(gen(d)), [("a", 1), ("b", 2)])
+
+
+class DictItemIteratorResultTest(unittest.TestCase):
+    """The pair that a dict item iterator returns when something other than a
+    two-target unpack takes it."""
+
+    def test_held_pairs_are_distinct(self):
+        d = {"a": 1, "b": 2, "c": 3}
+        it = iter(d.items())
+        first = next(it)
+        second = next(it)
+        third = next(it)
+        self.assertEqual([first, second, third], list(d.items()))
+        self.assertEqual(len({id(first), id(second), id(third)}), 3)
+        with self.assertRaises(StopIteration):
+            next(it)
+
+    def test_released_pair_is_reused(self):
+        d = {"a": 1, "b": 2, "c": 3}
+        it = iter(d.items())
+        first = id(next(it))
+        self.assertEqual(id(next(it)), first)
+        self.assertEqual(id(next(it)), first)
+
+    def test_iterator_never_advanced(self):
+        d = Dict(a=1)
+        reference = weakref.ref(d)
+        d["it"] = iter(d.items())
+        del d
+        gc.collect()
+        self.assertIsNone(reference())
+        it = iter(reversed(Dict(a=1).items()))
+        self.assertEqual(next(it), ("a", 1))
+
+    def test_pair_survives_the_iterator(self):
+        class Obj:
+            pass
+
+        d = {Obj(): Obj()}
+        refs = [weakref.ref(o) for pair in d.items() for o in pair]
+        it = iter(d.items())
+        pair = next(it)
+        del it
+        d.clear()
+        gc.collect()
+        self.assertEqual([r() for r in refs], list(pair))
+        del pair
+        gc.collect()
+        self.assertEqual([r() for r in refs], [None, None])
+
+    def test_iterator_is_collected_with_its_pair(self):
+        d = Dict(a=1)
+        reference = weakref.ref(d)
+        it = iter(d.items())
+        pair = next(it)
+        d["it"] = it
+        d["pair"] = pair
+        del d, it, pair
+        gc.collect()
+        self.assertIsNone(reference())
 
 
 class DictItemsLoopMonitoringTest(unittest.TestCase):

@@ -5858,7 +5858,7 @@ typedef struct {
     PyDictObject *di_dict; /* Set to NULL when iterator is exhausted */
     Py_ssize_t di_used;
     Py_ssize_t di_pos;
-    PyObject* di_result; /* reusable result tuple for iteritems */
+    PyObject* di_result; /* reusable result tuple for iteritems, made with the first pair */
     Py_ssize_t len;
 } dictiterobject;
 
@@ -5889,18 +5889,7 @@ dictiter_new(PyDictObject *dict, PyTypeObject *itertype)
     else {
         di->di_pos = 0;
     }
-    /* gh-152107: track before allocating di_result. A dictiter with a NULL
-       di_result is a valid state for dictiter_traverse()/dictiter_dealloc(),
-       so a failure of the allocation below can safely DECREF a tracked di. */
     _PyObject_GC_TRACK(di);
-    if (itertype == &PyDictIterItem_Type ||
-        itertype == &PyDictRevIterItem_Type) {
-        di->di_result = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(Py_None), PyValue_PrepareOwned(Py_None));
-        if (di->di_result == NULL) {
-            Py_DECREF(di);
-            return NULL;
-        }
-    }
     return (PyObject *)di;
 }
 
@@ -6036,7 +6025,7 @@ static PyValue
 dictiter_pair(dictiterobject *di, PyValue key, PyValue value)
 {
     PyObject *result = di->di_result;
-    if (acquire_iter_result(result)) {
+    if (result != NULL && acquire_iter_result(result)) {
         PyTupleObject *pair = (PyTupleObject *)result;
         // a move: replaced below
         PyValue old_key = pair->ob_item[0];
@@ -6050,15 +6039,21 @@ dictiter_pair(dictiterobject *di, PyValue key, PyValue value)
         PyValue_XCLOSE(old_value);
     }
     else {
-        result = PyTuple_New(2);
-        if (result != NULL) {
-            PyTuple_SET_VALUE(result, 0, key);
-            PyTuple_SET_VALUE(result, 1, value);
+        PyObject *fresh = PyTuple_New(2);
+        if (fresh != NULL) {
+            PyTuple_SET_VALUE(fresh, 0, key);
+            PyTuple_SET_VALUE(fresh, 1, value);
+            if (result == NULL) {
+                // The first pair is the iterator's result for the next. A
+                // loop that unpacks its items never reaches this.
+                di->di_result = Py_NewRef(fresh);
+            }
         }
         else {
             PyValue_XCLOSE(key);
             PyValue_XCLOSE(value);
         }
+        result = fresh;
     }
     if (result == NULL) {
         return PyValue_NULL;

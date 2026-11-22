@@ -7700,20 +7700,18 @@ PyObject_VisitManagedDict(PyObject *obj, visitproc visit, void *arg)
 static void
 clear_inline_values(PyDictValues *values)
 {
-    if (values->valid) {
-        PyValue refs[SHARED_KEYS_MAX_SIZE];
-        Py_ssize_t capacity = values->capacity;
-        assert(capacity <= SHARED_KEYS_MAX_SIZE);
-        FT_ATOMIC_STORE_UINT8(values->valid, 0);
-        _PyDictValues_SetShape(values, _Py_SHAPE_NONE);
-        for (Py_ssize_t i = 0; i < capacity; i++) {
-            refs[i] = values->values[i];
-            values->values[i] = PyValue_NULL;
-        }
-        FT_ATOMIC_STORE_UINT8_RELEASE(values->size, 0);
-        for (Py_ssize_t i = 0; i < capacity; i++) {
-            PyValue_XCLOSE(refs[i]);
-        }
+    if (!values->valid) {
+        return;
+    }
+    /* Once invalid, no reader looks at a slot: each one is emptied before
+     * its owner is closed, and the close can run Python code. */
+    FT_ATOMIC_STORE_UINT8(values->valid, 0);
+    _PyDictValues_SetShape(values, _Py_SHAPE_NONE);
+    FT_ATOMIC_STORE_UINT8_RELEASE(values->size, 0);
+    for (Py_ssize_t i = 0; i < values->capacity; i++) {
+        PyValue owner = values->values[i];
+        values->values[i] = PyValue_NULL;
+        PyValue_XCLOSE(owner);
     }
 }
 
@@ -7790,57 +7788,68 @@ detach_dict_from_object(PyDictObject *mp, PyObject *obj)
 }
 
 
+/* DICT aliases the inline values of an object that is going away. Make it
+ * an empty dict of its own, so that clearing the values leaves it consistent. */
+static void
+unlink_dict_from_inline_values(PyDictObject *dict)
+{
+    PyDictKeysObject *keys = dict->ma_keys;
+    dict->ma_keys = Py_EMPTY_KEYS;
+    dict->ma_values = NULL;
+    STORE_USED(dict, 0);
+    dictkeys_decref(keys, false);
+}
+
+/* The object holds DICT, which aliases its inline values, and someone else
+ * holds it too: the values move into storage of the dict's own. */
+static Py_NO_INLINE void
+detach_escaped_dict(PyDictObject *dict, PyObject *obj)
+{
+    /* The detach can fail (out of memory), and that failure is reported as
+     * unraisable; a deallocator must leave the current exception as it found
+     * it (gh-89373), so set the caller's exception aside first. The report can
+     * run Python, which may drop the other holders of the dict. */
+    PyObject *entry_error = PyErr_GetRaisedException();
+    Py_INCREF(dict);
+    if (detach_dict_from_object(dict, obj) < 0) {
+        PyErr_FormatUnraisable("Exception ignored while clearing an object managed dict");
+        PyDictValues *values = _PyObject_InlineValues(obj);
+        /* The reporting hook may already detach/replace the association. */
+        if (_PyObject_GetManagedDict(obj) == dict && dict->ma_values == values) {
+            unlink_dict_from_inline_values(dict);
+            clear_inline_values(values);
+        }
+    }
+    Py_DECREF(dict);
+    PyErr_SetRaisedException(entry_error);
+}
+
 void
 PyObject_ClearManagedDict(PyObject *obj)
 {
-    /* subtype_dealloc can pass a refcount-zero instance. Never INCREF it.
-     * The detach below can fail (out of memory), and that failure is reported
-     * as unraisable; a deallocator must leave the current exception as it
-     * found it (gh-89373), so set the caller's exception aside first. */
-    PyObject *entry_error = PyErr_GetRaisedException();
-    PyTypeObject *type = Py_TYPE(obj);
-    Py_INCREF(type);
+    /* The object is being freed, or cleared by the GC, so nothing else reaches
+     * it. subtype_dealloc can pass a refcount-zero instance: never INCREF it. */
     PyDictObject *dict = _PyObject_GetManagedDict(obj);
-    Py_XINCREF(dict);
-    if (type->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
-        if (dict == NULL) {
-            clear_inline_values(_PyObject_InlineValues(obj));
-        }
-        else if (dict->ma_values == _PyObject_InlineValues(obj)) {
-            if (detach_dict_from_object(dict, obj) < 0) {
-                PyErr_FormatUnraisable("Exception ignored while clearing an object managed dict");
-                /* The reporting hook may already detach/replace the association. */
-                PyDictValues *values = _PyObject_InlineValues(obj);
-                if (_PyObject_GetManagedDict(obj) == dict && dict->ma_values == values) {
-                    PyValue refs[SHARED_KEYS_MAX_SIZE];
-                    size_t capacity = values->capacity;
-                    assert(capacity <= SHARED_KEYS_MAX_SIZE);
-                    PyDictKeysObject *keys = dict->ma_keys;
-                    for (size_t i = 0; i < capacity; i++) {
-                        refs[i] = values->values[i];
-                        values->values[i] = PyValue_NULL;
-                    }
-                    values->size = 0;
-                    values->valid = 0;
-                    _PyDictValues_SetShape(values, _Py_SHAPE_NONE);
-                    dict->ma_keys = Py_EMPTY_KEYS;
-                    dict->ma_values = NULL;
-                    STORE_USED(dict, 0);
-                    /* Every visible shape is empty before the first close. */
-                    dictkeys_decref(keys, false);
-                    for (size_t i = 0; i < capacity; i++) {
-                        PyValue_XCLOSE(refs[i]);
-                    }
-                }
+    if (Py_TYPE(obj)->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
+        PyDictValues *values = _PyObject_InlineValues(obj);
+        if (dict != NULL && dict->ma_values == values) {
+            if (Py_REFCNT(dict) > 1) {
+                detach_escaped_dict(dict, obj);
+            }
+            else {
+                /* Only the object holds the dict: no one can see its
+                 * values after the object, so they need no copy. */
+                unlink_dict_from_inline_values(dict);
             }
         }
+        clear_inline_values(values);
     }
+    /* Clearing the values can run Python, which may have made a dict. */
     PyDictObject *current = _PyObject_GetManagedDict(obj);
-    _PyObject_ManagedDictPointer(obj)->dict = NULL;
-    Py_XDECREF((PyObject *)current);
-    Py_XDECREF((PyObject *)dict);
-    Py_XDECREF((PyObject *)type);
-    PyErr_SetRaisedException(entry_error);
+    if (current != NULL) {
+        _PyObject_ManagedDictPointer(obj)->dict = NULL;
+        Py_DECREF((PyObject *)current);
+    }
 }
 
 int

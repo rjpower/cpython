@@ -4342,14 +4342,25 @@ dict_update(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
     if (kwnames != NULL) {
         const PyValue *keyword_values = args + nargs;
         Py_ssize_t nkwargs = PyTuple_GET_SIZE(kwnames);
-        for (Py_ssize_t i = 0; i < nkwargs; i++) {
-            /* Vectorcall keyword names are exact str, never inline. */
-            if (_PyDict_SetValue_Take2((PyDictObject *)dict,
-                                       PyValue_DUP(PyTuple_GET_VALUE(kwnames, i)),
-                                       PyValue_DUP(keyword_values[i])) < 0)
-            {
-                return PyValue_NULL;
-            }
+        int status = 0;
+        Py_BEGIN_CRITICAL_SECTION(dict);
+        /* Size once for the keywords, as dict_dict_merge() does. */
+        PyDictObject *mp = (PyDictObject *)dict;
+        if (USABLE_FRACTION(DK_SIZE(mp->ma_keys)) < nkwargs) {
+            status = dictresize(mp, estimate_log2_keysize(mp->ma_used + nkwargs),
+                                true);
+        }
+        for (Py_ssize_t i = 0; status == 0 && i < nkwargs; i++) {
+            /* Vectorcall keyword names are exact str with a hash, never
+               inline: the hash is cached or computed by the str itself. */
+            PyValueBorrow key = PyTuple_GET_VALUE(kwnames, i);
+            status = setitem_take2_lock_held_known_hash(
+                mp, PyValue_DUP(key), PyValue_DUP(keyword_values[i]),
+                hash_unicode_key(PyValue_AsKnownObjectBorrow(key)));
+        }
+        Py_END_CRITICAL_SECTION();
+        if (status < 0) {
+            return PyValue_NULL;
         }
     }
     return PyValue_None;

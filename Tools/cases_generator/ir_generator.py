@@ -3755,6 +3755,7 @@ class IREmitter(Emitter):
         self.emit("((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_YIELD;\n")
         self.emit("FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);\n")
         self.abrupt_prefix = True
+        self.emit(f"IR_TRY_NATIVE_YIELD({value});\n")
         self.emit("next_instr = frame->return_pc;\n")
         self.emit(f"if (_PyFrame_SetReturnValue(frame, {value})) {{ next_instr = frame->return_pc; }}\n")
         self.emit("LLTRACE_RESUME_FRAME();\n")

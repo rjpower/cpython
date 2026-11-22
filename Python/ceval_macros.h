@@ -105,6 +105,21 @@
         next_instr = this_instr; \
         goto LABEL_gen_yield; \
     } while (0)
+/* Likewise V from the frame that a delegating YIELD has just suspended, if
+ * its resumer is a SEND with a native yielded outcome.  A leaf YIELD does not
+ * test: its resumer is a FOR_ITER_GEN or the C entry as often as a SEND, and
+ * the YIELD that follows a SEND carries a value up the chain from there. */
+#define IR_TRY_NATIVE_YIELD(V) \
+    do { \
+        if (generator_site_kind(frame, frame->instr_ptr, \
+                                generator_yielded_targets) && \
+            !frame->pending_redirect) { \
+            assert(_PyValue_IsHome(V)); \
+            ir_gen_value = (V); \
+            next_instr = frame->instr_ptr; \
+            goto LABEL_gen_yield; \
+        } \
+    } while (0)
 /* The SEND or CLEANUP_THROW at this_instr completes with V, whose word has
  * a native completed outcome. */
 #define IR_GEN_COMPLETE(V) \

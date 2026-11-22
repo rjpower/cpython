@@ -4169,7 +4169,7 @@ call_first_argument(const PyValue *slots, const _PyIRWord *head,
 }
 
 /* The CALL event, before the call runs.  The callback can run Python. */
-static int
+static _Py_COLD_FUNCTION int
 call_monitor(PyThreadState *tstate, _PyInterpreterFrame *frame,
              _PyInstr *head, PyValue callable, PyValue first)
 {
@@ -4186,7 +4186,7 @@ call_monitor(PyThreadState *tstate, _PyInterpreterFrame *frame,
 /* The C_RETURN or C_RAISE event of a call that ran native code.  failed: the
  * call raised.  Returns whether it failed, which a callback that raises in
  * C_RETURN makes true. */
-static int
+static _Py_COLD_FUNCTION int
 call_monitor_result(PyThreadState *tstate, _PyInterpreterFrame *frame,
                     _PyInstr *head, PyValue callable, PyValue first,
                     int failed)

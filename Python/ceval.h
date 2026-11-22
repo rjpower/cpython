@@ -399,7 +399,7 @@ enum {
 static_assert(sizeof(_PyIRErrorResult) == 16, "error return has no owning payload");
 #endif
 
-static int
+static _Py_COLD_FUNCTION int
 do_monitor_exc(PyThreadState *tstate, _PyInterpreterFrame *frame,
                _PyInstr *instr, int event)
 {

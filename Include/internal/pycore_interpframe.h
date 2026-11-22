@@ -262,7 +262,9 @@ _PyFrame_PublishReturnSlot(_PyInterpreterFrame *f, PyValue v)
     PyValue_XCLOSE(old);
 }
 
-void _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame);
+// A redirect is pending only while a monitoring callback or the debugger has
+// moved the resume point of the frame.
+void _Py_COLD_FUNCTION _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame);
 
 static inline int
 _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
@@ -676,7 +678,9 @@ _PyThreadState_HasStackSpace(PyThreadState *tstate, int size)
         size < tstate->datastack_limit - tstate->datastack_top;
 }
 
-PyAPI_FUNC(void) _PyStackChunk_ExtendInitialized(
+// Exposing storage beyond the initialized frontier: no frame push does so
+// once the stack has been as deep, so it is a cold call.
+PyAPI_FUNC(void) _Py_COLD_FUNCTION _PyStackChunk_ExtendInitialized(
     _PyStackChunk *chunk, PyObject **value_end);
 
 /* Reserve initialized cells before any header write. Old headers are not

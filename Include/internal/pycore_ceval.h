@@ -395,7 +395,7 @@ typedef struct {
 
 /* PRE (0) observes the held completion value while the input window is
  * intact. POST (1) observes the committed semantic outcome. */
-PyAPI_FUNC(_PyIRStepResult) _PyIR_ObserveStep(
+PyAPI_FUNC(_PyIRStepResult) _Py_COLD_FUNCTION _PyIR_ObserveStep(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, _PyInstr *,
     PyValueBorrow, enum _PyIRStepKind, int);
 PyAPI_FUNC(_PyIRStepResult) _PyEval_CompleteForIter(

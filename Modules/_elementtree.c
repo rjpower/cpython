@@ -2818,11 +2818,6 @@ static PyType_Spec elementchilditer_spec = {
 static PyObject *
 element_iter(PyObject *op)
 {
-    if (Py_TYPE(op)->tp_as_sequence->sq_item != element_getitem) {
-        /* A subclass that defines __getitem__ and not __iter__ iterates
-           through its __getitem__. */
-        return PySeqIter_New(op);
-    }
     elementtreestate *st = get_elementtree_state_by_type(Py_TYPE(op));
     ElementChildIterObject *it =
         PyObject_GC_New(ElementChildIterObject, st->ElementChildIter_Type);

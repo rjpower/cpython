@@ -211,6 +211,9 @@ class Element:
     def __getitem__(self, index):
         return self._children[index]
 
+    def __iter__(self):
+        return iter(self._children)
+
     def __setitem__(self, index, element):
         if isinstance(index, slice):
             for elt in element:
@@ -335,7 +338,8 @@ class Element:
 
         """
         self.attrib.clear()
-        self._children = []
+        # In place, so that a running iterator sees the children go.
+        self._children.clear()
         self.text = self.tail = None
 
     def get(self, key, default=None):

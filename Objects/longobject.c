@@ -66,8 +66,9 @@ static int long_to_decimal_string_internal(_PyLongSpan a, PyObject **str,
                                            _PyUnicodeWriter *writer,
                                            PyBytesWriter *bytes_writer,
                                            char **bytes_str);
-static int long_to_decimal_writer_span(_PyUnicodeWriter *writer,
-                                       _PyLongSpan a);
+static PyObject *long_inline_to_decimal_str(PyValueBorrow v);
+static int long_inline_to_decimal_writer(_PyUnicodeWriter *writer,
+                                         PyValueBorrow v);
 static Py_ssize_t long_compare(_PyLongSpan a, _PyLongSpan b);
 static PyLongObject *long_pow_spans(_PyLongSpan a, _PyLongSpan b,
                                     const _PyLongSpan *c);
@@ -2267,12 +2268,42 @@ long_to_decimal_string_internal(_PyLongSpan a,
     return 0;
 }
 
-/* The kernel into a writer, for the repr of an int held inline: a span from
-   a word never needs the _pylong switch. */
-static int
-long_to_decimal_writer_span(_PyUnicodeWriter *writer, _PyLongSpan a)
+/* The decimal text of an int held inline, written backwards from end; the
+   result is where it starts. It has at most 16 digits, so neither the
+   _pylong switch nor the int_max_str_digits limit applies, and the digits
+   are made on the stack, with no scratch array. */
+static char *
+long_inline_decimal_text(PyValueBorrow v, char *end)
 {
-    return long_to_decimal_string_internal(a, NULL, writer, NULL, NULL);
+    int64_t value = PyValue_InlineInt64(v);
+    char *p = end;
+    uint64_t magnitude = value < 0 ? -(uint64_t)value : (uint64_t)value;
+    do {
+        *--p = '0' + magnitude % 10;
+        magnitude /= 10;
+    } while (magnitude != 0);
+    if (value < 0) {
+        *--p = '-';
+    }
+    return p;
+}
+
+static PyObject *
+long_inline_to_decimal_str(PyValueBorrow v)
+{
+    char text[24];
+    char *end = text + sizeof(text);
+    char *p = long_inline_decimal_text(v, end);
+    return _PyUnicode_FromASCII(p, end - p);
+}
+
+static int
+long_inline_to_decimal_writer(_PyUnicodeWriter *writer, PyValueBorrow v)
+{
+    char text[24];
+    char *end = text + sizeof(text);
+    char *p = long_inline_decimal_text(v, end);
+    return _PyUnicodeWriter_WriteASCIIString(writer, p, end - p);
 }
 
 /* The object entry of the kernel: the checks of an object argument and the
@@ -2535,12 +2566,13 @@ _PyLong_FormatValue(PyValueBorrow value, int base)
     if (!PyValue_IsInlineInt(value)) {
         return _PyLong_Format(PyValue_AsKnownObjectBorrow(value), base);
     }
+    if (base == 10) {
+        return long_inline_to_decimal_str(value);
+    }
     digit digits[_PyLong_WORD_DIGITS];
     _PyLongSpan span = _PyLong_SpanOfValue(value, digits);
     PyObject *str;
-    int err = base == 10
-        ? long_to_decimal_string_internal(span, &str, NULL, NULL, NULL)
-        : long_format_binary_span(span, base, 1, &str, NULL, NULL, NULL);
+    int err = long_format_binary_span(span, base, 1, &str, NULL, NULL, NULL);
     return err < 0 ? NULL : str;
 }
 
@@ -2552,11 +2584,11 @@ _PyLong_FormatWriterValue(_PyUnicodeWriter *writer, PyValueBorrow value,
         return _PyLong_FormatWriter(writer, PyValue_AsKnownObjectBorrow(value),
                                     base, alternate);
     }
+    if (base == 10) {
+        return long_inline_to_decimal_writer(writer, value);
+    }
     digit digits[_PyLong_WORD_DIGITS];
     _PyLongSpan span = _PyLong_SpanOfValue(value, digits);
-    if (base == 10) {
-        return long_to_decimal_writer_span(writer, span);
-    }
     return long_format_binary_span(span, base, alternate, NULL, writer,
                                    NULL, NULL);
 }
@@ -7413,15 +7445,7 @@ PyObject *
 _PyLong_ValueRepr(PyValueBorrow v)
 {
     if (PyValue_IsInlineInt(v)) {
-        /* At most 16 digits: neither the _pylong switch nor the
-           int_max_str_digits limit can apply. */
-        digit v_digits[_PyLong_WORD_DIGITS];
-        PyObject *str;
-        if (long_to_decimal_string_internal(SPAN_OF_VALUE(v), &str, NULL,
-                                            NULL, NULL) < 0) {
-            return NULL;
-        }
-        return str;
+        return long_inline_to_decimal_str(v);
     }
     return long_to_decimal_string(PyValue_AsKnownObjectBorrow(v));
 }
@@ -7430,8 +7454,7 @@ int
 _PyLong_WriteDecimal(_PyUnicodeWriter *writer, PyValueBorrow v)
 {
     if (PyValue_IsInlineInt(v)) {
-        digit v_digits[_PyLong_WORD_DIGITS];
-        return long_to_decimal_writer_span(writer, SPAN_OF_VALUE(v));
+        return long_inline_to_decimal_writer(writer, v);
     }
     return _PyLong_FormatWriter(writer, PyValue_AsKnownObjectBorrow(v), 10, 0);
 }

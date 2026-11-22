@@ -1316,34 +1316,29 @@ _Py_dict_lookup() is general-purpose, and may return DKIX_ERROR if (and only if)
 comparison raises an exception.
 When the key isn't found a DKIX_EMPTY is returned.
 */
-Py_ssize_t
-(_Py_dict_lookup)(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
-                  PyValueBorrow *value_addr)
+/* The lookups that compare keys through the general path: a general table,
+   or a key that is not an exact str in a table of str keys. A comparison can
+   run Python code that changes the table, and then the lookup starts again
+   from _Py_dict_lookup(). */
+static Py_NO_INLINE Py_ssize_t
+dict_lookup_general(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
+                    PyValueBorrow *value_addr)
 {
-    PyDictKeysObject *dk;
-    DictKeysKind kind;
+    PyDictKeysObject *dk = mp->ma_keys;
+    DictKeysKind kind = dk->dk_kind;
     Py_ssize_t ix;
 
-    _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(mp);
-start:
-    dk = mp->ma_keys;
-    kind = dk->dk_kind;
-
     if (kind != DICT_KEYS_GENERAL) {
-        if (value_is_exact_unicode(key)) {
-            ix = unicodekeys_lookup_unicode(dk, PyValue_AsKnownObjectBorrow(key), hash);
-        }
-        else {
-            INCREF_KEYS_FT(dk);
-            LOCK_KEYS_IF_SPLIT(dk, kind);
+        assert(!value_is_exact_unicode(key));
+        INCREF_KEYS_FT(dk);
+        LOCK_KEYS_IF_SPLIT(dk, kind);
 
-            ix = unicodekeys_lookup_generic(mp, dk, key, hash);
+        ix = unicodekeys_lookup_generic(mp, dk, key, hash);
 
-            UNLOCK_KEYS_IF_SPLIT(dk, kind);
-            DECREF_KEYS_FT(dk, IS_DICT_SHARED(mp));
-            if (ix == DKIX_KEY_CHANGED) {
-                goto start;
-            }
+        UNLOCK_KEYS_IF_SPLIT(dk, kind);
+        DECREF_KEYS_FT(dk, IS_DICT_SHARED(mp));
+        if (ix == DKIX_KEY_CHANGED) {
+            return (_Py_dict_lookup)(mp, key, hash, value_addr);
         }
 
         if (ix >= 0) {
@@ -1357,20 +1352,44 @@ start:
         else {
             *value_addr = PyValue_Borrow(PyValue_NULL);
         }
-    }
-    else {
-        ix = dictkeys_generic_lookup(mp, dk, key, hash);
-        if (ix == DKIX_KEY_CHANGED) {
-            goto start;
-        }
-        if (ix >= 0) {
-            *value_addr = PyValue_Borrow(DK_ENTRIES(dk)[ix].me_value);
-        }
-        else {
-            *value_addr = PyValue_Borrow(PyValue_NULL);
-        }
+        return ix;
     }
 
+    ix = dictkeys_generic_lookup(mp, dk, key, hash);
+    if (ix == DKIX_KEY_CHANGED) {
+        return (_Py_dict_lookup)(mp, key, hash, value_addr);
+    }
+    if (ix >= 0) {
+        *value_addr = PyValue_Borrow(DK_ENTRIES(dk)[ix].me_value);
+    }
+    else {
+        *value_addr = PyValue_Borrow(PyValue_NULL);
+    }
+    return ix;
+}
+
+Py_ssize_t
+(_Py_dict_lookup)(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
+                  PyValueBorrow *value_addr)
+{
+    _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(mp);
+    PyDictKeysObject *dk = mp->ma_keys;
+    DictKeysKind kind = dk->dk_kind;
+    if (kind == DICT_KEYS_GENERAL || !value_is_exact_unicode(key)) {
+        return dict_lookup_general(mp, key, hash, value_addr);
+    }
+    /* An exact str in a table of str keys: no comparison can run Python. */
+    Py_ssize_t ix = unicodekeys_lookup_unicode(
+        dk, PyValue_AsKnownObjectBorrow(key), hash);
+    if (ix < 0) {
+        *value_addr = PyValue_Borrow(PyValue_NULL);
+    }
+    else if (kind == DICT_KEYS_SPLIT) {
+        *value_addr = PyValue_Borrow(mp->ma_values->values[ix]);
+    }
+    else {
+        *value_addr = PyValue_Borrow(DK_UNICODE_ENTRIES(dk)[ix].me_value);
+    }
     return ix;
 }
 

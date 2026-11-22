@@ -103,20 +103,18 @@ BaseException_init(PyObject *op, PyObject *args, PyObject *kwds)
 }
 
 
-static PyValue
-BaseException_vectorcall(PyThreadState *tstate, PyObject *type_obj,
-                         const PyValue *args, size_t nargsf,
-                         PyObject *kwnames)
+/* The instance that calling type(*args) builds, for a class whose tp_new and
+ * tp_init are BaseException's (the ones _PyExc_InitTypes() gives
+ * _PyBaseException_Vectorcall).  The runtime builds its own exceptions with it,
+ * without the call: see _PyErr_CreateExceptionFromArray(). */
+PyObject *
+_PyBaseException_NewFromArray(PyTypeObject *type, const PyValue *args,
+                              Py_ssize_t nargs)
 {
-    PyTypeObject *type = _PyType_CAST(type_obj);
-    if (!_PyArg_NoKwnames(type->tp_name, kwnames)) {
-        return PyValue_NULL;
-    }
-
     PyBaseExceptionObject *self;
     self = (PyBaseExceptionObject *)type->tp_alloc(type, 0);
     if (!self) {
-        return PyValue_NULL;
+        return NULL;
     }
 
     // The dict is created on the fly in PyObject_GenericSetAttr()
@@ -127,13 +125,25 @@ BaseException_vectorcall(PyThreadState *tstate, PyObject *type_obj,
     self->context = NULL;
     self->suppress_context = 0;
 
-    self->args = _PyTuple_FromValueArray(args, PyVectorcall_NARGS(nargsf));
+    self->args = _PyTuple_FromValueArray(args, nargs);
     if (!self->args) {
         Py_DECREF(self);
+        return NULL;
+    }
+    return (PyObject *)self;
+}
+
+PyValue
+_PyBaseException_Vectorcall(PyThreadState *tstate, PyObject *type_obj,
+                            const PyValue *args, size_t nargsf,
+                            PyObject *kwnames)
+{
+    PyTypeObject *type = _PyType_CAST(type_obj);
+    if (!_PyArg_NoKwnames(type->tp_name, kwnames)) {
         return PyValue_NULL;
     }
-
-    return PyValue_FromObjectSteal((PyObject *)self);
+    return PyValue_PrepareOwned(_PyBaseException_NewFromArray(
+        type, args, PyVectorcall_NARGS(nargsf)));
 }
 
 
@@ -671,7 +681,7 @@ static PyTypeObject _PyExc_BaseException = {
     0,                          /* tp_alloc */
     BaseException_new,          /* tp_new */
     .tp_vectorcall = _PyValue_VectorcallThunk,
-    .tp_value_vectorcall = (_Py_valuefunc)BaseException_vectorcall,
+    .tp_value_vectorcall = (_Py_valuefunc)_PyBaseException_Vectorcall,
 };
 /* the CPython API expects exceptions to be (PyObject *) - both a hold-over
 from the previous implementation and also allowing Python objects to be used
@@ -4711,7 +4721,7 @@ _PyExc_InitTypes(PyInterpreterState *interp)
             && exc->tp_init == BaseException_init)
         {
             exc->tp_vectorcall = _PyValue_VectorcallThunk;
-            exc->tp_value_vectorcall = (_Py_valuefunc)BaseException_vectorcall;
+            exc->tp_value_vectorcall = (_Py_valuefunc)_PyBaseException_Vectorcall;
         }
     }
     return 0;

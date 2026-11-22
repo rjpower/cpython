@@ -36,25 +36,11 @@ _PyErr_SetRaisedException(PyThreadState *tstate, PyObject *exc)
     Py_XDECREF(old_exc);
 }
 
-static PyObject*
-_PyErr_CreateException(PyObject *exception_type, PyObject *value)
+/* The instance that a call of exception_type returned, which must be one. */
+static PyObject *
+_PyErr_CreatedInstance(PyObject *exception_type, PyValue result)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyValueBorrow type = PyValue_FromObjectBorrow(exception_type);
-    PyValue result;
-
-    if (value == NULL || value == Py_None) {
-        result = _PyValue_CallNoArgs(tstate, type);
-    }
-    else if (PyTuple_Check(value)) {
-        result = _PyValue_Call(tstate, type, value, NULL);
-    }
-    else {
-        result = _PyValue_CallOneArg(tstate, type,
-                                     PyValue_FromObjectBorrow(value));
-    }
     PyObject *exc = _PyValue_AsObjectResultAt(result, BOX_SITE_CALL);
-
     if (exc != NULL && !PyExceptionInstance_Check(exc)) {
         PyErr_Format(PyExc_TypeError,
                      "calling %R should have returned an instance of "
@@ -62,8 +48,41 @@ _PyErr_CreateException(PyObject *exception_type, PyObject *value)
                      exception_type, Py_TYPE(exc)->tp_name);
         Py_CLEAR(exc);
     }
-
     return exc;
+}
+
+/* The instance of exception_type that calling it with args builds, or NULL
+ * with an exception set.  A class that BaseException constructs is built
+ * directly: its args tuple and the object, without the call. */
+static PyObject *
+_PyErr_CreateExceptionFromArray(PyObject *exception_type, const PyValue *args,
+                                Py_ssize_t nargs)
+{
+    PyTypeObject *type = (PyTypeObject *)exception_type;
+    if (type->tp_value_vectorcall == (_Py_valuefunc)_PyBaseException_Vectorcall) {
+        return _PyBaseException_NewFromArray(type, args, nargs);
+    }
+    PyValue result = _PyValue_VectorcallTstate(
+        _PyThreadState_GET(), PyValue_FromObjectBorrow(exception_type),
+        args, nargs, NULL);
+    return _PyErr_CreatedInstance(exception_type, result);
+}
+
+static PyObject*
+_PyErr_CreateException(PyObject *exception_type, PyObject *value)
+{
+    if (value == NULL || value == Py_None) {
+        return _PyErr_CreateExceptionFromArray(exception_type, NULL, 0);
+    }
+    if (PyTuple_Check(value)) {
+        PyThreadState *tstate = _PyThreadState_GET();
+        PyValue result = _PyValue_Call(tstate,
+                                       PyValue_FromObjectBorrow(exception_type),
+                                       value, NULL);
+        return _PyErr_CreatedInstance(exception_type, result);
+    }
+    PyValue arg = {PyValue_FromObjectBorrow(value).bits};
+    return _PyErr_CreateExceptionFromArray(exception_type, &arg, 1);
 }
 
 void
@@ -159,12 +178,56 @@ get_normalization_failure_note(PyThreadState *tstate, PyObject *exception, PyVal
     return note;
 }
 
+/* Make value, an exception instance that the caller owns, the current
+ * exception, chained to the exception being handled as its __context__. */
+static void
+_PyErr_SetInstance(PyThreadState *tstate, PyObject *value)
+{
+    PyObject *exc_value = _PyErr_GetTopmostException(tstate)->exc_value;
+    if (exc_value != NULL && exc_value != Py_None) {
+        /* Implicit exception chaining */
+        Py_INCREF(exc_value);
+        /* Avoid creating new reference cycles through the
+           context chain, while taking care not to hang on
+           pre-existing ones.
+           This is O(chain length) but context chains are
+           usually very short. Sensitive readers may try
+           to inline the call to PyException_GetContext. */
+        if (exc_value != value) {
+            PyObject *o = exc_value, *context;
+            PyObject *slow_o = o;  /* Floyd's cycle detection algo */
+            int slow_update_toggle = 0;
+            while ((context = PyException_GetContext(o))) {
+                Py_DECREF(context);
+                if (context == value) {
+                    PyException_SetContext(o, NULL);
+                    break;
+                }
+                o = context;
+                if (o == slow_o) {
+                    /* pre-existing cycle - all exceptions on the
+                       path were visited and checked.  */
+                    break;
+                }
+                if (slow_update_toggle) {
+                    slow_o = PyException_GetContext(slow_o);
+                    Py_DECREF(slow_o);
+                }
+                slow_update_toggle = !slow_update_toggle;
+            }
+            PyException_SetContext(value, exc_value);
+        }
+        else {
+            Py_DECREF(exc_value);
+        }
+    }
+    /* The traceback that the instance carries stays on it. */
+    _PyErr_SetRaisedException(tstate, value);
+}
+
 void
 _PyErr_SetObject(PyThreadState *tstate, PyObject *exception, PyObject *value)
 {
-    PyObject *exc_value;
-    PyObject *tb = NULL;
-
     if (exception != NULL &&
         !PyExceptionClass_Check(exception)) {
         _PyErr_Format(tstate, PyExc_SystemError,
@@ -207,48 +270,7 @@ _PyErr_SetObject(PyThreadState *tstate, PyObject *exception, PyObject *value)
         Py_XSETREF(value, fixed_value);
     }
 
-    exc_value = _PyErr_GetTopmostException(tstate)->exc_value;
-    if (exc_value != NULL && exc_value != Py_None) {
-        /* Implicit exception chaining */
-        Py_INCREF(exc_value);
-        /* Avoid creating new reference cycles through the
-           context chain, while taking care not to hang on
-           pre-existing ones.
-           This is O(chain length) but context chains are
-           usually very short. Sensitive readers may try
-           to inline the call to PyException_GetContext. */
-        if (exc_value != value) {
-            PyObject *o = exc_value, *context;
-            PyObject *slow_o = o;  /* Floyd's cycle detection algo */
-            int slow_update_toggle = 0;
-            while ((context = PyException_GetContext(o))) {
-                Py_DECREF(context);
-                if (context == value) {
-                    PyException_SetContext(o, NULL);
-                    break;
-                }
-                o = context;
-                if (o == slow_o) {
-                    /* pre-existing cycle - all exceptions on the
-                       path were visited and checked.  */
-                    break;
-                }
-                if (slow_update_toggle) {
-                    slow_o = PyException_GetContext(slow_o);
-                    Py_DECREF(slow_o);
-                }
-                slow_update_toggle = !slow_update_toggle;
-            }
-            PyException_SetContext(value, exc_value);
-        }
-        else {
-            Py_DECREF(exc_value);
-        }
-    }
-    assert(value != NULL);
-    if (PyExceptionInstance_Check(value))
-        tb = PyException_GetTraceback(value);
-    _PyErr_Restore(tstate, Py_NewRef(Py_TYPE(value)), value, tb);
+    _PyErr_SetInstance(tstate, value);
 }
 
 void
@@ -320,17 +342,13 @@ void
     _PyErr_Clear(tstate);
 
     // The exception's args tuple holds the word: an inline key is not boxed.
-    PyValue result = _PyValue_CallOneArg(tstate,
-                                         PyValue_FromObjectBorrow(PyExc_KeyError),
-                                         arg);
-    PyObject *exc = _PyValue_AsObjectResultAt(result, BOX_SITE_CALL);
+    PyValue args[1] = {{arg.bits}};
+    PyObject *exc = _PyErr_CreateExceptionFromArray(PyExc_KeyError, args, 1);
     if (!exc) {
         /* caller will expect error to be set anyway */
         return;
     }
-
-    _PyErr_SetObject(tstate, (PyObject*)Py_TYPE(exc), exc);
-    Py_DECREF(exc);
+    _PyErr_SetInstance(tstate, exc);
 }
 
 void

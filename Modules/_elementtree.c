@@ -19,6 +19,7 @@
 #include "Python.h"
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCall()
 #include "pycore_dict.h"          // _PyDict_CopyAsDict()
+#include "pycore_hashtable.h"     // _Py_hashtable_new_full()
 #include "pycore_descrobject.h"   // _Py_VALUE_GETSET()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_pyhash.h"        // _Py_HashSecret
@@ -3605,7 +3606,8 @@ typedef struct {
     PyObject *target;
     PyObject *entity;
 
-    PyObject *names;
+    /* raw UTF-8 name from expat (char *) -> universal name (str) */
+    _Py_hashtable_t *names;
 
     PyObject *handle_start_ns;
     PyObject *handle_end_ns;
@@ -3636,51 +3638,90 @@ typedef struct {
 
 /* helpers */
 
+static void
+names_clear(XMLParserObject *self)
+{
+    _Py_hashtable_t *names = self->names;
+    self->names = NULL;
+    if (names != NULL) {
+        _Py_hashtable_destroy(names);
+    }
+}
+
+static Py_uhash_t
+names_hash(const void *key)
+{
+    const char *name = key;
+    return (Py_uhash_t)Py_HashBuffer(name, (Py_ssize_t)strlen(name));
+}
+
+static int
+names_equal(const void *key1, const void *key2)
+{
+    return strcmp(key1, key2) == 0;
+}
+
+static void
+names_free_key(void *key)
+{
+    PyMem_RawFree(key);
+}
+
+static void
+names_free_value(void *value)
+{
+    Py_DECREF((PyObject *)value);
+}
+
+static _Py_hashtable_t *
+names_new(void)
+{
+    return _Py_hashtable_new_full(names_hash, names_equal,
+                                  names_free_key, names_free_value, NULL);
+}
+
 LOCAL(PyObject*)
 makeuniversal(XMLParserObject* self, const char* string)
 {
     /* convert a UTF-8 tag/attribute name from the expat parser
        to a universal name string */
 
-    /* look the 'raw' name up in the names dictionary. Its keys are str, so
-       the lookup takes the dict's str path rather than comparing bytes. */
-    PyObject *key = PyUnicode_DecodeUTF8(string, (Py_ssize_t)strlen(string),
-                                         "strict");
-    if (key == NULL) {
+    /* look the 'raw' name up in the names table. A document repeats a few
+       names many times, and a hit allocates nothing. */
+    PyObject *cached = _Py_hashtable_get(self->names, string);
+    if (cached != NULL) {
+        return Py_NewRef(cached);
+    }
+
+    /* new name.  decode it; a namespaced name "uri}local" becomes the
+       universal name "{uri}local" and any other name is its own. */
+    size_t size = strlen(string);
+    PyObject *value = PyUnicode_DecodeUTF8(string, (Py_ssize_t)size, "strict");
+    if (value == NULL) {
         return NULL;
     }
-
-    PyValue cached = PyValue_NULL;
-    if (PyDict_GetValue(self->names, _PyValue_PointerBorrow(key), &cached) != 0) {
-        // The key exists or an error occurred
-        Py_DECREF(key);
-        if (PyValue_IsNull(cached)) {
-            return NULL;
-        }
-        return PyValue_AsKnownObjectSteal(cached);
-    }
-
-    /* new name.  a namespaced name "uri}local" becomes the universal name
-       "{uri}local"; any other name is its own universal name. */
-    PyObject *value;
     if (strchr(string, '}') != NULL) {
-        value = PyUnicode_FromFormat("{%U", key);
+        PyObject *raw = value;
+        value = PyUnicode_FromFormat("{%U", raw);
+        Py_DECREF(raw);
         if (value == NULL) {
-            Py_DECREF(key);
             return NULL;
         }
-    } else {
-        value = Py_NewRef(key);
     }
 
-    /* add to names dictionary */
-    if (PyDict_SetValue(self->names, _PyValue_PointerBorrow(key), _PyValue_PointerBorrow(value)) < 0) {
-        Py_DECREF(key);
+    /* add to names table */
+    char *key = PyMem_RawMalloc(size + 1);
+    if (key == NULL) {
         Py_DECREF(value);
-        return NULL;
+        return PyErr_NoMemory();
     }
-
-    Py_DECREF(key);
+    memcpy(key, string, size + 1);
+    if (_Py_hashtable_set(self->names, key, Py_NewRef(value)) < 0) {
+        PyMem_RawFree(key);
+        Py_DECREF(value);  // the reference given to the table
+        Py_DECREF(value);
+        return PyErr_NoMemory();
+    }
     return value;
 }
 
@@ -4213,7 +4254,8 @@ xmlparser_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     XMLParserObject *self = (XMLParserObject *)type->tp_alloc(type, 0);
     if (self) {
         self->parser = NULL;
-        self->target = self->entity = self->names = NULL;
+        self->target = self->entity = NULL;
+        self->names = NULL;
         self->handle_start_ns = self->handle_end_ns = NULL;
         self->handle_start = self->handle_data = self->handle_end = NULL;
         self->handle_comment = self->handle_pi = self->handle_close = NULL;
@@ -4269,16 +4311,18 @@ _elementtree_XMLParser___init___impl(XMLParserObject *self,
     if (!self->entity)
         return -1;
 
-    self->names = PyDict_New();
+    names_clear(self);
+    self->names = names_new();
     if (!self->names) {
         Py_CLEAR(self->entity);
+        PyErr_NoMemory();
         return -1;
     }
     elementtreestate *st = self->state;
     self->parser = EXPAT(st, ParserCreate_MM)(encoding, &ExpatMemoryHandler, "}");
     if (!self->parser) {
         Py_CLEAR(self->entity);
-        Py_CLEAR(self->names);
+        names_clear(self);
         PyErr_NoMemory();
         return -1;
     }
@@ -4300,7 +4344,7 @@ _elementtree_XMLParser___init___impl(XMLParserObject *self,
     }
     if (!target_obj) {
         Py_CLEAR(self->entity);
-        Py_CLEAR(self->names);
+        names_clear(self);
         return -1;
     }
     self->target = target_obj;
@@ -4409,7 +4453,6 @@ xmlparser_gc_traverse(PyObject *op, visitproc visit, void *arg)
 
     Py_VISIT(self->target);
     Py_VISIT(self->entity);
-    Py_VISIT(self->names);
     Py_VISIT(self->elementtree_module);
 
     return 0;
@@ -4446,7 +4489,7 @@ xmlparser_gc_clear(PyObject *op)
 
     Py_CLEAR(self->target);
     Py_CLEAR(self->entity);
-    Py_CLEAR(self->names);
+    names_clear(self);
 
     return 0;
 }

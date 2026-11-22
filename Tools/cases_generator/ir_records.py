@@ -213,7 +213,9 @@ class OperationRecord:
     polls: bool                 # it or its call transaction polls the eval breaker
     specializes: bool           # a generic handler whose entry's counter
                                 # drives specialisation
-    reads_poly_table: bool      # needs the site's learned table of cases
+    reads_poly_table: bool      # needs the site's learned table of cases:
+                                # a poly execution variant or a
+                                # POLY_TABLE_READERS macro
 
 
 def record_through(record: OperationRecord) -> list[StackItem]:
@@ -1141,7 +1143,8 @@ MACRO_EFFECTS = {
                     frozenset()),
     **dict.fromkeys(("IR_DUP_CANONICAL_ELEMENT", "IR_DUP_SHAPE_READ",
                      "IR_GUARD_ELEMENT_INDEX", "IR_GUARD_ELEMENT_TYPE",
-                     "IR_GUARD_SHAPE_READ", "IR_UNPACK_ITEMS"),
+                     "IR_GUARD_SHAPE_READ", "IR_METHOD_POLY_LOOKUP",
+                     "IR_UNPACK_ITEMS"),
                     frozenset((READS_HEAP,))),
     "IR_BUILD_TUPLE": frozenset((ALLOCATES,)),
     "IR_DEFER_CLOSE": frozenset((MAY_RELEASE,)),
@@ -1151,6 +1154,10 @@ MACRO_EFFECTS = {
     # Fires the monitoring event, whose callback is Python
     "INSTRUMENTED_JUMP": frozenset((MAY_RUN_PYTHON,)),
 }
+
+# The macros that read the site's poly rows, which only the specializer
+# fills (OperationRecord.reads_poly_table)
+POLY_TABLE_READERS = frozenset(("IR_METHOD_POLY_LOOKUP",))
 
 # A `*` after one of these dereferences a pointer
 DEREF_AFTER = frozenset(("(", "=", ",", ";", "{", "return"))

@@ -527,15 +527,16 @@ void _mi_page_retire(mi_page_t* page) mi_attr_noexcept {
 
   // don't retire too often..
   // (or we end up retiring and re-allocating most of the time)
-  // NOTE: refine this more: we should not retire if this
-  // is the only page left with free blocks. It is not clear
-  // how to check this efficiently though...
-  // for now, we don't retire if it is the only page left of this size class.
+  // CPython: the page that allocation starts from (the head of its queue) is
+  // kept for MI_RETIRE_CYCLES collections even if other pages follow it.
+  // A head page that empties and refills each cycle, while the pages behind
+  // it hold long-lived blocks, would otherwise be freed and allocated again
+  // every time. At most one empty page is held per size class.
   mi_page_queue_t* pq = mi_page_queue_of(page);
   #if MI_RETIRE_CYCLES > 0
   const size_t bsize = mi_page_block_size(page);
   if mi_likely( /* bsize < MI_MAX_RETIRE_SIZE && */ !mi_page_queue_is_special(pq)) {  // not full or huge queue?
-    if (pq->last==page && pq->first==page) { // the only page in the queue?
+    if (pq->first==page) { // the head of the queue?
       mi_stat_counter_increase(_mi_stats_main.pages_retire,1);
       page->retire_expire = (bsize <= MI_SMALL_OBJ_SIZE_MAX ? MI_RETIRE_CYCLES : MI_RETIRE_CYCLES/4);
       mi_heap_t* heap = mi_page_heap(page);

@@ -963,7 +963,8 @@ dummy_func(
             assert(IR_IS_LOCAL(IR_DST));
             PyValue *target_local = &IR_SLOT(IR_DST);
             assert(PyUnicode_CheckExact(left_o));
-            EXIT_IF(PyValue_AsKnownObjectBorrow(*target_local) != left_o);
+            EXIT_IF(PyValue_AsKnownObjectBorrow(*target_local) != left_o,
+                    "the next word stores the result to the left operand's local");
             STAT_INC(BINARY_OP, hit);
             /* Handle `left = left + right` or `left += right` for str.
              *
@@ -1623,8 +1624,10 @@ dummy_func(
             EXIT_IF(!PyValue_IsObject(receiver));
             PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
             EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type);
-            EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v));
-            EXIT_IF(!gen_try_set_executing((PyGenObject *)gen));
+            EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v),
+                    "a created generator accepts only None");
+            EXIT_IF(!gen_try_set_executing((PyGenObject *)gen),
+                    "claims the generator for this frame: an effect, not a fact");
             STAT_INC(SEND, hit);
             IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
         }
@@ -2991,7 +2994,7 @@ dummy_func(
                 if (_PyShape_TransitionMissing(Py_TYPE(owner_o), values->shape,
                                                value_ptr - values->values)) {
                     UNLOCK_OBJECT(owner_o);
-                    EXIT_IF(true);
+                    EXIT_IF(true, "the type's shape tree lacks the transition");
                 }
             }
 #endif
@@ -3989,7 +3992,8 @@ dummy_func(
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(Py_TYPE(iter_o) != &PyDictIterItem_Type);
             _PyIRWord unpack = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr);
-            EXIT_IF(_PyIR_HandlerFlags[IR_HANDLER(unpack)] & _PyIR_H_INSTRUMENTED);
+            EXIT_IF(_PyIR_HandlerFlags[IR_HANDLER(unpack)] & _PyIR_H_INSTRUMENTED,
+                    "the folded unpack word is instrumented");
             int found = _PyDictIterItem_Next(iter_o, &IR_SLOT(IR_D(unpack)));
             if (found <= 0) {
                 if (found < 0) {
@@ -4143,7 +4147,8 @@ dummy_func(
             assert(PyValue_IsObject(iter));
             PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(Py_TYPE(gen) != &PyGen_Type);
-            EXIT_IF(!gen_try_set_executing((PyGenObject *)gen));
+            EXIT_IF(!gen_try_set_executing((PyGenObject *)gen),
+                    "claims the generator for this frame: an effect, not a fact");
             STAT_INC(FOR_ITER, hit);
             IR_ENTER_GENERATOR(gen, _PY_IR_FOR_ITER);
         }
@@ -4866,7 +4871,7 @@ dummy_func(
             STAT_INC(CALL, hit);
             _PyNativeCallResult call = call_builtin_values(
                 tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-            DEOPT_IF(call.miss);
+            DEOPT_IF(call.miss, "the native call declined the callee");
             PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
@@ -4896,7 +4901,7 @@ dummy_func(
             STAT_INC(CALL, hit);
             _PyNativeCallResult call = call_builtin_values(
                 tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-            DEOPT_IF(call.miss);
+            DEOPT_IF(call.miss, "the native call declined the callee");
             PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
@@ -5067,7 +5072,7 @@ dummy_func(
             STAT_INC(CALL, hit);
             _PyNativeCallResult call = call_descriptor_values(
                 tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-            DEOPT_IF(call.miss);
+            DEOPT_IF(call.miss, "the native call declined the callee");
             PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
@@ -5138,7 +5143,7 @@ dummy_func(
             STAT_INC(CALL, hit);
             _PyNativeCallResult call = call_descriptor_values(
                 tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-            DEOPT_IF(call.miss);
+            DEOPT_IF(call.miss, "the native call declined the callee");
             PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
@@ -5324,7 +5329,8 @@ dummy_func(
 
         op(_CHECK_IS_NOT_PY_CALLABLE_EX, (func_st, unused, unused, unused -- func_st, unused, unused, unused)) {
             PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
-            EXIT_IF(Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall);
+            EXIT_IF(Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall,
+                    "not a Python function with the standard vectorcall");
         }
 
         inline_ok op(_CALL_FUNCTION_EX_NON_PY_GENERAL, (func_st, null, callargs_st, kwargs_st -- result)) {

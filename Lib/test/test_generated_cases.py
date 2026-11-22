@@ -3681,7 +3681,7 @@ class TestIRCases(unittest.TestCase):
         }
         macro(BINARY_OP) = _SPECIALIZE_BINARY_OP + _BINARY_OP;
         op(_GUARD_INT, (left, right -- left, right)) {
-            DEOPT_IF(!EGGS(left, right));
+            DEOPT_IF(!EGGS(left, right), "eggs");
         }
         op(_ADD_INT, (left, right -- res)) {
             res = HAM(left, right);

@@ -75,10 +75,11 @@ import argparse
 import io
 import ir_numbers
 from ir_records import (
-    DEOPT, SITE_TOKENS, CALL_OPERAND, CONST, EXIT_GUARD, FEEDBACK, GUARD_TOKENS, IMMEDIATE, LOCAL, SLOT,
-    TARGET, TEMP, WINDOW, CallShape, FeedbackOperand, FeedbackSchema, Guard, Operand,
-    OperationRecord, Transfer, UopRecord, feedback_schema, passed_through, site_tokens,
-    assigns_to, uop_transfers, walk_values,
+    CONST, CONSTRUCTOR, DEOPT, EXIT_GUARD, FEEDBACK, GUARD_TOKENS, IMMEDIATE,
+    LOCAL, SITE_TOKENS, SLOT, TARGET, TEMP, WINDOW, CallShape, Fact, FeedbackOperand,
+    FeedbackSchema, Guard, Operand, OperationRecord, Subjects, Transfer, UopRecord,
+    assigns_to, check_record, feedback_schema, guard_facts, infer_effects, passed_through,
+    site_tokens, uop_transfers, walk_values,
 )
 from ir_read_effects import (
     error_nonnull_value, null_value_condition, value_assignment, value_declaration,
@@ -1456,8 +1457,10 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
             EXIT_IF(!PyValue_IsObject(receiver));
             PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
             EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type);
-            EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v));
-            EXIT_IF(!gen_try_set_executing((PyGenObject *)gen));
+            EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v),
+                    "a created generator accepts only None");
+            EXIT_IF(!gen_try_set_executing((PyGenObject *)gen),
+                    "claims the generator for this frame: an effect, not a fact");
             STAT_INC(SEND, hit);
             IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
         }"""),
@@ -6002,7 +6005,8 @@ def implicit_object_guards(walk, index: int, uop: Uop, known: set[int]) -> list[
         return result
     for item in inputs:
         if item.name in uop.object_inputs and item.value not in known:
-            result.append(Guard(EXIT_GUARD, None, item.name))
+            result.append(Guard(EXIT_GUARD, None, item.name,
+                                facts=(Fact("OBJECT", f"v{item.value}"),)))
             known.add(item.value)
     return result
 
@@ -6041,12 +6045,15 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
         guards = implicit_object_guards(walk, index, part, known)
         # The implicit guards precede the body and its transfers
         transfers = tuple(Transfer(DEOPT, None, deopt) for _ in guards)
-        guards += [Guard(GUARD_TOKENS[t.text], t) for t in site_tokens(part)
-                   if t.text in GUARD_TOKENS]
+        subjects = Subjects(part, inputs)
+        for site in site_tokens(part):
+            if site.text in GUARD_TOKENS:
+                facts, reason = guard_facts(part, site, subjects)
+                guards.append(Guard(GUARD_TOKENS[site.text], site, facts=facts, reason=reason))
         uops.append(UopRecord(part.name, inputs, outs,
                               uop_feedback(part, schema, inst),
                               part.properties.oparg, tuple(guards),
-                              transfers + uop_transfers(part, deopt)))
+                              transfers + uop_transfers(part, deopt), infer_effects(part)))
     results = []
     for j, (value, external, item, _) in enumerate(walk.outputs):
         if external >= 0 and walk.values[value].external >= 0:
@@ -6087,6 +6094,7 @@ def build_records(analysis: Analysis,
             record = replace(record, form="SHARED_BODY(binary_op)")
         elif generator_word_entry(name, analysis) != name:
             record = replace(record, form=f"SHARED_BODY({generator_word_entry(name, analysis)})")
+        check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
         records[name] = record
     return records
 
@@ -6802,6 +6810,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.declared_roles = roles
     emitter.declared_closes = set(emitter.close_names)
     emit_handler(record, emitter, out, {})
+    check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
 
 
 def canonical_body_tokens(part: Uop) -> list[str]:
@@ -7694,9 +7703,6 @@ def twin_of(name: str, fmt: IRFormat, ids: dict[str, int]) -> str | None:
     twin = "INSTRUMENTED_" + fmt.group
     return twin if twin in ids else None
 
-
-# Calls that construct an object: conservatively, ALLOCATES
-CONSTRUCTOR = re.compile(r"New(?!Ref)|Alloc|^PyValue_From|_PyFrame_Push|_Py_Make")
 
 def analyze_handlers(analysis: Analysis, formats: dict[str, IRFormat],
                     programs: dict[str, tuple[OwnershipEvent, ...]] | None = None,

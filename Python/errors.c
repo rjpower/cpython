@@ -54,7 +54,7 @@ _PyErr_CreatedInstance(PyObject *exception_type, PyValue result)
 /* The instance of exception_type that calling it with args builds, or NULL
  * with an exception set.  A common class is built directly, its args tuple and
  * the object, without the call. */
-static PyObject *
+PyObject *
 _PyErr_CreateExceptionFromArray(PyObject *exception_type, const PyValue *args,
                                 Py_ssize_t nargs)
 {
@@ -240,9 +240,17 @@ _PyErr_SetObject(PyThreadState *tstate, PyObject *exception, PyObject *value)
     /* Normalize the exception */
     int is_subclass = 0;
     if (value != NULL && PyExceptionInstance_Check(value)) {
-        is_subclass = PyObject_IsSubclass((PyObject *)Py_TYPE(value), exception);
-        if (is_subclass < 0) {
-            return;
+        /* A class is a subclass of itself, as PyObject_IsSubclass() finds
+           first for a class whose metaclass is type. */
+        if ((PyObject *)Py_TYPE(value) == exception &&
+            PyType_CheckExact(exception)) {
+            is_subclass = 1;
+        }
+        else {
+            is_subclass = PyObject_IsSubclass((PyObject *)Py_TYPE(value), exception);
+            if (is_subclass < 0) {
+                return;
+            }
         }
     }
     Py_XINCREF(value);

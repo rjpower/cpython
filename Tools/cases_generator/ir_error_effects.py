@@ -102,8 +102,9 @@ HELPERS = {
         result_owned=True, result_canonical=True, result_nonnull=True),
     "PyValue_AsKnownObjectBorrow": native_helper((Kind.VALUE,), Kind.OBJECT,
                                                  result_owned=False),
-    "PyValue_FromObjectSteal": native_helper((Kind.OBJECT,), Kind.VALUE, steals=(0,),
-        result_owned=True, result_canonical=True, result_nonnull=True),
+    **{name: native_helper((Kind.OBJECT,), Kind.VALUE, steals=(0,),
+            result_owned=True, result_canonical=True, result_nonnull=True)
+       for name in ("PyValue_FromObjectSteal", "PyValue_FromNonNumberSteal")},
     **{name: native_helper((Kind.VALUE,), Kind.VALUE, True, True,
             canonical_clear=True, result_owned=True, opens_current_observer=False)
        for name in ("_PyValue_Negative", "_PyValue_Positive", "_PyValue_Invert")},

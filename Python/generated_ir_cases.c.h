@@ -4028,7 +4028,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 if (res_o == NULL) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                res = PyValue_FromObjectSteal(res_o);
+                res = PyValue_FromNonNumberSteal(res_o);
                 l = left;
                 r = right;
                 ir_own_B = IR_DETACH(ir_word, B, l);
@@ -4369,7 +4369,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                res = PyValue_FromObjectSteal(temp);
+                res = PyValue_FromNonNumberSteal(temp);
             }
             IR_STORE_DST(ir_word, A, res);
             _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
@@ -5217,7 +5217,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 if (res_o == NULL) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                res = PyValue_FromObjectSteal(res_o);
+                res = PyValue_FromNonNumberSteal(res_o);
                 ls = list_st;
                 ss = sub_st;
                 ir_own_B = IR_DETACH(ir_word, B, ls);

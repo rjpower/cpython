@@ -943,7 +943,7 @@ dummy_func(
             if (res_o == NULL) {
                 ERROR_NO_POP();
             }
-            res = PyValue_FromObjectSteal(res_o);
+            res = PyValue_FromNonNumberSteal(res_o);
             l = left;
             r = right;
             INPUTS_DEAD();
@@ -994,7 +994,7 @@ dummy_func(
             _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
             *target_local = PyValue_NULL;
             ERROR_IF(temp == NULL);
-            res = PyValue_FromObjectSteal(temp);
+            res = PyValue_FromNonNumberSteal(temp);
         }
 
        // These legacy descriptors guard objects. Decline canonical inline
@@ -1105,7 +1105,7 @@ dummy_func(
             if (res_o == NULL) {
                 ERROR_NO_POP();
             }
-            res = PyValue_FromObjectSteal(res_o);
+            res = PyValue_FromNonNumberSteal(res_o);
             ls = list_st;
             ss = sub_st;
             INPUTS_DEAD();

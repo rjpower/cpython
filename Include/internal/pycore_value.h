@@ -848,6 +848,17 @@ PyValue_FromObjectSteal(PyObject *obj)
     return _PyValue_PointerSteal(obj);
 }
 
+/* PyValue_FromObjectSteal() for an object that is not an exact int or float,
+   as a handler knows when it has just made a str or a list: the value is the
+   pointer, with no number test. */
+static inline PyValue
+PyValue_FromNonNumberSteal(PyObject *obj)
+{
+    assert(obj != NULL);
+    assert(!_PyValue_IsNumberType(Py_TYPE(obj)));
+    return _PyValue_PointerSteal(obj);
+}
+
 /* Consume obj and return its canonical value, which owns what obj owned.
    An exact int or float whose value is held inline is returned inline and
    its box is released at once; that release runs no Python and leaves the

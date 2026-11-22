@@ -1951,7 +1951,7 @@ static _PyCallResult call_run_keywords(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
 static _PyCallResult call_run_ex(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
-static inline _PyCallResult call_bind_positional(
+static _PyCallResult call_bind_positional(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue,
     const _PyBindPlan *);
 
@@ -4530,7 +4530,7 @@ call_bind_general(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return call_bind_core(tstate, frame, head, callable, receiver, plan, NULL, NULL, 0);
 }
 
-static inline Py_ALWAYS_INLINE _PyCallResult
+static Py_NO_INLINE _PyCallResult
 call_bind_positional(PyThreadState *tstate, _PyInterpreterFrame *frame,
                      _PyInstr *head, PyValue callable, PyValue receiver,
                      const _PyBindPlan *plan)
@@ -4818,12 +4818,14 @@ call_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
             dict_items = &items;
         }
         /* The site's plan holds for the code and the arity it was made for,
-         * and for a call without items of a dict */
+         * and for a call without items of a dict.  A site past the limit of
+         * the feedback vector shares entry 0, a header alone. */
         const _PyFbCall *fb = (const _PyFbCall *)(frame->ir_feedback +
                                                   ((size_t)IR_D(word) << 3));
         _PyBindPlan plan;
         const _PyBindPlan *planned = &plan;
-        if (dict_items == NULL && fb->func_version == callee_code->co_version &&
+        if (dict_items == NULL && fb->h.kind == FB_CALL &&
+            fb->func_version == callee_code->co_version &&
             fb->plan.positional == count &&
             !!(fb->plan.flags & _Py_CALL_BIND_LEAD) == lead &&
             (fb->plan.flags & _Py_CALL_BIND_VALID))

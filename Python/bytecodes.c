@@ -4303,14 +4303,14 @@ dummy_func(
          * or _NO_DICT observation) replace the one cached type version.  The
          * row of the receiver's type holds the method; a receiver of any other
          * type deoptimizes and the specializer adds its row. */
-        ir_only op(_LOAD_ATTR_METHOD_POLY, (owner -- attr, self)) {
+        ir_only op(_LOAD_ATTR_METHOD_POLY, (owner -- attr, self_or_null[oparg&1])) {
             assert(oparg & 1);
             PyValueBorrow method = IR_METHOD_POLY_LOOKUP(
                 FB_COUNTER(), PyValue_AsKnownObjectBorrow(owner));
             EXIT_IF(PyValue_IsNull(method));
             STAT_INC(LOAD_ATTR, hit);
             attr = PyValue_DUP(method);
-            self = TAKE(owner);
+            self_or_null[0] = TAKE(owner);
         }
 
         macro(LOAD_ATTR_METHOD_POLY) =

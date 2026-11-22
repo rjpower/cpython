@@ -11283,10 +11283,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
-            assert(!IR_IS_LOCAL_FIELD(ir_word, A));
             PyValueBorrow owner;
             PyValue attr;
-            PyValue self;
+            PyValue *self_or_null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_TYPE_HAS_VERSION
@@ -11303,6 +11302,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             }
             // _LOAD_ATTR_METHOD_POLY
             {
+                self_or_null = ((oparg&1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
                 assert(oparg & 1);
                 PyValueBorrow method = IR_METHOD_POLY_LOOKUP(
                     ((_PyFbHeader *)fb), _PyValue_AsKnownObjectBorrowPointer(owner));
@@ -11313,10 +11313,10 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 attr = PyValue_DUP(method);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
-                self = IR_TAKEN_POINTER(owner, ir_own_B);
+                self_or_null[0] = IR_TAKEN_POINTER(owner, ir_own_B);
             }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), self);
+            IR_STORE_DST(ir_word, A, attr);
+            PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
 

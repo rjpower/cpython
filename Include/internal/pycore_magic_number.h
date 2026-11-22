@@ -376,8 +376,9 @@ Known values:
           or MAKE_CELL before its RETURN_GENERATOR, and nothing executes a
           generator expression's prelude: the creating call makes the free
           variables, the cells and the iterator
-   64439: parity84 BD merged with GN (the merge renumbers; see 64437, 64438) */
-#define PYC_MAGIC_NUMBER 64439
+   64439: parity84 BD merged with GN (the merge renumbers; see 64437, 64438)
+   64440: hot85 AT (unit branch): LOAD_ATTR_SLOT_POINTER, IR handler 410 */
+#define PYC_MAGIC_NUMBER 64440
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

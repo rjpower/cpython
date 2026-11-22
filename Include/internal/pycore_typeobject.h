@@ -136,6 +136,9 @@ PyAPI_FUNC(PyObject *) _PyType_GetDict(PyTypeObject *);
 /* 1: eligible native lookup (NULL value means absent); 0: decline. Never fails. */
 PyAPI_FUNC(int) _PyType_TryLookupValueNoAlloc(
     PyTypeObject *, PyObject *, PyValue *, unsigned int *);
+/* Whether obj.__class__ is Py_TYPE(obj) for an instance of the type, by the
+   type cache alone (typeobject.c). */
+extern int _PyType_HasObjectClass(PyTypeObject *);
 // Visit what a static type refers to; for the tracing verifier.
 extern int _PyType_TraverseStatic(PyTypeObject *, visitproc, void *);
 

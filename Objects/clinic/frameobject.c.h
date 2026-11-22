@@ -99,18 +99,6 @@ frame_builtins_get(PyObject *self, void *Py_UNUSED(context))
     return return_value;
 }
 
-PyDoc_STRVAR(frame_code__doc__,
-"Return the code object being executed in this frame.");
-
-static PyObject *
-frame_code_get_impl(PyFrameObject *self);
-
-static PyObject *
-frame_code_get(PyObject *self, void *Py_UNUSED(context))
-{
-    return frame_code_get_impl((PyFrameObject *)self);
-}
-
 static PyObject *
 frame_back_get_impl(PyFrameObject *self);
 
@@ -317,8 +305,6 @@ frame_repr(PyObject *self)
 
 #define FRAME_F_BUILTINS_GETSETDEF {"f_builtins", (getter)frame_builtins_get, (setter)NULL, frame_builtins__doc__},
 
-#define FRAME_F_CODE_GETSETDEF {"f_code", (getter)frame_code_get, (setter)NULL, frame_code__doc__},
-
 #define FRAME_F_BACK_GETSETDEF {"f_back", (getter)frame_back_get, (setter)NULL, NULL},
 
 #define FRAME_F_TRACE_OPCODES_GETSETDEF {"f_trace_opcodes", (getter)frame_trace_opcodes_get, (setter)frame_trace_opcodes_set, frame_trace_opcodes__doc__},
@@ -327,4 +313,4 @@ frame_repr(PyObject *self)
 
 #define FRAME_F_GENERATOR_GETSETDEF {"f_generator", (getter)frame_generator_get, (setter)NULL, frame_generator__doc__},
 
-/*[clinic end generated code: output=fd3350fe5a13f607 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=eb35dbb4c50b89ba input=a9049054013a1b77]*/

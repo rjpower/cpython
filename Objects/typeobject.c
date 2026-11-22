@@ -3207,10 +3207,12 @@ is_subtype_with_mro(PyObject *a_mro, PyTypeObject *a, PyTypeObject *b)
         return type_is_subtype_base_chain(a, b);
     }
     assert(PyTuple_Check(a_mro));
+    /* An mro entry is a type, so its word is the address with the immortal
+       tag, which no scalar or index word shares: compare the address. */
+    uintptr_t target = (uintptr_t)b;
     for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(a_mro); i++) {
-        PyValueBorrow item = PyTuple_GET_VALUE(a_mro, i);
-        if (PyValue_IsObject(item) &&
-                PyValue_AsKnownObjectBorrow(item) == (PyObject *)b) {
+        if ((_PyValue_BITS(PyTuple_GET_VALUE(a_mro, i)) & ~(uintptr_t)Py_TAG_REFCNT)
+                == target) {
             return 1;
         }
     }
@@ -8398,7 +8400,8 @@ object_get_class(PyValueBorrow self, void *closure)
 {
     PyTypeObject *type = PyValue_TYPE(self);
     _Py_INCREF_TYPE(type);
-    return PyValue_FromObjectSteal((PyObject *)type);
+    // A type is no exact int or float, so its value is the pointer.
+    return _PyValue_PointerSteal((PyObject *)type);
 }
 
 static int
@@ -8697,6 +8700,27 @@ static PyGetSetDef object_getsets[] = {
                      PyDoc_STR("the object's class"), NULL),
     {0}
 };
+
+/* Does the lookup of __class__ on an instance of tp return its type? That is
+   so when the attribute protocol is the generic one and the type finds
+   object's descriptor, a data descriptor that wins over the instance dict.
+   The cache read runs no Python, and a type without a cache entry answers no:
+   the caller then makes the full lookup, which fills the cache. */
+int
+_PyType_HasObjectClass(PyTypeObject *tp)
+{
+    if (_PyType_VALUE_SLOT(tp, getattro) != _PyObject_GenericGetAttrValue) {
+        return 0;
+    }
+    PyValueBorrow descr;
+    if (_PyTypeCache_Lookup(tp, &_Py_ID(__class__), &descr) == 0
+        || !PyValue_IsObject(descr)) {
+        return 0;
+    }
+    PyObject *descr_obj = PyValue_AsKnownObjectBorrow(descr);
+    return Py_IS_TYPE(descr_obj, &PyGetSetDescr_Type)
+           && ((PyGetSetDescrObject *)descr_obj)->d_getset == &object_getsets[0];
+}
 
 
 /* Stuff to implement __reduce_ex__ for pickle protocols >= 2.

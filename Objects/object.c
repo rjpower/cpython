@@ -1835,6 +1835,51 @@ pin_class_attr(PyValueBorrow descr_value, PyValue *owner, PyTypeObject *tp,
     }
 }
 
+/* The cold parts of the generic attribute read and of _PyValue_GetMethod,
+   out of line so that a read the type cache answers is one contiguous path. */
+
+/* The lookup of name on tp that the type cache did not answer: the type is
+   readied if it is not, and the MRO is walked. The caller holds a count on
+   tp. Returns -1 with an exception set when the type cannot be readied. */
+static _Py_COLD_FUNCTION Py_NO_INLINE int
+class_attr_uncached(PyTypeObject *tp, PyObject *name, PyValue *owner,
+                    PyValueBorrow *descr_value)
+{
+    if (!_PyType_IsReady(tp) && PyType_Ready(tp) < 0) {
+        return -1;
+    }
+    (void)_PyType_LookupValueAndVersion(tp, name, owner);
+    *descr_value = PyValue_Borrow(*owner);
+    return 0;
+}
+
+/* Is the member descriptor's field of obj unset, so that its read would
+   raise AttributeError (gh-157840)? A member of another type or an audited
+   member is read the ordinary way. */
+Py_NO_INLINE static int
+member_field_missing(PyObject *obj, PyObject *descr)
+{
+    PyMemberDef *member = ((PyMemberDescrObject *)descr)->d_member;
+    if ((member->type == Py_T_OBJECT_EX || member->type == _Py_T_VALUE_EX)
+        && !(member->flags & Py_AUDIT_READ)
+        && PyObject_TypeCheck(obj, PyDescr_TYPE(descr))) {
+        void *addr = _PyMember_GetOffset(obj, member);
+        return member->type == _Py_T_VALUE_EX
+            ? PyValue_IsNull(*(PyValue *)addr)
+            : FT_ATOMIC_LOAD_PTR(*(PyObject **)addr) == NULL;
+    }
+    return 0;
+}
+
+static _Py_COLD_FUNCTION Py_NO_INLINE void
+attribute_missing(PyTypeObject *tp, PyValueBorrow v, PyObject *name)
+{
+    PyErr_Format(PyExc_AttributeError,
+                 "'%.100s' object has no attribute '%U'",
+                 tp->tp_name, name);
+    value_attribute_error_context(v, name);
+}
+
 /* The port of _PyObject_GetMethod(): a method descriptor found on the type
    gives status 1 with the descriptor, to call with obj as self, so that no
    bound method is made; anything else is the attribute, status 0. A
@@ -1943,9 +1988,7 @@ _PyStatusValue
         owner = PyValue_NULL;
     }
     else {
-        PyErr_Format(PyExc_AttributeError, "'%.100s' object has no attribute '%U'",
-                     tp->tp_name, name);
-        value_attribute_error_context(v, name);
+        attribute_missing(tp, v, name);
     }
  done:
     if (pinned) {
@@ -2062,12 +2105,9 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
         // A type that is not ready has no table, so only a miss is here.
         Py_INCREF(tp);
         pinned = 1;
-        if (!_PyType_IsReady(tp) && PyType_Ready(tp) < 0) {
-            Py_DECREF(tp);
-            return PyValue_NULL;
+        if (class_attr_uncached(tp, name, &owner, &descr_value) < 0) {
+            goto done;
         }
-        (void)_PyType_LookupValueAndVersion(tp, name, &owner);
-        descr_value = PyValue_Borrow(owner);
     }
     descr = PyValue_ObjectOrNull(descr_value);
 
@@ -2076,20 +2116,9 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
         if (has_get && PyDescr_IsData(descr)) {
             // gh-157840: We special-case member descriptors here to avoid
             // allocating an extra AttributeError
-            if (suppress && obj != NULL && Py_IS_TYPE(descr, &PyMemberDescr_Type)) {
-                PyMemberDef *member = ((PyMemberDescrObject *)descr)->d_member;
-                if ((member->type == Py_T_OBJECT_EX ||
-                     member->type == _Py_T_VALUE_EX)
-                    && !(member->flags & Py_AUDIT_READ)
-                    && PyObject_TypeCheck(obj, PyDescr_TYPE(descr))) {
-                    void *addr = _PyMember_GetOffset(obj, member);
-                    int missing = member->type == _Py_T_VALUE_EX
-                        ? PyValue_IsNull(*(PyValue *)addr)
-                        : FT_ATOMIC_LOAD_PTR(*(PyObject **)addr) == NULL;
-                    if (missing) {
-                        goto done;
-                    }
-                }
+            if (suppress && obj != NULL && Py_IS_TYPE(descr, &PyMemberDescr_Type)
+                && member_field_missing(obj, descr)) {
+                goto done;
             }
             if (!descr_get_leaves_descr_unused(descr)) {
                 pin_class_attr(descr_value, &owner, tp, &pinned);
@@ -2180,11 +2209,7 @@ generic_getattr_value(PyValueBorrow v, PyObject *name, PyObject *dict,
     }
 
     if (!suppress) {
-        PyErr_Format(PyExc_AttributeError,
-                     "'%.100s' object has no attribute '%U'",
-                     tp->tp_name, name);
-
-        value_attribute_error_context(v, name);
+        attribute_missing(tp, v, name);
     }
   done:
     if (pinned) {

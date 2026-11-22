@@ -951,7 +951,8 @@ MAY_RELEASE = "MAY_RELEASE"         # drops a reference whose finalizer may run
 MAY_RUN_PYTHON = "MAY_RUN_PYTHON"
 EFFECTS = (READS_HEAP, WRITES_HEAP, ALLOCATES, MAY_RAISE, MAY_RELEASE, MAY_RUN_PYTHON)
 
-# What may allocate: the one rule, also of the handlers' _PyIR_ALLOCATES
+# The names of calls that may allocate, after PURE_CALLS; handler_effects()
+# applies it alone for the handlers' _PyIR_ALLOCATES
 CONSTRUCTOR = re.compile(r"New(?!Ref)|Alloc|^PyValue_From|_PyFrame_Push|_Py_Make")
 # Allocating calls that CONSTRUCTOR does not name, with what else they do
 ALLOCATORS = {

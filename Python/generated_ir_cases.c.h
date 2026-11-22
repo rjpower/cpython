@@ -9104,7 +9104,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 UPDATE_MISS_STATS(FOR_ITER);
                 JUMP_TO_PREDICTED(FOR_ITER);
             }
-            _PyIRWord unpack = *next_instr;
+            _PyIRWord unpack = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr);
             if (_PyIR_HandlerFlags[IR_HANDLER(unpack)] & _PyIR_H_INSTRUMENTED) {
                 UPDATE_MISS_STATS(FOR_ITER);
                 JUMP_TO_PREDICTED(FOR_ITER);

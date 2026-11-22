@@ -3995,7 +3995,7 @@ dummy_func(
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(Py_TYPE(iter_o) != &PyDictIterItem_Type);
-            _PyIRWord unpack = *next_instr;
+            _PyIRWord unpack = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr);
             EXIT_IF(_PyIR_HandlerFlags[IR_HANDLER(unpack)] & _PyIR_H_INSTRUMENTED);
             PyValue key = PyValue_NULL;
             PyValue value = PyValue_NULL;

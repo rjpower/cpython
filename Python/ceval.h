@@ -83,7 +83,7 @@
             break; \
         } \
         _Py_DECREF_STAT_INC(); \
-        if (--op->ob_refcnt == 0) { \
+        if (Py_UNLIKELY(--op->ob_refcnt == 0)) { \
             _PyReftracerTrack(op, PyRefTracer_DESTROY); \
             destructor dealloc = Py_TYPE(op)->tp_dealloc; \
             (*dealloc)(op); \
@@ -99,7 +99,7 @@
             break; \
         } \
         _Py_DECREF_STAT_INC(); \
-        if (--op->ob_refcnt == 0) { \
+        if (Py_UNLIKELY(--op->ob_refcnt == 0)) { \
             _PyReftracerTrack(op, PyRefTracer_DESTROY); \
             destructor d = (destructor)(dealloc); \
             d(op); \

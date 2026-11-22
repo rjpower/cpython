@@ -2579,7 +2579,8 @@ specialize_py_call_kw(PyFunctionObject *func, _PyInstr *instr, int nargs,
         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_CODE_NOT_OPTIMIZED);
         return -1;
     }
-    if (!prepare_function_for_inline(code)) {
+    // A generator function's call binds into its object (_Py_CALL_BIND_GENERATOR)
+    if (!prepare_function_exec(code)) {
         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OTHER);
         return -1;
     }

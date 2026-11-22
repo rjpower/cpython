@@ -498,6 +498,39 @@ class TestGeneratorCallees(PlanTestCase):
                       outcome(call, 1))
         self.assertEqual(list(gen(1, 2)), [1, 2])
 
+    def test_generator_prologue_after_binding(self):
+        # Free variables and a cell argument are made once the arguments
+        # are bound: the default and the keyword reach the cell.
+        outer = 10
+
+        def gen(x, y=5, *, k=7):
+            def inner():
+                return x, y, k, outer
+            yield inner()
+            x2, y2 = x, y
+            yield x2 + y2
+
+        def call(a):
+            return list(gen(a)), list(gen(a, k=1)), list(gen(a, 2, k=3))
+        call = reset_code(call)
+        expected = ([(1, 5, 7, 10), 6], [(1, 5, 1, 10), 6],
+                    [(1, 2, 3, 10), 3])
+        self.assertEqual(warm(call, 1), expected)
+        self.assertEqual(call(1), expected)
+        self.assertIn("CALL_KW_PY", handlers(call))
+
+    def test_generator_cell_argument_with_default(self):
+        def gen(x=3):
+            def inner():
+                return x
+            x += 1
+            yield inner
+
+        def call():
+            return gen().__next__()()
+        call = reset_code(call)
+        self.assertEqual(warm(call), 4)
+
     def test_failed_binding_creates_no_generator(self):
         def gen(x, y=5):
             yield x

@@ -250,7 +250,7 @@ PyAPI_FUNC(void) _Py_Specialize_ContainsOp(PyValueBorrow item, PyValueBorrow val
 #define _Py_Specialize_ContainsOp(V0, V1, V2) \
     (_Py_Specialize_ContainsOp)(PyValue_Borrow(V0), PyValue_Borrow(V1), V2)
 PyAPI_FUNC(void) _Py_GatherStats_GetIter(PyValue iterable);
-PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(PyValue func_st, _PyInstr *instr);
+PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(PyValue func_st, PyValue args_st, _PyInstr *instr);
 PyAPI_FUNC(void) _Py_Specialize_GetIter(PyValue iterable, _PyInstr *instr);
 
 /* See InternalDocs/exception_handling.md for details.

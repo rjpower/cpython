@@ -398,14 +398,16 @@ ir_run_CALL_FUNCTION_EX(
             uint32_t call_feedback = IR_D(ir_word);
             (void)call_feedback;
             PyValue func;
+            PyValue callargs;
             // _SPECIALIZE_CALL_FUNCTION_EX
             {
+                callargs = IR_OPERAND(0);
                 func = IR_SLOT(IR_B(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     call_state |= CALL_EFFECTS;
-                    _Py_Specialize_CallFunctionEx(func, this_instr);
+                    _Py_Specialize_CallFunctionEx(func, callargs, this_instr);
                     if (call_refresh(tstate, frame, this_instr) < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
@@ -7040,7 +7042,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_bind_keywords(tstate, frame, this_instr, IR_SLOT(IR_B(ir_word)), PyValue_NULL, fb);
+                    _PyCallResult call_result = call_bind_positional(tstate, frame, this_instr, IR_SLOT(IR_B(ir_word)), PyValue_NULL, &fb->plan);
                     if (call_result.status > 0) {
                         call_result = call_run_keywords(tstate, frame, this_instr, (0) | call_state);
                     }
@@ -7752,7 +7754,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 assert(fb->func_version >= FUNC_VERSION_FIRST_VALID);
                 assert(frame->instr_ptr == this_instr);
                 {
-                    _PyCallResult call_result = call_bind_positional(tstate, frame, this_instr, IR_SLOT(IR_B(ir_word)), PyValue_NULL);
+                    _PyCallResult call_result = call_bind_positional(tstate, frame, this_instr, IR_SLOT(IR_B(ir_word)), PyValue_NULL, &fb->plan);
                     if (call_result.status > 0) {
                         call_result = call_run_vector(tstate, frame, this_instr, (0) | call_state);
                     }

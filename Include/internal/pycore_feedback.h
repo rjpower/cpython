@@ -158,6 +158,54 @@ typedef struct {
 // CALL, CALL_KW, CALL_FUNCTION_EX
 #define _Py_CALL_BIND_KEYWORD_CAPACITY 3
 
+/* How the call at a site fills the frame of the Python function it calls
+ * (parity84 BD).  Everything here follows from the function's code and the
+ * shape of the site (the number of positional operands, whether the self
+ * operand is skipped, the keyword names), which the guarded function version
+ * fixes; the function's own mutable parts are read at the call:
+ * __defaults__ for the parameters named by default_mask (its length must
+ * reach need), and __kwdefaults__ for the keyword-only parameters named by
+ * kwonly_mask.  The plan is an input of the binder in Python/ceval.c, which
+ * fills the frame from it without searching or counting; calls that no plan
+ * describes (flags without _Py_CALL_BIND_VALID) take the generic binder.
+ *
+ * A site keeps the plan in its feedback.  The calls that cannot (an
+ * unspecialized CALL, a CALL_FUNCTION_EX whose tuple has any length) build
+ * one on the stack with _PyBindPlan_Init() and bind through the same code. */
+typedef struct {
+    /* Where each keyword name goes: a parameter's slot, or
+     * _Py_CALL_BIND_TO_KWARGS for a name that **kwargs takes. */
+    uint16_t keyword_dest[_Py_CALL_BIND_KEYWORD_CAPACITY];
+    uint16_t flags;                 // _Py_CALL_BIND_*
+    uint16_t default_mask;          // positional slots that __defaults__ fills
+    uint16_t kwonly_mask;           // keyword-only parameters (bit j: the
+                                    // j-th) that __kwdefaults__ fills
+    uint8_t positional;             // operands that are positional arguments
+    uint8_t filled;                 // those that named parameters take
+    uint8_t need;                   // the defaults the function must have
+    uint8_t keywords;               // keyword operands (a CALL_KW)
+} _PyBindPlan;
+
+#define _Py_CALL_BIND_VALID 1       // the plan describes the call
+#define _Py_CALL_BIND_SKIP 2        // the self operand is NULL: skipped
+#define _Py_CALL_BIND_VARARGS 4     // the code has *args
+#define _Py_CALL_BIND_NEW_KWARGS 8  // **kwargs is a new dict (else see VIRTUAL)
+#define _Py_CALL_BIND_VIRTUAL_KWARGS 16 // the callee's **kwargs stays pending
+#define _Py_CALL_BIND_GENERATOR 32  // the call creates the generator that
+                                    // holds the arguments (_PyGen_NewCall)
+#define _Py_CALL_BIND_LEAD 128      // the receiver of an expanded bound method
+                                    // is the first positional argument
+#define _Py_CALL_BIND_GENERAL 64    // the call needs more than the straight
+                                    // line: *args, **kwargs, keyword-only
+                                    // defaults or a generator
+#define _Py_CALL_BIND_TO_KWARGS UINT16_MAX
+
+/* The most positional parameters and keyword-only parameters a plan
+ * describes (its masks), and the most extra positional arguments for *args
+ * that the in-place binding gathers. */
+#define _Py_CALL_BIND_SLOTS_MAX 16
+#define _Py_CALL_BIND_EXTRAS_MAX 8
+
 typedef struct {
     _PyFbHeader h;
     union {
@@ -165,21 +213,21 @@ typedef struct {
         uint32_t type_version;      // CALL_ALLOC_AND_ENTER_INIT: the class
     };
     uint32_t callable_type_version; // recorded but not guarded
-    /* The binding plan of a CALL_KW (binding_flags & _Py_CALL_BIND_KEYWORDS):
-     * where each keyword name goes, a parameter's slot or
-     * _Py_CALL_BIND_TO_KWARGS for a name that **kwargs takes. */
-    uint16_t keyword_dest[_Py_CALL_BIND_KEYWORD_CAPACITY];
-    uint16_t binding_flags;        // _Py_CALL_BIND_*; scalar-only guarded plan
+    _PyBindPlan plan;
 } _PyFbCall;
 
-static_assert(sizeof(_PyFbCall) == sizeof(_PyFbHeader) + 16,
+static_assert(sizeof(_PyFbCall) == sizeof(_PyFbHeader) + 24,
               "call feedback size changed");
 
-#define _Py_CALL_BIND_KEYWORDS 8
-#define _Py_CALL_BIND_KEYWORD_COUNT_SHIFT 4
-#define _Py_CALL_BIND_KEYWORD_COUNT_MASK (3 << _Py_CALL_BIND_KEYWORD_COUNT_SHIFT)
-#define _Py_CALL_BIND_SELF 64
-#define _Py_CALL_BIND_TO_KWARGS UINT16_MAX
+/* Describe a call of code that passes positional operands (the receiver of
+ * an expanded method, lead, counts among them), skips the self operand if
+ * skip, and has kwcount keywords at the destinations dests.  Returns 0
+ * (the plan is not valid) for a call that only the generic binder takes.
+ * Does not copy dests: a site's plan keeps up to
+ * _Py_CALL_BIND_KEYWORD_CAPACITY of them. */
+extern int _PyBindPlan_Init(_PyBindPlan *plan, PyCodeObject *code,
+                            int positional, int skip, int lead,
+                            const uint16_t *dests, int kwcount);
 
 /* One row per observation.  type_version[i] is the first version of the
  * observation and aux[i] the second: the operand types for BINARY, the

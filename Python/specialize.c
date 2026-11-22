@@ -2359,7 +2359,7 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
         return -1;
     }
     fb->func_version = version;
-    fb->binding_flags = 0;
+    memset(&fb->plan, 0, sizeof(fb->plan));
     int opcode;
     if (argcount == nargs + bound_method) {
         if (bound_method) {
@@ -2372,11 +2372,98 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
             opcode = CALL_PY_EXACT_ARGS;
         }
     }
+    else if (bound_method) {
+        opcode = CALL_BOUND_METHOD_GENERAL;
+    }
     else {
-        opcode = bound_method ? CALL_BOUND_METHOD_GENERAL : CALL_PY_GENERAL;
+        /* The call has no self operand (it is NULL at run time) when the
+         * operands outnumber the arguments */
+        int skip = (int)IR_C(*instr) - nargs;
+        if (!_PyBindPlan_Init(&fb->plan, code, nargs, skip, 0, NULL, 0)) {
+            SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OTHER);
+            return -1;
+        }
+        opcode = CALL_PY_GENERAL;
     }
     specialize(instr, opcode);
     return 0;
+}
+
+/* See pycore_feedback.h.  The slots a keyword fills are not defaults, and
+ * the positional parameters that no operand and no keyword fills are the
+ * ones that __defaults__ must fill: its length is the only fact about it
+ * that a call needs, and the function version does not guard it. */
+int
+_PyBindPlan_Init(_PyBindPlan *plan, PyCodeObject *code, int positional,
+                 int skip, int lead, const uint16_t *dests, int kwcount)
+{
+    memset(plan, 0, sizeof(*plan));
+    int flags = code->co_flags;
+    int argcount = code->co_argcount;
+    int kwonly = code->co_kwonlyargcount;
+    if (!(flags & CO_OPTIMIZED) || code->_co_exec == NULL ||
+        argcount > _Py_CALL_BIND_SLOTS_MAX ||
+        kwonly > _Py_CALL_BIND_SLOTS_MAX ||
+        positional > UINT8_MAX || kwcount > UINT8_MAX)
+    {
+        return 0;
+    }
+    uint16_t bits = 0;
+    if (flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) {
+        /* A generator whose code has a prologue is created from a frame
+         * that runs it: the generic binder's. */
+        if (!code->_co_exec->generator_direct) {
+            return 0;
+        }
+        bits |= _Py_CALL_BIND_GENERATOR;
+    }
+    int filled = positional < argcount ? positional : argcount;
+    int extras = positional - filled;
+    if (extras > 0 && (!(flags & CO_VARARGS) ||
+                       extras > _Py_CALL_BIND_EXTRAS_MAX || lead > argcount))
+    {
+        return 0;
+    }
+    uint32_t positional_covered = 0;
+    uint32_t kwonly_covered = 0;
+    int routed = 0;
+    for (int i = 0; i < kwcount; i++) {
+        if (dests[i] == _Py_CALL_BIND_TO_KWARGS) {
+            routed++;
+        }
+        else if (dests[i] < argcount) {
+            positional_covered |= 1u << dests[i];
+        }
+        else {
+            kwonly_covered |= 1u << (dests[i] - argcount);
+        }
+    }
+    uint32_t defaulted = ((1u << argcount) - (1u << filled)) & ~positional_covered;
+    plan->default_mask = (uint16_t)defaulted;
+    plan->need = defaulted ? (uint8_t)(argcount - __builtin_ctz(defaulted)) : 0;
+    plan->kwonly_mask = (uint16_t)(((1u << kwonly) - 1) & ~kwonly_covered);
+    plan->positional = (uint8_t)positional;
+    plan->filled = (uint8_t)filled;
+    plan->keywords = (uint8_t)kwcount;
+    if (skip) {
+        bits |= _Py_CALL_BIND_SKIP;
+    }
+    if (lead) {
+        bits |= _Py_CALL_BIND_LEAD;
+    }
+    if (flags & CO_VARARGS) {
+        bits |= _Py_CALL_BIND_VARARGS;
+    }
+    if (flags & CO_VARKEYWORDS) {
+        bits |= routed == 0 && (flags & CO_VIRTUAL_KWARGS)
+            ? _Py_CALL_BIND_VIRTUAL_KWARGS : _Py_CALL_BIND_NEW_KWARGS;
+    }
+    if (bits & (_Py_CALL_BIND_VARARGS | _Py_CALL_BIND_NEW_KWARGS |
+                _Py_CALL_BIND_GENERATOR) || plan->kwonly_mask || extras) {
+        bits |= _Py_CALL_BIND_GENERAL;
+    }
+    plan->flags = bits | _Py_CALL_BIND_VALID;
+    return 1;
 }
 
 
@@ -2386,7 +2473,7 @@ specialize_py_call(PyFunctionObject *func, _PyInstr *instr, int nargs,
  * name is, so that no other spelling of it names a parameter.  The binding
  * rests on the code, which every function of the guarded version shares. */
 static void
-specialize_keyword_binding(PyFunctionObject *func, _PyFbCall *fb,
+specialize_keyword_binding(PyFunctionObject *func, _PyFbCall *fb, _PyInstr *instr,
                            int nargs, bool has_self, PyValueBorrow names)
 {
     PyCodeObject *code = (PyCodeObject *)func->func_code;
@@ -2445,12 +2532,15 @@ specialize_keyword_binding(PyFunctionObject *func, _PyFbCall *fb,
         }
         destinations[i] = (uint16_t)destination;
     }
-    for (int i = 0; i < kwcount; i++) {
-        fb->keyword_dest[i] = destinations[i];
+    int skip = !has_self && (int)IR_C(*instr) - 1 > nargs;
+    if (!_PyBindPlan_Init(&fb->plan, code, positional, skip, 0, destinations,
+                          (int)kwcount))
+    {
+        return;
     }
-    fb->binding_flags = _Py_CALL_BIND_KEYWORDS |
-        ((uint16_t)kwcount << _Py_CALL_BIND_KEYWORD_COUNT_SHIFT) |
-        (has_self ? _Py_CALL_BIND_SELF : 0);
+    for (int i = 0; i < kwcount; i++) {
+        fb->plan.keyword_dest[i] = destinations[i];
+    }
 }
 
 static int
@@ -2483,9 +2573,9 @@ specialize_py_call_kw(PyFunctionObject *func, _PyInstr *instr, int nargs,
         return -1;
     }
     fb->func_version = version;
-    fb->binding_flags = 0;
+    memset(&fb->plan, 0, sizeof(fb->plan));
     if (!bound_method) {
-        specialize_keyword_binding(func, fb, nargs, has_self, kwnames);
+        specialize_keyword_binding(func, fb, instr, nargs, has_self, kwnames);
     }
     specialize(instr, bound_method ? CALL_KW_BOUND_METHOD : CALL_KW_PY);
     return 0;
@@ -3468,7 +3558,7 @@ failure:
 }
 
 Py_NO_INLINE void
-_Py_Specialize_CallFunctionEx(PyValue func_st, _PyInstr *instr)
+_Py_Specialize_CallFunctionEx(PyValue func_st, PyValue args_st, _PyInstr *instr)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[CALL_FUNCTION_EX] == INLINE_CACHE_ENTRIES_CALL_FUNCTION_EX);
@@ -3480,6 +3570,29 @@ _Py_Specialize_CallFunctionEx(PyValue func_st, _PyInstr *instr)
     }
     PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
 
+    /* The binding plan of the arity and the code that the site sees: the
+     * call uses it for that code and arity (func_version holds the code's
+     * version), and derives one for any other. */
+    _PyFbCall *fb = instr_entry(instr);
+    memset(&fb->plan, 0, sizeof(fb->plan));
+    fb->func_version = 0;
+    int lead = 0;
+    if (PyMethod_Check(func)) {
+        func = ((PyMethodObject *)func)->im_func;
+        lead = 1;
+    }
+    if (PyFunction_Check(func) && PyValue_IsObject(args_st) &&
+        PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(args_st)))
+    {
+        PyCodeObject *code = (PyCodeObject *)((PyFunctionObject *)func)->func_code;
+        Py_ssize_t count = lead + PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(args_st));
+        if (count <= UINT8_MAX &&
+            _PyBindPlan_Init(&fb->plan, code, (int)count, 0, lead, NULL, 0))
+        {
+            fb->func_version = code->co_version;
+        }
+    }
+    func = PyValue_AsKnownObjectBorrow(func_st);
     if (Py_TYPE(func) == &PyFunction_Type &&
         ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
         if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET())) {

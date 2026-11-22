@@ -1951,11 +1951,9 @@ static _PyCallResult call_run_keywords(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
 static _PyCallResult call_run_ex(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
-static _PyCallResult call_bind_positional(
-    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue);
-static _PyCallResult call_bind_keywords(
+static inline _PyCallResult call_bind_positional(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue,
-    const _PyFbCall *);
+    const _PyBindPlan *);
 
 typedef struct {
     PyThreadState *tstate;
@@ -4100,65 +4098,48 @@ call_commit(PyThreadState *tstate, _PyInterpreterFrame *frame,
 /* The most arguments that fill a *args tuple, and the most keyword-only
  * parameters, that the binding below handles: it holds their values in
  * arrays. */
-#define CALL_BIND_EXTRAS_MAX 8
-#define CALL_BIND_KWONLY_MAX 16
+#define CALL_BIND_EXTRAS_MAX _Py_CALL_BIND_EXTRAS_MAX
+#define CALL_BIND_KWONLY_MAX _Py_CALL_BIND_SLOTS_MAX
 
-/* Release what the binding below prepared before it pushed anything. */
+/* Release what the binding below prepared before it pushed anything: the
+ * __kwdefaults__ values that kwonly_mask names, and the *args tuple. */
 static Py_NO_INLINE void
-call_bind_discard(PyValue *kwdefaults, int count, PyObject *extras)
+call_bind_discard(PyValue *kwdefaults, unsigned int kwonly_mask,
+                  PyObject *extras, PyObject *kwargs)
 {
-    for (int i = 0; i < count; i++) {
-        PyValue_XCLOSE(kwdefaults[i]);
+    for (unsigned int bits = kwonly_mask; bits; bits &= bits - 1) {
+        PyValue_XCLOSE(kwdefaults[__builtin_ctz(bits)]);
     }
     Py_XDECREF(extras);
+    Py_XDECREF(kwargs);
 }
 
-/* The keyword-only parameters that no keyword fills take their
- * __kwdefaults__ entry, each looked up as an owner in kwdefaults (NULL for
- * a parameter that a keyword fills).  The dictionary is mutable: it is read
- * here, as long as a lookup cannot run Python (an exact dict whose keys are
- * all str).  Returns 0, with nothing held, for anything else, and for a
- * missing entry, which the general binder reports.  The rare shapes of the
- * binding live in the noinline functions here, so that the common call
- * carries none of their state. */
+/* The keyword-only parameters that no keyword fills (kwonly_mask) take their
+ * __kwdefaults__ entry, each looked up as an owner in kwdefaults.  The
+ * dictionary is mutable: it is read here, as long as a lookup cannot run
+ * Python (an exact dict whose keys are all str).  Returns 0, with nothing
+ * held, for anything else, and for a missing entry, which the general binder
+ * reports.  The rare shapes of the binding live in the noinline functions
+ * here, so that the common call carries none of their state. */
 static Py_NO_INLINE int
 call_bind_kwdefaults(PyFunctionObject *func, PyCodeObject *code,
-                     const uint16_t *destinations, int kwcount,
-                     PyValue *kwdefaults)
+                     unsigned int kwonly_mask, PyValue *kwdefaults)
 {
-    int argcount = code->co_argcount;
-    int kwonly = code->co_kwonlyargcount;
-    unsigned int covered = 0;
-    for (int i = 0; i < kwcount; i++) {
-        if (destinations[i] != _Py_CALL_BIND_TO_KWARGS &&
-            destinations[i] >= argcount) {
-            covered |= 1u << (destinations[i] - argcount);
-        }
-    }
-    for (int j = 0; j < kwonly; j++) {
-        kwdefaults[j] = PyValue_NULL;
-    }
-    if (covered == (1u << kwonly) - 1) {
-        return 1;
-    }
     PyObject *kwdefs = func->func_kwdefaults;
     if (kwdefs == NULL || !PyDict_CheckExact(kwdefs) ||
         !DK_IS_UNICODE(((PyDictObject *)kwdefs)->ma_keys)) {
         return 0;
     }
-    for (int j = 0; j < kwonly; j++) {
-        if (covered & (1u << j)) {
-            continue;
-        }
+    int argcount = code->co_argcount;
+    for (unsigned int bits = kwonly_mask; bits; bits &= bits - 1) {
+        int j = __builtin_ctz(bits);
         /* Parameter names are interned, and their hash is cached. */
         PyObject *name = _PyTuple_GET_OBJECT(code->co_localsplusnames,
                                              argcount + j);
         if (PyUnstable_Unicode_GET_CACHED_HASH(name) == -1 ||
             !_PyDict_GetUnicodeValue((PyDictObject *)kwdefs, name,
                                      &kwdefaults[j])) {
-            for (int i = 0; i < j; i++) {
-                PyValue_XCLOSE(kwdefaults[i]);
-            }
+            call_bind_discard(kwdefaults, bits ^ kwonly_mask, NULL, NULL);
             return 0;
         }
     }
@@ -4175,7 +4156,7 @@ call_bind_extras(PyValue *slots, _PyInstr *head, PyObject *tuple, int skip,
     PyValue gathered[CALL_BIND_EXTRAS_MAX];
     for (int i = 0; i < extras; i++) {
         gathered[i] = tuple != NULL
-            ? _PyTuple_ITEMS(tuple)[filled + i]
+            ? _PyTuple_ITEMS(tuple)[filled + i - lead]
             : slots[_PyIR_CallOperand(head, skip + filled + i - lead)];
     }
     return _PyTuple_FromValueArray(gathered, extras);
@@ -4233,14 +4214,110 @@ call_bind_take_rest(PyValue *slots, _PyInstr *head, int skip, int lead,
     }
 }
 
+/* The items of the **kwargs dict of a CALL_FUNCTION_EX, bound by name:
+ * dests[i] is the slot that item i fills (a positional-or-keyword or
+ * keyword-only parameter), or _Py_CALL_BIND_TO_KWARGS for a name that no
+ * parameter has, which the callee's **kwargs takes.  The items are views of
+ * the dict, which the call's operand keeps alive and unchanged until the
+ * frame is complete. */
+#define CALL_BIND_DICT_MAX 16
+
+typedef struct {
+    int count;
+    uint16_t dests[CALL_BIND_DICT_MAX];
+    PyValueBorrow keys[CALL_BIND_DICT_MAX];
+    PyValueBorrow values[CALL_BIND_DICT_MAX];
+} _CallDict;
+
+/* Decide where each item of dict goes, for a call of code whose first
+ * filled parameters positional arguments fill.  Returns 0, having changed
+ * nothing, when the generic binder must take the call: a dict that is not
+ * exact, too many items, a key that is not an exact str (comparing it
+ * could run Python), a name that two arguments give, and a name that no
+ * parameter has when there is no **kwargs: it reports each error with its
+ * message.  Parameter names are interned, so most keys match by identity;
+ * the rest are compared as strings, which runs nothing. */
+static Py_NO_INLINE int
+call_bind_dict_destinations(PyCodeObject *code, int filled, PyObject *dict,
+                            _CallDict *items)
+{
+    if (!PyDict_CheckExact(dict) ||
+        PyDict_GET_SIZE(dict) > CALL_BIND_DICT_MAX) {
+        return 0;
+    }
+    int total = code->co_argcount + code->co_kwonlyargcount;
+    int first = code->co_posonlyargcount;
+    PyObject *names = code->co_localsplusnames;
+    int count = 0;
+    Py_ssize_t position = 0;
+    PyValueBorrow key, value;
+    while (_PyDict_NextBorrowed(dict, &position, &key, &value)) {
+        if (!PyValue_IsObject(key)) {
+            return 0;
+        }
+        PyObject *name = PyValue_AsKnownObjectBorrow(key);
+        if (!PyUnicode_CheckExact(name)) {
+            return 0;
+        }
+        int slot = first;
+        while (slot < total && _PyTuple_GET_OBJECT(names, slot) != name) {
+            slot++;
+        }
+        if (slot == total) {
+            for (slot = first; slot < total; slot++) {
+                if (_PyUnicode_Equal(_PyTuple_GET_OBJECT(names, slot), name)) {
+                    break;
+                }
+            }
+        }
+        if (slot == total) {
+            if (!(code->co_flags & CO_VARKEYWORDS)) {
+                return 0;
+            }
+            slot = _Py_CALL_BIND_TO_KWARGS;
+        }
+        else if (slot < filled) {
+            return 0;
+        }
+        items->dests[count] = (uint16_t)slot;
+        items->keys[count] = key;
+        items->values[count] = value;
+        count++;
+    }
+    items->count = count;
+    return 1;
+}
+
+/* The **kwargs dictionary of the items that no parameter takes. */
+static Py_NO_INLINE PyObject *
+call_bind_dict_kwargs(const _CallDict *items)
+{
+    PyValue keys[CALL_BIND_DICT_MAX];
+    PyValue values[CALL_BIND_DICT_MAX];
+    int count = 0;
+    for (int i = 0; i < items->count; i++) {
+        if (items->dests[i] == _Py_CALL_BIND_TO_KWARGS) {
+            keys[count] = (PyValue){items->keys[i].bits};
+            values[count] = (PyValue){items->values[i].bits};
+            count++;
+        }
+    }
+    return _PyDict_FromValueItems(keys, 1, values, 1, count);
+}
+
 /* Push the frame of the Python function callable, and fill it as the
  * evaluator binds a call, from the positional arguments (the receiver of an
  * expanded bound method, then the operands of the call at head after the
  * self operand that was NULL, or the items of tuple for a CALL_FUNCTION_EX)
- * and, for a CALL_KW, the keywords, which the cached plan of the call site
- * (binding) maps to parameters: the call needs no per-call search of names.
- * Defaults, empty or filled *args and **kwargs and keyword-only parameters
- * (their defaults are read from __kwdefaults__) are bound as well.
+ * and, for a CALL_KW, the keywords, which the plan maps to parameters: the
+ * call needs no per-call search of names.  The plan (pycore_feedback.h)
+ * says the rest: which parameters take defaults, which keyword-only
+ * parameters take their __kwdefaults__ entry, and whether *args and
+ * **kwargs are empty, filled or pending.  The call reads only what the plan
+ * leaves to the function: the length of __defaults__ and the
+ * __kwdefaults__ dict.  The caller has shown that callable is a Python
+ * function that a frame may be pushed for (PEP 523 is not hooked, the
+ * function version or call_is_python_function()).
  *
  * Every test and every allocation precedes the first move, so on a miss
  * (status 1) nothing happened and the operands are as they were: the caller
@@ -4250,103 +4327,70 @@ call_bind_take_rest(PyValue *slots, _PyInstr *head, int skip, int lead,
  * receiver, if it is not NULL, is the self of an expanded bound method:
  * callable is its function, and the method operand is released once the
  * child is current.  A tuple call leaves the operands and the tuple to the
- * caller. */
+ * caller.
+ *
+ * A generator function whose code the call creates directly
+ * (_Py_CALL_BIND_GENERATOR) takes the arguments into the new generator's
+ * frame, and the call's result is the generator: it is published as a native
+ * call's is, and the status is 0 with no child. */
 static inline Py_ALWAYS_INLINE _PyCallResult
 call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
                _PyInstr *head, PyValue callable, PyValue receiver,
-               int keywords, const _PyFbCall *binding, PyObject *tuple)
+               const _PyBindPlan *plan, PyObject *tuple,
+               const _CallDict *items, int simple)
 {
 #ifdef Py_GIL_DISABLED
     return (_PyCallResult){1, NULL};
 #else
+    int bits = plan->flags;
+    if (!(bits & _Py_CALL_BIND_VALID)) {
+        return (_PyCallResult){1, NULL};
+    }
     _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*head);
     PyValue *slots = _PyFrame_Slots(frame);
-    if (!PyValue_IsObject(callable) || IS_PEP523_HOOKED(tstate)) {
-        return (_PyCallResult){1, NULL};
-    }
-    PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
-    if (Py_TYPE(func) != &PyFunction_Type ||
-        func->vectorcall != _PyFunction_Vectorcall) {
-        return (_PyCallResult){1, NULL};
-    }
+    PyFunctionObject *func =
+        (PyFunctionObject *)_PyValue_AsKnownObjectBorrowPointer(callable);
     PyCodeObject *code = (PyCodeObject *)func->func_code;
-    int flags = code->co_flags;
-    if (!(flags & CO_OPTIMIZED) || code->_co_exec == NULL ||
+    int lead = !PyValue_IsNull(receiver);
+    int skip = 0;
+    if (tuple == NULL) {
+        skip = call_skipped_operands(slots, head, word);
+        if (skip != !!(bits & _Py_CALL_BIND_SKIP)) {
+            return (_PyCallResult){1, NULL};
+        }
+    }
+    /* A simple plan (not _Py_CALL_BIND_GENERAL) needs no *args tuple, no
+     * **kwargs dict, no keyword-only default and no generator: the binding
+     * of the common call is the straight line of this function. */
+    int generator = !simple && (bits & _Py_CALL_BIND_GENERATOR) != 0;
+    if (!simple && tuple != NULL && generator) {
+        /* The caller releases a tuple call's operands once it has a child,
+         * which a generator call does not have. */
+        return (_PyCallResult){1, NULL};
+    }
+    if (!generator &&
         !_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
         return (_PyCallResult){1, NULL};
     }
     int argcount = code->co_argcount;
-    int kwonly = code->co_kwonlyargcount;
-    int total = argcount + kwonly;
-    int lead = !PyValue_IsNull(receiver);
-    int skip = 0;
-    int supplied;
-    if (tuple != NULL) {
-        assert(!lead && !keywords);
-        supplied = (int)Py_MIN(PyTuple_GET_SIZE(tuple), INT_MAX);
-    }
-    else {
-        skip = call_skipped_operands(slots, head, word);
-        supplied = lead + (int)IR_C(word) - keywords - skip;
-    }
+    int kwcount = plan->keywords;
+    int positional = plan->positional;
+    int filled = plan->filled;
+    int extras = simple ? 0 : positional - filled;
+    const uint16_t *destinations = items != NULL ? items->dests : plan->keyword_dest;
+    /* The positional parameters that no argument and no keyword fills take a
+     * default: the function's own, which a function of the same code may
+     * have changed, so its length is tested: it covers need slots. */
     PyObject *defaults = func->func_defaults;
     Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
-    if (ndefaults > argcount) {
+    int need = plan->need;
+    if ((size_t)(ndefaults - need) > (size_t)(argcount - need)) {
         return (_PyCallResult){1, NULL};
     }
-    int first_default = argcount - (int)ndefaults;
-    int positional = supplied;
-    int kwcount = 0;
-    int routed = 0;             // the keywords that **kwargs takes
-    const uint16_t *destinations = NULL;
-    if (keywords) {
-        if (binding == NULL || !(binding->binding_flags & _Py_CALL_BIND_KEYWORDS)) {
-            return (_PyCallResult){1, NULL};
-        }
-        /* The plan matches the call site and the code of the guarded
-         * function version (specialize_keyword_binding): the names, their
-         * destinations and the number of positional arguments need no
-         * test, only whether the operands carry a self. */
-        int has_self = lead || ((word & IR_F_NO_SELF) == 0 && !skip);
-        if (has_self != !!(binding->binding_flags & _Py_CALL_BIND_SELF)) {
-            return (_PyCallResult){1, NULL};
-        }
-        kwcount = (binding->binding_flags & _Py_CALL_BIND_KEYWORD_COUNT_MASK)
-            >> _Py_CALL_BIND_KEYWORD_COUNT_SHIFT;
-        positional = supplied - kwcount;
-        assert(kwcount >= 1 && kwcount <= _Py_CALL_BIND_KEYWORD_CAPACITY);
-        assert(positional >= 0);
-        destinations = binding->keyword_dest;
-        for (int i = 0; i < kwcount; i++) {
-            routed += destinations[i] == _Py_CALL_BIND_TO_KWARGS;
-        }
-    }
-    int filled = Py_MIN(positional, argcount);  // slots that positionals fill
-    int extras = positional - filled;
-    if (extras > 0 && (!(flags & CO_VARARGS) || extras > CALL_BIND_EXTRAS_MAX ||
-                       lead > argcount)) {
-        return (_PyCallResult){1, NULL};
-    }
-    if (kwonly > CALL_BIND_KWONLY_MAX) {
-        return (_PyCallResult){1, NULL};
-    }
-    /* The positional parameters that no argument fills take a default, or a
-     * keyword fills them: the defaults are the function's own, which a
-     * function of the same code may have changed. */
-    for (int slot = filled; slot < first_default; slot++) {
-        int i;
-        for (i = 0; i < kwcount; i++) {
-            if (destinations[i] == slot) {
-                break;
-            }
-        }
-        if (i == kwcount) {
-            return (_PyCallResult){1, NULL};
-        }
-    }
+    unsigned int kwonly_mask = simple ? 0 : plan->kwonly_mask;
     PyValue kwdefaults[CALL_BIND_KWONLY_MAX];
-    if (kwonly && !call_bind_kwdefaults(func, code, destinations, kwcount,
-                                        kwdefaults)) {
+    if (!simple && kwonly_mask &&
+        !call_bind_kwdefaults(func, code, kwonly_mask, kwdefaults)) {
         return (_PyCallResult){1, NULL};
     }
     /* The *args tuple and the **kwargs dictionary hold counts of their own
@@ -4354,32 +4398,29 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
      * them can fail and schedules the GC, which does not run Python before
      * the complete child is published. */
     PyObject *extras_tuple = NULL;
-    if (extras > 0) {
-        extras_tuple = call_bind_extras(slots, head, tuple, skip, filled, lead,
-                                        extras);
-        if (extras_tuple == NULL) {
-            call_bind_discard(kwdefaults, kwonly, NULL);
-            return (_PyCallResult){-1, NULL};
-        }
-    }
-    int kwargs_slot = total + ((flags & CO_VARARGS) != 0);
     PyObject *kwargs = NULL;
-    int virtual_kwargs = 0;
-    if (flags & CO_VARKEYWORDS) {
-        if (routed == 0 && (flags & CO_VIRTUAL_KWARGS)) {
-            virtual_kwargs = 1;
+    if (!simple) {
+        if (extras > 0) {
+            extras_tuple = call_bind_extras(slots, head, tuple, skip, filled,
+                                            lead, extras);
+            if (extras_tuple == NULL) {
+                call_bind_discard(kwdefaults, kwonly_mask, NULL, NULL);
+                return (_PyCallResult){-1, NULL};
+            }
         }
-        else {
-            kwargs = call_bind_kwargs(frame, slots, head, word, skip, lead,
-                                      positional, kwcount, destinations);
+        if (bits & _Py_CALL_BIND_NEW_KWARGS) {
+            kwargs = items != NULL
+                ? call_bind_dict_kwargs(items)
+                : call_bind_kwargs(frame, slots, head, word, skip, lead,
+                                   positional, kwcount, destinations);
             if (kwargs == NULL) {
-                call_bind_discard(kwdefaults, kwonly, extras_tuple);
+                call_bind_discard(kwdefaults, kwonly_mask, extras_tuple, NULL);
                 return (_PyCallResult){-1, NULL};
             }
         }
     }
 
-    /* All tests precede this transfer. The child is complete before it
+    /* All tests precede this transfer. The target is complete before it
      * becomes current: nothing fails, calls back or releases. */
     PyValue function;
     if (tuple != NULL || lead || (word & IR_F_LOCAL_B)) {
@@ -4389,85 +4430,125 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
         function = callable;
         slots[IR_B(word)] = PyValue_NULL;
     }
-    _PyInterpreterFrame *child = _PyFrame_PushUnchecked(tstate, function, frame);
-    PyValue *arguments = child->base;
+    _PyInterpreterFrame *target;
+    PyGenObject *gen = NULL;
+    if (!simple && generator) {
+        gen = _PyGen_NewCall(tstate, function, code, frame);
+        if (gen == NULL) {
+            call_bind_discard(kwdefaults, kwonly_mask, extras_tuple, kwargs);
+            return (_PyCallResult){-1, NULL};
+        }
+        target = &gen->gi_iframe;
+    }
+    else {
+        target = _PyFrame_PushUnchecked(tstate, function, frame);
+    }
+    PyValue *base = target->base;
+    PyValue *arguments = base;
     if (lead) {
         *arguments++ = PyValue_DUP(receiver);
     }
     if (tuple != NULL) {
-        for (int i = 0; i < filled; i++) {
-            child->base[i] = PyValue_DUP(_PyTuple_ITEMS(tuple)[i]);
+        for (int i = 0; i < filled - lead; i++) {
+            arguments[i] = PyValue_DUP(_PyTuple_ITEMS(tuple)[i]);
+        }
+        if (items != NULL) {
+            for (int i = 0; i < kwcount; i++) {
+                if (destinations[i] != _Py_CALL_BIND_TO_KWARGS) {
+                    base[destinations[i]] = PyValue_DUP(items->values[i]);
+                }
+            }
         }
     }
     else {
         call_take_operands(slots, head, skip, filled - lead, arguments);
-        if (extras > 0 || kwcount > 0) {
+        if (kwcount > 0 || extras > 0) {
             call_bind_take_rest(slots, head, skip, lead, filled, extras,
-                                positional, kwcount, destinations, child->base);
+                                positional, kwcount, destinations, base);
         }
     }
-    for (int i = filled; i < argcount; i++) {
-        if (PyValue_IsNull(child->base[i])) {
-            child->base[i] = PyValue_XDUP(_PyTuple_ITEMS(defaults)[i - first_default]);
+    int first_default = argcount - (int)ndefaults;
+    for (unsigned int mask = plan->default_mask; mask; mask &= mask - 1) {
+        int slot = __builtin_ctz(mask);
+        base[slot] = PyValue_DUP(_PyTuple_ITEMS(defaults)[slot - first_default]);
+    }
+    if (!simple) {
+        for (unsigned int mask = kwonly_mask; mask; mask &= mask - 1) {
+            int j = __builtin_ctz(mask);
+            base[argcount + j] = kwdefaults[j];
         }
     }
-    for (int j = 0; j < kwonly; j++) {
-        if (!PyValue_IsNull(kwdefaults[j])) {
-            child->base[argcount + j] = kwdefaults[j];
+    if (!simple) {
+        int slot = argcount + code->co_kwonlyargcount;
+        if (bits & _Py_CALL_BIND_VARARGS) {
+            base[slot++] = extras_tuple != NULL
+                ? PyValue_FromObjectSteal(extras_tuple)
+                : (PyValue)_PyValue_STATIC_IMMORTAL(&_Py_SINGLETON(tuple_empty));
+        }
+        if (kwargs != NULL) {
+            base[slot] = PyValue_FromObjectSteal(kwargs);
         }
     }
-    if (flags & CO_VARARGS) {
-        child->base[total] = extras_tuple != NULL
-            ? PyValue_FromObjectSteal(extras_tuple)
-            : (PyValue)_PyValue_STATIC_IMMORTAL(&_Py_SINGLETON(tuple_empty));
+    if (bits & _Py_CALL_BIND_VIRTUAL_KWARGS) {
+        /* A simple plan has no *args (which makes it general) and is never
+         * new: the slot follows the keyword-only parameters */
+        target->pending_kwargs = (uint16_t)(argcount + code->co_kwonlyargcount +
+            ((bits & _Py_CALL_BIND_VARARGS) != 0));
     }
-    if (kwargs != NULL) {
-        child->base[kwargs_slot] = PyValue_FromObjectSteal(kwargs);
-    }
-    else if (virtual_kwargs) {
-        child->pending_kwargs = kwargs_slot;
-    }
-    if (keywords) {
+    if (kwcount) {
         CALL_STAT_INC(keyword_plan_hits);
     }
-    call_commit(tstate, frame, head, child);
-    if (lead) {
+    if (!simple && generator) {
+        PyValue displaced = call_publish(
+            frame, head, word, PyValue_FromObjectSteal((PyObject *)gen),
+            (int)IR_C(word) - (kwcount != 0));
+        PyValue_XCLOSE(displaced);
+        return (_PyCallResult){0, NULL};
+    }
+    call_commit(tstate, frame, head, target);
+    if (lead && tuple == NULL) {
         /* The method operand has kept the function and the receiver alive;
          * releasing it can run a weakref callback or a finalizer, with the
-         * child current and not started. */
+         * child current and not started.  A tuple call's caller releases
+         * its operands. */
         call_release_callable(frame, word);
     }
-    return (_PyCallResult){0, child};
+    return (_PyCallResult){0, target};
 #endif
 }
 
-/* The three bindings, each decided at compile time: the call's operands
- * (receiver is the self of an expanded bound method, else NULL), the
- * operands of a CALL_KW with the keyword plan of its site, and the items of
- * the tuple of a CALL_FUNCTION_EX. */
+/* The bindings, each decided at compile time: the call's operands (receiver
+ * is the self of an expanded bound method, else NULL; a CALL_KW's plan
+ * names its keywords), and the items of the tuple of a CALL_FUNCTION_EX.  A
+ * simple plan binds in the straight line of a function of its own, which
+ * calls nothing. */
 static Py_NO_INLINE _PyCallResult
-call_bind_positional(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                     _PyInstr *head, PyValue callable, PyValue receiver)
+call_bind_general(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                  _PyInstr *head, PyValue callable, PyValue receiver,
+                  const _PyBindPlan *plan)
 {
-    return call_bind_core(tstate, frame, head, callable, receiver, 0, NULL,
-                          NULL);
+    return call_bind_core(tstate, frame, head, callable, receiver, plan, NULL, NULL, 0);
 }
 
-static Py_NO_INLINE _PyCallResult
-call_bind_keywords(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                   _PyInstr *head, PyValue callable, PyValue receiver,
-                   const _PyFbCall *binding)
+static inline Py_ALWAYS_INLINE _PyCallResult
+call_bind_positional(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     _PyInstr *head, PyValue callable, PyValue receiver,
+                     const _PyBindPlan *plan)
 {
-    return call_bind_core(tstate, frame, head, callable, receiver, 1, binding,
-                          NULL);
+    if (plan->flags & _Py_CALL_BIND_GENERAL) {
+        return call_bind_general(tstate, frame, head, callable, receiver, plan);
+    }
+    return call_bind_core(tstate, frame, head, callable, receiver, plan, NULL, NULL, 1);
 }
 
 static Py_NO_INLINE _PyCallResult
 call_bind_tuple(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                _PyInstr *head, PyValue callable, PyObject *tuple)
+                _PyInstr *head, PyValue callable, PyValue receiver,
+                PyObject *tuple, const _CallDict *items,
+                const _PyBindPlan *plan)
 {
-    return call_bind_core(tstate, frame, head, callable, PyValue_NULL, 0, NULL,
-                          tuple);
+    return call_bind_core(tstate, frame, head, callable, receiver, plan,
+                          tuple, items, 0);
 }
 
 /* The frame of any Python function call: the operands are gathered into an
@@ -4563,12 +4644,22 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
         }
     }
     if (call_is_python_function(tstate, callable)) {
-        /* A keyword call has no plan here: the general binding takes it */
+        /* A keyword call has no plan here (no site's keyword destinations):
+         * the general binding takes it */
         if (!keywords) {
-            _PyCallResult pushed = call_bind_positional(
-                tstate, frame, head, callable, receiver);
-            if (pushed.status <= 0) {
-                return pushed;
+            _PyBindPlan plan;
+            int skip = call_skipped_operands(slots, head, word);
+            PyFunctionObject *func =
+                (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
+            if (_PyBindPlan_Init(&plan, (PyCodeObject *)func->func_code,
+                                 !PyValue_IsNull(receiver) + (int)IR_C(word) - skip,
+                                 skip, !PyValue_IsNull(receiver), NULL, 0))
+            {
+                _PyCallResult pushed = call_bind_positional(
+                    tstate, frame, head, callable, receiver, &plan);
+                if (pushed.status <= 0) {
+                    return pushed;
+                }
             }
         }
         return call_push_python(tstate, frame, head, callable, receiver,
@@ -4703,13 +4794,53 @@ call_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
         Py_XDECREF(tuple);
         return (_PyCallResult){-1, NULL};
     }
-    if (!instrumented && call_is_python_function(tstate, callable)) {
-        /* A tuple and no dict (an empty one is a dict) binds in place: the
-         * child takes counts of the items, and the operands and the tuple
-         * that this call prepared are released once it is current. */
-        if (kwargs == NULL) {
+    PyValue receiver = PyValue_NULL;
+    PyValue target = instrumented ? callable
+        : call_expand_method(callable, 0, &receiver);
+    if (!instrumented && call_is_python_function(tstate, target)) {
+        /* The items of the tuple and the dict (an empty one is nothing)
+         * bind in place, after the receiver of a bound method: the child
+         * takes counts of them, and the operands and the tuple that this
+         * call prepared are released once it is current.  What the plan
+         * does not cover binds below. */
+        PyFunctionObject *callee =
+            (PyFunctionObject *)PyValue_AsKnownObjectBorrow(target);
+        PyCodeObject *callee_code = (PyCodeObject *)callee->func_code;
+        int lead = !PyValue_IsNull(receiver);
+        int count = lead + (int)Py_MIN(PyTuple_GET_SIZE(callargs), INT_MAX - 1);
+        _CallDict items;
+        const _CallDict *dict_items = NULL;
+        int plannable = 1;
+        if (kwargs != NULL && PyDict_GET_SIZE(kwargs) > 0) {
+            plannable = call_bind_dict_destinations(
+                callee_code, Py_MIN(count, callee_code->co_argcount), kwargs,
+                &items);
+            dict_items = &items;
+        }
+        /* The site's plan holds for the code and the arity it was made for,
+         * and for a call without items of a dict */
+        const _PyFbCall *fb = (const _PyFbCall *)(frame->ir_feedback +
+                                                  ((size_t)IR_D(word) << 3));
+        _PyBindPlan plan;
+        const _PyBindPlan *planned = &plan;
+        if (dict_items == NULL && fb->func_version == callee_code->co_version &&
+            fb->plan.positional == count &&
+            !!(fb->plan.flags & _Py_CALL_BIND_LEAD) == lead &&
+            (fb->plan.flags & _Py_CALL_BIND_VALID))
+        {
+            planned = &fb->plan;
+        }
+        else if (!plannable ||
+                 !_PyBindPlan_Init(&plan, callee_code, count, 0, lead,
+                                   dict_items != NULL ? items.dests : NULL,
+                                   dict_items != NULL ? items.count : 0))
+        {
+            planned = NULL;
+        }
+        if (planned != NULL) {
             _PyCallResult pushed = call_bind_tuple(
-                tstate, frame, head, callable, callargs);
+                tstate, frame, head, target, receiver, callargs, dict_items,
+                planned);
             if (pushed.status < 0) {
                 Py_XDECREF(tuple);
                 return pushed;
@@ -4720,6 +4851,9 @@ call_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
                 return pushed;
             }
         }
+    }
+    if (!instrumented && PyValue_IsNull(receiver) &&
+        call_is_python_function(tstate, callable)) {
         PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
         PyCodeObject *code = (PyCodeObject *)Py_NewRef(func->func_code);
         PyObject *locals = code->co_flags & CO_OPTIMIZED ? NULL

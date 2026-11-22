@@ -406,7 +406,7 @@ static inline void Py_DECREF(const char *filename, int lineno, PyObject *op)
     }
     _Py_DECREF_STAT_INC();
     _Py_DECREF_DecRefTotal();
-    if (--op->ob_refcnt == 0) {
+    if (Py_UNLIKELY(--op->ob_refcnt == 0)) {
         _Py_Dealloc(op);
     }
 }
@@ -423,7 +423,7 @@ static inline Py_ALWAYS_INLINE void Py_DECREF(PyObject *op)
         return;
     }
     _Py_DECREF_STAT_INC();
-    if (--op->ob_refcnt == 0) {
+    if (Py_UNLIKELY(--op->ob_refcnt == 0)) {
         _Py_Dealloc(op);
     }
 }

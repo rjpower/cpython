@@ -291,15 +291,15 @@ _Py_DECREF_SPECIALIZED(PyObject *op, const destructor destruct)
 #ifdef Py_REF_DEBUG
     _Py_DEC_REFTOTAL(PyInterpreterState_Get());
 #endif
-    if (--op->ob_refcnt != 0) {
-        assert(op->ob_refcnt > 0);
-    }
-    else {
+    if (Py_UNLIKELY(--op->ob_refcnt == 0)) {
 #ifdef Py_TRACE_REFS
         _Py_ForgetReference(op);
 #endif
         _PyReftracerTrack(op, PyRefTracer_DESTROY);
         destruct(op);
+    }
+    else {
+        assert(op->ob_refcnt > 0);
     }
 }
 

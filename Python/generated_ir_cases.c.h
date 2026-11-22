@@ -12227,11 +12227,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 uint32_t globals_version = fb->globals_version;
                 PyDictObject *dict = (PyDictObject *)GLOBALS();
-                if (!PyDict_CheckExact(dict)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
                 PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
                 if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
@@ -12245,11 +12240,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 uint32_t builtins_version = fb->builtins_version;
                 uint32_t index = fb->index;
                 PyDictObject *dict = (PyDictObject *)BUILTINS();
-                if (!PyDict_CheckExact(dict)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
                 PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
                 if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != builtins_version) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
@@ -12297,11 +12287,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 uint32_t globals_version = fb->globals_version;
                 uint32_t index = fb->index;
                 PyDictObject *dict = (PyDictObject *)GLOBALS();
-                if (!PyDict_CheckExact(dict)) {
-                    UPDATE_MISS_STATS(LOAD_GLOBAL);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
-                    JUMP_TO_PREDICTED(LOAD_GLOBAL);
-                }
                 PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
                 if (FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);

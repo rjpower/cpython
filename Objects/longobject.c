@@ -3642,11 +3642,13 @@ _PyLong_SpanAsDouble(_PyLongSpan a)
     return ldexp(x, (int)exponent);
 }
 
-/* The hash of a span: long_hash()'s loop, the compact case included. */
+/* The hash of an int object: long_hash()'s loop, the compact case included.
+   It takes the object, not a span, so that its callers pass one word. */
 
 Py_hash_t
-_PyLong_SpanHash(_PyLongSpan a)
+_PyLong_ObjectHash(const PyLongObject *op)
 {
+    _PyLongSpan a = _PyLong_SpanOf(op);
     Py_uhash_t x;
     Py_ssize_t i = a.n;
 

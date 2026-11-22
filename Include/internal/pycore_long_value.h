@@ -348,7 +348,7 @@ _PyLong_ValueHash(PyValueBorrow v)
         /* One digit, below the modulus: the hash is the value. */
         return _PyLong_WordHash(_PyLong_CompactValue(op));
     }
-    return _PyLong_SpanHash(_PyLong_SpanOf(op));
+    return _PyLong_ObjectHash(op);
 }
 
 

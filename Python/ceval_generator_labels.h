@@ -187,8 +187,8 @@ HOT_LABEL(gen_return)
     tstate->exc_info = gen->gi_exc_state.previous_item;
     gen->gi_exc_state.previous_item = NULL;
     dying->previous = NULL;
-    value = ir_gen_empty ? _PyFrame_ClearGeneratorLocals(gen, value)
-                         : _PyFrame_ClearGenerator(gen, value);
+    _PyFrame_ClearGenerator(gen, ir_gen_empty ? _PyFrame_GetCode(dying)->co_nlocalsplus
+                                              : _PyFrame_NumSlots(dying));
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
     assert(frame == tstate->current_frame);
     if (frame->owner != FRAME_OWNED_BY_INTERPRETER &&
@@ -209,7 +209,9 @@ HOT_LABEL(gen_return)
         frame->return_pc = exit;
         frame->instr_ptr = exit;
         PyValue_XCLOSE(cursor);
-        PyValue_XCLOSE(receiver);
+        if (!gen_try_close_completed(receiver)) {
+            PyValue_XCLOSE(receiver);
+        }
         PyValue_XCLOSE(value);
         next_instr = frame->instr_ptr;
         LLTRACE_RESUME_FRAME();

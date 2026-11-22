@@ -105,8 +105,10 @@
         next_instr = this_instr; \
         goto LABEL_gen_yield; \
     } while (0)
-/* Likewise V from the frame that a leaf YIELD has just suspended, if its
- * resumer is a SEND with a native yielded outcome. */
+/* Likewise V from the frame that a delegating YIELD has just suspended, if
+ * its resumer is a SEND with a native yielded outcome.  A leaf YIELD does not
+ * test: its resumer is a FOR_ITER_GEN or the C entry as often as a SEND, and
+ * the YIELD that follows a SEND carries a value up the chain from there. */
 #define IR_TRY_NATIVE_YIELD(V) \
     do { \
         if (generator_site_kind(frame, frame->instr_ptr, \

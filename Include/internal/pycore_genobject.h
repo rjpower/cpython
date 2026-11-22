@@ -34,7 +34,9 @@ _PyGen_FinalizerIsNoop(PyObject *op)
  * creates: no frame of the thread runs before the object exists.  Its frame
  * is ready but for the arguments, which the caller moves into
  * gen->gi_iframe.base at once, and then the prologue of the code (the
- * evaluator's gen_prologue()).  Consumes function and locals, the mapping
+ * evaluator's gen_prologue(), for the cells and the iterator of a generator
+ * expression; the free variables are copied here).  Consumes function and
+ * locals, the mapping
  * of an unoptimized code's frame (NULL for optimized code); NULL with an
  * exception set on failure.  _PyGen_DiscardCall() abandons it when the
  * arguments or the prologue fail. */

@@ -15611,7 +15611,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = temp;
                 LLTRACE_RESUME_FRAME();
             }
-            IR_TRY_NATIVE_YIELD(value);
             IR_STORE_RETURN(value);
             DISPATCH();
         }

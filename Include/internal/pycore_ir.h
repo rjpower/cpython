@@ -406,7 +406,7 @@ enum {
     _PyIR_OWNER_ERROR_BRANCH,
     _PyIR_OWNER_NORMAL_EXIT,
     _PyIR_OWNER_ERROR_EXIT,
-    _PyIR_OWNER_CREATED_COPY,
+    _PyIR_OWNER_GENERATOR_MARKER,
     _PyIR_OWNER_NORMAL_CLEAR_INPUTS,
     _PyIR_OWNER_CALL_DRAIN,
     _PyIR_OWNER_NORMAL_COMPLETION,
@@ -591,7 +591,6 @@ typedef struct {
 } _PyIRCodePlan;
 
 #define _PyIR_PLAN_ALL_RETURNS 1u
-#define _PyIR_PLAN_ALL_CREATED_EMPTY 2u
 #define _PyIR_PHASE_RANGE_NULLABLE 1u
 
 typedef enum _PyIRHomeAuthority {
@@ -651,18 +650,6 @@ typedef struct _PyCodeExec {
     uint16_t const_first;
     uint16_t nconst;
     uint32_t nlocalsplus;   // of the code, which IR_IS_LOCAL() reads
-    /* Every RETURN_GENERATOR site is reached with empty scratch, so the
-     * created generator takes only the locals (_PyFrame_CopyCreatedGenerator).
-     * Set only for code with such a site. The header ends with nlocalsplus
-     * and padding: handlers read nlocalsplus at a fixed offset from the
-     * words. */
-    uint8_t all_created_empty;
-    /* A generator, coroutine or async generator whose first word is its
-     * RETURN_GENERATOR: nothing runs before the object exists, so a call
-     * creates it without a frame (_PyGen_NewCall()).  Code with a prologue
-     * (cell and free variable setup, a generator expression's iterator)
-     * runs it in a frame of the thread, which RETURN_GENERATOR then copies. */
-    uint8_t generator_direct;
 } _PyCodeExec;
 
 /* The feedback table of a code object, which follows its words: per entry,
@@ -696,10 +683,6 @@ PyAPI_FUNC(_PyCodeExec *) _PyCode_GetExec(PyCodeObject *co);
  * does not keep plans: only tests and the shadow comparison below read them. */
 PyAPI_FUNC(int) _PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan);
 PyAPI_FUNC(void) _PyCode_FreeSemanticPlan(const _PyIRCodePlan *plan);
-
-/* Whether every RETURN_GENERATOR site of co is reached with empty scratch.
- * Zero for code without such a site; -1 with an exception on failure. */
-PyAPI_FUNC(int) _PyCode_AllCreatedEmpty(PyCodeObject *co);
 
 /* The words of co with each return whose scratch the proof finds empty
  * replaced by its empty form, or NULL with *words NULL if none is. This is

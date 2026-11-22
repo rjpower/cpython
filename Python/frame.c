@@ -9,44 +9,6 @@
 #include "pycore_pystate.h"       // HEAD_LOCK(), thread enumeration
 #include "pycore_value.h"      // _Py_VISIT_VALUE()
 
-static Py_NO_INLINE void
-copy_created_generator_control(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
-{
-    src->instr_ptr++;
-    _PyFrame_Copy(src, dest);
-}
-
-/* Only the actual RETURN_GENERATOR marker calls this entry. The whole-image
- * flag covers every such site, including public/synthetic image sites. */
-Py_NO_INLINE void
-_PyFrame_CopyCreatedGenerator(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
-{
-    PyCodeObject *code = _PyFrame_GetCode(src);
-    _PyCodeExec *exec = _PyFrame_Exec(src);
-    if (!exec->all_created_empty) {
-        copy_created_generator_control(src, dest);
-        return;
-    }
-    int nl = code->co_nlocalsplus;
-    int nslots = _PyFrame_NumSlotsForCodeObject(code);
-    src->instr_ptr++;
-    /* The header as one copy; the generator's frame owns its slots, has no
-     * caller and starts outside any stack walk. */
-    memcpy(dest, src, offsetof(_PyInterpreterFrame, owned_slots));
-    dest->base = dest->owned_slots;
-    dest->previous = NULL;
-    dest->external = 0;
-    dest->visited = 0;
-    for (int i = 0; i < nl; i++) {
-        dest->base[i] = src->base[i];
-        src->base[i] = PyValue_NULL;
-    }
-    /* The current NULL control still requires initialized destination gaps. */
-    for (int i = nl; i < nslots; i++) {
-        dest->base[i] = PyValue_NULL;
-    }
-}
-
 void
 _PyFrame_FillConstSlots(_PyInterpreterFrame *frame, PyCodeObject *code)
 {
@@ -292,6 +254,25 @@ _PyFrame_ClearGenerator(PyGenObject *gen, PyValue result)
 {
     return clear_generator_at_extent(gen, result,
                                      _PyFrame_NumSlots(&gen->gi_iframe));
+}
+
+PyValue
+_PyFrame_ClearGeneratorLocals(PyGenObject *gen, PyValue result)
+{
+    /* The return that is certified RETURN_VALUE_EMPTY leaves the scratch
+     * empty, as for a thread frame: only the locals own values. */
+    _PyInterpreterFrame *frame = &gen->gi_iframe;
+    if (frame->frame_obj != NULL) {
+        return clear_generator_at_extent(gen, result,
+            _PyFrame_GetCode(frame)->co_nlocalsplus);
+    }
+    assert(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CLEARED);
+    Py_BEGIN_CRITICAL_SECTION(gen);
+    _PyFrame_ClearSlots(frame, _PyFrame_GetCode(frame)->co_nlocalsplus);
+    Py_CLEAR(frame->f_funcobj);
+    Py_END_CRITICAL_SECTION();
+    _PyErr_ClearExcState(&gen->gi_exc_state);
+    return result;
 }
 
 void

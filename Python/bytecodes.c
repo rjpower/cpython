@@ -1471,7 +1471,7 @@ dummy_func(
             int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
             frame = tstate->current_frame = dying->previous;
             if (generator_return) {
-                IR_FINISH_GENERATOR_RETURN(temp, dying);
+                IR_FINISH_GENERATOR_RETURN_EMPTY(temp, dying);
             }
             temp = _PyEval_RetireThreadFrameWithResult(tstate, dying, temp);
             RELOAD_STACK();
@@ -1508,49 +1508,10 @@ dummy_func(
             _RETURN_VALUE_EMPTY;
 
         outlined inst(GET_AITER, (obj -- iter)) {
-            unaryfunc getter = NULL;
-            PyObject *iter_o;
-            // A number has no __aiter__
-            if (!PyValue_IsObject(obj)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "'async for' requires an object with "
-                              "__aiter__ method, got %.100s",
-                              PyValue_TYPE(obj)->tp_name);
-                DEAD(obj);
-                ERROR_IF(true);
-            }
-            assert(PyValue_IsObject(obj));
-            PyObject *obj_o = PyValue_AsKnownObjectBorrow(obj);
-            PyTypeObject *type = Py_TYPE(obj_o);
-
-            if (type->tp_as_async != NULL) {
-                getter = type->tp_as_async->am_aiter;
-            }
-
-            if (getter == NULL) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "'async for' requires an object with "
-                              "__aiter__ method, got %.100s",
-                              type->tp_name);
-                PyValue_CLOSE(obj);
-                ERROR_IF(true);
-            }
-
-            iter_o = (*getter)(obj_o);
-            PyValue_CLOSE(obj);
-            ERROR_IF(iter_o == NULL);
-
-            if (Py_TYPE(iter_o)->tp_as_async == NULL ||
-                    Py_TYPE(iter_o)->tp_as_async->am_anext == NULL) {
-
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "'async for' received an object from __aiter__ "
-                              "that does not implement __anext__: %.100s",
-                              Py_TYPE(iter_o)->tp_name);
-                Py_DECREF(iter_o);
-                ERROR_IF(true);
-            }
-            iter = PyValue_FromObjectSteal(iter_o);
+            PyValue iterator = _PyEval_GetAIter(tstate, obj);
+            DEAD(obj);
+            ERROR_IF(PyValue_IsNull(iterator));
+            iter = iterator;
         }
 
         outlined inst(GET_ANEXT, (aiter -- aiter, awaitable)) {
@@ -3868,6 +3829,9 @@ dummy_func(
                 ERROR_NO_POP();
             }
             gen->gi_iframe.base[0] = TAKE(iterable);
+            if (gen_prologue(tstate, gen, (PyCodeObject *)func->func_code) < 0) {
+                ERROR_NO_POP();
+            }
             INPUTS_DEAD();
             iter = PyValue_FromObjectSteal((PyObject *)gen);
             index_or_null = PyValue_NULL;
@@ -5340,28 +5304,13 @@ dummy_func(
             *ptr = attr;
         }
 
+        // The marker at the start of a generator's code: nothing executes it,
+        // because a call creates the object (_PyGen_NewCall()) with its frame
+        // past this word.  The word stays for the first send's resume point,
+        // f_lasti and monitoring.
         window inst(RETURN_GENERATOR, (-- res)) {
-            PyFunctionObject *func = _PyFrame_GetFunction(frame);
-            PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(
-                func, _PyFrame_GetCode(frame), frame->previous);
-            ERROR_IF(gen == NULL);
-            SAVE_STACK();
-            _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
-            IR_CREATED_COPY(frame, gen_frame);
-            // The value of the first send takes the slot of res
-            gen_frame->return_slot = (uint16_t)IR_DST_SLOT;
-            assert(frame->frame_obj == NULL);
-            gen->gi_frame_state = FRAME_CREATED;
-            gen_frame->owner = FRAME_OWNED_BY_GENERATOR;
-            _Py_LeaveRecursiveCallPy(tstate);
-            _PyInterpreterFrame *prev = frame->previous;
-            _PyThreadState_UpdateLastProfiledFrame(tstate, frame, prev);
-            _PyThreadState_PopFrame(tstate, frame);
-            frame = tstate->current_frame = prev;
-            next_instr = frame->return_pc;
-            RELOAD_STACK();
-            res = PyValue_FromObjectSteal((PyObject *)gen);
-            LLTRACE_RESUME_FRAME();
+            IR_GENERATOR_MARKER();
+            res = PyValue_NULL;
         }
 
         inst(BUILD_SLICE, (args[oparg] -- slice)) {

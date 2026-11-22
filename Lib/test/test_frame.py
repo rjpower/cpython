@@ -553,26 +553,7 @@ class FrameCopyTest(unittest.TestCase):
         gen.close()
         frame.clear()
 
-    def test_empty_created_copy_uses_certified_kind_and_skips_scratch(self):
-        internal = import_helper.import_module('_testinternalcapi')
-
-        def gen(value):
-            yield value
-
-        async def coro(value):
-            return value
-
-        async def asyncgen(value):
-            yield value
-
-        for function in (gen, coro, asyncgen):
-            with self.subTest(function=function.__name__):
-                self.assertTrue(internal.has_empty_created_copy_plan(function.__code__))
-                for payload in (object(), 17, 2.5):
-                    internal.check_created_frame_copy(function.__code__, payload)
-
-    def test_empty_created_copy_preserves_cells_and_free_variables(self):
-        internal = import_helper.import_module('_testinternalcapi')
+    def test_created_generator_preserves_cells_and_free_variables(self):
         captured = object()
 
         def body(value):
@@ -580,7 +561,6 @@ class FrameCopyTest(unittest.TestCase):
                 return value, captured
             yield read
 
-        self.assertTrue(internal.has_empty_created_copy_plan(body.__code__))
         payload = object()
         gen = body(payload)
         try:
@@ -589,11 +569,9 @@ class FrameCopyTest(unittest.TestCase):
         finally:
             gen.close()
 
-    def test_genexpr_iterator_is_not_empty_created_scratch(self):
-        internal = import_helper.import_module('_testinternalcapi')
+    def test_genexpr_iterator_is_made_by_the_caller(self):
         payload = object()
         gen = (value for value in (payload,))
-        self.assertFalse(internal.has_empty_created_copy_plan(gen.gi_code))
         self.assertIs(next(gen), payload)
         with self.assertRaises(StopIteration):
             next(gen)

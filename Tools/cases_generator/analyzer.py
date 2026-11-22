@@ -540,6 +540,7 @@ IR_MARKER_EFFECTS = {
     "IR_PROCESS_ERROR": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_RETURN_TO_CALLER": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_FINISH_GENERATOR_RETURN": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
+    "IR_FINISH_GENERATOR_RETURN_EMPTY": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_ENTER_GENERATOR": frozenset(("escapes", "error", "sync", "pc", "terminal", "frame")),
     "IR_SUSPEND_DELEGATED": frozenset(("escapes", "sync", "pc", "terminal", "frame")),
     "IR_TRY_DICT_FIRST_PROBE": frozenset(("escapes", "error", "sync", "pc")),

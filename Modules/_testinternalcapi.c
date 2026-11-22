@@ -4852,113 +4852,6 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
     return PyLong_FromLong(status);
 }
 
-/* A cold protocol probe: inactive words are never exposed as Python values,
- * executed, or closed. Only the selected home owns payload. */
-static PyObject *
-check_frame_copy(PyObject *args, int mode)
-{
-    int created = mode == 1;
-    PyObject *code_object, *payload;
-    if (!PyArg_ParseTuple(args, "O!O:check_frame_selected_copy", &PyCode_Type,
-                          &code_object, &payload))
-    {
-        return NULL;
-    }
-    PyCodeObject *code = (PyCodeObject *)code_object;
-    int n = _PyFrame_NumSlotsForCodeObject(code);
-    int nl = code->co_nlocalsplus;
-    if ((!created && n - nl < 2) || (created && nl == 0)) {
-        PyErr_SetString(PyExc_ValueError, "insufficient probe homes");
-        return NULL;
-    }
-    _PyCodeExec *exec = NULL;
-    int site = 0;
-    if (created) {
-        exec = _PyCode_GetExec(code);
-        if (exec == NULL) {
-            return NULL;
-        }
-        if (!exec->all_created_empty) {
-            PyErr_SetString(PyExc_ValueError, "probe needs certified empty creation");
-            return NULL;
-        }
-        while (site < exec->nwords) {
-            int handler = IR_HANDLER(code->co_words[site]);
-            const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
-            if (boundary != NULL) {
-                handler = boundary->ordinary;
-            }
-            if (_PyIR_BaseOpcode(handler) == RETURN_GENERATOR) {
-                break;
-            }
-            site++;
-        }
-        if (site == exec->nwords) {
-            PyErr_SetString(PyExc_ValueError, "probe needs the actual copy site");
-            return NULL;
-        }
-    }
-    size_t size = offsetof(_PyInterpreterFrame, owned_slots) +
-        (size_t)n * sizeof(PyValue);
-    _PyInterpreterFrame *src = PyMem_Calloc(1, size);
-    _PyInterpreterFrame *dst = PyMem_Calloc(1, size);
-    if (src == NULL || dst == NULL) {
-        PyMem_Free(src);
-        PyMem_Free(dst);
-        return PyErr_NoMemory();
-    }
-    src->f_executable = (PyCodeObject *)Py_NewRef(code);
-    src->base = src->owned_slots;
-    const uint64_t poison = UINT64_C(0xdeadbeefdeadbeef);
-    for (int i = nl; i < n; i++) {
-        src->base[i].bits = poison;
-    }
-    PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(payload));
-    int selected_home = created ? 0 : nl + 1;
-    assert(selected_home >= 0 && selected_home < n);
-    src->base[selected_home] = value;
-    int scratch_home = 1;
-    src->ir_words = exec->words;
-    src->instr_ptr = exec->words + site;
-    _PyFrame_CopyCreatedGenerator(src, dst);
-    int correct = dst->base[selected_home].bits == value.bits &&
-                  PyValue_IsNull(src->base[selected_home]);
-    for (int i = nl; i < n; i++) {
-        if (i != selected_home) {
-            correct &= src->base[i].bits == poison && PyValue_IsNull(dst->base[i]);
-        }
-    }
-    PyValue_XCLOSE(dst->base[selected_home]);
-    Py_DECREF(dst->f_executable);
-    PyMem_Free(src);
-    PyMem_Free(dst);
-    if (!correct) {
-        PyErr_SetString(PyExc_AssertionError, "copy touched an inactive home");
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-check_created_frame_copy(PyObject *self, PyObject *args)
-{
-    return check_frame_copy(args, 1);
-}
-
-static PyObject *
-has_empty_created_copy_plan(PyObject *self, PyObject *arg)
-{
-    if (!PyCode_Check(arg)) {
-        PyErr_SetString(PyExc_TypeError, "expected code");
-        return NULL;
-    }
-    _PyCodeExec *exec = _PyCode_GetExec((PyCodeObject *)arg);
-    if (exec == NULL) {
-        return NULL;
-    }
-    return PyBool_FromLong(exec->all_created_empty);
-}
-
 /* The words of a code object with the compiler's return selection applied to
  * a code object built by hand. */
 static PyObject *
@@ -4980,8 +4873,6 @@ select_empty_returns(PyObject *self, PyObject *arg)
 
 static PyMethodDef module_functions[] = {
     {"select_empty_returns", select_empty_returns, METH_O},
-    {"has_empty_created_copy_plan", has_empty_created_copy_plan, METH_O},
-    {"check_created_frame_copy", check_created_frame_copy, METH_VARARGS},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"check_ir_retirement", _PyCFunction_CAST(check_ir_retirement),
      METH_VARARGS | METH_KEYWORDS, NULL},

@@ -1241,6 +1241,54 @@ adapter_fill_vector(PyObject **vector, const PyValue *args, Py_ssize_t total,
     return 0;
 }
 
+/* The call of an adapter on its object vector, slots[1..total] (slots[0] is
+   the vector's offset slot: the callee may use PY_VECTORCALL_ARGUMENTS_OFFSET).
+   The vector is borrowed words, which the GC does not read (the frames own
+   the objects), so it lives on the C stack, or on the heap beyond
+   ADAPTER_SMALL_STACK words. */
+static inline Py_ALWAYS_INLINE PyValue
+adapter_call(PyThreadState *tstate, PyObject *callable, vectorcallfunc of,
+             const PyValue *args, Py_ssize_t nargs, Py_ssize_t total,
+             PyObject *kwnames, PyObject **slots)
+{
+    PyObject **vector = slots + 1;
+    int boxed = 0;
+    if (adapter_fill_vector(vector, args, total, callable, &boxed) < 0) {
+        return PyValue_NULL;
+    }
+    slots[0] = NULL;
+    int was_in_call;
+    _PyBorrowMark mark = _PyBorrowCall_Enter(tstate, &was_in_call);
+    PyObject *res = of(callable, vector, nargs | PY_VECTORCALL_ARGUMENTS_OFFSET,
+                       kwnames);
+    _PyBorrowCall_Exit(tstate, mark, was_in_call);
+    if (boxed) {
+        for (Py_ssize_t i = 0; i < total; i++) {
+            if (PyValue_IsInline(args[i])) {
+                Py_DECREF(vector[i]);
+            }
+        }
+    }
+    res = _Py_CheckFunctionResult(tstate, callable, res, NULL);
+    return _PyValue_FromObjectResult(res);
+}
+
+static Py_NO_INLINE PyValue
+adapter_call_large(PyThreadState *tstate, PyObject *callable, vectorcallfunc of,
+                   const PyValue *args, Py_ssize_t nargs, Py_ssize_t total,
+                   PyObject *kwnames)
+{
+    PyObject **slots = PyMem_Malloc((size_t)(total + 1) * sizeof(PyObject *));
+    if (slots == NULL) {
+        PyErr_NoMemory();
+        return PyValue_NULL;
+    }
+    PyValue res = adapter_call(tstate, callable, of, args, nargs, total,
+                               kwnames, slots);
+    PyMem_Free(slots);
+    return res;
+}
+
 PyValue
 _PyValue_CallAdapter(PyThreadState *tstate, PyObject *callable,
                      vectorcallfunc of, const PyValue *args, size_t nargsf,
@@ -1248,41 +1296,13 @@ _PyValue_CallAdapter(PyThreadState *tstate, PyObject *callable,
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     Py_ssize_t total = nargs + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
-    /* The callee may use PY_VECTORCALL_ARGUMENTS_OFFSET, so the vector has
-       its own offset slot.  It is borrowed words, which the GC does not read
-       (the frames own the objects), so it lives on the C stack. */
+    if (Py_UNLIKELY(total > ADAPTER_SMALL_STACK)) {
+        return adapter_call_large(tstate, callable, of, args, nargs, total,
+                                  kwnames);
+    }
     PyObject *small[ADAPTER_SMALL_STACK + 1];
-    PyObject **slots = small;
-    if (total >= (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
-        slots = PyMem_Malloc((size_t)(total + 1) * sizeof(PyObject *));
-        if (slots == NULL) {
-            PyErr_NoMemory();
-            return PyValue_NULL;
-        }
-    }
-    PyObject **vector = slots + 1;
-    int boxed = 0;
-    PyObject *res = NULL;
-    if (adapter_fill_vector(vector, args, total, callable, &boxed) == 0) {
-        slots[0] = NULL;
-        int was_in_call;
-        _PyBorrowMark mark = _PyBorrowCall_Enter(tstate, &was_in_call);
-        res = of(callable, vector, nargs | PY_VECTORCALL_ARGUMENTS_OFFSET,
-                 kwnames);
-        _PyBorrowCall_Exit(tstate, mark, was_in_call);
-        if (boxed) {
-            for (Py_ssize_t i = 0; i < total; i++) {
-                if (PyValue_IsInline(args[i])) {
-                    Py_DECREF(vector[i]);
-                }
-            }
-        }
-        res = _Py_CheckFunctionResult(tstate, callable, res, NULL);
-    }
-    if (slots != small) {
-        PyMem_Free(slots);
-    }
-    return _PyValue_FromObjectResult(res);
+    return adapter_call(tstate, callable, of, args, nargs, total, kwnames,
+                        small);
 }
 
 /* tp_call of callable with an argument tuple and a dict (or NULL), in a

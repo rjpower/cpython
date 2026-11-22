@@ -535,6 +535,20 @@ live_neighbour(_PyRegCfg *cfg, int start, int end, int i, int step)
     return NULL;
 }
 
+/* Whether neighbour keeps the line event that op would otherwise give: it
+ * is on the line under the same handler and either states its span or has
+ * op's own, which is all that a propagated location can be. */
+static int
+holds_line(const _PyRegOp *neighbour, const _PyRegOp *op)
+{
+    return neighbour != NULL && neighbour->loc.lineno == op->loc.lineno &&
+           neighbour->except == op->except &&
+           ((neighbour->flags & _PyReg_SOURCE_ORIGIN) ||
+            (neighbour->loc.end_lineno == op->loc.end_lineno &&
+             neighbour->loc.col_offset == op->loc.col_offset &&
+             neighbour->loc.end_col_offset == op->loc.end_col_offset));
+}
+
 /* Remove the ops prod (if not NULL) and pop, keeping a NOP for the line
  * if nothing else in the region is on it. */
 static void
@@ -551,17 +565,11 @@ remove_with_line(_PyRegCfg *cfg, int start, int end, _PyRegOp *prod,
                                       (int)(first - cfg->ops), -1);
     _PyRegOp *after = live_neighbour(cfg, start, end,
                                      (int)(pop - cfg->ops), 1);
-    int line = first->loc.lineno;
-    int keeps_line = (before != NULL && before->loc.lineno == line &&
-                      before->except == first->except &&
-                      (before->flags & _PyReg_SOURCE_ORIGIN)) ||
-                     (after != NULL && after->loc.lineno == line &&
-                      after->except == first->except &&
-                      (after->flags & _PyReg_SOURCE_ORIGIN));
+    int keeps_line = holds_line(before, first) || holds_line(after, first);
     if (prod != NULL) {
         prod->opcode = _PyReg_DEAD;
     }
-    if (keeps_line && pop->loc.lineno == line) {
+    if (keeps_line && pop->loc.lineno == first->loc.lineno) {
         pop->opcode = _PyReg_DEAD;
     }
     else {
@@ -1217,13 +1225,7 @@ elide_null_region(_PyRegCfg *cfg, int start, int end)
         assert(op->dst < 0 && op->nout == 1);
         _PyRegOp *before = live_neighbour(cfg, start, end, i, -1);
         _PyRegOp *after = live_neighbour(cfg, start, end, i, 1);
-        int line = op->loc.lineno;
-        int keeps_line = (before != NULL && before->loc.lineno == line &&
-                          before->except == op->except &&
-                          (before->flags & _PyReg_SOURCE_ORIGIN)) ||
-                         (after != NULL && after->loc.lineno == line &&
-                          after->except == op->except &&
-                          (after->flags & _PyReg_SOURCE_ORIGIN));
+        int keeps_line = holds_line(before, op) || holds_line(after, op);
         op->flags |= _PyReg_ELIDED | (keeps_line ? 0 : _PyReg_ELIDED_NOP);
     }
     return SUCCESS;

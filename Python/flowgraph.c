@@ -41,6 +41,7 @@ typedef _PyJumpTargetLabel jump_target_label;
 
 typedef struct _PyCfgInstruction {
     int i_opcode;
+    unsigned i_source : 1; /* explicit source span, not propagated location */
     int i_oparg;
     _Py_SourceLocation i_loc;
     /* Lowering only: the code-unit offset in co_code of the instruction that
@@ -148,6 +149,7 @@ is_jump(cfg_instr *i)
     do { \
         cfg_instr *_instr__ptr_ = (I); \
         _instr__ptr_->i_loc = (LOC); \
+        _instr__ptr_->i_source = (LOC).lineno >= 0; \
     } while (0);
 
 /***** Blocks *****/
@@ -220,6 +222,7 @@ basicblock_addop(basicblock *b, int opcode, int oparg, location loc,
     i->i_opcode = opcode;
     i->i_oparg = oparg;
     i->i_loc = loc;
+    i->i_source = loc.lineno >= 0;
     i->i_except = except;
     // memory is already zero initialized
     assert(i->i_target == NULL);
@@ -1090,6 +1093,7 @@ basicblock_remove_redundant_nops(basicblock *bb) {
     /* Remove NOPs when legal to do so. */
     int dest = 0;
     int prev_lineno = -1;
+    basicblock *prev_except = NULL;
     for (int src = 0; src < bb->b_iused; src++) {
         int lineno = bb->b_instr[src].i_loc.lineno;
         if (bb->b_instr[src].i_opcode == NOP) {
@@ -1097,18 +1101,29 @@ basicblock_remove_redundant_nops(basicblock *bb) {
             if (lineno < 0) {
                 continue;
             }
-            /* or, if the previous instruction had the same line number. */
-            if (prev_lineno == lineno) {
+            /* Equal source lines do not imply equal observer exception state.
+             * In particular, line propagation can cross POP_BLOCK. */
+            if (prev_lineno == lineno &&
+                prev_except == bb->b_instr[src].i_except)
+            {
+                bb->b_instr[dest - 1].i_source |= bb->b_instr[src].i_source;
                 continue;
             }
             /* or, if the next instruction has same line number or no line number */
             if (src < bb->b_iused - 1) {
                 int next_lineno = bb->b_instr[src+1].i_loc.lineno;
-                if (next_lineno == lineno) {
+                if (next_lineno == lineno &&
+                    bb->b_instr[src+1].i_except == bb->b_instr[src].i_except)
+                {
+                    bb->b_instr[src+1].i_source |= bb->b_instr[src].i_source;
                     continue;
                 }
-                if (next_lineno < 0) {
+                if (next_lineno < 0 &&
+                    bb->b_instr[src+1].i_opcode != POP_BLOCK &&
+                    bb->b_instr[src+1].i_except == bb->b_instr[src].i_except)
+                {
                     bb->b_instr[src+1].i_loc = bb->b_instr[src].i_loc;
+                    bb->b_instr[src+1].i_source |= bb->b_instr[src].i_source;
                     continue;
                 }
             }
@@ -1117,6 +1132,8 @@ basicblock_remove_redundant_nops(basicblock *bb) {
                 /* or if last instruction in BB and next BB has same line number */
                 if (next) {
                     location next_loc = NO_LOCATION;
+                    basicblock *next_except = NULL;
+                    cfg_instr *next_source = NULL;
                     for (int next_i=0; next_i < next->b_iused; next_i++) {
                         cfg_instr *instr = &next->b_instr[next_i];
                         if (instr->i_opcode == NOP && instr->i_loc.lineno < 0) {
@@ -1124,9 +1141,15 @@ basicblock_remove_redundant_nops(basicblock *bb) {
                             continue;
                         }
                         next_loc = instr->i_loc;
+                        next_except = instr->i_except;
+                        next_source = instr;
                         break;
                     }
-                    if (lineno == next_loc.lineno) {
+                    if (lineno == next_loc.lineno &&
+                        next_except == bb->b_instr[src].i_except)
+                    {
+                        assert(next_source != NULL);
+                        next_source->i_source |= bb->b_instr[src].i_source;
                         continue;
                     }
                 }
@@ -1136,6 +1159,7 @@ basicblock_remove_redundant_nops(basicblock *bb) {
         if (dest != src) {
             bb->b_instr[dest] = bb->b_instr[src];
         }
+        prev_except = bb->b_instr[dest].i_except;
         dest++;
         prev_lineno = lineno;
     }
@@ -4727,6 +4751,13 @@ split_instruction(const decoded_instr *d, int opcodes[2], int opargs[2])
     }
 }
 
+static bool
+same_span(location a, location b)
+{
+    return a.lineno == b.lineno && a.end_lineno == b.end_lineno &&
+           a.col_offset == b.col_offset && a.end_col_offset == b.end_col_offset;
+}
+
 static int
 decode_code(PyCodeObject *co, cfg_builder *g)
 {
@@ -4850,6 +4881,10 @@ decode_code(PyCodeObject *co, cfg_builder *g)
             i->i_opcode = opcode;
             i->i_oparg = oparg;
             i->i_loc = loc;
+            // Upstream propagates a location to the instructions that have
+            // none, so one equal to its predecessor's is not a source span
+            i->i_source = loc.lineno >= 0 &&
+                          !(off > 0 && same_span(b->b_instr[off - 1].i_loc, loc));
             i->i_srcoff = d->unit;
             i->i_except = except;
             i->i_target = d->target >= 0 ? block_of_unit[d->target] : NULL;
@@ -4913,7 +4948,7 @@ cfg_to_regcfg(cfg_builder *g, int nlocalsplus, int maxdepth,
             {
                 goto error;
             }
-            if (instr->i_loc.lineno >= 0) {
+            if (instr->i_source) {
                 cfg->ops[cfg->nops - 1].flags |= _PyReg_SOURCE_ORIGIN;
             }
         }

@@ -2872,6 +2872,10 @@ _PyMonitoring_SetLocalEvents(PyCodeObject *code, int tool_id, _PyMonitoringEvent
     assert(0 <= tool_id && tool_id < PY_MONITORING_TOOL_IDS);
     PyInterpreterState *interp = _PyInterpreterState_GET();
     assert(events < (1 << _PY_MONITORING_UNGROUPED_EVENTS));
+    // The events are set on the words, which code that has not run lacks
+    if (_PyCode_GetIR(code) == NULL) {
+        return -1;
+    }
     if (code->_co_exec != NULL &&
         code->_co_exec->first_traceable >= code->_co_exec->nwords) {
         PyErr_Format(PyExc_SystemError, "cannot instrument shim code object '%U'", code->co_name);

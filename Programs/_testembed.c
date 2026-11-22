@@ -532,16 +532,18 @@ static int test_borrow_scope_outside_eval(void)
     {
         return 1;
     }
+    /* Outside any scope, the base region holds what is kept in it until it
+       is released, which finalization does before modules are torn down.
+       (Parsed tuple items are borrowed from the tuple, so keep the tuple.) */
     PyObject *main_dict = PyModule_GetDict(PyImport_AddModule("__main__"));
-    PyObject *late, *object;
+    PyObject *late;
     if (PyDict_GetItemStringRef(main_dict, "late", &late) <= 0 ||
-        !PyArg_ParseTuple(late, "O", &object) ||
+        _PyBorrow_Keep(late) == NULL ||
         PyDict_DelItemString(main_dict, "late") < 0)
     {
         PyErr_Print();
         return 1;
     }
-    Py_DECREF(late);
     printf("base region holds it: %d\n", _PyBorrow_Depth(tstate) == base + 1);
     fflush(stdout);
     Py_Finalize();

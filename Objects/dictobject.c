@@ -1682,6 +1682,23 @@ replace_value(PyDictObject *mp, PyValueBorrow key, Py_ssize_t ix,
     PyValue_XCLOSE(owner);
 }
 
+/* The full table of insertdict_unicode_key(): grow it, find the free slot
+   again and store the pair. Returns 1, or -1 on a memory error, consuming key
+   and value either way. */
+static Py_NO_INLINE int
+insertdict_unicode_key_grow(PyDictObject *mp, Py_hash_t hash, PyValue key,
+                            PyValue value)
+{
+    if (insertion_resize(mp, 1) < 0) {
+        PyValue_CLOSE(key);
+        PyValue_CLOSE(value);
+        return -1;
+    }
+    insert_combined_dict(mp, hash, find_empty_slot(mp->ma_keys, hash), key,
+                         value);
+    return 1;
+}
+
 /* One-pass insert of an exact str key into an unwatched combined table of
    str keys: one probe finds either the entry to replace or the slot to fill.
    Returns 1 if it stored the pair, consuming key and value; -1 on a memory
@@ -1704,9 +1721,9 @@ insertdict_unicode_key(PyDictObject *mp, PyValue key, Py_hash_t hash,
                        PyValue value)
 {
     PyDictKeysObject *keys = mp->ma_keys;
-    if (!value_is_exact_unicode(key) || mp->ma_values != NULL
-        || !DK_IS_UNICODE(keys)
-        || (mp->_ma_watcher_tag & DICT_WATCHER_MASK))
+    if (!DK_IS_UNICODE(keys) || mp->ma_values != NULL
+        || (mp->_ma_watcher_tag & DICT_WATCHER_MASK)
+        || !value_is_exact_unicode(key))
     {
         return 0;
     }
@@ -1741,32 +1758,20 @@ insertdict_unicode_key(PyDictObject *mp, PyValue key, Py_hash_t hash,
         i = mask & (i*5 + perturb + 1);
     }
     if (keys->dk_usable <= 0) {
-        if (insertion_resize(mp, 1) < 0) {
-            PyValue_CLOSE(key);
-            PyValue_CLOSE(value);
-            return -1;
-        }
-        free_slot = find_empty_slot(mp->ma_keys, hash);
+        return insertdict_unicode_key_grow(mp, hash, key, value);
     }
     insert_combined_dict(mp, hash, free_slot, key, value);
     return 1;
 }
 
 /*
-Internal routine to insert a new item into the table.
-Used both by the internal resize routine and by the public insert routine.
-Returns -1 if an error occurred, or 0 on success.
+The general insert of insertdict(): any key and table kind, watched dicts and
+split tables included. Returns -1 if an error occurred, or 0 on success.
 Consumes key and value references.
 */
-static int
-insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
+static Py_NO_INLINE int
+insertdict_general(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
 {
-    assert(can_modify_dict(mp));
-    assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
-    int fast = insertdict_unicode_key(mp, key, hash, value);
-    if (fast != 0) {
-        return fast < 0 ? -1 : 0;
-    }
     int notified = 0, classified = 0;
     PyDict_WatchEvent event = PyDict_EVENT_ADDED;
     int status = -1;
@@ -1852,6 +1857,18 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
     PyValue_XCLOSE(value);
     PyValue_XCLOSE(key);
     return status;
+}
+
+static int
+insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
+{
+    assert(can_modify_dict(mp));
+    assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
+    int fast = insertdict_unicode_key(mp, key, hash, value);
+    if (fast != 0) {
+        return fast < 0 ? -1 : 0;
+    }
+    return insertdict_general(mp, key, hash, value);
 }
 
 // Same as insertdict but specialized for ma_keys == Py_EMPTY_KEYS: the entry

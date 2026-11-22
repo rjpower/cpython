@@ -630,7 +630,8 @@ method_value_call_varargs(PyThreadState *tstate, PyObject *func,
     if (meth == NULL) {
         goto exit;
     }
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    int was_in_call;
+    _PyBorrowMark mark = _PyBorrowCall_Enter(tstate, &was_in_call);
     if (keywords) {
         result = _PyCFunctionWithKeywords_TrampolineCall(
             (PyCFunctionWithKeywords)meth, self, argstuple, kwdict);
@@ -639,7 +640,7 @@ method_value_call_varargs(PyThreadState *tstate, PyObject *func,
         result = _PyCFunction_TrampolineCall((PyCFunction)meth, self,
                                              argstuple);
     }
-    _PyBorrowScope_Exit(tstate, mark);
+    _PyBorrowCall_Exit(tstate, mark, was_in_call);
     _Py_LeaveRecursiveCallTstate(tstate);
     result = _Py_CheckFunctionResult(tstate, func, result, NULL);
 exit:

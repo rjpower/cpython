@@ -1265,10 +1265,11 @@ _PyValue_CallAdapter(PyThreadState *tstate, PyObject *callable,
     PyObject *res = NULL;
     if (adapter_fill_vector(vector, args, total, callable, &boxed) == 0) {
         slots[0] = NULL;
-        _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+        int was_in_call;
+        _PyBorrowMark mark = _PyBorrowCall_Enter(tstate, &was_in_call);
         res = of(callable, vector, nargs | PY_VECTORCALL_ARGUMENTS_OFFSET,
                  kwnames);
-        _PyBorrowScope_Exit(tstate, mark);
+        _PyBorrowCall_Exit(tstate, mark, was_in_call);
         if (boxed) {
             for (Py_ssize_t i = 0; i < total; i++) {
                 if (PyValue_IsInline(args[i])) {
@@ -1291,10 +1292,11 @@ static PyValue
 value_tp_call(PyThreadState *tstate, PyObject *callable, ternaryfunc call,
               PyObject *argstuple, PyObject *kwdict)
 {
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    int was_in_call;
+    _PyBorrowMark mark = _PyBorrowCall_Enter(tstate, &was_in_call);
     PyObject *res = _PyCFunctionWithKeywords_TrampolineCall(
         (PyCFunctionWithKeywords)call, callable, argstuple, kwdict);
-    _PyBorrowScope_Exit(tstate, mark);
+    _PyBorrowCall_Exit(tstate, mark, was_in_call);
     res = _Py_CheckFunctionResult(tstate, callable, res, NULL);
     return _PyValue_FromObjectResult(res);
 }

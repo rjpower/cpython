@@ -5588,7 +5588,8 @@ type_call_value(PyThreadState *tstate, PyTypeObject *type, const PyValue *args,
                       type->tp_name);
         goto done;
     }
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    int was_in_call;
+    _PyBorrowMark mark = _PyBorrowCall_Enter(tstate, &was_in_call);
     _Py_newvaluefunc value_new = _PyType_VALUE_SLOT(type, new_);
     if (value_new != NULL) {
         _PyType_CHECK_VALUE_ROW(type, _Py_VALUE_SLOT_INDEX_new_);
@@ -5623,7 +5624,7 @@ type_call_value(PyThreadState *tstate, PyTypeObject *type, const PyValue *args,
             }
         }
     }
-    _PyBorrowScope_Exit(tstate, mark);
+    _PyBorrowCall_Exit(tstate, mark, was_in_call);
 done:
     Py_XDECREF(kwds);
     Py_DECREF(tuple);

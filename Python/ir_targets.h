@@ -3,7 +3,7 @@
 //   Python/bytecodes.c
 // Do not edit!
 #ifdef IR_GEN_TABLES
-static const uint8_t generator_yielded_targets[409] = {
+static const uint8_t generator_yielded_targets[410] = {
     [375] = 1,
     [376] = 1,
     [397] = 1,
@@ -29,7 +29,7 @@ static const uint8_t generator_yielded_targets[409] = {
     [404] = 1,
     [390] = 1,
 };
-static const uint8_t generator_completed_targets[409] = {
+static const uint8_t generator_completed_targets[410] = {
     [367] = GEN_THROWING | GEN_COMPLETE_DISCARD,
     [368] = GEN_THROWING | GEN_COMPLETE_HOME,
     [395] = GEN_THROWING | GEN_COMPLETE_POP_TOP,
@@ -63,7 +63,7 @@ static const uint8_t generator_completed_targets[409] = {
     [65] = GEN_COMPLETE_FOR_ITER,
     [182] = GEN_COMPLETE_FOR_ITER,
 };
-static const uint8_t generator_resume_targets[409] = {
+static const uint8_t generator_resume_targets[410] = {
     [371] = GEN_RESUME_SEND,
     [372] = GEN_RESUME_STORE,
     [373] = GEN_RESUME_SEND,
@@ -225,7 +225,7 @@ static void *const opcode_targets[512] = {
     [123] = &&TARGET_TO_BOOL_STR,
     [124] = &&TARGET_UNPACK_SEQUENCE_LIST,
     [125] = &&TARGET_UNPACK_SEQUENCE_TUPLE,
-    [126] = &&TARGET_UNPACK_SEQUENCE_TWO_TUPLE,
+    [126] = &&TARGET_UNKNOWN_OPCODE,
     [127] = &&TARGET_MATERIALIZE_KWARGS,
     [128] = &&TARGET_RESUME,
     [129] = &&TARGET_BINARY_OP_ADD_FLOAT,
@@ -508,7 +508,7 @@ static void *const opcode_targets[512] = {
     [406] = &&TARGET_LOAD_ATTR_GETSET,
     [407] = &&TARGET_CALL_PY_GENERATOR,
     [408] = &&TARGET_GET_ITER_PY_GENERATOR,
-    [409] = &&TARGET_UNKNOWN_OPCODE,
+    [409] = &&TARGET_CONTAINS_OP_JUMP_SEQUENCE,
     [410] = &&TARGET_UNKNOWN_OPCODE,
     [411] = &&TARGET_UNKNOWN_OPCODE,
     [412] = &&TARGET_UNKNOWN_OPCODE,

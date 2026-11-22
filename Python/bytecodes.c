@@ -563,16 +563,27 @@ dummy_func(
         macro(TO_BOOL_STR) =
             _GUARD_TOS_UNICODE + unused/1 + unused/2 + _TO_BOOL_STR + _POP_TOP_UNICODE;
 
-        op(_REPLACE_WITH_TRUE, (value -- res, v)) {
-            res = PyValue_True;
+        // The one guarded form for a value that is None or an instance of a
+        // type with no __bool__ or __len__ (the version covers those
+        // slots): None is false, any such instance true.
+        op(_GUARD_NONE_OR_TYPE_VERSION, (type_version/2, value -- value)) {
+            assert(type_version != 0);
+            if (!PyValue_IsNone(value)) {
+                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(value));
+                EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version);
+            }
+        }
+
+        op(_TRUTH_NONE_OR_PLAIN, (value -- res, v)) {
+            res = PyValue_IsNone(value) ? PyValue_False : PyValue_True;
             v = value;
             DEAD(value);
         }
 
         macro(TO_BOOL_ALWAYS_TRUE) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
-            _REPLACE_WITH_TRUE +
+            _GUARD_NONE_OR_TYPE_VERSION +
+            _TRUTH_NONE_OR_PLAIN +
             POP_TOP;
 
         macro(UNARY_INVERT) = _UNARY_INVERT + POP_TOP;
@@ -1882,7 +1893,6 @@ dummy_func(
         }
 
         family(UNPACK_SEQUENCE, INLINE_CACHE_ENTRIES_UNPACK_SEQUENCE) = {
-            UNPACK_SEQUENCE_TWO_TUPLE,
             UNPACK_SEQUENCE_TUPLE,
             UNPACK_SEQUENCE_LIST,
         };
@@ -1918,20 +1928,6 @@ dummy_func(
 
         macro(UNPACK_SEQUENCE) = unused/1 + _SPECIALIZE_UNPACK_SEQUENCE + _UNPACK_SEQUENCE;
 
-        macro(UNPACK_SEQUENCE_TWO_TUPLE) =
-            _GUARD_TOS_TUPLE + unused/1 + _UNPACK_SEQUENCE_TWO_TUPLE;
-
-        op(_UNPACK_SEQUENCE_TWO_TUPLE, (seq -- values[2])) {
-            assert(oparg == 2);
-            PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
-            assert(PyTuple_CheckExact(seq_o));
-            EXIT_IF(PyTuple_GET_SIZE(seq_o) != 2);
-            STAT_INC(UNPACK_SEQUENCE, hit);
-            IR_WRITE_OUTPUT(values, 0, PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1)));
-            IR_WRITE_OUTPUT(values, 1, PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0)));
-            DECREF_INPUTS();
-        }
-
         macro(UNPACK_SEQUENCE_TUPLE) =
             _GUARD_TOS_TUPLE + unused/1 + _UNPACK_SEQUENCE_TUPLE;
 
@@ -1940,10 +1936,7 @@ dummy_func(
             assert(PyTuple_CheckExact(seq_o));
             EXIT_IF(PyTuple_GET_SIZE(seq_o) != oparg);
             STAT_INC(UNPACK_SEQUENCE, hit);
-            PyValue *items = _PyTuple_ITEMS(seq_o);
-            for (int i = 0; i < oparg; i++) {
-                IR_WRITE_OUTPUT(values, i, PyValue_XDUP(items[oparg - 1 - i]));
-            }
+            IR_UNPACK_ITEMS(values, _PyTuple_ITEMS(seq_o), oparg);
             DECREF_INPUTS();
         }
 
@@ -1959,10 +1952,7 @@ dummy_func(
                 DEOPT_IF(true);
             }
             STAT_INC(UNPACK_SEQUENCE, hit);
-            PyValue *items = _PyList_ITEMS(seq_o);
-            for (int i = 0; i < oparg; i++) {
-                IR_WRITE_OUTPUT(values, i, PyValue_XDUP(items[oparg - 1 - i]));
-            }
+            IR_UNPACK_ITEMS(values, _PyList_ITEMS(seq_o), oparg);
             UNLOCK_OBJECT(seq_o);
             DECREF_INPUTS();
         }
@@ -3379,9 +3369,35 @@ dummy_func(
         macro(INSTRUMENTED_COMPARE_OP_JUMP) =
             unused/1 + _COMPARE_OP + _INSTRUMENTED_JUMP_IF_COND;
 
+        /* An exact str, tuple or list container: the type's contains
+         * function is called by value from the handler, with no slot lookup
+         * and no dispatcher. The guard is the exact type, so a subclass that
+         * overrides __contains__ takes the generic handler. Only the fused
+         * words have this form. */
+        op(_GUARD_TOS_STR_TUPLE_LIST, (tos -- tos)) {
+            PyObject *o = PyValue_AsKnownObjectBorrow(tos);
+            EXIT_IF(!PyUnicode_CheckExact(o) && !PyTuple_CheckExact(o)
+                    && !PyList_CheckExact(o));
+        }
+
+        op(_CONTAINS_OP_SEQUENCE, (left, right -- b, l, r)) {
+            PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+            STAT_INC(CONTAINS_OP, hit);
+            _Py_containsvaluefunc contains_slot = _PyType_VALUE_SLOT(Py_TYPE(right_o), contains);
+            int res = contains_slot(right_o, PyValue_Borrow(left));
+            if (res < 0) {
+                ERROR_NO_POP();
+            }
+            b = (res ^ oparg) ? PyValue_True : PyValue_False;
+            l = left;
+            r = right;
+            INPUTS_DEAD();
+        }
+
         family(CONTAINS_OP_JUMP, INLINE_CACHE_ENTRIES_CONTAINS_OP) = {
             CONTAINS_OP_JUMP_DICT,
             CONTAINS_OP_JUMP_SET,
+            CONTAINS_OP_JUMP_SEQUENCE,
         };
 
         macro(CONTAINS_OP_JUMP) =
@@ -3392,6 +3408,9 @@ dummy_func(
 
         macro(CONTAINS_OP_JUMP_DICT) =
             _GUARD_TOS_ANY_DICT + unused/1 + _CONTAINS_OP_DICT + POP_TOP + POP_TOP + _JUMP_IF_COND;
+
+        macro(CONTAINS_OP_JUMP_SEQUENCE) =
+            _GUARD_TOS_STR_TUPLE_LIST + unused/1 + _CONTAINS_OP_SEQUENCE + POP_TOP + POP_TOP + _JUMP_IF_COND;
 
         macro(INSTRUMENTED_CONTAINS_OP_JUMP) =
             unused/1 + _CONTAINS_OP + POP_TOP + POP_TOP + _INSTRUMENTED_JUMP_IF_COND;
@@ -3618,10 +3637,35 @@ dummy_func(
             _GUARD_TOS_UNICODE + unused/1 + unused/2 + _TO_BOOL_STR + _POP_TOP_UNICODE + _POP_JUMP_IF_FALSE;
         macro(POP_JUMP_IF_TRUE_STR) =
             _GUARD_TOS_UNICODE + unused/1 + unused/2 + _TO_BOOL_STR + _POP_TOP_UNICODE + _POP_JUMP_IF_TRUE;
+        // The jump of the None-or-plain form tests the None the guard
+        // allowed, without forming the bool: the object path then carries no
+        // result to select.
+        op(_POP_JUMP_IF_FALSE_NONE_OR_PLAIN, (value -- v)) {
+            int flag = PyValue_IsNone(value);
+            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
+            IR_REPORT_EDGE(flag);
+            v = value;
+            DEAD(value);
+            if (flag) {
+                JUMPTO(oparg);
+            }
+        }
+
+        op(_POP_JUMP_IF_TRUE_NONE_OR_PLAIN, (value -- v)) {
+            int flag = !PyValue_IsNone(value);
+            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
+            IR_REPORT_EDGE(flag);
+            v = value;
+            DEAD(value);
+            if (flag) {
+                JUMPTO(oparg);
+            }
+        }
+
         macro(POP_JUMP_IF_FALSE_ALWAYS_TRUE) =
-            unused/1 + _GUARD_TYPE_VERSION + _REPLACE_WITH_TRUE + POP_TOP + _POP_JUMP_IF_FALSE;
+            unused/1 + _GUARD_NONE_OR_TYPE_VERSION + _POP_JUMP_IF_FALSE_NONE_OR_PLAIN + POP_TOP;
         macro(POP_JUMP_IF_TRUE_ALWAYS_TRUE) =
-            unused/1 + _GUARD_TYPE_VERSION + _REPLACE_WITH_TRUE + POP_TOP + _POP_JUMP_IF_TRUE;
+            unused/1 + _GUARD_NONE_OR_TYPE_VERSION + _POP_JUMP_IF_TRUE_NONE_OR_PLAIN + POP_TOP;
 
         macro(POP_JUMP_IF_NONE) = unused/1 + _IS_NONE + _POP_JUMP_IF_TRUE;
 
@@ -3877,30 +3921,46 @@ dummy_func(
 
         macro(FOR_ITER) = unused/1 + _SPECIALIZE_FOR_ITER + _FOR_ITER;
 
-        op(_GUARD_TOS_NOT_NULL, (null_or_index -- null_or_index)) {
-            EXIT_IF(PyValue_IsNull(null_or_index));
-        }
-
+        // One form for both cursor protocols. A tagged cursor steps an
+        // index-protocol iterator; a NULL cursor steps an object-protocol
+        // iterator through its C value slot, and a type without the slot
+        // exits.
         replaced op(_FOR_ITER_VIRTUAL, (iter, null_or_index -- iter, null_or_index, next)) {
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-            _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
-            index = next_index.index;
-            if (PyValue_IsNull(next_index.value)) {
-                if (index < 0) {
-                    ERROR_NO_POP();
+            if (PyValue_IsNull(null_or_index)) {
+                _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(Py_TYPE(iter_o), iternext);
+                EXIT_IF(next_value == NULL);
+                _PyStatusValue step = next_value(iter_o);
+                if (step.status != PYGEN_NEXT) {
+                    // A StopIteration is the exhaustion; any other error
+                    // propagates.
+                    if (step.status == PYGEN_ERROR && !_PyForIter_StopIsExhaustion(tstate, frame)) {
+                        ERROR_NO_POP();
+                    }
+                    PyValue completed = PyValue_IsNull(step.value) ? PyValue_None : step.value;
+                    IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
                 }
-                PyValue completed = PyValue_None;
-                IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
+                next = step.value;
             }
-            null_or_index = PyValue_TagIndex(index);
-            next = next_index.value;
+            else {
+                Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                index = next_index.index;
+                if (PyValue_IsNull(next_index.value)) {
+                    if (index < 0) {
+                        ERROR_NO_POP();
+                    }
+                    PyValue completed = PyValue_None;
+                    IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
+                }
+                null_or_index = PyValue_TagIndex(index);
+                next = next_index.value;
+            }
         }
 
         macro(FOR_ITER_VIRTUAL) =
             unused/1 +  // Skip over the entry distance
-            _GUARD_TOS_NOT_NULL +
             _FOR_ITER_VIRTUAL;
 
         inst(INSTRUMENTED_FOR_ITER, (unused/1, iter, null_or_index -- iter, null_or_index, next)) {

@@ -761,6 +761,44 @@ _PyIR_TakenPointer(PyValueBorrow view, PyValue *owner)
         ir_unpack_owned |= ir_owns; \
     } while (0)
 
+/* The elements of an unpack of ITEMS[0..N-1]: ITEMS[J] goes to LOCALS[J] and
+ * the old value of that local to WINDOW[N - 1 - J] if it owns an object, or
+ * the slot is left empty (zero), as IR_UNPACK_DIRECT does one at a time. The
+ * frame owns every value throughout. The result says whether the window
+ * holds an owner to close.
+ *
+ * A leaf function, so that the loop's state stays in registers across the
+ * evaluator's many live values. The ownership select has no branch: the
+ * old value is masked by whether it owns an object. */
+static Py_NO_INLINE bool
+_PyIR_UnpackItemsToLocals(PyValue *locals, PyValue *window,
+                          const PyValue *items, int n)
+{
+    uintptr_t owned = 0;
+    PyValue *slot = window + (n - 1);
+    for (int j = 0; j < n; j++, slot--) {
+        PyValue item = PyValue_DUP(items[j]);
+        PyValue old = locals[j];
+        locals[j] = item;
+        _PyValue_CheckHome(locals[j]);
+        uintptr_t owns = (old.bits != 0) & ((old.bits & Py_OWNED_MASK) == 0);
+        slot->bits = old.bits & -owns;
+        owned |= owns;
+    }
+    return owned != 0;
+}
+
+/* The elements of an unpack of ITEMS[0..N-1] into the window's homes, in
+ * stack order: ITEMS[N - 1 - I] to WINDOW[I]. */
+static Py_NO_INLINE void
+_PyIR_UnpackItemsToWindow(_PyInterpreterFrame *frame, PyValue *window,
+                          const PyValue *items, int n)
+{
+    for (int i = 0; i < n; i++) {
+        _PyFrame_WriteHome(frame, &window[i], PyValue_XDUP(items[n - 1 - i]));
+    }
+}
+
 /* The elements of an unpack that a function wrote into WINDOW in stack
  * order (element i in WINDOW[N - 1 - i]) go to the locals LOCALS[0..N-1].
  * Each local's old value changes places with the element's slot if it owns

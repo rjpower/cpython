@@ -8769,6 +8769,90 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             DISPATCH();
         }
 
+        TARGET(CONTAINS_OP_JUMP_SEQUENCE) {
+            int opcode = CONTAINS_OP_JUMP_SEQUENCE;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(CONTAINS_OP_JUMP_SEQUENCE);
+            _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
+            int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
+            (void)oparg;
+            PyValueBorrow tos;
+            PyValueBorrow left;
+            PyValueBorrow right;
+            PyValue b;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValueBorrow value;
+            PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            // _GUARD_TOS_STR_TUPLE_LIST
+            {
+                tos = IR_VIEW(IR_B(ir_word));
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
+                    UPDATE_MISS_STATS(CONTAINS_OP);
+                    JUMP_TO_PREDICTED(CONTAINS_OP_JUMP);
+                }
+                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
+                if (!PyUnicode_CheckExact(o) && !PyTuple_CheckExact(o)
+                    && !PyList_CheckExact(o)) {
+                    UPDATE_MISS_STATS(CONTAINS_OP);
+                    JUMP_TO_PREDICTED(CONTAINS_OP_JUMP);
+                }
+            }
+            // _CONTAINS_OP_SEQUENCE
+            {
+                right = tos;
+                (void)right;
+                left = IR_VIEW(IR_A(ir_word));
+                PyObject *right_o = _PyValue_AsKnownObjectBorrowPointer(right);
+                STAT_INC(CONTAINS_OP, hit);
+                _Py_containsvaluefunc contains_slot = _PyType_VALUE_SLOT(Py_TYPE(right_o), contains);
+                int res = contains_slot(right_o, PyValue_Borrow(left));
+                if (res < 0) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                b = (res ^ oparg) ? PyValue_True : PyValue_False;
+                l = left;
+                r = right;
+                ir_own_A = IR_DETACH(ir_word, A, l);
+                ir_own_B = IR_DETACH(ir_word, B, r);
+            }
+            // _POP_TOP
+            {
+                value = r;
+                (void)value;
+                (void)(ir_own_B);
+            }
+            // _POP_TOP
+            {
+                value = l;
+                (void)value;
+                (void)(ir_own_A);
+            }
+            // _JUMP_IF_COND
+            {
+                cond = b;
+                assert(PyValue_BoolCheck(cond));
+                int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->taken, flag);
+                IR_REPORT_EDGE(flag);
+                if (flag) {
+                    JUMPBY(IR_FUSED_DISTANCE());
+                }
+            }
+            _PyValue_XCLOSE_POINTER(ir_own_B);
+            PyValue_XCLOSE(ir_own_A);
+            DISPATCH();
+        }
+
         TARGET(CONTAINS_OP_JUMP_SET) {
             int opcode = CONTAINS_OP_JUMP_SET;
             (void)(opcode);
@@ -9357,23 +9441,35 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
-            PyValue null_or_index;
             PyValue iter;
+            PyValue null_or_index;
             PyValue next;
-            // _GUARD_TOS_NOT_NULL
-            {
-                null_or_index = window[1];
-                if (PyValue_IsNull(null_or_index)) {
+            null_or_index = window[1];
+            iter = window[0];
+            assert(PyValue_IsObject(iter));
+            PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
+            if (PyValue_IsNull(null_or_index)) {
+                _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(Py_TYPE(iter_o), iternext);
+                if (next_value == NULL) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
+                _PyStatusValue step = next_value(iter_o);
+                if (step.status != PYGEN_NEXT) {
+                    if (step.status == PYGEN_ERROR && !_PyForIter_StopIsExhaustion(tstate, frame)) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                    PyValue completed = PyValue_IsNull(step.value) ? PyValue_None : step.value;{
+                        _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, completed);
+                        next_instr = ir_step_result.next;
+                        if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
+                        DISPATCH();
+                    }
+                }
+                next = step.value;
             }
-            // _FOR_ITER_VIRTUAL
-            {
-                iter = window[0];
-                assert(PyValue_IsObject(iter));
-                PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
+            else {
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
                 _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
                 index = next_index.index;
@@ -12643,54 +12739,45 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
-            PyValueBorrow owner;
             PyValueBorrow value;
-            PyValue res;
             PyValueBorrow v;
-            PyValue cond;
             PyValue ir_own_A = PyValue_NULL;
             (void)ir_own_A;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_NONE_OR_TYPE_VERSION
             {
-                owner = IR_VIEW(IR_A(ir_word));
+                value = IR_VIEW(IR_A(ir_word));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
                 }
-                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
-                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
-                    JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                if (!PyValue_IsNone(value)) {
+                    PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(value));
+                    if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                        UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
+                        assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
+                        JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                    }
                 }
             }
-            // _REPLACE_WITH_TRUE
+            // _POP_JUMP_IF_FALSE_NONE_OR_PLAIN
             {
-                value = owner;
-                (void)value;
-                res = PyValue_True;
+                int flag = PyValue_IsNone(value);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                IR_REPORT_EDGE(flag);
                 v = value;
                 ir_own_A = IR_DETACH(ir_word, A, v);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
             }
             // _POP_TOP
             {
                 value = v;
                 (void)value;
                 (void)(ir_own_A);
-            }
-            // _POP_JUMP_IF_FALSE
-            {
-                cond = res;
-                assert(PyValue_BoolCheck(cond));
-                int flag = PyValue_IsFalse(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
-                IR_REPORT_EDGE(flag);
-                if (flag) {
-                    JUMPTO(oparg);
-                }
             }
             _PyValue_XCLOSE_POINTER(ir_own_A);
             DISPATCH();
@@ -13076,54 +13163,45 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
-            PyValueBorrow owner;
             PyValueBorrow value;
-            PyValue res;
             PyValueBorrow v;
-            PyValue cond;
             PyValue ir_own_A = PyValue_NULL;
             (void)ir_own_A;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_NONE_OR_TYPE_VERSION
             {
-                owner = IR_VIEW(IR_A(ir_word));
+                value = IR_VIEW(IR_A(ir_word));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
                 }
-                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
-                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
-                    JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                if (!PyValue_IsNone(value)) {
+                    PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(value));
+                    if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                        UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
+                        assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
+                        JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                    }
                 }
             }
-            // _REPLACE_WITH_TRUE
+            // _POP_JUMP_IF_TRUE_NONE_OR_PLAIN
             {
-                value = owner;
-                (void)value;
-                res = PyValue_True;
+                int flag = !PyValue_IsNone(value);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                IR_REPORT_EDGE(flag);
                 v = value;
                 ir_own_A = IR_DETACH(ir_word, A, v);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
             }
             // _POP_TOP
             {
                 value = v;
                 (void)value;
                 (void)(ir_own_A);
-            }
-            // _POP_JUMP_IF_TRUE
-            {
-                cond = res;
-                assert(PyValue_BoolCheck(cond));
-                int flag = PyValue_IsTrue(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
-                IR_REPORT_EDGE(flag);
-                if (flag) {
-                    JUMPTO(oparg);
-                }
             }
             _PyValue_XCLOSE_POINTER(ir_own_A);
             DISPATCH();
@@ -14854,31 +14932,31 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_ALWAYS_TRUE);
             _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_C(ir_word));
-            PyValue owner;
             PyValue value;
             PyValue res;
             PyValue v;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_NONE_OR_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                value = IR_SLOT(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(TO_BOOL);
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                     JUMP_TO_PREDICTED(TO_BOOL);
                 }
-                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    UPDATE_MISS_STATS(TO_BOOL);
-                    assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
-                    JUMP_TO_PREDICTED(TO_BOOL);
+                if (!PyValue_IsNone(value)) {
+                    PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(value));
+                    if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                        UPDATE_MISS_STATS(TO_BOOL);
+                        assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
+                        JUMP_TO_PREDICTED(TO_BOOL);
+                    }
                 }
             }
-            // _REPLACE_WITH_TRUE
+            // _TRUTH_NONE_OR_PLAIN
             {
-                value = owner;
-                res = PyValue_True;
+                res = PyValue_IsNone(value) ? PyValue_False : PyValue_True;
                 v = value;
                 _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
             }
@@ -15246,10 +15324,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     }
                 }
                 STAT_INC(UNPACK_SEQUENCE, hit);
-                PyValue *items = _PyList_ITEMS(seq_o);
-                for (int i = 0; i < oparg; i++) {
-                    if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[i], i, oparg, PyValue_XDUP(items[oparg - 1 - i])); } else { _PyFrame_WriteHome(frame, &values[i], PyValue_XDUP(items[oparg - 1 - i])); };
-                }
+                if (IR_IS_LOCAL_FIELD(ir_word, D)) { ir_unpack_owned = _PyIR_UnpackItemsToLocals(&IR_SLOT(IR_D(ir_word)), values, _PyList_ITEMS(seq_o), oparg); } else { _PyIR_UnpackItemsToWindow(frame, values, _PyList_ITEMS(seq_o), oparg); };
                 UNLOCK_OBJECT(seq_o);
                 IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
                 _PyValue_CLOSE_POINTER(seq);
@@ -15306,68 +15381,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
                 STAT_INC(UNPACK_SEQUENCE, hit);
-                PyValue *items = _PyTuple_ITEMS(seq_o);
-                for (int i = 0; i < oparg; i++) {
-                    if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[i], i, oparg, PyValue_XDUP(items[oparg - 1 - i])); } else { _PyFrame_WriteHome(frame, &values[i], PyValue_XDUP(items[oparg - 1 - i])); };
-                }
+                if (IR_IS_LOCAL_FIELD(ir_word, D)) { ir_unpack_owned = _PyIR_UnpackItemsToLocals(&IR_SLOT(IR_D(ir_word)), values, _PyTuple_ITEMS(seq_o), oparg); } else { _PyIR_UnpackItemsToWindow(frame, values, _PyTuple_ITEMS(seq_o), oparg); };
                 IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
-                _PyValue_CLOSE_POINTER(seq);
-            }
-            if (IR_IS_LOCAL_FIELD(ir_word, D)) {
-                if (ir_unpack_owned) { IR_CLOSE_WINDOW(window, oparg); }
-            }
-            DISPATCH();
-        }
-
-        TARGET(UNPACK_SEQUENCE_TWO_TUPLE) {
-            int opcode = UNPACK_SEQUENCE_TWO_TUPLE;
-            (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            IR_HOLD_NEXT();
-            next_instr += 1;
-            INSTRUCTION_STATS(UNPACK_SEQUENCE_TWO_TUPLE);
-            PyValue ir_old = PyValue_NULL;
-            (void)ir_old;
-            bool ir_unpack_owned = false;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            PyValue *window = &IR_SLOT(IR_A(ir_word));
-            (void)window;
-            PyValue tos;
-            PyValue seq;
-            PyValue *values;
-            // _GUARD_TOS_TUPLE
-            {
-                tos = window[0];
-                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-                PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
-                if (!PyTuple_CheckExact(o)) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-            }
-            // _UNPACK_SEQUENCE_TWO_TUPLE
-            {
-                seq = tos;
-                values = &window[0];
-                assert(oparg == 2);
-                PyObject *seq_o = _PyValue_AsKnownObjectBorrowPointer(seq);
-                assert(PyTuple_CheckExact(seq_o));
-                if (PyTuple_GET_SIZE(seq_o) != 2) {
-                    UPDATE_MISS_STATS(UNPACK_SEQUENCE);
-                    assert(_PyOpcode_Deopt[opcode] == (UNPACK_SEQUENCE));
-                    JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
-                }
-                STAT_INC(UNPACK_SEQUENCE, hit);
-                if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[0], 0, oparg, PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1))); } else { _PyFrame_WriteHome(frame, &values[0], PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1))); };
-                if (IR_IS_LOCAL_FIELD(ir_word, D)) { IR_UNPACK_DIRECT(&IR_SLOT(IR_D(ir_word)), &values[1], 1, oparg, PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0))); } else { _PyFrame_WriteHome(frame, &values[1], PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0))); };
                 _PyValue_CLOSE_POINTER(seq);
             }
             if (IR_IS_LOCAL_FIELD(ir_word, D)) {

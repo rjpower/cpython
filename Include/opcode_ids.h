@@ -131,7 +131,6 @@ extern "C" {
 #define TO_BOOL_STR                            123
 #define UNPACK_SEQUENCE_LIST                   124
 #define UNPACK_SEQUENCE_TUPLE                  125
-#define UNPACK_SEQUENCE_TWO_TUPLE              126
 #define MATERIALIZE_KWARGS                     127
 #define RESUME                                 128
 #define BINARY_OP_ADD_FLOAT                    129
@@ -275,7 +274,7 @@ extern "C" {
 #define HAVE_ARGUMENT                           41
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                233
-#define IR_NUM_HANDLERS                        409
+#define IR_NUM_HANDLERS                        410
 
 #ifdef __cplusplus
 }

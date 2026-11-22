@@ -552,8 +552,6 @@ int _PyOpcode_num_popped(int opcode, int oparg)  {
             return 1;
         case UNPACK_SEQUENCE_TUPLE:
             return 1;
-        case UNPACK_SEQUENCE_TWO_TUPLE:
-            return 1;
         case WITH_EXCEPT_START:
             return 5;
         case YIELD_VALUE:
@@ -1085,8 +1083,6 @@ int _PyOpcode_num_pushed(int opcode, int oparg)  {
             return oparg;
         case UNPACK_SEQUENCE_TUPLE:
             return oparg;
-        case UNPACK_SEQUENCE_TWO_TUPLE:
-            return 2;
         case WITH_EXCEPT_START:
             return 6;
         case YIELD_VALUE:
@@ -1415,7 +1411,6 @@ const struct opcode_metadata _PyOpcode_opcode_metadata[267] = {
     [UNPACK_SEQUENCE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [UNPACK_SEQUENCE_LIST] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_DEOPT_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
     [UNPACK_SEQUENCE_TUPLE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
-    [UNPACK_SEQUENCE_TWO_TUPLE] = { true, INSTR_FMT_IBC, HAS_ARG_FLAG | HAS_EXIT_FLAG | HAS_ESCAPES_FLAG },
     [WITH_EXCEPT_START] = { true, INSTR_FMT_IX, HAS_ERROR_FLAG | HAS_ESCAPES_FLAG },
     [YIELD_VALUE] = { true, INSTR_FMT_IB, HAS_ARG_FLAG | HAS_ESCAPES_FLAG | HAS_SYNC_SP_FLAG },
     [ANNOTATIONS_PLACEHOLDER] = { true, -1, HAS_PURE_FLAG },
@@ -1511,7 +1506,7 @@ _PyOpcode_macro_expansion[256] = {
     [FOR_ITER_LIST] = { .nuops = 3, .uops = { { _ITER_CHECK_LIST, OPARG_SIMPLE, 1 }, { _ITER_JUMP_LIST, OPARG_REPLACED, 1 }, { _ITER_NEXT_LIST, OPARG_REPLACED, 1 } } },
     [FOR_ITER_RANGE] = { .nuops = 3, .uops = { { _ITER_CHECK_RANGE, OPARG_SIMPLE, 1 }, { _ITER_JUMP_RANGE, OPARG_REPLACED, 1 }, { _ITER_NEXT_RANGE, OPARG_SIMPLE, 1 } } },
     [FOR_ITER_TUPLE] = { .nuops = 3, .uops = { { _ITER_CHECK_TUPLE, OPARG_SIMPLE, 1 }, { _ITER_JUMP_TUPLE, OPARG_REPLACED, 1 }, { _ITER_NEXT_TUPLE, OPARG_SIMPLE, 1 } } },
-    [FOR_ITER_VIRTUAL] = { .nuops = 2, .uops = { { _GUARD_TOS_NOT_NULL, OPARG_SIMPLE, 1 }, { _FOR_ITER_VIRTUAL, OPARG_REPLACED, 1 } } },
+    [FOR_ITER_VIRTUAL] = { .nuops = 1, .uops = { { _FOR_ITER_VIRTUAL, OPARG_REPLACED, 1 } } },
     [GET_AITER] = { .nuops = 1, .uops = { { _GET_AITER, OPARG_SIMPLE, 0 } } },
     [GET_ANEXT] = { .nuops = 1, .uops = { { _GET_ANEXT, OPARG_SIMPLE, 0 } } },
     [GET_AWAITABLE] = { .nuops = 1, .uops = { { _GET_AWAITABLE, OPARG_SIMPLE, 0 } } },
@@ -1578,7 +1573,6 @@ _PyOpcode_macro_expansion[256] = {
     [POP_EXCEPT] = { .nuops = 1, .uops = { { _POP_EXCEPT, OPARG_SIMPLE, 0 } } },
     [POP_ITER] = { .nuops = 1, .uops = { { _POP_ITER, OPARG_SIMPLE, 0 } } },
     [POP_JUMP_IF_FALSE] = { .nuops = 2, .uops = { { _TO_BOOL, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 3 } } },
-    [POP_JUMP_IF_FALSE_ALWAYS_TRUE] = { .nuops = 4, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _REPLACE_WITH_TRUE, OPARG_SIMPLE, 3 }, { _POP_TOP, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 3 } } },
     [POP_JUMP_IF_FALSE_BOOL] = { .nuops = 2, .uops = { { _GUARD_TOS_BOOL, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 3 } } },
     [POP_JUMP_IF_FALSE_INT] = { .nuops = 4, .uops = { { _GUARD_TOS_EXACT_INT, OPARG_SIMPLE, 0 }, { _TO_BOOL_INT, OPARG_SIMPLE, 3 }, { _POP_TOP_INT, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 3 } } },
     [POP_JUMP_IF_FALSE_LIST] = { .nuops = 4, .uops = { { _GUARD_TOS_LIST, OPARG_SIMPLE, 0 }, { _TO_BOOL_LIST, OPARG_SIMPLE, 3 }, { _POP_TOP, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 3 } } },
@@ -1587,7 +1581,6 @@ _PyOpcode_macro_expansion[256] = {
     [POP_JUMP_IF_NONE] = { .nuops = 2, .uops = { { _IS_NONE, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_TRUE, OPARG_REPLACED, 1 } } },
     [POP_JUMP_IF_NOT_NONE] = { .nuops = 2, .uops = { { _IS_NONE, OPARG_SIMPLE, 1 }, { _POP_JUMP_IF_FALSE, OPARG_REPLACED, 1 } } },
     [POP_JUMP_IF_TRUE] = { .nuops = 2, .uops = { { _TO_BOOL, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_TRUE, OPARG_REPLACED, 3 } } },
-    [POP_JUMP_IF_TRUE_ALWAYS_TRUE] = { .nuops = 4, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _REPLACE_WITH_TRUE, OPARG_SIMPLE, 3 }, { _POP_TOP, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_TRUE, OPARG_REPLACED, 3 } } },
     [POP_JUMP_IF_TRUE_BOOL] = { .nuops = 2, .uops = { { _GUARD_TOS_BOOL, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_TRUE, OPARG_REPLACED, 3 } } },
     [POP_JUMP_IF_TRUE_INT] = { .nuops = 4, .uops = { { _GUARD_TOS_EXACT_INT, OPARG_SIMPLE, 0 }, { _TO_BOOL_INT, OPARG_SIMPLE, 3 }, { _POP_TOP_INT, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_TRUE, OPARG_REPLACED, 3 } } },
     [POP_JUMP_IF_TRUE_LIST] = { .nuops = 4, .uops = { { _GUARD_TOS_LIST, OPARG_SIMPLE, 0 }, { _TO_BOOL_LIST, OPARG_SIMPLE, 3 }, { _POP_TOP, OPARG_SIMPLE, 3 }, { _POP_JUMP_IF_TRUE, OPARG_REPLACED, 3 } } },
@@ -1619,7 +1612,7 @@ _PyOpcode_macro_expansion[256] = {
     [STORE_SUBSCR_LIST_INT] = { .nuops = 5, .uops = { { _GUARD_TOS_INT, OPARG_SIMPLE, 0 }, { _GUARD_NOS_LIST, OPARG_SIMPLE, 0 }, { _STORE_SUBSCR_LIST_INT, OPARG_SIMPLE, 1 }, { _POP_TOP, OPARG_SIMPLE, 1 }, { _POP_TOP, OPARG_SIMPLE, 1 } } },
     [SWAP] = { .nuops = 1, .uops = { { _SWAP, OPARG_SIMPLE, 0 } } },
     [TO_BOOL] = { .nuops = 1, .uops = { { _TO_BOOL, OPARG_SIMPLE, 3 } } },
-    [TO_BOOL_ALWAYS_TRUE] = { .nuops = 3, .uops = { { _GUARD_TYPE_VERSION, 2, 1 }, { _REPLACE_WITH_TRUE, OPARG_SIMPLE, 3 }, { _POP_TOP, OPARG_SIMPLE, 3 } } },
+    [TO_BOOL_ALWAYS_TRUE] = { .nuops = 3, .uops = { { _GUARD_NONE_OR_TYPE_VERSION, 2, 1 }, { _TRUTH_NONE_OR_PLAIN, OPARG_SIMPLE, 3 }, { _POP_TOP, OPARG_SIMPLE, 3 } } },
     [TO_BOOL_BOOL] = { .nuops = 1, .uops = { { _GUARD_TOS_BOOL, OPARG_SIMPLE, 3 } } },
     [TO_BOOL_INT] = { .nuops = 3, .uops = { { _GUARD_TOS_EXACT_INT, OPARG_SIMPLE, 0 }, { _TO_BOOL_INT, OPARG_SIMPLE, 3 }, { _POP_TOP_INT, OPARG_SIMPLE, 3 } } },
     [TO_BOOL_LIST] = { .nuops = 3, .uops = { { _GUARD_TOS_LIST, OPARG_SIMPLE, 0 }, { _TO_BOOL_LIST, OPARG_SIMPLE, 3 }, { _POP_TOP, OPARG_SIMPLE, 3 } } },
@@ -1632,7 +1625,6 @@ _PyOpcode_macro_expansion[256] = {
     [UNPACK_SEQUENCE] = { .nuops = 1, .uops = { { _UNPACK_SEQUENCE, OPARG_SIMPLE, 1 } } },
     [UNPACK_SEQUENCE_LIST] = { .nuops = 2, .uops = { { _GUARD_TOS_LIST, OPARG_SIMPLE, 0 }, { _UNPACK_SEQUENCE_LIST, OPARG_SIMPLE, 1 } } },
     [UNPACK_SEQUENCE_TUPLE] = { .nuops = 2, .uops = { { _GUARD_TOS_TUPLE, OPARG_SIMPLE, 0 }, { _UNPACK_SEQUENCE_TUPLE, OPARG_SIMPLE, 1 } } },
-    [UNPACK_SEQUENCE_TWO_TUPLE] = { .nuops = 2, .uops = { { _GUARD_TOS_TUPLE, OPARG_SIMPLE, 0 }, { _UNPACK_SEQUENCE_TWO_TUPLE, OPARG_SIMPLE, 1 } } },
     [WITH_EXCEPT_START] = { .nuops = 1, .uops = { { _WITH_EXCEPT_START, OPARG_SIMPLE, 0 } } },
     [YIELD_VALUE] = { .nuops = 2, .uops = { { _MAKE_HEAP_SAFE, OPARG_SIMPLE, 0 }, { _YIELD_VALUE, OPARG_SIMPLE, 0 } } },
 };
@@ -1899,7 +1891,6 @@ const char *_PyOpcode_OpName[267] = {
     [UNPACK_SEQUENCE] = "UNPACK_SEQUENCE",
     [UNPACK_SEQUENCE_LIST] = "UNPACK_SEQUENCE_LIST",
     [UNPACK_SEQUENCE_TUPLE] = "UNPACK_SEQUENCE_TUPLE",
-    [UNPACK_SEQUENCE_TWO_TUPLE] = "UNPACK_SEQUENCE_TWO_TUPLE",
     [WITH_EXCEPT_START] = "WITH_EXCEPT_START",
     [YIELD_VALUE] = "YIELD_VALUE",
 };
@@ -1987,6 +1978,7 @@ PyAPI_DATA(const uint8_t) _PyOpcode_Deopt[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Deopt[256] = {
     [112] = 112,
+    [126] = 126,
     [239] = 239,
     [26] = 26,
     [64] = 64,
@@ -2239,7 +2231,6 @@ const uint8_t _PyOpcode_Deopt[256] = {
     [UNPACK_SEQUENCE] = UNPACK_SEQUENCE,
     [UNPACK_SEQUENCE_LIST] = UNPACK_SEQUENCE,
     [UNPACK_SEQUENCE_TUPLE] = UNPACK_SEQUENCE,
-    [UNPACK_SEQUENCE_TWO_TUPLE] = UNPACK_SEQUENCE,
     [WITH_EXCEPT_START] = WITH_EXCEPT_START,
     [YIELD_VALUE] = YIELD_VALUE,
 };
@@ -2252,6 +2243,7 @@ const uint8_t _PyOpcode_Deopt[256] = {
     case 64: \
     case 85: \
     case 112: \
+    case 126: \
     case 239: \
         ;
 struct pseudo_targets {

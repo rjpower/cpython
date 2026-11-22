@@ -1221,6 +1221,8 @@ static inline Py_ALWAYS_INLINE _PyStatusValue
 _PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
                                      _PyInterpreterFrame *frame,
                                      PyValue iter, PyValue *index_ptr);
+static int _PyForIter_StopIsExhaustion(PyThreadState *tstate,
+                                         _PyInterpreterFrame *frame);
 
 #if (defined(__GNUC__) && __GNUC__ >= 10 && !defined(__clang__)) && defined(__x86_64__)
 /*
@@ -6888,13 +6890,25 @@ _PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
     if (step.status != PYGEN_ERROR) {
         return step;
     }
-    if (_PyErr_ExceptionMatches(tstate, PyExc_StopIteration)) {
-        _PyEval_MonitorRaise(tstate, frame, frame->instr_ptr);
-        _PyErr_Clear(tstate);
+    if (_PyForIter_StopIsExhaustion(tstate, frame)) {
         return result;
     }
     result.status = -1;
     return result;
+}
+
+/* Called with an error set by a FOR_ITER step: a StopIteration is the
+ * exhaustion, so report it to monitoring, clear it and return 1. Any
+ * other exception stays set and the result is 0. */
+static Py_NO_INLINE int
+_PyForIter_StopIsExhaustion(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    if (!_PyErr_ExceptionMatches(tstate, PyExc_StopIteration)) {
+        return 0;
+    }
+    _PyEval_MonitorRaise(tstate, frame, frame->instr_ptr);
+    _PyErr_Clear(tstate);
+    return 1;
 }
 
 /* Out of line, as when it was exported, for the steps that are not

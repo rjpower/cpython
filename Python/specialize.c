@@ -688,12 +688,12 @@ instr_is_fused(_PyInstr *instr)
     return (_PyIR_FormatOf(handler)->flags & _PyIR_FUSED) != 0;
 }
 
+/* Install handler, the form of specialized_opcode (the opcode whose family
+ * the site is in) for this site. */
 static inline void
-specialize(_PyInstr *instr, int specialized_opcode)
+specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
 {
     assert(!PyErr_Occurred());
-    int handler = instr_is_fused(instr) ? fused_form(specialized_opcode)
-                                        : specialized_opcode;
     if (handler == LOAD_ATTR_SHAPE) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
         int nlocalsplus = _PyFrame_GetCode(current_frame())->co_nlocalsplus;
@@ -723,6 +723,14 @@ specialize(_PyInstr *instr, int specialized_opcode)
             ? LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP : LOAD_ATTR_SHAPE_POLY;
         (void)set_opcode(instr, poly_handler);
     }
+}
+
+static inline void
+specialize(_PyInstr *instr, int specialized_opcode)
+{
+    specialize_handler(instr, specialized_opcode,
+                       instr_is_fused(instr) ? fused_form(specialized_opcode)
+                                             : specialized_opcode);
 }
 
 static inline void
@@ -3273,10 +3281,6 @@ _Py_Specialize_UnpackSequence(PyValue seq_st, _PyInstr *instr, int oparg)
             unspecialize(instr);
             return;
         }
-        if (PyTuple_GET_SIZE(seq) == 2) {
-            specialize(instr, UNPACK_SEQUENCE_TWO_TUPLE);
-            return;
-        }
         specialize(instr, UNPACK_SEQUENCE_TUPLE);
         return;
     }
@@ -3398,6 +3402,10 @@ _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int
                 goto failure;
             }
             specialize(instr, FOR_ITER_GEN);
+            return;
+        }
+        else if (_PyType_VALUE_SLOT(tp, iternext) != NULL) {
+            specialize(instr, FOR_ITER_VIRTUAL);
             return;
         }
     }
@@ -3671,6 +3679,15 @@ Py_NO_INLINE void
     if (PySet_CheckExact(value) || PyFrozenSet_CheckExact(value)) {
         specialize(instr, CONTAINS_OP_SET);
         return;
+    }
+    // The scans and the substring search have forms of the fused word only
+    if (instr_is_fused(instr)) {
+        if (PyUnicode_CheckExact(value) || PyTuple_CheckExact(value)
+            || PyList_CheckExact(value))
+        {
+            specialize_handler(instr, CONTAINS_OP, CONTAINS_OP_JUMP_SEQUENCE);
+            return;
+        }
     }
 
     SPECIALIZATION_FAIL(CONTAINS_OP, containsop_fail_kind(value));

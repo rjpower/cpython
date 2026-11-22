@@ -363,9 +363,13 @@ Known values:
    64432: constant slots for every inline or immortal register input, the
           constant image in the executing copy
    64433: LOAD_ATTR_GETSET, IR handler 406
-   64434: parity84 GL: CALL_PY_GENERATOR and GET_ITER_PY_GENERATOR, IR
-          handlers 407 and 408 */
-#define PYC_MAGIC_NUMBER 64434
+   64434: parity84 GL (unit branch): CALL_PY_GENERATOR and
+          GET_ITER_PY_GENERATOR, IR handlers 407 and 408
+   64435: parity84 IT (unit branch): the fused CONTAINS_OP form for str, tuple
+          and list containers; UNPACK_SEQUENCE_TWO_TUPLE removed (handler 126)
+   64436: parity84 integration of NB, GL, IT and RM: GL's handlers 407 and
+          408, IT's CONTAINS_OP_JUMP_SEQUENCE as 409, handler 126 removed */
+#define PYC_MAGIC_NUMBER 64436
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

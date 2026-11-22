@@ -868,7 +868,7 @@ class SourceScanTests(unittest.TestCase):
                     expected = (3, 3)
                 if min(expected) < 0:
                     continue
-                if opcode.opname[h].endswith(("OP_JUMP", "OP_JUMP_FLOAT", "OP_JUMP_INT", "OP_JUMP_STR", "OP_JUMP_SET", "OP_JUMP_DICT")):
+                if opcode.opname[h].endswith(("OP_JUMP", "OP_JUMP_FLOAT", "OP_JUMP_INT", "OP_JUMP_STR", "OP_JUMP_SET", "OP_JUMP_DICT", "OP_JUMP_SEQUENCE")):
                     # A fused compare-and-jump consumes the operands
                     # and the jump consumes the result: no write.
                     expected = (expected[0], 0)

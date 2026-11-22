@@ -5217,13 +5217,50 @@ vector_arg(const void *args, Py_ssize_t i, int objects)
     return PyValue_Borrow(((const PyValue *)args)[i]);
 }
 
+/* The entry's binding of a call that does not bind each argument to its own
+ * local (keywords, defaults, *args, **kwargs, a generator function): it
+ * gathers owners of the arguments for the general binder, which consumes
+ * func's and locals' counts too.  The frame is current for the evaluator, or
+ * the call made a generator. */
+static Py_NO_INLINE _PyBound
+vector_bind(PyThreadState *tstate, PyFunctionObject *func, PyObject *locals,
+            const void *args, int objects, Py_ssize_t nargs, PyObject *kwnames)
+{
+    Py_ssize_t total = nargs + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
+    PyValue small[8];
+    PyValue *owners = small;
+    if (total > (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
+        owners = PyMem_Malloc(sizeof(PyValue) * (size_t)total);
+        if (owners == NULL) {
+            Py_XDECREF(locals);
+            _PyErr_NoMemory(tstate);
+            return (_PyBound){NULL, NULL};
+        }
+    }
+    for (Py_ssize_t i = 0; i < total; i++) {
+        owners[i] = PyValue_DUP(vector_arg(args, i, objects));
+    }
+    /* The code is pinned across the binding, which the function's mutable
+     * code could outlive. */
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    Py_INCREF(code);
+    _PyBound bound = eval_frame_push_and_init_code(
+        tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals, owners,
+        nargs, kwnames, NULL, code);
+    Py_DECREF(code);
+    if (owners != small) {
+        PyMem_Free(owners);
+    }
+    return bound;
+}
+
 /* The entry of every native caller of a Python function: it pushes the
  * frame, binds the arguments and runs it.  The arguments are the window of
  * words that value code holds, or the vector of objects that the object API
  * holds (objects is a constant of each caller).  A call that binds exactly
- * dups each argument into its local; any other gathers owners for the
- * general binder.  locals is a new reference, or NULL, that the frame
- * consumes.  The frame is current for the evaluator, which consumes it. */
+ * dups each argument into its local.  locals is a new reference, or NULL,
+ * that the frame consumes.  The frame is current for the evaluator, which
+ * consumes it. */
 static inline Py_ALWAYS_INLINE PyValue
 eval_vector(PyThreadState *tstate, PyFunctionObject *func, PyObject *locals,
             const void *args, int objects, size_t nargsf, PyObject *kwnames)
@@ -5264,30 +5301,8 @@ eval_vector(PyThreadState *tstate, PyFunctionObject *func, PyObject *locals,
         }
     }
     else {
-        Py_ssize_t total = nargs + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
-        PyValue small[8];
-        PyValue *owners = small;
-        if (total > (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
-            owners = PyMem_Malloc(sizeof(PyValue) * (size_t)total);
-            if (owners == NULL) {
-                Py_XDECREF(locals);
-                _PyErr_NoMemory(tstate);
-                return PyValue_NULL;
-            }
-        }
-        for (Py_ssize_t i = 0; i < total; i++) {
-            owners[i] = PyValue_DUP(vector_arg(args, i, objects));
-        }
-        /* The code is pinned across the binding, which the function's mutable
-         * code could outlive. */
-        Py_INCREF(code);
-        _PyBound bound = eval_frame_push_and_init_code(
-            tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
-            owners, nargs, kwnames, NULL, code);
-        Py_DECREF(code);
-        if (owners != small) {
-            PyMem_Free(owners);
-        }
+        _PyBound bound = vector_bind(tstate, func, locals, args, objects,
+                                     nargs, kwnames);
         if (bound.gen != NULL) {
             return PyValue_FromObjectSteal((PyObject *)bound.gen);
         }

@@ -341,8 +341,6 @@ PyAPI_FUNC(PyValue) _PyEval_CallMethodDescriptorNoArgs(PyThreadState *tstate, Py
 PyAPI_FUNC(PyValue) _PyEval_CallIntrinsic2(PyThreadState *tstate, int oparg, PyValueBorrow value2, PyValueBorrow value1);
 #define _PyEval_CallIntrinsic2(T, O, V2, V1) \
     (_PyEval_CallIntrinsic2)(T, O, PyValue_Borrow(V2), PyValue_Borrow(V1))
-PyAPI_FUNC(PyValue) _PyEval_CallIntrinsic1(PyThreadState *tstate, int oparg, PyValueBorrow value);
-#define _PyEval_CallIntrinsic1(T, O, V) (_PyEval_CallIntrinsic1)(T, O, PyValue_Borrow(V))
 PyAPI_FUNC(void) _Py_COLD_FUNCTION _PyEval_FormatExcCheckArg(PyThreadState *tstate, PyObject *exc, const char *format_str, PyObject *obj);
 PyAPI_FUNC(void) _PyEval_FormatExcUnbound(PyThreadState *tstate, PyCodeObject *co, int oparg);
 PyAPI_FUNC(void) _PyEval_FormatKwargsError(PyThreadState *tstate, PyValueBorrow func, PyObject *kwargs, PyObject *dupkey);
@@ -420,9 +418,6 @@ _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args);
 PyAPI_FUNC(int) _PyEval_StoreName(PyThreadState *tstate, PyValueBorrow v, PyObject *name, PyObject* ns);
 #define _PyEval_StoreName(V0, V1, V2, V3) \
     (_PyEval_StoreName)(V0, PyValue_Borrow(V1), V2, V3)
-PyAPI_FUNC(PyValue) _PyEval_BinarySlice(PyValueBorrow container, PyValueBorrow start, PyValueBorrow stop);
-#define _PyEval_BinarySlice(V0, V1, V2) \
-    (_PyEval_BinarySlice)(PyValue_Borrow(V0), PyValue_Borrow(V1), PyValue_Borrow(V2))
 PyAPI_FUNC(int) _PyEval_StoreSlice(PyValueBorrow v, PyValueBorrow container, PyValueBorrow start, PyValueBorrow stop);
 #define _PyEval_StoreSlice(V0, V1, V2, V3) \
     (_PyEval_StoreSlice)(PyValue_Borrow(V0), PyValue_Borrow(V1), PyValue_Borrow(V2), PyValue_Borrow(V3))

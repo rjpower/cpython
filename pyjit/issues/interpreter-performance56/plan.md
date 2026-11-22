@@ -1,6 +1,43 @@
 # Interpreter performance: combined plan
 
-## Current wave: hot85, the remaining slow cases and hot-code size
+## Current wave: tight86, hot85's deferred items as tight code
+
+Approved 2026-11-22. The user promoted hot85's IP3 as golden85
+(`2a9ea8c4f69`, `pyjit/round85-golden`, tag `pyjit-golden-20261122-hot85`)
+and asked:
+- to land the remaining fixes;
+- for clean, tightly defined code, with no spaghetti;
+- to prefer tighter hot code to layout rules, with layout last, as one
+  simple rule, and only if it is still necessary.
+
+The [tight86 record](../register-semantics59/tight86.md) holds the units.
+Evidence `E59/tight86/`.
+
+- **Units**, eight from golden85:
+  - HT: the handler skeleton;
+  - GE: generator life, resume and yield;
+  - PC: Python call and return under one frame slot contract;
+  - NC: native calls and the owed-operand fact;
+  - NE: one C-to-Python entry;
+  - CM: compare, membership and hashing;
+  - EX: `_json`, `_pickle` and mimalloc retire hysteresis;
+  - IA: instance attribute stores and `__dict__`.
+- **Integration** on `pyjit/tight86`:
+  - full suites;
+  - instructions for all 29;
+  - the timed all-29 against golden85 and upstream;
+  - cycles and decoder µops on CPU 15.
+- **Last, only if needed:** one simple layout rule for the small hot sets,
+  if the tighter handlers have not made them robust.
+
+The gates are correctness, the allocator limit (50M; golden85 is at 44.39M)
+and root's review of each diff. Review returns a diff that has any of these:
+- second paths;
+- old-or-new flags;
+- benchmark-keyed cases;
+- single-user layers.
+
+## Previous: hot85, the remaining slow cases and hot-code size
 
 Approved 2026-11-21. The user promoted parity84's IP2 as golden84
 (`4be2eb5d31f`, `pyjit/round84-golden`, tag
@@ -29,8 +66,8 @@ Gates are correctness and the allocator limit (50M; golden84 is at 44.84M).
 
 Phase B1 is integrated as IP3 (`2a9ea8c4f69`): seven units, with RT not
 merged. It runs 0.949 of golden84's time and 0.900 of upstream's, with
-known failures only and an allocator product of 44.39M. Next, if the user
-promotes it:
+known failures only and an allocator product of 44.39M. The user promoted
+it as golden85 on 2026-11-22. Phase B2 became tight86. B1's list was:
 - **Phase B2**, the items B1 deferred:
   - the C-to-Python entry;
   - generator creation, resume and yield, which is nqueens' genexpr;
@@ -49,7 +86,7 @@ promotes it:
     across one-unit builds, and neither the hint nor the smaller handlers
     made them robust. Any remedy must be structural, not placement tuning.
 
-## Previous: parity84, the clean changes profile83 ranked
+## Earlier: parity84, the clean changes profile83 ranked
 
 Approved 2026-11-21. The [parity84 record](../register-semantics59/parity84.md)
 holds the units and their state. Base: golden82 (`5194e957c5d`); integration

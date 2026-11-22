@@ -10,12 +10,12 @@ through the generator. Source attribution belongs to observation; execution and
 exception recovery use semantic state. Source positions do not grant ownership
 or initialization facts.
 
-Selected runtime: golden84, `4be2eb5d31f` (`pyjit/round84-golden`), selected
-on 2026-11-21. It adds [parity84](issues/register-semantics59/parity84.md)'s
-six units to golden82 (`5194e957c5d`, 0.992) and runs 0.953 of upstream's
-time on the timed all-29 geomean. Deepcopy, deepcopy_reduce, logging_format,
-json_dumps, nqueens, comprehensions and the xml cases remain above upstream;
-code placement limits small hot sets.
+Selected runtime: golden85, `2a9ea8c4f69` (`pyjit/round85-golden`), selected
+on 2026-11-22. It adds [hot85](issues/register-semantics59/hot85.md)'s seven
+phase B1 units to golden84 (`4be2eb5d31f`, 0.953) and runs 0.900 of
+upstream's time on the timed all-29 geomean. Deepcopy, deepcopy_reduce,
+nqueens, pickle, comprehensions, json_dumps and json_loads remain above
+upstream. Tighter hot code comes before any layout rule.
 
 Previous selection: [execution-boundary73](design/proposals/execution-boundary73.md)
 and its RETURN isolation correction are implemented, protocol-qualified and
@@ -70,7 +70,7 @@ not complete this stage.
 
 Remove repeated work from ordinary execution and improve unchanged workloads
 toward upstream parity while recovering logging performance and retaining
-golden84's gains. Frame clearing is
+golden85's gains. Frame clearing is
 one hypothesis, not an established explanation for the gap. PyValue integration
 is complete; remaining work concerns transport, ownership and how established
 facts survive lowering and native boundaries.

@@ -11,13 +11,17 @@ Read the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md
 in that order. The [roadmap](ROADMAP.md) gives stage outcomes; [process](PROCESS.md)
 and [handoff](HANDOFF.md) explain development and runtime coordination.
 
-**Current work (2026-11-22):** [hot85](issues/register-semantics59/hot85.md)
+**Current work (2026-11-22):** [tight86](issues/register-semantics59/tight86.md)
+lands hot85's deferred items in eight units from golden85, as clean,
+tightly defined code, with tighter hot code preferred over any layout rule.
+
+**Previous (2026-11-22):** [hot85](issues/register-semantics59/hot85.md)
 broke golden84's remaining slow cases down by opcode family and code
 structure and implemented the clean changes in seven units. Its integration
-IP3 (`2a9ea8c4f69`, `pyjit/hot85`) runs 0.949 of golden84's time and 0.900
-of upstream's and awaits the user's promotion decision.
+IP3 (`2a9ea8c4f69`) runs 0.949 of golden84's time and 0.900 of upstream's
+and was selected as golden85.
 
-**Previous (2026-11-21):** [parity84](issues/register-semantics59/parity84.md)
+**Earlier (2026-11-21):** [parity84](issues/register-semantics59/parity84.md)
 implemented profile83's clean changes in six units. Its integration IP2
 (`4be2eb5d31f`) runs 0.961 of golden82's time and 0.953 of upstream's and
 was selected as golden84.
@@ -34,8 +38,9 @@ upstream's time ([results](issues/register-semantics59/gap82.md#results)). The
 [active plan](issues/interpreter-performance56/plan.md#previous-wave-gap82-the-gap-to-upstream-after-h5)
 lists the phases and [handoff](HANDOFF.md) the worktrees.
 
-The selected runtime is golden84 at `4be2eb5d31f`, branch `pyjit/round84-golden`,
-selected on 2026-11-21. Golden82 (`5194e957c5d`, `pyjit/round82-golden`) and
+The selected runtime is golden85 at `2a9ea8c4f69`, branch `pyjit/round85-golden`,
+selected on 2026-11-22. Golden84 (`4be2eb5d31f`, `pyjit/round84-golden`),
+golden82 (`5194e957c5d`, `pyjit/round82-golden`) and
 golden73 (`44f066f5fd5`, `pyjit/round73-golden`) remain comparison controls.
 Both independently implemented
 [execution-state72](design/proposals/execution-state72.md) units are closed and

@@ -2,31 +2,27 @@
 
 ## Live state
 
-**Selected: golden84, 2026-11-21.** `4be2eb5d31f` (`pyjit/round84-golden`,
-tag `pyjit-golden-20261121-parity84`, pushed) is
-[parity84](issues/register-semantics59/parity84.md)'s IP2: golden82 plus
-[profile83](issues/register-semantics59/profile83.md)'s clean changes in six
-units (native-call publication, generators, membership and iteration,
-allocation and dicts, one generator creation path, per-site bind plans). It
-passes the full suites with known failures only, executes 0.962 of golden82's
-instructions and 0.995 of upstream's, and runs **0.961 of golden82's time and
-0.953 of upstream's** on the timed all-29 geomean. IP1, with the first four
-units, ran 0.948 and 0.949. The difference is spectral_norm, whose loop
-misses the op cache at constant instructions (20–40 times golden82's
-legacy-decoder µops): placement, not work. Golden82 (`5194e957c5d`, 0.992 of
-upstream's time) is a frozen control.
-
-**Candidate: hot85 IP3, 2026-11-22.** `2a9ea8c4f69` (`pyjit/hot85`) is
-golden84 plus [hot85](issues/register-semantics59/hot85.md) phase B1's
-seven units: attribute members, float operand closes, the call-operand
+**Selected: golden85, 2026-11-22.** `2a9ea8c4f69` (`pyjit/round85-golden`,
+tag `pyjit-golden-20261122-hot85`, pushed) is
+[hot85](issues/register-semantics59/hot85.md)'s IP3: golden84 plus phase
+B1's seven units (attribute members, float operand closes, the call-operand
 protocol, dicts, `_elementtree`, the one branch hint with cold callees, and
-small unpacks and truth-slot jumps. It runs **0.949 of golden84's time and
-0.900 of upstream's** on the timed all-29 geomean and executes 0.961 of
-golden84's instructions. `ir_evaluate` shrinks from 92.1 KB to 89.0 KB. The
-full suites show known failures only. Still slower than upstream: deepcopy_reduce
-1.095, deepcopy 1.087, nqueens 1.073, pickle 1.067, comprehensions 1.046,
-json_dumps 1.016 and json_loads 1.013. spectral_norm's op-cache cliff
-persists in the integrated layout. Promotion awaits the user.
+small unpacks and truth-slot jumps) and two root fixes. It runs **0.949 of
+golden84's time and 0.900 of upstream's** on the timed all-29 geomean and
+executes 0.961 of golden84's instructions. `ir_evaluate` shrinks from 92.1 KB
+to 89.0 KB. The full suites show known failures only. Still slower than
+upstream: deepcopy_reduce 1.095, deepcopy 1.087, nqueens 1.073, pickle 1.067,
+comprehensions 1.046, json_dumps 1.016 and json_loads 1.013. Small hot sets
+(spectral_norm, nbody, coroutines) remain sensitive to where the hottest
+handlers land. Golden84 (`4be2eb5d31f`, 0.953 of upstream's time) is a
+frozen control.
+
+**Active: [tight86](issues/register-semantics59/tight86.md), 2026-11-22.**
+Eight units from golden85 land hot85's deferred items as tight code: the
+handler skeleton, generator life, Python call and return with one frame slot
+contract, native calls, the C-to-Python entry, compare and membership, the
+json and pickle cases, and instance attributes. The user asked for clean,
+tightly defined code and for tighter hot code before any layout rule.
 
 The checkpoints between golden73 and gap82, each measured against golden73:
 
@@ -172,9 +168,11 @@ records the remaining common call/return cycle-cost problem. The older
 and does not reopen its selection decision.
 
 The current stage is [interpreter performance](issues/interpreter-performance56/plan.md).
-The active runtime is golden84 at
-`4be2eb5d31f3e06e39d158740b46666a3b8c2810`, branch `pyjit/round84-golden`,
-tag `pyjit-golden-20261121-parity84`, pushed to origin. Golden82
+The active runtime is golden85 at
+`2a9ea8c4f69`, branch `pyjit/round85-golden`, tag
+`pyjit-golden-20261122-hot85`, pushed to origin. Golden84
+`4be2eb5d31f3e06e39d158740b46666a3b8c2810` (`pyjit/round84-golden`, tag
+`pyjit-golden-20261121-parity84`), golden82
 `5194e957c5d573ef2b6112508a7b0990b7de656d` (`pyjit/round82-golden`), golden73
 `44f066f5fd55947edf709bbcf9bf17c607307e4b` (branch `pyjit/round73-golden`, tag
 `pyjit-golden-20261116-generator-boundaries`) and selected57

@@ -241,3 +241,7 @@ long-lived blocks share that page decides whether it empties, so any change
 to a long-lived allocation size can move the effect. In IP3, json_loads
 runs 0.961 of golden84's instructions but 1.010 of its time. The real fix
 belongs in the allocator: retire hysteresis for one-page size classes.
+
+**Selected.** The user promoted IP3 as golden85 on 2026-11-22 (tag
+`pyjit-golden-20261122-hot85`, branch `pyjit/round85-golden`). The deferred
+phase B2 items continue in [tight86](tight86.md).

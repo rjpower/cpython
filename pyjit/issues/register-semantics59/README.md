@@ -9,7 +9,8 @@ timed all-29 geomean and 0.949 of golden84's. Golden84 (`4be2eb5d31f`,
 0.992), golden73 `44f066f5fd55947edf709bbcf9bf17c607307e4b`
 (`pyjit/round73-golden`, selected 2026-11-16 with an accepted logging
 regression) and selected57 remain controls. [Tight86](tight86.md) is the
-current wave: hot85's deferred items as clean, tight code. Root coordinates
+current wave: hot85's deferred items as clean, tight code; its IP1
+(`3cac420ddbf`) runs 0.877 of upstream's time. Root coordinates
 integration and native validation; Sol 6.1 workers implement and cross-review.
 
 Both [execution72](../../design/proposals/execution-state72.md) units are

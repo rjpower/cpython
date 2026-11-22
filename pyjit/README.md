@@ -14,6 +14,8 @@ and [handoff](HANDOFF.md) explain development and runtime coordination.
 **Current work (2026-11-22):** [tight86](issues/register-semantics59/tight86.md)
 lands hot85's deferred items in eight units from golden85, as clean,
 tightly defined code, with tighter hot code preferred over any layout rule.
+Its integration (`3cac420ddbf`) runs 0.970 of golden85's time and 0.877 of
+upstream's; promotion awaits the user.
 
 **Previous (2026-11-22):** [hot85](issues/register-semantics59/hot85.md)
 broke golden84's remaining slow cases down by opcode family and code

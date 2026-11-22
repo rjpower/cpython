@@ -29,6 +29,11 @@ Evidence `E59/tight86/`.
   - cycles and decoder µops on CPU 15.
 - **Last, only if needed:** one simple layout rule for the small hot sets,
   if the tighter handlers have not made them robust.
+- **Result:** IP1 (`3cac420ddbf`) runs 0.970 of golden85's time and 0.877
+  of upstream's; seven cases remain above upstream. Only nbody shows a
+  consistent layout loss (1.016, unchanged code predicting worse), so no
+  layout rule is proposed. Details in the
+  [tight86 record](../register-semantics59/tight86.md#ip1-results).
 
 The gates are correctness, the allocator limit (50M; golden85 is at 44.39M)
 and root's review of each diff. Review returns a diff that has any of these:

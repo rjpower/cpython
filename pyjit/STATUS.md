@@ -23,6 +23,13 @@ handler skeleton, generator life, Python call and return with one frame slot
 contract, native calls, the C-to-Python entry, compare and membership, the
 json and pickle cases, and instance attributes. The user asked for clean,
 tightly defined code and for tighter hot code before any layout rule.
+IP1 (`3cac420ddbf`, `pyjit/tight86`) runs **0.970 of golden85's time and
+0.877 of upstream's** on the timed all-29 geomean and executes 0.969 of
+golden85's instructions. Still slower than upstream: comprehensions 1.107,
+deepcopy_reduce 1.051, deepcopy 1.049, nqueens 1.041, json_dumps 1.017,
+pickle 1.017 and logging_simple 1.015. nbody's 1.016 comes from branch
+prediction of unchanged code at new addresses; no layout rule is proposed.
+Promotion awaits the user.
 
 The checkpoints between golden73 and gap82, each measured against golden73:
 

@@ -3997,16 +3997,13 @@ dummy_func(
             EXIT_IF(Py_TYPE(iter_o) != &PyDictIterItem_Type);
             _PyIRWord unpack = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr);
             EXIT_IF(_PyIR_HandlerFlags[IR_HANDLER(unpack)] & _PyIR_H_INSTRUMENTED);
-            PyValue key = PyValue_NULL;
-            PyValue value = PyValue_NULL;
-            int found = _PyDictIterItem_Next(iter_o, &key, &value);
+            int found = _PyDictIterItem_Next(iter_o, &IR_SLOT(IR_D(unpack)));
             if (found <= 0) {
                 if (found < 0) {
                     ERROR_NO_POP();
                 }
                 IR_COMPLETE_STEP(_PY_IR_FOR_ITER, PyValue_None, oparg);
             }
-            IR_STORE_ITEM_PAIR(&IR_SLOT(IR_D(unpack)), key, value);
             next_instr++;
         }
 

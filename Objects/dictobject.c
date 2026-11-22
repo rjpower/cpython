@@ -6132,11 +6132,13 @@ DICTITER_NEXT(dictreviter_next_item, DICTITER_ITEMS, 1)
 #undef DICTITER_NEXT
 
 /* The step of a dict item iterator for a loop that unpacks each item into two
- * targets: return 1 with the key and the value, each an owner, 0 at the end,
- * or -1 with an exception set (a dict that changed size or keys during the
- * iteration). The pair is never built. */
+ * locals: return 1 with the key in TARGETS[0] and the value in TARGETS[1],
+ * 0 at the end, or -1 with an exception set (a dict that changed size or keys
+ * during the iteration). The pair is never built. The old values of the two
+ * locals close after both stores, the first's first, and none changes on 0
+ * or -1. */
 int
-_PyDictIterItem_Next(PyObject *self, PyValue *key, PyValue *value)
+_PyDictIterItem_Next(PyObject *self, PyValue *targets)
 {
     assert(Py_IS_TYPE(self, &PyDictIterItem_Type));
     dictiterobject *di = (dictiterobject *)self;
@@ -6144,7 +6146,20 @@ _PyDictIterItem_Next(PyObject *self, PyValue *key, PyValue *value)
     if (d == NULL) {
         return 0;
     }
-    return dictiter_capture(d, di, 0, key, value);
+    PyValue key, value;
+    int found = dictiter_capture(d, di, 0, &key, &value);
+    if (found <= 0) {
+        return found;
+    }
+    PyValue old_key = targets[0];
+    PyValue old_value = targets[1];
+    targets[0] = key;
+    targets[1] = value;
+    _PyValue_CheckHome(key);
+    _PyValue_CheckHome(value);
+    PyValue_XCLOSE(old_key);
+    PyValue_XCLOSE(old_value);
+    return 1;
 }
 
 PyTypeObject PyDictIterKey_Type = {

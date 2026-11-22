@@ -9108,9 +9108,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 UPDATE_MISS_STATS(FOR_ITER);
                 JUMP_TO_PREDICTED(FOR_ITER);
             }
-            PyValue key = PyValue_NULL;
-            PyValue value = PyValue_NULL;
-            int found = _PyDictIterItem_Next(iter_o, &key, &value);
+            int found = _PyDictIterItem_Next(iter_o, &IR_SLOT(IR_D(unpack)));
             if (found <= 0) {
                 if (found < 0) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -9121,7 +9119,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     DISPATCH();
                 }
             }
-            IR_STORE_ITEM_PAIR(&IR_SLOT(IR_D(unpack)), key, value);
             next_instr++;
             IR_MOVE_TO_DST(ir_word, A, window[2]);
             PyValue_XCLOSE(ir_old);

@@ -111,8 +111,11 @@ PyObject *
 _PyBaseException_NewFromArray(PyTypeObject *type, const PyValue *args,
                               Py_ssize_t nargs)
 {
-    PyBaseExceptionObject *self;
-    self = (PyBaseExceptionObject *)type->tp_alloc(type, 0);
+    /* The class is a static one with the base layout: no tp_alloc is
+     * needed to size, zero or find a heap for the object. */
+    assert(type->tp_basicsize == sizeof(PyBaseExceptionObject));
+    assert(type->tp_itemsize == 0 && PyType_IS_GC(type));
+    PyBaseExceptionObject *self = PyObject_GC_New(PyBaseExceptionObject, type);
     if (!self) {
         return NULL;
     }
@@ -124,12 +127,12 @@ _PyBaseException_NewFromArray(PyTypeObject *type, const PyValue *args,
     self->cause = NULL;
     self->context = NULL;
     self->suppress_context = 0;
-
     self->args = _PyTuple_FromValueArray(args, nargs);
     if (!self->args) {
         Py_DECREF(self);
         return NULL;
     }
+    PyObject_GC_Track(self);
     return (PyObject *)self;
 }
 

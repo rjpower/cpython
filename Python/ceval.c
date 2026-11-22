@@ -1473,14 +1473,16 @@ call_release_pass(PyValue *slots, const _PyIRWord *head, _PyIRWord word,
                   int operands, uint32_t dst)
 {
     int owed = 0;
-    if (!(word & IR_F_CALL_LOCALS)) {
-        _PyIRWord ops = head[1];
-        uint64_t homes = ops >> 16;
-        for (int k = 0; k < operands; k++, homes >>= 12) {
-            uint32_t home = (uint32_t)(homes & IR_FIELD_MAX);
-            if (home != dst && !(ops & (IR_F_LOCAL_A << k))) {
-                owed |= call_release_home(slots, home);
-            }
+    _PyIRWord ops = head[1];
+    uint64_t homes = ops >> 16;
+    /* No operand of a call that names only locals owes a release */
+    if (word & IR_F_CALL_LOCALS) {
+        operands = 0;
+    }
+    for (int k = 0; k < operands; k++, homes >>= 12) {
+        uint32_t home = (uint32_t)(homes & IR_FIELD_MAX);
+        if (home != dst && !(ops & (IR_F_LOCAL_A << k))) {
+            owed |= call_release_home(slots, home);
         }
     }
     uint32_t callable = IR_B(word);

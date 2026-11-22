@@ -314,15 +314,19 @@ dummy_func(
             PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
         }
 
+        // An inline float owns no reference (see _POP_TOP_NUMBER).
         inline_ok op(_POP_TOP_FLOAT, (value --)) {
             assert(PyValue_IsInlineFloat(value));
-            PyValue_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
+            DEAD(value);
         }
 
-        // An operand of float arithmetic, an inline float or int.
+        // An operand of float arithmetic, an inline float or int. It owns no
+        // reference, so there is nothing to close. The compiler cannot prove
+        // this from the float guard's two ranges, and a close here would
+        // cost a pointer test and a dealloc call per operand.
         inline_ok op(_POP_TOP_NUMBER, (value --)) {
             assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
+            DEAD(value);
         }
 
         op(_POP_TOP_UNICODE, (value --)) {
@@ -939,7 +943,7 @@ dummy_func(
             if (res_o == NULL) {
                 ERROR_NO_POP();
             }
-            res = PyValue_FromObjectSteal(res_o);
+            res = PyValue_FromNonNumberSteal(res_o);
             l = left;
             r = right;
             INPUTS_DEAD();
@@ -990,7 +994,7 @@ dummy_func(
             _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
             *target_local = PyValue_NULL;
             ERROR_IF(temp == NULL);
-            res = PyValue_FromObjectSteal(temp);
+            res = PyValue_FromNonNumberSteal(temp);
         }
 
        // These legacy descriptors guard objects. Decline canonical inline
@@ -1101,7 +1105,7 @@ dummy_func(
             if (res_o == NULL) {
                 ERROR_NO_POP();
             }
-            res = PyValue_FromObjectSteal(res_o);
+            res = PyValue_FromNonNumberSteal(res_o);
             ls = list_st;
             ss = sub_st;
             INPUTS_DEAD();

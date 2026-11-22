@@ -642,6 +642,7 @@ NON_ESCAPING_FUNCTIONS = (
     "PyValue_DupImmortal",
     "PyValue_False",
     "PyValue_FromObjectSteal",
+    "PyValue_FromNonNumberSteal",
     "PyValue_IsExactly",
     "PyValue_IsNone",
     "PyValue_Is",

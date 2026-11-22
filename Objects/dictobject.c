@@ -1136,29 +1136,6 @@ do_lookup(PyDictObject *mp, PyDictKeysObject *dk, const void *key, Py_hash_t has
     Py_UNREACHABLE();
 }
 
-/* The key of an entry of a table of str keys has the hash of a key that is
-   not a str, so the two are compared, which can run Python code. The caller
-   keeps the table pinned through the comparison. */
-static Py_NO_INLINE int
-compare_unicode_generic_slow(PyDictObject *mp, PyDictKeysObject *dk,
-                             PyDictUnicodeEntry *ep, PyValueBorrow key)
-{
-    PyObject *startkey = ep->me_key;
-    Py_INCREF(startkey);
-    int cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(startkey), key, Py_EQ);
-    Py_DECREF(startkey);
-    if (cmp < 0) {
-        return DKIX_ERROR;
-    }
-    if (dk == mp->ma_keys && ep->me_key == startkey) {
-        return cmp;
-    }
-    else {
-        /* The dict was mutated, restart */
-        return DKIX_KEY_CHANGED;
-    }
-}
-
 static inline int
 compare_unicode_generic(PyDictObject *mp, PyDictKeysObject *dk,
                         void *ep0, Py_ssize_t ix, const void *key_ptr, Py_hash_t hash)
@@ -1170,7 +1147,20 @@ compare_unicode_generic(PyDictObject *mp, PyDictKeysObject *dk,
     assert(!value_is_exact_unicode(key));
 
     if (unicode_get_hash(ep->me_key) == hash) {
-        return compare_unicode_generic_slow(mp, dk, ep, key);
+        PyObject *startkey = ep->me_key;
+        Py_INCREF(startkey);
+        int cmp = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(startkey), key, Py_EQ);
+        Py_DECREF(startkey);
+        if (cmp < 0) {
+            return DKIX_ERROR;
+        }
+        if (dk == mp->ma_keys && ep->me_key == startkey) {
+            return cmp;
+        }
+        else {
+            /* The dict was mutated, restart */
+            return DKIX_KEY_CHANGED;
+        }
     }
     return 0;
 }
@@ -1205,21 +1195,6 @@ unicodekeys_lookup_unicode(PyDictKeysObject* dk, PyObject *key, Py_hash_t hash)
     return do_lookup(NULL, dk, key, hash, compare_unicode_unicode);
 }
 
-/* The entry's key has the hash of key but is another word: compare them,
-   which can run Python code. */
-static Py_NO_INLINE int
-compare_generic_slow(PyDictObject *mp, PyDictKeysObject *dk,
-                     PyDictKeyEntry *ep, PyValueBorrow key)
-{
-    PyValue startkey = PyValue_DUP(ep->me_key);
-    uintptr_t startkey_word = _PyValue_Word(startkey);
-    int cmp = _PyValue_RichCompareBool(startkey, key, Py_EQ);
-    PyValue_CLOSE(startkey);
-    if (cmp < 0) return DKIX_ERROR;
-    if (dk == mp->ma_keys && _PyValue_Word(ep->me_key) == startkey_word) return cmp;
-    return DKIX_KEY_CHANGED;
-}
-
 static inline int
 compare_generic(PyDictObject *mp, PyDictKeysObject *dk,
                 void *ep0, Py_ssize_t ix, const void *key_ptr, Py_hash_t hash)
@@ -1229,7 +1204,13 @@ compare_generic(PyDictObject *mp, PyDictKeysObject *dk,
     assert(!PyValue_IsNull(ep->me_key));
     if (PyValue_Is(ep->me_key, key)) return 1;
     if (ep->me_hash == hash) {
-        return compare_generic_slow(mp, dk, ep, key);
+        PyValue startkey = PyValue_DUP(ep->me_key);
+        uintptr_t startkey_word = _PyValue_Word(startkey);
+        int cmp = _PyValue_RichCompareBool(startkey, key, Py_EQ);
+        PyValue_CLOSE(startkey);
+        if (cmp < 0) return DKIX_ERROR;
+        if (dk == mp->ma_keys && _PyValue_Word(ep->me_key) == startkey_word) return cmp;
+        return DKIX_KEY_CHANGED;
     }
     return 0;
 }

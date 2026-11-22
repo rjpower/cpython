@@ -1594,6 +1594,25 @@ call_publish_cold(_PyInterpreterFrame *frame, const _PyIRWord *head,
         } \
     } while (0)
 
+/* The same for any count, across the operand words after head: from operand
+ * FIRST on, N operands, four to a word. */
+static inline Py_ALWAYS_INLINE void
+call_gather_words(PyValue *slots, const _PyIRWord *head, int first, int n,
+                  PyValue *args)
+{
+    int w = first / IR_OPERANDS_PER_WORD;
+    int s = first % IR_OPERANDS_PER_WORD;
+    for (; n > 0; w++, s = 0) {
+        int count = IR_OPERANDS_PER_WORD - s;
+        if (count > n) {
+            count = n;
+        }
+        CALL_NATIVE_GATHER(&head[w], slots, s, count, args);
+        args += count;
+        n -= count;
+    }
+}
+
 /* The native vectorcall of a call, on its operands as they stand in their
  * homes: they are borrowed for the call, as a temporary cannot change and a
  * local's old value survives a write through its frame's proxy.  The caller
@@ -1614,9 +1633,9 @@ call_vector_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
         PyValue_IsNull(slots[_PyIR_CallOperand(head, 0)]);
     int lead = !PyValue_IsNull(receiver);
     int nargs = lead + operands - first;
-    PyValue small[8];
+    PyValue small[16];
     PyValue *args = small;
-    if (nargs > 8) {
+    if (nargs > (int)Py_ARRAY_LENGTH(small)) {
         args = PyMem_Malloc((size_t)nargs * sizeof(PyValue));
         if (args == NULL) {
             PyErr_NoMemory();
@@ -1630,9 +1649,7 @@ call_vector_impl(PyThreadState *tstate, _PyInterpreterFrame *frame,
         CALL_NATIVE_GATHER(head, slots, first, operands - first, args + lead);
     }
     else {
-        for (int i = 0; i < operands - first; i++) {
-            args[lead + i] = slots[_PyIR_CallOperand(head, first + i)];
-        }
+        call_gather_words(slots, head, first, operands - first, args + lead);
     }
     PyObject *names = NULL;
     size_t positional = (size_t)nargs;
@@ -1806,23 +1823,24 @@ call_take_fields(PyValue *slots, uint64_t fields, unsigned int locals,
 #undef CALL_TAKE
 }
 
-/* The same for any count, across the operand words after head. */
+/* The same for any count, across the operand words after head: count
+ * operands from operand first on, four to a word. */
 static Py_NO_INLINE void
 call_take_loop(PyValue *slots, const _PyIRWord *head, int first, int count,
                PyValue *dest)
 {
-    for (int k = first; k < first + count; k++) {
-        _PyIRWord ops = head[1 + k / IR_OPERANDS_PER_WORD];
-        int s = k % IR_OPERANDS_PER_WORD;
-        PyValue *home = &slots[(ops >> (16 + 12 * s)) & IR_FIELD_MAX];
-        PyValue value = *home;
-        if (ops & (IR_F_LOCAL_A << s)) {
-            value = PyValue_DUP(value);
+    int w = first / IR_OPERANDS_PER_WORD;
+    int s = first % IR_OPERANDS_PER_WORD;
+    for (; count > 0; w++, s = 0) {
+        int n = IR_OPERANDS_PER_WORD - s;
+        if (n > count) {
+            n = count;
         }
-        else {
-            *home = PyValue_NULL;
-        }
-        *dest++ = value;
+        _PyIRWord ops = head[1 + w];
+        call_take_fields(slots, ops >> (16 + 12 * s),
+                         (unsigned int)(ops >> (9 + s)), n, dest);
+        dest += n;
+        count -= n;
     }
 }
 

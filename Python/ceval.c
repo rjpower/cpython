@@ -2628,11 +2628,11 @@ ir_event_end_for(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * line in the functions that run them: the handler is a function of its own
  * already, and a second call in front of the work only adds a frame. They
  * are defined below, with the code they share. */
-static Py_ALWAYS_INLINE PyValue
+static inline Py_ALWAYS_INLINE PyValue
 (_PyEval_BinarySlice)(PyValueBorrow container, PyValueBorrow start, PyValueBorrow stop);
 #define _PyEval_BinarySlice(V0, V1, V2) \
     (_PyEval_BinarySlice)(PyValue_Borrow(V0), PyValue_Borrow(V1), PyValue_Borrow(V2))
-static Py_ALWAYS_INLINE PyValue
+static inline Py_ALWAYS_INLINE PyValue
 (_PyEval_CallIntrinsic1)(PyThreadState *tstate, int oparg, PyValueBorrow value);
 #define _PyEval_CallIntrinsic1(T, O, V) (_PyEval_CallIntrinsic1)(T, O, PyValue_Borrow(V))
 
@@ -6184,7 +6184,7 @@ slice_of_bounds(PyValueBorrow start, PyValueBorrow stop)
 
 // container[start:stop], for BINARY_SLICE: an owner of the item, or
 // PyValue_NULL with an exception set.
-static Py_ALWAYS_INLINE PyValue
+static inline Py_ALWAYS_INLINE PyValue
 (_PyEval_BinarySlice)(PyValueBorrow container_st, PyValueBorrow start_st, PyValueBorrow stop_st)
 {
     if (PyValue_IsPointerSpace(container_st)) {
@@ -6816,7 +6816,7 @@ Py_NO_INLINE PyValue
    Only PRINT and ASYNC_GEN_WRAP can get a number: this boxes it here, in a
    record that the handler does not carry. Returns the result, or
    PyValue_NULL with an exception set. */
-static Py_ALWAYS_INLINE PyValue
+static inline Py_ALWAYS_INLINE PyValue
 (_PyEval_CallIntrinsic1)(PyThreadState *tstate, int oparg, PyValueBorrow value)
 {
     if (PyValue_IsPointerSpace(value)) {

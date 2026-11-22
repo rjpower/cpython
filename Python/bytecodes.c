@@ -2612,6 +2612,7 @@ dummy_func(
             LOAD_ATTR_NONDESCRIPTOR_NO_DICT,
             LOAD_ATTR_SHAPE,
             LOAD_ATTR_GETSET,
+            LOAD_ATTR_SLOT_POINTER,
         };
 
         specializing op(_SPECIALIZE_LOAD_ATTR, (owner -- owner)) {
@@ -2808,6 +2809,28 @@ dummy_func(
             unused/1 +
             _GUARD_TYPE_VERSION +
             _LOAD_ATTR_SLOT +  // NOTE: This action may also deopt
+            unused/5 +
+            _PUSH_NULL_CONDITIONAL;
+
+        /* A PyObject * field of the owner, read where LOAD_ATTR_SLOT reads a
+         * value: a _Py_T_OBJECT member, or the type pointer that __class__
+         * returns. The field holds an object address, never an inline value
+         * or an immortal's tag, so the read makes the canonical value of it
+         * (PyValue_FromObjectBorrow). A NULL field deoptimizes: the generic
+         * path answers None for the member (or raises). */
+        ir_only op(_LOAD_ATTR_SLOT_POINTER, (index/1, owner -- attr)) {
+            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+            PyObject *field = *(PyObject **)((char *)owner_o + index);
+            EXIT_IF(field == NULL);
+            attr = PyValue_DUP(PyValue_FromObjectBorrow(field));
+            STAT_INC(LOAD_ATTR, hit);
+            DECREF_INPUTS();
+        }
+
+        macro(LOAD_ATTR_SLOT_POINTER) =
+            unused/1 +
+            _GUARD_TYPE_VERSION +
+            _LOAD_ATTR_SLOT_POINTER +
             unused/5 +
             _PUSH_NULL_CONDITIONAL;
 

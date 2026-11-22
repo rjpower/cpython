@@ -288,5 +288,157 @@ class PyValueSlotTests(unittest.TestCase):
         self.assertFalse(hasattr(item, 'value'))
 
 
+class PointerFieldTests(unittest.TestCase):
+    """LOAD_ATTR_SLOT_POINTER: a PyObject * member or the type of the owner."""
+
+    HANDLER = 'LOAD_ATTR_SLOT_POINTER'
+
+    def warm(self, function, *args):
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
+            result = function(*args)
+        return result
+
+    def test_code_members_and_class(self):
+        def target():
+            pass
+
+        def filename(code):
+            return code.co_filename
+
+        def name(code):
+            return code.co_name
+
+        def cls(owner):
+            return owner.__class__
+
+        code = target.__code__
+        self.assertEqual(self.warm(filename, code), __file__)
+        self.assertEqual(self.warm(name, code), 'target')
+        self.assertIs(self.warm(cls, code), type(code))
+        for function in (filename, name, cls):
+            self.assertIn(self.HANDLER, executing_handlers(function))
+        self.assertEqual(filename(code), __file__)
+        self.assertEqual(name(code), 'target')
+
+    def test_members_do_not_leak_references(self):
+        def args(partial):
+            return partial.args
+
+        def func(partial):
+            return partial.func
+
+        import functools
+        payload = (object(), [])
+        partial = functools.partial(print, *payload)
+        self.warm(args, partial)
+        self.warm(func, partial)
+        before = (sys.getrefcount(partial.args), sys.getrefcount(partial.func))
+        for _ in range(1000):
+            args(partial)
+            func(partial)
+        self.assertEqual(
+            (sys.getrefcount(partial.args), sys.getrefcount(partial.func)),
+            before)
+        self.assertIn(self.HANDLER, executing_handlers(args))
+        self.assertIs(args(partial), partial.args)
+
+    def test_null_member_reads_none(self):
+        def name(error):
+            return error.name
+
+        error = ImportError('message')
+        self.assertIsNone(self.warm(name, error))
+        self.assertIn(self.HANDLER, executing_handlers(name))
+        # A NULL field leaves the specialised form and the generic read
+        # answers None, as it does before the field is set.
+        self.assertIsNone(name(error))
+        for value in ('module', 5, 2**70, 1.5, None, (1, 2), error):
+            with self.subTest(value=value):
+                error.name = value
+                self.assertEqual(name(error), value)
+                self.assertIs(type(name(error)), type(value))
+                del error.name
+                self.assertIsNone(name(error))
+
+    def test_inline_values_in_members(self):
+        def path(error):
+            return error.path
+
+        error = ImportError('message')
+        for value in (0, -(2**50), 2**50 - 1, 0.0, -0.0, 0.5, float('inf'),
+                      True):
+            with self.subTest(value=value):
+                error.path = value
+                for _ in range(3):
+                    result = self.warm(path, error)
+                self.assertEqual(result, value)
+                self.assertIs(type(result), type(value))
+        self.assertIn(self.HANDLER, executing_handlers(path))
+
+    def test_subclasses_and_layouts(self):
+        def name(error):
+            return error.name
+
+        class Sub(ImportError):
+            pass
+
+        class Slotted(ImportError):
+            __slots__ = ('extra',)
+
+        class Other(Exception):
+            name = 'class attribute'
+
+        errors = [ImportError(name='a'), Sub(name='b'), Slotted(name='c'),
+                  ModuleNotFoundError(name='d'), Other()]
+        expected = ['a', 'b', 'c', 'd', 'class attribute']
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
+            self.assertEqual([name(e) for e in errors], expected)
+        self.assertEqual([name(e) for e in reversed(errors)],
+                         expected[::-1])
+
+    def test_type_changes_leave_the_specialisation(self):
+        def name(error):
+            return error.name
+
+        class Sub(ImportError):
+            pass
+
+        error = Sub(name='field')
+        self.assertEqual(self.warm(name, error), 'field')
+        self.assertIn(self.HANDLER, executing_handlers(name))
+        Sub.name = property(lambda self: 'property')
+        self.assertEqual(name(error), 'property')
+        self.assertEqual(self.warm(name, error), 'property')
+        del Sub.name
+        self.assertEqual(self.warm(name, error), 'field')
+
+    def test_dunder_class(self):
+        def cls(owner):
+            return owner.__class__
+
+        class A:
+            pass
+
+        class B:
+            pass
+
+        class Property:
+            @property
+            def __class__(self):
+                return 'property'
+
+        a = A()
+        self.assertIs(self.warm(cls, a), A)
+        self.assertIn(self.HANDLER, executing_handlers(cls))
+        a.__class__ = B
+        self.assertIs(cls(a), B)
+        self.assertEqual(cls(Property()), 'property')
+        self.assertEqual(self.warm(cls, Property()), 'property')
+        for value, expected in [(1, int), (2**70, int), (1.5, float),
+                                (None, type(None)), ('s', str), (A, type),
+                                (sys, type(sys)), (a, B)]:
+            self.assertIs(cls(value), expected)
+
+
 if __name__ == '__main__':
     unittest.main()

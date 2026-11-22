@@ -465,3 +465,6 @@ GET_ITER_PY_GENERATOR 408
 # parity84 IT: the fused CONTAINS_OP form for an exact str, tuple or list
 # container.
 CONTAINS_OP_JUMP_SEQUENCE 409
+
+# hot85 AT: LOAD_ATTR of a PyObject * field of the owner.
+LOAD_ATTR_SLOT_POINTER 410

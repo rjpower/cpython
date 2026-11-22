@@ -855,6 +855,7 @@ typedef enum {
     METHOD, /* Attribute has Py_TPFLAGS_METHOD_DESCRIPTOR set */
     PROPERTY, /* Is a property */
     OBJECT_SLOT, /* Is a strong VALUE_EX slot descriptor */
+    POINTER_SLOT, /* Is a descriptor of a PyObject * field (_Py_T_OBJECT) */
     OTHER_SLOT, /* Is a slot descriptor of another type */
     NON_OVERRIDING, /* Is another non-overriding descriptor, and is an instance of an immutable class*/
     BUILTIN_CLASSMETHOD, /* Builtin methods with METH_CLASS */
@@ -889,6 +890,9 @@ classify_descriptor(PyValue value, bool has_getattr)
             struct PyMemberDef *dmem = member->d_member;
             if (dmem->type == _Py_T_VALUE_EX) {
                 return OBJECT_SLOT;
+            }
+            if (dmem->type == _Py_T_OBJECT) {
+                return POINTER_SLOT;
             }
             return OTHER_SLOT;
         }
@@ -1339,6 +1343,7 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
             return 0;
         }
         case OBJECT_SLOT:
+        case POINTER_SLOT:
         {
             PyMemberDescrObject *member = (PyMemberDescrObject *)descr;
             struct PyMemberDef *dmem = member->d_member;
@@ -1359,14 +1364,26 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
                 SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_RANGE);
                 return -1;
             }
-            assert(dmem->type == _Py_T_VALUE_EX);
             assert(offset > 0);
             fb->index = (uint32_t)offset;
             fb->type_version = tp_version;
-            specialize(instr, LOAD_ATTR_SLOT);
+            if (kind == OBJECT_SLOT) {
+                assert(dmem->type == _Py_T_VALUE_EX);
+                specialize(instr, LOAD_ATTR_SLOT);
+            }
+            else {
+                assert(dmem->type == _Py_T_OBJECT);
+                specialize(instr, LOAD_ATTR_SLOT_POINTER);
+            }
             return 0;
         }
         case DUNDER_CLASS:
+            /* ob_type is a PyObject * field of every object: the same read,
+             * found by the type's version, which fixes the owner's type. */
+            fb->index = (uint32_t)offsetof(PyObject, ob_type);
+            fb->type_version = tp_version;
+            specialize(instr, LOAD_ATTR_SLOT_POINTER);
+            return 0;
         case OTHER_SLOT:
             SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NON_OBJECT_SLOT);
             return -1;
@@ -1598,6 +1615,7 @@ Py_NO_INLINE void
             goto success;
         }
         case DUNDER_CLASS:
+        case POINTER_SLOT:
         case OTHER_SLOT:
             SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_NON_OBJECT_SLOT);
             goto fail;
@@ -1650,6 +1668,7 @@ load_attr_fail_kind(DescriptorClassification kind)
             return SPEC_FAIL_ATTR_PROPERTY;
         case OBJECT_SLOT:
             return SPEC_FAIL_ATTR_OBJECT_SLOT;
+        case POINTER_SLOT:
         case OTHER_SLOT:
             return SPEC_FAIL_ATTR_NON_OBJECT_SLOT;
         case DUNDER_CLASS:

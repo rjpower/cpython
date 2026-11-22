@@ -9205,7 +9205,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 PyObject *list_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(PyList_CheckExact(list_o));
-                next = PyValue_XDUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
+                next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
                 null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             IR_SET_TEMP(window[1], null_or_index);
@@ -10663,7 +10663,22 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             list = window[0];
             ir_own_B = IR_DETACH(ir_word, B, v);
             PyValue item = IR_TAKEN_REQUIRED(v, ir_own_B);
-            int err = _PyList_AppendTakeValue((PyListObject *)PyValue_AsKnownObjectBorrow(list), item);
+            PyListObject *list_o = (PyListObject *)PyValue_AsKnownObjectBorrow(list);
+            int err = 0;
+            #ifdef Py_GIL_DISABLED
+            err = _PyList_AppendTakeValue(list_o, item);
+            #else
+
+            Py_ssize_t size = Py_SIZE(list_o);
+            if (list_o->allocated > size) {
+                list_o->ob_item[size] = item;
+                _PyValue_CheckHome(item);
+                Py_SET_SIZE(list_o, size + 1);
+            }
+            else {
+                err = _PyList_AppendTakeValue(list_o, item);
+            }
+            #endif
             if (err < 0) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
@@ -12983,6 +12998,75 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             DISPATCH();
         }
 
+        TARGET(POP_JUMP_IF_FALSE_SLOT) {
+            int opcode = POP_JUMP_IF_FALSE_SLOT;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(POP_JUMP_IF_FALSE_SLOT);
+            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            PyValueBorrow owner;
+            PyValueBorrow value;
+            PyValue res;
+            PyValueBorrow v;
+            PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            // _GUARD_TYPE_VERSION
+            {
+                owner = IR_VIEW(IR_A(ir_word));
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
+                    UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                }
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                }
+            }
+            // _TO_BOOL_SLOT
+            {
+                value = owner;
+                (void)value;
+                int truth = _PyValue_IsTrueSlow(value);
+                if (truth < 0) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                res = truth ? PyValue_True : PyValue_False;
+                v = value;
+                ir_own_A = IR_DETACH(ir_word, A, v);
+            }
+            // _POP_TOP
+            {
+                value = v;
+                (void)value;
+                (void)(ir_own_A);
+            }
+            // _POP_JUMP_IF_FALSE
+            {
+                cond = res;
+                assert(PyValue_BoolCheck(cond));
+                int flag = PyValue_IsFalse(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                IR_REPORT_EDGE(flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+            }
+            _PyValue_XCLOSE_POINTER(ir_own_A);
+            DISPATCH();
+        }
+
         TARGET(POP_JUMP_IF_FALSE_STR) {
             int opcode = POP_JUMP_IF_FALSE_STR;
             (void)(opcode);
@@ -13404,6 +13488,75 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMPTO(oparg);
                 }
             }
+            DISPATCH();
+        }
+
+        TARGET(POP_JUMP_IF_TRUE_SLOT) {
+            int opcode = POP_JUMP_IF_TRUE_SLOT;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(POP_JUMP_IF_TRUE_SLOT);
+            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            PyValueBorrow owner;
+            PyValueBorrow value;
+            PyValue res;
+            PyValueBorrow v;
+            PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            // _GUARD_TYPE_VERSION
+            {
+                owner = IR_VIEW(IR_A(ir_word));
+                uint32_t type_version = fb->type_version;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
+                    UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                }
+                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
+                assert(type_version != 0);
+                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                    UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
+                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
+                    JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                }
+            }
+            // _TO_BOOL_SLOT
+            {
+                value = owner;
+                (void)value;
+                int truth = _PyValue_IsTrueSlow(value);
+                if (truth < 0) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                res = truth ? PyValue_True : PyValue_False;
+                v = value;
+                ir_own_A = IR_DETACH(ir_word, A, v);
+            }
+            // _POP_TOP
+            {
+                value = v;
+                (void)value;
+                (void)(ir_own_A);
+            }
+            // _POP_JUMP_IF_TRUE
+            {
+                cond = res;
+                assert(PyValue_BoolCheck(cond));
+                int flag = PyValue_IsTrue(cond);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                IR_REPORT_EDGE(flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+            }
+            _PyValue_XCLOSE_POINTER(ir_own_A);
             DISPATCH();
         }
 

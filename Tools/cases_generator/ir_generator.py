@@ -774,7 +774,7 @@ INPLACE_READERS = {
     "PyValue_InlineInt64", "_PyValue_IntScaled", "PyValue_LongCheckExact",
     # The value dispatchers (pycore_value_ops.h): they read their operands
     # as values and take a count of what they keep
-    "_PyValue_Contains", "_PyValue_Invert", "_PyValue_IsTrue",
+    "_PyValue_Contains", "_PyValue_Invert", "_PyValue_IsTrue", "_PyValue_IsTrueSlow",
     "_PyValue_Negative", "_PyValue_Positive", "_PyValue_RichCompare",
     "_PyValue_Str", "_PyValue_Repr", "_PyValue_ASCII", "_PyValue_Format",
     "_PyValue_SequenceTuple",

@@ -377,8 +377,11 @@ Known values:
           generator expression's prelude: the creating call makes the free
           variables, the cells and the iterator
    64439: parity84 BD merged with GN (the merge renumbers; see 64437, 64438)
-   64440: hot85 AT (unit branch): LOAD_ATTR_SLOT_POINTER, IR handler 410 */
-#define PYC_MAGIC_NUMBER 64440
+   64440: hot85 AT and EV (unit branches, both numbered 64440): AT's
+          LOAD_ATTR_SLOT_POINTER, IR handler 410; EV's POP_JUMP_IF_FALSE_SLOT
+          and POP_JUMP_IF_TRUE_SLOT in retired slots 126 and 112
+   64441: hot85 integration of AT and EV */
+#define PYC_MAGIC_NUMBER 64441
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

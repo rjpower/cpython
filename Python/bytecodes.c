@@ -1244,7 +1244,23 @@ dummy_func(
 
         inline_ok inst(LIST_APPEND, (list, unused[oparg-1], v -- list, unused[oparg-1])) {
             PyValue item = TAKE(v);
-            int err = _PyList_AppendTakeValue((PyListObject *)PyValue_AsKnownObjectBorrow(list), item);
+            PyListObject *list_o = (PyListObject *)PyValue_AsKnownObjectBorrow(list);
+            int err = 0;
+#ifdef Py_GIL_DISABLED
+            err = _PyList_AppendTakeValue(list_o, item);
+#else
+            // The store is in line while the list has room; growth is the
+            // function's.
+            Py_ssize_t size = Py_SIZE(list_o);
+            if (list_o->allocated > size) {
+                list_o->ob_item[size] = item;
+                _PyValue_CheckHome(item);
+                Py_SET_SIZE(list_o, size + 1);
+            }
+            else {
+                err = _PyList_AppendTakeValue(list_o, item);
+            }
+#endif
             ERROR_IF(err < 0);
         }
 
@@ -3564,6 +3580,7 @@ dummy_func(
             POP_JUMP_IF_FALSE_INT,
             POP_JUMP_IF_FALSE_LIST,
             POP_JUMP_IF_FALSE_NONE,
+            POP_JUMP_IF_FALSE_SLOT,
             POP_JUMP_IF_FALSE_STR,
         };
 
@@ -3573,6 +3590,7 @@ dummy_func(
             POP_JUMP_IF_TRUE_INT,
             POP_JUMP_IF_TRUE_LIST,
             POP_JUMP_IF_TRUE_NONE,
+            POP_JUMP_IF_TRUE_SLOT,
             POP_JUMP_IF_TRUE_STR,
         };
 
@@ -3644,6 +3662,27 @@ dummy_func(
             unused/1 + _GUARD_NONE_OR_TYPE_VERSION + _POP_JUMP_IF_FALSE_NONE_OR_PLAIN + POP_TOP;
         macro(POP_JUMP_IF_TRUE_ALWAYS_TRUE) =
             unused/1 + _GUARD_NONE_OR_TYPE_VERSION + _POP_JUMP_IF_TRUE_NONE_OR_PLAIN + POP_TOP;
+
+        // The truth of an instance of a type that the other forms do not
+        // take: after the guard on the type's version, which covers its
+        // slots, the type's own slot decides (a dict, set, tuple, deque,
+        // a class with __len__ or __bool__).  The test is the generic
+        // one's without its decision of the inline kinds, and the site
+        // keeps no counter.
+        op(_TO_BOOL_SLOT, (value -- res, v)) {
+            int truth = _PyValue_IsTrueSlow(value);
+            if (truth < 0) {
+                ERROR_NO_POP();
+            }
+            res = truth ? PyValue_True : PyValue_False;
+            v = value;
+            DEAD(value);
+        }
+
+        macro(POP_JUMP_IF_FALSE_SLOT) =
+            unused/1 + _GUARD_TYPE_VERSION + _TO_BOOL_SLOT + POP_TOP + _POP_JUMP_IF_FALSE;
+        macro(POP_JUMP_IF_TRUE_SLOT) =
+            unused/1 + _GUARD_TYPE_VERSION + _TO_BOOL_SLOT + POP_TOP + _POP_JUMP_IF_TRUE;
 
         macro(POP_JUMP_IF_NONE) = unused/1 + _IS_NONE + _POP_JUMP_IF_TRUE;
 
@@ -3992,7 +4031,7 @@ dummy_func(
         replaced op(_ITER_NEXT_LIST, (iter, null_or_index -- iter, null_or_index, next)) {
             PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
             assert(PyList_CheckExact(list_o));
-            next = PyValue_XDUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
+            next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
             null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
         }
 

@@ -3710,9 +3710,15 @@ check_type_always_true(PyTypeObject *ty)
     return 0;
 }
 
+static int
+type_valid(PyTypeObject *Py_UNUSED(ty))
+{
+    return 0;
+}
+
 /* The specialisations of a truth test, in the order of truth_ops below */
 enum { TRUTH_BOOL, TRUTH_INT, TRUTH_LIST, TRUTH_NONE, TRUTH_STR,
-       TRUTH_ALWAYS_TRUE, TRUTH_COUNT };
+       TRUTH_ALWAYS_TRUE, TRUTH_SLOT, TRUTH_COUNT };
 
 /* TO_BOOL and the conditional jumps, which test the truth of a value the
  * same way, choose a specialisation from their own row of ops. */
@@ -3753,23 +3759,27 @@ specialize_truth(PyValueBorrow value_o, _PyInstr *instr, const uint8_t *ops)
         specialized_op = ops[TRUTH_STR];
         goto success;
     }
+    unsigned int version = 0;
     if (PyType_HasFeature(Py_TYPE(value), Py_TPFLAGS_HEAPTYPE)) {
-        unsigned int version = 0;
         int err = _PyType_Validate(Py_TYPE(value), check_type_always_true, &version);
-        if (err < 0) {
-            SPECIALIZATION_FAIL(TO_BOOL, SPEC_FAIL_OUT_OF_VERSIONS);
-            goto failure;
+        if (err == 0) {
+            assert(version);
+            ((_PyFbUnary *)instr_entry(instr))->type_version = version;
+            specialized_op = ops[TRUTH_ALWAYS_TRUE];
+            goto success;
         }
-        else if (err > 0) {
-            SPECIALIZATION_FAIL(TO_BOOL, err);
-            goto failure;
+    }
+    if (ops[TRUTH_SLOT] != 0) {
+        // The type's slots decide; the version guards them
+        int err = _PyType_Validate(Py_TYPE(value), type_valid, &version);
+        if (err == 0) {
+            assert(version);
+            ((_PyFbUnary *)instr_entry(instr))->type_version = version;
+            specialized_op = ops[TRUTH_SLOT];
+            goto success;
         }
-
-        assert(err == 0);
-        assert(version);
-        ((_PyFbUnary *)instr_entry(instr))->type_version = version;
-        specialized_op = ops[TRUTH_ALWAYS_TRUE];
-        goto success;
+        SPECIALIZATION_FAIL(TO_BOOL, SPEC_FAIL_OUT_OF_VERSIONS);
+        goto failure;
     }
 
     SPECIALIZATION_FAIL(TO_BOOL, to_bool_fail_kind(value));
@@ -3786,7 +3796,7 @@ _Py_Specialize_ToBool(PyValue value_o, _PyInstr *instr)
 {
     static const uint8_t ops[TRUTH_COUNT] = {
         TO_BOOL_BOOL, TO_BOOL_INT, TO_BOOL_LIST, TO_BOOL_NONE, TO_BOOL_STR,
-        TO_BOOL_ALWAYS_TRUE,
+        TO_BOOL_ALWAYS_TRUE, 0,
     };
     specialize_truth(value_o, instr, ops);
 }
@@ -3797,12 +3807,12 @@ Py_NO_INLINE void
     static const uint8_t if_false[TRUTH_COUNT] = {
         POP_JUMP_IF_FALSE_BOOL, POP_JUMP_IF_FALSE_INT, POP_JUMP_IF_FALSE_LIST,
         POP_JUMP_IF_FALSE_NONE, POP_JUMP_IF_FALSE_STR,
-        POP_JUMP_IF_FALSE_ALWAYS_TRUE,
+        POP_JUMP_IF_FALSE_ALWAYS_TRUE, POP_JUMP_IF_FALSE_SLOT,
     };
     static const uint8_t if_true[TRUTH_COUNT] = {
         POP_JUMP_IF_TRUE_BOOL, POP_JUMP_IF_TRUE_INT, POP_JUMP_IF_TRUE_LIST,
         POP_JUMP_IF_TRUE_NONE, POP_JUMP_IF_TRUE_STR,
-        POP_JUMP_IF_TRUE_ALWAYS_TRUE,
+        POP_JUMP_IF_TRUE_ALWAYS_TRUE, POP_JUMP_IF_TRUE_SLOT,
     };
     int opcode = _PyOpcode_Deopt[instr_opcode(instr)];
     assert(opcode == POP_JUMP_IF_FALSE || opcode == POP_JUMP_IF_TRUE);

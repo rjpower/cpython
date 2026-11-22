@@ -762,19 +762,46 @@ _PyIR_TakenPointer(PyValueBorrow view, PyValue *owner)
         ir_unpack_owned |= ir_owns; \
     } while (0)
 
+/* One element of an unpack: the item goes to the local, and the local's old
+ * value to the window slot if it owns an object, or the slot is left empty
+ * (zero), as IR_UNPACK_DIRECT does. The result says whether the slot holds
+ * an owner. */
+static inline bool
+_PyIR_UnpackOneToLocal(PyValue *local, PyValue *slot, const PyValue *item)
+{
+    PyValue dup = PyValue_DUP(*item);
+    PyValue old = *local;
+    *local = dup;
+    _PyValue_CheckHome(*local);
+    bool owns = PyValue_RefcountOnObject(old);
+    *slot = owns ? old : PyValue_NULL;
+    return owns;
+}
+
 /* The elements of an unpack of ITEMS[0..N-1]: ITEMS[J] goes to LOCALS[J] and
  * the old value of that local to WINDOW[N - 1 - J] if it owns an object, or
- * the slot is left empty (zero), as IR_UNPACK_DIRECT does one at a time. The
- * frame owns every value throughout. The result says whether the window
- * holds an owner to close.
+ * the slot is left empty (zero). The frame owns every value throughout. The
+ * result says whether the window holds an owner to close.
  *
- * A leaf function, so that the loop's state stays in registers across the
- * evaluator's many live values. The ownership select has no branch: the
- * old value is masked by whether it owns an object. */
+ * A leaf function, so that the evaluator does not carry the loop's state
+ * across its many live values. Two and three elements, the common unpacks,
+ * are straight-line copies with no loop; the loop selects an old value's
+ * ownership with a mask, without a branch. */
 static Py_NO_INLINE bool
 _PyIR_UnpackItemsToLocals(PyValue *locals, PyValue *window,
                           const PyValue *items, int n)
 {
+    if (n == 2) {
+        bool owns0 = _PyIR_UnpackOneToLocal(&locals[0], &window[1], &items[0]);
+        bool owns1 = _PyIR_UnpackOneToLocal(&locals[1], &window[0], &items[1]);
+        return owns0 | owns1;
+    }
+    if (n == 3) {
+        bool owns0 = _PyIR_UnpackOneToLocal(&locals[0], &window[2], &items[0]);
+        bool owns1 = _PyIR_UnpackOneToLocal(&locals[1], &window[1], &items[1]);
+        bool owns2 = _PyIR_UnpackOneToLocal(&locals[2], &window[0], &items[2]);
+        return owns0 | owns1 | owns2;
+    }
     uintptr_t owned = 0;
     PyValue *slot = window + (n - 1);
     for (int j = 0; j < n; j++, slot--) {

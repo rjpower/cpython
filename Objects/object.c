@@ -2427,17 +2427,12 @@ int
 (_PyValue_IsTrueSlow)(PyValueBorrow v)
 {
     Py_ssize_t res;
-    /* The inline callers have answered for an int or float: v holds an
-       object, and the one test of its tag is this. */
+    /* The callers have answered for a bool, None, an int and a float: v
+       holds another object, and the one test of its tag is this. */
     PyObject *obj = PyValue_AsKnownObjectBorrow(v);
+    assert(!PyValue_IsTrue(v) && !PyValue_IsFalse(v) && !PyValue_IsNone(v));
     PyTypeObject *tp = Py_TYPE(obj);
-    if (PyValue_Is(v, PyValue_True))
-        return 1;
-    if (PyValue_Is(v, PyValue_False))
-        return 0;
-    if (PyValue_Is(v, PyValue_None))
-        return 0;
-    else if (tp->tp_as_number != NULL &&
+    if (tp->tp_as_number != NULL &&
              tp->tp_as_number->nb_bool != NULL)
         res = call_bool(tp, tp->tp_as_number->nb_bool, v);
     else if (tp->tp_as_mapping != NULL &&

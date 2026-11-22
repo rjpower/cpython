@@ -181,8 +181,10 @@ PyAPI_FUNC(PyObject *) _PyObject_ValueStr(PyValueBorrow v);
 
 /* PyObject_IsTrue(): the truth of v, or -1 with an exception set. The
    bool, None, int and float arms are inline for every caller; any other
-   value takes the out-of-line path (nb_bool, mp_length, sq_length). */
+   value takes the out-of-line path (nb_bool, mp_length, sq_length), which
+   takes a value that is an object but not a bool or None. */
 PyAPI_FUNC(int) _PyValue_IsTrueSlow(PyValueBorrow v);
+#define _PyValue_IsTrueSlow(V) (_PyValue_IsTrueSlow)(PyValue_Borrow(V))
 static inline int
 (_PyValue_IsTrue)(PyValueBorrow v)
 {

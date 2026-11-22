@@ -3342,27 +3342,18 @@ done:
     return rc;
 }
 
-/* The method `attr` of self's type, for a call with self as its first
-   argument (status 1: a method descriptor, not bound) or without it (status
-   0: the attribute bound by its descriptor, or as it is). *out owns it, an
-   int or float attribute included, which a call then reports as not
-   callable. Status -1 is an error, or a missing method: the missing method
-   raises AttributeError only with raise_attribute_error, and *out is
-   PyValue_NULL. */
+/* The method that was found as `attr` of tp, the type of self, as a callable
+   for a call with self as its first argument (status 1: a method descriptor,
+   not bound) or without it (status 0: the attribute bound by its descriptor,
+   or as it is). found is consumed; *out owns the callable, an int or float
+   attribute included, which a call then reports as not callable. Status -1
+   is an error: *out is PyValue_NULL, and AttributeError from a descriptor
+   is raised only with raise_attribute_error. */
 static inline Py_ALWAYS_INLINE int
-lookup_method_value_ex(PyValueBorrow self, PyObject *attr, PyValue *out,
-                       int raise_attribute_error)
+bind_slot_method(PyValueBorrow self, PyTypeObject *tp, PyValue found,
+                 PyValue *out, int raise_attribute_error)
 {
     *out = PyValue_NULL;
-    PyTypeObject *tp = PyValue_TYPE(self);
-    PyValue found = PyValue_NULL;
-    (void)_PyType_LookupValueAndVersion(tp, attr, &found);
-    if (PyValue_IsNull(found)) {
-        if (raise_attribute_error) {
-            PyErr_SetObject(PyExc_AttributeError, attr);
-        }
-        return -1;
-    }
     if (!PyValue_IsObject(found)) {
         *out = found;
         return 0;
@@ -3389,6 +3380,26 @@ lookup_method_value_ex(PyValueBorrow self, PyObject *attr, PyValue *out,
     }
     *out = bound;
     return 0;
+}
+
+/* The method `attr` of self's type, bound as bind_slot_method() does. A
+   missing method is status -1 and raises AttributeError only with
+   raise_attribute_error. */
+static inline Py_ALWAYS_INLINE int
+lookup_method_value_ex(PyValueBorrow self, PyObject *attr, PyValue *out,
+                       int raise_attribute_error)
+{
+    PyTypeObject *tp = PyValue_TYPE(self);
+    PyValue found = PyValue_NULL;
+    (void)_PyType_LookupValueAndVersion(tp, attr, &found);
+    if (PyValue_IsNull(found)) {
+        *out = PyValue_NULL;
+        if (raise_attribute_error) {
+            PyErr_SetObject(PyExc_AttributeError, attr);
+        }
+        return -1;
+    }
+    return bind_slot_method(self, tp, found, out, raise_attribute_error);
 }
 
 /* Calls the method that lookup_method_value_ex() found. args is a window of
@@ -13086,28 +13097,23 @@ _Py_slot_tp_getattro(PyObject *self, PyObject *name)
         _Py_slot_tp_getattro_value(_Py_VALUE_ARG(self), name), BOX_SITE_ATTRIBUTE);
 }
 
-static inline PyObject *
-call_attribute(PyObject *self, PyObject *attr, PyObject *name)
+/* Calls attr, which is consumed, as the method of self's type with the
+   attribute name as its argument. */
+static PyValue
+call_attribute(PyObject *self, PyValue attr, PyObject *name)
 {
-    PyObject *res, *descr = NULL;
-
-    if (_PyType_HasFeature(Py_TYPE(attr), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
-        PyObject *args[] = { self, name };
-        res = PyObject_Vectorcall(attr, args, 2, NULL);
-        return res;
+    PyValue func;
+    int unbound = bind_slot_method(PyValue_FromObjectBorrow(self), Py_TYPE(self),
+                                   attr, &func, 1);
+    if (unbound < 0) {
+        return PyValue_NULL;
     }
-
-    descrgetfunc f = Py_TYPE(attr)->tp_descr_get;
-
-    if (f != NULL) {
-        descr = f(attr, self, (PyObject *)(Py_TYPE(self)));
-        if (descr == NULL)
-            return NULL;
-        else
-            attr = descr;
-    }
-    res = PyObject_CallOneArg(attr, name);
-    Py_XDECREF(descr);
+    PyValue stack[2];
+    _PyValue_WindowPut(&stack[0], PyValue_FromObjectBorrow(self));
+    _PyValue_WindowPut(&stack[1], PyValue_FromObjectBorrow(name));
+    PyValue res = vectorcall_unbound_value(_PyThreadState_GET(), unbound, func,
+                                           stack, 2);
+    PyValue_CLOSE(func);
     return res;
 }
 
@@ -13121,16 +13127,15 @@ _Py_slot_tp_getattr_hook_value(PyValueBorrow self_value, PyObject *name)
     }
     PyObject *self = PyValue_AsKnownObjectBorrow(self_value);
     PyTypeObject *tp = Py_TYPE(self);
-    PyObject *getattr, *getattribute;
+    PyValue getattr, getattribute;
     PyValue res;
 
     /* speed hack: we could use lookup_maybe, but that would resolve the
        method fully for each attribute lookup for classes with
-       __getattr__, even when the attribute is present. So we use
-       _PyType_LookupRef and create the method only when needed, with
-       call_attribute. */
-    getattr = _PyType_LookupRef(tp, &_Py_ID(__getattr__));
-    if (getattr == NULL) {
+       __getattr__, even when the attribute is present. So we look the
+       attribute up and bind it only when needed, with call_attribute. */
+    (void)_PyType_LookupValueAndVersion(tp, &_Py_ID(__getattr__), &getattr);
+    if (PyValue_IsNull(getattr)) {
         /* No __getattr__ hook: use a simpler dispatcher */
 #ifndef Py_GIL_DISABLED
         // Replacing the slot is only thread-safe if there is a GIL.
@@ -13143,36 +13148,40 @@ _Py_slot_tp_getattr_hook_value(PyValueBorrow self_value, PyObject *name)
     /* speed hack: we could use lookup_maybe, but that would resolve the
        method fully for each attribute lookup for classes with
        __getattr__, even when self has the default __getattribute__
-       method. So we use _PyType_LookupRef and create the method only when
-       needed, with call_attribute. */
-    getattribute = _PyType_LookupRef(tp, &_Py_ID(__getattribute__));
-    if (getattribute == NULL ||
-        (Py_IS_TYPE(getattribute, &PyWrapperDescr_Type) &&
-         ((PyWrapperDescrObject *)getattribute)->d_wrapped_value ==
-             (void *)_PyObject_GenericGetAttrValue)) {
-        Py_XDECREF(getattribute);
+       method. So we look it up and bind it only when needed, with
+       call_attribute. */
+    (void)_PyType_LookupValueAndVersion(tp, &_Py_ID(__getattribute__),
+                                        &getattribute);
+    if (PyValue_IsNull(getattribute) ||
+        (PyValue_IsObject(getattribute) &&
+         Py_IS_TYPE(PyValue_AsKnownObjectBorrow(getattribute),
+                    &PyWrapperDescr_Type) &&
+         ((PyWrapperDescrObject *)PyValue_AsKnownObjectBorrow(getattribute))
+             ->d_wrapped_value == (void *)_PyObject_GenericGetAttrValue)) {
+        PyValue_XCLOSE(getattribute);
         _PyStatusValue found =
             _PyObject_GenericLookupAttrValue(self_value, name, NULL);
         res = found.value;
         /* Status 0: a missing attribute, or an AttributeError suppressed
            by us. */
         if (found.status == 0) {
-            res = _PyValue_FromObjectResult(call_attribute(self, getattr, name));
+            res = call_attribute(self, getattr, name);
+        }
+        else {
+            PyValue_CLOSE(getattr);
         }
     }
     else {
-        res = _PyValue_FromObjectResult(
-            call_attribute(self, getattribute, name));
-        Py_DECREF(getattribute);
+        res = call_attribute(self, getattribute, name);
         if (PyValue_IsNull(res)
             && PyErr_ExceptionMatches(PyExc_AttributeError)) {
             PyErr_Clear();
-            res = _PyValue_FromObjectResult(
-                call_attribute(self, getattr, name));
+            res = call_attribute(self, getattr, name);
+        }
+        else {
+            PyValue_CLOSE(getattr);
         }
     }
-
-    Py_DECREF(getattr);
     return res;
 }
 

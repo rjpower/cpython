@@ -7834,7 +7834,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 }
                 res = generator;
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }

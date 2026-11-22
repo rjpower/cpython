@@ -2,23 +2,26 @@
 
 ## Live state
 
-**Selected: golden82, 2026-11-20.** `5194e957c5d` (`pyjit/round82-golden`,
-tag `pyjit-golden-20261120-gap82`, pushed) is the
-[gap82](issues/register-semantics59/gap82.md#results) integration. Its timed
-all-29 geomean is **0.992 of upstream's time**, 0.884 of golden73's and 0.899
-of checkpoint78's; ten cases beat upstream. Full suites fail only known
-failures. The [profile83](issues/register-semantics59/profile83.md) analysis
-finds the remaining gap is executed work at boundaries (native-call publish,
-C entering Python, generator creation and finishing, the non-exact binder,
-membership, allocation and GC entry), each with a clean change.
-[Parity84](issues/register-semantics59/parity84.md) (approved 2026-11-21)
-implemented them in six units. Its integration, IP2 (`4be2eb5d31f`,
-`pyjit/parity84`), passes the full suites with golden82's known failures
-only. It executes 0.962 of golden82's instructions and 0.995 of upstream's,
-and runs **0.961 of golden82's time and 0.953 of upstream's**. IP1, with the
-first four units, ran 0.948 and 0.949. The difference is spectral_norm, whose
-loop misses the op cache at constant instructions (20–40 times golden82's
-legacy-decoder µops): placement, not work. IP2 awaits the user's selection.
+**Selected: golden84, 2026-11-21.** `4be2eb5d31f` (`pyjit/round84-golden`,
+tag `pyjit-golden-20261121-parity84`, pushed) is
+[parity84](issues/register-semantics59/parity84.md)'s IP2: golden82 plus
+[profile83](issues/register-semantics59/profile83.md)'s clean changes in six
+units (native-call publication, generators, membership and iteration,
+allocation and dicts, one generator creation path, per-site bind plans). It
+passes the full suites with known failures only, executes 0.962 of golden82's
+instructions and 0.995 of upstream's, and runs **0.961 of golden82's time and
+0.953 of upstream's** on the timed all-29 geomean. IP1, with the first four
+units, ran 0.948 and 0.949. The difference is spectral_norm, whose loop
+misses the op cache at constant instructions (20–40 times golden82's
+legacy-decoder µops): placement, not work. Golden82 (`5194e957c5d`, 0.992 of
+upstream's time) is a frozen control.
+
+[Hot85](issues/register-semantics59/hot85.md) (approved 2026-11-21) is the
+current wave. Phase A breaks the remaining slow cases (deepcopy 1.181,
+deepcopy_reduce 1.126, logging_format, the xml cases, json_dumps, nqueens and
+comprehensions at 1.06–1.08) down by opcode family, native symbol and source
+construct, and measures golden84's hot code and the rare paths inside it.
+Phase B moves those rare paths out of line.
 
 The checkpoints between golden73 and gap82, each measured against golden73:
 
@@ -164,9 +167,10 @@ records the remaining common call/return cycle-cost problem. The older
 and does not reopen its selection decision.
 
 The current stage is [interpreter performance](issues/interpreter-performance56/plan.md).
-The active runtime is golden82 at
-`5194e957c5d573ef2b6112508a7b0990b7de656d`, branch `pyjit/round82-golden`,
-tag `pyjit-golden-20261120-gap82`, pushed to origin. Golden73
+The active runtime is golden84 at
+`4be2eb5d31f3e06e39d158740b46666a3b8c2810`, branch `pyjit/round84-golden`,
+tag `pyjit-golden-20261121-parity84`, pushed to origin. Golden82
+`5194e957c5d573ef2b6112508a7b0990b7de656d` (`pyjit/round82-golden`), golden73
 `44f066f5fd55947edf709bbcf9bf17c607307e4b` (branch `pyjit/round73-golden`, tag
 `pyjit-golden-20261116-generator-boundaries`) and selected57
 `0dcba75bb3df40c32137db453b001f7e8f101de0` and their refs remain immutable controls.

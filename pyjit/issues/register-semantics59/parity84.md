@@ -236,3 +236,11 @@ Still above upstream's time:
   1,741 against upstream's 1,395. A plan in its feedback is the follow-up.
 - Unit ladders missed test_sys (phase 1) and test_builtin and test_repl
   (phase 2). The integration smoke now runs them.
+
+## Selection
+
+On 2026-11-21 the user promoted IP2 as golden84: `4be2eb5d31f`, branch
+`pyjit/round84-golden`, tag `pyjit-golden-20261121-parity84`. The source
+(`worktrees/parity84`, detached at the tag) and builds
+(`BASE/parity84-{release,debug}`, aliased `BASE/golden84-{release,debug}`)
+are frozen. The next wave is [hot85](hot85.md).

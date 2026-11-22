@@ -1,6 +1,33 @@
 # Interpreter performance: combined plan
 
-## Current wave: parity84, the clean changes profile83 ranked
+## Current wave: hot85, the remaining slow cases and hot-code size
+
+Approved 2026-11-21. The user promoted parity84's IP2 as golden84
+(`4be2eb5d31f`, `pyjit/round84-golden`, tag
+`pyjit-golden-20261121-parity84`) and asked:
+- what, by opcode and code structure, still makes deepcopy and the other
+  slow cases slower than upstream;
+- for a cleanup of the hot code size, with rare branches in hot handlers
+  moved out to functions.
+
+The [hot85 record](../register-semantics59/hot85.md) holds the units.
+Evidence `E59/hot85/`.
+
+- **Phase A**, analysis on golden84:
+  - LB: the library cases (deepcopy, logging, json, pickle) by opcode
+    family, native symbol and Python line;
+  - XK: the xml cases, nqueens, comprehensions, coroutines and
+    regex_compile, the same way, and by source construct;
+  - HC: cycles and front-end counters on CPU 15 for all 29, spectral_norm's
+    op-cache mechanism, the hot footprint, the rare paths inside hot
+    handlers and helpers, and one prototype family.
+- **Phase B**, implementation units from HC's plan, from golden84;
+  integration on `pyjit/hot85`; full suites, instructions for all 29 and the
+  timed all-29 against golden84 and upstream.
+
+Gates are correctness and the allocator limit (50M; golden84 is at 44.84M).
+
+## Previous: parity84, the clean changes profile83 ranked
 
 Approved 2026-11-21. The [parity84 record](../register-semantics59/parity84.md)
 holds the units and their state. Base: golden82 (`5194e957c5d`); integration
@@ -35,7 +62,9 @@ Result (2026-11-21):
 The record lists the open items. Hot-code size (profile83 group F) is the
 structural lever for the placement sensitivity.
 
-## Previous: golden82 and the profile83 pass
+The user promoted IP2 as golden84 on 2026-11-21.
+
+## Earlier: golden82 and the profile83 pass
 
 On 2026-11-20 the user promoted gap82's integration to golden and asked for a
 profiling pass: where is there still room for clean improvements? Golden82 is

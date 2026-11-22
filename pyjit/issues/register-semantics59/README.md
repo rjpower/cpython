@@ -1,14 +1,15 @@
 # Register semantics and interpreter parity
 
-Status: stage remains open. Golden82
-`5194e957c5d573ef2b6112508a7b0990b7de656d`, the [gap82](gap82.md) integration,
-was selected on 2026-11-20 and is pushed as `pyjit/round82-golden`; it runs
-0.992 of upstream's time on the timed all-29 geomean. Golden73
+Status: stage remains open. Golden84
+`4be2eb5d31f3e06e39d158740b46666a3b8c2810`, [parity84](parity84.md)'s
+integration of profile83's clean changes, was selected on 2026-11-21 and is
+pushed as `pyjit/round84-golden`; it runs 0.953 of upstream's time on the
+timed all-29 geomean and 0.961 of golden82's. Golden82 (`5194e957c5d`,
+[gap82](gap82.md), 0.992), golden73
 `44f066f5fd55947edf709bbcf9bf17c607307e4b` (`pyjit/round73-golden`, selected
 2026-11-16 with an accepted logging regression) and selected57 remain
-controls. [Parity84](parity84.md) (2026-11-21) integrates profile83's clean
-changes as IP2 (`4be2eb5d31f`, `pyjit/parity84`): 0.961 of golden82's time
-and 0.953 of upstream's, awaiting selection. Root coordinates
+controls. [Hot85](hot85.md) is the current wave: the remaining slow cases
+by opcode and code structure, then hot-code size. Root coordinates
 integration and native validation; Sol 6.1 workers implement and cross-review.
 
 Both [execution72](../../design/proposals/execution-state72.md) units are

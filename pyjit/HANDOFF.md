@@ -4,8 +4,10 @@ Canonical documentation is this checkout; its runtime source is stale. **Do
 not build it.** Start with [GOAL](GOAL.md), the
 [active plan](issues/interpreter-performance56/plan.md), [STATUS](STATUS.md),
 [architecture](design/runtime-architecture.md) and [process](PROCESS.md).
-The selected runtime is golden82, the [gap82](issues/register-semantics59/gap82.md)
-integration at `5194e957c5d`, selected by the user on 2026-11-20. The previous
+The selected runtime is golden84, the [parity84](issues/register-semantics59/parity84.md)
+integration at `4be2eb5d31f`, selected by the user on 2026-11-21. Golden82
+(`5194e957c5d`, [gap82](issues/register-semantics59/gap82.md)) is the
+previous golden and a frozen control. The earlier
 selection, [execution-boundary73](design/proposals/execution-boundary73.md),
 was selected as golden73 on 2026-11-16 with the logging regression accepted. The
 [trial report](issues/register-semantics59/report.md) owns measured outcomes;
@@ -39,7 +41,8 @@ to future protection rules. Preserve both original screen verdicts.
 | `worktrees/handlers81-h4` | `pyjit/handlers81-h4` | H4 (computed-goto evaluator), landed as `744d4ad992a`. Worktree and builds `BASE/handlers81h4-{release,debug}` stay as the base for the layout follow-up: logging_silent's front-end stalls first appear here ([record](issues/register-semantics59/handlers81.md#logging_silent)) |
 | — | `pyjit/handlers81-h5s2bc`, `pyjit/handlers81-h5s3`, `pyjit/handlers81-h5c` | Calls80 steps 2b/2c and 3, merged into `pyjit/handlers81` (H5 landed at `d6d1ed5ac93`). H5c (`4f431e2a5f3`, pushed) is parked. Their worktrees and builds are removed. Evidence `E59/handlers81/{h5s2bc,h5s3,h5-merge,h5-tests,h5c,full-h5,bench}/`; [record](issues/register-semantics59/handlers81.md) |
 | `worktrees/gap82` | detached at `pyjit-golden-20261120-gap82` | **Frozen golden82** `5194e957c5d` ([gap82](issues/register-semantics59/gap82.md) integration, pushed as `pyjit/gap82` and `pyjit/round82-golden`): H5 + TX, SL, CS, K1, N34, ST, N56, G, K2b, K2a and two test follow-ups. Builds `BASE/gap82-{release,debug}`, aliased `BASE/golden82-{release,debug}`; never rebuild or relink them. Evidence `E59/gap82/` (`coordinator.md` is the log; `int/` holds integration builds, smoke, instruction counts, full suites and probes; `bench/` holds the campaigns). New work branches from the tag in a new worktree |
-| `worktrees/parity84` | `pyjit/parity84` | [Parity84](issues/register-semantics59/parity84.md) integration branch, from golden82; at IP2 (`4be2eb5d31f`). Builds `BASE/parity84-{release,debug}` (at IP2); evidence `E59/parity84/` (`coordinator.md` is the log) |
+| `worktrees/parity84` | detached at `pyjit-golden-20261121-parity84` | **Frozen golden84** `4be2eb5d31f` ([parity84](issues/register-semantics59/parity84.md) IP2, pushed as `pyjit/parity84` and `pyjit/round84-golden`). Builds `BASE/parity84-{release,debug}`, aliased `BASE/golden84-{release,debug}`; never rebuild or relink them. Evidence `E59/parity84/` (`coordinator.md` is the log). New work branches from the tag in a new worktree |
+| `worktrees/hot85-<unit>` | `pyjit/hot85-<unit>` | [Hot85](issues/register-semantics59/hot85.md) units, from golden84, made by `E59/hot85/mkbuild.sh UNIT COMMIT`; builds `BASE/hot85<unit>-{release,debug}`. `hot85-hc` is phase A's prototype. Evidence `E59/hot85/` (`coordinator.md` is the log) |
 | `worktrees/parity84-{nb,gl,it,rm}` | `pyjit/parity84-<unit>` | Parity84 phase-1 units, from golden82; all merged into `pyjit/parity84` (IP1, `5a51846ce16`). Builds `BASE/parity84<unit>-{release,debug}` |
 | `worktrees/parity84-{bd,gn}` | `pyjit/parity84-<unit>` | Parity84 phase-2 units, from IP1; merged into `pyjit/parity84` (IP2, `4be2eb5d31f`). Builds `BASE/parity84<unit>-{release,debug}` |
 | `worktrees/gap82-{cs,tx,sl,g,k1,k2a,k2b,n34,n56,st}` | `pyjit/gap82-<unit>` | Gap82 units, all merged into `pyjit/gap82`. Builds `BASE/gap82<unit>-{release,debug}` are per-unit attribution builds (the cycles probes use them). H6 was parked with no commits and removed |
@@ -123,7 +126,8 @@ A=`R/parity61-ascent`, I=`R/call55-integrated`.
 
 | Control | Source commit / tree | Release build | Module record |
 | --- | --- | --- | --- |
-| Golden82 | `5194e957c5d573ef2b6112508a7b0990b7de656d`, `R/gap82` | `BASE/gap82-release` (alias `BASE/golden82-release`) | `E59/gap82/int/k2a/build-release.log`, 79 extensions; use with `--control-role golden --control-head` (IP2's campaigns) |
+| Golden84 | `4be2eb5d31f3e06e39d158740b46666a3b8c2810`, `R/round84-golden` | `BASE/parity84-release` (alias `BASE/golden84-release`) | `E59/parity84/int/ip2b/build-release.log`, 79 extensions; use with `--control-role golden --control-head` |
+| Golden82 | `5194e957c5d573ef2b6112508a7b0990b7de656d`, `R/gap82` | `BASE/gap82-release` (alias `BASE/golden82-release`) | `E59/gap82/int/k2a/build-release.log`, 79 extensions |
 | Golden73 | `44f066f5fd55947edf709bbcf9bf17c607307e4b`, G | `BASE/reg59-results-release` | `E59/execution73-boundary11-release-build.log`, 117/79 |
 | Selected57 | `0dcba75bb3df40c32137db453b001f7e8f101de0`, I | `BASE/call55-integrated-release` | `E55/comp57-dictionary-release-build.log`, 117/79 |
 | Golden56 | `883524c180e4486b47df77ee2276c9276c0ec32c`, `R/round56-golden` | `BASE/round56-golden-release` | `E57/control-retry-build.log`, 117/79 |

@@ -11,12 +11,16 @@ Read the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md
 in that order. The [roadmap](ROADMAP.md) gives stage outcomes; [process](PROCESS.md)
 and [handoff](HANDOFF.md) explain development and runtime coordination.
 
-**Current work (2026-11-21):** [parity84](issues/register-semantics59/parity84.md)
-implemented profile83's clean changes in six units. Its integration IP2
-(`4be2eb5d31f`, `pyjit/parity84`) runs 0.961 of golden82's time and 0.953 of
-upstream's, and awaits selection.
+**Current work (2026-11-21):** [hot85](issues/register-semantics59/hot85.md)
+breaks golden84's remaining slow cases down by opcode family and code
+structure, then moves rare paths in hot handlers and helpers out of line.
 
-**Previous (2026-11-20):** [gap82](issues/register-semantics59/gap82.md),
+**Previous (2026-11-21):** [parity84](issues/register-semantics59/parity84.md)
+implemented profile83's clean changes in six units. Its integration IP2
+(`4be2eb5d31f`) runs 0.961 of golden82's time and 0.953 of upstream's and
+was selected as golden84.
+
+**Earlier (2026-11-20):** [gap82](issues/register-semantics59/gap82.md),
 H5's remaining gap to upstream. The
 [handlers81](design/proposals/handlers81.md) rollout and
 [operand-encoded calls](design/proposals/operand-calls80.md) landed as H0–H5
@@ -25,13 +29,12 @@ on `pyjit/handlers81` (`d6d1ed5ac93`,
 and implementation out to agents from there. It is integrated as
 `pyjit/gap82` at `5194e957c5d`, with a timed all-29 geomean of 0.992 of
 upstream's time ([results](issues/register-semantics59/gap82.md#results)). The
-[active plan](issues/interpreter-performance56/plan.md#current-wave-gap82-the-gap-to-upstream-after-h5)
+[active plan](issues/interpreter-performance56/plan.md#previous-wave-gap82-the-gap-to-upstream-after-h5)
 lists the phases and [handoff](HANDOFF.md) the worktrees.
 
-The selected runtime is golden82 at `5194e957c5d`, branch `pyjit/round82-golden`,
-selected on 2026-11-20. The [profile83](issues/register-semantics59/profile83.md)
-analysis ranks the clean changes that remain against upstream. Golden73 (`44f066f5fd5`, `pyjit/round73-golden`) remains
-a comparison control.
+The selected runtime is golden84 at `4be2eb5d31f`, branch `pyjit/round84-golden`,
+selected on 2026-11-21. Golden82 (`5194e957c5d`, `pyjit/round82-golden`) and
+golden73 (`44f066f5fd5`, `pyjit/round73-golden`) remain comparison controls.
 Both independently implemented
 [execution-state72](design/proposals/execution-state72.md) units are closed and
 rejected: cold ownership maps demonstrated no packing benefit, and carried-value

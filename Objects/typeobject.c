@@ -3232,10 +3232,9 @@ PyType_IsSubtype(PyTypeObject *a, PyTypeObject *b)
    - _PyObject_LookupSpecial() returns NULL without raising an exception
      when the _PyType_LookupRef() call fails;
 
-   - lookup_maybe_method() and lookup_method() are internal routines similar
-     to _PyObject_LookupSpecial(), but can return unbound PyFunction
-     to avoid temporary method object. Pass self as first argument when
-     unbound == 1.
+   - lookup_method_value_ex() is an internal routine similar to
+     _PyObject_LookupSpecial(), but can return unbound PyFunction to avoid
+     temporary method object. Pass self as first argument when unbound == 1.
 */
 
 _PyStatusValue
@@ -3343,75 +3342,21 @@ done:
     return rc;
 }
 
-/* On success, *out is a new reference to the method as an object, which
-   every caller calls: an int or float attribute comes back as its box. It
-   is a C local of the caller, not a home, so it need not be canonical. */
-static int
-lookup_method_ex(PyObject *self, PyObject *attr, PyObject **out,
-                 int raise_attribute_error)
-{
-    *out = NULL;
-    PyValue found = PyValue_NULL;
-    (void)_PyType_LookupValueAndVersion(Py_TYPE(self), attr, &found);
-    if (PyValue_IsNull(found)) {
-        if (raise_attribute_error) {
-            PyErr_SetObject(PyExc_AttributeError, attr);
-        }
-        return -1;
-    }
-
-    /* Callers use the method as an object: box an inline scalar value. */
-    PyObject *value = _PyValue_AsObjectAt(found, BOX_SITE_ATTRIBUTE);
-    PyValue_CLEAR(found);
-    if (value == NULL) {
-        return -1;
-    }
-    if (_PyType_HasFeature(Py_TYPE(value), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
-        /* Avoid temporary PyMethodObject */
-        *out = value;
-        return 1;
-    }
-
-    descrgetfunc f = Py_TYPE(value)->tp_descr_get;
-    if (f != NULL) {
-        PyObject *bound = f(value, self, (PyObject *)(Py_TYPE(self)));
-        Py_DECREF(value);
-        if (bound == NULL) {
-            if (!raise_attribute_error &&
-                PyErr_ExceptionMatches(PyExc_AttributeError))
-            {
-                PyErr_Clear();
-            }
-            return -1;
-        }
-        value = bound;
-    }
-    *out = value;
-    return 0;
-}
-
-static int
-lookup_maybe_method(PyObject *self, PyObject *attr, PyObject **out)
-{
-    return lookup_method_ex(self, attr, out, 0);
-}
-
-static int
-lookup_method(PyObject *self, PyObject *attr, PyObject **out)
-{
-    return lookup_method_ex(self, attr, out, 1);
-}
-
-/* lookup_method_ex() for a caller that calls the method through the value
-   vectorcall: *out is the owner of the method, an int or float attribute
-   included, which the call then reports as not callable. */
+/* The method `attr` of self's type, for a call with self as its first
+   argument (status 1: a method descriptor, not bound) or without it (status
+   0: the attribute bound by its descriptor, or as it is). *out owns it, an
+   int or float attribute included, which a call then reports as not
+   callable. Status -1 is an error, or a missing method: the missing method
+   raises AttributeError only with raise_attribute_error, and *out is
+   PyValue_NULL. */
 static inline Py_ALWAYS_INLINE int
-lookup_method_value_ex(PyObject *self, PyObject *attr, PyValue *out,
+lookup_method_value_ex(PyValueBorrow self, PyObject *attr, PyValue *out,
                        int raise_attribute_error)
 {
     *out = PyValue_NULL;
+    PyTypeObject *tp = PyValue_TYPE(self);
     PyValue found = PyValue_NULL;
-    (void)_PyType_LookupValueAndVersion(Py_TYPE(self), attr, &found);
+    (void)_PyType_LookupValueAndVersion(tp, attr, &found);
     if (PyValue_IsNull(found)) {
         if (raise_attribute_error) {
             PyErr_SetObject(PyExc_AttributeError, attr);
@@ -3428,14 +3373,13 @@ lookup_method_value_ex(PyObject *self, PyObject *attr, PyValue *out,
         *out = found;
         return 1;
     }
-    descrgetfunc f = Py_TYPE(value)->tp_descr_get;
-    if (f == NULL) {
+    if (Py_TYPE(value)->tp_descr_get == NULL) {
         *out = found;
         return 0;
     }
-    PyObject *bound = f(value, self, (PyObject *)(Py_TYPE(self)));
+    PyValue bound = _PyValue_DescrGet(value, self, tp);
     PyValue_CLOSE(found);
-    if (bound == NULL) {
+    if (PyValue_IsNull(bound)) {
         if (!raise_attribute_error &&
             PyErr_ExceptionMatches(PyExc_AttributeError))
         {
@@ -3443,101 +3387,15 @@ lookup_method_value_ex(PyObject *self, PyObject *attr, PyValue *out,
         }
         return -1;
     }
-    *out = PyValue_FromObjectSteal(bound);
+    *out = bound;
     return 0;
 }
 
-
-static inline PyObject*
-vectorcall_unbound(PyThreadState *tstate, int unbound, PyObject *func,
-                   PyObject *const *args, Py_ssize_t nargs)
-{
-    size_t nargsf = nargs;
-    if (!unbound) {
-        /* Skip self argument, freeing up args[0] to use for
-         * PY_VECTORCALL_ARGUMENTS_OFFSET */
-        args++;
-        nargsf = nargsf - 1 + PY_VECTORCALL_ARGUMENTS_OFFSET;
-    }
-    EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_SLOT, func);
-    return _PyObject_VectorcallTstate(tstate, func, args, nargsf, NULL);
-}
-
-static PyObject*
-call_unbound_noarg(int unbound, PyObject *func, PyObject *self)
-{
-    if (unbound) {
-        return PyObject_CallOneArg(func, self);
-    }
-    else {
-        return _PyObject_CallNoArgs(func);
-    }
-}
-
-// Call the method with the name `attr` on `self`. Returns NULL with an
-// exception set if the method is missing or an error occurs.
-static PyObject *
-call_method_noarg(PyObject *self, PyObject *attr)
-{
-    PyObject *func = NULL;
-    int unbound = lookup_method(self, attr, &func);
-    if (unbound < 0) {
-        return NULL;
-    }
-    PyObject *result = call_unbound_noarg(unbound, func, self);
-    Py_DECREF(func);
-    return result;
-}
-
-static PyObject *
-call_method(PyObject *self, PyObject *attr, PyObject *args, PyObject *kwds)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *result;
-    PyObject *meth = NULL;
-    int unbound = lookup_method(self, attr, &meth);
-    if (unbound < 0) {
-        return NULL;
-    }
-    if (unbound) {
-        result = _PyObject_Call_Prepend(tstate, meth, self, args, kwds);
-    }
-    else {
-        result = _PyObject_Call(tstate, meth, args, kwds);
-    }
-    Py_DECREF(meth);
-    return result;
-}
-
-
-/* A variation of PyObject_CallMethod* that uses lookup_method()
-   instead of PyObject_GetAttrString().
-
-   args is an argument vector of length nargs. The first element in this
-   vector is the special object "self" which is used for the method lookup */
-static PyObject *
-vectorcall_method(PyObject *name, PyObject *const *args, Py_ssize_t nargs)
-{
-    assert(nargs >= 1);
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *func = NULL;
-    int unbound = lookup_method(args[0], name, &func);
-    if (unbound < 0) {
-        return NULL;
-    }
-    PyObject *result = vectorcall_unbound(tstate, unbound, func, args, nargs);
-    Py_DECREF(func);
-    return result;
-}
-
-/* The value twins of vectorcall_unbound(), vectorcall_method() and
-   vectorcall_maybe(), for the value sides of the slot_* functions (V2a-1a
-   part iii). args is a window of borrowed words (_PyValue_WindowPut): the
-   caller's operands stay owned by the caller for the whole call, so an
-   inline operand reaches the dunder without a box. args[0] is the receiver,
-   whose type has the slot_* function and so is a heap type: an object. The
-   dunder is looked up on that receiver, as the object forms do, and called
-   through the value vectorcall. */
+/* Calls the method that lookup_method_value_ex() found. args is a window of
+   borrowed words (_PyValue_WindowPut) whose first word is self: the caller's
+   operands stay owned by the caller for the whole call, so an inline operand
+   reaches the dunder without a box. A method that is not unbound is called
+   without it. */
 static PyValue
 vectorcall_unbound_value(PyThreadState *tstate, int unbound, PyValue func,
                          const PyValue *args, Py_ssize_t nargs)
@@ -3556,15 +3414,16 @@ vectorcall_unbound_value(PyThreadState *tstate, int unbound, PyValue func,
     return _PyValue_VectorcallTstate(tstate, func, args, nargsf, NULL);
 }
 
+/* The method with the name `name` of args[0]'s type, called with args. */
 static PyValue
 vectorcall_method_value(PyObject *name, const PyValue *args, Py_ssize_t nargs)
 {
     assert(nargs >= 1);
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *self = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     PyValue func;
     PyValue result = PyValue_NULL;
-    int unbound = lookup_method_value_ex(self, name, &func, 1);
+    int unbound = lookup_method_value_ex(PyValue_Borrow(args[0]), name, &func,
+                                         1);
     if (unbound >= 0) {
         result = vectorcall_unbound_value(tstate, unbound, func, args, nargs);
     }
@@ -3572,16 +3431,16 @@ vectorcall_method_value(PyObject *name, const PyValue *args, Py_ssize_t nargs)
     return result;
 }
 
-/* Gives NotImplemented when the lookup fails, as vectorcall_maybe(). */
+/* Gives NotImplemented when the lookup fails. */
 static PyValue
 vectorcall_maybe_value(PyThreadState *tstate, PyObject *name,
                        const PyValue *args, Py_ssize_t nargs)
 {
     assert(nargs >= 1);
-    PyObject *self = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     PyValue func;
     PyValue result = PyValue_NULL;
-    int unbound = lookup_method_value_ex(self, name, &func, 0);
+    int unbound = lookup_method_value_ex(PyValue_Borrow(args[0]), name, &func,
+                                         0);
     if (unbound < 0) {
         if (!PyErr_Occurred()) {
             result = PyValue_NotImplemented;
@@ -3594,21 +3453,20 @@ vectorcall_maybe_value(PyThreadState *tstate, PyObject *name,
     return result;
 }
 
-/* The value twin of maybe_call_special_no_args() and
-   maybe_call_special_one_arg(): PyValue_NULL without an exception if the
-   method is missing (or is None, with attr_is_none). */
+/* PyValue_NULL without an exception if the method is missing (or is None,
+   with attr_is_none). */
 static PyValue
 maybe_call_special_value(PyObject *attr, const PyValue *args, Py_ssize_t nargs,
                          int *attr_is_none)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *self = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     PyValue func;
     PyValue result = PyValue_NULL;
     if (attr_is_none != NULL) {
         *attr_is_none = 0;
     }
-    int unbound = lookup_method_value_ex(self, attr, &func, 0);
+    int unbound = lookup_method_value_ex(PyValue_Borrow(args[0]), attr, &func,
+                                         0);
     if (unbound >= 0) {
         int is_none = PyValue_IsObject(func) &&
             PyValue_AsKnownObjectBorrow(func) == Py_None;
@@ -3624,69 +3482,60 @@ maybe_call_special_value(PyObject *attr, const PyValue *args, Py_ssize_t nargs,
     return result;
 }
 
-/* Call the method with the name `attr` on `self`. Returns NULL if the
-   method is missing or an error occurs.  No exception is set if
-   the method is missing. If attr_is_none is not NULL, it is set to 1 if
-   the attribute was found and was None, or 0 if it was not found. */
+/* The calls of object-API slots, which hold their arguments as a tuple and
+   a dict: the method is the object that lookup_method_value_ex() found. */
 static PyObject *
-maybe_call_special_no_args(PyObject *self, PyObject *attr, int *attr_is_none)
+call_method(PyObject *self, PyObject *attr, PyObject *args, PyObject *kwds)
 {
-    PyObject *result = NULL;
-    PyObject *func = NULL;
-
-    if (attr_is_none != NULL) {
-        *attr_is_none = 0;
-    }
-    int unbound = lookup_maybe_method(self, attr, &func);
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValue func;
+    int unbound = lookup_method_value_ex(PyValue_FromObjectBorrow(self), attr,
+                                         &func, 1);
     if (unbound < 0) {
         return NULL;
     }
-    if (attr_is_none != NULL) {
-        *attr_is_none = (func == Py_None);
+    PyObject *meth = _PyValue_AsObjectResultAt(func, BOX_SITE_ATTRIBUTE);
+    if (meth == NULL) {
+        return NULL;
     }
-    if (func != Py_None || attr_is_none == NULL) {
-        result = call_unbound_noarg(unbound, func, self);
+    PyObject *result;
+    if (unbound) {
+        result = _PyObject_Call_Prepend(tstate, meth, self, args, kwds);
     }
-    Py_DECREF(func);
+    else {
+        result = _PyObject_Call(tstate, meth, args, kwds);
+    }
+    Py_DECREF(meth);
     return result;
 }
 
+/* A call of the method by name, with the result as an object, for the
+   object API: args[0] is the object. */
 static PyObject *
-maybe_call_special_one_arg(PyObject *self, PyObject *attr, PyObject *arg,
-                           int *attr_is_none)
+maybe_call_special_object(PyObject *attr, PyObject *self, PyObject *arg,
+                          int *attr_is_none)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *result = NULL;
-    PyObject *func = NULL;
-
-    if (attr_is_none != NULL) {
-        *attr_is_none = 0;
+    PyValue stack[2];
+    _PyValue_WindowPut(&stack[0], PyValue_FromObjectBorrow(self));
+    if (arg != NULL) {
+        _PyValue_WindowPut(&stack[1], PyValue_FromObjectBorrow(arg));
     }
-    int unbound = lookup_maybe_method(self, attr, &func);
-    if (unbound < 0) {
-        return NULL;
-    }
-    if (attr_is_none != NULL) {
-        *attr_is_none = (func == Py_None);
-    }
-    if (func != Py_None || attr_is_none == NULL) {
-        PyObject *args[] = { self, arg };
-        result = vectorcall_unbound(tstate, unbound, func, args, 2);
-    }
-    Py_DECREF(func);
-    return result;
+    return _PyValue_AsObjectResultAt(
+        maybe_call_special_value(attr, stack, arg != NULL ? 2 : 1,
+                                 attr_is_none),
+        BOX_SITE_CALL);
 }
 
 PyObject *
 _PyObject_MaybeCallSpecialNoArgs(PyObject *self, PyObject *attr)
 {
-    return maybe_call_special_no_args(self, attr, NULL);
+    return maybe_call_special_object(attr, self, NULL, NULL);
 }
 
 PyObject *
 _PyObject_MaybeCallSpecialOneArg(PyObject *self, PyObject *attr, PyObject *arg)
 {
-    return maybe_call_special_one_arg(self, attr, arg, NULL);
+    return maybe_call_special_object(attr, self, arg, NULL);
 }
 
 /*
@@ -4065,7 +3914,10 @@ mro_invoke(PyTypeObject *type)
     if (custom) {
         // Custom mro() method on metaclass.  This is potentially re-entrant.
         // We are called either from type_ready() or from type_set_bases().
-        mro_result = call_method_noarg((PyObject *)type, &_Py_ID(mro));
+        PyValue stack[1];
+        _PyValue_WindowPut(&stack[0], PyValue_FromObjectBorrow((PyObject *)type));
+        mro_result = _PyValue_AsObjectResultAt(
+            vectorcall_method_value(&_Py_ID(mro), stack, 1), BOX_SITE_CALL);
     }
     else {
         // In this case, the mro() method on the type object is being used and
@@ -13174,22 +13026,18 @@ static PyValue
 slot_tp_call_value(PyThreadState *tstate, PyObject *self,
                    const PyValue *args, size_t nargsf, PyObject *kwnames)
 {
-    PyObject *meth = NULL;
-    int unbound = lookup_method(self, &_Py_ID(__call__), &meth);
+    PyValueBorrow self_value = PyValue_FromObjectBorrow(self);
+    PyValue func;
+    int unbound = lookup_method_value_ex(self_value, &_Py_ID(__call__), &func,
+                                         1);
     if (unbound < 0) {
         return PyValue_NULL;
     }
-    PyValue result;
-    if (unbound) {
-        result = _PyValue_VectorcallPrepend(
-            tstate, PyValue_FromObjectBorrow(meth),
-            PyValue_FromObjectBorrow(self), args, nargsf, kwnames);
-    }
-    else {
-        result = _PyValue_VectorcallTstate(
-            tstate, PyValue_FromObjectBorrow(meth), args, nargsf, kwnames);
-    }
-    Py_DECREF(meth);
+    PyValue result = unbound
+        ? _PyValue_VectorcallPrepend(tstate, func, self_value, args, nargsf,
+                                     kwnames)
+        : _PyValue_VectorcallTstate(tstate, func, args, nargsf, kwnames);
+    PyValue_CLOSE(func);
     return result;
 }
 
@@ -13217,9 +13065,10 @@ PyValue
 _Py_slot_tp_getattro_value(PyValueBorrow self, PyObject *name)
 {
     assert(!PyValue_IsInline(self));
-    PyObject *stack[2] = {PyValue_AsKnownObjectBorrow(self), name};
-    return _PyValue_FromObjectResult(
-        vectorcall_method(&_Py_ID(__getattribute__), stack, 2));
+    PyValue stack[2];
+    _PyValue_WindowPut(&stack[0], self);
+    _PyValue_WindowPut(&stack[1], PyValue_FromObjectBorrow(name));
+    return vectorcall_method_value(&_Py_ID(__getattribute__), stack, 2);
 }
 
 Py_VALUE_ENTRY PyObject *
@@ -13383,12 +13232,13 @@ slot_tp_richcompare_value(PyValueBorrow self, PyValueBorrow other, int op)
 static int
 has_dunder_getitem(PyObject *self)
 {
-    PyObject *func = NULL;
-    int status = lookup_maybe_method(self, &_Py_ID(__getitem__), &func);
-    /* lookup_maybe_method() reports a missing method and an error the same
-       way. Unlike upstream, propagate the error. */
+    PyValue func;
+    int status = lookup_method_value_ex(PyValue_FromObjectBorrow(self),
+                                        &_Py_ID(__getitem__), &func, 0);
+    /* lookup_method_value_ex() reports a missing method and an error the
+       same way. Unlike upstream, propagate the error. */
     int result = status >= 0 ? 1 : (PyErr_Occurred() ? -1 : 0);
-    Py_XDECREF(func);
+    PyValue_XCLOSE(func);
     return result;
 }
 
@@ -13396,8 +13246,8 @@ PyObject *
 _PyType_SlotIter(PyObject *self)
 {
     int attr_is_none = 0;
-    PyObject *res = maybe_call_special_no_args(self, &_Py_ID(__iter__),
-                                               &attr_is_none);
+    PyObject *res = maybe_call_special_object(&_Py_ID(__iter__), self, NULL,
+                                              &attr_is_none);
     if (res != NULL) {
         return res;
     }
@@ -13508,28 +13358,17 @@ _Py_slot_tp_init_value(PyValueBorrow self, const PyValue *args,
                         Py_ssize_t nargs, PyObject *kwnames)
 {
     assert(PyValue_IsObject(self));
-    /* _PyObject_LookupSpecialMethod() consumes its receiver slot. */
-    PyValue receiver = PyValue_DUP(self);
-    PyValue meth = PyValue_NULL;
-    PyValue result = PyValue_NULL;
-    int found = _PyObject_LookupSpecialMethod(NULL, &_Py_ID(__init__), &meth, &receiver);
-    if (found <= 0) {
-        if (found == 0) {
-            PyErr_SetObject(PyExc_AttributeError, &_Py_ID(__init__));
-        }
-        goto done;
-    }
     PyThreadState *tstate = _PyThreadState_GET();
-    if (!PyValue_IsNull(receiver)) {
-        result = _PyValue_VectorcallPrepend(tstate, meth, receiver,
-                                             args, nargs, kwnames);
+    PyValue meth;
+    int unbound = lookup_method_value_ex(self, &_Py_ID(__init__), &meth, 1);
+    PyValue result = PyValue_NULL;
+    if (unbound >= 0) {
+        result = unbound
+            ? _PyValue_VectorcallPrepend(tstate, meth, self, args, nargs,
+                                         kwnames)
+            : _PyValue_VectorcallTstate(tstate, meth, args, nargs, kwnames);
     }
-    else {
-        result = _PyValue_VectorcallTstate(tstate, meth, args, nargs, kwnames);
-    }
-done:
     PyValue_XCLOSE(meth);
-    PyValue_XCLOSE(receiver);
     if (PyValue_IsNull(result)) {
 
         return -1;
@@ -13641,26 +13480,31 @@ slot_tp_finalize(PyObject *self)
     PyObject *exc = _PyErr_GetRaisedException(tstate);
 
     /* Execute __del__ method, if any. */
-    PyObject *del = NULL;
-    int unbound = lookup_maybe_method(self, &_Py_ID(__del__), &del);
+    PyValue stack[1];
+    _PyValue_WindowPut(&stack[0], PyValue_FromObjectBorrow(self));
+    PyValue del;
+    int unbound = lookup_method_value_ex(PyValue_Borrow(stack[0]), &_Py_ID(__del__),
+                                        &del, 0);
     if (unbound >= 0) {
-        PyObject *res = call_unbound_noarg(unbound, del, self);
-        if (res == NULL) {
+        PyValue res = vectorcall_unbound_value(tstate, unbound, del, stack, 1);
+        if (PyValue_IsNull(res)) {
+            PyObject *del_object = _PyValue_AsObjectAt(del, BOX_SITE_ATTRIBUTE);
             PyErr_FormatUnraisable("Exception ignored while "
-                                   "calling deallocator %R", del);
+                                   "calling deallocator %R", del_object);
+            Py_XDECREF(del_object);
         }
         else {
-            Py_DECREF(res);
+            PyValue_CLOSE(res);
         }
     }
     else if (PyErr_Occurred()) {
-        /* lookup_maybe_method() reports a missing method and a failed lookup
-           the same way. Report the failure rather than drop it. */
+        /* lookup_method_value_ex() reports a missing method and a failed
+           lookup the same way. Report the failure rather than drop it. */
         PyErr_FormatUnraisable("Exception ignored while "
                                "calling deallocator %R", self);
     }
 
-    Py_XDECREF(del);
+    PyValue_XCLOSE(del);
 
     /* Restore the saved exception. */
     _PyErr_SetRaisedException(tstate, exc);
@@ -13747,8 +13591,11 @@ slot_bf_getbuffer(PyObject *self, Py_buffer *buffer, int flags)
         return -1;
     }
     PyBufferWrapper *wrapper = NULL;
-    PyObject *stack[2] = {self, flags_obj};
-    PyObject *ret = vectorcall_method(&_Py_ID(__buffer__), stack, 2);
+    PyValue stack[2];
+    _PyValue_WindowPut(&stack[0], PyValue_FromObjectBorrow(self));
+    _PyValue_WindowPut(&stack[1], PyValue_FromObjectBorrow(flags_obj));
+    PyObject *ret = _PyValue_AsObjectResultAt(
+        vectorcall_method_value(&_Py_ID(__buffer__), stack, 2), BOX_SITE_CALL);
     if (ret == NULL) {
         goto fail;
     }
@@ -13876,8 +13723,12 @@ releasebuffer_call_python(PyObject *self, Py_buffer *buffer)
         // buffer.
         ((PyMemoryViewObject *)mv)->flags |= _Py_MEMORYVIEW_RESTRICTED;
     }
-    PyObject *stack[2] = {self, mv};
-    PyObject *ret = vectorcall_method(&_Py_ID(__release_buffer__), stack, 2);
+    PyValue stack[2];
+    _PyValue_WindowPut(&stack[0], PyValue_FromObjectBorrow(self));
+    _PyValue_WindowPut(&stack[1], PyValue_FromObjectBorrow(mv));
+    PyObject *ret = _PyValue_AsObjectResultAt(
+        vectorcall_method_value(&_Py_ID(__release_buffer__), stack, 2),
+        BOX_SITE_CALL);
     if (ret == NULL) {
         PyErr_FormatUnraisable("Exception ignored in __release_buffer__ of %s", Py_TYPE(self)->tp_name);
     }

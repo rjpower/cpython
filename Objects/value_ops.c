@@ -5,6 +5,7 @@
 #include "Python.h"
 #include "pycore_long_value.h"    // _PyLong_ValueHash()
 #include "pycore_object.h"        // _Py_SwappedOp
+#include "pycore_pyhash.h"        // _Py_HashPointerInline()
 #include "pycore_unicodeobject.h"  // _PyUnicode_Equal()
 #include "pycore_typeobject.h"    // _PyType_IsReady()
 #include "pycore_value_ops.h"
@@ -74,7 +75,7 @@ Py_hash_t
                _PyValue_GenericHash() and PyObject_GenericHash() for it. An
                exact int or float never has this hash, so the address is the
                identity. */
-            return Py_HashPointer(op);
+            return _Py_HashPointerInline(op);
         }
         return hash_object_value(op, value);
     }

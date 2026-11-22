@@ -20,6 +20,18 @@ _Py_HashPointerRaw(const void *ptr)
     return (Py_hash_t)x;
 }
 
+// Py_HashPointer() as an inline function, for the hash of a value that is
+// an object.
+static inline Py_hash_t
+_Py_HashPointerInline(const void *ptr)
+{
+    Py_hash_t hash = _Py_HashPointerRaw(ptr);
+    if (hash == -1) {
+        hash = -2;
+    }
+    return hash;
+}
+
 /* Hash secret
  *
  * memory layout on 64 bit systems

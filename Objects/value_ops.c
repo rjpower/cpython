@@ -5,6 +5,7 @@
 #include "Python.h"
 #include "pycore_long_value.h"    // _PyLong_ValueHash()
 #include "pycore_object.h"        // _Py_SwappedOp
+#include "pycore_pyhash.h"        // _Py_HashPointerInline()
 #include "pycore_unicodeobject.h"  // _PyUnicode_Equal()
 #include "pycore_typeobject.h"    // _PyType_IsReady()
 #include "pycore_value_ops.h"
@@ -67,7 +68,16 @@ Py_hash_t
 (_PyValue_Hash)(PyValueBorrow value)
 {
     if (PyValue_IsPointerSpace(value)) {
-        return hash_object_value(BITS_TO_PTR_MASKED(value), value);
+        PyObject *op = BITS_TO_PTR_MASKED(value);
+        if (Py_TYPE(op)->tp_hash == PyObject_GenericHash) {
+            /* The default hash, of a class instance, a type or a function,
+               is the hash of the address: the dispatch below would reach
+               _PyValue_GenericHash() and PyObject_GenericHash() for it. An
+               exact int or float never has this hash, so the address is the
+               identity. */
+            return _Py_HashPointerInline(op);
+        }
+        return hash_object_value(op, value);
     }
     /* Inline int keys are common (ids, counters, indexes), so their hash
        stays inline; an inline float key is rare. */

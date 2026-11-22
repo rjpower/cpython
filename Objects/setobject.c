@@ -2848,9 +2848,9 @@ static int
     (set_contains_borrowed)(S, PyValue_Borrow(K))
 
 int
-_PySet_Contains(PySetObject *so, PyObject *key)
+(_PySet_Contains)(PySetObject *so, PyValueBorrow key)
 {
-    return set_contains_borrowed(so, PyValue_FromObjectBorrow(key));
+    return set_contains_borrowed(so, key);
 }
 
 static int

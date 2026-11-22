@@ -847,8 +847,10 @@ init_keys_object(PyDictKeysObject* dk, uint8_t log2_size, int log2_bytes, int ki
     }
 }
 
-static PyDictKeysObject*
-new_keys_object(uint8_t log2_size, bool unicode)
+/* The body is inline so that insert_to_emptydict(), whose size is a constant,
+   folds the sizes and the entry loops away. */
+static inline Py_ALWAYS_INLINE PyDictKeysObject*
+new_keys_object_inline(uint8_t log2_size, bool unicode)
 {
     Py_ssize_t usable = USABLE_FRACTION((size_t)1<<log2_size);
     size_t entry_size = unicode ? sizeof(PyDictUnicodeEntry) : sizeof(PyDictKeyEntry);
@@ -872,6 +874,12 @@ new_keys_object(uint8_t log2_size, bool unicode)
                      unicode ? DICT_KEYS_UNICODE : DICT_KEYS_GENERAL,
                      usable, entry_size);
     return dk;
+}
+
+static PyDictKeysObject*
+new_keys_object(uint8_t log2_size, bool unicode)
+{
+    return new_keys_object_inline(log2_size, unicode);
 }
 
 static void
@@ -1308,34 +1316,29 @@ _Py_dict_lookup() is general-purpose, and may return DKIX_ERROR if (and only if)
 comparison raises an exception.
 When the key isn't found a DKIX_EMPTY is returned.
 */
-Py_ssize_t
-(_Py_dict_lookup)(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
-                  PyValueBorrow *value_addr)
+/* The lookups that compare keys through the general path: a general table,
+   or a key that is not an exact str in a table of str keys. A comparison can
+   run Python code that changes the table, and then the lookup starts again
+   from _Py_dict_lookup(). */
+static Py_NO_INLINE Py_ssize_t
+dict_lookup_general(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
+                    PyValueBorrow *value_addr)
 {
-    PyDictKeysObject *dk;
-    DictKeysKind kind;
+    PyDictKeysObject *dk = mp->ma_keys;
+    DictKeysKind kind = dk->dk_kind;
     Py_ssize_t ix;
 
-    _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(mp);
-start:
-    dk = mp->ma_keys;
-    kind = dk->dk_kind;
-
     if (kind != DICT_KEYS_GENERAL) {
-        if (value_is_exact_unicode(key)) {
-            ix = unicodekeys_lookup_unicode(dk, PyValue_AsKnownObjectBorrow(key), hash);
-        }
-        else {
-            INCREF_KEYS_FT(dk);
-            LOCK_KEYS_IF_SPLIT(dk, kind);
+        assert(!value_is_exact_unicode(key));
+        INCREF_KEYS_FT(dk);
+        LOCK_KEYS_IF_SPLIT(dk, kind);
 
-            ix = unicodekeys_lookup_generic(mp, dk, key, hash);
+        ix = unicodekeys_lookup_generic(mp, dk, key, hash);
 
-            UNLOCK_KEYS_IF_SPLIT(dk, kind);
-            DECREF_KEYS_FT(dk, IS_DICT_SHARED(mp));
-            if (ix == DKIX_KEY_CHANGED) {
-                goto start;
-            }
+        UNLOCK_KEYS_IF_SPLIT(dk, kind);
+        DECREF_KEYS_FT(dk, IS_DICT_SHARED(mp));
+        if (ix == DKIX_KEY_CHANGED) {
+            return (_Py_dict_lookup)(mp, key, hash, value_addr);
         }
 
         if (ix >= 0) {
@@ -1349,21 +1352,52 @@ start:
         else {
             *value_addr = PyValue_Borrow(PyValue_NULL);
         }
-    }
-    else {
-        ix = dictkeys_generic_lookup(mp, dk, key, hash);
-        if (ix == DKIX_KEY_CHANGED) {
-            goto start;
-        }
-        if (ix >= 0) {
-            *value_addr = PyValue_Borrow(DK_ENTRIES(dk)[ix].me_value);
-        }
-        else {
-            *value_addr = PyValue_Borrow(PyValue_NULL);
-        }
+        return ix;
     }
 
+    ix = dictkeys_generic_lookup(mp, dk, key, hash);
+    if (ix == DKIX_KEY_CHANGED) {
+        return (_Py_dict_lookup)(mp, key, hash, value_addr);
+    }
+    if (ix >= 0) {
+        *value_addr = PyValue_Borrow(DK_ENTRIES(dk)[ix].me_value);
+    }
+    else {
+        *value_addr = PyValue_Borrow(PyValue_NULL);
+    }
     return ix;
+}
+
+static inline Py_ALWAYS_INLINE Py_ssize_t
+dict_lookup_inline(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
+                   PyValueBorrow *value_addr)
+{
+    _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(mp);
+    PyDictKeysObject *dk = mp->ma_keys;
+    DictKeysKind kind = dk->dk_kind;
+    if (kind == DICT_KEYS_GENERAL || !value_is_exact_unicode(key)) {
+        return dict_lookup_general(mp, key, hash, value_addr);
+    }
+    /* An exact str in a table of str keys: no comparison can run Python. */
+    Py_ssize_t ix = unicodekeys_lookup_unicode(
+        dk, PyValue_AsKnownObjectBorrow(key), hash);
+    if (ix < 0) {
+        *value_addr = PyValue_Borrow(PyValue_NULL);
+    }
+    else if (kind == DICT_KEYS_SPLIT) {
+        *value_addr = PyValue_Borrow(mp->ma_values->values[ix]);
+    }
+    else {
+        *value_addr = PyValue_Borrow(DK_UNICODE_ENTRIES(dk)[ix].me_value);
+    }
+    return ix;
+}
+
+Py_ssize_t
+(_Py_dict_lookup)(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
+                  PyValueBorrow *value_addr)
+{
+    return dict_lookup_inline(mp, key, hash, value_addr);
 }
 
 /* The caller keeps the dictionary and query alive through equality callbacks.
@@ -1674,6 +1708,23 @@ replace_value(PyDictObject *mp, PyValueBorrow key, Py_ssize_t ix,
     PyValue_XCLOSE(owner);
 }
 
+/* The full table of insertdict_unicode_key(): grow it, find the free slot
+   again and store the pair. Returns 1, or -1 on a memory error, consuming key
+   and value either way. */
+static Py_NO_INLINE int
+insertdict_unicode_key_grow(PyDictObject *mp, Py_hash_t hash, PyValue key,
+                            PyValue value)
+{
+    if (insertion_resize(mp, 1) < 0) {
+        PyValue_CLOSE(key);
+        PyValue_CLOSE(value);
+        return -1;
+    }
+    insert_combined_dict(mp, hash, find_empty_slot(mp->ma_keys, hash), key,
+                         value);
+    return 1;
+}
+
 /* One-pass insert of an exact str key into an unwatched combined table of
    str keys: one probe finds either the entry to replace or the slot to fill.
    Returns 1 if it stored the pair, consuming key and value; -1 on a memory
@@ -1696,9 +1747,9 @@ insertdict_unicode_key(PyDictObject *mp, PyValue key, Py_hash_t hash,
                        PyValue value)
 {
     PyDictKeysObject *keys = mp->ma_keys;
-    if (!value_is_exact_unicode(key) || mp->ma_values != NULL
-        || !DK_IS_UNICODE(keys)
-        || (mp->_ma_watcher_tag & DICT_WATCHER_MASK))
+    if (!DK_IS_UNICODE(keys) || mp->ma_values != NULL
+        || (mp->_ma_watcher_tag & DICT_WATCHER_MASK)
+        || !value_is_exact_unicode(key))
     {
         return 0;
     }
@@ -1733,38 +1784,26 @@ insertdict_unicode_key(PyDictObject *mp, PyValue key, Py_hash_t hash,
         i = mask & (i*5 + perturb + 1);
     }
     if (keys->dk_usable <= 0) {
-        if (insertion_resize(mp, 1) < 0) {
-            PyValue_CLOSE(key);
-            PyValue_CLOSE(value);
-            return -1;
-        }
-        free_slot = find_empty_slot(mp->ma_keys, hash);
+        return insertdict_unicode_key_grow(mp, hash, key, value);
     }
     insert_combined_dict(mp, hash, free_slot, key, value);
     return 1;
 }
 
 /*
-Internal routine to insert a new item into the table.
-Used both by the internal resize routine and by the public insert routine.
-Returns -1 if an error occurred, or 0 on success.
+The general insert of insertdict(): any key and table kind, watched dicts and
+split tables included. Returns -1 if an error occurred, or 0 on success.
 Consumes key and value references.
 */
-static int
-insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
+static Py_NO_INLINE int
+insertdict_general(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
 {
-    assert(can_modify_dict(mp));
-    assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
-    int fast = insertdict_unicode_key(mp, key, hash, value);
-    if (fast != 0) {
-        return fast < 0 ? -1 : 0;
-    }
     int notified = 0, classified = 0;
     PyDict_WatchEvent event = PyDict_EVENT_ADDED;
     int status = -1;
     for (;;) {
         PyValueBorrow old_value = PyValue_Borrow(PyValue_NULL);
-        Py_ssize_t ix = _Py_dict_lookup(mp, key, hash, &old_value);
+        Py_ssize_t ix = dict_lookup_inline(mp, PyValue_Borrow(key), hash, &old_value);
         if (ix == DKIX_ERROR) {
             break;
         }
@@ -1846,11 +1885,23 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
     return status;
 }
 
+static int
+insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
+{
+    assert(can_modify_dict(mp));
+    assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
+    int fast = insertdict_unicode_key(mp, key, hash, value);
+    if (fast != 0) {
+        return fast < 0 ? -1 : 0;
+    }
+    return insertdict_general(mp, key, hash, value);
+}
+
 // Same as insertdict but specialized for ma_keys == Py_EMPTY_KEYS: the entry
 // goes to the first slot of a new table of the minimum size. A watched dict
 // takes insertdict(), which notifies the watchers before it stores.
 // Consumes key and value references.
-static int
+static Py_NO_INLINE int
 insert_to_emptydict(PyDictObject *mp, PyValue key, Py_hash_t hash,
                     PyValue value)
 {
@@ -1861,7 +1912,7 @@ insert_to_emptydict(PyDictObject *mp, PyValue key, Py_hash_t hash,
         return insertdict(mp, key, hash, value);
     }
     bool unicode = value_is_exact_unicode(key);
-    PyDictKeysObject *newkeys = new_keys_object(PyDict_LOG_MINSIZE, unicode);
+    PyDictKeysObject *newkeys = new_keys_object_inline(PyDict_LOG_MINSIZE, unicode);
     if (newkeys == NULL) {
         PyValue_CLOSE(key);
         PyValue_CLOSE(value);
@@ -2009,42 +2060,53 @@ dictresize(PyDictObject *mp, uint8_t log2_newsize, int unicode)
         assert(newkeys->dk_kind == DICT_KEYS_GENERAL);
         PyDictKeyEntry *oldentries = DK_ENTRIES(oldkeys);
         PyDictKeyEntry *entries = DK_ENTRIES(newkeys);
-        Py_ssize_t next = 0;
-        for (Py_ssize_t i = 0; i < oldkeys->dk_nentries; i++) {
-            if (!PyValue_IsNull(oldentries[i].me_value)) {
-                entries[next++] = oldentries[i];
-                oldentries[i].me_key = PyValue_NULL;
-                oldentries[i].me_value = PyValue_NULL;
-            }
+        if (oldkeys->dk_nentries == numentries) {
+            memcpy(entries, oldentries, numentries * sizeof(PyDictKeyEntry));
         }
-        assert(next == numentries);
+        else {
+            Py_ssize_t next = 0;
+            for (Py_ssize_t i = 0; i < oldkeys->dk_nentries; i++) {
+                if (!PyValue_IsNull(oldentries[i].me_value)) {
+                    entries[next++] = oldentries[i];
+                }
+            }
+            assert(next == numentries);
+        }
         build_indices_generic(newkeys, entries, numentries);
     }
     else {
         PyDictUnicodeEntry *oldentries = DK_UNICODE_ENTRIES(oldkeys);
-        Py_ssize_t next = 0;
-        for (Py_ssize_t i = 0; i < oldkeys->dk_nentries; i++) {
-            if (PyValue_IsNull(oldentries[i].me_value)) {
-                continue;
-            }
-            if (newkeys->dk_kind == DICT_KEYS_GENERAL) {
-                PyDictKeyEntry *entry = &DK_ENTRIES(newkeys)[next++];
-                entry->me_hash = unicode_get_hash(oldentries[i].me_key);
-                entry->me_key = dict_take_unicode_key(oldentries[i].me_key);
-                entry->me_value = oldentries[i].me_value;
-            }
-            else {
-                DK_UNICODE_ENTRIES(newkeys)[next++] = oldentries[i];
-            }
-            oldentries[i].me_key = NULL;
-            oldentries[i].me_value = PyValue_NULL;
-        }
-        assert(next == numentries);
         if (newkeys->dk_kind == DICT_KEYS_GENERAL) {
-            build_indices_generic(newkeys, DK_ENTRIES(newkeys), numentries);
+            // combined unicode -> generic: the keys move as owners
+            PyDictKeyEntry *entries = DK_ENTRIES(newkeys);
+            Py_ssize_t next = 0;
+            for (Py_ssize_t i = 0; i < oldkeys->dk_nentries; i++) {
+                if (PyValue_IsNull(oldentries[i].me_value)) {
+                    continue;
+                }
+                entries[next].me_hash = unicode_get_hash(oldentries[i].me_key);
+                entries[next].me_key = dict_take_unicode_key(oldentries[i].me_key);
+                entries[next].me_value = oldentries[i].me_value;
+                next++;
+            }
+            assert(next == numentries);
+            build_indices_generic(newkeys, entries, numentries);
         }
         else {
-            build_indices_unicode(newkeys, DK_UNICODE_ENTRIES(newkeys), numentries);
+            PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(newkeys);
+            if (oldkeys->dk_nentries == numentries) {
+                memcpy(entries, oldentries, numentries * sizeof(PyDictUnicodeEntry));
+            }
+            else {
+                Py_ssize_t next = 0;
+                for (Py_ssize_t i = 0; i < oldkeys->dk_nentries; i++) {
+                    if (!PyValue_IsNull(oldentries[i].me_value)) {
+                        entries[next++] = oldentries[i];
+                    }
+                }
+                assert(next == numentries);
+            }
+            build_indices_unicode(newkeys, entries, numentries);
         }
     }
 
@@ -2055,8 +2117,21 @@ dictresize(PyDictObject *mp, uint8_t log2_newsize, int unicode)
     if (oldvalues != NULL && !embedded) {
         free_values(oldvalues, shared);
     }
-    if (oldkeys != Py_EMPTY_KEYS) {
+    if (oldkeys == Py_EMPTY_KEYS) {
+        return 0;
+    }
+    if (oldvalues != NULL) {
+        // The shared keys of a split table stay alive for the other instances.
         dictkeys_decref(oldkeys, shared);
+    }
+    else {
+        // A combined table's entries now belong to the new table, and its
+        // deleted entries own nothing, so there is nothing to walk.
+        assert(oldkeys->dk_refcnt == 1);
+#ifdef Py_REF_DEBUG
+        _Py_DecRefTotal(_PyThreadState_GET());
+#endif
+        free_keys_object(oldkeys, shared);
     }
     return 0;
 }
@@ -2218,13 +2293,9 @@ static int
 dict_get_value(PyDictObject *mp, PyValueBorrow key, PyValue *result)
 {
     *result = PyValue_NULL;
-    Py_hash_t cached = cached_str_hash(key);
-    if (can_use_cached_str_lookup(mp, cached)) {
-        return _PyDict_GetValue_KnownHash(mp, key, cached, result);
-    }
     /* The caller owns the dictionary and the key for the whole call, so
      * hashing and equality need no pins here. */
-    Py_hash_t hash = cached;
+    Py_hash_t hash = cached_str_hash(key);
     if (hash == -1) {
         hash = _PyValue_Hash(key);
     }
@@ -2529,6 +2600,18 @@ setitem_take2_lock_held_known_hash(PyDictObject *mp, PyValue key,
     return insertdict(mp, key, hash, value);
 }
 
+/* The key has no hash: report it and release both owners. */
+static _Py_COLD_FUNCTION Py_NO_INLINE int
+setitem_unhashable(PyDictObject *mp, PyValue key, PyValue value)
+{
+    if (PyValue_IsObject(key)) {
+        dict_unhashable_type((PyObject *)mp, PyValue_AsKnownObjectBorrow(key));
+    }
+    PyValue_XCLOSE(value);
+    PyValue_XCLOSE(key);
+    return -1;
+}
+
 static int
 setitem_take2_lock_held(PyDictObject *mp, PyValue key, PyValue value)
 {
@@ -2539,12 +2622,7 @@ setitem_take2_lock_held(PyDictObject *mp, PyValue key, PyValue value)
         ? hash_unicode_key(PyValue_AsKnownObjectBorrow(key))
         : _PyValue_Hash(key);
     if (hash == -1) {
-        if (PyValue_IsObject(key)) {
-            dict_unhashable_type((PyObject *)mp, PyValue_AsKnownObjectBorrow(key));
-        }
-        PyValue_XCLOSE(value);
-        PyValue_XCLOSE(key);
-        return -1;
+        return setitem_unhashable(mp, key, value);
     }
     return setitem_take2_lock_held_known_hash(mp, key, value, hash);
 }

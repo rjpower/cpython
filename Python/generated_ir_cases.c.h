@@ -8835,14 +8835,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 PyObject *right_o = _PyValue_AsKnownObjectBorrowPointer(right);
                 assert(PyAnySet_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
-                int res;
-                if (PyValue_IsInline(left)) {
-                    res = _PySet_ContainsValue((PySetObject *)right_o, left);
-                }
-                else {
-                    res = _PySet_Contains((PySetObject *)right_o,
-                                      PyValue_AsKnownObjectBorrow(left));
-                }
+                int res = _PySet_Contains((PySetObject *)right_o, left);
                 if (res < 0) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -8928,14 +8921,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 PyObject *right_o = _PyValue_AsKnownObjectBorrowPointer(right);
                 assert(PyAnySet_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
-                int res;
-                if (PyValue_IsInline(left)) {
-                    res = _PySet_ContainsValue((PySetObject *)right_o, left);
-                }
-                else {
-                    res = _PySet_Contains((PySetObject *)right_o,
-                                      PyValue_AsKnownObjectBorrow(left));
-                }
+                int res = _PySet_Contains((PySetObject *)right_o, left);
                 if (res < 0) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }

@@ -133,11 +133,7 @@ _Py_HashDouble(PyObject *inst, double v)
 Py_hash_t
 Py_HashPointer(const void *ptr)
 {
-    Py_hash_t hash = _Py_HashPointerRaw(ptr);
-    if (hash == -1) {
-        hash = -2;
-    }
-    return hash;
+    return _Py_HashPointerInline(ptr);
 }
 
 Py_hash_t

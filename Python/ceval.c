@@ -1987,7 +1987,8 @@ gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
          * argument.  Its errors are those of the call. */
         _PyCodeExec *exec = code->_co_exec;
         int handler = _PyIR_BaseOpcode(IR_HANDLER(exec->words[2]));
-        assert(IR_HANDLER(exec->words[1]) == LOAD_FAST);
+        assert(_PyIR_BaseOpcode(IR_HANDLER(exec->words[1])) == LOAD_FAST ||
+               _PyIR_BaseOpcode(IR_HANDLER(exec->words[1])) == LOAD_FAST_BORROW);
         assert(handler == GET_ITER || handler == GET_AITER);
         assert(IR_A(exec->words[2]) == (uint32_t)code->co_nlocalsplus);
         PyValue *stack = frame->base + code->co_nlocalsplus;

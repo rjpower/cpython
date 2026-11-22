@@ -2750,10 +2750,12 @@ dummy_func(
             unused/5 +
             _PUSH_NULL_CONDITIONAL;
 
-        inline_ok op(_LOAD_ATTR_MODULE, (dict_version/2, index/1, owner -- attr)) {
-            EXIT_IF(!PyValue_IsObject(owner));
+        op(_GUARD_MODULE_EXACT, (owner -- owner)) {
+            EXIT_IF(!PyModule_CheckExact(PyValue_AsKnownObjectBorrow(owner)));
+        }
+
+        op(_LOAD_ATTR_MODULE, (dict_version/2, index/1, owner -- attr)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            EXIT_IF(!PyModule_CheckExact(owner_o));
             PyDictObject *dict = (PyDictObject *)((PyModuleObject *)owner_o)->md_dict;
             assert(dict != NULL);
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
@@ -2770,6 +2772,7 @@ dummy_func(
 
         macro(LOAD_ATTR_MODULE) =
             unused/1 +
+            _GUARD_MODULE_EXACT +
             _LOAD_ATTR_MODULE +
             unused/5 +
             _PUSH_NULL_CONDITIONAL;

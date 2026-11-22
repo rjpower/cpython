@@ -11355,22 +11355,25 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            // _LOAD_ATTR_MODULE
+            // _GUARD_MODULE_EXACT
             {
                 owner = IR_VIEW(IR_B(ir_word));
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                if (!PyModule_CheckExact(_PyValue_AsKnownObjectBorrowPointer(owner))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _LOAD_ATTR_MODULE
+            {
                 uint32_t dict_version = fb->dict_version;
                 uint32_t index = fb->index;
-                if (!PyValue_IsObject(owner)) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
-                PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-                if (!PyModule_CheckExact(owner_o)) {
-                    UPDATE_MISS_STATS(LOAD_ATTR);
-                    assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
-                    JUMP_TO_PREDICTED(LOAD_ATTR);
-                }
+                PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 PyDictObject *dict = (PyDictObject *)((PyModuleObject *)owner_o)->md_dict;
                 assert(dict != NULL);
                 PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
@@ -11404,7 +11407,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 }
             }
             IR_STORE_DST(ir_word, A, attr);
-            PyValue_XCLOSE(ir_own_B);
+            _PyValue_XCLOSE_POINTER(ir_own_B);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }

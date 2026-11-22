@@ -1681,10 +1681,8 @@ encoder_marker_key(const void *obj)
 static int
 write_inline_int(PyUnicodeWriter *writer, PyValueBorrow obj)
 {
-    char buf[24];
-    int n = PyOS_snprintf(buf, sizeof(buf), "%lld",
-                          (long long)PyValue_InlineInt64(obj));
-    return PyUnicodeWriter_WriteASCII(writer, buf, n);
+    // A PyUnicodeWriter is a _PyUnicodeWriter.
+    return _PyLong_WriteDecimal((_PyUnicodeWriter *)writer, obj);
 }
 
 static int

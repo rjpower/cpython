@@ -1081,9 +1081,12 @@ lookdict_index(PyDictKeysObject *k, Py_hash_t hash, Py_ssize_t index)
     Py_UNREACHABLE();
 }
 
+/* key is a pointer to the key as its comparison reads it: a PyValueBorrow for
+   the generic ones, the PyObject * of an exact str for compare_unicode_unicode,
+   which then needs no decode. */
 static inline Py_ALWAYS_INLINE Py_ssize_t
-do_lookup(PyDictObject *mp, PyDictKeysObject *dk, PyValueBorrow key, Py_hash_t hash,
-          int (*check_lookup)(PyDictObject *, PyDictKeysObject *, void *, Py_ssize_t ix, PyValueBorrow key, Py_hash_t))
+do_lookup(PyDictObject *mp, PyDictKeysObject *dk, const void *key, Py_hash_t hash,
+          int (*check_lookup)(PyDictObject *, PyDictKeysObject *, void *, Py_ssize_t ix, const void *key, Py_hash_t))
 {
     void *ep0 = _DK_ENTRIES(dk);
     size_t mask = DK_MASK(dk);
@@ -1127,8 +1130,9 @@ do_lookup(PyDictObject *mp, PyDictKeysObject *dk, PyValueBorrow key, Py_hash_t h
 
 static inline int
 compare_unicode_generic(PyDictObject *mp, PyDictKeysObject *dk,
-                        void *ep0, Py_ssize_t ix, PyValueBorrow key, Py_hash_t hash)
+                        void *ep0, Py_ssize_t ix, const void *key_ptr, Py_hash_t hash)
 {
+    PyValueBorrow key = *(const PyValueBorrow *)key_ptr;
     PyDictUnicodeEntry *ep = &((PyDictUnicodeEntry *)ep0)[ix];
     assert(ep->me_key != NULL);
     assert(PyUnicode_CheckExact(ep->me_key));
@@ -1157,15 +1161,15 @@ compare_unicode_generic(PyDictObject *mp, PyDictKeysObject *dk,
 static Py_ssize_t
 unicodekeys_lookup_generic(PyDictObject *mp, PyDictKeysObject* dk, PyValueBorrow key, Py_hash_t hash)
 {
-    return do_lookup(mp, dk, key, hash, compare_unicode_generic);
+    return do_lookup(mp, dk, &key, hash, compare_unicode_generic);
 }
 
 static inline int
 compare_unicode_unicode(PyDictObject *mp, PyDictKeysObject *dk,
-                        void *ep0, Py_ssize_t ix, PyValueBorrow key, Py_hash_t hash)
+                        void *ep0, Py_ssize_t ix, const void *key_ptr, Py_hash_t hash)
 {
     PyDictUnicodeEntry *ep = &((PyDictUnicodeEntry *)ep0)[ix];
-    PyObject *key_object = PyValue_AsKnownObjectBorrow(key);
+    PyObject *key_object = (PyObject *)key_ptr;
     PyObject *ep_key = FT_ATOMIC_LOAD_PTR_CONSUME(ep->me_key);
     assert(ep_key != NULL);
     assert(PyUnicode_CheckExact(ep_key));
@@ -1179,13 +1183,15 @@ compare_unicode_unicode(PyDictObject *mp, PyDictKeysObject *dk,
 static Py_ssize_t _Py_HOT_FUNCTION
 unicodekeys_lookup_unicode(PyDictKeysObject* dk, PyObject *key, Py_hash_t hash)
 {
-    return do_lookup(NULL, dk, PyValue_FromObjectBorrow(key), hash, compare_unicode_unicode);
+    assert(PyUnicode_CheckExact(key));
+    return do_lookup(NULL, dk, key, hash, compare_unicode_unicode);
 }
 
 static inline int
 compare_generic(PyDictObject *mp, PyDictKeysObject *dk,
-                void *ep0, Py_ssize_t ix, PyValueBorrow key, Py_hash_t hash)
+                void *ep0, Py_ssize_t ix, const void *key_ptr, Py_hash_t hash)
 {
+    PyValueBorrow key = *(const PyValueBorrow *)key_ptr;
     PyDictKeyEntry *ep = &((PyDictKeyEntry *)ep0)[ix];
     assert(!PyValue_IsNull(ep->me_key));
     if (PyValue_Is(ep->me_key, key)) return 1;
@@ -1204,7 +1210,7 @@ compare_generic(PyDictObject *mp, PyDictKeysObject *dk,
 static Py_ssize_t
 dictkeys_generic_lookup(PyDictObject *mp, PyDictKeysObject* dk, PyValueBorrow key, Py_hash_t hash)
 {
-    return do_lookup(mp, dk, key, hash, compare_generic);
+    return do_lookup(mp, dk, &key, hash, compare_generic);
 }
 
 static bool
@@ -1408,6 +1414,35 @@ _PyDict_GetUnicodeValue(PyDictObject *mp, PyObject *key, PyValue *result)
     return 1;
 }
 #endif
+
+/* The value of the exact str key (with a cached hash) in any dict or
+ * frozendict, as an owner in *result: 1, or 0 and PyValue_NULL if the key is
+ * absent, or -1 on an error from comparing a non-str key. */
+int
+_PyDict_GetStrValue(PyDictObject *mp, PyObject *key, PyValue *result)
+{
+    assert(PyAnyDict_Check(mp));
+    assert(PyUnicode_CheckExact(key));
+    Py_hash_t hash = PyUnstable_Unicode_GET_CACHED_HASH(key);
+    assert(hash != -1);
+#ifndef Py_GIL_DISABLED
+    PyDictKeysObject *dk = mp->ma_keys;
+    if (dk->dk_kind != DICT_KEYS_GENERAL) {
+        Py_ssize_t ix = unicodekeys_lookup_unicode(dk, key, hash);
+        if (ix < 0) {
+            *result = PyValue_NULL;
+            return 0;
+        }
+        PyValue value = dk->dk_kind == DICT_KEYS_SPLIT
+            ? mp->ma_values->values[ix]
+            : DK_UNICODE_ENTRIES(dk)[ix].me_value;
+        _PyValue_RecheckHome(value);
+        *result = PyValue_DUP(value);
+        return 1;
+    }
+#endif
+    return dict_lookup_value(mp, PyValue_FromObjectBorrow(key), hash, result);
+}
 
 int
 (_PyDict_GetValue_KnownHash)(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash,
@@ -1811,13 +1846,47 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
     return status;
 }
 
-// Same as insertdict but specialized for ma_keys == Py_EMPTY_KEYS.
+// Same as insertdict but specialized for ma_keys == Py_EMPTY_KEYS: the entry
+// goes to the first slot of a new table of the minimum size. A watched dict
+// takes insertdict(), which notifies the watchers before it stores.
 // Consumes key and value references.
 static int
 insert_to_emptydict(PyDictObject *mp, PyValue key, Py_hash_t hash,
                     PyValue value)
 {
-    return insertdict(mp, key, hash, value);
+    assert(mp->ma_keys == Py_EMPTY_KEYS);
+    assert(mp->ma_values == NULL);
+    assert(mp->ma_used == 0);
+    if (mp->_ma_watcher_tag & DICT_WATCHER_MASK) {
+        return insertdict(mp, key, hash, value);
+    }
+    bool unicode = value_is_exact_unicode(key);
+    PyDictKeysObject *newkeys = new_keys_object(PyDict_LOG_MINSIZE, unicode);
+    if (newkeys == NULL) {
+        PyValue_CLOSE(key);
+        PyValue_CLOSE(value);
+        return -1;
+    }
+    _PyValue_CheckHome(key);
+    _PyValue_CheckHome(value);
+    dictkeys_set_index(newkeys, (size_t)hash & (PyDict_MINSIZE - 1), 0);
+    if (unicode) {
+        PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(newkeys);
+        STORE_KEY(ep, PyValue_AsKnownObjectSteal(key));
+        STORE_VALUE(ep, value);
+    }
+    else {
+        PyDictKeyEntry *ep = DK_ENTRIES(newkeys);
+        STORE_KEY(ep, key);
+        STORE_VALUE(ep, value);
+        STORE_HASH(ep, hash);
+    }
+    STORE_KEYS_USABLE(newkeys, newkeys->dk_usable - 1);
+    STORE_KEYS_NENTRIES(newkeys, 1);
+    STORE_USED(mp, 1);
+    // The empty keys are immortal, so there is no count to release.
+    set_keys(mp, newkeys);
+    return 0;
 }
 
 /*
@@ -2408,15 +2477,12 @@ _PyDict_LoadBuiltinsFromGlobals(PyObject *globals)
     }
 
     PyDictObject *mp = (PyDictObject *)globals;
-    PyObject *key = &_Py_ID(__builtins__);
-    Py_hash_t hash = unicode_get_hash(key);
-
     PyValue ref;
-    Py_ssize_t ix = _Py_dict_lookup_threadsafe_value(mp, key, hash, &ref);
-    if (ix == DKIX_ERROR) {
+    int found = _PyDict_GetStrValue(mp, &_Py_ID(__builtins__), &ref);
+    if (found < 0) {
         return NULL;
     }
-    if (PyValue_IsNull(ref)) {
+    if (!found) {
         return Py_NewRef(PyEval_GetBuiltins());
     }
     PyObject *object = _PyValue_AsObjectAt(ref, BOX_SITE_DICT);
@@ -5101,21 +5167,18 @@ dict_traverse(PyObject *op, visitproc visit, void *arg)
     PyDictKeysObject *keys = mp->ma_keys;
     Py_ssize_t i, n = keys->dk_nentries;
 
-    /* The keys of a unicode-keyed table are strings, which the cycle
-       collector ignores, but the tracing collector must see them.  A split
-       table's keys are shared and owned by the keys object; visiting them
-       from each dict is harmless for both collectors. */
+    /* The keys of a unicode-keyed table are strings, which are never part of
+       a cycle.  The tracing verifier visits them with
+       _PyDict_TraverseUnicodeKeys(). */
     if (DK_IS_UNICODE(keys)) {
         PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
         if (_PyDict_HasSplitTable(mp)) {
             for (i = 0; i < n; i++) {
-                _Py_VISIT_ATOMIC(entries[i].me_key);
                 _Py_VISIT_VALUE(mp->ma_values->values[i]);
             }
         }
         else {
             for (i = 0; i < n; i++) {
-                _Py_VISIT_ATOMIC(entries[i].me_key);
                 _Py_VISIT_VALUE(entries[i].me_value);
             }
         }
@@ -5128,6 +5191,24 @@ dict_traverse(PyObject *op, visitproc visit, void *arg)
                 _Py_VISIT_VALUE(entries[i].me_key);
             }
         }
+    }
+    return 0;
+}
+
+/* Visit the keys that dict_traverse() leaves out, for the tracing verifier
+   (Python/gc_trace.c), which must see every reference an object owns.  A
+   split table's keys are shared and owned by the keys object; visiting them
+   from each dict is harmless. */
+int
+_PyDict_TraverseUnicodeKeys(PyObject *op, visitproc visit, void *arg)
+{
+    PyDictKeysObject *keys = ((PyDictObject *)op)->ma_keys;
+    if (!DK_IS_UNICODE(keys)) {
+        return 0;
+    }
+    PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
+    for (Py_ssize_t i = 0, n = keys->dk_nentries; i < n; i++) {
+        _Py_VISIT_ATOMIC(entries[i].me_key);
     }
     return 0;
 }

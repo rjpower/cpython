@@ -1426,6 +1426,23 @@ _PyThreadState_PopCValueSteal(PyThreadState *tstate, _PyCValue *ref)
         PyValue_XCLOSE(_tmp_dst_ref); \
     } while(0)
 
+#ifndef Py_GIL_DISABLED
+/* Visit the object that ref holds. The cycle collector counts the incoming
+   references of each object, and a value that owns no count (an immortal,
+   borrowed or deferred reference) is none of them, so its subtraction pass
+   (_PyGC_VisitDecref) ignores such values; every other visitor sees them. */
+static inline int
+_PyGC_VisitValue(PyValue *ref, visitproc visit, void *arg)
+{
+    assert(PyValue_IsObject(*ref));
+    _PyValue_RecheckHome(*ref);
+    if (!PyValue_RefcountOnObject(*ref) && visit == _PyGC_VisitDecref) {
+        return 0;
+    }
+    return visit(PyValue_AsKnownObjectBorrow(*ref), arg);
+}
+#endif
+
 // Like Py_VISIT but for PyValue fields
 #define _Py_VISIT_VALUE(ref)                                         \
     do {                                                                \

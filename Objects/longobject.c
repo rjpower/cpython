@@ -5688,7 +5688,7 @@ long_bitwise(_PyLongSpan a,
     /* Scratch digits for the two's complement of negative operands: small
        operands use the stack. */
     digit scratch_small[32];
-    digit *scratch = NULL;
+    digit *scratch = scratch_small;
     const digit *ad, *bd;
 
     /* Bitwise operations for negative numbers operate as though

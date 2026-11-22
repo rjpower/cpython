@@ -115,6 +115,7 @@ PyAPI_FUNC(int) _PyDict_GetValue(PyDictObject *, PyValueBorrow, PyValue *);
 #ifndef Py_GIL_DISABLED
 PyAPI_FUNC(int) _PyDict_GetUnicodeValue(PyDictObject *, PyObject *, PyValue *);
 #endif
+PyAPI_FUNC(int) _PyDict_GetStrValue(PyDictObject *, PyObject *, PyValue *);
 PyAPI_FUNC(int) _PyDict_SetValue(PyDictObject *, PyValueBorrow, PyValueBorrow);
 PyAPI_FUNC(int) _PyDict_DelValue(PyDictObject *, PyValueBorrow);
 PyAPI_FUNC(int) _PyDict_ContainsValue(PyDictObject *, PyValueBorrow);
@@ -186,6 +187,7 @@ typedef struct {
 extern PyDictKeysObject *_PyDict_NewKeysForClass(PyHeapTypeObject *);
 extern void _PyDict_RemoveKeysForClass(PyHeapTypeObject *);
 extern int _PyDict_TraverseKeysForClass(PyHeapTypeObject *, visitproc, void *);
+extern int _PyDict_TraverseUnicodeKeys(PyObject *, visitproc, void *);
 extern PyObject *_PyDict_FromKeys(PyObject *, PyObject *, PyObject *);
 
 /* Implementations of the `|` and `|=` operators for dict, used by the

@@ -445,8 +445,8 @@ update_refs(PyGC_Head *containers)
 }
 
 /* A traversal callback for subtract_refs. */
-static int
-visit_decref(PyObject *op, void *parent)
+int
+_PyGC_VisitDecref(PyObject *op, void *parent)
 {
     OBJECT_STAT_INC(object_visits);
     _PyObject_ASSERT(_PyObject_CAST(parent), !_PyObject_IsFreed(op));
@@ -461,21 +461,6 @@ visit_decref(PyObject *op, void *parent)
             gc_decref(gc);
         }
     }
-    return 0;
-}
-
-int
-_PyGC_VisitValue(PyValue *ref, visitproc visit, void *arg)
-{
-    // This is a bit tricky! We want to ignore values with embedded
-    // refcounts when computing the incoming references, but otherwise treat
-    // them like normal.
-    assert(PyValue_IsObject(*ref));
-    _PyValue_RecheckHome(*ref);
-    if (!PyValue_RefcountOnObject(*ref) && (visit == visit_decref)) {
-        return 0;
-    }
-    Py_VISIT(PyValue_AsKnownObjectBorrow(*ref));
     return 0;
 }
 
@@ -509,7 +494,7 @@ subtract_refs(PyGC_Head *containers)
         PyObject *op = FROM_GC(gc);
         traverse = Py_TYPE(op)->tp_traverse;
         (void) traverse(op,
-                        visit_decref,
+                        _PyGC_VisitDecref,
                         op);
     }
 }

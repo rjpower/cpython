@@ -4,6 +4,7 @@
 #include "pycore_interp.h"        // _PyInterpreterState_HasFeature
 #include "pycore_mmap.h"          // _PyAnnotateMemoryMap()
 #include "pycore_object.h"        // _PyDebugAllocatorStats() definition
+#include "pycore_object_alloc.h"  // _PyObject_GetAllocationHeap()
 #include "pycore_obmalloc.h"
 #include "pycore_obmalloc_init.h"
 #include "pycore_pyerrors.h"      // _Py_FatalErrorFormat()
@@ -386,6 +387,26 @@ _PyObject_MiMalloc(void *ctx, size_t nbytes)
 #endif
     return mi_heap_malloc(heap, nbytes);
 }
+
+#ifndef Py_GIL_DISABLED
+// The object allocator for a type when _PyObject_MallocWithType() cannot call
+// the stock allocator with a heap: a hooked object domain gets the heap
+// through the thread state, and a thread without a bound thread state gets
+// the default path.
+void *
+_PyObject_MallocWithTypeHooked(PyTypeObject *tp, size_t size)
+{
+    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)_PyThreadState_GET();
+    if (tstate == NULL || tstate->mimalloc.current_object_heap == NULL) {
+        return PyObject_Malloc(size);
+    }
+    struct _mimalloc_thread_state *m = &tstate->mimalloc;
+    m->current_object_heap = _PyObject_GetAllocationHeap(tstate, tp);
+    void *mem = PyObject_Malloc(size);
+    m->current_object_heap = &m->heaps[_Py_MIMALLOC_HEAP_OBJECT];
+    return mem;
+}
+#endif
 
 void *
 _PyObject_MiCalloc(void *ctx, size_t nelem, size_t elsize)

@@ -201,9 +201,8 @@ PyFunction_NewWithQualName(PyObject *code, PyObject *globals, PyObject *qualname
     PyObject *module = NULL;
     PyObject *builtins = NULL;
     PyValue module_value;
-    int module_rc = PyDict_GetValue(globals,
-                                    _PyValue_FromObjectKnown(&_Py_ID(__name__)),
-                                    &module_value);
+    int module_rc = _PyDict_GetStrValue((PyDictObject *)globals,
+                                        &_Py_ID(__name__), &module_value);
     if (module_rc > 0) {
         module = _PyValue_AsObjectAt(module_value, BOX_SITE_DICT);
         PyValue_CLOSE(module_value);

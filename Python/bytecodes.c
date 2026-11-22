@@ -4786,13 +4786,11 @@ dummy_func(
         inline_ok op(_CALL_ISINSTANCE, (callable, null, instance, cls -- res)) {
             /* isinstance(o, o2) */
             STAT_INC(CALL, hit);
-            int retval;
-            if (PyValue_IsInline(instance) || PyValue_IsInline(cls)) {
-                retval = _PyEval_IsInstanceValue(instance, cls);
-            }
-            else {
-                retval = PyObject_IsInstance(PyValue_AsKnownObjectBorrow(instance),
-                                             PyValue_AsKnownObjectBorrow(cls));
+            /* An instance of cls itself is the common answer; a class has
+             * its pointer's bits, less the tag that says it owns no count */
+            int retval = 1;
+            if ((cls.bits & ~(uintptr_t)1) != (uintptr_t)PyValue_TYPE(instance)) {
+                retval = _PyValue_IsInstance(instance, cls);
             }
             if (retval < 0) {
                 ERROR_NO_POP();

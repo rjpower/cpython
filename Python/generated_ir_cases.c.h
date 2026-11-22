@@ -6402,12 +6402,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    ir_old = call_publish(frame, this_instr, res);
+                    ir_old = call_publish_cold(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
                     PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -6479,12 +6479,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    ir_old = call_publish(frame, this_instr, res);
+                    ir_old = call_publish_cold(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
                     PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -6556,12 +6556,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    ir_old = call_publish(frame, this_instr, res);
+                    ir_old = call_publish_cold(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
                     PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -6638,12 +6638,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    ir_old = call_publish(frame, this_instr, res);
+                    ir_old = call_publish_cold(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
                     PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -6832,13 +6832,9 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 instance = IR_OPERAND(0 + IR_CALL_HAS_SELF(ir_word));
                 null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 STAT_INC(CALL, hit);
-                int retval;
-                if (PyValue_IsInline(instance) || PyValue_IsInline(cls)) {
-                    retval = _PyEval_IsInstanceValue(instance, cls);
-                }
-                else {
-                    retval = PyObject_IsInstance(PyValue_AsKnownObjectBorrow(instance),
-                        PyValue_AsKnownObjectBorrow(cls));
+                int retval = 1;
+                if ((cls.bits & ~(uintptr_t)1) != (uintptr_t)PyValue_TYPE(instance)) {
+                    retval = _PyValue_IsInstance(instance, cls);
                 }
                 if (retval < 0) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -6847,7 +6843,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 res = retval ? PyValue_True : PyValue_False;
                 assert((!PyValue_IsNull(res)) ^ (_PyErr_Occurred(tstate) != NULL));
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -7107,7 +7103,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -7186,7 +7182,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 }
                 none = PyValue_None;
             }
-            ir_old = call_publish(frame, this_instr, none);
+            ir_old = call_publish(frame, this_instr, ir_word, none, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -7259,12 +7255,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    ir_old = call_publish(frame, this_instr, res);
+                    ir_old = call_publish_cold(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
                     PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -7337,12 +7333,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    ir_old = call_publish(frame, this_instr, res);
+                    ir_old = call_publish_cold(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
                     PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -7427,12 +7423,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    ir_old = call_publish(frame, this_instr, res);
+                    ir_old = call_publish_cold(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
                     PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -7516,12 +7512,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    ir_old = call_publish(frame, this_instr, res);
+                    ir_old = call_publish_cold(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
                     PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -7573,12 +7569,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    ir_old = call_publish(frame, this_instr, res);
+                    ir_old = call_publish_cold(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
                     PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -7821,12 +7817,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    ir_old = call_publish(frame, this_instr, res);
+                    ir_old = call_publish_cold(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
                     PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -7881,12 +7877,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 int err = check_periodics_at_end(tstate, frame);
                 if (err != 0) {
-                    ir_old = call_publish(frame, this_instr, res);
+                    ir_old = call_publish_cold(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
                     PyValue_XCLOSE(ir_old);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -7933,7 +7929,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(CALL, hit);
                 res = PyValue_DUP(PyValue_FromObjectBorrow(PyValue_TYPE(arg)));
             }
-            ir_old = call_publish(frame, this_instr, res);
+            ir_old = call_publish(frame, this_instr, ir_word, res, (int)IR_C(ir_word));
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }

@@ -3845,7 +3845,7 @@ done:
 }
 
 /* isinstance() of an int or float, whose __class__ is its type. */
-static _Py_COLD_FUNCTION Py_NO_INLINE int
+static Py_NO_INLINE int
 object_isinstance_inline(PyValueBorrow inst, PyObject *cls)
 {
     PyTypeObject *tp = _PyValue_TypeNotPointer(inst);
@@ -3912,7 +3912,16 @@ object_recursive_isinstance_value(PyThreadState *tstate, PyValueBorrow inst,
         int r = 0;
         for (Py_ssize_t i = 0; i < n; ++i) {
             PyValueBorrow item = PyTuple_GET_VALUE(cls, i);
-            r = object_recursive_isinstance_value(tstate, inst, obj, tp, item);
+            PyObject *item_cls = PyValue_ObjectOrNull(item);
+            if (item_cls != NULL && PyType_CheckExact(item_cls)) {
+                /* An exact type decides at once, as the entry does */
+                r = tp == (PyTypeObject *)item_cls ||
+                    object_isinstance_value(inst, obj, item_cls);
+            }
+            else {
+                r = object_recursive_isinstance_value(tstate, inst, obj, tp,
+                                                      item);
+            }
             if (r != 0) {
                 /* either found it, or got an error */
                 break;
@@ -3938,19 +3947,38 @@ object_recursive_isinstance_value(PyThreadState *tstate, PyValueBorrow inst,
     return object_isinstance_value(inst, obj, cls);
 }
 
+/* isinstance(inst, cls), the one entry: the handler of CALL_ISINSTANCE,
+   the builtin and PyObject_IsInstance() all end here.  An instance of cls
+   itself and an instance of a subclass of an exact type, the two common
+   answers, are decided before the general case (a tuple, a union, a
+   metaclass with __instancecheck__) is looked at. */
 int
-(_PyValue_IsInstance)(PyValueBorrow inst, PyValueBorrow cls)
+(_PyValue_IsInstance)(PyValueBorrow inst, PyValueBorrow cls_value)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
     /* The one test of inst's tag. */
     PyObject *obj = PyValue_ObjectOrNull(inst);
     PyTypeObject *tp = obj != NULL ? Py_TYPE(obj) : _PyValue_TypeNotPointer(inst);
-    return object_recursive_isinstance_value(tstate, inst, obj, tp, cls);
+    PyObject *cls = PyValue_ObjectOrNull(cls_value);
+    if (cls != NULL) {
+        if (tp == (PyTypeObject *)cls) {
+            return 1;
+        }
+        /* We know what type's __instancecheck__ does. */
+        if (PyType_CheckExact(cls)) {
+            return object_isinstance_value(inst, obj, cls);
+        }
+    }
+    return object_recursive_isinstance_value(_PyThreadState_GET(), inst, obj,
+                                             tp, cls_value);
 }
 
 int
 PyObject_IsInstance(PyObject *inst, PyObject *cls)
 {
+    /* Quick test for an exact match */
+    if (Py_IS_TYPE(inst, (PyTypeObject *)cls)) {
+        return 1;
+    }
     return _PyValue_IsInstance(PyValue_FromObjectBorrow(inst),
                                PyValue_FromObjectBorrow(cls));
 }

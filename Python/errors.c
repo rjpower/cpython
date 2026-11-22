@@ -39,17 +39,21 @@ _PyErr_SetRaisedException(PyThreadState *tstate, PyObject *exc)
 static PyObject*
 _PyErr_CreateException(PyObject *exception_type, PyObject *value)
 {
-    PyObject *exc;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyValueBorrow type = PyValue_FromObjectBorrow(exception_type);
+    PyValue result;
 
     if (value == NULL || value == Py_None) {
-        exc = _PyObject_CallNoArgs(exception_type);
+        result = _PyValue_CallNoArgs(tstate, type);
     }
     else if (PyTuple_Check(value)) {
-        exc = PyObject_Call(exception_type, value, NULL);
+        result = _PyValue_Call(tstate, type, value, NULL);
     }
     else {
-        exc = PyObject_CallOneArg(exception_type, value);
+        result = _PyValue_CallOneArg(tstate, type,
+                                     PyValue_FromObjectBorrow(value));
     }
+    PyObject *exc = _PyValue_AsObjectResultAt(result, BOX_SITE_CALL);
 
     if (exc != NULL && !PyExceptionInstance_Check(exc)) {
         PyErr_Format(PyExc_TypeError,
@@ -315,15 +319,11 @@ void
     // a result with an excception set.
     _PyErr_Clear(tstate);
 
-    // The args tuple holds the word: an inline key is not boxed.
-    PyValue key;
-    _PyValue_WindowPut(&key, arg);
-    PyObject *args = _PyTuple_FromValueArray(&key, 1);
-    if (args == NULL) {
-        return;
-    }
-    PyObject *exc = PyObject_Call(PyExc_KeyError, args, NULL);
-    Py_DECREF(args);
+    // The exception's args tuple holds the word: an inline key is not boxed.
+    PyValue result = _PyValue_CallOneArg(tstate,
+                                         PyValue_FromObjectBorrow(PyExc_KeyError),
+                                         arg);
+    PyObject *exc = _PyValue_AsObjectResultAt(result, BOX_SITE_CALL);
     if (!exc) {
         /* caller will expect error to be set anyway */
         return;

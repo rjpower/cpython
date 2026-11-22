@@ -24,6 +24,7 @@
 #include "pycore_pyhash.h"        // _Py_HashSecret
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
+#include "pycore_value_call.h"    // _PyValue_CallOneArg()
 #include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
 #include "pycore_slots.h"         // _Py_value_subscript
 #include "pycore_value_slots.h"   // _PyValue_FromObjectResult()
@@ -3691,12 +3692,14 @@ xmlparser_append_event(XMLParserObject *self, PyObject *action, PyObject *node)
     if (event == NULL) {
         return -1;
     }
-    PyObject *res = PyObject_CallOneArg(self->events_append, event);
+    PyValue res = _PyValue_CallOneArg(_PyThreadState_GET(),
+                                      PyValue_FromObjectBorrow(self->events_append),
+                                      PyValue_FromObjectBorrow(event));
     Py_DECREF(event);
-    if (res == NULL) {
+    if (PyValue_IsNull(res)) {
         return -1;
     }
-    Py_DECREF(res);
+    PyValue_CLOSE(res);
     return 0;
 }
 

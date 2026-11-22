@@ -3139,14 +3139,14 @@ class IRStack(Stack):
             # is closed.
             self.home_node = None
             if self.final:
-                expression = f"ir_old = call_publish(frame, this_instr, {var.name})"
+                expression = f"ir_old = call_publish(frame, this_instr, ir_word, {var.name}, (int)IR_C(ir_word))"
                 self.dst_stores.append(expression)
                 out.emit(f"{expression};\n")
             elif self.error_exit and var.name in lay.call_results:
                 if self.publish_on_error:
                     # The periodic check follows the store, so the result
                     # stays in its home when the check raises
-                    out.emit(f"ir_old = call_publish(frame, this_instr, {var.name});\n")
+                    out.emit(f"ir_old = call_publish_cold(frame, this_instr, ir_word, {var.name}, (int)IR_C(ir_word));\n")
                     out.emit("PyValue_XCLOSE(ir_old);\n")
                 else:
                     out.emit(f"PyValue_XCLOSE({var.name});\n")

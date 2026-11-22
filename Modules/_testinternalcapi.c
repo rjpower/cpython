@@ -1817,9 +1817,10 @@ get_feedback(PyObject *self, PyObject *args)
 
 /* The register IR of CODE, lowered if the code has not run, as a tuple: the
  * words (bytes), the feedback initialisers (bytes), nfixed, nconst, nslots,
- * the constant values, the first traceable word, the exceptions in word units
- * (bytes), the recovery records (bytes), the positions (bytes), the pcmap
- * (bytes of uint32) and the flags. */
+ * the constant values, the exceptions in word units (bytes), the recovery
+ * records (bytes), the positions (bytes), the pcmap (bytes of uint32), the
+ * first traceable word, then the words of the executing copy and its
+ * feedback entries (bytes, or None if the code has not run). */
 static PyObject *
 get_ir_raw(PyObject *self, PyObject *code_obj)
 {
@@ -1845,8 +1846,33 @@ get_ir_raw(PyObject *self, PyObject *code_obj)
         }
         PyTuple_SET_ITEM(consts, i, o);
     }
+    PyObject *exec_words = Py_NewRef(Py_None);
+    PyObject *feedback = Py_NewRef(Py_None);
+    _PyCodeExec *exec = ((PyCodeObject *)code_obj)->_co_exec;
+    if (exec != NULL) {
+        Py_SETREF(exec_words,
+                  PyBytes_FromStringAndSize((const char *)exec->words,
+                                            exec->nwords * sizeof(_PyIRWord)));
+        if (exec_words == NULL) {
+            Py_DECREF(consts);
+            Py_DECREF(feedback);
+            return NULL;
+        }
+        if (exec->entries != NULL) {
+            Py_SETREF(feedback,
+                      PyBytes_FromStringAndSize(
+                          exec->entries,
+                          (Py_ssize_t)_PyCode_FbUnits((PyCodeObject *)code_obj)
+                              << IR_FB_UNIT_SHIFT));
+            if (feedback == NULL) {
+                Py_DECREF(consts);
+                Py_DECREF(exec_words);
+                return NULL;
+            }
+        }
+    }
     return Py_BuildValue(
-        "(y#y#IIINy#y#y#y#I)",
+        "(y#y#IIINy#y#y#y#INN)",
         (const char *)ir->words, (Py_ssize_t)(ir->nwords * sizeof(_PyIRWord)),
         (const char *)ir->fbinit, (Py_ssize_t)(ir->nfeedback * sizeof(uint32_t)),
         ir->nfixed, ir->nconst, ir->nslots, consts,
@@ -1854,7 +1880,7 @@ get_ir_raw(PyObject *self, PyObject *code_obj)
         (const char *)ir->records, (Py_ssize_t)(ir->nrecords * _PyIR_RECOVERY_RECORD),
         (const char *)ir->positions, (Py_ssize_t)(ir->nrecords * _PyIR_POSITION_RECORD),
         (const char *)ir->pcmap, (Py_ssize_t)(ir->nwords * sizeof(uint32_t)),
-        ir->first_traceable);
+        ir->first_traceable, exec_words, feedback);
 }
 
 /* The words that the lowering of CODE made, or with ADAPTIVE those of its

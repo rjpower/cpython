@@ -6,7 +6,6 @@
 #include "pycore_long_value.h"    // _PyLong_ValueHash()
 #include "pycore_object.h"        // _Py_SwappedOp
 #include "pycore_pyhash.h"        // _Py_HashPointerInline()
-#include "pycore_unicodeobject.h"  // _PyUnicode_Equal()
 #include "pycore_typeobject.h"    // _PyType_IsReady()
 #include "pycore_value_ops.h"
 #include "pycore_value_slots.h"   // _PyType_VALUE_FIELD_AT()
@@ -77,6 +76,11 @@ Py_hash_t
                identity. */
             return _Py_HashPointerInline(op);
         }
+        if (Py_TYPE(op)->tp_hash == PyLong_Type.tp_hash) {
+            /* An int, or a subclass that keeps int's hash (re's
+               _NamedIntConstant): hashed from its digits, as an int. */
+            return _PyLong_ValueHash(value);
+        }
         return hash_object_value(op, value);
     }
     /* Inline int keys are common (ids, counters, indexes), so their hash
@@ -85,86 +89,6 @@ Py_hash_t
         return _PyLong_ValueHash(value);
     }
     return hash_inline_float(value);
-}
-
-// The full dispatch and the truth of its result: kept out of line, so that
-// the inline paths of _PyValue_RichCompareBool() need no frame.
-static Py_NO_INLINE int
-richcompare_bool_dispatch(PyValueBorrow left, PyValueBorrow right, int op)
-{
-    PyValue res = (_PyValue_RichCompare)(left, right, op);
-    if (PyValue_IsNull(res)) {
-        return -1;
-    }
-    int ok = (_PyValue_IsTrue)(PyValue_Borrow(res));
-    PyValue_CLOSE(res);
-    return ok;
-}
-
-/* The compare of two objects of one type whose richcompare slot is str's or
-   int's: no Python code can run, so, as with the inline exits below, no
-   recursion guard and no result value. Returns 0 or 1, or -1 when the
-   operands need the full dispatch (an ordering of str, an int beyond a
-   word). The slot is compared, not the type, so a subclass that does not
-   override the comparison (re's _NamedIntConstant) takes the exit too. */
-static inline int
-richcompare_bool_same_type(PyValueBorrow left, PyValueBorrow right, int op)
-{
-    PyObject *a = PyValue_AsKnownObjectBorrow(left);
-    PyObject *b = PyValue_AsKnownObjectBorrow(right);
-    PyTypeObject *t = Py_TYPE(a);
-    if (t != Py_TYPE(b)) {
-        return -1;
-    }
-    if (t->tp_richcompare == PyUnicode_RichCompare) {
-        if (op == Py_EQ || op == Py_NE) {
-            return _PyUnicode_Equal(a, b) ^ (op == Py_NE);
-        }
-        return -1;
-    }
-    if (t->tp_richcompare == PyLong_Type.tp_richcompare) {
-        int64_t x, y;
-        if (_PyLong_WordOperands(left, right, &x, &y)) {
-            return _PyLong_CompareOp(_PyLong_WordCompare(x, y), op);
-        }
-    }
-    return -1;
-}
-
-int
-(_PyValue_RichCompareBool)(PyValueBorrow left, PyValueBorrow right, int op)
-{
-    /* Python's containers consider an object equal to itself, including NaN. */
-    if ((op == Py_EQ || op == Py_NE) && PyValue_Is(left, right)) {
-        return op == Py_EQ;
-    }
-    if (PyValue_IsInline(left) && PyValue_IsInline(right)) {
-        /* R-inline: two inline values are exact ints or non-NaN floats.
-           int's and float's compares, in the full dispatch order (int's
-           gives NotImplemented for a float, then float's reflected one
-           decides), come to comparing the words, or the doubles: an inline
-           int has at most 51 bits, so it is exact as a double. Neither runs
-           Python code, so no recursion guard is needed. */
-        if (PyValue_BothInlineInt(left, right)) {
-            return _PyLong_CompareOp(
-                _PyLong_WordCompare(PyValue_InlineInt64(left),
-                                    PyValue_InlineInt64(right)), op);
-        }
-        /* Set by the call, which holds for the operands tested above; the
-           initialisers quiet -Wmaybe-uninitialized in release builds. */
-        double a = 0.0, b = 0.0;
-        bool floats = PyValue_FloatOperandValues(left, right, &a, &b);
-        assert(floats);
-        (void)floats;
-        return _PyFloat_CompareOp(a, b, op);
-    }
-    if (PyValue_IsPointerSpace(left) && PyValue_IsPointerSpace(right)) {
-        int res = richcompare_bool_same_type(left, right, op);
-        if (res >= 0) {
-            return res;
-        }
-    }
-    return richcompare_bool_dispatch(left, right, op);
 }
 
 PyObject *

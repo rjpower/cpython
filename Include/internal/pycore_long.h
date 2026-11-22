@@ -456,8 +456,8 @@ PyAPI_FUNC(double) _PyLong_SpanAsDouble(_PyLongSpan a);
 PyAPI_FUNC(double) _PyLong_SpanFrexp(_PyLongSpan a, int64_t *e);
 // _PyLong_NumBits() of a span: -1 with OverflowError.
 PyAPI_FUNC(int64_t) _PyLong_SpanNumBits(_PyLongSpan a);
-// The hash of a, as long_hash().
-PyAPI_FUNC(Py_hash_t) _PyLong_SpanHash(_PyLongSpan a);
+// The hash of an int object, as long_hash().
+PyAPI_FUNC(Py_hash_t) _PyLong_ObjectHash(const PyLongObject *op);
 // PyLong_AsNativeBytes() of a span.
 PyAPI_FUNC(Py_ssize_t) _PyLong_SpanAsNativeBytes(_PyLongSpan a, void *buffer,
                                                  Py_ssize_t n, int flags);

@@ -11847,22 +11847,14 @@ PyUnicode_RichCompare(PyObject *left, PyObject *right, int op)
     }
 }
 
-int
-PyUnicode_Contains(PyObject *str, PyObject *substr)
+/* Whether the str substr occurs in the str str. */
+static int
+unicode_contains_str(PyObject *str, PyObject *substr)
 {
     int kind1, kind2;
     const void *buf1, *buf2;
     Py_ssize_t len1, len2;
     int result;
-
-    if (!PyUnicode_Check(substr)) {
-        PyErr_Format(PyExc_TypeError,
-                     "'in <string>' requires string as left operand, not %.100s",
-                     Py_TYPE(substr)->tp_name);
-        return -1;
-    }
-    if (ensure_unicode(str) < 0)
-        return -1;
 
     kind1 = PyUnicode_KIND(str);
     kind2 = PyUnicode_KIND(substr);
@@ -11904,6 +11896,20 @@ PyUnicode_Contains(PyObject *str, PyObject *substr)
         PyMem_Free((void *)buf2);
 
     return result;
+}
+
+int
+PyUnicode_Contains(PyObject *str, PyObject *substr)
+{
+    if (!PyUnicode_Check(substr)) {
+        PyErr_Format(PyExc_TypeError,
+                     "'in <string>' requires string as left operand, not %.100s",
+                     Py_TYPE(substr)->tp_name);
+        return -1;
+    }
+    if (ensure_unicode(str) < 0)
+        return -1;
+    return unicode_contains_str(str, substr);
 }
 
 /* Concat to string or Unicode object giving a new Unicode object. */
@@ -14444,7 +14450,7 @@ unicode_contains_value(PyObject *str, PyValueBorrow substr)
                      PyValue_TYPE(substr)->tp_name);
         return -1;
     }
-    return PyUnicode_Contains(str, PyValue_AsKnownObjectBorrow(substr));
+    return unicode_contains_str(str, PyValue_AsKnownObjectBorrow(substr));
 }
 
 static PySequenceMethods unicode_as_sequence = {

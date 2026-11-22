@@ -26,6 +26,7 @@
 #include "pycore_lazyimportobject.h" // PyLazyImport_Type
 #include "pycore_list.h"          // _PyList_DebugMallocStats()
 #include "pycore_long.h"          // _PyLong_GetZero()
+#include "pycore_long_value.h"    // _PyLong_WordOperands()
 #include "pycore_memoryobject.h"  // _PyManagedBuffer_Type
 #include "pycore_namespace.h"     // _PyNamespace_Type
 #include "pycore_object.h"        // export _Py_SwappedOp
@@ -38,6 +39,7 @@
 #include "pycore_typecache.h"     // _PyTypeCache_Lookup()
 #include "pycore_typeobject.h"    // _PyBufferWrapper_Type
 #include "pycore_typevarobject.h" // _PyTypeAlias_Type
+#include "pycore_unicodeobject.h" // _PyUnicode_Equal()
 #include "pycore_value.h"         // PyValue_FromObjectSteal
 #include "pycore_unionobject.h"   // _PyUnion_Type
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
@@ -1166,25 +1168,27 @@ do_richcompare(PyValueBorrow v, PyValueBorrow w, int op)
     /* The steps: the reflected comparison of a subtype, v's, then w's. One
        call site serves the three. */
     for (int step = 0; step < 3; step++) {
-        PyTypeObject *tv = richcompare_type(v);
-        PyTypeObject *tw = richcompare_type(w);
         PyTypeObject *t;
         PyValueBorrow a, b;
         int aop;
         if (step == 0) {
-            if (tv == tw || !PyType_IsSubtype(tw, tv)) {
+            PyTypeObject *tv = richcompare_type(v);
+            t = richcompare_type(w);
+            if (tv == t || !PyType_IsSubtype(t, tv)) {
                 continue;
             }
-            t = tw; a = w; b = v; aop = _Py_SwappedOp[op];
+            a = w; b = v; aop = _Py_SwappedOp[op];
         }
         else if (step == 1) {
-            t = tv; a = v; b = w; aop = op;
+            t = richcompare_type(v);
+            a = v; b = w; aop = op;
         }
         else {
             if (checked_reverse_op) {
                 continue;
             }
-            t = tw; a = w; b = v; aop = _Py_SwappedOp[op];
+            t = richcompare_type(w);
+            a = w; b = v; aop = _Py_SwappedOp[op];
         }
         richcmpfunc f = t->tp_richcompare;
         if (f == NULL) {
@@ -1216,27 +1220,105 @@ do_richcompare(PyValueBorrow v, PyValueBorrow w, int op)
     }
 }
 
-/* Perform a rich comparison with value result.  This wraps do_richcompare()
-   with a check for NULL arguments and a recursion check. */
+/* The exits of a rich comparison: the pairs whose comparison runs no Python
+   code and answers with a bool, taken before the protocol of do_richcompare()
+   and so without its recursion guard or result value. Returns 0 or 1, or -1
+   when the operands need the protocol.
 
-PyValue
-(_PyValue_RichCompare)(PyValueBorrow v, PyValueBorrow w, int op)
+   The exits are keyed on the operands' comparison slots, not their types:
+   two operands with one slot get that slot's answer from either operand's
+   call, and a subclass that overrides nothing (re's _NamedIntConstant, an
+   enum member) keeps its base's slot. An operand with another slot, a
+   subclass that overrides a comparison, and a pair of which exactly one is
+   an inline value, take the protocol. */
+static inline int
+richcompare_exit(PyValueBorrow left, PyValueBorrow right, int op)
+{
+    if (PyValue_IsInline(left) && PyValue_IsInline(right)) {
+        /* R-inline: two inline values are exact ints or non-NaN floats.
+           int's and float's compares, in the full dispatch order (int's
+           gives NotImplemented for a float, then float's reflected one
+           decides), come to comparing the words, or the doubles: an inline
+           int has at most 51 bits, so it is exact as a double. */
+        if (PyValue_BothInlineInt(left, right)) {
+            return _PyLong_CompareOp(
+                _PyLong_WordCompare(PyValue_InlineInt64(left),
+                                    PyValue_InlineInt64(right)), op);
+        }
+        /* Set by the call, which holds for the operands tested above; the
+           initialisers quiet -Wmaybe-uninitialized in release builds. */
+        double a = 0.0, b = 0.0;
+        bool floats = PyValue_FloatOperandValues(left, right, &a, &b);
+        assert(floats);
+        (void)floats;
+        return _PyFloat_CompareOp(a, b, op);
+    }
+    if (!PyValue_IsPointerSpace(left) || !PyValue_IsPointerSpace(right)) {
+        return -1;
+    }
+    PyObject *a = BITS_TO_PTR_MASKED(left);
+    PyObject *b = BITS_TO_PTR_MASKED(right);
+    richcmpfunc f = Py_TYPE(a)->tp_richcompare;
+    if (f != Py_TYPE(b)->tp_richcompare) {
+        return -1;
+    }
+    if (f == PyUnicode_RichCompare && (op == Py_EQ || op == Py_NE)) {
+        return _PyUnicode_Equal(a, b) == (op == Py_EQ);
+    }
+    if (f == PyBytes_Type.tp_richcompare) {
+        /* Two bytes objects: bytes_richcompare() answers with Py_True or
+           Py_False for every operator, and runs no Python code. */
+        return f(a, b, op) == Py_True;
+    }
+    if (f == PyLong_Type.tp_richcompare) {
+        /* An int, or a subclass that keeps int's compare, of one digit; the
+           protocol takes the rest. */
+        if (!_PyLong_BothAreCompact((PyLongObject *)a, (PyLongObject *)b)) {
+            return -1;
+        }
+        return _PyLong_CompareOp(
+            _PyLong_WordCompare(_PyLong_CompactValue((PyLongObject *)a),
+                                _PyLong_CompactValue((PyLongObject *)b)), op);
+    }
+    if (f == PyBaseObject_Type.tp_richcompare && (op == Py_EQ || op == Py_NE)) {
+        /* object's == is identity, and its != inverts it. */
+        return (a == b) == (op == Py_EQ);
+    }
+    return -1;
+}
+
+/* The protocol, with the recursion guard. */
+static PyValue
+richcompare_protocol(PyValueBorrow v, PyValueBorrow w, int op)
 {
     PyThreadState *tstate = _PyThreadState_GET();
 
-    assert(Py_LT <= op && op <= Py_GE);
-    if (PyValue_IsNull(v) || PyValue_IsNull(w)) {
-        if (!_PyErr_Occurred(tstate)) {
-            PyErr_BadInternalCall();
-        }
-        return PyValue_NULL;
-    }
     if (_Py_EnterRecursiveCallTstate(tstate, " in comparison")) {
         return PyValue_NULL;
     }
     PyValue res = do_richcompare(v, w, op);
     _Py_LeaveRecursiveCallTstate(tstate);
     return res;
+}
+
+/* Perform a rich comparison with value result: the exits, else the protocol
+   (with a check for NULL arguments). */
+
+PyValue
+(_PyValue_RichCompare)(PyValueBorrow v, PyValueBorrow w, int op)
+{
+    assert(Py_LT <= op && op <= Py_GE);
+    if (PyValue_IsNull(v) || PyValue_IsNull(w)) {
+        if (!_PyErr_Occurred(_PyThreadState_GET())) {
+            PyErr_BadInternalCall();
+        }
+        return PyValue_NULL;
+    }
+    int res = richcompare_exit(v, w, op);
+    if (res >= 0) {
+        return res ? PyValue_True : PyValue_False;
+    }
+    return richcompare_protocol(v, w, op);
 }
 
 PyObject *
@@ -1247,9 +1329,37 @@ PyObject_RichCompare(PyObject *v, PyObject *w, int op)
         BOX_SITE_COMPARE);
 }
 
+/* The truth of the protocol's result, out of line so that the exits of
+   _PyValue_RichCompareBool() need no frame. */
+static Py_NO_INLINE int
+richcompare_bool_protocol(PyValueBorrow left, PyValueBorrow right, int op)
+{
+    PyValue res = richcompare_protocol(left, right, op);
+    if (PyValue_IsNull(res)) {
+        return -1;
+    }
+    int ok = (_PyValue_IsTrue)(PyValue_Borrow(res));
+    PyValue_CLOSE(res);
+    return ok;
+}
+
+int
+(_PyValue_RichCompareBool)(PyValueBorrow left, PyValueBorrow right, int op)
+{
+    /* Python's containers consider an object equal to itself, including NaN. */
+    if ((op == Py_EQ || op == Py_NE) && PyValue_Is(left, right)) {
+        return op == Py_EQ;
+    }
+    int res = richcompare_exit(left, right, op);
+    if (res >= 0) {
+        return res;
+    }
+    return richcompare_bool_protocol(left, right, op);
+}
+
 /* Perform a rich comparison with integer result, returning -1 for error,
-   0 for false, 1 for true: value_ops.c's _PyValue_RichCompareBool(), which
-   also guarantees that identity implies equality. */
+   0 for false, 1 for true: _PyValue_RichCompareBool(), which also guarantees
+   that identity implies equality. */
 int
 PyObject_RichCompareBool(PyObject *v, PyObject *w, int op)
 {

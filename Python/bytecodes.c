@@ -2079,9 +2079,11 @@ dummy_func(
             _LOAD_GLOBAL +
             _NULL_SLOT_CONDITIONAL;
 
-        // The keys version names the keys of the exact dict that the
-        // specialiser saw (a keys object has one owner and a version is
-        // never reused), so a match proves the dict exact too.
+        // Globals are always a dict, and a keys object has one owner and a
+        // version that is never reused, so a match on the keys version
+        // names the dict the specialiser saw.  Builtins can be any object,
+        // so _LOAD_GLOBAL_BUILTINS still checks the type before it reads
+        // the keys.
         op(_GUARD_GLOBALS_VERSION, (globals_version/1 --)) {
             PyDictObject *dict = (PyDictObject *)GLOBALS();
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
@@ -2106,6 +2108,7 @@ dummy_func(
         op(_LOAD_GLOBAL_BUILTINS, (builtins_version/1, index/1 -- res))
         {
             PyDictObject *dict = (PyDictObject *)BUILTINS();
+            DEOPT_IF(!PyDict_CheckExact(dict));
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
             DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != builtins_version);
             assert(keys->dk_kind == DICT_KEYS_UNICODE);

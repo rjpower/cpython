@@ -6136,6 +6136,22 @@ DICTITER_NEXT(dictreviter_next_val, DICTITER_VALUES, 1)
 DICTITER_NEXT(dictreviter_next_item, DICTITER_ITEMS, 1)
 #undef DICTITER_NEXT
 
+/* The step of a dict item iterator for a loop that unpacks each item into two
+ * targets: return 1 with the key and the value, each an owner, 0 at the end,
+ * or -1 with an exception set (a dict that changed size or keys during the
+ * iteration). The pair is never built. */
+int
+_PyDictIterItem_Next(PyObject *self, PyValue *key, PyValue *value)
+{
+    assert(Py_IS_TYPE(self, &PyDictIterItem_Type));
+    dictiterobject *di = (dictiterobject *)self;
+    PyDictObject *d = di->di_dict;
+    if (d == NULL) {
+        return 0;
+    }
+    return dictiter_capture(d, di, 0, key, value);
+}
+
 PyTypeObject PyDictIterKey_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "dict_keyiterator",                         /* tp_name */

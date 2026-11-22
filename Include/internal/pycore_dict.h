@@ -140,6 +140,10 @@ PyAPI_FUNC(int) PyDict_SetValueString(PyObject *, const char *, PyValueBorrow);
  * As with dict iteration, owners do not make key mutation during iteration
  * safe. The borrowed dict must remain live throughout each call. */
 PyAPI_FUNC(int) _PyDict_NextValue(PyDictObject *, Py_ssize_t *, PyValue *, PyValue *, Py_hash_t *);
+/* Step a dict item iterator (PyDictIterItem_Type) without building the pair:
+ * return 1 with the key and the value as owners, 0 at the end, or -1 with an
+ * exception set. */
+PyAPI_FUNC(int) _PyDictIterItem_Next(PyObject *, PyValue *, PyValue *);
 /* Borrowed iteration for core code that must not allocate or fail, such as
  * finalization and fault dumps: return 1 with borrowed key/value views, or 0
  * at the end. Never sets an exception. The views are valid only while the

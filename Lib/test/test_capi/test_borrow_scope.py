@@ -301,9 +301,9 @@ class DebugChecksTests(unittest.TestCase):
     def test_scope_size_warning(self):
         rc, out, err = assert_python_ok('-c', '''if 1:
             import _testinternalcapi
-            pairs = [(1, 2.5)] * 6000
+            pairs = [(1, 2.5)] * 6000  # six entries each: 36000 unscoped
             for _ in range(2):
-                assert _testinternalcapi.parse_pairs(pairs, False) == 12000
+                assert _testinternalcapi.parse_pairs(pairs, False) == 36000
             assert _testinternalcapi.parse_pairs(pairs, True) == 0
         ''')
         self.assertEqual(err.count(b'Warning: a borrow scope holds'), 1, err)

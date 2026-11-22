@@ -430,135 +430,6 @@ get_localsplus_names(PyCodeObject *co, _PyLocals_Kind kind, int num)
     return names;
 }
 
-/* Whether constructors re-check the compiler's guarantees; see
- * validate_semantic_image(). */
-static inline int
-code_validation_enabled(void)
-{
-    return _PyInterpreterState_GET()->opt_config.validate_code;
-}
-
-/* The words against the layout of the frame, which the compiler's verifier
- * (Python/regcfg.c) guarantees for its own output: no word writes a
- * constant slot, through a field whose role is a destination or a local
- * written, and no window starts below the temporaries.  Words of unknown
- * handlers are for check_words(). */
-static int
-check_const_layout(struct _PyCodeConstructor *con, int first, int nconst)
-{
-    Py_ssize_t nwords = PyBytes_GET_SIZE(con->code) / (Py_ssize_t)sizeof(_PyIRWord);
-    const char *bytes = PyBytes_AS_STRING(con->code);
-    int nlocalsplus = (int)PyTuple_GET_SIZE(con->localsplusnames);
-    for (Py_ssize_t i = 0; i < nwords; i++) {
-        _PyIRWord word;
-        memcpy(&word, bytes + i * sizeof(_PyIRWord), sizeof(word));
-        int handler = IR_HANDLER(word);
-        if (handler >= IR_NUM_HANDLERS
-            || !(_PyIR_Formats[handler].flags & _PyIR_VALID))
-        {
-            continue;
-        }
-        const _PyIRFormat *fmt = &_PyIR_Formats[handler];
-        for (int k = 0; k < 4; k++) {
-            int role = fmt->roles[k];
-            int value = (int)((word >> (16 + 12 * k)) & IR_FIELD_MAX);
-            int writes = (role == _PyIR_ROLE_DST && fmt->dst != _PyIR_NO_DST)
-                         || role == _PyIR_ROLE_LOCAL_OUT
-                         || role == _PyIR_ROLE_LOCAL_CLEAR
-                         || role == _PyIR_ROLE_LOCAL_MOVE;
-            if (writes && value >= first && value < first + nconst) {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %zd writes constant slot %d", i, value);
-                return -1;
-            }
-            if (role == _PyIR_ROLE_BASE && (fmt->flags & _PyIR_WINDOW)
-                && value < nlocalsplus)
-            {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %zd has a window at slot %d, below "
-                             "the temporaries", i, value);
-                return -1;
-            }
-        }
-    }
-    return 0;
-}
-
-/* The constant-slot table: pairs of (slot, co_consts index), in the
- * order of the constant slots of localsplusnames, which are consecutive
- * and have the kind CO_FAST_CONST | CO_FAST_HIDDEN, one per pair.  One more
- * slot of that kind ends them, with no pair: the discard slot, the last slot
- * before the free variables. */
-static int
-check_constslots(struct _PyCodeConstructor *con)
-{
-    Py_ssize_t nconst = 0;
-    Py_ssize_t first = -1;
-    Py_ssize_t n = PyBytes_GET_SIZE(con->localspluskinds);
-    for (Py_ssize_t i = 0; i < n; i++) {
-        _PyLocals_Kind kind = _PyLocals_GetKind(con->localspluskinds, (int)i);
-        if (kind & CO_FAST_CONST) {
-            if (kind != (CO_FAST_CONST | CO_FAST_HIDDEN)
-                || (first >= 0 && i != first + nconst))
-            {
-                PyErr_SetString(PyExc_ValueError,
-                                "code: malformed constant slot kinds");
-                return -1;
-            }
-            if (first < 0) {
-                first = i;
-            }
-            nconst++;
-        }
-    }
-    // The last of the slots is the discard slot, and ends the locals
-    Py_ssize_t nfree = 0;
-    while (nfree < n &&
-           (_PyLocals_GetKind(con->localspluskinds, (int)(n - 1 - nfree)) &
-            CO_FAST_FREE))
-    {
-        nfree++;
-    }
-    if (nconst < 1 || first + nconst != n - nfree) {
-        PyErr_SetString(PyExc_ValueError, "code: the discard slot is missing");
-        return -1;
-    }
-    nconst--;
-    if (con->constslots != NULL && !PyBytes_Check(con->constslots)) {
-        PyErr_SetString(PyExc_ValueError, "code: co_constslots is malformed");
-        return -1;
-    }
-    Py_ssize_t size = con->constslots == NULL ? 0
-                      : PyBytes_GET_SIZE(con->constslots);
-    if (size % (2 * sizeof(uint32_t)) != 0
-        || size / (Py_ssize_t)(2 * sizeof(uint32_t)) != nconst)
-    {
-        PyErr_SetString(PyExc_ValueError, "code: co_constslots is malformed");
-        return -1;
-    }
-    const uint32_t *table = size == 0 ? NULL
-        : (const uint32_t *)PyBytes_AS_STRING(con->constslots);
-    Py_ssize_t nconsts = PyTuple_GET_SIZE(con->consts);
-    for (Py_ssize_t j = 0; j < nconst; j++) {
-        if (table[2 * j] != first + j) {
-            // The slots follow the cells, so a different number of
-            // variables moves them
-            PyErr_SetString(PyExc_ValueError,
-                            "code: changing the number of variables of code "
-                            "with constant slots is not supported "
-                            "(co_constslots names other slots)");
-            return -1;
-        }
-        if (table[2 * j + 1] >= nconsts) {
-            PyErr_SetString(PyExc_ValueError,
-                            "code: co_constslots is malformed");
-            return -1;
-        }
-    }
-    return code_validation_enabled()
-        ? check_const_layout(con, (int)first, (int)nconst) : 0;
-}
-
 /* The units that an entry of each kind takes at least (pycore_feedback.h) */
 static const uint8_t fb_kind_units[] = {
     [FB_COUNTER] = sizeof(_PyFbHeader) / 8,
@@ -570,970 +441,8 @@ static const uint8_t fb_kind_units[] = {
     [FB_CALL] = sizeof(_PyFbCall) / 8,
 };
 
-/* Whether fbinit, the feedback table of a code object, describes a vector:
- * entry 0 first, the others in order of unit, each with room for its kind,
- * all within the units that entry 0 gives. */
-static int
-fbinit_is_valid(PyObject *fbinit)
-{
-    Py_ssize_t size = PyBytes_GET_SIZE(fbinit);
-    if (size % sizeof(uint32_t) != 0) {
-        return 0;
-    }
-    Py_ssize_t n = size / (Py_ssize_t)sizeof(uint32_t);
-    if (n == 0) {
-        return 1;
-    }
-    uint32_t word;
-    memcpy(&word, PyBytes_AS_STRING(fbinit), sizeof(word));
-    uint32_t total = _PyIR_FBINIT_ARG(word);
-    if (_PyIR_FBINIT_KIND(word) != FB_COUNTER || _PyIR_FBINIT_UNIT(word) != 0
-        || total < IR_FB_FIRST_UNIT || total > IR_FB_UNITS_MAX)
-    {
-        return 0;
-    }
-    uint32_t next = IR_FB_FIRST_UNIT;
-    for (Py_ssize_t i = 1; i < n; i++) {
-        memcpy(&word, PyBytes_AS_STRING(fbinit) + i * sizeof(word), sizeof(word));
-        int kind = _PyIR_FBINIT_KIND(word);
-        if (kind <= FB_COUNTER || kind > FB_CALL
-            || _PyIR_FBINIT_UNIT(word) < next)
-        {
-            return 0;
-        }
-        next = _PyIR_FBINIT_UNIT(word) + fb_kind_units[kind];
-        if (next > total) {
-            return 0;
-        }
-    }
-    return 1;
-}
-
-/* Validate location payloads before the variable-length runtime readers see
- * them. Raw constructors may omit trailing locations; stored maps may not. */
-static int
-location_words(const _PyIRPositions *map, uint32_t *covered)
-{
-    const unsigned char *p = map->locations;
-    const unsigned char *end = p + map->locations_size;
-    uint64_t count = 0;
-    while (p < end) {
-        unsigned int header = *p++;
-        if (!(header & 128)) {
-            return -1;
-        }
-        count += (header & 7) + 1;
-        int kind = (header >> 3) & 15;
-        int fixed = kind < 10 ? 1 : kind < 13 ? 2 : 0;
-        if (end - p < fixed) {
-            return -1;
-        }
-        for (int j = 0; j < fixed; j++) {
-            if (p[j] & 128) {
-                return -1;
-            }
-        }
-        p += fixed;
-        int varints = kind == 13 ? 1 : kind == 14 ? 4 : 0;
-        for (int k = 0; k < varints; k++) {
-            int bytes = 0;
-            unsigned int byte;
-            do {
-                if (p == end || ++bytes > 6 || (*p & 128)) {
-                    return -1;
-                }
-                byte = *p++;
-            } while (byte & 64);
-        }
-        if (count > UINT32_MAX) {
-            return -1;
-        }
-    }
-    *covered = (uint32_t)count;
-    return 0;
-}
-
-static PyObject *
-normalize_positions(const _PyIRPositions *map, uint32_t nwords)
-{
-    uint32_t covered;
-    if (location_words(map, &covered) < 0 || covered > nwords) {
-        PyErr_SetString(PyExc_ValueError, "code: malformed source map locations");
-        return NULL;
-    }
-    uint32_t padding = (nwords - covered + 7) / 8;
-    if ((uint64_t)map->locations_size + padding > UINT32_MAX) {
-        return PyErr_NoMemory();
-    }
-    PyObject *locations = PyBytes_FromStringAndSize(NULL, (Py_ssize_t)map->locations_size + padding);
-    if (locations == NULL) {
-        return NULL;
-    }
-    unsigned char *p = (unsigned char *)PyBytes_AS_STRING(locations);
-    memcpy(p, map->locations, map->locations_size);
-    p += map->locations_size;
-    while (covered < nwords) {
-        uint32_t run = Py_MIN(nwords - covered, 8u);
-        /* Location kind 15: no line or column, over run real words. */
-        *p++ = (unsigned char)(0xF8 | (run - 1));
-        covered += run;
-    }
-    PyObject *result = _PyIRPositions_Pack(
-        (const unsigned char *)PyBytes_AS_STRING(locations),
-        (uint32_t)PyBytes_GET_SIZE(locations), map->records, map->nrecords);
-    Py_DECREF(locations);
-    return result;
-}
-
-static int mark_operand_words(const char *, Py_ssize_t, unsigned char **);
-/* The exception edges of a code object, indexed by word, so that the proof
- * below finds those of a word without scanning the exception table and the
- * recovery events of the whole code for each. */
-typedef struct {
-    int start, size, target, slot, lasti;
-} completion_entry;
-
-typedef struct completion_edges {
-    completion_entry *entries;
-    int *cover;    // per word: the first entry whose range holds it, or -1
-    int *first;    // events[first[i]:first[i + 1]] are those from word i
-    int *events;   // recovery records that have a handler, by word, in order
-    _PyIRSemanticMap source;
-} completion_edges;
-
-static int completion_handler_safe(struct _PyCodeConstructor *,
-                                   const completion_edges *, int, int, int,
-                                   int, int);
-static int observer_handler_safe(struct _PyCodeConstructor *,
-                                 const completion_edges *, _PyIRWord, int,
-                                 int, int, int, int);
-static int completion_edges_build(completion_edges *, const _PyIRSemanticMap *,
-                                  int);
-static void completion_edges_free(completion_edges *);
-
-static int
-validate_semantic_and_position_maps(struct _PyCodeConstructor *con)
-{
-    _PyIRPositions positions;
-    int format = _PyIRPositions_Decode(PyBytes_AS_STRING(con->linetable),
-                                    PyBytes_GET_SIZE(con->linetable), &positions);
-    if (format < 0) {
-        PyErr_SetString(PyExc_ValueError, "code: malformed source map");
-        return -1;
-    }
-    int nwords = (int)(PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord));
-    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
-    int nslots = nl + Py_MAX(con->stacksize, 1);
-    uint32_t covered;
-    if (location_words(&positions, &covered) < 0 || covered > (uint32_t)nwords ||
-        (format && covered != (uint32_t)nwords))
-    {
-        PyErr_SetString(PyExc_ValueError, "code: source map locations do not fit code");
-        return -1;
-    }
-    _PyIRSemanticMap map;
-    if (_PyIRSemantic_Decode(PyBytes_AS_STRING(con->exceptiontable),
-                             PyBytes_GET_SIZE(con->exceptiontable), &map) < 0 ||
-        !_PyIR_ExceptionTableValid(map.exceptions,
-                                  map.exceptions + map.exceptions_size,
-                                  nwords, nl, nslots))
-    {
-        PyErr_SetString(PyExc_ValueError, "code: malformed semantic recovery map");
-        return -1;
-    }
-    if (positions.nrecords && positions.nrecords != map.nrecords) {
-        PyErr_SetString(PyExc_ValueError,
-                        "code: position IDs do not match semantic recovery");
-        return -1;
-    }
-    /* A call and its operand words are one instruction: nothing starts or
-     * ends a protected range, recovers or handles between them. */
-    unsigned char *operand_words;
-    if (mark_operand_words(PyBytes_AS_STRING(con->code), nwords, &operand_words) < 0) {
-        return -1;
-    }
-    if (operand_words != NULL) {
-        const unsigned char *p = map.exceptions;
-        const unsigned char *end = p + map.exceptions_size;
-        int split = 0;
-        while (p < end) {
-            _PyIRExceptionEntry entry = {0};
-            int valid = _PyIR_ExceptionNext(&p, end, &entry);
-            assert(valid == 0);
-            (void)valid;
-            split |= (entry.start < nwords && operand_words[entry.start]) ||
-                     (entry.target < nwords && operand_words[entry.target]) ||
-                     (entry.end < nwords && operand_words[entry.end]);
-        }
-        for (uint32_t i = 0; i < map.nrecords; i++) {
-            _PyIRRecoveryEvent event;
-            _PyIRSemantic_Event(&map, i, &event);
-            split |= (event.from >= 0 && event.from < nwords && operand_words[event.from]) ||
-                     (event.to >= 0 && event.to < nwords && operand_words[event.to]) ||
-                     (event.handler >= 0 && event.handler < nwords &&
-                      operand_words[event.handler]);
-        }
-        PyMem_Free(operand_words);
-        if (split) {
-            PyErr_SetString(PyExc_ValueError,
-                            "code: a call and its operands are split by recovery");
-            return -1;
-        }
-    }
-    completion_edges edges;
-    if (completion_edges_build(&edges, &map, nwords) < 0) {
-        PyErr_NoMemory();
-        return -1;
-    }
-    for (uint32_t i = 0; i < map.nrecords; i++) {
-        _PyIRRecoveryEvent event;
-        _PyIRSemantic_Event(&map, i, &event);
-        if (event.from < 0 || event.from >= nwords ||
-            event.to < 0 || event.to >= nwords ||
-            event.edge < 0 || event.edge > _PyIR_EDGE_TAKEN ||
-            event.handler < -1 || event.handler >= nwords ||
-            (event.handler == -1 && (event.exc_slot != 0 || event.lasti != 0)) ||
-            (event.handler >= 0 &&
-             ((event.lasti != 0 && event.lasti != 1) ||
-              event.exc_slot < PyTuple_GET_SIZE(con->localsplusnames) + event.lasti ||
-              event.exc_slot >= nslots)))
-        {
-            PyErr_SetString(PyExc_ValueError, "code: semantic recovery does not fit code");
-            { completion_edges_free(&edges); return -1; }
-        }
-        const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
-        if (_PyIR_HandlerBase[IR_HANDLER(words[event.to])] == RESUME) {
-            PyErr_SetString(PyExc_ValueError,
-                            "code: semantic recovery cannot precede an entry RESUME");
-            { completion_edges_free(&edges); return -1; }
-        }
-        if (event.handler >= 0) {
-            _PyIRWord from = words[event.from];
-            int opcode = _PyIR_BaseOpcode(IR_HANDLER(from));
-            bool completed = ((opcode == FOR_ITER || opcode == SEND) &&
-                              event.edge == _PyIR_EDGE_TAKEN) ||
-                             (opcode == CLEANUP_THROW &&
-                              event.edge == _PyIR_EDGE_TAKEN);
-            int observer = _PyIR_ObserverOutcome(from, event.edge);
-            if (observer || completed) {
-                int safe = observer
-                    ? observer_handler_safe(con, &edges, from, event.edge,
-                                            event.handler, event.exc_slot,
-                                            event.lasti, 1)
-                    : completion_handler_safe(con, &edges, event.handler,
-                                              event.exc_slot, event.lasti,
-                                              IR_B(from),
-                                              _PyIR_CompletionWindow(opcode));
-                if (safe <= 0) {
-                    if (safe == 0) {
-                        PyErr_SetString(PyExc_ValueError,
-                                        "code: source handler reads a retired completion owner");
-                    }
-                    { completion_edges_free(&edges); return -1; }
-                }
-            }
-        }
-    }
-    completion_edges_free(&edges);
-    for (uint32_t i = 0; i < positions.nrecords; i++) {
-        _PyIRPosition position;
-        _PyIRPositions_Event(&positions, i, &position);
-        if ((position.line == -1 &&
-             (position.end_line != -1 || position.column != -1 ||
-              position.end_column != -1)) ||
-            position.line == 0 || position.line < -1 ||
-            position.end_line < -1 ||
-            (position.end_line != -1 && position.end_line < position.line) ||
-            position.column < -1 || position.end_column < -1 ||
-            ((position.column == -1) != (position.end_column == -1)) ||
-            (position.line == position.end_line &&
-             position.column > position.end_column))
-        {
-            PyErr_SetString(PyExc_ValueError, "code: malformed optional source position");
-            return -1;
-        }
-    }
-    return 0;
-}
-
-static int
-kwargs_word_access(_PyIRWord word, int slot)
-{
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-    if (IR_HANDLER(word) == IR_OPERANDS) {
-        // The call that owns it checks its operands (validate_virtual_kwargs)
-        return 0;
-    }
-    uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
-    int reads = 0;
-    for (int f = 0; f < 4; f++) {
-        if (fields[f] != (uint32_t)slot) {
-            continue;
-        }
-        int role = fmt->roles[f];
-        if (role == _PyIR_ROLE_DST || role == _PyIR_ROLE_LOCAL_OUT ||
-            role == _PyIR_ROLE_LOCAL_CLEAR || role == _PyIR_ROLE_LOCAL_MOVE ||
-            role == _PyIR_ROLE_CELL)
-        {
-            return -1;
-        }
-        reads |= role == _PyIR_ROLE_LOCAL_IN || role >= _PyIR_ROLE_IN0;
-    }
-    if (fmt->flags & _PyIR_WINDOW) {
-        int base = -1;
-        for (int f = 0; f < 4; f++) {
-            if (fmt->roles[f] == _PyIR_ROLE_BASE) {
-                base = (int)fields[f];
-            }
-        }
-        /* A feedback-encoded argument cannot put the local inside a window:
-         * generated windows otherwise live above all ordinary locals. */
-        if (base >= 0 && base <= slot) {
-            int oparg = fmt->imm == _PyIR_LOC_FBARG ? IR_MAX_SLOTS
-                                                 : _PyIR_FieldOparg(word);
-            int writes = _PyIR_Extent(fmt->writes, oparg);
-            if (slot < base + writes) {
-                return -1;
-            }
-            reads |= slot < base + _PyIR_Extent(fmt->reads, oparg);
-        }
-    }
-    return reads;
-}
-
-/* Prove that a pending kwargs home is immutable and cannot be read before a
- * materialization barrier. After a barrier the immutable binding stays real.
- * Exception handlers are conservative independent pending entry points. */
-static int
-validate_virtual_kwargs(struct _PyCodeConstructor *con)
-{
-    if (!(con->flags & CO_VIRTUAL_KWARGS)) {
-        return 0;
-    }
-    int slot = con->argcount + con->kwonlyargcount + !!(con->flags & CO_VARARGS);
-    if (!(con->flags & CO_VARKEYWORDS) ||
-        con->flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR) ||
-        slot >= PyBytes_GET_SIZE(con->localspluskinds) ||
-        (_PyLocals_GetKind(con->localspluskinds, slot) & (CO_FAST_CELL | CO_FAST_FREE)))
-    {
-        goto invalid;
-    }
-    int nwords = (int)(PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord));
-    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
-    unsigned char *seen = PyMem_Calloc((size_t)Py_MAX(nwords, 1), 1);
-    int *todo = PyMem_Malloc((size_t)Py_MAX(nwords, 1) * sizeof(int));
-    if (seen == NULL || todo == NULL) {
-        PyMem_Free(seen);
-        PyMem_Free(todo);
-        PyErr_NoMemory();
-        return -1;
-    }
-    int count = 0;
-    if (nwords) {
-        seen[0] = 1;
-        todo[count++] = 0;
-    }
-    for (int i = 0; i < nwords; i++) {
-        int handler = IR_HANDLER(words[i]);
-        if (handler >= IR_NUM_HANDLERS || !(_PyIR_FormatOf(handler)->flags & _PyIR_VALID) ||
-            !_PyIR_CanonicalFlagsValid(words[i]) ||
-            (handler != MATERIALIZE_KWARGS && kwargs_word_access(words[i], slot) < 0) ||
-            (handler == MATERIALIZE_KWARGS && IR_A(words[i]) != (uint32_t)slot))
-        {
-            goto invalid_allocated;
-        }
-    }
-    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(con->exceptiontable);
-    const unsigned char *p = semantic.exceptions;
-    const unsigned char *end = p + semantic.exceptions_size;
-    while (p < end) {
-        unsigned int fields[4] = {0};
-        for (int k = 0; k < 4; k++) {
-            unsigned int byte;
-            do {
-                if (p == end || fields[k] > (UINT_MAX >> 6)) {
-                    goto invalid_allocated;
-                }
-                byte = *p++;
-                fields[k] = (fields[k] << 6) | (byte & 63);
-            } while (byte & 64);
-        }
-        unsigned int target = fields[2];
-        if (target >= (unsigned int)nwords) {
-            goto invalid_allocated;
-        }
-        if (!seen[target]) {
-            seen[target] = 1;
-            todo[count++] = (int)target;
-        }
-    }
-    _PyIRSemanticMap source;
-    if (_PyIRSemantic_Decode(PyBytes_AS_STRING(con->exceptiontable),
-                          PyBytes_GET_SIZE(con->exceptiontable), &source) < 0) {
-        goto invalid_allocated;
-    }
-    for (uint32_t j = 0; j < source.nrecords; j++) {
-        _PyIRRecoveryEvent event;
-        _PyIRSemantic_Event(&source, j, &event);
-        if (event.handler >= 0 && !seen[event.handler]) {
-            seen[event.handler] = 1;
-            todo[count++] = event.handler;
-        }
-    }
-    while (count) {
-        int i = todo[--count];
-        _PyIRWord word = words[i];
-        int handler = IR_HANDLER(word);
-        if (handler == MATERIALIZE_KWARGS) {
-            continue;
-        }
-        if (kwargs_word_access(word, slot)) {
-            goto invalid_allocated;
-        }
-        // The call reads its operands.  The last of a CALL_KW is the index
-        // of its names in co_consts, not a slot.
-        if (_PyIR_WordLength(word) > 1) {
-            for (int k = 0; k < _PyIR_CallSlotOperands(word); k++) {
-                if (_PyIR_CallOperand(&words[i], k) == slot) {
-                    goto invalid_allocated;
-                }
-            }
-        }
-        const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
-        int base = _PyIR_HandlerBase[_PyIR_BaseOpcode(handler)];
-        int next[2] = {i + _PyIR_WordLength(word), -1};
-        if (fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) {
-            if (!(fmt->flags & _PyIR_NAMES_TARGET)) {
-                next[1] = fmt->flags & (_PyIR_FORWARD | _PyIR_FUSED)
-                    ? i + 1 + IR_DS(word) : (int)IR_CD(word);
-            }
-        }
-        if (IS_SCOPE_EXIT_OPCODE(base) || (fmt->flags & _PyIR_JUMP_ALWAYS)) {
-            next[0] = -1;
-        }
-        for (int k = 0; k < 2; k++) {
-            int target = next[k];
-            if (target < 0 || target == nwords) {
-                continue;
-            }
-            if (target > nwords) {
-                goto invalid_allocated;
-            }
-            if (!seen[target]) {
-                seen[target] = 1;
-                todo[count++] = target;
-            }
-        }
-    }
-    PyMem_Free(seen);
-    PyMem_Free(todo);
-    return 0;
-invalid_allocated:
-    PyMem_Free(seen);
-    PyMem_Free(todo);
-invalid:
-    PyErr_SetString(PyExc_ValueError, "code: invalid virtual kwargs binding");
-    return -1;
-}
-
-
-typedef struct {
-    uint32_t *facts;
-    int *queue;
-    int n, head, tail, count;
-    int homes[8], nhomes;
-} completion_worklist;
-
-enum {
-    COMPLETION_REACHED = 1u << 24,
-    COMPLETION_QUEUED = 1u << 25,
-};
-
-/* Low bits mean the original owner is unavailable. The next nhomes bits mean
- * that unavailable home may be non-NULL; OR joins preserve both possibilities. */
-static int
-completion_enqueue(completion_worklist *work, int target, unsigned int mask,
-                   unsigned int nonnull)
-{
-    unsigned int limit = (1u << work->nhomes) - 1;
-    unsigned int facts = (mask & limit) |
-                         ((nonnull & mask & limit) << work->nhomes);
-    if (target < 0 || target >= work->n) {
-        return 0;
-    }
-    unsigned int old = work->facts[target];
-    if ((old & COMPLETION_REACHED) && (old & facts) == facts) {
-        return 1;
-    }
-    work->facts[target] |= facts | COMPLETION_REACHED;
-    if (!(old & COMPLETION_QUEUED)) {
-        work->facts[target] |= COMPLETION_QUEUED;
-        work->queue[work->tail] = target;
-        work->tail = (work->tail + 1) % work->n;
-        work->count++;
-    }
-    return 1;
-}
-
-static unsigned int
-completion_home_mask(int slot, const int *homes, int count)
-{
-    for (int k = 0; k < count; k++) {
-        if (slot == homes[k]) {
-            return 1u << k;
-        }
-    }
-    return 0;
-}
-
-static int
-completion_exception_edge(completion_worklist *work, int target, int slot,
-                          int lasti, unsigned int mask,
-                          unsigned int nonnull)
-{
-    if ((lasti != 0 && lasti != 1) || slot < lasti) {
-        return 0;
-    }
-    int floor = slot - lasti;
-    for (int k = 0; k < work->nhomes; k++) {
-        if (work->homes[k] >= floor) {
-            mask |= 1u << k;
-            nonnull &= ~(1u << k);
-        }
-    }
-    mask &= ~completion_home_mask(slot, work->homes, work->nhomes);
-    if (lasti) {
-        mask &= ~completion_home_mask(slot - 1, work->homes, work->nhomes);
-    }
-    return completion_enqueue(work, target, mask, nonnull);
-}
-
-static int
-completion_edges_build(completion_edges *edges, const _PyIRSemanticMap *source,
-                       int n)
-{
-    *edges = (completion_edges){.source = *source};
-    int nentries = 0;
-    const unsigned char *cursor = source->exceptions;
-    const unsigned char *end = cursor + source->exceptions_size;
-    while (cursor < end) {
-        int field;
-        for (int k = 0; k < 4; k++) {
-            if (_PyIR_ExceptionVarint(&cursor, end, &field) < 0) {
-                return -1;
-            }
-        }
-        nentries++;
-    }
-    size_t nints = (size_t)n + ((size_t)n + 1) + source->nrecords;
-    edges->entries = PyMem_Malloc(Py_MAX(nentries, 1) * sizeof(*edges->entries));
-    edges->cover = PyMem_Malloc(nints * sizeof(int));
-    if (edges->entries == NULL || edges->cover == NULL) {
-        completion_edges_free(edges);
-        return -1;
-    }
-    edges->first = edges->cover + n;
-    edges->events = edges->first + n + 1;
-    cursor = source->exceptions;
-    for (int e = 0; e < nentries; e++) {
-        int slot_lasti = 0;
-        completion_entry *entry = &edges->entries[e];
-        (void)_PyIR_ExceptionVarint(&cursor, end, &entry->start);
-        (void)_PyIR_ExceptionVarint(&cursor, end, &entry->size);
-        (void)_PyIR_ExceptionVarint(&cursor, end, &entry->target);
-        (void)_PyIR_ExceptionVarint(&cursor, end, &slot_lasti);
-        entry->slot = slot_lasti >> 1;
-        entry->lasti = slot_lasti & 1;
-    }
-    for (int i = 0; i < n; i++) {
-        edges->cover[i] = -1;
-    }
-    // Backwards, so that the first entry of the table has the last word
-    for (int e = nentries - 1; e >= 0; e--) {
-        const completion_entry *entry = &edges->entries[e];
-        int low = Py_MAX(entry->start, 0);
-        int high = (int)Py_MIN((int64_t)entry->start + entry->size, (int64_t)n);
-        for (int i = low; i < high; i++) {
-            edges->cover[i] = e;
-        }
-    }
-    for (int i = 0; i <= n; i++) {
-        edges->first[i] = 0;
-    }
-    for (uint32_t j = 0; j < source->nrecords; j++) {
-        _PyIRRecoveryEvent event;
-        _PyIRSemantic_Event(source, j, &event);
-        if (event.handler >= 0 && event.from >= 0 && event.from < n) {
-            edges->first[event.from + 1]++;
-        }
-    }
-    for (int i = 0; i < n; i++) {
-        edges->first[i + 1] += edges->first[i];
-    }
-    int *next = PyMem_Malloc(((size_t)n + 1) * sizeof(int));
-    if (next == NULL) {
-        completion_edges_free(edges);
-        return -1;
-    }
-    memcpy(next, edges->first, ((size_t)n + 1) * sizeof(int));
-    for (uint32_t j = 0; j < source->nrecords; j++) {
-        _PyIRRecoveryEvent event;
-        _PyIRSemantic_Event(source, j, &event);
-        if (event.handler >= 0 && event.from >= 0 && event.from < n) {
-            edges->events[next[event.from]++] = (int)j;
-        }
-    }
-    PyMem_Free(next);
-    return 0;
-}
-
-static void
-completion_edges_free(completion_edges *edges)
-{
-    PyMem_Free(edges->entries);
-    PyMem_Free(edges->cover);
-}
-
-/* A preserved prefix need not contain live semantic operands. Generator
- * StopIteration wrappers, for example, keep an iterator below their real
- * exception/lasti inputs. Prove that completed homes are not read as those
- * old values on any normal or exceptional handler path. This is the final
- * encoded proof for both compiled programs and public code constructors. */
-static int
-owner_handler_safe(struct _PyCodeConstructor *con,
-                   const completion_edges *edges, int entry, int exc_slot,
-                   int lasti, const int *homes, int count,
-                   unsigned int initial, unsigned int initial_nonnull)
-{
-    if (count <= 0 || count > 8) {
-        return 0;
-    }
-    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
-    int n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(*words));
-    const _PyIRSemanticMap source = edges->source;
-    completion_worklist work = {.n = n, .nhomes = count};
-    memcpy(work.homes, homes, (size_t)count * sizeof(int));
-    work.facts = PyMem_Calloc((size_t)n, sizeof(*work.facts));
-    work.queue = PyMem_Malloc((size_t)n * sizeof(int));
-    if (work.facts == NULL || work.queue == NULL) {
-        PyMem_Free(work.facts);
-        PyMem_Free(work.queue);
-        PyErr_NoMemory();
-        return -1;
-    }
-    /* Preserved homes may still be PRE owners. Only the actual unwind, not
-     * POST's retirement alone, proves them NULL on both admitted paths. */
-    int safe = completion_exception_edge(&work, entry, exc_slot, lasti,
-                                         initial, initial_nonnull);
-    while (safe && work.count) {
-        int i = work.queue[work.head];
-        work.head = (work.head + 1) % n;
-        work.count--;
-        work.facts[i] &= ~COMPLETION_QUEUED;
-        unsigned int limit = (1u << count) - 1;
-        unsigned int mask = work.facts[i] & limit;
-        unsigned int nonnull = (work.facts[i] >> count) & limit;
-        _PyIRWord word = words[i];
-        int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
-        const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
-        int arg = fmt->imm == _PyIR_LOC_FBARG ? IR_MAX_SLOTS
-                                              : _PyIR_FieldOparg(word);
-        unsigned int reads = 0, defs = 0, nullable = 0;
-        for (int k = 0; k < count; k++) {
-            int home = work.homes[k];
-            if (!(nonnull & (1u << k)) && _PyIR_NullableHome(&words[i], arg, home)) {
-                nullable |= 1u << k;
-            }
-            if (_PyIR_ReadsHome(&words[i], arg, home)) {
-                reads |= 1u << k;
-            }
-            if (_PyIR_DefinesHome(word, arg, home)) {
-                defs |= 1u << k;
-            }
-        }
-        /* RERAISE's implicit owner prefix is absent from its encoded reads.
-         * Explicit retirement operands still require their original owners. */
-        if (reads & mask & ~nullable) {
-            PyErr_Format(PyExc_ValueError,
-                "code: invalid semantic completion window or handler "
-                "(%U:%d; entry=%d pc=%d opcode=%d base=%d count=%d "
-                "unavailable=%u may_nonnull=%u reads=%u)", con->qualname, con->firstlineno,
-                entry, i, opcode, work.homes[0], count, mask, nonnull, reads);
-            safe = -1;
-            break;
-        }
-        if (edges->cover[i] >= 0) {
-            const completion_entry *entry = &edges->entries[edges->cover[i]];
-            safe = completion_exception_edge(&work, entry->target,
-                entry->slot, entry->lasti, mask, nonnull);
-        }
-        if (!safe) {
-            break;
-        }
-        bool jumps = (fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD)) &&
-                     !(fmt->flags & _PyIR_NAMES_TARGET);
-        for (int taken = 0; taken <= (int)jumps; taken++) {
-            if (!taken && (IS_SCOPE_EXIT_OPCODE(_PyIR_HandlerBase[opcode]) ||
-                           (fmt->flags & _PyIR_JUMP_ALWAYS)))
-            {
-                continue;
-            }
-            int next = !taken ? i + _PyIR_WordLength(word)
-                : fmt->flags & (_PyIR_FORWARD | _PyIR_FUSED)
-                    ? i + 1 + IR_DS(word) : (int)IR_CD(word);
-            unsigned int edge = mask;
-            unsigned int edge_nonnull = nonnull;
-            _PyIRSlotOutcome outcome = _PyIR_Outcome(word, taken);
-            if (fmt->output_kind == _PyIR_OUTPUT_OUTCOME && !outcome.semantic) {
-                safe = 0;
-                break;
-            }
-            if (outcome.semantic) {
-                /* Only actual produced values define a valid new input;
-                 * a retired NULL home remains unavailable to readers. */
-                for (int k = 0; k < count; k++) {
-                    if (work.homes[k] >= outcome.first &&
-                        work.homes[k] - outcome.first < outcome.count)
-                    {
-                        edge |= 1u << k;
-                        edge_nonnull &= ~(1u << k);
-                    }
-                }
-                edge &= ~completion_home_mask(outcome.dst, work.homes, count);
-                if (opcode == FOR_ITER && !taken) {
-                    edge &= ~completion_home_mask(IR_B(word) + 1, work.homes, count);
-                }
-                if (opcode == SEND && !taken) {
-                    edge &= ~completion_home_mask(IR_B(word) + 2, work.homes, count);
-                }
-            }
-            else {
-                edge &= ~defs;
-            }
-            for (int k = edges->first[i]; k < edges->first[i + 1]; k++) {
-                _PyIRRecoveryEvent event;
-                _PyIRSemantic_Event(&source, (uint32_t)edges->events[k], &event);
-                if (event.edge == taken &&
-                    !completion_exception_edge(&work, event.handler, event.exc_slot,
-                                               event.lasti, edge, edge_nonnull))
-                {
-                    safe = 0;
-                    break;
-                }
-            }
-            if (!safe) {
-                break;
-            }
-            if (!completion_enqueue(&work, next, edge, edge_nonnull)) {
-                safe = 0;
-                break;
-            }
-        }
-    }
-    PyMem_Free(work.facts);
-    PyMem_Free(work.queue);
-    return safe;
-}
-
-static int
-completion_handler_safe(struct _PyCodeConstructor *con,
-                        const completion_edges *edges, int entry, int exc_slot,
-                        int lasti, int base, int count)
-{
-    int homes[8];
-    if (count <= 0 || count > 8) {
-        return 0;
-    }
-    for (int k = 0; k < count; k++) {
-        homes[k] = base + k;
-    }
-    unsigned int initial = (1u << count) - 1;
-    return owner_handler_safe(con, edges, entry, exc_slot, lasti, homes, count,
-                              initial, initial);
-}
-
-static int
-observer_handler_safe(struct _PyCodeConstructor *con,
-                      const completion_edges *edges, _PyIRWord word, int edge,
-                      int entry, int exc_slot, int lasti, int post)
-{
-    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
-    int limit = nl + con->stacksize;
-    _PyIRObservedHomes observed;
-    if (!_PyIR_ObservedHomes(word, edge, nl, limit, &observed)) {
-        return 0;
-    }
-    if (observed.count == 0) {
-        return 1;
-    }
-    unsigned int unavailable = 0, may_nonnull = 0;
-    for (int k = 0; k < observed.count; k++) {
-        int home = observed.home[k];
-        if (home < nl || home >= limit) {
-            return 0;
-        }
-        for (int j = 0; j < k; j++) {
-            if (observed.home[j] == home) {
-                return 0;
-            }
-        }
-        unsigned int bit = 1u << k;
-        if (observed.old_cut[k] ||
-            observed.physical[k] == _PyIR_OBSERVED_MISSING ||
-            (!post && observed.physical[k] != _PyIR_OBSERVED_UNKNOWN))
-        {
-            unavailable |= bit;
-            may_nonnull |= bit;
-        }
-        else if (observed.physical[k] == _PyIR_OBSERVED_NULL) {
-            unavailable |= bit;
-        }
-    }
-    return owner_handler_safe(con, edges, entry, exc_slot, lasti, observed.home,
-                              observed.count, unavailable, may_nonnull);
-}
-
-/* These words now own completion, rather than returning to frontend cleanup.
- * Validate their complete windows and the anchors their EH recipes preserve. */
-static int
-validate_completion_words(struct _PyCodeConstructor *con)
-{
-    completion_edges edges = {0};
-    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
-    int n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(*words));
-    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
-    int limit = nl + con->stacksize;
-    bool has_owner_proof = false;
-    for (int i = 0; i < n; i++) {
-        _PyIRWord word = words[i];
-        int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
-        int count = _PyIR_CompletionWindow(opcode);
-        for (int edge = 0; edge < 2; edge++) {
-            if (_PyIR_ObserverOutcome(word, edge)) {
-                _PyIRObservedHomes observed;
-                if (!_PyIR_ObservedHomes(word, edge, nl, limit, &observed)) {
-                    goto invalid;
-                }
-                has_owner_proof = true;
-            }
-        }
-        if (!count && opcode != RETURN_GENERATOR) {
-            continue;
-        }
-        has_owner_proof = true;
-        int base = (int)IR_B(word), dst = (int)IR_A(word);
-        if ((count && (base < nl || base > limit - count)) ||
-            (dst != IR_NO_DST && dst >= limit) ||
-            (opcode == RETURN_GENERATOR && dst != IR_NO_DST) ||
-            (opcode == FOR_ITER && dst >= nl && dst != IR_NO_DST &&
-             dst != base + 2) ||
-            (opcode == YIELD_VALUE && IR_C(word) == 1 && dst != base))
-        {
-            goto invalid;
-        }
-        if (opcode == FOR_ITER || opcode == SEND || opcode == CLEANUP_THROW) {
-            int target = opcode == CLEANUP_THROW ? (int)IR_CD(word)
-                                                : i + 1 + IR_DS(word);
-            if (target < 0 || target >= n) {
-                goto invalid;
-            }
-        }
-    }
-    if (!has_owner_proof) {
-        return 0;
-    }
-    /* Named-local fields cannot borrow scratch homes. The handler proof
-     * relies on that distinction when it reads the executable field roles. */
-    for (int i = 0; i < n; i++) {
-        const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(words[i]));
-        uint32_t fields[] = {IR_A(words[i]), IR_B(words[i]),
-                             IR_C(words[i]), IR_D(words[i])};
-        for (int f = 0; f < 4; f++) {
-            if (fmt->roles[f] >= _PyIR_ROLE_LOCAL_IN &&
-                fmt->roles[f] <= _PyIR_ROLE_CELL && fields[f] >= (uint32_t)nl)
-            {
-                goto invalid;
-            }
-        }
-    }
-    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(con->exceptiontable);
-    const unsigned char *cursor = semantic.exceptions;
-    const unsigned char *end = cursor + semantic.exceptions_size;
-    if (!_PyIR_ExceptionTableValid(cursor, end, n, nl, limit)) {
-        goto invalid;
-    }
-    if (completion_edges_build(&edges, &semantic, n) < 0) {
-        PyErr_NoMemory();
-        return -1;
-    }
-    cursor = semantic.exceptions;
-    while (cursor < end) {
-        int start, size, target, slot_lasti;
-        if (_PyIR_ExceptionVarint(&cursor, end, &start) < 0 ||
-            _PyIR_ExceptionVarint(&cursor, end, &size) < 0 ||
-            _PyIR_ExceptionVarint(&cursor, end, &target) < 0 ||
-            _PyIR_ExceptionVarint(&cursor, end, &slot_lasti) < 0 ||
-            start > n || size > n - start || target >= n)
-        {
-            goto invalid;
-        }
-        int slot = slot_lasti >> 1;
-        int floor = slot - (slot_lasti & 1);
-        if (floor < nl || slot >= limit) {
-            goto invalid;
-        }
-        for (int i = start; i < start + size; i++) {
-            int opcode = _PyIR_BaseOpcode(IR_HANDLER(words[i]));
-            for (int edge = 0; edge < 2; edge++) {
-                if (!_PyIR_ObserverOutcome(words[i], edge)) {
-                    continue;
-                }
-                int pre = observer_handler_safe(con, &edges, words[i], edge,
-                                                target, slot, slot_lasti & 1, 0);
-                int post = pre > 0
-                    ? observer_handler_safe(con, &edges, words[i], edge, target,
-                                            slot, slot_lasti & 1, 1)
-                    : pre;
-                if (pre < 0 || post < 0) {
-                    completion_edges_free(&edges);
-                    return -1;
-                }
-                if (!pre || !post) {
-                    goto invalid;
-                }
-            }
-            if (opcode == FOR_ITER || opcode == SEND || opcode == CLEANUP_THROW) {
-                int base = IR_B(words[i]), dst = IR_A(words[i]);
-                int count = _PyIR_CompletionWindow(opcode);
-                if (dst != IR_NO_DST && dst >= nl && dst < floor &&
-                    (dst < base || dst >= base + count))
-                {
-                    goto invalid;
-                }
-                int safe = completion_handler_safe(con, &edges, target, slot,
-                                                   slot_lasti & 1, base, count);
-                if (safe < 0) {
-                    completion_edges_free(&edges);
-                    return -1;
-                }
-                if (!safe) {
-                    goto invalid;
-                }
-            }
-        }
-    }
-    completion_edges_free(&edges);
-    return 0;
-invalid:
-    completion_edges_free(&edges);
-    PyErr_Format(PyExc_ValueError,
-                 "code: invalid semantic completion window or handler (%U:%d)",
-                 con->qualname, con->firstlineno);
-    return -1;
-}
-
-static int
-validate_code_structure(struct _PyCodeConstructor *con)
+int
+_PyCode_Validate(struct _PyCodeConstructor *con)
 {
     /* Check argument types */
     if (con->argcount < con->posonlyargcount || con->posonlyargcount < 0 ||
@@ -1564,24 +473,10 @@ validate_code_structure(struct _PyCodeConstructor *con)
                         "code: co_code larger than INT_MAX");
         return -1;
     }
-    if (PyBytes_GET_SIZE(con->code) % sizeof(_PyIRWord) != 0) {
+    if (PyBytes_GET_SIZE(con->code) % sizeof(_Py_CODEUNIT) != 0 ||
+        !_Py_IS_ALIGNED(PyBytes_AS_STRING(con->code), sizeof(_Py_CODEUNIT))
+        ) {
         PyErr_SetString(PyExc_ValueError, "code: co_code is malformed");
-        return -1;
-    }
-    Py_ssize_t nlocalsplus = PyTuple_GET_SIZE(con->localsplusnames);
-    if (nlocalsplus > IR_MAX_SLOTS ||
-        Py_MAX(con->stacksize, 1) > IR_MAX_SLOTS - nlocalsplus)
-    {
-        PyErr_SetString(PyExc_ValueError, "code: frame exceeds register limit");
-        return -1;
-    }
-    if (con->fbinit != NULL
-        && (!PyBytes_Check(con->fbinit) || !fbinit_is_valid(con->fbinit)))
-    {
-        PyErr_SetString(PyExc_ValueError, "code: co_fbinit is malformed");
-        return -1;
-    }
-    if (check_constslots(con) < 0) {
         return -1;
     }
 
@@ -1600,43 +495,14 @@ validate_code_structure(struct _PyCodeConstructor *con)
         PyErr_SetString(PyExc_ValueError, "code: co_varnames is too small");
         return -1;
     }
-    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
-    Py_ssize_t nwords = PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord);
-    for (Py_ssize_t i = 0; i < nwords; i++) {
-        int handler = IR_HANDLER(words[i]);
-        if (handler >= IR_NUM_HANDLERS || !(_PyIR_FormatOf(handler)->flags & _PyIR_VALID) ||
-            !_PyIR_CanonicalFlagsValid(words[i])) {
-            PyErr_SetString(PyExc_ValueError, "code: invalid executable handler");
-            return -1;
-        }
-        if (_PyIR_FormatOf(handler)->effects & _PyIR_NATIVE_ONLY) {
-            PyErr_SetString(PyExc_ValueError, "code: native-only executable handler");
-            return -1;
-        }
-        if (_PyIR_FormatOf(handler)->effects & _PyIR_LEARNED_ONLY) {
-            PyErr_SetString(PyExc_ValueError, "code: learned-only executable handler");
-            return -1;
-        }
-        if (handler == NOP) {
-            PyErr_SetString(PyExc_ValueError,
-                            "code: empty or release-only executable instruction");
-            return -1;
-        }
-    }
+
+    /* The register IR has fixed-width fields: the frame of the code
+     * lowered from this stack bytecode is checked when it first runs. */
     return 0;
 }
 
-#ifdef Py_GIL_DISABLED
-static _PyCodeArray * _PyCodeArray_New(Py_ssize_t size);
-
-/* Free a thread-local copy of the bytecode of CO, with its poly tables. */
-static void
-free_bytecode_copy(PyCodeObject *co, char *bytecode)
-{
-    PyMem_Free(bytecode);
-}
-#endif
-
+/* The register IR (co->_co_ir) and the frame size, which depends on it, are
+ * made by _PyCode_GetExec() when the code first runs. */
 static int
 init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
 {
@@ -1677,7 +543,7 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
     /* derived values */
     co->co_nlocalsplus = nlocalsplus;
     co->co_nlocals = nlocals;
-    co->co_framesize = nlocalsplus + con->stacksize + FRAME_SPECIALS_SIZE;
+    co->co_framesize = 0;
     co->co_ncellvars = ncellvars;
     co->co_nfreevars = nfreevars;
     FT_MUTEX_LOCK(&interp->func_state.mutex);
@@ -1692,41 +558,11 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
     co->co_weakreflist = NULL;
     co->co_extra = NULL;
     co->_co_cached = NULL;
-
-    memcpy(co->co_words, PyBytes_AS_STRING(con->code),
-           PyBytes_GET_SIZE(con->code));
-    co->co_nfeedback = 0;
-    if (con->fbinit != NULL && PyBytes_GET_SIZE(con->fbinit)) {
-        co->co_nfeedback = (int)(PyBytes_GET_SIZE(con->fbinit) / sizeof(uint32_t));
-        memcpy((uint32_t *)_PyCode_FBINIT(co), PyBytes_AS_STRING(con->fbinit),
-               PyBytes_GET_SIZE(con->fbinit));
-    }
-    co->co_nconstslots = 0;
-    if (con->constslots != NULL && PyBytes_GET_SIZE(con->constslots)) {
-        Py_ssize_t size = PyBytes_GET_SIZE(con->constslots);
-        co->co_nconstslots = (int)(size / (2 * sizeof(uint32_t)));
-        memcpy((uint32_t *)_PyCode_CONSTSLOTS(co),
-               PyBytes_AS_STRING(con->constslots), size);
-    }
+    co->_co_ir = NULL;
     co->_co_exec = NULL;
-#ifdef Py_GIL_DISABLED
-    co->co_tlbc = _PyCodeArray_New(INITIAL_SPECIALIZED_CODE_SIZE);
-    if (co->co_tlbc == NULL) {
-        return -1;
-    }
-    co->co_tlbc->entries[0] = (char *)co->co_words;
-#endif
-    int entry_point = 0;
-    while (entry_point < Py_SIZE(co)) {
-        if (_PyCode_InstrHandler(co, entry_point) == RESUME &&
-           (_PyCode_InstrOparg(co, entry_point) & RESUME_OPARG_LOCATION_MASK) != RESUME_AT_GEN_EXPR_START
-        ) {
-            break;
-        }
-        entry_point++;
-    }
-    co->_co_firsttraceable = entry_point;
 
+    memcpy(_PyCode_CODE(co), PyBytes_AS_STRING(con->code),
+           PyBytes_GET_SIZE(con->code));
     notify_code_watchers(PY_CODE_EVENT_CREATE, co);
     return 0;
 }
@@ -1783,20 +619,13 @@ static PyObject *
 remove_column_info(PyObject *locations)
 {
     Py_ssize_t offset = 0;
-    _PyIRPositions source;
-    if (_PyIRPositions_Decode(PyBytes_AS_STRING(locations),
-                          PyBytes_GET_SIZE(locations), &source) < 0)
-    {
-        PyErr_SetString(PyExc_ValueError, "code: malformed source map");
-        return NULL;
-    }
-    const uint8_t *data = source.locations;
+    const uint8_t *data = (const uint8_t *)PyBytes_AS_STRING(locations);
     PyBytesWriter *res = PyBytesWriter_Create(32);
     if (res == NULL) {
         return NULL;
     }
     uint8_t *output = (uint8_t *)PyBytesWriter_GetData(res);
-    while (offset < source.locations_size) {
+    while (offset < PyBytes_GET_SIZE(locations)) {
         Py_ssize_t write_offset = output - (uint8_t *)PyBytesWriter_GetData(res);
         if (write_offset + 16 >= PyBytesWriter_GetSize(res)) {
             if (PyBytesWriter_Resize(res, PyBytesWriter_GetSize(res) * 2) < 0) {
@@ -1817,30 +646,12 @@ remove_column_info(PyObject *locations)
             output += write_signed_varint(output, ldelta);
         }
         offset++;
-        while (offset < source.locations_size &&
+        while (offset < PyBytes_GET_SIZE(locations) &&
             (data[offset] & 128) == 0) {
             offset++;
         }
     }
-    PyObject *body = PyBytesWriter_FinishWithPointer(res, output);
-    if (body == NULL) {
-        return NULL;
-    }
-    PyObject *result = _PyIRPositions_Pack(
-        (const unsigned char *)PyBytes_AS_STRING(body),
-        (uint32_t)PyBytes_GET_SIZE(body), source.records, source.nrecords);
-    Py_DECREF(body);
-    if (result != NULL) {
-        _PyIRPositions stripped = _PyIRPositions_Stored(result);
-        for (uint32_t i = 0; i < stripped.nrecords; i++) {
-            _PyIRPosition event;
-            _PyIRPositions_Event(&stripped, i, &event);
-            event.column = event.end_column = -1;
-            _PyIRPositions_EncodeEvent((unsigned char *)stripped.records +
-                                     i * _PyIR_POSITION_RECORD, &event);
-        }
-    }
-    return result;
+    return PyBytesWriter_FinishWithPointer(res, output);
 }
 
 static int
@@ -1868,63 +679,36 @@ error:
     return -1;
 }
 
-/* Only the common admission boundary below calls this allocator. Its private
- * constructor may be adjusted while normalizing locations and frame size. */
-static PyCodeObject *
-new_code(struct _PyCodeConstructor *con)
+PyCodeObject *
+_PyCode_New(struct _PyCodeConstructor *con)
 {
     if (intern_code_constants(con) < 0) {
         return NULL;
     }
 
-    _PyIRPositions source;
-    int source_format = _PyIRPositions_Decode(PyBytes_AS_STRING(con->linetable),
-                                          PyBytes_GET_SIZE(con->linetable), &source);
-    if (source_format < 0) {
-        PyErr_SetString(PyExc_ValueError, "code: malformed source map");
-        return NULL;
-    }
-    PyObject *replacement_locations = source_format
-        ? Py_NewRef(con->linetable)
-        : normalize_positions(&source,
-            (uint32_t)(PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord)));
-    if (replacement_locations == NULL) {
-        return NULL;
-    }
-    con->linetable = replacement_locations;
+    PyObject *replacement_locations = NULL;
     // Compact the linetable if we are opted out of debug
     // ranges.
     if (!_Py_GetConfig()->code_debug_ranges) {
-        PyObject *stripped = remove_column_info(con->linetable);
-        if (stripped == NULL) {
-            Py_DECREF(replacement_locations);
+        replacement_locations = remove_column_info(con->linetable);
+        if (replacement_locations == NULL) {
             return NULL;
         }
-        Py_SETREF(replacement_locations, stripped);
         con->linetable = replacement_locations;
     }
 
-    Py_ssize_t size = PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord);
-    // The feedback table follows the words, two entries to an item
-    Py_ssize_t nfb = con->fbinit != NULL
-        ? PyBytes_GET_SIZE(con->fbinit) / (Py_ssize_t)sizeof(uint32_t) : 0;
-    // The constant-slot table follows, two entries to an item
-    Py_ssize_t nconstslots = con->constslots != NULL
-        ? PyBytes_GET_SIZE(con->constslots) / (Py_ssize_t)sizeof(uint32_t) / 2
-        : 0;
-    Py_ssize_t nitems = size + (nfb + 1) / 2 + nconstslots;
+    Py_ssize_t size = PyBytes_GET_SIZE(con->code) / sizeof(_Py_CODEUNIT);
     PyCodeObject *co;
 #ifdef Py_GIL_DISABLED
-    co = PyObject_GC_NewVar(PyCodeObject, &PyCode_Type, nitems);
+    co = PyObject_GC_NewVar(PyCodeObject, &PyCode_Type, size);
 #else
-    co = PyObject_NewVar(PyCodeObject, &PyCode_Type, nitems);
+    co = PyObject_NewVar(PyCodeObject, &PyCode_Type, size);
 #endif
     if (co == NULL) {
         Py_XDECREF(replacement_locations);
         PyErr_NoMemory();
         return NULL;
     }
-    Py_SET_SIZE(co, size);
 
 #ifdef Py_GIL_DISABLED
     co->_co_unique_id = _Py_INVALID_UNIQUE_ID;
@@ -1948,45 +732,6 @@ new_code(struct _PyCodeConstructor *con)
 /******************
  * the legacy "constructors"
  ******************/
-
-/* Whether the inline constant handler of word fits the constant it names */
-static int
-inline_const_fits(_PyIRWord word, PyObject *consts)
-{
-    Py_ssize_t index = _PyIR_FieldOparg(word);
-    if (index >= PyTuple_GET_SIZE(consts)) {
-        return 0;
-    }
-    PyValueBorrow value = PyTuple_GET_VALUE(consts, index);
-    if (IR_HANDLER(word) == LOAD_CONST_INLINE_INT) {
-        return PyValue_IsInlineInt(value);
-    }
-    return PyValue_IsInlineFloat(value);
-}
-
-static int
-fb_field_is_valid(const _PyIRFormat *fmt, int handler, uint32_t unit,
-                  const uint32_t *table, int nfb)
-{
-    if (nfb == 0) {
-        return 0;
-    }
-    if (unit == 0) {
-        // A fused word keeps its operation in its entry too
-        return !((fmt->imm == _PyIR_LOC_FBARG
-                  && !(handler >= _PyIR_BINARY_OP_FIRST
-                       && handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST))
-                 || (fmt->flags & _PyIR_FUSED));
-    }
-    int i = _PyIR_FbFind(table, nfb, unit);
-    if (i < 0) {
-        return 0;
-    }
-    uint32_t end = i + 1 < nfb ? _PyIR_FBINIT_UNIT(table[i + 1])
-                               : _PyIR_FBINIT_ARG(table[0]);
-    return _PyIR_FBINIT_KIND(table[i]) == fmt->fb_kind &&
-           (end - unit) * 8 >= fmt->fb_size;
-}
 
 /* Only after structural/feedback-domain admission. Pinned binary handlers
  * encode the operation in their handler number; other FBARG forms use the
@@ -2033,369 +778,6 @@ is_delegated_yield_handler(int handler)
     }
     return boundary->ordinary == YIELD_DELEGATED ||
            boundary->ordinary == INSTRUMENTED_YIELD_DELEGATED;
-}
-
-/* Mark the operand words that call heads claim, with 1, in a new array of
- * nwords bytes, which *marks receives: NULL if no head has any.  Returns -1
- * with an exception set if a head claims words past the end.  A walker steps
- * from head to head by _PyIR_WordLength(); the marks are for the checks that
- * start from an index, a jump target or the end of an exception range. */
-static int
-mark_operand_words(const char *bytes, Py_ssize_t nwords, unsigned char **marks)
-{
-    *marks = NULL;
-    for (Py_ssize_t i = 0; i < nwords;) {
-        _PyIRWord word;
-        memcpy(&word, bytes + i * sizeof(_PyIRWord), sizeof(word));
-        Py_ssize_t length = _PyIR_WordLength(word);
-        if (length > nwords - i) {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %zd has operand words past the end", i);
-            goto error;
-        }
-        if (length > 1) {
-            if (*marks == NULL) {
-                *marks = PyMem_Calloc((size_t)nwords, 1);
-                if (*marks == NULL) {
-                    PyErr_NoMemory();
-                    return -1;
-                }
-            }
-            memset(*marks + i + 1, 1, (size_t)(length - 1));
-        }
-        i += length;
-    }
-    return 0;
-error:
-    PyMem_Free(*marks);
-    *marks = NULL;
-    return -1;
-}
-
-/* The operand words of the call head at index i, which has length - 1 of
- * them: handler IR_OPERANDS and no flags, the first n fields (n is the C
- * field of the head) name slots of the frame, unused fields hold
- * IR_FIELD_MAX, and no operand names a cell or a free variable, since
- * only a load of one reads it (a local that is also a cell is the variable
- * of an inlined comprehension).  The last operand of a CALL_KW is the index of
- * its names in co_consts. */
-static int
-check_operand_words(struct _PyCodeConstructor *con, const char *bytes,
-                    Py_ssize_t i, _PyIRWord head, int nslots)
-{
-    int n = (int)IR_C(head);
-    int nwords_operand = _PyIR_WordLength(head) - 1;
-    int has_names = _PyIR_BaseOpcode(IR_HANDLER(head)) == CALL_KW;
-    if (has_names && n < 1) {
-        PyErr_Format(PyExc_ValueError,
-                     "code: word %zd needs the names of its keywords", i);
-        return -1;
-    }
-    for (int k = 0; k < nwords_operand * IR_OPERANDS_PER_WORD; k++) {
-        if (k % IR_OPERANDS_PER_WORD == 0) {
-            _PyIRWord word;
-            memcpy(&word, bytes + (i + 1 + k / IR_OPERANDS_PER_WORD) * sizeof(_PyIRWord),
-                   sizeof(word));
-            if (IR_HANDLER(word) != IR_OPERANDS || IR_FLAGS(word) != 0) {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %zd has no operand word at %zd", i,
-                             i + 1 + k / IR_OPERANDS_PER_WORD);
-                return -1;
-            }
-        }
-        _PyIRWord word;
-        memcpy(&word, bytes + (i + 1 + k / IR_OPERANDS_PER_WORD) * sizeof(_PyIRWord),
-               sizeof(word));
-        uint32_t value = (uint32_t)(word >> (16 + 12 * (k % IR_OPERANDS_PER_WORD)))
-                         & IR_FIELD_MAX;
-        if (k >= n) {
-            if (value != IR_FIELD_MAX) {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %zd has an unused operand that is not empty", i);
-                return -1;
-            }
-            continue;
-        }
-        if (has_names && k == n - 1) {
-            if (value >= (uint32_t)PyTuple_GET_SIZE(con->consts)) {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %zd has an invalid constant index", i);
-                return -1;
-            }
-            continue;
-        }
-        if (value >= (uint32_t)nslots) {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %zd has an operand at slot %u of %d", i,
-                         value, nslots);
-            return -1;
-        }
-        /* A slot that is both a local and a cell is the variable of an
-         * inlined comprehension that a closure of the function also
-         * captures: inside the comprehension it holds the plain value. */
-        int kind = value < (uint32_t)PyTuple_GET_SIZE(con->localsplusnames)
-            ? _PyLocals_GetKind(con->localspluskinds, (int)value) : 0;
-        if ((kind & CO_FAST_FREE) ||
-            (kind & (CO_FAST_LOCAL | CO_FAST_CELL)) == CO_FAST_CELL)
-        {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %zd has a cell or free variable as an operand", i);
-            return -1;
-        }
-    }
-    return 0;
-}
-
-/* The words to use, a new reference: the code itself, or a copy whose inline
- * constant handlers that no longer fit their constant run LOAD_CONST, as
- * after code.replace(co_consts=...). */
-static PyObject *
-fit_inline_constants(struct _PyCodeConstructor *con)
-{
-    PyObject *code = con->code;
-    PyObject *result = Py_NewRef(code);
-    const char *bytes = PyBytes_AS_STRING(code);
-    Py_ssize_t nwords = PyBytes_GET_SIZE(code) / (Py_ssize_t)sizeof(_PyIRWord);
-    for (Py_ssize_t i = 0; i < nwords; i++) {
-        _PyIRWord word;
-        memcpy(&word, bytes + i * sizeof(_PyIRWord), sizeof(word));
-        int handler = IR_HANDLER(word);
-        if ((handler != LOAD_CONST_INLINE_INT &&
-             handler != LOAD_CONST_INLINE_FLOAT) ||
-            inline_const_fits(word, con->consts))
-        {
-            continue;
-        }
-        if (result == code) {
-            Py_SETREF(result, PyBytes_FromStringAndSize(
-                PyBytes_AS_STRING(code), PyBytes_GET_SIZE(code)));
-            if (result == NULL) {
-                return NULL;
-            }
-        }
-        _PyIR_SetHandler(&word, LOAD_CONST);
-        memcpy(PyBytes_AS_STRING(result) + i * sizeof(_PyIRWord), &word,
-               sizeof(word));
-    }
-    return result;
-}
-
-/* Check the fields of every admitted image that the
- * interpreter uses as indices without checking them: each handler exists,
- * each slot is in the frame, and each feedback index has an entry, which
- * for an operand kept in the entry is not the shared entry 0.  The compiler
- * produces such images; this guards against hand-built code. */
-static int
-check_words(struct _PyCodeConstructor *con)
-{
-    PyObject *code = con->code;
-    PyObject *fbinit = con->fbinit;
-    PyObject *consts = con->consts;
-    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
-    int nslots = nl + Py_MAX(con->stacksize, 1);
-    int nfreevars;
-    get_localsplus_counts(con->localsplusnames, con->localspluskinds,
-                          NULL, NULL, &nfreevars);
-    const char *bytes = PyBytes_AS_STRING(code);
-    Py_ssize_t nwords = PyBytes_GET_SIZE(code) / (Py_ssize_t)sizeof(_PyIRWord);
-    const uint32_t *table = fbinit == NULL ? NULL
-        : (const uint32_t *)PyBytes_AS_STRING(fbinit);
-    int nfb = fbinit == NULL ? 0
-        : (int)(PyBytes_GET_SIZE(fbinit) / (Py_ssize_t)sizeof(uint32_t));
-    unsigned char *operand_words;
-    if (mark_operand_words(bytes, nwords, &operand_words) < 0) {
-        return -1;
-    }
-    // Each step is one instruction: a call head takes its operand words
-    for (Py_ssize_t i = 0, length; i < nwords; i += length) {
-        _PyIRWord word;
-        memcpy(&word, bytes + i * sizeof(_PyIRWord), sizeof(word));
-        length = _PyIR_WordLength(word);
-        int handler = IR_HANDLER(word);
-        if (handler >= IR_NUM_HANDLERS
-            || !(_PyIR_Formats[handler].flags & _PyIR_VALID))
-        {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %zd has no handler %d", i, handler);
-            goto error;
-        }
-        if (!_PyIR_CanonicalFlagsValid(word)) {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %zd has invalid flags 0x%x for handler %d",
-                         i, IR_FLAGS(word), handler);
-            goto error;
-        }
-        if (handler == IR_OPERANDS) {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %zd is an operand word that no call claims", i);
-            goto error;
-        }
-        if (length > 1 && check_operand_words(con, bytes, i, word, nslots) < 0) {
-            goto error;
-        }
-        const _PyIRFormat *fmt = &_PyIR_Formats[handler];
-        int base = -1, dst = -1;
-        if (is_delegated_yield_handler(handler) &&
-            (i + 1 >= nwords || IR_D(word) == IR_A(word) || IR_D(word) == IR_B(word)))
-        {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %zd has invalid delegated suspension operands", i);
-            goto error;
-        }
-        for (int k = 0; k < 4; k++) {
-            int role = fmt->roles[k];
-            uint32_t value = (uint32_t)(word >> (16 + 12 * k)) & IR_FIELD_MAX;
-            if (role == _PyIR_ROLE_BASE) {
-                base = (int)value;
-            }
-            else if (role == _PyIR_ROLE_DST) {
-                dst = (int)value;
-            }
-            if (role == _PyIR_ROLE_DST && value == IR_NO_DST
-                && (fmt->flags & (_PyIR_DISCARDS | _PyIR_UNPACKS)))
-            {
-                continue;
-            }
-            if ((role == _PyIR_ROLE_DST || role == _PyIR_ROLE_BASE
-                 || role >= _PyIR_ROLE_IN0) && value >= (uint32_t)nslots)
-            {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %zd names slot %u of %d", i, value,
-                             nslots);
-                goto error;
-            }
-            if (role >= _PyIR_ROLE_LOCAL_IN && role <= _PyIR_ROLE_CELL &&
-                value >= (uint32_t)nl)
-            {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %zd names local slot %u of %d", i,
-                             value, nl);
-                goto error;
-            }
-            if (role >= _PyIR_ROLE_IN0 && value < (uint32_t)nl &&
-                !(fmt->borrow_mask & (1u << (role - _PyIR_ROLE_IN0))))
-            {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %zd cannot borrow local slot %u", i, value);
-                goto error;
-            }
-            // The field is the unit of an entry that fits the handler's
-            // type; 0 is the shared header, which only a handler with no
-            // operand in its entry can use.
-            if (role == _PyIR_ROLE_FB && !fb_field_is_valid(fmt, handler, value,
-                                                            table, nfb))
-            {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %zd has no feedback entry %u", i,
-                             value);
-                goto error;
-            }
-        }
-        int arg = admitted_word_arg(word, table, nfb);
-        int reads = _PyIR_Extent(fmt->reads, arg);
-        int writes = _PyIR_Extent(fmt->writes, arg);
-        int through = _PyIR_Extent(fmt->through, arg);
-        if (reads < 0 || writes < 0 || through < 0 || through > reads ||
-            through > writes ||
-            (base >= 0 && (base < nl ||
-                          base > nslots - Py_MAX(reads, writes))))
-        {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %zd has an invalid register window", i);
-            goto error;
-        }
-        int outputs = writes - through;
-        int result_offset = normal_window_result_offset(fmt);
-        if (result_offset >= 0 && dst >= nl && dst != IR_NO_DST &&
-            dst != base + result_offset)
-        {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %zd has an invalid window result destination", i);
-            goto error;
-        }
-        if ((fmt->transfer_kind == _PyIR_TRANSFER_COPY && arg < 1) ||
-            (fmt->transfer_kind == _PyIR_TRANSFER_SWAP && arg < 2))
-        {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %zd has invalid transfer operands", i);
-            goto error;
-        }
-        if ((fmt->flags & _PyIR_UNPACKS) && dst != IR_NO_DST) {
-            if (dst < 0 || dst >= nl || outputs > nl - dst) {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %zd has an invalid unpack local window", i);
-                goto error;
-            }
-        }
-        else if (fmt->output_kind == _PyIR_OUTPUT_REGISTER_DST && outputs > 0) {
-            if ((dst == IR_NO_DST && outputs != 1) ||
-                (dst != IR_NO_DST &&
-                 (dst < 0 || outputs > nslots - dst ||
-                  (dst < nl && (!(fmt->flags & _PyIR_STORE_DST) || outputs != 1)))))
-            {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %zd has an invalid output window", i);
-                goto error;
-            }
-        }
-        if (fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD | _PyIR_NAMES_TARGET)) {
-            Py_ssize_t target = fmt->flags & _PyIR_FORWARD ? i + 1 + arg : arg;
-            if (target < 0 || target >= nwords ||
-                (operand_words != NULL && operand_words[target]))
-            {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %zd has an invalid branch target", i);
-                goto error;
-            }
-        }
-        int opcode = _PyIR_BaseOpcode(handler);
-        if ((opcode == YIELD_VALUE || opcode == INSTRUMENTED_YIELD_VALUE) &&
-            !is_delegated_yield_handler(handler) && arg != 0)
-        {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %zd needs an explicit delegated yield", i);
-            goto error;
-        }
-        if (opcode == COPY_FREE_VARS && arg != nfreevars) {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %zd has an invalid free-variable count", i);
-            goto error;
-        }
-        if ((opcode == LOAD_COMMON_CONSTANT && arg >= NUM_COMMON_CONSTANTS) ||
-            (opcode == LOAD_SMALL_INT && arg >= _PY_NSMALLPOSINTS))
-        {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %zd has an invalid constant index", i);
-            goto error;
-        }
-        if (OPCODE_HAS_CONST(opcode) &&
-            (arg < 0 || arg >= PyTuple_GET_SIZE(consts)))
-        {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %zd has an invalid constant index", i);
-            goto error;
-        }
-        if (OPCODE_HAS_NAME(opcode)) {
-            int index = arg;
-            if (opcode == LOAD_GLOBAL || opcode == LOAD_ATTR) {
-                index >>= 1;
-            }
-            else if (opcode == LOAD_SUPER_ATTR || opcode == IMPORT_NAME) {
-                index >>= 2;
-            }
-            if (index < 0 || index >= PyTuple_GET_SIZE(con->names)) {
-                PyErr_Format(PyExc_ValueError,
-                             "code: word %zd has an invalid name index", i);
-                goto error;
-            }
-        }
-    }
-    PyMem_Free(operand_words);
-    return 0;
-
-error:
-    PyMem_Free(operand_words);
-    return -1;
 }
 
 typedef struct {
@@ -3540,7 +1922,7 @@ semantic_has_exceptional_predecessor(const semantic_image *image, int pc)
 
 static int
 normal_transfer_proof(const semantic_image *image,
-                      const _PyIRCodePlan **plan, PyObject **normalized)
+                      const _PyIRCodePlan **plan, _PyIRWord **normalized)
 {
     assert(plan == NULL || normalized == NULL);
     if (normalized != NULL) {
@@ -3856,23 +2238,22 @@ normal_transfer_proof(const semantic_image *image,
                     break;
                 }
                 if (normalized != NULL && !semantic_empty_return(handler) && empty) {
-                    /* Constructor bytes may be borrowed from the caller.
-                     * Copy only when a stable proof first selects a fast form;
+                    /* Copy only when a stable proof first selects a fast form;
                      * all remaining proofs still inspect the original image. */
                     if (*normalized == NULL) {
-                        *normalized = PyBytes_FromStringAndSize((const char *)words,
-                            (Py_ssize_t)n * sizeof(*words));
+                        *normalized = PyMem_Malloc((size_t)n * sizeof(*words));
                         if (*normalized == NULL) {
+                            PyErr_NoMemory();
                             result = -1;
                             break;
                         }
+                        memcpy(*normalized, words, (size_t)n * sizeof(*words));
                     }
                     int selected = handler == RETURN_VALUE ? RETURN_VALUE_EMPTY :
                         INSTRUMENTED_RETURN_VALUE_EMPTY;
                     _PyIRWord selected_word = words[i];
                     _PyIR_SetHandler(&selected_word, selected);
-                    memcpy(PyBytes_AS_STRING(*normalized) + (size_t)i * sizeof(*words),
-                           &selected_word, sizeof(selected_word));
+                    (*normalized)[i] = selected_word;
                 }
             }
             if (plan != NULL) {
@@ -3930,7 +2311,8 @@ normal_transfer_proof(const semantic_image *image,
     }
 done:
     if (result < 0 && normalized != NULL) {
-        Py_CLEAR(*normalized);
+        PyMem_Free(*normalized);
+        *normalized = NULL;
     }
     PyMem_Free(source_links);
     PyMem_Free(handlers);
@@ -3942,62 +2324,27 @@ done:
     return result;
 }
 
-static int
-validate_normal_transfers(struct _PyCodeConstructor *con, PyObject **normalized)
+/* The semantic image of the IR of a code object */
+static semantic_image
+code_semantic_image(const _PyCodeIR *ir)
 {
-    semantic_image image = {
-        .words = (const _PyIRWord *)PyBytes_AS_STRING(con->code),
-        .n = (int)(PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord)),
-        .nl = (int)PyTuple_GET_SIZE(con->localsplusnames),
-        .scratch = Py_MAX(con->stacksize, 1),
-        .fbinit = con->fbinit == NULL ? NULL :
-            (const uint32_t *)PyBytes_AS_STRING(con->fbinit),
-        .nfb = con->fbinit == NULL ? 0 :
-            (int)(PyBytes_GET_SIZE(con->fbinit) / sizeof(uint32_t)),
-        .semantic = _PyIRSemantic_Stored(con->exceptiontable),
+    return (semantic_image){
+        .words = ir->words,
+        .n = (int)ir->nwords,
+        .nl = (int)ir->nfixed,
+        .scratch = (int)(ir->nslots - ir->nfixed),
+        .fbinit = ir->fbinit,
+        .nfb = (int)ir->nfeedback,
+        .semantic = {ir->exceptions, ir->nexceptions, ir->records,
+                     ir->nrecords},
     };
-    int result = normal_transfer_proof(&image, NULL, normalized);
-    if (result < 0 && PyErr_ExceptionMatches(PyExc_ValueError)) {
-        _PyErr_FormatNote("while admitting %U (%U)", con->qualname, con->filename);
-    }
-    return result;
-}
-
-/* The semantic image of an admitted code object. Public zero-stack images
- * reserve one physical scratch home. Keep that same domain in the proof; a
- * differently shaped static image has no certificate rather than silently
- * discarding its physical tail. Returns 0 for no image. */
-static int
-code_semantic_image(PyCodeObject *co, semantic_image *image)
-{
-    int nl = co->co_nlocalsplus;
-    int scratch = Py_MAX(co->co_stacksize, 1);
-    int limit = _PyFrame_NumSlotsForCodeObject(co);
-    if (nl < 0 || nl > IR_MAX_SLOTS || scratch > IR_MAX_SLOTS - nl ||
-        limit != nl + scratch)
-    {
-        return 0;
-    }
-    *image = (semantic_image){
-        .words = _PyCode_WORDS(co),
-        .n = (int)Py_SIZE(co),
-        .nl = nl,
-        .scratch = scratch,
-        .fbinit = _PyCode_FBINIT(co),
-        .nfb = co->co_nfeedback,
-        .semantic = _PyIRSemantic_Stored(co->co_exceptiontable),
-    };
-    return 1;
 }
 
 int
 _PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan)
 {
     *plan = NULL;
-    semantic_image image;
-    if (!code_semantic_image(co, &image)) {
-        return 0;
-    }
+    semantic_image image = code_semantic_image(_PyCode_IR(co));
     return normal_transfer_proof(&image, plan, NULL);
 }
 
@@ -4010,118 +2357,28 @@ _PyCode_FreeSemanticPlan(const _PyIRCodePlan *plan)
     }
 }
 
+/* Select the empty form of each return that leaves no scratch owner, in the
+ * words of ir, which is not yet published. */
 int
-_PyCode_SelectEmptyReturns(PyCodeObject *co, PyObject **words)
+_PyIR_SelectEmptyReturns(_PyCodeIR *ir)
 {
-    *words = NULL;
-    semantic_image image;
-    if (!code_semantic_image(co, &image)) {
-        return 0;
-    }
-    return normal_transfer_proof(&image, NULL, words);
-}
-
-static int
-validate_generator_boundaries(struct _PyCodeConstructor *con)
-{
-    const _PyIRWord *words = (const _PyIRWord *)PyBytes_AS_STRING(con->code);
-    int nwords = (int)(PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord));
-    int nl = (int)PyTuple_GET_SIZE(con->localsplusnames);
-    for (int pc = 0; pc < nwords; pc++) {
-        int handler = IR_HANDLER(words[pc]);
-        const _PyIRGeneratorBoundary *boundary =
-            _PyIR_GeneratorBoundaryOf(handler);
-        if (boundary == NULL || !(boundary->flags & _PyIR_GEN_BOUNDARY_PLACED)) {
-            continue;
-        }
-#ifdef Py_GIL_DISABLED
-        PyErr_SetString(PyExc_ValueError,
-                        "code: generator boundary placement requires the GIL");
+    semantic_image image = code_semantic_image(ir);
+    _PyIRWord *normalized = NULL;
+    if (normal_transfer_proof(&image, NULL, &normalized) < 0) {
         return -1;
-#else
-        if (!_PyIR_CheckGeneratorBoundary(words, nwords, nl, pc, handler)) {
-            PyErr_Format(PyExc_ValueError,
-                         "code: word %d has an incomplete generator boundary", pc);
-            return -1;
-        }
-#endif
+    }
+    if (normalized != NULL) {
+        memcpy(ir->words, normalized, (size_t)ir->nwords * sizeof(_PyIRWord));
+        PyMem_Free(normalized);
     }
     return 0;
 }
 
-/* The normalized words and all semantic proofs refer to the same immutable
- * image. A caller's constructor and borrowed input references stay unchanged.
- *
- * Release builds trust the words they are given, as they trust the code of
- * a C extension: the passes that re-derive the compiler's guarantees cost
- * several times the rest of construction, and guard only against hand-built
- * code and corrupt .pyc files. Only the compiler's selection of empty
- * returns is needed to run. */
-static PyObject *
-validate_semantic_image(struct _PyCodeConstructor *con)
-{
-    if (validate_code_structure(con) < 0) {
-        return NULL;
-    }
-    int validate = code_validation_enabled();
-    if (validate && check_words(con) < 0) {
-        return NULL;
-    }
-    PyObject *words = fit_inline_constants(con);
-    if (words == NULL) {
-        return NULL;
-    }
-    struct _PyCodeConstructor checked = *con;
-    checked.code = words;
-    PyObject *normalized = NULL;
-    if ((validate &&
-         (validate_semantic_and_position_maps(&checked) < 0 ||
-          validate_completion_words(&checked) < 0 ||
-          validate_virtual_kwargs(&checked) < 0 ||
-          validate_generator_boundaries(&checked) < 0)) ||
-        ((validate || con->select_returns) &&
-         validate_normal_transfers(&checked,
-             con->select_returns ? &normalized : NULL) < 0))
-    {
-        Py_DECREF(words);
-        return NULL;
-    }
-    if (normalized != NULL) {
-        Py_SETREF(words, normalized);
-        checked.code = words;
-        if (validate && validate_generator_boundaries(&checked) < 0) {
-            Py_DECREF(words);
-            return NULL;
-        }
-    }
-    return words;
-}
-
 PyCodeObject *
-_PyCode_New(struct _PyCodeConstructor *con)
-{
-    PyObject *words = validate_semantic_image(con);
-    if (words == NULL) {
-        return NULL;
-    }
-    struct _PyCodeConstructor checked = *con;
-    checked.code = words;
-    PyCodeObject *co = new_code(&checked);
-    Py_DECREF(words);
-    return co;
-}
-
-/* As PyUnstable_Code_NewWithPosOnlyArgs(), with the feedback table of the
- * words in fbinit, or NULL for none, and the constant-slot table in
- * constslots, or NULL for none: the constructor adds its hidden slots to
- * localsplus, between the cells and the free variables. */
-static PyCodeObject *
-code_new_with_fbinit(
+PyUnstable_Code_NewWithPosOnlyArgs(
                           int argcount, int posonlyargcount, int kwonlyargcount,
                           int nlocals, int stacksize, int flags,
-                          PyObject *code, PyObject *fbinit,
-                          PyObject *constslots,
-                          PyObject *consts, PyObject *names,
+                          PyObject *code, PyObject *consts, PyObject *names,
                           PyObject *varnames, PyObject *freevars, PyObject *cellvars,
                           PyObject *filename, PyObject *name,
                           PyObject *qualname, int firstlineno,
@@ -4131,7 +2388,6 @@ code_new_with_fbinit(
     PyCodeObject *co = NULL;
     PyObject *localsplusnames = NULL;
     PyObject *localspluskinds = NULL;
-    PyObject *padded = NULL;
 
     if (varnames == NULL || !PyTuple_Check(varnames) ||
         cellvars == NULL || !PyTuple_Check(cellvars) ||
@@ -4141,42 +2397,11 @@ code_new_with_fbinit(
         return NULL;
     }
 
-    if (validate_code_name_tuple(varnames) < 0 ||
-        validate_code_name_tuple(cellvars) < 0 ||
-        validate_code_name_tuple(freevars) < 0) {
-        return NULL;
-    }
-
-    // Extensions built for 2-byte code units, such as Cython's, pass zeroed
-    // code that never runs and only spans the line table.  Pad it to whole
-    // words, which are CACHE.
-    if (code != NULL && PyBytes_Check(code)
-        && PyBytes_GET_SIZE(code) % (Py_ssize_t)sizeof(_PyIRWord) != 0
-        && PyBytes_GET_SIZE(code) % 2 == 0)
-    {
-        Py_ssize_t size = PyBytes_GET_SIZE(code);
-        Py_ssize_t words_size = _Py_SIZE_ROUND_UP(size, sizeof(_PyIRWord));
-        padded = PyBytes_FromStringAndSize(NULL, words_size);
-        if (padded == NULL) {
-            return NULL;
-        }
-        memcpy(PyBytes_AS_STRING(padded), PyBytes_AS_STRING(code), size);
-        memset(PyBytes_AS_STRING(padded) + size, 0, words_size - size);
-        code = padded;
-    }
-
     // Set the "fast locals plus" info.
     int nvarnames = (int)PyTuple_GET_SIZE(varnames);
     int ncellvars = (int)PyTuple_GET_SIZE(cellvars);
     int nfreevars = (int)PyTuple_GET_SIZE(freevars);
-    if (constslots != NULL && !PyBytes_Check(constslots)) {
-        PyErr_SetString(PyExc_ValueError, "code: co_constslots is malformed");
-        goto error;
-    }
-    int nconstslots = constslots == NULL ? 0
-        : (int)(PyBytes_GET_SIZE(constslots) / (2 * sizeof(uint32_t)));
-    // The discard slot follows the constant slots
-    int nlocalsplus = nvarnames + ncellvars + nconstslots + 1 + nfreevars;
+    int nlocalsplus = nvarnames + ncellvars + nfreevars;
     localsplusnames = PyTuple_New(nlocalsplus);
     if (localsplusnames == NULL) {
         goto error;
@@ -4214,25 +2439,6 @@ code_new_with_fbinit(
         _Py_set_localsplus_info(offset, name, CO_FAST_CELL,
                                localsplusnames, localspluskinds);
     }
-    for (int i = 0; i < nconstslots; i++, offset++) {
-        PyObject *name = PyUnicode_FromFormat(".k%d", i);
-        if (name == NULL) {
-            goto error;
-        }
-        _Py_set_localsplus_info(offset, name, CO_FAST_CONST | CO_FAST_HIDDEN,
-                               localsplusnames, localspluskinds);
-        Py_DECREF(name);
-    }
-    {
-        PyObject *name = PyUnicode_FromString(".discard");
-        if (name == NULL) {
-            goto error;
-        }
-        _Py_set_localsplus_info(offset, name, CO_FAST_CONST | CO_FAST_HIDDEN,
-                               localsplusnames, localspluskinds);
-        Py_DECREF(name);
-        offset++;
-    }
     for (int i = 0; i < nfreevars; i++, offset++) {
         PyObject *name = _PyTuple_GET_OBJECT(freevars, i);
         _Py_set_localsplus_info(offset, name, CO_FAST_FREE,
@@ -4241,14 +2447,19 @@ code_new_with_fbinit(
 
     // gh-110543: Make sure the CO_FAST_HIDDEN flag is set correctly.
     if (!(flags & CO_OPTIMIZED)) {
-        Py_ssize_t nwords = PyBytes_GET_SIZE(code) / sizeof(_PyIRWord);
-        const char *words = PyBytes_AS_STRING(code);
-        for (Py_ssize_t i = 0, length; i < nwords; i += length) {
-            _PyIRWord word;
-            memcpy(&word, words + i * sizeof(_PyIRWord), sizeof(word));
-            length = _PyIR_WordLength(word);
-            if (IR_HANDLER(word) == LOAD_FAST_AND_CLEAR) {
-                int oparg = _PyIR_FieldOparg(word);
+        Py_ssize_t code_len = PyBytes_GET_SIZE(code);
+        _Py_CODEUNIT *code_data = (_Py_CODEUNIT *)PyBytes_AS_STRING(code);
+        Py_ssize_t num_code_units = code_len / sizeof(_Py_CODEUNIT);
+        int extended_arg = 0;
+        for (int i = 0; i < num_code_units; i += 1 + _PyOpcode_Caches[code_data[i].op.code]) {
+            _Py_CODEUNIT *instr = &code_data[i];
+            uint8_t opcode = instr->op.code;
+            if (opcode == EXTENDED_ARG) {
+                extended_arg = extended_arg << 8 | instr->op.arg;
+                continue;
+            }
+            if (opcode == LOAD_FAST_AND_CLEAR) {
+                int oparg = extended_arg << 8 | instr->op.arg;
                 if (oparg >= nlocalsplus) {
                     PyErr_Format(PyExc_ValueError,
                                 "code: LOAD_FAST_AND_CLEAR oparg %d out of range",
@@ -4258,6 +2469,7 @@ code_new_with_fbinit(
                 _PyLocals_Kind kind = _PyLocals_GetKind(localspluskinds, oparg);
                 _PyLocals_SetKind(localspluskinds, oparg, kind | CO_FAST_HIDDEN);
             }
+            extended_arg = 0;
         }
     }
 
@@ -4276,8 +2488,6 @@ code_new_with_fbinit(
         .flags = flags,
 
         .code = code,
-        .fbinit = fbinit,
-        .constslots = constslots,
         .firstlineno = firstlineno,
         .linetable = linetable,
 
@@ -4296,6 +2506,11 @@ code_new_with_fbinit(
         .exceptiontable = exceptiontable,
     };
 
+    if (_PyCode_Validate(&con) < 0) {
+        goto error;
+    }
+    assert(PyBytes_GET_SIZE(code) % sizeof(_Py_CODEUNIT) == 0);
+    assert(_Py_IS_ALIGNED(PyBytes_AS_STRING(code), sizeof(_Py_CODEUNIT)));
     if (nlocals != PyTuple_GET_SIZE(varnames)) {
         PyErr_SetString(PyExc_ValueError,
                         "code: co_nlocals != len(co_varnames)");
@@ -4310,26 +2525,7 @@ code_new_with_fbinit(
 error:
     Py_XDECREF(localsplusnames);
     Py_XDECREF(localspluskinds);
-    Py_XDECREF(padded);
     return co;
-}
-
-PyCodeObject *
-PyUnstable_Code_NewWithPosOnlyArgs(
-                          int argcount, int posonlyargcount, int kwonlyargcount,
-                          int nlocals, int stacksize, int flags,
-                          PyObject *code, PyObject *consts, PyObject *names,
-                          PyObject *varnames, PyObject *freevars, PyObject *cellvars,
-                          PyObject *filename, PyObject *name,
-                          PyObject *qualname, int firstlineno,
-                          PyObject *linetable,
-                          PyObject *exceptiontable)
-{
-    return code_new_with_fbinit(argcount, posonlyargcount, kwonlyargcount,
-                                nlocals, stacksize, flags, code, NULL, NULL, consts,
-                                names, varnames, freevars, cellvars, filename,
-                                name, qualname, firstlineno, linetable,
-                                exceptiontable);
 }
 
 PyCodeObject *
@@ -4353,20 +2549,17 @@ PyUnstable_Code_New(int argcount, int kwonlyargcount,
 // NOTE: When modifying the construction of PyCode_NewEmpty, please also change
 // test.test_code.CodeLocationTest.test_code_new_empty to keep it in sync!
 
-// Slot 0 is the discard slot, the only local; slot 1 is the only temporary
-static const _PyIRWord assert0[3] = {
-    IR_WORD(RESUME, RESUME_AT_FUNC_START, 0, 0, 0),
-    IR_WORD(LOAD_COMMON_CONSTANT, 1, CONSTANT_ASSERTIONERROR, 0, 0),
-    IR_WORD(RAISE_VARARGS, 1, 1, 0, 0),
+static const uint8_t assert0[8] = {
+    RESUME, RESUME_AT_FUNC_START,
+    CACHE, 0,
+    LOAD_COMMON_CONSTANT, CONSTANT_ASSERTIONERROR,
+    RAISE_VARARGS, 1
 };
-
-// The kinds of the locals of PyCode_NewEmpty: every code has the discard slot
-static const char discard_kinds[1] = {CO_FAST_CONST | CO_FAST_HIDDEN};
 
 static const uint8_t linetable[2] = {
     (1 << 7)  // New entry.
     | (PY_CODE_LOCATION_INFO_NO_COLUMNS << 3)
-    | (3 - 1),  // Three words.
+    | (4 - 1),  // Four code units.
     0,  // Offset from co_firstlineno.
 };
 
@@ -4378,21 +2571,10 @@ PyCode_NewEmpty(const char *filename, const char *funcname, int firstlineno)
     PyObject *funcname_ob = NULL;
     PyObject *code_ob = NULL;
     PyObject *linetable_ob = NULL;
-    PyObject *localsplusnames_ob = NULL;
-    PyObject *localspluskinds_ob = NULL;
     PyCodeObject *result = NULL;
 
     nulltuple = PyTuple_New(0);
     if (nulltuple == NULL) {
-        goto failed;
-    }
-    localsplusnames_ob = Py_BuildValue("(s)", ".discard");
-    if (localsplusnames_ob == NULL) {
-        goto failed;
-    }
-    localspluskinds_ob = PyBytes_FromStringAndSize(discard_kinds,
-                                                   sizeof(discard_kinds));
-    if (localspluskinds_ob == NULL) {
         goto failed;
     }
     funcname_ob = PyUnicode_FromString(funcname);
@@ -4403,7 +2585,7 @@ PyCode_NewEmpty(const char *filename, const char *funcname, int firstlineno)
     if (filename_ob == NULL) {
         goto failed;
     }
-    code_ob = PyBytes_FromStringAndSize((const char *)assert0, sizeof(assert0));
+    code_ob = PyBytes_FromStringAndSize((const char *)assert0, 8);
     if (code_ob == NULL) {
         goto failed;
     }
@@ -4422,8 +2604,8 @@ PyCode_NewEmpty(const char *filename, const char *funcname, int firstlineno)
         .linetable = linetable_ob,
         .consts = nulltuple,
         .names = nulltuple,
-        .localsplusnames = localsplusnames_ob,
-        .localspluskinds = localspluskinds_ob,
+        .localsplusnames = nulltuple,
+        .localspluskinds = emptystring,
         .exceptiontable = emptystring,
         .stacksize = 1,
     };
@@ -4431,8 +2613,6 @@ PyCode_NewEmpty(const char *filename, const char *funcname, int firstlineno)
 
 failed:
     Py_XDECREF(nulltuple);
-    Py_XDECREF(localsplusnames_ob);
-    Py_XDECREF(localspluskinds_ob);
     Py_XDECREF(funcname_ob);
     Py_XDECREF(filename_ob);
     Py_XDECREF(code_ob);
@@ -4451,14 +2631,7 @@ PyCode_Addr2Line(PyCodeObject *co, int addrq)
     if (addrq < 0) {
         return co->co_firstlineno;
     }
-    _PyCoMonitoringData *data = _Py_atomic_load_ptr_acquire(&co->_co_monitoring);
-    if (data) {
-        _PyCoLineInstrumentationData *lines = _Py_atomic_load_ptr_acquire(&data->lines);
-        if (lines) {
-            return _Py_Instrumentation_GetLine(co, lines, addrq);
-        }
-    }
-    assert(addrq >= 0 && addrq < Py_SIZE(co));
+    assert(addrq >= 0 && addrq < _PyCode_NBYTES(co));
     PyCodeAddressRange bounds;
     _PyCode_InitAddressRange(co, &bounds);
     return _PyCode_CheckLineNumber(addrq, &bounds);
@@ -4470,10 +2643,7 @@ _PyCode_SafeAddr2Line(PyCodeObject *co, int addrq)
     if (addrq < 0) {
         return co->co_firstlineno;
     }
-    if (co->_co_monitoring && co->_co_monitoring->lines) {
-        return _Py_Instrumentation_GetLine(co, co->_co_monitoring->lines, addrq);
-    }
-    if (!(addrq >= 0 && addrq < Py_SIZE(co))) {
+    if (!(addrq >= 0 && addrq < _PyCode_NBYTES(co))) {
         return -1;
     }
     PyCodeAddressRange bounds;
@@ -4484,14 +2654,8 @@ _PyCode_SafeAddr2Line(PyCodeObject *co, int addrq)
 void
 _PyLineTable_InitAddressRange(const char *linetable, Py_ssize_t length, int firstlineno, PyCodeAddressRange *range)
 {
-    _PyIRPositions source;
-    int valid = _PyIRPositions_Decode(linetable, length, &source);
-    assert(valid >= 0);
-    if (valid < 0) {
-        source = (_PyIRPositions){(const unsigned char *)linetable, 0, NULL, 0};
-    }
-    range->opaque.lo_next = source.locations;
-    range->opaque.limit = range->opaque.lo_next + source.locations_size;
+    range->opaque.lo_next = (const uint8_t *)linetable;
+    range->opaque.limit = range->opaque.lo_next + length;
     range->ar_start = -1;
     range->ar_end = 0;
     range->opaque.computed_line = firstlineno;
@@ -4543,7 +2707,7 @@ static int
 next_code_delta(PyCodeAddressRange *bounds)
 {
     assert((*bounds->opaque.lo_next) & 128);
-    return ((*bounds->opaque.lo_next) & 7) + 1;
+    return (((*bounds->opaque.lo_next) & 7) + 1) * sizeof(_Py_CODEUNIT);
 }
 
 static int
@@ -4558,7 +2722,7 @@ previous_code_delta(PyCodeAddressRange *bounds)
     while (((*ptr) & 128) == 0) {
         ptr--;
     }
-    return ((*ptr) & 7) + 1;
+    return (((*ptr) & 7) + 1) * sizeof(_Py_CODEUNIT);
 }
 
 static int
@@ -4640,7 +2804,7 @@ advance_with_locations(PyCodeAddressRange *bounds, int *endline, int *column, in
     int first_byte = read_byte(bounds);
     int code = (first_byte >> 3) & 15;
     bounds->ar_start = bounds->ar_end;
-    bounds->ar_end = bounds->ar_start + (first_byte & 7) + 1;
+    bounds->ar_end = bounds->ar_start + ((first_byte & 7) + 1) * sizeof(_Py_CODEUNIT);
     switch(code) {
         case PY_CODE_LOCATION_INFO_NONE:
             bounds->ar_line = *endline = -1;
@@ -4697,7 +2861,7 @@ PyCode_Addr2Location(PyCodeObject *co, int addrq,
         *start_column = *end_column = 0;
         return 1;
     }
-    assert(addrq >= 0 && addrq < Py_SIZE(co));
+    assert(addrq >= 0 && addrq < _PyCode_NBYTES(co));
     PyCodeAddressRange bounds;
     _PyCode_InitAddressRange(co, &bounds);
     _PyCode_CheckLineNumber(addrq, &bounds);
@@ -4735,30 +2899,33 @@ _PyLineTable_NextAddressRange(PyCodeAddressRange *range)
     return 1;
 }
 
+/* Step to the next entry of the location table and report its whole
+ * location; the lowering to the register IR reads every entry in order. */
+int
+_PyLineTable_NextLocation(PyCodeAddressRange *range, int *line, int *endline,
+                          int *column, int *endcolumn)
+{
+    if (at_end(range)) {
+        return 0;
+    }
+    advance_with_locations(range, endline, column, endcolumn);
+    *line = range->ar_line;
+    assert(range->ar_end > range->ar_start);
+    return 1;
+}
 
-typedef struct {
-    int offset;
-    int line;
-} line_source_row;
 
 typedef struct {
     PyObject_HEAD
     PyCodeObject *li_code;
     PyCodeAddressRange li_line;
-    line_source_row *li_sources;
-    uint32_t li_source_count;
-    uint32_t li_source_next;
-    int li_offset;
-    int li_range_end;
-    int li_range_line;
-    int li_last_line;
 } lineiterator;
+
 
 static void
 lineiter_dealloc(PyObject *self)
 {
     lineiterator *li = (lineiterator*)self;
-    PyMem_Free(li->li_sources);
     Py_DECREF(li->li_code);
     Py_TYPE(li)->tp_free(li);
 }
@@ -4776,52 +2943,21 @@ static PyObject *
 lineiter_next(PyObject *self)
 {
     lineiterator *li = (lineiterator*)self;
-    int next_source = INT_MAX;
-    while (li->li_source_next < li->li_source_count) {
-        line_source_row row = li->li_sources[li->li_source_next];
-        if (row.offset > li->li_offset) {
-            next_source = row.offset;
-            break;
-        }
-        li->li_source_next++;
-        if (row.offset == li->li_offset && row.line != li->li_last_line) {
-            li->li_last_line = row.line;
-            return Py_BuildValue("iii", row.offset, row.offset, row.line);
-        }
-    }
-    if (li->li_offset >= Py_SIZE(li->li_code)) {
+    PyCodeAddressRange *bounds = &li->li_line;
+    if (!_PyLineTable_NextAddressRange(bounds)) {
         return NULL;
     }
-    if (li->li_offset >= li->li_range_end) {
-        PyCodeAddressRange *bounds = &li->li_line;
-        int line = _PyCode_CheckLineNumber(li->li_offset, bounds);
-        int end = bounds->ar_end;
-        while (_PyLineTable_NextAddressRange(bounds)) {
-            if (bounds->ar_line != line) {
-                _PyLineTable_PreviousAddressRange(bounds);
-                break;
-            }
-            end = bounds->ar_end;
+    int start = bounds->ar_start;
+    int line = bounds->ar_line;
+    // Merge overlapping entries:
+    while (_PyLineTable_NextAddressRange(bounds)) {
+        if (bounds->ar_line != line) {
+            _PyLineTable_PreviousAddressRange(bounds);
+            break;
         }
-        /* A source row can split this range. Retain the merged end so the
-         * next split never seeks the raw location cursor backwards. */
-        li->li_range_end = end;
-        li->li_range_line = line;
     }
-    int start = li->li_offset;
-    int end = Py_MIN(li->li_range_end, next_source);
-    int line = li->li_range_line;
-    li->li_offset = end;
-    li->li_last_line = line;
-    return Py_BuildValue("iiO&", start, end,
+    return Py_BuildValue("iiO&", start, bounds->ar_end,
                          _source_offset_converter, &line);
-}
-
-static int
-lineiter_traverse(PyObject *self, visitproc visit, void *arg)
-{
-    Py_VISIT(((lineiterator *)self)->li_code);
-    return 0;
 }
 
 PyTypeObject _PyLineIterator = {
@@ -4847,7 +2983,7 @@ PyTypeObject _PyLineIterator = {
     0,                                  /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,       /* tp_flags */
     0,                                  /* tp_doc */
-    lineiter_traverse,                  /* tp_traverse */
+    0,                                  /* tp_traverse */
     0,                                  /* tp_clear */
     0,                                  /* tp_richcompare */
     0,                                  /* tp_weaklistoffset */
@@ -4867,16 +3003,6 @@ PyTypeObject _PyLineIterator = {
     PyObject_Free,                      /* tp_free */
 };
 
-static int
-compare_source_rows(const void *left, const void *right)
-{
-    const line_source_row *a = left, *b = right;
-    if (a->offset != b->offset) {
-        return (a->offset > b->offset) - (a->offset < b->offset);
-    }
-    return (a->line > b->line) - (a->line < b->line);
-}
-
 static lineiterator *
 new_linesiterator(PyCodeObject *code)
 {
@@ -4885,44 +3011,7 @@ new_linesiterator(PyCodeObject *code)
         return NULL;
     }
     li->li_code = (PyCodeObject*)Py_NewRef(code);
-    li->li_sources = NULL;
-    li->li_source_count = li->li_source_next = 0;
-    li->li_offset = li->li_range_end = 0;
-    li->li_range_line = -1;
-    li->li_last_line = INT_MIN;
     _PyCode_InitAddressRange(code, &li->li_line);
-    _PyIRObservationMap source = _PyIRObservation_Stored(code);
-    if (source.nrecords) {
-        li->li_sources = PyMem_Calloc(source.nrecords, sizeof(line_source_row));
-        if (li->li_sources == NULL) {
-            PyErr_NoMemory();
-            Py_DECREF(li);
-            return NULL;
-        }
-        for (uint32_t i = 0; i < source.nrecords; i++) {
-            _PyIRObservationEvent event;
-            _PyIRObservation_Event(&source, i, &event);
-            li->li_sources[i] = (line_source_row){event.to, event.line};
-        }
-        qsort(li->li_sources, source.nrecords, sizeof(line_source_row), compare_source_rows);
-        /* Static co_lines rows are sorted independently of runtime edge
-         * order. Filter redundant rows with one forward location-table walk. */
-        PyCodeAddressRange future;
-        _PyCode_InitAddressRange(code, &future);
-        for (uint32_t i = 0; i < source.nrecords; i++) {
-            line_source_row row = li->li_sources[i];
-            if (row.line < 0 || row.line == _PyCode_CheckLineNumber(row.offset, &future)) {
-                continue;
-            }
-            uint32_t count = li->li_source_count;
-            if (count && li->li_sources[count - 1].offset == row.offset &&
-                li->li_sources[count - 1].line == row.line)
-            {
-                continue;
-            }
-            li->li_sources[li->li_source_count++] = row;
-        }
-    }
     return li;
 }
 
@@ -4956,19 +3045,12 @@ positionsiter_next(PyObject *self)
         }
         advance_with_locations(&pi->pi_range, &pi->pi_endline, &pi->pi_column, &pi->pi_endcolumn);
     }
-    pi->pi_offset += 1;
+    pi->pi_offset += 2;
     return Py_BuildValue("(O&O&O&O&)",
         _source_offset_converter, &pi->pi_range.ar_line,
         _source_offset_converter, &pi->pi_endline,
         _source_offset_converter, &pi->pi_column,
         _source_offset_converter, &pi->pi_endcolumn);
-}
-
-static int
-positionsiter_traverse(PyObject *self, visitproc visit, void *arg)
-{
-    Py_VISIT(((positionsiterator *)self)->pi_code);
-    return 0;
 }
 
 PyTypeObject _PyPositionsIterator = {
@@ -4994,7 +3076,7 @@ PyTypeObject _PyPositionsIterator = {
     0,                                  /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,       /* tp_flags */
     0,                                  /* tp_doc */
-    positionsiter_traverse,             /* tp_traverse */
+    0,                                  /* tp_traverse */
     0,                                  /* tp_clear */
     0,                                  /* tp_richcompare */
     0,                                  /* tp_weaklistoffset */
@@ -5278,6 +3360,18 @@ GETITEM(PyObject *v, Py_ssize_t i)
 }
 #endif
 
+/* The oparg of the instruction at unit i, with its EXTENDED_ARGs */
+static int
+code_oparg(const _Py_CODEUNIT *code, int i)
+{
+    int oparg = code[i].op.arg;
+    for (int shift = 8; i > 0 && code[i - 1].op.code == EXTENDED_ARG; shift += 8) {
+        i--;
+        oparg |= code[i].op.arg << shift;
+    }
+    return oparg;
+}
+
 static int
 identify_unbound_names(PyThreadState *tstate, PyCodeObject *co,
                        PyObject *globalnames, PyObject *attrnames,
@@ -5299,10 +3393,11 @@ identify_unbound_names(PyThreadState *tstate, PyCodeObject *co,
     struct co_unbound_counts unbound = {0};
     int numdupes = 0;
     Py_ssize_t len = Py_SIZE(co);
-    for (int i = 0; i < len; i += _PyCode_InstrLength(co, i)) {
-        int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(co, i));
+    const _Py_CODEUNIT *code = _PyCode_CODE(co);
+    for (int i = 0; i < len; i += 1 + _PyOpcode_Caches[code[i].op.code]) {
+        int opcode = code[i].op.code;
         if (opcode == LOAD_ATTR) {
-            int oparg = _PyCode_InstrOparg(co, i);
+            int oparg = code_oparg(code, i);
             int index = LOAD_ATTR_NAME_INDEX(oparg);
             PyObject *name = GETITEM(co->co_names, index);
             if (PySet_ContainsValue(attrnames, PyValue_FromObjectBorrow(name))) {
@@ -5324,7 +3419,7 @@ identify_unbound_names(PyThreadState *tstate, PyCodeObject *co,
             }
         }
         else if (opcode == LOAD_GLOBAL) {
-            int oparg = _PyCode_InstrOparg(co, i);
+            int oparg = code_oparg(code, i);
             int index = LOAD_ATTR_NAME_INDEX(oparg);
             PyObject *name = GETITEM(co->co_names, index);
             if (PySet_ContainsValue(globalnames, PyValue_FromObjectBorrow(name))) {
@@ -5379,16 +3474,11 @@ _PyCode_GetVarCounts(PyCodeObject *co, _PyCode_var_counts_t *counts)
     // Count the locals, cells, and free vars.
     struct co_locals_counts locals = {0};
     int numfree = 0;
-    int numconst = 0;
     PyObject *kinds = co->co_localspluskinds;
     Py_ssize_t numlocalplusfree = PyBytes_GET_SIZE(kinds);
     for (int i = 0; i < numlocalplusfree; i++) {
         _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
-        if (kind & CO_FAST_CONST) {
-            // A constant slot, or the discard slot, is none of these
-            numconst += 1;
-        }
-        else if (kind & CO_FAST_FREE) {
+        if (kind & CO_FAST_FREE) {
             assert(!(kind & CO_FAST_LOCAL));
             assert(!(kind & CO_FAST_HIDDEN));
             assert(!(kind & CO_FAST_ARG));
@@ -5460,9 +3550,7 @@ _PyCode_GetVarCounts(PyCodeObject *co, _PyCode_var_counts_t *counts)
     assert(locals.cells.total == co->co_ncellvars);
     assert(locals.args.total + locals.numpure == co->co_nlocals);
     assert(locals.total + locals.cells.numargs == co->co_nlocals + co->co_ncellvars);
-    // The discard slot is the one constant slot with no table entry
-    assert(numconst == co->co_nconstslots + 1);
-    assert(locals.total + numfree + numconst == co->co_nlocalsplus);
+    assert(locals.total + numfree == co->co_nlocalsplus);
     assert(numfree == co->co_nfreevars);
 
     // Get the unbound counts.
@@ -5657,24 +3745,6 @@ _PyCode_CheckPureFunction(PyCodeObject *co, const char **p_errmsg)
     return 1;
 }
 
-/* Whether slot is a constant slot (CO_FAST_CONST) whose constant is None,
- * which is what a return of None reads. */
-static int
-return_names_none_slot(PyCodeObject *co, int slot)
-{
-    const uint32_t *table = _PyCode_CONSTSLOTS(co);
-    for (int j = 0; j < co->co_nconstslots; j++) {
-        if (table[2 * j] == (uint32_t)slot) {
-            return PyValue_IsNone(PyTuple_GET_VALUE(co->co_consts,
-                                                    table[2 * j + 1]));
-        }
-    }
-    return 0;
-}
-
-/* Here "value" means a non-None value, since a bare return is identical
- * to returning None explicitly.  Likewise a missing return statement
- * at the end of the function is turned into "return None". */
 static int
 code_returns_only_none(PyCodeObject *co)
 {
@@ -5683,6 +3753,7 @@ code_returns_only_none(PyCodeObject *co)
     }
     int len = (int)Py_SIZE(co);
     assert(len > 0);
+    const _Py_CODEUNIT *code = _PyCode_CODE(co);
 
     // Look up None in co_consts.
     Py_ssize_t nconsts = PyTuple_Size(co->co_consts);
@@ -5692,22 +3763,20 @@ code_returns_only_none(PyCodeObject *co)
             break;
         }
     }
-    int previous = -1;  // the instruction before the one at i
-    for (int i = 0; i < len; previous = i, i += _PyCode_InstrLength(co, i)) {
-        if (!IS_RETURN_OPCODE(_PyIR_BaseOpcode(_PyCode_InstrHandler(co, i)))) {
+    /* We don't worry about EXTENDED_ARG for now. */
+    for (int i = 0; i < len; i += 1 + _PyOpcode_Caches[code[i].op.code]) {
+        if (!IS_RETURN_OPCODE(code[i].op.code)) {
             continue;
         }
-        assert(previous >= 0);
-        if (return_names_none_slot(co, IR_A(_PyCode_WORDS(co)[i]))) {
+        assert(i != 0);
+        _Py_CODEUNIT prev = code[i - 1];
+        if (prev.op.code == LOAD_COMMON_CONSTANT &&
+            prev.op.arg == CONSTANT_NONE)
+        {
             continue;
         }
-        int prev = _PyIR_BaseOpcode(_PyCode_InstrHandler(co, previous));
-        int prev_oparg = _PyCode_InstrOparg(co, previous);
-        if (prev == LOAD_COMMON_CONSTANT && prev_oparg == CONSTANT_NONE) {
-            continue;
-        }
-        if (none_index < nconsts && prev == LOAD_CONST
-            && prev_oparg == none_index)
+        if (none_index < nconsts && prev.op.code == LOAD_CONST
+            && prev.op.arg == none_index)
         {
             continue;
         }
@@ -5743,7 +3812,7 @@ _PyCode_GetCode(PyCodeObject *co)
     Py_BEGIN_CRITICAL_SECTION(co);
     code = cached->_co_code;
     if (code == NULL) {
-        code = PyBytes_FromStringAndSize((const char *)co->co_words,
+        code = PyBytes_FromStringAndSize((const char *)_PyCode_CODE(co),
                                          _PyCode_NBYTES(co));
         if (code != NULL) {
             assert(cached->_co_code == NULL);
@@ -5796,8 +3865,6 @@ code.__new__ as code_new
     exceptiontable: object(subclass_of="&PyBytes_Type")
     freevars: object(subclass_of="&PyTuple_Type", c_default="NULL") = ()
     cellvars: object(subclass_of="&PyTuple_Type", c_default="NULL") = ()
-    fbinit: object(subclass_of="&PyBytes_Type", c_default="NULL") = b''
-    constslots: object(subclass_of="&PyBytes_Type", c_default="NULL") = b''
     /
 
 Create a code object.  Not for the faint of heart.
@@ -5810,8 +3877,8 @@ code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
               PyObject *varnames, PyObject *filename, PyObject *name,
               PyObject *qualname, int firstlineno, PyObject *linetable,
               PyObject *exceptiontable, PyObject *freevars,
-              PyObject *cellvars, PyObject *fbinit, PyObject *constslots)
-/*[clinic end generated code: output=d98fa2ec432ba30e input=c95e5e3b3712cb94]*/
+              PyObject *cellvars)
+/*[clinic end generated code: output=aa227cfeea5fe9a5 input=e31da3c41ad8064a]*/
 {
     PyObject *co = NULL;
     PyObject *ournames = NULL;
@@ -5871,16 +3938,16 @@ code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
     if (ourcellvars == NULL)
         goto cleanup;
 
-    co = (PyObject *)code_new_with_fbinit(argcount, posonlyargcount,
-                                          kwonlyargcount,
-                                          nlocals, stacksize, flags,
-                                          code, fbinit, constslots, consts, ournames,
-                                          ourvarnames, ourfreevars,
-                                          ourcellvars, filename,
-                                          name, qualname, firstlineno,
-                                          linetable,
-                                          exceptiontable
-                                         );
+    co = (PyObject *)PyCode_NewWithPosOnlyArgs(argcount, posonlyargcount,
+                                               kwonlyargcount,
+                                               nlocals, stacksize, flags,
+                                               code, consts, ournames,
+                                               ourvarnames, ourfreevars,
+                                               ourcellvars, filename,
+                                               name, qualname, firstlineno,
+                                               linetable,
+                                               exceptiontable
+                                              );
   cleanup:
     Py_XDECREF(ournames);
     Py_XDECREF(ourvarnames);
@@ -5986,7 +4053,7 @@ code_dealloc(PyObject *self)
         for (Py_ssize_t i = 1; i < co->co_tlbc->size; i++) {
             char *entry = co->co_tlbc->entries[i];
             if (entry != NULL) {
-                free_bytecode_copy(co, entry);
+                PyMem_Free(entry);
             }
         }
         PyMem_Free(co->co_tlbc);
@@ -6075,15 +4142,13 @@ code_richcompare(PyObject *self, PyObject *other, int op)
     if (!eq) {
         goto unequal;
     }
-    eq = co->co_nfeedback == cp->co_nfeedback
-        && memcmp(co->co_words, cp->co_words, _PyCode_NBYTES(co)) == 0
-        && memcmp(_PyCode_FBINIT(co), _PyCode_FBINIT(cp),
-                  co->co_nfeedback * sizeof(uint32_t)) == 0
-        && co->co_nconstslots == cp->co_nconstslots
-        && memcmp(_PyCode_CONSTSLOTS(co), _PyCode_CONSTSLOTS(cp),
-                  co->co_nconstslots * 2 * sizeof(uint32_t)) == 0;
-    if (!eq) {
-        goto unequal;
+    for (int i = 0; i < Py_SIZE(co); i++) {
+        _Py_CODEUNIT co_instr = _PyCode_CODE(co)[i];
+        _Py_CODEUNIT cp_instr = _PyCode_CODE(cp)[i];
+        if (co_instr.cache != cp_instr.cache) {
+            goto unequal;
+        }
+        i += _PyOpcode_Caches[co_instr.op.code];
     }
 
     /* compare constants */
@@ -6161,13 +4226,10 @@ code_hash(PyObject *self)
     SCRAMBLE_IN(co->co_firstlineno);
     SCRAMBLE_IN(Py_SIZE(co));
     for (int i = 0; i < Py_SIZE(co); i++) {
-        SCRAMBLE_IN(_PyCode_WORDS(co)[i]);
-    }
-    for (int i = 0; i < co->co_nfeedback; i++) {
-        SCRAMBLE_IN(_PyCode_FBINIT(co)[i]);
-    }
-    for (int i = 0; i < 2 * co->co_nconstslots; i++) {
-        SCRAMBLE_IN(_PyCode_CONSTSLOTS(co)[i]);
+        _Py_CODEUNIT co_instr = _PyCode_CODE(co)[i];
+        SCRAMBLE_IN(co_instr.op.code);
+        SCRAMBLE_IN(co_instr.op.arg);
+        i += _PyOpcode_Caches[co_instr.op.code];
     }
     if ((Py_hash_t)uhash == -1) {
         return -2;
@@ -6218,52 +4280,12 @@ code_getfreevars(PyObject *self, void *closure)
     return _PyCode_GetFreevars(code);
 }
 
-/* The words of the executing copy, whose handlers specialisation and
- * instrumentation rewrite, or co_code before the first call. */
 static PyObject *
 code_getcodeadaptive(PyObject *self, void *closure)
 {
     PyCodeObject *code = _PyCodeObject_CAST(self);
-    _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
-    if (exec == NULL) {
-        return _PyCode_GetCode(code);
-    }
-    return PyBytes_FromStringAndSize((const char *)exec->words,
-                                     exec->nwords * sizeof(_PyIRWord));
-}
-
-/* The feedback entries of the executing copy, in units of 8 bytes with
- * entry 0 first, or None before the first call or without entries. */
-static PyObject *
-code_getfeedback(PyObject *self, void *closure)
-{
-    PyCodeObject *code = _PyCodeObject_CAST(self);
-    _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
-    if (exec == NULL || exec->entries == NULL) {
-        Py_RETURN_NONE;
-    }
-    return PyBytes_FromStringAndSize(exec->entries,
-                                     (Py_ssize_t)_PyCode_FbUnits(code)
-                                     << IR_FB_UNIT_SHIFT);
-}
-
-/* The feedback table: per feedback entry, its kind and static operand */
-static PyObject *
-code_getfbinit(PyObject *self, void *closure)
-{
-    PyCodeObject *code = _PyCodeObject_CAST(self);
-    return PyBytes_FromStringAndSize((const char *)_PyCode_FBINIT(code),
-                                     code->co_nfeedback * sizeof(uint32_t));
-}
-
-/* The constant-slot table: per constant slot, the slot and the index in
- * co_consts of its value, two 32-bit integers each */
-static PyObject *
-code_getconstslots(PyObject *self, void *closure)
-{
-    PyCodeObject *code = _PyCodeObject_CAST(self);
-    return PyBytes_FromStringAndSize((const char *)_PyCode_CONSTSLOTS(code),
-                                     code->co_nconstslots * 2 * sizeof(uint32_t));
+    return PyBytes_FromStringAndSize(code->co_code_adaptive,
+                                     _PyCode_NBYTES(code));
 }
 
 static PyObject *
@@ -6275,9 +4297,6 @@ code_getcode(PyObject *self, void *closure)
 
 static PyGetSetDef code_getsetlist[] = {
     {"_co_code_adaptive", code_getcodeadaptive, NULL, NULL},
-    {"co_fbinit",         code_getfbinit,       NULL, NULL},
-    {"co_constslots",     code_getconstslots,   NULL, NULL},
-    {"_co_feedback",      code_getfeedback,     NULL, NULL},
     // The following old names are kept for backward compatibility.
     {"co_varnames",       code_getvarnames,     NULL, NULL},
     {"co_cellvars",       code_getcellvars,     NULL, NULL},
@@ -6292,8 +4311,6 @@ code_sizeof(PyObject *self, PyObject *Py_UNUSED(args))
 {
     PyCodeObject *co = _PyCodeObject_CAST(self);
     size_t res = _PyObject_VAR_SIZE(Py_TYPE(co), Py_SIZE(co));
-    // The feedback table is not counted (follow-up); the constant slots are
-    res += (size_t)co->co_nconstslots * 2 * sizeof(uint32_t);
     res += _PyCode_ExecSizeOf(co);
     _PyCodeObjectExtra *co_extra = (_PyCodeObjectExtra*) co->co_extra;
     if (co_extra != NULL) {
@@ -6340,9 +4357,7 @@ code.replace
     co_name: unicode(c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_name") = unchanged
     co_qualname: unicode(c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_qualname") = unchanged
     co_linetable: object(subclass_of="&PyBytes_Type", c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_linetable") = unchanged
-    co_exceptiontable: object(subclass_of="&PyBytes_Type", c_default="NULL") = unchanged
-    co_fbinit: object(subclass_of="&PyBytes_Type", c_default="NULL") = unchanged
-    co_constslots: object(subclass_of="&PyBytes_Type", c_default="NULL") = unchanged
+    co_exceptiontable: object(subclass_of="&PyBytes_Type", c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_exceptiontable") = unchanged
 
 Return a copy of the code object with new values for the specified fields.
 [clinic start generated code]*/
@@ -6356,9 +4371,8 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
                   PyObject *co_freevars, PyObject *co_cellvars,
                   PyObject *co_filename, PyObject *co_name,
                   PyObject *co_qualname, PyObject *co_linetable,
-                  PyObject *co_exceptiontable, PyObject *co_fbinit,
-                  PyObject *co_constslots)
-/*[clinic end generated code: output=44d80c045ef0ae97 input=04e92ba26bb63103]*/
+                  PyObject *co_exceptiontable)
+/*[clinic end generated code: output=f3229ff5ba526e57 input=8e4034f980233edd]*/
 {
 #define CHECK_INT_ARG(ARG) \
         if (ARG < 0) { \
@@ -6377,41 +4391,6 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
 
 #undef CHECK_INT_ARG
 
-    bool structural_change =
-        co_argcount != self->co_argcount ||
-        co_posonlyargcount != self->co_posonlyargcount ||
-        co_kwonlyargcount != self->co_kwonlyargcount ||
-        co_nlocals != self->co_nlocals || co_stacksize != self->co_stacksize ||
-        (co_flags & ~CO_VIRTUAL_KWARGS) != (self->co_flags & ~CO_VIRTUAL_KWARGS) ||
-        co_varnames != NULL || co_freevars != NULL || co_cellvars != NULL;
-    bool recovery_geometry_change =
-        co_nlocals != self->co_nlocals ||
-        Py_MAX(co_stacksize, 1) != Py_MAX(self->co_stacksize, 1) ||
-        (co_varnames != NULL && PyTuple_GET_SIZE(co_varnames) != self->co_nlocals) ||
-        (co_freevars != NULL && PyTuple_GET_SIZE(co_freevars) != self->co_nfreevars) ||
-        (co_cellvars != NULL && PyTuple_GET_SIZE(co_cellvars) != self->co_ncellvars);
-    if (co_code != NULL) {
-        bool changed_words = PyBytes_GET_SIZE(co_code) != Py_SIZE(self) * (Py_ssize_t)sizeof(_PyIRWord) ||
-            memcmp(PyBytes_AS_STRING(co_code), self->co_words,
-                   (size_t)Py_MIN(PyBytes_GET_SIZE(co_code),
-                                 Py_SIZE(self) * (Py_ssize_t)sizeof(_PyIRWord))) != 0;
-        structural_change |= changed_words;
-        recovery_geometry_change |= changed_words;
-    }
-    if (recovery_geometry_change && co_exceptiontable == NULL) {
-        _PyIRSemanticMap semantic = _PyIRSemantic_Stored(self->co_exceptiontable);
-        if (semantic.nrecords) {
-            PyErr_SetString(PyExc_ValueError,
-                            "code.replace: changed code requires matching semantic recovery");
-            return PyValue_NULL;
-        }
-    }
-    if (co_exceptiontable == NULL) {
-        co_exceptiontable = self->co_exceptiontable;
-    }
-    if (structural_change) {
-        co_flags &= ~CO_VIRTUAL_KWARGS;
-    }
     PyObject *code = NULL;
     if (co_code == NULL) {
         code = _PyCode_GetCode(self);
@@ -6433,8 +4412,6 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
     PyObject *varnames = NULL;
     PyObject *cellvars = NULL;
     PyObject *freevars = NULL;
-    PyObject *fbinit = NULL;
-    PyObject *constslots = NULL;
     if (co_varnames == NULL) {
         varnames = get_localsplus_names(self, CO_FAST_LOCAL, self->co_nlocals);
         if (varnames == NULL) {
@@ -6457,34 +4434,14 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
         co_freevars = freevars;
     }
 
-    if (co_fbinit == NULL) {
-        fbinit = PyBytes_FromStringAndSize((const char *)_PyCode_FBINIT(self),
-                                           self->co_nfeedback * sizeof(uint32_t));
-        if (fbinit == NULL) {
-            goto error;
-        }
-        co_fbinit = fbinit;
-    }
-    if (co_constslots == NULL) {
-        constslots = PyBytes_FromStringAndSize(
-            (const char *)_PyCode_CONSTSLOTS(self),
-            self->co_nconstslots * 2 * sizeof(uint32_t));
-        if (constslots == NULL) {
-            goto error;
-        }
-        co_constslots = constslots;
-    }
-    co = code_new_with_fbinit(
+    co = PyCode_NewWithPosOnlyArgs(
         co_argcount, co_posonlyargcount, co_kwonlyargcount, co_nlocals,
-        co_stacksize, co_flags, co_code, co_fbinit, co_constslots,
-        co_consts, co_names,
+        co_stacksize, co_flags, co_code, co_consts, co_names,
         co_varnames, co_freevars, co_cellvars, co_filename, co_name,
         co_qualname, co_firstlineno,
         co_linetable, co_exceptiontable);
 
 error:
-    Py_XDECREF(fbinit);
-    Py_XDECREF(constslots);
     Py_XDECREF(code);
     Py_XDECREF(varnames);
     Py_XDECREF(cellvars);
@@ -6533,8 +4490,8 @@ _Py_VALUE_NOTIMPL_RICHCMP(code_richcompare_value, code_richcompare)
 PyTypeObject PyCode_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "code",
-    offsetof(PyCodeObject, co_words),
-    sizeof(_PyIRWord),
+    offsetof(PyCodeObject, co_code_adaptive),
+    sizeof(_Py_CODEUNIT),
     code_dealloc,                       /* tp_dealloc */
     0,                                  /* tp_vectorcall_offset */
     0,                                  /* tp_getattr */

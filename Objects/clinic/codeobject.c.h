@@ -21,7 +21,7 @@ PyDoc_STRVAR(code_new__doc__,
 "code(argcount, posonlyargcount, kwonlyargcount, nlocals, stacksize,\n"
 "     flags, codestring, constants, names, varnames, filename, name,\n"
 "     qualname, firstlineno, linetable, exceptiontable, freevars=(),\n"
-"     cellvars=(), fbinit=b\'\', constslots=b\'\', /)\n"
+"     cellvars=(), /)\n"
 "--\n"
 "\n"
 "Create a code object.  Not for the faint of heart.");
@@ -33,7 +33,7 @@ code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
               PyObject *varnames, PyObject *filename, PyObject *name,
               PyObject *qualname, int firstlineno, PyObject *linetable,
               PyObject *exceptiontable, PyObject *freevars,
-              PyObject *cellvars, PyObject *fbinit, PyObject *constslots);
+              PyObject *cellvars);
 
 static PyValue
 code_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
@@ -58,14 +58,12 @@ code_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObje
     PyObject *exceptiontable;
     PyObject *freevars = NULL;
     PyObject *cellvars = NULL;
-    PyObject *fbinit = NULL;
-    PyObject *constslots = NULL;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKwnames("code", kwnames)) {
         goto exit;
     }
-    if (!_PyArg_CheckPositional("code", nargs, 16, 20)) {
+    if (!_PyArg_CheckPositional("code", nargs, 16, 18)) {
         goto exit;
     }
     argcount = _PyValue_AsInt(PyValue_Borrow(args[0]));
@@ -169,24 +167,8 @@ code_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObje
         goto exit;
     }
     cellvars = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[17]));
-    if (nargs < 19) {
-        goto skip_optional;
-    }
-    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[18])), &PyBytes_Type)) {
-        _PyArg_BadArgumentValue("code", "argument 19", "bytes", PyValue_Borrow(args[18]));
-        goto exit;
-    }
-    fbinit = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[18]));
-    if (nargs < 20) {
-        goto skip_optional;
-    }
-    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[19])), &PyBytes_Type)) {
-        _PyArg_BadArgumentValue("code", "argument 20", "bytes", PyValue_Borrow(args[19]));
-        goto exit;
-    }
-    constslots = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[19]));
 skip_optional:
-    return_value = code_new_impl(type, argcount, posonlyargcount, kwonlyargcount, nlocals, stacksize, flags, code, consts, names, varnames, filename, name, qualname, firstlineno, linetable, exceptiontable, freevars, cellvars, fbinit, constslots);
+    return_value = code_new_impl(type, argcount, posonlyargcount, kwonlyargcount, nlocals, stacksize, flags, code, consts, names, varnames, filename, name, qualname, firstlineno, linetable, exceptiontable, freevars, cellvars);
 
 exit:
     return return_value;
@@ -228,8 +210,7 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
                   PyObject *co_freevars, PyObject *co_cellvars,
                   PyObject *co_filename, PyObject *co_name,
                   PyObject *co_qualname, PyObject *co_linetable,
-                  PyObject *co_exceptiontable, PyObject *co_fbinit,
-                  PyObject *co_constslots);
+                  PyObject *co_exceptiontable);
 
 static PyValue
 code_replace(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
@@ -237,7 +218,7 @@ code_replace(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject
     PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
-    #define NUM_KEYWORDS 20
+    #define NUM_KEYWORDS 18
     static struct {
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
@@ -246,7 +227,7 @@ code_replace(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(co_argcount)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_posonlyargcount)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_kwonlyargcount)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_nlocals)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_stacksize)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_flags)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_firstlineno)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_code)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_consts)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_names)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_varnames)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_freevars)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_cellvars)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_filename)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_name)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_qualname)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_linetable)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_exceptiontable)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_fbinit)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_constslots)), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(co_argcount)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_posonlyargcount)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_kwonlyargcount)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_nlocals)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_stacksize)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_flags)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_firstlineno)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_code)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_consts)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_names)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_varnames)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_freevars)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_cellvars)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_filename)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_name)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_qualname)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_linetable)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_exceptiontable)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -255,14 +236,14 @@ code_replace(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject
     #  define KWTUPLE NULL
     #endif  // !Py_BUILD_CORE
 
-    static const char * const _keywords[] = {"co_argcount", "co_posonlyargcount", "co_kwonlyargcount", "co_nlocals", "co_stacksize", "co_flags", "co_firstlineno", "co_code", "co_consts", "co_names", "co_varnames", "co_freevars", "co_cellvars", "co_filename", "co_name", "co_qualname", "co_linetable", "co_exceptiontable", "co_fbinit", "co_constslots", NULL};
+    static const char * const _keywords[] = {"co_argcount", "co_posonlyargcount", "co_kwonlyargcount", "co_nlocals", "co_stacksize", "co_flags", "co_firstlineno", "co_code", "co_consts", "co_names", "co_varnames", "co_freevars", "co_cellvars", "co_filename", "co_name", "co_qualname", "co_linetable", "co_exceptiontable", NULL};
     static _PyArg_Parser _parser = {
         .keywords = _keywords,
         .fname = "replace",
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    Py_ssize_t _idx[20];
+    Py_ssize_t _idx[18];
     int co_argcount = ((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_argcount;
     int co_posonlyargcount = ((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_posonlyargcount;
     int co_kwonlyargcount = ((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_kwonlyargcount;
@@ -280,12 +261,10 @@ code_replace(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject
     PyObject *co_name = ((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_name;
     PyObject *co_qualname = ((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_qualname;
     PyObject *co_linetable = ((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_linetable;
-    PyObject *co_exceptiontable = NULL;
-    PyObject *co_fbinit = NULL;
-    PyObject *co_constslots = NULL;
+    PyObject *co_exceptiontable = ((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_exceptiontable;
 
     if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, _idx, 20)) {
+            /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, _idx, 18)) {
         goto exit;
     }
     if (_idx[0] >= 0) {
@@ -419,21 +398,7 @@ code_replace(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject
         }
         co_exceptiontable = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[17]]));
     }
-    if (_idx[18] >= 0) {
-        if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[18]])), &PyBytes_Type)) {
-            _PyArg_BadArgumentValue("replace", "argument 'co_fbinit'", "bytes", PyValue_Borrow(args[_idx[18]]));
-            goto exit;
-        }
-        co_fbinit = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[18]]));
-    }
-    if (_idx[19] >= 0) {
-        if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[19]])), &PyBytes_Type)) {
-            _PyArg_BadArgumentValue("replace", "argument 'co_constslots'", "bytes", PyValue_Borrow(args[_idx[19]]));
-            goto exit;
-        }
-        co_constslots = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[19]]));
-    }
-    return_value = code_replace_impl((PyCodeObject *)PyValue_AsKnownObjectBorrow(self), co_argcount, co_posonlyargcount, co_kwonlyargcount, co_nlocals, co_stacksize, co_flags, co_firstlineno, co_code, co_consts, co_names, co_varnames, co_freevars, co_cellvars, co_filename, co_name, co_qualname, co_linetable, co_exceptiontable, co_fbinit, co_constslots);
+    return_value = code_replace_impl((PyCodeObject *)PyValue_AsKnownObjectBorrow(self), co_argcount, co_posonlyargcount, co_kwonlyargcount, co_nlocals, co_stacksize, co_flags, co_firstlineno, co_code, co_consts, co_names, co_varnames, co_freevars, co_cellvars, co_filename, co_name, co_qualname, co_linetable, co_exceptiontable);
 
 exit:
     return return_value;
@@ -501,4 +466,4 @@ code__varname_from_oparg(PyValueBorrow self, const PyValue *args, Py_ssize_t nar
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=7e922f7f68c138e3 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=9350b910151f8416 input=a9049054013a1b77]*/

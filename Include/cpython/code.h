@@ -38,9 +38,11 @@ typedef struct {
 #define _PyCode_DEF_THREAD_LOCAL_BYTECODE()
 #endif
 
-/* The executing copy of the words, with the feedback vector (see
-   Include/internal/pycore_ir.h); NULL until the first call. */
+/* The register IR of the code, lowered from co_code at the first call, and
+   the executing copy of its words with the feedback vector (see
+   Include/internal/pycore_ir.h); NULL until then. */
 #define _PyCode_DEF_FEEDBACK() \
+    struct _PyCodeIR *_co_ir; \
     struct _PyCodeExec *_co_exec;
 
 // To avoid repeating ourselves in deepfreeze.py, all PyCodeObject members are
@@ -104,19 +106,13 @@ typedef struct {
     uintptr_t _co_instrumentation_version; /* current instrumentation version */ \
     struct _PyCoMonitoringData *_co_monitoring; /* Monitoring data */          \
     _PyCode_DEF_UNIQUE_ID()                                                    \
-    int _co_firsttraceable;       /* index of first traceable instruction */   \
     /* Scratch space for extra data relating to the code object.               \
        Type is a void* to keep the format private in codeobject.c to force     \
        people to go through the proper APIs. */                                \
     void *co_extra;                                                            \
-    int co_nfeedback;             /* feedback entries, entry 0 included, or 0 */ \
-    int co_nconstslots;           /* constant slots, see CO_FAST_CONST */      \
     _PyCode_DEF_FEEDBACK()                                                     \
     _PyCode_DEF_THREAD_LOCAL_BYTECODE()                                        \
-    /* The IR, one 64-bit word per instruction (Py_SIZE() of them), then the   \
-       feedback table: co_nfeedback 32-bit entries, then the constant-slot     \
-       table: co_nconstslots pairs of 32-bit (slot, co_consts index). */       \
-    uint64_t co_words[(SIZE)];                                                 \
+    char co_code_adaptive[(SIZE)];                                             \
 }
 
 /* Bytecode object */
@@ -159,9 +155,6 @@ struct PyCodeObject _PyCode_DEF(1);
 
 /* A function defined in class scope */
 #define CO_METHOD  0x8000000
-
-/* The compiler proves reads of the empty **kwargs binding materialize it. */
-#define CO_VIRTUAL_KWARGS 0x10000000
 
 /* This should be defined if a future statement modifies the syntax.
    For example, when a keyword is added.

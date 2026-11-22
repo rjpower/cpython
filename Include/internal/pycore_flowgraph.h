@@ -26,17 +26,20 @@ int _PyCfg_OptimizeCodeUnit(struct _PyCfgBuilder *g, PyObject *consts, PyObject 
 
 struct _PyCfgBuilder* _PyCfg_FromInstructionSequence(_PyInstructionSequence *seq);
 int _PyCfg_ToInstructionSequence(struct _PyCfgBuilder *g, _PyInstructionSequence *seq);
-struct _PyRegCfg;
-/* Finish the code unit's CFG and convert it into the register CFG
- * (Python/regcfg.c), with its passes run and its slots assigned. */
-int _PyCfg_OptimizedCfgToRegCfg(struct _PyCfgBuilder *g, _PyCompile_CodeUnitMetadata *umd,
-                                int code_flags, int *stackdepth, int *nlocalsplus,
-                                struct _PyRegCfg **result);
+int _PyCfg_OptimizedCfgToInstructionSequence(struct _PyCfgBuilder *g, _PyCompile_CodeUnitMetadata *umd,
+                                             int *stackdepth, int *nlocalsplus,
+                                             _PyInstructionSequence *seq);
 
 PyCodeObject *
 _PyAssemble_MakeCodeObject(_PyCompile_CodeUnitMetadata *u, PyObject *const_cache,
-                           PyObject *consts, struct _PyRegCfg *cfg,
+                           PyObject *consts, int maxdepth, _PyInstructionSequence *instrs,
                            int nlocalsplus, int code_flags, PyObject *filename);
+
+struct _PyRegCfg;
+/* Decode the stack bytecode of co into the register CFG (Python/regcfg.c),
+ * with its passes run and its slots assigned: the first half of
+ * _PyIR_LowerCode() (Python/ir.c). */
+int _PyCfg_LowerCode(PyCodeObject *co, struct _PyRegCfg **result);
 
 // Export for '_testinternalcapi' shared extension
 PyAPI_FUNC(PyObject*) _PyCompile_OptimizeCfg(

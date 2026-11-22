@@ -14,16 +14,10 @@ extern "C" {
 #include "pycore_tstate.h"      // _PyThreadStateImpl
 
 
-/* The words of the IR, which never change (Include/internal/pycore_ir.h) */
-#define _PyCode_WORDS(CO) _Py_RVALUE((const _PyIRWord *)(CO)->co_words)
-#define _PyCode_NBYTES(CO) (Py_SIZE(CO) * (Py_ssize_t)sizeof(_PyIRWord))
-/* The feedback table, co_nfeedback entries after the words */
-#define _PyCode_FBINIT(CO) \
-    _Py_RVALUE((const uint32_t *)((CO)->co_words + Py_SIZE(CO)))
-/* The constant-slot table, co_nconstslots pairs of (slot, co_consts index)
- * after the feedback table */
-#define _PyCode_CONSTSLOTS(CO) \
-    _Py_RVALUE(_PyCode_FBINIT(CO) + (CO)->co_nfeedback)
+/* co_code: the stack bytecode, which never changes (the register IR is
+ * derived from it by _PyIR_LowerCode(), Include/internal/pycore_ir.h) */
+#define _PyCode_CODE(CO) _Py_RVALUE((_Py_CODEUNIT *)(CO)->co_code_adaptive)
+#define _PyCode_NBYTES(CO) (Py_SIZE(CO) * (Py_ssize_t)sizeof(_Py_CODEUNIT))
 
 
 // We hide some of the newer PyCodeObject fields behind macros.
@@ -125,13 +119,8 @@ struct _PyCodeConstructor {
     PyObject *qualname;
     int flags;
 
-    /* the code: the words of the IR, and the feedback table (one 32-bit
-       entry per feedback entry, see pycore_ir.h), or NULL for none */
+    /* the code */
     PyObject *code;
-    PyObject *fbinit;
-    /* the constant-slot table: (slot, co_consts index) pairs of uint32, or
-       NULL for none; the slots are in localsplusnames */
-    PyObject *constslots;
     int firstlineno;
     PyObject *linetable;
 
@@ -154,12 +143,6 @@ struct _PyCodeConstructor {
 
     /* used by the eval loop */
     PyObject *exceptiontable;
-
-    /* The compiler sets this: the constructor proves which returns leave
-     * no scratch owner and selects their empty form. The proof is part of
-     * compilation and its result is serialized, so a code object built from
-     * marshal or the public constructor keeps the words it is given. */
-    int select_returns;
 };
 
 // Using an "arguments struct" like this is helpful for maintainability
@@ -171,6 +154,7 @@ struct _PyCodeConstructor {
 // back to a regular function signature.  Regardless, this approach
 // wouldn't be appropriate if this weren't a strictly internal API.
 // (See the comments in https://github.com/python/cpython/pull/26258.)
+extern int _PyCode_Validate(struct _PyCodeConstructor *);
 extern PyCodeObject* _PyCode_New(struct _PyCodeConstructor *);
 
 
@@ -194,6 +178,8 @@ extern void _PyLineTable_InitAddressRange(
 
 /** API for traversing the line number table. */
 PyAPI_FUNC(int) _PyLineTable_NextAddressRange(PyCodeAddressRange *range);
+extern int _PyLineTable_NextLocation(PyCodeAddressRange *range, int *line,
+                                     int *endline, int *column, int *endcolumn);
 extern int _PyLineTable_PreviousAddressRange(PyCodeAddressRange *range);
 
 // Similar to PyCode_Addr2Line(), but return -1 if the code object is invalid

@@ -1053,23 +1053,6 @@ w_complex_object(PyObject *v, WFILE *p)
             p->error = true;
             return;
         }
-        PyObject *co_fbinit = PyBytes_FromStringAndSize(
-            (const char *)_PyCode_FBINIT(co),
-            co->co_nfeedback * sizeof(uint32_t));
-        if (co_fbinit == NULL) {
-            Py_DECREF(co_code);
-            p->error = true;
-            return;
-        }
-        PyObject *co_constslots = PyBytes_FromStringAndSize(
-            (const char *)_PyCode_CONSTSLOTS(co),
-            co->co_nconstslots * 2 * sizeof(uint32_t));
-        if (co_constslots == NULL) {
-            Py_DECREF(co_code);
-            Py_DECREF(co_fbinit);
-            p->error = true;
-            return;
-        }
         W_TYPE(TYPE_CODE, p);
         w_long(co->co_argcount, p);
         w_long(co->co_posonlyargcount, p);
@@ -1077,8 +1060,6 @@ w_complex_object(PyObject *v, WFILE *p)
         w_long(co->co_stacksize, p);
         w_long(co->co_flags, p);
         w_object(co_code, p);
-        w_object(co_fbinit, p);
-        w_object(co_constslots, p);
         w_object(co->co_consts, p);
         w_object(co->co_names, p);
         w_object(co->co_localsplusnames, p);
@@ -1090,8 +1071,6 @@ w_complex_object(PyObject *v, WFILE *p)
         w_object(co->co_linetable, p);
         w_object(co->co_exceptiontable, p);
         Py_DECREF(co_code);
-        Py_DECREF(co_fbinit);
-        Py_DECREF(co_constslots);
         w_complete(v, p);
     }
     else if (PyObject_CheckBuffer(v)) {
@@ -2019,10 +1998,6 @@ r_value(RFILE *p)
             int flags;
             PyObject *code = NULL;
             PyValue code_value = PyValue_NULL;
-            PyObject *fbinit = NULL;
-            PyValue fbinit_value = PyValue_NULL;
-            PyObject *constslots = NULL;
-            PyValue constslots_value = PyValue_NULL;
             PyObject *consts = NULL;
             PyValue consts_value = PyValue_NULL;
             PyObject *names = NULL;
@@ -2076,16 +2051,6 @@ r_value(RFILE *p)
                 goto code_error;
             code = PyValue_IsObject(code_value)
                 ? PyValue_AsKnownObjectBorrow(code_value) : Py_None;
-            fbinit_value = r_value(p);
-            if (PyValue_IsNull(fbinit_value))
-                goto code_error;
-            fbinit = PyValue_IsObject(fbinit_value)
-                ? PyValue_AsKnownObjectBorrow(fbinit_value) : Py_None;
-            constslots_value = r_value(p);
-            if (PyValue_IsNull(constslots_value))
-                goto code_error;
-            constslots = PyValue_IsObject(constslots_value)
-                ? PyValue_AsKnownObjectBorrow(constslots_value) : Py_None;
             consts_value = r_value(p);
             if (PyValue_IsNull(consts_value))
                 goto code_error;
@@ -2142,8 +2107,6 @@ r_value(RFILE *p)
                 .flags = flags,
 
                 .code = code,
-                .fbinit = fbinit,
-                .constslots = constslots,
                 .firstlineno = firstlineno,
                 .linetable = linetable,
 
@@ -2162,6 +2125,10 @@ r_value(RFILE *p)
                 .exceptiontable = exceptiontable,
             };
 
+            if (_PyCode_Validate(&con) < 0) {
+                goto code_error;
+            }
+
             v = (PyObject *)_PyCode_New(&con);
             if (v == NULL) {
                 goto code_error;
@@ -2175,8 +2142,6 @@ r_value(RFILE *p)
                     "NULL object in marshal data for code object");
             }
             PyValue_XCLOSE(code_value);
-            PyValue_XCLOSE(fbinit_value);
-            PyValue_XCLOSE(constslots_value);
             PyValue_XCLOSE(consts_value);
             PyValue_XCLOSE(names_value);
             PyValue_XCLOSE(localsplusnames_value);

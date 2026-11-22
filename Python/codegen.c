@@ -758,9 +758,7 @@ codegen_enter_scope(compiler *c, identifier name, int scope_type,
          before returning. */
         location loc = LOCATION(lineno, lineno, -1, -1);
         ADDOP_IN_SCOPE(c, loc, RETURN_GENERATOR);
-        /* The initial resume input is compiler bookkeeping, not a source
-         * statement before the generator's entry RESUME. */
-        ADDOP_IN_SCOPE(c, NO_LOCATION, POP_TOP);
+        ADDOP_IN_SCOPE(c, loc, POP_TOP);
     }
 
     ADDOP_I_IN_SCOPE(c, loc, RESUME, RESUME_AT_FUNC_START);
@@ -2325,6 +2323,7 @@ codegen_async_for(compiler *c, stmt_ty s)
     USE_LABEL(c, send);
     ADD_YIELD_FROM(c, loc, 1);
     ADDOP(c, loc, POP_BLOCK);  /* for SETUP_FINALLY */
+    ADDOP(c, loc, NOT_TAKEN);
 
     /* Success block for __anext__ */
     VISIT(c, expr, s->v.AsyncFor.target);

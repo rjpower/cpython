@@ -7184,7 +7184,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 STAT_INC(CALL, hit);
                 _PyNativeCallResult call = call_descriptor_values(
-                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                    tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
                 if (call.miss) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
@@ -7262,7 +7262,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 STAT_INC(CALL, hit);
                 _PyNativeCallResult call = call_descriptor_values(
-                    tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                    tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
                 if (call.miss) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));

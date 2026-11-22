@@ -5045,7 +5045,7 @@ dummy_func(
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- res)) {
             STAT_INC(CALL, hit);
             _PyNativeCallResult call = call_descriptor_values(
-                tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
             DEOPT_IF(call.miss);
             PyValue result = call.value;
             if (PyValue_IsNull(result)) {
@@ -5116,7 +5116,7 @@ dummy_func(
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST, (callable, self_or_null, args[oparg] -- res)) {
             STAT_INC(CALL, hit);
             _PyNativeCallResult call = call_descriptor_values(
-                tstate, frame, this_instr, callable, IR_CALL_FIRST());
+                tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
             DEOPT_IF(call.miss);
             PyValue result = call.value;
             if (PyValue_IsNull(result)) {

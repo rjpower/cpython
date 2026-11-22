@@ -1796,14 +1796,15 @@ call_class_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * arguments. */
 static inline Py_ALWAYS_INLINE _PyNativeCallResult
 call_descriptor_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                       const _PyIRWord *head, PyValue callable, int first)
+                       const _PyIRWord *head, _PyIRWord word,
+                       PyValue callable, int first)
 {
     PyMethodDescrObject *descr =
         (PyMethodDescrObject *)PyValue_AsKnownObjectBorrow(callable);
     int flags = descr->d_method->ml_flags;
-    int n = (int)IR_C(*head) - first;
-    if (n == 0 || ((flags & METH_O) && n != 2)
-        || ((flags & METH_NOARGS) && n != 1))
+    int n = (int)IR_C(word) - first;
+    if (n == 0 || ((flags & (METH_O | METH_NOARGS))
+                   && n != ((flags & METH_O) ? 2 : 1)))
     {
         return CALL_NATIVE_MISS;
     }

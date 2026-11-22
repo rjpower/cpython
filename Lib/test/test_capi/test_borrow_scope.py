@@ -27,10 +27,12 @@ def tick():
 class BorrowScopeTests(unittest.TestCase):
 
     def test_tuple_items_survive_churn(self):
-        for args in [(1, 2.5), (2**40, "x"), (-7, 2**40)]:
+        # The run is a vector of the items, which the tuple keeps alive, with
+        # the offset slot and the skip entry, and a box for each inline item.
+        for args, entries in [((1, 2.5), 6), ((2**40, "x"), 5), ((-7, 2**40), 6)]:
             with self.subTest(args=args):
                 delta, values = parse_then_churn("OO", args)
-                self.assertEqual(delta, 2)
+                self.assertEqual(delta, entries)
                 self.assertEqual(values, args)
 
     def test_keywords_survive_churn(self):
@@ -63,7 +65,7 @@ class BorrowScopeTests(unittest.TestCase):
         n = 1000
         pairs = [(i, i + 0.5) for i in range(n)]
         before = borrow_depth()
-        self.assertEqual(_testinternalcapi.parse_pairs(pairs, False), 2 * n)
+        self.assertEqual(_testinternalcapi.parse_pairs(pairs, False), 6 * n)
         self.assertEqual(borrow_depth(), before)
         self.assertEqual(_testinternalcapi.parse_pairs(pairs, True), 0)
         self.assertEqual(borrow_depth(), before)
@@ -112,7 +114,7 @@ class BorrowScopeTests(unittest.TestCase):
         self.assertEqual((a, b), (2**40, 0.75))
         self.assertEqual(result, "done")
         self.assertEqual(depth_after, depth_before)
-        self.assertEqual(inner, [(2, (3, 4.5)), 0])
+        self.assertEqual(inner, [(6, (3, 4.5)), 0])
 
     def test_generator_resumed_from_c(self):
         def gen():
@@ -150,7 +152,7 @@ class BorrowScopeTests(unittest.TestCase):
                 self.assertIsInstance(exc, MemoryError)
                 self.assertEqual(delta, 0)
                 self.assertEqual(parse_then_churn("OO", (2**40, 0.5)),
-                                 (2, (2**40, 0.5)))
+                                 (6, (2**40, 0.5)))
 
     def test_callback_exit_requests_no_release(self):
         # A builtin on the native-call vector path keeps its argument vector
@@ -299,9 +301,9 @@ class DebugChecksTests(unittest.TestCase):
     def test_scope_size_warning(self):
         rc, out, err = assert_python_ok('-c', '''if 1:
             import _testinternalcapi
-            pairs = [(1, 2.5)] * 6000
+            pairs = [(1, 2.5)] * 6000  # six entries each: 36000 unscoped
             for _ in range(2):
-                assert _testinternalcapi.parse_pairs(pairs, False) == 12000
+                assert _testinternalcapi.parse_pairs(pairs, False) == 36000
             assert _testinternalcapi.parse_pairs(pairs, True) == 0
         ''')
         self.assertEqual(err.count(b'Warning: a borrow scope holds'), 1, err)

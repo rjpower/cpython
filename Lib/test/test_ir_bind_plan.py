@@ -626,6 +626,128 @@ class TestEvents(PlanTestCase):
 
 @cpython_only
 @requires_specialization
+class TestPolymorphicSite(PlanTestCase):
+    """A site whose callee changes misses its guard and calls generically:
+    the plan of each callee's code is derived once and reused."""
+
+    def test_callees_of_different_codes(self):
+        def d1(x, memo, k=1): return ("d1", x, memo, k)
+        def d2(x, memo, *a): return ("d2", x, a)
+        def d3(x, memo, *, k=3): return ("d3", k)
+        def d4(x, memo, k=4, j=5): return ("d4", k, j)
+        callees = [d1, d2, d3, d4]
+
+        def call(f, x):
+            return f(x, 0)
+        call = reset_code(call)
+        expected = [("d1", 7, 0, 1), ("d2", 7, ()), ("d3", 3), ("d4", 4, 5)]
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 10):
+            self.assertEqual([call(f, 7) for f in callees], expected)
+
+    def test_changes_between_calls_of_one_site(self):
+        def f(x, memo, k=1): return (x, memo, k)
+        def g(x, memo, k=10, j=20): return ("g", x, memo, k, j)
+        def h(x, memo): return ("h", x, memo)
+        other = [lambda x, m: ("other", x, m), len]
+
+        def call(fn, x):
+            return fn(x, 0)
+        call = reset_code(call)
+        for i in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 10):
+            self.assertEqual(call(f, i), (i, 0, 1))
+            self.assertEqual(call(other[0], i), ("other", i, 0))
+        f.__defaults__ = (5,)
+        self.assertEqual(call(f, 1), (1, 0, 5))
+        f.__defaults__ = ()
+        self.assertIn("missing 1 required positional argument: 'k'",
+                      outcome(call, f, 1))
+        f.__defaults__ = (6, 7)
+        f.__code__ = g.__code__
+        self.assertEqual(call(f, 1), ("g", 1, 0, 6, 7))
+        f.__defaults__ = (8,)
+        self.assertIn("missing 1 required positional argument: 'k'",
+                      outcome(call, f, 1))
+        f.__code__ = h.__code__
+        f.__defaults__ = None
+        self.assertEqual(call(f, 1), ("h", 1, 0))
+        self.assertEqual(call(other[0], 2), ("other", 2, 0))
+        self.assertIn("takes 2 positional arguments but 3 were given",
+                      outcome(lambda: f(1, 2, 3)))
+
+    def test_operand_counts_of_one_code(self):
+        def f(a, b=2, c=3, *rest): return (a, b, c, rest)
+        shapes = [lambda g: g(1), lambda g: g(1, 5), lambda g: g(1, 5, 6),
+                  lambda g: g(1, 5, 6, 7, 8)]
+        expected = [(1, 2, 3, ()), (1, 5, 3, ()), (1, 5, 6, ()),
+                    (1, 5, 6, (7, 8))]
+        shapes = [reset_code(s) for s in shapes]
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 10):
+            for shape, want in zip(shapes, expected):
+                self.assertEqual(shape(f), want)
+            self.assertEqual(f(*[1, 2, 3, 4, 5]), (1, 2, 3, (4, 5)))
+            self.assertEqual(f(*[1]), (1, 2, 3, ()))
+
+
+@cpython_only
+class TestWideCalls(PlanTestCase):
+    """Calls of more than four operands: native and Python callees, with
+    temporaries that the call releases and errors at each position."""
+
+    def test_wide_native_and_python_calls(self):
+        for n in (5, 8, 9, 16, 255):
+            with self.subTest(n=n):
+                names = ", ".join("a%d" % i for i in range(n))
+                values = ", ".join(str(i) for i in range(n))
+                ns = {}
+                exec(f"def f({names}): return a0 + a{n - 1}\n"
+                     f"def g():\n"
+                     f"    {names} = {values}\n"
+                     f"    return (f({names}), max({names}), len(({names},)),\n"
+                     f"            f({', '.join('%d + 0' % i for i in range(n))}))\n",
+                     ns)
+                for _ in range(20):
+                    self.assertEqual(ns["g"](), (n - 1, n - 1, n, n - 1))
+
+    def test_wide_calls_release_temporaries_on_every_path(self):
+        released = []
+
+        class Owner:
+            def __init__(self, i): self.i = i
+            def __del__(self): released.append(self.i)
+            def __lt__(self, other): raise KeyError(self.i)
+
+        def boom(i): raise ValueError(i)
+
+        for n in (5, 9, 16):
+            for position in range(n):
+                with self.subTest(n=n, position=position):
+                    ns = {"Owner": Owner, "boom": boom}
+                    args = ", ".join("boom(%d)" % i if i == position
+                                     else "Owner(%d)" % i for i in range(n))
+                    exec(f"def f():\n    return max({args})\n", ns)
+                    released.clear()
+                    with self.assertRaises(ValueError):
+                        ns["f"]()
+                    support_collect()
+                    # The owners built before the failing operand
+                    self.assertEqual(sorted(released), list(range(position)))
+            released.clear()
+            ns = {"Owner": Owner}
+            exec("def f():\n    return max(%s)\n"
+                 % ", ".join("Owner(%d)" % i for i in range(n)), ns)
+            with self.assertRaises(KeyError):
+                ns["f"]()
+            support_collect()
+            self.assertEqual(sorted(released), list(range(n)))
+
+
+def support_collect():
+    import gc
+    gc.collect()
+
+
+@cpython_only
+@requires_specialization
 class TestRecursion(PlanTestCase):
     def test_recursion_through_defaults_and_kwargs(self):
         def rec(n, a=1):

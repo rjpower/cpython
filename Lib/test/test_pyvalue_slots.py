@@ -439,6 +439,14 @@ class PointerFieldTests(unittest.TestCase):
                                 (sys, type(sys)), (a, B)]:
             self.assertIs(cls(value), expected)
 
+    def test_frame_code_getter(self):
+        def code(frame):
+            return frame.f_code
+
+        frame = sys._getframe()
+        self.assertIs(self.warm(code, frame), frame.f_code)
+        self.assertIn('LOAD_ATTR_GETSET', executing_handlers(code))
+
 
 if __name__ == '__main__':
     unittest.main()

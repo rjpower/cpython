@@ -5,6 +5,7 @@
 #include "pycore_ceval.h"         // _PyEval_SetOpcodeTrace()
 #include "pycore_code.h"          // CO_FAST_LOCAL
 #include "pycore_dict.h"          // _PyDict_LoadBuiltinsFromGlobals()
+#include "pycore_descrobject.h"   // _Py_VALUE_GETTER()
 #include "pycore_frame.h"         // PyFrameObject
 #include "pycore_function.h"      // _PyFunction_FromConstructor()
 #include "pycore_genobject.h"     // _PyGen_GetGeneratorFromFrame()
@@ -1261,21 +1262,16 @@ frame_builtins_get_impl(PyFrameObject *self)
     return Py_NewRef(builtins);
 }
 
-/*[clinic input]
-@getter
-frame.f_code as frame_code
-
-Return the code object being executed in this frame.
-[clinic start generated code]*/
-
-static PyObject *
-frame_code_get_impl(PyFrameObject *self)
-/*[clinic end generated code: output=a5ed6207395a8cef input=e127e7098c124816]*/
+/* f_code is a value getter, so that LOAD_ATTR_GETSET reads it without boxing
+   the frame or the result. */
+static PyValue
+frame_code_value(PyValueBorrow self, void *closure)
 {
-    if (PySys_Audit("object.__getattr__", "Os", self, "f_code") < 0) {
-        return NULL;
+    PyFrameObject *frame = (PyFrameObject *)PyValue_AsKnownObjectBorrow(self);
+    if (PySys_Audit("object.__getattr__", "Os", frame, "f_code") < 0) {
+        return PyValue_NULL;
     }
-    return (PyObject *)PyFrame_GetCode(self);
+    return PyValue_FromObjectSteal((PyObject *)PyFrame_GetCode(frame));
 }
 
 /*[clinic input]
@@ -3892,7 +3888,9 @@ static PyGetSetDef frame_getsetlist[] = {
     FRAME_F_LASTI_GETSETDEF
     FRAME_F_GLOBALS_GETSETDEF
     FRAME_F_BUILTINS_GETSETDEF
-    FRAME_F_CODE_GETSETDEF
+    _Py_VALUE_GETTER("f_code", frame_code_value,
+                     PyDoc_STR("Return the code object being executed in this frame."),
+                     NULL),
     FRAME_F_TRACE_OPCODES_GETSETDEF
     FRAME_F_GENERATOR_GETSETDEF
     {0}

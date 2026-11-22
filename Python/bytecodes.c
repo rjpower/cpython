@@ -1240,7 +1240,23 @@ dummy_func(
 
         inline_ok inst(LIST_APPEND, (list, unused[oparg-1], v -- list, unused[oparg-1])) {
             PyValue item = TAKE(v);
-            int err = _PyList_AppendTakeValue((PyListObject *)PyValue_AsKnownObjectBorrow(list), item);
+            PyListObject *list_o = (PyListObject *)PyValue_AsKnownObjectBorrow(list);
+            int err = 0;
+#ifdef Py_GIL_DISABLED
+            err = _PyList_AppendTakeValue(list_o, item);
+#else
+            // The store is in line while the list has room; growth is the
+            // function's.
+            Py_ssize_t size = Py_SIZE(list_o);
+            if (list_o->allocated > size) {
+                list_o->ob_item[size] = item;
+                _PyValue_CheckHome(item);
+                Py_SET_SIZE(list_o, size + 1);
+            }
+            else {
+                err = _PyList_AppendTakeValue(list_o, item);
+            }
+#endif
             ERROR_IF(err < 0);
         }
 

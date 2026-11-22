@@ -10701,7 +10701,22 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             list = window[0];
             ir_own_B = IR_DETACH(ir_word, B, v);
             PyValue item = IR_TAKEN_REQUIRED(v, ir_own_B);
-            int err = _PyList_AppendTakeValue((PyListObject *)PyValue_AsKnownObjectBorrow(list), item);
+            PyListObject *list_o = (PyListObject *)PyValue_AsKnownObjectBorrow(list);
+            int err = 0;
+            #ifdef Py_GIL_DISABLED
+            err = _PyList_AppendTakeValue(list_o, item);
+            #else
+
+            Py_ssize_t size = Py_SIZE(list_o);
+            if (list_o->allocated > size) {
+                list_o->ob_item[size] = item;
+                _PyValue_CheckHome(item);
+                Py_SET_SIZE(list_o, size + 1);
+            }
+            else {
+                err = _PyList_AppendTakeValue(list_o, item);
+            }
+            #endif
             if (err < 0) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }

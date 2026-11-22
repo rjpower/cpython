@@ -380,71 +380,6 @@ method_enter_call(PyThreadState *tstate, PyObject *func)
 
 /* Now the actual vectorcall functions */
 static PyObject *
-method_vectorcall_VARARGS(
-    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    if (method_check_args(func, args, nargs, kwnames)) {
-        return NULL;
-    }
-    PyObject *argstuple = PyTuple_FromArray(args+1, nargs-1);
-    if (argstuple == NULL) {
-        return NULL;
-    }
-    PyCFunction meth = (PyCFunction)method_enter_call(tstate, func);
-    if (meth == NULL) {
-        Py_DECREF(argstuple);
-        return NULL;
-    }
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
-    PyObject *result = _PyCFunction_TrampolineCall(
-        meth, args[0], argstuple);
-    _PyBorrowScope_Exit(tstate, mark);
-    Py_DECREF(argstuple);
-    _Py_LeaveRecursiveCallTstate(tstate);
-    return result;
-}
-
-static PyObject *
-method_vectorcall_VARARGS_KEYWORDS(
-    PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
-    if (method_check_args(func, args, nargs, NULL)) {
-        return NULL;
-    }
-    PyObject *argstuple = PyTuple_FromArray(args+1, nargs-1);
-    if (argstuple == NULL) {
-        return NULL;
-    }
-    PyObject *result = NULL;
-    /* Create a temporary dict for keyword arguments */
-    PyObject *kwdict = NULL;
-    if (kwnames != NULL && PyTuple_GET_SIZE(kwnames) > 0) {
-        kwdict = _PyStack_AsDict(args + nargs, kwnames);
-        if (kwdict == NULL) {
-            goto exit;
-        }
-    }
-    PyCFunctionWithKeywords meth = (PyCFunctionWithKeywords)
-                                   method_enter_call(tstate, func);
-    if (meth == NULL) {
-        goto exit;
-    }
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
-    result = _PyCFunctionWithKeywords_TrampolineCall(
-        meth, args[0], argstuple, kwdict);
-    _PyBorrowScope_Exit(tstate, mark);
-    _Py_LeaveRecursiveCallTstate(tstate);
-exit:
-    Py_DECREF(argstuple);
-    Py_XDECREF(kwdict);
-    return result;
-}
-
-static PyObject *
 method_vectorcall_FASTCALL_KEYWORDS_METHOD(
     PyObject *func, PyObject *const *args, size_t nargsf, PyObject *kwnames)
 {
@@ -661,6 +596,85 @@ method_value_vectorcall_descr_METHOD(PyThreadState *tstate, PyObject *func,
                           args + 1, nargs - 1, kwnames);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
+}
+
+
+/* METH_VARARGS and METH_VARARGS | METH_KEYWORDS: the arguments become a tuple
+   of the words of the window, with no box of an inline one, and the callee
+   parses that tuple, which boxes an inline word once as it lends it.  An
+   object-API caller reaches these through _PyValue_VectorcallThunk().  The
+   call is a native call scope, which releases what the parsers lend. */
+static inline PyValue
+method_value_call_varargs(PyThreadState *tstate, PyObject *func,
+                          const PyValue *args, Py_ssize_t nargs,
+                          PyObject *kwnames, int keywords)
+{
+    PyObject *self = (_PyValue_AdapterBox)(
+        PyValue_Borrow(args[0]) _PyBox_AT_ARG(_PyBox_CALL_ADAPTER(func)));
+    if (self == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *result = NULL;
+    PyObject *argstuple = _PyTuple_FromValueArray(args + 1, nargs - 1);
+    if (argstuple == NULL) {
+        goto done;
+    }
+    PyObject *kwdict = NULL;
+    if (keywords && kwnames != NULL && PyTuple_GET_SIZE(kwnames) > 0) {
+        kwdict = _PyValue_StackAsDict(args + nargs, kwnames);
+        if (kwdict == NULL) {
+            goto exit;
+        }
+    }
+    funcptr meth = method_enter_call(tstate, func);
+    if (meth == NULL) {
+        goto exit;
+    }
+    int was_in_call;
+    _PyBorrowMark mark = _PyBorrowCall_Enter(tstate, &was_in_call);
+    if (keywords) {
+        result = _PyCFunctionWithKeywords_TrampolineCall(
+            (PyCFunctionWithKeywords)meth, self, argstuple, kwdict);
+    }
+    else {
+        result = _PyCFunction_TrampolineCall((PyCFunction)meth, self,
+                                             argstuple);
+    }
+    _PyBorrowCall_Exit(tstate, mark, was_in_call);
+    _Py_LeaveRecursiveCallTstate(tstate);
+    result = _Py_CheckFunctionResult(tstate, func, result, NULL);
+exit:
+    Py_XDECREF(kwdict);
+    Py_DECREF(argstuple);
+done:
+    _PyValue_AdapterRelease(args[0], self);
+    return _PyValue_FromObjectResult(result);
+}
+
+static PyValue
+method_value_vectorcall_descr_VARARGS(PyThreadState *tstate, PyObject *func,
+                                      const PyValue *args, size_t nargsf,
+                                      PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    if (method_check_value_args(func, args, nargs) < 0 ||
+        method_check_value_kwnames(func, kwnames) < 0)
+    {
+        return PyValue_NULL;
+    }
+    return method_value_call_varargs(tstate, func, args, nargs, NULL, 0);
+}
+
+static PyValue
+method_value_vectorcall_descr_VARARGS_KEYWORDS(
+    PyThreadState *tstate, PyObject *func, const PyValue *args, size_t nargsf,
+    PyObject *kwnames)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    if (method_check_value_args(func, args, nargs) < 0) {
+        return PyValue_NULL;
+    }
+    return method_value_call_varargs(tstate, func, args, nargs, kwnames, 1);
 }
 
 
@@ -1235,10 +1249,12 @@ PyDescr_NewMethod(PyTypeObject *type, PyMethodDef *method)
     switch (method->ml_flags & _Py_METH_CALL_FLAGS)
     {
         case METH_VARARGS:
-            vectorcall = method_vectorcall_VARARGS;
+            value_vectorcall = method_value_vectorcall_descr_VARARGS;
+            vectorcall = _PyValue_VectorcallThunk;
             break;
         case METH_VARARGS | METH_KEYWORDS:
-            vectorcall = method_vectorcall_VARARGS_KEYWORDS;
+            value_vectorcall = method_value_vectorcall_descr_VARARGS_KEYWORDS;
+            vectorcall = _PyValue_VectorcallThunk;
             break;
         case METH_FASTCALL:
             vectorcall = method_vectorcall_FASTCALL;

@@ -2887,6 +2887,8 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
                                                     _PY_BORROW_RELEASE_BIT);
     PyObject **floor = borrow->top;
     borrow->eval_floor = floor;
+    int outer_in_call = borrow->in_call;
+    borrow->in_call = 0;
     PyValue result;
 
     /* The activation's record, linked from the thread state until it
@@ -2973,6 +2975,7 @@ leave:
     assert(borrow->eval_floor == floor);
     _PyBorrowScope_Exit(tstate, floor);
     borrow->eval_floor = outer_floor;
+    borrow->in_call = outer_in_call;
     if (outer_request && outer_floor != NULL && borrow->top != outer_floor) {
         /* Renew the request that this activation may have consumed.  Entries
            that requested nothing stay unrequested: a live argument vector

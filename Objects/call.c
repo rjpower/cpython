@@ -1208,6 +1208,87 @@ PyValue
     return PyValue_NULL;
 }
 
+#define ADAPTER_SMALL_STACK 16
+
+/* The object vector of an adapter call: each word of args as the object it
+   holds, which the vector lends, or a box of the inline word (kind
+   CALL_ADAPTER), which the vector owns.  Returns -1 with the exception set
+   when a box fails, after releasing the boxes it made. */
+static inline int
+adapter_fill_vector(PyObject **vector, const PyValue *args, Py_ssize_t total,
+                    PyObject *callable, int *boxed)
+{
+    for (Py_ssize_t i = 0; i < total; i++) {
+        PyValue v = args[i];
+        assert(PyValue_IsLanguageValue(v));
+        _PyValue_RecheckHome(v);
+        if (!PyValue_IsInline(v)) {
+            vector[i] = PyValue_AsKnownObjectBorrow(v);
+            continue;
+        }
+        PyObject *box = _PyValue_AsObjectFor(v, _PyBox_CALL_ADAPTER(callable));
+        if (box == NULL) {
+            while (--i >= 0) {
+                if (PyValue_IsInline(args[i])) {
+                    Py_DECREF(vector[i]);
+                }
+            }
+            return -1;
+        }
+        vector[i] = box;
+        *boxed = 1;
+    }
+    return 0;
+}
+
+/* The call of an adapter on its object vector, slots[1..total] (slots[0] is
+   the vector's offset slot: the callee may use PY_VECTORCALL_ARGUMENTS_OFFSET).
+   The vector is borrowed words, which the GC does not read (the frames own
+   the objects), so it lives on the C stack, or on the heap beyond
+   ADAPTER_SMALL_STACK words. */
+static inline Py_ALWAYS_INLINE PyValue
+adapter_call(PyThreadState *tstate, PyObject *callable, vectorcallfunc of,
+             const PyValue *args, Py_ssize_t nargs, Py_ssize_t total,
+             PyObject *kwnames, PyObject **slots)
+{
+    PyObject **vector = slots + 1;
+    int boxed = 0;
+    if (adapter_fill_vector(vector, args, total, callable, &boxed) < 0) {
+        return PyValue_NULL;
+    }
+    slots[0] = NULL;
+    int was_in_call;
+    _PyBorrowMark mark = _PyBorrowCall_Enter(tstate, &was_in_call);
+    PyObject *res = of(callable, vector, nargs | PY_VECTORCALL_ARGUMENTS_OFFSET,
+                       kwnames);
+    _PyBorrowCall_Exit(tstate, mark, was_in_call);
+    if (boxed) {
+        for (Py_ssize_t i = 0; i < total; i++) {
+            if (PyValue_IsInline(args[i])) {
+                Py_DECREF(vector[i]);
+            }
+        }
+    }
+    res = _Py_CheckFunctionResult(tstate, callable, res, NULL);
+    return _PyValue_FromObjectResult(res);
+}
+
+static Py_NO_INLINE PyValue
+adapter_call_large(PyThreadState *tstate, PyObject *callable, vectorcallfunc of,
+                   const PyValue *args, Py_ssize_t nargs, Py_ssize_t total,
+                   PyObject *kwnames)
+{
+    PyObject **slots = PyMem_Malloc((size_t)(total + 1) * sizeof(PyObject *));
+    if (slots == NULL) {
+        PyErr_NoMemory();
+        return PyValue_NULL;
+    }
+    PyValue res = adapter_call(tstate, callable, of, args, nargs, total,
+                               kwnames, slots);
+    PyMem_Free(slots);
+    return res;
+}
+
 PyValue
 _PyValue_CallAdapter(PyThreadState *tstate, PyObject *callable,
                      vectorcallfunc of, const PyValue *args, size_t nargsf,
@@ -1215,19 +1296,13 @@ _PyValue_CallAdapter(PyThreadState *tstate, PyObject *callable,
 {
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     Py_ssize_t total = nargs + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
-    /* The vector lends each object word and boxes each inline one on the
-       borrow stack (kind CALL_ADAPTER); it has its own offset slot. */
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
-    PyObject *res = NULL;
-    PyObject **vector = _PyBorrow_ValueVectorFor(args, total,
-                                                  _PyBox_CALL_ADAPTER(callable));
-    if (vector != NULL) {
-        res = of(callable, vector, nargs | PY_VECTORCALL_ARGUMENTS_OFFSET,
-                 kwnames);
+    if (Py_UNLIKELY(total > ADAPTER_SMALL_STACK)) {
+        return adapter_call_large(tstate, callable, of, args, nargs, total,
+                                  kwnames);
     }
-    _PyBorrowScope_Exit(tstate, mark);
-    res = _Py_CheckFunctionResult(tstate, callable, res, NULL);
-    return _PyValue_FromObjectResult(res);
+    PyObject *small[ADAPTER_SMALL_STACK + 1];
+    return adapter_call(tstate, callable, of, args, nargs, total, kwnames,
+                        small);
 }
 
 /* tp_call of callable with an argument tuple and a dict (or NULL), in a
@@ -1237,10 +1312,11 @@ static PyValue
 value_tp_call(PyThreadState *tstate, PyObject *callable, ternaryfunc call,
               PyObject *argstuple, PyObject *kwdict)
 {
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    int was_in_call;
+    _PyBorrowMark mark = _PyBorrowCall_Enter(tstate, &was_in_call);
     PyObject *res = _PyCFunctionWithKeywords_TrampolineCall(
         (PyCFunctionWithKeywords)call, callable, argstuple, kwdict);
-    _PyBorrowScope_Exit(tstate, mark);
+    _PyBorrowCall_Exit(tstate, mark, was_in_call);
     res = _Py_CheckFunctionResult(tstate, callable, res, NULL);
     return _PyValue_FromObjectResult(res);
 }

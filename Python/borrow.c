@@ -48,6 +48,7 @@ _PyBorrowStack_Init(_PyBorrowStack *s)
     s->top = _PyBorrowChunk_Slots(base);
     s->end = base->end;
     s->eval_floor = NULL;
+    s->in_call = 0;
     s->spare = NULL;
 }
 
@@ -139,7 +140,8 @@ _PyBorrowStack_Visit(PyThreadState *tstate, visitproc visit, void *arg)
 void
 _PyBorrow_RequestRelease(PyThreadState *tstate)
 {
-    if (borrow_stack(tstate)->eval_floor != NULL) {
+    _PyBorrowStack *s = borrow_stack(tstate);
+    if (s->eval_floor != NULL && !s->in_call) {
         _Py_set_eval_breaker_bit(tstate, _PY_BORROW_RELEASE_BIT);
     }
 }
@@ -433,12 +435,6 @@ _PyBorrow_ValueVector(const PyValue *values, Py_ssize_t n)
     return _PyBorrow_ValueVector_body(
         values, n, _PyBox_AT(BOX_SITE_CALL_ADAPTER, BOX_KIND_CALL_ADAPTER,
                              _Py_BOX_CALLER()));
-}
-
-PyObject **
-_PyBorrow_ValueVectorFor(const PyValue *values, Py_ssize_t n, _PyBoxAt at)
-{
-    return _PyBorrow_ValueVector_body(values, n, at);
 }
 #endif
 

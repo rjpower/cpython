@@ -55,6 +55,8 @@ typedef struct {
     PyObject **end;             // end of the current chunk
     PyObject **eval_floor;      // top when the innermost eval loop was
                                 // entered; NULL outside any eval loop
+    int in_call;                // a native call's scope (_PyBorrowCall_Enter)
+                                // is innermost: its pushes need no request
     _PyBorrowChunk *chunk;      // initially base.chunk
     _PyBorrowChunk *spare;      // one cached chunk
     _PyBorrowBase base;

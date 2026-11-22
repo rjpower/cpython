@@ -309,23 +309,22 @@ enum {
                                      // scratch absence; no readability grant
 #define _PyIR_ERROR_PROGRAM 0x8000  // actual Storage suffix follows normal events
 
-/* _PyIRFormat.effects: what the handler itself may do, from the cases
- * generator's analysis of its instruction.  For a stack opcode they agree
- * with the HAS_*_FLAG flags of _PyOpcode_opcode_metadata. */
-#define _PyIR_RAISES        0x1     // may raise (HAS_ERROR_FLAG)
-#define _PyIR_ESCAPES       0x2     // makes an escaping call (HAS_ESCAPES_FLAG)
-#define _PyIR_RUNS_PYTHON   0x4     // may run Python code; the format's
-                                    // _PyIR_RUNS_CODE is the union over its
-                                    // handlers
+/* _PyIRFormat.effects: what the handler itself may do, a projection of its
+ * operation record (Tools/cases_generator/ir_records.py): the union of its
+ * uops' effects, the transfers it has, or a field of the record. */
+#define _PyIR_RAISES        0x1     // may raise: an error exit, or Python
+                                    // that it runs (a callee, a throw()
+                                    // into a yield) raises at its word
+#define _PyIR_ESCAPES       0x2     // may run Python, its own or a finalizer
+#define _PyIR_RUNS_PYTHON   0x4     // escapes, or fires a monitoring event;
+                                    // the format's _PyIR_RUNS_CODE is the
+                                    // union over its handlers
 #define _PyIR_DEOPTS        0x8     // may deoptimise: to the family head, and
                                     // in BINARY_OP's family to the handler of
                                     // the operation that the entry records
 #define _PyIR_SUSPENDS      0x10    // suspends its frame (a generator's)
 #define _PyIR_PUSHES_FRAME  0x20    // may push a Python frame and run it
 #define _PyIR_POLLS         0x40    // polls the eval breaker
-#define _PyIR_ALLOCATES     0x80    // may allocate: conservatively, it may
-                                    // raise, escape, box, push a frame or
-                                    // call a constructor
 #define _PyIR_PURE          0x100   // annotated pure (HAS_PURE_FLAG)
 #define _PyIR_SPECIALIZES   0x200   // a generic handler whose entry's
                                     // counter drives specialisation

@@ -256,6 +256,9 @@ class Emitter:
         self.cannot_escape = cannot_escape
         self.jump_prefix = jump_prefix
 
+    def note_site(self, tkn: Token) -> None:
+        "A token of a body is printed: see ir_generator.IREmitter.note_site()"
+
     def dispatch(
         self,
         tkn: Token,
@@ -290,10 +293,18 @@ class Emitter:
         storage: Storage,
         inst: Instruction | None,
     ) -> None:
-        "emit_to() the closing parenthesis, with the replacement of known_object_borrow()"
+        """emit_to() the closing parenthesis, with the replacement of
+        known_object_borrow().  A guard's second argument, the reason that
+        it establishes no fact (ir_records.py), is not printed."""
         parens = 0
         for tkn in tkn_iter:
             if tkn.kind == "RPAREN" and parens == 0:
+                return
+            if tkn.kind == "COMMA" and parens == 0:
+                reason = next(tkn_iter)
+                if reason.kind != "STRING" or next(tkn_iter).kind != "RPAREN":
+                    raise analysis_error("a guard's second argument is its reason, "
+                                         "a string", reason)
                 return
             if tkn.kind == "LPAREN":
                 parens += 1
@@ -738,6 +749,7 @@ class Emitter:
                 self.emit_save(storage)
             tkn_iter = TokenIterator(stmt.contents)
             for tkn in tkn_iter:
+                self.note_site(tkn)
                 if tkn.kind == "GOTO":
                     label_tkn = next(tkn_iter)
                     self.goto_label(tkn, label_tkn, storage)

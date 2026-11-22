@@ -3240,6 +3240,119 @@ class BasicElementTest(ElementTestCase, unittest.TestCase):
                 r".*\bElement, not int"):
             e.remove(1)
 
+    def test_iter_children(self):
+        for mod in self.modules:
+            with self.subTest(mod=mod.__name__):
+                root = mod.Element('root')
+                self.assertEqual(list(root), [])
+                self.assertEqual(list(iter(root)), [])
+                kids = [mod.SubElement(root, 'c%d' % i) for i in range(3)]
+                self.assertEqual(list(root), kids)
+                self.assertEqual(list(reversed(root)), kids[::-1])
+                self.assertEqual(root[:], kids)
+                self.assertEqual(root[1], kids[1])
+                it = iter(root)
+                self.assertIs(iter(it), it)
+                self.assertEqual(operator.length_hint(it), 3)
+                self.assertIs(next(it), kids[0])
+                self.assertEqual(operator.length_hint(it), 2)
+                self.assertEqual(list(it), kids[1:])
+                self.assertEqual(operator.length_hint(it), 0)
+                # an exhausted iterator stays exhausted
+                mod.SubElement(root, 'late')
+                self.assertEqual(list(it), [])
+
+    def test_iter_children_nested(self):
+        for mod in self.modules:
+            with self.subTest(mod=mod.__name__):
+                root = mod.Element('root')
+                for i in range(3):
+                    mod.SubElement(root, 'c%d' % i)
+                pairs = [(a.tag, b.tag) for a in root for b in root]
+                self.assertEqual(len(pairs), 9)
+                self.assertEqual(pairs[:4], [('c0', 'c0'), ('c0', 'c1'),
+                                             ('c0', 'c2'), ('c1', 'c0')])
+
+    def test_iter_children_mutation(self):
+        for mod in self.modules:
+            with self.subTest(mod=mod.__name__):
+                # children appended during the iteration are visited
+                root = mod.Element('root')
+                mod.SubElement(root, 'a')
+                seen = []
+                for child in root:
+                    seen.append(child.tag)
+                    if len(seen) < 4:
+                        mod.SubElement(root, 'n%d' % len(seen))
+                self.assertEqual(seen, ['a', 'n1', 'n2', 'n3'])
+
+                # children removed during the iteration are not
+                root = mod.Element('root')
+                kids = [mod.SubElement(root, 'c%d' % i) for i in range(4)]
+                seen = []
+                for child in root:
+                    seen.append(child.tag)
+                    if child is kids[0]:
+                        root.remove(kids[1])
+                self.assertEqual(seen, ['c0', 'c2', 'c3'])
+
+                # clear() ends the iteration
+                root = mod.Element('root')
+                for i in range(4):
+                    mod.SubElement(root, 'c%d' % i)
+                seen = []
+                for child in root:
+                    seen.append(child.tag)
+                    root.clear()
+                self.assertEqual(seen, ['c0'])
+
+                # deleting everything ends the iteration
+                root = mod.Element('root')
+                for i in range(4):
+                    mod.SubElement(root, 'c%d' % i)
+                seen = []
+                for child in root:
+                    seen.append(child.tag)
+                    del root[:]
+                self.assertEqual(seen, ['c0'])
+
+    def test_iter_children_subclass(self):
+        for mod in self.modules:
+            with self.subTest(mod=mod.__name__):
+                class Plain(mod.Element):
+                    pass
+                root = Plain('root')
+                kids = [mod.SubElement(root, 'c%d' % i) for i in range(3)]
+                self.assertEqual(list(root), kids)
+
+                # __getitem__ and no __iter__: the sequence protocol rules
+                class GetItem(mod.Element):
+                    def __getitem__(self, index):
+                        return mod.Element.__getitem__(self, index).tag
+                root = GetItem('root')
+                for i in range(3):
+                    mod.SubElement(root, 'c%d' % i)
+                self.assertEqual(list(root), ['c0', 'c1', 'c2'])
+
+                class Iter(mod.Element):
+                    def __iter__(self):
+                        return iter('xyz')
+                root = Iter('root')
+                mod.SubElement(root, 'c0')
+                self.assertEqual(list(root), ['x', 'y', 'z'])
+
+    def test_iter_children_pickle(self):
+        for mod in self.modules:
+            with self.subTest(mod=mod.__name__):
+                root = mod.Element('root')
+                for i in range(3):
+                    mod.SubElement(root, 'c%d' % i)
+                it = iter(root)
+                next(it)
+                it2 = copy.copy(it)
+                self.assertEqual([e.tag for e in it2], ['c1', 'c2'])
+                self.assertEqual([e.tag for e in it], ['c1', 'c2'])
+
 class BadElementTest(ElementTestCase, unittest.TestCase):
 
     def test_extend_mutable_list(self):

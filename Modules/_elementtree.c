@@ -111,6 +111,7 @@ typedef struct {
     /* Types defined by this extension */
     PyTypeObject *Element_Type;
     PyTypeObject *ElementIter_Type;
+    PyTypeObject *ElementChildIter_Type;
     PyTypeObject *TreeBuilder_Type;
     PyTypeObject *XMLParser_Type;
 
@@ -170,6 +171,7 @@ elementtree_clear(PyObject *m)
     // Heap types
     Py_CLEAR(st->Element_Type);
     Py_CLEAR(st->ElementIter_Type);
+    Py_CLEAR(st->ElementChildIter_Type);
     Py_CLEAR(st->TreeBuilder_Type);
     Py_CLEAR(st->XMLParser_Type);
     Py_CLEAR(st->expat_capsule);
@@ -191,6 +193,7 @@ elementtree_traverse(PyObject *m, visitproc visit, void *arg)
     // Heap types
     Py_VISIT(st->Element_Type);
     Py_VISIT(st->ElementIter_Type);
+    Py_VISIT(st->ElementChildIter_Type);
     Py_VISIT(st->TreeBuilder_Type);
     Py_VISIT(st->XMLParser_Type);
     Py_VISIT(st->expat_capsule);
@@ -2719,6 +2722,149 @@ create_elementiter(elementtreestate *st, ElementObject *self, PyObject *tag,
     return (PyObject *)it;
 }
 
+/***************************** Element child iterator ************************/
+
+/* The iterator of an Element's children, by index. It reads the live child
+ * array at every step, so it sees children appended or removed during the
+ * iteration and stops at the current length, as the sequence iterator over
+ * element_getitem did, without the IndexError that ended that iteration.
+ */
+typedef struct {
+    PyObject_HEAD
+    ElementObject *element;  /* NULL once exhausted */
+    Py_ssize_t index;
+} ElementChildIterObject;
+
+#define _ElementChildIter_CAST(op) ((ElementChildIterObject *)(op))
+
+static void
+elementchilditer_dealloc(PyObject *op)
+{
+    PyTypeObject *tp = Py_TYPE(op);
+    ElementChildIterObject *it = _ElementChildIter_CAST(op);
+    PyObject_GC_UnTrack(it);
+    Py_XDECREF(it->element);
+    tp->tp_free(it);
+    Py_DECREF(tp);
+}
+
+static int
+elementchilditer_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    ElementChildIterObject *it = _ElementChildIter_CAST(op);
+    Py_VISIT(Py_TYPE(it));
+    Py_VISIT(it->element);
+    return 0;
+}
+
+static _PyStatusValue
+elementchilditer_next_value(PyObject *op)
+{
+    ElementChildIterObject *it = _ElementChildIter_CAST(op);
+    ElementObject *elem = it->element;
+    if (elem == NULL) {
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+    }
+    ElementObjectExtra *extra = elem->extra;
+    if (extra != NULL && it->index < extra->length) {
+        /* A child is an Element, never an inline number. */
+        PyObject *child = Py_NewRef(extra->children[it->index++]);
+        return (_PyStatusValue){PYGEN_NEXT, _PyValue_PointerSteal(child)};
+    }
+    it->element = NULL;
+    Py_DECREF(elem);
+    return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+}
+
+_Py_VALUE_THUNK_ITERNEXT(elementchilditer_next, elementchilditer_next_value)
+
+static PyObject *
+elementchilditer_length_hint(PyObject *op, PyObject *Py_UNUSED(ignored))
+{
+    ElementChildIterObject *it = _ElementChildIter_CAST(op);
+    Py_ssize_t len = 0;
+    if (it->element != NULL && it->element->extra != NULL) {
+        len = it->element->extra->length - it->index;
+        if (len < 0) {
+            len = 0;
+        }
+    }
+    return PyLong_FromSsize_t(len);
+}
+
+static PyObject *
+elementchilditer_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
+{
+    ElementChildIterObject *it = _ElementChildIter_CAST(op);
+    PyObject *iter = _PyEval_GetBuiltin(&_Py_ID(iter));
+    if (iter == NULL) {
+        return NULL;
+    }
+    if (it->element == NULL) {
+        return Py_BuildValue("N(())", iter);
+    }
+    return Py_BuildValue("N(O)n", iter, it->element, it->index);
+}
+
+static PyObject *
+elementchilditer_setstate(PyObject *op, PyObject *state)
+{
+    ElementChildIterObject *it = _ElementChildIter_CAST(op);
+    Py_ssize_t index = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(state), PyExc_OverflowError);
+    if (index == -1 && PyErr_Occurred()) {
+        return NULL;
+    }
+    if (it->element != NULL) {
+        it->index = index < 0 ? 0 : index;
+    }
+    Py_RETURN_NONE;
+}
+
+static PyMethodDef elementchilditer_methods[] = {
+    {"__length_hint__", elementchilditer_length_hint, METH_NOARGS, NULL},
+    {"__reduce__", elementchilditer_reduce, METH_NOARGS, NULL},
+    {"__setstate__", elementchilditer_setstate, METH_O, NULL},
+    {NULL, NULL}
+};
+
+static PyType_Slot elementchilditer_slots[] = {
+    {Py_tp_dealloc, elementchilditer_dealloc},
+    {Py_tp_traverse, elementchilditer_traverse},
+    {Py_tp_iter, PyObject_SelfIter},
+    {Py_tp_iternext, elementchilditer_next},
+    {_Py_value_iternext, elementchilditer_next_value},
+    {Py_tp_methods, elementchilditer_methods},
+    {0, NULL},
+};
+
+static PyType_Spec elementchilditer_spec = {
+    .name = "_elementtree._element_child_iterator",
+    .basicsize = sizeof(ElementChildIterObject),
+    .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+              Py_TPFLAGS_IMMUTABLETYPE | Py_TPFLAGS_DISALLOW_INSTANTIATION),
+    .slots = elementchilditer_slots,
+};
+
+static PyObject *
+element_iter(PyObject *op)
+{
+    if (Py_TYPE(op)->tp_as_sequence->sq_item != element_getitem) {
+        /* A subclass that defines __getitem__ and not __iter__ iterates
+           through its __getitem__. */
+        return PySeqIter_New(op);
+    }
+    elementtreestate *st = get_elementtree_state_by_type(Py_TYPE(op));
+    ElementChildIterObject *it =
+        PyObject_GC_New(ElementChildIterObject, st->ElementChildIter_Type);
+    if (it == NULL) {
+        return NULL;
+    }
+    it->element = (ElementObject *)Py_NewRef(op);
+    it->index = 0;
+    PyObject_GC_Track(it);
+    return (PyObject *)it;
+}
+
 
 /* ==================================================================== */
 /* the tree builder type */
@@ -4865,6 +5011,7 @@ static PyType_Slot element_slots[] = {
     {Py_tp_alloc, PyType_GenericAlloc},
     {Py_tp_new, element_new},
     {Py_sq_length, element_length},
+    {Py_tp_iter, element_iter},
     {Py_sq_item, element_getitem},
     {Py_sq_ass_item, element_setitem},
     {Py_nb_bool, element_bool},
@@ -4970,6 +5117,7 @@ module_exec(PyObject *m)
 
     /* Initialize object types */
     CREATE_TYPE(m, st->ElementIter_Type, &elementiter_spec);
+    CREATE_TYPE(m, st->ElementChildIter_Type, &elementchilditer_spec);
     CREATE_TYPE(m, st->TreeBuilder_Type, &treebuilder_spec);
     CREATE_TYPE(m, st->Element_Type, &element_spec);
     CREATE_TYPE(m, st->XMLParser_Type, &xmlparser_spec);

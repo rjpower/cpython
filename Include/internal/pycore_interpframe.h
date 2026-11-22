@@ -729,8 +729,9 @@ _PyThreadState_HasStackSpace(PyThreadState *tstate, int size)
         ||
         (tstate->datastack_top != NULL && tstate->datastack_limit != NULL)
     );
-    return tstate->datastack_top != NULL &&
-        size < tstate->datastack_limit - tstate->datastack_top;
+    // A thread without a stack has top == limit == NULL: no room, by one test
+    return (size_t)size * sizeof(PyObject *) <
+        (uintptr_t)tstate->datastack_limit - (uintptr_t)tstate->datastack_top;
 }
 
 // Exposing storage beyond the initialized frontier: no frame push does so

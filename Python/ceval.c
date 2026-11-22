@@ -5063,11 +5063,16 @@ call_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
         }
     }
     PyObject *callargs = tuple != NULL ? tuple : PyValue_AsKnownObjectBorrow(args);
-    PyValue first = PyTuple_GET_SIZE(callargs)
-        ? _PyIR_AdoptTemp(PyTuple_GET_VALUE(callargs, 0)) : PyValue_NULL;
-    if (instrumented && call_monitor(tstate, frame, head, callable, first) < 0) {
-        Py_XDECREF(tuple);
-        return (_PyCallResult){-1, NULL};
+    // The first argument is for the monitoring events alone
+    PyValue first = PyValue_NULL;
+    if (instrumented) {
+        if (PyTuple_GET_SIZE(callargs)) {
+            first = _PyIR_AdoptTemp(PyTuple_GET_VALUE(callargs, 0));
+        }
+        if (call_monitor(tstate, frame, head, callable, first) < 0) {
+            Py_XDECREF(tuple);
+            return (_PyCallResult){-1, NULL};
+        }
     }
     PyValue receiver = PyValue_NULL;
     PyValue target = instrumented ? callable

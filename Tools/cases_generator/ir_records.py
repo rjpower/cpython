@@ -579,6 +579,8 @@ class Fact:
         return f"{self.kind}({self.subject}{', ' + self.arg if self.arg else ''})"
 
 
+# TYPE_VERSION(v, K): type(v)'s version is K; TYPE_VERSION(v) without an
+# argument: type(v) has a version, not a specific one.
 FACT_KINDS = frozenset((
     "INLINE_INT", "INLINE_FLOAT", "NUMBER", "OBJECT", "NOT_NULL", "IS_NULL",
     "IS_NONE", "EXACT_TYPE", "NOT_TYPE", "SUBTYPE", "IDENTITY", "TYPE_VERSION",
@@ -822,6 +824,10 @@ def comparison_facts(lhs: list, op: str, rhs: list,
     if op == "==":
         if right == ["NULL"]:
             return [Fact("NOT_NULL", subjects.of(left))]
+        if right == ["0"] and left[-2:] == ["->", "tp_version_tag"]:
+            owner = subjects.of(left[:-2])
+            if owner.startswith("type(") and owner.endswith(")"):
+                return [Fact("TYPE_VERSION", owner[5:-1])]
         if right in (["0"], ["0.0"]):
             return [Fact("NON_ZERO", subjects.of(left))]
         args = _call(left, "Py_TYPE")

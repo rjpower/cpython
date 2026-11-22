@@ -1738,17 +1738,14 @@ insertdict_unicode_key_grow(PyDictObject *mp, Py_hash_t hash, PyValue key,
     return 1;
 }
 
-/* One-pass insert of an exact str key into an unwatched table of str keys:
-   one probe finds either the entry to replace or the slot to fill. In a split
-   table the probe reads the shared keys, and the pair is stored when the key
-   is among them; a key that is not needs the type's keys to grow.
+/* One-pass insert of an exact str key into an unwatched combined table of
+   str keys: one probe finds either the entry to replace or the slot to fill.
    Returns 1 if it stored the pair, consuming key and value; -1 on a memory
    error while growing the table, consuming them too; and 0 with nothing
-   consumed when the general insertdict() must run: a split table without the
-   key, a watched dict or a generic table. A combined table that is full, or
-   the empty keys of a new dict, grows first. Growth moves the entries and
-   runs no Python code, so the probe's miss stays valid and only the free slot
-   is found again.
+   consumed when the general insertdict() must run: a split table, a watched
+   dict or a generic table. A table that is full, or the empty keys of a new
+   dict, grows first. Growth moves the entries and runs no Python code, so the
+   probe's miss stays valid and only the free slot is found again.
 
    Nothing runs Python code between the probe and the store. Comparing two
    exact str keys is a pointer test, a hash test and unicode_eq(), and a
@@ -1763,7 +1760,7 @@ insertdict_unicode_key(PyDictObject *mp, PyValue key, Py_hash_t hash,
                        PyValue value)
 {
     PyDictKeysObject *keys = mp->ma_keys;
-    if (!DK_IS_UNICODE(keys)
+    if (!DK_IS_UNICODE(keys) || mp->ma_values != NULL
         || (mp->_ma_watcher_tag & DICT_WATCHER_MASK)
         || !value_is_exact_unicode(key))
     {
@@ -1782,15 +1779,8 @@ insertdict_unicode_key(PyDictObject *mp, PyValue key, Py_hash_t hash,
                 || (unicode_get_hash(ep_key) == hash
                     && unicode_eq(ep_key, key_object)))
             {
-                PyValue *slot = mp->ma_values != NULL
-                    ? &mp->ma_values->values[ix] : &entries[ix].me_value;
-                if (PyValue_IsNull(*slot)) {
-                    fill_split_value(mp, ix, value);
-                }
-                else {
-                    replace_value(mp, PyValue_Borrow(key), ix,
-                                  PyValue_Borrow(*slot), value);
-                }
+                replace_value(mp, PyValue_Borrow(key), ix,
+                              PyValue_Borrow(entries[ix].me_value), value);
                 PyValue_CLOSE(key);
                 return 1;
             }
@@ -1806,13 +1796,41 @@ insertdict_unicode_key(PyDictObject *mp, PyValue key, Py_hash_t hash,
         perturb >>= PERTURB_SHIFT;
         i = mask & (i*5 + perturb + 1);
     }
-    if (mp->ma_values != NULL) {
-        return 0;
-    }
     if (keys->dk_usable <= 0) {
         return insertdict_unicode_key_grow(mp, hash, key, value);
     }
     insert_combined_dict(mp, hash, free_slot, key, value);
+    return 1;
+}
+
+/* The one-pass insert for an unwatched split table whose shared keys hold an
+   exact str key: the probe finds the slot, and the value replaces the old one
+   or fills the empty slot. Returns 1 if it stored the pair, consuming key and
+   value, and 0 with nothing consumed otherwise: another kind of table, a
+   watched dict, or a key the shared keys lack, which needs them to grow.
+   Nothing between the probe and the store runs Python code. */
+static inline Py_ALWAYS_INLINE int
+insertdict_split_key(PyDictObject *mp, PyValue key, Py_hash_t hash,
+                     PyValue value)
+{
+    if (mp->ma_values == NULL || (mp->_ma_watcher_tag & DICT_WATCHER_MASK)
+        || !value_is_exact_unicode(key))
+    {
+        return 0;
+    }
+    Py_ssize_t ix = unicodekeys_lookup_unicode(
+        mp->ma_keys, PyValue_AsKnownObjectBorrow(key), hash);
+    if (ix < 0) {
+        return 0;
+    }
+    PyValue *slot = &mp->ma_values->values[ix];
+    if (PyValue_IsNull(*slot)) {
+        fill_split_value(mp, ix, value);
+    }
+    else {
+        replace_value(mp, PyValue_Borrow(key), ix, PyValue_Borrow(*slot), value);
+    }
+    PyValue_CLOSE(key);
     return 1;
 }
 
@@ -1824,6 +1842,9 @@ Consumes key and value references.
 static Py_NO_INLINE int
 insertdict_general(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
 {
+    if (insertdict_split_key(mp, key, hash, value)) {
+        return 0;
+    }
     int notified = 0, classified = 0;
     PyDict_WatchEvent event = PyDict_EVENT_ADDED;
     int status = -1;

@@ -26,12 +26,14 @@ static inline PyCodeObject *_PyFrame_GetCode(_PyInterpreterFrame *f) {
     return f->f_executable;
 }
 
-/* The executing copy of the code of f, which f->instr_ptr points into. */
+/* The executing copy of the code of f, which f->instr_ptr points into.  Its
+ * words follow it in memory (make_exec(), _PyIRStaticExec), so it is found
+ * from the frame's own pointer to them, without the code. */
 static inline _PyCodeExec *
 _PyFrame_Exec(_PyInterpreterFrame *f)
 {
-    _PyCodeExec *exec = _PyFrame_GetCode(f)->_co_exec;
-    assert(exec != NULL && exec->words == f->ir_words);
+    _PyCodeExec *exec = (_PyCodeExec *)f->ir_words - 1;
+    assert(exec == _PyFrame_GetCode(f)->_co_exec && exec->words == f->ir_words);
     return exec;
 }
 
@@ -400,28 +402,25 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 }
 
 
-/* Write the constants of the constant slots of code (CO_FAST_CONST) into the
- * slots of frame, counting those that need a count.  The slow path of
- * _PyFrame_Initialize(), for code with a mortal constant, as after
- * code.replace(co_consts=...). */
-extern void _PyFrame_FillConstSlots(_PyInterpreterFrame *frame,
-                                    PyCodeObject *code);
+/* The pairs of a constant block beyond the eighth entry (n is the whole
+ * count, dst the start of the block). */
+extern void _PyFrame_CopyConstSlotsMore(PyValue *dst, const PyValueBorrow *src,
+                                        int n);
+extern void _PyFrame_ZeroConstSlotsMore(PyValue *dst, int n);
 
 /* Copy the image of the constant slots (CO_FAST_CONST) of an exec to dst, the
- * first of them in a new frame: n of them, 1 <= n <= IR_CONST_IMAGE_MAX, two
- * slots at a time.
- * The image holds inline scalars and immortals, which own no count, and has
- * an even number of entries: for an odd n the last pair also writes the
- * slot after the last constant, the discard slot, which is NULL in a new
- * frame, from the NULL that pads the image.  Each test takes the next pair
- * only when there are constants for it: no loop and no call.  The exit needs
- * no counterpart: it closes the constant slots with the other locals, and
- * closing an inline or immortal value is a no-op. */
+ * first of them in a new frame: n >= 1 of them, two slots at a time.  The
+ * constants are not owned (the frame borrows them from co_consts through the
+ * code that it holds), so the copy takes no count and the exit closes
+ * nothing.  The image holds an even number of entries: for an odd n the last
+ * pair also writes the slot after the last constant, the discard slot, which
+ * is NULL in a new frame, from the NULL that pads the image.  Each test takes
+ * the next pair only when there are constants for it, and the pairs beyond
+ * IR_CONST_IMAGE_MAX are a call. */
 static inline void
-_PyFrame_CopyConstSlots(PyValue *dst, const PyValue *src, int n)
+_PyFrame_CopyConstSlots(PyValue *dst, const PyValueBorrow *src, int n)
 {
     static_assert(IR_CONST_IMAGE_MAX == 8, "the copy has four pairs");
-    assert(1 <= n && n <= IR_CONST_IMAGE_MAX);
     memcpy(dst, src, 2 * sizeof(PyValue));
     if (n > 2) {
         memcpy(dst + 2, src + 2, 2 * sizeof(PyValue));
@@ -429,6 +428,33 @@ _PyFrame_CopyConstSlots(PyValue *dst, const PyValue *src, int n)
             memcpy(dst + 4, src + 4, 2 * sizeof(PyValue));
             if (n > 6) {
                 memcpy(dst + 6, src + 6, 2 * sizeof(PyValue));
+                if (n > IR_CONST_IMAGE_MAX) {
+                    _PyFrame_CopyConstSlotsMore(dst, src, n);
+                }
+            }
+        }
+    }
+}
+
+/* The exit's counterpart of _PyFrame_CopyConstSlots(): NULL the n constant
+ * slots in the same pairs.  They own no count, so there is nothing to close,
+ * but a popped frame's slots must be NULL for the next frame, of any code.
+ * For an odd n the last pair also writes the discard slot, which the caller
+ * has already closed. */
+static inline void
+_PyFrame_ZeroConstSlots(PyValue *dst, int n)
+{
+    static_assert(IR_CONST_IMAGE_MAX == 8, "the zeroing has four pairs");
+    memset(dst, 0, 2 * sizeof(PyValue));
+    if (n > 2) {
+        memset(dst + 2, 0, 2 * sizeof(PyValue));
+        if (n > 4) {
+            memset(dst + 4, 0, 2 * sizeof(PyValue));
+            if (n > 6) {
+                memset(dst + 6, 0, 2 * sizeof(PyValue));
+                if (n > IR_CONST_IMAGE_MAX) {
+                    _PyFrame_ZeroConstSlotsMore(dst, n);
+                }
             }
         }
     }
@@ -462,17 +488,10 @@ _PyFrame_Initialize(
     frame->lltrace = 0;
 #endif
 
-    // The constant slots (CO_FAST_CONST), which are NULL: copy the ready
-    // image of their values if they own no count.  A mortal constant, as
-    // after code.replace(co_consts=...), gets a count.
+    // The constant slots (CO_FAST_CONST), which are NULL: copy the image
     if (exec->nconst) {
-        if (exec->const_image != NULL) {
-            _PyFrame_CopyConstSlots(base + exec->const_first, exec->const_image,
-                                    exec->nconst);
-        }
-        else {
-            _PyFrame_FillConstSlots(frame, code);
-        }
+        _PyFrame_CopyConstSlots(base + exec->const_first, exec->const_image,
+                                exec->nconst);
     }
 }
 
@@ -586,12 +605,49 @@ _PyFrame_ObjectMayReenter(PyObject *object)
 #endif
 }
 
+/* Release the slot at sp and leave it NULL.  An inline or immortal value is
+ * only NULLed, after one test; a NULL slot is left as it is. */
+static inline void
+_PyFrame_ClearSlot(PyValue *sp)
+{
+    PyValue ref = *sp;
+    if (ref.bits & Py_OWNED_MASK) {
+        // an inline value or an immortal one: nothing to close
+        *sp = PyValue_NULL;
+        return;
+    }
+    if (PyValue_IsNull(ref)) {
+        return;
+    }
+    // a move: cleared before the close, which can run a finalizer
+    *sp = PyValue_NULL;
+    PyValue_CLOSE(ref);
+}
+
+/* Release the slots [begin, end), from the top. */
+static inline void
+_PyFrame_ClearRange(PyValue *begin, PyValue *end)
+{
+    while (end > begin) {
+        _PyFrame_ClearSlot(--end);
+    }
+}
+
+/* The same for the slots above the discard slot: the free variables, which a
+ * closure's frame owns, and any scratch.  Out of line, as most frames have
+ * neither. */
+extern void _PyFrame_ClearUpper(PyValue *begin, PyValue *end);
+
 /* Release the first n slots of frame, from the top, so that a finalizer
  * that looks at the frame finds the slots that it has not reached yet intact
- * and the rest NULL.  The n cover the locals, which include the discard
- * slot.  An inline or immortal value, which includes every constant slot
- * that has an image, is only NULLed, after one test; a NULL slot is left as
- * it is. */
+ * and the rest NULL.  The n cover the locals, which include the discard slot
+ * and the free variables.
+ * The slots of the frame by owner:
+ *   [0, const_first)         arguments, locals, cells: owners;
+ *   [const_first, +nconst)   the constants, which own nothing and which
+ *                            nothing writes while the frame runs: NULLed
+ *                            without a test;
+ *   the discard slot, the free variables and the scratch above: owners. */
 static inline void
 _PyFrame_ClearSlots(_PyInterpreterFrame *frame, int n)
 {
@@ -599,23 +655,22 @@ _PyFrame_ClearSlots(_PyInterpreterFrame *frame, int n)
     _PyValue_CheckFrameExtent(frame, n);
 #endif
     PyValue *locals = frame->base;
-    assert(n > _PyFrame_DiscardSlot(frame));
-    PyValue *sp = locals + n;
-    while (sp > locals) {
-        sp--;
-        PyValue ref = *sp;
-        if (ref.bits & Py_OWNED_MASK) {
-            // an inline value or an immortal one: nothing to close
-            *sp = PyValue_NULL;
-            continue;
-        }
-        if (PyValue_IsNull(ref)) {
-            continue;
-        }
-        // a move: cleared before the close, which can run a finalizer
-        *sp = PyValue_NULL;
-        PyValue_CLOSE(ref);
+    const _PyCodeExec *exec = _PyFrame_Exec(frame);
+    assert(n >= (int)exec->nlocalsplus);
+    PyValue *consts = locals + exec->const_first;
+    PyValue *discard = consts + exec->nconst;
+    // The cleanup shim of __init__ has no discard slot: its block is empty
+    assert(exec == &_PyIR_InitCleanupExec ||
+           discard == locals + _PyFrame_DiscardSlot(frame));
+    if (locals + n > discard + 1) {
+        _PyFrame_ClearUpper(discard + 1, locals + n);
     }
+    // The zeroing writes the discard slot for an odd count: close it first
+    _PyFrame_ClearSlot(discard);
+    if (exec->nconst) {
+        _PyFrame_ZeroConstSlots(consts, exec->nconst);
+    }
+    _PyFrame_ClearRange(locals, consts);
     Py_CLEAR(frame->f_locals);
 }
 
@@ -674,8 +729,9 @@ _PyThreadState_HasStackSpace(PyThreadState *tstate, int size)
         ||
         (tstate->datastack_top != NULL && tstate->datastack_limit != NULL)
     );
-    return tstate->datastack_top != NULL &&
-        size < tstate->datastack_limit - tstate->datastack_top;
+    // A thread without a stack has top == limit == NULL: no room, by one test
+    return (size_t)size * sizeof(PyObject *) <
+        (uintptr_t)tstate->datastack_limit - (uintptr_t)tstate->datastack_top;
 }
 
 // Exposing storage beyond the initialized frontier: no frame push does so

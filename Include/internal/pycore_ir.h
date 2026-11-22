@@ -633,9 +633,9 @@ enum {
 };
 
 
-/* The most constant slots that an exec has an image for (_PyFrame_Initialize()
- * copies them in pairs); the code constructor accepts more, and a frame of
- * such code counts its constants one by one. */
+/* The most constant slots that a frame copies and clears in line, in pairs
+ * (_PyFrame_Initialize(), _PyFrame_ClearSlots()); a block of more is copied
+ * and cleared by a call. */
 #define IR_CONST_IMAGE_MAX 8
 
 typedef struct _PyCodeExec {
@@ -644,15 +644,14 @@ typedef struct _PyCodeExec {
                             // has an entry
     _PyFbBlock *feedback;   // the header before entries, or NULL
     /* The constant slots (CO_FAST_CONST), which are consecutive: nconst of
-     * them from const_first.  const_image holds the PyValue of each, to be
-     * copied into the slots of a new frame, or is NULL if some constant is
-     * mortal (as after code.replace(co_consts=...)) or there are more than
-     * IR_CONST_IMAGE_MAX: a frame then counts the constants it holds
-     * (_PyFrame_FillConstSlots()).  The image is
-     * padded with a NULL to an even count, because the copy takes two slots
-     * at a time: an odd count writes the slot after the last constant, the
-     * discard slot, which is NULL at the push. */
-    const PyValue *const_image;
+     * them from const_first, and the discard slot follows.  A code with no
+     * constant has const_first at the discard slot.  const_image holds the
+     * PyValue of each constant, which a frame copies into its slots and does
+     * not own: co_consts keeps the constants alive, and the frame holds the
+     * code.  The image is padded with a NULL to an even count, because the
+     * copy takes two slots at a time: an odd count writes the discard slot,
+     * which is NULL at the push. */
+    const PyValueBorrow *const_image;
     /* The bind plan of the last call of this code that has no keyword and
      * whose site holds no plan (_PyBindPlan_ForCall()), and the shape it was
      * made for, or 0.  A plan follows from the code and the shape alone, so

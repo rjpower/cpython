@@ -807,14 +807,6 @@ exec_discard_slot(_PyIRWord word, uint32_t discard)
     return word;
 }
 
-/* Whether a frame's slot may hold value without owning a count: an inline
- * scalar or an immortal object. */
-static int
-const_needs_no_count(PyValueBorrow value)
-{
-    return !PyValue_IsNull(value) && !PyValue_RefcountOnObject(value);
-}
-
 static _PyCodeExec *
 make_exec(PyCodeObject *co)
 {
@@ -824,19 +816,12 @@ make_exec(PyCodeObject *co)
     size_t fb_size = nfb
         ? sizeof(_PyFbBlock) + ((size_t)_PyCode_FbUnits(co) << IR_FB_UNIT_SHIFT)
         : 0;
-    // The image of the constant slots follows the feedback, if every
-    // constant is immortal or inline and there are at most
-    // IR_CONST_IMAGE_MAX of them
+    // The image of the constant slots follows the feedback
     int nconst = co->co_nconstslots;
     const uint32_t *table = _PyCode_CONSTSLOTS(co);
-    int image = 0 < nconst && nconst <= IR_CONST_IMAGE_MAX;
-    for (int j = 0; j < nconst; j++) {
-        image &= const_needs_no_count(
-            PyTuple_GET_VALUE(co->co_consts, table[2 * j + 1]));
-    }
     // The image has an even number of entries: the fill copies two at a
     // time, and the entry after an odd count is NULL
-    size_t image_size = image ? (size_t)(nconst + (nconst & 1)) * sizeof(PyValue) : 0;
+    size_t image_size = (size_t)(nconst + (nconst & 1)) * sizeof(PyValue);
     // Feedback entries hold borrowed pointers only.
     _PyCodeExec *exec = _PyMem_NoScanMalloc(
         sizeof(_PyCodeExec) + words_size + fb_size + image_size);
@@ -851,17 +836,19 @@ make_exec(PyCodeObject *co)
         .nlocalsplus = (uint32_t)co->co_nlocalsplus,
         .nconst = (uint16_t)nconst,
     };
+    // Without constants the block is empty and begins at the discard slot
+    exec->const_first = nconst > 0
+        ? (uint16_t)table[0]
+        : (uint16_t)_PyFrame_DiscardSlotForCodeObject(co);
     if (nconst > 0) {
-        exec->const_first = (uint16_t)table[0];
-    }
-    if (image) {
-        PyValue *values = (PyValue *)((char *)words + words_size + fb_size);
+        // The frames borrow these: co_consts keeps them alive
+        PyValueBorrow *values =
+            (PyValueBorrow *)((char *)words + words_size + fb_size);
         for (int j = 0; j < nconst; j++) {
-            values[j] = PyValue_XDUP(
-                PyTuple_GET_VALUE(co->co_consts, table[2 * j + 1]));
+            values[j] = PyTuple_GET_VALUE(co->co_consts, table[2 * j + 1]);
         }
         if (nconst & 1) {
-            values[nconst] = PyValue_NULL;
+            values[nconst] = PyValue_Borrow(PyValue_NULL);
         }
         exec->const_image = values;
     }
@@ -972,9 +959,7 @@ _PyCode_ExecSizeOf(PyCodeObject *co)
         return 0;
     }
     size_t res = sizeof(_PyCodeExec) + exec->nwords * sizeof(_PyIRWord);
-    if (exec->const_image != NULL) {
-        res += (size_t)(exec->nconst + (exec->nconst & 1)) * sizeof(PyValue);
-    }
+    res += (size_t)(exec->nconst + (exec->nconst & 1)) * sizeof(PyValueBorrow);
     _PyFbBlock *feedback = exec->feedback;
     if (feedback != NULL) {
         res += feedback->size;

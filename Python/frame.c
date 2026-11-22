@@ -10,13 +10,24 @@
 #include "pycore_value.h"      // _Py_VISIT_VALUE()
 
 void
-_PyFrame_FillConstSlots(_PyInterpreterFrame *frame, PyCodeObject *code)
+_PyFrame_CopyConstSlotsMore(PyValue *dst, const PyValueBorrow *src, int n)
 {
-    const uint32_t *table = _PyCode_CONSTSLOTS(code);
-    for (int i = 0; i < code->co_nconstslots; i++) {
-        frame->base[table[2 * i]] =
-            PyValue_XDUP(PyTuple_GET_VALUE(code->co_consts, table[2 * i + 1]));
-    }
+    size_t count = (size_t)(n + (n & 1)) - IR_CONST_IMAGE_MAX;
+    memcpy(dst + IR_CONST_IMAGE_MAX, src + IR_CONST_IMAGE_MAX,
+           count * sizeof(PyValue));
+}
+
+void
+_PyFrame_ZeroConstSlotsMore(PyValue *dst, int n)
+{
+    size_t count = (size_t)(n + (n & 1)) - IR_CONST_IMAGE_MAX;
+    memset(dst + IR_CONST_IMAGE_MAX, 0, count * sizeof(PyValue));
+}
+
+void
+_PyFrame_ClearUpper(PyValue *begin, PyValue *end)
+{
+    _PyFrame_ClearRange(begin, end);
 }
 
 void

@@ -197,6 +197,74 @@ class TestIsInstanceIsSubclass(unittest.TestCase):
         self.assertEqual(True, isinstance(Child(), Super))
         self.assertEqual(False, isinstance(Child(), AbstractSuper))
 
+    def test_isinstance_overridden_class_attribute(self):
+        # A type that does not find object's __class__ descriptor, or does
+        # not use the generic attribute protocol, answers by what its
+        # instances' __class__ returns. Each case runs repeatedly so that
+        # the type cache holds the lookup.
+        import weakref
+
+        class Plain:
+            pass
+
+        class Liar:
+            @property
+            def __class__(self):
+                return Super
+
+        class Dunder:
+            __class__ = Super
+
+        class Getattr:
+            def __getattr__(self, name):
+                raise AssertionError(name)
+
+        class GetattrLiar:
+            def __getattr__(self, name):
+                raise AssertionError(name)
+            __class__ = property(lambda self: Super)
+
+        class Getattribute:
+            def __getattribute__(self, name):
+                if name == '__class__':
+                    return Super
+                return object.__getattribute__(self, name)
+
+        class Reassigned:
+            pass
+
+        reassigned = Reassigned()
+        reassigned.__class__ = Plain
+
+        class Subclass(Plain):
+            pass
+
+        plain = Plain()
+        cases = [
+            (plain, Super, False), (plain, Plain, True),
+            (Subclass(), Plain, True), (Liar(), Super, True),
+            (Liar(), Plain, False), (Dunder(), Super, True),
+            (Getattr(), Super, False), (GetattrLiar(), Super, True),
+            (Getattribute(), Super, True), (reassigned, Plain, True),
+            (reassigned, Reassigned, False), (weakref.proxy(plain), Plain, True),
+            (weakref.proxy(plain), Super, False), (3, Super, False),
+            (None, Super, False), ((), Super, False),
+        ]
+        for _ in range(10):
+            for inst, cls, expected in cases:
+                with self.subTest(inst=inst, cls=cls):
+                    self.assertIs(isinstance(inst, cls), expected)
+        # A type whose attribute protocol changes after the cache is warm
+        def getattribute(self, name):
+            if name == '__class__':
+                return Super
+            return object.__getattribute__(self, name)
+
+        Plain.__getattribute__ = getattribute
+        self.assertIs(isinstance(plain, Super), True)
+        del Plain.__getattribute__
+        self.assertIs(isinstance(plain, Super), False)
+
     def test_isinstance_abstract(self):
         # abstract instances
         self.assertEqual(True, isinstance(AbstractSuper(), AbstractSuper))

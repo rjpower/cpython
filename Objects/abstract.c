@@ -19,6 +19,7 @@
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // _PyTuple_FromArraySteal()
+#include "pycore_typeobject.h"    // _PyType_HasObjectClass()
 #include "pycore_unionobject.h"   // _PyUnion_Check()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_long_value.h"    // _PyValue_IntAsDouble()
@@ -3802,7 +3803,9 @@ object_isinstance(PyObject *inst, PyObject *cls)
     int retval;
     if (PyType_Check(cls)) {
         retval = PyObject_TypeCheck(inst, (PyTypeObject *)cls);
-        if (retval == 0) {
+        /* An instance whose __class__ is its type has no other class to
+           test. */
+        if (retval == 0 && !_PyType_HasObjectClass(Py_TYPE(inst))) {
             retval = PyObject_GetOptionalAttr(inst, &_Py_ID(__class__), &icls);
             if (icls != NULL) {
                 if (icls != (PyObject *)(Py_TYPE(inst)) && PyType_Check(icls)) {

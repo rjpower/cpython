@@ -52,17 +52,11 @@ _PyErr_CreatedInstance(PyObject *exception_type, PyValue result)
 }
 
 /* The instance of exception_type that calling it with args builds, or NULL
- * with an exception set.  A common class is built directly, its args tuple and
- * the object, without the call. */
+ * with an exception set. */
 PyObject *
 _PyErr_CreateExceptionFromArray(PyObject *exception_type, const PyValue *args,
                                 Py_ssize_t nargs)
 {
-    PyObject *built;
-    if (_PyExc_BuildFromArray((PyTypeObject *)exception_type, args, nargs,
-                              &built)) {
-        return built;
-    }
     PyValue result = _PyValue_VectorcallTstate(
         _PyThreadState_GET(), PyValue_FromObjectBorrow(exception_type),
         args, nargs, NULL);

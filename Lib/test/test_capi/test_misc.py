@@ -2993,7 +2993,9 @@ class Test_Pep523API(unittest.TestCase):
         def func():
             for _ in gen():
                 pass
-        names = ["func", "gen", "gen", "gen"]
+        # The call of a generator function creates the generator without
+        # evaluating a frame: the hook sees only the resumptions.
+        names = ["func", "gen", "gen"]
         self.do_test(func, names)
 
     def test_inlined_load_attr(self):
@@ -3017,7 +3019,7 @@ class Test_Pep523API(unittest.TestCase):
             yield from inner()
         def func():
             list(outer())
-        names = ["func", "outer", "outer", "inner", "inner", "outer", "inner"]
+        names = ["func", "outer", "inner", "outer", "inner"]
         self.do_test(func, names)
 
 

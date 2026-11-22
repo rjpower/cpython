@@ -1240,7 +1240,7 @@ class TestIRCases(unittest.TestCase):
                 analysis.instructions[name]))
             self.assertFalse(ir_generator.writes_suspended_frame_state(
                 analysis.instructions[name]))
-        for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE", "RETURN_GENERATOR"):
+        for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
             self.assertTrue(ir_generator.writes_suspended_frame_state(
                 analysis.instructions[name]))
         source = source.replace(
@@ -1250,7 +1250,7 @@ class TestIRCases(unittest.TestCase):
                                 "assert(gen->gi_frame_state == FRAME_CREATED);")
         Path(self.temp_input_filename).write_text(source)
         mutated = analyzer.analyze_files([self.temp_input_filename])
-        for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE", "RETURN_GENERATOR"):
+        for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
             self.assertFalse(ir_generator.writes_suspended_frame_state(
                 mutated.instructions[name]))
 
@@ -3390,19 +3390,19 @@ class TestIRCases(unittest.TestCase):
         finally:
             producer.body.body.pop()
 
-    def test_created_copy_recipe_checks_actual_transport(self):
+    def test_generator_marker_contract_checks_actual_body(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
         formats = ir_generator.compute_formats(analysis)
         inst = analysis.instructions["RETURN_GENERATOR"]
-        self.assertTrue(ir_generator.created_copy_contract(inst, formats[inst.name]))
+        self.assertTrue(ir_generator.generator_marker_contract(inst, formats[inst.name]))
         body = inst.parts[0].body
         for statement in ("opaque(frame);", "*slots = PyValue_NULL;",
                           "frame->base[0] = PyValue_NULL;"):
             changed = self.analyze(f"\ninst(OP, (--)) {{ {statement} }}\n")
             body.body.insert(0, changed.instructions["OP"].parts[0].body.body[0])
             try:
-                self.assertFalse(ir_generator.created_copy_contract(inst, formats[inst.name]))
+                self.assertFalse(ir_generator.generator_marker_contract(inst, formats[inst.name]))
             finally:
                 body.body.pop(0)
         for name in ("MAKE_CELL", "COPY_FREE_VARS"):

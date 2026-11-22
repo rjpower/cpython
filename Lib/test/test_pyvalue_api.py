@@ -634,7 +634,7 @@ class CustomEvaluatorTests(unittest.TestCase):
     """A custom evaluator must consume the frame it is given, by running it
     or by retiring it; the provider keeps no token."""
 
-    def test_created_generator_uses_executing_code_after_hook_mutation(self):
+    def test_created_generator_is_not_evaluated_by_the_hook(self):
         for object_provider in (False, True):
             for replacement_generator in (False, True):
                 with self.subTest(object_provider=object_provider,
@@ -659,20 +659,19 @@ class CustomEvaluatorTests(unittest.TestCase):
 
                     def observe(phase):
                         observations.append(phase)
-                        if phase == 'before':
-                            target.__code__ = replacement_code
-                        support.gc_collect()
 
                     payload = Item()
                     gen = _testinternalcapi.run_staged_provider(
                         target, payload, observe, 'default', object_provider)
                     self.assertIsInstance(gen, types.GeneratorType)
+                    # The call creates the object and evaluates no frame
+                    self.assertEqual(observations, [])
+                    target.__code__ = replacement_code
+                    support.gc_collect()
                     self.assertIs(gen.gi_code, selected_code)
-                    self.assertIs(target.__code__, replacement_code)
                     self.assertEqual(next(gen), (payload, payload))
                     with self.assertRaises(StopIteration):
                         next(gen)
-                    self.assertEqual(observations, ['before', 'after'])
 
     def test_delegated_hook_lifetime_and_reentry(self):
         namespace = {}

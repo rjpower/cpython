@@ -28,6 +28,7 @@
 #include "pycore_import.h"        // _PyImport_ClearExtension()
 #include "pycore_initconfig.h"    // _Py_GetConfigsAsDict()
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
+#include "pycore_ir_source.h"     // _PyIR_POSITION_RECORD
 #include "pycore_ir_outcomes.h"    // _PyIR_NormalPhysicalTransfer()
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
@@ -1812,6 +1813,48 @@ get_feedback(PyObject *self, PyObject *args)
     }
     return Py_BuildValue("(ssIIN)", kinds[h->kind], states[h->state],
                          fields[0], fields[1], rows);
+}
+
+/* The register IR of CODE, lowered if the code has not run, as a tuple: the
+ * words (bytes), the feedback initialisers (bytes), nfixed, nconst, nslots,
+ * the constant values, the first traceable word, the exceptions in word units
+ * (bytes), the recovery records (bytes), the positions (bytes), the pcmap
+ * (bytes of uint32) and the flags. */
+static PyObject *
+get_ir_raw(PyObject *self, PyObject *code_obj)
+{
+    if (!PyCode_Check(code_obj)) {
+        PyErr_SetString(PyExc_TypeError, "argument must be a code object");
+        return NULL;
+    }
+    const _PyCodeIR *ir = _PyCode_GetIR((PyCodeObject *)code_obj);
+    if (ir == NULL) {
+        return NULL;
+    }
+    PyObject *consts = PyTuple_New(ir->nconst);
+    if (consts == NULL) {
+        return NULL;
+    }
+    for (uint32_t i = 0; i < ir->nconst; i++) {
+        PyValue v = PyValue_DUP(ir->const_values[i]);
+        PyObject *o = _PyValue_AsObjectAt(v, BOX_SITE_FRAME);
+        PyValue_CLOSE(v);
+        if (o == NULL) {
+            Py_DECREF(consts);
+            return NULL;
+        }
+        PyTuple_SET_ITEM(consts, i, o);
+    }
+    return Py_BuildValue(
+        "(y#y#IIINy#y#y#y#I)",
+        (const char *)ir->words, (Py_ssize_t)(ir->nwords * sizeof(_PyIRWord)),
+        (const char *)ir->fbinit, (Py_ssize_t)(ir->nfeedback * sizeof(uint32_t)),
+        ir->nfixed, ir->nconst, ir->nslots, consts,
+        (const char *)ir->exceptions, (Py_ssize_t)ir->nexceptions,
+        (const char *)ir->records, (Py_ssize_t)(ir->nrecords * _PyIR_RECOVERY_RECORD),
+        (const char *)ir->positions, (Py_ssize_t)(ir->nrecords * _PyIR_POSITION_RECORD),
+        (const char *)ir->pcmap, (Py_ssize_t)(ir->nwords * sizeof(uint32_t)),
+        ir->first_traceable);
 }
 
 /* The words that the lowering of CODE made, or with ADAPTIVE those of its
@@ -4938,6 +4981,7 @@ static PyMethodDef module_functions[] = {
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
+    {"get_ir_raw", get_ir_raw, METH_O, NULL},
     {"ir_normal_physical_transfer", ir_normal_physical_transfer,
      METH_VARARGS, NULL},
     {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},

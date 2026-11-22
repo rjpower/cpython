@@ -4063,6 +4063,47 @@ create_init_frame(PyThreadState *tstate, _PyInterpreterFrame *caller,
     return child;
 }
 
+/* The frame of a class's __init__ that the operands do not fill directly
+ * (a defaulted or variadic __init__, or too little stack): the operands are
+ * gathered with init and self into a window that create_init_frame binds
+ * from. */
+static Py_NO_INLINE _PyInterpreterFrame *
+create_init_frame_window(PyThreadState *tstate, _PyInterpreterFrame *caller,
+                         _PyInstr *current, PyValue init, PyValue self,
+                         _PyInstr *next, _PyIRWord word, int first, int nargs)
+{
+    PyValue small[8];
+    PyValue *window = small;
+    if (nargs + 2 > (int)Py_ARRAY_LENGTH(small)) {
+        window = PyMem_Malloc(sizeof(PyValue) * (nargs + 2));
+        if (window == NULL) {
+            PyErr_NoMemory();
+            PyValue_CLOSE(init);
+            PyValue_CLOSE(self);
+            return NULL;
+        }
+    }
+    window[0] = init;
+    window[1] = self;
+    for (int k = 0; k < nargs; k++) {
+        window[2 + k] = call_operand_take(caller, current, first + k);
+    }
+    _PyInterpreterFrame *child = create_init_frame(
+        tstate, caller, window, nargs, (int)IR_A(word), next);
+    if (child != NULL) {
+        call_release_callable(caller, word);
+    }
+    else {
+        for (int k = nargs + 2; k-- > 0;) {
+            PyValue_CLEAR(window[k]);
+        }
+    }
+    if (window != small) {
+        PyMem_Free(window);
+    }
+    return child;
+}
+
 /* The frame of a class's __init__ for CALL_ALLOC_AND_ENTER_INIT, called with
  * the call at current: init (the function) and self (the new instance) are
  * owners that the helper consumes, and the operands fill the arguments after
@@ -4104,36 +4145,8 @@ _PyEval_CreateInitFrame(PyThreadState *tstate, _PyInterpreterFrame *caller,
         tstate->py_recursion_remaining--;
         return child;
     }
-    PyValue small[8];
-    PyValue *window = small;
-    if (nargs + 2 > (int)Py_ARRAY_LENGTH(small)) {
-        window = PyMem_Malloc(sizeof(PyValue) * (nargs + 2));
-        if (window == NULL) {
-            PyErr_NoMemory();
-            PyValue_CLOSE(init);
-            PyValue_CLOSE(self);
-            return NULL;
-        }
-    }
-    window[0] = init;
-    window[1] = self;
-    for (int k = 0; k < nargs; k++) {
-        window[2 + k] = call_operand_take(caller, current, first + k);
-    }
-    _PyInterpreterFrame *child = create_init_frame(
-        tstate, caller, window, nargs, (int)IR_A(word), next);
-    if (child != NULL) {
-        call_release_callable(caller, word);
-    }
-    else {
-        for (int k = nargs + 2; k-- > 0;) {
-            PyValue_CLEAR(window[k]);
-        }
-    }
-    if (window != small) {
-        PyMem_Free(window);
-    }
-    return child;
+    return create_init_frame_window(tstate, caller, current, init, self, next,
+                                    word, first, nargs);
 }
 
 /* Generic calls.
@@ -4532,7 +4545,7 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return (_PyCallResult){1, NULL};
 #else
     int bits = plan->flags;
-    if (!(bits & _Py_CALL_BIND_VALID)) {
+    if (Py_UNLIKELY(!(bits & _Py_CALL_BIND_VALID))) {
         return (_PyCallResult){1, NULL};
     }
     _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*head);
@@ -4544,7 +4557,7 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
     int skip = 0;
     if (tuple == NULL) {
         skip = call_skipped_operands(slots, head, word);
-        if (skip != !!(bits & _Py_CALL_BIND_SKIP)) {
+        if (Py_UNLIKELY(skip != !!(bits & _Py_CALL_BIND_SKIP))) {
             return (_PyCallResult){1, NULL};
         }
     }
@@ -4557,8 +4570,8 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
          * which a generator call does not have. */
         return (_PyCallResult){1, NULL};
     }
-    if (!generator &&
-        !_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+    if (Py_UNLIKELY(!generator &&
+        !_PyThreadState_HasStackSpace(tstate, code->co_framesize))) {
         return (_PyCallResult){1, NULL};
     }
     int argcount = code->co_argcount;
@@ -4573,7 +4586,7 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
     PyObject *defaults = func->func_defaults;
     Py_ssize_t ndefaults = defaults == NULL ? 0 : PyTuple_GET_SIZE(defaults);
     int need = plan->need;
-    if ((size_t)(ndefaults - need) > (size_t)(argcount - need)) {
+    if (Py_UNLIKELY((size_t)(ndefaults - need) > (size_t)(argcount - need))) {
         return (_PyCallResult){1, NULL};
     }
     unsigned int kwonly_mask = simple ? 0 : plan->kwonly_mask;
@@ -4816,6 +4829,42 @@ call_push_python(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return (_PyCallResult){0, child};
 }
 
+/* The end of an instrumented call to native code: the events of its result.
+ * Out of line, as the events are rare. */
+static Py_NO_INLINE _PyCallResult
+call_run_instrumented_result(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                             _PyInstr *head, _PyIRWord word, PyValue callable,
+                             PyValue first, PyValue result, int flags,
+                             int keywords)
+{
+    /* An instrumented call: the callee can run Python, so check the frame
+     * before the event's callback reads it, and again after the callback,
+     * which can run Python too. */
+    int refreshed = call_refresh(tstate, frame, head);
+    int failed = call_monitor_result(tstate, frame, head, callable, first,
+                                     PyValue_IsNull(result) || refreshed < 0);
+    if (!failed && refreshed == 0) {
+        refreshed = call_refresh(tstate, frame, head);
+    }
+    if (failed || refreshed < 0) {
+        PyValue_XCLOSE(result);
+        return (_PyCallResult){-1, NULL};
+    }
+    PyValue displaced = call_publish_cold(frame, head, word, result,
+                                          (int)IR_C(word) - keywords);
+    PyValue_XCLOSE(displaced);
+    /* Releasing the operands can run a finalizer. */
+    int status = call_refresh(tstate, frame, head);
+    if (status == 0 && (flags & CALL_PERIODIC)) {
+        /* Signal handlers and the GC can run Python. */
+        if (check_periodics_at_end(tstate, frame) < 0 ||
+            call_refresh(tstate, frame, head) < 0) {
+            status = -1;
+        }
+    }
+    return (_PyCallResult){status, NULL};
+}
+
 /* The generic CALL and CALL_KW: their words, instrumented or not, and the
  * guarded calls that missed.  Returns {-1, NULL} on error, {0, child} for a
  * pushed frame and {0, NULL} for a finished native call.  The handler keeps
@@ -4832,7 +4881,7 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
     PyValue callable = call_expand_method(slots[IR_B(word)], flags, &receiver);
     int instrumented = (flags & CALL_INSTRUMENTED) != 0;
     PyValue first = PyValue_NULL;
-    if (instrumented) {
+    if (Py_UNLIKELY(instrumented)) {
         first = call_first_argument(slots, head, receiver, keywords);
         if (call_monitor(tstate, frame, head, callable, first) < 0) {
             return (_PyCallResult){-1, NULL};
@@ -4862,58 +4911,36 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
     }
     PyValue result = call_vector_impl(tstate, frame, head, callable, receiver,
                                       keywords);
-    if (!instrumented) {
-        /* The callee may have run Python, but nothing that the rest of the
-         * call reads can have changed.  A native callee returns on the C
-         * stack above this activation, so this frame is the current one;
-         * the executing copy of the code, and so the head, is fixed for the
-         * life of the code object (register-ir.md 1.10), as value_operation_
-         * refresh() asserts; and the frame's slots stay where they are.  The
-         * temporaries are owned by their homes and a local that the callee
-         * rebound keeps its old value alive, so publishing reads nothing
-         * stale.  A finalizer that the release runs is in the same position.
-         * Only an event's callback, below, reads the frame after the call. */
-        assert(tstate->current_frame == frame);
-        assert(_PyFrame_GetCode(frame)->_co_exec != NULL &&
-               frame->ir_words == _PyFrame_GetCode(frame)->_co_exec->words);
-        if (PyValue_IsNull(result)) {
-            return (_PyCallResult){-1, NULL};
-        }
-        /* The keyword names operand of CALL_KW is not a slot. */
-        PyValue displaced = call_publish(frame, head, word, result,
-                                         (int)IR_C(word) - keywords);
-        PyValue_XCLOSE(displaced);
-        if ((flags & CALL_PERIODIC) && check_periodics_at_end(tstate, frame) < 0) {
-            return (_PyCallResult){-1, NULL};
-        }
-        return (_PyCallResult){0, NULL};
+    if (Py_UNLIKELY(instrumented)) {
+        return call_run_instrumented_result(tstate, frame, head, word,
+                                            callable, first, result, flags,
+                                            keywords);
     }
-    /* An instrumented call: the callee can run Python, so check the frame
-     * before the event's callback reads it, and again after the callback,
-     * which can run Python too. */
-    int refreshed = call_refresh(tstate, frame, head);
-    int failed = call_monitor_result(tstate, frame, head, callable, first,
-                                     PyValue_IsNull(result) || refreshed < 0);
-    if (!failed && refreshed == 0) {
-        refreshed = call_refresh(tstate, frame, head);
-    }
-    if (failed || refreshed < 0) {
-        PyValue_XCLOSE(result);
+    /* The callee may have run Python, but nothing that the rest of the
+     * call reads can have changed.  A native callee returns on the C
+     * stack above this activation, so this frame is the current one;
+     * the executing copy of the code, and so the head, is fixed for the
+     * life of the code object (register-ir.md 1.10), as value_operation_
+     * refresh() asserts; and the frame's slots stay where they are.  The
+     * temporaries are owned by their homes and a local that the callee
+     * rebound keeps its old value alive, so publishing reads nothing
+     * stale.  A finalizer that the release runs is in the same position.
+     * Only an event's callback (call_run_instrumented_result) reads the
+     * frame after the call. */
+    assert(tstate->current_frame == frame);
+    assert(_PyFrame_GetCode(frame)->_co_exec != NULL &&
+           frame->ir_words == _PyFrame_GetCode(frame)->_co_exec->words);
+    if (PyValue_IsNull(result)) {
         return (_PyCallResult){-1, NULL};
     }
+    /* The keyword names operand of CALL_KW is not a slot. */
     PyValue displaced = call_publish(frame, head, word, result,
                                      (int)IR_C(word) - keywords);
     PyValue_XCLOSE(displaced);
-    /* Releasing the operands can run a finalizer. */
-    int status = call_refresh(tstate, frame, head);
-    if (status == 0 && (flags & CALL_PERIODIC)) {
-        /* Signal handlers and the GC can run Python. */
-        if (check_periodics_at_end(tstate, frame) < 0 ||
-            call_refresh(tstate, frame, head) < 0) {
-            status = -1;
-        }
+    if ((flags & CALL_PERIODIC) && check_periodics_at_end(tstate, frame) < 0) {
+        return (_PyCallResult){-1, NULL};
     }
-    return (_PyCallResult){status, NULL};
+    return (_PyCallResult){0, NULL};
 }
 
 static Py_NO_INLINE _PyCallResult

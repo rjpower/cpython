@@ -4637,6 +4637,20 @@ class XMLParserTest(unittest.TestCase):
     sample3 = ('<?xml version="1.0" encoding="iso-8859-1"?>\n'
         '<money value="$\xa3\u20ac\U0001017b">$\xa3\u20ac\U0001017b</money>')
 
+    def test_repeated_names(self):
+        # tag and attribute names are converted once and then reused
+        xml = ('<a xmlns="urn:x" xmlns:p="urn:y" k="1">'
+               '<p:b p:k="2" k="3"/><p:b/><b/><b/>'
+               '<\u00e9\u4e2d \u00e9="4"/><\u00e9\u4e2d/></a>')
+        root = ET.XML(xml)
+        self.assertEqual(root.tag, '{urn:x}a')
+        self.assertEqual([child.tag for child in root],
+                         ['{urn:y}b', '{urn:y}b', '{urn:x}b', '{urn:x}b',
+                          '{urn:x}\u00e9\u4e2d', '{urn:x}\u00e9\u4e2d'])
+        self.assertEqual(root[0].attrib, {'{urn:y}k': '2', 'k': '3'})
+        self.assertEqual(root[4].attrib, {'\u00e9': '4'})
+        self.assertIs(root[0].tag, root[1].tag)
+
     def _check_sample_element(self, e):
         self.assertEqual(e.tag, 'file')
         self.assertEqual(e[0].tag, 'line')

@@ -208,5 +208,25 @@ class TestPlainGenerator(unittest.TestCase):
         self.assertEqual(log, ["closed"])
 
 
+class TestUnoptimizedCoroutine(unittest.TestCase):
+    # Top-level await compiles to a coroutine whose code is not optimized:
+    # its frame reads and writes the mapping of locals it was called with,
+    # which the created coroutine must keep.
+    def test_top_level_await_keeps_its_locals(self):
+        import ast
+        import types
+
+        async def ready(value):
+            return value
+
+        code = compile("a = await ready(1)\nb = a + 1", "<test>", "exec",
+                       flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
+        namespace = {"ready": ready}
+        coro = types.FunctionType(code, namespace)()
+        with self.assertRaises(StopIteration):
+            coro.send(None)
+        self.assertEqual((namespace["a"], namespace["b"]), (1, 2))
+
+
 if __name__ == "__main__":
     unittest.main()

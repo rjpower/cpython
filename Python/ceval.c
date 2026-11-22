@@ -2037,7 +2037,7 @@ call_new_generator(PyThreadState *tstate, _PyInterpreterFrame *frame,
         (PyFunctionObject *)_PyValue_AsKnownObjectBorrowPointer(callable);
     PyCodeObject *code = (PyCodeObject *)func->func_code;
     PyValue function = call_exact_function(slots, word, callable, 0);
-    PyGenObject *gen = _PyGen_NewCall(tstate, function, code, frame);
+    PyGenObject *gen = _PyGen_NewCall(tstate, function, NULL, code, frame);
     if (gen == NULL) {
         return PyValue_NULL;
     }
@@ -3790,9 +3790,8 @@ eval_new_generator(PyThreadState *tstate, PyValue func, PyObject *locals,
     PyFunctionObject *func_obj =
         (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     CALL_STAT_INC(frames_pushed);
-    // The frame of a generator holds no mapping of locals
-    Py_XDECREF(locals);
-    PyGenObject *gen = _PyGen_NewCall(tstate, func, code, tstate->current_frame);
+    PyGenObject *gen = _PyGen_NewCall(tstate, func, locals, code,
+                                      tstate->current_frame);
     if (gen == NULL) {
         bound_close_arguments(NULL, args, argcount, kwnames);
         return NULL;
@@ -4586,7 +4585,7 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
     _PyInterpreterFrame *target;
     PyGenObject *gen = NULL;
     if (!simple && generator) {
-        gen = _PyGen_NewCall(tstate, function, code, frame);
+        gen = _PyGen_NewCall(tstate, function, NULL, code, frame);
         if (gen == NULL) {
             call_bind_discard(kwdefaults, kwonly_mask, extras_tuple, kwargs);
             return (_PyCallResult){-1, NULL};

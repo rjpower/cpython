@@ -1322,23 +1322,25 @@ _Py_MakeCoro(PyFunctionObject *func, PyCodeObject *code,
  * RETURN_GENERATOR would leave it, except for the arguments, which the caller
  * moves into gen->gi_iframe.base before anything that can fail, run code or
  * collect, and the prologue of the code (gen_prologue() in Python/ceval.c).
- * Consumes function, which the frame owns; on failure it is closed.  caller is the frame that makes
- * the call. */
+ * Consumes function and locals, which the frame owns; on failure they are
+ * closed.  locals is the mapping of an unoptimized code's frame (top-level
+ * await), NULL for optimized code.  caller is the frame that makes the call. */
 PyGenObject *
-_PyGen_NewCall(PyThreadState *tstate, PyValue function, PyCodeObject *code,
-               _PyInterpreterFrame *caller)
+_PyGen_NewCall(PyThreadState *tstate, PyValue function, PyObject *locals,
+               PyCodeObject *code, _PyInterpreterFrame *caller)
 {
     PyFunctionObject *func =
         (PyFunctionObject *)PyValue_AsKnownObjectBorrow(function);
     PyGenObject *gen = (PyGenObject *)_Py_MakeCoro(func, code, caller);
     if (gen == NULL) {
         PyValue_CLOSE(function);
+        Py_XDECREF(locals);
         return NULL;
     }
     _PyInterpreterFrame *frame = &gen->gi_iframe;
     memset(frame->owned_slots, 0,
            (size_t)_PyFrame_NumSlotsForCodeObject(code) * sizeof(PyValue));
-    _PyFrame_Initialize(tstate, frame, function, NULL, code,
+    _PyFrame_Initialize(tstate, frame, function, locals, code,
                         frame->owned_slots, NULL);
     frame->owner = FRAME_OWNED_BY_GENERATOR;
     // The first send resumes after RETURN_GENERATOR, the word before the

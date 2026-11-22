@@ -3823,7 +3823,7 @@ dummy_func(
             PyFunctionObject *func = (PyFunctionObject *)ht->_spec_cache.iter;
             PyGenObject *gen = _PyGen_NewCall(
                 tstate, PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)func)),
-                (PyCodeObject *)func->func_code, frame);
+                NULL, (PyCodeObject *)func->func_code, frame);
             if (gen == NULL) {
                 // The iterable is still in its home, for the unwinder
                 ERROR_NO_POP();

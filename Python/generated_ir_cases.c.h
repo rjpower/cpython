@@ -9519,7 +9519,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 PyFunctionObject *func = (PyFunctionObject *)ht->_spec_cache.iter;
                 PyGenObject *gen = _PyGen_NewCall(
                     tstate, PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)func)),
-                    (PyCodeObject *)func->func_code, frame);
+                    NULL, (PyCodeObject *)func->func_code, frame);
                 if (gen == NULL) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }

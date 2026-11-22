@@ -1907,10 +1907,11 @@ call_release_callable(_PyInterpreterFrame *frame, _PyIRWord word)
  * upstream does.  The frame is already unlinked, the caller holds the result
  * in C, and each owner is NULLed and closed in turn: a finalizer that runs
  * sees a consistent frame, and nested calls may grow the arena but must
- * restore this reservation, which stays until the code is closed.  The one
- * routine for the common frame, in the handler: the clear loop, the function
- * and the code, and the pop.  A frame that has a frame object leaves the
- * locals to _PyFrame_ClearExceptCode(), which hands them to it. */
+ * restore this reservation, which stays until the code is closed.  The
+ * common frame is the one routine here: the clear, the function and the code,
+ * and the pop.  A frame that has a frame object, or that a sampling profiler
+ * anchors, takes the general retire out of line: the frame object takes the
+ * locals. */
 static inline Py_ALWAYS_INLINE PyValue
 _PyEval_RetireThreadFrameWithResult(PyThreadState *tstate,
                                     _PyInterpreterFrame *frame, PyValue result)
@@ -1919,17 +1920,15 @@ _PyEval_RetireThreadFrameWithResult(PyThreadState *tstate,
     assert(frame->owner == FRAME_OWNED_BY_THREAD);
     assert(tstate->current_frame != frame);
     assert((PyObject **)frame == tstate->datastack_limit);
-    _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
-    int extent = _PyFrame_GetCode(frame)->co_nlocalsplus;
-    if (Py_UNLIKELY(frame->frame_obj != NULL)) {
-        assert(frame->frame_obj->f_frame == frame);
-        _PyFrame_ClearExceptCode(frame, extent);
+    if (Py_UNLIKELY(frame->frame_obj != NULL
+                    || tstate->last_profiled_frame == frame)) {
+        return _PyEval_FrameClearAndPopGeneralWithResult(tstate, frame, result);
     }
-    else {
-        _PyFrame_ClearSlots(frame, extent);
-        Py_CLEAR(frame->f_funcobj);
-    }
-    Py_CLEAR(frame->f_executable);
+    _PyFrame_ClearSlots(frame, (int)_PyFrame_Exec(frame)->nlocalsplus);
+    // The frame holds both, and is dead: nothing reads the pointers again
+    assert(frame->f_funcobj != NULL);
+    Py_DECREF(frame->f_funcobj);
+    Py_DECREF(frame->f_executable);
     _PyThreadState_PopFrame(tstate, frame);
     return result;
 }

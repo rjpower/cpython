@@ -82,9 +82,9 @@ extern void _PyCode_Fini(PyInterpreterState *interp);
 
 // Note that these all fit within a byte, as do combinations.
 #define CO_FAST_CONST   (0x01)  // a constant slot (with CO_FAST_HIDDEN), none of
-                                // the kinds below: the frame fills it with an
-                                // inline scalar or immortal from co_consts at
-                                // entry (_PyCodeExec.const_image).  The
+                                // the kinds below: the frame copies the value
+                                // from co_consts at entry and does not own it
+                                // (_PyCodeExec.const_image).  The
                                 // last such slot has no table entry: it is the
                                 // discard slot, which receives the results that
                                 // nothing reads

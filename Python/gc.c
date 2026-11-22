@@ -466,13 +466,23 @@ _PyGC_VisitDecref(PyObject *op, void *parent)
 
 /* Every slot of a frame is a canonical value or NULL whenever the collector
  * can run, so the scan needs no knowledge of the frame's state. Values that a
- * handler holds in C are external references. */
+ * handler holds in C are external references.  The constant slots are not
+ * visited: they hold no count (co_consts has it), so a visit would
+ * subtract a reference that does not exist. */
 int
 _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
-    PyValue *ref = _PyFrame_GetLocalsArray(frame);
-    PyValue *end = ref + _PyFrame_NumSlots(frame);
-    for (; ref < end; ref++) {
+    PyValue *locals = _PyFrame_GetLocalsArray(frame);
+    const _PyCodeExec *exec = _PyFrame_Exec(frame);
+    PyValue *consts = locals + exec->const_first;
+    PyValue *end = locals + _PyFrame_NumSlots(frame);
+    for (PyValue *ref = locals; ref < end; ref++) {
+        if (ref == consts) {
+            ref += exec->nconst;
+            if (ref == end) {
+                break;
+            }
+        }
         if (!PyValue_IsTaggedIndex(*ref)) {
             _PyValue_RecheckHome(*ref);
         }

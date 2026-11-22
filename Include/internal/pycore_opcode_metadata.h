@@ -1132,6 +1132,9 @@ enum InstructionFormat {
     (((OP) >= 0) && ((OP) < 267) && \
      (_PyOpcode_opcode_metadata[(OP)].valid_entry))
 
+#define IS_STACK_OPCODE(OP) \
+    (IS_VALID_OPCODE(OP) && (OP) != JUMP_IF_FALSE_OR_POP && (OP) != JUMP_IF_TRUE_OR_POP && (OP) != INSTRUMENTED_JUMP_IF_FALSE_OR_POP && (OP) != INSTRUMENTED_JUMP_IF_TRUE_OR_POP && (OP) != MATERIALIZE_KWARGS)
+
 #define HAS_ARG_FLAG (1)
 #define HAS_CONST_FLAG (2)
 #define HAS_NAME_FLAG (4)

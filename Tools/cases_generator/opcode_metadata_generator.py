@@ -19,6 +19,7 @@ from generators_common import (
     cflags,
 )
 from cwriter import CWriter
+from ir_generator import IR_BASE_ONLY
 from typing import TextIO
 from stack import get_stack_effect
 
@@ -426,6 +427,13 @@ def generate_opcode_metadata(
         out.emit("#define IS_VALID_OPCODE(OP) \\\n")
         out.emit(f"    (((OP) >= 0) && ((OP) < {table_size}) && \\\n")
         out.emit("     (_PyOpcode_opcode_metadata[(OP)].valid_entry))\n\n")
+        # co_code holds stack bytecode: the handlers that only the register
+        # IR uses as base opcodes are not among its opcodes
+        out.emit("#define IS_STACK_OPCODE(OP) \\\n")
+        out.emit("    (IS_VALID_OPCODE(OP)")
+        for name in IR_BASE_ONLY:
+            out.emit(f" && (OP) != {name}")
+        out.emit(")\n\n")
         generate_flag_macros(out)
         generate_oparg_macros(out)
         generate_metadata_table(analysis, out)

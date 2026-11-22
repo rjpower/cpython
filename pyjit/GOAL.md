@@ -55,7 +55,7 @@ saving and retained specialization coverage. No third72 lane is adopted.
 Smaller source or native frames alone do not predict throughput. The selected
 runtime retains its contracts until a measured winner lands.
 
-Golden82 is the runtime baseline; golden73 and selected57 remain immutable
+Golden85 is the runtime baseline; golden84, golden82, golden73 and selected57 remain immutable
 comparison controls. Round68 and earlier losing packets
 also remain closed. Preserve their evidence without making them prerequisites
 or claiming a combined parity budget. The

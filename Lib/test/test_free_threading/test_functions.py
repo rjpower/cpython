@@ -101,7 +101,7 @@ class TestFTFunctionAttributes(TestCase):
                 target.__qualname__
                 target.__doc__
                 target.__module__
-                # make_gen() copies __name__ and __qualname__.
+                # _PyGen_NewCall() copies __name__ and __qualname__.
                 gen = target()
                 gen.__name__
                 gen.__qualname__

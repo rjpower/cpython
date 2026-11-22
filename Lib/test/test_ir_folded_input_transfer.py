@@ -99,7 +99,8 @@ class FoldedInputTransferTests(unittest.TestCase):
             inputs, _ = ir_generator.external_io(analysis.instructions[name])
             self.assertTrue(all(not item.is_array()
                                 for item in inputs[-fmt.n_inputs:]))
-            layout = ir_generator.slot_layout(analysis.instructions[name], fmt, None)
+            layout = ir_generator.build_record(
+                name, analysis.instructions[name], fmt, analysis, formats).layout
             self.assertEqual(layout.in_fields,
                              {k - fmt.n_inputs: fmt.input_field(k)
                               for k in range(fmt.n_inputs)})

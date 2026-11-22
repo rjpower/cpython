@@ -288,9 +288,10 @@ class TestIRCases(unittest.TestCase):
         self.maxDiff = None
         fd, self.temp_input_filename = tempfile.mkstemp(suffix=".c")
         os.close(fd)
-        # The families of the tests that have feedback entries
+        # The families of the tests that have feedback entries: a cache
+        # operand names a field of the entry type (pycore_feedback.h)
         layouts = mock.patch.dict(ir_generator.FEEDBACK_LAYOUTS, {
-            "OP": ir_generator.FB_HEADER, "BRANCH": ir_generator.FB_HEADER})
+            "OP": "_PyFbUnary", "BRANCH": ir_generator.FB_HEADER})
         layouts.start()
         self.addCleanup(layouts.stop)
         # SPAM stands for a function that reads its arguments (S3), and
@@ -2153,7 +2154,7 @@ class TestIRCases(unittest.TestCase):
                  PyValue_AsKnownObjectBorrow(value));
             DECREF_INPUTS();
         }
-        inst(BRANCH, (counter/1, cond --)) {
+        inst(BRANCH, (unused/1, cond --)) {
             _PyFbHeader *feedback = FB_COUNTER();
             int flag = PyValue_IsFalse(cond);
             DEAD(cond);
@@ -2520,7 +2521,7 @@ class TestIRCases(unittest.TestCase):
         # the word, and cache effects read the entry.  The sites that get no
         # entry share entry 0 and run the same handlers.
         input = """
-        specializing op(_SPECIALIZE_OP, (counter/1, owner -- owner)) {
+        specializing op(_SPECIALIZE_OP, (owner -- owner)) {
             _PyFbHeader *feedback = FB_COUNTER();
             ADVANCE_ADAPTIVE_COUNTER(feedback);
         }
@@ -2559,8 +2560,6 @@ class TestIRCases(unittest.TestCase):
             (void)ir_own_B;
             // _SPECIALIZE_OP
             {
-                uint32_t counter = fb->counter;
-                (void)counter;
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
             }
@@ -2632,7 +2631,7 @@ class TestIRCases(unittest.TestCase):
         # Two inputs, a destination and an entry fill the word, so the oparg
         # lives in the entry.
         input = """
-        inst(OP, (counter/1, left, right -- res)) {
+        inst(OP, (unused/1, left, right -- res)) {
             _PyFbHeader *feedback = FB_COUNTER();
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
@@ -2659,8 +2658,6 @@ class TestIRCases(unittest.TestCase):
             PyValue res;
             right = IR_SLOT(IR_C(ir_word));
             left = IR_SLOT(IR_B(ir_word));
-            uint32_t counter = fb->counter;
-            (void)counter;
             _PyFbHeader *feedback = ((_PyFbHeader *)fb);
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
@@ -3616,7 +3613,7 @@ class TestIRCases(unittest.TestCase):
     def test_feedback_layout_required(self):
         # A family with an entry must have its type in FEEDBACK_LAYOUTS
         input = """
-        specializing op(_SPECIALIZE_SPAM, (counter/1, owner -- owner)) {
+        specializing op(_SPECIALIZE_SPAM, (owner -- owner)) {
             _PyFbHeader *feedback = FB_COUNTER();
             ADVANCE_ADAPTIVE_COUNTER(feedback);
         }
@@ -3674,7 +3671,7 @@ class TestIRCases(unittest.TestCase):
         # their entry records.
         input = """
         family(BINARY_OP, 1) = { BINARY_OP_ADD_INT };
-        specializing op(_SPECIALIZE_BINARY_OP, (counter/1, lhs, rhs -- lhs, rhs)) {
+        specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs)) {
             _PyFbHeader *feedback = FB_COUNTER();
             ADVANCE_ADAPTIVE_COUNTER(feedback);
         }

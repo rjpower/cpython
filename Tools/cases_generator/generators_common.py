@@ -256,6 +256,9 @@ class Emitter:
         self.cannot_escape = cannot_escape
         self.jump_prefix = jump_prefix
 
+    def note_site(self, tkn: Token) -> None:
+        "A token of a body is printed: see ir_generator.IREmitter.note_site()"
+
     def dispatch(
         self,
         tkn: Token,
@@ -738,6 +741,7 @@ class Emitter:
                 self.emit_save(storage)
             tkn_iter = TokenIterator(stmt.contents)
             for tkn in tkn_iter:
+                self.note_site(tkn)
                 if tkn.kind == "GOTO":
                     label_tkn = next(tkn_iter)
                     self.goto_label(tkn, label_tkn, storage)

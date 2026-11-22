@@ -74,6 +74,12 @@ Invariants:
 import argparse
 import io
 import ir_numbers
+from ir_records import (
+    DEOPT, SITE_TOKENS, CALL_OPERAND, CONST, EXIT_GUARD, FEEDBACK, GUARD_TOKENS, IMMEDIATE, LOCAL, SLOT,
+    TARGET, TEMP, WINDOW, CallShape, FeedbackOperand, FeedbackSchema, Guard, Operand,
+    OperationRecord, Transfer, UopRecord, feedback_schema, passed_through, site_tokens,
+    assigns_to, uop_transfers, walk_values,
+)
 from ir_read_effects import (
     error_nonnull_value, null_value_condition, value_assignment, value_declaration,
     value_nonnull_changes, value_transport_expression,
@@ -624,70 +630,13 @@ class Entry:
     aliased: bool = False           # assigned from an input, `out = in;`
 
 
-def passed_through(uop: Uop, j: int) -> int | None:
-    """The index of the input of uop that its output j passes through.
-
-    A named output passes through the input of the same name. An `unused`
-    output is not written, so it keeps what the input at its position held,
-    provided that no array lies below it."""
-    inputs, outputs = uop.stack.inputs, uop.stack.outputs
-    name = outputs[j].name
-    if name != "unused":
-        for i, item in enumerate(inputs):
-            if item.name == name:
-                return i
-        return None
-    if j < len(inputs) and not any(
-            item.is_array() for item in inputs[:j + 1] + outputs[:j + 1]):
-        return j
-    return None
-
-
 def external_io(inst: Instruction) -> tuple[list[StackItem], list[Entry]]:
     """The inputs that inst takes from the stack, bottom first, and the
-    entries it leaves there, which name an input when it passes through."""
-    stack: list[Entry] = []
-    external: list[StackItem] = []   # top first
-    for part in inst.parts:
-        if not isinstance(part, Uop):
-            continue
-        popped: list[Entry] = []    # top first
-        for item in reversed(part.stack.inputs):
-            if stack:
-                entry = stack.pop()
-            else:
-                entry = Entry(len(external), item)
-                external.append(item)
-            popped.append(entry)
-        popped.reverse()
-        for j, item in enumerate(part.stack.outputs):
-            i = passed_through(part, j)
-            if i is not None:
-                stack.append(popped[i])
-            else:
-                stack.append(Entry(-1, item, item.name in part.aliased_outputs))
-        if any(token.text in CALL_INVOKE_MARKERS for token in part.body.tokens()):
-            # A terminal transaction owns both immediate result publication
-            # and the child's eventual return. Trailing legacy frame/poll
-            # uops do not execute and cannot erase that logical output.
-            break
-    n = len(external)
-    inputs = list(reversed(external))
-    outputs = [
-        Entry(n - 1 - e.external if e.external >= 0 else -1, e.item, e.aliased)
-        for e in stack
-    ]
-    return inputs, outputs
-
-
-def assigns_to(uop: Uop, name: str) -> bool:
-    "Whether the body of uop assigns to the variable name"
-    tokens = list(uop.body.tokens())
-    return any(
-        tkn.text == name and nxt.kind == "EQUALS"
-        and prev.kind not in ("ARROW", "PERIOD")
-        for prev, tkn, nxt in zip(tokens, tokens[1:], tokens[2:])
-    )
+    entries it leaves there, which name an input when it passes through:
+    the stack ends of the record's value walk (ir_records.walk_values())."""
+    walk = walk_values(inst)
+    return walk.inputs, [Entry(external, item, aliased)
+                         for _, external, item, aliased in walk.outputs]
 
 
 def classify_inputs(inst: Instruction, n_inputs: int) -> list[str]:
@@ -3518,6 +3467,13 @@ class IREmitter(Emitter):
         self.observer_calls = set()
         # Emitting the one body that every generic BINARY_OP operation shares
         self.shared_binary_op = False
+        # The record of the handler being printed, and the identities of its
+        # elements printed so far (check_record_consumed())
+        self.record: OperationRecord | None = None
+        self.record_consumed: set[int] = set()
+        self.record_sites: set[int] = set()
+        self.uop_index = 0
+        self.current_uop: UopRecord | None = None
         self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
         self._replacers["DISPATCH_SAME_OPARG"] = self.dispatch_same_oparg
         self._replacers["IR_DST"] = self.ir_dst
@@ -3827,6 +3783,55 @@ class IREmitter(Emitter):
         stack.bind(result, None)
         stack.code_ran()
         return True
+
+    def uop_record(self, uop: Uop) -> UopRecord:
+        "The record of uop, the next uop of the handler being printed"
+        assert self.record is not None
+        if (self.uop_index >= len(self.record.uops)
+                or self.record.uops[self.uop_index].name != uop.name):
+            raise analysis_error(f"{self.record.handler}: {uop.name} is not the "
+                                 f"next uop of its record", self.record.instruction.where)
+        self.current_uop = self.record.uops[self.uop_index]
+        self.uop_index += 1
+        return self.current_uop
+
+    def note_site(self, tkn: Token) -> None:
+        """Mark a guard or transfer site of the body as printed.  A site that
+        the record lacks is a generation error: the record and the C would
+        differ"""
+        if self.record is None:
+            return
+        if not (tkn.kind in ("GOTO", "RETURN") or
+                tkn.kind == "IDENTIFIER" and tkn.text in SITE_TOKENS):
+            return
+        if id(tkn) not in self.record_sites:
+            raise analysis_error(f"{self.record.handler}: '{tkn.text}' is not in "
+                                 "the handler's record", tkn)
+        self.record_consumed.add(id(tkn))
+
+    def check_record_consumed(self) -> None:
+        """Every element of the record that the body prints was printed: its
+        guard and transfer sites, its implicit object guards and its cache
+        operands"""
+        record = self.record
+        assert record is not None
+        missing = []
+        for uop in record.uops:
+            for guard in uop.guards:
+                key = id(guard.site) if guard.site is not None else id(guard)
+                if key not in self.record_consumed:
+                    missing.append(f"{uop.name}: guard "
+                                   f"{guard.site.text if guard.site else 'object ' + guard.input}")
+            for transfer in uop.transfers:
+                if transfer.site is not None and id(transfer.site) not in self.record_consumed:
+                    missing.append(f"{uop.name}: {transfer.kind} at {transfer.site.text}")
+            for operand in uop.feedback:
+                if id(operand) not in self.record_consumed:
+                    missing.append(f"{uop.name}: feedback {operand.name}")
+        if missing:
+            raise analysis_error(f"{record.handler}: the C omits elements of its "
+                                 f"record: {'; '.join(missing)}",
+                                 record.instruction.where)
 
     def format_of(self, inst: Instruction) -> IRFormat:
         if self.handler_format is not None:
@@ -4754,6 +4759,8 @@ class IREmitter(Emitter):
                 var.nonnull = False
         self.check_stale_views(list(stmt.condition), storage, inst)
         self.check_spent_views(list(stmt.condition), storage)
+        for tkn in stmt.condition:
+            self.note_site(tkn)
         # A condition may assign/address an output through C syntax. Such
         # effects are not part of the checked NULL assignment transport.
         if any(t.kind in ASSIGNMENTS or t.text in {"&", "++", "--"} or
@@ -5471,31 +5478,31 @@ class IREmitter(Emitter):
         if self.call_kind and self.call_effects_possible:
             self.emit(f"if (call_state & CALL_EFFECTS) {{ goto {self.call_fallback}; }}\n")
             self.call_fallback_used = True
-        binary_op = inst.family is not None and inst.family.name == BINARY_OP_FAMILY
-        if binary_op:
+        deopt = self.record.deopt if self.record is not None else ""
+        kind, _, head = deopt.partition("(")
+        head = head.rstrip(")")
+        if kind == "BINARY_OP_BY_ENTRY":
             # The handler of the operation that the entry records
             self.emit(f"UPDATE_MISS_STATS({BINARY_OP_FAMILY});\n")
             self.emit(f"IR_DEOPT_BINARY_OP({field_expr(fmt.fb)});\n")
             return
-        if inst.family is not None and inst.family.name in FUSED_JUMPS:
+        if kind == "FUSED_HEAD":
             # The head has no opcode: the miss counts for the compare
-            self.emit(f"UPDATE_MISS_STATS({FUSED_SHADOWS[inst.family.name]});\n")
-            self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{inst.family.name});\n")
+            self.emit(f"UPDATE_MISS_STATS({FUSED_SHADOWS[head]});\n")
+            self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{head});\n")
             return
-        if inst.family is not None:
-            if self.generator_boundary is not None:
-                boundary = self.generator_boundary
-                head = f"{inst.family.name}_XFER_{boundary.completed}"
-                if head not in generator_boundaries(self.analysis):
-                    raise analysis_error("generator deopt has no complete source shape", inst.where)
-                self.emit(f"UPDATE_MISS_STATS({inst.family.name});\n")
-                self.emit(f"JUMP_TO_PREDICTED({generator_word_entry(head, self.analysis)});\n")
-                return
-            if inst.name in self.analysis.ir_only:
-                # No opcode of its own: nothing to look up in _PyOpcode_Deopt
-                self.emit(f"UPDATE_MISS_STATS({inst.family.name});\n")
-                self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{inst.family.name});\n")
-                return
+        if kind == "GENERATOR_SHAPE":
+            if not head:
+                raise analysis_error("generator deopt has no complete source shape", inst.where)
+            self.emit(f"UPDATE_MISS_STATS({inst.family.name});\n")
+            self.emit(f"JUMP_TO_PREDICTED({head});\n")
+            return
+        if kind == "IR_ONLY_HEAD":
+            # No opcode of its own: nothing to look up in _PyOpcode_Deopt
+            self.emit(f"UPDATE_MISS_STATS({head});\n")
+            self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{head});\n")
+            return
+        if kind == "FAMILY_HEAD":
             super().emit_jump_to_predicted(inst)
             return
         raise analysis_error(f"{inst.name} deoptimises but has no family",
@@ -5680,6 +5687,17 @@ class IREmitter(Emitter):
         self.out.emit(" 1u ")
         return True
 
+    def consume_object_guard(self, uop: Uop, name: str) -> None:
+        "Mark the implicit object guard of input name of uop as printed"
+        record = self.current_uop
+        assert record is not None and record.name == uop.name
+        for guard in record.guards:
+            if guard.site is None and guard.input == name:
+                self.record_consumed.add(id(guard))
+                return
+        raise analysis_error(f"{uop.name}: the object guard of '{name}' is not "
+                             "in the handler's record", next(iter(uop.body.tokens())))
+
     def emit_object_inputs(
         self, uop: Uop, storage: Storage, inst: Instruction | None
     ) -> None:
@@ -5711,6 +5729,7 @@ class IREmitter(Emitter):
                 ref = f"&{storage.stack.address(var.memory_offset)}"
                 at = "At"
             if guard:
+                self.consume_object_guard(uop, var.name)
                 if inst is not None:
                     self.check_exit_inputs(inst.where, storage,
                                            f"The guard of {uop.name}")
@@ -5753,28 +5772,26 @@ def write_uop(
         emitter.out.emit(f"// {uop.name}\n")
         emitter.emit("{\n")
     storage = Storage.for_uop(stack, uop, emitter.out)
-    for cache in uop.caches:
-        if cache.name != "unused":
-            if cache.name == "class_value":
-                if cache.size != 4:
-                    raise analysis_error(
-                        "guarded class_value cache operand must use four units",
-                        inst.where)
-                if emitter.format_of(inst).fb_layout != "_PyFbAttr":
-                    raise analysis_error(
-                        "guarded class_value requires attribute feedback",
-                        inst.where)
-                value = f"_PyValueGuarded {cache.name} = fb->{cache.name};"
-            elif cache.size == 4:
-                value = f"PyObject *{cache.name} = (PyObject *)fb->{cache.name};"
-            else:
-                binding = storage.stack.shape_read_binding
-                source = (binding[1] if cache.name == "offset" and binding is not None
-                          else f"fb->{cache.name}")
-                value = f"uint32_t {cache.name} = {source};"
-            emitter.emit(value + "\n")
-            if inst.family is None:
-                emitter.emit(f"(void){cache.name};\n")
+    record = emitter.uop_record(uop)
+    for operand in record.feedback:
+        # The local's type follows the entry field's (pycore_feedback.h)
+        name, field = operand.name, operand.field
+        if field.ctype == "_PyValueGuarded":
+            value = f"_PyValueGuarded {name} = fb->{name};"
+        elif field.is_pointer:
+            value = f"PyObject *{name} = (PyObject *)fb->{name};"
+        elif field.ctype == "uint32_t":
+            binding = storage.stack.shape_read_binding
+            source = (binding[1] if name == "offset" and binding is not None
+                      else f"fb->{name}")
+            value = f"uint32_t {name} = {source};"
+        else:
+            raise analysis_error(f"{uop.name}: cache operand '{name}' has type "
+                                 f"{field.ctype}, which no uop reads", inst.where)
+        emitter.emit(value + "\n")
+        if inst.family is None:
+            emitter.emit(f"(void){name};\n")
+        emitter.record_consumed.add(id(operand))
     emitter.emit_object_inputs(uop, storage, inst)
     reachable, storage = emitter.emit_tokens(uop, storage, inst, False)
     if emitter.pending_owner is not None:
@@ -5799,16 +5816,141 @@ def reads_fb_arg(inst: Instruction, fmt: IRFormat, operation: str | None) -> boo
             and operation is None)
 
 
-def slot_layout(inst: Instruction, fmt: IRFormat, mode: str | None) -> SlotLayout:
-    "Where the handler of inst, of format fmt, keeps its stack positions"
+def closed_generator_boundary(name: str, analysis: Analysis,
+                              formats: dict[str, IRFormat]) -> GeneratorBoundary | None:
+    "The generator boundary shape of handler name, if its source is closed"
+    boundary = generator_boundaries(analysis).get(name)
+    if boundary is not None and not generator_boundary_source_closed(
+            boundary, analysis, formats):
+        return None
+    return boundary
+
+
+def deopt_target(inst: Instruction, boundary: GeneratorBoundary | None,
+                 analysis: Analysis) -> str:
+    """Where a failed guard of inst goes: the handler of the operation that
+    the entry records for BINARY_OP, the generic shape of a generator
+    boundary, or the family head; "" if inst has no family"""
+    if inst.family is None:
+        return ""
+    family = inst.family.name
+    if family == BINARY_OP_FAMILY:
+        return "BINARY_OP_BY_ENTRY"
+    if family in FUSED_JUMPS:
+        return f"FUSED_HEAD({family})"
+    if boundary is not None:
+        head = f"{family}_XFER_{boundary.completed}"
+        if head not in generator_boundaries(analysis):
+            return "GENERATOR_SHAPE()"
+        return f"GENERATOR_SHAPE({generator_word_entry(head, analysis)})"
+    if inst.name in analysis.ir_only:
+        return f"IR_ONLY_HEAD({family})"
+    return f"FAMILY_HEAD({family})"
+
+
+def oparg_source(inst: Instruction, fmt: IRFormat, operation: str | None) -> str:
+    "Where the handler's oparg comes from: the IMMEDIATE operand's detail"
+    if not inst.properties.oparg:
+        return ""
+    if operation is not None:
+        return "OPERATION"
+    if fmt.fused:
+        return "FUSED_OP"           # the entry's arg holds the operation
+    if fmt.imm == LOC_FBARG and is_specialization(inst):
+        return "FBARG_ENTRY"
+    if fmt.imm == LOC_FBARG:
+        return "FBARG"
+    if fmt.forward and field_expr(fmt.imm).startswith("IR_D("):
+        return "SIGNED_D"           # a distance has a sign
+    if fmt.operands != "_PyIR_OPERANDS_NONE":
+        return "CALL_ARGC"          # C counts the operands
+    return "FIELD"
+
+
+def call_shape(name: str, inst: Instruction, fmt: IRFormat) -> CallShape | None:
+    "How the window of a call handler is a call, or None"
+    call_family = inst.family.name if inst.family is not None else inst.name
+    call_family = {"INSTRUMENTED_CALL": "CALL",
+                   "INSTRUMENTED_CALL_KW": "CALL_KW"}.get(call_family, call_family)
+    if not fmt.window or call_family not in (
+            "CALL", "CALL_KW", "CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX"):
+        return None
+    inputs, _ = external_io(inst)
+    count = " + ".join(f"({item.size or '1'})" for item in inputs)
+    kind = ("CALL_EX" if call_family in
+            ("CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX") else
+            "CALL_KEYWORDS" if call_family == "CALL_KW" else
+            "CALL_VECTOR")
+    # call_run_*() derives the operand count from its kind
+    fixed = sum(1 for item in inputs if not item.size)
+    arrays = [item.size for item in inputs if item.size]
+    expected = {"CALL_VECTOR": (2, ["oparg"]),
+                "CALL_KEYWORDS": (3, ["oparg"]),
+                "CALL_EX": (4, [])}[kind]
+    if uses_generic_call(inst) and (fixed, arrays) != expected:
+        raise analysis_error(
+            f"{name}: a {kind} call with inputs {count}", inst.where)
+    flags = []
+    if name.startswith("INSTRUMENTED_"):
+        flags.append("CALL_INSTRUMENTED")
+    if polls_at_end(name, inst):
+        flags.append("CALL_PERIODIC")
+    return CallShape(kind,
+                     {"CALL_VECTOR": "call_run_vector",
+                      "CALL_KEYWORDS": "call_run_keywords",
+                      "CALL_EX": "call_run_ex"}[kind],
+                     "(" + (" | ".join(flags) or "0") + ")",
+                     "oparg" if inst.properties.oparg else "0")
+
+
+def word_operands(fmt: IRFormat, oparg: str) -> tuple[Operand, ...]:
+    "The operands of a word of format fmt, in field order"
+    operands = []
+    for field, role in zip(FIELDS, fmt.roles):
+        if role == ROLE_DST:
+            names = frozenset((LOCAL, TEMP)) if fmt.store_dst else frozenset((TEMP,))
+            operands.append(Operand(SLOT, field, names, detail="dst"))
+        elif role == ROLE_BASE:
+            operands.append(Operand(WINDOW, field, frozenset((TEMP,)), 0, "base"))
+        elif role.startswith(ROLE_IN0):
+            k = int(role.rsplit("+", 1)[1])
+            names = (frozenset((LOCAL, CONST, TEMP)) if fmt.borrow_mask & (1 << k)
+                     else frozenset((TEMP,)))
+            operands.append(Operand(SLOT, field, names, detail=f"input {k}"))
+        elif role == ROLE_FB:
+            operands.append(Operand(FEEDBACK, field))
+        elif role == ROLE_IMM:
+            if fmt.imm == LOC_CD and field == "D":
+                continue            # the second half of CD
+            where = "CD" if fmt.imm == LOC_CD else field
+            if fmt.jumps or fmt.forward:
+                operands.append(Operand(TARGET, where,
+                                        detail="ABSOLUTE" if fmt.jumps else "FORWARD"))
+            else:
+                operands.append(Operand(IMMEDIATE, where, detail=oparg))
+        elif role != ROLE_NONE:
+            # An oparg that names a slot: a local or a cell
+            operands.append(Operand(SLOT, field, frozenset((LOCAL,)),
+                                    detail=role.removeprefix("_PyIR_ROLE_")))
+    if fmt.imm == LOC_FBARG and oparg:
+        operands.append(Operand(IMMEDIATE, "FBARG", detail=oparg))
+    elif oparg == "OPERATION":
+        operands.append(Operand(IMMEDIATE, None, detail=oparg))
+    return tuple(operands)
+
+
+def record_layout(inst: Instruction, fmt: IRFormat, mode: str | None,
+                  operands: tuple[Operand, ...]) -> SlotLayout:
+    """Where the handler keeps the positions of its stack effect: its input
+    operands' fields, by position from the top, and its dst"""
     if fmt.transparent:
         return SlotLayout.empty()
+    in_fields = {int(o.detail.split()[1]) - fmt.n_inputs: o.field for o in operands
+                 if o.kind == SLOT and o.detail.startswith("input ")
+                 and int(o.detail.split()[1]) not in fmt.metadata_inputs}
+    borrowable = frozenset(k - fmt.n_inputs for k in range(fmt.n_inputs)
+                           if fmt.borrow_mask & (1 << k))
     if fmt.window:
-        # The top inputs of a window with sources are read through fields
-        in_fields = {k - fmt.n_inputs: fmt.input_field(k)
-                     for k in range(fmt.n_inputs)}
-        borrowable = frozenset(k - fmt.n_inputs for k in range(fmt.n_inputs)
-                               if fmt.borrow_mask & (1 << k))
         base = get_stack_effect(inst).base_offset
         # The inputs are window[0:n] when their number is constant
         move = (mode == STORE_RESULT and fmt.operands == "_PyIR_OPERANDS_NONE"
@@ -5817,13 +5959,136 @@ def slot_layout(inst: Instruction, fmt: IRFormat, mode: str | None) -> SlotLayou
         return SlotLayout(True, base, in_fields, borrowable,
                           move_dst=fmt.dst_offset if move else None,
                           move_dst_args=FIELD_ARGS[fmt.field_of(ROLE_DST)] if move else "")
-    in_fields = {k - fmt.n_inputs: fmt.input_field(k)
-                 for k in range(fmt.n_inputs) if k not in fmt.metadata_inputs}
-    borrowable = frozenset(k - fmt.n_inputs for k in range(fmt.n_inputs)
-                           if fmt.borrow_mask & (1 << k))
     return SlotLayout(False, PointerOffset.zero(), in_fields, borrowable,
                       dst=fmt.field_of(ROLE_DST), dst_offset=fmt.dst_offset,
                       store_dst=mode == STORE_RESULT)
+
+
+def uop_feedback(uop: Uop, schema: FeedbackSchema | None,
+                 inst: Instruction) -> tuple[FeedbackOperand, ...]:
+    "The cache operands of uop, bound to the fields of the family's entry"
+    result = []
+    for cache in uop.caches:
+        if cache.name == "unused":
+            continue
+        field = schema.field(cache.name) if schema is not None else None
+        if field is None:
+            raise analysis_error(
+                f"{uop.name}: cache operand '{cache.name}' names no field of "
+                f"{schema.type if schema is not None else 'a feedback entry'}",
+                inst.where)
+        # The DSL's units of a cache operand say which local the uop reads
+        # it into: four for a pointer or a guarded value, fewer for 32 bits
+        wide = field.is_pointer or field.ctype == "_PyValueGuarded"
+        if wide != (cache.size == 4):
+            raise analysis_error(
+                f"{uop.name}: cache operand '{cache.name}' is a {field.ctype}, "
+                f"so it must use {'four units' if wide else 'fewer than four units'}",
+                inst.where)
+        result.append(FeedbackOperand(cache.name, field))
+    return tuple(result)
+
+
+def implicit_object_guards(walk, index: int, uop: Uop, known: set[int]) -> list[Guard]:
+    """The guards that the emitter puts before a uop that reads an input as
+    an object (IREmitter.emit_object_inputs()): one per such input that is
+    not known to be an object yet.  known holds those values, and grows."""
+    _, inputs, _ = walk.uops[index]
+    result = []
+    for item in inputs:
+        if item.name in uop.asserted_objects:
+            known.add(item.value)
+    if uop.properties.inline_ok or not uop.is_guard():
+        return result
+    for item in inputs:
+        if item.name in uop.object_inputs and item.value not in known:
+            result.append(Guard(EXIT_GUARD, None, item.name))
+            known.add(item.value)
+    return result
+
+
+def build_record(name: str, inst: Instruction, fmt: IRFormat,
+                 analysis: Analysis, formats: dict[str, IRFormat]) -> OperationRecord:
+    "The record of handler name, which runs inst in a word of format fmt"
+    boundary = closed_generator_boundary(name, analysis, formats)
+    operation = None
+    if name != inst.name and name not in EXECUTION_VARIANTS and boundary is None:
+        operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
+    oparg = oparg_source(inst, fmt, operation)
+    walk = walk_values(inst)
+    outputs = [Entry(external, item, aliased)
+               for _, external, item, aliased in walk.outputs]
+    mode = store_mode(inst, outputs) if fmt.store_dst else None
+    operands = word_operands(fmt, oparg)
+    layout = record_layout(inst, fmt, mode, operands)
+    call = call_shape(name, inst, fmt)
+    variant = EXECUTION_VARIANTS.get(name)
+    layout = replace(layout, canonical_frame_transfer=canonical_frame_transfer_input(inst),
+                     native_entry=native_entry_input_contract(inst),
+                     owning_result=owned_alias_result(inst, outputs),
+                     call_kind=call.kind if call is not None else None,
+                     call_results=(frozenset(o.item.name for o in outputs)
+                                   if call is not None else frozenset()))
+    if variant is not None:
+        layout = replace(layout, local_fields=variant.local_fields,
+                         temp_fields=variant.temp_fields)
+    schema = (feedback_schema(fmt.group, fmt.fb_layout)
+              if fmt.fb_layout is not None else None)
+    deopt = deopt_target(inst, boundary, analysis)
+    uops = []
+    known: set[int] = set()
+    for index, (part, inputs, outs) in enumerate(walk.uops):
+        guards = implicit_object_guards(walk, index, part, known)
+        # The implicit guards precede the body and its transfers
+        transfers = tuple(Transfer(DEOPT, None, deopt) for _ in guards)
+        guards += [Guard(GUARD_TOKENS[t.text], t) for t in site_tokens(part)
+                   if t.text in GUARD_TOKENS]
+        uops.append(UopRecord(part.name, inputs, outs,
+                              uop_feedback(part, schema, inst),
+                              part.properties.oparg, tuple(guards),
+                              transfers + uop_transfers(part, deopt)))
+    results = []
+    for j, (value, external, item, _) in enumerate(walk.outputs):
+        if external >= 0 and walk.values[value].external >= 0:
+            continue
+        if inst.properties.returns:
+            results.append((value, Operand(SLOT, None, detail="caller")))
+        elif fmt.window:
+            results.append((value, Operand(WINDOW, fmt.field_of(ROLE_BASE), position=j)))
+        else:
+            results.append((value, Operand(SLOT, fmt.field_of(ROLE_DST),
+                                           position=j - (fmt.dst_offset or 0)
+                                           - len(walk.inputs))))
+    if mode == STORE_RETURN:
+        results.append((-1, Operand(SLOT, fmt.field_of(ROLE_DST), detail="callee return")))
+    return OperationRecord(
+        handler=name, instruction=inst, format=fmt, form="EMITTED",
+        family=inst.family.name if inst.family is not None else None,
+        operands=operands, values=tuple(walk.values), uops=tuple(uops),
+        results=tuple(results), store_mode=mode, layout=layout, feedback=schema,
+        uses_feedback=fmt.fb != LOC_NONE and (
+            uses_feedback(inst) or reads_fb_arg(inst, fmt, operation) or fmt.fused),
+        operation=operation, oparg=oparg, call=call,
+        generator_boundary=boundary, deopt=deopt)
+
+
+def build_records(analysis: Analysis,
+                  formats: dict[str, IRFormat]) -> dict[str, OperationRecord]:
+    "The record of every handler, by name"
+    shared = set(binary_op_handlers(analysis))
+    records = {}
+    for name, inst in handler_instructions(analysis).items():
+        record = build_record(name, inst, formats[name], analysis, formats)
+        if name in EDGE_TWINS:
+            record = replace(record, form=f"EDGE_TWIN({EDGE_TWINS[name][0]})")
+        elif name in EVENT_TWINS:
+            record = replace(record, form=f"EVENT_TWIN({EVENT_TWINS[name][1]})")
+        elif name in shared:
+            record = replace(record, form="SHARED_BODY(binary_op)")
+        elif generator_word_entry(name, analysis) != name:
+            record = replace(record, form=f"SHARED_BODY({generator_word_entry(name, analysis)})")
+        records[name] = record
+    return records
 
 
 def polls_at_end(name: str, inst: Instruction) -> bool:
@@ -6517,6 +6782,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     validate_dict_first_probe(inst, fmt)
     validate_guarded_python_call(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)
+    record = build_record(name, inst, fmt, emitter.analysis, emitter.formats)
     saved = emitter.out
     roles: dict[str, set[str]] = {}
     emitter.declared_roles = {}
@@ -6524,7 +6790,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.declared_closes = set()
     emitter.out = CWriter.null()
     try:
-        emit_handler(name, inst, fmt, emitter, emitter.out, roles)
+        emit_handler(record, emitter, emitter.out, roles)
     finally:
         emitter.out = saved
     for var, kinds in sorted(roles.items()):
@@ -6535,7 +6801,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
                 inst.where)
     emitter.declared_roles = roles
     emitter.declared_closes = set(emitter.close_names)
-    emit_handler(name, inst, fmt, emitter, out, {})
+    emit_handler(record, emitter, out, {})
 
 
 def canonical_body_tokens(part: Uop) -> list[str]:
@@ -6697,14 +6963,19 @@ def current_operation_preserves_scratch(inst: Instruction, fmt: IRFormat, source
         not inst.properties.switches_frame)
 
 
-def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
-                 emitter: IREmitter, out: CWriter,
+def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
                  roles: dict[str, set[str]]) -> None:
-    "One pass of generate_handler, which records the roles it finds"
-    emitter.generator_boundary = generator_boundaries(emitter.analysis).get(name)
-    if (emitter.generator_boundary is not None and not generator_boundary_source_closed(
-            emitter.generator_boundary, emitter.analysis, emitter.formats)):
-        emitter.generator_boundary = None
+    """One pass of generate_handler, which records the roles it finds.  It
+    prints the handler from its record, and checks that it printed every
+    element of the record that has a site in the body"""
+    name, inst, fmt = record.handler, record.instruction, record.format
+    emitter.record = record
+    emitter.record_consumed = set()
+    emitter.record_sites = {id(site.site) for uop in record.uops
+                            for site in (*uop.guards, *uop.transfers)
+                            if site.site is not None}
+    emitter.uop_index = 0
+    emitter.generator_boundary = record.generator_boundary
     emitter.pending_owner = None
     emitter.close_count = 0
     emitter.shape_read_guards = 0
@@ -6750,10 +7021,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.call_normal_drained = False
     emitter.call_kind = ""
     emitter.taken_outputs = set()
-    operation = None
-    if (name != inst.name and name not in EXECUTION_VARIANTS
-            and emitter.generator_boundary is None):
-        operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
+    operation = record.operation
     transaction = uses_generic_call(inst)
     emitter.call_finished = False
     # Only a call whose DSL says IR_BEGIN_CALL_EFFECTS can have effects
@@ -6804,27 +7072,26 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("(void)ir_old;\n")
     if unpacks_elements_directly(inst, fmt):
         out.emit("bool ir_unpack_owned = false;\n")
-    use_fb = fmt.fb != LOC_NONE and (
-        uses_feedback(inst) or reads_fb_arg(inst, fmt, operation) or fmt.fused)
+    use_fb = record.uses_feedback
     emitter.call_has_feedback = use_fb
     if use_fb:
         out.emit(f"{feedback_type(fmt)} *fb = ({feedback_type(fmt)} *)"
                  f"IR_FB({field_expr(fmt.fb)});\n")
-    if inst.properties.oparg:
-        if operation is not None:
+    if record.oparg:
+        if record.oparg == "OPERATION":
             out.emit("int oparg = ir_binary_op;\n" if emitter.shared_binary_op
                      else f"int oparg = {operation};\n")
-        elif fmt.fused:
+        elif record.oparg == "FUSED_OP":
             # D is the distance; the arg of the entry holds the operation
             out.emit("int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);\n")
-        elif fmt.imm == LOC_FBARG and is_specialization(inst):
+        elif record.oparg == "FBARG_ENTRY":
             out.emit("int oparg = (int)((_PyFbHeader *)fb)->arg;\n")
-        elif fmt.imm == LOC_FBARG:
+        elif record.oparg == "FBARG":
             out.emit(f"int oparg = IR_FB_ARG(fb, {field_expr(fmt.fb)});\n")
-        elif fmt.forward and field_expr(fmt.imm).startswith("IR_D("):
+        elif record.oparg == "SIGNED_D":
             # The distance has a sign, as _PyCode_InstrOparg() decodes it
             out.emit("int oparg = IR_DS(ir_word);\n")
-        elif fmt.operands != "_PyIR_OPERANDS_NONE":
+        elif record.oparg == "CALL_ARGC":
             # C is the number of operands; the DSL's oparg counts the
             # arguments, among them the keyword values of a CALL_KW
             out.emit("int oparg = (int)IR_C(ir_word)"
@@ -6838,41 +7105,13 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         out.emit(f"PyValue *window = &IR_SLOT({base});\n")
         out.emit("(void)window;\n")
-    call_family = inst.family.name if inst.family is not None else inst.name
-    if call_family == "INSTRUMENTED_CALL":
-        call_family = "CALL"
-    elif call_family == "INSTRUMENTED_CALL_KW":
-        call_family = "CALL_KW"
-    call_window = fmt.window and call_family in (
-        "CALL", "CALL_KW", "CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX")
+    call_window = record.call is not None
     if call_window:
-        assert fmt.window
-        inputs, _ = external_io(inst)
-        count = " + ".join(f"({item.size or '1'})" for item in inputs)
-        kind = ("CALL_EX" if call_family in
-                ("CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX") else
-                "CALL_KEYWORDS" if call_family == "CALL_KW" else
-                "CALL_VECTOR")
-        # call_run_*() derives the operand count from its kind
-        fixed = sum(1 for item in inputs if not item.size)
-        arrays = [item.size for item in inputs if item.size]
-        expected = {"CALL_VECTOR": (2, ["oparg"]),
-                    "CALL_KEYWORDS": (3, ["oparg"]),
-                    "CALL_EX": (4, [])}[kind]
-        if transaction and (fixed, arrays) != expected:
-            raise analysis_error(
-                f"{name}: a {kind} call with inputs {count}", inst.where)
-        emitter.call_argc = "oparg" if inst.properties.oparg else "0"
+        kind = record.call.kind
+        emitter.call_argc = record.call.argc
         emitter.call_kind = kind
-        emitter.call_run = {"CALL_VECTOR": "call_run_vector",
-                            "CALL_KEYWORDS": "call_run_keywords",
-                            "CALL_EX": "call_run_ex"}[kind]
-        flags = []
-        if name.startswith("INSTRUMENTED_"):
-            flags.append("CALL_INSTRUMENTED")
-        if polls_at_end(name, inst):
-            flags.append("CALL_PERIODIC")
-        emitter.call_flags = "(" + (" | ".join(flags) or "0") + ")"
+        emitter.call_run = record.call.run
+        emitter.call_flags = record.call.flags
         # What the call is, from its word: whether it has a self operand (or
         # a kwargs operand), and what the handler did before the call
         # (call_state, in a register).  The operands are the words after the
@@ -6886,7 +7125,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             out.emit("(void)call_feedback;\n")
     if inst.properties.uses_opcode:
         out.emit(f"opcode = {canonical_handler(name)};\n")
-    mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
+    mode = record.store_mode
     if mode == STORE_LEAVE:
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         out.emit(f"if ({is_local(fmt.field_of(ROLE_DST))}) {{\n")
@@ -6905,15 +7144,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
             own = owner_name(fmt.input_field(k))
             out.emit(f"PyValue {own} = PyValue_NULL;\n")
             out.emit(f"(void){own};\n")
-    layout = slot_layout(inst, fmt, mode)
-    layout = replace(layout, canonical_frame_transfer=canonical_frame_transfer_input(inst),
-                     native_entry=native_entry_input_contract(inst),
-                     owning_result=owned_alias_result(inst, external_io(inst)[1]),
-                     call_kind=emitter.call_kind if call_window else None,
-                     call_results=frozenset(o.item.name for o in external_io(inst)[1]) if call_window else frozenset())
-    if emitter.execution_variant is not None:
-        layout = replace(layout, local_fields=emitter.execution_variant.local_fields,
-                         temp_fields=emitter.execution_variant.temp_fields)
+    layout = record.layout
     stack: Stack = IRStack(layout, roles)
     insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
     reachable = True
@@ -7053,6 +7284,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                            for event in completions}
         emitter.ownership_events.extend(sorted(completions,
                                               key=lambda event: (event.dst, event.src)))
+    emitter.check_record_consumed()
 
 
 # What an outlined body cannot contain: a jump into the evaluator (other than

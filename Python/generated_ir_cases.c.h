@@ -12604,54 +12604,45 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
-            PyValueBorrow owner;
             PyValueBorrow value;
-            PyValue res;
             PyValueBorrow v;
-            PyValue cond;
             PyValue ir_own_A = PyValue_NULL;
             (void)ir_own_A;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_NONE_OR_TYPE_VERSION
             {
-                owner = IR_VIEW(IR_A(ir_word));
+                value = IR_VIEW(IR_A(ir_word));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
                 }
-                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
-                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
-                    JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                if (!PyValue_IsNone(value)) {
+                    PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(value));
+                    if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                        UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
+                        assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
+                        JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
+                    }
                 }
             }
-            // _REPLACE_WITH_TRUE
+            // _POP_JUMP_IF_FALSE_NONE_OR_PLAIN
             {
-                value = owner;
-                (void)value;
-                res = PyValue_True;
+                int flag = PyValue_IsNone(value);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                IR_REPORT_EDGE(flag);
                 v = value;
                 ir_own_A = IR_DETACH(ir_word, A, v);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
             }
             // _POP_TOP
             {
                 value = v;
                 (void)value;
                 (void)(ir_own_A);
-            }
-            // _POP_JUMP_IF_FALSE
-            {
-                cond = res;
-                assert(PyValue_BoolCheck(cond));
-                int flag = PyValue_IsFalse(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
-                IR_REPORT_EDGE(flag);
-                if (flag) {
-                    JUMPTO(oparg);
-                }
             }
             _PyValue_XCLOSE_POINTER(ir_own_A);
             DISPATCH();
@@ -13037,54 +13028,45 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
-            PyValueBorrow owner;
             PyValueBorrow value;
-            PyValue res;
             PyValueBorrow v;
-            PyValue cond;
             PyValue ir_own_A = PyValue_NULL;
             (void)ir_own_A;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_NONE_OR_TYPE_VERSION
             {
-                owner = IR_VIEW(IR_A(ir_word));
+                value = IR_VIEW(IR_A(ir_word));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_A(ir_word))))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
                 }
-                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
-                    assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
-                    JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                if (!PyValue_IsNone(value)) {
+                    PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(value));
+                    if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                        UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
+                        assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
+                        JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
+                    }
                 }
             }
-            // _REPLACE_WITH_TRUE
+            // _POP_JUMP_IF_TRUE_NONE_OR_PLAIN
             {
-                value = owner;
-                (void)value;
-                res = PyValue_True;
+                int flag = !PyValue_IsNone(value);
+                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
+                IR_REPORT_EDGE(flag);
                 v = value;
                 ir_own_A = IR_DETACH(ir_word, A, v);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
             }
             // _POP_TOP
             {
                 value = v;
                 (void)value;
                 (void)(ir_own_A);
-            }
-            // _POP_JUMP_IF_TRUE
-            {
-                cond = res;
-                assert(PyValue_BoolCheck(cond));
-                int flag = PyValue_IsTrue(cond);
-                RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
-                IR_REPORT_EDGE(flag);
-                if (flag) {
-                    JUMPTO(oparg);
-                }
             }
             _PyValue_XCLOSE_POINTER(ir_own_A);
             DISPATCH();
@@ -14815,31 +14797,31 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_ALWAYS_TRUE);
             _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_C(ir_word));
-            PyValue owner;
             PyValue value;
             PyValue res;
             PyValue v;
-            // _GUARD_TYPE_VERSION
+            // _GUARD_NONE_OR_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_B(ir_word));
+                value = IR_SLOT(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(TO_BOOL);
                     assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
                     JUMP_TO_PREDICTED(TO_BOOL);
                 }
-                PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner));
                 assert(type_version != 0);
-                if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
-                    UPDATE_MISS_STATS(TO_BOOL);
-                    assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
-                    JUMP_TO_PREDICTED(TO_BOOL);
+                if (!PyValue_IsNone(value)) {
+                    PyTypeObject *tp = Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(value));
+                    if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version) {
+                        UPDATE_MISS_STATS(TO_BOOL);
+                        assert(_PyOpcode_Deopt[opcode] == (TO_BOOL));
+                        JUMP_TO_PREDICTED(TO_BOOL);
+                    }
                 }
             }
-            // _REPLACE_WITH_TRUE
+            // _TRUTH_NONE_OR_PLAIN
             {
-                value = owner;
-                res = PyValue_True;
+                res = PyValue_IsNone(value) ? PyValue_False : PyValue_True;
                 v = value;
                 _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
             }

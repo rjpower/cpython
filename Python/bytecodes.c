@@ -563,16 +563,27 @@ dummy_func(
         macro(TO_BOOL_STR) =
             _GUARD_TOS_UNICODE + unused/1 + unused/2 + _TO_BOOL_STR + _POP_TOP_UNICODE;
 
-        op(_REPLACE_WITH_TRUE, (value -- res, v)) {
-            res = PyValue_True;
+        // The one guarded form for a value that is None or an instance of a
+        // type with no __bool__ or __len__ (the version covers those
+        // slots): None is false, any such instance true.
+        op(_GUARD_NONE_OR_TYPE_VERSION, (type_version/2, value -- value)) {
+            assert(type_version != 0);
+            if (!PyValue_IsNone(value)) {
+                PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(value));
+                EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version);
+            }
+        }
+
+        op(_TRUTH_NONE_OR_PLAIN, (value -- res, v)) {
+            res = PyValue_IsNone(value) ? PyValue_False : PyValue_True;
             v = value;
             DEAD(value);
         }
 
         macro(TO_BOOL_ALWAYS_TRUE) =
             unused/1 +
-            _GUARD_TYPE_VERSION +
-            _REPLACE_WITH_TRUE +
+            _GUARD_NONE_OR_TYPE_VERSION +
+            _TRUTH_NONE_OR_PLAIN +
             POP_TOP;
 
         macro(UNARY_INVERT) = _UNARY_INVERT + POP_TOP;
@@ -3647,10 +3658,35 @@ dummy_func(
             _GUARD_TOS_UNICODE + unused/1 + unused/2 + _TO_BOOL_STR + _POP_TOP_UNICODE + _POP_JUMP_IF_FALSE;
         macro(POP_JUMP_IF_TRUE_STR) =
             _GUARD_TOS_UNICODE + unused/1 + unused/2 + _TO_BOOL_STR + _POP_TOP_UNICODE + _POP_JUMP_IF_TRUE;
+        // The jump of the None-or-plain form tests the None the guard
+        // allowed, without forming the bool: the object path then carries no
+        // result to select.
+        op(_POP_JUMP_IF_FALSE_NONE_OR_PLAIN, (value -- v)) {
+            int flag = PyValue_IsNone(value);
+            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
+            IR_REPORT_EDGE(flag);
+            v = value;
+            DEAD(value);
+            if (flag) {
+                JUMPTO(oparg);
+            }
+        }
+
+        op(_POP_JUMP_IF_TRUE_NONE_OR_PLAIN, (value -- v)) {
+            int flag = !PyValue_IsNone(value);
+            RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
+            IR_REPORT_EDGE(flag);
+            v = value;
+            DEAD(value);
+            if (flag) {
+                JUMPTO(oparg);
+            }
+        }
+
         macro(POP_JUMP_IF_FALSE_ALWAYS_TRUE) =
-            unused/1 + _GUARD_TYPE_VERSION + _REPLACE_WITH_TRUE + POP_TOP + _POP_JUMP_IF_FALSE;
+            unused/1 + _GUARD_NONE_OR_TYPE_VERSION + _POP_JUMP_IF_FALSE_NONE_OR_PLAIN + POP_TOP;
         macro(POP_JUMP_IF_TRUE_ALWAYS_TRUE) =
-            unused/1 + _GUARD_TYPE_VERSION + _REPLACE_WITH_TRUE + POP_TOP + _POP_JUMP_IF_TRUE;
+            unused/1 + _GUARD_NONE_OR_TYPE_VERSION + _POP_JUMP_IF_TRUE_NONE_OR_PLAIN + POP_TOP;
 
         macro(POP_JUMP_IF_NONE) = unused/1 + _IS_NONE + _POP_JUMP_IF_TRUE;
 

@@ -1783,7 +1783,8 @@ get_feedback(PyObject *self, PyObject *args)
     if (exec == NULL) {
         return NULL;
     }
-    if (_PyCode_InstrFbIndex(code, i) <= 0) {
+    int fb = _PyCode_InstrFbIndex(code, i);
+    if (fb < 0 || fb == IR_FB_SHARED) {
         Py_RETURN_NONE;
     }
     _PyFbHeader *h = _PyIR_InstrFeedback(code, exec, &exec->words[i]);

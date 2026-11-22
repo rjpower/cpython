@@ -693,7 +693,7 @@ _PyIR_InstrFeedback(PyCodeObject *co, const _PyCodeExec *exec,
     if (fb < 0) {
         return NULL;
     }
-    return _PyIR_FbEntry(exec->words, IR_FB_UNIT(fb));
+    return _PyIR_FbEntry(exec->words, (uint32_t)fb);
 }
 
 
@@ -876,7 +876,7 @@ make_exec(PyCodeObject *co)
     _PyIR_FbBlock(words)->size = (uint32_t)fb_size;
     // The shared entry is a header only and never specialises: its counter
     // never triggers
-    _PyFbHeader *shared = _PyIR_FbEntry(words, 0);
+    _PyFbHeader *shared = _PyIR_FbEntry(words, IR_FB_SHARED);
     shared->kind = FB_COUNTER;
     shared->state = FB_OFF;
     shared->counter = initial_unreachable_backoff_counter();
@@ -890,7 +890,7 @@ make_exec(PyCodeObject *co)
         ? adaptive_counter_warmup() : initial_unreachable_backoff_counter();
     const uint32_t *fbinit = _PyCode_FBINIT(co);
     for (int i = 1; i < nfb; i++) {
-        _PyFbHeader *h = _PyIR_FbEntry(words, _PyIR_FBINIT_UNIT(fbinit[i]));
+        _PyFbHeader *h = _PyIR_FbEntry(words, _PyIR_FBINIT_FIELD(fbinit[i]));
         h->kind = (uint8_t)_PyIR_FBINIT_KIND(fbinit[i]);
         h->counter = counter;
         h->arg = _PyIR_FBINIT_ARG(fbinit[i]);

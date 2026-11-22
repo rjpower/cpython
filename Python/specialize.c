@@ -304,7 +304,7 @@ instr_fb(_PyInstr *instr)
 static inline int
 is_shared_entry(_PyFbHeader *h)
 {
-    return h == _PyIR_FbEntry(_PyFrame_Exec(current_frame())->words, 0);
+    return h == _PyIR_FbEntry(_PyFrame_Exec(current_frame())->words, IR_FB_SHARED);
 }
 
 static inline void *

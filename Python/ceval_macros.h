@@ -412,7 +412,7 @@ static void dtrace_function_return(_PyInterpreterFrame *);
  * either, so nothing after a trigger writes past a header there. */
 #ifdef Py_DEBUG
 #  define IR_SHARED_ENTRY_NEVER_TRIGGERS(FB) \
-    (assert((char *)(FB) != (char *)_PyIR_FbEntry(frame->ir_words, 0) \
+    (assert((char *)(FB) != (char *)_PyIR_FbEntry(frame->ir_words, IR_FB_SHARED) \
             || !backoff_counter_triggers((FB)->counter)), 1)
 #else
 #  define IR_SHARED_ENTRY_NEVER_TRIGGERS(FB) 1
@@ -936,7 +936,7 @@ shape_read_dup(PyObject *owner, uint32_t offset)
  * always have an entry of their own: the assembler assigns theirs first and
  * lowers a site that gets none to CALL_INTRINSIC_2. */
 #define IR_FB_ARG(FB, F) \
-    (assert((F) != 0), (int)((_PyFbHeader *)(FB))->arg)
+    (assert((F) != IR_FB_SHARED), (int)((_PyFbHeader *)(FB))->arg)
 
 /* A specialisation of BINARY_OP deoptimises to the generic body, run with
  * the operation that its entry, at index F, records. */

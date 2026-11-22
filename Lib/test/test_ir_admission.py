@@ -14,6 +14,8 @@ from test.support.bytecode_helper import encode_words
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 CONTRACT = _opcode.get_ir_contract()
+# The feedback field of a site that shares entry 0
+IR_FB_SHARED = 0xFFF
 HANDLERS = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_opmap}
 
 
@@ -97,7 +99,7 @@ class AdmissionTests(unittest.TestCase):
                 reached.add(name)
                 fb = row.roles.index(_opcode.IR_ROLE_FB)
                 self.assert_rejected(code, replace_word(code, index,
-                    replace_field(word, fb, 4095)), "feedback")
+                    replace_field(word, fb, 0)), "feedback")
                 self.assert_rejected(code, replace_word(code, index,
                     replace_field(word, 0, limit - 1)), "output window")
                 imm = row.imm - _opcode.IR_LOC_A
@@ -135,7 +137,7 @@ class AdmissionTests(unittest.TestCase):
             fields = [0, 0, 0, 0]
             # Preserve an available feedback entry for the conditional form.
             if row.fb != _opcode.IR_LOC_NONE:
-                fields[row.fb - _opcode.IR_LOC_A] = 0
+                fields[row.fb - _opcode.IR_LOC_A] = IR_FB_SHARED
             if row.imm == _opcode.IR_LOC_CD:
                 fields[2:] = [4095, 4095]
             else:

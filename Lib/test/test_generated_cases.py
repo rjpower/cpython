@@ -2550,7 +2550,7 @@ class TestIRCases(unittest.TestCase):
             (void)this_instr;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_CS(ir_word));
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -2589,7 +2589,7 @@ class TestIRCases(unittest.TestCase):
             INSTRUCTION_STATS(OP_SPECIALIZED);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_CS(ir_word));
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -2651,8 +2651,8 @@ class TestIRCases(unittest.TestCase):
             INSTRUCTION_STATS(OP);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_DS(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_DS(ir_word));
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_D(ir_word));
+            int oparg = IR_FB_ARG(fb, IR_D(ir_word));
             (void)oparg;
             PyValue left;
             PyValue right;
@@ -3727,7 +3727,7 @@ class TestIRCases(unittest.TestCase):
                       shared)
         handler = code[code.index("TARGET(BINARY_OP_ADD_INT)"):]
         handler = handler[:handler.index("DISPATCH();")]
-        self.assertIn("IR_DEOPT_BINARY_OP(IR_DS(ir_word));", handler)
+        self.assertIn("IR_DEOPT_BINARY_OP(IR_D(ir_word));", handler)
         self.assertNotIn("JUMP_TO_PREDICTED", handler)
 
         out = io.StringIO()

@@ -17,9 +17,9 @@ extern "C" {
  *
  * Every instruction of a family below, and every conditional branch, owns
  * one feedback entry unless the vector is full.  The assembler places the
- * entries in 8-byte units, entry 0 last, at most 2,048 units before it, and
- * stores in the IR word the signed unit at which its entry starts, counted
- * from entry 0 (Include/internal/pycore_ir.h).  The code object keeps one
+ * entries in 8-byte units, entry 0 last, each ending by entry 0, and
+ * stores in the IR word the field at which its entry starts, counted up
+ * toward entry 0 (Include/internal/pycore_ir.h).  The code object keeps one
  * 32-bit initialiser per entry, in order of address: its kind, its unit and
  * the operand that does not fit the word (_PyIR_FBINIT).  At the first call
  * the executing copy is allocated with the entries before the words:

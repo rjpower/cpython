@@ -794,10 +794,10 @@ warm_up(PyCodeObject *code, int i)
         return;
     }
     int fb = _PyCode_InstrFbIndex(code, i);
-    if (fb <= 0) {
+    if (fb < 0 || fb == IR_FB_SHARED) {
         return;
     }
-    _PyFbHeader *h = _PyIR_FbEntry(code->_co_exec->words, IR_FB_UNIT(fb));
+    _PyFbHeader *h = _PyIR_FbEntry(code->_co_exec->words, (uint32_t)fb);
     h->counter = adaptive_counter_warmup();
 #endif
 }

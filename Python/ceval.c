@@ -5094,7 +5094,7 @@ call_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
         /* The site's plan holds for the code and the arity it was made for,
          * and for a call without items of a dict.  A site past the limit of
          * the feedback vector shares entry 0, a header alone. */
-        const _PyFbCall *fb = (const _PyFbCall *)IR_FB(IR_DS(word));
+        const _PyFbCall *fb = (const _PyFbCall *)IR_FB(IR_D(word));
         _PyBindPlan plan;
         const _PyBindPlan *planned = &plan;
         if (dict_items == NULL && fb->h.kind == FB_CALL &&

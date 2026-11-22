@@ -395,10 +395,11 @@ def _field(fields, loc):
         return fields[2] | fields[3] << 12
     return fields[loc - _LOC_A]
 
-def _signed_unit(field):
-    """The unit of a 12-bit feedback field: the signed distance in 8-byte
-    units from the start of entry 0, which ends the vector, to the entry"""
-    return field - 0x1000 if field >= 0x800 else field
+def _fb_unit(field):
+    """The unit of a 12-bit feedback field: the negative distance in 8-byte
+    units from the start of entry 0, whose field is 0xFFF, which ends the
+    vector, to the entry"""
+    return field - _FIELD_MAX
 
 def _feedback_entry(fbinit, unit):
     """The (kind, arg, units) of the entry of the feedback table fbinit that
@@ -411,7 +412,7 @@ def _feedback_entry(fbinit, unit):
         return None
     words = [int.from_bytes(fbinit[i:i + 4], sys.byteorder)
              for i in range(0, len(fbinit), 4)]
-    units = [_signed_unit((w >> 16) & _FIELD_MAX) for w in words]
+    units = [_fb_unit((w >> 16) & _FIELD_MAX) for w in words]
     try:
         i = units.index(unit)
     except ValueError:
@@ -449,7 +450,7 @@ def _decode_word(handler, fields, fbinit=None):
         elif role == _ROLE_BASE or role >= _ROLE_IN0:
             srcs.append(fields[k])
         elif role == _ROLE_FB:
-            fb = _signed_unit(fields[k])
+            fb = _fb_unit(fields[k])
     if base not in hasarg:
         arg = None
     elif imm == _LOC_NONE:

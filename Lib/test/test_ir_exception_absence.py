@@ -29,7 +29,7 @@ class ExceptionAbsenceTests(unittest.TestCase):
         # actually be callable or awaitable for the ownership controls.
         code = template_code.replace(
             co_code=encoded(words), co_stacksize=7, co_linetable=b"",
-            co_exceptiontable=table, co_fbinit=struct.pack("<I", 2))
+            co_exceptiontable=table, co_fbinit=struct.pack("<I", 0xFFF << 16 | 2))
         return code, words
 
     def test_complete_inert_exception_predecessor_is_not_an_ingress(self):

@@ -2488,11 +2488,6 @@ def field_expr(loc: str) -> str:
     return FIELD_VARS[loc.removeprefix("_PyIR_LOC_")]
 
 
-def fb_unit_expr(loc: str) -> str:
-    "The C expression of the field at loc as a signed feedback unit, in a handler"
-    return f"IR_{loc.removeprefix('_PyIR_LOC_')}S(ir_word)"
-
-
 def is_specialization(inst: Instruction) -> bool:
     "Whether inst is a specialised member of a family, not its head"
     return inst.family is not None
@@ -5480,7 +5475,7 @@ class IREmitter(Emitter):
         if binary_op:
             # The handler of the operation that the entry records
             self.emit(f"UPDATE_MISS_STATS({BINARY_OP_FAMILY});\n")
-            self.emit(f"IR_DEOPT_BINARY_OP({fb_unit_expr(fmt.fb)});\n")
+            self.emit(f"IR_DEOPT_BINARY_OP({field_expr(fmt.fb)});\n")
             return
         if inst.family is not None and inst.family.name in FUSED_JUMPS:
             # The head has no opcode: the miss counts for the compare
@@ -6814,7 +6809,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.call_has_feedback = use_fb
     if use_fb:
         out.emit(f"{feedback_type(fmt)} *fb = ({feedback_type(fmt)} *)"
-                 f"IR_FB({fb_unit_expr(fmt.fb)});\n")
+                 f"IR_FB({field_expr(fmt.fb)});\n")
     if inst.properties.oparg:
         if operation is not None:
             out.emit("int oparg = ir_binary_op;\n" if emitter.shared_binary_op
@@ -6825,7 +6820,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         elif fmt.imm == LOC_FBARG and is_specialization(inst):
             out.emit("int oparg = (int)((_PyFbHeader *)fb)->arg;\n")
         elif fmt.imm == LOC_FBARG:
-            out.emit(f"int oparg = IR_FB_ARG(fb, {fb_unit_expr(fmt.fb)});\n")
+            out.emit(f"int oparg = IR_FB_ARG(fb, {field_expr(fmt.fb)});\n")
         elif fmt.forward and field_expr(fmt.imm).startswith("IR_D("):
             # The distance has a sign, as _PyCode_InstrOparg() decodes it
             out.emit("int oparg = IR_DS(ir_word);\n")
@@ -6887,7 +6882,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
                     else "IR_CALL_SELF_STATE(ir_word)") + ";\n")
         out.emit("(void)call_state;\n")
         if emitter.call_has_feedback:
-            out.emit(f"int call_feedback = {fb_unit_expr(fmt.fb)};\n")
+            out.emit(f"uint32_t call_feedback = {field_expr(fmt.fb)};\n")
             out.emit("(void)call_feedback;\n")
     if inst.properties.uses_opcode:
         out.emit(f"opcode = {canonical_handler(name)};\n")

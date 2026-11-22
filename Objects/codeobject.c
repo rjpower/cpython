@@ -587,7 +587,8 @@ fbinit_is_valid(PyObject *fbinit)
     uint32_t word;
     memcpy(&word, PyBytes_AS_STRING(fbinit), sizeof(word));
     uint32_t total = _PyIR_FBINIT_ARG(word);
-    if (_PyIR_FBINIT_KIND(word) != FB_COUNTER || _PyIR_FBINIT_UNIT(word) != 0
+    if (_PyIR_FBINIT_KIND(word) != FB_COUNTER
+        || _PyIR_FBINIT_FIELD(word) != IR_FB_SHARED
         || total < IR_FB_FIRST_UNIT || total > IR_FB_UNITS_MAX)
     {
         return 0;
@@ -1971,7 +1972,7 @@ fb_field_is_valid(const _PyIRFormat *fmt, int handler, uint32_t unit,
     if (nfb == 0) {
         return 0;
     }
-    if (unit == 0) {
+    if (unit == IR_FB_SHARED) {
         // A fused word keeps its operation in its entry too
         return !((fmt->imm == _PyIR_LOC_FBARG
                   && !(handler >= _PyIR_BINARY_OP_FIRST
@@ -1985,7 +1986,7 @@ fb_field_is_valid(const _PyIRFormat *fmt, int handler, uint32_t unit,
     // An entry ends where the next begins, the last where entry 0 does
     int end = i + 1 < nfb ? _PyIR_FBINIT_UNIT(table[i + 1]) : 0;
     return _PyIR_FBINIT_KIND(table[i]) == fmt->fb_kind &&
-           (end - IR_FB_UNIT(unit)) * 8 >= (int)fmt->fb_size;
+           (end - ((int)unit - IR_FB_SHARED)) * 8 >= (int)fmt->fb_size;
 }
 
 /* Only after structural/feedback-domain admission. Pinned binary handlers
@@ -2279,9 +2280,9 @@ check_words(struct _PyCodeConstructor *con)
                              "code: word %zd cannot borrow local slot %u", i, value);
                 goto error;
             }
-            // The field is the unit of an entry that fits the handler's
-            // type; 0 is the shared header, which only a handler with no
-            // operand in its entry can use.
+            // The field is that of an entry that fits the handler's type;
+            // IR_FB_SHARED is the shared header, which only a handler with
+            // no operand in its entry can use.
             if (role == _PyIR_ROLE_FB && !fb_field_is_valid(fmt, handler, value,
                                                             table, nfb))
             {

@@ -207,13 +207,8 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
 #define IR_C(W)         ((uint32_t)((W) >> 40) & IR_FIELD_MAX)
 #define IR_D(W)         ((uint32_t)((W) >> 52))
 #define IR_CD(W)        ((uint32_t)((W) >> 40))
-/* A field as a signed 12-bit value: a distance, or a feedback unit
- * (IR_FB_UNIT).  The field is shifted to the top of the word and back, one
- * shift more than IR_A() and the others take. */
-#define IR_AS(W)        ((int)((int64_t)((uint64_t)(W) << 36) >> 52))
-#define IR_BS(W)        ((int)((int64_t)((uint64_t)(W) << 24) >> 52))
-#define IR_CS(W)        ((int)((int64_t)((uint64_t)(W) << 12) >> 52))
-#define IR_DS(W)        ((int)((int64_t)(W) >> 52))
+/* D as a signed distance */
+#define IR_DS(W)        ((int)(IR_D(W) ^ 0x800) - 0x800)
 
 #define IR_WORD(H, A, B, C, D) \
     ((_PyIRWord)(uint16_t)(H) | (_PyIRWord)((A) & IR_FIELD_MAX) << 16 | \
@@ -221,20 +216,17 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
      (_PyIRWord)((C) & IR_FIELD_MAX) << 40 | \
      (_PyIRWord)((D) & IR_FIELD_MAX) << 52)
 
-/* The fb field is a signed distance in 8-byte units from entry 0, the shared
- * header at field 0, to the entry, which lies below it in the executing copy
- * (the entries precede the words, so a frame finds them from word 0 alone):
- * the entry is at the address of entry 0 + (sext(fb) << 3), with no table.
- * Each kind of entry takes its own size (pycore_feedback.h), and the last
- * entry ends where entry 0 begins.  The vector has IR_FB_FIRST_UNIT units
- * for entry 0 and at most 2,048 for the others, 16 KB, which the 12 bits of
- * the field reach. */
+/* The fb field counts 8-byte units up toward entry 0, the shared header,
+ * whose field is IR_FB_SHARED: the entry is at entry 0 - (IR_FB_SHARED - fb)
+ * * 8, with no table.  The entries precede the words in the executing copy
+ * (so a frame finds them from word 0 alone), and each kind takes its own size
+ * (pycore_feedback.h); the last entry ends where entry 0 begins.  A site with
+ * no entry of its own holds IR_FB_SHARED.  The vector has IR_FB_FIRST_UNIT
+ * units for entry 0, and an entry begins by field 0, so it is at most 32 KB. */
 #define IR_FB_UNIT_SHIFT    3
 #define IR_FB_FIRST_UNIT    2
-#define IR_FB_UNITS_MAX     (IR_FB_FIRST_UNIT + 2048)
-/* The signed unit of the 12-bit field F, which IR_AS() and the others take
- * from a word */
-#define IR_FB_UNIT(F)       ((int)((uint32_t)(F) << 20) >> 20)
+#define IR_FB_UNITS_MAX     4096
+#define IR_FB_SHARED        IR_FIELD_MAX
 
 /* Field roles; input k of a register-style instruction is _PyIR_ROLE_IN0 + k.
  * A field that holds the oparg has role IMM, or one of the slot roles when
@@ -682,19 +674,19 @@ typedef struct _PyCodeExec {
 } _PyCodeExec;
 
 /* The feedback table of a code object, which follows its words: per entry, a
- * word of the kind (4 bits), the field of the entry (12 bits, see IR_FB_UNIT)
- * and its arg (16 bits): the operation of COMPARE_OP, CONTAINS_OP and
- * BINARY_OP, the only operands that live in an entry.  Entry 0 comes first;
- * the others follow in order of address, so by field (_PyIR_FBINIT_FIELD)
- * ascending: the fields of the negative units are 2,048 and up.  An entry
- * ends where the next begins, and the last where entry 0 does; the arg of
- * entry 0 is the number of units of the vector, entry 0 included. */
-#define _PyIR_FBINIT(KIND, UNIT, ARG) \
-    ((uint32_t)(KIND) << 28 | ((uint32_t)(UNIT) & IR_FIELD_MAX) << 16 | \
-     (uint32_t)(ARG))
+ * word of the kind (4 bits), the field of the entry (12 bits, see
+ * IR_FB_SHARED) and its arg (16 bits): the operation of COMPARE_OP,
+ * CONTAINS_OP and BINARY_OP, the only operands that live in an entry.  Entry
+ * 0 (field IR_FB_SHARED) comes first; the others follow in order of address,
+ * so of field.  An entry ends where the next begins, and the last where
+ * entry 0 does; the arg of entry 0 is the number of units of the vector,
+ * entry 0 included. */
+#define _PyIR_FBINIT(KIND, FIELD, ARG) \
+    ((uint32_t)(KIND) << 28 | (uint32_t)(FIELD) << 16 | (uint32_t)(ARG))
 #define _PyIR_FBINIT_KIND(V)     ((int)((V) >> 28))
 #define _PyIR_FBINIT_FIELD(V)    ((uint32_t)((V) >> 16) & IR_FIELD_MAX)
-#define _PyIR_FBINIT_UNIT(V)     IR_FB_UNIT(_PyIR_FBINIT_FIELD(V))
+/* The entry's distance in units before entry 0: negative, 0 for entry 0 */
+#define _PyIR_FBINIT_UNIT(V)     ((int)_PyIR_FBINIT_FIELD(V) - IR_FB_SHARED)
 #define _PyIR_FBINIT_ARG(V)      ((uint32_t)(V) & 0xFFFF)
 
 /* The executing copy of _Py_InitCleanup (Python/specialize.c), which runs
@@ -998,21 +990,26 @@ _PyIR_FbBlock(const _PyIRWord *words)
     return (_PyFbBlock *)((const _PyCodeExec *)words - 1) - 1;
 }
 
-/* The feedback entry at signed unit UNIT, in the executing copy whose word 0
- * is WORDS.  Entry 0 is the header that ends the vector before the block. */
+/* The feedback entry of field F, in the executing copy whose word 0 is
+ * WORDS.  Entry 0 is the header that ends the vector before the block. */
 static inline _PyFbHeader *
-_PyIR_FbEntry(const _PyIRWord *words, int unit)
+_PyIR_FbEntry(const _PyIRWord *words, uint32_t f)
 {
-    char *entry0 = (char *)_PyIR_FbBlock(words) - sizeof(_PyFbHeader);
-    return (_PyFbHeader *)(entry0 + (ptrdiff_t)unit * 8);
+    assert(f <= IR_FB_SHARED);
+    /* Written from field 0, entry 0 less the shared field's units, so that
+     * the address is word 0 and the field scaled plus a constant */
+    char *field0 = (char *)_PyIR_FbBlock(words) - sizeof(_PyFbHeader)
+                   - ((size_t)IR_FB_SHARED << IR_FB_UNIT_SHIFT);
+    return (_PyFbHeader *)(field0 + ((size_t)f << IR_FB_UNIT_SHIFT));
 }
 
 /* The index in the feedback table fbinit of n words of the entry whose field
- * is FIELD, or -1.  The table is in order of field. */
+ * is FIELD, or -1.  The table is in order of field after entry 0, which has
+ * no entry of its own to find. */
 static inline int
 _PyIR_FbFind(const uint32_t *fbinit, int n, uint32_t field)
 {
-    int low = 0, high = n - 1;
+    int low = 1, high = n - 1;
     while (low <= high) {
         int mid = (low + high) / 2;
         uint32_t u = _PyIR_FBINIT_FIELD(fbinit[mid]);

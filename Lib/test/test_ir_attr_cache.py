@@ -529,13 +529,13 @@ class TestGuardedClassValue(unittest.TestCase):
                  if instruction.opname == "LOAD_ATTR"]
         private = [site for site in sites if site.fb != 0]
         shared = [site for site in sites if site.fb == 0]
-        # Two header units, then 341 six-unit attr entries before entry 0.
+        # Two header units, then 682 six-unit attr entries before entry 0.
         # The remaining two units cannot hold another attr entry in the
-        # 2,048 units that the signed field reaches.
-        self.assertEqual([site.fb for site in private], list(range(-2046, 0, 6)))
-        self.assertEqual(len(shared), 359)
+        # 4096-unit vector.
+        self.assertEqual([site.fb for site in private], list(range(-4092, 0, 6)))
+        self.assertEqual(len(shared), 18)
         total = int.from_bytes(read.__code__.co_fbinit[:4], sys.byteorder) & 0xFFFF
-        self.assertEqual(total, 2048)
+        self.assertEqual(total, 4094)
         owner = Receiver()
         warm(read, owner)
         words = handlers(read)

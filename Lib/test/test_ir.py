@@ -689,7 +689,7 @@ class AssemblerTest(unittest.TestCase):
             def __init__(self):
                 self.attr = 5
                 self.other = 7
-        nsites = 1000     # attribute entries are 48 bytes: 340 fit after the compares
+        nsites = 1000     # attribute entries are 48 bytes: 681 fit after the compares
         source = ("def f(o, n):\n"
                   + "".join(f"    x = o.attr\n" for i in range(nsites))
                   + "    return (o.attr - o.other, o.other // n,\n"
@@ -709,7 +709,7 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(fb_position(f.__code__, load_attrs[1].fb), 16)
         shared = [i for i in load_attrs if i.fb == 0]
         owned = [i for i in load_attrs if i.fb != 0]
-        self.assertEqual(len(owned), 340)
+        self.assertEqual(len(owned), 681)
         self.assertEqual(len(shared), nsites + 6 - len(owned))
         self.assertEqual({i.argval for i in shared}, {"attr", "other"})
         ir = handlers(f)
@@ -738,7 +738,7 @@ class AssemblerTest(unittest.TestCase):
         dis.dis(f, adaptive=True, show_caches=True, file=io.StringIO())
         fbinit = f.__code__.co_fbinit
         self.assertLessEqual(int.from_bytes(fbinit[:4], sys.byteorder) & 0xFFFF,
-                             2050)
+                             4096)
         self.assertEqual(len(f.__code__._co_feedback),
                          (int.from_bytes(fbinit[:4], sys.byteorder) & 0xFFFF) * 8)
 
@@ -765,7 +765,7 @@ class AssemblerTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "slot"):
             code.replace(co_code=with_word(("LOAD_ATTR", nslots, b, c, d)))
         with self.assertRaisesRegex(ValueError, "feedback"):
-            code.replace(co_code=with_word(("LOAD_ATTR", a, b, IR_FIELD_MAX, d)))
+            code.replace(co_code=with_word(("LOAD_ATTR", a, b, 0, d)))
         with self.assertRaisesRegex(ValueError, "malformed"):
             code.replace(co_code=code.co_code + b"\0")
         self.assertEqual(code.replace(co_code=with_word(("LOAD_ATTR", a, b, c, d))),
@@ -851,7 +851,7 @@ def fb_entries(code):
     entry 0 first, then the others in order of address"""
     return [(kind, unit, arg, units) for kind, arg, units, unit in
             ((*dis._feedback_entry(code.co_fbinit, u), u) for u in
-             [dis._signed_unit((int.from_bytes(code.co_fbinit[i:i + 4],
+             [dis._fb_unit((int.from_bytes(code.co_fbinit[i:i + 4],
                                                sys.byteorder) >> 16)
                                & IR_FIELD_MAX)
               for i in range(0, len(code.co_fbinit), 4)])]
@@ -959,7 +959,7 @@ class FeedbackLayoutTest(unittest.TestCase):
         return "\n".join(lines) + "\n"
 
     def test_compare_sites_past_the_entry_limit(self):
-        # 512 compare entries fit; the other sites become intrinsic calls
+        # 1023 compare entries fit; the other sites become intrinsic calls
         # of the same result, whatever the operation and the use of the result
         ncopies = 70
         f = make_function(self.compare_source(ncopies))
@@ -970,15 +970,15 @@ class FeedbackLayoutTest(unittest.TestCase):
         compares = [i for i in instrs
                     if i.opname.startswith(("COMPARE_OP", "CONTAINS_OP"))]
         intrinsics = [i for i in instrs if i.opname == "CALL_INTRINSIC_2"]
-        self.assertEqual(len(compares), 512)
-        self.assertEqual(len(intrinsics), nsites - 512)
+        self.assertEqual(len(compares), 1023)
+        self.assertEqual(len(intrinsics), nsites - 1023)
         self.assertEqual([fb_position(f.__code__, i.fb) for i in compares],
-                         [2 + 4 * k for k in range(512)])
+                         [2 + 4 * k for k in range(1023)])
         names = {i.argrepr for i in intrinsics}
         self.assertTrue(all(n.startswith(("INTRINSIC_COMPARE_", "INTRINSIC_CONTAINS_"))
                             for n in names), names)
         total = int.from_bytes(f.__code__.co_fbinit[:4], sys.byteorder) & 0xFFFF
-        self.assertEqual(total, 2 + 4 * 512)
+        self.assertEqual(total, 2 + 4 * 1023)
 
         import operator
         ops = {"<": operator.lt, "<=": operator.le, "==": operator.eq,
@@ -1016,7 +1016,7 @@ class FeedbackLayoutTest(unittest.TestCase):
                 f(same, same, *bad)
 
     def test_big_vector(self):
-        # More than 2,048 units of entries: the later sites share entry 0
+        # More than 4,096 units of entries: the later sites share entry 0
         class O:
             def __init__(self):
                 self.attr = 5
@@ -1026,7 +1026,7 @@ class FeedbackLayoutTest(unittest.TestCase):
         lines.append("    return t")
         f = make_function("\n".join(lines) + "\n")
         total = int.from_bytes(f.__code__.co_fbinit[:4], sys.byteorder) & 0xFFFF
-        self.assertLessEqual(total, 2050)
+        self.assertLessEqual(total, 4096)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 3):
             self.assertEqual(f(O()), 10000)
         self.assertEqual(len(f.__code__._co_feedback), total * 8)
@@ -1047,8 +1047,9 @@ class FeedbackLayoutTest(unittest.TestCase):
         def table(*words):
             return struct.pack(f"<{len(words)}I", *words)
         def word(kind, unit, arg):
-            # The units of the entries before entry 0 are negative
-            return kind << 28 | (unit & IR_FIELD_MAX) << 16 | arg
+            # The entries before entry 0 have negative units, whose field
+            # counts up toward entry 0 (0xFFF)
+            return kind << 28 | (unit + IR_FIELD_MAX) << 16 | arg
         attr = dis._FEEDBACK_KINDS.index("ATTR")
         # Entry 0 and the one entry of 6 units that ends where it begins
         good = table(word(0, 0, 8), word(attr, -6, 0))
@@ -1059,7 +1060,7 @@ class FeedbackLayoutTest(unittest.TestCase):
                                        word(attr, -12, 0)),
             "entry does not fit": table(word(0, 0, 7), word(attr, -5, 0)),
             "entry before the vector": table(word(0, 0, 8), word(attr, -7, 0)),
-            "entry in the header": table(word(0, 0, 8), word(attr, 1, 0)),
+            "entry in the header": table(word(0, 0, 8), word(attr, 0, 0)),
             "past the limit": table(word(0, 0, 5000), word(attr, -6, 0)),
             "no entry 0 units": table(word(0, 0, 1), word(attr, -6, 0)),
         }

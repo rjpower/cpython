@@ -160,7 +160,8 @@ class ContractTests(unittest.TestCase):
         # carry the transfers of their homes, not the head.
         calls = {
             "CALL", "INSTRUMENTED_CALL", "CALL_BOUND_METHOD_EXACT_ARGS",
-            "CALL_PY_EXACT_ARGS", "CALL_TYPE_1", "CALL_STR_1", "CALL_TUPLE_1",
+            "CALL_PY_EXACT_ARGS", "CALL_PY_GENERATOR", "CALL_TYPE_1", "CALL_STR_1",
+            "CALL_TUPLE_1",
             "CALL_BUILTIN_CLASS", "CALL_BUILTIN_O", "CALL_BUILTIN_FAST",
             "CALL_BUILTIN_FAST_WITH_KEYWORDS", "CALL_LEN", "CALL_ISINSTANCE",
             "CALL_LIST_APPEND", "CALL_METHOD_DESCRIPTOR_O",

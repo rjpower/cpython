@@ -498,7 +498,9 @@ class TestIRCases(unittest.TestCase):
                 branch = body.index("if (generator_return) {")
                 end = body.index("}\n", branch)
                 route = body[branch:end]
-                self.assertIn("IR_GEN_RETURN(temp, dying);", route)
+                flag = 1 if name.endswith("_EMPTY") else 0
+                gen_return = f"IR_GEN_RETURN(temp, dying, {flag});"
+                self.assertIn(gen_return, route)
                 self.assertNotIn("generator_site_kind(", body)
                 self.assertNotIn("generator_outcome_target(", body)
                 self.assertNotIn("_PyEval_FrameClear", route)
@@ -506,7 +508,7 @@ class TestIRCases(unittest.TestCase):
                 clear = ("_PyEval_RetireThreadFrameWithResult" if name.endswith("_EMPTY")
                          else "_PyEval_FrameClearAndPopGeneralWithResult")
                 # The generator's return leaves before the thread's clear
-                self.assertLess(body.index("IR_GEN_RETURN(temp, dying);"),
+                self.assertLess(body.index(gen_return),
                                 body.index(f"temp = {clear}("))
                 self.assertEqual(body.count(f"temp = {clear}(tstate, dying, temp);"), 1)
                 self.assertEqual(body.count("_PyFrame_SetReturnValue(frame, temp)"), 1)

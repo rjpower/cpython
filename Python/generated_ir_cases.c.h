@@ -13583,7 +13583,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
-                if (generator_return) {IR_GEN_RETURN(temp, dying);
+                if (generator_return) {IR_GEN_RETURN(temp, dying, 0);
                 }
                 temp = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, temp);
                 assert(_PyValue_IsHome(temp));
@@ -13631,7 +13631,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 _PyInterpreterFrame *dying = frame;
                 int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
                 frame = tstate->current_frame = dying->previous;
-                if (generator_return) {IR_GEN_RETURN(temp, dying);
+                if (generator_return) {IR_GEN_RETURN(temp, dying, 1);
                 }
                 temp = _PyEval_RetireThreadFrameWithResult(tstate, dying, temp);
                 assert(_PyValue_IsHome(temp));

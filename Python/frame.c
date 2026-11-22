@@ -256,6 +256,25 @@ _PyFrame_ClearGenerator(PyGenObject *gen, PyValue result)
                                      _PyFrame_NumSlots(&gen->gi_iframe));
 }
 
+PyValue
+_PyFrame_ClearGeneratorLocals(PyGenObject *gen, PyValue result)
+{
+    /* The return that is certified RETURN_VALUE_EMPTY leaves the scratch
+     * empty, as for a thread frame: only the locals own values. */
+    _PyInterpreterFrame *frame = &gen->gi_iframe;
+    if (frame->frame_obj != NULL) {
+        return clear_generator_at_extent(gen, result,
+            _PyFrame_GetCode(frame)->co_nlocalsplus);
+    }
+    assert(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CLEARED);
+    Py_BEGIN_CRITICAL_SECTION(gen);
+    _PyFrame_ClearSlots(frame, _PyFrame_GetCode(frame)->co_nlocalsplus);
+    Py_CLEAR(frame->f_funcobj);
+    Py_END_CRITICAL_SECTION();
+    _PyErr_ClearExcState(&gen->gi_exc_state);
+    return result;
+}
+
 void
 _PyFrame_ClearGeneratorBindings(PyGenObject *gen)
 {

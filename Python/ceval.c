@@ -2665,6 +2665,7 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
      * (Python/ceval_generator_labels.h) */
     PyValue ir_gen_value;
     _PyInterpreterFrame *ir_gen_dying;
+    int ir_gen_empty;
     _PyIRTransfer ir_gen_transfer;
 #ifdef Py_STATS
     int lastopcode = 0;

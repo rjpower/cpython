@@ -630,6 +630,9 @@ void _PyFrame_ClearExceptCode(_PyInterpreterFrame *frame, int extent);
  * caller detached. The code remains owned by the generator. Close and
  * deallocation pass NULL. */
 PyAPI_FUNC(PyValue) _PyFrame_ClearGenerator(PyGenObject *gen, PyValue result);
+/* The same, for the return that leaves the scratch empty
+ * (RETURN_VALUE_EMPTY): only the locals own values. */
+PyAPI_FUNC(PyValue) _PyFrame_ClearGeneratorLocals(PyGenObject *gen, PyValue result);
 /* The same, for a frame whose scratch the error processor already drained:
  * only the bindings remain. */
 void _PyFrame_ClearGeneratorBindings(PyGenObject *gen);

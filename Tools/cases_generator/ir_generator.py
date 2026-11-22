@@ -3530,6 +3530,7 @@ class IREmitter(Emitter):
         self._replacers["IR_DEFER_CLOSE"] = self.defer_observer_input
         self._replacers["IR_RETURN_TO_CALLER"] = self.return_to_caller
         self._replacers["IR_FINISH_GENERATOR_RETURN"] = self.finish_generator_return
+        self._replacers["IR_FINISH_GENERATOR_RETURN_EMPTY"] = self.finish_generator_return
         self._replacers["IR_ENTER_GENERATOR"] = self.enter_generator
         self._replacers["IR_TRY_DICT_FIRST_PROBE"] = self.try_dict_first_probe
         self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
@@ -5590,7 +5591,8 @@ class IREmitter(Emitter):
         value, dying = self.macro_args(tkn, tkn_iter, 2)
         if inst is None or not canonical_frame_transfer_input(inst):
             raise analysis_error("generator return needs canonical source transfer", tkn)
-        self.emit(f"IR_GEN_RETURN({value}, {dying});\n")
+        empty = 1 if tkn.text.endswith("_EMPTY") else 0
+        self.emit(f"IR_GEN_RETURN({value}, {dying}, {empty});\n")
         return False
 
     def return_to_caller(self, tkn, tkn_iter, uop, storage, inst):
@@ -6664,6 +6666,9 @@ def canonical_frame_transfer_input(inst: Instruction) -> bool:
         RELOAD_STACK();
         IR_RETURN_TO_CALLER(temp, generator_return);
     }"""
+    if parts[1].name == "_RETURN_VALUE_EMPTY":
+        expected_body = expected_body.replace(
+            "IR_FINISH_GENERATOR_RETURN(", "IR_FINISH_GENERATOR_RETURN_EMPTY(")
     expected_body = expected_body.replace("RETIRE_HELPER", (
         "_PyEval_FrameClearAndPopGeneralWithResult"
         if parts[1].name == "_RETURN_VALUE"

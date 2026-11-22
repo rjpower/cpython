@@ -135,11 +135,13 @@
         goto LABEL_gen_complete; \
     } while (0)
 /* The generator frame DYING has returned V and been unlinked and debited;
- * frame is its resumer. */
-#define IR_GEN_RETURN(V, DYING) \
+ * frame is its resumer.  EMPTY: the return is the certified
+ * RETURN_VALUE_EMPTY, so that only the locals of DYING own values. */
+#define IR_GEN_RETURN(V, DYING, EMPTY) \
     do { \
         ir_gen_value = (V); \
         ir_gen_dying = (DYING); \
+        ir_gen_empty = (EMPTY); \
         goto LABEL_gen_return; \
     } while (0)
 /* The generator that frame has just entered resumes with V, and follows the

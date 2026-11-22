@@ -1471,7 +1471,7 @@ dummy_func(
             int generator_return = dying->owner == FRAME_OWNED_BY_GENERATOR;
             frame = tstate->current_frame = dying->previous;
             if (generator_return) {
-                IR_FINISH_GENERATOR_RETURN(temp, dying);
+                IR_FINISH_GENERATOR_RETURN_EMPTY(temp, dying);
             }
             temp = _PyEval_RetireThreadFrameWithResult(tstate, dying, temp);
             RELOAD_STACK();

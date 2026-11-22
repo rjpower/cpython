@@ -216,10 +216,11 @@ assemble_source_edge(struct assembler *a, _PyRegCfg *cfg, int from,
         unsigned char encoded[_PyIR_RECOVERY_RECORD];
         _PyIRSemantic_EncodeEvent(encoded, &event);
         RETURN_IF_ERROR(buffer_write(&a->a_records, encoded, sizeof(encoded)));
-        _PyIRPosition position = {-1, -1, -1, -1};
+        _PyIRPosition position = {-1, -1, -1, -1, -1};
         if (op->loc.lineno > 0) {
             position = (_PyIRPosition){op->loc.lineno, op->loc.end_lineno,
-                                      op->loc.col_offset, op->loc.end_col_offset};
+                                      op->loc.col_offset, op->loc.end_col_offset,
+                                      op->srcoff};
         }
         unsigned char location[_PyIR_POSITION_RECORD];
         _PyIRPositions_EncodeEvent(location, &position);

@@ -10,7 +10,7 @@ extern "C" {
 #include "pycore_ir_exception.h"
 
 /* Optional positions have dense IDs matching semantic recovery rows. */
-#define _PyIR_POSITION_FIELDS 4
+#define _PyIR_POSITION_FIELDS 5
 #define _PyIR_POSITION_RECORD (_PyIR_POSITION_FIELDS * 4)
 
 typedef struct {
@@ -18,8 +18,10 @@ typedef struct {
     uint32_t nrecords;
 } _PyIRPositions;
 
+/* offset is the code-unit offset in co_code of the stack instruction that the
+ * source-only operation stands for, the f_lasti of its line event. */
 typedef struct {
-    int32_t line, end_line, column, end_column;
+    int32_t line, end_line, column, end_column, offset;
 } _PyIRPosition;
 static_assert(sizeof(_PyIRPosition) == _PyIR_POSITION_RECORD,
               "position serialization must not contain padding");
@@ -64,7 +66,7 @@ typedef struct {
 
 typedef struct {
     int32_t from, to, edge;
-    int32_t line, end_line, column, end_column;
+    int32_t line, end_line, column, end_column, offset;
     int32_t handler, exc_slot, lasti;
 } _PyIRObservationEvent;
 
@@ -83,13 +85,14 @@ _PyIRObservation_Event(const _PyIRObservationMap *map, uint32_t index,
 {
     _PyIRRecoveryEvent recovery;
     _PyIRSemantic_Event(&map->semantic, index, &recovery);
-    _PyIRPosition position = {-1, -1, -1, -1};
+    _PyIRPosition position = {-1, -1, -1, -1, -1};
     if (map->positions.nrecords) {
         _PyIRPositions_Event(&map->positions, index, &position);
     }
     *event = (_PyIRObservationEvent){
         recovery.from, recovery.to, recovery.edge,
         position.line, position.end_line, position.column, position.end_column,
+        position.offset,
         recovery.handler, recovery.exc_slot, recovery.lasti,
     };
 }

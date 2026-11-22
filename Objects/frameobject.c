@@ -1210,6 +1210,17 @@ static PyObject *
 frame_lasti_get_impl(PyFrameObject *self)
 /*[clinic end generated code: output=03275b4f0327d1a2 input=0225ed49cb1fbeeb]*/
 {
+    if (self->f_source_event >= 0) {
+        // A line event of an operation that has no word: the instruction
+        // that the stack bytecode has for it
+        PyCodeObject *code = _PyFrame_GetCode(self->f_frame);
+        _PyIRObservationMap source = _PyIRObservation_Stored(code);
+        _PyIRObservationEvent event;
+        _PyIRObservation_Event(&source, (uint32_t)self->f_source_event, &event);
+        if (event.offset >= 0) {
+            return PyLong_FromLong(event.offset * (int)sizeof(_Py_CODEUNIT));
+        }
+    }
     int lasti = PyUnstable_InterpreterFrame_GetLasti(self->f_frame);
     if (lasti < 0) {
         return PyLong_FromLong(-1);

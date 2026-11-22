@@ -81,10 +81,11 @@ PyAPI_FUNC(void) _PyValue_CheckInstanceInvariant(PyObject *callable);
 PyAPI_FUNC(PyValue) _PyValue_NotCallable(PyThreadState *tstate, PyValueBorrow v);
 #define _PyValue_NotCallable(T, V) (_PyValue_NotCallable)(T, PyValue_Borrow(V))
 
-/* The object vectorcall of an object-form native (value field NULL): boxes
- * the inline words of args (nargsf's offset slot included) on the borrow
- * stack (kind CALL_ADAPTER) inside a borrow scope, calls of, checks the
- * result as _Py_CheckFunctionResult and converts it with
+/* The object vectorcall of an object-form native (value field NULL): builds
+ * the object vector on the C stack (a heap array beyond sixteen words) with
+ * its own offset slot, lending each object word and boxing each inline one
+ * (kind CALL_ADAPTER) for the call, calls of in a native call scope, checks
+ * the result as _Py_CheckFunctionResult and converts it with
  * PyValue_FromObjectSteal. */
 PyAPI_FUNC(PyValue) _PyValue_CallAdapter(
     PyThreadState *tstate, PyObject *callable, vectorcallfunc of,

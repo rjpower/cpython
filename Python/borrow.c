@@ -436,12 +436,6 @@ _PyBorrow_ValueVector(const PyValue *values, Py_ssize_t n)
         values, n, _PyBox_AT(BOX_SITE_CALL_ADAPTER, BOX_KIND_CALL_ADAPTER,
                              _Py_BOX_CALLER()));
 }
-
-PyObject **
-_PyBorrow_ValueVectorFor(const PyValue *values, Py_ssize_t n, _PyBoxAt at)
-{
-    return _PyBorrow_ValueVector_body(values, n, at);
-}
 #endif
 
 

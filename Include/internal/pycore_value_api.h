@@ -45,17 +45,15 @@ _PyValue_FromObjectKnown(PyObject *obj)
    kind and owner with a For form (_PyBox_AT() in pycore_value.h). Builds
    without Py_STATS drop the argument. */
 
-/* The borrow entries of the call adapter (pycore_borrow.h) with a stated
+/* The tuple-items entry of the argument parsers (pycore_borrow.h) with a stated
    box argument: the argument parser's owner, or the callee's C entry
    (_PyCall_BoxOwner()). Without one, an entry's boxes are of kind THUNK
-   (_PyBorrow_TupleItems) or CALL_ADAPTER (_PyBorrow_ValueVector), owned by
-   its caller. */
+   (_PyBorrow_TupleItems) or CALL_ADAPTER (_PyBorrow_ValueVector), owned by its
+   caller. */
 #ifdef Py_STATS
 PyAPI_FUNC(PyObject *const *) _PyBorrow_TupleItemsFor(PyObject *tuple,
                                                       Py_ssize_t n,
                                                       _PyBoxAt at);
-PyAPI_FUNC(PyObject **) _PyBorrow_ValueVectorFor(const PyValue *values,
-                                                 Py_ssize_t n, _PyBoxAt at);
 /* The C entry that a call adapter's boxes serve, for a callable: a
    function's ml_meth, a wrapper's d_wrapped, a type's tp_vectorcall,
    tp_init or tp_new, else its vectorcall function or tp_call. Runs no
@@ -64,8 +62,6 @@ PyAPI_FUNC(const void *) _PyCall_BoxOwner(PyObject *callable);
 #else
 #  define _PyBorrow_TupleItemsFor(TUPLE, N, AT) \
         _PyBorrow_TupleItems((TUPLE), (N))
-#  define _PyBorrow_ValueVectorFor(VALUES, N, AT) \
-        _PyBorrow_ValueVector((VALUES), (N))
 #endif
 /* The THUNK forms of a compatibility entry (Py_VALUE_ENTRY), which boxes for
    its caller (pyjit/design/proposals/value-api-g.md, section 1.2): kind

@@ -3933,7 +3933,7 @@ class IREmitter(Emitter):
         variant = self.execution_variant
         if variant is not None and variant.shape_cases:
             self.emit(f"(void){version}; (void){shape};\n")
-            self.emit(f"int64_t ir_selected_offset = shape_read_offset(frame->ir_feedback, fb, {pointer});\n")
+            self.emit(f"int64_t ir_selected_offset = shape_read_offset(frame->ir_words, fb, {pointer});\n")
             self.emit("if (ir_selected_offset < 0) {\n")
             self.emit_jump_to_predicted(inst)
             self.emit("}\n")
@@ -4234,7 +4234,7 @@ class IREmitter(Emitter):
         self.reader_reload()
         if self.call_has_feedback:
             self.emit(f"fb = ({feedback_type(self.format_of(inst))} *)"
-                      "(frame->ir_feedback + ((size_t)call_feedback << 3));\n")
+                      "IR_FB(call_feedback);\n")
 
     def prepare_call(self, tkn, tkn_iter, uop, storage, inst):
         """The preparations of a call (the method form, the tuple of a

@@ -37,7 +37,7 @@ template_code = (lambda: undefined).__code__
 def make_code(words, *, slots=4, locals=(), consts=(None,)):
     code = template_code.replace(co_code=encoded(words, len(locals)), co_stacksize=slots,
                             co_linetable=b"", co_exceptiontable=b"",
-                            co_fbinit=struct.pack("<I", 2), co_consts=consts,
+                            co_fbinit=struct.pack("<I", 0xFFF << 16 | 2), co_consts=consts,
                             co_nlocals=len(locals), co_varnames=locals)
     # The compiler selects the empty returns; constructors keep the words
     # they are given.

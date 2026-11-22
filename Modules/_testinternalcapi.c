@@ -1783,7 +1783,8 @@ get_feedback(PyObject *self, PyObject *args)
     if (exec == NULL) {
         return NULL;
     }
-    if (_PyCode_InstrFbIndex(code, i) <= 0) {
+    int fb = _PyCode_InstrFbIndex(code, i);
+    if (fb < 0 || fb == IR_FB_SHARED) {
         Py_RETURN_NONE;
     }
     _PyFbHeader *h = _PyIR_InstrFeedback(code, exec, &exec->words[i]);
@@ -1792,7 +1793,7 @@ get_feedback(PyObject *self, PyObject *args)
         return NULL;
     }
     if (h->poly) {
-        _PyFbPoly *poly = _PyFb_PolyOf(exec->feedback, h);
+        _PyFbPoly *poly = _PyFb_PolyOf(_PyIR_FbBlock(exec->words), h);
         for (int r = 0; r < FB_POLY_SIZE && poly->handler[r]; r++) {
             PyObject *row = Py_BuildValue("(IIi)", poly->type_version[r],
                                           poly->aux[r], poly->handler[r]);

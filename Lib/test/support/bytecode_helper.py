@@ -49,7 +49,8 @@ def shift_for_discard_slot(words, nlocals):
     Words written for a frame without it name a temporary as nlocals + k
     where the code object has nlocals + 1 + k.  This adds one to each slot
     field of a word (a destination, window base or input) that is at least
-    nlocals, other than the discard sentinel 0xFFF.
+    nlocals, other than the discard sentinel 0xFFF.  A feedback field written
+    as 0, for a site without an entry, becomes the shared entry 0xFFF.
     """
     import _opcode
     contract = _opcode.get_ir_contract()
@@ -68,6 +69,8 @@ def shift_for_discard_slot(words, nlocals):
                        or role >= _opcode.IR_ROLE_IN0)
             if is_slot and nlocals <= fields[k] < 0xFFF:
                 fields[k] += 1
+            elif role == _opcode.IR_ROLE_FB and fields[k] == 0:
+                fields[k] = 0xFFF
         shifted.append((handler, *fields))
     return shifted
 

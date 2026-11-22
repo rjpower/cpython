@@ -3773,7 +3773,7 @@ class TestShapeReadMetadata(unittest.TestCase):
     def test_shape_read_uses_checked_metadata_for_both_execution_forms(self):
         root = Path(__file__).resolve().parents[2]
         source = (root / "Python/bytecodes.c").read_text()
-        start = (root / "Python/ceval_macros.h").read_text().index("shape_read_offset(char *entries")
+        start = (root / "Python/ceval_macros.h").read_text().index("shape_read_offset(const _PyIRWord *words")
         macros = (root / "Python/ceval_macros.h").read_text()[start:][:600]
         for suffix in ("", "_LOCAL_TEMP"):
             for poly in (False, True):
@@ -3782,12 +3782,12 @@ class TestShapeReadMetadata(unittest.TestCase):
                     handler, effects = self.shape_read_handler(source, name)
                     self.assertEqual("shape_read_offset(" in handler, poly)
                     if poly:
-                        # The handler passes the entries of the frame's
-                        # feedback bank; the function steps back over the
-                        # block header to the poly tables
-                        self.assertIn("shape_read_offset(frame->ir_feedback, fb,", handler)
+                        # The handler passes the frame's words; the
+                        # function steps back over the executing copy's
+                        # header to the block of the poly tables
+                        self.assertIn("shape_read_offset(frame->ir_words, fb,", handler)
                         self.assertNotIn("_PyFrame_Exec(frame)->feedback", handler)
-                        self.assertIn("_PyFbBlock *block = (_PyFbBlock *)entries - 1;", macros)
+                        self.assertIn("_PyFbBlock *block = _PyIR_FbBlock(words);", macros)
                         self.assertIn("_PyFb_PolyOf(block, &entry->h)", macros)
                     self.assertEqual("_PyIR_LEARNED_ONLY" in effects, poly)
                     self.assertIn("uint32_t offset = " +

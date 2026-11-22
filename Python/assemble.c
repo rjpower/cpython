@@ -1454,7 +1454,9 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
  * entry 0, which never specialises and keeps no operand; a COMPARE_OP or
  * CONTAINS_OP among them becomes the intrinsic call, and a fused pair among
  * them is two words again, so a pair is fused only if its compare keeps an
- * entry.  a_fbinit gets one word per entry, in unit order.
+ * entry.  a_fbinit gets one word per entry, in order of address.  The
+ * entries are placed in order from the start of the vector, then counted
+ * up toward entry 0 (IR_FB_SHARED), which ends it.
  *
  * It runs again after layout() unfused pairs by distance, which add entries
  * of classes after the required one and so change none of the others. */
@@ -1528,7 +1530,7 @@ place_entries(struct assembler *a, _PyRegCfg *cfg, int code_flags,
                 continue;
             }
             if (c != FB_CLASS_REQUIRED) {
-                op->fb = 0;
+                op->fb = IR_FB_SHARED;
                 continue;
             }
             if (op->flags & _PyReg_FUSED) {
@@ -1547,7 +1549,21 @@ place_entries(struct assembler *a, _PyRegCfg *cfg, int code_flags,
     }
     // Entry 0 exists only with others
     if (nfb > 1) {
-        fbinit[0] = _PyIR_FBINIT(FB_COUNTER, 0, unit);
+        uint32_t total = unit;
+        fbinit[0] = _PyIR_FBINIT(FB_COUNTER, IR_FB_SHARED, total);
+        for (int i = 1; i < nfb; i++) {
+            uint32_t word = fbinit[i];
+            fbinit[i] = _PyIR_FBINIT(_PyIR_FBINIT_KIND(word),
+                                     _PyIR_FBINIT_FIELD(word) - total
+                                     + IR_FB_SHARED,
+                                     _PyIR_FBINIT_ARG(word));
+        }
+        for (int i = 0; i < cfg->nops; i++) {
+            _PyRegOp *op = &cfg->ops[i];
+            if (op->fb > 0 && op->fb < IR_FB_SHARED) {
+                op->fb += IR_FB_SHARED - (int)total;
+            }
+        }
     }
     a->a_nfb = nfb > 1 ? nfb : 0;
     if (_PyBytes_Resize(&a->a_fbinit, a->a_nfb * sizeof(uint32_t)) < 0) {
@@ -1631,7 +1647,7 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
         [_PyIR_ROLE_NONE] = 0,
         [_PyIR_ROLE_DST] = slots.dst,
         [_PyIR_ROLE_BASE] = slots.base,
-        [_PyIR_ROLE_FB] = op->fb > 0 ? op->fb : 0,
+        [_PyIR_ROLE_FB] = op->fb > 0 ? op->fb : IR_FB_SHARED,
         [_PyIR_ROLE_IMM] = oparg,
         [_PyIR_ROLE_LOCAL_IN] = oparg,
         [_PyIR_ROLE_LOCAL_OUT] = oparg,

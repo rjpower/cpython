@@ -516,7 +516,8 @@ class SemanticCompletionTests(unittest.TestCase):
         table = exception_entry(site, 1, len(words), exception << 1)
         for name in ('STORE_ATTR', 'STORE_ATTR_INSTANCE_VALUE'):
             with self.subTest(handler=name):
-                handler = words + [dis._all_opmap[name] | (base << 28),
+                # The feedback field (C) is that of the shared entry 0
+                handler = words + [dis._all_opmap[name] | (base << 28) | (4095 << 40),
                                    dis.opmap['RERAISE'] | (exception << 16)]
                 def replace():
                     return code.replace(co_code=struct.pack(f'<{len(handler)}Q', *handler),
@@ -541,7 +542,7 @@ class SemanticCompletionTests(unittest.TestCase):
         base = (words[site] >> 28) & 4095
         exception = base - 1
         table = exception_entry(site, 1, len(words), exception << 1)
-        words.extend((dis.opmap['STORE_ATTR'] | (base << 16) | (base << 28),
+        words.extend((dis.opmap['STORE_ATTR'] | (base << 16) | (base << 28) | (4095 << 40),
                       dis.opmap['RERAISE'] | (exception << 16)))
         with self.assertRaisesRegex(ValueError, 'semantic completion'):
             code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),

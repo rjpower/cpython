@@ -8090,18 +8090,14 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = r;
                 (void)value;
                 assert(PyValue_IsInlineFloat(value));
-                (void)(ir_own_C);
             }
             // _POP_TOP_FLOAT
             {
                 value = l;
                 (void)value;
                 assert(PyValue_IsInlineFloat(value));
-                (void)(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyFloat_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_ExactDealloc);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -8244,14 +8240,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = r;
                 (void)value;
                 assert(PyValue_IsInlineFloat(value));
-                (void)(ir_own_B);
             }
             // _POP_TOP_FLOAT
             {
                 value = l;
                 (void)value;
                 assert(PyValue_IsInlineFloat(value));
-                (void)(ir_own_A);
             }
             // _JUMP_IF_COND
             {
@@ -8264,8 +8258,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMPBY(IR_FUSED_DISTANCE());
                 }
             }
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_ExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_A, _PyFloat_ExactDealloc);
             DISPATCH();
         }
 

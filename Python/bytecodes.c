@@ -314,9 +314,10 @@ dummy_func(
             PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
         }
 
+        // An inline float owns no reference (see _POP_TOP_NUMBER).
         inline_ok op(_POP_TOP_FLOAT, (value --)) {
             assert(PyValue_IsInlineFloat(value));
-            PyValue_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
+            DEAD(value);
         }
 
         // An operand of float arithmetic, an inline float or int. It owns no

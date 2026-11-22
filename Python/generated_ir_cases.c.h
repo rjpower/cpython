@@ -2310,7 +2310,6 @@ ir_run_LOAD_SUPER_ATTR(
             PyValue class_st;
             PyValue self_st;
             PyValue attr;
-            PyValue *null;
             // _SPECIALIZE_LOAD_SUPER_ATTR
             {
                 class_st = window[1];
@@ -2398,12 +2397,8 @@ ir_run_LOAD_SUPER_ATTR(
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = &window[1];
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_MOVE_TO_DST(ir_word, A, window[0]);
             PyValue_XCLOSE(ir_old);
@@ -10083,7 +10078,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             PyValue class_st;
             PyValue self_st;
             PyValue attr;
-            PyValue *null;
             // _LOAD_SUPER_ATTR
             {
                 self_st = window[2];
@@ -10157,12 +10151,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = &window[1];
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_MOVE_TO_DST(ir_word, A, window[0]);
             PyValue_XCLOSE(ir_old);
@@ -10707,7 +10697,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _CHECK_ATTR_CLASS
@@ -10741,12 +10730,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 attr = PyValue_DUP(found);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -10859,7 +10844,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_TYPE_VERSION
@@ -10904,12 +10888,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 attr = PyValue_DUP(found);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11026,7 +11006,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_TYPE_VERSION
@@ -11060,12 +11039,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 }
                 attr = found;
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11089,7 +11064,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_TYPE_VERSION
@@ -11135,12 +11109,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11352,7 +11322,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_MODULE_EXACT
@@ -11399,12 +11368,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11630,7 +11595,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_SHAPE_READ
@@ -11663,12 +11627,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11692,7 +11652,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_SHAPE_READ
@@ -11725,12 +11684,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11753,7 +11708,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             uint32_t ir_shape_offset;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
@@ -11783,12 +11737,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11812,7 +11762,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             uint32_t ir_shape_offset;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
@@ -11842,12 +11791,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11870,7 +11815,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_TYPE_VERSION
@@ -11906,12 +11850,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11935,7 +11875,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_TYPE_VERSION
@@ -11966,12 +11905,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);
@@ -11995,7 +11930,6 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             (void)oparg;
             PyValueBorrow owner;
             PyValue attr;
-            PyValue *null;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             // _GUARD_TYPE_VERSION
@@ -12071,12 +12005,8 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 attr = PyValue_XDUP(found);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = ((oparg & 1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
-                if (oparg & 1) {
-                    _PyFrame_WriteHome(frame, &null[0], PyValue_NULL);
-                }
             }
             IR_STORE_DST(ir_word, A, attr);
             _PyValue_XCLOSE_POINTER(ir_own_B);

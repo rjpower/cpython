@@ -2066,12 +2066,6 @@ dummy_func(
             ERROR_IF(PyValue_IsNull(res[0]));
         }
 
-        op(_PUSH_NULL_CONDITIONAL, ( -- null[oparg & 1])) {
-            if (oparg & 1) {
-                IR_WRITE_OUTPUT(null, 0, PyValue_NULL);
-            }
-        }
-
         // The NULL of a call's window needs no write: the slot is NULL by the
         // NULL invariant, and the assembler clears the bit in the word
         // (register-ir.md G4).  The stack model keeps the output.
@@ -2494,7 +2488,7 @@ dummy_func(
         macro(INSTRUMENTED_LOAD_SUPER_ATTR) =
             unused/1 +
             _LOAD_SUPER_ATTR +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         family(LOAD_SUPER_ATTR, INLINE_CACHE_ENTRIES_LOAD_SUPER_ATTR) = {
             LOAD_SUPER_ATTR_ATTR,
@@ -2559,7 +2553,7 @@ dummy_func(
         macro(LOAD_SUPER_ATTR) =
             unused/1 + _SPECIALIZE_LOAD_SUPER_ATTR +
             _LOAD_SUPER_ATTR +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         inline_ok inst(LOAD_SUPER_ATTR_ATTR, (unused/1, global_super_st, class_st, self_st -- attr_st)) {
             EXIT_IF(!PyValue_IsObject(global_super_st) || !PyValue_IsObject(class_st));
@@ -2721,7 +2715,7 @@ dummy_func(
             _CHECK_MANAGED_OBJECT_HAS_VALUES +
             _LOAD_ATTR_INSTANCE_VALUE +
             unused/5 +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         /* The shape handlers (Py_SHAPES, see pycore_dict.h).  They follow a
          * type version guard, which proves that the owner has inline values
@@ -2748,7 +2742,7 @@ dummy_func(
             _GUARD_SHAPE_READ +
             _LOAD_ATTR_SHAPE +
             unused/5 +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         op(_GUARD_MODULE_EXACT, (owner -- owner)) {
             EXIT_IF(!PyModule_CheckExact(PyValue_AsKnownObjectBorrow(owner)));
@@ -2775,7 +2769,7 @@ dummy_func(
             _GUARD_MODULE_EXACT +
             _LOAD_ATTR_MODULE +
             unused/5 +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         op(_LOAD_ATTR_WITH_HINT, (hint/1, owner -- attr)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
@@ -2814,7 +2808,7 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             _LOAD_ATTR_WITH_HINT +
             unused/5 +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         op(_LOAD_ATTR_SLOT, (index/1, owner -- attr)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
@@ -2833,7 +2827,7 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             _LOAD_ATTR_SLOT +  // NOTE: This action may also deopt
             unused/5 +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         /* A PyObject * field of the owner, read where LOAD_ATTR_SLOT reads a
          * value: a _Py_T_OBJECT member, or the type pointer that __class__
@@ -2855,7 +2849,7 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             _LOAD_ATTR_SLOT_POINTER +
             unused/5 +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         op(_CHECK_ATTR_CLASS, (class_version/2, owner -- owner)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
@@ -2878,14 +2872,14 @@ dummy_func(
             _CHECK_ATTR_CLASS +
             unused/2 +
             _LOAD_ATTR_CLASS +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         macro(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK) =
             unused/1 +
             _GUARD_TYPE_VERSION +
             _CHECK_ATTR_CLASS +
             _LOAD_ATTR_CLASS +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         op(_GUARD_BUILTIN_METACLASS, (owner -- owner)) {
             #ifdef Py_GIL_DISABLED
@@ -4332,7 +4326,7 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             unused/2 +
             _LOAD_ATTR_GETSET +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         op(_CHECK_ATTR_METHOD_LAZY_DICT, (dictoffset/1, owner -- owner)) {
             char *ptr = ((char *)PyValue_AsKnownObjectBorrow(owner)) + MANAGED_DICT_OFFSET + dictoffset;

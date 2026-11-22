@@ -3902,6 +3902,7 @@ dummy_func(
             FOR_ITER_RANGE,
             FOR_ITER_GEN,
             FOR_ITER_VIRTUAL,
+            FOR_ITER_DICT_ITEMS,
         };
 
         specializing op(_SPECIALIZE_FOR_ITER, (iter, null_or_index -- iter, null_or_index)) {
@@ -3975,6 +3976,33 @@ dummy_func(
         macro(FOR_ITER_VIRTUAL) =
             unused/1 +  // Skip over the entry distance
             _FOR_ITER_VIRTUAL;
+
+        // `for key, value in d.items()`: FOR_ITER over a dict's items, whose
+        // key and value go straight to the two locals that the unpack after
+        // it names, with no pair and no unpack.  The specializer chooses it
+        // only when the next word unpacks the item into a run of two locals;
+        // the handler then continues after that word, which stays in place
+        // for the generic form.  Instrumentation may replace that word, and
+        // then the generic form runs it.
+        ir_only op(_FOR_ITER_DICT_ITEMS, (iter, null_or_index -- iter, null_or_index, unused)) {
+            assert(PyValue_IsObject(iter));
+            PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+            EXIT_IF(Py_TYPE(iter_o) != &PyDictIterItem_Type);
+            _PyIRWord unpack = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr);
+            EXIT_IF(_PyIR_HandlerFlags[IR_HANDLER(unpack)] & _PyIR_H_INSTRUMENTED);
+            int found = _PyDictIterItem_Next(iter_o, &IR_SLOT(IR_D(unpack)));
+            if (found <= 0) {
+                if (found < 0) {
+                    ERROR_NO_POP();
+                }
+                IR_COMPLETE_STEP(_PY_IR_FOR_ITER, PyValue_None, oparg);
+            }
+            next_instr++;
+        }
+
+        macro(FOR_ITER_DICT_ITEMS) =
+            unused/1 +  // Skip over the entry distance
+            _FOR_ITER_DICT_ITEMS;
 
         inst(INSTRUMENTED_FOR_ITER, (unused/1, iter, null_or_index -- iter, null_or_index, next)) {
             _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &window[1]);

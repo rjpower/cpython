@@ -5858,7 +5858,7 @@ typedef struct {
     PyDictObject *di_dict; /* Set to NULL when iterator is exhausted */
     Py_ssize_t di_used;
     Py_ssize_t di_pos;
-    PyObject* di_result; /* reusable result tuple for iteritems */
+    PyObject* di_result; /* reusable result tuple for iteritems, made with the first pair */
     Py_ssize_t len;
 } dictiterobject;
 
@@ -5889,18 +5889,7 @@ dictiter_new(PyDictObject *dict, PyTypeObject *itertype)
     else {
         di->di_pos = 0;
     }
-    /* gh-152107: track before allocating di_result. A dictiter with a NULL
-       di_result is a valid state for dictiter_traverse()/dictiter_dealloc(),
-       so a failure of the allocation below can safely DECREF a tracked di. */
     _PyObject_GC_TRACK(di);
-    if (itertype == &PyDictIterItem_Type ||
-        itertype == &PyDictRevIterItem_Type) {
-        di->di_result = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(Py_None), PyValue_PrepareOwned(Py_None));
-        if (di->di_result == NULL) {
-            Py_DECREF(di);
-            return NULL;
-        }
-    }
     return (PyObject *)di;
 }
 
@@ -6036,7 +6025,7 @@ static PyValue
 dictiter_pair(dictiterobject *di, PyValue key, PyValue value)
 {
     PyObject *result = di->di_result;
-    if (acquire_iter_result(result)) {
+    if (result != NULL && acquire_iter_result(result)) {
         PyTupleObject *pair = (PyTupleObject *)result;
         // a move: replaced below
         PyValue old_key = pair->ob_item[0];
@@ -6050,15 +6039,21 @@ dictiter_pair(dictiterobject *di, PyValue key, PyValue value)
         PyValue_XCLOSE(old_value);
     }
     else {
-        result = PyTuple_New(2);
-        if (result != NULL) {
-            PyTuple_SET_VALUE(result, 0, key);
-            PyTuple_SET_VALUE(result, 1, value);
+        PyObject *fresh = PyTuple_New(2);
+        if (fresh != NULL) {
+            PyTuple_SET_VALUE(fresh, 0, key);
+            PyTuple_SET_VALUE(fresh, 1, value);
+            if (result == NULL) {
+                // The first pair is the iterator's result for the next. A
+                // loop that unpacks its items never reaches this.
+                di->di_result = Py_NewRef(fresh);
+            }
         }
         else {
             PyValue_XCLOSE(key);
             PyValue_XCLOSE(value);
         }
+        result = fresh;
     }
     if (result == NULL) {
         return PyValue_NULL;
@@ -6135,6 +6130,37 @@ DICTITER_NEXT(dictreviter_next_key, DICTITER_KEYS, 1)
 DICTITER_NEXT(dictreviter_next_val, DICTITER_VALUES, 1)
 DICTITER_NEXT(dictreviter_next_item, DICTITER_ITEMS, 1)
 #undef DICTITER_NEXT
+
+/* The step of a dict item iterator for a loop that unpacks each item into two
+ * locals: return 1 with the key in TARGETS[0] and the value in TARGETS[1],
+ * 0 at the end, or -1 with an exception set (a dict that changed size or keys
+ * during the iteration). The pair is never built. The old values of the two
+ * locals close after both stores, the first's first, and none changes on 0
+ * or -1. */
+int
+_PyDictIterItem_Next(PyObject *self, PyValue *targets)
+{
+    assert(Py_IS_TYPE(self, &PyDictIterItem_Type));
+    dictiterobject *di = (dictiterobject *)self;
+    PyDictObject *d = di->di_dict;
+    if (d == NULL) {
+        return 0;
+    }
+    PyValue key, value;
+    int found = dictiter_capture(d, di, 0, &key, &value);
+    if (found <= 0) {
+        return found;
+    }
+    PyValue old_key = targets[0];
+    PyValue old_value = targets[1];
+    targets[0] = key;
+    targets[1] = value;
+    _PyValue_CheckHome(key);
+    _PyValue_CheckHome(value);
+    PyValue_XCLOSE(old_key);
+    PyValue_XCLOSE(old_value);
+    return 1;
+}
 
 PyTypeObject PyDictIterKey_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)

@@ -3516,6 +3516,20 @@ int
 }
 #endif   // Py_STATS
 
+/* Whether the word after the FOR_ITER at instr unpacks its item, which this
+ * word leaves in a temporary, into two locals: the loop of
+ * `for key, value in d.items()`. */
+static inline int
+for_iter_unpacks_pair(_PyInstr *instr)
+{
+    _PyIRWord for_iter = FT_ATOMIC_LOAD_UINT64_RELAXED(instr[0]);
+    _PyIRWord unpack = FT_ATOMIC_LOAD_UINT64_RELAXED(instr[1]);
+    int handler = IR_HANDLER(unpack);
+    return (handler == UNPACK_SEQUENCE || handler == UNPACK_SEQUENCE_TUPLE) &&
+           IR_B(unpack) == 2 && IR_A(unpack) == IR_A(for_iter) &&
+           (unpack & IR_F_LOCAL_D) != 0;
+}
+
 Py_NO_INLINE void
 _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int oparg)
 {
@@ -3548,6 +3562,10 @@ _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int
                 goto failure;
             }
             specialize(instr, FOR_ITER_GEN);
+            return;
+        }
+        else if (tp == &PyDictIterItem_Type && for_iter_unpacks_pair(instr)) {
+            specialize(instr, FOR_ITER_DICT_ITEMS);
             return;
         }
         else if (_PyType_VALUE_SLOT(tp, iternext) != NULL) {

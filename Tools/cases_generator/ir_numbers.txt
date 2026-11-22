@@ -468,3 +468,7 @@ CONTAINS_OP_JUMP_SEQUENCE 409
 
 # hot85 AT: LOAD_ATTR of a PyObject * field of the owner.
 LOAD_ATTR_SLOT_POINTER 410
+
+# tight86 IA: FOR_ITER over a dict's items, whose key and value go to the two
+# locals of the unpack that follows.
+FOR_ITER_DICT_ITEMS 411

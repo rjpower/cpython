@@ -2550,7 +2550,7 @@ class TestIRCases(unittest.TestCase):
             (void)this_instr;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -2589,7 +2589,7 @@ class TestIRCases(unittest.TestCase):
             INSTRUCTION_STATS(OP_SPECIALIZED);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -2651,8 +2651,8 @@ class TestIRCases(unittest.TestCase):
             INSTRUCTION_STATS(OP);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_D(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_D(ir_word));
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_DS(ir_word));
+            int oparg = IR_FB_ARG(fb, IR_DS(ir_word));
             (void)oparg;
             PyValue left;
             PyValue right;
@@ -3727,7 +3727,7 @@ class TestIRCases(unittest.TestCase):
                       shared)
         handler = code[code.index("TARGET(BINARY_OP_ADD_INT)"):]
         handler = handler[:handler.index("DISPATCH();")]
-        self.assertIn("IR_DEOPT_BINARY_OP(IR_D(ir_word));", handler)
+        self.assertIn("IR_DEOPT_BINARY_OP(IR_DS(ir_word));", handler)
         self.assertNotIn("JUMP_TO_PREDICTED", handler)
 
         out = io.StringIO()
@@ -3773,7 +3773,7 @@ class TestShapeReadMetadata(unittest.TestCase):
     def test_shape_read_uses_checked_metadata_for_both_execution_forms(self):
         root = Path(__file__).resolve().parents[2]
         source = (root / "Python/bytecodes.c").read_text()
-        start = (root / "Python/ceval_macros.h").read_text().index("shape_read_offset(char *entries")
+        start = (root / "Python/ceval_macros.h").read_text().index("shape_read_offset(const _PyIRWord *words")
         macros = (root / "Python/ceval_macros.h").read_text()[start:][:600]
         for suffix in ("", "_LOCAL_TEMP"):
             for poly in (False, True):
@@ -3782,12 +3782,12 @@ class TestShapeReadMetadata(unittest.TestCase):
                     handler, effects = self.shape_read_handler(source, name)
                     self.assertEqual("shape_read_offset(" in handler, poly)
                     if poly:
-                        # The handler passes the entries of the frame's
-                        # feedback bank; the function steps back over the
-                        # block header to the poly tables
-                        self.assertIn("shape_read_offset(frame->ir_feedback, fb,", handler)
+                        # The handler passes the frame's words; the
+                        # function steps back over the executing copy's
+                        # header to the block of the poly tables
+                        self.assertIn("shape_read_offset(frame->ir_words, fb,", handler)
                         self.assertNotIn("_PyFrame_Exec(frame)->feedback", handler)
-                        self.assertIn("_PyFbBlock *block = (_PyFbBlock *)entries - 1;", macros)
+                        self.assertIn("_PyFbBlock *block = _PyIR_FbBlock(words);", macros)
                         self.assertIn("_PyFb_PolyOf(block, &entry->h)", macros)
                     self.assertEqual("_PyIR_LEARNED_ONLY" in effects, poly)
                     self.assertIn("uint32_t offset = " +

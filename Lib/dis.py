@@ -359,7 +359,7 @@ _Instruction.handler.__doc__ = "Name of the handler of the instruction's word"
 _Instruction.dst.__doc__ = "Frame slot that the instruction writes (if any), otherwise None"
 _Instruction.srcs.__doc__ = ("Frame slots that the instruction reads, or for a window the first slot of the window; "
                             "for a call with operand words, those of its fields, then its operands")
-_Instruction.fb.__doc__ = "Index of the instruction's feedback entry (if any), otherwise None"
+_Instruction.fb.__doc__ = "Unit of the instruction's feedback entry (if any), otherwise None: its negative distance in 8-byte units before entry 0, or 0 for a site that shares entry 0"
 _Instruction.length.__doc__ = "Number of words of the instruction: 1, or more for a call with operand words"
 
 _ExceptionTableEntryBase = collections.namedtuple("_ExceptionTableEntryBase",
@@ -395,21 +395,31 @@ def _field(fields, loc):
         return fields[2] | fields[3] << 12
     return fields[loc - _LOC_A]
 
+def _signed_unit(field):
+    """The unit of a 12-bit feedback field: the signed distance in 8-byte
+    units from the start of entry 0, which ends the vector, to the entry"""
+    return field - 0x1000 if field >= 0x800 else field
+
 def _feedback_entry(fbinit, unit):
     """The (kind, arg, units) of the entry of the feedback table fbinit that
     starts at unit, or None.  A word of the table is the kind (4 bits), the
-    unit (12 bits) and the arg (16 bits); an entry ends where the next
-    begins, and the arg of entry 0 is the number of units."""
+    unit's field (12 bits) and the arg (16 bits); entry 0 comes first and is
+    the 2 units of a header, the others follow in order of address, each
+    ending where the next begins and the last where entry 0 does, and the
+    arg of entry 0 is the number of units."""
     if fbinit is None:
         return None
     words = [int.from_bytes(fbinit[i:i + 4], sys.byteorder)
              for i in range(0, len(fbinit), 4)]
-    units = [(w >> 16) & _FIELD_MAX for w in words]
+    units = [_signed_unit((w >> 16) & _FIELD_MAX) for w in words]
     try:
         i = units.index(unit)
     except ValueError:
         return None
-    end = units[i + 1] if i + 1 < len(units) else words[0] & 0xFFFF
+    if i == 0:
+        end = 2
+    else:
+        end = units[i + 1] if i + 1 < len(units) else 0
     return words[i] >> 28, words[i] & 0xFFFF, end - unit
 
 def _feedback_arg(fbinit, fb):
@@ -439,7 +449,7 @@ def _decode_word(handler, fields, fbinit=None):
         elif role == _ROLE_BASE or role >= _ROLE_IN0:
             srcs.append(fields[k])
         elif role == _ROLE_FB:
-            fb = fields[k]
+            fb = _signed_unit(fields[k])
     if base not in hasarg:
         arg = None
     elif imm == _LOC_NONE:
@@ -538,7 +548,9 @@ class Instruction(_Instruction):
          handler - name of the handler of the instruction's word
          dst - frame slot that the instruction writes (if any), otherwise None
          srcs - frame slots that the instruction reads
-         fb - index of the instruction's feedback entry (if any), otherwise None
+         fb - unit of the instruction's feedback entry (if any), otherwise None:
+              its negative distance in 8-byte units before entry 0, or 0 for
+              a site that shares entry 0
          length - number of words of the instruction, more than 1 for a call
                   that has operand words, which srcs lists after its fields
     """
@@ -905,7 +917,8 @@ def _parse_exception_table(code):
 def _feedback_info(fb, fbinit, feedback):
     """The cache_info of the feedback entry at unit fb: of the executing copy
     if feedback holds its entries, else the kind and static operand in
-    fbinit, the code object's feedback table."""
+    fbinit, the code object's feedback table.  Entry 0 is the last 16 bytes
+    of feedback."""
     if fb is None or fb == 0:
         return None
     found = _feedback_entry(fbinit, fb)
@@ -913,7 +926,8 @@ def _feedback_info(fb, fbinit, feedback):
         return None
     kind, arg, units = found
     if feedback is not None:
-        entry = feedback[fb * 8:(fb + units) * 8]
+        start = len(feedback) - 16 + fb * 8
+        entry = feedback[start:start + units * 8]
         # _PyFbHeader (Include/internal/pycore_feedback.h), then the first
         # two 32-bit fields of the entry if it has them
         layout = (("kind", 0, 1), ("state", 1, 1), ("counter", 2, 2),

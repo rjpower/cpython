@@ -17,14 +17,14 @@ extern "C" {
  *
  * Every instruction of a family below, and every conditional branch, owns
  * one feedback entry unless the vector is full.  The assembler places the
- * entries in 8-byte units, entry 0 first, each ending by unit 4,096, and
- * stores in the IR word the unit at which its entry starts
- * (Include/internal/pycore_ir.h).  The code object keeps one 32-bit
- * initialiser per entry, in order of unit: its kind, its unit and the
- * operand that does not fit the word (_PyIR_FBINIT).  At the first call the executing copy is allocated with the entries after the
- * words:
+ * entries in 8-byte units, entry 0 last, at most 2,048 units before it, and
+ * stores in the IR word the signed unit at which its entry starts, counted
+ * from entry 0 (Include/internal/pycore_ir.h).  The code object keeps one
+ * 32-bit initialiser per entry, in order of address: its kind, its unit and
+ * the operand that does not fit the word (_PyIR_FBINIT).  At the first call
+ * the executing copy is allocated with the entries before the words:
  *
- *     | _PyCodeExec | words | _PyFbBlock | entries |
+ *     | entries | entry 0 | _PyFbBlock | _PyCodeExec | words |
  *
  * Entry 0 is shared by every instruction that has no entry of its own: the
  * instructions past the limit of the vector and _Py_InitCleanup.  It never
@@ -256,7 +256,7 @@ typedef struct {
 static_assert(sizeof(_PyFbPoly) == 120, "polymorphic feedback size changed");
 
 typedef struct _PyFbBlock {
-    uint32_t size;          // bytes from the start of the block to the end of the last entry
+    uint32_t size;          // bytes from the first entry to the end of the block
     uint32_t npoly;         // poly tables in use; capacity is npoly rounded up to a power of 2
     _PyFbPoly *poly;
 } _PyFbBlock;

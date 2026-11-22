@@ -693,7 +693,7 @@ _PyIR_InstrFeedback(PyCodeObject *co, const _PyCodeExec *exec,
     if (fb < 0) {
         return NULL;
     }
-    return _PyIR_FbEntry(exec->entries, (uint32_t)fb);
+    return _PyIR_FbEntry(exec->words, IR_FB_UNIT(fb));
 }
 
 
@@ -816,19 +816,20 @@ make_exec(PyCodeObject *co)
     size_t fb_size = nfb
         ? sizeof(_PyFbBlock) + ((size_t)_PyCode_FbUnits(co) << IR_FB_UNIT_SHIFT)
         : 0;
-    // The image of the constant slots follows the feedback
+    // The image of the constant slots follows the words
     int nconst = co->co_nconstslots;
     const uint32_t *table = _PyCode_CONSTSLOTS(co);
     // The image has an even number of entries: the fill copies two at a
     // time, and the entry after an odd count is NULL
     size_t image_size = (size_t)(nconst + (nconst & 1)) * sizeof(PyValue);
     // Feedback entries hold borrowed pointers only.
-    _PyCodeExec *exec = _PyMem_NoScanMalloc(
-        sizeof(_PyCodeExec) + words_size + fb_size + image_size);
-    if (exec == NULL) {
+    char *base = _PyMem_NoScanMalloc(
+        fb_size + sizeof(_PyCodeExec) + words_size + image_size);
+    if (base == NULL) {
         PyErr_NoMemory();
         return NULL;
     }
+    _PyCodeExec *exec = (_PyCodeExec *)(base + fb_size);
     _PyIRWord *words = (_PyIRWord *)(exec + 1);
     *exec = (_PyCodeExec){
         .words = words,
@@ -843,7 +844,7 @@ make_exec(PyCodeObject *co)
     if (nconst > 0) {
         // The frames borrow these: co_consts keeps them alive
         PyValueBorrow *values =
-            (PyValueBorrow *)((char *)words + words_size + fb_size);
+            (PyValueBorrow *)((char *)words + words_size);
         for (int j = 0; j < nconst; j++) {
             values[j] = PyTuple_GET_VALUE(co->co_consts, table[2 * j + 1]);
         }
@@ -871,13 +872,11 @@ make_exec(PyCodeObject *co)
     if (fb_size == 0) {
         return exec;
     }
-    exec->feedback = (_PyFbBlock *)(words + nwords);
-    memset(exec->feedback, 0, fb_size);
-    exec->feedback->size = (uint32_t)fb_size;
-    exec->entries = (char *)(exec->feedback + 1);
+    memset(base, 0, fb_size);
+    _PyIR_FbBlock(words)->size = (uint32_t)fb_size;
     // The shared entry is a header only and never specialises: its counter
     // never triggers
-    _PyFbHeader *shared = _PyIR_FbEntry(exec->entries, 0);
+    _PyFbHeader *shared = _PyIR_FbEntry(words, 0);
     shared->kind = FB_COUNTER;
     shared->state = FB_OFF;
     shared->counter = initial_unreachable_backoff_counter();
@@ -891,8 +890,7 @@ make_exec(PyCodeObject *co)
         ? adaptive_counter_warmup() : initial_unreachable_backoff_counter();
     const uint32_t *fbinit = _PyCode_FBINIT(co);
     for (int i = 1; i < nfb; i++) {
-        _PyFbHeader *h = _PyIR_FbEntry(exec->entries,
-                                       _PyIR_FBINIT_UNIT(fbinit[i]));
+        _PyFbHeader *h = _PyIR_FbEntry(words, _PyIR_FBINIT_UNIT(fbinit[i]));
         h->kind = (uint8_t)_PyIR_FBINIT_KIND(fbinit[i]);
         h->counter = counter;
         h->arg = _PyIR_FBINIT_ARG(fbinit[i]);
@@ -931,10 +929,13 @@ _PyCode_ClearExec(PyCodeObject *co)
         return;
     }
     co->_co_exec = NULL;
-    if (exec->feedback != NULL) {
-        _PyFb_Clear(exec->feedback);
+    char *base = (char *)exec;
+    if (co->co_nfeedback) {
+        _PyFbBlock *block = _PyIR_FbBlock(exec->words);
+        _PyFb_Clear(block);
+        base = (char *)(block + 1) - block->size;
     }
-    _PyMem_NoScanFree(exec);
+    _PyMem_NoScanFree(base);
 }
 
 size_t
@@ -946,8 +947,8 @@ _PyCode_ExecSizeOf(PyCodeObject *co)
     }
     size_t res = sizeof(_PyCodeExec) + exec->nwords * sizeof(_PyIRWord);
     res += (size_t)(exec->nconst + (exec->nconst & 1)) * sizeof(PyValueBorrow);
-    _PyFbBlock *feedback = exec->feedback;
-    if (feedback != NULL) {
+    if (co->co_nfeedback) {
+        _PyFbBlock *feedback = _PyIR_FbBlock(exec->words);
         res += feedback->size;
         if (feedback->npoly) {
             // capacity: npoly rounded up to a power of 2

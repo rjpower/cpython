@@ -312,12 +312,12 @@ ir_run_CALL(
             (void)this_instr;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_DS(ir_word));
             int oparg = (int)IR_C(ir_word) - IR_CALL_HAS_SELF(ir_word);
             (void)oparg;
             int call_state = IR_CALL_SELF_STATE(ir_word);
             (void)call_state;
-            uint32_t call_feedback = IR_D(ir_word);
+            int call_feedback = IR_DS(ir_word);
             (void)call_feedback;
             PyValue callable;
             PyValue self_or_null;
@@ -336,7 +336,7 @@ ir_run_CALL(
                         }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                        fb = (_PyFb_CALL *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                        fb = (_PyFb_CALL *)IR_FB(call_feedback);
                         if (call_state & CALL_EFFECTS) { goto call_fallback_CALL; }
                         DISPATCH_SAME_OPARG();
                     }
@@ -392,10 +392,10 @@ ir_run_CALL_FUNCTION_EX(
             (void)this_instr;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_CALL_FUNCTION_EX *fb = (_PyFb_CALL_FUNCTION_EX *)IR_FB(IR_D(ir_word));
+            _PyFb_CALL_FUNCTION_EX *fb = (_PyFb_CALL_FUNCTION_EX *)IR_FB(IR_DS(ir_word));
             int call_state = IR_CALL_KWARGS_STATE(ir_word);
             (void)call_state;
-            uint32_t call_feedback = IR_D(ir_word);
+            int call_feedback = IR_DS(ir_word);
             (void)call_feedback;
             PyValue func;
             PyValue callargs;
@@ -413,7 +413,7 @@ ir_run_CALL_FUNCTION_EX(
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                    fb = (_PyFb_CALL_FUNCTION_EX *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                    fb = (_PyFb_CALL_FUNCTION_EX *)IR_FB(call_feedback);
                     if (call_state & CALL_EFFECTS) { goto call_fallback_CALL_FUNCTION_EX; }
                     DISPATCH_SAME_OPARG();
                 }
@@ -583,12 +583,12 @@ ir_run_CALL_KW(
             (void)this_instr;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_D(ir_word));
+            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_DS(ir_word));
             int oparg = (int)IR_C(ir_word) - IR_CALL_HAS_SELF(ir_word) - 1;
             (void)oparg;
             int call_state = IR_CALL_SELF_STATE(ir_word);
             (void)call_state;
-            uint32_t call_feedback = IR_D(ir_word);
+            int call_feedback = IR_DS(ir_word);
             (void)call_feedback;
             PyValue callable;
             PyValue self_or_null;
@@ -608,7 +608,7 @@ ir_run_CALL_KW(
                     }
                     this_instr = frame->instr_ptr;
                     ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
-                    fb = (_PyFb_CALL_KW *)(frame->ir_feedback + ((size_t)call_feedback << 3));
+                    fb = (_PyFb_CALL_KW *)IR_FB(call_feedback);
                     if (call_state & CALL_EFFECTS) { goto call_fallback_CALL_KW; }
                     DISPATCH_SAME_OPARG();
                 }
@@ -763,8 +763,8 @@ ir_run_COMPARE_OP(
             (void)this_instr;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_D(ir_word));
+            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_DS(ir_word));
+            int oparg = IR_FB_ARG(fb, IR_DS(ir_word));
             (void)oparg;
             PyValueBorrow left;
             PyValueBorrow right;
@@ -834,7 +834,7 @@ ir_run_COMPARE_OP_JUMP(
             INSTRUCTION_STATS(COMPARE_OP_JUMP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
+            _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_CS(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
             PyValueBorrow left;
@@ -916,8 +916,8 @@ ir_run_CONTAINS_OP(
             (void)this_instr;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_D(ir_word));
-            int oparg = IR_FB_ARG(fb, IR_D(ir_word));
+            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_DS(ir_word));
+            int oparg = IR_FB_ARG(fb, IR_DS(ir_word));
             (void)oparg;
             PyValueBorrow left;
             PyValueBorrow right;
@@ -989,7 +989,7 @@ ir_run_CONTAINS_OP_JUMP(
             INSTRUCTION_STATS(CONTAINS_OP_JUMP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
+            _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_CS(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
             PyValueBorrow left;
@@ -1502,7 +1502,7 @@ ir_run_FOR_ITER(
             (void)this_instr;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_FOR_ITER *fb = (_PyFb_FOR_ITER *)IR_FB(IR_C(ir_word));
+            _PyFb_FOR_ITER *fb = (_PyFb_FOR_ITER *)IR_FB(IR_CS(ir_word));
             int oparg = IR_DS(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -1668,7 +1668,7 @@ ir_run_GET_ITER(
             INSTRUCTION_STATS(GET_ITER);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_GET_ITER *fb = (_PyFb_GET_ITER *)IR_FB(IR_C(ir_word));
+            _PyFb_GET_ITER *fb = (_PyFb_GET_ITER *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValue iterable;
@@ -1931,7 +1931,7 @@ ir_run_LOAD_ATTR(
             (void)this_instr;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -2141,7 +2141,7 @@ ir_run_LOAD_GLOBAL(
             INSTRUCTION_STATS(LOAD_GLOBAL);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
+            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_BS(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue *res;
@@ -2298,7 +2298,7 @@ ir_run_LOAD_SUPER_ATTR(
             (void)this_instr;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -2709,7 +2709,7 @@ ir_run_POP_JUMP_IF_FALSE(
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
+            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_BS(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -2770,7 +2770,7 @@ ir_run_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
+            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_BS(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -2965,7 +2965,7 @@ ir_run_SEND(
             (void)this_instr;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_SEND *fb = (_PyFb_SEND *)IR_FB(IR_C(ir_word));
+            _PyFb_SEND *fb = (_PyFb_SEND *)IR_FB(IR_CS(ir_word));
             int oparg = IR_DS(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -3221,7 +3221,7 @@ ir_run_STORE_ATTR(
             INSTRUCTION_STATS(STORE_ATTR);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow v;
@@ -3414,7 +3414,7 @@ ir_run_STORE_SUBSCR(
             INSTRUCTION_STATS(STORE_SUBSCR);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_STORE_SUBSCR *fb = (_PyFb_STORE_SUBSCR *)IR_FB(IR_D(ir_word));
+            _PyFb_STORE_SUBSCR *fb = (_PyFb_STORE_SUBSCR *)IR_FB(IR_DS(ir_word));
             PyValueBorrow container;
             PyValueBorrow sub;
             PyValueBorrow v;
@@ -3473,7 +3473,7 @@ ir_run_TO_BOOL(
             INSTRUCTION_STATS(TO_BOOL);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_C(ir_word));
+            _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_CS(ir_word));
             PyValue value;
             PyValue res;
             // _SPECIALIZE_TO_BOOL
@@ -3564,7 +3564,7 @@ ir_run_UNPACK_SEQUENCE(
             (void)this_instr;
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_UNPACK_SEQUENCE *fb = (_PyFb_UNPACK_SEQUENCE *)IR_FB(IR_C(ir_word));
+            _PyFb_UNPACK_SEQUENCE *fb = (_PyFb_UNPACK_SEQUENCE *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_A(ir_word));
@@ -3774,7 +3774,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(_PyIR_BINARY_OP_FIRST + ir_binary_op);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_DS(ir_word));
             int oparg = ir_binary_op;
             (void)oparg;
             PyValueBorrow lhs;
@@ -3847,7 +3847,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 double a, b;
                 if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 STAT_INC(BINARY_OP, hit);
                 res = PyValue_FromDouble(a + b);
@@ -3902,7 +3902,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_INT
@@ -3910,7 +3910,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 left = IR_VIEW(IR_B(ir_word));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_ADD_INT
@@ -3983,12 +3983,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_C(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 if (!PyUnicode_CheckExact(value_o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_UNICODE
@@ -3996,12 +3996,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 nos = IR_VIEW(IR_B(ir_word));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!PyUnicode_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_ADD_UNICODE
@@ -4076,7 +4076,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_INT
@@ -4084,7 +4084,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 left = IR_VIEW(IR_B(ir_word));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_AND_INT
@@ -4133,7 +4133,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(BINARY_OP_EXTEND);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_DS(ir_word));
             PyValueBorrow left;
             PyValueBorrow right;
             PyValue res;
@@ -4151,7 +4151,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 PyObject *descr = (PyObject *)fb->descr;
                 if (!PyValue_IsObject(left) || !PyValue_IsObject(right)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
                 PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
@@ -4160,7 +4160,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 assert(d != NULL);
                 if (Py_TYPE(left_o) != d->lhs_type || Py_TYPE(right_o) != d->rhs_type) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 STAT_INC(BINARY_OP, hit);
                 PyObject *res_o = d->action(left_o, right_o);
@@ -4224,7 +4224,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_INT
@@ -4232,7 +4232,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 left = IR_VIEW(IR_B(ir_word));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_FLOOR_DIVIDE_INT
@@ -4242,7 +4242,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 int64_t b = PyValue_InlineInt64(right);
                 if (b == 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 int64_t a = PyValue_InlineInt64(left);
                 STAT_INC(BINARY_OP, hit);
@@ -4309,12 +4309,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_C(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 PyObject *value_o = _PyValue_AsKnownObjectBorrowPointer(value);
                 if (!PyUnicode_CheckExact(value_o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_UNICODE
@@ -4322,12 +4322,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 nos = IR_VIEW(IR_B(ir_word));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!PyUnicode_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_INPLACE_ADD_UNICODE
@@ -4344,7 +4344,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 assert(PyUnicode_CheckExact(left_o));
                 if (PyValue_AsKnownObjectBorrow(*target_local) != left_o) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 STAT_INC(BINARY_OP, hit);
                 ir_own_B = IR_DETACH(ir_word, B, left);
@@ -4446,7 +4446,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_INT
@@ -4454,7 +4454,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 left = IR_VIEW(IR_B(ir_word));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_LSHIFT_INT
@@ -4464,7 +4464,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 int64_t b = PyValue_InlineInt64(right);
                 if (b < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 int64_t a = PyValue_InlineInt64(left);
                 STAT_INC(BINARY_OP, hit);
@@ -4543,7 +4543,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 double a, b;
                 if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 STAT_INC(BINARY_OP, hit);
                 res = PyValue_FromDouble(a * b);
@@ -4598,7 +4598,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_INT
@@ -4606,7 +4606,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 left = IR_VIEW(IR_B(ir_word));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_MULTIPLY_INT
@@ -4682,7 +4682,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_INT
@@ -4690,7 +4690,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 left = IR_VIEW(IR_B(ir_word));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_OR_INT
@@ -4762,7 +4762,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_INT
@@ -4770,7 +4770,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 left = IR_VIEW(IR_B(ir_word));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_REMAINDER_INT
@@ -4780,7 +4780,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 int64_t b = PyValue_InlineInt64(right);
                 if (b == 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 int64_t a = PyValue_InlineInt64(left);
                 STAT_INC(BINARY_OP, hit);
@@ -4848,7 +4848,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_INT
@@ -4856,7 +4856,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 left = IR_VIEW(IR_B(ir_word));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_RSHIFT_INT
@@ -4866,7 +4866,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 int64_t b = PyValue_InlineInt64(right);
                 if (b < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 int64_t a = PyValue_InlineInt64(left);
                 STAT_INC(BINARY_OP, hit);
@@ -4928,16 +4928,16 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 nos = IR_VIEW(IR_B(ir_word));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!Py_TYPE(o)->tp_as_mapping) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 if (Py_TYPE(o)->tp_as_mapping->mp_subscript != _PyDict_Subscript) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_SUBSCR_DICT
@@ -4998,7 +4998,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 if (IS_PEP523_HOOKED(tstate)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_SUBSCR_CHECK_FUNC
@@ -5006,30 +5006,30 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 container = IR_VIEW(IR_B(ir_word));
                 if (!PyValue_IsObject(container)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(container));
                 if (!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
                 PyObject *getitem_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.getitem);
                 if (getitem_o == NULL) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 assert(PyFunction_Check(getitem_o));
                 uint32_t cached_version = FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.getitem_version);
                 if (((PyFunctionObject *)getitem_o)->func_version != cached_version) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(getitem_o);
                 assert(code->co_argcount == 2);
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 getitem = PyValue_DUP(PyValue_FromObjectBorrow(getitem_o));
             }
@@ -5089,7 +5089,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_ELEMENT_LIST
@@ -5097,11 +5097,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 container = IR_VIEW(IR_B(ir_word));
                 #ifdef Py_GIL_DISABLED
                 UPDATE_MISS_STATS(BINARY_OP);
-                IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 #endif
                 if (!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))) || !PyList_CheckExact(_PyValue_AsKnownObjectBorrowPointer(container))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_SUBSCR_LIST_INT
@@ -5114,7 +5114,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 if (index < 0) { index += PyList_GET_SIZE(_PyValue_AsKnownObjectBorrowPointer(list_st)); }
                 if (index < 0 || index >= PyList_GET_SIZE(_PyValue_AsKnownObjectBorrowPointer(list_st))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 res =PyValue_DUP(PyList_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer(list_st), index));
                 assert(!PyValue_IsNull(res));
@@ -5172,12 +5172,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 tos = IR_VIEW(IR_C(ir_word));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_C(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 PyObject *o = _PyValue_AsKnownObjectBorrowPointer(tos);
                 if (!PySlice_Check(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_LIST
@@ -5185,12 +5185,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 nos = IR_VIEW(IR_B(ir_word));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!PyList_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_SUBSCR_LIST_SLICE
@@ -5260,7 +5260,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_COMPACT_ASCII
@@ -5268,16 +5268,16 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 nos = IR_VIEW(IR_B(ir_word));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!PyUnicode_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 if (!PyUnicode_IS_COMPACT_ASCII(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_SUBSCR_STR_INT
@@ -5291,11 +5291,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
                 if (index < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 if (PyUnicode_GET_LENGTH(str) <= index) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 uint8_t c = PyUnicode_1BYTE_DATA(str)[index];
                 assert(c < 128);
@@ -5355,7 +5355,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_ELEMENT_TUPLE
@@ -5363,7 +5363,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 container = IR_VIEW(IR_B(ir_word));
                 if (!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))) || !PyTuple_CheckExact(_PyValue_AsKnownObjectBorrowPointer(container))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_SUBSCR_TUPLE_INT
@@ -5375,11 +5375,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
                 if (index < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 if (index >= PyTuple_GET_SIZE(_PyValue_AsKnownObjectBorrowPointer(tuple_st))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 res =PyValue_DUP(PyTuple_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer(tuple_st), index));
                 STAT_INC(BINARY_OP, hit);
@@ -5436,7 +5436,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_UNICODE
@@ -5444,12 +5444,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 nos = IR_VIEW(IR_B(ir_word));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 PyObject *o = _PyValue_AsKnownObjectBorrowPointer(nos);
                 if (!PyUnicode_CheckExact(o)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_SUBSCR_USTR_INT
@@ -5463,16 +5463,16 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
                 if (index < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 if (PyUnicode_GET_LENGTH(str) <= index) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 Py_UCS4 c = PyUnicode_READ_CHAR(str, index);
                 if (Py_ARRAY_LENGTH(_Py_SINGLETON(strings).ascii) <= c) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 STAT_INC(BINARY_OP, hit);
                 PyObject *res_o = (PyObject*)&_Py_SINGLETON(strings).ascii[c];
@@ -5535,7 +5535,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 double a, b;
                 if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 STAT_INC(BINARY_OP, hit);
                 res = PyValue_FromDouble(a - b);
@@ -5590,7 +5590,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_INT
@@ -5598,7 +5598,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 left = IR_VIEW(IR_B(ir_word));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_SUBTRACT_INT
@@ -5672,11 +5672,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 double a, b;
                 if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 if (b == 0.0) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
                 STAT_INC(BINARY_OP, hit);
                 res = PyValue_FromDouble(a / b);
@@ -5739,7 +5739,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_C(ir_word));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _GUARD_NOS_INT
@@ -5747,7 +5747,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 left = IR_VIEW(IR_B(ir_word));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_D(ir_word));
+                    IR_DEOPT_BINARY_OP(IR_DS(ir_word));
                 }
             }
             // _BINARY_OP_XOR_INT
@@ -5929,12 +5929,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(CALL_ALLOC_AND_ENTER_INIT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_DS(ir_word));
             int oparg = (int)IR_C(ir_word) - IR_CALL_HAS_SELF(ir_word);
             (void)oparg;
             int call_state = IR_CALL_SELF_STATE(ir_word);
             (void)call_state;
-            uint32_t call_feedback = IR_D(ir_word);
+            int call_feedback = IR_DS(ir_word);
             (void)call_feedback;
             PyValue callable;
             PyValue self_or_null;
@@ -6059,12 +6059,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(CALL_BOUND_METHOD_EXACT_ARGS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_DS(ir_word));
             int oparg = (int)IR_C(ir_word) - IR_CALL_HAS_SELF(ir_word);
             (void)oparg;
             int call_state = IR_CALL_SELF_STATE(ir_word);
             (void)call_state;
-            uint32_t call_feedback = IR_D(ir_word);
+            int call_feedback = IR_DS(ir_word);
             (void)call_feedback;
             PyValue callable;
             PyValue self_or_null;
@@ -6203,12 +6203,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(CALL_BOUND_METHOD_GENERAL);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_DS(ir_word));
             int oparg = (int)IR_C(ir_word) - IR_CALL_HAS_SELF(ir_word);
             (void)oparg;
             int call_state = IR_CALL_SELF_STATE(ir_word);
             (void)call_state;
-            uint32_t call_feedback = IR_D(ir_word);
+            int call_feedback = IR_DS(ir_word);
             (void)call_feedback;
             PyValue callable;
             // _CHECK_PEP_523
@@ -6798,12 +6798,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(CALL_KW_BOUND_METHOD);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_D(ir_word));
+            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_DS(ir_word));
             int oparg = (int)IR_C(ir_word) - IR_CALL_HAS_SELF(ir_word) - 1;
             (void)oparg;
             int call_state = IR_CALL_SELF_STATE(ir_word);
             (void)call_state;
-            uint32_t call_feedback = IR_D(ir_word);
+            int call_feedback = IR_DS(ir_word);
             (void)call_feedback;
             PyValue callable;
             // _CHECK_PEP_523
@@ -6925,12 +6925,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(CALL_KW_PY);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_D(ir_word));
+            _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_DS(ir_word));
             int oparg = (int)IR_C(ir_word) - IR_CALL_HAS_SELF(ir_word) - 1;
             (void)oparg;
             int call_state = IR_CALL_SELF_STATE(ir_word);
             (void)call_state;
-            uint32_t call_feedback = IR_D(ir_word);
+            int call_feedback = IR_DS(ir_word);
             (void)call_feedback;
             PyValue callable;
             // _CHECK_PEP_523
@@ -7526,12 +7526,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(CALL_PY_EXACT_ARGS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_DS(ir_word));
             int oparg = (int)IR_C(ir_word) - IR_CALL_HAS_SELF(ir_word);
             (void)oparg;
             int call_state = IR_CALL_SELF_STATE(ir_word);
             (void)call_state;
-            uint32_t call_feedback = IR_D(ir_word);
+            int call_feedback = IR_DS(ir_word);
             (void)call_feedback;
             PyValue callable;
             PyValue self_or_null;
@@ -7637,12 +7637,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(CALL_PY_GENERAL);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_DS(ir_word));
             int oparg = (int)IR_C(ir_word) - IR_CALL_HAS_SELF(ir_word);
             (void)oparg;
             int call_state = IR_CALL_SELF_STATE(ir_word);
             (void)call_state;
-            uint32_t call_feedback = IR_D(ir_word);
+            int call_feedback = IR_DS(ir_word);
             (void)call_feedback;
             PyValue callable;
             // _CHECK_PEP_523
@@ -7714,12 +7714,12 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(CALL_PY_GENERATOR);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_D(ir_word));
+            _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_DS(ir_word));
             int oparg = (int)IR_C(ir_word) - IR_CALL_HAS_SELF(ir_word);
             (void)oparg;
             int call_state = IR_CALL_SELF_STATE(ir_word);
             (void)call_state;
-            uint32_t call_feedback = IR_D(ir_word);
+            int call_feedback = IR_DS(ir_word);
             (void)call_feedback;
             PyValue callable;
             PyValue res;
@@ -8031,7 +8031,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(COMPARE_OP_FLOAT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_DS(ir_word));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
             PyValueBorrow value;
@@ -8104,7 +8104,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(COMPARE_OP_INT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_DS(ir_word));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
             PyValueBorrow value;
@@ -8182,7 +8182,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_JUMP_FLOAT);
-            _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
+            _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_CS(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
             PyValueBorrow value;
@@ -8260,7 +8260,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_JUMP_INT);
-            _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
+            _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_CS(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
             PyValueBorrow value;
@@ -8342,7 +8342,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_JUMP_STR);
-            _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_C(ir_word));
+            _PyFb_COMPARE_OP_JUMP *fb = (_PyFb_COMPARE_OP_JUMP *)IR_FB(IR_CS(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
             PyValueBorrow value;
@@ -8443,7 +8443,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(COMPARE_OP_STR);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_DS(ir_word));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
             PyValueBorrow value;
@@ -8542,7 +8542,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(CONTAINS_OP_DICT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_DS(ir_word));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
             PyValueBorrow tos;
@@ -8620,7 +8620,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_JUMP_DICT);
-            _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
+            _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_CS(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
             PyValueBorrow tos;
@@ -8702,7 +8702,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_JUMP_SEQUENCE);
-            _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
+            _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_CS(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
             PyValueBorrow tos;
@@ -8785,7 +8785,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_JUMP_SET);
-            _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_C(ir_word));
+            _PyFb_CONTAINS_OP_JUMP *fb = (_PyFb_CONTAINS_OP_JUMP *)IR_FB(IR_CS(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
             PyValueBorrow tos;
@@ -8869,7 +8869,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(CONTAINS_OP_SET);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_D(ir_word));
+            _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_DS(ir_word));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
             PyValueBorrow tos;
@@ -9865,7 +9865,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_IS_OP_JUMP);
-            _PyFb_IS_OP_JUMP *fb = (_PyFb_IS_OP_JUMP *)IR_FB(IR_C(ir_word));
+            _PyFb_IS_OP_JUMP *fb = (_PyFb_IS_OP_JUMP *)IR_FB(IR_CS(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
             PyValueBorrow left;
@@ -10480,7 +10480,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(IS_OP_JUMP);
-            _PyFb_IS_OP_JUMP *fb = (_PyFb_IS_OP_JUMP *)IR_FB(IR_C(ir_word));
+            _PyFb_IS_OP_JUMP *fb = (_PyFb_IS_OP_JUMP *)IR_FB(IR_CS(ir_word));
             int oparg = (int)(((_PyFbHeader *)fb)->arg & IR_FUSED_OP_MASK);
             (void)oparg;
             PyValueBorrow left;
@@ -10721,7 +10721,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_CLASS);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -10779,7 +10779,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_CLASSMETHOD);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             assert(!IR_IS_LOCAL_FIELD(ir_word, A));
@@ -10868,7 +10868,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -10937,7 +10937,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -11030,7 +11030,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_GETSET);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -11088,7 +11088,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_INSTANCE_VALUE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -11158,7 +11158,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_LAZY_DICT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             assert(!IR_IS_LOCAL_FIELD(ir_word, A));
@@ -11224,7 +11224,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_NO_DICT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             assert(!IR_IS_LOCAL_FIELD(ir_word, A));
@@ -11280,7 +11280,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_WITH_VALUES);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             assert(!IR_IS_LOCAL_FIELD(ir_word, A));
@@ -11346,7 +11346,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_MODULE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -11417,7 +11417,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_NO_DICT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -11469,7 +11469,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -11531,7 +11531,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_PROPERTY);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -11619,7 +11619,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -11676,7 +11676,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -11732,7 +11732,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -11751,7 +11751,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 (void)type_version; (void)shape;
-                int64_t ir_selected_offset = shape_read_offset(frame->ir_feedback, fb, _PyValue_AsKnownObjectBorrowPointer(owner));
+                int64_t ir_selected_offset = shape_read_offset(frame->ir_words, fb, _PyValue_AsKnownObjectBorrowPointer(owner));
                 if (ir_selected_offset < 0) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -11786,7 +11786,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -11805,7 +11805,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 (void)type_version; (void)shape;
-                int64_t ir_selected_offset = shape_read_offset(frame->ir_feedback, fb, _PyValue_AsKnownObjectBorrowPointer(owner));
+                int64_t ir_selected_offset = shape_read_offset(frame->ir_words, fb, _PyValue_AsKnownObjectBorrowPointer(owner));
                 if (ir_selected_offset < 0) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -11839,7 +11839,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_SLOT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -11899,7 +11899,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_SLOT_POINTER);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -11954,7 +11954,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(LOAD_ATTR_WITH_HINT);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -12264,7 +12264,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL_BUILTIN);
-            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
+            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_BS(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue res;
@@ -12328,7 +12328,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL_MODULE);
-            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_B(ir_word));
+            _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_BS(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue res;
@@ -12689,7 +12689,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_ALWAYS_TRUE);
-            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
+            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_BS(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -12950,7 +12950,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_SLOT);
-            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_B(ir_word));
+            _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_BS(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -13166,7 +13166,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_ALWAYS_TRUE);
-            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
+            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_BS(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow value;
@@ -13427,7 +13427,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_SLOT);
-            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_B(ir_word));
+            _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_BS(ir_word));
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -14172,7 +14172,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             INSTRUCTION_STATS(SEND);
             PyValue ir_old = PyValue_NULL;
             (void)ir_old;
-            _PyFb_SEND *fb = (_PyFb_SEND *)IR_FB(IR_C(ir_word));
+            _PyFb_SEND *fb = (_PyFb_SEND *)IR_FB(IR_CS(ir_word));
             int oparg = IR_DS(ir_word);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_B(ir_word));
@@ -14321,7 +14321,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_INSTANCE_VALUE);
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_CS(ir_word));
             PyValueBorrow value;
             PyValueBorrow owner;
             PyValue ir_own_B = PyValue_NULL;
@@ -14427,7 +14427,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE);
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_CS(ir_word));
             PyValueBorrow owner;
             PyValueBorrow value;
             PyValue ir_own_B = PyValue_NULL;
@@ -14488,7 +14488,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE_ADD);
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_CS(ir_word));
             PyValueBorrow owner;
             PyValueBorrow value;
             PyValue ir_own_B = PyValue_NULL;
@@ -14551,7 +14551,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SLOT);
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_CS(ir_word));
             PyValueBorrow owner;
             PyValueBorrow value;
             PyValue ir_own_B = PyValue_NULL;
@@ -14608,7 +14608,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_WITH_HINT);
-            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_C(ir_word));
+            _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_CS(ir_word));
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow owner;
@@ -14977,7 +14977,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_ALWAYS_TRUE);
-            _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_C(ir_word));
+            _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_CS(ir_word));
             PyValue value;
             PyValue res;
             PyValue v;

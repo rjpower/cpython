@@ -571,8 +571,8 @@ static const uint8_t fb_kind_units[] = {
 };
 
 /* Whether fbinit, the feedback table of a code object, describes a vector:
- * entry 0 first, the others in order of unit, each with room for its kind,
- * all within the units that entry 0 gives. */
+ * entry 0 first, the others in order of address, each with room for its kind,
+ * all within the units that entry 0 gives and ending by entry 0. */
 static int
 fbinit_is_valid(PyObject *fbinit)
 {
@@ -592,17 +592,17 @@ fbinit_is_valid(PyObject *fbinit)
     {
         return 0;
     }
-    uint32_t next = IR_FB_FIRST_UNIT;
+    // The others lie before entry 0, at negative units
+    int next = IR_FB_FIRST_UNIT - (int)total;
     for (Py_ssize_t i = 1; i < n; i++) {
         memcpy(&word, PyBytes_AS_STRING(fbinit) + i * sizeof(word), sizeof(word));
         int kind = _PyIR_FBINIT_KIND(word);
-        if (kind <= FB_COUNTER || kind > FB_CALL
-            || _PyIR_FBINIT_UNIT(word) < next)
-        {
+        int unit = _PyIR_FBINIT_UNIT(word);
+        if (kind <= FB_COUNTER || kind > FB_CALL || unit < next) {
             return 0;
         }
-        next = _PyIR_FBINIT_UNIT(word) + fb_kind_units[kind];
-        if (next > total) {
+        next = unit + fb_kind_units[kind];
+        if (next > 0) {
             return 0;
         }
     }
@@ -1982,10 +1982,10 @@ fb_field_is_valid(const _PyIRFormat *fmt, int handler, uint32_t unit,
     if (i < 0) {
         return 0;
     }
-    uint32_t end = i + 1 < nfb ? _PyIR_FBINIT_UNIT(table[i + 1])
-                               : _PyIR_FBINIT_ARG(table[0]);
+    // An entry ends where the next begins, the last where entry 0 does
+    int end = i + 1 < nfb ? _PyIR_FBINIT_UNIT(table[i + 1]) : 0;
     return _PyIR_FBINIT_KIND(table[i]) == fmt->fb_kind &&
-           (end - unit) * 8 >= fmt->fb_size;
+           (end - IR_FB_UNIT(unit)) * 8 >= (int)fmt->fb_size;
 }
 
 /* Only after structural/feedback-domain admission. Pinned binary handlers
@@ -6232,19 +6232,20 @@ code_getcodeadaptive(PyObject *self, void *closure)
                                      exec->nwords * sizeof(_PyIRWord));
 }
 
-/* The feedback entries of the executing copy, in units of 8 bytes with
- * entry 0 first, or None before the first call or without entries. */
+/* The feedback entries of the executing copy as they lie in memory, in units
+ * of 8 bytes with entry 0 last, or None before the first call or without
+ * entries. */
 static PyObject *
 code_getfeedback(PyObject *self, void *closure)
 {
     PyCodeObject *code = _PyCodeObject_CAST(self);
     _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
-    if (exec == NULL || exec->entries == NULL) {
+    if (exec == NULL || code->co_nfeedback == 0) {
         Py_RETURN_NONE;
     }
-    return PyBytes_FromStringAndSize(exec->entries,
-                                     (Py_ssize_t)_PyCode_FbUnits(code)
-                                     << IR_FB_UNIT_SHIFT);
+    Py_ssize_t size = (Py_ssize_t)_PyCode_FbUnits(code) << IR_FB_UNIT_SHIFT;
+    return PyBytes_FromStringAndSize((char *)_PyIR_FbBlock(exec->words) - size,
+                                     size);
 }
 
 /* The feedback table: per feedback entry, its kind and static operand */

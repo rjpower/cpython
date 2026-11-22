@@ -304,7 +304,7 @@ instr_fb(_PyInstr *instr)
 static inline int
 is_shared_entry(_PyFbHeader *h)
 {
-    return (char *)h == _PyFrame_Exec(current_frame())->entries;
+    return h == _PyIR_FbEntry(_PyFrame_Exec(current_frame())->words, 0);
 }
 
 static inline void *
@@ -407,7 +407,7 @@ fb_block(_PyInstr *instr)
 {
     _PyCodeExec *exec = _PyFrame_Exec(current_frame());
     assert(exec->words <= instr && instr < exec->words + exec->nwords);
-    return exec->feedback;
+    return _PyIR_FbBlock(exec->words);
 }
 
 static fb_row

@@ -412,7 +412,7 @@ static void dtrace_function_return(_PyInterpreterFrame *);
  * either, so nothing after a trigger writes past a header there. */
 #ifdef Py_DEBUG
 #  define IR_SHARED_ENTRY_NEVER_TRIGGERS(FB) \
-    (assert((char *)(FB) != frame->ir_feedback \
+    (assert((char *)(FB) != (char *)_PyIR_FbEntry(frame->ir_words, 0) \
             || !backoff_counter_triggers((FB)->counter)), 1)
 #else
 #  define IR_SHARED_ENTRY_NEVER_TRIGGERS(FB) 1
@@ -863,11 +863,10 @@ _PyIR_CloseWindow(PyValue *window, int n)
         } \
     } while (0)
 
-/* The frame's view of its executing copy: frame->ir_words and
- * frame->ir_feedback follow the copy that instr_ptr points into. */
+/* The frame's view of its executing copy: frame->ir_words follows the copy
+ * that instr_ptr points into. */
 #define IR_CHECK_BLOCK() \
-    assert(frame->ir_words == _PyFrame_Exec(frame)->words && \
-           frame->ir_feedback == _PyFrame_Exec(frame)->entries)
+    assert(frame->ir_words == _PyFrame_Exec(frame)->words)
 
 /* This is the callback-free identity arm of _PyEval_GetAwaitable. The other
  * states and custom __await__ implementations keep its ordinary error path. */
@@ -888,19 +887,19 @@ coro_awaitable_can_transfer(PyValueBorrow value)
 }
 
 /* The feedback entry at index F. */
-#define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_feedback, (F)))
+#define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_words, (F)))
 
 /* Every executable row was nominated by the checked managed-shape lookup
  * (fb_shape_read_set()): its handler is LOAD_ATTR_SHAPE, its type version is
  * not zero and its aux is a shape.  A row that is not in use has version zero
- * and never matches the type's nonzero version.  ENTRIES is the frame's
- * ir_feedback, whose block header precedes it.  No pointer from the bank
- * escapes this callback-free selection. */
+ * and never matches the type's nonzero version.  WORDS is the frame's
+ * ir_words, whose block precedes the executing copy's header.  No pointer
+ * from the bank escapes this callback-free selection. */
 static inline int64_t
-shape_read_offset(char *entries, _PyFbAttr *entry, PyObject *owner)
+shape_read_offset(const _PyIRWord *words, _PyFbAttr *entry, PyObject *owner)
 {
 #ifdef Py_SHAPES
-    _PyFbBlock *block = (_PyFbBlock *)entries - 1;
+    _PyFbBlock *block = _PyIR_FbBlock(words);
     const _PyFbPoly *poly = _PyFb_PolyOf(block, &entry->h);
     uint32_t version = Py_TYPE(owner)->tp_version_tag;
     if (version == 0) {

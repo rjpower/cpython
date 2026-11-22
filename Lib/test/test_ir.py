@@ -689,7 +689,7 @@ class AssemblerTest(unittest.TestCase):
             def __init__(self):
                 self.attr = 5
                 self.other = 7
-        nsites = 1000     # attribute entries are 48 bytes: 681 fit after the compares
+        nsites = 1000     # attribute entries are 48 bytes: 340 fit after the compares
         source = ("def f(o, n):\n"
                   + "".join(f"    x = o.attr\n" for i in range(nsites))
                   + "    return (o.attr - o.other, o.other // n,\n"
@@ -703,13 +703,13 @@ class AssemblerTest(unittest.TestCase):
         # compares alone
         compares = [i for i in instrs
                     if i.opname.startswith(("COMPARE_OP", "CONTAINS_OP"))]
-        self.assertEqual([i.fb for i in compares], [2, 6])
+        self.assertEqual([fb_position(f.__code__, i.fb) for i in compares], [2, 6])
         load_attrs = [i for i in instrs if i.opname == "LOAD_ATTR"]
-        self.assertEqual(load_attrs[0].fb, 10)
-        self.assertEqual(load_attrs[1].fb, 16)
+        self.assertEqual(fb_position(f.__code__, load_attrs[0].fb), 10)
+        self.assertEqual(fb_position(f.__code__, load_attrs[1].fb), 16)
         shared = [i for i in load_attrs if i.fb == 0]
         owned = [i for i in load_attrs if i.fb != 0]
-        self.assertEqual(len(owned), 681)
+        self.assertEqual(len(owned), 340)
         self.assertEqual(len(shared), nsites + 6 - len(owned))
         self.assertEqual({i.argval for i in shared}, {"attr", "other"})
         ir = handlers(f)
@@ -725,11 +725,11 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(f(O(), 2.0), (-2, 3.0, True, True))
         with self.assertRaises(ZeroDivisionError):
             f(O(), 0)
-        header = f.__code__._co_feedback[:4]       # kind, state, counter
+        header = f.__code__._co_feedback[-16:-12]  # kind, state, counter
         self.assertEqual(header[:2], bytes([0, 4]))  # COUNTER, OFF
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 8):
             f(O(), 2)
-        after = f.__code__._co_feedback[:4]
+        after = f.__code__._co_feedback[-16:-12]
         self.assertEqual(after[:2], header[:2])
         # The counter of entry 0 stays unreachable (backoff bits 7)
         self.assertEqual(after[2] & 7, 7)
@@ -738,7 +738,7 @@ class AssemblerTest(unittest.TestCase):
         dis.dis(f, adaptive=True, show_caches=True, file=io.StringIO())
         fbinit = f.__code__.co_fbinit
         self.assertLessEqual(int.from_bytes(fbinit[:4], sys.byteorder) & 0xFFFF,
-                             4096)
+                             2050)
         self.assertEqual(len(f.__code__._co_feedback),
                          (int.from_bytes(fbinit[:4], sys.byteorder) & 0xFFFF) * 8)
 
@@ -848,11 +848,21 @@ class SlotLimitTest(unittest.TestCase):
 
 def fb_entries(code):
     """The (kind, unit, arg, units) of each entry of code's feedback table,
-    entry 0 first"""
+    entry 0 first, then the others in order of address"""
     return [(kind, unit, arg, units) for kind, arg, units, unit in
-            ((*dis._feedback_entry(code.co_fbinit, w), w) for w in
-             [(int.from_bytes(code.co_fbinit[i:i + 4], sys.byteorder) >> 16)
-              & IR_FIELD_MAX for i in range(0, len(code.co_fbinit), 4)])]
+            ((*dis._feedback_entry(code.co_fbinit, u), u) for u in
+             [dis._signed_unit((int.from_bytes(code.co_fbinit[i:i + 4],
+                                               sys.byteorder) >> 16)
+                               & IR_FIELD_MAX)
+              for i in range(0, len(code.co_fbinit), 4)])]
+
+
+def fb_position(code, fb):
+    """The unit of the entry at unit fb counted from the start of the vector,
+    as the assembler places the entries: the first follows entry 0's 2 units
+    in the order of placement"""
+    total = int.from_bytes(code.co_fbinit[:4], sys.byteorder) & 0xFFFF
+    return fb + total
 
 
 COMPARE_OPS = ("<", "<=", "==", "!=", ">", ">=", "in", "not in")
@@ -874,13 +884,14 @@ class FeedbackLayoutTest(unittest.TestCase):
         kinds = dis._FEEDBACK_KINDS
         self.assertEqual(entries[0][:2], (0, 0))
         self.assertEqual(entries[0][3], 2)
-        # Entries are in order of unit, without gaps; entry 0 gives the total
+        # Entries are in order of address, without gaps, and end where entry
+        # 0 begins; entry 0 gives the total
         total = int.from_bytes(code.co_fbinit[:4], sys.byteorder) & 0xFFFF
         position = 2
         sizes = {"UNARY": (24,), "BINARY": (32,), "ATTR": (48,),
                  "GLOBAL": (32,), "CALL": (40,), "BRANCH": (16, 24)}
         for kind, unit, arg, units in entries[1:]:
-            self.assertEqual(unit, position)
+            self.assertEqual(unit + total, position)
             self.assertIn(units * 8, sizes[kinds[kind]])
             position += units
         self.assertEqual(position, total)
@@ -889,8 +900,8 @@ class FeedbackLayoutTest(unittest.TestCase):
         by_name = {}
         for instr in dis.get_instructions(f):
             by_name.setdefault(instr.opname, []).append(instr.fb)
-        self.assertEqual(by_name["COMPARE_OP_JUMP"], [2])
-        self.assertEqual(by_name["CONTAINS_OP_JUMP"], [6])
+        self.assertEqual([fb_position(code, fb) for fb in by_name["COMPARE_OP_JUMP"]], [2])
+        self.assertEqual([fb_position(code, fb) for fb in by_name["CONTAINS_OP_JUMP"]], [6])
         pre, a1, b, a2 = by_name["LOAD_ATTR"][:4]
         after = by_name["LOAD_ATTR"][4]
         self.assertEqual(sorted([a1, b, a2, by_name["STORE_ATTR"][0]]),
@@ -948,7 +959,7 @@ class FeedbackLayoutTest(unittest.TestCase):
         return "\n".join(lines) + "\n"
 
     def test_compare_sites_past_the_entry_limit(self):
-        # 1023 compare entries fit; the other sites become intrinsic calls
+        # 512 compare entries fit; the other sites become intrinsic calls
         # of the same result, whatever the operation and the use of the result
         ncopies = 70
         f = make_function(self.compare_source(ncopies))
@@ -959,15 +970,15 @@ class FeedbackLayoutTest(unittest.TestCase):
         compares = [i for i in instrs
                     if i.opname.startswith(("COMPARE_OP", "CONTAINS_OP"))]
         intrinsics = [i for i in instrs if i.opname == "CALL_INTRINSIC_2"]
-        self.assertEqual(len(compares), 1023)
-        self.assertEqual(len(intrinsics), nsites - 1023)
-        self.assertEqual([i.fb for i in compares],
-                         [2 + 4 * k for k in range(1023)])
+        self.assertEqual(len(compares), 512)
+        self.assertEqual(len(intrinsics), nsites - 512)
+        self.assertEqual([fb_position(f.__code__, i.fb) for i in compares],
+                         [2 + 4 * k for k in range(512)])
         names = {i.argrepr for i in intrinsics}
         self.assertTrue(all(n.startswith(("INTRINSIC_COMPARE_", "INTRINSIC_CONTAINS_"))
                             for n in names), names)
         total = int.from_bytes(f.__code__.co_fbinit[:4], sys.byteorder) & 0xFFFF
-        self.assertEqual(total, 2 + 4 * 1023)
+        self.assertEqual(total, 2 + 4 * 512)
 
         import operator
         ops = {"<": operator.lt, "<=": operator.le, "==": operator.eq,
@@ -1005,7 +1016,7 @@ class FeedbackLayoutTest(unittest.TestCase):
                 f(same, same, *bad)
 
     def test_big_vector(self):
-        # More than 4,096 units of entries: the later sites share entry 0
+        # More than 2,048 units of entries: the later sites share entry 0
         class O:
             def __init__(self):
                 self.attr = 5
@@ -1015,7 +1026,7 @@ class FeedbackLayoutTest(unittest.TestCase):
         lines.append("    return t")
         f = make_function("\n".join(lines) + "\n")
         total = int.from_bytes(f.__code__.co_fbinit[:4], sys.byteorder) & 0xFFFF
-        self.assertLessEqual(total, 4096)
+        self.assertLessEqual(total, 2050)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 3):
             self.assertEqual(f(O()), 10000)
         self.assertEqual(len(f.__code__._co_feedback), total * 8)
@@ -1036,18 +1047,21 @@ class FeedbackLayoutTest(unittest.TestCase):
         def table(*words):
             return struct.pack(f"<{len(words)}I", *words)
         def word(kind, unit, arg):
-            return kind << 28 | unit << 16 | arg
+            # The units of the entries before entry 0 are negative
+            return kind << 28 | (unit & IR_FIELD_MAX) << 16 | arg
         attr = dis._FEEDBACK_KINDS.index("ATTR")
-        good = table(word(0, 0, 8), word(attr, 2, 0))
+        # Entry 0 and the one entry of 6 units that ends where it begins
+        good = table(word(0, 0, 8), word(attr, -6, 0))
         self.assertEqual(c.replace(co_fbinit=good).co_fbinit, good)
         bad = {
-            "entry 0 is not a counter": table(word(attr, 0, 8), word(attr, 2, 0)),
-            "unit out of order": table(word(0, 0, 14), word(attr, 8, 0),
-                                       word(attr, 2, 0)),
-            "entry does not fit": table(word(0, 0, 7), word(attr, 2, 0)),
+            "entry 0 is not a counter": table(word(attr, 0, 8), word(attr, -6, 0)),
+            "unit out of order": table(word(0, 0, 14), word(attr, -6, 0),
+                                       word(attr, -12, 0)),
+            "entry does not fit": table(word(0, 0, 7), word(attr, -5, 0)),
+            "entry before the vector": table(word(0, 0, 8), word(attr, -7, 0)),
             "entry in the header": table(word(0, 0, 8), word(attr, 1, 0)),
-            "past the limit": table(word(0, 0, 5000), word(attr, 2, 0)),
-            "no entry 0 units": table(word(0, 0, 1), word(attr, 2, 0)),
+            "past the limit": table(word(0, 0, 5000), word(attr, -6, 0)),
+            "no entry 0 units": table(word(0, 0, 1), word(attr, -6, 0)),
         }
         for name, fbinit in bad.items():
             with self.subTest(name):
@@ -1055,7 +1069,7 @@ class FeedbackLayoutTest(unittest.TestCase):
                     c.replace(co_fbinit=fbinit)
         # A word that names a unit that starts no entry, or whose entry is
         # too small for its handler
-        short = table(word(0, 0, 7), word(dis._FEEDBACK_KINDS.index("CALL"), 2, 0))
+        short = table(word(0, 0, 8), word(dis._FEEDBACK_KINDS.index("CALL"), -6, 0))
         with self.assertRaisesRegex(ValueError, "feedback"):
             c.replace(co_fbinit=short)
 

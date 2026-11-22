@@ -207,8 +207,13 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
 #define IR_C(W)         ((uint32_t)((W) >> 40) & IR_FIELD_MAX)
 #define IR_D(W)         ((uint32_t)((W) >> 52))
 #define IR_CD(W)        ((uint32_t)((W) >> 40))
-/* D as a signed distance */
-#define IR_DS(W)        ((int)(IR_D(W) ^ 0x800) - 0x800)
+/* A field as a signed 12-bit value: a distance, or a feedback unit
+ * (IR_FB_UNIT).  The field is shifted to the top of the word and back, one
+ * shift more than IR_A() and the others take. */
+#define IR_AS(W)        ((int)((int64_t)((uint64_t)(W) << 36) >> 52))
+#define IR_BS(W)        ((int)((int64_t)((uint64_t)(W) << 24) >> 52))
+#define IR_CS(W)        ((int)((int64_t)((uint64_t)(W) << 12) >> 52))
+#define IR_DS(W)        ((int)((int64_t)(W) >> 52))
 
 #define IR_WORD(H, A, B, C, D) \
     ((_PyIRWord)(uint16_t)(H) | (_PyIRWord)((A) & IR_FIELD_MAX) << 16 | \
@@ -216,14 +221,20 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
      (_PyIRWord)((C) & IR_FIELD_MAX) << 40 | \
      (_PyIRWord)((D) & IR_FIELD_MAX) << 52)
 
-/* The fb field is an offset in 8-byte units into the feedback vector, and
- * each kind of entry takes its own size (pycore_feedback.h): the entry is at
- * entries + (fb << 3), with no table.  Entry 0 is the 16-byte header, so
- * entries start at unit IR_FB_FIRST_UNIT, and an entry ends by unit
- * IR_FB_UNITS_MAX, a vector of at most 32 KB. */
+/* The fb field is a signed distance in 8-byte units from entry 0, the shared
+ * header at field 0, to the entry, which lies below it in the executing copy
+ * (the entries precede the words, so a frame finds them from word 0 alone):
+ * the entry is at the address of entry 0 + (sext(fb) << 3), with no table.
+ * Each kind of entry takes its own size (pycore_feedback.h), and the last
+ * entry ends where entry 0 begins.  The vector has IR_FB_FIRST_UNIT units
+ * for entry 0 and at most 2,048 for the others, 16 KB, which the 12 bits of
+ * the field reach. */
 #define IR_FB_UNIT_SHIFT    3
 #define IR_FB_FIRST_UNIT    2
-#define IR_FB_UNITS_MAX     4096
+#define IR_FB_UNITS_MAX     (IR_FB_FIRST_UNIT + 2048)
+/* The signed unit of the 12-bit field F, which IR_AS() and the others take
+ * from a word */
+#define IR_FB_UNIT(F)       ((int)((uint32_t)(F) << 20) >> 20)
 
 /* Field roles; input k of a register-style instruction is _PyIR_ROLE_IN0 + k.
  * A field that holds the oparg has role IMM, or one of the slot roles when
@@ -586,16 +597,19 @@ _PyFb_HasEntry(int opcode)
  * the code object (co_words, which co_code returns as bytes) never change;
  * the first call copies them into one allocation laid out as
  *
- *     | _PyCodeExec | words | _PyFbBlock | entries |
+ *     | entries | entry 0 | _PyFbBlock | _PyCodeExec | words |
  *
- * with a feedback vector set up from the code object's feedback table.
+ * with a feedback vector (entries and entry 0, the shared header) set up
+ * from the code object's feedback table, or none if the code has no entry.
+ * The vector ends at the block, so entry 0 is a fixed distance before the
+ * words and every entry is at a fixed offset from word 0 (_PyIR_FbEntry()).
  * Specialisation and instrumentation rewrite the handler id of the copy
  * only, so the code object's words are the generic handlers that both
  * restore.  The copy also carries the slot-class flags (IR_F_LOCAL_A..D),
- * derived from the fields, which the code object's words do not.  Frames keep the words and entries of the copy in ir_words and
- * ir_feedback, which handlers index with their jump targets and feedback
- * indices.  The free-threaded build shares one copy between threads and does
- * not specialise it. */
+ * derived from the fields, which the code object's words do not.  Frames keep
+ * word 0 of the copy in ir_words, from which handlers index their jump
+ * targets and feedback entries.  The free-threaded build shares one copy
+ * between threads and does not specialise it. */
 /* One immutable semantic plan owns normal-return certificates. */
 typedef struct {
     uint32_t nsites;
@@ -646,9 +660,6 @@ enum {
 
 typedef struct _PyCodeExec {
     _PyIRWord *words;
-    char *entries;          // feedback entry 0, or NULL if no instruction
-                            // has an entry
-    _PyFbBlock *feedback;   // the header before entries, or NULL
     /* The constant slots (CO_FAST_CONST), which are consecutive: nconst of
      * them from const_first, and the discard slot follows.  A code with no
      * constant has const_first at the discard slot.  const_image holds the
@@ -670,16 +681,20 @@ typedef struct _PyCodeExec {
     uint32_t nlocalsplus;   // of the code, which IR_IS_LOCAL() reads
 } _PyCodeExec;
 
-/* The feedback table of a code object, which follows its words: per entry,
- * entry 0 included, in order of unit, a word of the kind (4 bits), the unit
- * where the entry starts (12 bits) and its arg (16 bits): the operation of
- * COMPARE_OP, CONTAINS_OP and BINARY_OP, the only operands that live in an
- * entry.  An entry ends where the next begins; the arg of entry 0 is the
- * number of units of the vector. */
+/* The feedback table of a code object, which follows its words: per entry, a
+ * word of the kind (4 bits), the field of the entry (12 bits, see IR_FB_UNIT)
+ * and its arg (16 bits): the operation of COMPARE_OP, CONTAINS_OP and
+ * BINARY_OP, the only operands that live in an entry.  Entry 0 comes first;
+ * the others follow in order of address, so by field (_PyIR_FBINIT_FIELD)
+ * ascending: the fields of the negative units are 2,048 and up.  An entry
+ * ends where the next begins, and the last where entry 0 does; the arg of
+ * entry 0 is the number of units of the vector, entry 0 included. */
 #define _PyIR_FBINIT(KIND, UNIT, ARG) \
-    ((uint32_t)(KIND) << 28 | (uint32_t)(UNIT) << 16 | (uint32_t)(ARG))
+    ((uint32_t)(KIND) << 28 | ((uint32_t)(UNIT) & IR_FIELD_MAX) << 16 | \
+     (uint32_t)(ARG))
 #define _PyIR_FBINIT_KIND(V)     ((int)((V) >> 28))
-#define _PyIR_FBINIT_UNIT(V)     ((uint32_t)((V) >> 16) & IR_FIELD_MAX)
+#define _PyIR_FBINIT_FIELD(V)    ((uint32_t)((V) >> 16) & IR_FIELD_MAX)
+#define _PyIR_FBINIT_UNIT(V)     IR_FB_UNIT(_PyIR_FBINIT_FIELD(V))
 #define _PyIR_FBINIT_ARG(V)      ((uint32_t)(V) & 0xFFFF)
 
 /* The executing copy of _Py_InitCleanup (Python/specialize.c), which runs
@@ -975,27 +990,36 @@ _PyIR_ExecCallFlags(const _PyIRWord *head, uint32_t nlocalsplus)
     return flags;
 }
 
-/* The feedback entry at unit I of a vector whose entry 0 is at ENTRIES */
-static inline _PyFbHeader *
-_PyIR_FbEntry(char *entries, uint32_t i)
+/* The feedback block of the executing copy whose word 0 is WORDS, which
+ * is the one with entries (co_nfeedback is not 0) */
+static inline _PyFbBlock *
+_PyIR_FbBlock(const _PyIRWord *words)
 {
-    assert(entries != NULL && i <= IR_FIELD_MAX);
-    return (_PyFbHeader *)(entries + ((size_t)i << IR_FB_UNIT_SHIFT));
+    return (_PyFbBlock *)((const _PyCodeExec *)words - 1) - 1;
 }
 
-/* The index in the feedback table fbinit of n words of the entry that starts
- * at unit, or -1.  The table is in order of unit. */
+/* The feedback entry at signed unit UNIT, in the executing copy whose word 0
+ * is WORDS.  Entry 0 is the header that ends the vector before the block. */
+static inline _PyFbHeader *
+_PyIR_FbEntry(const _PyIRWord *words, int unit)
+{
+    char *entry0 = (char *)_PyIR_FbBlock(words) - sizeof(_PyFbHeader);
+    return (_PyFbHeader *)(entry0 + (ptrdiff_t)unit * 8);
+}
+
+/* The index in the feedback table fbinit of n words of the entry whose field
+ * is FIELD, or -1.  The table is in order of field. */
 static inline int
-_PyIR_FbFind(const uint32_t *fbinit, int n, uint32_t unit)
+_PyIR_FbFind(const uint32_t *fbinit, int n, uint32_t field)
 {
     int low = 0, high = n - 1;
     while (low <= high) {
         int mid = (low + high) / 2;
-        uint32_t u = _PyIR_FBINIT_UNIT(fbinit[mid]);
-        if (u == unit) {
+        uint32_t u = _PyIR_FBINIT_FIELD(fbinit[mid]);
+        if (u == field) {
             return mid;
         }
-        if (u < unit) {
+        if (u < field) {
             low = mid + 1;
         }
         else {

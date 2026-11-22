@@ -797,7 +797,7 @@ warm_up(PyCodeObject *code, int i)
     if (fb <= 0) {
         return;
     }
-    _PyFbHeader *h = _PyIR_FbEntry(code->_co_exec->entries, (uint32_t)fb);
+    _PyFbHeader *h = _PyIR_FbEntry(code->_co_exec->words, IR_FB_UNIT(fb));
     h->counter = adaptive_counter_warmup();
 #endif
 }

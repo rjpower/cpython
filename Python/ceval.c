@@ -1409,7 +1409,6 @@ value_operation_refresh(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                               failed_result);
     }
     assert(instrumentation_is_current(tstate, code));
-    assert(frame->ir_feedback == exec->entries);
     frame->instr_ptr = current;
     return 0;
 }
@@ -2182,7 +2181,6 @@ native_call_publish_pc(void *opaque)
     assert(exec != NULL && state->current_word >= 0 &&
            state->current_word < exec->nwords);
     assert(frame->ir_words == exec->words);
-    assert(frame->ir_feedback == exec->entries);
     frame->instr_ptr = exec->words + state->current_word;
 }
 
@@ -2214,7 +2212,6 @@ native_call_finish(_PyNativeCallPublication *state, _PyNativeScope *scope,
         return -1;
     }
     assert(frame->ir_words == exec->words);
-    assert(frame->ir_feedback == exec->entries);
     assert(next == exec->words + state->next_word);
     (void)next;
     frame->instr_ptr = exec->words + state->current_word;
@@ -2921,7 +2918,6 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     /* Returns and yields resume the explicit real INTERPRETER_EXIT target. */
     entry->frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.ir_words = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
-    entry->frame.ir_feedback = NULL;
     entry->frame.owner = FRAME_OWNED_BY_INTERPRETER;
     entry->frame.visited = 0;
     /* What the frame returns or yields lands in entry->stack[0] */
@@ -5098,8 +5094,7 @@ call_run_ex(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
         /* The site's plan holds for the code and the arity it was made for,
          * and for a call without items of a dict.  A site past the limit of
          * the feedback vector shares entry 0, a header alone. */
-        const _PyFbCall *fb = (const _PyFbCall *)(frame->ir_feedback +
-                                                  ((size_t)IR_D(word) << 3));
+        const _PyFbCall *fb = (const _PyFbCall *)IR_FB(IR_DS(word));
         _PyBindPlan plan;
         const _PyBindPlan *planned = &plan;
         if (dict_items == NULL && fb->h.kind == FB_CALL &&

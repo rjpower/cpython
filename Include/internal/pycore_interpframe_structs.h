@@ -44,10 +44,10 @@ struct _PyInterpreterFrame {
     PyObject *f_locals; /* Strong reference, may be NULL. Only valid if not on C stack */
     PyFrameObject *frame_obj; /* Strong reference, may be NULL. Only valid if not on C stack */
     _PyInstr *instr_ptr; /* Instruction currently executing (or about to begin) */
-    /* Word 0 and feedback entry 0 of the IR block that instr_ptr points
-     * into: the bases of jump targets and feedback indices. */
+    /* Word 0 of the executing copy that instr_ptr points into: the base of
+     * jump targets and, at fixed negative offsets, of feedback entries
+     * (_PyIR_FbEntry()). */
     _PyInstr *ir_words;
-    char *ir_feedback;
     /* Real executable continuation while this frame awaits a child result. */
     _PyInstr *return_pc;
 #ifdef Py_GIL_DISABLED
@@ -73,7 +73,7 @@ struct _PyInterpreterFrame {
 };
 
 #if SIZEOF_VOID_P == 8 && !defined(Py_GIL_DISABLED)
-static_assert(offsetof(_PyInterpreterFrame, owned_slots) == 104,
+static_assert(offsetof(_PyInterpreterFrame, owned_slots) == 96,
               "the frame header must keep its fixed size");
 #endif
 

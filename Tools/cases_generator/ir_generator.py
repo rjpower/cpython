@@ -79,7 +79,7 @@ from ir_records import (
     LOCAL, SITE_TOKENS, SLOT, TARGET, TEMP, WINDOW, CallShape, Fact, FeedbackOperand,
     FeedbackSchema, Guard, Operand, OperationRecord, Subjects, Transfer, UopRecord,
     assigns_to, check_record, feedback_schema, guard_facts, infer_effects, passed_through,
-    site_tokens, uop_transfers, walk_values,
+    result_facts, site_tokens, uop_transfers, walk_values,
 )
 from ir_read_effects import (
     error_nonnull_value, null_value_condition, value_assignment, value_declaration,
@@ -6053,7 +6053,8 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
         uops.append(UopRecord(part.name, inputs, outs,
                               uop_feedback(part, schema, inst),
                               part.properties.oparg, tuple(guards),
-                              transfers + uop_transfers(part, deopt), infer_effects(part)))
+                              transfers + uop_transfers(part, deopt), infer_effects(part),
+                              result_facts(part, outs)))
     results = []
     for j, (value, external, item, _) in enumerate(walk.outputs):
         if external >= 0 and walk.values[value].external >= 0:

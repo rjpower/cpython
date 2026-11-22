@@ -172,6 +172,7 @@ class UopRecord:
     guards: tuple[Guard, ...]
     transfers: tuple[Transfer, ...]
     effects: frozenset[str] = frozenset()
+    results: tuple["Fact", ...] = ()   # what holds of its new outputs
 
 
 @dataclass(frozen=True)
@@ -899,6 +900,43 @@ def guard_facts(uop: Uop, site: Token, subjects: Subjects) -> tuple[tuple[Fact, 
     return tuple(facts), ""
 
 
+# The facts of a uop's results: every assignment to an output makes a
+# value of one kind
+BOOL_RESULT = re.compile(r"(.* \? )?PyValue_(True|False)( : PyValue_(True|False))?")
+INLINE_INT_RESULTS = frozenset(("PyValue_FromInlineInt", "_PyValue_FromIntScaled"))
+INT_RESULTS = INLINE_INT_RESULTS | {
+    "PyValue_FromInt64", "_PyValue_BoxInt64", "_PyValue_MultiplyInt64",
+    "_PyValue_LshiftInt64"}
+FLOAT_RESULTS = frozenset(("PyValue_FromDouble", "PyValue_FromDoubleNotNaN"))
+
+
+def result_facts(uop: Uop, outputs: tuple[UopOutput, ...]) -> tuple[Fact, ...]:
+    "The facts that hold of the new outputs of uop"
+    tokens = [t.text for t in uop.body.tokens() if t.kind != "COMMENT"]
+    facts = []
+    for out in outputs:
+        if out.ownership not in (OWNED, INLINE):
+            continue
+        sources = []
+        for i, t in enumerate(tokens):
+            if t == "=" and i and tokens[i - 1] == out.name:
+                end = tokens.index(";", i)
+                sources.append(tokens[i + 1:end])
+        if not sources:
+            continue
+        subject = f"v{out.value}"
+        callees = {src[0] if len(src) > 1 and src[1] == "(" else "" for src in sources}
+        if all(BOOL_RESULT.fullmatch(" ".join(src)) for src in sources):
+            facts.append(Fact("EXACT_TYPE", subject, "PyBool_Type"))
+        elif callees <= INLINE_INT_RESULTS:
+            facts += [Fact("INLINE_INT", subject), Fact("EXACT_TYPE", subject, "PyLong_Type")]
+        elif callees <= INT_RESULTS:
+            facts.append(Fact("EXACT_TYPE", subject, "PyLong_Type"))
+        elif callees <= FLOAT_RESULTS:
+            facts.append(Fact("EXACT_TYPE", subject, "PyFloat_Type"))
+    return tuple(facts)
+
+
 # Effects (tiers87, C6): a set of flags per uop; a pure uop has none.
 # MAY_RUN_PYTHON implies every other flag.  Compiled code publishes
 # instr_ptr before a uop with MAY_RAISE, MAY_RELEASE or MAY_RUN_PYTHON.
@@ -1284,6 +1322,8 @@ def format_record(record) -> str:
             where = guard.site.line if guard.site is not None else f"object {guard.input}"
             facts = " ".join(map(str, guard.facts)) or f"no fact: {guard.reason}"
             lines.append(f"    guard {guard.kind} @{where} {facts}")
+        for fact in uop.results:
+            lines.append(f"    result {fact}")
         transfers = " ".join(t.kind + (f"({t.target})" if t.target else "")
                              for t in uop.transfers)
         lines.append(f"    transfers {transfers}")

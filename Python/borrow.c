@@ -321,38 +321,6 @@ _PyBorrow_Keep(PyObject *owned)
 #endif
 #define borrow_box(V0) _PyValue_AsObjectFor((V0), at)
 
-BORROW_STATIC PyObject *const *
-BORROW_BODY(_PyBorrow_TupleItems)(PyObject *tuple, Py_ssize_t n
-                                  _PyBox_AT_PARAM)
-{
-    assert(PyTuple_Check(tuple));
-    assert(0 <= n && n <= PyTuple_GET_SIZE(tuple));
-    assert(!PyErr_Occurred());
-    if (n == 0) {
-        return empty_run;
-    }
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyBorrowStack *s = borrow_stack(tstate);
-    if (s->end - s->top < n && borrow_grow(s, n) < 0) {
-        return NULL;
-    }
-    _PyBorrow_RequestRelease(tstate);
-    /* Boxing allocates, and an object allocator hook may run code; as in
-       _PyBorrow_ValueVector, what that code calls leaves the top where it
-       was, so the run stays contiguous. */
-    PyObject **run = s->top;
-    for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *item = borrow_box(PyTuple_GET_VALUE(tuple, i));
-        if (item == NULL) {
-            return NULL;
-        }
-        assert(s->top == run + i);
-        *s->top++ = item;
-    }
-    BORROW_CHECK_SIZE(tstate, s);
-    return run;
-}
-
 BORROW_STATIC PyObject **
 BORROW_BODY(_PyBorrow_ValueVector)(const PyValue *values, Py_ssize_t n
                                    _PyBox_AT_PARAM)
@@ -400,6 +368,26 @@ BORROW_BODY(_PyBorrow_ValueVector)(const PyValue *values, Py_ssize_t n
     }
     BORROW_CHECK_SIZE(tstate, s);
     return vector;
+}
+
+/* The items of a tuple are a vector of values that the tuple keeps alive, as
+ * the arguments of a call are: the vector form borrows them and steps over
+ * them when the scope exits, where a count for each item would be taken and
+ * released again.  The caller holds the tuple until the scope exits. */
+BORROW_STATIC PyObject *const *
+BORROW_BODY(_PyBorrow_TupleItems)(PyObject *tuple, Py_ssize_t n
+                                  _PyBox_AT_PARAM)
+{
+    assert(PyTuple_Check(tuple));
+    assert(0 <= n && n <= PyTuple_GET_SIZE(tuple));
+    if (n == 0) {
+        return empty_run;
+    }
+    /* The callers of a parser hold no scope of their own: the eval loop
+       releases at its next instruction boundary. */
+    _PyBorrow_RequestRelease(_PyThreadState_GET());
+    return BORROW_BODY(_PyBorrow_ValueVector)(_PyTuple_ITEMS(tuple), n
+                                              _PyBox_AT_ARG(at));
 }
 
 #ifdef Py_STATS

@@ -53,14 +53,16 @@ _PyBorrowScope_Exit(PyThreadState *tstate, _PyBorrowMark mark)
  * `owned`, set MemoryError and return NULL. */
 PyAPI_FUNC(PyObject *) _PyBorrow_Keep(PyObject *owned);
 
-/* Push one owned reference for each of the first n items of `tuple`
- * (0 <= n <= its size) as one contiguous run and return the run.  Inline
- * scalars are boxed.  n == 0 returns a static empty array.  Call it with no
- * exception set, after any arity check, so a rejected call pushes nothing.
+/* Return the first n items of `tuple` (0 <= n <= its size) as one contiguous
+ * run, which the caller must keep alive until the scope exits.  The items are
+ * borrowed from the tuple, as the arguments of a vector are by
+ * _PyBorrow_ValueVector(); only inline scalars are boxed, and the boxes stay
+ * until the scope exits.  n == 0 returns a static empty array.  Call it with
+ * no exception set, after any arity check, so a rejected call pushes nothing.
  * The only failure is memory: the stack cannot grow or a box cannot be
- * allocated.  Then return NULL with MemoryError set; items already pushed
- * stay until the scope exits.  The run is read-only and has no slot before
- * element 0: never pass PY_VECTORCALL_ARGUMENTS_OFFSET with it. */
+ * allocated.  Then return NULL with MemoryError set; boxes already pushed
+ * stay until the scope exits.  The run is read-only: never pass
+ * PY_VECTORCALL_ARGUMENTS_OFFSET with it. */
 Py_VALUE_ENTRY PyAPI_FUNC(PyObject *const *) _PyBorrow_TupleItems(
     PyObject *tuple, Py_ssize_t n);
 

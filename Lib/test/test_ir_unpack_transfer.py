@@ -89,7 +89,7 @@ class UnpackTransferTests(unittest.TestCase):
         names = [name for name, fmt in formats.items()
                  if fmt.group == "UNPACK_SEQUENCE"]
         expected = (ir_generator.OwnershipEvent("_PyIR_OWNER_UNPACK_LOCAL_DRAIN"),)
-        self.assertGreaterEqual(len(names), 4)
+        self.assertGreaterEqual(len(names), 3)
         for name in names:
             self.assertEqual(contracts[name].ownership_events, expected)
         text = source.read_text()

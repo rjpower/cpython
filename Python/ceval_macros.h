@@ -12,14 +12,6 @@
 #define OR_DTRACE_LINE
 #endif
 
-// Branch hint for generated code, such as the test before boxing an inline
-// value.
-#if defined(__GNUC__) || defined(__clang__)
-#  define Py_UNLIKELY(x) __builtin_expect(!!(x), 0)
-#else
-#  define Py_UNLIKELY(x) (x)
-#endif
-
 #ifdef Py_STATS
 /* Count the entered handler, including IR-only and specialized targets. */
 #define INSTRUCTION_STATS(op) \

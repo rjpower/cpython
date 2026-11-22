@@ -385,6 +385,17 @@ extern "C" {
 #define _Py_COLD_FUNCTION
 #endif
 
+/* Py_UNLIKELY
+ * Branch hint: the condition is rare, such as a count reaching zero or a
+ * check that guards an error. The compiler keeps the code of the rare branch
+ * out of the line that the common path runs.
+ */
+#if defined(__GNUC__) || defined(__clang__)
+#  define Py_UNLIKELY(x) __builtin_expect(!!(x), 0)
+#else
+#  define Py_UNLIKELY(x) (x)
+#endif
+
 // Ask the compiler to always inline a static inline function. The compiler can
 // ignore it and decides to not inline the function.
 //

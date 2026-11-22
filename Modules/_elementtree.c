@@ -3831,24 +3831,34 @@ expat_default_handler(void *op, const XML_Char *data_in, int data_len)
 
 /* Append (action, node) to the list of events of the pull parser. */
 LOCAL(int)
-xmlparser_append_event(XMLParserObject *self, PyObject *action, PyObject *node)
+xmlparser_push_event(XMLParserObject *self, PyObject *action, PyObject *node)
 {
-    if (self->events_append == NULL || action == NULL || node == NULL) {
-        return 0;
-    }
-    PyObject *event = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(action), PyValue_FromObjectBorrow(node)});
+    PyObject *event = _PyTuple_FromPairTakeValue(
+        PyValue_DUP(PyValue_FromObjectBorrow(action)),
+        PyValue_DUP(PyValue_FromObjectBorrow(node)));
     if (event == NULL) {
         return -1;
     }
     PyValue res = _PyValue_CallOneArg(_PyThreadState_GET(),
                                       PyValue_FromObjectBorrow(self->events_append),
-                                      PyValue_FromObjectBorrow(event));
+                                      _PyValue_PointerBorrow(event));
     Py_DECREF(event);
     if (PyValue_IsNull(res)) {
         return -1;
     }
     PyValue_CLOSE(res);
     return 0;
+}
+
+/* The parser has no pull events unless a user called _setevents(), so the
+   caller's test comes first and stays inline. */
+static inline int
+xmlparser_append_event(XMLParserObject *self, PyObject *action, PyObject *node)
+{
+    if (self->events_append == NULL || action == NULL || node == NULL) {
+        return 0;
+    }
+    return xmlparser_push_event(self, action, node);
 }
 
 static void

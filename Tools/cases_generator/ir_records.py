@@ -88,6 +88,7 @@ class UopInput:
     value: int
     ownership: str              # BORROWED or CONSUMED
     array: str = ""
+    changed: bool = False       # the uop may write it in place (changes())
 
 
 @dataclass(frozen=True)
@@ -173,6 +174,8 @@ class UopRecord:
     transfers: tuple[Transfer, ...]
     effects: frozenset[str] = frozenset()
     results: tuple["Fact", ...] = ()   # what holds of its new outputs
+    pure: bool = False          # annotated `pure`: removable if its outputs
+                                # are unused (Python/regcfg_passes.c)
 
 
 @dataclass(frozen=True)
@@ -204,6 +207,33 @@ class OperationRecord:
     call: CallShape | None
     generator_boundary: object  # ir_generator.GeneratorBoundary, if closed
     deopt: str                  # where a failed guard goes, see deopt_target()
+    inputs: tuple[StackItem, ...]   # the instruction's stack inputs, bottom first
+    # What it leaves on the stack, bottom first (ValueWalk.outputs)
+    outputs: tuple[tuple[int, int, StackItem, bool], ...]
+    polls: bool                 # it or its call transaction polls the eval breaker
+    specializes: bool           # a generic handler whose entry's counter
+                                # drives specialisation
+    reads_poly_table: bool      # needs the site's learned table of cases
+
+
+def record_through(record: OperationRecord) -> list[StackItem]:
+    """The deepest inputs that keep their slot and their value: each is the
+    output at its own position, passed through or an array of the same
+    name and size left alone, and no uop writes it in place.  The count
+    stops at the first input that does not, so that an unchanged input
+    above a changed one, as the middle of SWAP, is not counted."""
+    changed = {i.value for uop in record.uops for i in uop.inputs if i.changed}
+    result = []
+    for j, (item, (_, external, out, _)) in enumerate(zip(record.inputs, record.outputs)):
+        # External input j is value j (walk_values())
+        if j in changed:
+            break
+        if external == j or (item.is_array() and out.is_array()
+                             and item.size == out.size and item.name == out.name):
+            result.append(item)
+        else:
+            break
+    return result
 
 
 # The tokens of a uop body that leave the uop or may: each is a site of a
@@ -288,6 +318,46 @@ def passed_through(uop: Uop, j: int) -> int | None:
             item.is_array() for item in inputs[:j + 1] + outputs[:j + 1]):
         return j
     return None
+
+
+ASSIGNMENTS = {"EQUALS", "TIMESEQUAL", "DIVEQUAL", "MODEQUAL", "PLUSEQUAL",
+               "MINUSEQUAL", "LSHIFTEQUAL", "RSHIFTEQUAL", "ANDEQUAL",
+               "OREQUAL", "XOREQUAL", "PLUSPLUS", "MINUSMINUS"}
+# What may stand before an & that is a binary operator, not address-of
+OPERANDS = {"IDENTIFIER", "NUMBER", "RPAREN", "RBRACKET"}
+
+
+def changes(uop: Uop, name: str, array: bool = False) -> bool:
+    """Whether the body of uop may change the variable name: it assigns to
+    the variable or to an element of it, increments or decrements it, or
+    takes its address, through which a callee may write it.  An array also
+    changes where the body uses its name other than to index it, since the
+    name is then a pointer to the elements."""
+    tokens = [t for t in uop.body.tokens() if t.kind != "COMMENT"]
+    for i, tkn in enumerate(tokens):
+        if tkn.text != name:
+            continue
+        prev = tokens[i - 1] if i > 0 else None
+        if prev is not None and prev.kind in ("ARROW", "PERIOD"):
+            continue    # a member of another variable
+        if prev is not None and prev.kind in ("PLUSPLUS", "MINUSMINUS"):
+            return True
+        if prev is not None and prev.kind == "AND" and (
+                i < 2 or tokens[i - 2].kind not in OPERANDS):
+            return True
+        j = i + 1
+        if array and (j >= len(tokens) or tokens[j].kind != "LBRACKET"):
+            return True
+        while j < len(tokens) and tokens[j].kind == "LBRACKET":
+            depth = 0
+            for j in range(j, len(tokens)):
+                depth += {"LBRACKET": 1, "RBRACKET": -1}.get(tokens[j].kind, 0)
+                if depth == 0:
+                    break
+            j += 1
+        if j < len(tokens) and tokens[j].kind in ASSIGNMENTS:
+            return True
+    return False
 
 
 def assigns_to(uop: Uop, name: str) -> bool:
@@ -379,7 +449,8 @@ def walk_values(inst: Instruction) -> ValueWalk:
             outputs.append((item.name, value, ALIAS if aliased else OWNED, item.size))
         for i, item in enumerate(part.stack.inputs):
             inputs.append((item.name, popped[i][0],
-                           BORROWED if i in kept else CONSUMED, item.size))
+                           BORROWED if i in kept else CONSUMED, item.size,
+                           item.name != "unused" and changes(part, item.name, item.is_array())))
         bound.append((part, inputs, outputs))
         if ends_handler(part):
             break
@@ -393,7 +464,8 @@ def walk_values(inst: Instruction) -> ValueWalk:
                     n - 1 - found[old][1] if found[old][1] >= 0 else -1,
                     found[old][2], found[old][3]) for old in order]
     uops = [(part,
-             tuple(UopInput(name, renumber[v], own, size) for name, v, own, size in ins),
+             tuple(UopInput(name, renumber[v], own, size, changed)
+                   for name, v, own, size, changed in ins),
              tuple(UopOutput(name, renumber[v], own, size) for name, v, own, size in outs))
             for part, ins, outs in bound]
     outputs = []
@@ -448,6 +520,14 @@ def conditional(stmts: list[Stmt], token: Token, inside: bool = False) -> bool |
     return None
 
 
+def suspends_frame(uop: Uop) -> bool:
+    "Whether uop marks its generator's frame suspended: a yield"
+    tokens = " ".join(t.text for t in uop.body.tokens())
+    return bool(re.search(r"\bgi_frame_state\s*=\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens)
+                or re.search(r"\bFT_ATOMIC_STORE_INT8_RELEASE\s*\(\s*\w+\s*->\s*"
+                             r"gi_frame_state\s*,\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens))
+
+
 def uop_transfers(uop: Uop, deopt_target: str) -> tuple[Transfer, ...]:
     """The transfers of uop, in body order: one per site, then the frame
     switch that its properties give, and NEXT if it can fall through"""
@@ -473,7 +553,7 @@ def uop_transfers(uop: Uop, deopt_target: str) -> tuple[Transfer, ...]:
     if p.returns and not any(t.kind == RETURN for t in result):
         result.append(Transfer(RETURN))
     elif p.switches_frame and not any(t.kind in (ENTER_FRAME, RETURN, YIELD) for t in result):
-        result.append(Transfer(ENTER_FRAME))
+        result.append(Transfer(YIELD if suspends_frame(uop) else ENTER_FRAME))
     elif not p.always_exits:
         result.append(Transfer(NEXT))
     return tuple(result)
@@ -950,9 +1030,10 @@ MAY_RAISE = "MAY_RAISE"
 MAY_RELEASE = "MAY_RELEASE"         # drops a reference whose finalizer may run
 MAY_RUN_PYTHON = "MAY_RUN_PYTHON"
 EFFECTS = (READS_HEAP, WRITES_HEAP, ALLOCATES, MAY_RAISE, MAY_RELEASE, MAY_RUN_PYTHON)
+# A uop with one of these may run Python: its own or a finalizer
+RUNS_PYTHON = frozenset((MAY_RELEASE, MAY_RUN_PYTHON))
 
-# The names of calls that may allocate, after PURE_CALLS; handler_effects()
-# applies it alone for the handlers' _PyIR_ALLOCATES
+# The names of calls that may allocate, after PURE_CALLS
 CONSTRUCTOR = re.compile(r"New(?!Ref)|Alloc|^PyValue_From|_PyFrame_Push|_Py_Make")
 # Allocating calls that CONSTRUCTOR does not name, with what else they do
 ALLOCATORS = {
@@ -967,12 +1048,46 @@ ALLOCATORS = {
     "_PyList_AppendTakeRef": frozenset((ALLOCATES, READS_HEAP, WRITES_HEAP)),
 }
 
-# The calls that release a reference, whose finalizer may run Python
-RELEASES = frozenset((
-    "PyValue_CLOSE", "PyValue_XCLOSE", "Py_DECREF", "Py_XDECREF", "Py_CLEAR",
-    "Py_SETREF", "Py_XSETREF", "PyValue_CLEAR", "PyValue_XSETREF",
-    "DECREF_INPUTS", "IR_CLOSE_INPUTS", "PyValue_CLOSE_SPECIALIZED",
-))
+# The identifiers that look like a release (RELEASE_LIKE), each known to
+# release a reference whose __del__ may run Python, or not to.  Any other
+# such identifier is an error, so that a new release helper cannot pass as
+# one that runs nothing.
+RELEASE_LIKE = re.compile(r"CLOSE|DECREF|CLEAR|SETREF|RETIRE|Close|Clear|"
+                          r"Dealloc|_READER|FINISH_VALUE")
+RELEASES = {
+    "IR_DEFER_CLOSE",
+    "IR_CLOSE_INPUTS",
+    "PyValue_CLOSE", "PyValue_XCLOSE", "PyValue_CLEAR", "_PyValue_CloseStack",
+    "_PyValue_CLOSE_POINTER", "_PyValue_XCLOSE_POINTER", "DECREF_INPUTS",
+    "Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF", "Py_XSETREF",
+    # The value and attribute transactions release the inputs they retire
+    "IR_RETIRE_PUBLISHED", "IR_RETIRE_PUBLISHED_RESULT",
+    "IR_RETIRE_PUBLISHED_PAIR",
+    "_PyCell_SetValue",                     # stores, then releases the old value
+    "IR_FINISH_VALUE_OPERATION", "IR_ABORT_VALUE_READER",
+    "IR_TRY_DICT_FIRST_PROBE",
+    "IR_COMPLETE_VALUE_READER", "IR_COMPLETE_ATTR_READER",
+    "IR_BINARY_READER",
+    "_PyFrame_ClearTemporaries", "_PyEval_FrameClearAndPop",
+    "_PyEval_FrameClearAndPopWithResult", "_PyEval_FrameClearAndPopGeneralWithResult",
+    "_PyEval_RetireThreadFrameWithResult",
+    "_PyErr_Clear",
+}
+NOT_RELEASES = {
+    # A release whose destructor, that of an exact type, runs no Python
+    "PyValue_CLOSE_SPECIALIZED", "_Py_DECREF_SPECIALIZED",
+    "_PyLong_ExactDealloc", "_PyFloat_ExactDealloc",
+    "_PyFloat_OrLongExactDealloc", "_PyUnicode_ExactDealloc",
+    "_PyFrame_AssertTemporariesClear",      # a debug check
+    "_PyGC_CLEAR_ARRAY",                    # expands to nothing
+    "LOAD_FAST_AND_CLEAR",                  # an opcode
+    # Semantic reason constants passed to the actual release boundary.
+    "_PyIR_RETIRE_NONE", "_PyIR_RETIRE_NORMAL_RETURN",
+    "_PyIR_RETIRE_ERROR_UNWIND", "_PyIR_RETIRE_HEAP_CLEAR",
+    "_PyIR_RETIRE_STAGED_FAILURE",
+}
+
+
 
 # Non-escaping calls that only compute on their arguments' bits
 PURE_CALLS = re.compile(
@@ -1030,8 +1145,9 @@ MACRO_EFFECTS = {
                     frozenset((READS_HEAP,))),
     "IR_BUILD_TUPLE": frozenset((ALLOCATES,)),
     "IR_DEFER_CLOSE": frozenset((MAY_RELEASE,)),
-    # The emitter makes the generator, which takes the frame, and returns it
-    "IR_GENERATOR_MARKER": frozenset((READS_HEAP, WRITES_HEAP, ALLOCATES, MAY_RAISE)),
+    # Marks RETURN_GENERATOR, whose handler never runs: the generator is
+    # made when the frame is entered
+    "IR_GENERATOR_MARKER": frozenset(),
     # Fires the monitoring event, whose callback is Python
     "INSTRUMENTED_JUMP": frozenset((MAY_RUN_PYTHON,)),
 }
@@ -1086,30 +1202,35 @@ def effect_sites(uop: Uop) -> list[tuple[Token, str | None]]:
             continue
         if text in TRANSFER_TOKENS and TRANSFER_TOKENS[text] == RAISE:
             sites.append((tkn, MAY_RAISE))
+        if text in IR_MARKER_EFFECTS and "escapes" in IR_MARKER_EFFECTS[text]:
+            sites.append((tkn, MAY_RUN_PYTHON))
+        elif text in RELEASES:
+            # The last reference's finalizer may run Python, whether or not
+            # the analysis counts the release as escaping
+            sites.append((tkn, MAY_RELEASE))
+            if text == "_PyCell_SetValue":
+                sites.append((tkn, WRITES_HEAP))
+        elif text in NOT_RELEASES:
+            # A release whose deallocator runs no Python frees memory
+            sites.append((tkn, WRITES_HEAP))
+        elif p.escapes and text in escaping:
+            sites.append((tkn, MAY_RUN_PYTHON))
         # A call that escapes only on the way to an error exit is a raise
-        if (p.escapes and text in escaping
-                or text in IR_MARKER_EFFECTS and "escapes" in IR_MARKER_EFFECTS[text]):
-            sites.append((tkn, MAY_RELEASE if text in RELEASES else MAY_RUN_PYTHON))
         elif PURE_CALLS.fullmatch(text) or text in escaping:
             continue
         elif text in ALLOCATORS:
             sites += [(tkn, e) for e in ALLOCATORS[text]]
         elif CONSTRUCTOR.search(text):
             sites.append((tkn, ALLOCATES))
-        elif text in RELEASES:
-            # The analyzer counts DECREF_INPUTS as an escape of the uop
-            # itself.  A close that does not escape cannot run Python: it
-            # changes the heap by freeing an object.
-            escapes = text in ("DECREF_INPUTS", "IR_CLOSE_INPUTS") and p.escapes
-            sites.append((tkn, MAY_RELEASE if escapes else WRITES_HEAP))
         elif text in MACRO_EFFECTS:
             sites += [(tkn, e) for e in MACRO_EFFECTS[text]]
         elif WRITER_CALLS.fullmatch(text):
             sites += [(tkn, READS_HEAP), (tkn, WRITES_HEAP)]
         elif READER_CALLS.fullmatch(text):
             sites.append((tkn, READS_HEAP))
-        elif not text.isupper():    # not a statement macro: STAT_INC, TAKE, ...
-            sites.append((tkn, None))   # may do anything
+        elif not text.isupper() or RELEASE_LIKE.search(text):
+            # Not a statement macro (STAT_INC, TAKE, ...): it may do anything
+            sites.append((tkn, None))
     return sites
 
 

@@ -38,6 +38,7 @@ with test_tools.imports_under_tool("cases_generator"):
     from analyzer import StackItem
     from cwriter import CWriter
     import ir_generator
+    import ir_records
     import stack
     import ir_metadata_generator
     import opcode_metadata_generator
@@ -1234,6 +1235,9 @@ class TestIRCases(unittest.TestCase):
         self.assertIsNone(ir_generator.analyze_error_effects(guard_instruction))
 
     def test_suspension_effect_requires_a_state_write(self):
+        def suspends(inst):
+            return any(ir_records.suspends_frame(part) for part in inst.parts
+                       if isinstance(part, analyzer.Uop))
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
         Path(self.temp_input_filename).write_text(source)
@@ -1241,11 +1245,9 @@ class TestIRCases(unittest.TestCase):
         for name in ("SEND", "SEND_GEN"):
             self.assertIn("FRAME_CREATED", ir_generator.uop_tokens(
                 analysis.instructions[name]))
-            self.assertFalse(ir_generator.writes_suspended_frame_state(
-                analysis.instructions[name]))
+            self.assertFalse(suspends(analysis.instructions[name]))
         for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
-            self.assertTrue(ir_generator.writes_suspended_frame_state(
-                analysis.instructions[name]))
+            self.assertTrue(suspends(analysis.instructions[name]))
         source = source.replace(
             "FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);",
             "assert(gen->gi_frame_state == FRAME_SUSPENDED + oparg);")
@@ -1254,8 +1256,7 @@ class TestIRCases(unittest.TestCase):
         Path(self.temp_input_filename).write_text(source)
         mutated = analyzer.analyze_files([self.temp_input_filename])
         for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
-            self.assertFalse(ir_generator.writes_suspended_frame_state(
-                mutated.instructions[name]))
+            self.assertFalse(suspends(mutated.instructions[name]))
 
     def test_physical_output_mapping_matches_window_finalization(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -3019,10 +3020,14 @@ class TestIRCases(unittest.TestCase):
         self.assertNotIn("IR_CLOSE_INPUTS", analyzer.IR_MARKER_EFFECTS)
         self.assertIn("IR_CLOSE_INPUTS", {escape.call.text
                                         for escape in part.properties.escaping_calls.values()})
-        self.assertTrue(ir_generator.releases_object(analysis.instructions["POP_TOP"]))
+        def releases(name):
+            return any(effect == ir_records.MAY_RELEASE
+                       for part in analysis.instructions[name].parts
+                       if isinstance(part, analyzer.Uop)
+                       for _, effect in ir_records.effect_sites(part))
+        self.assertTrue(releases("POP_TOP"))
         # A call reads its operands in place and releases nothing of its own
-        self.assertFalse(ir_generator.releases_object(
-            analysis.instructions["CALL_BUILTIN_FAST_WITH_KEYWORDS"]))
+        self.assertFalse(releases("CALL_BUILTIN_FAST_WITH_KEYWORDS"))
 
     def test_nullable_annotations_are_input_only(self):
         analysis = self.analyze("""
@@ -3765,7 +3770,8 @@ class TestShapeReadMetadata(unittest.TestCase):
         emitter = ir_generator.IREmitter(out, analysis, formats)
         instruction = ir_generator.handler_instructions(analysis)[name]
         ir_generator.generate_handler(name, instruction, formats[name], emitter, out)
-        return output.getvalue(), ir_generator.handler_effects(name, instruction, formats[name])
+        record = ir_generator.build_record(name, instruction, formats[name], analysis, formats)
+        return output.getvalue(), ir_generator.handler_effects(record)
 
     def test_shape_read_uses_checked_metadata_for_both_execution_forms(self):
         root = Path(__file__).resolve().parents[2]

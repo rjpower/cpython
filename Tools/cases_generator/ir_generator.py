@@ -75,10 +75,11 @@ import argparse
 import io
 import ir_numbers
 from ir_records import (
-    CONST, CONSTRUCTOR, DEOPT, EXIT_GUARD, FEEDBACK, GUARD_TOKENS, IMMEDIATE,
-    LOCAL, SITE_TOKENS, SLOT, TARGET, TEMP, WINDOW, CallShape, Fact, FeedbackOperand,
-    FeedbackSchema, Guard, Operand, OperationRecord, Subjects, Transfer, UopRecord,
-    assigns_to, check_record, feedback_schema, guard_facts, infer_effects, passed_through,
+    ASSIGNMENTS, CONST, DEOPT, ENTER_FRAME, EXIT_GUARD, FEEDBACK, GUARD_TOKENS, IMMEDIATE,
+    LOCAL, MAY_RAISE, OPERANDS, RELEASE_LIKE, RUNS_PYTHON, SITE_TOKENS, SLOT, TARGET, TEMP,
+    WINDOW, YIELD, CallShape, Fact, FeedbackOperand, FeedbackSchema, Guard, Operand,
+    OperationRecord, Subjects, Transfer, UopRecord, assigns_to, changes, check_record,
+    feedback_schema, guard_facts, infer_effects, passed_through, record_through,
     result_facts, site_tokens, uop_transfers, walk_values,
 )
 from ir_read_effects import (
@@ -514,88 +515,12 @@ def declare_variables(inst: Instruction, out: CWriter,
             break
 
 
-def uop_runs_code(uop: Uop) -> bool:
-    """Whether uop may run Python code: an escaping call, the eval breaker,
-    or a frame switch, which pushes a frame or goes back to one.  A
-    specializer (annotation `specializing`) inspects types and rewrites the
-    handler and runs none; when it specialises, it dispatches the same word
-    again, which reads every field anew."""
-    if "specializing" in uop.annotations:
-        return False
-    p = uop.properties
-    return p.escapes or p.eval_breaker or p.switches_frame or p.returns
-
-
-# The identifiers that look like a release (RELEASE_LIKE), each known to
-# release a reference whose __del__ may run Python, or not to.  Any other
-# such identifier is an error, so that a new release helper cannot pass as
-# one that runs nothing.
-RELEASE_LIKE = re.compile(r"CLOSE|DECREF|CLEAR|SETREF|RETIRE|Close|Clear|"
-                          r"Dealloc|_READER|FINISH_VALUE")
-RELEASES = {
-    "IR_DEFER_CLOSE",
-    "IR_CLOSE_INPUTS",
-    "PyValue_CLOSE", "PyValue_XCLOSE", "PyValue_CLEAR", "_PyValue_CloseStack",
-    "_PyValue_CLOSE_POINTER", "_PyValue_XCLOSE_POINTER", "DECREF_INPUTS",
-    "Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF", "Py_XSETREF",
-    # The value and attribute transactions release the inputs they retire
-    "IR_RETIRE_PUBLISHED", "IR_RETIRE_PUBLISHED_RESULT",
-    "IR_RETIRE_PUBLISHED_PAIR",
-    "IR_FINISH_VALUE_OPERATION", "IR_ABORT_VALUE_READER",
-    "IR_TRY_DICT_FIRST_PROBE",
-    "IR_COMPLETE_VALUE_READER", "IR_COMPLETE_ATTR_READER",
-    "IR_BINARY_READER",
-    "_PyFrame_ClearTemporaries", "_PyEval_FrameClearAndPop",
-    "_PyEval_FrameClearAndPopWithResult", "_PyEval_FrameClearAndPopGeneralWithResult",
-    "_PyEval_RetireThreadFrameWithResult",
-    "_PyErr_Clear",
-}
-NOT_RELEASES = {
-    # A release whose destructor, that of an exact type, runs no Python
-    "PyValue_CLOSE_SPECIALIZED", "_Py_DECREF_SPECIALIZED",
-    "_PyLong_ExactDealloc", "_PyFloat_ExactDealloc",
-    "_PyFloat_OrLongExactDealloc", "_PyUnicode_ExactDealloc",
-    "_PyFrame_AssertTemporariesClear",      # a debug check
-    "_PyGC_CLEAR_ARRAY",                    # expands to nothing
-    "LOAD_FAST_AND_CLEAR",                  # an opcode
-    # Semantic reason constants passed to the actual release boundary.
-    "_PyIR_RETIRE_NONE", "_PyIR_RETIRE_NORMAL_RETURN",
-    "_PyIR_RETIRE_ERROR_UNWIND", "_PyIR_RETIRE_HEAP_CLEAR",
-    "_PyIR_RETIRE_STAGED_FAILURE",
-}
-
-
-def releases_object(inst: Instruction) -> bool:
-    """Whether inst releases a reference that may be an object's last, whose
-    __del__ may run Python, whether or not the escape analysis counts the
-    release as escaping (PyValue_CLEAR and the IR_* transactions it does
-    not)"""
-    found = False
-    for part in inst.parts:
-        if not isinstance(part, Uop):
-            continue
-        for tkn in part.body.tokens():
-            if tkn.kind != "IDENTIFIER" or not RELEASE_LIKE.search(tkn.text):
-                continue
-            if tkn.text in RELEASES:
-                found = True
-            elif tkn.text not in NOT_RELEASES:
-                raise analysis_error(
-                    f"{inst.name}: {tkn.text} looks like a release, which "
-                    "ir_generator.py does not know (RELEASES, NOT_RELEASES)",
-                    tkn)
-    return found
-
-
 def runs_code(inst: Instruction) -> bool:
-    """Whether inst may run Python code (uop_runs_code()), releases an
-    object (releases_object()), or is an instrumented twin, which fires a
-    monitoring event and so calls a Python callback: INSTRUMENTED_JUMP()
-    hides that call from the escape analysis."""
-    if inst.name.startswith("INSTRUMENTED_"):
-        return True
-    return releases_object(inst) or any(
-        uop_runs_code(part) for part in inst.parts if isinstance(part, Uop))
+    """Whether inst may run Python code, or release an object whose
+    finalizer may (ir_records.RUNS_PYTHON), or is an instrumented twin,
+    which fires a monitoring event and so calls a Python callback"""
+    return inst.name.startswith("INSTRUMENTED_") or any(
+        infer_effects(part) & RUNS_PYTHON for part in inst.parts if isinstance(part, Uop))
 
 
 def is_transparent(inst: Instruction) -> bool:
@@ -2046,11 +1971,6 @@ def names_target_only(inst: Instruction) -> bool:
 
 
 # Tokens that assign to what stands before them
-ASSIGNMENTS = {"EQUALS", "TIMESEQUAL", "DIVEQUAL", "MODEQUAL", "PLUSEQUAL",
-               "MINUSEQUAL", "LSHIFTEQUAL", "RSHIFTEQUAL", "ANDEQUAL",
-               "OREQUAL", "XOREQUAL", "PLUSPLUS", "MINUSMINUS"}
-# What may stand before an & that is a binary operator, not address-of
-OPERANDS = {"IDENTIFIER", "NUMBER", "RPAREN", "RBRACKET"}
 
 
 # The uses of GETLOCAL(oparg) that oparg_slot_role() knows.  Any other use
@@ -4201,7 +4121,7 @@ class IREmitter(Emitter):
         they replace would, so that a __del__ sees the same locals.  A
         release that may run Python is out of line."""
         if (not fmt.unpacks or not fmt.window or fmt.n_inputs != 0 or
-                through_items(inst, *external_io(inst)) or
+                record_through(self.record) or
                 fmt.field_of(ROLE_BASE) is None or
                 fmt.field_of(ROLE_DST) is None):
             raise analysis_error("unsupported local unpack transport", inst.where)
@@ -6054,7 +5974,7 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
                               uop_feedback(part, schema, inst),
                               part.properties.oparg, tuple(guards),
                               transfers + uop_transfers(part, deopt), infer_effects(part),
-                              result_facts(part, outs)))
+                              result_facts(part, outs), "pure" in part.annotations))
     results = []
     for j, (value, external, item, _) in enumerate(walk.outputs):
         if external >= 0 and walk.values[value].external >= 0:
@@ -6077,7 +5997,13 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
         uses_feedback=fmt.fb != LOC_NONE and (
             uses_feedback(inst) or reads_fb_arg(inst, fmt, operation) or fmt.fused),
         operation=operation, oparg=oparg, call=call,
-        generator_boundary=boundary, deopt=deopt)
+        generator_boundary=boundary, deopt=deopt,
+        inputs=tuple(walk.inputs), outputs=tuple(walk.outputs),
+        polls=(any(part.properties.eval_breaker for part, _, _ in walk.uops)
+               or polls_at_end(name, inst)),
+        specializes=fmt.fb != LOC_NONE and any(
+            "specializing" in part.annotations for part, _, _ in walk.uops),
+        reads_poly_table=variant is not None and variant.shape_cases)
 
 
 def build_records(analysis: Analysis,
@@ -7573,92 +7499,6 @@ def extent(items: list[StackItem], inst: Instruction) -> Extent:
     raise analysis_error(f"no extent form for {forms}", inst.where)
 
 
-def changes(uop: Uop, name: str, array: bool = False) -> bool:
-    """Whether the body of uop may change the variable name: it assigns to
-    the variable or to an element of it, increments or decrements it, or
-    takes its address, through which a callee may write it.  An array also
-    changes where the body uses its name other than to index it, since the
-    name is then a pointer to the elements."""
-    tokens = [t for t in uop.body.tokens() if t.kind != "COMMENT"]
-    for i, tkn in enumerate(tokens):
-        if tkn.text != name:
-            continue
-        prev = tokens[i - 1] if i > 0 else None
-        if prev is not None and prev.kind in ("ARROW", "PERIOD"):
-            continue    # a member of another variable
-        if prev is not None and prev.kind in ("PLUSPLUS", "MINUSMINUS"):
-            return True
-        if prev is not None and prev.kind == "AND" and (
-                i < 2 or tokens[i - 2].kind not in OPERANDS):
-            return True
-        j = i + 1
-        if array and (j >= len(tokens) or tokens[j].kind != "LBRACKET"):
-            return True
-        while j < len(tokens) and tokens[j].kind == "LBRACKET":
-            depth = 0
-            for j in range(j, len(tokens)):
-                depth += {"LBRACKET": 1, "RBRACKET": -1}.get(tokens[j].kind, 0)
-                if depth == 0:
-                    break
-            j += 1
-        if j < len(tokens) and tokens[j].kind in ASSIGNMENTS:
-            return True
-    return False
-
-
-def changed_inputs(inst: Instruction) -> set[int]:
-    """The inputs of inst, bottom first as external_io() numbers them, that a
-    uop may change (changes()) while they are on the stack.  It walks the
-    stack as external_io() does."""
-    stack: list[int] = []       # external index, top first, or -1
-    n = 0
-    changed = set()
-    for part in inst.parts:
-        if not isinstance(part, Uop):
-            continue
-        popped: list[int] = []  # top first
-        for item in reversed(part.stack.inputs):
-            if stack:
-                ext = stack.pop()
-            else:
-                ext = n
-                n += 1
-            if (ext >= 0 and item.name != "unused"
-                    and changes(part, item.name, item.is_array())):
-                changed.add(ext)
-            popped.append(ext)
-        popped.reverse()
-        for j in range(len(part.stack.outputs)):
-            i = passed_through(part, j)
-            stack.append(popped[i] if i is not None else -1)
-        if any(token.text in CALL_INVOKE_MARKERS for token in part.body.tokens()):
-            break
-    return {n - 1 - ext for ext in changed}
-
-
-def through_items(inst: Instruction, inputs: list[StackItem],
-                  outputs: list[Entry]) -> list[StackItem]:
-    """The deepest inputs that keep their slot and their value: each is the
-    output at its own position, as an input that the output passes through
-    or an array that an array of the same name and size there leaves alone,
-    and no uop changes it (changed_inputs()).  The count stops at the first
-    input that does not, so that an unchanged input above a changed one, as
-    the middle of SWAP, is not counted."""
-    changed = changed_inputs(inst)
-    result = []
-    for j, (item, out) in enumerate(zip(inputs, outputs)):
-        if j in changed:
-            break
-        if out.external == j:
-            result.append(item)
-        elif (item.is_array() and out.item.is_array()
-              and item.size == out.item.size and item.name == out.item.name):
-            result.append(item)
-        else:
-            break
-    return result
-
-
 # Calls whose name says which sys.monitoring events they fire
 MONITORING_HELPERS = {
     "IR_MONITOR_CALL": ("CALL",),
@@ -8523,48 +8363,29 @@ def result_publication_contract(
     return None
 
 
-def writes_suspended_frame_state(inst: Instruction) -> bool:
-    """Recognize state writes, rather than guards mentioning a child state."""
-    tokens = " ".join(uop_tokens(inst))
-    return "IR_SUSPEND_DELEGATED" in uop_tokens(inst) or bool(re.search(
-        r"\bgi_frame_state\s*=\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens)
-        or re.search(
-            r"\bFT_ATOMIC_STORE_INT8_RELEASE\s*\(\s*\w+\s*->\s*"
-            r"gi_frame_state\s*,\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens))
-
-
-def handler_effects(name: str, inst: Instruction, fmt: IRFormat) -> list[str]:
-    "The _PyIR_* effect bits of handler name, which runs inst"
-    p = inst.properties
-    tokens = {t.text for t in uop_token_list(inst)}
-    suspends = p.switches_frame and writes_suspended_frame_state(inst)
-    pushes_frame = p.switches_frame and not p.returns and not suspends
-    specializes = fmt.fb != LOC_NONE and any(
-        isinstance(part, Uop) and "specializing" in part.annotations
-        for part in inst.parts)
-    allocates = (not p.infallible or p.escapes or pushes_frame
-                 or any(CONSTRUCTOR.search(t) for t in tokens))
-    effects = []
+def handler_effects(record: OperationRecord) -> list[str]:
+    "The _PyIR_* effect bits of a handler: a projection of its record"
+    effects = set().union(*(uop.effects for uop in record.uops))
+    transfers = {t.kind for uop in record.uops for t in uop.transfers}
+    bits = []
     for bit, present in (
-            # INSTRUMENTED_JUMP() leaves for the error label when the
-            # callback raises, which the analysis does not see in a macro
-            ("_PyIR_RAISES", not p.infallible
-                             or fmt.fused and name.startswith("INSTRUMENTED_")),
-            ("_PyIR_ESCAPES", p.escapes),
-            ("_PyIR_RUNS_PYTHON", runs_code(inst)),
-            ("_PyIR_DEOPTS", p.deopts or p.side_exit),
-            ("_PyIR_SUSPENDS", suspends),
-            ("_PyIR_PUSHES_FRAME", pushes_frame),
-            ("_PyIR_POLLS", p.eval_breaker or polls_at_end(name, inst)),
-            ("_PyIR_ALLOCATES", allocates),
-            ("_PyIR_PURE", p.pure),
-            ("_PyIR_SPECIALIZES", specializes),
-            ("_PyIR_NATIVE_ONLY", native_entry_input_contract(inst)),
-            ("_PyIR_LEARNED_ONLY", bool(EXECUTION_VARIANTS.get(name) and
-                                      EXECUTION_VARIANTS[name].shape_cases))):
+            ("_PyIR_RAISES", MAY_RAISE in effects),
+            ("_PyIR_ESCAPES", bool(effects & RUNS_PYTHON)),
+            # An instrumented twin fires a monitoring event, whose callback
+            # is Python
+            ("_PyIR_RUNS_PYTHON", bool(effects & RUNS_PYTHON)
+                                  or record.handler.startswith("INSTRUMENTED_")),
+            ("_PyIR_DEOPTS", DEOPT in transfers),
+            ("_PyIR_SUSPENDS", YIELD in transfers),
+            ("_PyIR_PUSHES_FRAME", ENTER_FRAME in transfers),
+            ("_PyIR_POLLS", record.polls),
+            ("_PyIR_PURE", bool(record.uops) and all(uop.pure for uop in record.uops)),
+            ("_PyIR_SPECIALIZES", record.specializes),
+            ("_PyIR_NATIVE_ONLY", record.layout.native_entry),
+            ("_PyIR_LEARNED_ONLY", record.reads_poly_table)):
         if present:
-            effects.append(bit)
-    return effects
+            bits.append(bit)
+    return bits
 
 
 def handler_contracts(analysis: Analysis,
@@ -8612,13 +8433,13 @@ def handler_contracts(analysis: Analysis,
                 if name in analysis.instructions}}
     for name, inst in insts.items():
         fmt = formats[name]
-        inputs, outputs = external_io(inst)
+        record = build_record(name, inst, fmt, analysis, formats)
         publication = result_publication_contract(inst, fmt)
         result[name] = HandlerContract(
-            effects=handler_effects(name, inst, fmt),
-            reads=extent(inputs, inst),
-            writes=extent([e.item for e in outputs], inst),
-            through=extent(through_items(inst, inputs, outputs), inst),
+            effects=handler_effects(record),
+            reads=extent(list(record.inputs), inst),
+            writes=extent([item for _, _, item, _ in record.outputs], inst),
+            through=extent(record_through(record), inst),
             twin=twin_of(name, fmt, ids),
             result_phase=(publication.phase if publication is not None
                           else RESULT_PHASE_NONE),

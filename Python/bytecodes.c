@@ -319,10 +319,13 @@ dummy_func(
             PyValue_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
         }
 
-        // An operand of float arithmetic, an inline float or int.
+        // An operand of float arithmetic, an inline float or int. It owns no
+        // reference, so there is nothing to close. The compiler cannot prove
+        // this from the float guard's two ranges, and a close here would
+        // cost a pointer test and a dealloc call per operand.
         inline_ok op(_POP_TOP_NUMBER, (value --)) {
             assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-            PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
+            DEAD(value);
         }
 
         op(_POP_TOP_UNICODE, (value --)) {

@@ -3873,18 +3873,14 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = r;
                 (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                (void)(ir_own_C);
             }
             // _POP_TOP_NUMBER
             {
                 value = l;
                 (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                (void)(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyFloat_OrLongExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -4573,18 +4569,14 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = r;
                 (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                (void)(ir_own_C);
             }
             // _POP_TOP_NUMBER
             {
                 value = l;
                 (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                (void)(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyFloat_OrLongExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -5569,18 +5561,14 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = r;
                 (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                (void)(ir_own_C);
             }
             // _POP_TOP_NUMBER
             {
                 value = l;
                 (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                (void)(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyFloat_OrLongExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -5714,18 +5702,14 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = r;
                 (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                (void)(ir_own_C);
             }
             // _POP_TOP_NUMBER
             {
                 value = l;
                 (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                (void)(ir_own_B);
             }
             IR_STORE_DST(ir_word, A, res);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyFloat_OrLongExactDealloc);
-            PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }

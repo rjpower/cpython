@@ -121,7 +121,7 @@ def as_type(value, type_):
     return value
 
 
-def test_more_objects_function():
+def a_function():
     pass
 
 
@@ -221,7 +221,7 @@ class LoweringTests(unittest.TestCase):
         for name in ("PyList_CheckExact", "PyTuple_CheckExact", "PyDict_CheckExact",
                      "PyModule_CheckExact", "PyUnicode_CheckExact", "PyFunction_Check"):
             extra[name] = [(id(o),) for o in [*instances, *dicts, *lists, *tuples, "s", unittest,
-                                              len, test_more_objects_function, str, int]]
+                                              len, a_function, str, int]]
         for name, arg_cases in extra.items():
             for args in arg_cases:
                 self.check_against_c(name, args, rng)

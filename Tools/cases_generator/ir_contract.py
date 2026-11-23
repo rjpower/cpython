@@ -20,7 +20,7 @@ ir_records.py infers; the migration (G0) seeds every uop and deletes that
 inference.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 
 from analyzer import Instruction, Uop, analysis_error
@@ -148,6 +148,9 @@ ROW_KINDS = ("PRIMITIVE", "HELPER", "MACRO", "INTRINSIC", "DESTRUCTOR", "FIELD")
 RESULT_SHAPES = ("NONE", "SCALAR", "VIEW", "PATH", "MEASURE", "TEST", "CONTEXT",
                  "VALUE", "VALUE_OR_NULL", "DUP")
 BUILDS = ("gil", "free_threaded", "all")
+# The build whose handlers the generator verifies: the register IR's leaf
+# forms and the JIT exist in the build with the GIL only
+BUILD = "gil"
 
 
 @dataclass(frozen=True)
@@ -504,7 +507,14 @@ def check_callees(uop: Uop, table: dict[str, Row]) -> None:
     "V1: every call names a row or a construct of the DSL"
     for tkn, _ in body_calls(uop):
         name = tkn.text
-        if name in DSL_CONSTRUCTS or name in table or CHECKED_ARITHMETIC.fullmatch(name):
+        row = table.get(name)
+        if row is not None and row.kind == "INTRINSIC" and not row.builds & {BUILD, "all"}:
+            # An intrinsic is the identity only in its builds; elsewhere it is
+            # no component (design 2.2)
+            raise analysis_error(f"{uop.name}: calls {name}, an INTRINSIC of the "
+                                 f"{', '.join(sorted(row.builds))} build, not of the "
+                                 f"{BUILD} build that the generator generates", tkn)
+        if name in DSL_CONSTRUCTS or row is not None or CHECKED_ARITHMETIC.fullmatch(name):
             continue
         raise analysis_error(f"{uop.name}: calls {name}, which pycore_ir_components.h "
                              "does not declare", tkn)
@@ -802,20 +812,35 @@ def check_guard_conditions(uop: Uop, table: dict[str, Row]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Ownership and restartability on each exit (V4, V6 inside a uop)
+# Ownership, facts and restartability on each exit (V4, V5, V6 inside a uop)
 
 HELD, GONE, NULL = "held", "gone", "null"
+# The effects whose sites may run Python.  Python may write the frame's
+# homes (a finalizer through FrameLocalsProxy), so a value that stays in a
+# home, a pass-through or a borrowed input, may be replaced there: its
+# facts no longer describe the home (design 1.3, 3.2)
+REENTRY = frozenset(("releases", "runs_python", "polls", "switches_frame"))
 
 
 @dataclass
 class _State:
-    owners: dict[str, str]          # an input or a new owner: held, gone or null
+    # An input or a local that holds an obligation: held, gone or null
+    owners: dict[str, str]
+    # The live facts of each name
     facts: dict[str, frozenset[VFact]]
+    # Facts that hold of a name once it is shown not NULL: a VALUE_OR_NULL
+    # result's declared facts
+    pending: dict[str, frozenset[VFact]] = field(default_factory=dict)
+    # The row or input that a local was last assigned from, for messages
+    sources: dict[str, str] = field(default_factory=dict)
+    # Inputs left in homes that a reentry site may have rewritten: the site
+    rehomed: dict[str, str] = field(default_factory=dict)
     restartable: bool = True
     why: str = ""                   # what ended restartability
 
     def copy(self) -> "_State":
-        return _State(dict(self.owners), dict(self.facts), self.restartable, self.why)
+        return _State(dict(self.owners), dict(self.facts), dict(self.pending),
+                      dict(self.sources), dict(self.rehomed), self.restartable, self.why)
 
     def end_restart(self, why: str) -> None:
         if self.restartable:
@@ -823,29 +848,61 @@ class _State:
 
     def kill_heap_facts(self) -> None:
         self.facts = {n: without_heap_facts(f) for n, f in self.facts.items()}
+        self.pending = {n: without_heap_facts(f) for n, f in self.pending.items()}
+
+    def add_facts(self, name: str, facts) -> None:
+        found = implied(self.facts.get(name, frozenset()) | facts)
+        if NONNULL in found and name in self.pending:
+            found = implied(found | self.pending.pop(name))
+        self.facts[name] = found
+
+    def assign(self, name: str, facts, pending, source: str) -> None:
+        "name holds a new value: facts now, pending once it is not NULL"
+        self.facts[name] = implied(facts)
+        self.pending.pop(name, None)
+        if pending:
+            self.pending[name] = implied(pending)
+        self.sources[name] = source
 
 
 class OwnershipWalk:
     """Walks a declared uop's statements, tracking each obligation (the
-    inputs, and every new owner the body makes), the facts of the names,
-    and whether the word can still restart; checks every exit site"""
+    inputs, and every local that a new owner or a move puts one in), the
+    live facts of the names, and whether the word can still restart; checks
+    every exit site.  After run(), `exit` is the state at the `next` exit
+    (the join of the paths that reach it), from which the uop's exported
+    facts come (V9).  With kills false the walk ignores the effects' kills
+    and follows control flow only: the facts a guard site gives on every
+    path from it to the exit (the record's guard facts)."""
 
-    def __init__(self, uop: Uop, contract: Contract, table: dict[str, Row]):
+    def __init__(self, uop: Uop, contract: Contract, table: dict[str, Row],
+                 kills: bool = True):
         self.uop, self.contract, self.table = uop, contract, table
+        self.kills = kills
         self.views = Views(uop, table)
         self.declared = {i.name: i for i in contract.inputs if i.name != "unused"}
         self.new: set[str] = set()
+        self.exit: _State | None = None
         self.site_effects: dict[int, list[str]] = {}
         for site in effect_sites(uop, table):
             self.site_effects.setdefault(id(site.token), []).append(site.effect)
 
-    def run(self) -> None:
+    def run(self) -> "OwnershipWalk":
         facts = {n: implied(i.facts | (set() if i.nullable else {NONNULL}))
                  for n, i in self.declared.items()}
         state = _State({n: HELD for n in self.declared}, facts)
         end = self.block(self.uop.body.body, state)
         if end is not None and not self.uop.properties.always_exits:
             self.check_exit("next", end, self.uop.body.close)
+            self.exit = end
+        return self
+
+    def exported(self, name: str) -> frozenset[VFact]:
+        """The facts of name that hold at the `next` exit: none for an input
+        left in a home that a reentry site may have rewritten"""
+        if self.exit is None or name in self.exit.rehomed:
+            return frozenset()
+        return self.exit.facts.get(name, frozenset())
 
     # -- exits
 
@@ -886,6 +943,27 @@ class OwnershipWalk:
             elif exit == "raise" and item.mode == "taken" and gone:
                 self.fail(where, f"on raise, `{name}` is released, but it is declared "
                           "taken (kept on raise)")
+        if exit == "next":
+            self.check_outputs(state, where)
+
+    def check_outputs(self, state: _State, where: Token) -> None:
+        """V5 on the paths to next: each value output is not NULL unless it
+        is nullable, and has its declared facts, whatever path reached it"""
+        for out in self.contract.outputs:
+            if out.array or out.mode not in ("owned", "inline", "moved"):
+                continue
+            live = state.facts.get(out.name, frozenset())
+            source = state.sources.get(out.name)
+            if not out.nullable and NONNULL not in live:
+                if source is not None:
+                    self.fail(where, f"`{out.name}` may be NULL from {source}, and nothing "
+                              "raises on it on every path to next")
+                self.fail(where, f"on next, `{out.name}` is not assigned on every path")
+            missing = implied(out.facts) - live
+            if missing:
+                self.fail(where, f"on next, `{out.name}` is declared "
+                          f"{', '.join(sorted(map(str, missing)))}, which does not hold on "
+                          "every path (a join, or a kill since the assignment)")
 
     # -- statements
 
@@ -921,7 +999,8 @@ class OwnershipWalk:
         return self.simple(stmt.contents, state)
 
     def join(self, ends: list[_State | None]) -> _State | None:
-        "where paths meet: the same obligations, the facts all of them have"
+        """where paths meet: the same obligations; the facts that all of them
+        have; the homes that any of them may have rewritten"""
         live = [e for e in ends if e is not None]
         if not live:
             return None
@@ -933,7 +1012,19 @@ class OwnershipWalk:
                     self.fail(self.uop.body.open, f"`{name}` is owned on one path and "
                               "not on another where they join")
                 first.owners[name] = a
+            # What holds of a name once it is not NULL, on each path: its
+            # pending facts, or the facts it already has
+            pending = {}
+            for name in set(first.pending) | set(other.pending):
+                a, b = (implied(st.facts.get(name, frozenset()) | st.pending.get(name, frozenset()))
+                        for st in (first, other))
+                if a & b:
+                    pending[name] = a & b
             first.facts = _intersection([first.facts, other.facts])
+            first.pending = pending
+            first.sources.update(other.sources)
+            for name, why in other.rehomed.items():
+                first.rehomed.setdefault(name, why)
             if not other.restartable:
                 first.end_restart(other.why)
         return first
@@ -942,7 +1033,7 @@ class OwnershipWalk:
         found = condition_facts(cond, self.views, self.table, holds)
         if found:
             for name, facts in found[0].items():
-                state.facts[name] = implied(state.facts.get(name, frozenset()) | facts)
+                state.add_facts(name, facts)
         # `PyValue_IsNull(x)`: a new owner that is NULL owes nothing
         null = _call(cond, "PyValue_IsNull")
         if null is not None and len(null) == 1:
@@ -951,40 +1042,66 @@ class OwnershipWalk:
                 if holds:
                     state.owners[name] = NULL
                 else:
-                    state.facts[name] = implied(state.facts.get(name, frozenset()) | {NONNULL})
+                    state.add_facts(name, {NONNULL})
 
     def effects(self, tokens: list[Token], state: _State) -> None:
-        "the effects of the sites among tokens: heap facts die, restart ends"
+        """the effects of the sites among tokens: heap facts die, homes may be
+        rewritten, restart ends"""
         for t in tokens:
             for effect in self.site_effects.get(id(t), ()):
-                if effect in KILLS:
+                if effect in KILLS and self.kills:
                     state.kill_heap_facts()
+                if effect in REENTRY and self.kills:
+                    for name, item in self.declared.items():
+                        if item.mode in ("", "borrowed"):
+                            state.rehomed.setdefault(
+                                name, f"`{t.text}` at line {t.line}, which may {effect},")
                 if effect != "reads" and effect != "raises":
                     state.end_restart(f"`{t.text}`, which may {effect}")
 
+    def owner_of(self, arg: list[str], state: _State) -> str | None:
+        """The obligation that an argument passes: a name that holds one, or
+        an input through a borrowed view of it; None for anything else (a
+        nested call passes what its own row says)"""
+        tokens = _unwrap(arg, self.table)
+        if len(tokens) != 1:
+            return None
+        if tokens[0] in state.owners:
+            return tokens[0]
+        name = self.views.resolve(tokens, locals_=False)
+        return name if name in self.declared else None
+
+    def take(self, name: str, state: _State, where: Token, what: str) -> None:
+        "an owner's obligation leaves it (a consumption or a move)"
+        item = self.declared.get(name)
+        if item is not None and item.mode in ("borrowed", ""):
+            self.fail(where, f"{what} `{name}`, declared {item.mode or 'a pass-through'}, "
+                      "which it does not own")
+        status = state.owners.get(name)
+        if status != HELD:
+            self.fail(where, f"{what} `{name}`, which is "
+                      f"{'NULL' if status == NULL else 'already consumed or moved'}")
+        state.owners[name] = GONE
+
     def calls(self, tokens: list[Token], state: _State) -> None:
         """the calls among tokens: their argument requirements (V8 inside the
-        body) and the inputs they consume"""
+        body) and the obligations they consume"""
         for tkn, args in _calls_in(tokens):
             row = self.table.get(tkn.text)
             if row is None:
                 continue
             for arg, spec in zip(args, row.args):
                 name = self.views.resolve(arg)
-                if name is None:
-                    continue
-                missing = implied(spec.facts) - state.facts.get(name, frozenset())
-                if spec.facts and missing:
-                    self.fail(tkn, f"passes `{' '.join(arg)}` to {row.name}, which requires "
-                              f"{', '.join(sorted(map(str, missing)))} of it")
-                if spec.mode in ("consumed", "taken") and name in self.declared:
-                    if self.declared[name].mode in ("borrowed", ""):
-                        self.fail(tkn, f"passes `{name}`, declared "
-                                  f"{self.declared[name].mode or 'a pass-through'}, to "
-                                  f"{row.name}, which consumes it")
-                    if state.owners.get(name) == HELD:
-                        state.owners[name] = GONE
-                        state.end_restart(f"{row.name} consuming `{name}`")
+                if name is not None and spec.facts:
+                    missing = implied(spec.facts) - state.facts.get(name, frozenset())
+                    if missing:
+                        self.fail(tkn, f"passes `{' '.join(arg)}` to {row.name}, which "
+                                  f"requires {', '.join(sorted(map(str, missing)))} of it")
+                if spec.mode in ("consumed", "taken"):
+                    owner = self.owner_of(arg, state)
+                    if owner is not None:
+                        self.take(owner, state, tkn, f"{row.name} consumes")
+                        state.end_restart(f"{row.name} consuming `{owner}`")
 
     def discharge(self, name: str, state: _State, where: Token) -> None:
         "DEAD(name): only an inline value, or one already moved, owes nothing"
@@ -1035,6 +1152,7 @@ class OwnershipWalk:
                 self.discharge(name, state, toks[0])
             return state
         if head == "DECREF_INPUTS":
+            # The emitters close the inputs that are still held
             for name, item in self.declared.items():
                 if state.owners[name] == HELD and item.mode in ("borrowed", ""):
                     self.fail(toks[0], f"DECREF_INPUTS releases `{name}`, declared "
@@ -1051,41 +1169,86 @@ class OwnershipWalk:
 
     def assignment(self, toks: list[Token], texts: list[str], i: int, state: _State) -> None:
         lhs = texts[i - 1]
+        if i >= 2 and texts[i - 2] in ("->", ".") or not re.fullmatch(r"\w+", lhs):
+            return      # a store through a pointer: V2's `writes`
         rhs = _strip(texts[i + 1:-1] if texts[-1] == ";" else texts[i + 1:])
         out = self.contract.output(lhs)
-        if len(rhs) == 1 and rhs[0] in self.declared:
-            # A move: `out = in;` or `PyValue tmp = in;`
-            source = self.declared[rhs[0]]
-            if source.mode in ("borrowed", ""):
+        if len(rhs) == 1 and (rhs[0] in self.declared or rhs[0] in state.owners):
+            # A move, `out = in;` or `PyValue tmp = in;`: the obligation goes
+            # with the value, and the new holder must discharge it
+            source = self.declared.get(rhs[0])
+            if source is not None and source.mode in ("borrowed", ""):
                 if out is not None and out.mode == "moved":
                     self.fail(toks[0], f"on next, `{rhs[0]}` is moved, but it is declared "
                               f"{source.mode or 'a pass-through'}")
-                return
-            if state.owners.get(rhs[0]) == HELD:
-                state.owners[rhs[0]] = GONE
-                state.end_restart(f"the move of `{rhs[0]}`")
-            if out is not None:
-                state.facts[lhs] = state.facts.get(rhs[0], frozenset())
+                return          # a copy of a borrowed view: no obligation
+            self.take(rhs[0], state, toks[0], "moves")
+            state.owners[lhs] = HELD
+            self.new.add(lhs)
+            state.assign(lhs, state.facts.get(rhs[0], frozenset()),
+                         state.pending.get(rhs[0]), rhs[0])
+            state.end_restart(f"the move of `{rhs[0]}`")
             return
         call = _call_of(_uncast(rhs), self.table)
+        if call is None:
+            if out is not None:
+                state.end_restart(f"the assignment of the output `{lhs}`")
+            return
+        row, args = call
+        result = row.result
+        if result.shape == "VIEW" and any(a.mode in ("consumed", "taken") for a in row.args):
+            # A stealing view, `o = PyValue_AsKnownObjectSteal(x)`: the row
+            # consumed x, and its obligation is now the local's
+            source = self.views.resolve(args[0]) if args else None
+            state.owners[lhs] = HELD
+            self.new.add(lhs)
+            state.assign(lhs, state.facts.get(source, frozenset()), None, row.name)
+            return
+        if result.shape not in ("VALUE", "VALUE_OR_NULL", "DUP"):
+            if out is not None:
+                state.end_restart(f"the assignment of the output `{lhs}`")
+            return
+        facts = set(result.facts)
+        if result.shape == "VALUE_OR_NULL":
+            state.assign(lhs, frozenset(), facts, row.name)
+        elif result.shape == "DUP":
+            # A DUP is NULL where its argument is
+            source = self.views.resolve(args[0]) if args else None
+            nonnull = NONNULL in state.facts.get(source, frozenset())
+            if out is not None and not out.nullable and not nonnull:
+                self.fail(toks[0], f"`{lhs}` may be NULL: {row.name} of "
+                          f"`{' '.join(args[0]) if args else ''}`, which nothing "
+                          "shows is not NULL")
+            state.assign(lhs, facts | {NONNULL} if nonnull else frozenset(),
+                         None if nonnull else facts | {NONNULL}, row.name)
+        else:
+            state.assign(lhs, facts | {NONNULL}, None, row.name)
         # An `owned` output is an obligation whether or not its value needs a
         # physical count (1.2), so an inline value assigned to it is one too
-        value = call is not None and call[0].result.shape in ("VALUE", "VALUE_OR_NULL", "DUP")
-        if value and call[0].result.shape == "DUP" and out is not None and not out.nullable:
-            # A DUP is NULL where its argument is: here it must not be
-            source = self.views.resolve(call[1][0]) if call[1] else None
-            if NONNULL not in state.facts.get(source, frozenset()):
-                self.fail(toks[0], f"`{lhs}` may be NULL: {call[0].name} of "
-                          f"`{' '.join(call[1][0]) if call[1] else ''}`, which nothing "
-                          "shows is not NULL")
-        if value and (call[0].new_owner() or (out is not None and out.mode == "owned")):
+        if row.new_owner() or (out is not None and out.mode == "owned"):
             if state.owners.get(lhs) == HELD:
                 self.fail(toks[0], f"`{lhs}` is assigned a new owner while it holds one")
             state.owners[lhs] = HELD
             self.new.add(lhs)
-            state.end_restart(f"the new owner `{lhs}` from {call[0].name}")
+            state.end_restart(f"the new owner `{lhs}` from {row.name}")
         elif out is not None:
             state.end_restart(f"the assignment of the output `{lhs}`")
+
+
+_WALKS: dict[tuple[int, bool], tuple[Uop, OwnershipWalk]] = {}
+
+
+def walk_of(uop: Uop, table: dict[str, Row] | None = None,
+            kills: bool = True) -> OwnershipWalk:
+    "The walk of a declared uop's body, run"
+    table = rows() if table is None else table
+    key = (id(uop), kills)
+    if table is _ROWS and key in _WALKS:
+        return _WALKS[key][1]
+    walk = OwnershipWalk(uop, contract_of(uop), table, kills).run()
+    if table is _ROWS:
+        _WALKS[key] = (uop, walk)
+    return walk
 
 
 # ---------------------------------------------------------------------------
@@ -1103,10 +1266,11 @@ def _assignments(uop: Uop, name: str) -> list[tuple[Token, list[str]]]:
 
 
 def check_results(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
-    """V5: every assignment to an output gives its declared mode and facts,
-    so that their join does"""
+    """V5: every assignment to an output gives its declared mode and facts.
+    That they hold on every path to next, joins and kills included, and that
+    a non-nullable output is not NULL there, is the walk's check
+    (OwnershipWalk.check_outputs)"""
     inputs = {i.name: i for i in contract.inputs}
-    texts = [t.text for t in _tokens(uop)]
     for out in contract.outputs:
         if out.mode in ("", "borrowed"):
             continue
@@ -1137,13 +1301,6 @@ def check_results(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
             if out.mode == "inline" and mode != "inline":
                 raise analysis_error(f"{uop.name}: `{out.name}` is declared inline, but "
                                      f"{source} gives an {mode} value", where)
-            if (call is not None and call[0].result.shape == "VALUE_OR_NULL"
-                    and not out.nullable):
-                text = " ".join(texts)
-                if not re.search(rf"\b(ERROR_IF|if) \( PyValue_IsNull \( {out.name} \) [),]",
-                                 text):
-                    raise analysis_error(f"{uop.name}: `{out.name}` may be NULL from "
-                                         f"{source}, and nothing raises on it", where)
 
 
 def body_exits(uop: Uop, table: dict[str, Row], implicit_guards: int) -> set[str]:
@@ -1174,34 +1331,38 @@ def check_exits(uop: Uop, contract: Contract, table: dict[str, Row],
                              f"but the body takes {', '.join(sorted(actual))}", uop.body.open)
 
 
-def guard_facts_of(uop: Uop, table: dict[str, Row]) -> Facts:
-    "The facts that all guard sites of uop establish, by name"
-    derived: list[Facts] = []
-    for tkn, _ in body_calls(uop):
-        if tkn.text in GUARDS:
-            derived.append(site_facts(uop, tkn, table)[0])
-    return _union(derived)
-
-
-def check_guard_facts(uop: Uop, contract: Contract, derived: Facts) -> None:
-    """V9: what the guards of a uop establish of a value that leaves it (a
-    pass-through, or an input that an output is moved from) is what the
-    uop declares there: a guard uop on its pass-through, an in-body guard
-    (a refinement site) on the outputs moved from the guarded inputs"""
+def check_guard_facts(uop: Uop, contract: Contract, walk: OwnershipWalk) -> None:
+    """V9: the facts of a value that leaves the uop (a pass-through, or an
+    input that an output is moved from) that hold at its `next` exit, after
+    the body's kills and joins, are what the uop declares there: a guard
+    uop's on its pass-through, an in-body guard's (a refinement site) on the
+    outputs moved from the guarded inputs.  A conditional guard's facts do
+    not reach the exit; neither does a killed heap fact, nor any fact of a
+    value left in a home that a reentry site may have rewritten."""
     for out in contract.outputs:
-        source = out.name if not out.mode else out.source if out.mode == "moved" else None
-        if source is None:
+        if out.mode == "moved":
+            source, live = out.source, walk.exported(out.name)
+        elif not out.mode:
+            source = out.name
+            live = walk.exported(source)
+        else:
             continue
         item = contract.input(source)
-        required = implied(item.facts) if item is not None else frozenset()
-        established = implied(required | derived.get(source, frozenset()))
+        entry = (implied(item.facts | (set() if item.nullable else {NONNULL}))
+                 if item is not None else frozenset())
         declared = implied(out.facts)
-        extra = declared - established
+        extra = declared - live - {NONNULL}
         if extra:
+            rehomed = walk.exit.rehomed.get(source) if walk.exit is not None else None
+            if rehomed is not None and not out.mode:
+                raise analysis_error(
+                    f"{uop.name}: `{out.name}` is declared "
+                    f"{', '.join(sorted(map(str, extra)))}, but {rehomed} may replace the "
+                    "value in its home (a finalizer can write it)", uop.body.open)
             raise analysis_error(
                 f"{uop.name}: `{out.name}` is declared {', '.join(sorted(map(str, extra)))}, "
-                f"which nothing establishes", uop.body.open)
-        missing = implied(derived.get(source, frozenset())) - declared - required
+                f"which nothing establishes on every path to next", uop.body.open)
+        missing = live - declared - entry
         if missing:
             raise analysis_error(
                 f"{uop.name}: the guards establish {', '.join(sorted(map(str, missing)))} "
@@ -1220,10 +1381,13 @@ def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None 
     check_callees(uop, table)
     check_effects(uop, contract, table)
     check_guard_conditions(uop, table)
-    OwnershipWalk(uop, contract, table).run()
+    for tkn, _ in body_calls(uop):
+        if tkn.text in GUARDS:
+            site_facts(uop, tkn, table)     # a condition without facts needs a reason
     check_results(uop, contract, table)
+    walk = walk_of(uop, table)
     check_exits(uop, contract, table, implicit_guards)
-    check_guard_facts(uop, contract, guard_facts_of(uop, table))
+    check_guard_facts(uop, contract, walk)
     if table is _ROWS:
         _VERIFIED.add((id(uop), implicit_guards))
 
@@ -1271,8 +1435,7 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
             facts[v] = frozenset({NONNULL})
         bound = dict(zip((i.name for i in contract.inputs), stack[len(stack) - n:]))
         del stack[len(stack) - n:]
-        derived = guard_facts_of(part, table)
-        guards = bool(derived) or any(t.text in GUARDS for t, _ in body_calls(part))
+        guards = any(t.text in GUARDS for t, _ in body_calls(part))
         implicit = []
         for item in contract.inputs:
             value = bound[item.name]
@@ -1293,12 +1456,19 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
             raise analysis_error(f"{inst.name}: the guard in {part.name} follows {why}, "
                                  "so the word cannot restart (design.md 3.1)", inst.where)
         verify_uop(part, len(implicit), table)
-        # After the uop: its guards' facts, then its effects' kills
-        for name, f in derived.items():
-            if name in bound:
-                facts[bound[name]] = implied(facts.get(bound[name], frozenset()) | f)
+        # After the uop: its kills.  Heap facts die at a KILLS effect; at a
+        # reentry every value left in a home (the stack below the uop and
+        # its pass-throughs) may have been replaced there, so all of its
+        # facts die.  Then the facts the uop declares on its outputs, which
+        # V9 holds to the facts live at its exit.
         if contract.effects & KILLS:
             facts = {v: without_heap_facts(f) for v, f in facts.items()}
+        if contract.effects & REENTRY:
+            homes = set(stack) | {bound[i.name] for i in contract.inputs if not i.mode
+                                  and contract.output(i.name) is not None}
+            for v in homes:
+                if v is not None:
+                    facts[v] = frozenset()
         changes = contract.effects - {"reads", "raises"}
         if restartable and (changes or any(i.mode for i in contract.inputs)
                             or any(o.mode in ("owned", "inline") for o in contract.outputs)):
@@ -1326,8 +1496,13 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
 
 def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...], str]:
     """The record's facts of a guard site of a declared uop, as the site's
-    condition states them (not their implications), and its reason"""
+    condition states them (not their implications), and its reason.  Only
+    the facts that hold on every path from the site to the uop's `next`
+    exit are recorded: the record's readers (the templates) take a guard's
+    facts as the uop's, so a conditional guard's are not.  Their lifetime
+    against effects is the reader's: the record keeps the effects' order."""
     table = rows()
+    walk = walk_of(uop, table, kills=False)
     cond, reason = guard_condition(uop, site)
     views = Views(uop, table)
     found = condition_facts(cond, views, table, holds=False)
@@ -1339,7 +1514,8 @@ def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...],
     result = []
     for name, facts in stated.items():
         # A local's fact is recorded on the local, as the inference did
-        result += [f.record(values.get(name, name)) for f in facts]
+        live = walk.exit.facts.get(name, frozenset()) if walk.exit else frozenset()
+        result += [f.record(values.get(name, name)) for f in facts if f in live]
     return tuple(result), reason or found[1]
 
 

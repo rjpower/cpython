@@ -117,7 +117,9 @@ class SliceTests(unittest.TestCase):
 EXTRA_ROWS = """
 #define TEST_ROWS(PRIMITIVE, HELPER, MACRO) \\
     MACRO(SPAM_TEST, ARGS(borrowed), TEST(inline_int), EFFECTS(writes), EXITS()) \\
-    HELPER(spam_dealloc, void, (PyObject *), ARGS(object), NONE, EFFECTS())
+    HELPER(spam_dealloc, void, (PyObject *), ARGS(object), NONE, EFFECTS()) \\
+    HELPER(spam_write, void, (PyObject *), ARGS(object), NONE, EFFECTS(writes)) \\
+    INTRINSIC(SPAM_FT_ONLY, ARGS(scalar), SCALAR, BUILD(free_threaded))
 """
 
 
@@ -302,6 +304,50 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"on raise, `value` is released, but it is declared taken")
 
+    def test_double_consumption(self):
+        self.refuses("""
+            inst(OP, (value: consumed exact(PyLong_Type) --)) effects(writes) exits(next) {
+                PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+        """, r"PyValue_CLOSE_SPECIALIZED consumes `value`, which is already consumed or moved")
+        # Moved to an output, then released
+        self.refuses("""
+            inst(OP, (value: consumed exact(PyLong_Type) -- res: owned)) effects(writes)
+                exits(next)
+            {
+                res = value;
+                PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+            }
+        """, r"PyValue_CLOSE_SPECIALIZED consumes `value`, which is already consumed or moved")
+        # Moved twice
+        self.refuses("""
+            inst(OP, (value: consumed -- a: owned, b: owned)) effects() exits(next) {
+                a = value;
+                b = value;
+            }
+        """, r"moves `value`, which is already consumed or moved")
+
+    def test_move_carries_its_obligation(self):
+        source = """
+            inst(OP, (value: consumed exact(PyLong_Type) --)) effects(writes) exits(next) {
+                PyValue tmp = value;
+                %s
+            }
+        """
+        self.refuses(source % "", r"on next, the new owner `tmp` is still held")
+        self.verify(source % "PyValue_CLOSE_SPECIALIZED(tmp, _PyLong_ExactDealloc);")
+        # A stealing view carries the obligation too
+        source = """
+            inst(OP, (seq: consumed object --)) effects(runs_python) exits(next) {
+                PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
+                %s
+            }
+        """
+        self.refuses(source % "", r"on next, the new owner `seq_o` is still held")
+        self.verify(source % "int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, "
+                             "-1, NULL);")
+
     # V5: result facts, and their join
 
     def test_boxed_result_join(self):
@@ -336,6 +382,17 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"`res` may be NULL from _PyValue_BoxInt64, and nothing raises on it")
 
+    def test_branch_confined_null_test(self):
+        source = """
+            inst(OP, (flag/1 -- res: owned)) effects(allocates, raises) exits(next, raise) {
+                res = _PyValue_BoxInt64(1);
+                %s
+            }
+        """
+        self.verify(source % "ERROR_IF(PyValue_IsNull(res));")
+        self.refuses(source % "if (flag) { ERROR_IF(PyValue_IsNull(res)); }",
+                     r"`res` may be NULL from _PyValue_BoxInt64, and nothing raises on it")
+
     # V7: exits
 
     def test_exits_must_match(self):
@@ -354,7 +411,7 @@ class VerifierTests(unittest.TestCase):
             PyObject *o = PyValue_AsKnownObjectBorrow(seq);
             EXIT_IF(!PyTuple_CheckExact(o) || PyTuple_GET_SIZE(o) != oparg);
         }
-        op(_CALLBACK, (seq -- seq)) effects(runs_python) exits(next) {
+        op(_WRITE, (seq -- seq)) effects(writes) exits(next) {
         }
         op(_USE_LENGTH, (seq: consumed exact(PyTuple_Type) length(oparg) --))
             effects(releases) exits(next)
@@ -368,7 +425,7 @@ class VerifierTests(unittest.TestCase):
         self.verify(self.STALE % "")
 
     def test_stale_heap_fact(self):
-        self.refuses(self.STALE % "_CALLBACK + ",
+        self.refuses(self.STALE % "_WRITE + ",
                      r"OP: _USE_LENGTH requires length\(oparg\) of `seq`, which nothing "
                      r"before it establishes or which an effect since killed")
 
@@ -391,6 +448,77 @@ class VerifierTests(unittest.TestCase):
         """
         self.verify(source % "||")
         self.refuses(source % "&&", r"`a` is declared .*inline_int.*, which nothing establishes")
+
+    def test_conditional_guard_exports_no_fact(self):
+        source = """
+            inst(OP, (flag/1, value -- value: inline_int)) effects() exits(next, miss) {
+                %s
+            }
+        """
+        self.verify(source % "EXIT_IF(!PyValue_IsInlineInt(value));")
+        self.refuses(source % "if (flag) { EXIT_IF(!PyValue_IsInlineInt(value)); }",
+                     r"`value` is declared .*inline_int.*, which nothing establishes on "
+                     r"every path to next")
+
+    def test_killed_heap_fact_does_not_return(self):
+        source = """
+            op(_GUARD_LENGTH, (seq: object -- seq: exact(PyTuple_Type) length(oparg)))
+                effects(reads%s) exits(next, miss)
+            {
+                PyObject *o = PyValue_AsKnownObjectBorrow(seq);
+                EXIT_IF(!PyTuple_CheckExact(o) || PyTuple_GET_SIZE(o) != oparg);
+                %s
+            }
+            op(_USE_LENGTH, (seq: consumed exact(PyTuple_Type) length(oparg) --))
+                effects(releases) exits(next)
+            {
+                DECREF_INPUTS();
+            }
+            macro(OP) = _GUARD_LENGTH + _USE_LENGTH;
+        """
+        self.verify(source % ("", ""))
+        self.refuses(source % (", writes", "spam_write(o);"),
+                     r"_GUARD_LENGTH: `seq` is declared length\(oparg\), which nothing "
+                     r"establishes on every path to next")
+
+    def test_release_leaves_a_stale_home_fact(self):
+        # A finalizer may write a frame's homes (FrameLocalsProxy): a value
+        # left in its home after a release has no facts there
+        source = """
+            inst(OP, (value -- value: inline_int))
+                effects(allocates, raises, %s) exits(next, miss, raise)
+            {
+                EXIT_IF(!PyValue_IsInlineInt(value));
+                PyValue t = _PyValue_BoxInt64(1);
+                ERROR_IF(PyValue_IsNull(t));
+                PyValue_CLOSE_SPECIALIZED(t, %s);
+            }
+        """
+        self.verify(source % ("writes", "_PyLong_ExactDealloc"))
+        self.refuses(source % ("releases", "spam_dealloc"),
+                     r"`value` is declared .*inline_int.*, but `PyValue_CLOSE_SPECIALIZED` at "
+                     r"line \d+, which may releases, may replace the value in its home")
+        # Across uops: the release kills the facts of every value in a home
+        source = """
+            op(_GUARD, (value -- value: inline_int)) effects() exits(next, miss) {
+                EXIT_IF(!PyValue_IsInlineInt(value));
+            }
+            op(_RELEASE, (value -- value)) effects(allocates, raises, %s)
+                exits(next, raise)
+            {
+                PyValue t = _PyValue_BoxInt64(1);
+                ERROR_IF(PyValue_IsNull(t));
+                PyValue_CLOSE_SPECIALIZED(t, %s);
+            }
+            op(_USE, (value: consumed inline_int --)) effects() exits(next) {
+                DEAD(value);
+            }
+            macro(OP) = _GUARD + _RELEASE + _USE;
+        """
+        self.verify(source % ("writes", "_PyLong_ExactDealloc"))
+        self.refuses(source % ("releases", "spam_dealloc"),
+                     r"OP: _USE requires .*inline_int.* of `value`, which nothing before "
+                     r"it establishes or which an effect since killed")
 
     def test_guard_fact_must_be_declared(self):
         self.refuses("""
@@ -440,7 +568,7 @@ class VerifierTests(unittest.TestCase):
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             EXIT_IF(!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid));
         }
-        op(_CALL, (owner -- owner)) effects(runs_python) exits(next) {
+        op(_WRITE, (owner -- owner)) effects(writes) exits(next) {
         }
         op(_LOAD, (offset/1, owner: consumed has_values -- attr: owned))
             effects(reads, releases) exits(next, deopt)
@@ -457,14 +585,22 @@ class VerifierTests(unittest.TestCase):
     def test_facts_through_paths(self):
         self.verify(self.ATTR % ("DEOPT_IF(PyValue_IsNull(found));", ""))
 
-    def test_heap_fact_dies_at_a_call(self):
-        self.refuses(self.ATTR % ("DEOPT_IF(PyValue_IsNull(found));", "_CALL + "),
+    def test_heap_fact_dies_at_a_write(self):
+        self.refuses(self.ATTR % ("DEOPT_IF(PyValue_IsNull(found));", "_WRITE + "),
                      r"_LOAD requires has_values of `owner`, which nothing before it "
                      r"establishes or which an effect since killed")
 
     def test_dup_of_a_value_that_may_be_null(self):
         self.refuses(self.ATTR % ("", ""),
                      r"`attr` may be NULL: PyValue_XDUP of `found`")
+
+    def test_intrinsic_outside_its_build(self):
+        self.refuses("""
+            inst(OP, (value -- value)) effects() exits(next) {
+                int x = SPAM_FT_ONLY(1);
+            }
+        """, r"OP: calls SPAM_FT_ONLY, an INTRINSIC of the free_threaded build, not of the "
+             r"gil build")
 
     # V10, V11: regions and rows
 

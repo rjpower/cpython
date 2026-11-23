@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import ir_numbers
 import itertools
 import lexer
@@ -161,6 +161,8 @@ class StackItem:
     peek: bool = False
     used: bool = False
     nullable: bool = False
+    # The declared mode and facts (parsing.StackEffect.contract)
+    contract: tuple[str, ...] = ()
 
     def __str__(self) -> str:
         size = f"[{self.size}]" if self.size else ""
@@ -211,6 +213,9 @@ class Uop:
     asserted_objects: tuple[str, ...] = ()
     # Outputs that the body assigns from an input, `out = in;`
     aliased_outputs: tuple[str, ...] = ()
+    # The declared clauses, `effects(...)` and `exits(...)`; a uop with them
+    # has a declared contract (ir_contract.py)
+    clauses: dict[str, list[str]] = field(default_factory=dict)
 
     def dump(self, indent: str) -> None:
         print(
@@ -293,6 +298,8 @@ class Instruction:
     opcode: int = -1
     # Annotated `outlined` as a macro; an `outlined inst` is in the properties
     outlined: bool = False
+    # The declared region kind of an arm, `region(inline|split|shared)`
+    region: str | None = None
 
     @property
     def properties(self) -> Properties:
@@ -387,7 +394,7 @@ def override_error(
 def convert_stack_item(
     item: parser.StackEffect, replace_op_arg_1: str | None
 ) -> StackItem:
-    return StackItem(item.name, item.size, nullable=item.nullable)
+    return StackItem(item.name, item.size, nullable=item.nullable, contract=item.contract)
 
 def check_unused(stack: list[StackItem], input_names: dict[str, lexer.Token]) -> None:
     "Unused items cannot be on the stack above used, non-peek items"
@@ -603,6 +610,9 @@ def has_error_without_pop(op: parser.CodeDef) -> bool:
 
 
 NON_ESCAPING_FUNCTIONS = (
+    # Not a call: a raise site's checkpoint, ERROR_IF(cond, holding(x))
+    # (ir_contract.py)
+    "holding",
     "call_push_exact",
     "coro_awaitable_can_transfer",
     "native_vector_capture",
@@ -1180,6 +1190,13 @@ def make_uop(
     inputs: list[parser.InputEffect],
 ) -> Uop:
     stack = analyze_stack(op)
+    if not op.clauses:
+        for item in stack.inputs + stack.outputs:
+            if item.contract:
+                # Modes and facts are a contract, which needs its clauses
+                raise analysis_error(
+                    f"{name}: `{item.name}: {' '.join(item.contract)}` declares a "
+                    "contract, but the uop has no effects() and exits()", op.block.open)
     object_inputs, asserted_objects = find_object_inputs(op, stack)
     return Uop(
         name=name,
@@ -1193,6 +1210,7 @@ def make_uop(
         object_inputs=object_inputs,
         asserted_objects=asserted_objects,
         aliased_outputs=find_aliased_outputs(op),
+        clauses=op.clauses,
     )
 
 
@@ -1265,6 +1283,7 @@ def add_macro(
     assert parts
     add_instruction(macro.first_token, macro.name, parts, instructions)
     instructions[macro.name].outlined = "outlined" in macro.annotations
+    instructions[macro.name].region = macro.region
 
 
 def add_family(

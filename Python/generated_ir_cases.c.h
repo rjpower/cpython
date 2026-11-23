@@ -845,7 +845,7 @@ ir_run_BINARY_OP_FLOOR_DIVIDE_INT(
                 int64_t a = PyValue_InlineInt64(left);
                 STAT_INC(BINARY_OP, hit);
                 int64_t quotient = a / b;
-                if (a % b != 0 && (a ^ b) < 0) {
+                if (quotient * b != a && (a ^ b) < 0) {
                     quotient--;
                 }
                 res = PyValue_FromInt64(quotient);
@@ -17620,7 +17620,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 int64_t a = PyValue_InlineInt64(left);
                 STAT_INC(BINARY_OP, hit);
                 int64_t quotient = a / b;
-                if (a % b != 0 && (a ^ b) < 0) {
+                if (quotient * b != a && (a ^ b) < 0) {
                     quotient--;
                 }
                 res = PyValue_FromInt64(quotient);

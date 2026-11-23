@@ -287,11 +287,11 @@ GUARD_TOKENS = {
     "IR_GUARD_SHAPE_READ": EXIT_GUARD,
 }
 
-# The labels of bytecodes.c that a `goto` in a body may name, which raise
 # The targets of the jumps that run the same word again: with its handler,
 # or with the handler that the uop chose (`opcode`)
 JUMP_TARGETS = {"DISPATCH_SAME_OPARG": "self", "DISPATCH_GOTO": "self:handler"}
 
+# The labels of bytecodes.c that a `goto` in a body may name, which raise
 ERROR_LABELS = ("error", "exception_unwind", "pop_1_error", "pop_2_error",
                 "pop_3_error", "pop_4_error")
 
@@ -1329,9 +1329,9 @@ def guard_order(parts: list[Uop], uops: tuple[UopRecord, ...]) -> list[tuple[str
 
 def check_record(record, parts: list[Uop]) -> None:
     """Refuse what the record of a handler cannot state: a transfer that
-    is not typed, a guard with no fact or reason, a `pure` uop that changes the heap or runs Python, and a
-    guard that follows a change.
-    parts are the uops of the instruction.
+    is not typed, a guard with no fact or reason, a `pure` uop that changes
+    the heap or runs Python, and a guard that follows a change.  parts are
+    the uops of the instruction.
 
     The generator checks a record after the emitter's own checks, which
     name a fault more precisely."""

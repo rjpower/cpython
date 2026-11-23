@@ -107,6 +107,7 @@ Programs/test_frozenmain.h                          generated
 Python/Python-ast.c                                 generated
 Python/generated_ir_cases.c.h                       generated
 Python/ir_targets.h                                 generated
+Python/jit_lowerings.h                              generated
 Python/slots_generated.c                            generated
 Python/stdlib_module_names.h                        generated
 Tools/peg_generator/pegen/grammar_parser.py         generated

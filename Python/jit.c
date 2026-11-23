@@ -65,6 +65,7 @@ _PyJit_InitInterpreter(PyInterpreterState *interp)
         mode = _PyJIT_OFF;
     }
     interp->ceval.jit = mode;
+    interp->ceval.jit_warmup = mode == _PyJIT_ALWAYS ? 1 : _PyJIT_WARMUP;
     /* The JIT's activation loop is the forms executor */
     if (mode != _PyJIT_OFF) {
         interp->ceval.ir_forms = 1;
@@ -133,6 +134,7 @@ static_target(const _PyIRWord *words, uint32_t i)
  * through to what follows it. */
 typedef struct {
     _PyJitAsm *a;
+    PyCodeObject *code;
     _PyJitUnit *unit;
     const _PyIRWord *words;
     uint32_t nwords;
@@ -254,9 +256,10 @@ emit_continuation(_PyJitCompiler *c, uint32_t i)
 /* Word i as a call of its handler's function form, with the word's address
  * and bits as immediates, then its continuation.  Specialisation rewrites a
  * word's handler and its feedback entry together, and a handler's guards are
- * only sound against the entry that its own specialisation wrote, so the
- * compiled handler runs only while the word still names it; otherwise the
- * word's live handler runs.  B2's slow path for a word is this code. */
+ * only sound against the entry that its own specialisation wrote, so on a
+ * word that specialisation can rewrite the compiled handler runs only while
+ * the word still names it; otherwise the word's live handler runs.  B2's
+ * slow path for a word is this code. */
 static void
 emit_form_word(_PyJitCompiler *c, uint32_t i)
 {
@@ -273,9 +276,12 @@ emit_form_word(_PyJitCompiler *c, uint32_t i)
     _PyJitAsm_Jmp(a, c->trap);
     _PyJitAsm_Bind(a, base_ok);
 #endif
-    _PyJitAsm_MovzxRM16(a, R(RCX), WORD_AT(i));
-    _PyJitAsm_AluRI(a, _PyJitAlu_CMP, R(RCX), (int32_t)(w & 0xFFFF));
-    _PyJitAsm_Jcc(a, _PyJitCond_NE, changed);
+    int guarded = _PyJit_HandlerMayChange(c->code, (int)i);
+    if (guarded) {
+        _PyJitAsm_MovzxRM16(a, R(RCX), WORD_AT(i));
+        _PyJitAsm_AluRI(a, _PyJitAlu_CMP, R(RCX), (int32_t)(w & 0xFFFF));
+        _PyJitAsm_Jcc(a, _PyJitCond_NE, changed);
+    }
     _PyJitAsm_MovRR(a, R(RDI), R(R12));
     _PyJitAsm_MovRR(a, R(RSI), R(R13));
     _PyJitAsm_Lea(a, R(RDX), WORD_AT(i));
@@ -283,6 +289,9 @@ emit_form_word(_PyJitCompiler *c, uint32_t i)
     _PyJitAsm_CallAbs(a, _PyEval_HandlerForms()[IR_HANDLER(w)]);
     _PyJitAsm_Bind(a, called);
     emit_continuation(c, i);
+    if (!guarded) {
+        return;
+    }
 
     _PyJitSection section = a->current;
     _PyJitAsm_Section(a, _PyJitSection_COLD);
@@ -356,7 +365,7 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     unit->words = words;
     _PyJitAsm a;
     _PyJitAsm_Init(&a);
-    _PyJitCompiler c = {.a = &a, .unit = unit, .words = words, .nwords = nwords,
+    _PyJitCompiler c = {.a = &a, .code = code, .unit = unit, .words = words, .nwords = nwords,
                         .labels = labels};
     _PyJitLabel table = emit_unit(&c);
     int placed = _PyJitAsm_Place(&a, &unit->code);
@@ -364,6 +373,10 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     _PyJitAsm_Fini(&a);
     PyMem_RawFree(labels);
     exec->jit_compiles++;
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    interp->ceval.jit_compiled_codes += exec->jit_compiles == 1;
+    interp->ceval.jit_compiles++;
+    interp->ceval.jit_compiled_words += nwords;
     if (placed < 0) {
         /* Out of code memory: do not try this code again */
         exec->jit_compiles = _PyJIT_MAX_COMPILES;
@@ -373,7 +386,7 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     unit->entries = (const void *const *)(unit->code.start + table_offset);
     unit->older = exec->jit_unit;
     exec->jit_unit = unit;
-    if (_PyInterpreterState_GET()->config.perf_profiling == 1) {
+    if (interp->config.perf_profiling == 1) {
         PyObject *exc = PyErr_GetRaisedException();
         const char *qualname = PyUnicode_AsUTF8(code->co_qualname);
         const char *filename = PyUnicode_AsUTF8(code->co_filename);
@@ -408,8 +421,7 @@ _PyJit_Event(PyThreadState *tstate, _PyInterpreterFrame *frame)
         }
     }
     else {
-        int warmup = tstate->interp->ceval.jit == _PyJIT_ALWAYS ? 1 : _PyJIT_WARMUP;
-        if (++exec->jit_heat < (uint32_t)warmup ||
+        if (++exec->jit_heat < tstate->interp->ceval.jit_warmup ||
             exec->jit_compiles >= _PyJIT_MAX_COMPILES) {
             return NULL;
         }

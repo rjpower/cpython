@@ -30,9 +30,9 @@ extern "C" {
    where entry is entries[word index].  At every word boundary of the code
    r12 holds tstate, r13 frame, r14 word 0 of the frame's executing copy, r15
    frame->base and rbx the unit; the stack is 16-byte aligned; every value
-   is in the frame.  A word runs the handler it named at compile time only
-   while the word still names it, since specialisation rewrites the handler
-   and its feedback entry together.
+   is in the frame.  A word that specialisation can rewrite runs the handler
+   it named at compile time only while the word still names it, since
+   specialisation rewrites the handler and its feedback entry together.
 
    The JIT runs in the GIL build on Linux x86-64 (_PY_JIT_SUPPORTED). */
 
@@ -66,6 +66,18 @@ typedef struct _PyJitUnit {
     const void *const *entries;
     struct _PyJitUnit *older;       // the unit this one replaced, or NULL
 } _PyJitUnit;
+
+/* Whether specialisation can rewrite the handler of word i of code's
+ * executing copy: the generic handler of its instruction drives
+ * specialisation from its feedback entry.  set_opcode() in
+ * Python/specialize.c, the one writer of the column apart from
+ * instrumentation (which retires units), rewrites only such words, so
+ * compiled code checks the handler of these words only. */
+static inline int
+_PyJit_HandlerMayChange(PyCodeObject *code, int i)
+{
+    return _PyFb_HasEntry(_PyCode_InstrHandler(code, i));
+}
 
 /* Read -X jit and PYTHON_JIT into interp->ceval.jit.  An unknown value is
  * an error; a mode other than off on a process whose code memory cannot be

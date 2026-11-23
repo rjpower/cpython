@@ -379,6 +379,26 @@ class TestCompiled(JitTestCase):
         """, "jit=on")
         self.assertEqual(out.split(), ["True", "True", "True"])
 
+    @unittest.skipIf(_testinternalcapi is None, "needs _testinternalcapi")
+    def test_set_warm_up(self):
+        out = run("""
+            import _testinternalcapi as t
+            print(t.set_jit_warmup(1000))
+            def hot(): return 2
+            before = t.jit_stats()
+            for i in range(100):
+                hot()
+            print(t.jit_unit(hot.__code__) is None)
+            t.set_jit_warmup(32)
+            for i in range(100):
+                hot()
+            after = t.jit_stats()
+            print(t.jit_unit(hot.__code__) is not None,
+                  after["compiles"] > before["compiles"],
+                  after["words"] > before["words"])
+        """, "jit=on")
+        self.assertEqual(out.split(), ["32", "True", "True", "True", "True"])
+
     def test_perf_map(self):
         if not sys.platform.startswith("linux"):
             self.skipTest("perf maps are Linux files")

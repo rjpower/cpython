@@ -355,6 +355,9 @@ set_opcode(_PyInstr *instr, int opcode)
     if (opcode != previous) {
         _PyCodeExec *exec = _PyFrame_Exec(current_frame());
         assert(instr >= exec->words && instr < exec->words + exec->nwords);
+        // Compiled code checks the handler of such words only
+        assert(_PyJit_HandlerMayChange(_PyFrame_GetCode(current_frame()),
+                                       (int)(instr - exec->words)));
         _PyJit_NoteRewrite(exec);
     }
     return 1;

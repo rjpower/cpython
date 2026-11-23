@@ -124,6 +124,15 @@ struct _ceval_state {
        _PyJIT_ALWAYS in pycore_jit.h).  A mode other than off sets ir_forms,
        since the forms executor is the JIT's activation loop. */
     int jit;
+    /* Warm-up events before a code object compiles: 1 under always,
+       _PyJIT_WARMUP under on; _testinternalcapi.set_jit_warmup() sets it
+       for measurement. */
+    uint32_t jit_warmup;
+    /* Code objects compiled, compiles (with recompiles) and the words they
+       compiled, since startup (_testinternalcapi.jit_stats()) */
+    uint64_t jit_compiled_codes;
+    uint64_t jit_compiles;
+    uint64_t jit_compiled_words;
 };
 
 

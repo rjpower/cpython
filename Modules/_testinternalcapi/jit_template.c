@@ -322,7 +322,7 @@ emit_transfer(_PyJitAsm *a, int index, _PyJitLabel leave)
    compiled unit gives it.  The slow path calls the word's form. */
 static int
 build_unit(_PyInterpreterFrame *frame, uint32_t index, _PyJitTemplate template,
-           _PyJitCode *code)
+           _PyJitCode *code, size_t *template_bytes)
 {
     const _PyIRWord *words = (const _PyIRWord *)frame->ir_words;
     _PyIRWord w = words[index];
@@ -346,8 +346,14 @@ build_unit(_PyInterpreterFrame *frame, uint32_t index, _PyJitTemplate template,
     _PyJitAsm_MovzxRM16(&a, _PyJitReg_RAX, AT(_PyJit_WORDS, (int32_t)(index * sizeof(_PyIRWord))));
     _PyJitAsm_AluRI(&a, _PyJitAlu_CMP, _PyJitReg_RAX, (int32_t)(w & 0xFFFF));
     _PyJitAsm_Jcc(&a, _PyJitCond_NE, cx.slow);
+    size_t hot_before = a.sections[_PyJitSection_HOT].size;
+    size_t cold_before = a.sections[_PyJitSection_COLD].size;
     template(&cx);
     assert(cx.cold_depth == 0);
+    if (template_bytes != NULL) {
+        template_bytes[0] = a.sections[_PyJitSection_HOT].size - hot_before;
+        template_bytes[1] = a.sections[_PyJitSection_COLD].size - cold_before;
+    }
     int target = static_target(words, index);
     emit_transfer(&a, (int)index + _PyIR_WordLength(w), cx.leave);
     _PyJitAsm_Bind(&a, cx.target);
@@ -476,7 +482,7 @@ jit_template_run(PyObject *module, PyObject *args)
     if (use_template) {
         _PyJitTemplate template = _PyJit_Templates[_PyJit_CompiledHandler(w)];
         _PyJitCode unit;
-        if (template == NULL || build_unit(frame, index, template, &unit) < 0) {
+        if (template == NULL || build_unit(frame, index, template, &unit, NULL) < 0) {
             tstate->current_frame = previous;
             clear_and_pop(tstate, frame);
             PyErr_SetString(PyExc_ValueError, "no template for the word, or no code memory");
@@ -514,8 +520,50 @@ jit_template_run(PyObject *module, PyObject *args)
                          exc ? exc : Py_None, out);
 }
 
+/* jit_template_size(func, index) -> (hot, cold)
+
+   The bytes of the template of word index of func, in the hot and in the
+   cold section, as compiled for that word (the slots that it names are the
+   word's own). */
+static PyObject *
+jit_template_size(PyObject *module, PyObject *args)
+{
+    PyObject *func;
+    unsigned int index;
+    if (!PyArg_ParseTuple(args, "O!I", &PyFunction_Type, &func, &index)) {
+        return NULL;
+    }
+    PyCodeObject *code = (PyCodeObject *)((PyFunctionObject *)func)->func_code;
+    if (code->_co_exec == NULL) {
+        PyErr_SetString(PyExc_ValueError, "the code has not run");
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = _PyFrame_PushUnchecked(
+        tstate, PyValue_FromObjectSteal(Py_NewRef(func)), tstate->current_frame);
+    _PyIRWord w = ((const _PyIRWord *)frame->ir_words)[index];
+    _PyJitTemplate template = _PyJit_Templates[_PyJit_CompiledHandler(w)];
+    _PyJitCode unit;
+    size_t bytes[2];
+    int built = template == NULL ? -1 : build_unit(frame, index, template, &unit, bytes);
+    if (built >= 0) {
+        _PyJitMemory_Free(&unit);
+    }
+    clear_and_pop(tstate, frame);
+    if (built < 0) {
+        PyErr_SetString(PyExc_ValueError, "no template for the word, or no code memory");
+        return NULL;
+    }
+    return Py_BuildValue("(nn)", (Py_ssize_t)bytes[0], (Py_ssize_t)bytes[1]);
+}
+
 static PyMethodDef test_methods[] = {
     {"jit_template_run", jit_template_run, METH_VARARGS},
+    {"jit_template_size", jit_template_size, METH_VARARGS},
     {"jit_lower", jit_lower, METH_VARARGS},
     {"jit_lowerings", jit_lowerings, METH_NOARGS},
     {NULL},

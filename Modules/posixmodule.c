@@ -27,6 +27,7 @@
 #include "pycore_pystats.h"       // _Py_StatsDumpClear()
 #include "pycore_import.h"        // _PyImport_AcquireLock()
 #include "pycore_initconfig.h"    // _PyStatus_EXCEPTION()
+#include "pycore_jit_unwind.h"    // _PyJitUnwind_AfterFork_Child()
 #include "pycore_lock.h"          // PyMutex_LockFast()
 #include "pycore_long.h"          // _PyLong_IsNegative()
 #include "pycore_long_value.h"    // _PyValue_AsInt()
@@ -811,6 +812,12 @@ PyOS_AfterFork_Child(void)
     if (_PyStatus_EXCEPTION(status)) {
         goto fatal_error;
     }
+
+#ifdef _PY_JIT_SUPPORTED
+    // The child can inherit gdb's JIT interface lock held by another thread.
+    // Reset it before any code cleanup can deregister units.
+    _PyJitUnwind_AfterFork_Child();
+#endif
 
     // Thread-state cleanup can run finalizers that issue warnings.
     _PyWarnings_AfterFork(tstate->interp);

@@ -128,7 +128,7 @@ PyAPI_FUNC(_PyJitUnit *) _PyJit_Compile(PyCodeObject *code);
 
 /* The function forms of the handlers, ir_handler_forms (Python/ceval.c), as
  * code addresses indexed by handler */
-extern const void *const *_PyEval_HandlerForms(void);
+PyAPI_FUNC(const void *const *) _PyEval_HandlerForms(void);
 
 #else  /* !_PY_JIT_SUPPORTED */
 

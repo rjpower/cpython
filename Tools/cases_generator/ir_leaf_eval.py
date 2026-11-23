@@ -214,7 +214,7 @@ _CMP = {"eq": lambda a, b: a == b, "ne": lambda a, b: a != b,
 _FCMP = {"oeq": lambda a, b: a == b, "olt": lambda a, b: a < b,
          "ole": lambda a, b: a <= b, "ogt": lambda a, b: a > b,
          "oge": lambda a, b: a >= b,
-         "one": lambda a, b: a == a and b == b and a != b}
+         "une": lambda a, b: a != b}
 
 
 def _const(cx: Context, t: str, x):

@@ -1,4 +1,4 @@
-"""The compiler's proof selects empty returns."""
+"""The lowering selects the empty return where the stack holds only the result."""
 
 import marshal
 import sys

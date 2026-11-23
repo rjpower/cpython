@@ -789,10 +789,6 @@ extern int _PyCode_OffsetWord(PyCodeObject *co, int offset);
 extern _PyCodeIR *_PyIR_LowerCode(PyCodeObject *co);
 extern void _PyIR_Free(_PyCodeIR *ir);
 
-/* Select the empty form of the returns of ir that leave no scratch owner
- * (Objects/codeobject.c), or return -1 with an exception set. */
-extern int _PyIR_SelectEmptyReturns(_PyCodeIR *ir);
-
 /* Prove the admitted immutable image of co and build its plan. NULL means no
  * certified site; allocation failure returns -1 with an exception. The caller
  * owns the plan and releases it with _PyCode_FreeSemanticPlan(). The runtime

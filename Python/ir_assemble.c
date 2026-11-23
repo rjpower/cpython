@@ -408,6 +408,13 @@ choose_handler(_PyRegOp *op, PyObject *consts)
         }
         return _PyIR_BINARY_OP_FIRST + oparg;
     }
+    /* A return that finds the stack holding only its result leaves no scratch
+     * slot owning a reference: each op retires the inputs it pops, and the
+     * unwinder retires the stack above a handler's depth.  Such a return skips
+     * the clearing of the scratch slots. */
+    if (opcode == RETURN_VALUE && op->depth == 1) {
+        return RETURN_VALUE_EMPTY;
+    }
     // Canonical scalar constants have the same representation in every
     // supported interpreter.
     if (opcode == LOAD_SMALL_INT) {

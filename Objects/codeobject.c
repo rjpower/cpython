@@ -1929,16 +1929,9 @@ semantic_has_exceptional_predecessor(const semantic_image *image, int pc)
 }
 
 static int
-normal_transfer_proof(const semantic_image *image,
-                      const _PyIRCodePlan **plan, _PyIRWord **normalized)
+normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
 {
-    assert(plan == NULL || normalized == NULL);
-    if (normalized != NULL) {
-        *normalized = NULL;
-    }
-    if (plan != NULL) {
-        *plan = NULL;
-    }
+    *plan = NULL;
     const _PyIRWord *words = image->words;
     int n = image->n;
     if (n == 0) {
@@ -2196,13 +2189,11 @@ normal_transfer_proof(const semantic_image *image,
     }
     /* Allocate persistent storage only for mixed coverage. First count exact
      * sites without retaining a per-word map or another scratch-state array. */
-    work.build_plan = plan != NULL;
+    work.build_plan = 1;
     uint32_t nreturns = 0, ncertified = 0;
-    if (plan != NULL) {
-        for (int i = 0; i < n; i += _PyIR_WordLength(words[i])) {
-            nreturns += _PyIR_FormatOf(IR_HANDLER(words[i]))->transfer_kind ==
-                _PyIR_TRANSFER_EXIT;
-        }
+    for (int i = 0; i < n; i += _PyIR_WordLength(words[i])) {
+        nreturns += _PyIR_FormatOf(IR_HANDLER(words[i]))->transfer_kind ==
+            _PyIR_TRANSFER_EXIT;
     }
     for (int b = 0; b < nblocks && result == 0; b++) {
         if (!work.blocks[b].reached) {
@@ -2245,33 +2236,13 @@ normal_transfer_proof(const semantic_image *image,
                     result = -1;
                     break;
                 }
-                if (normalized != NULL && !semantic_empty_return(handler) && empty) {
-                    /* Copy only when a stable proof first selects a fast form;
-                     * all remaining proofs still inspect the original image. */
-                    if (*normalized == NULL) {
-                        *normalized = PyMem_Malloc((size_t)n * sizeof(*words));
-                        if (*normalized == NULL) {
-                            PyErr_NoMemory();
-                            result = -1;
-                            break;
-                        }
-                        memcpy(*normalized, words, (size_t)n * sizeof(*words));
-                    }
-                    int selected = handler == RETURN_VALUE ? RETURN_VALUE_EMPTY :
-                        INSTRUMENTED_RETURN_VALUE_EMPTY;
-                    _PyIRWord selected_word = words[i];
-                    _PyIR_SetHandler(&selected_word, selected);
-                    (*normalized)[i] = selected_word;
-                }
             }
-            if (plan != NULL) {
-                ncertified += semantic_exact_return(image, &work, state, i, complete);
-            }
+            ncertified += semantic_exact_return(image, &work, state, i, complete);
         }
     }
     uint32_t flags =
         ncertified && ncertified == nreturns ? _PyIR_PLAN_ALL_RETURNS : 0;
-    if (result == 0 && plan != NULL && (ncertified || flags)) {
+    if (result == 0 && (ncertified || flags)) {
         uint32_t nsites = flags & _PyIR_PLAN_ALL_RETURNS ? 0 : ncertified;
         if (nsites == 0) {
             *plan = &all_normal_returns;
@@ -2318,10 +2289,6 @@ normal_transfer_proof(const semantic_image *image,
         }
     }
 done:
-    if (result < 0 && normalized != NULL) {
-        PyMem_Free(*normalized);
-        *normalized = NULL;
-    }
     PyMem_Free(source_links);
     PyMem_Free(handlers);
     PyMem_Free(work.error_nodes);
@@ -2353,7 +2320,7 @@ _PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan)
 {
     *plan = NULL;
     semantic_image image = code_semantic_image(_PyCode_IR(co));
-    return normal_transfer_proof(&image, plan, NULL);
+    return normal_transfer_proof(&image, plan);
 }
 
 void
@@ -2363,23 +2330,6 @@ _PyCode_FreeSemanticPlan(const _PyIRCodePlan *plan)
     if (plan != NULL && plan->nsites != 0) {
         PyMem_Free((void *)plan);
     }
-}
-
-/* Select the empty form of each return that leaves no scratch owner, in the
- * words of ir, which is not yet published. */
-int
-_PyIR_SelectEmptyReturns(_PyCodeIR *ir)
-{
-    semantic_image image = code_semantic_image(ir);
-    _PyIRWord *normalized = NULL;
-    if (normal_transfer_proof(&image, NULL, &normalized) < 0) {
-        return -1;
-    }
-    if (normalized != NULL) {
-        memcpy(ir->words, normalized, (size_t)ir->nwords * sizeof(_PyIRWord));
-        PyMem_Free(normalized);
-    }
-    return 0;
 }
 
 PyCodeObject *

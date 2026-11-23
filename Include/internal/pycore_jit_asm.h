@@ -173,6 +173,12 @@ PyAPI_FUNC(void) _PyJitAsm_MovMI(_PyJitAsm *a, _PyJitMem dst, int32_t imm);
 PyAPI_FUNC(void) _PyJitAsm_MovRM32(_PyJitAsm *a, _PyJitReg dst, _PyJitMem src);
 PyAPI_FUNC(void) _PyJitAsm_MovMR32(_PyJitAsm *a, _PyJitMem dst, _PyJitReg src);
 PyAPI_FUNC(void) _PyJitAsm_MovMI32(_PyJitAsm *a, _PyJitMem dst, int32_t imm);
+/* Stores of the low 8 or 16 bits of a register, or of an immediate (-128 to
+   255, -32768 to 65535).  The 8-bit register forms never mean ah..bh. */
+PyAPI_FUNC(void) _PyJitAsm_MovMR8(_PyJitAsm *a, _PyJitMem dst, _PyJitReg src);
+PyAPI_FUNC(void) _PyJitAsm_MovMI8(_PyJitAsm *a, _PyJitMem dst, int imm);
+PyAPI_FUNC(void) _PyJitAsm_MovMR16(_PyJitAsm *a, _PyJitMem dst, _PyJitReg src);
+PyAPI_FUNC(void) _PyJitAsm_MovMI16(_PyJitAsm *a, _PyJitMem dst, int imm);
 /* Zero-extending loads of 8 and 16 bits. */
 PyAPI_FUNC(void) _PyJitAsm_MovzxRM8(_PyJitAsm *a, _PyJitReg dst, _PyJitMem src);
 PyAPI_FUNC(void) _PyJitAsm_MovzxRM16(_PyJitAsm *a, _PyJitReg dst, _PyJitMem src);
@@ -191,6 +197,11 @@ PyAPI_FUNC(void) _PyJitAsm_AluRM(_PyJitAsm *a, _PyJitAlu op, _PyJitReg dst, _PyJ
 PyAPI_FUNC(void) _PyJitAsm_AluMR(_PyJitAsm *a, _PyJitAlu op, _PyJitMem dst, _PyJitReg src);
 PyAPI_FUNC(void) _PyJitAsm_AluRI(_PyJitAsm *a, _PyJitAlu op, _PyJitReg dst, int32_t imm);
 PyAPI_FUNC(void) _PyJitAsm_AluMI(_PyJitAsm *a, _PyJitAlu op, _PyJitMem dst, int32_t imm);
+
+/* 32-bit read-modify-write on memory, for reference counts: `op dword [mem],
+   imm` and `inc`/`dec`/`not`/`neg dword [mem]`. */
+PyAPI_FUNC(void) _PyJitAsm_AluMI32(_PyJitAsm *a, _PyJitAlu op, _PyJitMem dst, int32_t imm);
+PyAPI_FUNC(void) _PyJitAsm_UnaryM32(_PyJitAsm *a, _PyJitUnary op, _PyJitMem dst);
 
 PyAPI_FUNC(void) _PyJitAsm_TestRR(_PyJitAsm *a, _PyJitReg x, _PyJitReg y);
 PyAPI_FUNC(void) _PyJitAsm_TestMR(_PyJitAsm *a, _PyJitMem x, _PyJitReg y);

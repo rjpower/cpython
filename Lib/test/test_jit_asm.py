@@ -33,6 +33,8 @@ REGS64 = ["rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi",
           "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"]
 REGS32 = ["eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi",
           "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d"]
+REGS16 = ["ax", "cx", "dx", "bx", "sp", "bp", "si", "di",
+          "r8w", "r9w", "r10w", "r11w", "r12w", "r13w", "r14w", "r15w"]
 REGS8 = ["al", "cl", "dl", "bl", "spl", "bpl", "sil", "dil",
          "r8b", "r9b", "r10b", "r11b", "r12b", "r13b", "r14b", "r15b"]
 RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15 = range(16)
@@ -82,9 +84,13 @@ DIMS = {
     "r": _regs(REGS64),
     "r32": _regs(REGS32),
     "r8": _regs(REGS8),
+    "r16": _regs(REGS16),
     "x": [(i, f"xmm{i}") for i in range(16)],
     "m": [(m, _mem_text(m)) for m in MEMS],
     "i": [(i, str(i)) for i in IMM32],
+    "i8": [(i, str(i)) for i in (0, 1, -1, 127, -128, 128, 255)],
+    "i16": [(i, str(i)) for i in (0, 1, -1, 127, -128, 128, 255, 256, 0x7fff,
+                                   0x8000, -0x8000, 0xffff)],
     "c": _regs(CONDS),
     "shift": [(i, str(i)) for i in (0, 1, 2, 7, 31, 32, 63)],
     "alu": [(v, k) for k, v in ALU.items()],
@@ -126,6 +132,10 @@ FORMS = {
     "mov_rm32": ("mov_rm32", "r32 m", "mov {0}, dword ptr {1}"),
     "mov_mr32": ("mov_mr32", "m r32", "mov dword ptr {0}, {1}"),
     "mov_mi32": ("mov_mi32", "m i", "mov dword ptr {0}, {1}"),
+    "mov_mr8": ("mov_mr8", "m r8", "mov byte ptr {0}, {1}"),
+    "mov_mi8": ("mov_mi8", "m i8", "mov byte ptr {0}, {1}"),
+    "mov_mr16": ("mov_mr16", "m r16", "mov word ptr {0}, {1}"),
+    "mov_mi16": ("mov_mi16", "m i16", "mov word ptr {0}, {1}"),
     "movzx_rm8": ("movzx_rm8", "r32 m", "movzx {0}, byte ptr {1}"),
     "movzx_rm16": ("movzx_rm16", "r32 m", "movzx {0}, word ptr {1}"),
     "movsx_rm8": ("movsx_rm8", "r m", "movsx {0}, byte ptr {1}"),
@@ -137,6 +147,7 @@ FORMS = {
     "alu_mr": ("alu_mr", "alu m r", "{0} qword ptr {1}, {2}"),
     "alu_ri": ("alu_ri", "alu r i", "{0} {1}, {2}"),
     "alu_mi": ("alu_mi", "alu m i", "{0} qword ptr {1}, {2}"),
+    "alu_mi32": ("alu_mi32", "alu m i", "{0} dword ptr {1}, {2}"),
     "test_rr": ("test_rr", "r r", "test {0}, {1}"),
     "test_mr": ("test_mr", "m r", "test qword ptr {0}, {1}"),
     "test_ri": ("test_ri", "r i", "test {0}, {1}"),
@@ -146,6 +157,7 @@ FORMS = {
     "imul_rri": ("imul_rri", "r r i", "imul {0}, {1}, {2}"),
     "unary_r": ("unary_r", "unary r", "{0} {1}"),
     "unary_m": ("unary_m", "unary m", "{0} qword ptr {1}"),
+    "unary_m32": ("unary_m32", "unary m", "{0} dword ptr {1}"),
     "shift_ri": ("shift_ri", "shiftop r shift", "{0} {1}, {2}"),
     "shift_rcl": ("shift_rcl", "shiftop r", "{0} {1}, cl"),
     "setcc": ("setcc", "c r8", "set{0} {1}"),
@@ -416,6 +428,72 @@ class ExecutionTests(unittest.TestCase):
             ("mov_rm", RAX, (RSP, -8)), ("ret",),
         ]
         self.assertEqual(run(program), signed((0xffffffff << 32) | 7))
+
+    def test_refcount_style_memory_updates(self):
+        # 32-bit read-modify-write of the dword at [rsp-8]; the dword above
+        # it must stay 7.
+        program = [
+            ("mov_mi32", (RSP, -4), 7),
+            ("mov_mi32", (RSP, -8), 100),
+            ("alu_mi32", ALU["add"], (RSP, -8), 5),
+            ("alu_mi32", ALU["sub"], (RSP, -8), 1000),
+            ("alu_mi32", ALU["add"], (RSP, -8), 100000),
+            ("unary_m32", UNARY["inc"], (RSP, -8)),
+            ("unary_m32", UNARY["dec"], (RSP, -8)),
+            ("unary_m32", UNARY["inc"], (RSP, -8)),
+            ("mov_imm", RCX, 2),
+            ("alu_mi32", ALU["cmp"], (RSP, RCX, 2, -16), 99106),   # [rsp-8]
+            ("alu_rr", ALU["xor"], RAX, RAX),
+            ("setcc", E, RAX),
+            ("mov_rm", RDX, (RSP, -8)),
+            ("shift_ri", SHIFT["shl"], RAX, 63),
+            ("alu_rr", ALU["or"], RAX, RDX),
+            ("ret",),
+        ]
+        # 100 + 5 - 1000 + 100000 + 1 - 1 + 1 = 99106, and cmp finds it equal.
+        self.assertEqual(run(program), signed((1 << 63) | (7 << 32) | 99106))
+        # A decrement through zero wraps within 32 bits.
+        program = [
+            ("mov_mi32", (RSP, -4), 7),
+            ("mov_mi32", (RSP, -8), 0),
+            ("unary_m32", UNARY["dec"], (RSP, -8)),
+            ("mov_rm", RAX, (RSP, -8)),
+            ("ret",),
+        ]
+        self.assertEqual(run(program), (7 << 32) | 0xffffffff)
+
+    def test_narrow_stores_leave_the_neighbours(self):
+        # Fill 8 bytes with 0xff, store narrow pieces, read the qword back.
+        def result(*stores, args):
+            program = [("mov_mi", (RSP, -8), -1), *stores,
+                       ("mov_rm", RAX, (RSP, -8)), ("ret",)]
+            return run(program, args)
+
+        def expect(*pieces):
+            data = bytearray(b"\xff" * 8)
+            for offset, size, value in pieces:
+                data[offset:offset + size] = (value & (256**size - 1)).to_bytes(size, "little")
+            return struct.unpack("<q", data)[0]
+
+        # sil and dil are stored as themselves, not as dh and bh.
+        self.assertEqual(
+            result(("mov_mr8", (RSP, -8), RDI),
+                   ("mov_mr8", (RSP, -6), RSI),
+                   ("mov_imm", R9, 0xc3),
+                   ("mov_mr8", (RSP, -5), R9),
+                   ("mov_mi8", (RSP, -3), 0x5a),
+                   ("mov_mi8", (RSP, -1), -2),
+                   args=(0x1122334455667788, 0x99aa)),
+            expect((0, 1, 0x88), (2, 1, 0xaa), (3, 1, 0xc3), (5, 1, 0x5a),
+                   (7, 1, 0xfe)))
+        # 16-bit stores, one through an index register (rsp + 2*2 - 10).
+        self.assertEqual(
+            result(("mov_mr16", (RSP, -8), RDI),
+                   ("mov_mi16", (RSP, -4), 0xbeef),
+                   ("mov_imm", RCX, 2),
+                   ("mov_mr16", (RSP, RCX, 1, -10), RSI),
+                   args=(0x1122334455667788, 0x99aa)),
+            expect((0, 2, 0x7788), (2, 2, 0x99aa), (4, 2, 0xbeef)))
 
     def test_call_c_function_rel32(self):
         # call rel32 of a function in the interpreter's text, with the stack

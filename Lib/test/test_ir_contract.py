@@ -601,22 +601,31 @@ class AnalyzerTests(unittest.TestCase):
             self.assertIsNotNone(CONTRACT[h], name)
 
     def test_properties(self):
+        # The effect bits are a projection of the handler's operation record
+        # (Tools/cases_generator/ir_records.py)
+        formats = self.ir_generator.compute_formats(self.analysis)
+        bits = ("RAISES", "ESCAPES", "RUNS_PYTHON", "DEOPTS", "SUSPENDS",
+                "PUSHES_FRAME", "POLLS", "PURE", "SPECIALIZES", "NATIVE_ONLY",
+                "LEARNED_ONLY")
         for name, inst in self.insts.items():
-            p = inst.properties
+            record = self.ir_generator.build_record(
+                name, inst, formats[name], self.analysis, formats)
+            expected = set(self.ir_generator.handler_effects(record))
             effects = CONTRACT[self.ids[name]].effects
             with self.subTest(handler=name):
-                # The twin of a fused jump raises when a callback does,
-                # which the analysis does not see in INSTRUMENTED_JUMP()
-                fused_twin = (name.startswith("INSTRUMENTED_")
-                              and name.endswith("_JUMP"))
-                self.assertEqual(bool(effects & _opcode.IR_RAISES),
-                                 not p.infallible or fused_twin)
-                self.assertEqual(bool(effects & _opcode.IR_ESCAPES), p.escapes)
-                self.assertEqual(bool(effects & _opcode.IR_PURE), p.pure)
-                self.assertEqual(bool(effects & _opcode.IR_DEOPTS),
-                                 p.deopts or p.side_exit)
-                self.assertEqual(bool(effects & _opcode.IR_RUNS_PYTHON),
-                                 self.ir_generator.runs_code(inst))
+                for bit in bits:
+                    self.assertEqual(bool(effects & getattr(_opcode, "IR_" + bit)),
+                                     "_PyIR_" + bit in expected, bit)
+        # A handler that pushes a frame may raise and run Python: the
+        # callee's exception propagates to its word; so may a yield, where
+        # throw() raises
+        for name in ("CALL_PY_EXACT_ARGS", "CALL_PY_GENERAL", "LOAD_ATTR_PROPERTY",
+                     "YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
+            effects = BY_NAME[name].effects
+            self.assertTrue(effects & _opcode.IR_RAISES, name)
+            self.assertTrue(effects & _opcode.IR_ESCAPES, name)
+        self.assertFalse(BY_NAME["LOAD_FAST"].effects
+                         & (_opcode.IR_RAISES | _opcode.IR_ESCAPES))
 
     def test_runs_code(self):
         # The format's RUNS_CODE is the union of RUNS_PYTHON over the

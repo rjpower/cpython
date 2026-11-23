@@ -412,7 +412,7 @@ static void dtrace_function_return(_PyInterpreterFrame *);
  * either, so nothing after a trigger writes past a header there. */
 #ifdef Py_DEBUG
 #  define IR_SHARED_ENTRY_NEVER_TRIGGERS(FB) \
-    (assert((char *)(FB) != frame->ir_feedback \
+    (assert((char *)(FB) != (char *)_PyIR_FbEntry(frame->ir_words, IR_FB_SHARED) \
             || !backoff_counter_triggers((FB)->counter)), 1)
 #else
 #  define IR_SHARED_ENTRY_NEVER_TRIGGERS(FB) 1
@@ -863,11 +863,10 @@ _PyIR_CloseWindow(PyValue *window, int n)
         } \
     } while (0)
 
-/* The frame's view of its executing copy: frame->ir_words and
- * frame->ir_feedback follow the copy that instr_ptr points into. */
+/* The frame's view of its executing copy: frame->ir_words follows the copy
+ * that instr_ptr points into. */
 #define IR_CHECK_BLOCK() \
-    assert(frame->ir_words == _PyFrame_Exec(frame)->words && \
-           frame->ir_feedback == _PyFrame_Exec(frame)->entries)
+    assert(frame->ir_words == _PyFrame_Exec(frame)->words)
 
 /* This is the callback-free identity arm of _PyEval_GetAwaitable. The other
  * states and custom __await__ implementations keep its ordinary error path. */
@@ -888,40 +887,80 @@ coro_awaitable_can_transfer(PyValueBorrow value)
 }
 
 /* The feedback entry at index F. */
-#define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_feedback, (F)))
+#define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_words, (F)))
 
-/* Every executable row was nominated by the checked managed-shape lookup
- * (fb_shape_read_set()): its handler is LOAD_ATTR_SHAPE, its type version is
- * not zero and its aux is a shape.  A row that is not in use has version zero
- * and never matches the type's nonzero version.  ENTRIES is the frame's
- * ir_feedback, whose block header precedes it.  No pointer from the bank
- * escapes this callback-free selection. */
-static inline int64_t
-shape_read_offset(char *entries, _PyFbAttr *entry, PyObject *owner)
+/* The poly row of the site whose entry header is H that records the
+ * receiver type version VERSION, or -1.  WORDS is the frame's ir_words; the
+ * block of the poly tables precedes the executing copy's header
+ * (_PyIR_FbBlock()).  VERSION is not zero, which an unused row holds.  Every
+ * form that executes a poly table finds its row here and then checks its
+ * own payload. */
+static inline int
+poly_row_index(const _PyIRWord *words, const _PyFbHeader *h, uint32_t version)
 {
-#ifdef Py_SHAPES
-    _PyFbBlock *block = (_PyFbBlock *)entries - 1;
-    const _PyFbPoly *poly = _PyFb_PolyOf(block, &entry->h);
-    uint32_t version = Py_TYPE(owner)->tp_version_tag;
-    if (version == 0) {
-        return -1;
-    }
+    const _PyFbPoly *poly = _PyFb_PolyOf(_PyIR_FbBlock(words), h);
+    assert(version != 0);
     for (int i = 0; i < FB_POLY_SIZE; i++) {
         if (poly->type_version[i] == version) {
-            assert(poly->payload[i].read_kind == _Py_FB_READ_SHAPE);
-            if (_PyObject_Shape(owner) != poly->aux[i]) {
-                return -1;
-            }
-            return poly->index[i];
+            return i;
         }
     }
-#else
-    (void)entries;
-    (void)entry;
-    (void)owner;
-#endif
     return -1;
 }
+
+/* Every executable shape row was nominated by the checked managed-shape lookup
+ * (fb_shape_read_set()): its handler is LOAD_ATTR_SHAPE and its aux is a
+ * shape.  No pointer from the bank escapes this callback-free selection. */
+static inline int64_t
+shape_read_offset(const _PyIRWord *words, _PyFbAttr *entry, PyObject *owner)
+{
+#ifdef Py_SHAPES
+    const _PyFbHeader *h = &entry->h;
+    uint32_t version = Py_TYPE(owner)->tp_version_tag;
+    int i = version != 0 ? poly_row_index(words, h, version) : -1;
+    if (i < 0) {
+        return -1;
+    }
+    const _PyFbPoly *poly = _PyFb_PolyOf(_PyIR_FbBlock(words), h);
+    assert(poly->payload[i].read_kind == _Py_FB_READ_SHAPE);
+    if (_PyObject_Shape(owner) != poly->aux[i]) {
+        return -1;
+    }
+    return poly->index[i];
+#else
+    (void)words;
+    (void)entry;
+    (void)owner;
+    return -1;
+#endif
+}
+
+/* The method that the poly row of OWNER's type holds (a LOAD_ATTR_METHOD_
+ * WITH_VALUES or _NO_DICT observation, nominated by fb_method_poly_set()),
+ * or a null value to deoptimize: no row, or an inline-values receiver that
+ * lost its values.  The type has a version (_GUARD_TYPE_HAS_VERSION).  The
+ * type version proves, as in the monomorphic forms, that the cached class
+ * value is still what the lookup finds. */
+static inline PyValueBorrow
+method_poly_lookup(const _PyIRWord *words, const _PyFbHeader *h, PyObject *owner)
+{
+    int i = poly_row_index(words, h, Py_TYPE(owner)->tp_version_tag);
+    if (i < 0) {
+        return PyValue_Borrow(PyValue_NULL);
+    }
+    const _PyFbPoly *poly = _PyFb_PolyOf(_PyIR_FbBlock(words), h);
+    if (poly->handler[i] == LOAD_ATTR_METHOD_WITH_VALUES &&
+        !FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner)->valid))
+    {
+        return PyValue_Borrow(PyValue_NULL);
+    }
+    return _PyValueGuarded_Load(poly->payload[i].class_value);
+}
+
+/* The handler's view of its frame's feedback, which a handler body does not
+ * name (it may not mention frame). */
+#define IR_METHOD_POLY_LOOKUP(H, OWNER) \
+    method_poly_lookup(frame->ir_words, (H), (OWNER))
 
 static inline PyValue
 shape_read_dup(PyObject *owner, uint32_t offset)
@@ -937,7 +976,7 @@ shape_read_dup(PyObject *owner, uint32_t offset)
  * always have an entry of their own: the assembler assigns theirs first and
  * lowers a site that gets none to CALL_INTRINSIC_2. */
 #define IR_FB_ARG(FB, F) \
-    (assert((F) != 0), (int)((_PyFbHeader *)(FB))->arg)
+    (assert((F) != IR_FB_SHARED), (int)((_PyFbHeader *)(FB))->arg)
 
 /* A specialisation of BINARY_OP deoptimises to the generic body, run with
  * the operation that its entry, at index F, records. */

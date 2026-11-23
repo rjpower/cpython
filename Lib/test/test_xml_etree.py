@@ -3325,14 +3325,15 @@ class BasicElementTest(ElementTestCase, unittest.TestCase):
                 kids = [mod.SubElement(root, 'c%d' % i) for i in range(3)]
                 self.assertEqual(list(root), kids)
 
-                # __getitem__ and no __iter__: the sequence protocol rules
+                # Overriding __getitem__ does not change iteration, as for
+                # list subclasses
                 class GetItem(mod.Element):
                     def __getitem__(self, index):
                         return mod.Element.__getitem__(self, index).tag
                 root = GetItem('root')
-                for i in range(3):
-                    mod.SubElement(root, 'c%d' % i)
-                self.assertEqual(list(root), ['c0', 'c1', 'c2'])
+                kids = [mod.SubElement(root, 'c%d' % i) for i in range(3)]
+                self.assertEqual(list(root), kids)
+                self.assertEqual(root[0], 'c0')
 
                 class Iter(mod.Element):
                     def __iter__(self):

@@ -216,14 +216,17 @@ static_assert(IR_NUM_HANDLERS <= IR_HANDLER_MASK + 1,
      (_PyIRWord)((C) & IR_FIELD_MAX) << 40 | \
      (_PyIRWord)((D) & IR_FIELD_MAX) << 52)
 
-/* The fb field is an offset in 8-byte units into the feedback vector, and
- * each kind of entry takes its own size (pycore_feedback.h): the entry is at
- * entries + (fb << 3), with no table.  Entry 0 is the 16-byte header, so
- * entries start at unit IR_FB_FIRST_UNIT, and an entry ends by unit
- * IR_FB_UNITS_MAX, a vector of at most 32 KB. */
+/* The fb field counts 8-byte units up toward entry 0, the shared header,
+ * whose field is IR_FB_SHARED: the entry is at entry 0 - (IR_FB_SHARED - fb)
+ * * 8, with no table.  The entries precede the words in the executing copy
+ * (so a frame finds them from word 0 alone), and each kind takes its own size
+ * (pycore_feedback.h); the last entry ends where entry 0 begins.  A site with
+ * no entry of its own holds IR_FB_SHARED.  The vector has IR_FB_FIRST_UNIT
+ * units for entry 0, and an entry begins by field 0, so it is at most 32 KB. */
 #define IR_FB_UNIT_SHIFT    3
 #define IR_FB_FIRST_UNIT    2
 #define IR_FB_UNITS_MAX     4096
+#define IR_FB_SHARED        IR_FIELD_MAX
 
 /* Field roles; input k of a register-style instruction is _PyIR_ROLE_IN0 + k.
  * A field that holds the oparg has role IMM, or one of the slot roles when
@@ -306,23 +309,22 @@ enum {
                                      // scratch absence; no readability grant
 #define _PyIR_ERROR_PROGRAM 0x8000  // actual Storage suffix follows normal events
 
-/* _PyIRFormat.effects: what the handler itself may do, from the cases
- * generator's analysis of its instruction.  For a stack opcode they agree
- * with the HAS_*_FLAG flags of _PyOpcode_opcode_metadata. */
-#define _PyIR_RAISES        0x1     // may raise (HAS_ERROR_FLAG)
-#define _PyIR_ESCAPES       0x2     // makes an escaping call (HAS_ESCAPES_FLAG)
-#define _PyIR_RUNS_PYTHON   0x4     // may run Python code; the format's
-                                    // _PyIR_RUNS_CODE is the union over its
-                                    // handlers
+/* _PyIRFormat.effects: what the handler itself may do, a projection of its
+ * operation record (Tools/cases_generator/ir_records.py): the union of its
+ * uops' effects, the transfers it has, or a field of the record. */
+#define _PyIR_RAISES        0x1     // may raise: an error exit, or Python
+                                    // that it runs (a callee, a throw()
+                                    // into a yield) raises at its word
+#define _PyIR_ESCAPES       0x2     // may run Python, its own or a finalizer
+#define _PyIR_RUNS_PYTHON   0x4     // escapes, or fires a monitoring event;
+                                    // the format's _PyIR_RUNS_CODE is the
+                                    // union over its handlers
 #define _PyIR_DEOPTS        0x8     // may deoptimise: to the family head, and
                                     // in BINARY_OP's family to the handler of
                                     // the operation that the entry records
 #define _PyIR_SUSPENDS      0x10    // suspends its frame (a generator's)
 #define _PyIR_PUSHES_FRAME  0x20    // may push a Python frame and run it
 #define _PyIR_POLLS         0x40    // polls the eval breaker
-#define _PyIR_ALLOCATES     0x80    // may allocate: conservatively, it may
-                                    // raise, escape, box, push a frame or
-                                    // call a constructor
 #define _PyIR_PURE          0x100   // annotated pure (HAS_PURE_FLAG)
 #define _PyIR_SPECIALIZES   0x200   // a generic handler whose entry's
                                     // counter drives specialisation
@@ -586,16 +588,19 @@ _PyFb_HasEntry(int opcode)
  * the code object (co_words, which co_code returns as bytes) never change;
  * the first call copies them into one allocation laid out as
  *
- *     | _PyCodeExec | words | _PyFbBlock | entries |
+ *     | entries | entry 0 | _PyFbBlock | _PyCodeExec | words |
  *
- * with a feedback vector set up from the code object's feedback table.
+ * with a feedback vector (entries and entry 0, the shared header) set up
+ * from the code object's feedback table, or none if the code has no entry.
+ * The vector ends at the block, so entry 0 is a fixed distance before the
+ * words and every entry is at a fixed offset from word 0 (_PyIR_FbEntry()).
  * Specialisation and instrumentation rewrite the handler id of the copy
  * only, so the code object's words are the generic handlers that both
  * restore.  The copy also carries the slot-class flags (IR_F_LOCAL_A..D),
- * derived from the fields, which the code object's words do not.  Frames keep the words and entries of the copy in ir_words and
- * ir_feedback, which handlers index with their jump targets and feedback
- * indices.  The free-threaded build shares one copy between threads and does
- * not specialise it. */
+ * derived from the fields, which the code object's words do not.  Frames keep
+ * word 0 of the copy in ir_words, from which handlers index their jump
+ * targets and feedback entries.  The free-threaded build shares one copy
+ * between threads and does not specialise it. */
 /* One immutable semantic plan owns normal-return certificates. */
 typedef struct {
     uint32_t nsites;
@@ -686,9 +691,6 @@ typedef struct _PyCodeIR {
 
 typedef struct _PyCodeExec {
     _PyIRWord *words;
-    char *entries;          // feedback entry 0, or NULL if no instruction
-                            // has an entry
-    _PyFbBlock *feedback;   // the header before entries, or NULL
     /* The constant slots (CO_FAST_CONST), which are consecutive: nconst of
      * them from const_first, and the discard slot follows.  A code with no
      * constant has const_first at the discard slot.  const_image holds the
@@ -711,16 +713,20 @@ typedef struct _PyCodeExec {
     uint32_t nfixed;        // slots below the temporaries, which IR_IS_LOCAL() reads
 } _PyCodeExec;
 
-/* The feedback table of a code object, which follows its words: per entry,
- * entry 0 included, in order of unit, a word of the kind (4 bits), the unit
- * where the entry starts (12 bits) and its arg (16 bits): the operation of
- * COMPARE_OP, CONTAINS_OP and BINARY_OP, the only operands that live in an
- * entry.  An entry ends where the next begins; the arg of entry 0 is the
- * number of units of the vector. */
-#define _PyIR_FBINIT(KIND, UNIT, ARG) \
-    ((uint32_t)(KIND) << 28 | (uint32_t)(UNIT) << 16 | (uint32_t)(ARG))
+/* The feedback table of a code object, which follows its words: per entry, a
+ * word of the kind (4 bits), the field of the entry (12 bits, see
+ * IR_FB_SHARED) and its arg (16 bits): the operation of COMPARE_OP,
+ * CONTAINS_OP and BINARY_OP, the only operands that live in an entry.  Entry
+ * 0 (field IR_FB_SHARED) comes first; the others follow in order of address,
+ * so of field.  An entry ends where the next begins, and the last where
+ * entry 0 does; the arg of entry 0 is the number of units of the vector,
+ * entry 0 included. */
+#define _PyIR_FBINIT(KIND, FIELD, ARG) \
+    ((uint32_t)(KIND) << 28 | (uint32_t)(FIELD) << 16 | (uint32_t)(ARG))
 #define _PyIR_FBINIT_KIND(V)     ((int)((V) >> 28))
-#define _PyIR_FBINIT_UNIT(V)     ((uint32_t)((V) >> 16) & IR_FIELD_MAX)
+#define _PyIR_FBINIT_FIELD(V)    ((uint32_t)((V) >> 16) & IR_FIELD_MAX)
+/* The entry's distance in units before entry 0: negative, 0 for entry 0 */
+#define _PyIR_FBINIT_UNIT(V)     ((int)_PyIR_FBINIT_FIELD(V) - IR_FB_SHARED)
 #define _PyIR_FBINIT_ARG(V)      ((uint32_t)(V) & 0xFFFF)
 
 /* The executing copy of _Py_InitCleanup (Python/specialize.c), which runs
@@ -1062,27 +1068,41 @@ _PyIR_ExecCallFlags(const _PyIRWord *head, uint32_t nlocalsplus)
     return flags;
 }
 
-/* The feedback entry at unit I of a vector whose entry 0 is at ENTRIES */
-static inline _PyFbHeader *
-_PyIR_FbEntry(char *entries, uint32_t i)
+/* The feedback block of the executing copy whose word 0 is WORDS, which
+ * is the one with entries (co_nfeedback is not 0) */
+static inline _PyFbBlock *
+_PyIR_FbBlock(const _PyIRWord *words)
 {
-    assert(entries != NULL && i <= IR_FIELD_MAX);
-    return (_PyFbHeader *)(entries + ((size_t)i << IR_FB_UNIT_SHIFT));
+    return (_PyFbBlock *)((const _PyCodeExec *)words - 1) - 1;
 }
 
-/* The index in the feedback table fbinit of n words of the entry that starts
- * at unit, or -1.  The table is in order of unit. */
-static inline int
-_PyIR_FbFind(const uint32_t *fbinit, int n, uint32_t unit)
+/* The feedback entry of field F, in the executing copy whose word 0 is
+ * WORDS.  Entry 0 is the header that ends the vector before the block. */
+static inline _PyFbHeader *
+_PyIR_FbEntry(const _PyIRWord *words, uint32_t f)
 {
-    int low = 0, high = n - 1;
+    assert(f <= IR_FB_SHARED);
+    /* Written from field 0, entry 0 less the shared field's units, so that
+     * the address is word 0 and the field scaled plus a constant */
+    char *field0 = (char *)_PyIR_FbBlock(words) - sizeof(_PyFbHeader)
+                   - ((size_t)IR_FB_SHARED << IR_FB_UNIT_SHIFT);
+    return (_PyFbHeader *)(field0 + ((size_t)f << IR_FB_UNIT_SHIFT));
+}
+
+/* The index in the feedback table fbinit of n words of the entry whose field
+ * is FIELD, or -1.  The table is in order of field after entry 0, which has
+ * no entry of its own to find. */
+static inline int
+_PyIR_FbFind(const uint32_t *fbinit, int n, uint32_t field)
+{
+    int low = 1, high = n - 1;
     while (low <= high) {
         int mid = (low + high) / 2;
-        uint32_t u = _PyIR_FBINIT_UNIT(fbinit[mid]);
-        if (u == unit) {
+        uint32_t u = _PyIR_FBINIT_FIELD(fbinit[mid]);
+        if (u == field) {
             return mid;
         }
-        if (u < unit) {
+        if (u < field) {
             low = mid + 1;
         }
         else {

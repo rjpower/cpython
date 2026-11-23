@@ -38,6 +38,7 @@ with test_tools.imports_under_tool("cases_generator"):
     from analyzer import StackItem
     from cwriter import CWriter
     import ir_generator
+    import ir_records
     import stack
     import ir_metadata_generator
     import opcode_metadata_generator
@@ -288,9 +289,10 @@ class TestIRCases(unittest.TestCase):
         self.maxDiff = None
         fd, self.temp_input_filename = tempfile.mkstemp(suffix=".c")
         os.close(fd)
-        # The families of the tests that have feedback entries
+        # The families of the tests that have feedback entries: a cache
+        # operand names a field of the entry type (pycore_feedback.h)
         layouts = mock.patch.dict(ir_generator.FEEDBACK_LAYOUTS, {
-            "OP": ir_generator.FB_HEADER, "BRANCH": ir_generator.FB_HEADER})
+            "OP": "_PyFbUnary", "BRANCH": ir_generator.FB_HEADER})
         layouts.start()
         self.addCleanup(layouts.stop)
         # SPAM stands for a function that reads its arguments (S3), and
@@ -1233,6 +1235,9 @@ class TestIRCases(unittest.TestCase):
         self.assertIsNone(ir_generator.analyze_error_effects(guard_instruction))
 
     def test_suspension_effect_requires_a_state_write(self):
+        def suspends(inst):
+            return any(ir_records.suspends_frame(part) for part in inst.parts
+                       if isinstance(part, analyzer.Uop))
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
         Path(self.temp_input_filename).write_text(source)
@@ -1240,11 +1245,9 @@ class TestIRCases(unittest.TestCase):
         for name in ("SEND", "SEND_GEN"):
             self.assertIn("FRAME_CREATED", ir_generator.uop_tokens(
                 analysis.instructions[name]))
-            self.assertFalse(ir_generator.writes_suspended_frame_state(
-                analysis.instructions[name]))
+            self.assertFalse(suspends(analysis.instructions[name]))
         for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
-            self.assertTrue(ir_generator.writes_suspended_frame_state(
-                analysis.instructions[name]))
+            self.assertTrue(suspends(analysis.instructions[name]))
         source = source.replace(
             "FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);",
             "assert(gen->gi_frame_state == FRAME_SUSPENDED + oparg);")
@@ -1253,8 +1256,7 @@ class TestIRCases(unittest.TestCase):
         Path(self.temp_input_filename).write_text(source)
         mutated = analyzer.analyze_files([self.temp_input_filename])
         for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
-            self.assertFalse(ir_generator.writes_suspended_frame_state(
-                mutated.instructions[name]))
+            self.assertFalse(suspends(mutated.instructions[name]))
 
     def test_physical_output_mapping_matches_window_finalization(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -2155,7 +2157,7 @@ class TestIRCases(unittest.TestCase):
                  PyValue_AsKnownObjectBorrow(value));
             DECREF_INPUTS();
         }
-        inst(BRANCH, (counter/1, cond --)) {
+        inst(BRANCH, (unused/1, cond --)) {
             _PyFbHeader *feedback = FB_COUNTER();
             int flag = PyValue_IsFalse(cond);
             DEAD(cond);
@@ -2522,7 +2524,7 @@ class TestIRCases(unittest.TestCase):
         # the word, and cache effects read the entry.  The sites that get no
         # entry share entry 0 and run the same handlers.
         input = """
-        specializing op(_SPECIALIZE_OP, (counter/1, owner -- owner)) {
+        specializing op(_SPECIALIZE_OP, (owner -- owner)) {
             _PyFbHeader *feedback = FB_COUNTER();
             ADVANCE_ADAPTIVE_COUNTER(feedback);
         }
@@ -2561,8 +2563,6 @@ class TestIRCases(unittest.TestCase):
             (void)ir_own_B;
             // _SPECIALIZE_OP
             {
-                uint32_t counter = fb->counter;
-                (void)counter;
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
             }
@@ -2634,7 +2634,7 @@ class TestIRCases(unittest.TestCase):
         # Two inputs, a destination and an entry fill the word, so the oparg
         # lives in the entry.
         input = """
-        inst(OP, (counter/1, left, right -- res)) {
+        inst(OP, (unused/1, left, right -- res)) {
             _PyFbHeader *feedback = FB_COUNTER();
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
@@ -2661,8 +2661,6 @@ class TestIRCases(unittest.TestCase):
             PyValue res;
             right = IR_SLOT(IR_C(ir_word));
             left = IR_SLOT(IR_B(ir_word));
-            uint32_t counter = fb->counter;
-            (void)counter;
             _PyFbHeader *feedback = ((_PyFbHeader *)fb);
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
@@ -3024,10 +3022,14 @@ class TestIRCases(unittest.TestCase):
         self.assertNotIn("IR_CLOSE_INPUTS", analyzer.IR_MARKER_EFFECTS)
         self.assertIn("IR_CLOSE_INPUTS", {escape.call.text
                                         for escape in part.properties.escaping_calls.values()})
-        self.assertTrue(ir_generator.releases_object(analysis.instructions["POP_TOP"]))
+        def releases(name):
+            return any(effect == ir_records.MAY_RELEASE
+                       for part in analysis.instructions[name].parts
+                       if isinstance(part, analyzer.Uop)
+                       for _, effect in ir_records.effect_sites(part))
+        self.assertTrue(releases("POP_TOP"))
         # A call reads its operands in place and releases nothing of its own
-        self.assertFalse(ir_generator.releases_object(
-            analysis.instructions["CALL_BUILTIN_FAST_WITH_KEYWORDS"]))
+        self.assertFalse(releases("CALL_BUILTIN_FAST_WITH_KEYWORDS"))
 
     def test_nullable_annotations_are_input_only(self):
         analysis = self.analyze("""
@@ -3618,7 +3620,7 @@ class TestIRCases(unittest.TestCase):
     def test_feedback_layout_required(self):
         # A family with an entry must have its type in FEEDBACK_LAYOUTS
         input = """
-        specializing op(_SPECIALIZE_SPAM, (counter/1, owner -- owner)) {
+        specializing op(_SPECIALIZE_SPAM, (owner -- owner)) {
             _PyFbHeader *feedback = FB_COUNTER();
             ADVANCE_ADAPTIVE_COUNTER(feedback);
         }
@@ -3676,7 +3678,7 @@ class TestIRCases(unittest.TestCase):
         # their entry records.
         input = """
         family(BINARY_OP, 1) = { BINARY_OP_ADD_INT };
-        specializing op(_SPECIALIZE_BINARY_OP, (counter/1, lhs, rhs -- lhs, rhs)) {
+        specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs)) {
             _PyFbHeader *feedback = FB_COUNTER();
             ADVANCE_ADAPTIVE_COUNTER(feedback);
         }
@@ -3686,7 +3688,7 @@ class TestIRCases(unittest.TestCase):
         }
         macro(BINARY_OP) = _SPECIALIZE_BINARY_OP + _BINARY_OP;
         op(_GUARD_INT, (left, right -- left, right)) {
-            DEOPT_IF(!EGGS(left, right));
+            DEOPT_IF(!EGGS(left, right), "eggs");
         }
         op(_ADD_INT, (left, right -- res)) {
             res = HAM(left, right);
@@ -3770,13 +3772,16 @@ class TestShapeReadMetadata(unittest.TestCase):
         emitter = ir_generator.IREmitter(out, analysis, formats)
         instruction = ir_generator.handler_instructions(analysis)[name]
         ir_generator.generate_handler(name, instruction, formats[name], emitter, out)
-        return output.getvalue(), ir_generator.handler_effects(name, instruction, formats[name])
+        record = ir_generator.build_record(name, instruction, formats[name], analysis, formats)
+        return output.getvalue(), ir_generator.handler_effects(record)
 
     def test_shape_read_uses_checked_metadata_for_both_execution_forms(self):
         root = Path(__file__).resolve().parents[2]
         source = (root / "Python/bytecodes.c").read_text()
-        start = (root / "Python/ceval_macros.h").read_text().index("shape_read_offset(char *entries")
+        start = (root / "Python/ceval_macros.h").read_text().index("shape_read_offset(const _PyIRWord *words")
         macros = (root / "Python/ceval_macros.h").read_text()[start:][:600]
+        poly_start = (root / "Python/ceval_macros.h").read_text().index("poly_row_index(const _PyIRWord *words")
+        poly_rows = (root / "Python/ceval_macros.h").read_text()[poly_start:][:300]
         for suffix in ("", "_LOCAL_TEMP"):
             for poly in (False, True):
                 name = "LOAD_ATTR_SHAPE" + ("_POLY" if poly else "") + suffix
@@ -3784,13 +3789,14 @@ class TestShapeReadMetadata(unittest.TestCase):
                     handler, effects = self.shape_read_handler(source, name)
                     self.assertEqual("shape_read_offset(" in handler, poly)
                     if poly:
-                        # The handler passes the entries of the frame's
-                        # feedback bank; the function steps back over the
-                        # block header to the poly tables
-                        self.assertIn("shape_read_offset(frame->ir_feedback, fb,", handler)
+                        # The handler passes the frame's words; the row
+                        # finder steps back over the executing copy's header
+                        # to the block of the poly tables
+                        self.assertIn("shape_read_offset(frame->ir_words, fb,", handler)
                         self.assertNotIn("_PyFrame_Exec(frame)->feedback", handler)
-                        self.assertIn("_PyFbBlock *block = (_PyFbBlock *)entries - 1;", macros)
-                        self.assertIn("_PyFb_PolyOf(block, &entry->h)", macros)
+                        self.assertIn("poly_row_index(words, h, version)", macros)
+                        self.assertIn("_PyFb_PolyOf(_PyIR_FbBlock(words), h)", macros)
+                        self.assertIn("_PyFb_PolyOf(_PyIR_FbBlock(words), h)", poly_rows)
                     self.assertEqual("_PyIR_LEARNED_ONLY" in effects, poly)
                     self.assertIn("uint32_t offset = " +
                                   ("ir_shape_offset" if poly else "fb->offset") + ";", handler)

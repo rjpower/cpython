@@ -83,7 +83,7 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
         self.assertNotIn("retire_published_values(", handler)
 
     def test_guarded_operand_rejects_wrong_feedback_type(self):
-        with self.assertRaisesRegex(SyntaxError, "requires attribute feedback"):
+        with self.assertRaisesRegex(SyntaxError, "names no field of _PyFbUnary"):
             self.generate("""
             inst(TO_BOOL, (class_value/4, owner -- attr)) {
                 attr = PyValue_DUP(owner);

@@ -50,15 +50,6 @@ _PyFrame_InstrAt(_PyInterpreterFrame *f, int offset)
     return f->ir_words + offset;
 }
 
-/* Set the bases that the handlers of the frame index, for exec, which
- * frame->instr_ptr points into. */
-static inline void
-_PyFrame_SetExec(_PyInterpreterFrame *frame, const _PyCodeExec *exec)
-{
-    frame->ir_words = exec->words;
-    frame->ir_feedback = exec->entries;
-}
-
 /* Start a frame of code, whose executing copy exists: _PyCode_GetExec()
  * has succeeded for it, which the call paths ensure.  Returns the copy. */
 static inline const _PyCodeExec *
@@ -67,7 +58,7 @@ _PyFrame_InitIRInstrPtr(_PyInterpreterFrame *frame, PyCodeObject *code)
     _PyCodeExec *exec = (_PyCodeExec *)FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
     assert(exec != NULL);
     frame->instr_ptr = exec->words;
-    _PyFrame_SetExec(frame, exec);
+    frame->ir_words = exec->words;
 #ifdef Py_GIL_DISABLED
     frame->tlbc_index = 0;
 #endif
@@ -368,7 +359,6 @@ _PyFrame_CopyHeader(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
     dest->frame_obj = src->frame_obj;
     dest->instr_ptr = src->instr_ptr;
     dest->ir_words = src->ir_words;
-    dest->ir_feedback = src->ir_feedback;
 #ifdef Py_GIL_DISABLED
     dest->tlbc_index = src->tlbc_index;
 #endif

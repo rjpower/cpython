@@ -632,16 +632,9 @@ do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause,
 
     if (PyExceptionClass_Check(exc)) {
         type = exc;
-        value = _PyObject_CallNoArgs(exc);
+        value = _PyErr_CreateExceptionFromArray(exc, NULL, 0);
         if (value == NULL)
             goto raise_error;
-        if (!PyExceptionInstance_Check(value)) {
-            _PyErr_Format(tstate, PyExc_TypeError,
-                          "calling %R should have returned an instance of "
-                          "BaseException, not %R",
-                          type, Py_TYPE(value));
-             goto raise_error;
-        }
     }
     else if (PyExceptionInstance_Check(exc)) {
         value = exc;
@@ -669,17 +662,9 @@ do_raise(PyThreadState *tstate, PyObject *exc, PyObject *cause,
     if (cause) {
         PyObject *fixed_cause;
         if (PyExceptionClass_Check(cause)) {
-            fixed_cause = _PyObject_CallNoArgs(cause);
+            fixed_cause = _PyErr_CreateExceptionFromArray(cause, NULL, 0);
             if (fixed_cause == NULL)
                 goto raise_error;
-            if (!PyExceptionInstance_Check(fixed_cause)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "calling %R should have returned an instance of "
-                              "BaseException, not %R",
-                              cause, Py_TYPE(fixed_cause));
-                Py_DECREF(fixed_cause);
-                goto raise_error;
-            }
             Py_DECREF(cause);
         }
         else if (PyExceptionInstance_Check(cause)) {

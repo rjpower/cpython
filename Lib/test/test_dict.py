@@ -317,6 +317,29 @@ class DictTest(unittest.TestCase):
             ['Cannot convert dictionary update sequence element #0 to a sequence'],
         )
 
+    def test_update_arguments(self):
+        class Sub(dict):
+            def __setitem__(self, key, value):
+                raise AssertionError("dict.update does not call __setitem__")
+
+        for target in ({}, Sub()):
+            with self.subTest(target=type(target)):
+                self.assertIsNone(target.update())
+                self.assertIsNone(target.update({'x': 1}, x=2, y=3))
+                self.assertEqual(dict(target), {'x': 2, 'y': 3})
+                target.update([('z', 4)], **{'k': 5})
+                self.assertEqual(dict(target), {'x': 2, 'y': 3, 'z': 4, 'k': 5})
+        with self.assertRaisesRegex(TypeError,
+                                    "update expected at most 1 argument, got 2"):
+            {}.update({}, {})
+        for operand in (5, 1.5, None):
+            with self.assertRaisesRegex(TypeError, "is not iterable"):
+                {}.update(operand)
+        d = {}
+        d.update(a=1)
+        dict.update(d, {'b': 2})
+        self.assertEqual(d, {'a': 1, 'b': 2})
+
     def test_update_shared_keys(self):
         class MyClass: pass
 

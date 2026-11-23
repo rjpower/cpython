@@ -97,10 +97,10 @@ class ScalarResultTests(unittest.TestCase):
     def test_normal_endpoint_cannot_replace_a_frame_exit_transfer(self):
         emit = ir_generator.emit_handler
         for effect in ("switches_frame", "returns"):
-            def frame_exit(name, instruction, *args, **kw):
-                instruction = replace(instruction, _properties=replace(
-                    instruction.properties, **{effect: True}))
-                return emit(name, instruction, *args, **kw)
+            def frame_exit(record, *args, **kw):
+                instruction = replace(record.instruction, _properties=replace(
+                    record.instruction.properties, **{effect: True}))
+                return emit(replace(record, instruction=instruction), *args, **kw)
 
             with self.subTest(effect=effect), mock.patch.object(
                     ir_generator, "emit_handler", frame_exit):

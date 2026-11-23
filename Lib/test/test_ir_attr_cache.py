@@ -167,7 +167,11 @@ class TestCanonicalMethodCapture(unittest.TestCase):
         for cls, expected in variants[1:]:
             for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN):
                 self.assertEqual(invoke(cls(), lambda: 40), 41)
-            self.assertIn(expected, handlers(invoke))
+            # Rows of the two forms that the poly handler reads make the
+            # site read them; a lazy-dict row keeps the latest monomorphic form
+            self.assertIn("LOAD_ATTR_METHOD_POLY" if expected !=
+                          "LOAD_ATTR_METHOD_LAZY_DICT" else expected,
+                          handlers(invoke))
         [site] = [i for i in dis.get_instructions(invoke) if i.opname == "LOAD_ATTR"]
         kind, state, _, _, rows = _testinternalcapi.get_feedback(
             invoke.__code__, site.offset)
@@ -530,9 +534,10 @@ class TestGuardedClassValue(unittest.TestCase):
                  if instruction.opname == "LOAD_ATTR"]
         private = [site for site in sites if site.fb != 0]
         shared = [site for site in sites if site.fb == 0]
-        # Two header units, then 682 six-unit attr entries. The remaining
-        # two units cannot hold another attr entry in the 4096-unit vector.
-        self.assertEqual([site.fb for site in private], list(range(2, 4094, 6)))
+        # Two header units, then 682 six-unit attr entries before entry 0.
+        # The remaining two units cannot hold another attr entry in the
+        # 4096-unit vector.
+        self.assertEqual([site.fb for site in private], list(range(-4092, 0, 6)))
         self.assertEqual(len(shared), 18)
         total = int.from_bytes(IRCode(read.__code__).co_fbinit[:4], sys.byteorder) & 0xFFFF
         self.assertEqual(total, 4094)

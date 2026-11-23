@@ -46,6 +46,29 @@ _PyBorrowScope_Exit(PyThreadState *tstate, _PyBorrowMark mark)
     }
 }
 
+/* The scope of a native callee that an adapter calls for the eval loop.  The
+ * callee's pushes are released when the scope exits, so a request for the
+ * loop to release them at its next instruction boundary would only run
+ * _Py_HandlePending() for nothing.  While the call runs, the stack is marked
+ * in_call, which makes _PyBorrow_RequestRelease() a no-op; an eval loop that
+ * the callee runs clears the mark for its own activation.  Enter stores the
+ * mark that Exit restores. */
+static inline _PyBorrowMark
+_PyBorrowCall_Enter(PyThreadState *tstate, int *was_in_call)
+{
+    _PyBorrowStack *s = &((_PyThreadStateImpl *)tstate)->borrow;
+    *was_in_call = s->in_call;
+    s->in_call = 1;
+    return s->top;
+}
+
+static inline void
+_PyBorrowCall_Exit(PyThreadState *tstate, _PyBorrowMark mark, int was_in_call)
+{
+    _PyBorrowScope_Exit(tstate, mark);
+    ((_PyThreadStateImpl *)tstate)->borrow.in_call = was_in_call;
+}
+
 /* Both functions below act on the current thread state. */
 
 /* Steal `owned`, push it, and return it as a borrowed reference that is

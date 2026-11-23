@@ -1769,7 +1769,8 @@ get_feedback(PyObject *self, PyObject *args)
         PyErr_SetString(PyExc_ValueError, "index out of range");
         return NULL;
     }
-    if (_PyCode_InstrFbIndex(code, i) <= 0) {
+    int fb = _PyCode_InstrFbIndex(code, i);
+    if (fb < 0 || fb == IR_FB_SHARED) {
         Py_RETURN_NONE;
     }
     _PyFbHeader *h = _PyIR_InstrFeedback(code, exec, &exec->words[i]);
@@ -1778,7 +1779,7 @@ get_feedback(PyObject *self, PyObject *args)
         return NULL;
     }
     if (h->poly) {
-        _PyFbPoly *poly = _PyFb_PolyOf(exec->feedback, h);
+        _PyFbPoly *poly = _PyFb_PolyOf(_PyIR_FbBlock(exec->words), h);
         for (int r = 0; r < FB_POLY_SIZE && poly->handler[r]; r++) {
             PyObject *row = Py_BuildValue("(IIi)", poly->type_version[r],
                                           poly->aux[r], poly->handler[r]);
@@ -1843,12 +1844,14 @@ get_ir_raw(PyObject *self, PyObject *code_obj)
             Py_DECREF(feedback);
             return NULL;
         }
-        if (exec->entries != NULL) {
+        if (ir->nfeedback) {
+            // The vector of entries ends at the block, with entry 0
+            Py_ssize_t size = (Py_ssize_t)_PyCode_FbUnits(
+                (PyCodeObject *)code_obj) << IR_FB_UNIT_SHIFT;
             Py_SETREF(feedback,
                       PyBytes_FromStringAndSize(
-                          exec->entries,
-                          (Py_ssize_t)_PyCode_FbUnits((PyCodeObject *)code_obj)
-                              << IR_FB_UNIT_SHIFT));
+                          (const char *)_PyIR_FbBlock(exec->words) - size,
+                          size));
             if (feedback == NULL) {
                 Py_DECREF(consts);
                 Py_DECREF(exec_words);

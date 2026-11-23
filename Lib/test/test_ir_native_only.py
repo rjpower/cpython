@@ -19,13 +19,16 @@ class NativeOnlyTests(unittest.TestCase):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
         inst = analysis.instructions["INTERPRETER_EXIT"]
-        fmt = ir_generator.compute_formats(analysis)[inst.name]
+        formats = ir_generator.compute_formats(analysis)
+
+        def effects():
+            return ir_generator.handler_effects(ir_generator.build_record(
+                inst.name, inst, formats[inst.name], analysis, formats))
+
         self.assertTrue(ir_generator.native_entry_input_contract(inst))
-        self.assertIn("_PyIR_NATIVE_ONLY",
-            ir_generator.handler_effects(inst.name, inst, fmt))
+        self.assertIn("_PyIR_NATIVE_ONLY", effects())
         with mock.patch.object(ir_generator, "native_entry_input_contract", return_value=False):
-            self.assertNotIn("_PyIR_NATIVE_ONLY",
-                ir_generator.handler_effects(inst.name, inst, fmt))
+            self.assertNotIn("_PyIR_NATIVE_ONLY", effects())
         ids = {**opcode.opmap, **opcode._ir_opmap}
         self.assertTrue(_opcode.get_ir_contract()[ids[inst.name]].effects & _opcode.IR_NATIVE_ONLY)
 

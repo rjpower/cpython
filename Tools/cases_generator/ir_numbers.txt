@@ -470,9 +470,13 @@ LOAD_ATTR_SLOT_POINTER 410
 # locals of the unpack that follows.
 FOR_ITER_DICT_ITEMS 411
 
+# contract87 AT: a method load over the poly rows of a site that saw several
+# receiver types.
+LOAD_ATTR_METHOD_POLY 412
+
 # contract87 SB: the real-opcode numbers 111, 112 and 126 go to the stack-only
 # superinstructions of co_code, so these IR-only forms move out of the opcode
-# space; 412 is the integration branch's LOAD_ATTR_METHOD_POLY.
+# space.
 LOAD_ATTR_CLASSMETHOD 413
 POP_JUMP_IF_TRUE_SLOT 414
 POP_JUMP_IF_FALSE_SLOT 415

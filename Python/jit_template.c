@@ -6,6 +6,7 @@
    are what they share.  See pycore_jit_lower.h. */
 
 #include "Python.h"
+#include "pycore_ceval.h"           // _Py_HandlePending()
 #include "pycore_code.h"            // COMPARISON_EQUALS
 #include "pycore_dict.h"            // PyDictUnicodeEntry
 #include "pycore_feedback.h"        // _PyFb_*
@@ -15,6 +16,7 @@
 #include "pycore_long.h"            // _PyLong_ExactDealloc()
 #include "pycore_floatobject.h"     // _PyFloat_ExactDealloc()
 #include "pycore_object.h"
+#include "pycore_range.h"           // _PyRangeIterObject
 #include "pycore_value.h"
 
 #include <stddef.h>                 // offsetof

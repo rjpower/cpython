@@ -17,7 +17,7 @@ lowerings' prototypes and table) and Python/jit_templates.c.h.
 """
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import ir_generator
 import ir_leaf
@@ -178,8 +178,8 @@ def write_lowerings(out) -> None:
 # An op with `when` (a C expression) is emitted only for words where it
 # holds: the slot-class flags of the word are known when it is compiled.
 # Terminators: ("br", c, t, f), ("jmp", b, args), ("end", c or None) (the
-# next word, or the target when c), ("deopt",) (the word's own form) and
-# ("raise",).
+# next word, or the target when c), ("end", None, True) (the target
+# always), ("deopt",) (the word's own form) and ("raise",).
 
 
 class Refused(Exception):
@@ -286,10 +286,53 @@ def unused_output(o) -> bool:
     return bool(o.array) and o.name == "unused"
 
 
+def window_base(record):
+    "The WINDOW operand of a handler whose window starts at its field"
+    for o in record.operands:
+        if o.kind == "WINDOW":
+            if o.position != 0:
+                raise Refused("a window that starts before its field")
+            return o
+    return None
+
+
+def window_offset(record, entries, k) -> str:
+    """The C offset from a window's first slot of entry k of entries, the
+    window's values in order: the sum of the sizes of those before it, an
+    array's size being its C expression of oparg"""
+    if any(v is None for v in entries[:k]):
+        raise Refused("a window entry of unknown size")
+    sizes = [f"({v.array})" if v.array else "1" for v in entries[:k]]
+    expr = " + ".join(sizes) or "0"
+    if "oparg" not in expr:
+        return str(eval(expr))
+    return expr.replace("oparg", f"({oparg_expr(record)})")
+
+
+def window_inputs(record) -> list:
+    return sorted((v for v in record.values if v.external >= 0), key=lambda v: v.external)
+
+
+def window_outputs(record) -> list:
+    """The window's output entries up to its last result, by position: an
+    entry that is no result keeps the input at its position"""
+    values = {v.id: v for v in record.values}
+    by_position = {o.position: values[vid] for vid, o in record.results}
+    inputs = window_inputs(record)
+    return [by_position.get(p, inputs[p] if p < len(inputs) else None)
+            for p in range(max(by_position) + 1)]
+
+
 def input_operand(record, k: int):
     for o in record.operands:
         if o.kind == "SLOT" and o.detail == f"input {k}":
             return o
+    window = window_base(record)
+    if window is not None:
+        # An input of a window is a temporary at its offset from the field's slot
+        offset = window_offset(record, window_inputs(record), k)
+        return replace(window, kind="SLOT", field=f"{window.field}+{offset}", may_name=TEMP_ONLY,
+                       position=0, detail=f"input {k}")
     raise Refused(f"input {k} is not in a slot of its own")
 
 
@@ -318,6 +361,7 @@ class Builder:
         self.detached: set[int] = set()
         self.deferred: list[TOp] = []       # the owners' closes, after the stores
         self.effect = False                 # an effect has been emitted
+        self.slot_effect = False            # one other than a store to memory
         self.deopt = None
         self.raises = None
         self.uses_fb = False
@@ -329,6 +373,9 @@ class Builder:
         if kind in EFFECT_OPS or (kind == "prim" and attr in COUNT_PRIMS) or (
                 kind == "prim" and isinstance(attr, tuple)):
             self.effect = True
+            # A store to memory is the C's own: an error after it finds
+            # the same state as the form's.  A slot's or a count's is not.
+            self.slot_effect |= kind != "store"
         return op
 
     def exit_block(self, kind: str) -> int:
@@ -348,6 +395,8 @@ class Builder:
         cur = g.blocks[g.entry]
         for v in r.values:
             if v.external >= 0:
+                if unused_output(v):
+                    continue
                 if v.array:
                     raise Refused("an array input")
                 operand = input_operand(r, v.external)
@@ -430,8 +479,10 @@ class Builder:
                     flag = g.value("bool")
                     self.add(gb, "const", [flag], [], 0)
                 gb.term = ("jmp", merge.id, args + [flag])
-            elif kind in ("raise", "exit"):
-                if self.effect:
+            elif kind in ("raise", "exit", "complete"):
+                # A completion (a loop's end) is rare: the word's form, run
+                # from the start, completes it
+                if self.slot_effect if kind == "raise" else self.effect:
                     raise Refused(f"{u.name}: an exit after an effect")
                 gb.term = ("jmp", self.exit_block("raise" if kind == "raise" else "deopt"), [])
             else:
@@ -495,7 +546,7 @@ class Builder:
             self.add(gb, "cache", results, [], op.attr)
             return gb
         if k in ("exit_if", "raise_if"):
-            if self.effect:
+            if self.slot_effect if k == "raise_if" else self.effect:
                 raise Refused(f"a {k} after an effect")
             cont = g.new_block()
             gb.term = ("br", args[0], self.exit_block("raise" if k == "raise_if" else "deopt"),
@@ -525,15 +576,40 @@ class Builder:
         self.add(gb, k, results, args, op.attr)
         return gb
 
+    def window_result(self, cur, vid, result) -> None:
+        """A result in the window's temporaries (IR_SET_TEMP), or the one
+        that moves to dst when dst names a local (IR_MOVE_RESULT_TO_DST)"""
+        r = self.record
+        window = window_base(r)
+        if window is None or result.field != window.field:
+            raise Refused("a result in another window")
+        v = self.env[vid]
+        # An input's value may move to another of the window's slots, as
+        # SWAP's do: the form rewrites every slot whose value moves
+        offset = window_offset(r, window_outputs(r), result.position)
+        slot = f"{window.field}+{offset}"
+        if r.layout.move_dst != result.position:
+            self.add(cur, "slot_store", [], [v], slot)
+            return
+        dst = next(o for o in r.operands if o.kind == "SLOT" and o.field == r.layout.move_dst_args.split(", ")[1])
+        o = self.g.value(ir_leaf.VALUE)
+        self.add(cur, "slot_load", [o], [], dst.field, local_test(dst))
+        self.add(cur, "slot_store", [], [v], dst.field, local_test(dst))
+        self.add(cur, "slot_store", [], [v], slot, f"!{local_test(dst)}")
+        self.old_values.append((o, dst))
+
     def epilogue(self, cur, branch):
         r = self.record
-        old = []
+        old = self.old_values = []
         values = {v.id: v for v in r.values}
         for vid, result in r.results:
-            if result.kind != "SLOT":
-                raise Refused(f"a result in a {result.kind}")
             if unused_output(values[vid]):
                 continue
+            if result.kind == "WINDOW":
+                self.window_result(cur, vid, result)
+                continue
+            if result.kind != "SLOT":
+                raise Refused(f"a result in a {result.kind}")
             # The record's operand of the field says what it may name.  A
             # result after the first goes to the slots that follow dst's,
             # which are temporaries, as is dst for a handler that never
@@ -554,6 +630,11 @@ class Builder:
                 self.add(cur, "slot_load", [o], [], field, local_test(operand))
                 old.append((o, operand))
             self.add(cur, "slot_store", [], [v], field)
+        # A slot that the end stores needs no detach: every path from a
+        # detach reaches the end, as no exit follows an effect
+        stored = {op.attr for op in cur.ops if op.kind == "slot_store" and op.when is None}
+        for b in self.g.blocks.values():
+            b.ops = [op for op in b.ops if not (op.kind == "detach" and op.attr in stored)]
         cur.ops.extend(self.deferred)
         for o, operand in old:
             self.add(cur, "prim", [], [o], "PyValue_XCLOSE", local_test(operand))
@@ -625,6 +706,33 @@ def merge_chains(g: Graph) -> bool:
             return changed
 
 
+def thread_jumps(g: Graph) -> bool:
+    "Branch past an empty block that only jumps on without arguments"
+    def through(i: int) -> int:
+        seen = set()
+        while i not in seen:
+            seen.add(i)
+            b = g.blocks[i]
+            if b.ops or b.params or b.term[0] != "jmp" or b.term[2] or i == g.entry:
+                return i
+            i = b.term[1]
+        return i
+
+    changed = False
+    for b in g.blocks.values():
+        t = b.term
+        if t[0] == "br":
+            new = ("br", t[1], through(t[2]), through(t[3]))
+        elif t[0] == "jmp":
+            new = ("jmp", through(t[1]), t[2])
+        else:
+            continue
+        if new != t:
+            b.term = new
+            changed = True
+    return changed
+
+
 def definitions(g: Graph) -> dict[int, TOp]:
     return {r: op for b in g.blocks.values() for op in b.ops for r in op.results}
 
@@ -684,6 +792,12 @@ def fold(g: Graph) -> bool:
         changed = True
         defs = definitions(g)
     for b in g.blocks.values():
+        # An end whose branch is a constant goes one way
+        if b.term[0] == "end" and b.term[1] is not None:
+            k = const_of(defs, b.term[1])
+            if k is not None:
+                b.term = ("end", None, True) if k else ("end", None)
+                changed = True
         for op in b.ops:
             k = op.kind
             a = op.args
@@ -823,6 +937,80 @@ def thread_bool_phis(g: Graph) -> bool:
     return False
 
 
+def dominators(g: Graph) -> dict[int, int]:
+    "The immediate dominator of each block but the entry"
+    order = g.rpo()
+    index = {b: n for n, b in enumerate(order)}
+    preds = g.preds()
+    idom = {g.entry: g.entry}
+
+    def meet(a: int, b: int) -> int:
+        while a != b:
+            while index[a] > index[b]:
+                a = idom[a]
+            while index[b] > index[a]:
+                b = idom[b]
+        return a
+
+    changed = True
+    while changed:
+        changed = False
+        for b in order[1:]:
+            done = [p for p in preds[b] if p in idom]
+            new = done[0]
+            for p in done[1:]:
+                new = meet(p, new)
+            if idom.get(b) != new:
+                idom[b] = new
+                changed = True
+    del idom[g.entry]
+    return idom
+
+
+# The ops that compute the same result from the same arguments anywhere:
+# not loads, which a store between may change, nor the view of a slot
+CSE_KINDS = {"const", "jconst", "cache", "fieldaddr", "ptradd", "add", "sub", "mul", "and",
+             "or", "xor", "shl", "ashr", "lshr", "neg", "not", "conv", "fadd", "fsub",
+             "fmul", "fdiv"}
+
+
+def cse(g: Graph) -> bool:
+    "Reuse the result of an equal pure op in a dominating position"
+    idom = dominators(g)
+    children: dict[int, list[int]] = {}
+    for b, d in idom.items():
+        children.setdefault(d, []).append(b)
+    mapping: dict[int, int] = {}
+
+    def walk(i: int, seen: dict) -> None:
+        seen = dict(seen)
+        b = g.blocks[i]
+        keep = []
+        for op in b.ops:
+            pure = (op.kind in CSE_KINDS or
+                    (op.kind == "prim" and isinstance(op.attr, str) and op.attr in PURE_PRIMS
+                     and op.results))
+            if not pure and not is_pure(op):
+                # An effect: what read memory before it may differ after
+                seen = {k: v for k, v in seen.items()
+                        if not (k[0] == "prim" and ir_leaf.PRIMITIVES[k[1]].effects)}
+            if pure and op.when is None and len(op.results) == 1:
+                key = (op.kind, op.attr, tuple(mapping.get(a, a) for a in op.args))
+                if key in seen:
+                    mapping[op.results[0]] = seen[key]
+                    continue
+                seen[key] = op.results[0]
+            keep.append(op)
+        b.ops = keep
+        for c in children.get(i, []):
+            walk(c, seen)
+
+    walk(g.entry, {})
+    if mapping:
+        substitute(g, mapping)
+    return bool(mapping)
+
+
 def dce(g: Graph) -> bool:
     changed = False
     while True:
@@ -845,9 +1033,11 @@ def simplify(g: Graph) -> None:
     prune(g)
     while True:
         changed = merge_chains(g)
+        changed |= thread_jumps(g)
         changed |= fold(g)
         changed |= thread_bool_phis(g)
         prune(g)
+        changed |= cse(g)
         changed |= dce(g)
         if not changed:
             return
@@ -1089,6 +1279,24 @@ def field_offset(attr) -> tuple[str, str]:
     return "0", attr
 
 
+def immediates(g: Graph, defs) -> set[int]:
+    """The integer constants that fit an imm32 and that only ops taking
+    their second operand as an immediate use: they are never in a register"""
+    candidates = {r for r, op in defs.items() if op.kind == "const" and
+                  (k := const_of(defs, r)) is not None and -2**31 <= k < 2**31 and
+                  g.types[r] != "bool"}
+    for b in g.blocks.values():
+        for op in b.ops:
+            for n, a in enumerate(op.args):
+                if a in candidates and not ((op.kind == "cmp" or op.kind in ALU) and n == 1
+                                            and op.args[0] != a and op.when is None):
+                    candidates.discard(a)
+        t = b.term
+        for a in ([t[1]] if t[0] in ("br", "end") else t[2] if t[0] == "jmp" else []):
+            candidates.discard(a)
+    return candidates
+
+
 class Emitter:
     def __init__(self, name: str, record, g: Graph, uses_fb: bool) -> None:
         self.name = name
@@ -1100,6 +1308,7 @@ class Emitter:
         self.lines: list[str] = []
         self.uses_fb = uses_fb
         self.defs = definitions(g)
+        self.imms = immediates(g, self.defs)
         self.order: list[int] = []
         self.cold: set[int] = set()
         self.temp_count = 0
@@ -1236,7 +1445,9 @@ class Emitter:
             if nxt != t[1]:
                 self.w(f"_PyJitAsm_Jmp(a, {self.label(t[1])});")
         elif t[0] == "end":
-            if t[1] is not None:
+            if t[2:] == (True,):
+                self.w("_PyJitAsm_Jmp(a, cx->target);")
+            elif t[1] is not None:
                 self.w(f"_PyJitTemplate_Branch(cx, {self.cond(t[1])});")
         else:
             raise Refused(f"term {t[0]}")
@@ -1282,6 +1493,19 @@ class Emitter:
             else:
                 self.w(f"_PyJitAsm_MovRR(a, {self.R(dst)}, {self.R(src)});")
 
+    def extend(self, v: int) -> None:
+        "Make a C function's narrow integer result canonical in its register"
+        t = self.g.types[v]
+        if is_xmm(t) or t in ("i64", "u64") or ir_leaf.is_pointer(t) or t == ir_leaf.VALUE:
+            return
+        if t == "bool":
+            self.w(f"_PyJitAsm_AluRI(a, _PyJitAlu_AND, {self.R(v)}, 0xFF);")
+            return
+        n = 64 - ir_leaf.bits_of(t)
+        sh = "SAR" if ir_leaf.is_signed(t) else "SHR"
+        self.w(f"_PyJitAsm_ShiftRI(a, _PyJitShift_SHL, {self.R(v)}, {n});")
+        self.w(f"_PyJitAsm_ShiftRI(a, _PyJitShift_{sh}, {self.R(v)}, {n});")
+
     def canonical(self, v: int) -> None:
         "Zero-extend an unsigned narrow result"
         t = self.g.types[v]
@@ -1311,6 +1535,8 @@ class Emitter:
             # DUP returns its argument: the register is its result, which a
             # call (a count in a Py_REF_DEBUG build) writes, as it holds it
             self.lower(i, k, op, "PyValue_DUP", [args[0]], args, written={args[0]})
+        elif kd == "const" and res[0] in self.imms:
+            pass
         elif kd == "const" or kd == "jconst":
             t = g.types[res[0]]
             expr = f"(int64_t)({op.attr})" if kd == "jconst" else const_expr(t, op.attr)
@@ -1345,6 +1571,12 @@ class Emitter:
             size = op.attr if isinstance(op.attr, int) else f"sizeof({op.attr})"
             self.w(f"_PyJitTemplate_PtrAdd(cx, {self.R(res[0])}, {self.R(args[0])}, "
                    f"{self.R(args[1])}, {size});")
+        elif kd in ALU and args[1] in self.imms:
+            self.mov(res[0], args[0])
+            self.w(f"_PyJitAsm_AluRI(a, _PyJitAlu_{ALU[kd]}, {self.R(res[0])}, "
+                   f"{const_of(self.defs, args[1])});")
+            if kd in ("add", "sub"):
+                self.canonical(res[0])
         elif kd in ALU or kd == "mul":
             self.mov(res[0], args[0])
             if kd == "mul":
@@ -1379,6 +1611,10 @@ class Emitter:
             self.setcc(op, "_PyJitCond_O")
         elif kd == "conv":
             self.conv(i, k, op)
+        elif kd == "cmp" and args[1] in self.imms:
+            self.w(f"_PyJitAsm_AluRI(a, _PyJitAlu_CMP, {self.R(args[0])}, "
+                   f"{const_of(self.defs, args[1])});")
+            self.setcc(op, f"_PyJitCond_{CMP_CONDS[op.attr]}")
         elif kd == "cmp":
             self.w(f"_PyJitAsm_AluRR(a, _PyJitAlu_CMP, {self.R(args[0])}, {self.R(args[1])});")
             self.setcc(op, f"_PyJitCond_{CMP_CONDS[op.attr]}")
@@ -1412,16 +1648,19 @@ class Emitter:
             self.lower(i, k, op, name, regs, argv, aux)
         elif kd == "call":
             helper = ir_leaf.HELPERS[op.attr]
-            if helper.thread:
-                raise Refused("a helper that takes the thread")
             gm, xm = self.live_masks(i, k, op)
             self.w(f"cx->live = {gm:#x}; cx->live_xmm = {xm:#x};")
-            argl = ", ".join(f"_PyJitArg_{'XMM' if self.alloc.kind(x) == 'x' else 'GPR'}({self.R(x)})"
-                             for x in args)
+            argv = [f"_PyJitArg_{'XMM' if self.alloc.kind(x) == 'x' else 'GPR'}({self.R(x)})"
+                    for x in args]
+            if helper.thread:
+                argv.insert(0, "_PyJitArg_GPR(_PyJit_TSTATE)")
+            argl = ", ".join(argv)
             result = (f"_PyJitArg_{'XMM' if self.alloc.kind(res[0]) == 'x' else 'GPR'}({self.R(res[0])})"
                       if res else "_PyJitArg_NONE")
-            self.w(f"_PyJitLower_Call(cx, (const void *){op.attr}, 1, {len(args)}, "
+            self.w(f"_PyJitLower_Call(cx, (const void *){op.attr}, 1, {len(argv)}, "
                    f"(const _PyJitArg[]){{{argl or '_PyJitArg_NONE'}}}, {result});")
+            if res:
+                self.extend(res[0])
         else:
             raise Refused(f"no emission of {kd}")
 

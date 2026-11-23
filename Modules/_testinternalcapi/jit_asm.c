@@ -39,6 +39,7 @@ label_of(Program *p, int64_t number)
 /* The ops: name, number of integer and memory arguments, the call.  v holds the integer arguments and m the memory
    operands, each in the order they appear in the tuple. */
 #define OPS(OP) \
+    OP(section, 1, 0, _PyJitAsm_Section(A, v[0])) \
     OP(bind, 1, 0, _PyJitAsm_Bind(A, L(0))) \
     OP(align, 1, 0, _PyJitAsm_Align(A, v[0])) \
     OP(quad_label, 1, 0, _PyJitAsm_QuadLabel(A, L(0))) \

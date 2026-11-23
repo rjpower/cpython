@@ -18,7 +18,7 @@ import sys
 import tempfile
 import unittest
 from test import support
-from test.support import import_helper
+from test.support import import_helper, warnings_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 if not hasattr(_testinternalcapi, "jit_asm_place"):
@@ -511,6 +511,85 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(run(program, (40, 2)), 51)
 
 
+HOT, COLD = 0, 1
+
+
+class SectionTests(unittest.TestCase):
+    """Hot and cold sections: placement lays out the hot bytes, then the
+    cold bytes, and resolves jumps, calls and label addresses across them."""
+
+    def test_jumps_between_sections(self):
+        # x != 0 detours through the cold section and comes back.
+        program = [
+            ("mov_imm", RAX, 10),
+            ("test_rr", RDI, RDI),
+            ("jcc", NE, 0),
+            ("bind", 1),
+            ("alu_ri", ALU["add"], RAX, 1),
+            ("ret",),
+            ("section", COLD),
+            ("bind", 0),
+            ("alu_ri", ALU["add"], RAX, 5),
+            ("jmp", 1),
+            ("section", HOT),
+            ("alu_ri", ALU["add"], RAX, 100),   # never reached; hot again
+            ("ret",),
+        ]
+        self.assertEqual(run(program, (0,)), 11)
+        self.assertEqual(run(program, (1,)), 16)
+
+    def test_cold_code_follows_the_hot_code(self):
+        hot = [("mov_imm", RAX, 1), ("ret",)]
+        together = hot + [("section", COLD), ("mov_imm", RAX, 2), ("ret",)]
+        a, b = jit_asm_assemble(hot, 0), jit_asm_assemble(together, 0)
+        self.assertEqual(b[:len(a)], a)
+        self.assertGreater(len(b), 64)           # the cold bytes start at 64
+        self.assertEqual(b[64:], bytes.fromhex("b802000000c3"))
+        self.assertEqual(set(b[len(a):64]), {0xCC})
+
+    def test_call_c_from_the_cold_section(self):
+        target = jit_asm_address("Py_HashPointer")
+        program = [
+            ("test_rr", RDI, RDI),
+            ("jcc", NE, 0),
+            ("mov_imm", RAX, -1),
+            ("ret",),
+            ("section", COLD),
+            ("bind", 0),
+            ("push", RBP), ("call_abs", target), ("pop", RBP), ("ret",),
+        ]
+        self.assertEqual(run(program, (0,)), -1)
+        pointer = 0x7f0000001230
+        self.assertEqual(run(program, (pointer,)),
+                         signed(bits((pointer >> 4) | (pointer << 60))))
+
+    def test_entry_table_into_both_sections(self):
+        def table_program(table_section):
+            entries = [(0, HOT), (1, COLD), (2, HOT), (3, COLD)]
+            program = [
+                ("lea_label", RAX, 10),
+                ("jmp_m", (RAX, RDI, 3, 0)),
+            ]
+            bodies = {section: [] for section in (HOT, COLD)}
+            for label, section in entries:
+                bodies[section] += [
+                    ("bind", label), ("mov_imm", RAX, 100 + label), ("ret",)]
+            program += bodies[HOT]
+            program += [("section", COLD)] + bodies[COLD]
+            program += [("section", table_section), ("align", 8), ("bind", 10)]
+            program += [("quad_label", label) for label, _ in entries]
+            return program
+        for table_section in (HOT, COLD):
+            program = table_program(table_section)
+            for index in range(4):
+                with self.subTest(table_section=table_section, index=index):
+                    self.assertEqual(run(program, (index,)), 100 + index)
+
+    def test_unbound_cold_label_is_an_error(self):
+        program = [("jmp", 3), ("section", COLD), ("ret",)]
+        self.assertIsNone(jit_asm_place(program))
+
+
 def maps_entry(address):
     """The permissions of the mapping that contains the address."""
     with open("/proc/self/maps") as f:
@@ -623,6 +702,7 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(jit_memory_info()["pages_in_use"], self.before)
 
     @support.requires_fork()
+    @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
     def test_fork_keeps_placed_code_and_places_its_own(self):
         placed = jit_asm_place([("mov_imm", RAX, 11), ("ret",)])
         pid = os.fork()

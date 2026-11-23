@@ -450,6 +450,12 @@ NOT_INTS = ["x", big(1), 2.5, None, []]
 INT_PAIRS = ([(a, b) for a in INTS[::2] for b in INTS[1::2]] +
              [(a, b) for a in INTS[:3] for b in NOT_INTS[:2]] +
              [(b, a) for a in INTS[:3] for b in NOT_INTS])
+# Signs, a zero divisor, the inline extremes and -2**50 // -1, whose quotient
+# leaves the inline range
+DIV_INTS = [0, 1, -1, 7, -7, 2**50 - 1, -2**50, 2**25, -2**25 - 3]
+DIV_PAIRS = ([(a, b) for a in DIV_INTS for b in DIV_INTS] +
+             [(a, b) for a in INTS[:3] for b in NOT_INTS[:2]] +
+             [(b, a) for a in INTS[:3] for b in NOT_INTS])
 FLOATS_ = [0.0, -0.0, 1.5, -2.25, 1e300, -1e-300, math.inf, -math.inf]
 FLOAT_PAIRS = ([(a, b) for a in FLOATS_[::2] for b in FLOATS_[1::2]] +
                [(1.5, 2), (2, 1.5), (1.5, "x"), ("x", 1.5), (math.nan, 1.0),
@@ -555,6 +561,10 @@ TEMPLATE_CASES = [
       for op, handler in (("+", "BINARY_OP_ADD_INT"), ("-", "BINARY_OP_SUBTRACT_INT"),
                           ("*", "BINARY_OP_MULTIPLY_INT"), ("&", "BINARY_OP_AND_INT"),
                           ("|", "BINARY_OP_OR_INT"), ("^", "BINARY_OP_XOR_INT"))],
+    *[(src.format(op=op), (6, 3), handler, fields, [(Plain(), a, b) for a, b in DIV_PAIRS]
+       if fields == "ABC" else DIV_PAIRS)
+      for op, handler in (("//", "BINARY_OP_FLOOR_DIVIDE_INT"), ("%", "BINARY_OP_REMAINDER_INT"))
+      for src, fields in ((BINARY, "ABC"), (TEMPS, "BC"))],
     # Counts below zero, inside the word, and past it
     (BINARY.format(op=">>"), (6, 3), "BINARY_OP_RSHIFT_INT", "ABC",
      [(Plain(), a, b) for a in INTS for b in (0, 1, 5, 62, 63, 64, 1000, -1)] +
@@ -760,6 +770,16 @@ class TemplateTests(unittest.TestCase):
         self.assertFalse(capi.jit_template_run(f, index, {b: 2**49, c: 2**49}, True)[1])
         self.assertTrue(capi.jit_template_run(f, index, {b: "x", c: 2}, True)[1])
         self.assertTrue(capi.jit_template_run(f, index, {b: 1, c: "y"}, True)[1])
+
+    def test_division_fast_path(self):
+        "Division and remainder by a nonzero inline int stay on the template's code"
+        for op, handler in (("//", "BINARY_OP_FLOOR_DIVIDE_INT"),
+                            ("%", "BINARY_OP_REMAINDER_INT")):
+            f = self.compile(f"def f(a, b):\n    return a {op} b", (7, 2))
+            index, (_, a, b, c, d) = word_of(f, handler)
+            for x, y in ((7, 2), (-7, 2), (7, -2), (-2**50, -1)):
+                self.assertFalse(capi.jit_template_run(f, index, {b: x, c: y}, True)[1])
+            self.assertTrue(capi.jit_template_run(f, index, {b: 7, c: 0}, True)[1])
 
 
 if __name__ == "__main__":

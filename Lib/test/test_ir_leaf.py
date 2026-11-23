@@ -551,7 +551,7 @@ def _type_version(tp):
 HANDLERS = {
     **{name: (int_domain, None, [0]) for name in (
         "BINARY_OP_ADD_INT", "BINARY_OP_SUBTRACT_INT", "BINARY_OP_MULTIPLY_INT",
-        "BINARY_OP_FLOOR_DIVIDE_INT")},
+        "BINARY_OP_FLOOR_DIVIDE_INT", "BINARY_OP_REMAINDER_INT")},
     **{name: (float_domain, None, [0]) for name in (
         "BINARY_OP_ADD_FLOAT", "BINARY_OP_SUBTRACT_FLOAT", "BINARY_OP_MULTIPLY_FLOAT",
         "BINARY_OP_TRUEDIV_FLOAT")},

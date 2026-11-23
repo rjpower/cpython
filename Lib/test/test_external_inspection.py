@@ -1963,6 +1963,16 @@ while True:
                 except RuntimeError:
                     continue
                 break
+            # The child lowers the code it runs at startup to the register IR,
+            # so wait until it is in the loop before counting samples
+            for _ in busy_retry(SHORT_TIMEOUT):
+                try:
+                    threads = unwinder.get_stack_trace()[0].threads
+                except TRANSIENT_ERRORS:
+                    continue
+                if threads and "leaf" in [
+                        frame.funcname for frame in threads[0].frame_info]:
+                    break
             samples = 0
             for _ in range(10_000):
                 try:

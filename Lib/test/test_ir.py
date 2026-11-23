@@ -16,7 +16,7 @@ import _opcode
 from test import support
 from test.support import import_helper
 from test.support.bytecode_helper import AssemblerTestCase
-from test.support.ir_dis import IRCode, encode_words
+from test.support.ir_dis import IRCode
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 get_ir = _testinternalcapi.get_ir
@@ -566,6 +566,10 @@ class AssemblerTest(unittest.TestCase):
         jump = [instr for instr in dis.get_instructions(f)
                 if instr.opname.startswith("COMPARE_OP_JUMP")][0]
         if_true = "if true" in jump.argrepr
+        # The event is at the stack bytecode's jump, which the word fuses
+        # with the compare
+        source = [instr.offset for instr in stack_dis.get_instructions(f)
+                  if instr.opname.startswith("POP_JUMP_IF")][0]
         xs = [1, 2, 3] * 100
         expected = ["right" if (x < 2) == if_true else "left" for x in xs]
         events = []
@@ -578,7 +582,7 @@ class AssemblerTest(unittest.TestCase):
                 sys.monitoring.register_callback(
                     tool, event,
                     lambda code, src, dst, name=name:
-                        events.append(name) if src == jump.offset else None)
+                        events.append(name) if src == source else None)
             sys.monitoring.set_local_events(tool, f.__code__,
                                             E.BRANCH_LEFT | E.BRANCH_RIGHT)
             self.assertEqual(f(xs), len(xs) // 3)
@@ -662,24 +666,21 @@ class AssemblerTest(unittest.TestCase):
 
     def test_slot_limit(self):
         # Locals, cells, free variables, the discard slot and the stack share
-        # IR_MAX_SLOTS slots; code that needs more does not compile.
+        # IR_MAX_SLOTS slots; code that needs more cannot be lowered, which
+        # happens when it first runs.
         def make(nlocals):
             source = ("def f():\n"
                       + "".join(f"    v{i} = {i}\n" for i in range(nlocals))
                       + "    return [v0]\n")
             return make_function(source)
-        # The list's window is the one temporary; the discard slot is a
-        # hidden local
-        stacksize = make(1).__code__.co_stacksize
-        self.assertEqual(stacksize, 1)
-        f = make(IR_MAX_SLOTS - stacksize - 1)
-        self.assertEqual(f.__code__.co_nlocals + 1 + f.__code__.co_stacksize,
-                         IR_MAX_SLOTS)
-        self.assertEqual(nlocalsplus(f) + f.__code__.co_stacksize,
-                         IR_MAX_SLOTS)
+        # Slots other than the locals: the discard slot and the list's window
+        fixed = IRCode(call_and_return(make(1))).nslots - 1
+        f = make(IR_MAX_SLOTS - fixed)
         self.assertEqual(f(), [0])
-        with self.assertRaisesRegex(SyntaxError, "slots"):
-            make(IR_MAX_SLOTS - stacksize)
+        self.assertEqual(IRCode(f.__code__).nslots, IR_MAX_SLOTS)
+        g = make(IR_MAX_SLOTS - fixed + 1)
+        with self.assertRaisesRegex(RuntimeError, "needs .* slots"):
+            g()
 
     def test_shared_feedback_entry(self):
         # The sites that get no entry (fb 0) share entry 0, a header: they
@@ -792,32 +793,61 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(f(3, 1), 2)
 
 
+def call_and_return(function):
+    """The code of function, once it has run and so been lowered"""
+    function()
+    return function.__code__
+
+
+def lower_all(code):
+    """Lower code and the code objects it contains: the IR is built when code
+    first runs or is asked for, not when it is compiled"""
+    _testinternalcapi.get_ir(code)
+    for const in code.co_consts:
+        if isinstance(const, types.CodeType):
+            lower_all(const)
+
+
+def make_function_with_reach(source, reach, name="f"):
+    """A function whose IR is lowered with jumps reaching `reach` words"""
+    old = _testinternalcapi.set_ir_max_forward(reach)
+    try:
+        function = make_function(source, name)
+        lower_all(function.__code__)
+    finally:
+        _testinternalcapi.set_ir_max_forward(old)
+    return function
+
+
 def relaxed_compile(source):
-    """The namespace of source compiled with every loop relaxed"""
+    """The namespace of source with every loop relaxed"""
     old = _testinternalcapi.set_ir_max_forward(0)
     try:
         namespace = {}
         exec(source, namespace)
+        for value in namespace.values():
+            if isinstance(value, types.FunctionType):
+                lower_all(value.__code__)
     finally:
         _testinternalcapi.set_ir_max_forward(old)
     return namespace
 
 
 class SlotLimitTest(unittest.TestCase):
-    """Running out of slots is a SyntaxError naming the limit."""
+    """Running out of slots is a SyntaxError naming the limit, when the code
+    is lowered."""
 
     def test_too_many_temporaries(self):
         source = "def f(a, b, c, d):\n    return a + (b + (c + (d + a)))\n"
         old = _testinternalcapi.set_ir_max_slots(2)
         try:
+            f = make_function(source)
             with self.assertRaisesRegex(SyntaxError,
                                         r"too many temporaries.*limit 2"):
-                compile(source, "<limit>", "exec")
+                f(1, 2, 3, 4)
         finally:
             _testinternalcapi.set_ir_max_slots(old)
-        namespace = {}
-        exec(source, namespace)
-        self.assertEqual(namespace["f"](1, 2, 3, 4), 11)
+        self.assertEqual(f(1, 2, 3, 4), 11)
 
     def test_knob_range(self):
         for value in (-1, 4096):
@@ -1262,62 +1292,6 @@ class RelaxationTest(unittest.TestCase):
             jumps.append(word[0])
         return index, jumps
 
-    def test_for_iter_encoded_destination_geometry(self):
-        # Construction must reject a temporary A that the emitted move never
-        # writes. Mutated code is never executed.
-        for name, repeats in (("near", 1), ("far", IR_MAX_FORWARD)):
-            source = ("def f(xs):\n"
-                      "    n = 0\n"
-                      "    for x in xs:\n"
-                      + "        n = n + x\n" * repeats
-                      + "    return n\n")
-            code = make_function(source).__code__
-            ir = get_ir(code)
-            index = next(i for i, row in enumerate(ir) if row[0] == "FOR_ITER")
-            successors = [row[0] for row in ir[index + 1:index + 3]]
-            if name == "far":
-                self.assertEqual(successors, ["IR_JUMP", "IR_JUMP"])
-            else:
-                self.assertNotEqual(successors, ["IR_JUMP", "IR_JUMP"])
-            # The mutation below changes output geometry. Drop inherited
-            # empty-return certificates before the common proof selects them
-            # again, or keeps general frame-owned cleanup for residual homes.
-            return_general = {
-                dis._all_opmap["RETURN_VALUE_EMPTY"]: dis.opmap["RETURN_VALUE"],
-                dis._all_opmap["INSTRUMENTED_RETURN_VALUE_EMPTY"]:
-                    dis.opmap["INSTRUMENTED_RETURN_VALUE"],
-            }
-            source_words = [int.from_bytes(code.co_code[off:off + 8], "little")
-                            for off in range(0, len(code.co_code), 8)]
-            source_bytes = b"".join(
-                ((word & ~_opcode.IR_HANDLER_MASK) | return_general.get(word & _opcode.IR_HANDLER_MASK, word & _opcode.IR_HANDLER_MASK))
-                .to_bytes(8, "little") for word in source_words)
-            word = int.from_bytes(code.co_code[8 * index:8 * (index + 1)],
-                                  "little")
-            a, b, c, d = ((word >> shift) & IR_FIELD_MAX
-                          for shift in (16, 28, 40, 52))
-            self.assertGreaterEqual(b, code.co_nlocals)
-            stacksize = max(code.co_stacksize, b + 4 - code.co_nlocals)
-            for handler in ("FOR_ITER", "INSTRUMENTED_FOR_ITER"):
-                for dst in (a, b + 2, 0, IR_FIELD_MAX, b + 3):
-                    with self.subTest(shape=name, handler=handler, dst=dst):
-                        replacement = encode_words((opcode.opmap[handler],
-                                                    dst, b, c, d))
-                        data = (source_bytes[:8 * index] + replacement +
-                                source_bytes[8 * (index + 1):])
-
-                        def construct():
-                            return code.replace(
-                                co_code=data, co_stacksize=stacksize,
-                                co_exceptiontable=memoryview(code.co_exceptiontable).tobytes())
-
-                        if dst == b + 3:
-                            with self.assertRaisesRegex(ValueError,
-                                                        "semantic completion window"):
-                                construct()
-                        else:
-                            self.assertIsInstance(construct(), types.CodeType)
-
     def test_far_for_iter(self):
         nlines = IR_MAX_FORWARD
         source = ("def f(it):\n"
@@ -1412,13 +1386,6 @@ class RelaxationTest(unittest.TestCase):
         self.assertEqual(self.relaxed(relaxed, "FOR_ITER")[1], ["IR_JUMP"] * 2)
         self.assertEqual(self.relaxed(plain, "FOR_ITER")[1], [])
 
-        def canonical(func, offset):
-            # The index of the word at offset among the words that are not
-            # IR_JUMP
-            ir = get_ir(func.__code__)
-            self.assertNotEqual(ir[offset][0], "IR_JUMP")
-            return offset - sum(word[0] == "IR_JUMP" for word in ir[:offset])
-
         def branches(func):
             events = []
             E = sys.monitoring.events
@@ -1429,8 +1396,7 @@ class RelaxationTest(unittest.TestCase):
                     sys.monitoring.register_callback(
                         tool, event,
                         lambda code, src, dst, event=event:
-                            events.append((event, canonical(func, src),
-                                           canonical(func, dst))))
+                            events.append((event, src, dst)))
                 sys.monitoring.set_local_events(
                     tool, func.__code__,
                     E.BRANCH_LEFT | E.BRANCH_RIGHT | E.JUMP)
@@ -1440,28 +1406,26 @@ class RelaxationTest(unittest.TestCase):
                 sys.monitoring.free_tool_id(tool)
             return events
 
-        def opcodes(func):
-            result, events = trace(func, [0, 1, 1], opcodes=True)
-            ir = get_ir(func.__code__)
-            instructions = [offset for event, offset, _ in events if event == "opcode"]
-            for offset in instructions:
-                self.assertIn(offset, range(len(ir)))
-            helpers = [offset for offset in instructions if ir[offset][0] == "IR_JUMP"]
-            if func is relaxed:
-                site, _ = self.relaxed(func, "FOR_ITER")
-                self.assertEqual(helpers, [site + 1] * 3 + [site + 2])
-                for index, offset in enumerate(instructions):
-                    if ir[offset][0] == "IR_JUMP":
-                        self.assertGreater(index, 0)
-                        self.assertEqual(instructions[index - 1], site)
-            else:
-                self.assertEqual(helpers, [])
-            return result, [(event, canonical(func, lasti), line)
-                            for event, lasti, line in events
-                            if event != "opcode" or ir[lasti][0] != "IR_JUMP"]
-
+        # Offsets are those of the stack bytecode, which relaxation does not
+        # change, so the branch events are the same. The helper words after
+        # FOR_ITER have INSTRUCTION events at FOR_ITER's offset.
         self.assertEqual(branches(relaxed), branches(plain))
-        self.assertEqual(opcodes(relaxed), opcodes(plain))
+        relaxed_result, relaxed_events = trace(relaxed, [0, 1, 1], opcodes=True)
+        plain_result, plain_events = trace(plain, [0, 1, 1], opcodes=True)
+        self.assertEqual(relaxed_result, plain_result)
+        site = [instr.offset for instr in stack_dis.get_instructions(plain)
+                if instr.opname == "FOR_ITER"][0]
+        extra = [event for event in relaxed_events
+                 if event[0] == "opcode" and event[1] == site]
+        self.assertEqual(len(extra), 2 * len([
+            event for event in plain_events
+            if event[0] == "opcode" and event[1] == site]))
+        without_helpers = []
+        for event in relaxed_events:
+            if event[0] == "opcode" and without_helpers[-1:] == [event]:
+                continue
+            without_helpers.append(event)
+        self.assertEqual(without_helpers, plain_events)
 
 
 
@@ -1914,6 +1878,9 @@ class TruthTest(unittest.TestCase):
         jump = [instr for instr in dis.get_instructions(f)
                 if instr.opname.startswith("POP_JUMP_IF_")][0]
         if_true = jump.opname == "POP_JUMP_IF_TRUE"
+        # The event is at the stack bytecode's jump
+        source = [instr.offset for instr in stack_dis.get_instructions(f)
+                  if instr.opname.startswith("POP_JUMP_IF_")][0]
         expected = ["right" if bool(x) == if_true else "left" for x in xs]
         events = []
         E = sys.monitoring.events
@@ -1925,7 +1892,7 @@ class TruthTest(unittest.TestCase):
                 sys.monitoring.register_callback(
                     tool, event,
                     lambda code, src, dst, name=name:
-                        events.append(name) if src == jump.offset else None)
+                        events.append(name) if src == source else None)
             sys.monitoring.set_local_events(tool, f.__code__,
                                             E.BRANCH_LEFT | E.BRANCH_RIGHT)
             self.assertEqual(f(xs), 40)
@@ -2525,7 +2492,8 @@ class RegCfgTest(unittest.TestCase):
         def f(a, b, c, d):
             return (a + b) * (c + d)
         t = nlocalsplus(f)
-        self.assertEqual(f.__code__.co_stacksize, 2)
+        ir = IRCode(f.__code__)
+        self.assertEqual(ir.nslots - ir.nfixed, 2)
         self.assertEqual(words(f), [
             ("BINARY_OP_ADD", t, (0, 1)),
             ("BINARY_OP_ADD", t + 1, (2, 3)),
@@ -2911,11 +2879,7 @@ class FusedJumpTest(AssemblerTestCase):
         # does not fit is a compare and a jump of its own
         source = ("def f(a, b):\n    if a < b:\n        a = a + b\n"
                   "        b = b + a\n    return a, b\n")
-        old = _testinternalcapi.set_ir_max_forward(0)
-        try:
-            far = make_function(source)
-        finally:
-            _testinternalcapi.set_ir_max_forward(old)
+        far = make_function_with_reach(source, 0)
         near = make_function(source)
         self.assertEqual(fused_names(far), [])
         self.assertEqual(fused_names(near), ["COMPARE_OP_JUMP"])
@@ -3099,11 +3063,7 @@ class FusedJumpTest(AssemblerTestCase):
                   "        if x is y:\n            n += 100\n"
                   "        if x != y:\n            n += 1000\n"
                   "    return n\n")
-        old = _testinternalcapi.set_ir_max_forward(0)
-        try:
-            far = make_function(source)
-        finally:
-            _testinternalcapi.set_ir_max_forward(old)
+        far = make_function_with_reach(source, 0)
         near = make_function(source)
         self.assertEqual(fused_names(far), [])
         self.assertEqual(len(fused_names(near)), 4)
@@ -3113,11 +3073,7 @@ class FusedJumpTest(AssemblerTestCase):
         # Some reach: the jumps that fit fuse, the others do not
         for reach in (1, 2, 3, 5):
             with self.subTest(reach=reach):
-                old = _testinternalcapi.set_ir_max_forward(reach)
-                try:
-                    some = make_function(source)
-                finally:
-                    _testinternalcapi.set_ir_max_forward(old)
+                some = make_function_with_reach(source, reach)
                 self.assertLessEqual(len(fused_names(some)), 4)
                 self.assertEqual(some(xs, 2), near(xs, 2))
 

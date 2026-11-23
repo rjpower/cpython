@@ -1762,7 +1762,6 @@ register_resume_null_states(PyCodeObject *code, RegisterResumeAnalysis *analysis
         count--;
         queued[pc] = 0;
         const uint64_t *before = analysis->null_states + (size_t)pc * stride;
-        _PyIRWord word = _PyCode_IRWords(code)[pc];
         int arg = _PyCode_InstrOparg(code, pc);
         for (int e = analysis->edge_heads[pc]; e >= 0;
              e = analysis->edges[e].next)

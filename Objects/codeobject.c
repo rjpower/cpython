@@ -430,17 +430,6 @@ get_localsplus_names(PyCodeObject *co, _PyLocals_Kind kind, int num)
     return names;
 }
 
-/* The units that an entry of each kind takes at least (pycore_feedback.h) */
-static const uint8_t fb_kind_units[] = {
-    [FB_COUNTER] = sizeof(_PyFbHeader) / 8,
-    [FB_BRANCH] = sizeof(_PyFbHeader) / 8,
-    [FB_UNARY] = sizeof(_PyFbUnary) / 8,
-    [FB_BINARY] = sizeof(_PyFbBinary) / 8,
-    [FB_ATTR] = sizeof(_PyFbAttr) / 8,
-    [FB_GLOBAL] = sizeof(_PyFbGlobal) / 8,
-    [FB_CALL] = sizeof(_PyFbCall) / 8,
-};
-
 int
 _PyCode_Validate(struct _PyCodeConstructor *con)
 {

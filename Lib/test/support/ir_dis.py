@@ -144,12 +144,16 @@ class IRCode:
         """The constant each constant slot holds, by slot: the hidden locals
         that follow the locals, cells and free variables, filled when a
         frame is created"""
-        first = self._co.co_nlocalsplus
+        first = len(_testinternalcapi.get_co_localskinds(self._co))
         return {first + k: value for k, value in enumerate(self.const_values)}
 
     def co_positions(self):
         positions = list(self._co.co_positions())
-        return iter([positions[unit] for unit in self._pcmap])
+        # A code object with a short or empty location table has no position
+        # for the units past its end
+        none = (None, None, None, None)
+        return iter([positions[unit] if unit < len(positions) else none
+                     for unit in self._pcmap])
 
     def co_lines(self):
         """(start, end, line) per run of words on a line, in word indices"""

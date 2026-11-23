@@ -4,12 +4,11 @@
 Each case runs a script in a subprocess with the JIT off and with it on,
 and compares what the two print."""
 
-import ctypes
 import os
 import sys
 import textwrap
 import unittest
-from test.support import script_helper
+from test.support import import_helper, script_helper
 
 try:
     import _testinternalcapi
@@ -486,9 +485,10 @@ class TestUnwind(unittest.TestCase):
     def unit_of(self, source):
         namespace = {}
         exec(textwrap.dedent(source), namespace)
-        code = namespace["f"].__code__
-        self.assertTrue(_testinternalcapi.jit_compile(code))
-        return _testinternalcapi.jit_unit(code)
+        function = namespace["f"]
+        self.assertTrue(_testinternalcapi.jit_compile(function.__code__))
+        # The unit lives as long as the function's code, which the caller keeps
+        return function, _testinternalcapi.jit_unit(function.__code__)
 
     def parse_frame(self, frame, frame_offset):
         """Check the CIE and the FDE's header; returns the FDE's CFI program"""
@@ -519,12 +519,13 @@ class TestUnwind(unittest.TestCase):
         return frame[pc_field + 9:fde_start + 4 + fde_size]
 
     def test_frame_states_the_code_exactly(self):
-        unit = self.unit_of("""
+        function, unit = self.unit_of("""
             def f(n, total=0):
                 for i in range(n):
                     total += i
                 return total
         """)
+        ctypes = import_helper.import_module("ctypes")
         start, size = unit["ranges"][0]
         code = ctypes.string_at(start, size)
         program = self.parse_frame(unit["eh_frame"], size)

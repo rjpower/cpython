@@ -28,8 +28,11 @@ extern "C" {
                            const void *entry);
 
    where entry is entries[word index].  At every word boundary of the code
-   r12 holds tstate, r13 frame, r14 word 0 of the frame's executing copy and
-   rbx the unit; the stack is 16-byte aligned; every value is in the frame.
+   r12 holds tstate, r13 frame, r14 word 0 of the frame's executing copy, r15
+   frame->base and rbx the unit; the stack is 16-byte aligned; every value
+   is in the frame.  A word runs the handler it named at compile time only
+   while the word still names it, since specialisation rewrites the handler
+   and its feedback entry together.
 
    The JIT runs in the GIL build on Linux x86-64 (_PY_JIT_SUPPORTED). */
 
@@ -111,8 +114,9 @@ extern void _PyJit_FreeUnits(_PyCodeExec *exec);
  * _testinternalcapi. */
 PyAPI_FUNC(_PyJitUnit *) _PyJit_Compile(PyCodeObject *code);
 
-/* The address of the function form of a handler (Python/ceval.c) */
-extern const void *_PyEval_HandlerForm(int handler);
+/* The function forms of the handlers, ir_handler_forms (Python/ceval.c), as
+ * code addresses indexed by handler */
+extern const void *const *_PyEval_HandlerForms(void);
 
 #else  /* !_PY_JIT_SUPPORTED */
 

@@ -2758,11 +2758,10 @@ IR_HOT_ROUTINE(gen_complete, PyValue gen_value);
 #pragma GCC diagnostic pop
 
 #ifdef _PY_JIT_SUPPORTED
-const void *
-_PyEval_HandlerForm(int handler)
+const void *const *
+_PyEval_HandlerForms(void)
 {
-    assert(handler >= 0 && handler < IR_NUM_HANDLERS);
-    return (const void *)ir_handler_forms[handler];
+    return (const void *const *)ir_handler_forms;
 }
 
 /* The unit to run the transfer t in, or NULL to run its word by its form.
@@ -2804,8 +2803,14 @@ jit_enter(PyThreadState *tstate, _PyJitUnit *unit, _PyIRTransfer t)
     assert(t.frame->ir_words == unit->words);
     assert(t.next >= t.frame->ir_words &&
            t.next < t.frame->ir_words + unit->nwords);
-    return ((jit_entry)unit->code.start)(
+    /* A form that pops the frame can drop the last reference to its code,
+     * which frees the exec and its units while the unit runs: the loop
+     * keeps the code until the unit has left. */
+    PyCodeObject *code = (PyCodeObject *)Py_NewRef(_PyFrame_GetCode(t.frame));
+    t = ((jit_entry)unit->code.start)(
         tstate, t.frame, unit->entries[t.next - t.frame->ir_words]);
+    Py_DECREF(code);
+    return t;
 }
 #endif
 

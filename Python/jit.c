@@ -90,11 +90,12 @@ _PyJit_IsAvailable(void)
     return _PyJitMemory_Init() == 0;
 }
 
-/* Where an operand word's entry leads: no transfer names one. */
+/* Where an operand word's entry leads (no transfer names one), and in a
+ * debug build a frame whose base moved. */
 static void
 bad_entry(void)
 {
-    Py_FatalError("baseline JIT: entered an operand word");
+    Py_FatalError("baseline JIT: an operand word entered, or a frame's base moved");
 }
 
 /* What compiled code tests after a word: RETIRED after a word that may run
@@ -124,38 +125,50 @@ static_target(const _PyIRWord *words, uint32_t i)
 
 #define R(X) _PyJitReg_##X
 #define AT(B, D) _PyJitMem_At(R(B), (D))
+#define WORD_AT(I) AT(R14, (int32_t)((I) * sizeof(_PyIRWord)))
 
-/* Emit the unit's code for words: the entry, the shared exits, a block per
- * head word and the entry table.  labels has a slot per word, -1 for the
- * operand words.  Returns the label of the table. */
-static _PyJitLabel
-emit_unit(_PyJitAsm *a, _PyJitUnit *unit, const _PyIRWord *words,
-          uint32_t nwords, _PyJitLabel *labels)
+/* The state of one unit's compilation: the words, a label per head word
+ * (-1 for the operand words) and the unit's shared exits.  Every piece
+ * below may be emitted anywhere in the code, hot or cold: none falls
+ * through to what follows it. */
+typedef struct {
+    _PyJitAsm *a;
+    _PyJitUnit *unit;
+    const _PyIRWord *words;
+    uint32_t nwords;
+    _PyJitLabel *labels;
+    _PyJitLabel leave;      // leave the unit with the transfer in rax:rdx
+    _PyJitLabel backedge;   // a backward jump of an invalid unit, in its frame
+    _PyJitLabel live;       // call the live handler of the word at rdx
+    _PyJitLabel trap;       // an operand word's entry, a broken invariant
+} _PyJitCompiler;
+
+/* The entry, the shared exits and the stubs.  Registers at a word boundary:
+ * r12 tstate, r13 frame, r14 word 0, r15 frame->base, rbx the unit; rsp is
+ * 16-byte aligned. */
+static void
+emit_frame(_PyJitCompiler *c)
 {
-    _PyJitLabel leave = _PyJitAsm_NewLabel(a);
-    _PyJitLabel backedge = _PyJitAsm_NewLabel(a);
-    _PyJitLabel trap = _PyJitAsm_NewLabel(a);
-    _PyJitLabel table = _PyJitAsm_NewLabel(a);
-    for (uint32_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
-        labels[i] = _PyJitAsm_NewLabel(a);
-    }
-
-    /* The entry: enter(tstate, frame, address of the word's block) */
+    _PyJitAsm *a = c->a;
+    /* enter(tstate, frame, address of the word's block) */
     _PyJitAsm_Push(a, R(RBP));
     _PyJitAsm_MovRR(a, R(RBP), R(RSP));
     _PyJitAsm_Push(a, R(RBX));
     _PyJitAsm_Push(a, R(R12));
     _PyJitAsm_Push(a, R(R13));
     _PyJitAsm_Push(a, R(R14));
+    _PyJitAsm_Push(a, R(R15));
+    _PyJitAsm_AluRI(a, _PyJitAlu_SUB, R(RSP), 8);
     _PyJitAsm_MovRR(a, R(R12), R(RDI));
     _PyJitAsm_MovRR(a, R(R13), R(RSI));
-    _PyJitAsm_MovRM(a, R(R14),
-                    AT(R13, offsetof(_PyInterpreterFrame, ir_words)));
-    _PyJitAsm_MovImm(a, R(RBX), (int64_t)(uintptr_t)unit);
+    _PyJitAsm_MovRM(a, R(R14), AT(R13, offsetof(_PyInterpreterFrame, ir_words)));
+    _PyJitAsm_MovRM(a, R(R15), AT(R13, offsetof(_PyInterpreterFrame, base)));
+    _PyJitAsm_MovImm(a, R(RBX), (int64_t)(uintptr_t)c->unit);
     _PyJitAsm_JmpR(a, R(RDX));
 
-    /* The exit, with the transfer in rax:rdx */
-    _PyJitAsm_Bind(a, leave);
+    _PyJitAsm_Bind(a, c->leave);
+    _PyJitAsm_AluRI(a, _PyJitAlu_ADD, R(RSP), 8);
+    _PyJitAsm_Pop(a, R(R15));
     _PyJitAsm_Pop(a, R(R14));
     _PyJitAsm_Pop(a, R(R13));
     _PyJitAsm_Pop(a, R(R12));
@@ -163,9 +176,9 @@ emit_unit(_PyJitAsm *a, _PyJitUnit *unit, const _PyIRWord *words,
     _PyJitAsm_Pop(a, R(RBP));
     _PyJitAsm_Ret(a);
 
-    /* A backward jump of a stale or retired unit, in the same frame: a
-     * warm-up event, which may recompile; then leave with the transfer. */
-    _PyJitAsm_Bind(a, backedge);
+    /* A warm-up event, which may recompile; then leave with the transfer,
+     * whose frame is the unit's. */
+    _PyJitAsm_Bind(a, c->backedge);
     _PyJitAsm_Push(a, R(RDX));
     _PyJitAsm_AluRI(a, _PyJitAlu_SUB, R(RSP), 8);
     _PyJitAsm_MovRR(a, R(RDI), R(R12));
@@ -174,62 +187,129 @@ emit_unit(_PyJitAsm *a, _PyJitUnit *unit, const _PyIRWord *words,
     _PyJitAsm_AluRI(a, _PyJitAlu_ADD, R(RSP), 8);
     _PyJitAsm_Pop(a, R(RDX));
     _PyJitAsm_MovRR(a, R(RAX), R(R13));
-    _PyJitAsm_Jmp(a, leave);
+    _PyJitAsm_Jmp(a, c->leave);
 
-    _PyJitAsm_Bind(a, trap);
+    _PyJitAsm_Bind(a, c->trap);
     _PyJitAsm_CallAbs(a, (const void *)bad_entry);
 
-    for (uint32_t i = 0; i < nwords; ) {
-        _PyIRWord w = words[i];
-        int handler = IR_HANDLER(w);
-        uint32_t next = i + (uint32_t)_PyIR_WordLength(w);
-        const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
-        _PyJitAsm_Bind(a, labels[i]);
-        _PyJitAsm_MovRR(a, R(RDI), R(R12));
-        _PyJitAsm_MovRR(a, R(RSI), R(R13));
-        _PyJitAsm_Lea(a, R(RDX), AT(R14, (int32_t)(i * sizeof(_PyIRWord))));
-        _PyJitAsm_MovImm(a, R(RCX), (int64_t)w);
-        _PyJitAsm_CallAbs(a, _PyEval_HandlerForm(handler));
-        /* Another frame: a call, a return, a yield, a resume */
-        _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RAX), R(R13));
-        _PyJitAsm_Jcc(a, _PyJitCond_NE, leave);
-        int target = static_target(words, i);
-        if (target >= 0 && ((uint32_t)target >= nwords || labels[target] < 0)) {
-            target = -1;
-        }
-        if (target >= 0 && (uint32_t)target <= i) {
-            _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
-            _PyJitAsm_TestRR(a, R(RCX), R(RCX));
-            _PyJitAsm_Jcc(a, _PyJitCond_NE, backedge);
-        }
-        else if (fmt->effects & MAY_RUN_PYTHON) {
-            _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
-            _PyJitAsm_TestRI(a, R(RCX), _PyJIT_RETIRED);
-            _PyJitAsm_Jcc(a, _PyJitCond_NE, leave);
-        }
-        if (target >= 0) {
-            _PyJitAsm_Lea(a, R(RCX),
-                          AT(R14, (int32_t)((uint32_t)target * sizeof(_PyIRWord))));
-            _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
-            _PyJitAsm_Jcc(a, _PyJitCond_E, labels[target]);
-        }
-        if (!(fmt->flags & _PyIR_JUMP_ALWAYS) && next < nwords) {
-            /* The next word's block follows */
-            _PyJitAsm_Lea(a, R(RCX),
-                          AT(R14, (int32_t)(next * sizeof(_PyIRWord))));
-            _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
-            _PyJitAsm_Jcc(a, _PyJitCond_NE, leave);
-        }
-        else {
-            _PyJitAsm_Jmp(a, leave);
-        }
-        i = next;
-    }
+    /* Called with rdx at a word whose handler is no longer the one compiled:
+     * runs the word's live handler by its form, as the word's own call
+     * would. */
+    _PyJitAsm_Bind(a, c->live);
+    _PyJitAsm_MovRM(a, R(RCX), AT(RDX, 0));
+    _PyJitAsm_MovRR(a, R(RAX), R(RCX));
+    _PyJitAsm_AluRI(a, _PyJitAlu_AND, R(RAX), IR_HANDLER_MASK);
+    _PyJitAsm_MovRR(a, R(RDI), R(R12));
+    _PyJitAsm_MovRR(a, R(RSI), R(R13));
+    _PyJitAsm_MovImm(a, R(R8), (int64_t)(uintptr_t)_PyEval_HandlerForms());
+    _PyJitAsm_JmpM(a, _PyJitMem_Indexed(R(R8), R(RAX), 3, 0));
+}
 
+/* The continuation of word i, with its transfer in rax:rdx: the next word or
+ * the word's static target in the same frame by a native jump, anything
+ * else by leaving.  The unit's invalid byte is tested after a word that may
+ * run Python (RETIRED: monitoring went on) and at a backward jump (either:
+ * the backedge stub may recompile). */
+static void
+emit_continuation(_PyJitCompiler *c, uint32_t i)
+{
+    _PyJitAsm *a = c->a;
+    _PyIRWord w = c->words[i];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(w));
+    uint32_t next = i + (uint32_t)_PyIR_WordLength(w);
+    /* Another frame: a call, a return, a yield, a resume */
+    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RAX), R(R13));
+    _PyJitAsm_Jcc(a, _PyJitCond_NE, c->leave);
+    int target = static_target(c->words, i);
+    if (target >= 0 && ((uint32_t)target >= c->nwords || c->labels[target] < 0)) {
+        target = -1;
+    }
+    if (target >= 0 && (uint32_t)target <= i) {
+        _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
+        _PyJitAsm_TestRR(a, R(RCX), R(RCX));
+        _PyJitAsm_Jcc(a, _PyJitCond_NE, c->backedge);
+    }
+    else if (fmt->effects & MAY_RUN_PYTHON) {
+        _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
+        _PyJitAsm_TestRI(a, R(RCX), _PyJIT_RETIRED);
+        _PyJitAsm_Jcc(a, _PyJitCond_NE, c->leave);
+    }
+    if (target >= 0) {
+        _PyJitAsm_Lea(a, R(RCX), WORD_AT((uint32_t)target));
+        _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
+        _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[target]);
+    }
+    if (!(fmt->flags & _PyIR_JUMP_ALWAYS) && next < c->nwords) {
+        _PyJitAsm_Lea(a, R(RCX), WORD_AT(next));
+        _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
+        _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[next]);
+    }
+    _PyJitAsm_Jmp(a, c->leave);
+}
+
+/* Word i as a call of its handler's function form, with the word's address
+ * and bits as immediates, then its continuation.  Specialisation rewrites a
+ * word's handler and its feedback entry together, and a handler's guards are
+ * only sound against the entry that its own specialisation wrote, so the
+ * compiled handler runs only while the word still names it; otherwise the
+ * word's live handler runs.  B2's slow path for a word is this code. */
+static void
+emit_form_word(_PyJitCompiler *c, uint32_t i)
+{
+    _PyJitAsm *a = c->a;
+    _PyIRWord w = c->words[i];
+    _PyJitLabel changed = _PyJitAsm_NewLabel(a);
+    _PyJitLabel called = _PyJitAsm_NewLabel(a);
+#ifdef Py_DEBUG
+    /* base is fixed while a frame runs */
+    _PyJitLabel base_ok = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_AluRM(a, _PyJitAlu_CMP, R(R15),
+                    AT(R13, offsetof(_PyInterpreterFrame, base)));
+    _PyJitAsm_Jcc(a, _PyJitCond_E, base_ok);
+    _PyJitAsm_Jmp(a, c->trap);
+    _PyJitAsm_Bind(a, base_ok);
+#endif
+    _PyJitAsm_MovzxRM16(a, R(RCX), WORD_AT(i));
+    _PyJitAsm_AluRI(a, _PyJitAlu_CMP, R(RCX), (int32_t)(w & 0xFFFF));
+    _PyJitAsm_Jcc(a, _PyJitCond_NE, changed);
+    _PyJitAsm_MovRR(a, R(RDI), R(R12));
+    _PyJitAsm_MovRR(a, R(RSI), R(R13));
+    _PyJitAsm_Lea(a, R(RDX), WORD_AT(i));
+    _PyJitAsm_MovImm(a, R(RCX), (int64_t)w);
+    _PyJitAsm_CallAbs(a, _PyEval_HandlerForms()[IR_HANDLER(w)]);
+    _PyJitAsm_Bind(a, called);
+    emit_continuation(c, i);
+
+    _PyJitAsm_Bind(a, changed);
+    _PyJitAsm_Lea(a, R(RDX), WORD_AT(i));
+    _PyJitAsm_LeaLabel(a, R(RAX), c->live);
+    _PyJitAsm_CallR(a, R(RAX));
+    _PyJitAsm_Jmp(a, called);
+}
+
+/* The unit's code: the frame, a block per head word and the entry table.
+ * Returns the label of the table. */
+static _PyJitLabel
+emit_unit(_PyJitCompiler *c)
+{
+    _PyJitAsm *a = c->a;
+    c->leave = _PyJitAsm_NewLabel(a);
+    c->backedge = _PyJitAsm_NewLabel(a);
+    c->live = _PyJitAsm_NewLabel(a);
+    c->trap = _PyJitAsm_NewLabel(a);
+    for (uint32_t i = 0; i < c->nwords; i += _PyIR_WordLength(c->words[i])) {
+        c->labels[i] = _PyJitAsm_NewLabel(a);
+    }
+    emit_frame(c);
+    for (uint32_t i = 0; i < c->nwords; i += _PyIR_WordLength(c->words[i])) {
+        _PyJitAsm_Bind(a, c->labels[i]);
+        emit_form_word(c, i);
+    }
+    _PyJitLabel table = _PyJitAsm_NewLabel(a);
     _PyJitAsm_Align(a, 8);
     _PyJitAsm_Bind(a, table);
-    for (uint32_t i = 0; i < nwords; i++) {
-        _PyJitAsm_QuadLabel(a, labels[i] >= 0 ? labels[i] : trap);
+    for (uint32_t i = 0; i < c->nwords; i++) {
+        _PyJitAsm_QuadLabel(a, c->labels[i] >= 0 ? c->labels[i] : c->trap);
     }
     return table;
 }
@@ -268,7 +348,9 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     unit->words = words;
     _PyJitAsm a;
     _PyJitAsm_Init(&a);
-    _PyJitLabel table = emit_unit(&a, unit, words, nwords, labels);
+    _PyJitCompiler c = {.a = &a, .unit = unit, .words = words, .nwords = nwords,
+                        .labels = labels};
+    _PyJitLabel table = emit_unit(&c);
     int placed = _PyJitAsm_Place(&a, &unit->code);
     size_t table_offset = placed < 0 ? 0 : _PyJitAsm_LabelOffset(&a, table);
     _PyJitAsm_Fini(&a);

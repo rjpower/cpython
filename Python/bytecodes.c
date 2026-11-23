@@ -333,7 +333,9 @@ dummy_func(
             PyValue_XCLOSE(value);
         }
 
-        leaf inline_ok op(_POP_TOP_INT, (value --)) {
+        leaf inline_ok op(_POP_TOP_INT, (value: consumed exact(PyLong_Type) --))
+            effects(writes) exits(next)
+        {
             assert(PyValue_LongCheckExact(value));
             PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
         }
@@ -348,7 +350,9 @@ dummy_func(
         // reference, so there is nothing to close. The compiler cannot prove
         // this from the float guard's two ranges, and a close here would
         // cost a pointer test and a dealloc call per operand.
-        leaf inline_ok op(_POP_TOP_NUMBER, (value --)) {
+        leaf inline_ok op(_POP_TOP_NUMBER, (value: consumed inline --))
+            effects() exits(next)
+        {
             assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
             DEAD(value);
         }
@@ -533,7 +537,9 @@ dummy_func(
             EXIT_IF(!PyList_CheckExact(o));
         }
 
-        op(_GUARD_TOS_LIST, (tos -- tos)) {
+        op(_GUARD_TOS_LIST, (tos: object -- tos: exact(PyList_Type)))
+            effects(reads) exits(next, miss)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(tos);
             EXIT_IF(!PyList_CheckExact(o));
         }
@@ -655,11 +661,15 @@ dummy_func(
         // The int guards accept an inline int only: a boxed exact int is
         // outside the inline range (canonical construction). The uops after
         // them read the value with PyValue_InlineInt64() or scaled.
-        leaf inline_ok op(_GUARD_NOS_INT, (left, unused -- left, unused)) {
+        leaf inline_ok op(_GUARD_NOS_INT, (left, unused -- left: inline_int, unused))
+            effects() exits(next, miss)
+        {
             EXIT_IF(!PyValue_IsInlineInt(left));
         }
 
-        leaf inline_ok op(_GUARD_TOS_INT, (value -- value)) {
+        leaf inline_ok op(_GUARD_TOS_INT, (value -- value: inline_int))
+            effects() exits(next, miss)
+        {
             EXIT_IF(!PyValue_IsInlineInt(value));
         }
 
@@ -689,7 +699,11 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        leaf inline_ok pure op(_BINARY_OP_ADD_INT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_ADD_INT,
+                (left: taken inline_int, right: taken inline_int
+                 -- res: owned exact(PyLong_Type), l: moved(left), r: moved(right)))
+            effects(allocates, raises) exits(next, raise)
+        {
             int64_t a = _PyValue_IntScaled(left);
             int64_t b = _PyValue_IntScaled(right);
             int64_t sum;
@@ -730,7 +744,7 @@ dummy_func(
         macro(BINARY_OP_MULTIPLY_INT) =
             _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_MULTIPLY_INT + _POP_TOP_INT + _POP_TOP_INT;
 
-        macro(BINARY_OP_ADD_INT) =
+        macro(BINARY_OP_ADD_INT) region(inline) =
             _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_ADD_INT + _POP_TOP_INT + _POP_TOP_INT;
 
         macro(BINARY_OP_SUBTRACT_INT) =
@@ -906,7 +920,11 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        leaf inline_ok pure op(_BINARY_OP_ADD_FLOAT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_ADD_FLOAT,
+                (left: taken, right: taken
+                 -- res: owned exact(PyFloat_Type), l: moved(left) inline, r: moved(right) inline))
+            effects(allocates, raises) exits(next, miss, raise)
+        {
             double a, b;
             EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
             STAT_INC(BINARY_OP, hit);
@@ -949,7 +967,7 @@ dummy_func(
 
         macro(BINARY_OP_MULTIPLY_FLOAT) =
             unused/5 + _BINARY_OP_MULTIPLY_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;
-        macro(BINARY_OP_ADD_FLOAT) =
+        macro(BINARY_OP_ADD_FLOAT) region(inline) =
             unused/5 + _BINARY_OP_ADD_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;
         macro(BINARY_OP_SUBTRACT_FLOAT) =
             unused/5 + _BINARY_OP_SUBTRACT_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;
@@ -1182,7 +1200,9 @@ dummy_func(
             EXIT_IF(!PyTuple_CheckExact(o));
         }
 
-        op(_GUARD_TOS_TUPLE, (tos -- tos)) {
+        op(_GUARD_TOS_TUPLE, (tos: object -- tos: exact(PyTuple_Type)))
+            effects(reads) exits(next, miss)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(tos);
             EXIT_IF(!PyTuple_CheckExact(o));
         }
@@ -1909,7 +1929,9 @@ dummy_func(
             UNPACK_SEQUENCE_LIST,
         };
 
-        specializing op(_SPECIALIZE_UNPACK_SEQUENCE, (seq -- seq)) {
+        specializing op(_SPECIALIZE_UNPACK_SEQUENCE, (seq -- seq))
+            effects(reads, writes) exits(next, jump)
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -1923,7 +1945,9 @@ dummy_func(
             (void)seq;
         }
 
-        window op(_UNPACK_SEQUENCE, (seq -- unused[oparg], top[0])) {
+        window op(_UNPACK_SEQUENCE, (seq: consumed -- unused[oparg], top[0]: owned))
+            effects(runs_python) exits(next, raise)
+        {
             // A number is not iterable
             if (!PyValue_IsObject(seq)) {
                 _PyErr_Format(tstate, PyExc_TypeError,
@@ -1938,12 +1962,14 @@ dummy_func(
             ERROR_IF(res == 0);
         }
 
-        macro(UNPACK_SEQUENCE) = unused/1 + _SPECIALIZE_UNPACK_SEQUENCE + _UNPACK_SEQUENCE;
+        macro(UNPACK_SEQUENCE) region(shared) = unused/1 + _SPECIALIZE_UNPACK_SEQUENCE + _UNPACK_SEQUENCE;
 
-        macro(UNPACK_SEQUENCE_TUPLE) =
+        macro(UNPACK_SEQUENCE_TUPLE) region(shared) =
             _GUARD_TOS_TUPLE + unused/1 + _UNPACK_SEQUENCE_TUPLE;
 
-        op(_UNPACK_SEQUENCE_TUPLE, (seq -- values[oparg])) {
+        op(_UNPACK_SEQUENCE_TUPLE, (seq: consumed exact(PyTuple_Type) -- values[oparg]: owned))
+            effects(reads, releases) exits(next, miss)
+        {
             PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
             assert(PyTuple_CheckExact(seq_o));
             EXIT_IF(PyTuple_GET_SIZE(seq_o) != oparg);
@@ -1952,10 +1978,12 @@ dummy_func(
             DECREF_INPUTS();
         }
 
-        macro(UNPACK_SEQUENCE_LIST) =
+        macro(UNPACK_SEQUENCE_LIST) region(shared) =
             _GUARD_TOS_LIST + unused/1 + _UNPACK_SEQUENCE_LIST;
 
-        op(_UNPACK_SEQUENCE_LIST, (seq -- values[oparg])) {
+        op(_UNPACK_SEQUENCE_LIST, (seq: consumed exact(PyList_Type) -- values[oparg]: owned))
+            effects(reads, releases) exits(next, deopt)
+        {
             PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
             assert(PyList_CheckExact(seq_o));
             DEOPT_IF(!LOCK_OBJECT(seq_o));
@@ -5523,7 +5551,9 @@ dummy_func(
             top = PyValue_DUP(bottom);
         }
 
-        specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs)) {
+        specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs))
+            effects(reads, writes) exits(next, jump)
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -5538,13 +5568,15 @@ dummy_func(
             assert(oparg <= NB_OPARG_LAST);
         }
 
-        inline_ok op(_BINARY_OP, (lhs, rhs -- res)) {
+        inline_ok op(_BINARY_OP, (lhs: consumed, rhs: consumed -- res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             res = value_binary_op(oparg, lhs, rhs);
             DECREF_INPUTS();
             ERROR_IF(PyValue_IsNull(res));
         }
 
-        macro(BINARY_OP) = unused/1 + _SPECIALIZE_BINARY_OP + unused/4 + _BINARY_OP;
+        macro(BINARY_OP) region(shared) = unused/1 + _SPECIALIZE_BINARY_OP + unused/4 + _BINARY_OP;
 
         pure inst(SWAP, (bottom, unused[oparg-2], top --
                     bottom, unused[oparg-2], top)) {

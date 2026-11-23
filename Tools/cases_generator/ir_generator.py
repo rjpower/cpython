@@ -73,6 +73,7 @@ Invariants:
 
 import argparse
 import io
+import ir_leaf
 import ir_numbers
 from ir_records import (
     ASSIGNMENTS, CONST, DEOPT, ENTER_FRAME, EXIT_GUARD, FEEDBACK, GUARD_TOKENS,
@@ -5971,11 +5972,12 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
             if site.text in GUARD_TOKENS:
                 facts, reason = guard_facts(part, site, subjects)
                 guards.append(Guard(GUARD_TOKENS[site.text], site, facts=facts, reason=reason))
-        uops.append(UopRecord(part.name, inputs, outs,
-                              uop_feedback(part, schema, inst),
+        feedback = uop_feedback(part, schema, inst)
+        leaf = ir_leaf.leaf_of(part, {fb.name: fb.field.ctype for fb in feedback})
+        uops.append(UopRecord(part.name, inputs, outs, feedback,
                               part.properties.oparg, tuple(guards),
                               transfers + uop_transfers(part, deopt), infer_effects(part),
-                              result_facts(part, outs), "pure" in part.annotations))
+                              result_facts(part, outs), "pure" in part.annotations, leaf))
     results = []
     for j, (value, external, item, _) in enumerate(walk.outputs):
         if external >= 0 and walk.values[value].external >= 0:
@@ -6025,6 +6027,7 @@ def build_records(analysis: Analysis,
         elif generator_word_entry(name, analysis) != name:
             record = replace(record, form=f"SHARED_BODY({generator_word_entry(name, analysis)})")
         check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
+        ir_leaf.check_leaf(record, [p for p in inst.parts if isinstance(p, Uop)])
         records[name] = record
     return records
 
@@ -6741,6 +6744,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.declared_closes = set(emitter.close_names)
     emit_handler(record, emitter, out, {})
     check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
+    ir_leaf.check_leaf(record, [p for p in inst.parts if isinstance(p, Uop)])
 
 
 def canonical_body_tokens(part: Uop) -> list[str]:

@@ -1,12 +1,15 @@
 """Leaf uops (Tools/cases_generator/ir_leaf.py): the value primitives' specs
-against their C definitions."""
+against their C definitions, and the leaf-subset checker."""
 
 import ctypes
 import math
+from pathlib import Path
 import random
+import tempfile
 import types
 import unittest
 
+from test import test_generated_cases as generated
 from test import test_tools
 from test.support import import_helper
 
@@ -307,6 +310,152 @@ class PrimitiveTests(unittest.TestCase):
         finally:
             for addr, byte in saved:
                 ctypes.c_uint8.from_address(addr).value = byte
+
+
+def analyze(source):
+    "The uops of DSL source"
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "bytecodes.c"
+        path.write_text(generated.parser.BEGIN_MARKER + "\n" + source + "\n" +
+                        generated.parser.END_MARKER)
+        with generated.handle_stderr():
+            return generated.analyzer.analyze_files([str(path)]).uops
+
+
+# Bodies outside the subset, and the construct the checker names
+REFUSALS = {
+    "a for loop": """
+        for (int i = 0; i < 3; i++) {
+            EXIT_IF(i);
+        }""",
+    "a call of SPAM, which is neither a listed primitive nor a declared helper":
+        "res = PyValue_FromInlineInt(SPAM(value));",
+    "untyped memory":
+        "char *p = (char *)PyValue_AsKnownObjectBorrow(value); res = value; DEAD(value);",
+    "field PyTypeObject.tp_as_mapping is not listed": """
+        EXIT_IF(Py_TYPE(PyValue_AsKnownObjectBorrow(value))->tp_as_mapping == NULL);
+        res = value; DEAD(value);""",
+    "the evaluator's tstate": "EXIT_IF(tstate == NULL); res = value; DEAD(value);",
+    "a value used as a condition": "EXIT_IF(value); res = value; DEAD(value);",
+}
+
+
+class CheckerTests(unittest.TestCase):
+    def test_refusals(self):
+        for expected, body in REFUSALS.items():
+            with self.subTest(expected):
+                uop = analyze(f"op(_OP, (value -- res)) {{ {body} }}")["_OP"]
+                with self.assertRaises(ir_leaf.LeafError) as cm:
+                    ir_leaf.translate(uop)
+                self.assertIn(expected, str(cm.exception))
+
+    def test_array_operand(self):
+        uop = analyze("op(_OP, (values[oparg] -- )) { DECREF_INPUTS(); }")["_OP"]
+        with self.assertRaisesRegex(ir_leaf.LeafError, r"array input values\[oparg\]"):
+            ir_leaf.translate(uop)
+
+    def test_annotated_uop_must_be_leaf(self):
+        uops = analyze("""
+            leaf op(_OK, (value -- value)) {
+                EXIT_IF(!PyValue_IsInlineInt(value));
+            }
+            leaf op(_BAD, (value -- res)) {
+                res = PyValue_FromInlineInt(SPAM(value));
+            }""")
+        records = {}
+        for name, uop in uops.items():
+            leaf = ir_leaf.leaf_of(uop, {})
+            records[name] = types.SimpleNamespace(
+                uops=[types.SimpleNamespace(name=name, feedback=(), leaf=leaf)])
+        ir_leaf.check_leaf(records["_OK"], [uops["_OK"]])
+        with self.assertRaisesRegex(SyntaxError, "_BAD is annotated leaf, but a call of SPAM"):
+            ir_leaf.check_leaf(records["_BAD"], [uops["_BAD"]])
+
+    def test_translation(self):
+        uop = analyze("""
+            op(_OP, (value -- res, v)) {
+                EXIT_IF(!PyValue_IsInlineInt(value));
+                res = PyValue_IsNone(value) ? PyValue_False : PyValue_True;
+                v = value;
+                DEAD(value);
+            }""")["_OP"]
+        body = ir_leaf.translate(uop)
+        self.assertEqual(body.dump(), [
+            "b0:",
+            "  %0:value = arg value",
+            "  %1:bool = prim PyValue_IsInlineInt %0",
+            "  %2:bool = lnot %1",
+            "  exit_if EXIT %2",
+            "  %3:bool = prim PyValue_IsNone %0",
+            "  %4:value = const PyValue_False",
+            "  %5:value = const PyValue_True",
+            "  %6:value = select %3, %4, %5",
+            "  out res %6",
+            "  out v %0",
+            "  next",
+        ])
+        self.assertEqual(body.effects, frozenset())
+
+
+BYTECODES = Path(test_tools.basepath) / "Python" / "bytecodes.c"
+
+# Where the leaf body's effects and CR's (ir_records.infer_effects) differ,
+# and which side is right
+EFFECT_DIFFERENCES = {
+    # CR counts _PyValueGuarded_Load as a heap read (ir_records.READER_CALLS),
+    # and the asserts' reads.  It is a change of type of the feedback word,
+    # an operand, and the release body reads nothing else: the leaf is right.
+    **{name: (frozenset(), frozenset({"READS_HEAP"})) for name in (
+        "_LOAD_ATTR_CLASS", "_LOAD_ATTR_METHOD_LAZY_DICT",
+        "_LOAD_ATTR_METHOD_NO_DICT", "_LOAD_ATTR_METHOD_WITH_VALUES",
+        "_LOAD_ATTR_NONDESCRIPTOR_NO_DICT", "_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES")},
+}
+
+
+class RecordTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        ir_generator = generated.ir_generator
+        with generated.handle_stderr():
+            analysis = generated.analyzer.analyze_files([str(BYTECODES)])
+        cls.records = ir_generator.build_records(
+            analysis, ir_generator.compute_formats(analysis))
+        cls.uops = {part.name: part
+                    for inst in ir_generator.handler_instructions(analysis).values()
+                    for part in inst.parts if isinstance(part, generated.analyzer.Uop)}
+
+    def record_uops(self):
+        for record in self.records.values():
+            yield from record.uops
+
+    def test_annotated_uops_have_leaf_ir(self):
+        annotated = {name for name, uop in self.uops.items() if "leaf" in uop.annotations}
+        self.assertGreater(len(annotated), 50)
+        for uop in self.record_uops():
+            if uop.name in annotated:
+                self.assertIsNotNone(uop.leaf, uop.name)
+
+    def test_effects_agree_with_the_records(self):
+        differences = {}
+        for uop in self.record_uops():
+            if uop.leaf is not None and uop.leaf.effects != uop.effects:
+                differences[uop.name] = (uop.leaf.effects - uop.effects,
+                                         uop.effects - uop.leaf.effects)
+        self.assertEqual(differences, EFFECT_DIFFERENCES)
+
+    def test_leaf_helpers_are_declared(self):
+        for uop in self.record_uops():
+            if uop.leaf is not None:
+                for name in uop.leaf.helpers:
+                    self.assertIn(name, ir_leaf.HELPERS, uop.name)
+
+    def test_record_dump_prints_the_leaf(self):
+        with test_tools.imports_under_tool("cases_generator"):
+            import ir_records
+        text = ir_records.format_record(self.records["BINARY_OP_ADD_INT"])
+        self.assertIn("  uop 2 _BINARY_OP_ADD_INT", text)
+        self.assertIn("call _PyValue_BoxInt64", text)
+        self.assertRegex(text, r"exit_if EXIT %\d+ \[")
 
 
 if __name__ == "__main__":

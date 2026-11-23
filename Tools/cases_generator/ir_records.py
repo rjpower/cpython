@@ -176,6 +176,8 @@ class UopRecord:
     results: tuple["Fact", ...] = ()   # what holds of its new outputs
     pure: bool = False          # annotated `pure`: removable if its outputs
                                 # are unused (Python/regcfg_passes.c)
+    leaf: object = None         # ir_leaf.LeafBody: the body as leaf IR, if
+                                # it is inside the leaf subset (ir_leaf.py)
 
 
 @dataclass(frozen=True)
@@ -1462,6 +1464,8 @@ def format_record(record) -> str:
         transfers = " ".join(t.kind + (f"({t.target})" if t.target else "")
                              for t in uop.transfers)
         lines.append(f"    transfers {transfers}")
+        if uop.leaf is not None:
+            lines.extend("    " + line for line in uop.leaf.dump(uop.guards))
     for value, operand in record.results:
         lines.append(f"  result v{value} -> {operand}")
     return "\n".join(lines) + "\n"

@@ -7,6 +7,7 @@ against the rows of Include/internal/pycore_ir_components.h.  The pilot
 declares BINARY_OP's add arms and generic form, UNPACK_SEQUENCE and
 LOAD_ATTR_INSTANCE_VALUE."""
 
+import io
 import os
 from pathlib import Path
 import re
@@ -20,6 +21,8 @@ from test import test_tools
 ir_generator = cases.ir_generator
 with test_tools.imports_under_tool("cases_generator"):
     import ir_contract
+    import ir_error_effects
+    import ir_leaf
     from ir_records import ALLOCATES, EFFECTS, MAY_RAISE, MAY_RELEASE, READS_HEAP, WRITES_HEAP
 
 BYTECODES = Path(test_tools.basepath) / "Python" / "bytecodes.c"
@@ -292,7 +295,38 @@ class VerifierTests(unittest.TestCase):
         """
         self.refuses(source % "", r"on raise, `value` is still owned, but the site "
                                   r"declares consumed")
-        self.verify(source % ", holding(value)")
+        self.refuses(source % ", value", r"`value` is not holding\(input\)")
+        self.refuses(source % ", holding(other)", r"`holding \( other \)` is not "
+                                                  r"holding\(input\)")
+        self.refuses(source.replace("ERROR_IF(PyValue_IsNull(res)%s);\n",
+                                    "").replace("DECREF_INPUTS();",
+                                                "DECREF_INPUTS();\n"
+                                                "ERROR_IF(PyValue_IsNull(res)%s);")
+                     % ", holding(value)",
+                     r"on raise, `value` is released, but the site declares holding")
+        analysis = self.verify(source % ", holding(value)")
+        uop = analysis.uops["OP"]
+        # The emitter keeps the held input in its slot (no clear, as at
+        # ERROR_NO_POP) and raises at the site
+        out = io.StringIO()
+        with cases.handle_stderr():
+            ir_generator.generate_ir([self.filename], analysis, out, False)
+        body = out.getvalue()
+        body = body[body.index("TARGET(OP)"):]
+        raise_at = body.index("PROCESS_ERROR_AT(RAISE, 0, this_instr)")
+        self.assertLess(raise_at, body.index("_PyFrame_WriteHome(frame, &IR_SLOT"))
+        with self.assertRaisesRegex(ir_leaf.LeafError, r"holding\(\.\.\.\)"):
+            ir_leaf.translate(uop)
+        # The error effects record the site's checkpoint
+        analysis = self.verify("""
+            inst(OP, (value: consumed --)) effects(raises, releases) exits(next, raise) {
+                ERROR_IF(oparg, holding(value));
+                DECREF_INPUTS();
+            }
+        """)
+        effects = ir_error_effects.analyze_error_effects(analysis.instructions["OP"])
+        self.assertEqual([held for _, held in effects.raise_checkpoints],
+                         [frozenset({"value"})])
 
     def test_taken_input_is_kept_on_raise(self):
         self.refuses("""

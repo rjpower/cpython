@@ -1330,6 +1330,11 @@ class Translator:
                 args = args[:1]
             self.guard(kind, args[0], tok)
         elif name == "ERROR_IF":
+            if len(args) > 1:
+                # holding(x): the raise leaves x in its slot, which the
+                # leaf's raise terminator does not model
+                raise LeafError("a raise checkpoint, holding(...), is outside "
+                                "the leaf subset", tok)
             if self.is_true(args[0]):
                 self.terminate(("raise",))
             else:

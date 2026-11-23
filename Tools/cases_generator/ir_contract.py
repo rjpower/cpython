@@ -1304,8 +1304,12 @@ class OwnershipWalk:
             return state
         if head in RAISES:
             args = _split(texts[2:_close(texts, 1)], ",") if texts[2:3] != [")"] else [[]]
-            holding = frozenset(" ".join(a[2:-1]) for a in args[1:]
-                                if a[:2] == ["holding", "("])
+            for a in args[1:]:
+                if (head != "ERROR_IF" or len(a) != 4 or a[:2] != ["holding", "("]
+                        or a[3] != ")" or not self.declared.get(a[2])):
+                    self.fail(toks[0], f"{head}: `{' '.join(a)}` is not holding(input), "
+                              "the one argument a raise site takes after its condition")
+            holding = frozenset(a[2] for a in args[1:])
             self.calls(toks, state)
             self.effects(toks, state)
             raised = state.copy()

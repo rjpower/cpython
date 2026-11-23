@@ -64,7 +64,8 @@ class SliceTests(unittest.TestCase):
             ("BINARY_OP_ADD_FLOAT", "_POP_TOP_NUMBER"): set(),
             ("UNPACK_SEQUENCE_LIST", "_GUARD_TOS_LIST"): {READS_HEAP},
             ("UNPACK_SEQUENCE_LIST", "_UNPACK_SEQUENCE_LIST"): {READS_HEAP, MAY_RELEASE},
-            ("UNPACK_SEQUENCE", "_SPECIALIZE_UNPACK_SEQUENCE"): {READS_HEAP, WRITES_HEAP},
+            # Not reviewed: today's inference (G0c reviews the specializers)
+            ("UNPACK_SEQUENCE", "_SPECIALIZE_UNPACK_SEQUENCE"): set(EFFECTS),
             ("UNPACK_SEQUENCE", "_UNPACK_SEQUENCE"): set(EFFECTS),
         }
         for (handler, uop), effects in expected.items():
@@ -594,6 +595,78 @@ class VerifierTests(unittest.TestCase):
         self.refuses(self.ATTR % ("", ""),
                      r"`attr` may be NULL: PyValue_XDUP of `found`")
 
+    def test_undeclared_feedback_access(self):
+        source = """
+            inst(OP, (unused/1 --)) effects(reads, writes) exits(next) %s {
+                _PyFbHeader *feedback = FB_COUNTER();
+                if (_PyFb_CounterTriggers(feedback)) {
+                    STAT_INC(OP, hit);
+                }
+                _PyFb_AdvanceCounter(feedback);
+            }
+        """
+        self.refuses(source % "",
+                     r"OP: `_PyFb_CounterTriggers` may read the feedback counter, which "
+                     r"feedback\(\) does not declare")
+        self.refuses(source % "feedback(read(counter))",
+                     r"`_PyFb_AdvanceCounter` may write the feedback counter, which "
+                     r"feedback\(read\(counter\)\) does not declare")
+        self.verify(source % "feedback(read(counter), write(counter))")
+        # The whole entry covers its counter
+        result = self.verify(source % "feedback(read(entry), write(entry))")
+        self.assertEqual(ir_contract.feedback_access(result.uops["OP"]),
+                         {("read", "entry"), ("write", "entry")})
+        self.refuses(source % "feedback(read(shape))", r"`read\(shape\)` is no feedback access")
+
+    # Output arrays: wholly published on next, never on raise or a guard exit
+
+    UNPACK = """
+        inst(OP, (seq: consumed object -- values[oparg]: owned)) effects(runs_python)
+            exits(next, raise)
+        {
+            PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
+            int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, values);
+            %s
+        }
+    """
+
+    def test_status_decides_an_out_array(self):
+        self.verify(self.UNPACK % "ERROR_IF(res == 0);")
+        self.verify(self.UNPACK % "ERROR_IF(!res);")
+        self.refuses(self.UNPACK % "",
+                     r"on next, the output array `values` is written only if `res` reports "
+                     r"success, which nothing tests here")
+        self.refuses(self.UNPACK % "ERROR_IF(res != 0);",
+                     r"on raise, the output array `values` is written: its values would leak")
+
+    def test_guard_after_a_publication(self):
+        source = """
+            inst(OP, (seq: consumed exact(PyTuple_Type) -- values[oparg]: owned))
+                effects(reads, releases) exits(next, miss)
+            {
+                PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
+                %s
+                DECREF_INPUTS();
+            }
+        """
+        guard = "EXIT_IF(PyTuple_GET_SIZE(seq_o) != oparg);"
+        unpack = "IR_UNPACK_ITEMS(values, _PyTuple_ITEMS(seq_o), oparg);"
+        self.verify(source % (guard + unpack))
+        self.refuses(source % (unpack + guard),
+                     r"the miss follows the publication of `values` by IR_UNPACK_ITEMS, so "
+                     r"the word cannot restart")
+
+    def test_partly_written_array(self):
+        source = """
+            inst(OP, (a: consumed -- values[%s]: owned)) effects() exits(next) {
+                values[0] = a;
+            }
+        """
+        self.verify(source % "1")
+        self.refuses(source % "oparg",
+                     r"on next, the output array `values` is partly written, but it is "
+                     r"published whole")
+
     def test_intrinsic_outside_its_build(self):
         self.refuses("""
             inst(OP, (value -- value)) effects() exits(next) {
@@ -628,6 +701,30 @@ class VerifierTests(unittest.TestCase):
             ir_contract.parse_rows(
                 "#define X(PRIMITIVE, HELPER, MACRO) "
                 "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(flies))")
+        # Nullness follows an argument: VALUE(... null_iff(k)); DUP is gone
+        rows = ir_contract.parse_rows(
+            "#define X(PRIMITIVE, HELPER, MACRO) "
+            "PRIMITIVE(spam, PyValue, (PyValueBorrow), ARGS(borrowed), "
+            "VALUE(owned null_iff(0)), EFFECTS())")
+        self.assertEqual(rows["spam"].result.null_iff, 0)
+        with self.assertRaisesRegex(SyntaxError, r"row spam: 'DUP\(owned\)' is not a result"):
+            ir_contract.parse_rows(
+                "#define X(PRIMITIVE, HELPER, MACRO) "
+                "PRIMITIVE(spam, PyValue, (PyValueBorrow), ARGS(borrowed), DUP(owned), "
+                "EFFECTS())")
+        # A routine has exits; any row may say what feedback it reads and writes
+        rows = ir_contract.parse_rows(
+            "#define X(PRIMITIVE, HELPER, ROUTINE, MACRO) "
+            "ROUTINE(spam, int, (PyThreadState *), ARGS(tstate), STATUS(NEGATIVE), "
+            "EFFECTS(runs_python), EXITS(raise, exit), FEEDBACK(write(handler)))")
+        self.assertEqual(rows["spam"].exits, {"raise", "exit"})
+        self.assertEqual(rows["spam"].feedback, {("write", "handler")})
+        self.assertEqual(rows["spam"].result.failure, "NEGATIVE")
+        with self.assertRaisesRegex(SyntaxError, r"row spam: HELPER: 6 columns, then an "
+                                                 r"optional FEEDBACK"):
+            ir_contract.parse_rows(
+                "#define X(PRIMITIVE, HELPER, MACRO) "
+                "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(), EXITS(next))")
 
 
 if __name__ == "__main__":

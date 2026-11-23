@@ -67,6 +67,10 @@ static_assert(__builtin_types_compatible_p(__typeof__(LOCK_OBJECT((PyObject *){0
               "LOCK_OBJECT: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(UNLOCK_OBJECT((PyObject *){0})), void),
               "UNLOCK_OBJECT: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyFb_CounterTriggers((_PyFbHeader *){0})), int),
+              "_PyFb_CounterTriggers: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyFb_AdvanceCounter((_PyFbHeader *){0})), void),
+              "_PyFb_AdvanceCounter: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_Specialize_BinaryOp), void (*)(PyValueBorrow, PyValueBorrow, _PyInstr *, int, PyValue *)),
               "_Py_Specialize_BinaryOp: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_Specialize_UnpackSequence), void (*)(PyValue, _PyInstr *, int)),
@@ -426,13 +430,13 @@ ir_binary_op(
                 lhs = IR_VIEW(IR_B(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
                 assert(oparg <= NB_OPARG_LAST);
@@ -3036,7 +3040,7 @@ ir_run_CALL(
                 #if ENABLE_SPECIALIZATION
                 {
                     _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                    if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                    if (_PyFb_CounterTriggers(feedback)) {
                         call_state |= CALL_EFFECTS;
                         _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + ((call_state & CALL_SELF_PRESENT) != 0));
                         if (call_refresh(tstate, frame, this_instr) < 0) {
@@ -3048,7 +3052,7 @@ ir_run_CALL(
                     }
                     else {
                         OPCODE_DEFERRED_INC(CALL);
-                        ADVANCE_ADAPTIVE_COUNTER(feedback);
+                        _PyFb_AdvanceCounter(feedback);
                     }
                 }
                 #endif  /* ENABLE_SPECIALIZATION */
@@ -3905,7 +3909,7 @@ ir_run_CALL_FUNCTION_EX(
                 func = IR_SLOT(IR_B(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     call_state |= CALL_EFFECTS;
                     _Py_Specialize_CallFunctionEx(func, callargs, this_instr);
                     if (call_refresh(tstate, frame, this_instr) < 0) {
@@ -3917,7 +3921,7 @@ ir_run_CALL_FUNCTION_EX(
                 }
                 else {
                     OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
-                    ADVANCE_ADAPTIVE_COUNTER(feedback);
+                    _PyFb_AdvanceCounter(feedback);
                 }
                 #endif  /* ENABLE_SPECIALIZATION */
             }
@@ -4147,7 +4151,7 @@ ir_run_CALL_KW(
                 callable = IR_SLOT(IR_B(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     call_state |= CALL_EFFECTS;
                     _Py_Specialize_CallKw(callable, self_or_null, kwnames, this_instr, oparg);
                     if (call_refresh(tstate, frame, this_instr) < 0) {
@@ -4159,7 +4163,7 @@ ir_run_CALL_KW(
                 }
                 else {
                     OPCODE_DEFERRED_INC(CALL_KW);
-                    ADVANCE_ADAPTIVE_COUNTER(feedback);
+                    _PyFb_AdvanceCounter(feedback);
                 }
                 #endif  /* ENABLE_SPECIALIZATION */
             }
@@ -5622,13 +5626,13 @@ ir_run_COMPARE_OP(
                 left = IR_VIEW(IR_B(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_CompareOp(left, right, next_instr, oparg);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(COMPARE_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _COMPARE_OP
@@ -5851,13 +5855,13 @@ ir_run_COMPARE_OP_JUMP(
                 left = IR_VIEW(IR_A(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_CompareOp(left, right, next_instr, oparg);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(COMPARE_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _COMPARE_OP
@@ -6305,13 +6309,13 @@ ir_run_CONTAINS_OP(
                 left = IR_VIEW(IR_B(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_ContainsOp(left, right, next_instr);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CONTAINS_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _CONTAINS_OP
@@ -6459,13 +6463,13 @@ ir_run_CONTAINS_OP_JUMP(
                 left = IR_VIEW(IR_A(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_ContainsOp(left, right, next_instr);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CONTAINS_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _CONTAINS_OP
@@ -7408,13 +7412,13 @@ ir_run_FOR_ITER(
                 iter = window[0];
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_ForIter(iter, null_or_index, next_instr, oparg);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(FOR_ITER);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _FOR_ITER
@@ -7975,13 +7979,13 @@ ir_run_GET_ITER(
                 iterable = IR_SLOT(IR_B(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_GetIter(iterable, next_instr);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(GET_ITER);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _GET_ITER
@@ -9612,14 +9616,14 @@ ir_run_LOAD_ATTR(
                 owner = IR_VIEW(IR_B(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                     next_instr = this_instr;
                     _Py_Specialize_LoadAttr(owner, next_instr, name);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(LOAD_ATTR);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _LOAD_ATTR
@@ -11509,14 +11513,14 @@ ir_run_LOAD_GLOBAL(
             {
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                     next_instr = this_instr;
                     _Py_Specialize_LoadGlobal(GLOBALS(), BUILTINS(), next_instr, name);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(LOAD_GLOBAL);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _LOAD_GLOBAL
@@ -11843,13 +11847,13 @@ ir_run_LOAD_SUPER_ATTR(
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 int load_method = oparg & 1;
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_LoadSuperAttr(global_super_st, class_st, next_instr, load_method);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(LOAD_SUPER_ATTR);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _LOAD_SUPER_ATTR
@@ -12491,13 +12495,13 @@ ir_run_POP_JUMP_IF_FALSE(
                 value = IR_VIEW(IR_A(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_PopJumpIf(value, next_instr);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(TO_BOOL);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _TO_BOOL
@@ -13059,13 +13063,13 @@ ir_run_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_A(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_PopJumpIf(value, next_instr);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(TO_BOOL);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _TO_BOOL
@@ -13937,13 +13941,13 @@ ir_run_SEND(
                 receiver = window[0];
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_Send(receiver, next_instr);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(SEND);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _SEND
@@ -14492,13 +14496,13 @@ ir_run_SEND_XFER_DISCARD(
                 receiver = window[0];
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_Send(receiver, next_instr);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(SEND);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _SEND
@@ -14775,7 +14779,7 @@ ir_run_STORE_ATTR(
                 v = IR_VIEW(IR_B(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     if (!PyValue_IsNull(v)) {
                         PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                         next_instr = this_instr;
@@ -14784,7 +14788,7 @@ ir_run_STORE_ATTR(
                     }
                 }
                 OPCODE_DEFERRED_INC(STORE_ATTR);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _STORE_ATTR
@@ -15441,13 +15445,13 @@ ir_run_STORE_SUBSCR(
                 container = IR_VIEW(IR_A(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_StoreSubscr(container, sub, next_instr);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(STORE_SUBSCR);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _STORE_SUBSCR
@@ -15696,13 +15700,13 @@ ir_run_TO_BOOL(
                 value = IR_SLOT(IR_B(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_ToBool(value, next_instr);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(TO_BOOL);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _TO_BOOL
@@ -16167,13 +16171,13 @@ ir_run_UNPACK_SEQUENCE(
                 seq = window[0];
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_UnpackSequence(seq, next_instr, oparg);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(UNPACK_SEQUENCE);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 (void)seq;
             }
@@ -17231,13 +17235,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 lhs = IR_VIEW(IR_B(ir_word));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
                 assert(NB_ADD <= oparg);
                 assert(oparg <= NB_OPARG_LAST);
@@ -27750,13 +27754,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 receiver = window[0];
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_Send(receiver, next_instr);
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(SEND);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
                 #endif  /* ENABLE_SPECIALIZATION */
             }
             // _SEND

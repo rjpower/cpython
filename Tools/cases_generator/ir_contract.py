@@ -65,6 +65,15 @@ KILLS = frozenset(("writes", "releases", "runs_python", "polls", "switches_frame
 EXITS = ("next", "branch", "jump", "miss", "deopt", "raise", "enter", "return",
          "yield", "exit")
 
+# Feedback access (design 1.6, section 6): what a row or a uop reads and
+# writes of its site's feedback, transitively.  `entry` is every field of
+# the site's entry, its header's counter included; `handler` is the word's
+# handler, which a specializer rewrites.  A uop's cache operands are reads
+# of their fields and need no clause.
+FEEDBACK_MODES = ("read", "write")
+FEEDBACK_FIELDS = ("counter", "entry", "handler")
+FEEDBACK_COVERS = {"entry": {"counter"}}
+
 INPUT_MODES = ("borrowed", "consumed", "taken")
 OUTPUT_MODES = ("owned", "inline", "borrowed", "moved")
 ARG_MODES = ("borrowed", "consumed", "taken", "scalar", "object", "tstate", "frame",
@@ -144,9 +153,11 @@ def parse_fact(word: str, where: Token | None) -> VFact:
 # The definition list (Include/internal/pycore_ir_components.h)
 
 COMPONENTS_HEADER = ROOT / "Include/internal/pycore_ir_components.h"
-ROW_KINDS = ("PRIMITIVE", "HELPER", "MACRO", "INTRINSIC", "DESTRUCTOR", "FIELD")
+ROW_KINDS = ("PRIMITIVE", "HELPER", "ROUTINE", "MACRO", "INTRINSIC", "DESTRUCTOR", "FIELD")
 RESULT_SHAPES = ("NONE", "SCALAR", "VIEW", "PATH", "MEASURE", "TEST", "CONTEXT",
-                 "VALUE", "VALUE_OR_NULL", "DUP")
+                 "VALUE", "VALUE_OR_NULL", "STATUS")
+# The failure value of a STATUS result: the int compares to 0 so
+STATUS_FAILURES = ("ZERO", "NEGATIVE", "NONZERO")
 BUILDS = ("gil", "free_threaded", "all")
 # The build whose handlers the generator verifies: the register IR's leaf
 # forms and the JIT exist in the build with the GIL only
@@ -167,6 +178,8 @@ class Result:
     measure: str = ""                       # MEASURE; PATH: the path
     tests: tuple[tuple[frozenset[VFact], frozenset[VFact]], ...] = ()  # TEST
     reason: str = ""                        # CONTEXT
+    null_iff: int = -1                      # VALUE: NULL exactly where argument k is
+    failure: str = ""                       # STATUS: ZERO, NEGATIVE or NONZERO
 
 
 @dataclass(frozen=True)
@@ -181,14 +194,14 @@ class Row:
     exits: frozenset[str] = frozenset()
     builds: frozenset[str] = frozenset()    # INTRINSIC
     callback_free: bool = False             # DESTRUCTOR
+    feedback: frozenset[tuple[str, str]] = frozenset()     # (read|write, field)
     struct: str = ""                        # FIELD: the struct, the field,
     field: str = ""                         # and the path of the pointer
     on: str = ""                            # it is read through
 
     def new_owner(self) -> bool:
         "whether a call returns a value that its caller must release"
-        return (self.result.shape in ("VALUE", "VALUE_OR_NULL", "DUP")
-                and self.result.mode == "owned")
+        return self.result.shape in ("VALUE", "VALUE_OR_NULL") and self.result.mode == "owned"
 
 
 def _split_text(text: str) -> list[str]:
@@ -236,10 +249,10 @@ def _parse_result(text: str) -> Result:
             return Result(shape)
     if (inner := _inner(text, "PATH")) is not None:
         return Result("PATH", measure=inner.strip())
-    if (inner := _inner(text, "DUP")) is not None:
-        if inner.strip() != "owned":
-            raise ValueError("DUP(owned)")
-        return Result("DUP", "owned")
+    if (inner := _inner(text, "STATUS")) is not None:
+        if inner.strip() not in STATUS_FAILURES:
+            raise ValueError(f"STATUS({' | '.join(STATUS_FAILURES)})")
+        return Result("STATUS", failure=inner.strip())
     if (inner := _inner(text, "MEASURE")) is not None:
         return Result("MEASURE", measure=inner.strip())
     if (inner := _inner(text, "CONTEXT")) is not None:
@@ -256,7 +269,14 @@ def _parse_result(text: str) -> Result:
             words = inner.split()
             if not words or words[0] not in ("owned", "inline", "borrowed"):
                 raise ValueError(f"{shape} needs a mode: {text}")
-            return Result(shape, words[0], frozenset(parse_fact(w, None) for w in words[1:]))
+            null_iff, facts = -1, []
+            for w in words[1:]:
+                m = re.fullmatch(r"null_iff\((\d+)\)", w)
+                if m and shape == "VALUE":
+                    null_iff = int(m.group(1))
+                else:
+                    facts.append(parse_fact(w, None))
+            return Result(shape, words[0], frozenset(facts), null_iff=null_iff)
     raise ValueError(f"{text!r} is not a result shape ({', '.join(RESULT_SHAPES)})")
 
 
@@ -269,6 +289,35 @@ def _parse_names(text: str, head: str, allowed: tuple[str, ...]) -> frozenset[st
     if unknown:
         raise ValueError(f"{head}: {sorted(unknown)} not in {allowed}")
     return names
+
+
+def parse_feedback(words, where: Token | None = None) -> frozenset[tuple[str, str]]:
+    "`read(counter)`, `write(entry)`, ...: (mode, field) pairs"
+    found = set()
+    for w in words:
+        m = re.fullmatch(r"(\w+)\((\w+)\)", w.strip())
+        if m is None or m.group(1) not in FEEDBACK_MODES or m.group(2) not in FEEDBACK_FIELDS:
+            message = (f"`{w.strip()}` is no feedback access: read(f) or write(f) with f "
+                       f"one of {', '.join(FEEDBACK_FIELDS)}")
+            raise analysis_error(message, where) if where else ValueError(message)
+        found.add((m.group(1), m.group(2)))
+    return frozenset(found)
+
+
+def feedback_covered(access: tuple[str, str], declared) -> bool:
+    mode, f = access
+    return any(m == mode and (d == f or f in FEEDBACK_COVERS.get(d, ()))
+               for m, d in declared)
+
+
+def _row_feedback(fields: list[str], fixed: int, kind: str) -> frozenset[tuple[str, str]]:
+    "the optional FEEDBACK(...) column after a row's fixed ones"
+    if len(fields) == fixed:
+        return frozenset()
+    inner = _inner(fields[-1], "FEEDBACK") if len(fields) == fixed + 1 else None
+    if inner is None:
+        raise ValueError(f"{kind}: {fixed} columns, then an optional FEEDBACK(...)")
+    return parse_feedback(_split_text(inner))
 
 
 def _parse_row(kind: str, fields: list[str]) -> Row:
@@ -292,23 +341,30 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
         return Row(kind, name, args=_parse_args(_inner(args, "ARGS")),
                    result=_parse_result(result), builds=_parse_names(builds, "BUILD", BUILDS))
     if kind == "MACRO":
-        if len(fields) != 5:
-            raise ValueError("MACRO(name, ARGS(...), result, EFFECTS(...), EXITS(...))")
-        name, args, result, effects, exits = fields
+        if len(fields) not in (5, 6):
+            raise ValueError("MACRO(name, ARGS(...), result, EFFECTS(...), EXITS(...)"
+                             "[, FEEDBACK(...)])")
+        name, args, result, effects, exits = fields[:5]
         return Row(kind, name, args=_parse_args(_inner(args, "ARGS")),
                    result=_parse_result(result),
                    effects=_parse_names(effects, "EFFECTS", EFFECTS),
-                   exits=_parse_names(exits, "EXITS", EXITS))
-    if len(fields) != 6:
-        raise ValueError(f"{kind}(name, ret, (params), ARGS(...), result, EFFECTS(...))")
-    name, ret, params, args, result, effects = fields
+                   exits=_parse_names(exits, "EXITS", EXITS),
+                   feedback=_row_feedback(fields, 5, kind))
+    fixed = 7 if kind == "ROUTINE" else 6
+    if len(fields) not in (fixed, fixed + 1):
+        raise ValueError(f"{kind}(name, ret, (params), ARGS(...), result, EFFECTS(...)"
+                         f"{', EXITS(...)' if kind == 'ROUTINE' else ''}[, FEEDBACK(...)])")
+    name, ret, params, args, result, effects = fields[:6]
     params = params.strip()
     if not (params.startswith("(") and params.endswith(")")):
         raise ValueError("the parameters are a parenthesized list of C types")
     row = Row(kind, name, ret,
               tuple(p.strip() for p in _split_text(params[1:-1]) if p.strip()),
               _parse_args(_inner(args, "ARGS")), _parse_result(result),
-              _parse_names(effects, "EFFECTS", EFFECTS))
+              _parse_names(effects, "EFFECTS", EFFECTS),
+              exits=(_parse_names(fields[6], "EXITS", EXITS) if kind == "ROUTINE"
+                     else frozenset()),
+              feedback=_row_feedback(fields, fixed, kind))
     fixed = [p for p in row.params if p != "..."]
     if len(row.args) != len(fixed):
         raise ValueError(f"{len(row.args)} ARGS for {len(fixed)} parameters")
@@ -363,7 +419,7 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
         lines.append(f"              \"{name}: its C type differs from pycore_ir_components.h\");")
 
     for row in table.values():
-        if row.kind == "HELPER":
+        if row.kind in ("HELPER", "ROUTINE"):
             check(f"&{row.name}", f"{row.ret} (*)({', '.join(row.params)})", row.name)
         elif row.kind == "DESTRUCTOR":
             check(f"&{row.name}", "void (*)(PyObject *)", row.name)
@@ -387,6 +443,7 @@ class Item:
     facts: frozenset[VFact] = frozenset()
     nullable: bool = False
     array: bool = False
+    size: str = ""              # an array's size, as declared
 
 
 @dataclass(frozen=True)
@@ -395,6 +452,9 @@ class Contract:
     outputs: tuple[Item, ...]
     effects: frozenset[str]
     exits: frozenset[str]
+    # The feedback the body reads and writes through its callees, beyond its
+    # cache operands: (read|write, field)
+    feedback: frozenset[tuple[str, str]] = frozenset()
 
     def input(self, name: str) -> Item | None:
         return next((i for i in self.inputs if i.name == name), None)
@@ -427,7 +487,7 @@ def _item(stack_item, modes: tuple[str, ...], where: Token) -> Item:
     if mode and through:
         raise analysis_error(f"`{name}` passes through, so it takes no mode", where)
     return Item(name, mode, source, frozenset(facts), stack_item.nullable,
-                stack_item.is_array())
+                stack_item.is_array(), stack_item.size)
 
 
 _CONTRACTS: dict[int, tuple[Uop, Contract | None]] = {}
@@ -456,7 +516,8 @@ def contract_of(uop: Uop) -> Contract | None:
             if o.mode == "moved" and not any(i.name == o.source for i in inputs):
                 raise analysis_error(f"{uop.name}: `{o.name}` is moved from `{o.source}`, "
                                      "which is not an input", where)
-        contract = Contract(inputs, outputs, effects, exits)
+        feedback = parse_feedback(uop.clauses.get("feedback", ()), where)
+        contract = Contract(inputs, outputs, effects, exits, feedback)
     # The uop is kept with its contract, so that its id is not reused
     _CONTRACTS[id(uop)] = (uop, contract)
     return contract
@@ -555,6 +616,8 @@ def effect_sites(uop: Uop, table: dict[str, Row] | None = None) -> list[Site]:
     contract = contract_of(uop)
     inline = {i.name for i in contract.inputs if INLINE in implied(i.facts)} \
         if contract else set()
+    # A store into an output array publishes; it writes nothing else
+    arrays = {o.name for o in contract.outputs if o.array} if contract else set()
     tokens = _tokens(uop)
     texts = [t.text for t in tokens]
     calls = {id(t): args for t, args in body_calls(uop)}
@@ -565,7 +628,8 @@ def effect_sites(uop: Uop, table: dict[str, Row] | None = None) -> list[Site]:
         if text == "assert" and i + 1 < len(tokens) and texts[i + 1] == "(":
             i = _close(texts, i + 1) + 1
             continue
-        if text in ir_records.ASSIGNS and ir_records._lvalue_is_heap(texts, i):
+        if (text in ir_records.ASSIGNS and ir_records._lvalue_is_heap(texts, i)
+                and _element_base(texts, i) not in arrays):
             sites.append(Site(t, "writes", "a store through a pointer"))
         elif text == "->":
             sites.append(Site(t, "reads", "a load through a pointer"))
@@ -588,6 +652,18 @@ def effect_sites(uop: Uop, table: dict[str, Row] | None = None) -> list[Site]:
     return sites
 
 
+def _element_base(texts: list[str], i: int) -> str:
+    "the array of an element store `a[k] = ...` at the `=` at i, or \"\""
+    if i == 0 or texts[i - 1] != "]":
+        return ""
+    depth = 0
+    for j in range(i - 1, -1, -1):
+        depth += {"]": 1, "[": -1}.get(texts[j], 0)
+        if depth == 0:
+            return texts[j - 1] if j > 0 else ""
+    return ""
+
+
 def covered(effect: str, declared: frozenset[str]) -> bool:
     return effect in declared or any(effect in COVERS.get(d, ()) for d in declared)
 
@@ -605,6 +681,38 @@ def check_effects(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
         if bad:
             raise analysis_error(f"{uop.name} is annotated pure but declares "
                                  f"{', '.join(sorted(bad))}", uop.body.open)
+
+
+def check_feedback(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
+    """The feedback that the body's callees read and write lies within the
+    uop's feedback(...) clause (staleness in G1 depends on it)"""
+    for tkn, _ in body_calls(uop):
+        row = table.get(tkn.text)
+        if row is None:
+            continue
+        for access in sorted(row.feedback):
+            if not feedback_covered(access, contract.feedback):
+                declared = ", ".join(f"{m}({f})" for m, f in sorted(contract.feedback))
+                raise analysis_error(
+                    f"{uop.name}: `{tkn.text}` may {access[0]} the feedback {access[1]}, "
+                    f"which feedback({declared}) does not declare", tkn)
+
+
+def feedback_access(uop: Uop) -> frozenset[tuple[str, str]]:
+    """What a declared uop reads and writes of its site's feedback: its
+    clause, and a read of the field of each cache operand"""
+    contract = contract_of(uop)
+    caches = {("read", c.name) for c in uop.caches if c.name != "unused"}
+    return frozenset(caches | (contract.feedback if contract else set()))
+
+
+def arm_feedback(inst: Instruction) -> frozenset[tuple[str, str]] | None:
+    """What an arm reads and writes of its site's feedback, through all of
+    its uops; None if one of them declares no contract"""
+    parts = [p for p in inst.parts if isinstance(p, Uop)]
+    if any(contract_of(p) is None for p in parts):
+        return None
+    return frozenset().union(*(feedback_access(p) for p in parts))
 
 
 def record_effect_sites(uop: Uop) -> list[tuple[Token, str]]:
@@ -815,6 +923,10 @@ def check_guard_conditions(uop: Uop, table: dict[str, Row]) -> None:
 # Ownership, facts and restartability on each exit (V4, V5, V6 inside a uop)
 
 HELD, GONE, NULL = "held", "gone", "null"
+# An owned output array: not yet written, wholly written, written in part
+# (element stores), or written if the status local named after PENDING
+# says success
+UNWRITTEN, WRITTEN, PARTIAL, PENDING = "unwritten", "written", "partly written", "pending:"
 # The effects whose sites may run Python.  Python may write the frame's
 # homes (a finalizer through FrameLocalsProxy), so a value that stays in a
 # home, a pass-through or a borrowed input, may be replaced there: its
@@ -835,12 +947,17 @@ class _State:
     sources: dict[str, str] = field(default_factory=dict)
     # Inputs left in homes that a reentry site may have rewritten: the site
     rehomed: dict[str, str] = field(default_factory=dict)
+    # The owned output arrays and how much of each is written
+    arrays: dict[str, str] = field(default_factory=dict)
+    # Locals holding a STATUS result: its failure value
+    status: dict[str, str] = field(default_factory=dict)
     restartable: bool = True
     why: str = ""                   # what ended restartability
 
     def copy(self) -> "_State":
         return _State(dict(self.owners), dict(self.facts), dict(self.pending),
-                      dict(self.sources), dict(self.rehomed), self.restartable, self.why)
+                      dict(self.sources), dict(self.rehomed), dict(self.arrays),
+                      dict(self.status), self.restartable, self.why)
 
     def end_restart(self, why: str) -> None:
         if self.restartable:
@@ -891,6 +1008,8 @@ class OwnershipWalk:
         facts = {n: implied(i.facts | (set() if i.nullable else {NONNULL}))
                  for n, i in self.declared.items()}
         state = _State({n: HELD for n in self.declared}, facts)
+        state.arrays = {o.name: UNWRITTEN for o in self.contract.outputs
+                        if o.array and o.mode == "owned"}
         end = self.block(self.uop.body.body, state)
         if end is not None and not self.uop.properties.always_exits:
             self.check_exit("next", end, self.uop.body.close)
@@ -943,8 +1062,23 @@ class OwnershipWalk:
             elif exit == "raise" and item.mode == "taken" and gone:
                 self.fail(where, f"on raise, `{name}` is released, but it is declared "
                           "taken (kept on raise)")
+        for name, written in state.arrays.items():
+            if exit == "next" and written != WRITTEN:
+                self.fail(where, f"on next, the output array `{name}` is "
+                          f"{self.array_state(written)}, but it is published whole")
+            if exit != "next" and written != UNWRITTEN:
+                self.fail(where, f"on {exit}, the output array `{name}` is "
+                          f"{self.array_state(written)}: its values would leak or be "
+                          "published by a word that did not complete")
         if exit == "next":
             self.check_outputs(state, where)
+
+    @staticmethod
+    def array_state(written: str) -> str:
+        if written.startswith(PENDING):
+            return (f"written only if `{written[len(PENDING):]}` reports success, "
+                    "which nothing tests here")
+        return written
 
     def check_outputs(self, state: _State, where: Token) -> None:
         """V5 on the paths to next: each value output is not NULL unless it
@@ -1025,11 +1159,19 @@ class OwnershipWalk:
             first.sources.update(other.sources)
             for name, why in other.rehomed.items():
                 first.rehomed.setdefault(name, why)
+            for name in first.arrays:
+                if first.arrays[name] != other.arrays.get(name):
+                    self.fail(self.uop.body.open, f"the output array `{name}` is "
+                              f"{self.array_state(first.arrays[name])} on one path and "
+                              f"{self.array_state(other.arrays.get(name, UNWRITTEN))} on "
+                              "another where they join")
+            first.status.update(other.status)
             if not other.restartable:
                 first.end_restart(other.why)
         return first
 
     def refine(self, state: _State, cond: list[str], holds: bool) -> None:
+        self.refine_status(state, cond, holds)
         found = condition_facts(cond, self.views, self.table, holds)
         if found:
             for name, facts in found[0].items():
@@ -1043,6 +1185,32 @@ class OwnershipWalk:
                     state.owners[name] = NULL
                 else:
                     state.add_facts(name, {NONNULL})
+
+    # A STATUS result's test: the predicate that a condition states of it
+    STATUS_TESTS = {("==", "0"): "zero", ("!=", "0"): "nonzero", ("<", "0"): "negative",
+                    (">=", "0"): "nonnegative"}
+    FAILS = {"ZERO": ("zero", "nonzero"), "NONZERO": ("nonzero", "zero"),
+             "NEGATIVE": ("negative", "nonnegative")}
+
+    def refine_status(self, state: _State, cond: list[str], holds: bool) -> None:
+        """`res == 0`, `!res`, `res`, `res < 0`...: on the path where the
+        status local reports failure, the arrays pending on it are
+        unwritten; where it reports success, written"""
+        cond = _strip(cond)
+        if cond[:1] == ["!"]:
+            cond, holds = _strip(cond[1:]), not holds
+        if not cond or cond[0] not in state.status:
+            return
+        name = cond[0]
+        predicate = ("nonzero" if len(cond) == 1
+                     else self.STATUS_TESTS.get(tuple(cond[1:])) if len(cond) == 3 else None)
+        failure, success = self.FAILS[state.status[name]]
+        if predicate not in (failure, success):
+            return
+        failed = (predicate == failure) == holds
+        for array, written in state.arrays.items():
+            if written == f"{PENDING}{name}":
+                state.arrays[array] = UNWRITTEN if failed else WRITTEN
 
     def effects(self, tokens: list[Token], state: _State) -> None:
         """the effects of the sites among tokens: heap facts die, homes may be
@@ -1102,6 +1270,14 @@ class OwnershipWalk:
                     if owner is not None:
                         self.take(owner, state, tkn, f"{row.name} consumes")
                         state.end_restart(f"{row.name} consuming `{owner}`")
+                if spec.mode == "out":
+                    array = " ".join(_unwrap(arg, self.table))
+                    if array in state.arrays:
+                        # Publication: wholly written, or written if a STATUS
+                        # result says so (the assignment names the local)
+                        state.arrays[array] = (PENDING if row.result.shape == "STATUS"
+                                               else WRITTEN)
+                        state.end_restart(f"the publication of `{array}` by {row.name}")
 
     def discharge(self, name: str, state: _State, where: Token) -> None:
         "DEAD(name): only an inline value, or one already moved, owes nothing"
@@ -1169,9 +1345,12 @@ class OwnershipWalk:
 
     def assignment(self, toks: list[Token], texts: list[str], i: int, state: _State) -> None:
         lhs = texts[i - 1]
+        rhs = _strip(texts[i + 1:-1] if texts[-1] == ";" else texts[i + 1:])
+        if lhs == "]":
+            self.element_store(toks, texts, i, rhs, state)
+            return
         if i >= 2 and texts[i - 2] in ("->", ".") or not re.fullmatch(r"\w+", lhs):
             return      # a store through a pointer: V2's `writes`
-        rhs = _strip(texts[i + 1:-1] if texts[-1] == ";" else texts[i + 1:])
         out = self.contract.output(lhs)
         if len(rhs) == 1 and (rhs[0] in self.declared or rhs[0] in state.owners):
             # A move, `out = in;` or `PyValue tmp = in;`: the obligation goes
@@ -1204,20 +1383,29 @@ class OwnershipWalk:
             self.new.add(lhs)
             state.assign(lhs, state.facts.get(source, frozenset()), None, row.name)
             return
-        if result.shape not in ("VALUE", "VALUE_OR_NULL", "DUP"):
+        if result.shape == "STATUS":
+            # Its `out` arguments are written on success only: the status
+            # local decides which (refine)
+            state.status[lhs] = result.failure
+            for name, st in state.arrays.items():
+                if st == PENDING:
+                    state.arrays[name] = f"{PENDING}{lhs}"
+            return
+        if result.shape not in ("VALUE", "VALUE_OR_NULL"):
             if out is not None:
                 state.end_restart(f"the assignment of the output `{lhs}`")
             return
         facts = set(result.facts)
         if result.shape == "VALUE_OR_NULL":
             state.assign(lhs, frozenset(), facts, row.name)
-        elif result.shape == "DUP":
-            # A DUP is NULL where its argument is
-            source = self.views.resolve(args[0]) if args else None
+        elif result.null_iff >= 0:
+            # NULL exactly where its argument k is
+            k = result.null_iff
+            source = self.views.resolve(args[k]) if len(args) > k else None
             nonnull = NONNULL in state.facts.get(source, frozenset())
             if out is not None and not out.nullable and not nonnull:
                 self.fail(toks[0], f"`{lhs}` may be NULL: {row.name} of "
-                          f"`{' '.join(args[0]) if args else ''}`, which nothing "
+                          f"`{' '.join(args[k]) if len(args) > k else ''}`, which nothing "
                           "shows is not NULL")
             state.assign(lhs, facts | {NONNULL} if nonnull else frozenset(),
                          None if nonnull else facts | {NONNULL}, row.name)
@@ -1233,6 +1421,23 @@ class OwnershipWalk:
             state.end_restart(f"the new owner `{lhs}` from {row.name}")
         elif out is not None:
             state.end_restart(f"the assignment of the output `{lhs}`")
+
+
+    def element_store(self, toks: list[Token], texts: list[str], i: int, rhs: list[str],
+                      state: _State) -> None:
+        """`arr[k] = v`: into an owned output array, a publication of v; it
+        writes the whole array only if the array has one element"""
+        array = _element_base(texts, i)
+        if array not in state.arrays:
+            return
+        if len(rhs) == 1 and (rhs[0] in state.owners):
+            item = self.declared.get(rhs[0])
+            if item is None or item.mode not in ("borrowed", ""):
+                self.take(rhs[0], state, toks[0], "moves")
+        size = self.contract.output(array).size
+        whole = re.fullmatch(r"1|\(?oparg\s*&\s*1\)?", size.strip()) is not None
+        state.arrays[array] = WRITTEN if whole else PARTIAL
+        state.end_restart(f"the publication of `{array}`")
 
 
 _WALKS: dict[tuple[int, bool], tuple[Uop, OwnershipWalk]] = {}
@@ -1283,7 +1488,7 @@ def check_results(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
                                          f"`{' '.join(rhs)}`", where)
                 continue
             call = _call_of(rhs, table)
-            if call is not None and call[0].result.shape in ("VALUE", "VALUE_OR_NULL", "DUP"):
+            if call is not None and call[0].result.shape in ("VALUE", "VALUE_OR_NULL"):
                 result = call[0].result
                 gives, mode, source = implied(result.facts), result.mode, call[0].name
             elif len(rhs) == 1 and rhs[0] in inputs:
@@ -1380,6 +1585,7 @@ def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None 
         return
     check_callees(uop, table)
     check_effects(uop, contract, table)
+    check_feedback(uop, contract, table)
     check_guard_conditions(uop, table)
     for tkn, _ in body_calls(uop):
         if tkn.text in GUARDS:

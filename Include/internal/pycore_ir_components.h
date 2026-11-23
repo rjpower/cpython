@@ -12,12 +12,17 @@
  * Python/generated_ir_cases.c.h.
  *
  * Rows:
- *   PRIMITIVE(name, ret, (params), ARGS(...), result, EFFECTS(...))
- *       a value primitive: a C function or expression macro, and for leaf
- *       uops a model and a machine lowering (ir_leaf.py, jit_lower.c)
- *   HELPER(name, ret, (params), ARGS(...), result, EFFECTS(...))
+ *   PRIMITIVE(name, ret, (params), ARGS(...), result, EFFECTS(...)[, FEEDBACK(...)])
+ *       a value primitive: a C function or expression macro.  One that a
+ *       leaf uop calls has a model and a machine lowering (ir_leaf.py,
+ *       jit_lower.c), and a model needs a lowering (V11)
+ *   HELPER(name, ret, (params), ARGS(...), result, EFFECTS(...)[, FEEDBACK(...)])
  *       an out-of-line C function, called with the SysV ABI
- *   MACRO(name, ARGS(...), result, EFFECTS(...), EXITS(...))
+ *   ROUTINE(name, ret, (params), ARGS(...), result, EFFECTS(...), EXITS(...)
+ *           [, FEEDBACK(...)])
+ *       a VM routine: a C function that may leave the word by its own
+ *       exits (the evaluator's label work)
+ *   MACRO(name, ARGS(...), result, EFFECTS(...), EXITS(...)[, FEEDBACK(...)])
  *       a macro that the generator expands; its C is generated
  *
  * ARGS: per parameter a mode (borrowed, consumed, taken, scalar, object,
@@ -25,10 +30,20 @@
  * result: NONE, SCALAR, VIEW (the object of argument 0), PATH(name) (a
  * pointer along a named path from argument 0: its type, its inline
  * values), MEASURE(kind) of argument 0, TEST(true facts | false facts, ...)
- * per argument, CONTEXT("reason"), VALUE(mode facts), VALUE_OR_NULL(mode
- * facts), DUP(owned) (a new owner of argument 0, NULL where it is).
+ * per argument, CONTEXT("reason"), VALUE(mode facts [null_iff(k)])
+ * (infallible; with null_iff(k) NULL exactly where argument k is),
+ * VALUE_OR_NULL(mode facts) (NULL means raised), STATUS(ZERO | NEGATIVE |
+ * NONZERO) (the failure value of an int status: raised, and the `out`
+ * arguments unwritten).
  * EFFECTS: reads writes allocates raises releases runs_python polls
- * switches_frame.  The vocabulary is Tools/cases_generator/ir_contract.py's.
+ * switches_frame.  A `releases` may run a finalizer, which may run Python
+ * and write the frame's homes (FrameLocalsProxy).
+ * FEEDBACK: the feedback the row reads and writes, transitively:
+ * read(f) and write(f) with f one of counter (the entry header's counter),
+ * entry (every field of the site's entry, the counter included) and
+ * handler (the word's handler).  A uop declares the union of its callees'
+ * in its feedback(...) clause; its cache operands are reads of their
+ * fields.  The vocabulary is Tools/cases_generator/ir_contract.py's.
  *
  *   DESTRUCTOR(name, callback_free)
  *       a deallocator reviewed to release nothing: a close through it
@@ -47,8 +62,9 @@
  * callbacks, or why there are none) is the comment above it.
  *
  * The regions89 pilot declares the rows of BINARY_OP's add arms and
- * generic form and of UNPACK_SEQUENCE; the rest of the handlers keep the
- * generator's inferred records until the migration (G0) seeds them. */
+ * generic form, UNPACK_SEQUENCE and LOAD_ATTR_INSTANCE_VALUE; the rest of
+ * the handlers keep the generator's inferred records until the migration
+ * (G0b) seeds them. */
 
 /* Values and numbers */
 #define _PyIR_COMPONENTS_VALUES(PRIMITIVE, HELPER, MACRO) \
@@ -120,17 +136,20 @@
               ARGS(object, scalar), SCALAR, EFFECTS()) \
     /* A new owner of a value, PyValue_NULL for PyValue_NULL: a count only */ \
     PRIMITIVE(PyValue_XDUP, PyValue, (PyValueBorrow), \
-              ARGS(borrowed), DUP(owned), EFFECTS()) \
+              ARGS(borrowed), VALUE(owned null_iff(0)), EFFECTS()) \
     /* Identities: a borrowed view of a value; in a build with the GIL the \
      * relaxed atomic loads are plain loads */ \
     INTRINSIC(PyValue_Borrow, ARGS(borrowed), VIEW, BUILD(all)) \
     INTRINSIC(FT_ATOMIC_LOAD_UINT_RELAXED, ARGS(scalar), SCALAR, BUILD(gil)) \
     INTRINSIC(FT_ATOMIC_LOAD_UINT8, ARGS(scalar), SCALAR, BUILD(gil)) \
-    /* _PyErr_Format -> PyUnicode_FromFormatV: formats with %s and the \
-     * type's name only, which calls no Python; it allocates the message \
-     * and replaces the current exception, releasing it: a finalizer */ \
+    /* _PyErr_Format (Python/errors.c) -> _PyErr_FormatV: _PyErr_Clear \
+     * releases the current exception (a finalizer); PyUnicode_FromFormatV \
+     * allocates the message; _PyErr_SetObject -> _PyErr_CreateException \
+     * calls the exception type, which runs Python for a class defined in \
+     * Python, and chains the context (releases).  The row admits any \
+     * type, so it declares runs_python */ \
     HELPER(_PyErr_Format, PyObject *, (PyThreadState *, PyObject *, const char *, ...), \
-           ARGS(tstate, object, scalar), NONE, EFFECTS(allocates, raises, releases))
+           ARGS(tstate, object, scalar), NONE, EFFECTS(runs_python))
 
 /* Containers */
 #define _PyIR_COMPONENTS_CONTAINERS(PRIMITIVE, HELPER, MACRO) \
@@ -151,11 +170,14 @@
      * values are closed by the skeleton after the uop (IR_CLOSE_WINDOW) */ \
     MACRO(IR_UNPACK_ITEMS, ARGS(out, scalar, scalar), NONE, EFFECTS(reads), \
           EXITS()) \
-    /* The generic unpack: _PyEval_UnpackIterableValue -> PyObject_GetIter \
-     * and the iterator's __next__: runs Python */ \
+    /* The generic unpack (Python/ceval.c): _PyValue_GetIter and the \
+     * iterator's __next__ run Python.  It releases v on every return (Done: \
+     * Py_DECREF(v)); it returns 0 with an exception set, having closed the \
+     * values it wrote below sp (Error:), else 1 with argcnt values (and the \
+     * list for argcntafter >= 0) written below sp */ \
     HELPER(_PyEval_UnpackIterableValue, int, \
            (PyThreadState *, PyObject *, int, int, PyValue *), \
-           ARGS(tstate, consumed, scalar, scalar, out), SCALAR, \
+           ARGS(tstate, consumed, scalar, scalar, out), STATUS(ZERO), \
            EFFECTS(runs_python)) \
     /* A free-threaded build's critical section: constant in this build */ \
     PRIMITIVE(LOCK_OBJECT, int, (PyObject *), \
@@ -166,17 +188,29 @@
 
 /* Specialization: the site's counter and the specializer */
 #define _PyIR_COMPONENTS_SPECIALIZATION(PRIMITIVE, HELPER, MACRO) \
-    MACRO(FB_COUNTER, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
-    MACRO(ADAPTIVE_COUNTER_TRIGGERS, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
-    MACRO(ADVANCE_ADAPTIVE_COUNTER, ARGS(scalar), NONE, EFFECTS(writes), EXITS()) \
-    /* Rewrites the word's handler and its feedback entry from the \
-     * operands' types (specialize.c); looks up types, calls no Python */ \
+    /* The header of the word's feedback entry: an address, which each \
+     * generator expands for its form (ir_generator.IR_INSTRUCTION_MACROS) */ \
+    MACRO(FB_COUNTER, ARGS(), SCALAR, EFFECTS(), EXITS()) \
+    /* The counter of an entry header (Python/ceval_macros.h): a test of \
+     * it, and its advance; NULL has no counter */ \
+    PRIMITIVE(_PyFb_CounterTriggers, int, (_PyFbHeader *), \
+              ARGS(scalar), SCALAR, EFFECTS(reads), FEEDBACK(read(counter))) \
+    PRIMITIVE(_PyFb_AdvanceCounter, void, (_PyFbHeader *), \
+              ARGS(scalar), NONE, EFFECTS(writes), FEEDBACK(write(counter))) \
+    /* The specializers rewrite the word's handler and its feedback entry \
+     * from the operands (Python/specialize.c).  Not reviewed: the effects \
+     * are today's inference (all of them).  Their transitive callees \
+     * include feedback-table allocation and, for BINARY_OP_SUBSCR_GETITEM, \
+     * specialize_subscr_getitem -> prepare_function_for_inline -> \
+     * _PyCode_GetExec (allocation, lowering and its failure handling); \
+     * G0c reviews them with that evidence */ \
     HELPER(_Py_Specialize_BinaryOp, void, \
            (PyValueBorrow, PyValueBorrow, _PyInstr *, int, PyValue *), \
            ARGS(borrowed, borrowed, scalar, scalar, scalar), NONE, \
-           EFFECTS(reads, writes)) \
+           EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
     HELPER(_Py_Specialize_UnpackSequence, void, (PyValue, _PyInstr *, int), \
-           ARGS(borrowed, scalar, scalar), NONE, EFFECTS(reads, writes))
+           ARGS(borrowed, scalar, scalar), NONE, EFFECTS(runs_python), \
+           FEEDBACK(read(entry), write(entry), write(handler)))
 
 #define _PyIR_COMPONENTS(PRIMITIVE, HELPER, MACRO) \
     _PyIR_COMPONENTS_VALUES(PRIMITIVE, HELPER, MACRO) \

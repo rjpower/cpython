@@ -765,6 +765,9 @@ NON_ESCAPING_FUNCTIONS = (
     "_Py_atomic_load_uintptr_relaxed",
     "_Py_set_eval_breaker_bit",
     "advance_backoff_counter",
+    # The specialization counters (pycore_ir_components.h)
+    "_PyFb_CounterTriggers",
+    "_PyFb_AdvanceCounter",
     "assert",
     "backoff_counter_triggers",
     "JUMP_TO_LABEL",

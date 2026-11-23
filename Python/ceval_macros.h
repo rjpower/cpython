@@ -387,7 +387,7 @@ GETITEM(PyObject *v, Py_ssize_t i) {
     do {                                                         \
         STAT_INC(opcode, miss);                                  \
         STAT_INC((INSTNAME), miss);                              \
-        if (ADAPTIVE_COUNTER_TRIGGERS(_PyIR_FbHeaderOf(frame, this_instr, opcode))) { \
+        if (_PyFb_CounterTriggers(_PyIR_FbHeaderOf(frame, this_instr, opcode))) { \
             STAT_INC((INSTNAME), deopt);                         \
         }                                                        \
     } while (0)
@@ -443,31 +443,37 @@ static void dtrace_function_return(_PyInterpreterFrame *);
 #define DTRACE_FUNCTION_RETURN() ((void)0)
 #endif
 
-/* Counters live in feedback entries (pycore_feedback.h).  FB is the entry
+/* Counters live in feedback entries (pycore_feedback.h).  fb is the entry
  * header of the instruction, or NULL if it has none, which never triggers.
  * Entry 0, the header that the sites without an entry share, never triggers
- * either, so nothing after a trigger writes past a header there. */
-#ifdef Py_DEBUG
-#  define IR_SHARED_ENTRY_NEVER_TRIGGERS(FB) \
-    (assert((char *)(FB) != (char *)_PyIR_FbEntry(frame->ir_words, IR_FB_SHARED) \
-            || !backoff_counter_triggers((FB)->counter)), 1)
-#else
-#  define IR_SHARED_ENTRY_NEVER_TRIGGERS(FB) 1
+ * either: its counter is unreachable (make_exec() in ir.c), which
+ * backoff_counter_triggers() never reports, so nothing after a trigger
+ * writes past a header there.  Every specializing op tests and advances its
+ * counter with these two functions, whose rows are in
+ * pycore_ir_components.h. */
+static inline int
+_PyFb_CounterTriggers(_PyFbHeader *fb)
+{
+    return fb != NULL && backoff_counter_triggers(fb->counter);
+}
+
+static inline void
+_PyFb_AdvanceCounter(_PyFbHeader *fb)
+{
+    if (fb == NULL) {
+        return;
+    }
+#ifdef Py_GIL_DISABLED
+    /* Counters are unreachable when thread-local bytecode is disabled,
+     * so there is no need to update them. */
+    if (backoff_counter_is_unreachable(fb->counter)) {
+        return;
+    }
 #endif
-#define ADAPTIVE_COUNTER_TRIGGERS(FB) \
-    ((FB) != NULL && IR_SHARED_ENTRY_NEVER_TRIGGERS(FB) \
-     && backoff_counter_triggers((FB)->counter))
+    fb->counter = advance_backoff_counter(fb->counter);
+}
 
 #ifdef Py_GIL_DISABLED
-/* Counters are unreachable when thread-local bytecode is disabled,
- * so there is no need to update them. */
-#define ADVANCE_ADAPTIVE_COUNTER(FB) \
-    do { \
-        if ((FB) != NULL && !backoff_counter_is_unreachable((FB)->counter)) { \
-            (FB)->counter = advance_backoff_counter((FB)->counter); \
-        } \
-    } while (0);
-
 #define PAUSE_ADAPTIVE_COUNTER(FB) \
     do { \
         _PyFbHeader *fb_ = (FB); \
@@ -476,13 +482,6 @@ static void dtrace_function_return(_PyInterpreterFrame *);
         } \
     } while (0);
 #else
-#define ADVANCE_ADAPTIVE_COUNTER(FB) \
-    do { \
-        if ((FB) != NULL) { \
-            (FB)->counter = advance_backoff_counter((FB)->counter); \
-        } \
-    } while (0);
-
 #define PAUSE_ADAPTIVE_COUNTER(FB) \
     do { \
         _PyFbHeader *fb_ = (FB); \

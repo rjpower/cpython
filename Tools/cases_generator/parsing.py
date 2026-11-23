@@ -406,7 +406,7 @@ class Parser(PLexer):
 
     # The clauses of a uop's declared contract, between its stack effect and
     # its body (Tools/cases_generator/ir_contract.py)
-    CONTRACT_CLAUSES = ("effects", "exits")
+    CONTRACT_CLAUSES = ("effects", "exits", "feedback")
 
     def contract_clauses(self) -> dict[str, list[str]]:
         clauses: dict[str, list[str]] = {}
@@ -418,7 +418,13 @@ class Parser(PLexer):
             self.require(lx.LPAREN)
             names: list[str] = []
             while name := self.word():
-                names.append(name.text)
+                text = name.text
+                if self.expect(lx.LPAREN):
+                    # `read(counter)`
+                    arg = self.require(lx.IDENTIFIER).text
+                    self.require(lx.RPAREN)
+                    text = f"{text}({arg})"
+                names.append(text)
                 if not self.expect(lx.COMMA):
                     break
             self.require(lx.RPAREN)

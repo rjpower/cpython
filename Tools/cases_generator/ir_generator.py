@@ -1336,13 +1336,13 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
     specialize = """{
         #if ENABLE_SPECIALIZATION
         _PyFbHeader *feedback = FB_COUNTER();
-        if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+        if (_PyFb_CounterTriggers(feedback)) {
             next_instr = this_instr;
             _Py_Specialize_Send(receiver, next_instr);
             DISPATCH_SAME_OPARG();
         }
         OPCODE_DEFERRED_INC(SEND);
-        ADVANCE_ADAPTIVE_COUNTER(feedback);
+        _PyFb_AdvanceCounter(feedback);
         #endif  /* ENABLE_SPECIALIZATION */
     }"""
     prefixes = [
@@ -7971,13 +7971,13 @@ def binary_reader_contract(inst: Instruction, fmt: IRFormat) -> bool:
     specialize = """{
         #if ENABLE_SPECIALIZATION
         _PyFbHeader *feedback = FB_COUNTER();
-        if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+        if (_PyFb_CounterTriggers(feedback)) {
             next_instr = this_instr;
             _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
             DISPATCH_SAME_OPARG();
         }
         OPCODE_DEFERRED_INC(BINARY_OP);
-        ADVANCE_ADAPTIVE_COUNTER(feedback);
+        _PyFb_AdvanceCounter(feedback);
         #endif  /* ENABLE_SPECIALIZATION */
         assert(NB_ADD <= oparg);
         assert(oparg <= NB_OPARG_LAST);

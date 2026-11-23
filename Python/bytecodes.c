@@ -487,13 +487,13 @@ dummy_func(
         specializing op(_SPECIALIZE_TO_BOOL, (value -- value)) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_ToBool(value, next_instr);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(TO_BOOL);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -1323,13 +1323,13 @@ dummy_func(
         specializing op(_SPECIALIZE_STORE_SUBSCR, (container, sub -- container, sub)) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_StoreSubscr(container, sub, next_instr);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(STORE_SUBSCR);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -1610,13 +1610,13 @@ dummy_func(
         specializing op(_SPECIALIZE_SEND, (receiver, unused, unused -- receiver, unused, unused)) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_Send(receiver, next_instr);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(SEND);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -1930,17 +1930,18 @@ dummy_func(
         };
 
         specializing op(_SPECIALIZE_UNPACK_SEQUENCE, (seq -- seq))
-            effects(reads, writes) exits(next, jump)
+            effects(runs_python) exits(next, jump)
+            feedback(read(entry), write(entry), write(handler))
         {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_UnpackSequence(seq, next_instr, oparg);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(UNPACK_SEQUENCE);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
             (void)seq;
         }
@@ -2023,7 +2024,7 @@ dummy_func(
         specializing op(_SPECIALIZE_STORE_ATTR, (v, owner -- v, owner)) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 if (!PyValue_IsNull(v)) {
                     PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                     next_instr = this_instr;
@@ -2032,7 +2033,7 @@ dummy_func(
                 }
             }
             OPCODE_DEFERRED_INC(STORE_ATTR);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -2107,14 +2108,14 @@ dummy_func(
         specializing op(_SPECIALIZE_LOAD_GLOBAL, ( -- )) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                 next_instr = this_instr;
                 _Py_Specialize_LoadGlobal(GLOBALS(), BUILTINS(), next_instr, name);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(LOAD_GLOBAL);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -2563,13 +2564,13 @@ dummy_func(
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             int load_method = oparg & 1;
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_LoadSuperAttr(global_super_st, class_st, next_instr, load_method);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(LOAD_SUPER_ATTR);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -2697,14 +2698,14 @@ dummy_func(
         specializing op(_SPECIALIZE_LOAD_ATTR, (owner -- owner)) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                 next_instr = this_instr;
                 _Py_Specialize_LoadAttr(owner, next_instr, name);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(LOAD_ATTR);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -3205,13 +3206,13 @@ dummy_func(
         specializing op(_SPECIALIZE_COMPARE_OP, (left, right -- left, right)) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_CompareOp(left, right, next_instr, oparg);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(COMPARE_OP);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -3322,13 +3323,13 @@ dummy_func(
         specializing op(_SPECIALIZE_CONTAINS_OP, (left, right -- left, right)) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_ContainsOp(left, right, next_instr);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(CONTAINS_OP);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -3670,13 +3671,13 @@ dummy_func(
         specializing op(_SPECIALIZE_POP_JUMP_IF, (value -- value)) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_PopJumpIf(value, next_instr);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(TO_BOOL);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -3877,13 +3878,13 @@ dummy_func(
         specializing op(_SPECIALIZE_GET_ITER, (iterable -- iterable)) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_GetIter(iterable, next_instr);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(GET_ITER);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -3986,13 +3987,13 @@ dummy_func(
         specializing op(_SPECIALIZE_FOR_ITER, (iter, null_or_index -- iter, null_or_index)) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_ForIter(iter, null_or_index, next_instr, oparg);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(FOR_ITER);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -4514,7 +4515,7 @@ dummy_func(
             #if ENABLE_SPECIALIZATION
             {
                 _PyFbHeader *feedback = FB_COUNTER();
-                if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+                if (_PyFb_CounterTriggers(feedback)) {
                     /* The specialisation is an effect of the call, which
                      * then finishes generically on this word: the call's
                      * uops follow, and next_instr stays the next word. */
@@ -4524,7 +4525,7 @@ dummy_func(
                 }
                 else {
                     OPCODE_DEFERRED_INC(CALL);
-                    ADVANCE_ADAPTIVE_COUNTER(feedback);
+                    _PyFb_AdvanceCounter(feedback);
                 }
             }
             #endif  /* ENABLE_SPECIALIZATION */
@@ -5329,7 +5330,7 @@ dummy_func(
         specializing op(_SPECIALIZE_CALL_KW, (callable, self_or_null, unused[oparg], kwnames -- callable, self_or_null, unused[oparg], kwnames)) {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 /* As in _SPECIALIZE_CALL */
                 IR_BEGIN_CALL_EFFECTS();
                 _Py_Specialize_CallKw(callable, self_or_null, kwnames, this_instr, oparg);
@@ -5337,7 +5338,7 @@ dummy_func(
             }
             else {
                 OPCODE_DEFERRED_INC(CALL_KW);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
             }
             #endif  /* ENABLE_SPECIALIZATION */
         }
@@ -5390,7 +5391,7 @@ dummy_func(
         specializing op(_SPECIALIZE_CALL_FUNCTION_EX, (func, unused, callargs, unused -- func, unused, callargs, unused)) {
         #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 /* As in _SPECIALIZE_CALL */
                 IR_BEGIN_CALL_EFFECTS();
                 _Py_Specialize_CallFunctionEx(func, callargs, this_instr);
@@ -5398,7 +5399,7 @@ dummy_func(
             }
             else {
                 OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                _PyFb_AdvanceCounter(feedback);
             }
         #endif  /* ENABLE_SPECIALIZATION */
         }
@@ -5561,17 +5562,18 @@ dummy_func(
         }
 
         specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs))
-            effects(reads, writes) exits(next, jump)
+            effects(runs_python) exits(next, jump)
+            feedback(read(entry), write(entry), write(handler))
         {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
-            if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+            if (_PyFb_CounterTriggers(feedback)) {
                 next_instr = this_instr;
                 _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(BINARY_OP);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
             #endif  /* ENABLE_SPECIALIZATION */
             assert(NB_ADD <= oparg);
             assert(oparg <= NB_OPARG_LAST);

@@ -489,6 +489,31 @@ class Other:
         return self
 
 
+class Fresh:
+    "A slot value made anew for each run, for an object that a run changes"
+    def __init__(self, make):
+        self.make = make
+
+
+def same_slot(x, y):
+    if type(x).__name__ == "range_iterator":
+        return x.__reduce__()[1:] == y.__reduce__()[1:]
+    return same(x, y)
+
+
+def tagged(i):
+    "The raw word of a tagged index, as a FOR_ITER window holds it"
+    return ("raw", capi.leaf_primitive("PyValue_TagIndex", i))
+
+
+def reversed_shape():
+    "A Shape whose attributes were set in the other order, so its shape differs"
+    s = Shape.__new__(Shape)
+    s.q = 2
+    s.p = 1
+    return s
+
+
 def owners():
     "Instances on and off the paths that the attribute templates take"
     extra = Shape()
@@ -581,6 +606,24 @@ TEMPLATE_CASES = [
       for cls, handler in ((Shape, "STORE_ATTR_SHAPE"), (Slots, "STORE_ATTR_SLOT"))],
     *[("G = 5\ndef f(a, b):\n    x = 1\n    x = G + len(a)\n    return x", ([1], 0), handler,
        "", [()]) for handler in ("LOAD_GLOBAL_MODULE", "LOAD_GLOBAL_BUILTIN")],
+    ("def f(a, b):\n    while a:\n        a -= 1\n    return a", (3, 0), "JUMP_BACKWARD", "",
+     [()]),
+    # A site that has seen two shapes of one type reads the instance's values
+    ("def f(a, b):\n    x = 1\n    x = a.q\n    return x",
+     [(Shape(), 0), (reversed_shape(), 0)], "LOAD_ATTR_INSTANCE_VALUE",
+     "AB", [(old, o) for old in (Plain(), None) for o in OWNERS + [reversed_shape()]]),
+    *[("def f(a, b):\n    s = 0\n    for x in a:\n        s = x\n    return s", (warm, 0), handler,
+       ("A", "B", "B+1"), [(old, it, index) for old in (Plain(), 3) for it, index in iters])
+      for warm, handler, iters in (
+          ([1, 2], "FOR_ITER_LIST",
+           [(seq, tagged(i)) for seq in SEQUENCES + [(1, 2)] for i in (0, 1, 3)]),
+          ((1, 2), "FOR_ITER_TUPLE",
+           [(tuple(seq), tagged(i)) for seq in SEQUENCES for i in (0, 1, 3)] +
+           [([1, 2], tagged(0))]),
+          (range(3), "FOR_ITER_RANGE",
+           [(Fresh(lambda r=r: iter(r)), tagged(0))
+            for r in (range(3), range(0), range(2**60, 2**60 + 2), range(5, -5, -3))] +
+           [([1], tagged(0))]))],
     *[(f"def f(a, b):\n    if {neg}a:\n        return 1\n    return 0", (warm, 0),
        f"POP_JUMP_IF_{sense}_{kind}", "A", [(x,) for x in TRUTHS])
       for neg, sense in (("", "FALSE"), ("not ", "TRUE"))
@@ -588,14 +631,22 @@ TEMPLATE_CASES = [
 ]
 
 
+def slot_of(field_slots, field):
+    "The slot of a field, or of the slot n after its slot for 'F+n'"
+    name, _, n = field.partition("+")
+    return field_slots[name] + int(n or 0)
+
+
 class TemplateTests(unittest.TestCase):
     def compile(self, source, warm):
         namespace = {}
         exec(source, namespace)
         f = namespace["f"]
-        for _ in range(200):
+        # warm is the arguments, or a list of them that the calls cycle through
+        warm = warm if isinstance(warm, list) else [warm]
+        for i in range(200):
             try:
-                f(*warm)
+                f(*warm[i % len(warm)])
             except Exception:
                 pass
         return f
@@ -609,8 +660,9 @@ class TemplateTests(unittest.TestCase):
         fresh = False
         for use_template in (True, False):
             f, index = word(fresh)
+            run_slots = {k: v.make() if isinstance(v, Fresh) else v for k, v in slots.items()}
             before = [sys.getrefcount(o) for o in objects]
-            next_, slow, exc, out = capi.jit_template_run(f, index, dict(slots), use_template)
+            next_, slow, exc, out = capi.jit_template_run(f, index, run_slots, use_template)
             after = [sys.getrefcount(o) for o in objects]
             results.append((next_, slow, exc, out, [b - a for a, b in zip(before, after)]))
             fresh = slow
@@ -623,7 +675,7 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(len(template[3]), len(form[3]))
         for i, (x, y) in enumerate(zip(form[3], template[3])):
             self.assertEqual(type(x), type(y), f"slot {i}")
-            self.assertTrue(same(x, y), f"slot {i}: {x!r} != {y!r}")
+            self.assertTrue(same_slot(x, y), f"slot {i}: {x!r} != {y!r}")
         self.assertEqual(template[4], form[4], "counts")
         return template
 
@@ -645,8 +697,8 @@ class TemplateTests(unittest.TestCase):
             fast = 0
             for case in cases:
                 with self.subTest(source=source, handler=handler, case=case):
-                    slots = {field_slots[x]: v for x, v in zip(fields, case)}
-                    objects = [v for v in case if not isinstance(v, (int, float)) or
+                    slots = {slot_of(field_slots, x): v for x, v in zip(fields, case)}
+                    objects = [v for v in case if not isinstance(v, (int, float, tuple, Fresh)) or
                                type(v) is int and not -2**50 <= v < 2**50]
                     fast += not self.check_same(word, slots, objects)[1]
             with self.subTest(source=source, handler=handler):

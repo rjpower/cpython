@@ -446,7 +446,27 @@ jit_template_run(PyObject *module, PyObject *args)
             clear_and_pop(tstate, frame);
             return NULL;
         }
-        PyValue v = PyValue_FromObjectSteal(value);
+        PyValue v;
+        PyObject *tag = NULL;
+        if (PyTuple_CheckExact(value) && PyTuple_GET_SIZE(value) == 2) {
+            tag = PyTuple_GetItemRef(value, 0);
+        }
+        int raw = tag != NULL && PyUnicode_Check(tag) && PyUnicode_EqualToUTF8(tag, "raw");
+        Py_XDECREF(tag);
+        if (raw) {
+            /* ("raw", bits): a word that is no object, such as a tagged index */
+            PyObject *bits = PyTuple_GetItemRef(value, 1);
+            v.bits = bits ? (uintptr_t)PyLong_AsUnsignedLongLong(bits) : 0;
+            Py_XDECREF(bits);
+            Py_DECREF(value);
+            if (PyErr_Occurred()) {
+                clear_and_pop(tstate, frame);
+                return NULL;
+            }
+        }
+        else {
+            v = PyValue_FromObjectSteal(value);
+        }
         PyValue_XCLOSE(frame->base[i]);
         frame->base[i] = v;
     }

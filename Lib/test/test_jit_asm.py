@@ -155,6 +155,7 @@ FORMS = {
     "imul_rr": ("imul_rr", "r r", "imul {0}, {1}"),
     "imul_rm": ("imul_rm", "r m", "imul {0}, qword ptr {1}"),
     "imul_rri": ("imul_rri", "r r i", "imul {0}, {1}, {2}"),
+    "idiv_r": ("idiv_r", "r", "idiv {0}"),
     "unary_r": ("unary_r", "unary r", "{0} {1}"),
     "unary_m": ("unary_m", "unary m", "{0} qword ptr {1}"),
     "unary_m32": ("unary_m32", "unary m", "{0} dword ptr {1}"),
@@ -209,7 +210,7 @@ def _mov_imm_cases():
 
 
 def _simple_cases():
-    return [(("ret",), "ret")]
+    return [(("ret",), "ret"), (("cqo",), "cqo")]
 
 
 def _branch_program():
@@ -345,6 +346,16 @@ class ExecutionTests(unittest.TestCase):
         ]
         self.assertEqual(run(program, (5, 6, 7)), 70)
         self.assertEqual(run(program, (-5, 2, 1000)), -3007)
+
+    def test_signed_division(self):
+        # cqo; idiv leaves the truncated quotient in rax, the remainder in rdx
+        quotient = [("mov_rr", RAX, RDI), ("cqo",), ("idiv_r", RSI), ("ret",)]
+        remainder = [("mov_rr", RAX, RDI), ("cqo",), ("idiv_r", RSI),
+                     ("mov_rr", RAX, RDX), ("ret",)]
+        for a, b in [(7, 2), (-7, 2), (7, -2), (-7, -2), (0, 5), (2**62, -3)]:
+            q = abs(a) // abs(b) * (1 if (a < 0) == (b < 0) else -1)
+            self.assertEqual(run(quotient, (a, b)), q)
+            self.assertEqual(run(remainder, (a, b)), a - q * b)
 
     def test_logic_and_shifts(self):
         program = [

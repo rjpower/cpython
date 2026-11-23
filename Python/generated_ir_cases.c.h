@@ -10598,7 +10598,7 @@ ir_run_LOAD_ATTR_SHAPE(
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = fb->offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -10659,7 +10659,7 @@ ir_run_LOAD_ATTR_SHAPE_LOCAL_TEMP(
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = fb->offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
@@ -10716,7 +10716,7 @@ ir_run_LOAD_ATTR_SHAPE_POLY(
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = ir_shape_offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -10774,7 +10774,7 @@ ir_run_LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP(
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = ir_shape_offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
@@ -24981,7 +24981,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = fb->offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -25038,7 +25038,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = fb->offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
@@ -25091,7 +25091,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = ir_shape_offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -25145,7 +25145,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = ir_shape_offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }

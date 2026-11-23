@@ -494,7 +494,7 @@ PRIMITIVES = {p.name: p for p in (
        READS),
     _p("_PyObject_ValueSlot", [P, "u64"], ["PyValue*"], "Include/internal/pycore_object.h",
        _value_slot, doc="the value slot at a byte offset inside an object"),
-    _p("shape_read_dup", [P, "u32"], [V], DICT_H,
+    _p("_PyObject_ShapeReadDup", [P, "u32"], [V], DICT_H,
        lambda cx, o, off: _dup(cx, cx.load(o + off, VALUE)), READS,
        doc="the filled slot at a byte offset, with a count of its own"),
     _p("DK_UNICODE_ENTRIES", ["PyDictKeysObject*"], ["PyDictUnicodeEntry*"], DICT_H,
@@ -998,7 +998,7 @@ def capability_expansion(name: str, args: list[str], pointer_test: str | None = 
                 ("guard", f"_PyObject_Shape({pointer}) != {shape}")]
     if name == "IR_DUP_SHAPE_READ":
         owner, offset = args
-        return [("expr", f"shape_read_dup(_PyValue_AsKnownObjectBorrowPointer({owner}), {offset})")]
+        return [("expr", f"_PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer({owner}), {offset})")]
     raise KeyError(name)
 
 

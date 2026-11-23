@@ -1406,7 +1406,7 @@ leaf_probe__LOAD_ATTR_SHAPE(_PyInterpreterFrame *frame, PyValue *stack_pointer, 
     uint32_t offset = (uint32_t)caches[0];
     PyValue owner, attr;
     owner = stack_pointer[-1];
-    attr =shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+    attr =_PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
     STAT_INC(LOAD_ATTR, hit);
     PyValue tmp = owner;
     owner = attr;

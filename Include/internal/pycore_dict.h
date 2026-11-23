@@ -533,7 +533,7 @@ _PyObject_Shape(PyObject *obj)
 /* The shape handlers' read of the slot at offset, a new count.  The
    current type and shape guards prove that the slot is filled. */
 static inline PyValue
-shape_read_dup(PyObject *owner, uint32_t offset)
+_PyObject_ShapeReadDup(PyObject *owner, uint32_t offset)
 {
     PyValueBorrow found = PyValue_Borrow(*_PyObject_ValueSlot(owner, offset));
     assert(!PyValue_IsNull(found));

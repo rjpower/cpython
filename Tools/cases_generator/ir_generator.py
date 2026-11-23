@@ -3830,7 +3830,7 @@ class IREmitter(Emitter):
         assert next(tkn_iter).kind == "SEMI"
         # Prefix uops share the handler's C scope. They must not replace the
         # private primitives or locals that implement this checked read.
-        reserved = {"shape_read_offset", "shape_read_dup", "ir_shape_offset",
+        reserved = {"shape_read_offset", "_PyObject_ShapeReadDup", "ir_shape_offset",
                     "ir_selected_offset"}
         if inst is not None and (
                 reserved.intersection(uop_tokens(inst)) or

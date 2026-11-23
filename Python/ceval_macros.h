@@ -13,21 +13,23 @@
 #endif
 
 #ifdef Py_STATS
-/* Count the entered handler, including IR-only and specialized targets. */
+/* Count the entered handler, including IR-only and specialized targets.  The
+ * previous handler, for pair counts, is the activation's. */
 #define INSTRUCTION_STATS(op) \
     do { \
         int entry_opcode = (op); \
+        int *last_handler = &IR_ACTIVATION()->last_handler; \
         assert(entry_opcode >= 0 && entry_opcode < IR_NUM_HANDLERS); \
         assert(_PyIR_HandlerFlags[entry_opcode] & _PyIR_H_DISPATCH); \
-        assert(lastopcode >= 0 && lastopcode < IR_NUM_HANDLERS); \
-        assert(lastopcode == 0 || \
-               (_PyIR_HandlerFlags[lastopcode] & _PyIR_H_DISPATCH)); \
+        assert(*last_handler >= 0 && *last_handler < IR_NUM_HANDLERS); \
+        assert(*last_handler == 0 || \
+               (_PyIR_HandlerFlags[*last_handler] & _PyIR_H_DISPATCH)); \
         PyStats *s = _PyStats_GET(); \
         if (s != NULL) { \
             s->opcode_stats[entry_opcode].execution_count++; \
-            s->opcode_stats[lastopcode].pair_count[entry_opcode]++; \
+            s->opcode_stats[*last_handler].pair_count[entry_opcode]++; \
         } \
-        lastopcode = entry_opcode; \
+        *last_handler = entry_opcode; \
     } while (0)
 #else
 #define INSTRUCTION_STATS(op) ((void)0)
@@ -46,8 +48,7 @@
  *   next_instr  the word to run next;
  *   ir_word     the word of the instruction, which dispatch loads and from
  *               which the handler decodes its fields, IR_A(ir_word) and so
- *               on (Include/internal/pycore_ir.h);
- *   lastopcode  under Py_STATS, the previous handler, for pair counts.
+ *               on (Include/internal/pycore_ir.h).
  *
  * These are locals of ir_evaluate(), and none has its address taken: that
  * would put it in memory in every handler and add a stack-protector canary.
@@ -57,7 +58,14 @@
  *
  * A handler that runs another on the same word, as INSTRUMENTED_LINE does
  * and a specialisation that deoptimises to its family head, jumps to it with
- * ir_word unchanged, so the other handler finds the same fields. */
+ * ir_word unchanged, so the other handler finds the same fields.
+ *
+ * Every handler also has a function form, ir_run_X(tstate, frame,
+ * next_instr, ir_word), which returns a _PyIRTransfer (tiers87, C2).  The
+ * bodies leave only through the transfer macros below, which this file binds
+ * for the evaluator and Python/ceval.c binds for the function forms; the
+ * evaluator's shared paths are the VM routines of Python/ceval_routines.h,
+ * bound the same way. */
 #if !defined(__GNUC__) && !defined(__clang__)
 #   error "The interpreter needs a C compiler with computed gotos."
 #endif
@@ -70,15 +78,38 @@
  * for size, which outlines them. */
 #define HOT_LABEL(name) LABEL_##name: __attribute__((hot));
 
+/* The evaluator's binding of the VM routines (Python/ceval_routines.h): a
+ * routine is a label, its operands are locals of ir_evaluate() of the same
+ * names, and its exits share the dispatch blocks gen_dispatch and
+ * gen_stepped, so that the evaluator has one dispatch for them.  The plain
+ * generator transfers are hot labels (HOT_LABEL); the error routine is not,
+ * since the profile estimate that a hot label gives every error path that
+ * reaches it would optimise the handlers' fast paths for size. */
+#define IR_ROUTINE(NAME, ...) LABEL_##NAME:
+#define IR_HOT_ROUTINE(NAME, ...) HOT_LABEL(NAME)
+#define GEN_DISPATCH() goto LABEL_gen_dispatch
+#define GEN_STEP_JUMP(NAME, F, IP, V) \
+    do { \
+        gen_transfer = ir_##NAME(tstate, (F), (IP), (V).bits); \
+        goto LABEL_gen_stepped; \
+    } while (0)
+#define GEN_STEP_EFFECT(REMAINING, IP, V) \
+    do { \
+        gen_transfer = ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, \
+                                              (REMAINING)); \
+        goto LABEL_gen_stepped; \
+    } while (0)
+
 /* The generator transfers.  The plain send, yield and return of a delegation
- * chain run in the evaluator, in the labels gen_resume, gen_yield, gen_return
- * and gen_complete (Python/ceval_generator_labels.h): a handler sets the
- * state that they read and jumps to one.  A transfer that is not plain,
- * because a callback, a hook or a pending redirect must observe it, runs
- * the steps of Python/ceval_generator.h (rule 13): functions that take the
- * value that they transfer as the word of their call, and return the frame
- * and next word to run.  A handler calls one with IR_GEN_JUMP() by name and
- * runs what it returns. */
+ * chain run in the VM routines gen_resume, gen_yield, gen_return and
+ * gen_complete (Python/ceval_routines.h): a handler passes the routine its
+ * operands, here in the locals of ir_evaluate() that the routine's label
+ * reads.  A transfer that is not plain, because a callback, a hook or a
+ * pending redirect must observe it, runs the steps of
+ * Python/ceval_generator.h (rule 13): functions that take the value that
+ * they transfer as the word of their call, and return the frame and next
+ * word to run.  A handler calls one with IR_GEN_JUMP() by name and runs what
+ * it returns. */
 #define IR_STEP_DONE(STEP) \
     do { \
         _PyIRTransfer ir_t = (STEP); \
@@ -92,19 +123,43 @@
     } while (0)
 #define IR_GEN_JUMP(NAME, F, IP, V) \
     IR_STEP_DONE(ir_##NAME(tstate, (F), (IP), (V).bits))
-/* GEN_COMPLETE_EFFECT also takes the count of send inputs that are still in
- * their homes. */
-#define IR_GEN_EFFECT(REMAINING, IP, V) \
-    IR_STEP_DONE(ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, (REMAINING)))
 
-/* The yielded value V passes up from the SEND at this_instr, whose YIELD
- * follows it, through every delegating frame above. */
-#define IR_GEN_YIELD(V) \
+/* The yielded value V passes up from the SEND at SITE, whose YIELD follows
+ * it, through every delegating frame above. */
+#define IR_GEN_YIELD_AT(SITE, V) \
     do { \
-        ir_gen_value = (V); \
-        next_instr = this_instr; \
+        gen_value = (V); \
+        next_instr = (SITE); \
         goto LABEL_gen_yield; \
     } while (0)
+/* The SEND or CLEANUP_THROW at SITE completes with V, whose word has a
+ * native completed outcome. */
+#define IR_GEN_COMPLETE_AT(SITE, V) \
+    do { \
+        gen_value = (V); \
+        next_instr = (SITE); \
+        goto LABEL_gen_complete; \
+    } while (0)
+/* The generator frame DYING has returned V and been unlinked and debited;
+ * frame is its resumer.  EMPTY: the return is the certified
+ * RETURN_VALUE_EMPTY, so that only the locals of DYING own values. */
+#define IR_GEN_RETURN(V, DYING, EMPTY) \
+    do { \
+        gen_value = (V); \
+        gen_dying = (DYING); \
+        gen_empty = (EMPTY); \
+        goto LABEL_gen_return; \
+    } while (0)
+/* The generator that frame has just entered resumes with V, and follows the
+ * chain of delegating frames that the words of the frame describe. */
+#define IR_GEN_RESUME(V) \
+    do { \
+        gen_value = (V); \
+        goto LABEL_gen_resume; \
+    } while (0)
+
+/* The forms of these that do not depend on the binding */
+#define IR_GEN_YIELD(V) IR_GEN_YIELD_AT(this_instr, (V))
 /* Likewise V from the frame that a delegating YIELD has just suspended, if
  * its resumer is a SEND with a native yielded outcome.  A leaf YIELD does not
  * test: its resumer is a FOR_ITER_GEN or the C entry as often as a SEND, and
@@ -115,36 +170,15 @@
                                 generator_yielded_targets) && \
             !frame->pending_redirect) { \
             assert(_PyValue_IsHome(V)); \
-            ir_gen_value = (V); \
-            next_instr = frame->instr_ptr; \
-            goto LABEL_gen_yield; \
+            IR_GEN_YIELD_AT(frame->instr_ptr, (V)); \
         } \
     } while (0)
-/* The SEND or CLEANUP_THROW at this_instr completes with V, whose word has
- * a native completed outcome. */
-#define IR_GEN_COMPLETE(V) \
-    do { \
-        ir_gen_value = (V); \
-        next_instr = this_instr; \
-        goto LABEL_gen_complete; \
-    } while (0)
-/* The generator frame DYING has returned V and been unlinked and debited;
- * frame is its resumer.  EMPTY: the return is the certified
- * RETURN_VALUE_EMPTY, so that only the locals of DYING own values. */
-#define IR_GEN_RETURN(V, DYING, EMPTY) \
-    do { \
-        ir_gen_value = (V); \
-        ir_gen_dying = (DYING); \
-        ir_gen_empty = (EMPTY); \
-        goto LABEL_gen_return; \
-    } while (0)
-/* The generator that frame has just entered resumes with V, and follows the
- * chain of delegating frames that the words of the frame describe. */
-#define IR_GEN_RESUME(V) \
-    do { \
-        ir_gen_value = (V); \
-        goto LABEL_gen_resume; \
-    } while (0)
+#define IR_GEN_COMPLETE(V) IR_GEN_COMPLETE_AT(this_instr, (V))
+
+/* A call that the function forms make in place of a jump, which must not
+ * grow the C stack: a chain of deoptimisations or frame entries stays one
+ * C frame deep. */
+#define Py_MUSTTAIL __attribute__((musttail))
 
 /* Every IR word is one word, so every handler's entry computes the same
  * next_instr + 1.  Left alone, RTL partial redundancy elimination hoists that
@@ -163,10 +197,13 @@
  * or leaves the evaluator. */
 #define PROCESS_ERROR_AT(ingress, checkpoint, origin) \
     do { \
-        ir_error_origin = (origin); \
-        ir_error_entry = _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint); \
+        process_error_origin = (origin); \
+        process_error_entry = _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint); \
         goto LABEL_process_error; \
     } while (0)
+/* The activation ends with the value V (INTERPRETER_EXIT, or an error that no
+ * handler catches) */
+#define IR_EXIT(V) return (V)
 #define JUMP_TO_LABEL(name) goto LABEL_##name
 /* A specialisation deoptimises to its family head, which runs the word
  * again from its start. */
@@ -572,6 +609,42 @@ gen_try_set_executing(PyGenObject *gen)
         return true;
     }
     return false;
+}
+
+/* Whether a specialized send or loop step can claim gen for the frame that
+ * it pushes: gen is created or suspended, and no other thread holds it.  A
+ * read, for the handler's guard; gen_claim() then claims it. */
+static inline bool
+gen_may_claim(PyGenObject *gen)
+{
+    int8_t frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
+#ifdef Py_GIL_DISABLED
+    return frame_state < FRAME_SUSPENDED_YIELD_FROM_LOCKED;
+#else
+    assert(frame_state != FRAME_SUSPENDED_YIELD_FROM_LOCKED);
+    return frame_state < FRAME_EXECUTING;
+#endif
+}
+
+/* Claim gen, which gen_may_claim() accepted.  With the GIL the claim is a
+ * store.  Free-threaded, another thread can claim gen between the guard and
+ * the claim; gen is then executing, and the claim raises what the generic
+ * send raises for an executing generator, and returns 0. */
+static inline int
+gen_claim(PyThreadState *tstate, PyGenObject *gen)
+{
+#ifdef Py_GIL_DISABLED
+    if (!gen_try_set_executing(gen)) {
+        _PyErr_SetString(tstate, PyExc_ValueError,
+                         PyCoro_CheckExact(gen) ? "coroutine already executing"
+                                                : "generator already executing");
+        return 0;
+    }
+#else
+    (void)tstate;
+    gen->gi_frame_state = FRAME_EXECUTING;
+#endif
+    return 1;
 }
 
 #define CALL_TP_ITERITEM_NO_ESCAPE(ITER, INDEX) \
@@ -982,7 +1055,7 @@ shape_read_dup(PyObject *owner, uint32_t offset)
  * the operation that its entry, at index F, records. */
 #define IR_DEOPT_BINARY_OP(F) \
     do { \
-        ir_binary_op = (int)((_PyFbHeader *)IR_FB(F))->arg; \
+        binary_op_operation = (int)((_PyFbHeader *)IR_FB(F))->arg; \
         next_instr = this_instr; \
         goto LABEL_binary_op; \
     } while (0)

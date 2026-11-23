@@ -604,6 +604,11 @@ class Emitter:
         self.emit(tkn)
         return True
 
+    def emit_return(self, tkn: Token, tkn_iter: TokenIterator) -> None:
+        self.emit(tkn)
+        semicolon = emit_to(self.out, tkn_iter, "SEMI")
+        self.emit(semicolon)
+
     def goto_label(self, goto: Token, label: Token, storage: Storage) -> None:
         if label.text not in self.labels:
             print(self.labels.keys())
@@ -755,9 +760,7 @@ class Emitter:
                     self.goto_label(tkn, label_tkn, storage)
                     reachable = False
                 elif tkn.kind == "RETURN":
-                    self.emit(tkn)
-                    semicolon = emit_to(self.out, tkn_iter, "SEMI")
-                    self.emit(semicolon)
+                    self.emit_return(tkn, tkn_iter)
                     reachable = False
                 elif tkn.kind == "IDENTIFIER":
                     if tkn.text in self._replacers:

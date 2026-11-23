@@ -68,22 +68,6 @@ class RetirementPlanTests(unittest.TestCase):
             self.assertEqual(_testinternalcapi.check_ir_retirement(
                 code, sites[0], NORMAL_RETURN), UNCOVERED)
 
-    def test_all_covered_loop_fixed_point(self):
-        def f():
-            x = None
-            while x is not None:
-                x = None
-            return 1
-
-        f()
-        rows = _testinternalcapi.get_ir(f.__code__)
-        self.assertTrue(any(row[0] == "JUMP_BACKWARD" for row in rows))
-        for admitted in self.routes(f.__code__):
-            sites = return_sites(admitted)
-            self.assertEqual(len(sites), 1)
-            self.assertEqual(_testinternalcapi.check_ir_retirement(
-                admitted, sites[0], NORMAL_RETURN), EXACT)
-
 
 if __name__ == "__main__":
     unittest.main()

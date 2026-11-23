@@ -17,6 +17,7 @@ extern "C" {
 #define CALL_FUNCTION_EX                         4
 #define CHECK_EG_MATCH                           5
 #define CHECK_EXC_MATCH                          6
+#define CLEANUP_THROW                            7
 #define DELETE_SUBSCR                            8
 #define END_FOR                                  9
 #define END_SEND                                10
@@ -96,7 +97,6 @@ extern "C" {
 #define LOAD_FAST_BORROW                        84
 #define LOAD_FAST_BORROW_LOAD_FAST_BORROW       85
 #define LOAD_FAST_CHECK                         86
-#define CLEANUP_THROW                           87
 #define LOAD_FROM_DICT_OR_DEREF                 88
 #define LOAD_FROM_DICT_OR_GLOBALS               89
 #define LOAD_GLOBAL                             90
@@ -279,7 +279,7 @@ extern "C" {
 #define HAVE_ARGUMENT                           41
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                233
-#define IR_NUM_HANDLERS                        415
+#define IR_NUM_HANDLERS                        416
 
 #ifdef __cplusplus
 }

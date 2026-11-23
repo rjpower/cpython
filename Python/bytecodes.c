@@ -1843,7 +1843,9 @@ dummy_func(
                 goto exception_unwind;
             }
             PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);
-            IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, oparg);
+            // IR_EXIT: the exit named by the word. co_code has no operand, and
+            // the instruction after this one continues there.
+            IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, IR_EXIT);
         }
 
         pure inst(LOAD_COMMON_CONSTANT, ( -- value)) {

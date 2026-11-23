@@ -4609,27 +4609,6 @@ jump_target_unit(const decoded_instr *d)
     }
 }
 
-/* The target of a CLEANUP_THROW, the END_SEND that its yield from or await
- * continues at.  The assembler stores the distance to it without the
- * direction, because it is not one of the jump opcodes that carry one: the
- * code of a handler that the compiler moved after the code of the function
- * jumps back, and a handler that did not move falls through (distance 0). */
-static int
-cleanup_throw_target(const decoded_instr *instrs, const int *instr_of_unit,
-                     int units, const decoded_instr *d)
-{
-    int candidates[2] = {d->next - d->oparg, d->next + d->oparg};
-    for (int c = 0; c < 2; c++) {
-        int unit = candidates[c];
-        if (unit >= 0 && unit < units && instr_of_unit[unit] >= 0 &&
-            instrs[instr_of_unit[unit]].opcode == END_SEND)
-        {
-            return unit;
-        }
-    }
-    return -1;
-}
-
 /* Give each instruction the location of the range of co_linetable that has
  * its opcode */
 static int
@@ -4782,9 +4761,7 @@ decode_code(PyCodeObject *co, cfg_builder *g)
     for (int k = 0; k < ninstrs; k++) {
         decoded_instr *d = &instrs[k];
         if (OPCODE_HAS_JUMP(d->opcode)) {
-            d->target = d->opcode == CLEANUP_THROW
-                ? cleanup_throw_target(instrs, instr_of_unit, units, d)
-                : jump_target_unit(d);
+            d->target = jump_target_unit(d);
             if (d->target < 0 || d->target >= units ||
                 instr_of_unit[d->target] < 0)
             {
@@ -4934,6 +4911,22 @@ cfg_to_regcfg(cfg_builder *g, int nlocalsplus, int maxdepth,
             cfg_instr *instr = &b->b_instr[i];
             int target = HAS_TARGET(instr->i_opcode)
                 ? instr->i_target->b_predecessors : -1;
+            if (instr->i_opcode == CLEANUP_THROW) {
+                // The stack bytecode continues at the END_SEND after it,
+                // directly or by the jump that follows.  The word of the
+                // register IR names that exit and has no successor else.
+                basicblock *exit;
+                if (i + 1 < b->b_iused) {
+                    cfg_instr *jump = &b->b_instr[i + 1];
+                    assert(IS_UNCONDITIONAL_JUMP_OPCODE(jump->i_opcode));
+                    exit = jump->i_target;
+                    i++;
+                }
+                else {
+                    exit = next_nonempty_block(b->b_next);
+                }
+                target = exit->b_predecessors;
+            }
             int except = instr->i_except != NULL
                 ? instr->i_except->b_predecessors : -1;
             if (_PyRegCfg_AddInstr(cfg, instr->i_opcode, instr->i_oparg,

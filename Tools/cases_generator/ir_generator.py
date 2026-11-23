@@ -1666,7 +1666,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     # These semantic operations have distinct body/yield and completion
     # outcomes. Their completion markers replace JUMPBY, but the executable
     # ABI remains an explicit window and a real forward exit.
-    completes_step = group in {"FOR_ITER", "SEND"}
+    completes_step = group in {"FOR_ITER", "SEND", "CLEANUP_THROW"}
     array_inputs = completes_step or any(m.properties.window for m in members) or any(
         item.is_array() for m in members for item in io[m.name][0])
     jumps = completes_step or any(m.properties.jumps for m in members)
@@ -1674,7 +1674,8 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     forward = jumps and (group in FORWARD_JUMPS or fused)
     # A fused word's entry holds its operation and the sense of its jump
     has_fb = fused or any(uses_feedback(m) for m in members)
-    has_imm = any(m.properties.oparg for m in members)
+    # CLEANUP_THROW has no operand in co_code, but its word names the exit
+    has_imm = any(m.properties.oparg for m in members) or group == "CLEANUP_THROW"
     if not has_imm:
         imm_kind = None
     elif forward:
@@ -5536,6 +5537,10 @@ class IREmitter(Emitter):
         """
         kind, value, distance = self.macro_args(tkn, tkn_iter, 3)
         assert inst is not None
+        # IR_EXIT is the word's exit, for an instruction whose stack form has
+        # no operand (CLEANUP_THROW); SEND and FOR_ITER pass their oparg
+        if distance == "IR_EXIT":
+            distance = "oparg"
         entries = {
             "_PY_IR_FOR_ITER": "_PyEval_CompleteForIter",
             "_PY_IR_SEND": "_PyEval_CompleteSend",
@@ -6820,7 +6825,7 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     if use_fb:
         out.emit(f"{feedback_type(fmt)} *fb = ({feedback_type(fmt)} *)"
                  f"IR_FB({field_expr(fmt.fb)});\n")
-    if inst.properties.oparg:
+    if inst.properties.oparg or "IR_EXIT" in uop_tokens(inst):
         if operation is not None:
             out.emit("int oparg = ir_binary_op;\n" if emitter.shared_binary_op
                      else f"int oparg = {operation};\n")

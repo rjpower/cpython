@@ -61,8 +61,7 @@ extern "C" {
 /* Effectful semantic jumps cannot be threaded or deleted as pure transfers. */
 #define IS_NO_FALLTHROUGH_OPCODE(opcode) \
         (IS_SCOPE_EXIT_OPCODE(opcode) || \
-         IS_UNCONDITIONAL_JUMP_OPCODE(opcode) || \
-         (opcode) == CLEANUP_THROW)
+         IS_UNCONDITIONAL_JUMP_OPCODE(opcode))
 
 #define IS_RETURN_OPCODE(opcode) \
         (opcode == RETURN_VALUE)

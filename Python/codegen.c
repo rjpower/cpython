@@ -567,7 +567,7 @@ codegen_add_yield_from(compiler *c, location loc, int await)
     ADDOP_JUMP(c, loc, JUMP_NO_INTERRUPT, send);
 
     USE_LABEL(c, fail);
-    ADDOP_JUMP(c, loc, CLEANUP_THROW, exit);
+    ADDOP(c, loc, CLEANUP_THROW);
 
     USE_LABEL(c, exit);
     ADDOP(c, loc, END_SEND);

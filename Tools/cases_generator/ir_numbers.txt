@@ -29,7 +29,7 @@ BINARY_OP_INPLACE_ADD_UNICODE 3
 CALL_FUNCTION_EX 4
 CHECK_EG_MATCH 5
 CHECK_EXC_MATCH 6
-# removed: CLEANUP_THROW 7
+CLEANUP_THROW 7
 DELETE_SUBSCR 8
 END_FOR 9
 END_SEND 10
@@ -109,9 +109,7 @@ LOAD_FAST_AND_CLEAR 83
 LOAD_FAST_BORROW 84
 LOAD_FAST_BORROW_LOAD_FAST_BORROW 85
 LOAD_FAST_CHECK 86
-# Format 64414 deliberately repurposes retired LOAD_FAST_LOAD_FAST slot 87
-# for argument-bearing CLEANUP_THROW; old caches are incompatible.
-CLEANUP_THROW 87
+# removed: CLEANUP_THROW 87
 LOAD_FROM_DICT_OR_DEREF 88
 LOAD_FROM_DICT_OR_GLOBALS 89
 LOAD_GLOBAL 90
@@ -473,7 +471,8 @@ LOAD_ATTR_SLOT_POINTER 410
 FOR_ITER_DICT_ITEMS 411
 
 # contract87 SB: the real-opcode numbers 111, 112 and 126 go to the stack-only
-# superinstructions of co_code, so these IR-only forms move out of the opcode space.
-LOAD_ATTR_CLASSMETHOD 412
-POP_JUMP_IF_TRUE_SLOT 413
-POP_JUMP_IF_FALSE_SLOT 414
+# superinstructions of co_code, so these IR-only forms move out of the opcode
+# space; 412 is the integration branch's LOAD_ATTR_METHOD_POLY.
+LOAD_ATTR_CLASSMETHOD 413
+POP_JUMP_IF_TRUE_SLOT 414
+POP_JUMP_IF_FALSE_SLOT 415

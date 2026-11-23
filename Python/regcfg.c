@@ -237,12 +237,6 @@ op_jumps(const _PyRegOp *op)
            && !(_PyRegCfg_FormatOf(op->opcode, op->oparg)->flags & _PyIR_NAMES_TARGET);
 }
 
-static inline int
-op_ends_flow(int opcode)
-{
-    return IS_NO_FALLTHROUGH_OPCODE(opcode);
-}
-
 /* The stack depth at the entry of exception handler block h, without the
  * exception and lasti: the depth the unwinder pops to. */
 static inline int
@@ -265,7 +259,7 @@ mark_blocks(_PyRegCfg *cfg)
         blk->falls_through = 1;
         if (blk->end > blk->start) {
             int last = cfg->ops[blk->end - 1].opcode;
-            blk->falls_through = !op_ends_flow(last);
+            blk->falls_through = !_PyRegOp_EndsFlow(last);
         }
         if (b == n - 1) {
             blk->falls_through = 0;

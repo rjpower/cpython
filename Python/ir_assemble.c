@@ -264,7 +264,7 @@ assemble_source_map(struct assembler *a, _PyRegCfg *cfg)
                     assemble_source_edge(a, cfg, op->word, _PyIR_EDGE_TAKEN,
                                          target, cfg->blocks[target].start));
             }
-            if (!IS_NO_FALLTHROUGH_OPCODE(control->opcode)) {
+            if (!_PyRegOp_EndsFlow(control->opcode)) {
                 RETURN_IF_ERROR(
                     assemble_source_edge(a, cfg, op->word,
                                          _PyIR_EDGE_FALLTHROUGH, b,

@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 #include "pycore_ir.h"          // IR_MAX_SLOTS
+#include "pycore_opcode_utils.h" // IS_NO_FALLTHROUGH_OPCODE
 #include "pycore_symtable.h"    // _Py_SourceLocation
 
 /* The register CFG (boil/design/07-compiler-passes.md).
@@ -295,6 +296,15 @@ int _PyRegCfg_AddOperands(_PyRegCfg *cfg, int n, int *index);
 
 /* Replace register from by to in every op of the region of block b. */
 void _PyRegCfg_Rename(_PyRegCfg *cfg, int b, int from, int to);
+
+/* Whether no op after one with this opcode is reached from it.  A
+ * CLEANUP_THROW falls through in the stack bytecode, but its word always
+ * continues at the exit that it names. */
+static inline int
+_PyRegOp_EndsFlow(int opcode)
+{
+    return IS_NO_FALLTHROUGH_OPCODE(opcode) || opcode == CLEANUP_THROW;
+}
 
 #ifdef __cplusplus
 }

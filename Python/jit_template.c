@@ -6,6 +6,7 @@
    are what they share.  See pycore_jit_lower.h. */
 
 #include "Python.h"
+#include "pycore_bitutils.h"        // _Py_bit_length()
 #include "pycore_ceval.h"           // _Py_HandlePending()
 #include "pycore_code.h"            // COMPARISON_EQUALS
 #include "pycore_dict.h"            // PyDictUnicodeEntry
@@ -57,6 +58,17 @@ _PyJitTemplate_PtrAdd(_PyJitWordCx *cx, _PyJitReg dst, _PyJitReg base,
     assert(dst != base && dst != index);
     _PyJitAsm_ImulRRI(A, dst, index, (int32_t)size);
     _PyJitAsm_AluRR(A, _PyJitAlu_ADD, dst, base);
+}
+
+/* dst /= size for an exact multiple of size, a power of two */
+static void
+_PyJitTemplate_SarLog2(_PyJitWordCx *cx, _PyJitReg dst, size_t size)
+{
+    assert(size != 0 && (size & (size - 1)) == 0);
+    int shift = _Py_bit_length((unsigned long)size) - 1;
+    if (shift > 0) {
+        _PyJitAsm_ShiftRI(A, _PyJitShift_SAR, dst, shift);
+    }
 }
 
 #include "jit_lowerings.h"

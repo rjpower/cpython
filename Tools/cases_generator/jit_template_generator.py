@@ -1571,6 +1571,13 @@ class Emitter:
             size = op.attr if isinstance(op.attr, int) else f"sizeof({op.attr})"
             self.w(f"_PyJitTemplate_PtrAdd(cx, {self.R(res[0])}, {self.R(args[0])}, "
                    f"{self.R(args[1])}, {size});")
+        elif kd == "ptrdiff":
+            # The elements between two pointers into one array: the bytes
+            # between them shifted by the element size's log2
+            size = op.attr if isinstance(op.attr, int) else f"sizeof({op.attr})"
+            self.mov(res[0], args[0])
+            self.w(f"_PyJitAsm_AluRR(a, _PyJitAlu_SUB, {self.R(res[0])}, {self.R(args[1])});")
+            self.w(f"_PyJitTemplate_SarLog2(cx, {self.R(res[0])}, {size});")
         elif kd in ALU and args[1] in self.imms:
             self.mov(res[0], args[0])
             self.w(f"_PyJitAsm_AluRI(a, _PyJitAlu_{ALU[kd]}, {self.R(res[0])}, "

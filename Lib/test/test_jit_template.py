@@ -498,6 +498,13 @@ class Fresh:
 def same_slot(x, y):
     if type(x).__name__ == "range_iterator":
         return x.__reduce__()[1:] == y.__reduce__()[1:]
+    if x is not y and type(x) is type(y) and type(x) in (Shape, Slots, Other):
+        # Fresh instances: the same attributes, added in the same order.
+        # vars() makes an instance's dict, which leaves the shape paths, so
+        # only instances that no later case uses are read this way.
+        if type(x) is Slots:
+            return all(getattr(x, n, None) == getattr(y, n, None) for n in Slots.__slots__)
+        return list(vars(x).items()) == list(vars(y).items())
     return same(x, y)
 
 
@@ -511,6 +518,12 @@ def reversed_shape():
     s = Shape.__new__(Shape)
     s.q = 2
     s.p = 1
+    return s
+
+
+def owners_with_z():
+    s = Shape()
+    s.z = 1
     return s
 
 
@@ -604,6 +617,10 @@ TEMPLATE_CASES = [
     *[("def f(a, b):\n    a.p = b\n    return a", (cls(), 1), handler, "AB",
        [(o, v) for o in OWNERS for v in (7, 2.5)])
       for cls, handler in ((Shape, "STORE_ATTR_SHAPE"), (Slots, "STORE_ATTR_SLOT"))],
+    # Each run adds the attribute to a new instance
+    ("def f(a, b):\n    a.z = b\n    return a", Fresh(lambda: (Shape(), 0)), "STORE_ATTR_SHAPE_ADD",
+     "AB", [(Fresh(o), v) for o in (Shape, owners_with_z, reversed_shape, Slots, Other)
+            for v in (7, 2.5, "s")] + [(None, 7), (4, 7)]),
     *[("G = 5\ndef f(a, b):\n    x = 1\n    x = G + len(a)\n    return x", ([1], 0), handler,
        "", [()]) for handler in ("LOAD_GLOBAL_MODULE", "LOAD_GLOBAL_BUILTIN")],
     ("def f(a, b):\n    while a:\n        a -= 1\n    return a", (3, 0), "JUMP_BACKWARD", "",
@@ -642,11 +659,13 @@ class TemplateTests(unittest.TestCase):
         namespace = {}
         exec(source, namespace)
         f = namespace["f"]
-        # warm is the arguments, or a list of them that the calls cycle through
+        # warm is the arguments, or a list of them that the calls cycle
+        # through; a Fresh makes them for each call
         warm = warm if isinstance(warm, list) else [warm]
         for i in range(200):
+            args = warm[i % len(warm)]
             try:
-                f(*warm[i % len(warm)])
+                f(*(args.make() if isinstance(args, Fresh) else args))
             except Exception:
                 pass
         return f

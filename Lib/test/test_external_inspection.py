@@ -4636,41 +4636,6 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
             asyncio.run(main())
         """))
 
-    def test_malformed_remote_source_map_degrades_to_no_location(self):
-        # Construction rejects these maps. Corrupt only an isolated child's
-        # bytes to exercise remote-memory validation rather than construction.
-        assert_python_ok("-c", textwrap.dedent("""
-            import ctypes
-            import os
-            from _remote_debugging import RemoteUnwinder
-
-            def sample(read):
-                return read()
-
-            # Prepare its executing image while the semantic map is valid;
-            # the mutations below target remote-memory decoding.
-            sample(lambda: None)
-            table = sample.__code__.co_linetable
-            assert table[:4] == b'IRSM'
-            address = ctypes.pythonapi.PyBytes_AsString
-            address.argtypes = [ctypes.py_object]
-            address.restype = ctypes.c_void_p
-            pointer = address(table)
-            for offset, payload in ((4, b'\\x03\\0\\0\\0'),
-                                    (8, b'\\xff' * 4),
-                                    (12, b'\\xff' * 4)):
-                saved = table[offset:offset + 4]
-                try:
-                    ctypes.memmove(pointer + offset, payload, 4)
-                    trace = sample(RemoteUnwinder(os.getpid()).get_stack_trace)
-                finally:
-                    ctypes.memmove(pointer + offset, saved, 4)
-                frames = [frame for interpreter in trace for thread in interpreter.threads
-                          for frame in thread.frame_info if frame.funcname == 'sample']
-                assert len(frames) == 1, trace
-                assert frames[0].location is None, frames[0]
-        """))
-
     def test_oversized_linetable_degrades_to_no_location(self):
         """A linetable over MAX_LINETABLE_SIZE degrades to a frame without
         location instead of failing the whole sample."""

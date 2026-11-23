@@ -65,6 +65,11 @@ struct _PyInterpreterFrame {
     uint8_t visited:1;
     uint8_t external:1; /* Set when the frame was pushed by something other than the VM */
     uint8_t pending_redirect:1; /* Commit a debugger continuation after child retirement */
+    /* The frame has run in its code's compiled unit (Python/jit.c): control
+     * that comes back to it in the interpreter goes back to the unit.  It
+     * shares a byte with pending_redirect, so that a return tests both at
+     * once (_PyFrame_SetReturnValue()). */
+    uint8_t jit_resume:1;
 #ifdef Py_DEBUG
     uint8_t lltrace:5;
 #endif

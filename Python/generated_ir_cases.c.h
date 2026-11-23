@@ -179,6 +179,7 @@ static _PyIRTransfer ir_run_IR_OPERANDS(PyThreadState *tstate, _PyInterpreterFra
 static _PyIRTransfer ir_run_IS_OP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_IS_OP_JUMP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_JUMP_BACKWARD(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_JUMP_BACKWARD_JIT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_JUMP_BACKWARD_NO_INTERRUPT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_JUMP_FORWARD(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_JUMP_IF_FALSE_OR_POP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -265,6 +266,7 @@ static _PyIRTransfer ir_run_RAISE_VARARGS(PyThreadState *tstate, _PyInterpreterF
 static _PyIRTransfer ir_run_RERAISE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RESERVED(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RESUME(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_RESUME_JIT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RETURN_GENERATOR(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RETURN_VALUE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RETURN_VALUE_EMPTY(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -9221,12 +9223,12 @@ ir_run_JUMP_BACKWARD(
 {
             int opcode = JUMP_BACKWARD;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_BACKWARD);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             // _CHECK_PERIODIC
@@ -9244,6 +9246,44 @@ ir_run_JUMP_BACKWARD(
             {
                 assert(JUMP_TARGET(oparg) < next_instr);
                 JUMPTO(oparg);
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_JUMP_BACKWARD_JIT(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = JUMP_BACKWARD_JIT;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(JUMP_BACKWARD_JIT);
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            // _CHECK_PERIODIC
+            {
+                _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
+                QSBR_QUIESCENT_STATE(tstate);
+                if (_Py_EvalBreakerHasEvents(tstate)) {
+                    int err = _Py_HandlePending(tstate);
+                    if (err != 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                }
+            }
+            // _JUMP_BACKWARD_NO_INTERRUPT
+            {
+                assert(JUMP_TARGET(oparg) < next_instr);
+                JUMPTO(oparg);
+            }
+            // _JIT_EVENT
+            {
+                IR_JIT_EVENT();
             }
             DISPATCH();
         }
@@ -13578,12 +13618,12 @@ ir_run_RESUME(
 {
             int opcode = RESUME;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(RESUME);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
             // _MAYBE_INSTRUMENT
@@ -13615,6 +13655,58 @@ ir_run_RESUME(
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                 }
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_RESUME_JIT(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = RESUME_JIT;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(RESUME_JIT);
+            int oparg = (int)IR_A(ir_word);
+            (void)oparg;
+            // _MAYBE_INSTRUMENT
+            {
+                #ifdef Py_GIL_DISABLED
+
+                int check_instrumentation = 1;
+                #else
+                int check_instrumentation = (tstate->tracing == 0);
+                #endif
+                if (check_instrumentation) {
+                    uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
+                    uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
+                    if (code_version != global_version) {
+                        int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
+                        if (err) {
+                            PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                        }
+                        next_instr = this_instr;
+                        DISPATCH();
+                    }
+                }
+            }
+            // _CHECK_PERIODIC_IF_NOT_YIELD_FROM
+            {
+                if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
+                    int err = check_periodics(tstate);
+                    if (err != 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                }
+            }
+            // _JIT_EVENT
+            {
+                IR_JIT_EVENT();
             }
             DISPATCH();
         }
@@ -13689,7 +13781,7 @@ ir_run_RETURN_VALUE(
                 }
                 else {
                     next_instr = frame->return_pc;
-                    if (_PyFrame_SetReturnValue(frame, temp)) { next_instr = frame->return_pc; }
+                    IR_STORE_RETURN(temp);
                 }
                 LLTRACE_RESUME_FRAME();
                 DISPATCH();
@@ -13741,7 +13833,7 @@ ir_run_RETURN_VALUE_EMPTY(
                 }
                 else {
                     next_instr = frame->return_pc;
-                    if (_PyFrame_SetReturnValue(frame, temp)) { next_instr = frame->return_pc; }
+                    IR_STORE_RETURN(temp);
                 }
                 LLTRACE_RESUME_FRAME();
                 DISPATCH();
@@ -16255,7 +16347,7 @@ ir_run_YIELD_DELEGATED(
             FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
             IR_TRY_NATIVE_YIELD(outgoing);
             next_instr = frame->return_pc;
-            if (_PyFrame_SetReturnValue(frame, outgoing)) { next_instr = frame->return_pc; }
+            IR_STORE_RETURN(outgoing);
             LLTRACE_RESUME_FRAME();
             DISPATCH();
         }
@@ -16938,8 +17030,8 @@ static const _PyIRForm ir_handler_forms[512] = {
     [413] = ir_run_LOAD_ATTR_CLASSMETHOD,
     [414] = ir_run_POP_JUMP_IF_TRUE_SLOT,
     [415] = ir_run_POP_JUMP_IF_FALSE_SLOT,
-    [416] = ir_run_UNKNOWN_OPCODE,
-    [417] = ir_run_UNKNOWN_OPCODE,
+    [416] = ir_run_RESUME_JIT,
+    [417] = ir_run_JUMP_BACKWARD_JIT,
     [418] = ir_run_UNKNOWN_OPCODE,
     [419] = ir_run_UNKNOWN_OPCODE,
     [420] = ir_run_UNKNOWN_OPCODE,
@@ -23808,12 +23900,12 @@ static const _PyIRForm ir_handler_forms[512] = {
         TARGET(JUMP_BACKWARD) {
             int opcode = JUMP_BACKWARD;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_BACKWARD);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             // _CHECK_PERIODIC
@@ -23831,6 +23923,40 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 assert(JUMP_TARGET(oparg) < next_instr);
                 JUMPTO(oparg);
+            }
+            DISPATCH();
+        }
+
+        TARGET(JUMP_BACKWARD_JIT) {
+            int opcode = JUMP_BACKWARD_JIT;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(JUMP_BACKWARD_JIT);
+            int oparg = (int)IR_CD(ir_word);
+            (void)oparg;
+            // _CHECK_PERIODIC
+            {
+                _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
+                QSBR_QUIESCENT_STATE(tstate);
+                if (_Py_EvalBreakerHasEvents(tstate)) {
+                    int err = _Py_HandlePending(tstate);
+                    if (err != 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                }
+            }
+            // _JUMP_BACKWARD_NO_INTERRUPT
+            {
+                assert(JUMP_TARGET(oparg) < next_instr);
+                JUMPTO(oparg);
+            }
+            // _JIT_EVENT
+            {
+                IR_JIT_EVENT();
             }
             DISPATCH();
         }
@@ -26908,12 +27034,12 @@ static const _PyIRForm ir_handler_forms[512] = {
         TARGET(RESUME) {
             int opcode = RESUME;
             (void)(opcode);
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(RESUME);
+            _PyIRWord* const this_instr = next_instr - 1;
+            (void)this_instr;
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
             // _MAYBE_INSTRUMENT
@@ -26945,6 +27071,54 @@ static const _PyIRForm ir_handler_forms[512] = {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                 }
+            }
+            DISPATCH();
+        }
+
+        TARGET(RESUME_JIT) {
+            int opcode = RESUME_JIT;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(RESUME_JIT);
+            int oparg = (int)IR_A(ir_word);
+            (void)oparg;
+            // _MAYBE_INSTRUMENT
+            {
+                #ifdef Py_GIL_DISABLED
+
+                int check_instrumentation = 1;
+                #else
+                int check_instrumentation = (tstate->tracing == 0);
+                #endif
+                if (check_instrumentation) {
+                    uintptr_t global_version = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & ~_PY_EVAL_EVENTS_MASK;
+                    uintptr_t code_version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(_PyFrame_GetCode(frame)->_co_instrumentation_version);
+                    if (code_version != global_version) {
+                        int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
+                        if (err) {
+                            PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                        }
+                        next_instr = this_instr;
+                        DISPATCH();
+                    }
+                }
+            }
+            // _CHECK_PERIODIC_IF_NOT_YIELD_FROM
+            {
+                if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
+                    int err = check_periodics(tstate);
+                    if (err != 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                }
+            }
+            // _JIT_EVENT
+            {
+                IR_JIT_EVENT();
             }
             DISPATCH();
         }
@@ -27011,7 +27185,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 }
                 else {
                     next_instr = frame->return_pc;
-                    if (_PyFrame_SetReturnValue(frame, temp)) { next_instr = frame->return_pc; }
+                    IR_STORE_RETURN(temp);
                 }
                 LLTRACE_RESUME_FRAME();
                 DISPATCH();
@@ -27059,7 +27233,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 }
                 else {
                     next_instr = frame->return_pc;
-                    if (_PyFrame_SetReturnValue(frame, temp)) { next_instr = frame->return_pc; }
+                    IR_STORE_RETURN(temp);
                 }
                 LLTRACE_RESUME_FRAME();
                 DISPATCH();
@@ -28794,7 +28968,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             FT_ATOMIC_STORE_INT8_RELEASE(ir_yield_gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
             IR_TRY_NATIVE_YIELD(outgoing);
             next_instr = frame->return_pc;
-            if (_PyFrame_SetReturnValue(frame, outgoing)) { next_instr = frame->return_pc; }
+            IR_STORE_RETURN(outgoing);
             LLTRACE_RESUME_FRAME();
             DISPATCH();
         }

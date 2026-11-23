@@ -62,7 +62,7 @@ IR_HOT_ROUTINE(gen_yield, PyValue gen_value)
         }
     }
     next_instr = frame->return_pc;
-    if (_PyFrame_SetReturnValue(frame, result)) { next_instr = frame->return_pc; }
+    IR_STORE_RETURN(result);
     LLTRACE_RESUME_FRAME();
     GEN_DISPATCH();
 }
@@ -301,7 +301,7 @@ IR_HOT_ROUTINE(gen_complete, PyValue gen_value)
         }
         result = _PyEval_FrameClearAndPopGeneralWithResult(tstate, dying, result);
         next_instr = frame->return_pc;
-        if (_PyFrame_SetReturnValue(frame, result)) { next_instr = frame->return_pc; }
+        IR_STORE_RETURN(result);
         LLTRACE_RESUME_FRAME();
         GEN_DISPATCH();
     }
@@ -319,6 +319,8 @@ IR_ROUTINE(process_error, _PyInstr *process_error_origin,
     if (ir_error_result.disposition == _PyIR_ERROR_HANDLED) {
         frame = tstate->current_frame;
         next_instr = ir_error_result.next;
+        /* A handler of a frame that ran in its unit runs there */
+        IR_JIT_RESUME();
         int opcode;
         DISPATCH();
     }

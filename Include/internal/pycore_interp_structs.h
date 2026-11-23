@@ -121,8 +121,9 @@ struct _ceval_state {
        their words (Python/ceval.c, ir_execute_forms()) */
     int ir_forms;
     /* -X jit, PYTHON_JIT: the baseline JIT's mode (_PyJIT_OFF, _PyJIT_ON,
-       _PyJIT_ALWAYS in pycore_jit.h).  A mode other than off sets ir_forms,
-       since the forms executor is the JIT's activation loop. */
+       _PyJIT_ALWAYS in pycore_jit.h); off under ir_forms.  Code lowered
+       under a mode other than off holds the JIT's forms of RESUME and
+       JUMP_BACKWARD (Python/ir_assemble.c). */
     int jit;
     /* Warm-up events before a code object compiles: 1 under always,
        _PyJIT_WARMUP under on; _testinternalcapi.set_jit_warmup() sets it

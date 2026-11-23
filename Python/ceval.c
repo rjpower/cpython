@@ -2569,6 +2569,10 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #undef GEN_STEP_JUMP
 #pragma push_macro("GEN_STEP_EFFECT")
 #undef GEN_STEP_EFFECT
+#pragma push_macro("IR_JIT_EVENT")
+#undef IR_JIT_EVENT
+#pragma push_macro("IR_JIT_RESUME")
+#undef IR_JIT_RESUME
 #define DISPATCH() return (_PyIRTransfer){frame, next_instr}
 #define DISPATCH_SAME_OPARG() return (_PyIRTransfer){frame, next_instr}
 #define DISPATCH_GOTO() \
@@ -2646,6 +2650,9 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
         Py_MUSTTAIL return ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, \
                                                   (REMAINING)); \
     } while (0)
+/* Compiled code runs the forms: it is in its unit already */
+#define IR_JIT_EVENT() ((void)0)
+#define IR_JIT_RESUME() ((void)0)
 
 /* The event of an instrumented branch, jump or loop step, after the effect
  * (rule 12).  It is out of the evaluator, where the instrumented handlers
@@ -2764,72 +2771,95 @@ _PyEval_HandlerForms(void)
     return (const void *const *)ir_handler_forms;
 }
 
-/* The unit to run the transfer t in, or NULL to run its word by its form.
- * last_frame and last_word are the frame and the word that the forms ran
- * last (last_word is NULL after a unit ran), which tell a warm-up event: a
- * frame switch (a call, a return, a resume, the activation's start) or a
- * backward transfer.  Only at an event does a code warm up, compile or
- * replace a stale unit; between events a stale unit runs as it is. */
+/* The unit that frame goes on in, or NULL to go on in the evaluator: its
+ * code's newest unit, unless that is invalid, when the warm-up event
+ * decides (a stale unit is recompiled; a retired one is not run).  It is
+ * looked up afresh each time: monitoring retires units and a recompile
+ * replaces them while the frame waits. */
 static inline _PyJitUnit *
-jit_unit_for(PyThreadState *tstate, _PyInterpreterFrame *last_frame,
-             _PyInstr *last_word, _PyIRTransfer t)
+jit_unit_of(PyThreadState *tstate, _PyInterpreterFrame *frame)
 {
-    if (t.frame->owner >= FRAME_OWNED_BY_INTERPRETER) {
+    if (frame->owner >= FRAME_OWNED_BY_INTERPRETER) {
         return NULL;
     }
 #ifdef Py_DEBUG
-    if (t.frame->lltrace >= 5) {
+    if (frame->lltrace >= 5) {
         return NULL;
     }
 #endif
-    _PyJitUnit *unit = _PyFrame_Exec(t.frame)->jit_unit;
-    if (unit != NULL && unit->invalid == 0) {
-        return unit;
+    _PyJitUnit *unit = _PyFrame_Exec(frame)->jit_unit;
+    if (unit != NULL && unit->invalid != 0) {
+        unit = _PyJit_Event(tstate, frame);
     }
-    if (t.frame == last_frame && t.next > last_word) {
-        return unit != NULL && !(unit->invalid & _PyJIT_RETIRED) ? unit : NULL;
-    }
-    return _PyJit_Event(tstate, t.frame);
+    return unit;
 }
 
 typedef _PyIRTransfer (*jit_entry)(PyThreadState *tstate,
                                    _PyInterpreterFrame *frame,
                                    const void *entry);
 
-static inline _PyIRTransfer
-jit_enter(PyThreadState *tstate, _PyJitUnit *unit, _PyIRTransfer t)
+/* The baseline JIT's driver, which the evaluator calls when frame, at the
+ * word next, is to go on in unit (IR_JIT_EVENT(), IR_JIT_RESUME() in
+ * Python/ceval_macros.h).  A unit leaves at every frame switch and at any
+ * transfer that it cannot continue natively; the driver runs the unit of
+ * the frame that the transfer names, if it has one, and returns the first
+ * transfer that has none, or that has raised, for the evaluator to run.
+ * The C stack stays one unit deep. */
+static Py_NO_INLINE _PyIRTransfer
+jit_run(PyThreadState *tstate, _PyJitUnit *unit, _PyInterpreterFrame *frame,
+        _PyInstr *next)
 {
-    /* The unit addresses the words from frame->ir_words */
-    assert(t.frame->ir_words == unit->words);
-    assert(t.next >= t.frame->ir_words &&
-           t.next < t.frame->ir_words + unit->nwords);
-    /* A form that pops the frame can drop the last reference to its code,
-     * which frees the exec and its units while the unit runs: the loop
-     * keeps the code until the unit has left. */
-    PyCodeObject *code = (PyCodeObject *)Py_NewRef(_PyFrame_GetCode(t.frame));
-    t = ((jit_entry)unit->code.start)(
-        tstate, t.frame, unit->entries[t.next - t.frame->ir_words]);
-    Py_DECREF(code);
-    return t;
+    _PyThreadStateImpl *impl = (_PyThreadStateImpl *)tstate;
+    _PyInterpreterFrame *outer = impl->jit_frame;
+    for (;;) {
+        /* The unit addresses the words from frame->ir_words */
+        assert(frame->ir_words == unit->words);
+        assert(next >= frame->ir_words && next < frame->ir_words + unit->nwords);
+        /* A form that pops the frame can drop the last reference to its
+         * code, which frees the exec and its units while the unit runs:
+         * the driver keeps the code until the unit has left. */
+        PyCodeObject *code = (PyCodeObject *)Py_NewRef(_PyFrame_GetCode(frame));
+        frame->jit_resume = 1;
+        impl->jit_frame = frame;
+        _PyIRTransfer t = ((jit_entry)unit->code.start)(
+            tstate, frame, unit->entries[next - frame->ir_words]);
+        impl->jit_frame = outer;
+        Py_DECREF(code);
+        if (t.next == NULL) {
+            return t;
+        }
+        unit = jit_unit_of(tstate, t.frame);
+        if (unit == NULL) {
+            return t;
+        }
+        frame = t.frame;
+        next = t.next;
+    }
+}
+
+/* Control has come back to frame, which ran in its code's unit, at next in
+ * the evaluator (IR_JIT_RESUME()): it goes back to the unit if the code has
+ * one to run; otherwise it stays in the evaluator, and is no longer marked. */
+static Py_NO_INLINE _PyIRTransfer
+jit_resume(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next)
+{
+    _PyJitUnit *unit = jit_unit_of(tstate, frame);
+    if (unit == NULL) {
+        frame->jit_resume = 0;
+        return (_PyIRTransfer){frame, next};
+    }
+    return jit_run(tstate, unit, frame, next);
 }
 #endif
 
-/* The function-form executor (-X ir_forms), and the baseline JIT's
- * activation loop: runs the activation's frames by calling each word's
- * function form, as the baseline JIT's B1 does, in place of ir_evaluate().
- * With the JIT on, a frame whose code has a unit runs in it, and the loop
- * runs the transfer that the unit leaves with.  A form or unit that returns
- * no word has raised, which the error routine resolves, or has ended the
- * activation. */
+/* The function-form executor (-X ir_forms), a test of the forms: runs the
+ * activation's frames by calling each word's function form, as compiled
+ * code does, in place of ir_evaluate().  A form that returns no word has
+ * raised, which the error routine resolves, or has ended the activation. */
 static Py_NO_INLINE PyValue
 ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     _PyEvalActivation *activation = IR_ACTIVATION();
-#ifdef _PY_JIT_SUPPORTED
-    int jit = tstate->interp->ceval.jit != _PyJIT_OFF;
-    _PyInterpreterFrame *last_frame = NULL;
-    _PyInstr *last_word = NULL;
-#endif
     _PyIRTransfer t = throwflag ? ir_throw_error(tstate, frame, frame->instr_ptr)
                                 : ir_start_frame(tstate, frame, frame->instr_ptr);
     for (;;) {
@@ -2842,19 +2872,6 @@ ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfla
                                  activation->exit_entry);
             continue;
         }
-#ifdef _PY_JIT_SUPPORTED
-        if (jit) {
-            _PyJitUnit *unit = jit_unit_for(tstate, last_frame, last_word, t);
-            if (unit != NULL) {
-                last_frame = t.frame;
-                last_word = NULL;
-                t = jit_enter(tstate, unit, t);
-                continue;
-            }
-            last_frame = t.frame;
-            last_word = t.next;
-        }
-#endif
         frame = t.frame;
         _PyInstr *next_instr = t.next;
         _PyIRWord ir_word;
@@ -2885,6 +2902,8 @@ ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfla
 #pragma pop_macro("GEN_DISPATCH")
 #pragma pop_macro("GEN_STEP_JUMP")
 #pragma pop_macro("GEN_STEP_EFFECT")
+#pragma pop_macro("IR_JIT_EVENT")
+#pragma pop_macro("IR_JIT_RESUME")
 
 /* The evaluator: every handler and label of the interpreter in one
  * function, which dispatches by computed goto (Python/ceval_macros.h).  Its
@@ -3108,6 +3127,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->frame.return_pc = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.pending_kwargs = IR_NO_DST;
     entry->frame.pending_redirect = 0;
+    entry->frame.jit_resume = 0;
 #ifdef Py_DEBUG
     entry->frame.lltrace = 0;
 #endif

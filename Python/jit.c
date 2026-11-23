@@ -61,15 +61,14 @@ _PyJit_InitInterpreter(PyInterpreterState *interp)
             }
         }
     }
-    if (mode != _PyJIT_OFF && !_PyJit_IsAvailable()) {
+    /* -X ir_forms, a test of the function forms, runs no unit: the JIT is
+     * off under it */
+    if (mode != _PyJIT_OFF &&
+        (interp->ceval.ir_forms || !_PyJit_IsAvailable())) {
         mode = _PyJIT_OFF;
     }
     interp->ceval.jit = mode;
     interp->ceval.jit_warmup = mode == _PyJIT_ALWAYS ? 1 : _PyJIT_WARMUP;
-    /* The JIT's activation loop is the forms executor */
-    if (mode != _PyJIT_OFF) {
-        interp->ceval.ir_forms = 1;
-    }
     return _PyStatus_OK();
 }
 
@@ -410,8 +409,11 @@ _PyJit_Event(PyThreadState *tstate, _PyInterpreterFrame *frame)
     if (unit != NULL && unit->invalid == 0) {
         return unit;
     }
-    if (exec == &_PyIR_InitCleanupExec) {
-        /* Shared by every interpreter and never freed */
+    if (exec == &_PyIR_InitCleanupExec ||
+        tstate->interp->ceval.jit == _PyJIT_OFF) {
+        /* The static exec is shared by every interpreter and never freed;
+         * a code lowered with the JIT on may run in an interpreter that has
+         * it off. */
         return NULL;
     }
     if (unit != NULL && unit->invalid == _PyJIT_STALE) {

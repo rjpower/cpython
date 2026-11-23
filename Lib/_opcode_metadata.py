@@ -3,6 +3,8 @@
 #   Python/bytecodes.c
 # Do not edit!
 _specializations = frozendict(
+    RESUME=(
+    ),
     LOAD_CONST=(
             "LOAD_CONST_INLINE_INT",
             "LOAD_CONST_INLINE_FLOAT",
@@ -96,6 +98,8 @@ _specializations = frozendict(
     CONTAINS_OP=(
             "CONTAINS_OP_SET",
             "CONTAINS_OP_DICT",
+    ),
+    JUMP_BACKWARD=(
     ),
     POP_JUMP_IF_FALSE=(
             "POP_JUMP_IF_FALSE_ALWAYS_TRUE",
@@ -524,6 +528,8 @@ _ir_opmap = frozendict(
     LOAD_ATTR_CLASSMETHOD=413,
     POP_JUMP_IF_TRUE_SLOT=414,
     POP_JUMP_IF_FALSE_SLOT=415,
+    RESUME_JIT=416,
+    JUMP_BACKWARD_JIT=417,
 )
 
 HAVE_ARGUMENT = 41

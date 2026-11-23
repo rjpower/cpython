@@ -1092,14 +1092,42 @@ method_poly_lookup(const _PyIRWord *words, const _PyFbHeader *h, PyObject *owner
     } while (0)
 
 /* After a frame switch, V goes to the slot of the frame that control came
- * back to (frame->return_slot). */
+ * back to (frame->return_slot).  If the frame has run in its code's unit, it
+ * goes back to it (IR_JIT_RESUME()). */
 #define IR_STORE_RETURN(V) \
     do { \
         assert(_PyValue_IsHome(V)); \
         if (_PyFrame_SetReturnValue(frame, (V))) { \
             next_instr = frame->return_pc; \
+            IR_JIT_RESUME(); \
         } \
     } while (0)
+
+/* The baseline JIT's hand-offs from the evaluator (Python/jit.c), which
+ * jit_run() and jit_resume() in Python/ceval.c drive.  IR_JIT_EVENT(), the
+ * end of RESUME_JIT and JUMP_BACKWARD_JIT, is a warm-up event of the frame's
+ * code; once the code has a unit, the frame goes on in it at next_instr.
+ * IR_JIT_RESUME(): control has come back to frame at next_instr, and the
+ * frame goes back to its unit if it ran in one.  The function forms, which
+ * compiled code calls, bind both to nothing. */
+#ifdef _PY_JIT_SUPPORTED
+#define IR_JIT_EVENT() \
+    do { \
+        _PyJitUnit *ir_unit = _PyJit_Event(tstate, frame); \
+        if (ir_unit != NULL) { \
+            IR_STEP_DONE(jit_run(tstate, ir_unit, frame, next_instr)); \
+        } \
+    } while (0)
+#define IR_JIT_RESUME() \
+    do { \
+        if (frame->jit_resume) { \
+            IR_STEP_DONE(jit_resume(tstate, frame, next_instr)); \
+        } \
+    } while (0)
+#else
+#define IR_JIT_EVENT() ((void)0)
+#define IR_JIT_RESUME() ((void)0)
+#endif
 
 /* The oparg and feedback entry of another instruction of the frame. */
 #define _PyIR_Oparg(FRAME, INSTR) \

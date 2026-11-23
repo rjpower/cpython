@@ -18,9 +18,17 @@ extern "C" {
    unit was compiled, followed by a native jump when the form's transfer is
    the same frame and a word known at compile time (the next word or the
    word's jump target).  Any other transfer leaves the unit with the
-   transfer, and the activation loop (ir_execute_forms() in Python/ceval.c)
-   resolves it: it enters the unit of the transfer's frame through the
-   unit's entry table, or runs the word by its form.
+   transfer, and the driver (jit_run() in Python/ceval.c) enters the unit of
+   the transfer's frame through the unit's entry table, or returns the
+   transfer to the evaluator, ir_evaluate(), which is the cold tier.
+
+   The evaluator hands a frame to its unit at three kinds of point: the
+   handlers RESUME_JIT (a frame's entry, a generator's resume) and
+   JUMP_BACKWARD_JIT (a backward jump), which the lowering gives a code
+   under a mode other than off, count a warm-up event and enter the unit
+   once the code has one; and a return or yield into a frame that has run in
+   its unit (_PyInterpreterFrame.jit_resume), or an exception handled in it,
+   goes back to the unit.
 
    A unit is entered by calling its code as
 
@@ -89,11 +97,12 @@ PyAPI_FUNC(int) _PyJit_IsAvailable(void);
 
 #ifdef _PY_JIT_SUPPORTED
 
-/* A warm-up event of frame, whose code has no valid unit: the frame enters
- * its code (a call, a return, a resume, an activation's start) or jumps
- * back.  Counts it, and compiles the code when it is warm or recompiles a
- * stale unit.  Returns the unit to run, or NULL to run the frame by the
- * function forms. */
+/* A warm-up event of frame: the frame enters or resumes its code, or jumps
+ * back (RESUME_JIT, JUMP_BACKWARD_JIT, a unit's backward jump when it is
+ * invalid), or goes back to an invalid unit.  Returns the code's valid
+ * unit; otherwise counts the event, and compiles the code when it is warm
+ * or recompiles a stale unit.  Returns the unit to run, or NULL to run the
+ * frame in the evaluator. */
 extern _PyJitUnit *_PyJit_Event(PyThreadState *tstate,
                                 struct _PyInterpreterFrame *frame);
 

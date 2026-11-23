@@ -3,7 +3,7 @@
 //   Python/bytecodes.c
 // Do not edit!
 #ifdef IR_GEN_TABLES
-static const uint8_t generator_yielded_targets[416] = {
+static const uint8_t generator_yielded_targets[418] = {
     [375] = 1,
     [376] = 1,
     [397] = 1,
@@ -29,7 +29,7 @@ static const uint8_t generator_yielded_targets[416] = {
     [404] = 1,
     [390] = 1,
 };
-static const uint8_t generator_completed_targets[416] = {
+static const uint8_t generator_completed_targets[418] = {
     [367] = GEN_THROWING | GEN_COMPLETE_DISCARD,
     [368] = GEN_THROWING | GEN_COMPLETE_HOME,
     [395] = GEN_THROWING | GEN_COMPLETE_POP_TOP,
@@ -63,7 +63,7 @@ static const uint8_t generator_completed_targets[416] = {
     [65] = GEN_COMPLETE_FOR_ITER,
     [182] = GEN_COMPLETE_FOR_ITER,
 };
-static const uint8_t generator_resume_targets[416] = {
+static const uint8_t generator_resume_targets[418] = {
     [371] = GEN_RESUME_SEND,
     [372] = GEN_RESUME_STORE,
     [373] = GEN_RESUME_SEND,
@@ -515,8 +515,8 @@ static void *const opcode_targets[512] = {
     [413] = &&TARGET_LOAD_ATTR_CLASSMETHOD,
     [414] = &&TARGET_POP_JUMP_IF_TRUE_SLOT,
     [415] = &&TARGET_POP_JUMP_IF_FALSE_SLOT,
-    [416] = &&TARGET_UNKNOWN_OPCODE,
-    [417] = &&TARGET_UNKNOWN_OPCODE,
+    [416] = &&TARGET_RESUME_JIT,
+    [417] = &&TARGET_JUMP_BACKWARD_JIT,
     [418] = &&TARGET_UNKNOWN_OPCODE,
     [419] = &&TARGET_UNKNOWN_OPCODE,
     [420] = &&TARGET_UNKNOWN_OPCODE,

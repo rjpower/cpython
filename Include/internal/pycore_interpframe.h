@@ -258,12 +258,16 @@ void _Py_COLD_FUNCTION _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame);
 static inline int
 _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
 {
-    int redirected = f->pending_redirect;
-    if (redirected) {
-        _PyFrame_CompleteRedirect(f);
+    /* One test of the byte that holds both bits */
+    if (f->pending_redirect | f->jit_resume) {
+        if (f->pending_redirect) {
+            _PyFrame_CompleteRedirect(f);
+        }
+        _PyFrame_PublishReturnSlot(f, v);
+        return 1;
     }
     _PyFrame_PublishReturnSlot(f, v);
-    return redirected;
+    return 0;
 }
 
 /* Materialize a compiler-proven virtual empty kwargs binding before a read
@@ -366,6 +370,8 @@ _PyFrame_CopyHeader(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
     dest->return_pc = src->return_pc;
     dest->pending_kwargs = src->pending_kwargs;
     dest->pending_redirect = src->pending_redirect;
+    /* The copy has not run in a unit */
+    dest->jit_resume = 0;
     /* Copy/takeover has a different lifecycle until a supported producer
      * publishes its exact site/phase. */
     // visited is GC bookkeeping for the current stack walk, not frame state.
@@ -468,6 +474,7 @@ _PyFrame_Initialize(
     frame->return_slot = 0;
     frame->pending_kwargs = IR_NO_DST;
     frame->pending_redirect = 0;
+    frame->jit_resume = 0;
     frame->owner = FRAME_OWNED_BY_THREAD;
     frame->visited = 0;
 #ifdef Py_DEBUG
@@ -851,6 +858,7 @@ _PyFrame_InitializeTrampoline(_PyInterpreterFrame *frame, PyCodeObject *code,
     frame->return_pc = frame->instr_ptr;
     frame->pending_kwargs = IR_NO_DST;
     frame->pending_redirect = 0;
+    frame->jit_resume = 0;
 }
 
 /* Pushes a trampoline frame without checking for space.

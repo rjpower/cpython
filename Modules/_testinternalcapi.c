@@ -4968,7 +4968,7 @@ jit_unit(PyObject *self, PyObject *code_object)
     }
     /* The code of every unit in the chain, newest first, as (address, size);
      * a unit's unwind info lies after its code in its block */
-    size_t frame_offset = (size_t)(unit->eh_frame - unit->code.start);
+    size_t frame_offset = (size_t)(unit->unwind.eh_frame - unit->code.start);
     PyObject *ranges = PyList_New(0);
     if (ranges == NULL) {
         return NULL;
@@ -4976,7 +4976,7 @@ jit_unit(PyObject *self, PyObject *code_object)
     for (_PyJitUnit *u = unit; u != NULL; u = u->older) {
         PyObject *range = Py_BuildValue("(Kn)",
             (unsigned long long)(uintptr_t)u->code.start,
-            (Py_ssize_t)(u->eh_frame - u->code.start));
+            (Py_ssize_t)(u->unwind.eh_frame - u->code.start));
         if (range == NULL || PyList_Append(ranges, range) < 0) {
             Py_XDECREF(range);
             Py_DECREF(ranges);
@@ -4994,7 +4994,7 @@ jit_unit(PyObject *self, PyObject *code_object)
         "compiles", exec->jit_compiles,
         "units", units,
         "ranges", ranges,
-        "eh_frame", (const char *)unit->eh_frame,
+        "eh_frame", (const char *)unit->unwind.eh_frame,
         (Py_ssize_t)(unit->code.size - frame_offset));
     return result;
 #else

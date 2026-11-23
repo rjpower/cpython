@@ -450,7 +450,7 @@ static void
 free_unit(_PyJitUnit *unit)
 {
     /* The unwinder reads the frame to forget it: deregister before freeing */
-    _PyJitUnwind_Deregister(unit->eh_frame);
+    _PyJitUnwind_Deregister(&unit->unwind);
     _PyJitMemory_Free(&unit->code);
     PyMem_RawFree(unit);
 }
@@ -502,22 +502,22 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
         return NULL;
     }
     unit->entries = (const void *const *)(unit->code.start + table_offset);
-    unit->eh_frame = unit->code.start + frame_offset;
-    _PyJitUnwind_Register(unit->eh_frame);
     unit->older = exec->jit_unit;
     exec->jit_unit = unit;
+    /* The unit's name for gdb and for the perf map */
+    char name[512] = "py::jit";
+    PyObject *exc = PyErr_GetRaisedException();
+    const char *qualname = PyUnicode_AsUTF8(code->co_qualname);
+    const char *filename = PyUnicode_AsUTF8(code->co_filename);
+    if (qualname != NULL && filename != NULL) {
+        PyOS_snprintf(name, sizeof(name), "py::jit:%s:%s", qualname, filename);
+    }
+    PyErr_Clear();
+    PyErr_SetRaisedException(exc);
+    _PyJitUnwind_Register(&unit->unwind, &unit->code, frame_offset, name);
     if (interp->config.perf_profiling == 1) {
-        PyObject *exc = PyErr_GetRaisedException();
-        const char *qualname = PyUnicode_AsUTF8(code->co_qualname);
-        const char *filename = PyUnicode_AsUTF8(code->co_filename);
-        if (qualname != NULL && filename != NULL) {
-            char name[512];
-            PyOS_snprintf(name, sizeof(name), "py::jit:%s:%s", qualname, filename);
-            PyUnstable_WritePerfMapEntry(unit->code.start,
-                                         (unsigned int)frame_offset, name);
-        }
-        PyErr_Clear();
-        PyErr_SetRaisedException(exc);
+        PyUnstable_WritePerfMapEntry(unit->code.start,
+                                     (unsigned int)frame_offset, name);
     }
     return unit;
 }

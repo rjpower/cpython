@@ -106,12 +106,25 @@ extern size_t _PyJitUnwind_End(_PyJitUnwind *u);
    the end of the frame list: End, then this; returns the size with it. */
 extern size_t _PyJitUnwind_Terminate(_PyJitUnwind *u);
 
-/* Make libgcc's unwinder (backtrace(), _Unwind_Backtrace, C++ exceptions,
-   faulthandler's C stack) find the code that a terminated frame describes.
-   The frame must stay unchanged and readable until it is deregistered, and
-   deregistered before the code is freed. */
-extern void _PyJitUnwind_Register(const uint8_t *eh_frame);
-extern void _PyJitUnwind_Deregister(const uint8_t *eh_frame);
+/* A unit's unwind info, registered with the two unwinders of a process.
+   The code block holds the code, then at frame_offset (a multiple of 8) the
+   frame that Begin to Terminate wrote.  libgcc's unwinder (backtrace(),
+   _Unwind_Backtrace, C++ exceptions, faulthandler's C stack) reads the frame
+   in the block until the unit is deregistered, which must come before the
+   block is freed.  gdb gets the unit as a symbol of `name` through its JIT
+   interface; that part is skipped if there is no memory for it. */
+typedef struct {
+    const uint8_t *eh_frame;
+    void *gdb;
+} _PyJitUnwindEntry;
+
+extern void _PyJitUnwind_Register(_PyJitUnwindEntry *entry, const _PyJitCode *code,
+                                  size_t frame_offset, const char *name);
+extern void _PyJitUnwind_Deregister(_PyJitUnwindEntry *entry);
+
+/* In the child of a fork: the interface's lock may be held by a thread that
+   does not exist there. */
+extern void _PyJitUnwind_AfterFork_Child(void);
 
 #endif  // _PY_JIT_SUPPORTED
 

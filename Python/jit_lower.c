@@ -579,12 +579,9 @@ owns_test(_PyJitWordCx *cx, _PyJitReg w, _PyJitReg t)
 /* ob_refcnt is the low 32 bits of the count word; the flags above it stay.
    The flags of the result: E when the count is now zero. */
 static void
-refcnt_add(_PyJitWordCx *cx, _PyJitReg w, _PyJitReg t, int32_t k)
+refcnt_step(_PyJitWordCx *cx, _PyJitReg w, _PyJitUnary op)
 {
-    _PyJitMem count = AT(w, offsetof(PyObject, ob_refcnt));
-    _PyJitAsm_MovRM32(A, t, count);
-    _PyJitAsm_AluRI(A, _PyJitAlu_ADD, t, k);
-    _PyJitAsm_MovMR32(A, count, t);
+    _PyJitAsm_UnaryM32(A, op, AT(w, offsetof(PyObject, ob_refcnt)));
 }
 
 static void
@@ -596,7 +593,7 @@ dup_value(_PyJitWordCx *cx, _PyJitReg dst, _PyJitReg w, _PyJitReg t, int may_be_
         _PyJitAsm_Jcc(A, _PyJitCond_E, done);
     }
     _PyJitAsm_Jcc(A, _PyJitCond_Not(owns_test(cx, w, t)), done);
-    refcnt_add(cx, w, t, 1);
+    refcnt_step(cx, w, _PyJitUnary_INC);
     _PyJitAsm_Bind(A, done);
     move(cx, dst, w);
 }
@@ -613,7 +610,7 @@ close_value(_PyJitWordCx *cx, _PyJitReg w, _PyJitReg t, int may_be_null,
         _PyJitAsm_Jcc(A, _PyJitCond_E, done);
     }
     _PyJitAsm_Jcc(A, _PyJitCond_Not(owns_test(cx, w, t)), done);
-    refcnt_add(cx, w, t, -1);
+    refcnt_step(cx, w, _PyJitUnary_DEC);
     _PyJitAsm_Jcc(A, _PyJitCond_E, last);
     _PyJitAsm_Bind(A, done);
     _PyJitArg arg = _PyJitArg_GPR(w);

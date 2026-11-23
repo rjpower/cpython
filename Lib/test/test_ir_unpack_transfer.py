@@ -28,7 +28,8 @@ class UnpackTransferTests(unittest.TestCase):
                             row[4] < unpack.__code__.co_nlocals for row in
                             _testinternalcapi.get_ir(unpack.__code__)))
         a, b = [], {}
-        for admitted in routes(unpack.__code__):
+        codes = routes(unpack.__code__)
+        for admitted in codes:
             function = types.FunctionType(admitted, globals(),
                                           closure=unpack.__closure__)
             for factory in (tuple, list, iter):
@@ -36,7 +37,7 @@ class UnpackTransferTests(unittest.TestCase):
                     result = function(factory((a, b)))
                     self.assertIs(result[0], a)
                     self.assertIs(result[1], b)
-        self.assertEqual(len(observations), 4 * 3 * 20 * 2)
+        self.assertEqual(len(observations), len(codes) * 3 * 20 * 2)
 
     def test_drain_recipe_requires_each_actual_family_adapter(self):
         from test import test_tools

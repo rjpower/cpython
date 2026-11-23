@@ -17,10 +17,13 @@ lowerings' prototypes and table) and Python/jit_templates.c.h.
 """
 
 import argparse
+import functools
+import re
 from dataclasses import dataclass, replace
 
 import ir_generator
 import ir_leaf
+import ir_leaf_eval
 import ir_numbers
 from analyzer import analyze_files
 from generators_common import DEFAULT_INPUT, ROOT
@@ -208,6 +211,7 @@ class Graph:
         self.types: dict[int, str] = {}
         self.blocks: dict[int, TBlock] = {}
         self.count = 0
+        self.block_count = 0
         self.entry = self.new_block().id
 
     def value(self, t: str) -> int:
@@ -216,7 +220,8 @@ class Graph:
         return self.count
 
     def new_block(self, param_types=()) -> TBlock:
-        b = TBlock(len(self.blocks), [self.value(t) for t in param_types], [])
+        b = TBlock(self.block_count, [self.value(t) for t in param_types], [])
+        self.block_count += 1
         self.blocks[b.id] = b
         return b
 
@@ -881,6 +886,10 @@ def fold(g: Graph) -> bool:
             if d is not None and d.kind == "lnot":
                 b.term = ("br", d.args[0], t[3], t[2])
                 changed = True
+            elif d is not None and d.kind == "xorb" and d.attr in ("0", "1") and d.when is None:
+                b.term = ("br", d.args[0], t[3], t[2]) if d.attr == "1" else \
+                    ("br", d.args[0], t[2], t[3])
+                changed = True
     return changed
 
 
@@ -967,6 +976,209 @@ def dominators(g: Graph) -> dict[int, int]:
     return idom
 
 
+# ---------------------------------------------------------------------------
+# Facts from the primitives' models.  A primitive's spec (ir_leaf.py) is
+# executable, so what a pass needs to know of a primitive is read from the
+# spec, not listed by name:
+# - which test is the test for NULL;
+# - which two-operand test is a primitive's test of both operands, so that
+#   two guards on one exit become one;
+# - which results are never NULL, by running the spec on words of which
+#   only some bits are known;
+# - which primitive is another with a precondition that the argument is not
+#   NULL (the same spec), so that the argument's known nonnull-ness picks it.
+# The numbers of the value encoding come from the headers that define them.
+
+HEADERS = ("Include/internal/pycore_pyvalue.h", "Include/internal/pycore_value.h")
+WORD_CONSTANTS = ("Py_PTR_LIMIT", "Py_INDEX_BASE", "Py_DOUBLE_OFFSET", "Py_INT_BASE",
+                  "Py_OWNED_MASK")
+
+
+@functools.cache
+def value_constants() -> dict[str, int]:
+    "The names of ir_leaf.CONSTANTS that the value headers define, evaluated"
+    defines = {}
+    for header in HEADERS:
+        for m in re.finditer(r"^#\s*define\s+(\w+)\s+(.+)$", (ROOT / header).read_text(),
+                             re.M):
+            defines[m.group(1)] = m.group(2)
+    values: dict[str, int] = {}
+
+    def value(name: str) -> int:
+        if name not in values:
+            expr = re.sub(r"\(\s*(?:uintptr_t|int64_t)\s*\)", "", defines[name])
+            expr = re.sub(r"[A-Za-z_]\w*", lambda m: str(value(m.group(0)))
+                          if m.group(0) in defines else m.group(0), expr)
+            values[name] = ir_leaf.u64(eval(expr)) if name in WORD_CONSTANTS else eval(expr)
+        return values[name]
+
+    return {name: value(name) for name in ir_leaf.CONSTANTS if name in defines}
+
+
+@functools.cache
+def model_context() -> ir_leaf_eval.Context:
+    # Static objects have distinct aligned addresses in pointer space
+    symbols = {name: 0x7F00_0000_0000 + 0x1000 * n for n, name in enumerate(ir_leaf.SYMBOLS)}
+    layout = ir_leaf_eval.Layout(value_constants(), {}, {}, symbols)
+    return ir_leaf_eval.Context(layout, None)
+
+
+@functools.cache
+def sample_words() -> tuple[int, ...]:
+    "Words on each side of every boundary of the encoding, and the tags"
+    k = value_constants()
+    edges = [0, 1, 2, 3, 4, 8, 16, k["Py_PTR_LIMIT"], k["Py_INDEX_BASE"],
+             k["Py_DOUBLE_OFFSET"], k["Py_INT_BASE"], k["Py_OWNED_MASK"], 2**64 - 1]
+    words = {ir_leaf.u64(e + d) for e in edges for d in (-2, -1, 0, 1, 2)}
+    # Pointers, indices, floats and ints inside their regions
+    words |= {0x7F00_0000_1000, 0x7F00_0000_1001, 0xFFF8_0000_0000_0005,
+              0xFFFF_FFFF_FFFF_FFFB, 0x4000_0000_0000_0000, 0x0001_0000_0000_0007}
+    return tuple(sorted(words))
+
+
+def is_test(prim: ir_leaf.Primitive, nargs: int) -> bool:
+    "A pure test of nargs words"
+    return (prim.params == (ir_leaf.VALUE,) * nargs and prim.results == ("bool",)
+            and not prim.effects and prim.pre is None)
+
+
+def model(prim: ir_leaf.Primitive, *args):
+    return prim.spec(model_context(), *args)
+
+
+@functools.cache
+def is_null_test(name: str) -> bool:
+    prim = ir_leaf.PRIMITIVES.get(name)
+    if prim is None or not is_test(prim, 1):
+        return False
+    try:
+        return all(bool(model(prim, w)) == (w == 0) for w in sample_words())
+    except Exception:
+        return False
+
+
+@functools.cache
+def test_facts(name: str) -> tuple[bool, bool]:
+    """What a test of one word shows about NULL: that the word is not NULL
+    when the test holds, when it does not"""
+    prim = ir_leaf.PRIMITIVES.get(name)
+    if prim is None or not is_test(prim, 1):
+        return False, False
+    try:
+        holds = {w: bool(model(prim, w)) for w in sample_words()}
+    except Exception:
+        return False, False
+    return all(w != 0 for w, h in holds.items() if h), holds[0]
+
+
+@functools.cache
+def both_test(name: str) -> str | None:
+    """The primitive that tests two words and holds when the named one holds
+    of each (a test of both operands), or None"""
+    prim = ir_leaf.PRIMITIVES.get(name)
+    if prim is None or not is_test(prim, 1):
+        return None
+    words = sample_words()
+    try:
+        single = {w: bool(model(prim, w)) for w in words}
+        for other, candidate in ir_leaf.PRIMITIVES.items():
+            if other not in LOWERINGS or not is_test(candidate, 2):
+                continue
+            if all(bool(model(candidate, a, b)) == (single[a] and single[b])
+                   for a in words for b in words):
+                return other
+    except Exception:
+        pass
+    return None
+
+
+class Unknown(Exception):
+    "The spec does something that known bits cannot follow"
+
+
+class Bits:
+    """A 64-bit word of which some bits are known: `ones` are 1 and `zeros`
+    are 0.  Only what the value tests and constructors do to words: and, or,
+    xor, complement and logical shifts by a constant."""
+
+    def __init__(self, ones: int = 0, zeros: int = 0) -> None:
+        self.ones, self.zeros = ones, zeros
+
+    @staticmethod
+    def of(x) -> "Bits":
+        if isinstance(x, Bits):
+            return x
+        x = ir_leaf.u64(x)
+        return Bits(x, ~x & ir_leaf.MASK64)
+
+    def __and__(self, o):
+        o = Bits.of(o)
+        return Bits(self.ones & o.ones, self.zeros | o.zeros)
+
+    def __or__(self, o):
+        o = Bits.of(o)
+        return Bits(self.ones | o.ones, self.zeros & o.zeros)
+
+    def __xor__(self, o):
+        o = Bits.of(o)
+        return Bits((self.ones & o.zeros) | (self.zeros & o.ones),
+                    (self.ones & o.ones) | (self.zeros & o.zeros))
+
+    def __invert__(self):
+        return Bits(self.zeros, self.ones)
+
+    def __rshift__(self, n: int):
+        top = ir_leaf.MASK64 & ~(ir_leaf.MASK64 >> n)
+        return Bits(self.ones >> n, (self.zeros >> n) | top)
+
+    def __lshift__(self, n: int):
+        return Bits((self.ones << n) & ir_leaf.MASK64,
+                    ((self.zeros << n) | ((1 << n) - 1)) & ir_leaf.MASK64)
+
+    __rand__, __ror__, __rxor__ = __and__, __or__, __xor__
+
+    def __bool__(self):
+        raise Unknown("a test of unknown bits")
+
+
+@functools.cache
+def never_null(name: str) -> bool:
+    "The primitive's one word result has a bit that is always 1: not NULL"
+    prim = ir_leaf.PRIMITIVES.get(name)
+    if prim is None or prim.results != (ir_leaf.VALUE,) or prim.effects or len(prim.params) != 1:
+        return False
+    try:
+        result = prim.spec(model_context(), Bits())
+    except Exception:
+        return False
+    return isinstance(result, Bits) and result.ones != 0
+
+
+def same_spec(a, b) -> bool:
+    "One function, or the same code closed over equal cells"
+    return a is b or (a.__code__ is b.__code__ and a.__defaults__ == b.__defaults__
+                      and [c.cell_contents for c in a.__closure__ or ()] ==
+                      [c.cell_contents for c in b.__closure__ or ()])
+
+
+@functools.cache
+def given_not_null(name: str) -> str | None:
+    """The primitive with the same spec whose precondition is that its one
+    argument is not NULL: what the named one is when its argument is not
+    NULL"""
+    prim = ir_leaf.PRIMITIVES.get(name)
+    if prim is None or prim.pre is not None or len(prim.params) != 1:
+        return None
+    for other, candidate in ir_leaf.PRIMITIVES.items():
+        if (other != name and other in LOWERINGS and same_spec(candidate.spec, prim.spec)
+                and candidate.params == prim.params and candidate.results == prim.results
+                and candidate.effects == prim.effects and candidate.pre is not None
+                and all(bool(candidate.pre(model_context(), w)) == (w != 0)
+                        for w in sample_words())):
+            return other
+    return None
+
+
 # The ops that compute the same result from the same arguments anywhere:
 # not loads, which a store between may change, nor the view of a slot
 CSE_KINDS = {"const", "jconst", "cache", "fieldaddr", "ptradd", "add", "sub", "mul", "and",
@@ -1029,6 +1241,197 @@ def dce(g: Graph) -> bool:
         changed = True
 
 
+def prim_name(op: TOp) -> str | None:
+    "The primitive of a prim op, whose attr is a name or (name, aux)"
+    if op.kind != "prim":
+        return None
+    return op.attr[0] if isinstance(op.attr, tuple) else op.attr
+
+
+def never_null_result(g: Graph, op: TOp) -> bool:
+    "The op's one result is not NULL, from its primitive's spec or its constant"
+    if op.when is not None:
+        return False
+    if op.kind == "prim":
+        return isinstance(op.attr, str) and never_null(op.attr)
+    if op.kind == "const" and isinstance(op.attr, str) and g.types[op.results[0]] == ir_leaf.VALUE:
+        return ir_leaf.VALUE_CONSTANTS[op.attr][0] is not None
+    return False
+
+
+def null_tested(defs, c: int) -> int | None:
+    "The word that the bool c tests for NULL, if it does"
+    d = defs.get(c)
+    if d is not None and d.kind == "prim" and isinstance(d.attr, str) and d.when is None \
+            and is_null_test(d.attr):
+        return d.args[0]
+    return None
+
+
+def shown_not_null(defs, c: int) -> tuple[int, bool] | None:
+    """(word, edge): the bool c is a test of one word that shows it not NULL
+    on the edge taken when c is `edge`"""
+    d = defs.get(c)
+    if d is None or d.kind != "prim" or not isinstance(d.attr, str) or d.when is not None \
+            or len(d.args) != 1:
+        return None
+    on_true, on_false = test_facts(d.attr)
+    if on_true or on_false:
+        return d.args[0], on_true
+    return None
+
+
+def not_null_facts(g: Graph) -> tuple[set[int], dict[int, frozenset]]:
+    """The values that are not NULL wherever they are defined (results of
+    primitives that never give NULL, parameters that every edge gives such
+    a value) and, for each block, those that a test on the path to it has
+    shown not NULL"""
+    defs = definitions(g)
+    preds = g.preds()
+    idom = dominators(g)
+    always: set[int] = set()
+    entry: dict[int, frozenset] = {}
+    for i in g.rpo():
+        b = g.blocks[i]
+        if i == g.entry:
+            entry[i] = frozenset()
+        elif len(preds[i]) == 1:
+            q = g.blocks[preds[i][0]]
+            entry[i] = entry[q.id]
+            t = q.term
+            if t[0] == "br" and t[2] != t[3] and i in t[2:]:
+                shown = shown_not_null(defs, t[1])
+                if shown is not None and shown[1] == (i == t[2]):
+                    entry[i] = entry[i] | {shown[0]}
+        else:
+            entry[i] = entry[idom[i]]
+        for k, p in enumerate(b.params):
+            if all(g.blocks[q].term[2][k] in always or g.blocks[q].term[2][k] in entry[q]
+                   for q in preds[i]):
+                always.add(p)
+        for op in b.ops:
+            if op.results and never_null_result(g, op):
+                always.add(op.results[0])
+    return always, entry
+
+
+def fold_nulls(g: Graph) -> bool:
+    "A test for NULL of a word that is not NULL is false; a primitive that tolerates NULL, given one that is not, is the one that does not"
+    always, entry = not_null_facts(g)
+    changed = False
+    for i, b in g.blocks.items():
+        known = always | entry[i]
+        for op in b.ops:
+            if op.kind != "prim" or not isinstance(op.attr, str) or op.when is not None:
+                continue
+            if is_null_test(op.attr) and op.args[0] in known:
+                op.kind, op.args, op.attr = "const", [], 0
+                changed = True
+            elif op.args and op.args[0] in known and given_not_null(op.attr) is not None:
+                op.attr = given_not_null(op.attr)
+                changed = True
+    return changed
+
+
+def fuse_guards(g: Graph) -> bool:
+    """Two tests of words that lead to one exit, the second alone in its
+    block, are one test of both words when a primitive's spec says it is
+    that: `br P(a), N, E` and N `br P(b), M, E` become `br Both(a, b), M, E`"""
+    defs = definitions(g)
+    preds = g.preds()
+    n = uses(g)
+    for i in g.rpo():
+        x = g.blocks[i]
+        if x.term[0] != "br":
+            continue
+        c, nid, exit_ = x.term[1:]
+        blk = g.blocks[nid]
+        d = defs.get(c)
+        if (nid == exit_ or preds[nid] != [i] or len(blk.ops) != 1 or blk.term[0] != "br"
+                or blk.term[3] != exit_ or d is None or d not in x.ops or n.get(c) != 1):
+            continue
+        e = blk.ops[0]
+        if blk.term[1] != e.results[0] or n.get(e.results[0]) != 1:
+            continue
+        name = prim_name(d)
+        if name is None or name != prim_name(e) or d.when or e.when \
+                or not isinstance(d.attr, str) or len(d.args) != 1 or len(e.args) != 1 \
+                or d.args[0] == e.args[0]:
+            continue
+        both = both_test(name)
+        if both is None:
+            continue
+        f = g.value("bool")
+        x.ops.append(TOp("prim", [f], [d.args[0], e.args[0]], both))
+        x.term = ("br", f, blk.term[2], exit_)
+        return True
+    return False
+
+
+def thread_tests(g: Graph) -> bool:
+    """A block that only tests a parameter for NULL, to leave by an exit,
+    gets the test on each edge that cannot show the word not NULL: the edges
+    that can are past it"""
+    defs = definitions(g)
+    preds = g.preds()
+    n = uses(g)
+    always, entry = not_null_facts(g)
+    for i in g.rpo():
+        b = g.blocks[i]
+        if not b.params or len(b.ops) != 1 or b.term[0] != "br" or i == g.entry:
+            continue
+        op, c = b.ops[0], b.term[1]
+        if op.results != [c] or n.get(c) != 1 or null_tested(defs, c) not in b.params:
+            continue
+        exit_, rest = b.term[2], b.term[3]
+        if g.blocks[exit_].params or g.blocks[exit_].term[0] not in ("deopt", "raise"):
+            continue
+        k = b.params.index(op.args[0])
+        incoming = [(q, g.blocks[q].term[2][k]) for q in preds[i]]
+        known = [arg in always or arg in entry[q] for q, arg in incoming]
+        if not any(known):
+            continue
+        for (q, arg), done in zip(incoming, known):
+            if done:
+                continue
+            blk = g.blocks[q]
+            t = g.value("bool")
+            blk.ops.append(TOp("prim", [t], [arg], op.attr))
+            goes_on = g.new_block()
+            goes_on.term = ("jmp", i, blk.term[2])
+            blk.term = ("br", t, exit_, goes_on.id)
+        b.ops = []
+        b.term = ("jmp", rest, [])
+        return True
+    return False
+
+
+def thread_branches(g: Graph) -> bool:
+    """A block that only branches on its one bool parameter is skipped by
+    its predecessors: one that gives a constant goes where it leads, another
+    branches on the value it gives"""
+    defs = definitions(g)
+    n = uses(g)
+    preds = g.preds()
+    for i in g.rpo():
+        b = g.blocks[i]
+        if i == g.entry or b.ops or len(b.params) != 1 or b.term[0] != "br" \
+                or b.term[1] != b.params[0] or n.get(b.params[0]) != 1:
+            continue
+        yes, no = b.term[2], b.term[3]
+        if g.blocks[yes].params or g.blocks[no].params or yes == no:
+            continue
+        for q in preds[i]:
+            blk = g.blocks[q]
+            arg = blk.term[2][0]
+            k = const_of(defs, arg)
+            blk.term = ("jmp", yes if k else no, []) if k is not None else \
+                ("br", arg, yes, no)
+        del g.blocks[i]
+        return True
+    return False
+
+
 def simplify(g: Graph) -> None:
     prune(g)
     while True:
@@ -1036,6 +1439,11 @@ def simplify(g: Graph) -> None:
         changed |= thread_jumps(g)
         changed |= fold(g)
         changed |= thread_bool_phis(g)
+        prune(g)
+        changed |= fold_nulls(g)
+        changed |= fuse_guards(g)
+        changed |= thread_tests(g)
+        changed |= thread_branches(g)
         prune(g)
         changed |= cse(g)
         changed |= dce(g)
@@ -1175,6 +1583,29 @@ def liveness(g: Graph) -> dict[int, set]:
                 live_in[i] = new
                 changed = True
     return live_in
+
+
+def cold_blocks(g: Graph) -> set[int]:
+    """The blocks placed after the template's hot code: those with a helper
+    call, those that only lead to cold ones and those that only cold ones
+    reach (the end excepted: the template falls through from it)"""
+    order = [i for i in g.rpo() if g.blocks[i].term[0] not in ("deopt", "raise")]
+    preds = g.preds()
+    cold: set[int] = set()
+    changed = True
+    while changed:
+        changed = False
+        for i in reversed(order):
+            b = g.blocks[i]
+            if i in cold or i == g.entry or b.term[0] == "end":
+                continue
+            succ = [s for s in g.successors(b) if g.blocks[s].term[0] not in ("deopt", "raise")]
+            if (any(op.kind == "call" for op in b.ops)
+                    or (b.term[0] in ("br", "jmp") and succ and all(s in cold for s in succ))
+                    or (preds[i] and all(q in cold for q in preds[i]))):
+                cold.add(i)
+                changed = True
+    return cold
 
 
 class Allocation:
@@ -1366,21 +1797,11 @@ class Emitter:
     def is_exit(self, i: int) -> bool:
         return self.g.blocks[i].term[0] in ("deopt", "raise")
 
-    # Layout: hot blocks in order, cold ones (with a helper call, or only
-    # leading to cold ones) after them
+    # Layout: hot blocks in order, cold ones after them
     def layout(self) -> None:
         g = self.g
         order = [i for i in g.rpo() if not self.is_exit(i)]
-        cold = set()
-        for i in reversed(order):
-            b = g.blocks[i]
-            if any(op.kind == "call" for op in b.ops):
-                cold.add(i)
-                continue
-            succ = [s for s in g.successors(b) if not self.is_exit(s)]
-            if b.term[0] in ("br", "jmp") and succ and all(s in cold for s in succ):
-                cold.add(i)
-        cold.discard(g.entry)
+        cold = cold_blocks(g)
         # The end is the last hot block: the template falls through from it
         # to the code after the template
         ends = [i for i in order if g.blocks[i].term[0] == "end"]

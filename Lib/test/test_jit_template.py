@@ -22,6 +22,8 @@ with test_tools.imports_under_tool("cases_generator"):
     import ir_leaf
     import jit_template_generator
 
+RECORDS = jit_template_generator.load_records()[1]
+
 from test.test_ir_leaf import (
     FLOATS, INDEX_WORDS, INLINE_WORDS, NAN, OBJECTS, SEPARATE, TAG, WIDE_INTS,
     cases, context, refcount, same, word, Holder, LAYOUT,
@@ -447,9 +449,13 @@ class Plain:
 # releases).  The template and the form run from the same slots.
 INTS = [0, 1, -1, 7, -2**50, 2**50 - 1, 2**25, -2**25 - 3]
 NOT_INTS = ["x", big(1), 2.5, None, []]
+# Operands that fail only the second of two fused guards, or the first, and
+# sums, differences and products past the inline range on both sides
 INT_PAIRS = ([(a, b) for a in INTS[::2] for b in INTS[1::2]] +
              [(a, b) for a in INTS[:3] for b in NOT_INTS[:2]] +
-             [(b, a) for a in INTS[:3] for b in NOT_INTS])
+             [(b, a) for a in INTS[:3] for b in NOT_INTS] +
+             [(2**50 - 1, 1), (-2**50, -1), (2**50 - 1, 2**50 - 1), (-2**50, -2**50),
+              (2**50 - 1, -2**50), (1, 2**50 - 1), (-1, -2**50)])
 # Signs, a zero divisor, the inline extremes and -2**50 // -1, whose quotient
 # leaves the inline range
 DIV_INTS = [0, 1, -1, 7, -7, 2**50 - 1, -2**50, 2**25, -2**25 - 3]
@@ -780,6 +786,91 @@ class TemplateTests(unittest.TestCase):
             for x, y in ((7, 2), (-7, 2), (7, -2), (-2**50, -1)):
                 self.assertFalse(capi.jit_template_run(f, index, {b: x, c: y}, True)[1])
             self.assertTrue(capi.jit_template_run(f, index, {b: 7, c: 0}, True)[1])
+
+
+def graph_of(handler):
+    "The template graph of a handler, simplified as the generator emits it"
+    record = RECORDS[handler]
+    graph = jit_template_generator.Builder(record).build()
+    jit_template_generator.simplify(graph)
+    return graph
+
+
+def prims_of(graph):
+    return [jit_template_generator.prim_name(op) for block in graph.blocks.values()
+            for op in block.ops if op.kind == "prim"]
+
+
+class TemplateGraphTests(unittest.TestCase):
+    "What the generator reads from the primitives' specs, and the graphs it builds with it"
+
+    def test_tests_for_null(self):
+        found = {name for name in ir_leaf.PRIMITIVES if jit_template_generator.is_null_test(name)}
+        self.assertEqual(found, {"PyValue_IsNull"})
+
+    def test_tests_of_both(self):
+        self.assertEqual(jit_template_generator.both_test("PyValue_IsInlineInt"),
+                         "PyValue_BothInlineInt")
+        found = {name for name in ir_leaf.PRIMITIVES
+                 if jit_template_generator.both_test(name) is not None}
+        self.assertEqual(found, {"PyValue_IsInlineInt"})
+
+    def test_what_a_test_shows(self):
+        facts = jit_template_generator.test_facts
+        self.assertEqual(facts("PyValue_IsNull"), (False, True))
+        self.assertEqual(facts("PyValue_IsObject"), (True, False))
+        self.assertEqual(facts("PyValue_IsInlineInt"), (True, False))
+        # NULL is in pointer space: only a word outside it is not NULL
+        self.assertEqual(facts("PyValue_IsPointerSpace"), (False, True))
+        self.assertEqual(facts("PyValue_IsTaggedIndex"), (True, False))
+
+    def test_results_that_are_never_null(self):
+        found = {name for name in ir_leaf.PRIMITIVES if jit_template_generator.never_null(name)}
+        self.assertEqual(found, {"_PyValue_FromIntScaled", "PyValue_FromInlineInt",
+                                 "PyValue_TagIndex"})
+        # The claim against the spec on its own domain
+        for name in found:
+            prim = ir_leaf.PRIMITIVES[name]
+            for args in cases(prim):
+                if prim.pre is None or prim.pre(context(), *args):
+                    self.assertNotEqual(capi.leaf_primitive(name, *args), 0, (name, args))
+
+    def test_primitives_for_a_word_that_is_not_null(self):
+        given = {name: jit_template_generator.given_not_null(name) for name in ir_leaf.PRIMITIVES}
+        self.assertEqual({k: v for k, v in given.items() if v},
+                         {"PyValue_XDUP": "PyValue_DUP", "PyValue_XCLOSE": "PyValue_CLOSE"})
+
+    def test_add_int_has_one_guard_and_tests_the_box_only(self):
+        graph = graph_of("BINARY_OP_ADD_INT")
+        names = prims_of(graph)
+        self.assertEqual(names.count("PyValue_BothInlineInt"), 1)
+        self.assertNotIn("PyValue_IsInlineInt", names)
+        # The overflow edge keeps its test: the box can be NULL, the inline int cannot
+        self.assertEqual(names.count("PyValue_IsNull"), 1)
+        (block,) = [b for b in graph.blocks.values()
+                    if any(jit_template_generator.prim_name(op) == "PyValue_IsNull"
+                           for op in b.ops)]
+        self.assertTrue(any(op.kind == "call" for op in block.ops))
+
+    def test_attribute_has_one_test_for_null(self):
+        names = prims_of(graph_of("LOAD_ATTR_INSTANCE_VALUE"))
+        self.assertEqual(names.count("PyValue_IsNull"), 1)
+        self.assertNotIn("PyValue_XDUP", names)
+        self.assertIn("PyValue_DUP", names)
+
+    def test_no_template_repeats_what_the_passes_remove(self):
+        for handler, record in RECORDS.items():
+            if record.form != "EMITTED" or not record.uops or any(u.leaf is None for u in record.uops):
+                continue
+            try:
+                graph = graph_of(handler)
+            except jit_template_generator.Refused:
+                continue
+            with self.subTest(handler=handler):
+                self.assertFalse(jit_template_generator.fold_nulls(graph))
+                self.assertFalse(jit_template_generator.fuse_guards(graph))
+                self.assertFalse(jit_template_generator.thread_tests(graph))
+                self.assertFalse(jit_template_generator.thread_branches(graph))
 
 
 if __name__ == "__main__":

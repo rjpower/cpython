@@ -1,6 +1,27 @@
 # Interpreter performance: combined plan
 
-## Current wave: contract87, the first phase of tiers87
+## Current wave: jit88, the baseline JIT's B0 and B1
+
+Approved 2026-11-23. The user promoted contract87's integration as golden87
+(`684a98eb30e`, `pyjit/round87-golden`, tag
+`pyjit-golden-20261123-contract87`) and approved Phase 2 of tiers87, asking
+for an update once a baseline version of the JIT has performance numbers.
+The [jit88 record](../register-semantics59/jit88.md) holds the units.
+Evidence `E59/jit88/`.
+
+- **Units**, from golden87:
+  - JA: the x86-64 assembler and W^X code memory;
+  - JB: code units, entry table, switches, warm-up and perf map (B0); every
+    word compiled as a call of its function form (B1).
+- **Integration** on `pyjit/jit88`:
+  - full suites with `PYTHON_JIT=always` and with the JIT off;
+  - instructions for all 29 with the JIT on against golden87;
+  - compile cost and code size;
+  - cold and warm timing on CPU 15.
+- **Next:** B2, inline templates generated from LS's leaf IR, with the value
+  primitives' machine lowerings tested against their C definitions.
+
+## Previous: contract87, the first phase of tiers87
 
 Approved 2026-11-22, with the optimizing method tier deferred. The user promoted tight86's IP1 as
 golden86 (`3cac420ddbf`, `pyjit/round86-golden`, tag

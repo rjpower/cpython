@@ -2,26 +2,11 @@
 
 ## Live state
 
-**Selected: golden86, 2026-11-22.** `3cac420ddbf` (`pyjit/round86-golden`,
-tag `pyjit-golden-20261122-tight86`, pushed) is
-[tight86](issues/register-semantics59/tight86.md)'s IP1: golden85 plus eight
-units (the handler skeleton, generator life, Python call and return under one
-frame slot contract, native calls, the C-to-Python entry, compare and
-membership, the json and pickle cases, and instance attributes). It runs
-**0.970 of golden85's time and 0.877 of upstream's** on the timed all-29
-geomean and executes 0.969 of golden85's instructions. `ir_evaluate` is
-88.3 KB and the allocator product 43.77M. The full suites show known failures
-only. Still slower than upstream: comprehensions 1.107, deepcopy_reduce 1.051,
-deepcopy 1.049, nqueens 1.041, json_dumps 1.017, pickle 1.017 and
-logging_simple 1.015. nbody's 1.016 of golden85 is branch prediction of
-unchanged code at new addresses; the user chose no layout rule. Golden85
-(`2a9ea8c4f69`, 0.900 of upstream's time) is a frozen control.
-
-**Integrated: contract87, 2026-11-22**, the first phase of the approved
-[tiers87](design/proposals/tiers87.md) plan (then a Sparkplug-style baseline
-method JIT, then a tracing JIT on the same contract). `pyjit/contract87`
-at `684a98eb30e` (magic 64446) holds ten units on golden86
-([record](issues/register-semantics59/contract87.md)):
+**Selected: golden87, 2026-11-23.** `684a98eb30e` (`pyjit/round87-golden`,
+tag `pyjit-golden-20261123-contract87`, pushed) is
+[contract87](issues/register-semantics59/contract87.md)'s integration, the
+first phase of the [tiers87](design/proposals/tiers87.md) plan: golden86
+plus ten units:
 - the operation record (CR);
 - VM routines and a function form for every handler (TR);
 - the leaf subset (LS);
@@ -37,7 +22,27 @@ golden86's time; logging_silent, coroutines, float and five more are 2–33%
 slower at equal instructions, from op-cache placement and, for float, one
 shared native-call site. Startup is 79.0M instructions for `-I -S -c pass`
 (golden86 37.5M): the cost of first-call lowering, which the user accepts.
-Selection is the user's.
+The full suites show known failures only.
+
+**Active: jit88, 2026-11-23**, the baseline method JIT's first two steps
+([record](issues/register-semantics59/jit88.md)): JA builds the assembler
+and W^X code memory; JB builds code units, the switches and warm-up (B0),
+then compiles every word as a call of its function form (B1).
+
+**Golden86, 2026-11-22**, now a frozen control: `3cac420ddbf` (`pyjit/round86-golden`,
+tag `pyjit-golden-20261122-tight86`, pushed) is
+[tight86](issues/register-semantics59/tight86.md)'s IP1: golden85 plus eight
+units (the handler skeleton, generator life, Python call and return under one
+frame slot contract, native calls, the C-to-Python entry, compare and
+membership, the json and pickle cases, and instance attributes). It runs
+**0.970 of golden85's time and 0.877 of upstream's** on the timed all-29
+geomean and executes 0.969 of golden85's instructions. `ir_evaluate` is
+88.3 KB and the allocator product 43.77M. The full suites show known failures
+only. Still slower than upstream: comprehensions 1.107, deepcopy_reduce 1.051,
+deepcopy 1.049, nqueens 1.041, json_dumps 1.017, pickle 1.017 and
+logging_simple 1.015. nbody's 1.016 of golden85 is branch prediction of
+unchanged code at new addresses; the user chose no layout rule. Golden85
+(`2a9ea8c4f69`, 0.900 of upstream's time) is a frozen control.
 
 The checkpoints between golden73 and gap82, each measured against golden73:
 

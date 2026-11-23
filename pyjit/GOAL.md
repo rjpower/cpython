@@ -5,18 +5,19 @@ on canonical eight-byte PyValues and a register IR. Rebuild and port
 extensions. Preserve Python behavior, explicit ownership and useful
 observation APIs.
 
-Selected runtime: golden86, `3cac420ddbf` (`pyjit/round86-golden`, tag
-`pyjit-golden-20261122-tight86`), selected on 2026-11-22. It adds
-[tight86](issues/register-semantics59/tight86.md)'s eight units to golden85
-and runs 0.877 of upstream's time on the timed all-29 geomean (golden85
-0.900). Comprehensions, deepcopy_reduce, deepcopy, nqueens, json_dumps, pickle
-and logging_simple remain slower than upstream.
+Selected runtime: golden87, `684a98eb30e` (`pyjit/round87-golden`, tag
+`pyjit-golden-20261123-contract87`), selected on 2026-11-23. It adds
+[contract87](issues/register-semantics59/contract87.md)'s ten units to
+golden86: the operation contract, a function form for every handler, and
+stack bytecode in `co_code` and `.pyc`. It runs 0.876 of upstream's time on
+the timed all-29 geomean (golden86 0.877). Comprehensions, nqueens, pickle,
+deepcopy, unpack_sequence and logging_simple remain slower than upstream.
 
 ## Next steps
 
 The [tiers87 plan](design/proposals/tiers87.md) sets three phases:
 
-1. **Contract87, the interpreter's last wave.** The cases generator exports
+1. **Contract87, the interpreter's last wave** (done: golden87). The cases generator exports
    one operation contract: each handler as uops with operands, ownership,
    effects, guard facts, typed transfers and a feedback schema, and every
    handler with a function form. The other units improve the shared runtime
@@ -24,7 +25,8 @@ The [tiers87 plan](design/proposals/tiers87.md) sets three phases:
    misses and the frame's exec pointer. Stack bytecode recovery lands
    alongside. Interpreter tuning that a compiler removes (dispatch, decode,
    operand views, layout) stops.
-2. **A baseline method JIT, Sparkplug style.** It compiles a warm code
+2. **A baseline method JIT, Sparkplug style** (active:
+   [jit88](issues/register-semantics59/jit88.md)). It compiles a warm code
    object's IR words to x86-64 with interpreter frames unchanged. Each word
    becomes a generated inline template or a call to its handler's function
    form; every word boundary is an interpreter state, so it needs no
@@ -65,8 +67,8 @@ its C definition.
 
 ## Controls and records
 
-Golden86 is the runtime baseline. Golden85, golden84, golden82, golden73 and
-selected57 remain immutable comparison controls; their evidence is preserved
+Golden87 is the runtime baseline. Golden86, golden85, golden84, golden82,
+golden73 and selected57 remain immutable comparison controls; their evidence is preserved
 without making it a prerequisite. [Status](STATUS.md) records the selected
 runtime's measurements and limits; the [active plan](issues/interpreter-performance56/plan.md)
 and each wave's record hold the work. The [trial report](issues/register-semantics59/report.md)

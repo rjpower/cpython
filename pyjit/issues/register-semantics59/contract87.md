@@ -1,5 +1,10 @@
 # Contract87: the operation contract and the interpreter's last wave
 
+**Selected:** the user promoted the integration (`684a98eb30e`) as golden87
+on 2026-11-23 (tag `pyjit-golden-20261123-contract87`, branch
+`pyjit/round87-golden`) and approved Phase 2, the baseline method JIT
+([jit88](jit88.md)).
+
 Approved 2026-11-22 as Phase 1 of [tiers87](../../design/proposals/tiers87.md):
 the cases generator exports one operation contract, and the remaining
 interpreter work goes to the shared runtime that compiled code also calls.

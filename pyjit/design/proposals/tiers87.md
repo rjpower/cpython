@@ -299,6 +299,9 @@ complete interpreter state.
 B1 exists for coverage: it is the whole semantics compiled with no
 hand-written lowering. B2 is where the instruction estimate above is tested.
 
+**Started 2026-11-23** as [jit88](../../issues/register-semantics59/jit88.md)
+(B0 and B1), from golden87, contract87's integration.
+
 ## Phase 3: the tracing JIT
 
 - **Selection.** Backedge counters in interpreter and baseline code start

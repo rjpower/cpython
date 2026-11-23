@@ -484,6 +484,8 @@ class Builder:
         for vid, operand in r.results:
             if operand.kind != "SLOT":
                 raise Refused(f"a result in a {operand.kind}")
+            # The record's operand of the field says what it may name
+            operand = next(o for o in r.operands if o.kind == "SLOT" and o.field == operand.field)
             v = self.env[vid]
             if v in self.views:
                 src = self.views[v]

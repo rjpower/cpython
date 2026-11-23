@@ -4,6 +4,7 @@
 of a frame."""
 
 import ctypes
+import math
 import random
 import struct
 import sys
@@ -287,20 +288,59 @@ class Plain:
     pass
 
 
-# (name, source, warm-up arguments, word, the word's inputs as fields,
-# cases).  The function's code is warmed with the arguments so that word
-# `word` is in the executing copy; each case gives the values of the inputs
-# in field order.  The template and the form run from the same slots.
+# (source, warm-up arguments, handler, fields, cases).  The function's code
+# is warmed with the arguments so that its last word with the handler is in
+# the executing copy; each case gives the values of the slots that the
+# fields name, in order (a dst field gets the old value that the store
+# releases).  The template and the form run from the same slots.
+INTS = [0, 1, -1, 7, -2**50, 2**50 - 1, 2**25, -2**25 - 3]
+NOT_INTS = ["x", big(1), 2.5, None, []]
+INT_PAIRS = ([(a, b) for a in INTS[::2] for b in INTS[1::2]] +
+             [(a, b) for a in INTS[:3] for b in NOT_INTS[:2]] +
+             [(b, a) for a in INTS[:3] for b in NOT_INTS])
+FLOATS_ = [0.0, -0.0, 1.5, -2.25, 1e300, -1e-300, math.inf, -math.inf]
+FLOAT_PAIRS = ([(a, b) for a in FLOATS_[::2] for b in FLOATS_[1::2]] +
+               [(1.5, 2), (2, 1.5), (1.5, "x"), ("x", 1.5), (math.nan, 1.0),
+                (1.0, math.nan), (1e308, 1e308), (big(3), 1.0)])
+ANY = [None, True, False, 0, 1, "s", [], big(4), 2.5]
+BINARY = "def f(a, b):\n    x = 1\n    x = a {op} b\n    return x"
+TEMPS = "def f(a, b):\n    return (a {op} b) {op} (b {op} a)"
 TEMPLATE_CASES = [
-    ("add_int_locals", "def f(a, b):\n    return a + b", (3, 4),
-     "BINARY_OP_ADD_INT", "BC",
-     [(1, 2), (-5, 7), (2**49, 2**49), (-2**50, -1), (0, 0),
-      ("x", 1),                 # the second guard fails after the first passed
-      (1, "y"),                 # the first guard fails
-      (big(1), 3), (2.5, 1), ([], [])]),
-    ("add_int_temps", "def f(a, b):\n    return (a - 1) + (b - 1)", (3, 4),
-     "BINARY_OP_ADD_INT", "BC",
-     [(1, 2), (2**50 - 1, 1), (-2**50, -2**50), (big(2), 1), ("x", 1)]),
+    *[(BINARY.format(op=op), (6, 3), handler, "ABC",
+       [(Plain(), a, b) for a, b in INT_PAIRS])
+      for op, handler in (("+", "BINARY_OP_ADD_INT"), ("-", "BINARY_OP_SUBTRACT_INT"),
+                          ("*", "BINARY_OP_MULTIPLY_INT"), ("&", "BINARY_OP_AND_INT"),
+                          ("|", "BINARY_OP_OR_INT"), ("^", "BINARY_OP_XOR_INT"))],
+    *[(TEMPS.format(op=op), (6, 3), handler, "BC", INT_PAIRS)
+      for op, handler in (("+", "BINARY_OP_ADD_INT"), ("-", "BINARY_OP_SUBTRACT_INT"),
+                          ("*", "BINARY_OP_MULTIPLY_INT"))],
+    ("def f(a, b):\n    return (a * 2**30) * (b * 2**30)", (1, 1), "BINARY_OP_MULTIPLY_INT",
+     "BC", [(2**30, 2**30), (2**25, -2**25), (1, 2**50 - 1), (-2**50, -1), (3, 5)]),
+    *[(BINARY.format(op=op), (6.0, 3.0), handler, "ABC",
+       [(Plain(), a, b) for a, b in FLOAT_PAIRS])
+      for op, handler in (("+", "BINARY_OP_ADD_FLOAT"), ("-", "BINARY_OP_SUBTRACT_FLOAT"),
+                          ("*", "BINARY_OP_MULTIPLY_FLOAT"))],
+    ("def f(a, b):\n    x = 1\n    x = a < b\n    return x", (1, 2), "COMPARE_OP_INT", "ABC",
+     [(Plain(), a, b) for a, b in INT_PAIRS]),
+    *[(f"def f(a, b):\n    if a {op} b:\n        return 1\n    return 0", (1, 2),
+       "COMPARE_OP_JUMP_INT", "AB", INT_PAIRS)
+      for op in ("<", "<=", "==", "!=", ">", ">=")],
+    *[(f"def f(a, b):\n    x = 1\n    x = a {op} b\n    return x", (None, None), "IS_OP",
+       "ABC", [(Plain(), a, b) for a in ANY for b in ANY[::2]])
+      for op in ("is", "is not")],
+    *[(f"def f(a, b):\n    if a {op} b:\n        return 1\n    return 0", (None, None),
+       "IS_OP_JUMP", "AB", [(a, b) for a in ANY for b in ANY[::2]])
+      for op in ("is", "is not")],
+    ("def f(a, b):\n    if a:\n        return 1\n    return 0", (True, 0),
+     "POP_JUMP_IF_FALSE_BOOL", "A", [(x,) for x in ANY]),
+    ("def f(a, b):\n    if not a:\n        return 1\n    return 0", (True, 0),
+     "POP_JUMP_IF_TRUE_BOOL", "A", [(x,) for x in ANY]),
+    ("def f(a, b):\n    if a is None:\n        return 1\n    return 0", (None, 0),
+     "POP_JUMP_IF_NOT_NONE", "A", [(x,) for x in ANY]),
+    ("def f(a, b):\n    if a is not None:\n        return 1\n    return 0", (None, 0),
+     "POP_JUMP_IF_NONE", "A", [(x,) for x in ANY]),
+    ("def f(a, b):\n    a = 5\n    return a", (1, 2), "LOAD_SMALL_INT_INLINE", "A",
+     [(Plain(),), (None,), (big(5),), (3,)]),
 ]
 
 
@@ -336,22 +376,26 @@ class TemplateTests(unittest.TestCase):
         return template
 
     def test_templates_against_forms(self):
-        for name, source, warm, handler, fields, cases in TEMPLATE_CASES:
+        for source, warm, handler, fields, cases in TEMPLATE_CASES:
             f = self.compile(source, warm)
             index, (_, *word_fields) = word_of(f, handler)
             field_slots = dict(zip("ABCD", word_fields))
-            if name.endswith("_temps"):
-                self.assertTrue(all(field_slots[x] >= nfixed(f) for x in fields), name)
             for case in cases:
-                with self.subTest(name=name, case=case):
+                with self.subTest(source=source, handler=handler, case=case):
                     slots = {field_slots[x]: v for x, v in zip(fields, case)}
                     objects = [v for v in case if not isinstance(v, (int, float)) or
                                type(v) is int and not -2**50 <= v < 2**50]
                     self.check_same(f, index, slots, objects)
 
+    def test_temporaries(self):
+        "TEMPS puts the inputs of its last word in temporaries"
+        f = self.compile(TEMPS.format(op="+"), (6, 3))
+        index, (_, a, b, c, d) = word_of(f, "BINARY_OP_ADD_INT")
+        self.assertGreaterEqual(min(b, c), nfixed(f))
+
     def test_fast_path(self):
         "Inputs that the guards accept stay on the template's own code"
-        f = self.compile(TEMPLATE_CASES[0][1], (3, 4))
+        f = self.compile("def f(a, b):\n    return a + b", (3, 4))
         index, (_, a, b, c, d) = word_of(f, "BINARY_OP_ADD_INT")
         self.assertFalse(capi.jit_template_run(f, index, {b: 1, c: 2}, True)[1])
         self.assertFalse(capi.jit_template_run(f, index, {b: 2**49, c: 2**49}, True)[1])

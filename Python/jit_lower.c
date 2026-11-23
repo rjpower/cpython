@@ -691,6 +691,7 @@ LOWERING(PyValue_CLOSE_SPECIALIZED)
     return _PyJitCond_NONE;
 }
 
+#define _PY_JIT_LOWERINGS_TABLE
 #include "jit_lowerings.h"
 
 #endif  // _PY_JIT_SUPPORTED

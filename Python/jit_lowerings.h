@@ -39,6 +39,7 @@ int _PyJitLower_PyValue_CLOSE(_PyJitWordCx *cx, const uint8_t *ops, const void *
 int _PyJitLower_PyValue_XCLOSE(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_PyValue_CLOSE_SPECIALIZED(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 
+#ifdef _PY_JIT_LOWERINGS_TABLE
 const _PyJitLoweringInfo _PyJit_Lowerings[] = {
     {"PyValue_IsNull", _PyJitLower_PyValue_IsNull, 0, 1, 0, 0, "g", 1},
     {"PyValue_IsPointerSpace", _PyJitLower_PyValue_IsPointerSpace, 0, 1, 1, 0, "gg", 1},
@@ -78,3 +79,4 @@ const _PyJitLoweringInfo _PyJit_Lowerings[] = {
     {"PyValue_CLOSE_SPECIALIZED", _PyJitLower_PyValue_CLOSE_SPECIALIZED, 0, 1, 1, 0, "gg", 0},
 };
 const int _PyJit_NumLowerings = (int)(sizeof(_PyJit_Lowerings) / sizeof(_PyJit_Lowerings[0]));
+#endif

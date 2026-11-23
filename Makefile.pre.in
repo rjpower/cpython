@@ -486,6 +486,7 @@ PYTHON_OBJS=	\
 		Python/initconfig.o \
 		Python/jit_asm.o \
 		Python/jit_lower.o \
+		Python/jit_template.o \
 		Python/jit_memory.o \
 		Python/interpconfig.o \
 		Python/instrumentation.o \
@@ -2250,10 +2251,13 @@ regen-ir-cases:
 .PHONY: regen-jit-templates
 regen-jit-templates:
 	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/jit_template_generator.py \
-	    --lowerings $(srcdir)/Python/jit_lowerings.h.new $(srcdir)/Python/bytecodes.c
+	    --lowerings $(srcdir)/Python/jit_lowerings.h.new \
+	    --templates $(srcdir)/Python/jit_templates.c.h.new $(srcdir)/Python/bytecodes.c
 	$(UPDATE_FILE) $(srcdir)/Python/jit_lowerings.h $(srcdir)/Python/jit_lowerings.h.new
+	$(UPDATE_FILE) $(srcdir)/Python/jit_templates.c.h $(srcdir)/Python/jit_templates.c.h.new
 
 Python/jit_lower.o: $(srcdir)/Python/jit_lowerings.h
+Python/jit_template.o: $(srcdir)/Python/jit_templates.c.h $(srcdir)/Python/jit_lowerings.h
 
 .PHONY: regen-ir-metadata
 regen-ir-metadata:

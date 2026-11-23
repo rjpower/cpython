@@ -4,6 +4,7 @@
 #include "pycore_descrobject.h"   // _PyGetSet_ValueRead()
 #include "pycore_dict.h"          // PyDict_GetValue()
 #include "pycore_function.h"      // FUNC_VERSION_FIRST_VALID
+#include "pycore_jit_lower.h"     // _PyEval_HandlerForms()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"
 #include "pycore_long_value.h"    // _PyValue_AsInt()
@@ -2755,6 +2756,27 @@ IR_HOT_ROUTINE(gen_complete, PyValue gen_value);
 #include "generated_ir_cases.c.h"
 #undef IR_FUNCTION_FORMS
 #pragma GCC diagnostic pop
+
+#ifdef _PY_JIT_SUPPORTED
+const void *const *
+_PyEval_HandlerForms(void)
+{
+    return (const void *const *)ir_handler_forms;
+}
+
+/* The raise exit of a baseline JIT template (Python/jit_template.c): its
+ * handler's PROCESS_ERROR_AT(RAISE, 0, this_instr), where the template
+ * published this_instr as frame->instr_ptr.  Machine code calls it and
+ * takes the transfer in rax:rdx. */
+static _PyIRTransfer
+jit_raise_exit(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    _PyInstr *this_instr = frame->instr_ptr;
+    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+}
+
+const void *const _PyEval_JitRaiseExit = (const void *)jit_raise_exit;
+#endif
 
 /* The function-form executor (-X ir_forms): runs the activation's frames by
  * calling each word's function form, as the baseline JIT's B1 will, in place

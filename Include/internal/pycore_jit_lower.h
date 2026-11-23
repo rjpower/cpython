@@ -118,6 +118,31 @@ PyAPI_FUNC(void) _PyJitLower_Publish(_PyJitWordCx *cx, _PyJitReg scratch);
 PyAPI_FUNC(void) _PyJitLower_AluRK(_PyJitWordCx *cx, _PyJitAlu op, _PyJitReg dst,
                                    int64_t k, _PyJitReg scratch);
 
+/* The templates (Python/jit_template.c).  A template emits a word whose
+   handler has one in place of the call of its form: the word's handler
+   check, its uops' code, and on the hot path a jump to cx->next or, when it
+   branches, to cx->target.  A failed guard jumps to cx->slow, which runs
+   the word as B1 does; an error leaves through cx->leave.  For a backward
+   target, cx->target is the compiler's check of the unit before the jump. */
+typedef void (*_PyJitTemplate)(_PyJitWordCx *cx);
+
+/* By handler; NULL for a handler that keeps its form's call */
+PyAPI_DATA(const _PyJitTemplate) _PyJit_Templates[];
+
+/* Python/ceval.c: the function forms by handler, and the address of the
+   raise exit of a template, which machine code calls as
+   _PyIRTransfer f(PyThreadState *, _PyInterpreterFrame *) */
+PyAPI_FUNC(const void *const *) _PyEval_HandlerForms(void);
+PyAPI_DATA(const void *const) _PyEval_JitRaiseExit;
+
+/* The pieces of the generated templates */
+PyAPI_FUNC(void) _PyJitTemplate_Begin(_PyJitWordCx *cx);
+PyAPI_FUNC(void) _PyJitTemplate_Branch(_PyJitWordCx *cx, int cond);
+PyAPI_FUNC(void) _PyJitTemplate_Raise(_PyJitWordCx *cx, _PyJitLabel label);
+PyAPI_FUNC(int) _PyJitTemplate_MaskCond(int mask);
+PyAPI_FUNC(void) _PyJitTemplate_PtrAdd(_PyJitWordCx *cx, _PyJitReg dst, _PyJitReg base,
+                                       _PyJitReg index, size_t size);
+
 /* The negation of a condition */
 static inline _PyJitCond
 _PyJitCond_Not(_PyJitCond cond)

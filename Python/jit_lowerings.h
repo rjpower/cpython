@@ -32,6 +32,29 @@ int _PyJitLower_PyValue_IncrementTaggedIndexNoOverflow(_PyJitWordCx *cx, const u
 int _PyJitLower_PyValue_AsKnownObjectBorrow(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyValue_AsKnownObjectBorrowPointer(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyValueGuarded_Load(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_Py_TYPE(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_PyList_CheckExact(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_PyTuple_CheckExact(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_PyDict_CheckExact(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_PyModule_CheckExact(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_PyUnicode_CheckExact(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_PyFunction_Check(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_PyList_GET_SIZE(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_PyTuple_GET_SIZE(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_PyList_GET_VALUE(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_PyTuple_GET_VALUE(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower__PyList_ITEMS(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower__PyObject_InlineValues(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower__PyObject_Shape(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower__PyObject_ValueSlot(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower__PyObject_ShapeReadDup(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_DK_UNICODE_ENTRIES(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower__PyLong_IsZero(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_GLOBALS(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_BUILTINS(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_FRAME_CO_CONSTS(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_GETLOCAL(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_IR_SLOTS(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__Py_EvalBreakerHasEvents(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_PyValue_DUP(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_PyValue_XDUP(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
@@ -70,6 +93,29 @@ const _PyJitLoweringInfo _PyJit_Lowerings[] = {
     {"PyValue_AsKnownObjectBorrow", _PyJitLower_PyValue_AsKnownObjectBorrow, 1, 1, 0, 0, "gg", 0},
     {"_PyValue_AsKnownObjectBorrowPointer", _PyJitLower__PyValue_AsKnownObjectBorrowPointer, 1, 1, 0, 0, "gg", 0},
     {"_PyValueGuarded_Load", _PyJitLower__PyValueGuarded_Load, 1, 1, 0, 0, "gg", 0},
+    {"Py_TYPE", _PyJitLower_Py_TYPE, 1, 1, 0, 0, "gg", 0},
+    {"PyList_CheckExact", _PyJitLower_PyList_CheckExact, 0, 1, 1, 0, "gg", 1},
+    {"PyTuple_CheckExact", _PyJitLower_PyTuple_CheckExact, 0, 1, 1, 0, "gg", 1},
+    {"PyDict_CheckExact", _PyJitLower_PyDict_CheckExact, 0, 1, 1, 0, "gg", 1},
+    {"PyModule_CheckExact", _PyJitLower_PyModule_CheckExact, 0, 1, 1, 0, "gg", 1},
+    {"PyUnicode_CheckExact", _PyJitLower_PyUnicode_CheckExact, 0, 1, 1, 0, "gg", 1},
+    {"PyFunction_Check", _PyJitLower_PyFunction_Check, 0, 1, 1, 0, "gg", 1},
+    {"PyList_GET_SIZE", _PyJitLower_PyList_GET_SIZE, 1, 1, 0, 0, "gg", 0},
+    {"PyTuple_GET_SIZE", _PyJitLower_PyTuple_GET_SIZE, 1, 1, 0, 0, "gg", 0},
+    {"PyList_GET_VALUE", _PyJitLower_PyList_GET_VALUE, 1, 2, 1, 0, "gggg", 0},
+    {"PyTuple_GET_VALUE", _PyJitLower_PyTuple_GET_VALUE, 1, 2, 0, 0, "ggg", 0},
+    {"_PyList_ITEMS", _PyJitLower__PyList_ITEMS, 1, 1, 0, 0, "gg", 0},
+    {"_PyObject_InlineValues", _PyJitLower__PyObject_InlineValues, 1, 1, 1, 0, "ggg", 0},
+    {"_PyObject_Shape", _PyJitLower__PyObject_Shape, 1, 1, 1, 0, "ggg", 0},
+    {"_PyObject_ValueSlot", _PyJitLower__PyObject_ValueSlot, 1, 2, 0, 0, "ggg", 0},
+    {"_PyObject_ShapeReadDup", _PyJitLower__PyObject_ShapeReadDup, 1, 2, 1, 0, "gggg", 0},
+    {"DK_UNICODE_ENTRIES", _PyJitLower_DK_UNICODE_ENTRIES, 1, 1, 2, 0, "gggg", 0},
+    {"_PyLong_IsZero", _PyJitLower__PyLong_IsZero, 0, 1, 1, 0, "gg", 1},
+    {"GLOBALS", _PyJitLower_GLOBALS, 1, 0, 0, 0, "g", 0},
+    {"BUILTINS", _PyJitLower_BUILTINS, 1, 0, 0, 0, "g", 0},
+    {"FRAME_CO_CONSTS", _PyJitLower_FRAME_CO_CONSTS, 1, 0, 0, 0, "g", 0},
+    {"GETLOCAL", _PyJitLower_GETLOCAL, 1, 1, 0, 0, "gg", 0},
+    {"IR_SLOTS", _PyJitLower_IR_SLOTS, 1, 0, 0, 0, "g", 0},
     {"_Py_EvalBreakerHasEvents", _PyJitLower__Py_EvalBreakerHasEvents, 0, 0, 0, 0, "", 1},
     {"PyValue_DUP", _PyJitLower_PyValue_DUP, 1, 1, 1, 0, "ggg", 0},
     {"PyValue_XDUP", _PyJitLower_PyValue_XDUP, 1, 1, 1, 0, "ggg", 0},

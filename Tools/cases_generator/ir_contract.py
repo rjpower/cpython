@@ -20,7 +20,7 @@ ir_records.py infers; the migration (G0) seeds every uop and deletes that
 inference.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import re
 
 from analyzer import Instruction, Uop, analysis_error
@@ -767,16 +767,12 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
     return {name: implied({VFact(measure, arg)})}, ""
 
 
-def _guard_condition_text(uop: Uop, site: Token) -> tuple[list[str], str]:
-    return guard_condition(uop, site)
-
-
 def site_facts(uop: Uop, site: Token, table: dict[str, Row] | None = None
                ) -> tuple[Facts, str]:
     """V9: the facts that a guard site establishes of the names of the
     uop's body, from the rows its condition calls, and its reason"""
     table = rows() if table is None else table
-    cond, reason = _guard_condition_text(uop, site)
+    cond, reason = guard_condition(uop, site)
     found = condition_facts(cond, Views(uop, table), table, holds=False)
     if found is None:
         if reason:
@@ -1332,7 +1328,7 @@ def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...],
     """The record's facts of a guard site of a declared uop, as the site's
     condition states them (not their implications), and its reason"""
     table = rows()
-    cond, reason = _guard_condition_text(uop, site)
+    cond, reason = guard_condition(uop, site)
     views = Views(uop, table)
     found = condition_facts(cond, views, table, holds=False)
     if found is None:

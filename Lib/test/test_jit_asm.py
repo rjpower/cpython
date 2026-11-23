@@ -137,6 +137,7 @@ FORMS = {
     "alu_mr": ("alu_mr", "alu m r", "{0} qword ptr {1}, {2}"),
     "alu_ri": ("alu_ri", "alu r i", "{0} {1}, {2}"),
     "alu_mi": ("alu_mi", "alu m i", "{0} qword ptr {1}, {2}"),
+    "alu_mi32": ("alu_mi32", "alu m i", "{0} dword ptr {1}, {2}"),
     "test_rr": ("test_rr", "r r", "test {0}, {1}"),
     "test_mr": ("test_mr", "m r", "test qword ptr {0}, {1}"),
     "test_ri": ("test_ri", "r i", "test {0}, {1}"),
@@ -146,6 +147,7 @@ FORMS = {
     "imul_rri": ("imul_rri", "r r i", "imul {0}, {1}, {2}"),
     "unary_r": ("unary_r", "unary r", "{0} {1}"),
     "unary_m": ("unary_m", "unary m", "{0} qword ptr {1}"),
+    "unary_m32": ("unary_m32", "unary m", "{0} dword ptr {1}"),
     "shift_ri": ("shift_ri", "shiftop r shift", "{0} {1}, {2}"),
     "shift_rcl": ("shift_rcl", "shiftop r", "{0} {1}, cl"),
     "setcc": ("setcc", "c r8", "set{0} {1}"),
@@ -416,6 +418,39 @@ class ExecutionTests(unittest.TestCase):
             ("mov_rm", RAX, (RSP, -8)), ("ret",),
         ]
         self.assertEqual(run(program), signed((0xffffffff << 32) | 7))
+
+    def test_refcount_style_memory_updates(self):
+        # 32-bit read-modify-write of the dword at [rsp-8]; the dword above
+        # it must stay 7.
+        program = [
+            ("mov_mi32", (RSP, -4), 7),
+            ("mov_mi32", (RSP, -8), 100),
+            ("alu_mi32", ALU["add"], (RSP, -8), 5),
+            ("alu_mi32", ALU["sub"], (RSP, -8), 1000),
+            ("alu_mi32", ALU["add"], (RSP, -8), 100000),
+            ("unary_m32", UNARY["inc"], (RSP, -8)),
+            ("unary_m32", UNARY["dec"], (RSP, -8)),
+            ("unary_m32", UNARY["inc"], (RSP, -8)),
+            ("mov_imm", RCX, 2),
+            ("alu_mi32", ALU["cmp"], (RSP, RCX, 2, -16), 99106),   # [rsp-8]
+            ("alu_rr", ALU["xor"], RAX, RAX),
+            ("setcc", E, RAX),
+            ("mov_rm", RDX, (RSP, -8)),
+            ("shift_ri", SHIFT["shl"], RAX, 63),
+            ("alu_rr", ALU["or"], RAX, RDX),
+            ("ret",),
+        ]
+        # 100 + 5 - 1000 + 100000 + 1 - 1 + 1 = 99106, and cmp finds it equal.
+        self.assertEqual(run(program), signed((1 << 63) | (7 << 32) | 99106))
+        # A decrement through zero wraps within 32 bits.
+        program = [
+            ("mov_mi32", (RSP, -4), 7),
+            ("mov_mi32", (RSP, -8), 0),
+            ("unary_m32", UNARY["dec"], (RSP, -8)),
+            ("mov_rm", RAX, (RSP, -8)),
+            ("ret",),
+        ]
+        self.assertEqual(run(program), (7 << 32) | 0xffffffff)
 
     def test_call_c_function_rel32(self):
         # call rel32 of a function in the interpreter's text, with the stack

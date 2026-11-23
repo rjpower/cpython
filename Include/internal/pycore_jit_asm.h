@@ -192,6 +192,11 @@ PyAPI_FUNC(void) _PyJitAsm_AluMR(_PyJitAsm *a, _PyJitAlu op, _PyJitMem dst, _PyJ
 PyAPI_FUNC(void) _PyJitAsm_AluRI(_PyJitAsm *a, _PyJitAlu op, _PyJitReg dst, int32_t imm);
 PyAPI_FUNC(void) _PyJitAsm_AluMI(_PyJitAsm *a, _PyJitAlu op, _PyJitMem dst, int32_t imm);
 
+/* 32-bit read-modify-write on memory, for reference counts: `op dword [mem],
+   imm` and `inc`/`dec`/`not`/`neg dword [mem]`. */
+PyAPI_FUNC(void) _PyJitAsm_AluMI32(_PyJitAsm *a, _PyJitAlu op, _PyJitMem dst, int32_t imm);
+PyAPI_FUNC(void) _PyJitAsm_UnaryM32(_PyJitAsm *a, _PyJitUnary op, _PyJitMem dst);
+
 PyAPI_FUNC(void) _PyJitAsm_TestRR(_PyJitAsm *a, _PyJitReg x, _PyJitReg y);
 PyAPI_FUNC(void) _PyJitAsm_TestMR(_PyJitAsm *a, _PyJitMem x, _PyJitReg y);
 PyAPI_FUNC(void) _PyJitAsm_TestRI(_PyJitAsm *a, _PyJitReg x, int32_t imm);

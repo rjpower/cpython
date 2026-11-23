@@ -64,6 +64,10 @@ typedef struct _PyJitUnit {
 #endif
     /* An address per word, in the code block; an operand word's traps */
     const void *const *entries;
+    /* The unit's .eh_frame, registered with libgcc's unwinder: in the code
+     * block, after the code, so that backtrace() walks through the unit
+     * (Python/jit.c, build_unwind) */
+    const uint8_t *eh_frame;
     struct _PyJitUnit *older;       // the unit this one replaced, or NULL
 } _PyJitUnit;
 

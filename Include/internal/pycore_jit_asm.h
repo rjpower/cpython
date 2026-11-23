@@ -162,6 +162,9 @@ PyAPI_FUNC(void) _PyJitAsm_Align(_PyJitAsm *a, size_t alignment);
    Aligns nothing: call _PyJitAsm_Align(a, 8) first if the table needs it. */
 PyAPI_FUNC(void) _PyJitAsm_QuadLabel(_PyJitAsm *a, _PyJitLabel label);
 
+/* Raw bytes, for data that lies with the code: the unit's unwind info. */
+PyAPI_FUNC(void) _PyJitAsm_Data(_PyJitAsm *a, const void *data, size_t size);
+
 /* mov.  MovImm picks the shortest of mov r32, imm32 (zero-extending),
    mov r64, simm32 and movabs. */
 PyAPI_FUNC(void) _PyJitAsm_MovRR(_PyJitAsm *a, _PyJitReg dst, _PyJitReg src);

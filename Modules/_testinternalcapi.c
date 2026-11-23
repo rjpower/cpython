@@ -4940,7 +4940,8 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
 
 /* The baseline JIT's unit of a code object: None if it has none, else a
  * dict of its words, its code bytes and pages, whether it is valid, the
- * code's compiles and the length of its chain of units. */
+ * code's compiles, the length of its chain of units, the ranges of their
+ * code and the newest unit's unwind info. */
 static PyObject *
 jit_unit(PyObject *self, PyObject *code_object)
 {
@@ -4965,7 +4966,25 @@ jit_unit(PyObject *self, PyObject *code_object)
         heads++;
         guarded += _PyJit_HandlerMayChange(code, (int)i);
     }
-    return Py_BuildValue("{sIsisisnsnsisIsi}",
+    /* The code of every unit in the chain, newest first, as (address, size);
+     * a unit's unwind info lies after its code in its block */
+    size_t frame_offset = (size_t)(unit->eh_frame - unit->code.start);
+    PyObject *ranges = PyList_New(0);
+    if (ranges == NULL) {
+        return NULL;
+    }
+    for (_PyJitUnit *u = unit; u != NULL; u = u->older) {
+        PyObject *range = Py_BuildValue("(Kn)",
+            (unsigned long long)(uintptr_t)u->code.start,
+            (Py_ssize_t)(u->eh_frame - u->code.start));
+        if (range == NULL || PyList_Append(ranges, range) < 0) {
+            Py_XDECREF(range);
+            Py_DECREF(ranges);
+            return NULL;
+        }
+        Py_DECREF(range);
+    }
+    PyObject *result = Py_BuildValue("{sIsisisnsnsisIsisNsy#}",
         "nwords", unit->nwords,
         "heads", heads,
         "guarded", guarded,
@@ -4973,7 +4992,11 @@ jit_unit(PyObject *self, PyObject *code_object)
         "pages", (Py_ssize_t)((unit->code.size + 4095) / 4096),
         "invalid", (int)unit->invalid,
         "compiles", exec->jit_compiles,
-        "units", units);
+        "units", units,
+        "ranges", ranges,
+        "eh_frame", (const char *)unit->eh_frame,
+        (Py_ssize_t)(unit->code.size - frame_offset));
+    return result;
 #else
     (void)code;
     Py_RETURN_NONE;

@@ -1612,6 +1612,7 @@ class Allocation:
     def __init__(self, g: Graph, flags: set[int]) -> None:
         self.g = g
         self.flags = flags
+        self.cold = cold_blocks(g)
         self.reg: dict[int, int] = {}
         self.live_in = liveness(g)
         self.live_after: dict[int, list[set]] = {}
@@ -1680,10 +1681,15 @@ class Allocation:
         for i in g.rpo():
             b = g.blocks[i]
             entry_live = self.live_in[i]
-            for p in b.params:
+            preds = self.g.preds()[i]
+            for n, p in enumerate(b.params):
                 if self.needs_reg(p):
                     k = self.kind(p)
-                    self.pick(p, self.regs_of(entry_live - {p}, k))
+                    # The register that a hot edge gives it in: no move there
+                    given = [self.g.blocks[q].term[2][n] for q in sorted(
+                        preds, key=lambda q: q in self.cold)]
+                    prefer = [self.reg[a] for a in given if a in self.reg and self.kind(a) == k]
+                    self.pick(p, self.regs_of(entry_live - {p}, k), prefer)
             for op, after in zip(b.ops, self.live_after[i]):
                 for j, r in enumerate(op.results):
                     if not self.needs_reg(r):
@@ -1739,8 +1745,7 @@ def immediates(g: Graph, defs) -> set[int]:
     """The integer constants that fit an imm32 and that only ops taking
     their second operand as an immediate use: they are never in a register"""
     candidates = {r for r, op in defs.items() if op.kind == "const" and
-                  (k := const_of(defs, r)) is not None and -2**31 <= k < 2**31 and
-                  g.types[r] != "bool"}
+                  (k := const_of(defs, r)) is not None and -2**31 <= k < 2**31}
     for b in g.blocks.values():
         for op in b.ops:
             for n, a in enumerate(op.args):
@@ -2080,8 +2085,12 @@ class Emitter:
         elif kd == "conv":
             self.conv(i, k, op)
         elif kd == "cmp" and args[1] in self.imms:
-            self.w(f"_PyJitAsm_AluRI(a, _PyJitAlu_CMP, {self.R(args[0])}, "
-                   f"{const_of(self.defs, args[1])});")
+            if const_of(self.defs, args[1]) == 0:
+                # test sets the flags that a compare with zero does
+                self.w(f"_PyJitAsm_TestRR(a, {self.R(args[0])}, {self.R(args[0])});")
+            else:
+                self.w(f"_PyJitAsm_AluRI(a, _PyJitAlu_CMP, {self.R(args[0])}, "
+                       f"{const_of(self.defs, args[1])});")
             self.setcc(op, f"_PyJitCond_{CMP_CONDS[op.attr]}")
         elif kd == "cmp":
             self.w(f"_PyJitAsm_AluRR(a, _PyJitAlu_CMP, {self.R(args[0])}, {self.R(args[1])});")

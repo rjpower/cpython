@@ -142,7 +142,7 @@ for args in list(CASES["DK_UNICODE_ENTRIES"]):
 SEPARATE = {"PyValue_DUP", "PyValue_XDUP", "PyValue_CLOSE", "PyValue_XCLOSE",
             "PyValue_CLOSE_SPECIALIZED", "shape_read_dup",
             "_PyDictValues_AddToInsertionOrder", "_PyDictValues_SetShape",
-            "GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "GETLOCAL",
+            "GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "GETLOCAL", "IR_SLOTS",
             "PyValue_FromInt64", "PyValue_FromDouble"}
 
 
@@ -231,7 +231,7 @@ class PrimitiveTests(unittest.TestCase):
     def test_frame_primitives(self):
         # The spec and C read the frame of this function
         frame = capi.leaf_frame()
-        for name in ("GLOBALS", "BUILTINS", "FRAME_CO_CONSTS"):
+        for name in ("GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "IR_SLOTS"):
             with self.subTest(primitive=name):
                 expected = ir_leaf.PRIMITIVES[name].spec(context(frame=frame))
                 self.assertEqual(capi.leaf_primitive(name), expected)
@@ -652,6 +652,32 @@ class LeafUopTests(unittest.TestCase):
                 keep.append(got_word)
             env[out.value] = got_word
         return "NEXT"
+
+    def test_store_fast(self):
+        # _SWAP_FAST stores into a home of the frame: here, this function's
+        # local `scratch`
+        leaf = next(u.leaf for r in self.records.values() for u in r.uops
+                    if u.name == "_SWAP_FAST")
+        home = LeafUopTests.test_store_fast.__code__.co_varnames.index("scratch")
+        for value in (BIG_INTS[0], "x", 5, None):
+            scratch = Holder()
+            old = word(scratch)
+            w = encode_int(value) if type(value) is int and INT_MIN <= value <= INT_MAX \
+                else word(value)
+            if owns_count(w):
+                ctypes.pythonapi.Py_IncRef(ctypes.py_object(value))
+            cx = context(frame=capi.leaf_frame())
+            expected = ir_leaf_eval.evaluate(leaf, cx, {"value": w}, {}, home)
+            outcome, outputs, *_ = capi.leaf_probe("_SWAP_FAST", (w,), home, (), False)
+            writes = [(ir_leaf_eval.RealMemory().load(addr, t), after)
+                      for addr, t, before, after in cx.mem.writes()]
+            # The old value is the probe's output now, an owned count
+            self.assertEqual(outputs, (old,))
+            ctypes.pythonapi.Py_DecRef(ctypes.py_object(object_at(old)))
+            self.assertEqual(ir_leaf_eval.OUTCOMES[outcome], expected.outcome)
+            self.assertEqual(expected.outputs, {"trash": old})
+            self.assertEqual(writes, [(w, w)])
+            self.assertEqual((type(scratch), scratch), (type(value), value))
 
     def test_handlers(self):
         parts = self.uops

@@ -512,6 +512,9 @@ PRIMITIVES = {p.name: p for p in (
     _p("FRAME_CO_CONSTS", [], [P], MACROS_H, _frame_co_consts, READS, frame=True),
     _p("GETLOCAL", ["i32"], [V], MACROS_H, _getlocal, frame=True,
        doc="a home of the frame: an operand, not heap (CR)"),
+    _p("IR_SLOTS", [], ["PyValue*"], MACROS_H,
+       lambda cx: cx.load(cx.frame + cx.off("_PyInterpreterFrame.base"), "PyValue*"),
+       frame=True, doc="the frame's homes; `GETLOCAL(i) = v` stores to IR_SLOTS()[i]"),
     # Ownership: counts are not heap writes (CR)
     _p("PyValue_DUP", [V], [V], VALUE_H, _dup, pre=lambda cx, w: w != 0),
     _p("PyValue_XDUP", [V], [V], VALUE_H, _dup),
@@ -1031,8 +1034,8 @@ _COMPARE = {"==": ("eq", "eq", "oeq"), "!=": ("ne", "ne", "one"),
 
 class _Loc:
     "A memory location: base pointer, the field read at it (or None) and its type"
-    def __init__(self, base: int, field: str | None, type: str) -> None:
-        self.base, self.field, self.type = base, field, type
+    def __init__(self, base: int, field: str | None, type: str, home: bool = False) -> None:
+        self.base, self.field, self.type, self.home = base, field, type, home
 
 
 class Translator:
@@ -1672,6 +1675,12 @@ class Translator:
             i = self.convert(self.rvalue(e.args[1]), "i64", e.token)[0]
             addr = self.emit1("ptradd", t, (p, i), ELEMENT_SIZES[t])[0]
             return _Loc(addr, None, _element(t))
+        if e.kind == "call" and e.value == "GETLOCAL" and len(e.args) == 1:
+            # A home of the frame: a store to it is not a heap write (CR)
+            slots = self.primitive(PRIMITIVES["IR_SLOTS"], Expr("call", e.token, "IR_SLOTS", ()), True)
+            i = self.convert(self.rvalue(e.args[0]), "i64", e.token)[0]
+            addr = self.emit1("ptradd", "PyValue*", (slots[0], i), "PyValue")[0]
+            return _Loc(addr, None, VALUE, home=True)
         if e.kind == "unary" and e.value == "*":
             p, t = self.rvalue(e.args[0])
             if not is_pointer(t) or t not in ELEMENT_SIZES:
@@ -1692,7 +1701,8 @@ class Translator:
     def store(self, loc: _Loc, value, token) -> None:
         if loc.field in ARRAY_FIELDS:
             raise LeafError("a store to an array field", token)
-        self.add_effects((WRITES_HEAP,))
+        if not loc.home:
+            self.add_effects((WRITES_HEAP,))
         self.emit("store", (), (loc.base, value[0]), loc.field or loc.type)
 
     # -- calls

@@ -167,6 +167,7 @@ caller_frame(void)
 static PyObject *lp_GLOBALS(PyObject *const *args) { _PyInterpreterFrame *frame = caller_frame(); RET_WORD(GLOBALS()); }
 static PyObject *lp_BUILTINS(PyObject *const *args) { _PyInterpreterFrame *frame = caller_frame(); RET_WORD(BUILTINS()); }
 static PyObject *lp_FRAME_CO_CONSTS(PyObject *const *args) { _PyInterpreterFrame *frame = caller_frame(); RET_WORD(FRAME_CO_CONSTS); }
+static PyObject *lp_IR_SLOTS(PyObject *const *args) { _PyInterpreterFrame *frame = caller_frame(); RET_WORD(IR_SLOTS()); }
 static PyObject *lp_GETLOCAL(PyObject *const *args) { _PyInterpreterFrame *frame = caller_frame(); RET_VAL(GETLOCAL((int)INT(0))); }
 
 /* The ownership primitives change the count of the object they are given;
@@ -224,7 +225,7 @@ static const struct {
     P(_PyObject_Shape, 1), P(_PyObject_ValueSlot, 2), P(shape_read_dup, 2),
     P(DK_UNICODE_ENTRIES, 1), P(_PyDictValues_AddToInsertionOrder, 2),
     P(_PyDictValues_SetShape, 2), P(_PyLong_IsZero, 1), P(_PyValueGuarded_Load, 1),
-    P(GLOBALS, 0), P(BUILTINS, 0), P(FRAME_CO_CONSTS, 0), P(GETLOCAL, 1),
+    P(GLOBALS, 0), P(BUILTINS, 0), P(FRAME_CO_CONSTS, 0), P(GETLOCAL, 1), P(IR_SLOTS, 0),
     P(PyValue_DUP, 1), P(PyValue_XDUP, 1), P(PyValue_CLOSE, 1),
     P(PyValue_XCLOSE, 1), P(PyValue_CLOSE_SPECIALIZED, 2),
 #undef P

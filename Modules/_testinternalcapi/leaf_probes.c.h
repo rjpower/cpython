@@ -1497,6 +1497,21 @@ leaf_probe__LOAD_FAST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int op
 }
 
 static int
+leaf_probe__LOAD_FAST_AND_CLEAR(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
+    const uint64_t *caches, struct leaf_probe_result *result)
+{
+    (void)frame; (void)oparg; (void)caches;
+    PyValue value;
+    value = GETLOCAL(oparg);
+    GETLOCAL(oparg) = PyValue_NULL;
+    stack_pointer[0] = value;
+    stack_pointer += 1;
+    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+    result->stack_pointer = stack_pointer;
+    return LEAF_PROBE_NEXT;
+}
+
+static int
 leaf_probe__LOAD_FAST_BORROW(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -1942,6 +1957,22 @@ leaf_probe__SWAP(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
 }
 
 static int
+leaf_probe__SWAP_FAST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
+    const uint64_t *caches, struct leaf_probe_result *result)
+{
+    (void)frame; (void)oparg; (void)caches;
+    PyValue value, trash;
+    value = stack_pointer[-1];
+    PyValue tmp = GETLOCAL(oparg);
+    GETLOCAL(oparg) = value;
+    _PyValue_CheckHome(value);
+    trash = tmp;
+    stack_pointer[-1] = trash;
+    result->stack_pointer = stack_pointer;
+    return LEAF_PROBE_NEXT;
+}
+
+static int
 leaf_probe__TO_BOOL_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -2097,6 +2128,7 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_LOAD_CONST_INLINE_FLOAT", leaf_probe__LOAD_CONST_INLINE_FLOAT, 0},
     {"_LOAD_CONST_INLINE_INT", leaf_probe__LOAD_CONST_INLINE_INT, 0},
     {"_LOAD_FAST", leaf_probe__LOAD_FAST, 0},
+    {"_LOAD_FAST_AND_CLEAR", leaf_probe__LOAD_FAST_AND_CLEAR, 0},
     {"_LOAD_FAST_BORROW", leaf_probe__LOAD_FAST_BORROW, 0},
     {"_LOAD_GLOBAL_BUILTINS", leaf_probe__LOAD_GLOBAL_BUILTINS, 0},
     {"_LOAD_GLOBAL_MODULE", leaf_probe__LOAD_GLOBAL_MODULE, 0},
@@ -2122,6 +2154,7 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_STORE_ATTR_SLOT", leaf_probe__STORE_ATTR_SLOT, 2},
     {"_STORE_SUBSCR_LIST_INT", leaf_probe__STORE_SUBSCR_LIST_INT, 3},
     {"_SWAP", leaf_probe__SWAP, 2},
+    {"_SWAP_FAST", leaf_probe__SWAP_FAST, 1},
     {"_TO_BOOL_INT", leaf_probe__TO_BOOL_INT, 1},
     {"_TO_BOOL_LIST", leaf_probe__TO_BOOL_LIST, 1},
     {"_TO_BOOL_NONE", leaf_probe__TO_BOOL_NONE, 1},

@@ -680,6 +680,8 @@ def maps_entry(address):
 
 
 @unittest.skipUnless(os.path.exists("/proc/self/maps"), "needs /proc")
+@unittest.skipIf(sys._jit.is_enabled(),
+                 "the JIT places code as the test counts pages")
 class MemoryTests(unittest.TestCase):
 
     def setUp(self):

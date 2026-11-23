@@ -16,6 +16,7 @@
 #include "pycore_global_objects_fini_generated.h"  // _PyStaticObjects_CheckAll()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interpolation.h" // _PyInterpolation_InitTypes()
+#include "pycore_jit.h"            // _PyJit_InitInterpreter()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"          // _PyLong_InitTypes()
 #include "pycore_moduleobject.h"  // _PyModule_InitModuleDictWatcher()
@@ -640,7 +641,7 @@ init_interp_settings(PyInterpreterState *interp,
     interp->ceval.ir_forms =
         _Py_get_xoption(&interp->config.xoptions, L"ir_forms") != NULL;
 
-    return _PyStatus_OK();
+    return _PyJit_InitInterpreter(interp);
 }
 
 

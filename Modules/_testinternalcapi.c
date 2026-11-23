@@ -31,6 +31,7 @@
 #include "pycore_ir_source.h"     // _PyIR_POSITION_RECORD
 #include "pycore_ir_outcomes.h"    // _PyIR_NormalPhysicalTransfer()
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
+#include "pycore_jit.h"           // _PyJitUnit
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_list.h"          // _PyList_SetItemTakeValue()
 #include "pycore_object.h"        // _PyObject_IsFreed()
@@ -4937,7 +4938,105 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
     return PyLong_FromLong(status);
 }
 
+/* The baseline JIT's unit of a code object: None if it has none, else a
+ * dict of its words, its code bytes and pages, whether it is valid, the
+ * code's compiles and the length of its chain of units. */
+static PyObject *
+jit_unit(PyObject *self, PyObject *code_object)
+{
+    if (!PyCode_Check(code_object)) {
+        PyErr_SetString(PyExc_TypeError, "expected a code object");
+        return NULL;
+    }
+    PyCodeObject *code = (PyCodeObject *)code_object;
+#ifdef _PY_JIT_SUPPORTED
+    _PyCodeExec *exec = code->_co_exec;
+    if (exec == NULL || exec->jit_unit == NULL) {
+        Py_RETURN_NONE;
+    }
+    _PyJitUnit *unit = exec->jit_unit;
+    int units = 0;
+    for (_PyJitUnit *u = unit; u != NULL; u = u->older) {
+        units++;
+    }
+    /* Head words, and those whose handler compiled code checks */
+    int heads = 0, guarded = 0;
+    for (uint32_t i = 0; i < unit->nwords; i += _PyIR_WordLength(unit->words[i])) {
+        heads++;
+        guarded += _PyJit_HandlerMayChange(code, (int)i);
+    }
+    return Py_BuildValue("{sIsisisnsnsisIsi}",
+        "nwords", unit->nwords,
+        "heads", heads,
+        "guarded", guarded,
+        "code_bytes", (Py_ssize_t)unit->code.size,
+        "pages", (Py_ssize_t)((unit->code.size + 4095) / 4096),
+        "invalid", (int)unit->invalid,
+        "compiles", exec->jit_compiles,
+        "units", units);
+#else
+    (void)code;
+    Py_RETURN_NONE;
+#endif
+}
+
+/* Code objects compiled, compiles and words compiled, since startup */
+static PyObject *
+jit_stats(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    return Py_BuildValue("{sKsKsK}",
+        "codes", (unsigned long long)interp->ceval.jit_compiled_codes,
+        "compiles", (unsigned long long)interp->ceval.jit_compiles,
+        "words", (unsigned long long)interp->ceval.jit_compiled_words);
+}
+
+/* Set the warm-up events before a code object compiles under -X jit=on
+ * (or always), for measurement.  Returns the previous value. */
+static PyObject *
+set_jit_warmup(PyObject *self, PyObject *arg)
+{
+    unsigned long n = PyLong_AsUnsignedLong(arg);
+    if (n == (unsigned long)-1 && PyErr_Occurred()) {
+        return NULL;
+    }
+    if (n == 0 || n > UINT32_MAX) {
+        PyErr_SetString(PyExc_ValueError, "warm-up must be in 1..2**32-1");
+        return NULL;
+    }
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    uint32_t previous = interp->ceval.jit_warmup;
+    interp->ceval.jit_warmup = (uint32_t)n;
+    return PyLong_FromUnsignedLong(previous);
+}
+
+/* Compile a code object now, whatever its warm-up.  Returns whether it
+ * compiled. */
+static PyObject *
+jit_compile(PyObject *self, PyObject *code_object)
+{
+    if (!PyCode_Check(code_object)) {
+        PyErr_SetString(PyExc_TypeError, "expected a code object");
+        return NULL;
+    }
+#ifdef _PY_JIT_SUPPORTED
+    if (!_PyJit_IsAvailable()) {
+        Py_RETURN_FALSE;
+    }
+    if (_PyCode_GetExec((PyCodeObject *)code_object) == NULL) {
+        return NULL;
+    }
+    return PyBool_FromLong(_PyJit_Compile((PyCodeObject *)code_object) != NULL);
+#else
+    Py_RETURN_FALSE;
+#endif
+}
+
 static PyMethodDef module_functions[] = {
+    {"jit_unit", jit_unit, METH_O},
+    {"jit_compile", jit_compile, METH_O},
+    {"jit_stats", jit_stats, METH_NOARGS},
+    {"set_jit_warmup", set_jit_warmup, METH_O},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"check_ir_retirement", _PyCFunction_CAST(check_ir_retirement),
      METH_VARARGS | METH_KEYWORDS, NULL},

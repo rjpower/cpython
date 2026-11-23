@@ -92,6 +92,16 @@ _PyJitMem_Indexed(_PyJitReg base, _PyJitReg index, int scale, int32_t disp)
 
 typedef int32_t _PyJitLabel;
 
+/* Emission goes to one of two sections.  Placement lays out all hot bytes,
+   then all cold bytes (starting at a 64-byte boundary), so that rarely run
+   code does not interleave with the code that runs.  Labels and fixups
+   record the section they were made in; jumps, calls and label addresses
+   work across the two. */
+typedef enum {
+    _PyJitSection_HOT,
+    _PyJitSection_COLD,
+} _PyJitSection;
+
 typedef enum {
     _PyJitFixup_REL32_LABEL,      // jmp, jcc: label - end of field
     _PyJitFixup_REL32_ABSOLUTE,   // call of a C address
@@ -99,8 +109,15 @@ typedef enum {
 } _PyJitFixupKind;
 
 typedef struct {
+    uint8_t *buffer;
+    size_t size;
+    size_t capacity;
+} _PyJitBuffer;
+
+typedef struct {
     _PyJitFixupKind kind;
-    size_t offset;                // of the field in the buffer
+    _PyJitSection section;        // of the field
+    size_t offset;                // of the field in its section
     union {
         _PyJitLabel label;
         const void *target;
@@ -108,10 +125,14 @@ typedef struct {
 } _PyJitFixup;
 
 typedef struct {
-    uint8_t *buffer;
-    size_t size;
-    size_t capacity;
-    size_t *label_offsets;        // SIZE_MAX until bound
+    size_t offset;                // in the section; SIZE_MAX until bound
+    _PyJitSection section;
+} _PyJitLabelInfo;
+
+typedef struct {
+    _PyJitBuffer sections[2];
+    _PyJitSection current;
+    _PyJitLabelInfo *labels;
     size_t nlabels;
     size_t labels_capacity;
     _PyJitFixup *fixups;
@@ -123,16 +144,16 @@ typedef struct {
 PyAPI_FUNC(void) _PyJitAsm_Init(_PyJitAsm *a);
 PyAPI_FUNC(void) _PyJitAsm_Fini(_PyJitAsm *a);
 
-/* The number of bytes emitted so far. */
-static inline size_t
-_PyJitAsm_Size(const _PyJitAsm *a)
-{
-    return a->size;
-}
+/* Direct the following emission, and the labels bound, to a section. */
+PyAPI_FUNC(void) _PyJitAsm_Section(_PyJitAsm *a, _PyJitSection section);
+
+/* The size of the placed code: the hot bytes, padding, then the cold bytes. */
+PyAPI_FUNC(size_t) _PyJitAsm_Size(const _PyJitAsm *a);
 
 PyAPI_FUNC(_PyJitLabel) _PyJitAsm_NewLabel(_PyJitAsm *a);
 PyAPI_FUNC(void) _PyJitAsm_Bind(_PyJitAsm *a, _PyJitLabel label);
-/* The offset of a bound label from the start of the code. */
+/* The offset of a bound label from the start of the code.  A cold label's
+   offset follows the hot size, so it is final once emission is complete. */
 PyAPI_FUNC(size_t) _PyJitAsm_LabelOffset(const _PyJitAsm *a, _PyJitLabel label);
 
 /* Pad with int3 to a multiple of `alignment`, a power of two. */

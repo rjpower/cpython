@@ -17,13 +17,27 @@ logging_simple 1.015. nbody's 1.016 of golden85 is branch prediction of
 unchanged code at new addresses; the user chose no layout rule. Golden85
 (`2a9ea8c4f69`, 0.900 of upstream's time) is a frozen control.
 
-**Active: contract87, 2026-11-22**, the first phase of the approved
+**Integrated: contract87, 2026-11-22**, the first phase of the approved
 [tiers87](design/proposals/tiers87.md) plan (then a Sparkplug-style baseline
-method JIT, then a tracing JIT on the same contract). Units from golden86: CR
-(operation records, guard facts, effect classes, feedback schema), SB (stack
-bytecode recovery), NV (one native call adapter), FR (one IR pointer per
-frame), EH (raise and catch) and AT (attribute misses); TR and LS follow CR.
-XP's iteration change is done.
+method JIT, then a tracing JIT on the same contract). `pyjit/contract87`
+at `684a98eb30e` (magic 64446) holds ten units on golden86
+([record](issues/register-semantics59/contract87.md)):
+- the operation record (CR);
+- VM routines and a function form for every handler (TR);
+- the leaf subset (LS);
+- stack bytecode in `co_code` and `.pyc`, with the register IR lowered at
+  first call (SB, with ST's lowering cost fixes);
+- one native call adapter (NV), raise and catch (EH), one exec pointer per
+  frame (FR), attribute misses (AT) and XP's iteration change.
+
+It runs **1.001 of golden86's time and 0.876 of upstream's** on the timed
+all-29 geomean, measured before ST, and executes 0.9935 of golden86's
+instructions. The allocator product is 42.57M. richards runs 0.789 of
+golden86's time; logging_silent, coroutines, float and five more are 2–33%
+slower at equal instructions, from op-cache placement and, for float, one
+shared native-call site. Startup is 79.0M instructions for `-I -S -c pass`
+(golden86 37.5M): the cost of first-call lowering, which the user accepts.
+Selection is the user's.
 
 The checkpoints between golden73 and gap82, each measured against golden73:
 

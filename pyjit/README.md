@@ -11,10 +11,14 @@ Read the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md
 in that order. The [roadmap](ROADMAP.md) gives stage outcomes; [process](PROCESS.md)
 and [handoff](HANDOFF.md) explain development and runtime coordination.
 
-**Current work (2026-11-22):** contract87, the interpreter's last wave and
-the first phase of [tiers87](design/proposals/tiers87.md); then a
-Sparkplug-style baseline method JIT, then a tracing JIT, all generated from
-one operation contract.
+**Current work (2026-11-22):** [contract87](issues/register-semantics59/contract87.md),
+the interpreter's last wave and the first phase of
+[tiers87](design/proposals/tiers87.md), is integrated (`684a98eb30e`) and
+awaits selection. It exports one operation contract from the cases generator,
+gives every handler a function form, and returns `co_code` and `.pyc` to
+stack bytecode. It runs 1.001 of golden86's time and 0.876 of upstream's.
+Next: a Sparkplug-style baseline method JIT, then a tracing JIT, both
+generated from that contract.
 
 **Previous (2026-11-22):** [tight86](issues/register-semantics59/tight86.md)
 landed hot85's deferred items in eight units as clean, tightly defined code.

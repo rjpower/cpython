@@ -184,7 +184,7 @@ C7. **Feedback has a schema.** Each family names and types its cache words in
 the DSL. The specializer, the guards and the compilers read them through
 generated accessors.
 
-C8. **Leaf uops use the primitive subset.** A uop marked `inline_ok` may
+C8. **Leaf uops use the primitive subset.** A uop marked `leaf` may
 contain only local variables of PyValue, integer, double or pointer type;
 calls to listed value primitives; checked integer arithmetic
 (`__builtin_*_overflow`); compares; guard and error exits; and calls to
@@ -218,6 +218,10 @@ and run in parallel with them.
 
 XP's change rides with the wave: the C `Element` drops its subclass check
 and the Python `Element` gains `__iter__`, so both iterate one way.
+
+**Integrated 2026-11-22** as `pyjit/contract87` (`684a98eb30e`), with ST, a
+follow-up that cut first-call lowering's cost; results in the
+[contract87 record](../../issues/register-semantics59/contract87.md).
 
 From this wave on, interpreter work must either improve the shared runtime
 that compiled code calls, or implement the contract. The hot handlers keep

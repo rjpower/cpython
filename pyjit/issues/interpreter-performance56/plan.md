@@ -21,6 +21,13 @@ answers:
   - FR: the frame reads `ir_words` and `ir_feedback` through the exec;
   - SB: stack bytecode recovery;
   - XP's iteration change, done (`pyjit/contract87-xp`, `7909372888c`).
+- **Result:** integrated 2026-11-22 as `pyjit/contract87` (`684a98eb30e`),
+  with ST, a follow-up that cut first-call lowering's cost, and two root
+  fixes. It runs 1.001 of golden86's time and 0.876 of upstream's (measured
+  before ST) and executes 0.9935 of golden86's instructions; startup is 79.0M
+  instructions against golden86's 37.5M, which the user accepts. Details in
+  the [contract87 record](../register-semantics59/contract87.md). Selection
+  is the user's.
 - **Baseline method JIT**, Sparkplug style, steps B0–B3.
 - **Tracing JIT** on the same contract, steps T0–T3. An optimizing method
   tier waits for evidence.

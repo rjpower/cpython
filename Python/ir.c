@@ -925,11 +925,6 @@ _PyIR_LowerCode(PyCodeObject *co)
         }
         _PyRegCfg_Free(cfg);
     }
-    // The compiler's proof of which returns leave no scratch owner
-    if (ir != NULL && _PyIR_SelectEmptyReturns(ir) < 0) {
-        _PyIR_Free(ir);
-        ir = NULL;
-    }
     if (ir == NULL) {
         _PyErr_FormatNote("while lowering %U (%U:%d) to the register IR",
                           co->co_qualname, co->co_filename, co->co_firstlineno);

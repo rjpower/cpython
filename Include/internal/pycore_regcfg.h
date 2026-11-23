@@ -143,6 +143,8 @@ typedef struct _PyRegCfg {
                             // or -1, after compaction
     int ntemps;             // temporary slots the frame needs
     int maxdepth;           // the deepest stack of the stack instructions
+    int ncanon;             // canonical temporaries in use: the deepest stack
+                            // that conversion numbered, IR_MAX_SLOTS before it
     /* Constant slots (_PyRegCfg_AssignConstSlots()): the registers
      * const_first .. const_first + nconst - 1 are hidden locals that no op
      * writes, whose frame slots hold const_values[j].  Each is an inline
@@ -155,9 +157,14 @@ typedef struct _PyRegCfg {
 int _PyRegCfg_PrepareKwargs(_PyRegCfg *cfg, int slot);
 
 /* Canonical temporaries are numbered by stack position below the frame
- * limit; the fresh ones follow. */
+ * limit; the fresh ones follow.  The tables that cover every register
+ * (slots, liveness) hold only the canonical ones in use, ncanon of them,
+ * and then the fresh ones: _PyReg_INDEX() is the position of a register. */
 #define _PyReg_CANON(CFG, K)    ((CFG)->nlocalsplus + (K))
 #define _PyReg_FRESH0(CFG)      ((CFG)->nlocalsplus + IR_MAX_SLOTS)
+#define _PyReg_INDEX(CFG, V) \
+    ((V) < _PyReg_FRESH0(CFG) ? (V) - (CFG)->nlocalsplus \
+     : (CFG)->ncanon + (V) - _PyReg_FRESH0(CFG))
 #define _PyReg_IS_LOCAL(CFG, V) ((V) < (CFG)->nlocalsplus)
 #define _PyReg_IS_CANON(CFG, V) \
     ((V) >= (CFG)->nlocalsplus && (V) < _PyReg_FRESH0(CFG))
@@ -233,7 +240,7 @@ _PyRegCfg_Slot(const _PyRegCfg *cfg, int v)
     if (v < cfg->nlocalsplus) {
         return v;
     }
-    return cfg->slot[v - cfg->nlocalsplus];
+    return cfg->slot[_PyReg_INDEX(cfg, v)];
 }
 
 /* The slot of each role of an op's word */

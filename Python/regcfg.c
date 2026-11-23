@@ -51,6 +51,7 @@ _PyRegCfg_New(int nlocalsplus, int maxdepth)
     }
     cfg->nlocalsplus = nlocalsplus;
     cfg->maxdepth = maxdepth;
+    cfg->ncanon = IR_MAX_SLOTS;
     cfg->nvregs = _PyReg_FRESH0(cfg);
     return cfg;
 }
@@ -464,6 +465,7 @@ typedef struct {
     int region_op;          // the first op of the current region
     int *def;               // per fresh register, the op that defines it
     int adef;
+    int maxpos;             // the deepest stack position numbered
 } converter;
 
 static int
@@ -602,6 +604,7 @@ convert_instr(converter *c, const _PyRegOp *instr)
     RETURN_IF_ERROR(grow((void **)&c->stack, &c->astack, depth + pushed + 1,
                          sizeof(int)));
     int base = depth - popped;
+    c->maxpos = Py_MAX(c->maxpos, base + pushed);
     for (int j = 0; j < pushed; j++) {
         int v;
         if (j < through) {
@@ -652,6 +655,7 @@ convert(_PyRegCfg *cfg)
                 c.stack[k] = _PyReg_CANON(cfg, k);
             }
             c.sp = blk->startdepth;
+            c.maxpos = Py_MAX(c.maxpos, blk->startdepth);
         }
         else if (c.sp != blk->startdepth) {
             PyErr_Format(PyExc_SystemError,
@@ -679,6 +683,9 @@ convert(_PyRegCfg *cfg)
     cfg->ops = c.ops;
     cfg->nops = c.nops;
     cfg->aops = c.aops;
+    // The passes rename registers to canonical ones that exist, so no
+    // register of a higher position appears after conversion
+    cfg->ncanon = Py_MIN(c.maxpos, IR_MAX_SLOTS);
     return SUCCESS;
 }
 
@@ -711,7 +718,7 @@ temp_bit(const _PyRegCfg *cfg, int v)
     if (v < _PyReg_FRESH0(cfg)) {
         return v - cfg->nlocalsplus;
     }
-    return IR_MAX_SLOTS + (v - _PyReg_FRESH0(cfg));
+    return _PyReg_INDEX(cfg, v);
 }
 
 #define BIT_GET(S, I)   (((S)[(I) >> 6] >> ((I) & 63)) & 1)
@@ -787,7 +794,7 @@ _PyRegCfg_Liveness(_PyRegCfg *cfg, _PyRegLiveness *lv)
 {
     memset(lv, 0, sizeof(*lv));
     int n = cfg->nblocks;
-    int nbits = IR_MAX_SLOTS + (cfg->nvregs - _PyReg_FRESH0(cfg));
+    int nbits = cfg->ncanon + (cfg->nvregs - _PyReg_FRESH0(cfg));
     int nwords = (nbits + 63) / 64;
     lv->nwords = nwords;
     lv->last = PyMem_Calloc(Py_MAX(cfg->noperands, 1), 1);
@@ -967,18 +974,50 @@ slot_error(const _PyRegOp *op, const char *what)
 
 typedef struct {
     int *occ;               // per slot less nlocalsplus, its register or -1
+    int cap;                // the slots that occ has room for; later ones are free
     int top;                // the slots from top up are free
     int lenient;            // unreachable code, which never runs
     _PyRegOp **reserved;    // folded loads that hold their slot
     int nreserved;
 } occupancy;
 
+static inline int
+occ_at(const occupancy *o, int s)
+{
+    return s < o->cap ? o->occ[s] : -1;
+}
+
+/* Room for slot s, which lies below the slot limit */
+static int
+occ_reserve(occupancy *o, int s)
+{
+    if (s < o->cap) {
+        return SUCCESS;
+    }
+    if (s >= IR_MAX_SLOTS) {
+        PyErr_SetString(PyExc_SyntaxError, "too many temporaries in function");
+        return ERROR;
+    }
+    int cap = Py_MIN(Py_MAX(2 * o->cap, s + 1), IR_MAX_SLOTS);
+    int *occ = PyMem_Realloc(o->occ, cap * sizeof(int));
+    if (occ == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    for (int i = o->cap; i < cap; i++) {
+        occ[i] = -1;
+    }
+    o->occ = occ;
+    o->cap = cap;
+    return SUCCESS;
+}
+
 static inline void
 occ_free(occupancy *o, int s, int v)
 {
-    if (o->occ[s] == v) {
+    if (occ_at(o, s) == v) {
         o->occ[s] = -1;
-        while (o->top > 0 && o->occ[o->top - 1] < 0) {
+        while (o->top > 0 && occ_at(o, o->top - 1) < 0) {
             o->top--;
         }
     }
@@ -997,6 +1036,7 @@ occ_take(occupancy *o, int s, int v, const _PyRegOp *op)
                      "(limit %d slots)", op->loc.lineno, _PyIR_MaxSlots);
         return ERROR;
     }
+    RETURN_IF_ERROR(occ_reserve(o, s));
     if (o->occ[s] >= 0 && o->occ[s] != v && !o->lenient) {
         PyErr_Format(PyExc_SystemError, "register allocation: two live "
                      "temporaries in slot %d (%d and %d) at line %d "
@@ -1014,7 +1054,7 @@ occ_take(occupancy *o, int s, int v, const _PyRegOp *op)
 static int
 assign(_PyRegCfg *cfg, occupancy *o, int v, int s, const _PyRegOp *op)
 {
-    int *slot = &cfg->slot[v - cfg->nlocalsplus];
+    int *slot = &cfg->slot[_PyReg_INDEX(cfg, v)];
     if (*slot >= 0 && *slot != s && !o->lenient) {
         return slot_error(op, "a temporary in two slots");
     }
@@ -1113,7 +1153,7 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op)
                 if (bump && op->nout - through == 1 && k >= 0
                     && k < op->nread && in[k] >= nl
                     && k >= op->nread - op->npop
-                    && o->occ[_PyRegCfg_Slot(cfg, in[k]) - nl] < 0)
+                    && occ_at(o, _PyRegCfg_Slot(cfg, in[k]) - nl) < 0)
                 {
                     bump = 0;
                     dst = _PyRegCfg_Slot(cfg, in[k]) - through;
@@ -1210,17 +1250,20 @@ int
 _PyRegCfg_Compact(_PyRegCfg *cfg)
 {
     int nl = cfg->nlocalsplus;
-    int nregs = cfg->nvregs - nl;
+    int nregs = cfg->ncanon + (cfg->nvregs - _PyReg_FRESH0(cfg));
     PyMem_Free(cfg->slot);
     cfg->slot = PyMem_Malloc(Py_MAX(nregs, 1) * sizeof(int));
-    int *occ = PyMem_Malloc(IR_MAX_SLOTS * sizeof(int));
+    // The slots are numbered from nl, and the allocator rarely gets far
+    // above the stack: occupancy grows when a slot needs room
+    int cap = Py_MIN(cfg->ncanon + 8, IR_MAX_SLOTS);
+    int *occ = PyMem_Malloc(cap * sizeof(int));
     if (cfg->slot == NULL || occ == NULL) {
         PyMem_Free(occ);
         PyErr_NoMemory();
         return ERROR;
     }
     for (int i = 0; i < nregs; i++) {
-        cfg->slot[i] = i < IR_MAX_SLOTS ? nl + i : -1;
+        cfg->slot[i] = i < cfg->ncanon ? nl + i : -1;
     }
     cfg->ntemps = 0;
     _PyRegOp **reserved = PyMem_Malloc(Py_MAX(cfg->nops, 1) * sizeof(_PyRegOp *));
@@ -1229,21 +1272,25 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
         PyErr_NoMemory();
         return ERROR;
     }
-    occupancy o = {.occ = occ, .top = 0, .reserved = reserved};
+    occupancy o = {.occ = occ, .cap = cap, .top = 0, .reserved = reserved};
     int err = SUCCESS;
     for (int b = 0; b < cfg->nblocks && err == SUCCESS; b++) {
         _PyRegBlock *blk = &cfg->blocks[b];
         o.lenient = !blk->reachable;
         if (!blk->continued) {
-            for (int s = 0; s < IR_MAX_SLOTS; s++) {
-                occ[s] = -1;
+            for (int s = 0; s < o.cap; s++) {
+                o.occ[s] = -1;
             }
             // The stack at a region's entry is canonical, and every value
             // on it holds its slot until an op takes it
             o.top = 0;
             o.nreserved = 0;
             for (int k = 0; k < blk->startdepth; k++) {
-                occ[k] = _PyReg_CANON(cfg, k);
+                err = occ_reserve(&o, k);
+                if (err != SUCCESS) {
+                    break;
+                }
+                o.occ[k] = _PyReg_CANON(cfg, k);
                 o.top = k + 1;
             }
         }
@@ -1259,7 +1306,7 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
         }
     }
     PyMem_Free(reserved);
-    PyMem_Free(occ);
+    PyMem_Free(o.occ);
     RETURN_IF_ERROR(err);
     // The frame holds the values at every region's entry, where the
     // unwinder puts an exception, and every slot that a word names
@@ -1383,7 +1430,7 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
         // Defined on every path: nothing is live at the entry, and a
         // handler finds only what lies below its depth
         int limit = b == 0 ? 0 : blk->is_handler ? blk->startdepth
-                  : IR_MAX_SLOTS;
+                  : cfg->ncanon;
         for (int bit = 0; bit < lv.nwords * 64; bit++) {
             if (!BIT_GET(lin, bit)) {
                 continue;
@@ -1393,7 +1440,7 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                                    "it is defined");
                 break;
             }
-            if (!blk->continued && bit >= IR_MAX_SLOTS) {
+            if (!blk->continued && bit >= cfg->ncanon) {
                 err = verify_error(after, NULL, "a fresh temporary live "
                                    "into a block that is not continued");
                 break;
@@ -1531,8 +1578,8 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                         if (!BIT_GET(work, bit)) {
                             continue;
                         }
-                        int v = bit < IR_MAX_SLOTS ? nl + bit
-                                : _PyReg_FRESH0(cfg) + bit - IR_MAX_SLOTS;
+                        int v = bit < cfg->ncanon ? nl + bit
+                                : _PyReg_FRESH0(cfg) + bit - cfg->ncanon;
                         int s = _PyRegCfg_Slot(cfg, v);
                         int is_out = 0;
                         for (int j = 0; j < op->nout; j++) {
@@ -1556,8 +1603,8 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                     if (!BIT_GET(work, bit)) {
                         continue;
                     }
-                    int v = bit < IR_MAX_SLOTS ? nl + bit
-                            : _PyReg_FRESH0(cfg) + bit - IR_MAX_SLOTS;
+                    int v = bit < cfg->ncanon ? nl + bit
+                            : _PyReg_FRESH0(cfg) + bit - cfg->ncanon;
                     int s = _PyRegCfg_Slot(cfg, v) - nl;
                     if (s < 0 || s >= cfg->ntemps) {
                         err = verify_error(after, op, "a live temporary "

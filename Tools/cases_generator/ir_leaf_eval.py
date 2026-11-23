@@ -123,6 +123,8 @@ HELPER_MODELS = {
     "_PyValue_BoxDouble": _box_double,
     "_PyValue_MultiplyInt64": _multiply_int64,
     "_PyValue_LshiftInt64": _lshift_int64,
+    # The tests run it with no event pending, or with one that raises nothing
+    "_Py_HandlePending": lambda cx: 0,
 }
 
 
@@ -132,6 +134,7 @@ class Context:
     layout: Layout
     mem: object
     frame: int = 0
+    tstate: int = 0
     calls: list = field(default_factory=list)
 
     def k(self, name: str) -> int:

@@ -548,11 +548,19 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 
 #define IS_PEP523_HOOKED(tstate) (tstate->interp->eval_frame != NULL)
 
+/* Whether the thread has an event for _Py_HandlePending(): one load and test
+ * of its eval breaker, the periodic checks' fast path. */
+static inline bool
+_Py_EvalBreakerHasEvents(PyThreadState *tstate)
+{
+    return (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & _PY_EVAL_EVENTS_MASK) != 0;
+}
+
 static inline int
 check_periodics(PyThreadState *tstate) {
     _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
     QSBR_QUIESCENT_STATE(tstate);
-    if (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & _PY_EVAL_EVENTS_MASK) {
+    if (_Py_EvalBreakerHasEvents(tstate)) {
         return _Py_HandlePending(tstate);
     }
     return 0;
@@ -575,7 +583,7 @@ static inline int
 check_periodics_at_end(PyThreadState *tstate, _PyInterpreterFrame *frame) {
     _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
     QSBR_QUIESCENT_STATE(tstate);
-    if (Py_UNLIKELY(_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & _PY_EVAL_EVENTS_MASK)) {
+    if (Py_UNLIKELY(_Py_EvalBreakerHasEvents(tstate))) {
         return handle_periodics_at_end(tstate, frame);
     }
     return 0;

@@ -152,9 +152,13 @@ dummy_func(
             ERROR_IF(err < 0);
         }
 
-        op(_CHECK_PERIODIC, (--)) {
-            int err = check_periodics(tstate);
-            ERROR_IF(err != 0);
+        leaf op(_CHECK_PERIODIC, (--)) {
+            _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
+            QSBR_QUIESCENT_STATE(tstate);
+            if (_Py_EvalBreakerHasEvents(tstate)) {
+                int err = _Py_HandlePending(tstate);
+                ERROR_IF(err != 0);
+            }
         }
 
         replaced op(_CHECK_PERIODIC_AT_END, (--)) {
@@ -4681,8 +4685,7 @@ dummy_func(
         }
 
         op(_GUARD_CALLABLE_TYPE_1, (callable, unused, unused -- callable, unused, unused)) {
-            // A word that names the type, ignoring the ownership bit, is it
-            EXIT_IF((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyType_Type);
+            EXIT_IF(!_PyValue_NamesObject(callable, &PyType_Type));
         }
 
         inline_ok op(_CALL_TYPE_1, (callable, null, arg -- res)) {
@@ -4701,8 +4704,7 @@ dummy_func(
             _CALL_TYPE_1;
 
         op(_GUARD_CALLABLE_STR_1, (callable, unused, unused -- callable, unused, unused)) {
-            // A word that names the type, ignoring the ownership bit, is it
-            EXIT_IF((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyUnicode_Type);
+            EXIT_IF(!_PyValue_NamesObject(callable, &PyUnicode_Type));
         }
 
         op(_CALL_STR_1, (callable, null, arg -- res)) {
@@ -4725,8 +4727,7 @@ dummy_func(
             _CHECK_PERIODIC_AT_END;
 
         op(_GUARD_CALLABLE_TUPLE_1, (callable, unused, unused -- callable, unused, unused)) {
-            // A word that names the type, ignoring the ownership bit, is it
-            EXIT_IF((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyTuple_Type);
+            EXIT_IF(!_PyValue_NamesObject(callable, &PyTuple_Type));
         }
 
         op(_CALL_TUPLE_1, (callable, null, arg -- res)) {
@@ -4957,8 +4958,7 @@ dummy_func(
             // The cached builtin is an object, so a word that names it is
             // one (a rebinding to an inline value exits here).
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.len);
+            EXIT_IF(!_PyValue_NamesObject(callable, interp->callable_cache.len));
         }
 
         op(_CALL_LEN, (callable, null, arg -- res)) {
@@ -4980,17 +4980,15 @@ dummy_func(
             // The cached builtin is an object, so a word that names it is
             // one (a rebinding to an inline value exits here).
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.isinstance);
+            EXIT_IF(!_PyValue_NamesObject(callable, interp->callable_cache.isinstance));
         }
 
         inline_ok op(_CALL_ISINSTANCE, (callable, null, instance, cls -- res)) {
             /* isinstance(o, o2) */
             STAT_INC(CALL, hit);
-            /* An instance of cls itself is the common answer; a class has
-             * its pointer's bits, less the tag that says it owns no count */
+            // An instance of cls itself is the common answer
             int retval = 1;
-            if ((cls.bits & ~(uintptr_t)1) != (uintptr_t)PyValue_TYPE(instance)) {
+            if (!_PyValue_NamesObject(cls, PyValue_TYPE(instance))) {
                 retval = _PyValue_IsInstance(instance, cls);
             }
             if (retval < 0) {
@@ -5021,8 +5019,7 @@ dummy_func(
             // The cached builtin is an object, so a word that names it is
             // one (a rebinding to an inline value exits here).
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.list_append);
+            EXIT_IF(!_PyValue_NamesObject(callable, interp->callable_cache.list_append));
         }
 
         inline_ok op(_CALL_LIST_APPEND, (callable, self, arg -- none)) {

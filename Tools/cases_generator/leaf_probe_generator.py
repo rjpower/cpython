@@ -151,7 +151,8 @@ def generate_probe(uop: Uop, feedback: dict[str, str], emitter: ProbeEmitter,
     out.emit(f"static int\nleaf_probe_{uop.name}(_PyInterpreterFrame *frame, "
              "PyValue *stack_pointer, int oparg,\n"
              "    const uint64_t *caches, struct leaf_probe_result *result)\n{\n")
-    out.emit("(void)frame; (void)oparg; (void)caches;\n")
+    out.emit("PyThreadState *tstate = _PyThreadState_GET();\n")
+    out.emit("(void)frame; (void)tstate; (void)oparg; (void)caches;\n")
     for index, cache in enumerate(c for c in uop.caches if c.name != "unused"):
         ctype = feedback.get(cache.name) or {1: "uint16_t", 2: "uint32_t"}.get(cache.size, "uint32_t")
         out.emit(cache_binding(cache.name, ctype, index) + "\n")

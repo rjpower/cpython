@@ -743,6 +743,9 @@ def predicate_facts(p: list, subjects: Subjects) -> list[Fact] | None:
     args = _call(p, "Py_IS_TYPE")
     if args is not None:
         return [Fact("EXACT_TYPE", subjects.of(args[0]), " ".join(args[1]).lstrip("& "))]
+    args = _call(p, "_PyValue_NamesObject")
+    if args is not None:
+        return [Fact("IDENTITY", subjects.of(args[0]), " ".join(_uncast(args[1])).lstrip("& "))]
     if len(p) >= 3 and _TYPE_CHECK.fullmatch(p[0]) and _call(p, p[0]) is not None:
         args = _call(p, p[0])
         m = _TYPE_CHECK.fullmatch(p[0])
@@ -823,11 +826,6 @@ def comparison_facts(lhs: list, op: str, rhs: list,
             return [Fact("OPERAND_COUNT", "word", text)]
         if any(t in ("ml_flags", "PyCFunction_GET_FLAGS", "flags") for t in left):
             return [Fact("CALL_FLAGS", "callable", f"{' '.join(left)} == {text}")]
-        # (x.bits & ~1) != (uintptr_t)K: x is the object K
-        inner = _strip(left)
-        if len(inner) >= 4 and inner[1:3] == [".", "bits"] and inner[3] == "&":
-            return [Fact("IDENTITY", subjects.of(inner[:1]),
-                         " ".join(_uncast(rhs)).lstrip("& "))]
         if len(left) == 1 and right[:1] == ["&"] or _uncast(rhs)[:1] == ["&"]:
             return [Fact("IDENTITY", subjects.of(left), " ".join(_uncast(rhs)).lstrip("& "))]
         if right == ["NULL"]:
@@ -1120,7 +1118,8 @@ PURE_CALLS = re.compile(
     r"Py_ARRAY_LENGTH|_PyIR_AdoptTemp|GETLOCAL|Py_FatalError|PyValue_RefcountOnObject|"
     r"_PyFrame_AssertTemporariesClear|_PyManagedDictPointer_IsValues|doesnt_escape|"
     r"(advance|restart)_backoff_counter|_Py_GatherStats_GetIter|native_vector_capture|"
-    r"_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY|_PyObject_ValueSlot|_PyValueGuarded_Load")
+    r"_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY|_PyObject_ValueSlot|_PyValueGuarded_Load|"
+    r"_PyValue_NamesObject")
 
 # Non-escaping calls that read the heap and change nothing
 READER_CALLS = re.compile(
@@ -1132,6 +1131,7 @@ READER_CALLS = re.compile(
     r"GetManagedDict|IsUniquelyReferenced|GC_IS_\w+|GC_MAY_BE_TRACKED)|_PyCode_\w+|"
     r"_?PyType_(HasFeature|IteratesByIndex|VALUE_SLOT|FastSubclass)|PyType_FastSubclass|"
     r"_PyErr_Occurred|_PyErr_ExceptionMatches|_PyInterpreterState_GET|_PyThreadState_HasStackSpace|"
+    r"_Py_EvalBreakerHasEvents|"
     r"PyExceptionInstance_Class|PyException_Get\w+|_PyCell_GetValue|"
     r"_PyFb_\w+|_PyDataStack_Slots|_PyGen_GetGeneratorFromFrame|_PyClassMethod_GetFunc|"
     r"backoff_counter_triggers|_PyEval_GeneratorReturnTarget|_PyUnicode_Equal|gen_may_claim|"

@@ -115,14 +115,14 @@ def bits_f64(w: int) -> float:
 CONSTANTS = (
     "Py_PTR_LIMIT", "Py_INDEX_BASE", "Py_DOUBLE_OFFSET", "Py_INT_SHIFT",
     "Py_INT_BASE", "Py_INT_MIN", "Py_INT_MAX", "Py_OWNED_MASK",
-    "Py_TAG_REFCNT",
+    "Py_TAG_REFCNT", "_PY_EVAL_EVENTS_MASK",
 )
 # The addresses of static objects that a leaf names
 SYMBOLS = (
     "_Py_TrueStruct", "_Py_FalseStruct", "_Py_NoneStruct",
     "PyLong_Type", "PyFloat_Type", "PyBool_Type", "PyList_Type",
     "PyTuple_Type", "PyDict_Type", "PyModule_Type", "PyFunction_Type",
-    "PyUnicode_Type", "PyRangeIter_Type",
+    "PyUnicode_Type", "PyRangeIter_Type", "PyType_Type",
 )
 
 
@@ -165,6 +165,7 @@ FIELDS = {f"{f.struct}.{f.name}": f for f in (
     Field("_PyInterpreterFrame", "f_executable", "PyCodeObject*"),
     Field("_PyInterpreterFrame", "base", "PyValue*"),
     Field("PyCodeObject", "co_consts", "PyObject*"),
+    Field("PyThreadState", "eval_breaker", "u64"),
 )}
 # Element sizes that pointer arithmetic needs
 SIZES = ("PyValue", "PyDictUnicodeEntry")
@@ -174,8 +175,8 @@ SIZES = ("PyValue", "PyDictUnicodeEntry")
 # Specs.  A spec is f(cx, *args): args are ints (words, integers, addresses),
 # floats or bools; cx is ir_leaf_eval.Context, which gives the layout
 # (cx.k(name), cx.off(field), cx.addr(symbol), cx.size(type)), memory
-# (cx.load(addr, type), cx.store(addr, type, x)), the frame (cx.frame) and
-# helper calls (cx.call(name, *args)).
+# (cx.load(addr, type), cx.store(addr, type, x)), the frame (cx.frame), the
+# thread state (cx.tstate) and helper calls (cx.call(name, *args)).
 
 
 def _is_null(cx, w):
@@ -386,6 +387,7 @@ class Primitive:
     pre: Callable | None = None # the precondition of its arguments
     slow: str = ""              # the helper its slow path calls
     frame: bool = False         # reads the frame, an implicit operand
+    thread: bool = False        # takes the thread state, written `tstate`
     doc: str = ""
 
 
@@ -420,6 +422,9 @@ PRIMITIVES = {p.name: p for p in (
     _p("PyValue_IsTaggedIndex", [V], [B], VALUE_H, _is_tagged_index),
     _p("PyValue_Is", [V, V], [B], VALUE_H,
        lambda cx, a, b: ((a ^ b) & ~int(_is_pointer_space(cx, a)) & MASK64) == 0),
+    _p("_PyValue_NamesObject", [V, P], [B], VALUE_H,
+       lambda cx, w, p: (u64(w) & ~1) == u64(p),
+       doc="the word is the object at p, whatever its no-count tag"),
     _p("PyValue_IsTrue", [V], [B], VALUE_H,
        lambda cx, w: w == cx.addr("_Py_TrueStruct") | cx.k("Py_TAG_REFCNT")),
     _p("PyValue_IsFalse", [V], [B], VALUE_H,
@@ -515,6 +520,10 @@ PRIMITIVES = {p.name: p for p in (
     _p("IR_SLOTS", [], ["PyValue*"], MACROS_H,
        lambda cx: cx.load(cx.frame + cx.off("_PyInterpreterFrame.base"), "PyValue*"),
        frame=True, doc="the frame's homes; `GETLOCAL(i) = v` stores to IR_SLOTS()[i]"),
+    _p("_Py_EvalBreakerHasEvents", [], [B], MACROS_H,
+       lambda cx: (cx.load(cx.tstate + cx.off("PyThreadState.eval_breaker"), "u64")
+                   & cx.k("_PY_EVAL_EVENTS_MASK")) != 0,
+       READS, thread=True, doc="an event for _Py_HandlePending(): the periodic check"),
     # Ownership: counts are not heap writes (CR)
     _p("PyValue_DUP", [V], [V], VALUE_H, _dup, pre=lambda cx, w: w != 0),
     _p("PyValue_XDUP", [V], [V], VALUE_H, _dup),
@@ -535,10 +544,12 @@ IDENTITIES = {
     "FT_ATOMIC_LOAD_UINT_RELAXED", "FT_ATOMIC_LOAD_UINT8_RELAXED",
 }
 CONSTANT_FORMS = {"LOCK_OBJECT": ("bool", 1)}
-# Statements that compile to nothing in a release build
+# Statements that compile to nothing in a release build of the GIL build, the
+# one in scope, outside Emscripten
 ERASED = {
     "assert", "STAT_INC", "OBJECT_STAT_INC", "_PyValue_CheckHome",
     "_PyValue_RecheckHome", "UNLOCK_OBJECT", "DEAD", "INPUTS_DEAD",
+    "QSBR_QUIESCENT_STATE", "_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY",
 }
 # Constant words, as (symbol, tag)
 VALUE_CONSTANTS = {
@@ -555,6 +566,7 @@ class Helper:
     results: tuple[str, ...]
     effects: frozenset[str]
     doc: str = ""
+    thread: bool = False        # takes the thread state, written `tstate`
 
 
 HELPERS = {h.name: h for h in (
@@ -567,6 +579,9 @@ HELPERS = {h.name: h for h in (
     Helper("_Py_Dealloc", (P,), (), frozenset((MAY_RELEASE,)), "the last count's release"),
     Helper("_PyLong_ExactDealloc", (P,), (), WRITES, "an exact int's release"),
     Helper("_PyFloat_ExactDealloc", (P,), (), WRITES, "an exact float's release"),
+    Helper("_Py_HandlePending", (), ("i32",), frozenset(EFFECTS),
+           "the events of the eval breaker: signals, GC, a drop request, ...",
+           thread=True),
     # The completions that a `complete` exit calls (IREmitter.complete_step):
     # each drains the input window, which may release the iterator
     *(Helper(name, (V,), (), frozenset(EFFECTS), f"the completion of {kind}")
@@ -1741,6 +1756,8 @@ class Translator:
             return self.primitive(prim, e, want)
         helper = HELPERS.get(name)
         if helper is not None:
+            if helper.thread:
+                args = self.thread_operand(e)
             vals = [self.convert(self.rvalue(a), t, tok)[0] for a, t in zip(args, helper.params)]
             if len(args) != len(helper.params):
                 raise LeafError(f"{name} takes {len(helper.params)} arguments", tok)
@@ -1751,8 +1768,16 @@ class Translator:
         raise LeafError(f"a call of {name}, which is neither a listed primitive nor a "
                         f"declared helper", tok)
 
+    def thread_operand(self, e: Expr) -> tuple:
+        "The arguments of a call that takes the thread state first, without it"
+        if not e.args or e.args[0].kind != "name" or e.args[0].value != "tstate":
+            raise LeafError(f"{e.value}'s first argument is not tstate", e.token)
+        return e.args[1:]
+
     def primitive(self, prim: Primitive, e: Expr, want: bool):
         args, tok = e.args, e.token
+        if prim.thread:
+            args = self.thread_operand(e)
         out_params = len(prim.results) - 1 if len(prim.results) > 1 else 0
         n_in = len(prim.params)
         if prim.name == "PyValue_CLOSE_SPECIALIZED":

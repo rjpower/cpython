@@ -65,6 +65,7 @@ PREDICATE(PyValue_IsInlineFloat)
 PREDICATE2(PyValue_BothInlineInt)
 PREDICATE(PyValue_IsTaggedIndex)
 PREDICATE2(PyValue_Is)
+static PyObject *lp__PyValue_NamesObject(PyObject *const *args) { RET_BOOL(_PyValue_NamesObject(VAL(0), PTR(PyObject, 1))); }
 PREDICATE(PyValue_IsTrue)
 PREDICATE(PyValue_IsFalse)
 PREDICATE(PyValue_IsNone)
@@ -169,6 +170,7 @@ static PyObject *lp_BUILTINS(PyObject *const *args) { _PyInterpreterFrame *frame
 static PyObject *lp_FRAME_CO_CONSTS(PyObject *const *args) { _PyInterpreterFrame *frame = caller_frame(); RET_WORD(FRAME_CO_CONSTS); }
 static PyObject *lp_IR_SLOTS(PyObject *const *args) { _PyInterpreterFrame *frame = caller_frame(); RET_WORD(IR_SLOTS()); }
 static PyObject *lp_GETLOCAL(PyObject *const *args) { _PyInterpreterFrame *frame = caller_frame(); RET_VAL(GETLOCAL((int)INT(0))); }
+static PyObject *lp__Py_EvalBreakerHasEvents(PyObject *const *args) { RET_BOOL(_Py_EvalBreakerHasEvents(_PyThreadState_GET())); }
 
 /* The ownership primitives change the count of the object they are given;
    the caller balances it. */
@@ -208,6 +210,7 @@ static const struct {
     P(PyValue_IsNull, 1), P(PyValue_IsPointerSpace, 1), P(PyValue_IsObject, 1),
     P(PyValue_IsInline, 1), P(PyValue_IsInlineInt, 1), P(PyValue_IsInlineFloat, 1),
     P(PyValue_BothInlineInt, 2), P(PyValue_IsTaggedIndex, 1), P(PyValue_Is, 2),
+    P(_PyValue_NamesObject, 2),
     P(PyValue_IsTrue, 1), P(PyValue_IsFalse, 1), P(PyValue_IsNone, 1),
     P(PyValue_BoolCheck, 1), P(PyValue_LongCheckExact, 1),
     P(_PyValue_IntScaled, 1), P(_PyValue_FromIntScaled, 1),
@@ -226,6 +229,7 @@ static const struct {
     P(DK_UNICODE_ENTRIES, 1), P(_PyDictValues_AddToInsertionOrder, 2),
     P(_PyDictValues_SetShape, 2), P(_PyLong_IsZero, 1), P(_PyValueGuarded_Load, 1),
     P(GLOBALS, 0), P(BUILTINS, 0), P(FRAME_CO_CONSTS, 0), P(GETLOCAL, 1), P(IR_SLOTS, 0),
+    P(_Py_EvalBreakerHasEvents, 0),
     P(PyValue_DUP, 1), P(PyValue_XDUP, 1), P(PyValue_CLOSE, 1),
     P(PyValue_XCLOSE, 1), P(PyValue_CLOSE_SPECIALIZED, 2),
 #undef P
@@ -283,6 +287,14 @@ leaf_frame(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(ignored))
     RET_WORD(caller_frame());
 }
 
+/* leaf_thread() -> the address of the thread state, the operand that the
+   thread primitives and helpers take */
+static PyObject *
+leaf_thread(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(ignored))
+{
+    RET_WORD(_PyThreadState_GET());
+}
+
 static int
 add_int(PyObject *dict, const char *name, long long value)
 {
@@ -322,7 +334,7 @@ leaf_layout(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(ignored))
 #define KW(NAME) if (add_word(k, #NAME, (uint64_t)(NAME)) < 0) goto error
     KW(Py_PTR_LIMIT); KW(Py_INDEX_BASE); KW(Py_DOUBLE_OFFSET); K(Py_INT_SHIFT);
     KW(Py_INT_BASE); K(Py_INT_MIN); K(Py_INT_MAX); KW(Py_OWNED_MASK);
-    K(Py_TAG_REFCNT);
+    K(Py_TAG_REFCNT); KW(_PY_EVAL_EVENTS_MASK);
 #define OFF(S, F) if (add_int(off, #S "." #F, (long long)offsetof(S, F)) < 0) goto error
     OFF(PyObject, ob_refcnt); OFF(PyObject, ob_type); OFF(PyVarObject, ob_size);
     OFF(PyTypeObject, tp_version_tag); OFF(PyTypeObject, tp_basicsize);
@@ -338,14 +350,14 @@ leaf_layout(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(ignored))
     OFF(PyLongObject, long_value.lv_tag);
     OFF(_PyInterpreterFrame, f_globals); OFF(_PyInterpreterFrame, f_builtins);
     OFF(_PyInterpreterFrame, f_executable); OFF(_PyInterpreterFrame, base);
-    OFF(PyCodeObject, co_consts);
+    OFF(PyCodeObject, co_consts); OFF(PyThreadState, eval_breaker);
 #define SIZE(T) if (add_int(size, #T, (long long)sizeof(T)) < 0) goto error
     SIZE(PyValue); SIZE(PyDictUnicodeEntry);
 #define SYM(NAME) if (add_word(sym, #NAME, (uint64_t)(uintptr_t)&NAME) < 0) goto error
     SYM(_Py_TrueStruct); SYM(_Py_FalseStruct); SYM(_Py_NoneStruct);
     SYM(PyLong_Type); SYM(PyFloat_Type); SYM(PyBool_Type); SYM(PyList_Type);
     SYM(PyTuple_Type); SYM(PyDict_Type); SYM(PyModule_Type); SYM(PyFunction_Type);
-    SYM(PyUnicode_Type); SYM(PyRangeIter_Type);
+    SYM(PyUnicode_Type); SYM(PyRangeIter_Type); SYM(PyType_Type);
 #undef K
 #undef KW
 #undef OFF
@@ -478,6 +490,7 @@ static PyMethodDef test_methods[] = {
     {"leaf_primitive", _PyCFunction_CAST(leaf_primitive), METH_FASTCALL},
     {"leaf_primitive_names", leaf_primitive_names, METH_NOARGS},
     {"leaf_frame", leaf_frame, METH_NOARGS},
+    {"leaf_thread", leaf_thread, METH_NOARGS},
     {"leaf_layout", leaf_layout, METH_NOARGS},
     {NULL},
 };

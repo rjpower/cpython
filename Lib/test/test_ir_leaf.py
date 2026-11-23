@@ -27,7 +27,7 @@ TAG = K["Py_TAG_REFCNT"]
 def context(mem=None, frame=0):
     if mem is None:
         mem = ir_leaf_eval.Overlay(ir_leaf_eval.RealMemory())
-    return ir_leaf_eval.Context(LAYOUT, mem, frame)
+    return ir_leaf_eval.Context(LAYOUT, mem, frame, capi.leaf_thread())
 
 
 def word(obj):
@@ -113,6 +113,9 @@ CASES = {
     "PyValue_BothInlineInt": [(a, b) for a in ANY_WORDS[::3] for b in ANY_WORDS[::4]],
     "PyValue_Is": [(a, b) for a in LIVE_WORDS[::2] for b in LIVE_WORDS[::3]] +
                   [(w, w) for w in LIVE_WORDS] + [(w, w | TAG) for w in OBJECT_WORDS],
+    "_PyValue_NamesObject": [(w, id(o)) for w in LIVE_WORDS[::2] for o in OBJECTS[::3]] +
+                            [(w | tag, id(o)) for o, w in zip(OBJECTS, OBJECT_WORDS)
+                             for tag in (0, TAG)],
     "PyValue_FloatOperandValues": [(a, b) for a in LIVE_WORDS[::2] for b in LIVE_WORDS[::3]],
     "_PyValue_FromIntScaled": [(i << K["Py_INT_SHIFT"],) for i in INTS],
     "COMPARISON_BIT": [(a, b) for a in INTS[::3] for b in INTS[::3]] +
@@ -143,6 +146,7 @@ SEPARATE = {"PyValue_DUP", "PyValue_XDUP", "PyValue_CLOSE", "PyValue_XCLOSE",
             "PyValue_CLOSE_SPECIALIZED", "_PyObject_ShapeReadDup",
             "_PyDictValues_AddToInsertionOrder", "_PyDictValues_SetShape",
             "GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "GETLOCAL", "IR_SLOTS",
+            "_Py_EvalBreakerHasEvents",
             "PyValue_FromInt64", "PyValue_FromDouble"}
 
 
@@ -240,6 +244,16 @@ class PrimitiveTests(unittest.TestCase):
         self.assertEqual(capi.leaf_primitive("GETLOCAL", 0), expected)
         self.assertEqual(expected & ~TAG, id(self))
 
+    def test_thread_primitives(self):
+        prim = ir_leaf.PRIMITIVES["_Py_EvalBreakerHasEvents"]
+        self.assertEqual(capi.leaf_primitive(prim.name), prim.spec(context()))
+        # An event bit, written to the overlay only
+        cx = context()
+        breaker = cx.tstate + LAYOUT.offsets["PyThreadState.eval_breaker"]
+        for bits, expected in ((1 << 4, True), (K["_PY_EVAL_EVENTS_MASK"] + 1, False)):
+            cx.store(breaker, "u64", cx.load(breaker, "u64") & ~K["_PY_EVAL_EVENTS_MASK"] | bits)
+            self.assertIs(prim.spec(cx), expected)
+
     def check_count_change(self, name, obj, *extra):
         "The spec's write of obj's count against the change C makes"
         prim = ir_leaf.PRIMITIVES[name]
@@ -336,6 +350,8 @@ REFUSALS = {
         EXIT_IF(Py_TYPE(PyValue_AsKnownObjectBorrow(value))->tp_as_mapping == NULL);
         res = value; DEAD(value);""",
     "the evaluator's tstate": "EXIT_IF(tstate == NULL); res = value; DEAD(value);",
+    "_Py_EvalBreakerHasEvents's first argument is not tstate":
+        "EXIT_IF(_Py_EvalBreakerHasEvents(frame)); res = value; DEAD(value);",
     "a value used as a condition": "EXIT_IF(value); res = value; DEAD(value);",
 }
 
@@ -561,6 +577,7 @@ HANDLERS = {
     "LOAD_FAST_BORROW": (lambda: [()], None, [0, 1]),
     "LOAD_FAST": (lambda: [()], None, [0, 1]),
     "JUMP_FORWARD": (lambda: [()], None, [0, 3]),
+    "JUMP_BACKWARD": (lambda: [()], None, [0, 3]),
 }
 
 

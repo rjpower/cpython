@@ -623,6 +623,8 @@ NON_ESCAPING_FUNCTIONS = (
     "PyFunction_GET_GLOBALS",
     "_PyClassMethod_GetFunc",
     "_PyValueGuarded_Load",
+    "_PyValue_NamesObject",
+    "_Py_EvalBreakerHasEvents",
     "PyList_GET_ITEM",
     "PyList_GET_VALUE",
     "PyList_GET_SIZE",

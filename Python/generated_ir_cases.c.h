@@ -4017,8 +4017,7 @@ ir_run_CALL_ISINSTANCE(
             {
                 callable = IR_SLOT(IR_B(ir_word));
                 PyInterpreterState *interp = tstate->interp;
-                if ((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.isinstance) {
+                if (!_PyValue_NamesObject(callable, interp->callable_cache.isinstance)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -4031,7 +4030,7 @@ ir_run_CALL_ISINSTANCE(
                 null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 STAT_INC(CALL, hit);
                 int retval = 1;
-                if ((cls.bits & ~(uintptr_t)1) != (uintptr_t)PyValue_TYPE(instance)) {
+                if (!_PyValue_NamesObject(cls, PyValue_TYPE(instance))) {
                     retval = _PyValue_IsInstance(instance, cls);
                 }
                 if (retval < 0) {
@@ -4361,8 +4360,7 @@ ir_run_CALL_LEN(
             {
                 callable = IR_SLOT(IR_B(ir_word));
                 PyInterpreterState *interp = tstate->interp;
-                if ((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.len) {
+                if (!_PyValue_NamesObject(callable, interp->callable_cache.len)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -4414,8 +4412,7 @@ ir_run_CALL_LIST_APPEND(
             {
                 callable = IR_SLOT(IR_B(ir_word));
                 PyInterpreterState *interp = tstate->interp;
-                if ((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.list_append) {
+                if (!_PyValue_NamesObject(callable, interp->callable_cache.list_append)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5203,7 +5200,7 @@ ir_run_CALL_STR_1(
             // _GUARD_CALLABLE_STR_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyUnicode_Type) {
+                if (!_PyValue_NamesObject(callable, &PyUnicode_Type)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5267,7 +5264,7 @@ ir_run_CALL_TUPLE_1(
             // _GUARD_CALLABLE_TUPLE_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyTuple_Type) {
+                if (!_PyValue_NamesObject(callable, &PyTuple_Type)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5331,7 +5328,7 @@ ir_run_CALL_TYPE_1(
             // _GUARD_CALLABLE_TYPE_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyType_Type) {
+                if (!_PyValue_NamesObject(callable, &PyType_Type)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8580,9 +8577,13 @@ ir_run_INSTRUMENTED_JUMP_BACKWARD(
             (void)oparg;
             // _CHECK_PERIODIC
             {
-                int err = check_periodics(tstate);
-                if (err != 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
+                QSBR_QUIESCENT_STATE(tstate);
+                if (_Py_EvalBreakerHasEvents(tstate)) {
+                    int err = _Py_HandlePending(tstate);
+                    if (err != 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
                 }
             }
             // _MONITOR_JUMP_BACKWARD
@@ -9230,9 +9231,13 @@ ir_run_JUMP_BACKWARD(
             (void)oparg;
             // _CHECK_PERIODIC
             {
-                int err = check_periodics(tstate);
-                if (err != 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
+                QSBR_QUIESCENT_STATE(tstate);
+                if (_Py_EvalBreakerHasEvents(tstate)) {
+                    int err = _Py_HandlePending(tstate);
+                    if (err != 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
                 }
             }
             // _JUMP_BACKWARD_NO_INTERRUPT
@@ -20013,8 +20018,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 callable = IR_SLOT(IR_B(ir_word));
                 PyInterpreterState *interp = tstate->interp;
-                if ((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.isinstance) {
+                if (!_PyValue_NamesObject(callable, interp->callable_cache.isinstance)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -20027,7 +20031,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 STAT_INC(CALL, hit);
                 int retval = 1;
-                if ((cls.bits & ~(uintptr_t)1) != (uintptr_t)PyValue_TYPE(instance)) {
+                if (!_PyValue_NamesObject(cls, PyValue_TYPE(instance))) {
                     retval = _PyValue_IsInstance(instance, cls);
                 }
                 if (retval < 0) {
@@ -20277,8 +20281,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 callable = IR_SLOT(IR_B(ir_word));
                 PyInterpreterState *interp = tstate->interp;
-                if ((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.len) {
+                if (!_PyValue_NamesObject(callable, interp->callable_cache.len)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -20326,8 +20329,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 callable = IR_SLOT(IR_B(ir_word));
                 PyInterpreterState *interp = tstate->interp;
-                if ((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.list_append) {
+                if (!_PyValue_NamesObject(callable, interp->callable_cache.list_append)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -21079,7 +21081,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _GUARD_CALLABLE_STR_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyUnicode_Type) {
+                if (!_PyValue_NamesObject(callable, &PyUnicode_Type)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -21139,7 +21141,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _GUARD_CALLABLE_TUPLE_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyTuple_Type) {
+                if (!_PyValue_NamesObject(callable, &PyTuple_Type)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -21199,7 +21201,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _GUARD_CALLABLE_TYPE_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyType_Type) {
+                if (!_PyValue_NamesObject(callable, &PyType_Type)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -23215,9 +23217,13 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)oparg;
             // _CHECK_PERIODIC
             {
-                int err = check_periodics(tstate);
-                if (err != 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
+                QSBR_QUIESCENT_STATE(tstate);
+                if (_Py_EvalBreakerHasEvents(tstate)) {
+                    int err = _Py_HandlePending(tstate);
+                    if (err != 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
                 }
             }
             // _MONITOR_JUMP_BACKWARD
@@ -23823,9 +23829,13 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)oparg;
             // _CHECK_PERIODIC
             {
-                int err = check_periodics(tstate);
-                if (err != 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
+                QSBR_QUIESCENT_STATE(tstate);
+                if (_Py_EvalBreakerHasEvents(tstate)) {
+                    int err = _Py_HandlePending(tstate);
+                    if (err != 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
                 }
             }
             // _JUMP_BACKWARD_NO_INTERRUPT

@@ -2397,6 +2397,13 @@ PyUnstable_Code_NewWithPosOnlyArgs(
         return NULL;
     }
 
+    if (validate_code_name_tuple(varnames) < 0 ||
+        validate_code_name_tuple(cellvars) < 0 ||
+        validate_code_name_tuple(freevars) < 0)
+    {
+        return NULL;
+    }
+
     // Set the "fast locals plus" info.
     int nvarnames = (int)PyTuple_GET_SIZE(varnames);
     int ncellvars = (int)PyTuple_GET_SIZE(cellvars);

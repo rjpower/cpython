@@ -4709,6 +4709,28 @@ done:
     return result;
 }
 
+/* The register passes run when a code object is lowered, so lower it and the
+ * code objects in its constants */
+static int
+lower_nested(PyObject *code)
+{
+    if (_PyCode_GetIR((PyCodeObject *)code) == NULL) {
+        return -1;
+    }
+    PyObject *consts = ((PyCodeObject *)code)->co_consts;
+    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(consts); i++) {
+        PyValueBorrow value = PyTuple_GET_VALUE(consts, i);
+        if (!PyValue_IsObject(value)) {
+            continue;
+        }
+        PyObject *item = PyValue_AsKnownObjectBorrow(value);
+        if (PyCode_Check(item) && lower_nested(item) < 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 /* Compile source with copy propagation's kill at code that may run Python
  * turned off, so that test_ir_contract can show that the verifier rejects
  * the fold that results */
@@ -4722,6 +4744,9 @@ compile_without_copyprop_kill(PyObject *self, PyObject *args)
     }
     int old = _PyRegPass_SetKeepAcrossCode(1);
     PyObject *code = Py_CompileString(source, filename, Py_file_input);
+    if (code != NULL && lower_nested(code) < 0) {
+        Py_CLEAR(code);
+    }
     _PyRegPass_SetKeepAcrossCode(old);
     return code;
 }

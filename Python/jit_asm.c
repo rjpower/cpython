@@ -6,6 +6,8 @@
 #ifdef _PY_JIT_SUPPORTED
 
 #define UNBOUND SIZE_MAX
+// The cold section starts at a multiple of this, which bounds _PyJitAsm_Align.
+#define COLD_ALIGNMENT 64
 
 void
 _PyJitAsm_Init(_PyJitAsm *a)
@@ -16,8 +18,9 @@ _PyJitAsm_Init(_PyJitAsm *a)
 void
 _PyJitAsm_Fini(_PyJitAsm *a)
 {
-    PyMem_RawFree(a->buffer);
-    PyMem_RawFree(a->label_offsets);
+    PyMem_RawFree(a->sections[_PyJitSection_HOT].buffer);
+    PyMem_RawFree(a->sections[_PyJitSection_COLD].buffer);
+    PyMem_RawFree(a->labels);
     PyMem_RawFree(a->fixups);
     *a = (_PyJitAsm){0};
 }
@@ -40,19 +43,21 @@ grow_array(void **array, size_t size, size_t *capacity, size_t count,
     return 0;
 }
 
-/* Reserve `count` bytes at the end of the buffer; NULL if the assembler has
-   failed. */
+/* Reserve `count` bytes at the end of the current section; NULL if the
+   assembler has failed. */
 static uint8_t *
 append(_PyJitAsm *a, size_t count)
 {
+    _PyJitBuffer *buffer = &a->sections[a->current];
     if (a->failed
-        || grow_array((void **)&a->buffer, a->size, &a->capacity, count, 1, 256) < 0)
+        || grow_array((void **)&buffer->buffer, buffer->size,
+                      &buffer->capacity, count, 1, 256) < 0)
     {
         a->failed = 1;
         return NULL;
     }
-    uint8_t *p = a->buffer + a->size;
-    a->size += count;
+    uint8_t *p = buffer->buffer + buffer->size;
+    buffer->size += count;
     return p;
 }
 
@@ -96,7 +101,8 @@ add_fixup(_PyJitAsm *a, _PyJitFixupKind kind, _PyJitLabel label,
     }
     _PyJitFixup *fixup = &a->fixups[a->nfixups++];
     fixup->kind = kind;
-    fixup->offset = a->size;
+    fixup->section = a->current;
+    fixup->offset = a->sections[a->current].size;
     if (kind == _PyJitFixup_REL32_ABSOLUTE) {
         fixup->target = target;
     }
@@ -109,13 +115,13 @@ _PyJitLabel
 _PyJitAsm_NewLabel(_PyJitAsm *a)
 {
     if (a->failed
-        || grow_array((void **)&a->label_offsets, a->nlabels,
-                      &a->labels_capacity, 1, sizeof(size_t), 16) < 0)
+        || grow_array((void **)&a->labels, a->nlabels,
+                      &a->labels_capacity, 1, sizeof(_PyJitLabelInfo), 16) < 0)
     {
         a->failed = 1;
         return 0;
     }
-    a->label_offsets[a->nlabels] = UNBOUND;
+    a->labels[a->nlabels].offset = UNBOUND;
     return (_PyJitLabel)a->nlabels++;
 }
 
@@ -124,24 +130,52 @@ _PyJitAsm_Bind(_PyJitAsm *a, _PyJitLabel label)
 {
     assert((label >= 0 && (size_t)label < a->nlabels) || a->failed);
     if (!a->failed) {
-        assert(a->label_offsets[label] == UNBOUND);
-        a->label_offsets[label] = a->size;
+        assert(a->labels[label].offset == UNBOUND);
+        a->labels[label] = (_PyJitLabelInfo){
+            a->sections[a->current].size, a->current};
     }
+}
+
+/* Where a section starts in the placed code. */
+static size_t
+section_base(const _PyJitAsm *a, _PyJitSection section)
+{
+    if (section == _PyJitSection_HOT) {
+        return 0;
+    }
+    size_t hot = a->sections[_PyJitSection_HOT].size;
+    return (hot + COLD_ALIGNMENT - 1) & ~(size_t)(COLD_ALIGNMENT - 1);
+}
+
+void
+_PyJitAsm_Section(_PyJitAsm *a, _PyJitSection section)
+{
+    a->current = section;
+}
+
+size_t
+_PyJitAsm_Size(const _PyJitAsm *a)
+{
+    size_t cold = a->sections[_PyJitSection_COLD].size;
+    return cold == 0 ? a->sections[_PyJitSection_HOT].size
+                     : section_base(a, _PyJitSection_COLD) + cold;
 }
 
 size_t
 _PyJitAsm_LabelOffset(const _PyJitAsm *a, _PyJitLabel label)
 {
     assert(label >= 0 && (size_t)label < a->nlabels);
-    assert(a->label_offsets[label] != UNBOUND);
-    return a->label_offsets[label];
+    assert(a->labels[label].offset != UNBOUND);
+    return section_base(a, a->labels[label].section) + a->labels[label].offset;
 }
 
 void
 _PyJitAsm_Align(_PyJitAsm *a, size_t alignment)
 {
-    assert(alignment != 0 && (alignment & (alignment - 1)) == 0);
-    size_t padding = (alignment - (a->size & (alignment - 1))) & (alignment - 1);
+    assert(alignment != 0 && (alignment & (alignment - 1)) == 0
+           && alignment <= COLD_ALIGNMENT);
+    size_t size = a->sections[a->current].size;
+    size_t padding = (alignment - (size & (alignment - 1))) & (alignment - 1);
     uint8_t *p = append(a, padding);
     if (p != NULL) {
         memset(p, 0xCC, padding);
@@ -642,19 +676,39 @@ _PyJitAsm_Cvttsd2si(_PyJitAsm *a, _PyJitReg dst, _PyJitXmm src)
 
 /* Placement */
 
+/* The offset in the placed code of a section's byte at `offset`. */
+static size_t
+final_offset(const _PyJitAsm *a, _PyJitSection section, size_t offset)
+{
+    return section_base(a, section) + offset;
+}
+
 int
 _PyJitAsm_Resolve(const _PyJitAsm *a, uint8_t *dst, uintptr_t address)
 {
     if (a->failed) {
         return -1;
     }
-    memcpy(dst, a->buffer, a->size);
+    for (int section = 0; section < 2; section++) {
+        const _PyJitBuffer *buffer = &a->sections[section];
+        if (buffer->size != 0) {
+            memcpy(dst + final_offset(a, section, 0), buffer->buffer,
+                   buffer->size);
+        }
+    }
+    // The padding between the sections is never executed.
+    size_t hot = a->sections[_PyJitSection_HOT].size;
+    size_t cold_base = section_base(a, _PyJitSection_COLD);
+    if (a->sections[_PyJitSection_COLD].size != 0) {
+        memset(dst + hot, 0xCC, cold_base - hot);
+    }
     for (size_t i = 0; i < a->nfixups; i++) {
         const _PyJitFixup *fixup = &a->fixups[i];
-        uint8_t *field = dst + fixup->offset;
+        size_t field_offset = final_offset(a, fixup->section, fixup->offset);
+        uint8_t *field = dst + field_offset;
         if (fixup->kind == _PyJitFixup_REL32_ABSOLUTE) {
             int64_t rel = (int64_t)((uintptr_t)fixup->target
-                                    - (address + fixup->offset + 4));
+                                    - (address + field_offset + 4));
             if (rel != (int32_t)rel) {
                 return -1;
             }
@@ -663,18 +717,19 @@ _PyJitAsm_Resolve(const _PyJitAsm *a, uint8_t *dst, uintptr_t address)
             continue;
         }
         assert(fixup->label >= 0 && (size_t)fixup->label < a->nlabels);
-        size_t offset = a->label_offsets[fixup->label];
-        if (offset == UNBOUND) {
+        const _PyJitLabelInfo *label = &a->labels[fixup->label];
+        if (label->offset == UNBOUND) {
             return -1;
         }
+        size_t target = final_offset(a, label->section, label->offset);
         if (fixup->kind == _PyJitFixup_ABS64_LABEL) {
-            uint64_t absolute = address + offset;
+            uint64_t absolute = address + target;
             memcpy(field, &absolute, 8);
         }
         else {
             assert(fixup->kind == _PyJitFixup_REL32_LABEL);
-            int32_t rel32 = (int32_t)((int64_t)offset
-                                      - (int64_t)(fixup->offset + 4));
+            int32_t rel32 = (int32_t)((int64_t)target
+                                      - (int64_t)(field_offset + 4));
             memcpy(field, &rel32, 4);
         }
     }
@@ -684,7 +739,9 @@ _PyJitAsm_Resolve(const _PyJitAsm *a, uint8_t *dst, uintptr_t address)
 int
 _PyJitAsm_Place(const _PyJitAsm *a, _PyJitCode *code)
 {
-    if (a->failed || a->size == 0 || _PyJitMemory_Alloc(a->size, code) < 0) {
+    if (a->failed || _PyJitAsm_Size(a) == 0
+        || _PyJitMemory_Alloc(_PyJitAsm_Size(a), code) < 0)
+    {
         return -1;
     }
     if (_PyJitAsm_Resolve(a, code->start, (uintptr_t)code->start) < 0

@@ -4440,16 +4440,16 @@ dummy_func(
                 _PyFbHeader *feedback = FB_COUNTER();
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     /* The specialisation is an effect of the call, which
-                     * then finishes generically on this word:
-                     * DISPATCH_SAME_OPARG() goes to its fallback, and
-                     * next_instr stays the next word. */
+                     * then finishes generically on this word: the call's
+                     * uops follow, and next_instr stays the next word. */
                     IR_BEGIN_CALL_EFFECTS();
                     _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + ((call_state & CALL_SELF_PRESENT) != 0));
                     IR_REFRESH_CALL();
-                    DISPATCH_SAME_OPARG();
                 }
-                OPCODE_DEFERRED_INC(CALL);
-                ADVANCE_ADAPTIVE_COUNTER(feedback);
+                else {
+                    OPCODE_DEFERRED_INC(CALL);
+                    ADVANCE_ADAPTIVE_COUNTER(feedback);
+                }
             }
             #endif  /* ENABLE_SPECIALIZATION */
         }
@@ -5260,10 +5260,11 @@ dummy_func(
                 IR_BEGIN_CALL_EFFECTS();
                 _Py_Specialize_CallKw(callable, self_or_null, kwnames, this_instr, oparg);
                 IR_REFRESH_CALL();
-                DISPATCH_SAME_OPARG();
             }
-            OPCODE_DEFERRED_INC(CALL_KW);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            else {
+                OPCODE_DEFERRED_INC(CALL_KW);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+            }
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
@@ -5320,10 +5321,11 @@ dummy_func(
                 IR_BEGIN_CALL_EFFECTS();
                 _Py_Specialize_CallFunctionEx(func, callargs, this_instr);
                 IR_REFRESH_CALL();
-                DISPATCH_SAME_OPARG();
             }
-            OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            else {
+                OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
+                ADVANCE_ADAPTIVE_COUNTER(feedback);
+            }
         #endif  /* ENABLE_SPECIALIZATION */
         }
 

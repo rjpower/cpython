@@ -2256,7 +2256,9 @@ Python/compile.o Python/codegen.o Python/assemble.o Python/flowgraph.o Python/in
 
 Python/ceval.o: \
 		$(srcdir)/Include/internal/pycore_native_scope.h \
+		$(srcdir)/Python/ceval_generator.h \
 		$(srcdir)/Python/ceval_macros.h \
+		$(srcdir)/Python/ceval_routines.h \
 		$(srcdir)/Python/condvar.h \
 		$(srcdir)/Python/generated_ir_cases.c.h \
 		$(srcdir)/Python/ir_targets.h \

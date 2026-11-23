@@ -1,6 +1,7 @@
 """Checked home publications and consuming helper callback boundaries."""
 
 import gc
+import marshal
 import sys
 import types
 import unittest
@@ -8,7 +9,11 @@ import weakref
 
 import _testinternalcapi
 from test import support
-from test.test_ir_call_roles import routes
+
+
+def routes(code):
+    "The same code reached by the public routes that rebuild a code object"
+    return (code, code.replace(), marshal.loads(marshal.dumps(code)))
 
 
 class HomeWriterTests(unittest.TestCase):
@@ -127,7 +132,11 @@ class HomeWriterTests(unittest.TestCase):
             import weakref
             import _testcapi
             import _testinternalcapi
-            from test.test_ir_call_roles import routes
+            import marshal
+            from test.support.ir_dis import IRCode
+
+            def routes(code):
+                return (code, code.replace(), marshal.loads(marshal.dumps(code)))
 
             for opening, closing, handler in (("(", ")", "BUILD_TUPLE"),
                                                ("[", "]", "BUILD_LIST")):
@@ -173,7 +182,12 @@ class HomeWriterTests(unittest.TestCase):
                     while trace.tb_next is not None:
                         trace = trace.tb_next
                     assert trace.tb_frame.f_code is code
-                    assert _testinternalcapi.get_ir(code)[trace.tb_lasti][0] == handler
+                    # tb_lasti is a byte offset into the stack bytecode; the
+                    # words it lowers to are the ones that map to its unit
+                    rows = _testinternalcapi.get_ir(code)
+                    words = [rows[word] for word, unit in enumerate(IRCode(code)._pcmap)
+                             if unit == trace.tb_lasti // 2]
+                    assert any(row[0] == handler for row in words), (words, trace.tb_lasti)
                     failure = trace = None
                     gc.collect()
                     assert len(references) == 24

@@ -1,6 +1,6 @@
 """Operand words: a call head followed by the words that name its inputs.
 
-The compiler gives every call operand words, and the call handlers read
+Lowering gives every call operand words, and the call handlers read
 them.  The code under test never runs past a call that the test does not
 mean to run: g is a function that fails the test.
 """
@@ -14,10 +14,7 @@ import unittest
 
 import _opcode
 from test.support import import_helper
-from test.support.ir_dis import encode_words
-from test.test_ir_admission import construct
-from test.test_ir_completion import exception_entry
-from test.test_ir_transfer_admission import raw_encoded
+from test.support.ir_dis import IRCode, encode_words
 
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
 
@@ -63,10 +60,6 @@ def cell():
 """
 
 
-KEYWORDS = compile(
-    "def kw(x):\n    return g(x, y=1)\n", "<keywords>", "exec").co_consts[0]
-
-
 def compile_functions():
     module = compile(SOURCE, "<operands>", "exec")
     return {c.co_name: c for c in module.co_consts if hasattr(c, "co_code")}
@@ -77,12 +70,6 @@ FUNCTIONS = compile_functions()
 
 def rows(code, adaptive=False):
     return _testinternalcapi.get_ir(code, adaptive)
-
-
-def top_slot(code):
-    """The last slot of the frame: the temporaries follow the locals, which
-    include the hidden constant slots"""
-    return len(_testinternalcapi.get_co_localskinds(code)) + code.co_stacksize - 1
 
 
 def calls(code):
@@ -102,25 +89,6 @@ def is_call_head(name):
     return (row.base in CALL_BASES or
             handler in ("INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW",
                         "INSTRUMENTED_CALL_FUNCTION_EX"))
-
-
-def replace_word(code, index, name, *fields):
-    "code with word index replaced by a word of handler name and fields"
-    co_code = code.co_code
-    word = encode_words((name, *fields))
-    return co_code[:8 * index] + word + co_code[8 * index + 8:]
-
-
-def routes(code):
-    return (code, construct(code), code.replace(),
-            marshal.loads(marshal.dumps(code)))
-
-
-def setUpModule():
-    # These tests construct malformed images and expect the constructor to
-    # reject them; release builds only do so on request.
-    from test.support.ir_semantics import code_validation
-    unittest.enterModuleContext(code_validation())
 
 
 class WordLengthTests(unittest.TestCase):
@@ -192,13 +160,14 @@ class EmissionTests(unittest.TestCase):
     def test_operand_words_belong_to_the_calls_instruction(self):
         for name in ("f", "five", "guarded"):
             code = FUNCTIONS[name]
-            positions = list(code.co_positions())
+            ir = IRCode(code)
+            positions = list(ir.co_positions())
             self.assertEqual(len(positions), len(rows(code)))
             for i, head, operands in calls(code):
                 for k in range(len(operands)):
                     self.assertEqual(positions[i + 1 + k], positions[i])
             lines = {}
-            for start, end, line in code.co_lines():
+            for start, end, line in ir.co_lines():
                 for w in range(start, end):
                     lines[w] = line
             for i, head, operands in calls(code):
@@ -266,7 +235,7 @@ class DisTests(unittest.TestCase):
     def test_labels_never_land_on_operands(self):
         for code in FUNCTIONS.values():
             starts = {ins.offset for ins in dis.get_instructions(code)}
-            for target in dis.findlabels(code.co_code):
+            for target in dis.findlabels(IRCode(code).co_code):
                 self.assertIn(target, starts)
 
     def test_adaptive_view_shows_the_same_instructions(self):
@@ -277,134 +246,13 @@ class DisTests(unittest.TestCase):
         self.assertEqual(plain, adaptive)
 
 
-def encode_row(row):
-    name, *fields = row
-    return encode_words((name, *fields))
-
-
-class AdmissionTests(unittest.TestCase):
-    def reject(self, code, co_code, message):
-        for route in (construct, lambda co, **kw: co.replace(**kw)):
-            with self.subTest(route=route):
-                with self.assertRaisesRegex(ValueError, message):
-                    route(code, co_code=co_code)
-        payload = marshal.dumps(code)
-        self.assertEqual(payload.count(code.co_code), 1)
-        with self.assertRaisesRegex(ValueError, message):
-            marshal.loads(payload.replace(code.co_code, co_code, 1))
-
-    def test_compiled_calls_are_admitted_by_every_route(self):
+class LoweringTests(unittest.TestCase):
+    def test_compiled_calls_lower_the_same_on_every_route(self):
         for name, code in FUNCTIONS.items():
             with self.subTest(function=name):
-                for admitted in routes(code):
-                    self.assertEqual(admitted.co_code, code.co_code)
-                    self.assertEqual(rows(admitted), rows(code))
-
-    def test_operand_word_without_a_head(self):
-        code = FUNCTIONS["one"]
-        (i, head, operands), = calls(code)
-        bad = replace_word(code, i, "POP_TOP", 0)
-        self.reject(code, bad, "operand word that no call claims")
-
-    def test_head_claiming_words_that_are_not_operands(self):
-        # Four operands fill one word; a count of five claims the next
-        # instruction as a second operand word
-        code = FUNCTIONS["four"]
-        (i, head, operands), = calls(code)
-        name, a, b, c, d = head
-        bad = replace_word(code, i, name, a, b, 5, d)
-        self.reject(code, bad, "no operand word at")
-
-    def test_head_claiming_words_past_the_end(self):
-        code = FUNCTIONS["one"]
-        (i, head, operands), = calls(code)
-        name, a, b, c, d = head
-        bad = replace_word(code, i, name, a, b, 4095, d)
-        self.reject(code, bad, "past the end")
-
-    def test_operand_slot_outside_the_frame(self):
-        code = FUNCTIONS["four"]
-        (i, head, operands), = calls(code)
-        bad = replace_word(code, i + 1, "IR_OPERANDS", EMPTY - 1, *operands[0][2:])
-        self.reject(code, bad, "operand at slot")
-
-    def test_unused_operand_field_must_be_empty(self):
-        code = FUNCTIONS["five"]
-        (i, head, operands), = calls(code)
-        row = list(operands[1])
-        row[2] = 0
-        bad = replace_word(code, i + 2, *row)
-        self.reject(code, bad, "unused operand that is not empty")
-
-    def test_operand_word_has_no_flags(self):
-        code = FUNCTIONS["one"]
-        (i, head, operands), = calls(code)
-        bad = replace_word(code, i + 1, "IR_OPERANDS+NO_SELF", *operands[0][1:])
-        self.reject(code, bad, "invalid executable handler")
-
-    def test_operand_cannot_name_a_cell(self):
-        code = FUNCTIONS["cell"]
-        (i, head, operands), = calls(code)
-        # A cell that is not also an argument has a slot of its own after
-        # the locals; an argument that a closure captures is a local too
-        self.assertIn("a", code.co_cellvars)
-        self.assertNotIn("a", code.co_varnames)
-        slot = len(code.co_varnames) + code.co_cellvars.index("a")
-        row = list(operands[0])
-        row[1] = slot
-        bad = replace_word(code, i + 1, *row)
-        self.reject(code, bad, "cell or free variable")
-
-    def test_jump_target_in_the_operands(self):
-        code = FUNCTIONS["f"]
-        (i, head, operands), = calls(code)
-        jump = next(k for k, row in enumerate(rows(code))
-                    if row[0] == "POP_JUMP_IF_FALSE")
-        name, a, b, c, d = rows(code)[jump]
-        self.assertGreater(c, i)
-        bad = replace_word(code, jump, name, a, b, i + 1, d)
-        self.reject(code, bad, "invalid branch target")
-
-    def keyword_call(self, n, operands):
-        "a hand-assembled call with keywords: g(x, y=1) with operand words"
-        words = list(rows(KEYWORDS))
-        i = next(k for k, row in enumerate(words) if row[0].startswith("CALL_KW"))
-        name, a, b, c, d = words[i]
-        words[i:i + 2] = [("CALL_KW+NO_SELF", a, b, n, d),
-                          *[("IR_OPERANDS", *row) for row in operands]]
-        return KEYWORDS.replace(co_code=raw_encoded(words), co_linetable=b"",
-                                co_exceptiontable=b"", co_stacksize=12)
-
-    def test_keyword_call_names_are_a_constant_index(self):
-        # Operands: x, 1 and the index of ('y',) in co_consts
-        code = self.keyword_call(3, [(0, 4, 1, EMPTY)])
-        self.assertEqual(construct(code), code)
-        self.assertEqual(code.replace(), code)
-        self.assertEqual(marshal.loads(marshal.dumps(code)), code)
-        for index in (0, 1):
-            self.assertIsNotNone(self.keyword_call(3, [(0, 4, index, EMPTY)]))
-        with self.assertRaisesRegex(ValueError, "invalid constant index"):
-            self.keyword_call(3, [(0, 4, 99, EMPTY)])
-
-    def test_recovery_cannot_split_a_call(self):
-        code = FUNCTIONS["f"]
-        (i, head, operands), = calls(code)
-        slot = top_slot(code)
-        for start, size in [(i + 1, 1), (i, 1)]:
-            with self.subTest(start=start, size=size):
-                table = exception_entry(start, size, i + 1 + len(operands),
-                                        slot << 1)
-                for route in (construct, lambda co, **kw: co.replace(**kw)):
-                    with self.assertRaisesRegex(ValueError, "split by recovery"):
-                        route(code, co_exceptiontable=table)
-
-    def test_handler_cannot_be_an_operand_word(self):
-        code = FUNCTIONS["f"]
-        (i, head, operands), = calls(code)
-        slot = top_slot(code)
-        table = exception_entry(0, 1, i + 1, slot << 1)
-        with self.assertRaisesRegex(ValueError, "split by recovery"):
-            construct(code, co_exceptiontable=table)
+                for copy in (code.replace(),
+                             marshal.loads(marshal.dumps(code))):
+                    self.assertEqual(rows(copy), rows(code))
 
 
 class WalkerTests(unittest.TestCase):
@@ -516,7 +364,7 @@ class WalkerTests(unittest.TestCase):
         for name, code in FUNCTIONS.items():
             with self.subTest(function=name):
                 starts = {ins.offset for ins in dis.get_instructions(code)}
-                for start, end, line in code.co_lines():
+                for start, end, line in IRCode(code).co_lines():
                     self.assertIn(start, starts)
                     self.assertTrue(end in starts or end == len(rows(code)))
 

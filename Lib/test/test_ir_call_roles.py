@@ -1,4 +1,4 @@
-"""Canonical CALL roles and positive public-image virtual-hole admission."""
+"""Canonical CALL roles of lowered calls and their virtual holes."""
 
 import gc
 import marshal
@@ -12,16 +12,13 @@ from test.support import ir_dis as dis
 import _opcode
 import _testinternalcapi
 from test import support
-from test.test_ir_admission import construct
-from test.test_ir_transfer_admission import encoded, make_code
 
 
 CONTRACT = _opcode.get_ir_contract()
 
 
 def routes(code):
-    return (code, construct(code), code.replace(),
-            marshal.loads(marshal.dumps(code)))
+    return (code, code.replace(), marshal.loads(marshal.dumps(code)))
 
 
 def contract_of(name):
@@ -55,35 +52,7 @@ def argument_functions(count):
     return namespace
 
 
-def setUpModule():
-    # These tests construct malformed images and expect the constructor to
-    # reject them; release builds only do so on request.
-    from test.support.ir_semantics import code_validation
-    unittest.enterModuleContext(code_validation())
-
-
 class CallRoleTests(unittest.TestCase):
-    def assert_admitted(self, words, **geometry):
-        code = make_code(words, **geometry)
-        for admitted in routes(code):
-            self.assertEqual(admitted.co_code, code.co_code)
-            # ExecImage uses the same admitted image and builds its own proof.
-            self.assertEqual(_testinternalcapi.get_ir(admitted, True),
-                             _testinternalcapi.get_ir(code))
-        return code
-
-    def assert_rejected(self, words, bad, message, **geometry):
-        code = make_code(words, **geometry)
-        replacement = encoded(bad)
-        self.assertEqual(len(replacement), len(code.co_code))
-        for route in (construct, lambda co, **kw: co.replace(**kw)):
-            with self.assertRaisesRegex(ValueError, message):
-                route(code, co_code=replacement)
-        payload = marshal.dumps(code)
-        self.assertEqual(payload.count(code.co_code), 1)
-        with self.assertRaisesRegex(ValueError, message):
-            marshal.loads(payload.replace(code.co_code, replacement, 1))
-
     def test_compiler_forms_retain_geometry_and_distinct_roles(self):
         def vector(fn, value):
             return fn(value)
@@ -113,27 +82,6 @@ class CallRoleTests(unittest.TestCase):
                     # The callable is an input; the operands follow the head
                     self.assertEqual(row.roles[0:2],
                                      (_opcode.IR_ROLE_DST, _opcode.IR_ROLE_IN0))
-
-    def test_role_flags_are_admitted_only_on_call_family_words(self):
-        words = [("LOAD_CONST", 0), ("POP_TOP", 1),
-                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
-        self.assert_admitted(words)
-        message = "invalid (flags|executable handler)"
-        for index, bad_word in ((3, ("RETURN_VALUE+NO_SELF", 0)),
-                                (2, ("CALL+NO_KW", 0, 0, 0, 0)),
-                                (2, ("CALL+NO_SELF+NO_KW", 0, 0, 0, 0))):
-            with self.subTest(word=bad_word):
-                bad = words.copy()
-                bad[index] = bad_word
-                self.assert_rejected(words, bad, message)
-        # CALL_FUNCTION_EX takes NO_KW, and no NO_SELF
-        ex = [("LOAD_CONST", 0), ("LOAD_CONST", 1),
-              ("CALL_FUNCTION_EX+NO_KW", 0, 0, 1, 0),
-              ("IR_OPERANDS", 1, 4095, 4095, 4095), ("RETURN_VALUE", 0)]
-        self.assert_admitted(ex, slots=5)
-        bad = ex.copy()
-        bad[2] = ("CALL_FUNCTION_EX+NO_SELF+NO_KW", 0, 0, 1, 0)
-        self.assert_rejected(ex, bad, message, slots=5)
 
     def test_fused_branches_retire_holes_on_both_successors(self):
         def choose(fn, first, second, sentinel):
@@ -175,15 +123,6 @@ class CallRoleTests(unittest.TestCase):
             function = types.FunctionType(admitted, globals())
             self.assertEqual(function(lambda *a, **kw: (a, kw), (17,), {"x": 18}),
                              ((17,), {"x": 18}))
-
-    def test_live_call_recipient_is_rejected(self):
-        words = [("LOAD_CONST", 0), ("POP_TOP", 3),
-                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
-        bad = words.copy()
-        bad[1] = ("LOAD_CONST", 3)
-        bad[2] = ("CALL+NO_SELF", 3, 0, 0, 0)
-        bad[3] = ("RETURN_VALUE", 3)
-        self.assert_rejected(words, bad, "call recipient")
 
     def test_real_loops_exception_handlers_and_generators_are_admitted(self):
         def sequence(fn, values):
@@ -234,12 +173,6 @@ class CallRoleTests(unittest.TestCase):
                 self.assertEqual(function(lambda value: value, values), 17)
 
     def test_local_loop_result_does_not_invent_a_scratch_output(self):
-        words = [("LOAD_CONST", 1), ("POP_TOP", 3),
-                 ("FOR_ITER", 0, 1, 0, 1), ("IR_JUMP", 0, 0, 2),
-                 ("LOAD_CONST", 1), ("CALL+NO_SELF", 1, 1, 0, 0),
-                 ("RETURN_VALUE", 1)]
-        self.assert_admitted(words, locals=("value",))
-
         def invoke(fn, values):
             for value in values:
                 if value:

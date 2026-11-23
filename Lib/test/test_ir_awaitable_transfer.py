@@ -8,7 +8,6 @@ import unittest
 
 from test.support import import_helper
 from test.test_ir_admission import construct
-from test.test_ir_transfer_admission import make_code
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 
@@ -26,54 +25,6 @@ def finish(coro):
 
 
 class AwaitableTransferTests(unittest.TestCase):
-    def test_folded_recipient_alias_discard_and_displacement(self):
-        async def result():
-            return 7
-
-        for scratch in (False, True):
-            for destination in ((0, 1, 3, 4095) if scratch else (0, 1, 4095)):
-                words = [("RESUME", 0)]
-                source = 0
-                if scratch:
-                    words.append(("LOAD_FAST_AND_CLEAR", 3, 0))
-                    source = 3
-                words.append(("GET_AWAITABLE", destination, source, 0))
-                if destination == 4095:
-                    # Discarding a scratch result leaves no owner to return.
-                    words.extend([("LOAD_CONST", 3), ("RETURN_VALUE", 3)])
-                else:
-                    words.append(("RETURN_VALUE", destination))
-                code = make_code(words, slots=2,
-                    locals=("value", "target", "mutable")).replace(co_argcount=3)
-                for admitted in routes(code):
-                    with self.subTest(scratch=scratch, destination=destination,
-                                      code=admitted):
-                        events = []
-                        child = result()
-
-                        class Previous:
-                            def __del__(self):
-                                frame = sys._getframe(1)
-                                events.append((frame.f_code is admitted,
-                                               frame.f_locals["target"] is child))
-                                frame.f_locals["mutable"] = 42
-                                gc.collect()
-                                events.append(frame.f_locals["mutable"])
-
-                        function = types.FunctionType(admitted, {})
-                        try:
-                            value = function(child, Previous() if destination == 1 else None, 17)
-                            if destination == 4095:
-                                self.assertIsNone(value)
-                            else:
-                                self.assertIs(value, child)
-                            if destination == 1:
-                                self.assertEqual(events, [(True, True), 42])
-                            else:
-                                self.assertEqual(events, [])
-                        finally:
-                            child.close()
-
     def test_exact_coroutine_from_scratch_and_binding(self):
         async def result(value):
             return value

@@ -1,48 +1,19 @@
-"""Exceptional prefix absence needs an independent abrupt-write contract."""
+"""A keyword call held across an await survives throw recovery."""
 
 import marshal
-from test.support import ir_dis as opcode
-import struct
 import types
 import unittest
 
 import _testinternalcapi
-import _opcode
-from test.support.ir_semantics import observation_tables, position_parts, semantic_parts
 from test.test_ir_admission import construct
-from test.test_ir_call_roles import routes
-from test.test_ir_completion import exception_entry
-from test.test_ir_transfer_admission import encoded, template_code
+
+
+def routes(code):
+    return (code, construct(code), code.replace(),
+            marshal.loads(marshal.dumps(code)))
 
 
 class ExceptionAbsenceTests(unittest.TestCase):
-    def image(self):
-        # The normal arm clears self home 1 again. Only the exceptional arm
-        # needs its incoming absence retained below the suspension footprint.
-        words = [("LOAD_CONST", 0), ("POP_TOP", 1), ("LOAD_CONST", 4),
-                 ("YIELD_VALUE", 4, 4, 0), ("POP_TOP", 4), ("POP_TOP", 1),
-                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0),
-                 ("POP_TOP", 6), ("POP_TOP", 4), ("POP_TOP", 5),
-                 ("IR_JUMP", 0, 0, 6)]
-        table = exception_entry(3, 1, 8, 6 << 1)
-        # Raw images are constructed but never executed: payloads need not
-        # actually be callable or awaitable for the ownership controls.
-        code = template_code.replace(
-            co_code=encoded(words), co_stacksize=7, co_linetable=b"",
-            co_exceptiontable=table, co_fbinit=struct.pack("<I", 2))
-        return code, words
-
-    def test_complete_inert_exception_predecessor_is_not_an_ingress(self):
-        code, _ = self.image()
-        contract = _opcode.get_ir_contract()[opcode.opmap["POP_TOP"]]
-        self.assertEqual(contract.error_routes, _opcode.IR_ERROR_COMPLETE)
-        # The protected POP has no emitted exceptional route. Its lack of an
-        # abrupt-prefix receipt must not erase the YIELD predecessor's facts.
-        extended = code.replace(
-            co_exceptiontable=exception_entry(3, 2, 8, 6 << 1))
-        for admitted in routes(extended):
-            _testinternalcapi.get_ir(admitted, True)
-
     def test_real_keyword_call_held_across_await_and_throw_recovery(self):
         class Awaitable:
             def __await__(self):

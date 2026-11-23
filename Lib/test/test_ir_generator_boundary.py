@@ -1,9 +1,8 @@
 """Complete generator transfers retain ordinary specialization and ownership."""
 
+import dis
 import gc
-import marshal
 from test.support import ir_dis as opcode
-import struct
 import sys
 import types
 import unittest
@@ -12,7 +11,6 @@ import weakref
 import _opcode
 import _testinternalcapi
 from test import support
-from test.test_ir_admission import construct
 
 
 HANDLERS = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_opmap}
@@ -46,13 +44,6 @@ def finish(generator, value):
     except StopIteration as result:
         return result.value
     raise AssertionError("generator did not complete")
-
-
-def setUpModule():
-    # These tests construct malformed images and expect the constructor to
-    # reject them; release builds only do so on request.
-    from test.support.ir_semantics import code_validation
-    unittest.enterModuleContext(code_validation())
 
 
 class GeneratorContractExportTests(unittest.TestCase):
@@ -108,19 +99,6 @@ class GeneratorBoundaryTests(unittest.TestCase):
         for _, _, row in selected:
             self.assertTrue(row.generator_boundary_flags & _opcode.GEN_BOUNDARY_CLOSED)
         return selected
-
-    def assert_rejected_image(self, code, words, message="incomplete generator boundary"):
-        original = code.co_code
-        replacement = struct.pack(f"<{len(words)}Q", *words)
-        for route in (construct, lambda source, **kw: source.replace(**kw)):
-            with self.assertRaisesRegex(ValueError, message):
-                route(code, co_code=replacement,
-                      co_exceptiontable=code.co_exceptiontable)
-        payload = marshal.dumps(code)
-        self.assertEqual(payload.count(original), 1)
-        with self.assertRaisesRegex(ValueError, message):
-            marshal.loads(payload.replace(original, replacement, 1))
-        self.assertEqual(code.co_code, original)
 
     def test_complete_yield_resume_and_return_shape(self):
         self.assert_completed_shape(delegated, _opcode.GEN_CONSUMER_RETURN)
@@ -227,58 +205,6 @@ class GeneratorBoundaryTests(unittest.TestCase):
         self.assertIsNone(coroutine.cr_frame)
         gc.collect()
         self.assertIsNone(references[0]())
-
-    def test_public_partial_yield_cycle_is_rejected(self):
-        words = list(struct.unpack(f"<{len(delegated.__code__.co_code) // 8}Q",
-                                   delegated.__code__.co_code))
-        selected = [(pc, row) for pc, _, row in sites(delegated)
-                    if row.generator_resume_consumer == _opcode.GEN_CONSUMER_SEND]
-        self.assertEqual(len(selected), 1)
-        pc, row = selected[0]
-        words[pc] = (words[pc] & ~_opcode.IR_HANDLER_MASK) | row.ordinary_handler
-        self.assert_rejected_image(delegated.__code__, words)
-
-    def test_public_partial_send_cycle_is_rejected(self):
-        code = delegated.__code__
-        words = list(struct.unpack(f"<{len(code.co_code) // 8}Q", code.co_code))
-        selected = [(pc, row) for pc, _, row in sites(delegated)
-                    if row.generator_yielded_consumer == _opcode.GEN_CONSUMER_DELEGATED]
-        self.assertEqual(len(selected), 1)
-        pc, row = selected[0]
-        words[pc] = (words[pc] & ~_opcode.IR_HANDLER_MASK) | row.ordinary_handler
-        self.assert_rejected_image(code, words)
-
-    def test_public_partial_throw_completion_is_rejected(self):
-        code = delegated.__code__
-        words = list(struct.unpack(f"<{len(code.co_code) // 8}Q", code.co_code))
-        selected = [(pc, row) for pc, _, row in sites(delegated)
-                    if NAMES[row.ordinary_handler] == "CLEANUP_THROW"]
-        self.assertEqual(len(selected), 1)
-        pc, row = selected[0]
-        self.assertEqual(row.generator_completed_consumer, _opcode.GEN_CONSUMER_RETURN)
-        words[pc] = (words[pc] & ~_opcode.IR_HANDLER_MASK) | row.ordinary_handler
-        self.assert_rejected_image(code, words)
-
-    def test_public_completion_join_requires_the_same_recipient_and_window(self):
-        # Extra NULL scratch makes the alternate B a valid window. Neither
-        # mutation changes a handler or fails an unrelated index bound.
-        code = delegated.__code__.replace(
-            co_stacksize=delegated.__code__.co_stacksize + 1,
-            co_exceptiontable=delegated.__code__.co_exceptiontable)
-        original = list(struct.unpack(f"<{len(code.co_code) // 8}Q", code.co_code))
-        pc, row = next((pc, row) for pc, word, row in sites(delegated)
-                       if NAMES[row.ordinary_handler] == "CLEANUP_THROW")
-        self.assertEqual(row.generator_completed_consumer, _opcode.GEN_CONSUMER_RETURN)
-        for shift in (16, 28):
-            words = original.copy()
-            value = (words[pc] >> shift) & 4095
-            words[pc] = (words[pc] & ~(4095 << shift)) | ((value + 1) << shift)
-            # The existing semantic owner proof can reject the inconsistent
-            # branch before the new connected-shape check. Both are retained.
-            self.assert_rejected_image(
-                code, words,
-                "incomplete generator boundary|semantic completion|"
-                "reads unavailable scratch|unproved delegated")
 
     def test_custom_iterator_and_native_provider_error(self):
         reply = object()
@@ -529,10 +455,11 @@ class GeneratorBoundaryTests(unittest.TestCase):
             )
 
         self.assert_completed_shape(outer, _opcode.GEN_CONSUMER_RETURN)
-        source, word = next((pc, word) for pc, word, row in sites(outer)
-                            if row.generator_yielded_consumer ==
-                            _opcode.GEN_CONSUMER_DELEGATED)
-        completed = source + 1 + ((word[4] ^ 2048) - 2048)
+        # Offsets are byte offsets into the stack bytecode: the SEND, and the
+        # RETURN_VALUE after its END_SEND, which carries the line event.
+        send = next(i for i in dis.get_instructions(outer) if i.opname == "SEND")
+        source = send.offset
+        completed = send.jump_target + 2
         monitor, tool = sys.monitoring, 2
         monitor.use_tool_id(tool, "generator completion observer errors")
         try:

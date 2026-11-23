@@ -1,6 +1,6 @@
 """Learned shape cases share the guarded canonical attribute-read action."""
 
-from test.support import ir_dis as dis
+import dis
 import gc
 import marshal
 import sys
@@ -11,7 +11,6 @@ import weakref
 from test import support
 from test.support import import_helper
 from test.test_ir_admission import construct
-from test.test_ir_transfer_admission import encoded, make_code
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 POLY = {"LOAD_ATTR_SHAPE_POLY", "LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP"}
@@ -36,21 +35,6 @@ def instances(count):
         owner.value = object()
         result.append(owner)
     return result
-
-
-class LearnedAdmissionTests(unittest.TestCase):
-    def test_public_images_cannot_supply_learned_cases(self):
-        code = make_code([("LOAD_CONST", 0), ("RETURN_VALUE", 0)])
-        for name in sorted(POLY):
-            changed = encoded([(name, 0), ("RETURN_VALUE", 0)])
-            for route in (construct, lambda co, **kw: co.replace(**kw)):
-                with self.subTest(handler=name, route=route):
-                    with self.assertRaisesRegex(ValueError, "learned-only executable handler"):
-                        route(code, co_code=changed)
-            payload = marshal.dumps(code)
-            self.assertEqual(payload.count(code.co_code), 1)
-            with self.assertRaisesRegex(ValueError, "learned-only executable handler"):
-                marshal.loads(payload.replace(code.co_code, changed, 1))
 
 
 @unittest.skipUnless(support.Py_SHAPES and not support.Py_GIL_DISABLED,

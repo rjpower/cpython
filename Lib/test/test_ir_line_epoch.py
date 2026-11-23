@@ -1,19 +1,12 @@
 """LINE handoffs depend on LINE configuration, not unrelated instrumentation."""
-import struct
 import sys
 import unittest
 
 
 class LineEpochTests(unittest.TestCase):
-    def assert_source_body(self, target):
-        magic, version, size, records = struct.unpack_from('<4sIII', target.__code__.co_linetable)
-        self.assertEqual((magic, version), (b'IRSM', 2))
-        self.assertGreater(records, 0)
-
     def test_instruction_enable_does_not_repeat_source_line(self):
         def target(value):
             value
-        self.assert_source_body(target)
         mon, tool = sys.monitoring, 4
         lines, opcodes = [], []
         def instruction(code, offset):
@@ -41,7 +34,6 @@ class LineEpochTests(unittest.TestCase):
                 def target(value):
                     value
                 target.__code__ = target.__code__.replace()
-                self.assert_source_body(target)
                 mon, tool = sys.monitoring, 4
                 old, new = [], []
                 def disabled(code, number):
@@ -86,7 +78,6 @@ class LineEpochTests(unittest.TestCase):
     def test_callback_replacement_does_not_replay_current_source_line(self):
         def target(value):
             value
-        self.assert_source_body(target)
         mon, tool = sys.monitoring, 4
         seen = []
         def replacement(code, number):

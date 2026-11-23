@@ -6,6 +6,7 @@ import sys
 import unittest
 import weakref
 from test.support import import_helper
+from test.support.ir_dis import IRCode
 
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
@@ -56,12 +57,11 @@ class CanonicalHomeTests(unittest.TestCase):
                                     if word[0] == 'BINARY_OP_SUBSCR_LIST_INT')
         local_count = len(_testinternalcapi.get_co_localskinds(local.__code__))
         self.assertLess(routes[local][1], local_count)
-        temp_count = len(_testinternalcapi.get_co_localskinds(temporary.__code__))
-        self.assertGreaterEqual(routes[temporary][1], temp_count)
+        # Temporaries follow the fixed slots (locals, constants, discard)
+        self.assertGreaterEqual(routes[temporary][1], IRCode(temporary.__code__).nfixed)
         self.assertLess(routes[temporary][1], 4095)
         # The executing copy names the discard slot, the last local
-        discard_count = len(_testinternalcapi.get_co_localskinds(discard.__code__))
-        self.assertEqual(routes[discard][1], discard_count - 1)
+        self.assertEqual(routes[discard][1], IRCode(discard.__code__).nfixed - 1)
         for value in (2, 2.5, 1 << 100, -0.0, float('inf'), float('nan')):
             with self.subTest(value=value):
                 result = local([value], -1)

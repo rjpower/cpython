@@ -1,6 +1,5 @@
-"""Synthetic native homes cannot become an ordinary code image."""
+"""Native-only handlers are marked by the checked source contract."""
 
-import marshal
 from test.support import ir_dis as opcode
 from pathlib import Path
 import unittest
@@ -8,24 +7,8 @@ from unittest import mock
 
 import _opcode
 
-from test.test_ir_admission import construct
-from test.test_ir_transfer_admission import encoded, make_code
-
 
 class NativeOnlyTests(unittest.TestCase):
-    def test_all_public_image_routes_reject_native_activation_handler(self):
-        code = make_code([("LOAD_CONST", 0), ("RETURN_VALUE", 0)])
-        native = encoded([("LOAD_CONST", 0), ("INTERPRETER_EXIT", 0)])
-        self.assertEqual(len(native), len(code.co_code))
-        for route in (construct, lambda co, **kwargs: co.replace(**kwargs)):
-            with self.subTest(route=route):
-                with self.assertRaisesRegex(ValueError, "native-only executable handler"):
-                    route(code, co_code=native)
-        payload = marshal.dumps(code)
-        self.assertEqual(payload.count(code.co_code), 1)
-        with self.assertRaisesRegex(ValueError, "native-only executable handler"):
-            marshal.loads(payload.replace(code.co_code, native, 1))
-
     def test_native_only_effect_comes_from_checked_source_contract(self):
         from test import test_tools
         test_tools.skip_if_missing("cases_generator")

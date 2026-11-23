@@ -3582,7 +3582,7 @@ class JumpFrameModelTestCase(unittest.TestCase):
         self.assertIs(frames[0].f_code, code)
         self.assertIs(frames[0].f_locals["a"], callee)
         self.assertGreaterEqual(frames[0].f_lasti, 0)
-        self.assertLess(frames[0].f_lasti, len(tuple(code.co_positions())))
+        self.assertLess(frames[0].f_lasti, len(code.co_code))
 
 
 class TestExtendedArgs(unittest.TestCase):

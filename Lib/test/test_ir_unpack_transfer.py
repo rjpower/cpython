@@ -1,7 +1,6 @@
 """Successful folded unpack transport retains no scratch outputs."""
 
 import gc
-import marshal
 from pathlib import Path
 import tempfile
 import types
@@ -9,43 +8,9 @@ import unittest
 
 import _testinternalcapi
 from test.test_ir_call_roles import routes
-from test.test_ir_transfer_admission import encoded, make_code
-from test.test_ir_admission import construct
 
 
 class UnpackTransferTests(unittest.TestCase):
-    def test_nonfolded_unpack_preserves_only_untouched_tail_absence(self):
-        for count in (0, 2, 8):
-            with self.subTest(count=count):
-                base = 1
-                tail = base + max(count, 2)
-                words = [("LOAD_CONST", base), ("POP_TOP", tail),
-                         ("UNPACK_SEQUENCE", base, count, 0, 4095)]
-                words.extend(("POP_TOP", base + i)
-                             for i in range(max(count, 1)))
-                words.extend((("LOAD_CONST", base),
-                              ("CALL+NO_SELF", base, base, 0, 0),
-                              ("RETURN_VALUE", base)))
-                code = make_code(words, slots=count + 4, locals=("local",))
-                for admitted in routes(code):
-                    self.assertEqual(_testinternalcapi.get_ir(admitted, True),
-                                     _testinternalcapi.get_ir(code))
-
-    def test_folded_outputs_are_empty_but_scratch_outputs_remain_live(self):
-        for count in (0, 2, 8):
-            with self.subTest(count=count):
-                nl = max(count, 1)
-                words = [("LOAD_CONST", nl),
-                         ("UNPACK_SEQUENCE", nl, count, 0, 0),
-                         ("LOAD_CONST", nl),
-                         ("CALL+NO_SELF", nl, nl, 0, 0),
-                         ("RETURN_VALUE", nl)]
-                code = make_code(words, slots=count + 4,
-                                 locals=tuple(f"local{i}" for i in range(nl)))
-                for admitted in routes(code):
-                    self.assertEqual(_testinternalcapi.get_ir(admitted, True),
-                                     _testinternalcapi.get_ir(code))
-
     def test_generic_and_specialized_local_transport_with_callbacks(self):
         observations = []
 

@@ -5,7 +5,7 @@ specialized ones; the results are those of the stack interpreter.
 """
 
 from test.support import ir_dis as dis
-import struct
+from test.support.ir_dis import IRCode
 import sys
 import types
 import unittest
@@ -241,10 +241,16 @@ class ConstantSlotOperandTests(unittest.TestCase):
     @staticmethod
     def const_slots(code):
         "{slot: constant} of the code's constant slots"
-        raw = code.co_constslots
-        table = struct.unpack("%dI" % (len(raw) // 4), raw)
-        return {table[i]: code.co_consts[table[i + 1]]
-                for i in range(0, len(table), 2)}
+        # The hidden slots follow the locals, cells and free variables
+        first = len(_testinternalcapi.get_co_localskinds(code))
+        return {first + k: value
+                for k, value in enumerate(IRCode(code).const_values)}
+
+    @staticmethod
+    def const_indexes(code):
+        "The co_consts index of each constant slot, in slot order"
+        consts = list(code.co_consts)
+        return [consts.index(value) for value in IRCode(code).const_values]
 
     def call_sources(self, code):
         "The constants that the last call of the code reads, in order"
@@ -313,14 +319,12 @@ class ConstantSlotOperandTests(unittest.TestCase):
         # After code.replace the constant need not be immortal: the frame
         # then counts the constant it holds, and the call borrows it.
         def f(g):
-            return g(1, 2)
+            return g(1000, 2000)
 
-        raw = f.__code__.co_constslots
-        table = struct.unpack("%dI" % (len(raw) // 4), raw)
         big, bigger = 10 ** 30, 3 * 10 ** 30
         consts = list(f.__code__.co_consts)
-        for slot, index in zip(table[::2], table[1::2]):
-            consts[index] = {1: big, 2: bigger}[consts[index]]
+        for index in self.const_indexes(f.__code__):
+            consts[index] = {1000: big, 2000: bigger}[consts[index]]
         replaced = types.FunctionType(
             f.__code__.replace(co_consts=tuple(consts)), {})
         # A Python callee takes the operands into its frame, a builtin
@@ -455,13 +459,11 @@ class ConstantSlotFrameTests(unittest.TestCase):
 
     def test_frame_of_a_mortal_constant_in_a_generator(self):
         def gen(g):
-            yield g(1, 2)
+            yield g(1000, 2000)
 
-        raw = gen.__code__.co_constslots
-        table = struct.unpack("%dI" % (len(raw) // 4), raw)
         big = 10 ** 30
         consts = list(gen.__code__.co_consts)
-        consts[table[1]] = big
+        consts[consts.index(1000)] = big
         replaced = types.FunctionType(
             gen.__code__.replace(co_consts=tuple(consts)), {})
         for _ in range(WARM):
@@ -575,7 +577,10 @@ class ObservationTests(unittest.TestCase):
         operand_words = [i for i, row in enumerate(rows)
                          if row[0] == "IR_OPERANDS"]
         self.assertTrue(operand_words)
-        self.assertEqual(events, heads)
+        # Events carry the byte offset of the stack instruction that each
+        # head lowers from
+        pcmap = IRCode(f.__code__)._pcmap
+        self.assertEqual(events, [2 * pcmap[i] for i in heads])
 
     def test_call_event_sees_callable_and_first_argument(self):
         events = []
@@ -616,11 +621,13 @@ class ObservationTests(unittest.TestCase):
         finally:
             sys.settrace(None)
         rows = _testinternalcapi.get_ir(f.__code__)
-        operand_words = {i for i, row in enumerate(rows)
-                         if row[0] == "IR_OPERANDS"}
-        self.assertTrue(operand_words)
+        pcmap = IRCode(f.__code__)._pcmap
+        heads = {2 * pcmap[i] for i, row in enumerate(rows)
+                 if row[0] != "IR_OPERANDS"}
+        self.assertTrue(any(row[0] == "IR_OPERANDS" for row in rows))
         self.assertTrue(offsets)
-        self.assertFalse(operand_words & set(offsets))
+        # Every event is at a head's offset (byte offsets, as f_lasti is)
+        self.assertLessEqual(set(offsets), heads)
 
 
 if __name__ == "__main__":

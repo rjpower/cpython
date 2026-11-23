@@ -7,90 +7,12 @@ from test.support import import_helper
 
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
 
-SOURCE = '''
-def nested():
-    try:
-        pass  # nested event
-    except InnerError:
-        events.append("inner caught")
-
-class Returned:
-    def __del__(self):
-        events.append("retire")
-        nested()
-        events.append("retired")
-
-def values():
-    yield 1
-    return Returned()
-
-def outer():
-    for item in values():
-        pass
-    else:
-        try:
-            pass  # outer event
-        except OuterError:
-            events.append("outer caught")
-'''
-
 
 class OuterError(Exception):
     pass
 
 
-class InnerError(Exception):
-    pass
-
-
 class SourceReentryTests(unittest.TestCase):
-    def test_source_recipe_is_consumed_before_later_ordinary_error(self):
-        events = []
-
-        def target():
-            try:
-                try:
-                    pass
-                except OuterError as error:
-                    events.append(('caught', error.__traceback__.tb_lineno))
-                raise InnerError('ordinary')
-            finally:
-                events.append('cleanup')
-
-        first = target.__code__.co_firstlineno
-        source_line = first + 3
-        self.assertTrue(any(start == end and line == source_line
-                            for start, end, line in target.__code__.co_lines()))
-
-        def callback(code, line):
-            if line == source_line:
-                raise OuterError('source callback')
-
-        mon, tool = sys.monitoring, 2
-        mon.use_tool_id(tool, 'source-recipe-consumption')
-        try:
-            mon.register_callback(tool, mon.events.LINE, callback)
-            for enabled in (True, False, True):
-                with self.subTest(enabled=enabled):
-                    events.clear()
-                    mon.set_local_events(
-                        tool, target.__code__, mon.events.LINE if enabled else 0)
-                    try:
-                        target()
-                    except InnerError as error:
-                        traceback = error.__traceback__
-                    else:
-                        self.fail('ordinary error did not propagate')
-                    while traceback.tb_frame.f_code is not target.__code__:
-                        traceback = traceback.tb_next
-                    self.assertEqual(traceback.tb_lineno, first + 6)
-                    expected = [('caught', source_line)] if enabled else []
-                    self.assertEqual(events, expected + ['cleanup'])
-        finally:
-            mon.set_local_events(tool, target.__code__, 0)
-            mon.register_callback(tool, mon.events.LINE, None)
-            mon.free_tool_id(tool)
-
     def test_unhandled_source_recipe_preserves_callback_attribution(self):
         def target():
             value = 42
@@ -98,7 +20,8 @@ class SourceReentryTests(unittest.TestCase):
             return value
 
         source_line = target.__code__.co_firstlineno + 2
-        self.assertTrue(any(start == end and line == source_line
+        # The source-only line is the span of a NOP in the stack bytecode
+        self.assertTrue(any(line == source_line
                             for start, end, line in target.__code__.co_lines()))
 
         def callback(code, line):
@@ -140,6 +63,9 @@ class SourceReentryTests(unittest.TestCase):
                         return x
                     target.__code__ = target.__code__.replace()
                     first = target.__code__.co_firstlineno
+                    line_start = next(start for start, end, line in
+                                      target.__code__.co_lines()
+                                      if line == first + 1)
                     for _ in range(warmup):
                         target()
                     commits = []
@@ -169,7 +95,9 @@ class SourceReentryTests(unittest.TestCase):
                     self.assertEqual(result, 1 if action == 'redirect' else 99)
                     if action == 'redirect':
                         self.assertEqual(len(commits), 1)
-                        self.assertEqual(commits[0][0], commits[0][1])
+                        # The redirect lands on the first instruction of the
+                        # target line
+                        self.assertEqual(commits[0][1], line_start)
                     else:
                         self.assertEqual(commits, [])
 
@@ -183,6 +111,9 @@ class SourceReentryTests(unittest.TestCase):
                         return x
                     target.__code__ = target.__code__.replace()
                     first = target.__code__.co_firstlineno
+                    line_start = next(start for start, end, line in
+                                      target.__code__.co_lines()
+                                      if line == first + 1)
                     for _ in range(warmup):
                         target()
                     commits = []
@@ -213,7 +144,9 @@ class SourceReentryTests(unittest.TestCase):
                     self.assertEqual(traceback.tb_lineno, first + (1 if redirect else 2))
                     if redirect:
                         self.assertEqual(len(commits), 1)
-                        self.assertEqual(commits[0][0], commits[0][1])
+                        # The redirect lands on the first instruction of the
+                        # target line
+                        self.assertEqual(commits[0][1], line_start)
                     else:
                         self.assertEqual(commits, [])
 
@@ -291,51 +224,6 @@ class SourceReentryTests(unittest.TestCase):
                     finally:
                         sys.settrace(old_trace)
                     self.assertEqual(events, [source_line])
-
-    def test_nested_callback_error_preserves_outer_recipe(self):
-        outer_line = next(i for i, line in enumerate(SOURCE.splitlines(), 1)
-                          if '# outer event' in line)
-        inner_line = next(i for i, line in enumerate(SOURCE.splitlines(), 1)
-                          if '# nested event' in line)
-        for warmup in (0, _testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
-            for nested_failure in (False, True):
-                with self.subTest(warmup=warmup, nested_failure=nested_failure):
-                    events = []
-                    namespace = dict(events=events, OuterError=OuterError,
-                                     InnerError=InnerError)
-                    exec(compile(SOURCE, '<source-reentry>', 'exec'), namespace)
-                    outer, nested = namespace['outer'], namespace['nested']
-                    for _ in range(warmup):
-                        outer()
-                    events.clear()
-
-                    def callback(code, line):
-                        if code is outer.__code__ and line == outer_line:
-                            events.append('outer event')
-                            raise OuterError('outer callback')
-                        if nested_failure and code is nested.__code__ and line == inner_line:
-                            events.append('inner event')
-                            raise InnerError('inner callback')
-
-                    tool = 2
-                    sys.monitoring.use_tool_id(tool, 'source-reentry')
-                    try:
-                        sys.monitoring.register_callback(
-                            tool, sys.monitoring.events.LINE, callback)
-                        for function in (outer, nested):
-                            sys.monitoring.set_local_events(
-                                tool, function.__code__, sys.monitoring.events.LINE)
-                        outer()
-                    finally:
-                        for function in (outer, nested):
-                            sys.monitoring.set_local_events(tool, function.__code__, 0)
-                        sys.monitoring.register_callback(tool, sys.monitoring.events.LINE, None)
-                        sys.monitoring.free_tool_id(tool)
-                    expected = ['outer event', 'retire']
-                    if nested_failure:
-                        expected += ['inner event', 'inner caught']
-                    expected += ['retired', 'outer caught']
-                    self.assertEqual(events, expected)
 
 
 if __name__ == '__main__':

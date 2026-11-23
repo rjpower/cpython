@@ -7,18 +7,10 @@ import unittest
 
 import _testinternalcapi
 from test.test_ir_admission import construct
-from test.test_ir_transfer_admission import raw_encoded
 
 
 def routes(code):
     return code, construct(code), code.replace(), marshal.loads(marshal.dumps(code))
-
-
-def setUpModule():
-    # These tests construct malformed images and expect the constructor to
-    # reject them; release builds only do so on request.
-    from test.support.ir_semantics import code_validation
-    unittest.enterModuleContext(code_validation())
 
 
 class SuperCallTransportTests(unittest.TestCase):
@@ -43,24 +35,6 @@ class SuperCallTransportTests(unittest.TestCase):
             with self.subTest(code=code):
                 self.assertEqual(function(instance, 17, 18, answer=42),
                                  ((17, 18), {"answer": 42}))
-
-    def test_present_optional_self_cannot_inherit_the_absent_self_proof(self):
-        _, method = self.make_method()
-        code = method.__code__
-        words = [tuple(row) for row in _testinternalcapi.get_ir(code)]
-        site = next(i for i, row in enumerate(words) if row[0] == "LOAD_SUPER_ATTR")
-        name, a, b, feedback, arg = words[site]
-        self.assertFalse(arg & 1)
-        words[site] = name, a, b, feedback, arg | 1
-        changed = raw_encoded(words)
-        for route in (construct, lambda co, **kw: co.replace(**kw)):
-            with self.subTest(route=route):
-                with self.assertRaisesRegex(ValueError, "unproved empty return"):
-                    route(code, co_code=changed)
-        payload = marshal.dumps(code)
-        self.assertEqual(payload.count(code.co_code), 1)
-        with self.assertRaisesRegex(ValueError, "unproved empty return"):
-            marshal.loads(payload.replace(code.co_code, changed, 1))
 
     def test_lookup_error_and_observer_local_mutation_keep_existing_routes(self):
         instance, method = self.make_method()

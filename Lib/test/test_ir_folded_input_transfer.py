@@ -1,53 +1,15 @@
 """A field-mapped scalar input does not write its former window home."""
 
-import marshal
 from pathlib import Path
 import tempfile
 import types
 import unittest
 
 import _testinternalcapi
-from test.test_ir_admission import construct
 from test.test_ir_call_roles import routes
-from test.test_ir_transfer_admission import encoded, make_code
 
 
 class FoldedInputTransferTests(unittest.TestCase):
-    def test_scalar_peek_preserves_unrelated_tail_absence(self):
-        words = [("LOAD_CONST", 1), ("POP_TOP", 3), ("GET_LEN", 2, 1),
-                 ("POP_TOP", 1), ("POP_TOP", 2), ("LOAD_CONST", 2),
-                 ("CALL+NO_SELF", 2, 2, 0, 0), ("RETURN_VALUE", 2)]
-        code = make_code(words, slots=5, locals=("value",))
-        for admitted in routes(code):
-            self.assertEqual(_testinternalcapi.get_ir(admitted, True),
-                             _testinternalcapi.get_ir(code))
-
-    def test_folded_input_preserves_only_prior_tail_absence(self):
-        for name in ("LIST_APPEND", "SET_ADD"):
-            for depth in (1, 2, 8):
-                with self.subTest(name=name, depth=depth):
-                    base = 1
-                    tail = base + depth
-                    words = [("LOAD_CONST", base), ("POP_TOP", tail),
-                             (name, base, 0, depth), ("POP_TOP", base),
-                             ("LOAD_CONST", tail - 1),
-                             ("CALL+NO_SELF", tail - 1, tail - 1, 0, 0),
-                             ("RETURN_VALUE", tail - 1)]
-                    code = make_code(words, slots=depth + 3, locals=("value",))
-                    for admitted in routes(code):
-                        self.assertEqual(_testinternalcapi.get_ir(admitted, True),
-                                         _testinternalcapi.get_ir(code))
-                    # A real scratch input is consumed through its field,
-                    # even when that field aliases the old window position.
-                    consumed = words.copy()
-                    consumed[1] = ("LOAD_CONST", tail)
-                    consumed[2] = (name, base, tail, depth)
-                    scratch_code = make_code(consumed, slots=depth + 3,
-                                             locals=("value",))
-                    for admitted in routes(scratch_code):
-                        self.assertEqual(_testinternalcapi.get_ir(admitted, True),
-                                         _testinternalcapi.get_ir(scratch_code))
-
     def test_comprehension_local_input_survives_loop_joins(self):
         def lists(fn, values):
             return fn([value for value in values])

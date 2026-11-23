@@ -1,7 +1,6 @@
 """Class-receiver classmethod capture through the ordinary owned call pair."""
 
 from test.support import ir_dis as dis
-import importlib.util
 import sys
 import unittest
 import weakref
@@ -197,7 +196,8 @@ class TestClassMethodCache(unittest.TestCase):
         kind, state, _, _, rows = _testinternalcapi.get_feedback(
             invoke.__code__, site.offset)
         self.assertEqual((kind, state, len(rows)), ("ATTR", "POLY", 3))
-        self.assertEqual({row[2] for row in rows}, {111})
+        self.assertEqual({row[2] for row in rows},
+                         {dis._ir_opmap["LOAD_ATTR_CLASSMETHOD"]})
         for cls in classes:
             cls.__dict__["selected"].__init__(replacement)
             self.assertEqual(invoke(cls, 21), ("replacement", cls, 21))
@@ -340,7 +340,7 @@ class TestClassMethodCache(unittest.TestCase):
             invoke(Receiver, 7)
         self.assert_cached(invoke)
 
-    def test_adaptive_name_number_and_original_words(self):
+    def test_adaptive_name_and_original_code(self):
         class Receiver:
             @classmethod
             def selected(cls, value):
@@ -349,12 +349,10 @@ class TestClassMethodCache(unittest.TestCase):
         invoke = make_invoke()
         original = invoke.__code__.co_code
         self.warm_invoke(invoke, Receiver)
-        self.assertEqual(dis._specialized_opmap["LOAD_ATTR_CLASSMETHOD"], 111)
+        self.assertIn("LOAD_ATTR_CLASSMETHOD", dis._ir_opmap)
         self.assertEqual(invoke.__code__.co_code, original)
-        self.assertIn("LOAD_ATTR_CLASSMETHOD", {
-            i.opname for i in dis.get_instructions(invoke, adaptive=True)})
-        self.assertEqual(importlib.util.MAGIC_NUMBER,
-                         (64443).to_bytes(2, "little") + b"\r\n")
+        # ir_dis shows an execution-only handler as the instruction it runs
+        self.assertIn("LOAD_ATTR_CLASSMETHOD", handlers(invoke))
 
 
 if __name__ == "__main__":

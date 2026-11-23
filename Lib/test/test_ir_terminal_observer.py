@@ -1,6 +1,6 @@
 """Terminal observers see published results and cannot strand C owners."""
 
-from test.support import ir_dis as dis
+import dis
 import gc
 import sys
 import unittest
@@ -112,9 +112,10 @@ class TerminalObserverTests(unittest.TestCase):
                         return Resource() or "fallback"
                     except HookError:
                         return "caught"
-                consume.__code__ = consume.__code__.replace()
+                # The stack bytecode has no or-pop jump: the branch is the
+                # conditional jump after the copy
                 offsets = {i.offset for i in dis.get_instructions(consume)
-                           if i.opname == 'JUMP_IF_TRUE_OR_POP'}
+                           if i.opname == 'POP_JUMP_IF_TRUE'}
                 self.assertTrue(offsets)
                 mon, tool = sys.monitoring, 4
                 event = mon.events.BRANCH_RIGHT if truth else mon.events.BRANCH_LEFT

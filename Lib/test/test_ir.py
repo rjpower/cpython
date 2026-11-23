@@ -2,6 +2,7 @@
 assembler (Python/assemble.c) emits."""
 
 from test.support import ir_dis as dis
+import dis as stack_dis
 import gc
 import io
 import math
@@ -15,7 +16,7 @@ import _opcode
 from test import support
 from test.support import import_helper
 from test.support.bytecode_helper import AssemblerTestCase
-from test.support.ir_dis import encode_words
+from test.support.ir_dis import IRCode, encode_words
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 get_ir = _testinternalcapi.get_ir
@@ -42,7 +43,8 @@ def ordinary_handlers(func):
 
 
 def nlocalsplus(func):
-    return len(_testinternalcapi.get_co_localskinds(func.__code__))
+    "The slots before the first temporary: locals, constants and the discard slot"
+    return IRCode(func.__code__).nfixed
 
 
 def make_function(source, name="f"):
@@ -73,13 +75,6 @@ def trace(func, *args, opcodes=False):
 # The attributes are instance attributes, whose loads specialise.  A class
 # attribute holding an inline int is classified INLINE_VALUE and its load
 # stays generic (Python/specialize.c).
-def setUpModule():
-    # These tests construct malformed images and expect the constructor to
-    # reject them; release builds only do so on request.
-    from test.support.ir_semantics import code_validation
-    unittest.enterModuleContext(code_validation())
-
-
 class C:
     def __init__(self):
         self.attr = 5
@@ -90,11 +85,12 @@ class AssemblerTest(unittest.TestCase):
     def check_offsets(self, func):
         # An instruction per word, at the word's index, and line ranges
         # that cover the words
-        nwords = len(func.__code__.co_code) // 8
+        ir = IRCode(func.__code__)
+        nwords = len(ir.co_code) // 8
         self.assertEqual(len(get_ir(func.__code__)), nwords)
         self.assertEqual([instr.offset for instr in dis.get_instructions(func)],
                          list(range(nwords)))
-        ranges = [(start, end) for start, end, _ in func.__code__.co_lines()]
+        ranges = [(start, end) for start, end, _ in ir.co_lines()]
         self.assertEqual(ranges[0][0], 0)
         self.assertEqual(ranges[-1][1], nwords)
 
@@ -358,14 +354,16 @@ class AssemblerTest(unittest.TestCase):
         self.assertNotIn("INSTRUMENTED_LINE", handlers(f))
 
     def test_opcode_events(self):
-        # One event per word from the first RESUME on, at its index
+        # One event per instruction after the first RESUME, at its byte offset
+        # in the stack bytecode; the folded load of the owner has none
         def f(o):
             return o.attr
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(f(C()), 5)
         result, events = trace(f, C(), opcodes=True)
         self.assertEqual(result, 5)
-        lasti = list(range(1, len(get_ir(f.__code__))))
+        lasti = [i.offset for i in stack_dis.get_instructions(f)
+                 if i.opname not in ("RESUME", "LOAD_FAST_BORROW")]
         self.assertEqual([e[1] for e in events if e[0] == "opcode"], lasti)
         self.assertEqual(f(C()), 5)
 
@@ -442,8 +440,9 @@ class AssemblerTest(unittest.TestCase):
         self.assertGreaterEqual(len({dst for _, dst in seen}), 2)
         self.assertIn(source_line,
                       [line for event, _, line in events if event == "line"])
+        # Opcode events are at byte offsets of the stack bytecode
         self.assertTrue({offset for event, offset, _ in events if event == "opcode"}
-                        <= {i.offset for i in instructions})
+                        <= {i.offset for i in stack_dis.get_instructions(f)})
 
         def raising(frame, event, arg):
             if (frame.f_code is f.__code__ and event == "line" and
@@ -594,7 +593,8 @@ class AssemblerTest(unittest.TestCase):
     def test_f_lasti(self):
         def f():
             return sys._getframe().f_lasti
-        load_attr = [instr for instr in dis.get_instructions(f)
+        # f_lasti is a byte offset into the stack bytecode
+        load_attr = [instr for instr in stack_dis.get_instructions(f)
                      if instr.argval == "f_lasti"]
         self.assertEqual(f(), load_attr[0].offset)
 
@@ -621,7 +621,7 @@ class AssemblerTest(unittest.TestCase):
                   + "".join(f"    v = {i}.5\n" for i in range(nconsts))
                   + "    return v, o.attr\n")
         f = make_function(source)
-        self.assertGreater(len(f.__code__.co_code) // 8, 65535)
+        self.assertGreater(len(IRCode(f.__code__).co_code) // 8, 65535)
         self.assertGreater(f.__code__.co_names.index("attr"), IR_FIELD_MAX)
         ir = get_ir(f.__code__)
         # The last LOAD_CONST, which may push its constant inline, names it
@@ -726,21 +726,21 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(f(O(), 2.0), (-2, 3.0, True, True))
         with self.assertRaises(ZeroDivisionError):
             f(O(), 0)
-        header = f.__code__._co_feedback[:4]       # kind, state, counter
+        header = IRCode(f.__code__)._co_feedback[:4]       # kind, state, counter
         self.assertEqual(header[:2], bytes([0, 4]))  # COUNTER, OFF
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 8):
             f(O(), 2)
-        after = f.__code__._co_feedback[:4]
+        after = IRCode(f.__code__)._co_feedback[:4]
         self.assertEqual(after[:2], header[:2])
         # The counter of entry 0 stays unreachable (backoff bits 7)
         self.assertEqual(after[2] & 7, 7)
         self.assertEqual({handlers(f)[i.offset] for i in shared}, {"LOAD_ATTR"})
         # The shared entry is the header and nothing else is written
         dis.dis(f, adaptive=True, show_caches=True, file=io.StringIO())
-        fbinit = f.__code__.co_fbinit
+        fbinit = IRCode(f.__code__).co_fbinit
         self.assertLessEqual(int.from_bytes(fbinit[:4], sys.byteorder) & 0xFFFF,
                              4096)
-        self.assertEqual(len(f.__code__._co_feedback),
+        self.assertEqual(len(IRCode(f.__code__)._co_feedback),
                          (int.from_bytes(fbinit[:4], sys.byteorder) & 0xFFFF) * 8)
 
     def test_sizeof(self):
@@ -749,28 +749,6 @@ class AssemblerTest(unittest.TestCase):
         before = sys.getsizeof(code)
         exec(code, {})
         self.assertGreater(sys.getsizeof(code), before)
-
-    def test_constructor_checks_the_words(self):
-        def f(a):
-            return a.attr
-        code = f.__code__
-        words = get_ir(code)
-        index = [k for k, word in enumerate(words) if word[0] == "LOAD_ATTR"][0]
-        _, a, b, c, d = words[index]
-
-        def with_word(word):
-            return code.co_code[:8 * index] + encode_words(word) \
-                + code.co_code[8 * (index + 1):]
-
-        nslots = nlocalsplus(f) + code.co_stacksize
-        with self.assertRaisesRegex(ValueError, "slot"):
-            code.replace(co_code=with_word(("LOAD_ATTR", nslots, b, c, d)))
-        with self.assertRaisesRegex(ValueError, "feedback"):
-            code.replace(co_code=with_word(("LOAD_ATTR", a, b, IR_FIELD_MAX, d)))
-        with self.assertRaisesRegex(ValueError, "malformed"):
-            code.replace(co_code=code.co_code + b"\0")
-        self.assertEqual(code.replace(co_code=with_word(("LOAD_ATTR", a, b, c, d))),
-                         code)
 
     def test_binary_op_handlers(self):
         # BINARY_OP runs the handler of its operation
@@ -850,10 +828,11 @@ class SlotLimitTest(unittest.TestCase):
 def fb_entries(code):
     """The (kind, unit, arg, units) of each entry of code's feedback table,
     entry 0 first"""
+    fbinit = IRCode(code).co_fbinit
     return [(kind, unit, arg, units) for kind, arg, units, unit in
-            ((*dis._feedback_entry(code.co_fbinit, w), w) for w in
-             [(int.from_bytes(code.co_fbinit[i:i + 4], sys.byteorder) >> 16)
-              & IR_FIELD_MAX for i in range(0, len(code.co_fbinit), 4)])]
+            ((*dis._feedback_entry(fbinit, w), w) for w in
+             [(int.from_bytes(fbinit[i:i + 4], sys.byteorder) >> 16)
+              & IR_FIELD_MAX for i in range(0, len(fbinit), 4)])]
 
 
 COMPARE_OPS = ("<", "<=", "==", "!=", ">", ">=", "in", "not in")
@@ -876,7 +855,7 @@ class FeedbackLayoutTest(unittest.TestCase):
         self.assertEqual(entries[0][:2], (0, 0))
         self.assertEqual(entries[0][3], 2)
         # Entries are in order of unit, without gaps; entry 0 gives the total
-        total = int.from_bytes(code.co_fbinit[:4], sys.byteorder) & 0xFFFF
+        total = int.from_bytes(IRCode(code).co_fbinit[:4], sys.byteorder) & 0xFFFF
         position = 2
         sizes = {"UNARY": (24,), "BINARY": (32,), "ATTR": (48,),
                  "GLOBAL": (32,), "CALL": (40,), "BRANCH": (16, 24)}
@@ -900,7 +879,7 @@ class FeedbackLayoutTest(unittest.TestCase):
         self.assertLess(pre, after)
         o = types.SimpleNamespace(a=1, b=2, c=0, pre=0)
         self.assertEqual(f(o, 4), 1)
-        self.assertEqual(len(f.__code__._co_feedback), total * 8)
+        self.assertEqual(len(IRCode(f.__code__)._co_feedback), total * 8)
 
     def test_loop_sites_before_others(self):
         # In a function, the sites inside a loop get entries before the sites
@@ -967,7 +946,7 @@ class FeedbackLayoutTest(unittest.TestCase):
         names = {i.argrepr for i in intrinsics}
         self.assertTrue(all(n.startswith(("INTRINSIC_COMPARE_", "INTRINSIC_CONTAINS_"))
                             for n in names), names)
-        total = int.from_bytes(f.__code__.co_fbinit[:4], sys.byteorder) & 0xFFFF
+        total = int.from_bytes(IRCode(f.__code__).co_fbinit[:4], sys.byteorder) & 0xFFFF
         self.assertEqual(total, 2 + 4 * 1023)
 
         import operator
@@ -1015,51 +994,15 @@ class FeedbackLayoutTest(unittest.TestCase):
             lines.append("    t += o.attr")
         lines.append("    return t")
         f = make_function("\n".join(lines) + "\n")
-        total = int.from_bytes(f.__code__.co_fbinit[:4], sys.byteorder) & 0xFFFF
+        total = int.from_bytes(IRCode(f.__code__).co_fbinit[:4], sys.byteorder) & 0xFFFF
         self.assertLessEqual(total, 4096)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 3):
             self.assertEqual(f(O()), 10000)
-        self.assertEqual(len(f.__code__._co_feedback), total * 8)
+        self.assertEqual(len(IRCode(f.__code__)._co_feedback), total * 8)
         # Round trips through marshal and the constructor
         import marshal
         g = types.FunctionType(marshal.loads(marshal.dumps(f.__code__)), {})
         self.assertEqual(g(O()), 10000)
-        self.assertEqual(f.__code__.replace(co_fbinit=f.__code__.co_fbinit),
-                         f.__code__)
-
-    def test_fbinit_is_checked(self):
-        import struct
-        def f(a):
-            return a.x
-        c = f.__code__
-        entries = fb_entries(c)
-        self.assertEqual(entries[1][0], dis._FEEDBACK_KINDS.index("ATTR"))
-        def table(*words):
-            return struct.pack(f"<{len(words)}I", *words)
-        def word(kind, unit, arg):
-            return kind << 28 | unit << 16 | arg
-        attr = dis._FEEDBACK_KINDS.index("ATTR")
-        good = table(word(0, 0, 8), word(attr, 2, 0))
-        self.assertEqual(c.replace(co_fbinit=good).co_fbinit, good)
-        bad = {
-            "entry 0 is not a counter": table(word(attr, 0, 8), word(attr, 2, 0)),
-            "unit out of order": table(word(0, 0, 14), word(attr, 8, 0),
-                                       word(attr, 2, 0)),
-            "entry does not fit": table(word(0, 0, 7), word(attr, 2, 0)),
-            "entry in the header": table(word(0, 0, 8), word(attr, 1, 0)),
-            "past the limit": table(word(0, 0, 5000), word(attr, 2, 0)),
-            "no entry 0 units": table(word(0, 0, 1), word(attr, 2, 0)),
-        }
-        for name, fbinit in bad.items():
-            with self.subTest(name):
-                with self.assertRaisesRegex(ValueError, "malformed"):
-                    c.replace(co_fbinit=fbinit)
-        # A word that names a unit that starts no entry, or whose entry is
-        # too small for its handler
-        short = table(word(0, 0, 7), word(dis._FEEDBACK_KINDS.index("CALL"), 2, 0))
-        with self.assertRaisesRegex(ValueError, "feedback"):
-            c.replace(co_fbinit=short)
-
 
 class AllOps:
     """Supports every operation of COMPARE_OPS, with the operand on either side"""
@@ -2346,16 +2289,6 @@ class GeneratorRecipientTest(unittest.TestCase):
             for item in iterator:
                 pass
 
-        # No body instruction reads item. Construct the supported discarded
-        # recipient without changing the iterator window or exhausted target.
-        code = discard.__code__
-        words = [int.from_bytes(code.co_code[i:i + 8], "little")
-                 for i in range(0, len(code.co_code), 8)]
-        index = next(i for i, row in enumerate(get_ir(code)) if row[0] == "FOR_ITER")
-        words[index] = (words[index] & ~(IR_FIELD_MAX << 16)) | (IR_FIELD_MAX << 16)
-        discard.__code__ = code.replace(
-            co_code=b"".join(word.to_bytes(8, "little") for word in words),
-            co_linetable=b"", co_exceptiontable=code.co_exceptiontable)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(unpack(pairs()), [3, 7])
             self.assertIsNone(discard(pairs()))

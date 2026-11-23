@@ -4059,8 +4059,19 @@ can_optimize_super_call(compiler *c, expr_ty attr)
     if (mangled == NULL) {
         return ERROR;
     }
-    Py_ssize_t arg = _PyCompile_DictAddObj(METADATA(c)->u_names, mangled);
+    // The index the name has, or would get; adding it here would move it
+    // ahead of the names that the instructions before it add
+    PyValue index = PyValue_NULL;
+    int found = _PyDict_GetValue((PyDictObject *)METADATA(c)->u_names,
+                                 PyValue_FromObjectBorrow(mangled), &index);
     Py_DECREF(mangled);
+    RETURN_IF_ERROR(found);
+    Py_ssize_t arg = PyDict_GET_SIZE(METADATA(c)->u_names);
+    if (found) {
+        arg = PyValue_IsInlineInt(index) ? PyValue_InlineInt64(index)
+                                         : _PyValue_IntAsSsize_t(index);
+        PyValue_CLOSE(index);
+    }
     RETURN_IF_ERROR(arg);
     return ((arg << 2) | 3) <= IR_FIELD_MAX;
 }

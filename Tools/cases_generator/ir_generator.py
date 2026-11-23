@@ -75,7 +75,7 @@ import argparse
 import io
 import ir_numbers
 from ir_records import (
-    ASSIGNMENTS, CONST, DEOPT, ENTER_FRAME, EXIT_GUARD, FEEDBACK, GUARD_TOKENS,
+    ASSIGNMENTS, CONST, DEOPT, ENTER_FRAME, EXIT_GUARD, FEEDBACK, GUARD_TOKENS, NEXT,
     IMMEDIATE, LOCAL, MAY_RAISE, OPERANDS, POLY_TABLE_READERS, RELEASE_LIKE,
     RUNS_PYTHON, SITE_TOKENS, SLOT, TARGET, TEMP, WINDOW, YIELD, CallShape, Fact,
     FeedbackOperand, FeedbackSchema, Guard, Operand, OperationRecord, Subjects,
@@ -5977,6 +5977,12 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
                               part.properties.oparg, tuple(guards),
                               transfers + uop_transfers(part, deopt), infer_effects(part),
                               result_facts(part, outs), "pure" in part.annotations))
+    if (boundary is not None and boundary.yielded == "DELEGATED"
+            and uops[-1].transfers[-1] == Transfer(NEXT)):
+        # A native send that the inner generator suspended yields its value
+        # where the handler would fall through (generate_handler())
+        last = uops[-1]
+        uops[-1] = replace(last, transfers=last.transfers[:-1] + (Transfer(YIELD, None, "delegated"),))
     results = []
     for j, (value, external, item, _) in enumerate(walk.outputs):
         if external >= 0 and walk.values[value].external >= 0:

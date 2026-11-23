@@ -141,7 +141,9 @@ ENTER_FRAME = "ENTER_FRAME"     # runs a Python frame that it pushed
 RETURN = "RETURN"               # pops the frame
 YIELD = "YIELD"                 # suspends a generator
 EXIT = "EXIT"                   # leaves the evaluator
-EVALUATOR = "EVALUATOR"         # jumps into the evaluator (TR removes these)
+
+TRANSFER_KINDS = frozenset({NEXT, BRANCH, JUMP, DEOPT, RAISE, ENTER_FRAME,
+                            RETURN, YIELD, EXIT})
 
 # Guard kinds
 EXIT_GUARD, DEOPT_GUARD = "EXIT", "DEOPT"
@@ -245,8 +247,8 @@ TRANSFER_TOKENS: dict[str, tuple[str, ...]] = {
     "ERROR_IF": (RAISE,),
     "ERROR_NO_POP": (RAISE,),
     "DISPATCH": (NEXT,),
-    "DISPATCH_GOTO": (EVALUATOR,),
-    "DISPATCH_SAME_OPARG": (EVALUATOR,),
+    "DISPATCH_GOTO": (JUMP,),
+    "DISPATCH_SAME_OPARG": (JUMP,),
     "DISPATCH_INLINED": (ENTER_FRAME,),
     "JUMPBY": (JUMP,),
     "JUMPTO": (JUMP,),
@@ -286,6 +288,10 @@ GUARD_TOKENS = {
 }
 
 # The labels of bytecodes.c that a `goto` in a body may name, which raise
+# The targets of the jumps that run the same word again: with its handler,
+# or with the handler that the uop chose (`opcode`)
+JUMP_TARGETS = {"DISPATCH_SAME_OPARG": "self", "DISPATCH_GOTO": "self:handler"}
+
 ERROR_LABELS = ("error", "exception_unwind", "pop_1_error", "pop_2_error",
                 "pop_3_error", "pop_4_error")
 
@@ -539,15 +545,18 @@ def uop_transfers(uop: Uop, deopt_target: str) -> tuple[Transfer, ...]:
             result.append(Transfer(DEOPT, token, deopt_target))
         elif token.kind == "GOTO":
             label = goto_label(uop, token)
-            result.append(Transfer(RAISE if label in ERROR_LABELS else EVALUATOR,
-                                   token, label))
+            if label not in ERROR_LABELS:
+                raise analysis_error(f"{uop.name}: `goto {label}` leaves for the "
+                                     "evaluator; a uop may goto only an error label",
+                                     token)
+            result.append(Transfer(RAISE, token, label))
         elif token.kind == "RETURN":
             result.append(Transfer(EXIT, token))
         else:
             for kind in TRANSFER_TOKENS[token.text]:
-                if kind == JUMP and conditional(uop.body.body, token):
+                target = JUMP_TARGETS.get(token.text, "")
+                if kind == JUMP and not target and conditional(uop.body.body, token):
                     kind = BRANCH
-                target = "redispatch" if kind == EVALUATOR else ""
                 result.append(Transfer(kind, token, target))
     # A frame switch that no site names continues in the other frame, in
     # place of the next word
@@ -1326,8 +1335,8 @@ def guard_order(parts: list[Uop], uops: tuple[UopRecord, ...]) -> list[tuple[str
 
 
 def check_record(record, parts: list[Uop]) -> None:
-    """Refuse what the record of a handler cannot state: a guard with no
-    fact or reason, a `pure` uop that changes the heap or runs Python, and a
+    """Refuse what the record of a handler cannot state: a transfer that
+    is not typed, a guard with no fact or reason, a `pure` uop that changes the heap or runs Python, and a
     guard that follows a change but is not in GUARD_ORDER_EXCEPTIONS.
     parts are the uops of the instruction.
 
@@ -1337,6 +1346,10 @@ def check_record(record, parts: list[Uop]) -> None:
     parts = parts[:len(record.uops)]
     assert [p.name for p in parts] == [u.name for u in record.uops]
     for part, uop in zip(parts, record.uops):
+        for transfer in uop.transfers:
+            if transfer.kind not in TRANSFER_KINDS:
+                raise analysis_error(f"{part.name}: the transfer {transfer.kind} is "
+                                     "not a typed transfer", transfer.site or part.body.open)
         for guard in uop.guards:
             if not guard.facts and not guard.reason:
                 cond, _ = guard_condition(part, guard.site)

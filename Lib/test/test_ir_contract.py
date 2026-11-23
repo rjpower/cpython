@@ -526,8 +526,11 @@ class ContractTests(unittest.TestCase):
                     self.assertNotEqual(row.fb, _opcode.IR_LOC_NONE)
         suspends = {opcode.opname[row.ordinary_handler] for row in ROWS.values()
                     if row.effects & _opcode.IR_SUSPENDS}
+        # A send to a native iterator that suspends yields its value from
+        # the outer frame, which the record states as a YIELD transfer
         self.assertEqual(suspends, {"YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE",
-                                    "YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED"})
+                                    "YIELD_DELEGATED", "INSTRUMENTED_YIELD_DELEGATED",
+                                    "SEND", "SEND_VIRTUAL", "SEND_ASYNC_GEN"})
         for name in ("CALL_PY_EXACT_ARGS", "SEND", "SEND_GEN", "FOR_ITER_GEN",
                      "LOAD_ATTR_PROPERTY"):
             self.assertTrue(BY_NAME[name].effects & _opcode.IR_PUSHES_FRAME,

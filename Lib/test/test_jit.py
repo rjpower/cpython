@@ -76,6 +76,23 @@ class TestSwitches(unittest.TestCase):
             "-c", "pass", PYTHON_JIT="2", __isolated=False)
         self.assertIn(b"PYTHON_JIT", err)
 
+    @unittest.skipUnless(AVAILABLE, "the JIT is not available")
+    def test_warmup_variable(self):
+        # The previous value that set_jit_warmup() returns is the warm-up
+        # in force since startup
+        src = "import _testinternalcapi as c; print(c.set_jit_warmup(7))"
+        env = {"PYTHON_JIT_WARMUP": "500"}
+        self.assertEqual(run(src, "jit=on", env=env).strip(), "500")
+        # always compiles at the first event, whatever the variable says
+        self.assertEqual(run(src, "jit=always", env=env).strip(), "1")
+        # (an empty value is unset, as for every PYTHON* variable)
+        for value in ("0", "-3", "x", "12x"):
+            with self.subTest(value=value):
+                rc, _, err = script_helper.assert_python_failure(
+                    "-c", "pass", PYTHON_JIT="on", PYTHON_JIT_WARMUP=value,
+                    __isolated=False)
+                self.assertIn(b"PYTHON_JIT_WARMUP", err)
+
     def test_isolated_ignores_variable(self):
         out = script_helper.assert_python_ok(
             "-I", "-c", "import sys; print(sys._jit.is_enabled())",

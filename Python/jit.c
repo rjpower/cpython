@@ -15,6 +15,8 @@
 #include "pycore_jit_unwind.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
 
+#include <ctype.h>                  // isdigit()
+#include <errno.h>
 #include <wchar.h>
 
 /* The mode named by value, or -1.  Upstream's PYTHON_JIT=0 and 1 are off
@@ -70,6 +72,21 @@ _PyJit_InitInterpreter(PyInterpreterState *interp)
     }
     interp->ceval.jit = mode;
     interp->ceval.jit_warmup = mode == _PyJIT_ALWAYS ? 1 : _PyJIT_WARMUP;
+    /* PYTHON_JIT_WARMUP=N: the warm-up events before a code compiles under
+     * on, from startup (always compiles at the first event) */
+    const char *warmup = _Py_GetEnv(config->use_environment, "PYTHON_JIT_WARMUP");
+    if (warmup != NULL) {
+        char *end = NULL;
+        errno = 0;
+        unsigned long n = isdigit((unsigned char)warmup[0])
+                          ? strtoul(warmup, &end, 10) : 0;
+        if (end == NULL || *end != '\0' || errno != 0 || n == 0 || n > UINT32_MAX) {
+            return _PyStatus_ERR("PYTHON_JIT_WARMUP: expected an integer in 1..2**32-1");
+        }
+        if (mode == _PyJIT_ON) {
+            interp->ceval.jit_warmup = (uint32_t)n;
+        }
+    }
     return _PyStatus_OK();
 }
 

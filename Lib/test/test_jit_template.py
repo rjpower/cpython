@@ -412,10 +412,16 @@ class LoweringTests(unittest.TestCase):
         restore()
 
 
+# Under a JIT mode the lowering picks these forms of RESUME and
+# JUMP_BACKWARD; a unit compiles them as their base handler (Python/jit.c)
+JIT_FORMS = {"RESUME_JIT": "RESUME", "JUMP_BACKWARD_JIT": "JUMP_BACKWARD"}
+
+
 def word_of(func, handler, nth=-1):
-    "The index and fields of func's nth word whose handler is handler"
+    "The index and fields of func's nth word that compiles as handler"
     words = capi.get_ir(func.__code__, True)
-    found = [(i, w) for i, w in enumerate(words) if w[0] == handler]
+    found = [(i, w) for i, w in enumerate(words)
+             if JIT_FORMS.get(w[0], w[0]) == handler]
     if not found:
         raise AssertionError(f"no {handler} in {[w[0] for w in words]}")
     return found[nth]

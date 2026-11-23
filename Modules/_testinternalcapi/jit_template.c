@@ -359,7 +359,7 @@ build_unit(_PyInterpreterFrame *frame, uint32_t index, _PyJitTemplate template,
     _PyJitAsm_MovRR(&a, _PyJitReg_RSI, _PyJit_FRAME);
     _PyJitAsm_Lea(&a, _PyJitReg_RDX, AT(_PyJit_WORDS, (int32_t)(index * sizeof(_PyIRWord))));
     _PyJitAsm_MovImm(&a, _PyJitReg_RCX, (int64_t)w);
-    _PyJitAsm_CallAbs(&a, _PyEval_HandlerForms()[IR_HANDLER(w)]);
+    _PyJitAsm_CallAbs(&a, _PyEval_HandlerForms()[_PyJit_CompiledHandler(w)]);
     _PyJitAsm_Bind(&a, cx.leave);
     _PyJitAsm_AluRI(&a, _PyJitAlu_ADD, _PyJitReg_RSP, 8);
     for (int i = NSAVED - 1; i >= 0; i--) {
@@ -474,7 +474,7 @@ jit_template_run(PyObject *module, PyObject *args)
     Transfer t;
     slow_taken = 0;
     if (use_template) {
-        _PyJitTemplate template = _PyJit_Templates[IR_HANDLER(w)];
+        _PyJitTemplate template = _PyJit_Templates[_PyJit_CompiledHandler(w)];
         _PyJitCode unit;
         if (template == NULL || build_unit(frame, index, template, &unit) < 0) {
             tstate->current_frame = previous;
@@ -486,7 +486,7 @@ jit_template_run(PyObject *module, PyObject *args)
         _PyJitMemory_Free(&unit);
     }
     else {
-        Form form = (Form)_PyEval_HandlerForms()[IR_HANDLER(w)];
+        Form form = (Form)_PyEval_HandlerForms()[_PyJit_CompiledHandler(w)];
         t = form(tstate, frame, (_PyInstr *)&words[index], w);
     }
     tstate->current_frame = previous;

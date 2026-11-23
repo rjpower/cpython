@@ -125,18 +125,6 @@ static_target(const _PyIRWord *words, uint32_t i)
     return -1;
 }
 
-/* The handler that compiled code runs for the word w.  A handler that ends
- * in the JIT's warm-up event (RESUME_JIT, JUMP_BACKWARD_JIT) is its base
- * handler with an event that is nothing in a unit, so it compiles as the
- * base: the base's template, or the base's form. */
-static inline int
-compiled_handler(_PyIRWord w)
-{
-    int handler = IR_HANDLER(w);
-    return (_PyIR_HandlerFlags[handler] & _PyIR_H_JIT_EVENT)
-        ? _PyIR_HandlerBase[handler] : handler;
-}
-
 #define R(X) _PyJitReg_##X
 #define AT(B, D) _PyJitMem_At(R(B), (D))
 #define WORD_AT(I) AT(R14, (int32_t)((I) * sizeof(_PyIRWord)))
@@ -402,7 +390,7 @@ emit_form_word(_PyJitCompiler *c, uint32_t i)
     _PyJitAsm_MovRR(a, R(RSI), R(R13));
     _PyJitAsm_Lea(a, R(RDX), WORD_AT(i));
     _PyJitAsm_MovImm(a, R(RCX), (int64_t)w);
-    _PyJitAsm_CallAbs(a, _PyEval_HandlerForms()[compiled_handler(w)]);
+    _PyJitAsm_CallAbs(a, _PyEval_HandlerForms()[_PyJit_CompiledHandler(w)]);
     _PyJitAsm_Bind(a, called);
     emit_continuation(c, i);
     if (!guarded) {
@@ -544,7 +532,7 @@ emit_unit(_PyJitCompiler *c)
     emit_frame(c);
     for (uint32_t i = 0; i < c->nwords; i += _PyIR_WordLength(c->words[i])) {
         _PyJitAsm_Bind(a, c->labels[i]);
-        _PyJitTemplate template = _PyJit_Templates[compiled_handler(c->words[i])];
+        _PyJitTemplate template = _PyJit_Templates[_PyJit_CompiledHandler(c->words[i])];
         if (template != NULL) {
             emit_template_word(c, i, template);
         }

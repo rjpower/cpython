@@ -1247,6 +1247,30 @@ leaf_probe__LOAD_ATTR_CLASS(_PyInterpreterFrame *frame, PyValue *stack_pointer, 
 }
 
 static int
+leaf_probe__LOAD_ATTR_INSTANCE_VALUE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
+    const uint64_t *caches, struct leaf_probe_result *result)
+{
+    (void)frame; (void)oparg; (void)caches;
+    uint32_t offset = (uint32_t)caches[0];
+    PyValue owner, attr;
+    owner = stack_pointer[-1];
+    PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+    PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
+    PyValueBorrow found = PyValue_Borrow(*value_ptr);
+    if (PyValue_IsNull(found)) {
+        return LEAF_PROBE_DEOPT;
+    }
+    attr = PyValue_XDUP(found);
+    STAT_INC(LOAD_ATTR, hit);
+    PyValue tmp = owner;
+    owner = attr;
+    stack_pointer[-1] = owner;
+    PyValue_CLOSE(tmp);
+    result->stack_pointer = stack_pointer;
+    return LEAF_PROBE_NEXT;
+}
+
+static int
 leaf_probe__LOAD_ATTR_METHOD_LAZY_DICT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -1383,6 +1407,30 @@ leaf_probe__LOAD_ATTR_SHAPE(_PyInterpreterFrame *frame, PyValue *stack_pointer, 
     PyValue owner, attr;
     owner = stack_pointer[-1];
     attr =shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+    STAT_INC(LOAD_ATTR, hit);
+    PyValue tmp = owner;
+    owner = attr;
+    stack_pointer[-1] = owner;
+    PyValue_CLOSE(tmp);
+    result->stack_pointer = stack_pointer;
+    return LEAF_PROBE_NEXT;
+}
+
+static int
+leaf_probe__LOAD_ATTR_SLOT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
+    const uint64_t *caches, struct leaf_probe_result *result)
+{
+    (void)frame; (void)oparg; (void)caches;
+    uint32_t index = (uint32_t)caches[0];
+    PyValue owner, attr;
+    owner = stack_pointer[-1];
+    PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+    PyValueBorrow value = PyValue_Borrow(*_PyObject_ValueSlot(owner_o, index));
+    if (PyValue_IsNull(value)) {
+        return LEAF_PROBE_EXIT;
+    }
+    _PyValue_RecheckHome(value);
+    attr = PyValue_DUP(value);
     STAT_INC(LOAD_ATTR, hit);
     PyValue tmp = owner;
     owner = attr;
@@ -1766,6 +1814,78 @@ leaf_probe__PUSH_TAGGED_ZERO(_PyInterpreterFrame *frame, PyValue *stack_pointer,
 }
 
 static int
+leaf_probe__STORE_ATTR_SHAPE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
+    const uint64_t *caches, struct leaf_probe_result *result)
+{
+    (void)frame; (void)oparg; (void)caches;
+    uint32_t offset = (uint32_t)caches[0];
+    PyValue value, owner;
+    owner = stack_pointer[-1];
+    value = stack_pointer[-2];
+    PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+    PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
+    PyValue old_value = *value_ptr;
+    *value_ptr =      value ;
+    STAT_INC(STORE_ATTR, hit);
+    stack_pointer += -2;
+    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+    PyValue_XCLOSE(owner);
+    PyValue_CLOSE(old_value);
+    result->stack_pointer = stack_pointer;
+    return LEAF_PROBE_NEXT;
+}
+
+static int
+leaf_probe__STORE_ATTR_SHAPE_ADD(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
+    const uint64_t *caches, struct leaf_probe_result *result)
+{
+    (void)frame; (void)oparg; (void)caches;
+    uint32_t shape_to = (uint32_t)caches[0];
+    uint32_t offset = (uint32_t)caches[1];
+    PyValue value, owner;
+    owner = stack_pointer[-1];
+    value = stack_pointer[-2];
+    PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+    PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
+    *value_ptr =      value ;
+    PyDictValues *values = _PyObject_InlineValues(owner_o);
+    _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
+    _PyDictValues_SetShape(values, (uint8_t)shape_to);
+    STAT_INC(STORE_ATTR, hit);
+    stack_pointer += -2;
+    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+    PyValue_XCLOSE(owner);
+    result->stack_pointer = stack_pointer;
+    return LEAF_PROBE_NEXT;
+}
+
+static int
+leaf_probe__STORE_ATTR_SLOT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
+    const uint64_t *caches, struct leaf_probe_result *result)
+{
+    (void)frame; (void)oparg; (void)caches;
+    uint32_t index = (uint32_t)caches[0];
+    PyValue value, owner;
+    owner = stack_pointer[-1];
+    value = stack_pointer[-2];
+    PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+    if (!LOCK_OBJECT(owner_o)) {
+        return LEAF_PROBE_DEOPT;
+    }
+    PyValue *addr = _PyObject_ValueSlot(owner_o, index);
+    STAT_INC(STORE_ATTR, hit);
+    PyValue old_value = *addr;
+    *addr =      value ;
+    UNLOCK_OBJECT(owner_o);
+    stack_pointer += -2;
+    ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
+    PyValue_XCLOSE(owner);
+    PyValue_XCLOSE(old_value);
+    result->stack_pointer = stack_pointer;
+    return LEAF_PROBE_NEXT;
+}
+
+static int
 leaf_probe__STORE_SUBSCR_LIST_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -1964,6 +2084,7 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_JUMP_FORWARD", leaf_probe__JUMP_FORWARD, 0},
     {"_JUMP_IF_COND", leaf_probe__JUMP_IF_COND, 1},
     {"_LOAD_ATTR_CLASS", leaf_probe__LOAD_ATTR_CLASS, 1},
+    {"_LOAD_ATTR_INSTANCE_VALUE", leaf_probe__LOAD_ATTR_INSTANCE_VALUE, 1},
     {"_LOAD_ATTR_METHOD_LAZY_DICT", leaf_probe__LOAD_ATTR_METHOD_LAZY_DICT, 1},
     {"_LOAD_ATTR_METHOD_NO_DICT", leaf_probe__LOAD_ATTR_METHOD_NO_DICT, 1},
     {"_LOAD_ATTR_METHOD_WITH_VALUES", leaf_probe__LOAD_ATTR_METHOD_WITH_VALUES, 1},
@@ -1971,6 +2092,7 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_LOAD_ATTR_NONDESCRIPTOR_NO_DICT", leaf_probe__LOAD_ATTR_NONDESCRIPTOR_NO_DICT, 1},
     {"_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES", leaf_probe__LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES, 1},
     {"_LOAD_ATTR_SHAPE", leaf_probe__LOAD_ATTR_SHAPE, 1},
+    {"_LOAD_ATTR_SLOT", leaf_probe__LOAD_ATTR_SLOT, 1},
     {"_LOAD_CONST", leaf_probe__LOAD_CONST, 0},
     {"_LOAD_CONST_INLINE_FLOAT", leaf_probe__LOAD_CONST_INLINE_FLOAT, 0},
     {"_LOAD_CONST_INLINE_INT", leaf_probe__LOAD_CONST_INLINE_INT, 0},
@@ -1995,6 +2117,9 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_POP_TOP_NUMBER", leaf_probe__POP_TOP_NUMBER, 1},
     {"_PUSH_NULL", leaf_probe__PUSH_NULL, 0},
     {"_PUSH_TAGGED_ZERO", leaf_probe__PUSH_TAGGED_ZERO, 0},
+    {"_STORE_ATTR_SHAPE", leaf_probe__STORE_ATTR_SHAPE, 2},
+    {"_STORE_ATTR_SHAPE_ADD", leaf_probe__STORE_ATTR_SHAPE_ADD, 2},
+    {"_STORE_ATTR_SLOT", leaf_probe__STORE_ATTR_SLOT, 2},
     {"_STORE_SUBSCR_LIST_INT", leaf_probe__STORE_SUBSCR_LIST_INT, 3},
     {"_SWAP", leaf_probe__SWAP, 2},
     {"_TO_BOOL_INT", leaf_probe__TO_BOOL_INT, 1},

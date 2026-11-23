@@ -725,6 +725,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyObject_InlineValues",
     "_PyObject_IsUniquelyReferenced",
     "_PyObject_Shape",
+    "_PyObject_ValueSlot",
     "_PyObject_ManagedDictPointer",
     "_PyThreadState_HasStackSpace",
     "_PyTuple_FromValueStealOnSuccess",

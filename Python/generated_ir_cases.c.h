@@ -11127,7 +11127,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
-                PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
+                PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
                 PyValueBorrow found = PyValue_Borrow(*value_ptr);
                 if (PyValue_IsNull(found)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -11918,8 +11918,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             {
                 uint32_t index = fb->index;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
-                PyValueBorrow value =
-                PyValue_Borrow(*(PyValue *)((char *)owner_o + index));
+                PyValueBorrow value = PyValue_Borrow(*_PyObject_ValueSlot(owner_o, index));
                 if (PyValue_IsNull(value)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -14431,7 +14430,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(_PyObject_GetManagedDict(owner_o) == NULL);
-                PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
+                PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
                 PyValue old_value = *value_ptr;
                 #ifdef Py_SHAPES
 
@@ -14516,7 +14515,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 value = IR_VIEW(IR_B(ir_word));
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
-                PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
+                PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
                 PyValue old_value = *value_ptr;
                 assert(!PyValue_IsNull(old_value));
                 ir_own_B = IR_DETACH(ir_word, B, value);
@@ -14578,7 +14577,7 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                 uint32_t shape_to = fb->shape_to;
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
-                PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
+                PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
                 assert(PyValue_IsNull(*value_ptr));
                 ir_own_B = IR_DETACH(ir_word, B, value);
                 *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
@@ -14636,11 +14635,11 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                char *addr = (char *)owner_o + index;
+                PyValue *addr = _PyObject_ValueSlot(owner_o, index);
                 STAT_INC(STORE_ATTR, hit);
-                PyValue old_value = *(PyValue *)addr;
+                PyValue old_value = *addr;
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *(PyValue *)addr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                *addr = IR_TAKEN_REQUIRED(value, ir_own_B);
                 UNLOCK_OBJECT(owner_o);
                 ir_own_A = IR_DETACH(ir_word, A, owner);
                 (void)(ir_own_A);

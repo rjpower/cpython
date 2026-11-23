@@ -2706,9 +2706,9 @@ dummy_func(
             EXIT_IF(!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid));
         }
 
-        op(_LOAD_ATTR_INSTANCE_VALUE, (offset/1, owner -- attr)) {
+        leaf op(_LOAD_ATTR_INSTANCE_VALUE, (offset/1, owner -- attr)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
+            PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
             PyValueBorrow found = PyValue_Borrow(*value_ptr);
             DEOPT_IF(PyValue_IsNull(found));
             attr = PyValue_XDUP(found);
@@ -2730,7 +2730,7 @@ dummy_func(
          * win.  The shape fields take no inline cache units.  Shapes exist
          * only in builds with the GIL, so the stores take no object lock and
          * need not check for a dict: an instance with a dict has no shape. */
-        op(_GUARD_SHAPE, (shape/0, owner -- owner)) {
+        leaf op(_GUARD_SHAPE, (shape/0, owner -- owner)) {
             EXIT_IF(_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape);
         }
 
@@ -2817,11 +2817,10 @@ dummy_func(
             unused/5 +
             _NULL_SLOT_CONDITIONAL;
 
-        op(_LOAD_ATTR_SLOT, (index/1, owner -- attr)) {
+        leaf op(_LOAD_ATTR_SLOT, (index/1, owner -- attr)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
 
-            PyValueBorrow value =
-                PyValue_Borrow(*(PyValue *)((char *)owner_o + index));
+            PyValueBorrow value = PyValue_Borrow(*_PyObject_ValueSlot(owner_o, index));
             EXIT_IF(PyValue_IsNull(value));
             _PyValue_RecheckHome(value);
             attr = PyValue_DUP(value);
@@ -2984,7 +2983,7 @@ dummy_func(
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
 
             assert(_PyObject_GetManagedDict(owner_o) == NULL);
-            PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
+            PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
             PyValue old_value = *value_ptr;  // a move: replaced below
 #ifdef Py_SHAPES
             /* This store does not grow the type's shapes.  An addition whose
@@ -3026,9 +3025,9 @@ dummy_func(
             _GUARD_DORV_NO_DICT +
             _STORE_ATTR_INSTANCE_VALUE;
 
-        inline_ok op(_STORE_ATTR_SHAPE, (offset/1, value, owner --)) {
+        leaf inline_ok op(_STORE_ATTR_SHAPE, (offset/1, value, owner --)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
+            PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
             PyValue old_value = *value_ptr;  // a move: replaced below
             assert(!PyValue_IsNull(old_value));
             *value_ptr = TAKE(value);
@@ -3043,9 +3042,9 @@ dummy_func(
             _GUARD_SHAPE +
             _STORE_ATTR_SHAPE;
 
-        inline_ok op(_STORE_ATTR_SHAPE_ADD, (shape_to/0, offset/1, value, owner --)) {
+        leaf inline_ok op(_STORE_ATTR_SHAPE_ADD, (shape_to/0, offset/1, value, owner --)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
+            PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
             assert(PyValue_IsNull(*value_ptr));
             *value_ptr = TAKE(value);
             PyDictValues *values = _PyObject_InlineValues(owner_o);
@@ -3114,14 +3113,14 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             _STORE_ATTR_WITH_HINT;
 
-        op(_STORE_ATTR_SLOT, (index/1, value, owner --)) {
+        leaf op(_STORE_ATTR_SLOT, (index/1, value, owner --)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
 
             DEOPT_IF(!LOCK_OBJECT(owner_o));
-            char *addr = (char *)owner_o + index;
+            PyValue *addr = _PyObject_ValueSlot(owner_o, index);
             STAT_INC(STORE_ATTR, hit);
-            PyValue old_value = *(PyValue *)addr;  // a move: replaced below
-            *(PyValue *)addr = TAKE(value);
+            PyValue old_value = *addr;  // a move: replaced below
+            *addr = TAKE(value);
             UNLOCK_OBJECT(owner_o);
             PyValue_XCLOSE(owner);
             PyValue_XCLOSE(old_value);

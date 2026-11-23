@@ -724,7 +724,7 @@ OBJECT_READERS = {
     "PyTuple_GET_VALUE", "PyUnicode_1BYTE_DATA", "PyUnicode_GET_LENGTH",
     "PyUnicode_IS_COMPACT_ASCII", "PyUnicode_READ_CHAR", "_PyList_ITEMS",
     "_PyLong_IsZero", "_PyObject_GetManagedDict", "_PyObject_InlineValues",
-    "_PyObject_Shape",
+    "_PyObject_Shape", "_PyObject_ValueSlot",
     # They take the index of a value slot, an address inside the object
     # less the start of its values
     "_PyShape_TransitionMissing", "_PyDictValues_AddToInsertionOrder",

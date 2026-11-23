@@ -902,8 +902,9 @@ def c_type(name: str, token=None) -> str:
     if stars == 1:
         if base in ("char", "void"):
             raise LeafError(f"type {name}: untyped memory", token)
-        target = {"uint8_t": "u8", "int8_t": "i8"}.get(base, base)
-        if target not in POINTER_TARGETS + ("PyDictValues", "u8", "i8"):
+        # No byte pointers: an object's value slots are _PyObject_ValueSlot()
+        target = base
+        if target not in POINTER_TARGETS + ("PyDictValues",):
             raise LeafError(f"type {name} is outside the leaf subset", token)
         return target + "*"
     t = _BASE_TYPES.get(base) or C_TYPES.get(base)
@@ -942,8 +943,7 @@ def common_type(a: str, b: str) -> str:
 
 
 # Element types and their sizes' names in the layout
-ELEMENT_SIZES = {"PyValue*": "PyValue", "PyDictUnicodeEntry*": "PyDictUnicodeEntry",
-                 "u8*": 1, "i8*": 1}
+ELEMENT_SIZES = {"PyValue*": "PyValue", "PyDictUnicodeEntry*": "PyDictUnicodeEntry"}
 
 
 def _element(pointer: str) -> str:
@@ -1684,7 +1684,7 @@ class Translator:
         if loc.field in ARRAY_FIELDS:
             return self.emit1("fieldaddr", loc.type, (loc.base,), loc.field)
         t = loc.type
-        if loc.field is None and t not in (VALUE, "u8", "i8"):
+        if loc.field is None and t != VALUE:
             raise LeafError(f"a load of a whole {t}", token)
         self.add_effects((READS_HEAP,))
         return self.emit1("load", t, (loc.base,), loc.field or t)

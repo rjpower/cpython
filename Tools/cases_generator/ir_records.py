@@ -1111,7 +1111,7 @@ PURE_CALLS = re.compile(
     r"Py_ARRAY_LENGTH|_PyIR_AdoptTemp|GETLOCAL|Py_FatalError|PyValue_RefcountOnObject|"
     r"_PyFrame_AssertTemporariesClear|_PyManagedDictPointer_IsValues|doesnt_escape|"
     r"(advance|restart)_backoff_counter|_Py_GatherStats_GetIter|native_vector_capture|"
-    r"_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY")
+    r"_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY|_PyObject_ValueSlot")
 
 # Non-escaping calls that read the heap and change nothing
 READER_CALLS = re.compile(

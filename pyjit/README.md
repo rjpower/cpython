@@ -11,13 +11,20 @@ Read the [goal](GOAL.md), [active plan](issues/interpreter-performance56/plan.md
 in that order. The [roadmap](ROADMAP.md) gives stage outcomes; [process](PROCESS.md)
 and [handoff](HANDOFF.md) explain development and runtime coordination.
 
-**Current work (2026-11-23):** [jit88](issues/register-semantics59/jit88.md),
-the Sparkplug-style baseline method JIT's first steps (tiers87 Phase 2): an
-assembler and code memory, then every IR word compiled as a call of its
-handler's function form. Inline templates from the leaf IR follow, then a
-tracing JIT.
+**Current work (2026-11-23):** [regions89](issues/register-semantics59/regions89.md):
+every handler, stub, helper and primitive carries declared contracts that
+the generator verifies, and words without inline code call shared stubs
+generated at build time instead of whole-handler forms. Then tighter inline
+arms, polymorphic loads, and compiled calls and returns.
 
-**Previous (2026-11-23):** [contract87](issues/register-semantics59/contract87.md),
+**Previous (2026-11-23):** [jit88](issues/register-semantics59/jit88.md)
+built the Sparkplug-style baseline method JIT (tiers87 Phase 2): an
+assembler and code memory, every IR word compiled as a call of its
+function form, inline templates from the leaf IR, unwind info, and the
+interpreter as the cold tier. Qualified at `ea4d023c2b4`; it runs 1.060 of
+golden87's warm time.
+
+**Earlier (2026-11-23):** [contract87](issues/register-semantics59/contract87.md),
 the interpreter's last wave and the first phase of
 [tiers87](design/proposals/tiers87.md), exported one operation contract from
 the cases generator, gave every handler a function form, and returned

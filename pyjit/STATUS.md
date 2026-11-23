@@ -24,10 +24,22 @@ shared native-call site. Startup is 79.0M instructions for `-I -S -c pass`
 (golden86 37.5M): the cost of first-call lowering, which the user accepts.
 The full suites show known failures only.
 
-**Active: jit88, 2026-11-23**, the baseline method JIT's first two steps
-([record](issues/register-semantics59/jit88.md)): JA builds the assembler
-and W^X code memory; JB builds code units, the switches and warm-up (B0),
-then compiles every word as a call of its function form (B1).
+**Active: regions89, 2026-11-23**
+([record](issues/register-semantics59/regions89.md)): declared operation
+contracts (V8-style declarations, verified, replacing inference) and shared
+stubs with typed completion for the baseline JIT, after Astra's review of
+jit88's handlers. DV's signed division templates are merged; RD's design is
+revised after review and its pilot is running.
+
+**Jit88, qualified 2026-11-23** at `ea4d023c2b4`
+([record](issues/register-semantics59/jit88.md)): the baseline method JIT
+with B1 (every word a call of its function form), B2 (inline templates for
+74 handlers from the leaf IR), unwind info for units and `ir_evaluate` as
+the cold tier. Timed against golden87 with its JIT off, it runs 1.060 of
+the warm time and 1.065 of the cold time under `on` (B1: 1.224), at 1.042
+of the instructions; nbody 0.96, richards 1.19, unpack_sequence 1.42. The
+full suites with `PYTHON_JIT=always` (release and the assert build) and
+with the JIT off show known failures only.
 
 **Golden86, 2026-11-22**, now a frozen control: `3cac420ddbf` (`pyjit/round86-golden`,
 tag `pyjit-golden-20261122-tight86`, pushed) is

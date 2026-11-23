@@ -147,6 +147,12 @@ class IRCode:
         first = len(_testinternalcapi.get_co_localskinds(self._co))
         return {first + k: value for k, value in enumerate(self.const_values)}
 
+    @property
+    def stack_offsets(self):
+        """The co_code byte offset of the stack instruction that each word
+        stands for: the offset that monitoring events report"""
+        return [2 * unit for unit in self._pcmap]
+
     def co_positions(self):
         positions = list(self._co.co_positions())
         # A code object with a short or empty location table has no position

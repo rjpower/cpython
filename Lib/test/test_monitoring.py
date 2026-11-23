@@ -12,7 +12,8 @@ import types
 import unittest
 
 import test.support
-from test.support import import_helper, requires_specialization, script_helper
+from test.support import import_helper, ir_dis, requires_specialization, script_helper
+from test.support.ir_dis import IRCode
 
 PAIR = (0,1)
 
@@ -1052,7 +1053,7 @@ class ExceptionMonitoringTest(CheckEvents):
             UnwindRecorder
         )
         events = self.get_events(f, TEST_TOOL, recorders)
-        adaptive_insts = dis.get_instructions(f, adaptive=True)
+        adaptive_insts = ir_dis.get_instructions(f, adaptive=True)
         self.assertIn(
             "CALL_ALLOC_AND_ENTER_INIT",
             [i.opname for i in adaptive_insts]
@@ -1190,6 +1191,10 @@ class InstructionRecorder:
 LINE_AND_INSTRUCTION_RECORDERS = InstructionRecorder, LineRecorder
 
 class TestLineAndInstructionEvents(CheckEvents):
+    # An INSTRUCTION event is per instruction of the register IR, at the
+    # co_code offset of the stack instruction it stands for. Stack instructions
+    # that lowering folds into another, such as the STORE_FAST after a
+    # LOAD_SMALL_INT or an operand load, have no event.
     maxDiff = None
 
     def test_disable_line_keeps_instruction_events(self):
@@ -1243,8 +1248,11 @@ class TestLineAndInstructionEvents(CheckEvents):
             func(1)
             expected_instructions = instructions[:]
             expected_lines = lines[:]
+            # An INSTRUCTION event is per instruction of the register IR, at
+            # the offset of the stack instruction it stands for
+            offsets = IRCode(func.__code__).stack_offsets
             self.assertEqual(expected_instructions, [
-                inst.offset for inst in dis.get_instructions(func)
+                offsets[inst.offset] for inst in ir_dis.get_instructions(func)
                 if inst.opname != "RESUME"
             ])
             self.assertTrue(expected_lines)
@@ -1277,14 +1285,10 @@ class TestLineAndInstructionEvents(CheckEvents):
             ("line", "get_events", 10),
             ("line", "func1", 1),
             ("instruction", "func1", 4),
-            ("instruction", "func1", 6),
             ("line", "func1", 2),
             ("instruction", "func1", 8),
-            ("instruction", "func1", 10),
             ("line", "func1", 3),
             ("instruction", "func1", 12),
-            ("instruction", "func1", 14),
-            ("instruction", "func1", 16),
             ("instruction", "func1", 18),
             ("line", "get_events", 11),
         ])
@@ -1300,17 +1304,12 @@ class TestLineAndInstructionEvents(CheckEvents):
             ("line", "get_events", 10),
             ("line", "func2", 1),
             ("instruction", "func2", 4),
-            ("instruction", "func2", 6),
             ("line", "func2", 2),
             ("instruction", "func2", 8),
             ("instruction", "func2", 10),
-            ("instruction", "func2", 30),
             ("instruction", "func2", 32),
-            ("instruction", "func2", 40),
             ("line", "func2", 3),
             ("instruction", "func2", 42),
-            ("instruction", "func2", 44),
-            ("instruction", "func2", 46),
             ("instruction", "func2", 48),
             ("line", "get_events", 11),
         ])
@@ -1328,10 +1327,8 @@ class TestLineAndInstructionEvents(CheckEvents):
         self.check_events(func3, recorders = LINE_AND_INSTRUCTION_RECORDERS, expected = [
             ("line", "get_events", 10),
             ("line", "func3", 1),
-            ("instruction", "func3", 4),
             ("line", "func3", 2),
             ("instruction", "func3", 6),
-            ("instruction", "func3", 8),
             ("line", "func3", 3),
             ("instruction", "func3", 10),
             ("instruction", "func3", 20),
@@ -1340,12 +1337,9 @@ class TestLineAndInstructionEvents(CheckEvents):
             ("instruction", "func3", 24),
             ("line", "func3", 5),
             ("instruction", "func3", 26),
-            ("instruction", "func3", 28),
             ("instruction", "func3", 30),
             ("line", "func3", 6),
             ("instruction", "func3", 32),
-            ("instruction", "func3", 34),
-            ("instruction", "func3", 36),
             ("instruction", "func3", 38),
             ("line", "get_events", 11),
         ])
@@ -1360,14 +1354,10 @@ class TestLineAndInstructionEvents(CheckEvents):
             ('line', 'get_events', 10),
             ('line', 'func1', 1),
             ('instruction', 'func1', 4),
-            ('instruction', 'func1', 6),
             ('line', 'func1', 2),
             ('instruction', 'func1', 8),
-            ('instruction', 'func1', 10),
             ('line', 'func1', 3),
             ('instruction', 'func1', 12),
-            ('instruction', 'func1', 14),
-            ('instruction', 'func1', 16),
             ('instruction', 'func1', 18),
             ('line', 'get_events', 11)])
 
@@ -1377,14 +1367,10 @@ class TestLineAndInstructionEvents(CheckEvents):
             ('line', 'get_events', 10),
             ('line', 'func1', 1),
             ('instruction', 'func1', 4),
-            ('instruction', 'func1', 6),
             ('line', 'func1', 2),
             ('instruction', 'func1', 8),
-            ('instruction', 'func1', 10),
             ('line', 'func1', 3),
             ('instruction', 'func1', 12),
-            ('instruction', 'func1', 14),
-            ('instruction', 'func1', 16),
             ('instruction', 'func1', 18),
             ('line', 'get_events', 11)])
 
@@ -1435,8 +1421,7 @@ class TestInstallIncrementally(MonitoringTestBase, unittest.TestCase):
     MUST_INCLUDE_LI = [
             ('instruction', 'func1', 4),
             ('line', 'func1', 2),
-            ('instruction', 'func1', 6),
-            ('instruction', 'func1', 8)]
+            ('instruction', 'func1', 10)]
 
     def test_line_then_instruction(self):
         recorders = [ LineRecorder, InstructionRecorder ]
@@ -1456,8 +1441,8 @@ class TestInstallIncrementally(MonitoringTestBase, unittest.TestCase):
             ('instruction', 'func2', 4),
             ('call', 'func2', sys.monitoring.MISSING),
             ('call', 'len', ()),
-            ('instruction', 'func2', 14),
-            ('instruction', 'func2', 16)]
+            ('instruction', 'func2', 16),
+            ('instruction', 'func2', 28)]
 
 
 
@@ -1956,10 +1941,10 @@ class TestBranchAndJumpEvents(CheckEvents):
             3
 
         self.check_events(func, recorders = JUMP_AND_BRANCH_RECORDERS, expected = [
-            ('branch', 'func', 2, 2),
+            ('branch', 'func', 2, 3),
             ('branch', 'func', 3, 6),
             ('jump', 'func', 6, 2),
-            ('branch', 'func', 2, 2),
+            ('branch', 'func', 2, 3),
             ('branch', 'func', 3, 4),
             ('jump', 'func', 4, 2),
             ('branch', 'func', 2, 7)])
@@ -1968,13 +1953,13 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('line', 'get_events', 10),
             ('line', 'func', 1),
             ('line', 'func', 2),
-            ('branch', 'func', 2, 2),
+            ('branch', 'func', 2, 3),
             ('line', 'func', 3),
             ('branch', 'func', 3, 6),
             ('line', 'func', 6),
             ('jump', 'func', 6, 2),
             ('line', 'func', 2),
-            ('branch', 'func', 2, 2),
+            ('branch', 'func', 2, 3),
             ('line', 'func', 3),
             ('branch', 'func', 3, 4),
             ('line', 'func', 4),
@@ -1985,9 +1970,9 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('line', 'get_events', 11)])
 
         self.check_events(func, recorders = BRANCHES_RECORDERS, expected = [
-            ('branch left', 'func', 2, 2),
+            ('branch left', 'func', 2, 3),
             ('branch right', 'func', 3, 6),
-            ('branch left', 'func', 2, 2),
+            ('branch left', 'func', 2, 3),
             ('branch left', 'func', 3, 4),
             ('branch right', 'func', 2, 7)])
 
@@ -1998,11 +1983,11 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('branch right', 'whilefunc', 1, 3)])
 
         self.check_events(func, recorders = BRANCH_OFFSET_RECORDERS, expected = [
-            ('branch left', 'func', 32, 36),
+            ('branch left', 'func', 32, 48),
             ('branch right', 'func', 48, 62),
-            ('branch left', 'func', 32, 36),
+            ('branch left', 'func', 32, 48),
             ('branch left', 'func', 48, 54),
-            ('branch right', 'func', 32, 74)])
+            ('branch right', 'func', 32, 76)])
 
     def test_except_star(self):
 
@@ -2057,8 +2042,8 @@ class TestBranchAndJumpEvents(CheckEvents):
                 n += 1
             return None
 
-        in_loop = ('branch left', 'foo', 12, 18)
-        exit_loop = ('branch right', 'foo', 12, 42)
+        in_loop = ('branch left', 'foo', 12, 24)
+        exit_loop = ('branch right', 'foo', 12, 44)
         self.check_events(foo, recorders = BRANCH_OFFSET_RECORDERS, expected = [
             in_loop,
             in_loop,
@@ -2105,17 +2090,17 @@ class TestBranchAndJumpEvents(CheckEvents):
             return x
 
         self.check_events(func, recorders = BRANCHES_RECORDERS, expected = [
-            ('branch left', 'func', 2, 2),
+            ('branch left', 'func', 2, 3),
             ('branch right', 'func', 4, 6),
-            ('branch right', 'func', 6, 8),
-            ('branch left', 'func', 2, 2),
+            ('branch right', 'func', 6, 9),
+            ('branch left', 'func', 2, 3),
             ('branch left', 'func', 4, 5),
-            ('branch left', 'func', 2, 2),
+            ('branch left', 'func', 2, 3),
             ('branch right', 'func', 4, 6),
             ('branch left', 'func', 6, 7),
-            ('branch left', 'func', 2, 2),
+            ('branch left', 'func', 2, 3),
             ('branch right', 'func', 4, 6),
-            ('branch right', 'func', 6, 8),
+            ('branch right', 'func', 6, 9),
             ('branch right', 'func', 2, 10)])
 
     def test_callback_set_frame_lineno(self):

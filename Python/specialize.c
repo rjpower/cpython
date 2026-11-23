@@ -352,9 +352,11 @@ set_opcode(_PyInstr *instr, int opcode)
     return 1;
 #else
     _PyIR_SetHandler(instr, opcode);
-    _PyCodeExec *exec = _PyFrame_Exec(current_frame());
-    assert(instr >= exec->words && instr < exec->words + exec->nwords);
-    _PyJit_NoteRewrite(exec);
+    if (opcode != previous) {
+        _PyCodeExec *exec = _PyFrame_Exec(current_frame());
+        assert(instr >= exec->words && instr < exec->words + exec->nwords);
+        _PyJit_NoteRewrite(exec);
+    }
     return 1;
 #endif
 }

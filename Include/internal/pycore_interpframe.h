@@ -389,10 +389,11 @@ _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *dest)
 
 
 /* The pairs of a constant block beyond the eighth entry (n is the whole
- * count, dst the start of the block). */
-extern void _PyFrame_CopyConstSlotsMore(PyValue *dst, const PyValueBorrow *src,
-                                        int n);
-extern void _PyFrame_ZeroConstSlotsMore(PyValue *dst, int n);
+ * count, dst the start of the block).  Exported for the frames that
+ * _testinternalcapi pushes. */
+PyAPI_FUNC(void) _PyFrame_CopyConstSlotsMore(PyValue *dst, const PyValueBorrow *src,
+                                             int n);
+PyAPI_FUNC(void) _PyFrame_ZeroConstSlotsMore(PyValue *dst, int n);
 
 /* Copy the image of the constant slots of an exec to dst, the
  * first of them in a new frame: n >= 1 of them, two slots at a time.  The

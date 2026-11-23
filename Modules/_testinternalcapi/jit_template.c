@@ -1,7 +1,13 @@
 /* Hooks for Lib/test/test_jit_template.py: the baseline JIT's primitive
-   lowerings (Python/jit_lower.c) run on chosen registers and values. */
+   lowerings (Python/jit_lower.c) run on chosen registers and values, and
+   its templates (Python/jit_template.c) run on one word of a frame against
+   the word's function form. */
 
 #include "parts.h"
+
+#include "pycore_ceval.h"         // _PyEval_FrameClearAndPop()
+#include "pycore_interpframe.h"   // _PyFrame_PushUnchecked()
+#include "pycore_ir.h"            // _PyIR_FormatOf()
 
 #include "pycore_floatobject.h"   // _PyFloat_ExactDealloc()
 #include "pycore_frame.h"         // _PyInterpreterFrame
@@ -273,7 +279,220 @@ jit_lowerings(PyObject *module, PyObject *Py_UNUSED(ignored))
     return t;
 }
 
+/* A form's or a unit's return: Python/ceval.h's _PyIRTransfer */
+typedef struct {
+    _PyInterpreterFrame *frame;
+    _PyInstr *next;
+} Transfer;
+
+typedef Transfer (*Form)(PyThreadState *, _PyInterpreterFrame *, _PyInstr *, _PyIRWord);
+typedef Transfer (*Unit)(PyThreadState *, _PyInterpreterFrame *);
+
+/* Whether the last template run took its slow path */
+static int64_t slow_taken;
+
+/* The static target of word i, as the compiler finds it, or -1 */
+static int
+static_target(const _PyIRWord *words, uint32_t i)
+{
+    _PyIRWord w = words[i];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(w));
+    if (fmt->flags & _PyIR_NAMES_TARGET) {
+        return -1;
+    }
+    if (fmt->flags & _PyIR_JUMPS) {
+        return (int)IR_CD(w);
+    }
+    if (fmt->flags & _PyIR_FORWARD) {
+        return (int)i + 1 + IR_DS(w);
+    }
+    return -1;
+}
+
+/* rax:rdx := {frame, word index}, then leave */
+static void
+emit_transfer(_PyJitAsm *a, _PyJitLabel label, int index, _PyJitLabel leave)
+{
+    _PyJitAsm_Bind(a, label);
+    _PyJitAsm_MovRR(a, _PyJitReg_RAX, _PyJit_FRAME);
+    _PyJitAsm_Lea(a, _PyJitReg_RDX, AT(_PyJit_WORDS, (int32_t)(index * sizeof(_PyIRWord))));
+    _PyJitAsm_Jmp(a, leave);
+}
+
+/* A unit of one word, entered as Unit: its template, with the exits that a
+   compiled unit gives it.  The slow path calls the word's form. */
+static int
+build_unit(_PyInterpreterFrame *frame, uint32_t index, _PyJitTemplate template,
+           _PyJitCode *code)
+{
+    const _PyIRWord *words = (const _PyIRWord *)frame->ir_words;
+    _PyIRWord w = words[index];
+    _PyJitAsm a;
+    _PyJitAsm_Init(&a);
+    _PyJitWordCx cx = {
+        .a = &a, .words = words, .word = w, .index = index,
+        .next = _PyJitAsm_NewLabel(&a), .target = _PyJitAsm_NewLabel(&a),
+        .slow = _PyJitAsm_NewLabel(&a), .resume = -1,
+        .leave = _PyJitAsm_NewLabel(&a), .backedge = -1,
+    };
+    for (int i = 0; i < NSAVED; i++) {
+        _PyJitAsm_Push(&a, saved[i]);
+    }
+    _PyJitAsm_AluRI(&a, _PyJitAlu_SUB, _PyJitReg_RSP, 8);
+    _PyJitAsm_MovRR(&a, _PyJit_TSTATE, _PyJitReg_RDI);
+    _PyJitAsm_MovRR(&a, _PyJit_FRAME, _PyJitReg_RSI);
+    _PyJitAsm_MovRM(&a, _PyJit_WORDS, AT(_PyJit_FRAME, offsetof(_PyInterpreterFrame, ir_words)));
+    _PyJitAsm_MovRM(&a, _PyJit_BASE, AT(_PyJit_FRAME, offsetof(_PyInterpreterFrame, base)));
+    _PyJitAsm_MovImm(&a, _PyJit_UNIT, 0);
+    template(&cx);
+    assert(cx.cold_depth == 0);
+    int target = static_target(words, index);
+    emit_transfer(&a, cx.next, (int)index + _PyIR_WordLength(w), cx.leave);
+    emit_transfer(&a, cx.target, target >= 0 ? target : (int)index, cx.leave);
+    _PyJitAsm_Bind(&a, cx.slow);
+    _PyJitAsm_MovImm(&a, _PyJitReg_RAX, (int64_t)(uintptr_t)&slow_taken);
+    _PyJitAsm_MovMI(&a, AT(_PyJitReg_RAX, 0), 1);
+    _PyJitAsm_MovRR(&a, _PyJitReg_RDI, _PyJit_TSTATE);
+    _PyJitAsm_MovRR(&a, _PyJitReg_RSI, _PyJit_FRAME);
+    _PyJitAsm_Lea(&a, _PyJitReg_RDX, AT(_PyJit_WORDS, (int32_t)(index * sizeof(_PyIRWord))));
+    _PyJitAsm_MovImm(&a, _PyJitReg_RCX, (int64_t)w);
+    _PyJitAsm_CallAbs(&a, _PyEval_HandlerForms()[IR_HANDLER(w)]);
+    _PyJitAsm_Bind(&a, cx.leave);
+    _PyJitAsm_AluRI(&a, _PyJitAlu_ADD, _PyJitReg_RSP, 8);
+    for (int i = NSAVED - 1; i >= 0; i--) {
+        _PyJitAsm_Pop(&a, saved[i]);
+    }
+    _PyJitAsm_Ret(&a);
+    int placed = _PyJitAsm_Place(&a, code);
+    _PyJitAsm_Fini(&a);
+    return placed;
+}
+
+/* The value of a slot for Python: an int for a word with no object (an
+   inline number, an index, NULL), else a new reference to its object */
+static PyObject *
+slot_object(PyValue v)
+{
+    if (PyValue_IsNull(v) || !PyValue_IsPointerSpace(v)) {
+        return PyLong_FromUnsignedLongLong((unsigned long long)v.bits);
+    }
+    return Py_NewRef(PyValue_AsKnownObjectBorrow(v));
+}
+
+/* A frame leaves with its temporaries empty: close them, then pop it with
+   its locals and constants */
+static void
+clear_and_pop(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    int nfixed = (int)(((const _PyCodeExec *)frame->ir_words) - 1)->nfixed;
+    for (int i = nfixed; i < _PyFrame_NumSlots(frame); i++) {
+        PyValue v = frame->base[i];
+        frame->base[i] = PyValue_NULL;
+        PyValue_XCLOSE(v);
+    }
+    _PyEval_FrameClearAndPop(tstate, frame);
+}
+
+/* jit_template_run(func, index, slots, template) -> (next, slow, exc, slots)
+
+   Pushes a frame of func (whose code has run, so that it has an executing
+   copy), sets the slots given by the dict slots (index: object, or index:
+   int for a raw word, which the frame then owns as it is), and runs word
+   index by its template if template, else by its form.  Returns the index
+   of the next word (None if the word raised), whether the template took its
+   slow path, the exception it raised, and every slot after it as
+   slot_object() gives it.  The frame is then cleared and popped. */
+static PyObject *
+jit_template_run(PyObject *module, PyObject *args)
+{
+    PyObject *func, *slots;
+    unsigned int index;
+    int use_template;
+    if (!PyArg_ParseTuple(args, "O!IO!p", &PyFunction_Type, &func, &index,
+                          &PyDict_Type, &slots, &use_template))
+    {
+        return NULL;
+    }
+    PyCodeObject *code = (PyCodeObject *)((PyFunctionObject *)func)->func_code;
+    if (code->_co_exec == NULL) {
+        PyErr_SetString(PyExc_ValueError, "the code has not run");
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    _PyInterpreterFrame *previous = tstate->current_frame;
+    _PyInterpreterFrame *frame = _PyFrame_PushUnchecked(
+        tstate, PyValue_FromObjectSteal(Py_NewRef(func)), previous);
+    int nslots = _PyFrame_NumSlots(frame);
+    const _PyIRWord *words = (const _PyIRWord *)frame->ir_words;
+    _PyIRWord w = words[index];
+    frame->instr_ptr = (_PyInstr *)&words[index];
+    Py_ssize_t pos = 0;
+    PyObject *key, *value;
+    while (PyDict_NextEntryRef(slots, &pos, &key, &value)) {
+        long i = PyLong_AsLong(key);
+        Py_DECREF(key);
+        if (i < 0 || i >= nslots) {
+            Py_DECREF(value);
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(PyExc_IndexError, "no such slot");
+            }
+            clear_and_pop(tstate, frame);
+            return NULL;
+        }
+        PyValue v = PyValue_FromObjectSteal(value);
+        PyValue_XCLOSE(frame->base[i]);
+        frame->base[i] = v;
+    }
+    tstate->current_frame = frame;
+    Transfer t;
+    slow_taken = 0;
+    if (use_template) {
+        _PyJitTemplate template = _PyJit_Templates[IR_HANDLER(w)];
+        _PyJitCode unit;
+        if (template == NULL || build_unit(frame, index, template, &unit) < 0) {
+            tstate->current_frame = previous;
+            clear_and_pop(tstate, frame);
+            PyErr_SetString(PyExc_ValueError, "no template for the word, or no code memory");
+            return NULL;
+        }
+        t = ((Unit)(uintptr_t)unit.start)(tstate, frame);
+        _PyJitMemory_Free(&unit);
+    }
+    else {
+        Form form = (Form)_PyEval_HandlerForms()[IR_HANDLER(w)];
+        t = form(tstate, frame, (_PyInstr *)&words[index], w);
+    }
+    tstate->current_frame = previous;
+    PyObject *exc = PyErr_GetRaisedException();
+    PyObject *out = PyTuple_New(nslots);
+    for (int i = 0; out != NULL && i < nslots; i++) {
+        PyObject *o = slot_object(frame->base[i]);
+        if (o == NULL) {
+            Py_CLEAR(out);
+            break;
+        }
+        PyTuple_SET_ITEM(out, i, o);
+    }
+    assert(t.frame == frame || t.next == NULL);
+    PyObject *next = t.next == NULL ? Py_NewRef(Py_None)
+        : PyLong_FromLong((long)(t.next - (_PyInstr *)words));
+    clear_and_pop(tstate, frame);
+    if (out == NULL || next == NULL) {
+        Py_XDECREF(out);
+        Py_XDECREF(next);
+        Py_XDECREF(exc);
+        return NULL;
+    }
+    return Py_BuildValue("(NONN)", next, slow_taken ? Py_True : Py_False,
+                         exc ? exc : Py_None, out);
+}
+
 static PyMethodDef test_methods[] = {
+    {"jit_template_run", jit_template_run, METH_VARARGS},
     {"jit_lower", jit_lower, METH_VARARGS},
     {"jit_lowerings", jit_lowerings, METH_NOARGS},
     {NULL},

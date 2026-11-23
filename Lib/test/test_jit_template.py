@@ -1,9 +1,12 @@
 """The baseline JIT's inline templates: the primitive lowerings
-(Python/jit_lower.c) against their C definitions."""
+(Python/jit_lower.c) against their C definitions, and each template
+(Python/jit_templates.c.h) against its handler's function form on one word
+of a frame."""
 
 import ctypes
 import random
 import struct
+import sys
 import unittest
 import weakref
 
@@ -260,6 +263,100 @@ class LoweringTests(unittest.TestCase):
                     del obj
                     _, _, before, after = run(name, ops, (w,), rng, aux, args_live=live)
                     self.check_registers(name, ops, before, after, live)
+
+
+def word_of(func, handler, nth=-1):
+    "The index and fields of func's nth word whose handler is handler"
+    words = capi.get_ir(func.__code__, True)
+    found = [(i, w) for i, w in enumerate(words) if w[0] == handler]
+    if not found:
+        raise AssertionError(f"no {handler} in {[w[0] for w in words]}")
+    return found[nth]
+
+
+def nfixed(func):
+    return capi.get_ir_raw(func.__code__)[2]
+
+
+def big(n):
+    "A new int object beyond the inline range"
+    return 2**60 + n
+
+
+class Plain:
+    pass
+
+
+# (name, source, warm-up arguments, word, the word's inputs as fields,
+# cases).  The function's code is warmed with the arguments so that word
+# `word` is in the executing copy; each case gives the values of the inputs
+# in field order.  The template and the form run from the same slots.
+TEMPLATE_CASES = [
+    ("add_int_locals", "def f(a, b):\n    return a + b", (3, 4),
+     "BINARY_OP_ADD_INT", "BC",
+     [(1, 2), (-5, 7), (2**49, 2**49), (-2**50, -1), (0, 0),
+      ("x", 1),                 # the second guard fails after the first passed
+      (1, "y"),                 # the first guard fails
+      (big(1), 3), (2.5, 1), ([], [])]),
+    ("add_int_temps", "def f(a, b):\n    return (a - 1) + (b - 1)", (3, 4),
+     "BINARY_OP_ADD_INT", "BC",
+     [(1, 2), (2**50 - 1, 1), (-2**50, -2**50), (big(2), 1), ("x", 1)]),
+]
+
+
+class TemplateTests(unittest.TestCase):
+    def compile(self, source, warm):
+        namespace = {}
+        exec(source, namespace)
+        f = namespace["f"]
+        for _ in range(200):
+            try:
+                f(*warm)
+            except Exception:
+                pass
+        return f
+
+    def check_same(self, f, index, slots, objects):
+        "The form and the template from the same slots"
+        results = []
+        for use_template in (False, True):
+            before = [sys.getrefcount(o) for o in objects]
+            next_, slow, exc, out = capi.jit_template_run(f, index, dict(slots), use_template)
+            after = [sys.getrefcount(o) for o in objects]
+            results.append((next_, slow, exc, out, [b - a for a, b in zip(before, after)]))
+        form, template = results
+        self.assertEqual(template[0], form[0], "next word")
+        self.assertEqual(type(template[2]), type(form[2]))
+        self.assertEqual(str(template[2]), str(form[2]))
+        self.assertEqual(len(template[3]), len(form[3]))
+        for i, (x, y) in enumerate(zip(form[3], template[3])):
+            self.assertEqual(type(x), type(y), f"slot {i}")
+            self.assertTrue(same(x, y), f"slot {i}: {x!r} != {y!r}")
+        self.assertEqual(template[4], form[4], "counts")
+        return template
+
+    def test_templates_against_forms(self):
+        for name, source, warm, handler, fields, cases in TEMPLATE_CASES:
+            f = self.compile(source, warm)
+            index, (_, *word_fields) = word_of(f, handler)
+            field_slots = dict(zip("ABCD", word_fields))
+            if name.endswith("_temps"):
+                self.assertTrue(all(field_slots[x] >= nfixed(f) for x in fields), name)
+            for case in cases:
+                with self.subTest(name=name, case=case):
+                    slots = {field_slots[x]: v for x, v in zip(fields, case)}
+                    objects = [v for v in case if not isinstance(v, (int, float)) or
+                               type(v) is int and not -2**50 <= v < 2**50]
+                    self.check_same(f, index, slots, objects)
+
+    def test_fast_path(self):
+        "Inputs that the guards accept stay on the template's own code"
+        f = self.compile(TEMPLATE_CASES[0][1], (3, 4))
+        index, (_, a, b, c, d) = word_of(f, "BINARY_OP_ADD_INT")
+        self.assertFalse(capi.jit_template_run(f, index, {b: 1, c: 2}, True)[1])
+        self.assertFalse(capi.jit_template_run(f, index, {b: 2**49, c: 2**49}, True)[1])
+        self.assertTrue(capi.jit_template_run(f, index, {b: "x", c: 2}, True)[1])
+        self.assertTrue(capi.jit_template_run(f, index, {b: 1, c: "y"}, True)[1])
 
 
 if __name__ == "__main__":

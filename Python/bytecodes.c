@@ -205,6 +205,26 @@ dummy_func(
             _MAYBE_INSTRUMENT +
             _CHECK_PERIODIC_IF_NOT_YIELD_FROM;
 
+        // Under -X jit=on and always the lowering gives every RESUME and
+        // JUMP_BACKWARD the form that ends in _JIT_EVENT
+        // (Python/ir_assemble.c): a warm-up event of the code, which enters
+        // the code's compiled unit at the next word once it has one
+        // (IR_JIT_EVENT(), Python/jit.c).  Compiled code runs the forms,
+        // where the event does nothing.
+        ir_only op(_JIT_EVENT, (--)) {
+            IR_JIT_EVENT();
+        }
+
+        family(RESUME, 1) = {
+            RESUME_JIT,
+        };
+
+        macro(RESUME_JIT) =
+            unused/1 +
+            _MAYBE_INSTRUMENT +
+            _CHECK_PERIODIC_IF_NOT_YIELD_FROM +
+            _JIT_EVENT;
+
         op(_MONITOR_RESUME, (--)) {
             int err = _Py_call_instrumentation(
                     tstate, oparg == 0 ? PY_MONITORING_EVENT_PY_START : PY_MONITORING_EVENT_PY_RESUME, frame, this_instr);
@@ -3526,6 +3546,16 @@ dummy_func(
             unused/1 +
             _CHECK_PERIODIC +
             JUMP_BACKWARD_NO_INTERRUPT;
+
+        family(JUMP_BACKWARD, 1) = {
+            JUMP_BACKWARD_JIT,
+        };
+
+        macro(JUMP_BACKWARD_JIT) =
+            unused/1 +
+            _CHECK_PERIODIC +
+            JUMP_BACKWARD_NO_INTERRUPT +
+            _JIT_EVENT;
 
         pseudo(JUMP, (--)) = {
             JUMP_FORWARD,

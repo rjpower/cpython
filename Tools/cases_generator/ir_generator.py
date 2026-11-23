@@ -3649,7 +3649,7 @@ class IREmitter(Emitter):
         self.abrupt_prefix = True
         self.emit(f"IR_TRY_NATIVE_YIELD({value});\n")
         self.emit("next_instr = frame->return_pc;\n")
-        self.emit(f"if (_PyFrame_SetReturnValue(frame, {value})) {{ next_instr = frame->return_pc; }}\n")
+        self.emit(f"IR_STORE_RETURN({value});\n")
         self.emit("LLTRACE_RESUME_FRAME();\n")
         self.emit("DISPATCH();\n")
         return False
@@ -5551,7 +5551,7 @@ class IREmitter(Emitter):
         self.emit("}\n")
         self.emit("else {\n")
         self.emit("next_instr = frame->return_pc;\n")
-        self.emit(f"if (_PyFrame_SetReturnValue(frame, {value})) {{ next_instr = frame->return_pc; }}\n")
+        self.emit(f"IR_STORE_RETURN({value});\n")
         self.emit("}\n")
         self.emit("LLTRACE_RESUME_FRAME();\n")
         self.emit("DISPATCH();\n")
@@ -5606,7 +5606,7 @@ class IREmitter(Emitter):
             self.emit("PyValue_XCLOSE(ir_resume_input);\n")
             self.emit("PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);\n")
             self.emit("}\n")
-            self.emit("_PyFrame_SetReturnValue(frame, ir_resume_input);\n")
+            self.emit("_PyFrame_SetResumeValue(frame, ir_resume_input);\n")
             self.emit("LOAD_IP(0);\n")
             self.emit("IR_SKIP_RESUME();\n")
             self.emit("DTRACE_FUNCTION_ENTRY();\n")
@@ -8015,13 +8015,16 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             == [token.text for token in tokenize(body)]
             for part, body in zip(parts, bodies))
 
-    if inst.name == "RESUME" and scalar_shape(0, 0):
+    if inst.name in ("RESUME", "RESUME_JIT") and scalar_shape(0, 0):
         # These audited helper contracts may poll/instrument and change
         # control flow; ordinary completion writes no scratch. Require the
         # complete bodies, not a token blacklist that can miss pointer stores.
-        # Callback/error phases remain uncovered.
-        if [part.name for part in parts] != [
-                "_MAYBE_INSTRUMENT", "_CHECK_PERIODIC_IF_NOT_YIELD_FROM"]:
+        # Callback/error phases remain uncovered.  RESUME_JIT ends in the
+        # JIT's warm-up event, which moves no value.
+        expected_parts = ["_MAYBE_INSTRUMENT", "_CHECK_PERIODIC_IF_NOT_YIELD_FROM"]
+        if inst.name == "RESUME_JIT":
+            expected_parts.append("_JIT_EVENT")
+        if [part.name for part in parts] != expected_parts:
             return unknown
         instrument = """{
             #ifdef Py_GIL_DISABLED
@@ -8046,10 +8049,11 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
                 ERROR_IF(err != 0);
             }
         }"""
+        event = "{ IR_JIT_EVENT(); }"
         if (any(part.stack.inputs or part.stack.outputs for part in parts)
                 or any(statement_shape(part.body)
                        != statement_shape(Parser(body, "<RESUME contract>").block())
-                       for part, body in zip(parts, (instrument, periodic)))):
+                       for part, body in zip(parts, (instrument, periodic, event)))):
             return unknown
         return "_PyIR_TRANSFER_PRESERVE"
 

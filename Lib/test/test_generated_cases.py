@@ -513,7 +513,8 @@ class TestIRCases(unittest.TestCase):
                 self.assertLess(body.index(gen_return),
                                 body.index(f"temp = {clear}("))
                 self.assertEqual(body.count(f"temp = {clear}(tstate, dying, temp);"), 1)
-                self.assertEqual(body.count("_PyFrame_SetReturnValue(frame, temp)"), 1)
+                # The caller may be a compiled frame (IR_STORE_RETURN)
+                self.assertEqual(body.count("IR_STORE_RETURN(temp);"), 1)
                 self.assertEqual(body.count("_Py_LeaveRecursiveCallPy(tstate);"), 1)
                 self.assertEqual(body.count("DTRACE_FUNCTION_RETURN();"), 1)
                 self.assertEqual(body.count("frame = tstate->current_frame = dying->previous;"), 1)
@@ -1186,7 +1187,7 @@ class TestIRCases(unittest.TestCase):
                               handler)
                 self.assertLess(handler.index("frame->return_slot ="),
                                 handler.index("frame = tstate->current_frame = ir_resumed_frame;"))
-                self.assertIn("_PyFrame_SetReturnValue(frame, ir_resume_input)", handler)
+                self.assertIn("_PyFrame_SetResumeValue(frame, ir_resume_input)", handler)
                 self.assertNotIn("_PyValue_Publish", handler)
         instruction = analysis.instructions["FOR_ITER_GEN"]
         recipe = ir_generator.generator_entry_recipe(instruction)
@@ -1321,7 +1322,7 @@ class TestIRCases(unittest.TestCase):
                 self.assertEqual(handler.count("_Py_EnterRecursivePy(tstate)"), 1)
                 self.assertNotIn("py_recursion_remaining--", handler)
                 entered = handler.index("frame = tstate->current_frame = ir_resumed_frame;")
-                consumed = handler.index("_PyFrame_SetReturnValue(frame, ir_resume_input);")
+                consumed = handler.index("_PyFrame_SetResumeValue(frame, ir_resume_input);")
                 self.assertLess(entered, consumed)
                 if name != "FOR_ITER_GEN":
                     detached = handler.index("IR_SLOT(IR_B(ir_word) + 2) = PyValue_NULL;")
@@ -1339,10 +1340,11 @@ class TestIRCases(unittest.TestCase):
                           else "_PyEval_FrameClearAndPopGeneralWithResult")
                 retired = handler.index(f"temp = {helper}(tstate, dying, temp);")
                 completed = handler.index("_PyEval_CompleteGeneratorReturn(")
-                published = handler.index("_PyFrame_SetReturnValue(frame, temp)")
+                published = handler.index("IR_STORE_RETURN(temp);")
                 self.assertLess(retired, completed)
                 self.assertLess(retired, published)
-                self.assertNotIn("IR_STORE_RETURN", handler)
+                # The home value is returned as it is, not boxed
+                self.assertNotIn("_PyValue_Publish", handler)
         handler = self.handler(output.getvalue(), "CLEANUP_THROW")
         self.assertIn("_PyFrame_InstrAt(frame, oparg)", handler)
         self.assertNotIn("next_instr + oparg", handler)

@@ -149,6 +149,10 @@ HELPERS = {
     "PAUSE_ADAPTIVE_COUNTER": native_helper((Kind.FEEDBACK,), Kind.VOID),
     "ORIGINAL_HANDLER": native_helper((Kind.OBSERVED_OPCODE,), Kind.SCALAR),
     "PRE_DISPATCH_GOTO": native_helper((), Kind.VOID),
+    # The baseline JIT's warm-up event (RESUME_JIT, JUMP_BACKWARD_JIT), after
+    # the word's effect: the frame may go on in its code's unit at the next
+    # word, which runs Python.  Errors there are those of later words.
+    "IR_JIT_EVENT": native_helper((), Kind.VOID, callback=True),
 }
 
 # LINE may adopt a debugger target before failing. The setter normalizes that

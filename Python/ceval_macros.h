@@ -1076,12 +1076,14 @@ method_poly_lookup(const _PyIRWord *words, const _PyFbHeader *h, PyObject *owner
 #else
 #  define IR_SKIP_RESUME_TLBC() 1
 #endif
-#define IR_SKIP_RESUME() \
+#define IR_SKIP_RESUME() IR_SKIP_RESUME_IF(IR_HANDLER(*next_instr) == RESUME)
+/* IS_RESUME: the word at next_instr is a RESUME to skip */
+#define IR_SKIP_RESUME_IF(IS_RESUME) \
     do { \
         assert(next_instr == frame->instr_ptr); \
         /* A predicted branch, not arithmetic on the three loads: dispatch \
          * from the next word does not wait on them. */ \
-        if (IR_HANDLER(*next_instr) == RESUME && \
+        if ((IS_RESUME) && \
             _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) == \
                 FT_ATOMIC_LOAD_UINTPTR_ACQUIRE( \
                     _PyFrame_GetCode(frame)->_co_instrumentation_version) && \
@@ -1092,14 +1094,51 @@ method_poly_lookup(const _PyIRWord *words, const _PyFbHeader *h, PyObject *owner
     } while (0)
 
 /* After a frame switch, V goes to the slot of the frame that control came
- * back to (frame->return_slot). */
+ * back to (frame->return_slot).  If the frame has run in its code's unit, it
+ * goes back to it (IR_JIT_RESUME()). */
 #define IR_STORE_RETURN(V) \
     do { \
         assert(_PyValue_IsHome(V)); \
         if (_PyFrame_SetReturnValue(frame, (V))) { \
             next_instr = frame->return_pc; \
+            IR_JIT_RESUME(); \
         } \
     } while (0)
+
+/* The baseline JIT's hand-offs from the evaluator (Python/jit.c), which
+ * jit_run() and jit_resume() in Python/ceval.c drive.  IR_JIT_EVENT(), the
+ * end of RESUME_JIT and JUMP_BACKWARD_JIT, is a warm-up event of the frame's
+ * code; once the code has a unit, the frame goes on in it at next_instr.
+ * IR_JIT_RESUME(): control has come back to frame at next_instr, and the
+ * frame goes back to its unit if it ran in one.  The function forms, which
+ * compiled code calls, bind both to nothing. */
+#ifdef _PY_JIT_SUPPORTED
+#define IR_JIT_EVENT() \
+    do { \
+        _PyCodeExec *ir_exec = _PyFrame_Exec(frame); \
+        /* Most events count a code that has no unit and is not yet warm, \
+         * which needs no call */ \
+        if (ir_exec->jit_unit == NULL && \
+            ir_exec->jit_heat + 1 < tstate->interp->ceval.jit_warmup) { \
+            ir_exec->jit_heat++; \
+        } \
+        else { \
+            _PyJitUnit *ir_unit = _PyJit_Event(tstate, frame); \
+            if (ir_unit != NULL) { \
+                IR_STEP_DONE(jit_run(tstate, ir_unit, frame, next_instr)); \
+            } \
+        } \
+    } while (0)
+#define IR_JIT_RESUME() \
+    do { \
+        if (frame->jit_resume) { \
+            IR_STEP_DONE(jit_resume(tstate, frame, next_instr)); \
+        } \
+    } while (0)
+#else
+#define IR_JIT_EVENT() ((void)0)
+#define IR_JIT_RESUME() ((void)0)
+#endif
 
 /* The oparg and feedback entry of another instruction of the frame. */
 #define _PyIR_Oparg(FRAME, INSTR) \

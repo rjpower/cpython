@@ -571,9 +571,10 @@ class ObservationTests(unittest.TestCase):
         self.addCleanup(monitoring.set_local_events, tool, f.__code__, 0)
         self.assertEqual(f(1), 2)
         rows = _testinternalcapi.get_ir(f.__code__)
-        # RESUME, at offset 0, has no event of its own
+        # RESUME (RESUME_JIT under the JIT), at offset 0, has no event of
+        # its own
         heads = [i for i, row in enumerate(rows)
-                 if row[0] not in ("IR_OPERANDS", "RESUME")]
+                 if row[0] not in ("IR_OPERANDS", "RESUME", "RESUME_JIT")]
         operand_words = [i for i, row in enumerate(rows)
                          if row[0] == "IR_OPERANDS"]
         self.assertTrue(operand_words)

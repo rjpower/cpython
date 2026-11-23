@@ -2,6 +2,7 @@
 #include "pycore_code.h"            // PyCodeObject
 #include "pycore_flowgraph.h"
 #include "pycore_intrinsics.h"      // INTRINSIC_COMPARE_OP
+#include "pycore_jit.h"             // _PyJIT_OFF
 #include "pycore_ir.h"              // _PyCodeIR, IR_WORD()
 #include "pycore_ir_source.h"
 #include "pycore_opcode_utils.h"    // IS_BACKWARDS_JUMP_OPCODE
@@ -399,6 +400,13 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     int oparg = op->oparg;
     if (opcode == YIELD_VALUE && oparg == 1) {
         return YIELD_DELEGATED;
+    }
+    /* With the baseline JIT on, frame entries, resumes and backward jumps
+     * are its warm-up events and hand-offs (Python/jit.c): a choice made
+     * here, so that with the JIT off the words are what they were. */
+    if ((opcode == RESUME || opcode == JUMP_BACKWARD) &&
+        _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF) {
+        return opcode == RESUME ? RESUME_JIT : JUMP_BACKWARD_JIT;
     }
     if (opcode == BINARY_OP) {
         if (oparg > NB_OPARG_LAST) {

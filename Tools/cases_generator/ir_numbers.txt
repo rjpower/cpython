@@ -480,3 +480,8 @@ LOAD_ATTR_METHOD_POLY 412
 LOAD_ATTR_CLASSMETHOD 413
 POP_JUMP_IF_TRUE_SLOT 414
 POP_JUMP_IF_FALSE_SLOT 415
+
+# jit88 JI: the forms of RESUME and JUMP_BACKWARD that the lowering picks
+# under -X jit=on and always, whose event enters the code's unit.
+RESUME_JIT 416
+JUMP_BACKWARD_JIT 417

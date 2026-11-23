@@ -3870,14 +3870,14 @@ class IREmitter(Emitter):
             self.emit("ir_shape_offset = (uint32_t)ir_selected_offset;\n")
             source = "ir_shape_offset"
         else:
-            self.emit(f"PyTypeObject *tp = Py_TYPE({pointer});\n")
-            self.emit(f"assert({version} != 0);\n")
-            self.emit(f"if (FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != {version}) {{\n")
-            self.emit_jump_to_predicted(inst)
-            self.emit("}\n")
-            self.emit(f"if (_PyObject_Shape({pointer}) != {shape}) {{\n")
-            self.emit_jump_to_predicted(inst)
-            self.emit("}\n")
+            # The expansion that the leaf translator reads too (ir_leaf.py)
+            for item in ir_leaf.capability_expansion(tkn.text, [pointer, version, shape]):
+                if item[0] == "stmt":
+                    self.emit(item[1] + "\n")
+                else:
+                    self.emit(f"if ({item[1]}) {{\n")
+                    self.emit_jump_to_predicted(inst)
+                    self.emit("}\n")
             source = "fb->offset"
         storage.stack.shape_read_binding = (var.ir_inplace, source)
         storage.stack.shape_read_complete = False
@@ -3906,7 +3906,8 @@ class IREmitter(Emitter):
         storage.stack.shape_read_binding = None
         storage.stack.shape_read_complete = True
         self.shape_read_uses += 1
-        self.emit(f" shape_read_dup(_PyValue_AsKnownObjectBorrowPointer({name}), {offset})")
+        [(_, expression)] = ir_leaf.capability_expansion(tkn.text, [name, offset])
+        self.emit(" " + expression)
         return True
 
     def element_operation(self, tkn, tkn_iter, uop, storage, inst):
@@ -3946,30 +3947,38 @@ class IREmitter(Emitter):
             self.emit_jump_to_predicted(inst)
             self.emit("}\n")
 
+        def expand(args, pointer_test=None):
+            "Print the expansion that the leaf translator reads too (ir_leaf.py)"
+            for item in ir_leaf.capability_expansion(tkn.text, args, pointer_test):
+                if item[0] == "guard":
+                    miss(item[1])
+                elif item[0] == "stmt":
+                    self.emit(item[1] + "\n")
+                elif item[0] == "expr":
+                    self.emit(item[1])
+                else:
+                    # The indexed list borrow/acquisition interval currently
+                    # relies on the GIL. Keep FT on its existing generic path.
+                    self.emit("#ifdef Py_GIL_DISABLED\n")
+                    self.emit_jump_to_predicted(inst)
+                    self.emit("#endif\n")
+
         owner = current(names[0])
         if tkn.text == "IR_GUARD_INLINE_INT":
-            miss(f"!PyValue_IsInlineInt({names[0]})")
+            expand(names)
             stack.element_guards[("INT", owner)] = "INT"
         elif tkn.text == "IR_GUARD_ELEMENT_TYPE":
             value, kind = names
             if kind not in {"LIST", "TUPLE"}:
                 raise analysis_error("element type must be LIST or TUPLE", tkn)
-            if kind == "LIST":
-                # The indexed list borrow/acquisition interval currently
-                # relies on the GIL. Keep FT on its existing generic path.
-                self.emit("#ifdef Py_GIL_DISABLED\n")
-                self.emit_jump_to_predicted(inst)
-                self.emit("#endif\n")
-            prefix = "PyList" if kind == "LIST" else "PyTuple"
             # A slot that is read in place holds an object or an inline value,
             # never NULL: a local that may be unbound is checked before it is
             # read as an operand.  The test reads the slot's top bits.
             var = find_local(value, storage)
+            pointer_test = None
             if var.ir_inplace is not None:
                 pointer_test = f"PyValue_IsPointerSpaceAt(&IR_SLOT({FIELD_VARS[var.ir_inplace]}))"
-            else:
-                pointer_test = f"PyValue_IsObject({value})"
-            miss(f"!{pointer_test} || !{prefix}_CheckExact(_PyValue_AsKnownObjectBorrowPointer({value}))")
+            expand(names, pointer_test)
             stack.element_guards[("TYPE", owner)] = kind
             var.known_object = True
         elif tkn.text == "IR_GUARD_ELEMENT_INDEX":
@@ -3983,15 +3992,7 @@ class IREmitter(Emitter):
                     index in stack.element_indices or
                     index in {var.name for var in self.current_value_locals(storage)}):
                 raise analysis_error("checked element index shadows a live identity", tkn)
-            prefix = "PyList" if kind == "LIST" else "PyTuple"
-            size = f"{prefix}_GET_SIZE(_PyValue_AsKnownObjectBorrowPointer({container}))"
-            self.emit(f"Py_ssize_t {index} = PyValue_InlineInt64({subscript});\n")
-            if kind == "LIST":
-                self.emit(f"if ({index} < 0) {{ {index} += {size}; }}\n")
-                miss(f"{index} < 0 || {index} >= {size}")
-            else:
-                miss(f"{index} < 0")
-                miss(f"{index} >= {size}")
+            expand(names)
             stack.element_indices[index] = (owner, subvalue, kind, id(self.native_scopes[-1]))
         else:
             container, index = names
@@ -4000,8 +4001,7 @@ class IREmitter(Emitter):
             if (capability is None or capability[0] != owner or capability[2] != kind or
                     capability[3] != id(self.native_scopes[-1])):
                 raise analysis_error("element read lacks its current lexical bounds/anchor", tkn)
-            prefix = "PyList" if kind == "LIST" else "PyTuple"
-            self.emit(f"PyValue_DUP({prefix}_GET_VALUE(_PyValue_AsKnownObjectBorrowPointer({container}), {index}))")
+            expand([container, index, kind])
             self.element_result = HELPERS[tkn.text]
         return True
 

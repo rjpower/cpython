@@ -999,6 +999,14 @@ def capability_expansion(name: str, args: list[str], pointer_test: str | None = 
     raise KeyError(name)
 
 
+def element_kind(uop) -> str:
+    """The kind of container that IR_DUP_CANONICAL_ELEMENT reads: the one
+    that the uop's IR_GUARD_ELEMENT_INDEX checked its index for"""
+    toks = [t.text for t in uop.body.tokens()]
+    mode = toks[toks.index("IR_GUARD_ELEMENT_INDEX") + 8]
+    return "LIST" if mode == "FROM_END" else "TUPLE"
+
+
 CAPABILITY_MACROS = ("IR_GUARD_INLINE_INT", "IR_GUARD_ELEMENT_TYPE",
                      "IR_GUARD_ELEMENT_INDEX", "IR_DUP_CANONICAL_ELEMENT",
                      "IR_GUARD_SHAPE_READ", "IR_DUP_SHAPE_READ")
@@ -1362,7 +1370,7 @@ class Translator:
             else:
                 raise LeafError(f"{e.value} with a computed argument", e.token)
         if e.value == "IR_DUP_CANONICAL_ELEMENT":
-            names.append(self.element_kind(names[0], e.token))
+            names.append(element_kind(self.uop))
         items = capability_expansion(e.value, names)
         guards = [it for it in items if it[0] == "guard"]
         k = 0
@@ -1383,13 +1391,6 @@ class Translator:
         if statement and result is not None:
             raise LeafError(f"{e.value} as a statement", e.token)
         return result
-
-    def element_kind(self, container: str, token) -> str:
-        "The kind that the uop's IR_GUARD_ELEMENT_INDEX checked for container"
-        toks = [t.text for t in self.uop.body.tokens()]
-        i = toks.index("IR_GUARD_ELEMENT_INDEX")
-        mode = toks[i + 8]
-        return "LIST" if mode == "FROM_END" else "TUPLE"
 
     def inline_statement(self, text: str, anchor) -> None:
         "A statement of a capability macro's expansion"

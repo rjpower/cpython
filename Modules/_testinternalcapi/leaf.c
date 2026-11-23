@@ -359,7 +359,121 @@ error:
     return NULL;
 }
 
+/* The leaf probes: each uop inside the leaf subset as a C function on a
+ * stack of words (Tools/cases_generator/leaf_probe_generator.py), printed by
+ * the generators' Emitter with the probe's binding of the statement macros.
+ * The interpreter's word and frame stack pointer have no part in a probe:
+ * the fused flag is the caller's, and the stack is the caller's array. */
+enum { LEAF_PROBE_NEXT, LEAF_PROBE_EXIT, LEAF_PROBE_DEOPT, LEAF_PROBE_RAISE,
+       LEAF_PROBE_COMPLETE };
+
+struct leaf_probe_result {
+    PyValue *stack_pointer;     // after NEXT: the top of the outputs
+    int branch;                 // JUMPBY or JUMPTO ran
+    int edge;                   // 0, or 1 + the flag that IR_REPORT_EDGE saw
+    int fused_if_false;         // IR_FUSED_IF_FALSE(), an input
+    PyValue completed;          // after COMPLETE: the completion's value
+};
+
+typedef int (*leaf_probe_fn)(_PyInterpreterFrame *, PyValue *, int,
+                             const uint64_t *, struct leaf_probe_result *);
+
+struct leaf_probe {
+    const char *name;
+    leaf_probe_fn run;
+    int inputs;
+};
+
+#undef ASSERT_WITHIN_STACK_BOUNDS
+#define ASSERT_WITHIN_STACK_BOUNDS(F, L) ((void)0)
+#undef IR_FUSED_IF_FALSE
+#define IR_FUSED_IF_FALSE() (result->fused_if_false)
+
+/* A probe declares each stack item; a body may not use them all */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#include "leaf_probes.c.h"
+#pragma GCC diagnostic pop
+
+#define LEAF_PROBE_STACK 16
+
+static uint64_t
+tuple_word(PyObject *tuple, Py_ssize_t i)
+{
+    PyObject *item = PySequence_GetItem(tuple, i);
+    if (item == NULL) {
+        return 0;
+    }
+    uint64_t word = PyLong_AsUnsignedLongLongMask(item);
+    Py_DECREF(item);
+    return word;
+}
+
+/* leaf_probe(name, inputs, oparg, caches, fused_if_false): run the probe of
+ * uop name on the input words, in the caller's frame.  Returns (outcome,
+ * outputs, branch, edge, completed); the outputs are the stack's words after
+ * NEXT, else (). */
+static PyObject *
+leaf_probe(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    const char *name;
+    PyObject *inputs, *caches;
+    int oparg, fused_if_false;
+    if (!PyArg_ParseTuple(args, "sO!iO!p", &name, &PyTuple_Type, &inputs,
+                          &oparg, &PyTuple_Type, &caches, &fused_if_false)) {
+        return NULL;
+    }
+    const struct leaf_probe *probe = LEAF_PROBES;
+    while (probe->name != NULL && strcmp(probe->name, name) != 0) {
+        probe++;
+    }
+    if (probe->name == NULL) {
+        PyErr_Format(PyExc_KeyError, "no leaf probe %s", name);
+        return NULL;
+    }
+    Py_ssize_t n = PyTuple_GET_SIZE(inputs);
+    if (n != probe->inputs || PyTuple_GET_SIZE(caches) > 8) {
+        PyErr_SetString(PyExc_ValueError, "wrong number of inputs or caches");
+        return NULL;
+    }
+    PyValue stack[LEAF_PROBE_STACK] = {0};
+    uint64_t cache_words[8] = {0};
+    for (Py_ssize_t i = 0; i < n; i++) {
+        stack[i].bits = (uintptr_t)tuple_word(inputs, i);
+    }
+    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(caches); i++) {
+        cache_words[i] = tuple_word(caches, i);
+    }
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    struct leaf_probe_result result = {NULL, 0, 0, fused_if_false, {0}};
+    _PyInterpreterFrame *frame = _PyThreadState_GET()->current_frame;
+    int outcome = probe->run(frame, stack + n, oparg, cache_words, &result);
+    if (outcome == LEAF_PROBE_RAISE && PyErr_Occurred()) {
+        PyErr_Clear();
+    }
+    Py_ssize_t count = outcome == LEAF_PROBE_NEXT ? result.stack_pointer - stack : 0;
+    assert(0 <= count && count < LEAF_PROBE_STACK);
+    PyObject *outputs = PyTuple_New(count);
+    if (outputs == NULL) {
+        return NULL;
+    }
+    for (Py_ssize_t i = 0; i < count; i++) {
+        PyObject *word = PyLong_FromUnsignedLongLong(stack[i].bits);
+        if (word == NULL) {
+            Py_DECREF(outputs);
+            return NULL;
+        }
+        PyTuple_SET_ITEM(outputs, i, word);
+    }
+    return Py_BuildValue("iNiiK", outcome, outputs, result.branch, result.edge,
+                         (unsigned long long)result.completed.bits);
+}
+
 static PyMethodDef test_methods[] = {
+    {"leaf_probe", leaf_probe, METH_VARARGS},
     {"leaf_primitive", _PyCFunction_CAST(leaf_primitive), METH_FASTCALL},
     {"leaf_primitive_names", leaf_primitive_names, METH_NOARGS},
     {"leaf_frame", leaf_frame, METH_NOARGS},

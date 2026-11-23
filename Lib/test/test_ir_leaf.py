@@ -458,5 +458,211 @@ class RecordTests(unittest.TestCase):
         self.assertRegex(text, r"exit_if EXIT %\d+ \[")
 
 
+# ---------------------------------------------------------------------------
+# Uops: the leaf IR's evaluation (ir_leaf_eval.evaluate) against the C uop
+# (its probe, Modules/_testinternalcapi/leaf_probes.c.h) on generated inputs.
+
+class Shaped:
+    "Instances with inline values: the shape guard and read"
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
+
+
+SHAPED = [Shaped(1, "two"), Shaped(2.5, None), Shaped([3], (4,))]
+SHAPED[0].a         # gives Shaped a type version
+# Mortal objects: a uop's counts on them change
+BIG_INTS = [2**70, -2**80, 2**63, -2**63 - 1]
+LISTS = [[1, 2, 3], ["a", 2.5, None, 2**70], [], [7]]
+TUPLES = [(4, "five", 6.5), (), (2**70,), (None, True)]
+INT_WORDS = [encode_int(i) for i in INTS[::2]] + [word(i) for i in BIG_INTS]
+FLOAT_WORDS = [encode_float(d) for d in FLOATS[::2]] + [word(NAN)]
+OTHERS = ["str", None, True, 2.5j, SHAPED[0]]     # held: their words borrow
+OTHER_WORDS = [word(o) for o in OTHERS]
+BOOL_WORDS = [word(True), word(False)]
+INDEX_OPARGS = range(0, 3)
+
+
+def owns_count(w):
+    return ir_leaf._owns_count(context(), w)
+
+
+def object_at(w):
+    "The object of an owning word, with a new reference held by Python"
+    return ctypes.cast(w & ~TAG, ctypes.py_object).value
+
+
+def int_domain():
+    return [(a, b) for a in INT_WORDS for b in INT_WORDS[::2]]
+
+
+def float_domain():
+    return [(a, b) for a in FLOAT_WORDS for b in FLOAT_WORDS[::2]]
+
+
+def mixed_domain():
+    pool = INT_WORDS[::3] + FLOAT_WORDS[::3] + OTHER_WORDS
+    return [(a, b) for a in pool for b in pool]
+
+
+def subscript_domain(containers):
+    return [(word(c), encode_int(i)) for c in containers
+            for i in range(-len(c) - 1, len(c) + 1)] + [
+            (word(containers[0]), w) for w in OTHER_WORDS[:2] + [word(2**70)]]
+
+
+def iterator_domain(make):
+    return [(word(it), capi.leaf_primitive("PyValue_TagIndex", i))
+            for it, n in make() for i in range(n + 2)]
+
+
+def shape_caches(inputs):
+    owner = object_at(inputs[0])
+    version = _type_version(type(owner))
+    shape = capi.leaf_primitive("_PyObject_Shape", id(owner))
+    values = capi.leaf_primitive("_PyObject_InlineValues", id(owner))
+    first = values + LAYOUT.offsets["PyDictValues.values"] - id(owner)
+    return [{"type_version": version, "shape": shape, "offset": first + k * 8}
+            for k in range(2)] + [{"type_version": version + 1, "shape": shape, "offset": first},
+                                  {"type_version": version, "shape": shape ^ 1, "offset": first}]
+
+
+def _type_version(tp):
+    return ctypes.c_uint32.from_address(id(tp) + LAYOUT.offsets["PyTypeObject.tp_version_tag"]).value
+
+
+# Handler: (inputs, a function of the inputs giving the cache operands, opargs)
+HANDLERS = {
+    **{name: (int_domain, None, [0]) for name in (
+        "BINARY_OP_ADD_INT", "BINARY_OP_SUBTRACT_INT", "BINARY_OP_MULTIPLY_INT",
+        "BINARY_OP_FLOOR_DIVIDE_INT")},
+    **{name: (float_domain, None, [0]) for name in (
+        "BINARY_OP_ADD_FLOAT", "BINARY_OP_SUBTRACT_FLOAT", "BINARY_OP_MULTIPLY_FLOAT",
+        "BINARY_OP_TRUEDIV_FLOAT")},
+    "COMPARE_OP_JUMP_INT": (mixed_domain, None, [i << 5 | k for i in range(6) for k in (0, 16)]),
+    "COMPARE_OP_JUMP_FLOAT": (float_domain, None, [i << 5 | k for i in range(6) for k in (0, 16)]),
+    "IS_OP_JUMP": (mixed_domain, None, [0, 1]),
+    "POP_JUMP_IF_FALSE_BOOL": (lambda: [(w,) for w in BOOL_WORDS + OTHER_WORDS], None, [0]),
+    "POP_JUMP_IF_TRUE_BOOL": (lambda: [(w,) for w in BOOL_WORDS + OTHER_WORDS], None, [0]),
+    "POP_JUMP_IF_NOT_NONE": (lambda: [(w,) for w in BOOL_WORDS + OTHER_WORDS + INT_WORDS[:3]],
+                             None, [0]),
+    "POP_JUMP_IF_FALSE_INT": (lambda: [(w,) for w in INT_WORDS + OTHER_WORDS], None, [0]),
+    "BINARY_OP_SUBSCR_LIST_INT": (lambda: subscript_domain(LISTS), None, [0]),
+    "BINARY_OP_SUBSCR_TUPLE_INT": (lambda: subscript_domain(TUPLES), None, [0]),
+    "FOR_ITER_LIST": (lambda: iterator_domain(lambda: [(l, len(l)) for l in LISTS]), None, [0]),
+    "FOR_ITER_TUPLE": (lambda: iterator_domain(lambda: [(t, len(t)) for t in TUPLES]), None, [0]),
+    "FOR_ITER_RANGE": (lambda: [(word(it), 0) for it in
+                                (iter(range(3)), iter(range(5, -2, -2)), iter(range(0)))]
+                       + [(word(it), 0) for it in (iter([1]),)], None, [0]),
+    "LOAD_ATTR_SHAPE": (lambda: [(word(o),) for o in SHAPED], shape_caches, [0, 1]),
+    "LOAD_SMALL_INT_INLINE": (lambda: [()], None, [0, 1, 200, 255]),
+    "LOAD_FAST_BORROW": (lambda: [()], None, [0, 1]),
+    "LOAD_FAST": (lambda: [()], None, [0, 1]),
+    "JUMP_FORWARD": (lambda: [()], None, [0, 3]),
+}
+
+
+def output_positions(part, oparg):
+    "The stack position of each named output of a uop, and the stack's height"
+    positions, height = {}, 0
+    for item in part.stack.outputs:
+        if item.name != "unused":
+            positions[item.name] = height
+        height += eval(item.size, {"oparg": oparg}) if item.is_array() else 1
+    return positions, height
+
+
+class LeafUopTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        RecordTests.setUpClass.__func__(cls)
+
+    def check_uop(self, uop, part, env, caches, oparg, fused, keep):
+        """Run uop on env's words in C and in the evaluator; compare.  Returns
+        the outcome, or None if the inputs make the C undefined."""
+        for guard in uop.guards:
+            if guard.site is None:
+                w = next(env[i.value] for i in uop.inputs if i.name == guard.input)
+                if not ir_leaf.PRIMITIVES["PyValue_IsObject"].spec(context(), w):
+                    return "EXIT"
+        words = [env[i.value] for i in uop.inputs]
+        consumed = [w for i, w in zip(uop.inputs, words)
+                    if i.ownership == "CONSUMED" and owns_count(w)]
+        for w in consumed:
+            ctypes.pythonapi.Py_IncRef(ctypes.py_object(object_at(w)))
+        cache_words = [caches[fb.name] for fb in uop.feedback]
+        cx = context(frame=capi.leaf_frame())
+        try:
+            expected = ir_leaf_eval.evaluate(
+                uop.leaf, cx, {i.name: w for i, w in zip(uop.inputs, words)},
+                {fb.name: caches[fb.name] for fb in uop.feedback}, oparg,
+                {"fused_if_false": fused})
+        except ir_leaf_eval.UndefinedBehavior:
+            for w in consumed:
+                ctypes.pythonapi.Py_DecRef(ctypes.py_object(object_at(w)))
+            return None
+        got = capi.leaf_probe(uop.name, tuple(words), oparg, tuple(cache_words), fused)
+        outcome, outputs, branch, edge, completed = got
+        where = (uop.name, [hex(w) for w in words], oparg, caches)
+        self.assertEqual(ir_leaf_eval.OUTCOMES[outcome], expected.outcome, where)
+        self.assertEqual(edge, expected.edge, where)
+        # Read before calling a method of self: a bound method counts self
+        writes = [(hex(addr), ir_leaf_eval.RealMemory().load(addr, t), after)
+                  for addr, t, before, after in cx.mem.writes()]
+        for addr, real, after in writes:
+            self.assertEqual(real, after, (where, addr))
+        if expected.outcome != "NEXT":
+            if expected.outcome == "COMPLETE":
+                self.assertEqual(completed, expected.completed, where)
+            for w in consumed:
+                ctypes.pythonapi.Py_DecRef(ctypes.py_object(object_at(w)))
+            return expected.outcome
+        self.assertEqual(bool(branch), expected.branch, where)
+        positions, height = output_positions(part, oparg)
+        self.assertEqual(len(outputs), height, where)
+        for out in uop.outputs:
+            if out.name == "unused":
+                continue
+            got_word = outputs[positions[out.name]]
+            want = expected.outputs[out.name]
+            if isinstance(want, ir_leaf_eval.Box):
+                obj = object_at(got_word)
+                self.assertEqual(type(obj).__name__, want.type, where)
+                self.assertTrue(same(obj, want.value), (where, obj, want.value))
+            else:
+                self.assertEqual(got_word, want, (where, out.name))
+            if out.ownership in ("OWNED", "ALIAS") and owns_count(got_word):
+                keep.append(got_word)
+            env[out.value] = got_word
+        return "NEXT"
+
+    def test_handlers(self):
+        parts = self.uops
+        for handler, (domain, make_caches, opargs) in HANDLERS.items():
+            record = self.records[handler]
+            self.assertTrue(all(u.leaf is not None for u in record.uops), handler)
+            externals = [v.id for v in sorted((v for v in record.values if v.external >= 0),
+                                              key=lambda v: v.external)]
+            outcomes = set()
+            for inputs in domain():
+                for caches in (make_caches(inputs) if make_caches else [{}]):
+                    for oparg in opargs:
+                        for fused in (False, True):
+                            env = dict(zip(externals, inputs))
+                            keep = []
+                            try:
+                                for uop in record.uops:
+                                    outcome = self.check_uop(uop, parts[uop.name], env,
+                                                             caches, oparg, fused, keep)
+                                    outcomes.add(outcome)
+                                    if outcome != "NEXT":
+                                        break
+                            finally:
+                                for w in keep:
+                                    ctypes.pythonapi.Py_DecRef(ctypes.py_object(object_at(w)))
+            with self.subTest(handler=handler):
+                self.assertIn("NEXT", outcomes)
+
+
 if __name__ == "__main__":
     unittest.main()

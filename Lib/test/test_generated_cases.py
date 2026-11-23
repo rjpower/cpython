@@ -3800,9 +3800,9 @@ class TestShapeReadMetadata(unittest.TestCase):
                     self.assertEqual("_PyIR_LEARNED_ONLY" in effects, poly)
                     self.assertIn("uint32_t offset = " +
                                   ("ir_shape_offset" if poly else "fb->offset") + ";", handler)
-                    self.assertIn("attr = shape_read_dup(", handler)
+                    self.assertIn("attr = _PyObject_ShapeReadDup(", handler)
                     self.assertLess(handler.index("uint32_t offset ="),
-                                    handler.index("attr = shape_read_dup("))
+                                    handler.index("attr = _PyObject_ShapeReadDup("))
                     if not poly:
                         self.assertLess(handler.index("tp->tp_version_tag"),
                                         handler.index("_PyObject_Shape("))
@@ -3846,7 +3846,7 @@ class TestShapeReadMetadata(unittest.TestCase):
 
     def test_shape_read_rejects_private_native_name_shadows(self):
         source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
-        for name in ("shape_read_offset", "shape_read_dup", "ir_shape_offset",
+        for name in ("shape_read_offset", "_PyObject_ShapeReadDup", "ir_shape_offset",
                      "ir_selected_offset"):
             for declaration in (f"int {name};", f"#define {name} opaque\n"):
                 prefix = ("op(_SHADOW_SHAPE_HELPER, (owner -- owner)) {\n" +

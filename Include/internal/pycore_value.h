@@ -977,6 +977,17 @@ PyValue_Is(PyValueBorrow a, PyValueBorrow b)
 }
 #define PyValue_Is(V0, V1) (PyValue_Is)(PyValue_Borrow(V0), PyValue_Borrow(V1))
 
+// Whether value names op, an object in pointer space: its pointer's bits,
+// ignoring bit 0, the no-count tag.  A guard that a word is a known object,
+// such as a type or a cached builtin; no other word has those bits.
+static inline bool
+_PyValue_NamesObject(PyValueBorrow value, PyObject *op)
+{
+    return (value.bits & ~(uintptr_t)1) == (uintptr_t)op;
+}
+#define _PyValue_NamesObject(V0, OP) \
+    (_PyValue_NamesObject)(PyValue_Borrow(V0), _PyObject_CAST(OP))
+
 /* The word itself, for the few places outside the value headers that need
    it (R26, pyjit/design/value-api.md section 1.6). Everything else reads a
    value through the predicates and accessors above. */

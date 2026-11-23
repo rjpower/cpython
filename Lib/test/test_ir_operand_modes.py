@@ -263,18 +263,18 @@ class OperandModeGeneratorTests(unittest.TestCase):
         body = body.split("TARGET(", 1)[0]
         self.assertNotIn("IR_IS_LOCAL", body)
         self.assertNotIn("IR_CONSUME_INPUT", body)
-        self.assertIn("attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);", body)
+        self.assertIn("attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);", body)
         self.assertIn("ir_own_B = PyValue_NULL;", body)
-        read = body.index("attr = shape_read_dup(")
+        read = body.index("attr = _PyObject_ShapeReadDup(")
         store = body.index("IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), attr);")
         close = body.index("_XCLOSE_POINTER(ir_own_B);")
         self.assertLess(read, store)
         self.assertLess(store, close)
         self.assertNotIn("retire_published_values(", body)
-        helpers = (Path(test_tools.basepath) / "Python" / "ceval_macros.h").read_text()
-        read = helpers.split("shape_read_dup(PyObject *owner, uint32_t offset)", 1)[1]
+        helpers = (Path(test_tools.basepath) / "Include" / "internal" / "pycore_dict.h").read_text()
+        read = helpers.split("_PyObject_ShapeReadDup(PyObject *owner, uint32_t offset)", 1)[1]
         read = read.split("\n}", 1)[0]
-        self.assertIn("PyValue_Borrow(*(PyValue *)((char *)owner + offset))", read)
+        self.assertIn("PyValue_Borrow(*_PyObject_ValueSlot(owner, offset))", read)
         self.assertIn("assert(!PyValue_IsNull(found));", read)
         self.assertIn("return PyValue_DUP(found);", read)
         self.assertIn("int opcode = LOAD_ATTR_SHAPE;", body)

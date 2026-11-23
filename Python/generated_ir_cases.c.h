@@ -4017,8 +4017,7 @@ ir_run_CALL_ISINSTANCE(
             {
                 callable = IR_SLOT(IR_B(ir_word));
                 PyInterpreterState *interp = tstate->interp;
-                if ((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.isinstance) {
+                if (!_PyValue_NamesObject(callable, interp->callable_cache.isinstance)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -4031,7 +4030,7 @@ ir_run_CALL_ISINSTANCE(
                 null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 STAT_INC(CALL, hit);
                 int retval = 1;
-                if ((cls.bits & ~(uintptr_t)1) != (uintptr_t)PyValue_TYPE(instance)) {
+                if (!_PyValue_NamesObject(cls, PyValue_TYPE(instance))) {
                     retval = _PyValue_IsInstance(instance, cls);
                 }
                 if (retval < 0) {
@@ -4361,8 +4360,7 @@ ir_run_CALL_LEN(
             {
                 callable = IR_SLOT(IR_B(ir_word));
                 PyInterpreterState *interp = tstate->interp;
-                if ((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.len) {
+                if (!_PyValue_NamesObject(callable, interp->callable_cache.len)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -4414,8 +4412,7 @@ ir_run_CALL_LIST_APPEND(
             {
                 callable = IR_SLOT(IR_B(ir_word));
                 PyInterpreterState *interp = tstate->interp;
-                if ((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.list_append) {
+                if (!_PyValue_NamesObject(callable, interp->callable_cache.list_append)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5203,7 +5200,7 @@ ir_run_CALL_STR_1(
             // _GUARD_CALLABLE_STR_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyUnicode_Type) {
+                if (!_PyValue_NamesObject(callable, &PyUnicode_Type)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5267,7 +5264,7 @@ ir_run_CALL_TUPLE_1(
             // _GUARD_CALLABLE_TUPLE_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyTuple_Type) {
+                if (!_PyValue_NamesObject(callable, &PyTuple_Type)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5331,7 +5328,7 @@ ir_run_CALL_TYPE_1(
             // _GUARD_CALLABLE_TYPE_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyType_Type) {
+                if (!_PyValue_NamesObject(callable, &PyType_Type)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -8580,9 +8577,13 @@ ir_run_INSTRUMENTED_JUMP_BACKWARD(
             (void)oparg;
             // _CHECK_PERIODIC
             {
-                int err = check_periodics(tstate);
-                if (err != 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
+                QSBR_QUIESCENT_STATE(tstate);
+                if (_Py_EvalBreakerHasEvents(tstate)) {
+                    int err = _Py_HandlePending(tstate);
+                    if (err != 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
                 }
             }
             // _MONITOR_JUMP_BACKWARD
@@ -9230,9 +9231,13 @@ ir_run_JUMP_BACKWARD(
             (void)oparg;
             // _CHECK_PERIODIC
             {
-                int err = check_periodics(tstate);
-                if (err != 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
+                QSBR_QUIESCENT_STATE(tstate);
+                if (_Py_EvalBreakerHasEvents(tstate)) {
+                    int err = _Py_HandlePending(tstate);
+                    if (err != 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
                 }
             }
             // _JUMP_BACKWARD_NO_INTERRUPT
@@ -9979,7 +9984,7 @@ ir_run_LOAD_ATTR_INSTANCE_VALUE(
             {
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
-                PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
+                PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
                 PyValueBorrow found = PyValue_Borrow(*value_ptr);
                 if (PyValue_IsNull(found)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -10591,7 +10596,7 @@ ir_run_LOAD_ATTR_SHAPE(
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = fb->offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -10652,7 +10657,7 @@ ir_run_LOAD_ATTR_SHAPE_LOCAL_TEMP(
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = fb->offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
@@ -10709,7 +10714,7 @@ ir_run_LOAD_ATTR_SHAPE_POLY(
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = ir_shape_offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -10767,7 +10772,7 @@ ir_run_LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP(
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = ir_shape_offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
@@ -10822,8 +10827,7 @@ ir_run_LOAD_ATTR_SLOT(
             {
                 uint32_t index = fb->index;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
-                PyValueBorrow value =
-                PyValue_Borrow(*(PyValue *)((char *)owner_o + index));
+                PyValueBorrow value = PyValue_Borrow(*_PyObject_ValueSlot(owner_o, index));
                 if (PyValue_IsNull(value)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -14712,7 +14716,7 @@ ir_run_STORE_ATTR_INSTANCE_VALUE(
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(_PyObject_GetManagedDict(owner_o) == NULL);
-                PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
+                PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
                 PyValue old_value = *value_ptr;
                 #ifdef Py_SHAPES
 
@@ -14801,7 +14805,7 @@ ir_run_STORE_ATTR_SHAPE(
                 value = IR_VIEW(IR_B(ir_word));
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
-                PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
+                PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
                 PyValue old_value = *value_ptr;
                 assert(!PyValue_IsNull(old_value));
                 ir_own_B = IR_DETACH(ir_word, B, value);
@@ -14867,7 +14871,7 @@ ir_run_STORE_ATTR_SHAPE_ADD(
                 uint32_t shape_to = fb->shape_to;
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
-                PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
+                PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
                 assert(PyValue_IsNull(*value_ptr));
                 ir_own_B = IR_DETACH(ir_word, B, value);
                 *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
@@ -14929,11 +14933,11 @@ ir_run_STORE_ATTR_SLOT(
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                char *addr = (char *)owner_o + index;
+                PyValue *addr = _PyObject_ValueSlot(owner_o, index);
                 STAT_INC(STORE_ATTR, hit);
-                PyValue old_value = *(PyValue *)addr;
+                PyValue old_value = *addr;
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *(PyValue *)addr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                *addr = IR_TAKEN_REQUIRED(value, ir_own_B);
                 UNLOCK_OBJECT(owner_o);
                 ir_own_A = IR_DETACH(ir_word, A, owner);
                 (void)(ir_own_A);
@@ -20003,8 +20007,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 callable = IR_SLOT(IR_B(ir_word));
                 PyInterpreterState *interp = tstate->interp;
-                if ((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.isinstance) {
+                if (!_PyValue_NamesObject(callable, interp->callable_cache.isinstance)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -20017,7 +20020,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 STAT_INC(CALL, hit);
                 int retval = 1;
-                if ((cls.bits & ~(uintptr_t)1) != (uintptr_t)PyValue_TYPE(instance)) {
+                if (!_PyValue_NamesObject(cls, PyValue_TYPE(instance))) {
                     retval = _PyValue_IsInstance(instance, cls);
                 }
                 if (retval < 0) {
@@ -20267,8 +20270,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 callable = IR_SLOT(IR_B(ir_word));
                 PyInterpreterState *interp = tstate->interp;
-                if ((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.len) {
+                if (!_PyValue_NamesObject(callable, interp->callable_cache.len)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -20316,8 +20318,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 callable = IR_SLOT(IR_B(ir_word));
                 PyInterpreterState *interp = tstate->interp;
-                if ((callable.bits & ~(uintptr_t)1)
-                    != (uintptr_t)interp->callable_cache.list_append) {
+                if (!_PyValue_NamesObject(callable, interp->callable_cache.list_append)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -21069,7 +21070,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _GUARD_CALLABLE_STR_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyUnicode_Type) {
+                if (!_PyValue_NamesObject(callable, &PyUnicode_Type)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -21129,7 +21130,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _GUARD_CALLABLE_TUPLE_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyTuple_Type) {
+                if (!_PyValue_NamesObject(callable, &PyTuple_Type)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -21189,7 +21190,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _GUARD_CALLABLE_TYPE_1
             {
                 callable = IR_SLOT(IR_B(ir_word));
-                if ((callable.bits & ~(uintptr_t)1) != (uintptr_t)&PyType_Type) {
+                if (!_PyValue_NamesObject(callable, &PyType_Type)) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -23205,9 +23206,13 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)oparg;
             // _CHECK_PERIODIC
             {
-                int err = check_periodics(tstate);
-                if (err != 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
+                QSBR_QUIESCENT_STATE(tstate);
+                if (_Py_EvalBreakerHasEvents(tstate)) {
+                    int err = _Py_HandlePending(tstate);
+                    if (err != 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
                 }
             }
             // _MONITOR_JUMP_BACKWARD
@@ -23813,9 +23818,13 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)oparg;
             // _CHECK_PERIODIC
             {
-                int err = check_periodics(tstate);
-                if (err != 0) {
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
+                QSBR_QUIESCENT_STATE(tstate);
+                if (_Py_EvalBreakerHasEvents(tstate)) {
+                    int err = _Py_HandlePending(tstate);
+                    if (err != 0) {
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
                 }
             }
             // _JUMP_BACKWARD_NO_INTERRUPT
@@ -24388,7 +24397,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
-                PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
+                PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
                 PyValueBorrow found = PyValue_Borrow(*value_ptr);
                 if (PyValue_IsNull(found)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -24964,7 +24973,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = fb->offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -25021,7 +25030,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = fb->offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
@@ -25074,7 +25083,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = ir_shape_offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -25128,7 +25137,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _LOAD_ATTR_SHAPE
             {
                 uint32_t offset = ir_shape_offset;
-                attr = shape_read_dup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
@@ -25179,8 +25188,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 uint32_t index = fb->index;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
-                PyValueBorrow value =
-                PyValue_Borrow(*(PyValue *)((char *)owner_o + index));
+                PyValueBorrow value = PyValue_Borrow(*_PyObject_ValueSlot(owner_o, index));
                 if (PyValue_IsNull(value)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -27694,7 +27702,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(_PyObject_GetManagedDict(owner_o) == NULL);
-                PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
+                PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
                 PyValue old_value = *value_ptr;
                 #ifdef Py_SHAPES
 
@@ -27779,7 +27787,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 value = IR_VIEW(IR_B(ir_word));
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
-                PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
+                PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
                 PyValue old_value = *value_ptr;
                 assert(!PyValue_IsNull(old_value));
                 ir_own_B = IR_DETACH(ir_word, B, value);
@@ -27841,7 +27849,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 uint32_t shape_to = fb->shape_to;
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
-                PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
+                PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
                 assert(PyValue_IsNull(*value_ptr));
                 ir_own_B = IR_DETACH(ir_word, B, value);
                 *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
@@ -27899,11 +27907,11 @@ static const _PyIRForm ir_handler_forms[512] = {
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
                     JUMP_TO_PREDICTED(STORE_ATTR);
                 }
-                char *addr = (char *)owner_o + index;
+                PyValue *addr = _PyObject_ValueSlot(owner_o, index);
                 STAT_INC(STORE_ATTR, hit);
-                PyValue old_value = *(PyValue *)addr;
+                PyValue old_value = *addr;
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *(PyValue *)addr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                *addr = IR_TAKEN_REQUIRED(value, ir_own_B);
                 UNLOCK_OBJECT(owner_o);
                 ir_own_A = IR_DETACH(ir_word, A, owner);
                 (void)(ir_own_A);

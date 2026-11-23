@@ -233,6 +233,7 @@ annotations = {
     "tier1",
     "no_save_ip",
     "inline_ok",
+    "leaf",
     "window",
     "no_fold",
     "returns",

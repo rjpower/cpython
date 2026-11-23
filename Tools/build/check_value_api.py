@@ -233,6 +233,9 @@ ENCODING_FILES = (
     "Modules/_testinternalcapi.c",
     "Modules/_testinternalcapi/list.c",
     "Modules/_testinternalcapi/slots.c",
+    # The leaf primitives' test (Lib/test/test_ir_leaf.py), which exports the
+    # layout to the primitives' specs and passes words as integers.
+    "Modules/_testinternalcapi/leaf.c",
     # The type cache's guarded word (register-ir-v2-a5b.md, section 2.4).
     "Include/internal/pycore_typecache.h",
 )

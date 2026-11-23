@@ -1400,21 +1400,6 @@ set_eval_frame_interp(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
-/* Set whether code constructors reject malformed images; return the old
- * setting. Release builds do not by default. */
-static PyObject *
-set_code_validation(PyObject *self, PyObject *arg)
-{
-    int enable = PyObject_IsTrue(arg);
-    if (enable < 0) {
-        return NULL;
-    }
-    _PyOptimizationConfig *config = &_PyInterpreterState_GET()->opt_config;
-    bool old = config->validate_code;
-    config->validate_code = enable;
-    return PyBool_FromLong(old);
-}
-
 static PyObject *
 is_specialization_enabled(PyObject *self, PyObject *Py_UNUSED(args))
 {
@@ -5014,7 +4999,6 @@ static PyMethodDef module_functions[] = {
     {"set_eval_frame_record", set_eval_frame_record, METH_O, NULL},
     {"run_staged_provider", run_staged_provider, METH_VARARGS, NULL},
     {"is_specialization_enabled", is_specialization_enabled, METH_NOARGS, NULL},
-    {"set_code_validation", set_code_validation, METH_O, NULL},
     _TESTINTERNALCAPI_COMPILER_CLEANDOC_METHODDEF
     _TESTINTERNALCAPI_NEW_INSTRUCTION_SEQUENCE_METHODDEF
     _TESTINTERNALCAPI_COMPILER_CODEGEN_METHODDEF

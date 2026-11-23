@@ -623,9 +623,9 @@ TEMPLATE_CASES = [
     *[("def f(a, b):\n    a.p = b\n    return a", (cls(), 1), handler, "AB",
        [(o, v) for o in OWNERS for v in (7, 2.5)])
       for cls, handler in ((Shape, "STORE_ATTR_SHAPE"), (Slots, "STORE_ATTR_SLOT"))],
-    # The attribute of a local into a temporary
-    ("def f(a, b):\n    return a.q + b", (Shape(), 2), "LOAD_ATTR_SHAPE_LOCAL_TEMP", "AB",
-     [(None, o) for o in OWNERS]),
+    # The attribute of a local into a temporary, which is empty before
+    ("def f(a, b):\n    return a.q + b", (Shape(), 2), "LOAD_ATTR_SHAPE_LOCAL_TEMP", "B",
+     [(o,) for o in OWNERS]),
     ("import math\ndef f(a, b):\n    x = 1\n    x = math.pi\n    return x", (1, 2),
      "LOAD_ATTR_MODULE", "AB",
      [(old, m) for old in (Plain(), None) for m in (math, sys, Shape(), 4)]),

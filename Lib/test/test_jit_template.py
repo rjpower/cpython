@@ -180,6 +180,15 @@ class LoweringTests(unittest.TestCase):
                     if cond:
                         self.assertTrue(same(tuple(results), expected[1:]),
                                         (results, expected))
+                if predicate and jit_template_generator.LOWERINGS[name].exits:
+                    # With an exit, the lowering leaves by it where the predicate is false
+                    holds = expected if not nres else expected[0]
+                    cond, results, before, after = run(name, ops, args, rng, "exit")
+                    self.check_registers(name, ops, before, after)
+                    self.assertIs(cond, not holds)
+                    if holds and nres:
+                        self.assertTrue(same(tuple(results), expected[1:]),
+                                        (results, expected))
 
     def test_against_c(self):
         rng = random.Random(88)
@@ -880,6 +889,20 @@ class TemplateGraphTests(unittest.TestCase):
         self.assertEqual(names.count("PyValue_IsNull"), 1)
         self.assertNotIn("PyValue_XDUP", names)
         self.assertIn("PyValue_DUP", names)
+
+    def test_guards_leave_by_their_exit_without_a_bool(self):
+        "A predicate that only guards leaves by the exit: no result, no branch on one"
+        for handler, name in (("BINARY_OP_ADD_FLOAT", "PyValue_FloatOperandValues"),
+                              ("BINARY_OP_SUBSCR_LIST_INT", "PyValue_IsObject"),
+                              ("POP_JUMP_IF_FALSE_BOOL", "PyValue_BoolCheck")):
+            with self.subTest(handler=handler):
+                graph = graph_of(handler)
+                ops = [op for block in graph.blocks.values() for op in block.ops
+                       if op.kind == "prim" and jit_template_generator.prim_name(op) == name]
+                self.assertEqual(len(ops), 1)
+                self.assertIsNotNone(ops[0].exit)
+                self.assertEqual(len(ops[0].results),
+                                 len(ir_leaf.PRIMITIVES[name].results) - 1)
 
     def cse_loads(self, middle):
         """A graph that loads a field of one object, runs the ops in middle

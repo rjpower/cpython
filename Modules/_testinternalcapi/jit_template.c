@@ -186,7 +186,8 @@ jit_lower(PyObject *module, PyObject *args)
     }
     const void *aux = NULL;
     /* aux "exit": the label that a NULL result leaves for; the result reports
-       whether the lowering left by it.  "exit_fail": the same, with object
+       whether the lowering left by it (a predicate leaves where it is false).
+       "exit_fail": the same, with object
        allocation failing while the code runs, so that a box fails */
     int has_exit = 0, fail_boxes = 0;
     if (aux_name != Py_None) {
@@ -241,7 +242,7 @@ jit_lower(PyObject *module, PyObject *args)
         _PyJitAsm_MovMI(&a, AT(_PyJitReg_RBP, offsetof(RegState, cond)), 1);
         _PyJitAsm_Bind(&a, end);
     }
-    if (info->predicate) {
+    if (info->predicate && !has_exit) {
         _PyJitLabel holds = _PyJitAsm_NewLabel(&a);
         _PyJitAsm_MovMI(&a, AT(_PyJitReg_RBP, offsetof(RegState, cond)), 1);
         _PyJitAsm_Jcc(&a, (_PyJitCond)cond, holds);

@@ -43,13 +43,15 @@ class Lowering:
     temps: int = 0          # general registers
     xtemps: int = 0         # xmm registers
     calls: bool = False     # may call a helper: the live registers are saved
+    exits: bool = False     # takes the exit for NULL (a constructor) or false (a
+                            # predicate that branches to make its bool) as aux
 
 
 LOWERINGS = {
     # Tags
     "PyValue_IsNull": Lowering(),
     "PyValue_IsPointerSpace": Lowering(1),
-    "PyValue_IsObject": Lowering(1),
+    "PyValue_IsObject": Lowering(1, exits=True),
     "PyValue_IsInline": Lowering(1),
     "PyValue_IsInlineInt": Lowering(1),
     "PyValue_IsInlineFloat": Lowering(2),
@@ -60,8 +62,8 @@ LOWERINGS = {
     "PyValue_IsTrue": Lowering(1),
     "PyValue_IsFalse": Lowering(1),
     "PyValue_IsNone": Lowering(1),
-    "PyValue_BoolCheck": Lowering(2),
-    "PyValue_LongCheckExact": Lowering(2),
+    "PyValue_BoolCheck": Lowering(2, exits=True),
+    "PyValue_LongCheckExact": Lowering(2, exits=True),
     # Numbers
     "_PyValue_IntScaled": Lowering(),
     "_PyValue_FromIntScaled": Lowering(1),
@@ -69,9 +71,9 @@ LOWERINGS = {
     "PyValue_FromInlineInt": Lowering(1),
     "PyValue_InlineFloat": Lowering(1),
     "PyValue_FromDoubleNotNaN": Lowering(1),
-    "PyValue_FloatOperandValues": Lowering(2),
-    "PyValue_FromInt64": Lowering(1, calls=True),
-    "PyValue_FromDouble": Lowering(1, calls=True),
+    "PyValue_FloatOperandValues": Lowering(2, exits=True),
+    "PyValue_FromInt64": Lowering(1, calls=True, exits=True),
+    "PyValue_FromDouble": Lowering(1, calls=True, exits=True),
     "PyValue_TagIndex": Lowering(1),
     "PyValue_UntagIndex": Lowering(),
     "PyValue_IncrementTaggedIndexNoOverflow": Lowering(),
@@ -1451,6 +1453,32 @@ def fuse_guards(g: Graph) -> bool:
     return False
 
 
+def exit_on_false(g: Graph) -> bool:
+    """A predicate whose lowering branches to make its bool, tested last in
+    its block to continue or to leave by an exit, leaves by it itself: its
+    false paths jump there, and the true path has no flags to test"""
+    n = uses(g)
+    for i in g.rpo():
+        b = g.blocks[i]
+        if b.term[0] != "br" or not b.ops or n.get(b.term[1]) != 1:
+            continue
+        op = b.ops[-1]
+        name = prim_name(op)
+        if (op.kind != "prim" or op.when or not isinstance(op.attr, str) or op.exit is not None
+                or name not in LOWERINGS or not LOWERINGS[name].exits
+                or not is_predicate(ir_leaf.PRIMITIVES[name]) or op.results[0] != b.term[1]):
+            continue
+        cont, exit_ = b.term[2], b.term[3]
+        if g.blocks[exit_].params or g.blocks[exit_].term[0] not in ("deopt", "raise") \
+                or g.blocks[cont].term[0] in ("deopt", "raise"):
+            continue
+        op.exit = exit_
+        op.results = op.results[1:]
+        b.term = ("jmp", cont, [])
+        return True
+    return False
+
+
 def fold_failed_boxes(g: Graph) -> bool:
     """A primitive whose result is NULL only when its slow path fails, and
     whose result is then tested to leave by an exit, leaves by it itself:
@@ -1467,7 +1495,8 @@ def fold_failed_boxes(g: Graph) -> bool:
             continue
         op = defs.get(word)
         if op is None or b.ops[-2] is not op or op.when or not isinstance(op.attr, str) \
-                or op.exit is not None or not null_only_from_slow(op.attr):
+                or op.exit is not None or not null_only_from_slow(op.attr) \
+                or not LOWERINGS[op.attr].exits:
             continue
         exit_, rest = b.term[2], b.term[3]
         if g.blocks[exit_].params or g.blocks[exit_].term[0] != "raise":
@@ -1556,6 +1585,7 @@ def simplify(g: Graph) -> None:
         changed |= fuse_guards(g)
         changed |= thread_tests(g)
         changed |= thread_branches(g)
+        changed |= exit_on_false(g)
         prune(g)
         changed |= cse(g)
         changed |= dce(g)
@@ -1595,7 +1625,8 @@ def flag_producer(g: Graph, op: TOp) -> bool:
     "op sets the flags for its bool result (the last for checked arithmetic)"
     if op.kind == "prim":
         name = op.attr[0] if isinstance(op.attr, tuple) else op.attr
-        return name in LOWERINGS and is_predicate(ir_leaf.PRIMITIVES[name])
+        return (op.exit is None and name in LOWERINGS
+                and is_predicate(ir_leaf.PRIMITIVES[name]))
     return op.kind in ("cmp", "fcmp", "cmpmask", "xorb", "lnot", "add_ovf", "sub_ovf",
                        "mul_ovf")
 
@@ -2229,7 +2260,8 @@ class Emitter:
             if name not in LOWERINGS:
                 raise Refused(f"{name} unfused")
             prim = ir_leaf.PRIMITIVES[name]
-            regs = [r for r in res if not (is_predicate(prim) and r == res[0])]
+            regs = [r for r in res if not (is_predicate(prim) and r == res[0]
+                                           and op.exit is None)]
             argv = args
             aux = "NULL"
             if isinstance(op.attr, tuple):
@@ -2304,7 +2336,7 @@ class Emitter:
             gm, xm = self.live_masks(i, k, op, written)
             self.w(f"cx->live = {gm:#x}; cx->live_xmm = {xm:#x};")
         call = (f"_PyJitLower_{name}(cx, (const uint8_t[]){{{', '.join(ops) or '0'}}}, {aux})")
-        if is_predicate(prim):
+        if is_predicate(prim) and op.exit is None:
             self.setcc(op, call)
         else:
             self.w(f"{call};")

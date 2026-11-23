@@ -176,10 +176,10 @@ cold_call(_PyJitWordCx *cx, _PyJitLabel from, _PyJitLabel back, const void *fn,
     _PyJitLower_ColdEnd(cx);
 }
 
-/* The label that a constructor's NULL result (a failed box) leaves for:
-   aux is that label plus one, or NULL for none */
+/* The label that a lowering with an exit leaves for (a constructor's NULL
+   result, a guard that fails): aux is that label plus one, or NULL for none */
 static _PyJitLabel
-fail_label(const void *aux)
+exit_label(const void *aux)
 {
     return (_PyJitLabel)(intptr_t)aux - 1;
 }
@@ -228,7 +228,8 @@ inline_float_test(_PyJitWordCx *cx, _PyJitReg t, _PyJitReg w, _PyJitReg k)
 }
 
 /* The flags of a predicate computed with branches: true and false paths
-   end at done with ZF set for true.  Returns E. */
+   end at done with ZF set for true.  Returns E.  A predicate that has an
+   exit jumps to it where it is false instead, and gives no flags. */
 static _PyJitCond
 join_bool(_PyJitWordCx *cx, _PyJitReg t, _PyJitLabel is_false, _PyJitLabel done)
 {
@@ -280,13 +281,18 @@ LOWERING(PyValue_IsPointerSpace)
 LOWERING(PyValue_IsObject)
 {
     _PyJitReg w = REG(0), t = REG(1);
-    _PyJitLabel is_false = _PyJitAsm_NewLabel(A), done = _PyJitAsm_NewLabel(A);
+    _PyJitLabel exit = exit_label(aux);
+    _PyJitLabel is_false = exit >= 0 ? exit : _PyJitAsm_NewLabel(A);
     top_bits(cx, t, w, 48);
     _PyJitAsm_Jcc(A, _PyJitCond_NE, is_false);
     _PyJitAsm_AluRI(A, _PyJitAlu_CMP, w, 2);
     _PyJitAsm_Jcc(A, _PyJitCond_BE, is_false);
     _PyJitAsm_TestRI(A, w, Py_TAG_INVALID);
-    return join_bool(cx, t, is_false, done);
+    if (exit >= 0) {
+        _PyJitAsm_Jcc(A, _PyJitCond_NE, exit);
+        return _PyJitCond_NONE;
+    }
+    return join_bool(cx, t, is_false, _PyJitAsm_NewLabel(A));
 }
 
 LOWERING(PyValue_IsInline)
@@ -360,21 +366,33 @@ LOWERING(PyValue_IsNone) { return is_word(cx, REG(0), REG(1), PyValue_None); }
 
 LOWERING(PyValue_BoolCheck)                     // [w, t, k]
 {
-    _PyJitLabel is_false = _PyJitAsm_NewLabel(A), done = _PyJitAsm_NewLabel(A);
+    _PyJitLabel exit = exit_label(aux);
+    _PyJitLabel is_false = exit >= 0 ? exit : _PyJitAsm_NewLabel(A);
     top_bits(cx, REG(1), REG(0), 48);
     _PyJitAsm_Jcc(A, _PyJitCond_NE, is_false);
     type_is(cx, REG(1), REG(0), &PyBool_Type, REG(2));
-    return join_bool(cx, REG(1), is_false, done);
+    if (exit >= 0) {
+        _PyJitAsm_Jcc(A, _PyJitCond_NE, exit);
+        return _PyJitCond_NONE;
+    }
+    return join_bool(cx, REG(1), is_false, _PyJitAsm_NewLabel(A));
 }
 
 LOWERING(PyValue_LongCheckExact)                // [w, t, k]
 {
-    _PyJitLabel is_false = _PyJitAsm_NewLabel(A), done = _PyJitAsm_NewLabel(A);
+    _PyJitLabel exit = exit_label(aux);
+    _PyJitLabel is_false = exit >= 0 ? exit : _PyJitAsm_NewLabel(A);
+    _PyJitLabel done = _PyJitAsm_NewLabel(A);
     inline_int_test(cx, REG(1), REG(0));
     _PyJitAsm_Jcc(A, _PyJitCond_E, done);
     top_bits(cx, REG(1), REG(0), 48);
     _PyJitAsm_Jcc(A, _PyJitCond_NE, is_false);
     type_is(cx, REG(1), REG(0), &PyLong_Type, REG(2));
+    if (exit >= 0) {
+        _PyJitAsm_Jcc(A, _PyJitCond_NE, exit);
+        _PyJitAsm_Bind(A, done);
+        return _PyJitCond_NONE;
+    }
     return join_bool(cx, REG(1), is_false, done);
 }
 
@@ -446,8 +464,9 @@ LOWERING(PyValue_FloatOperandValues)
     _PyJitXmm xa = XMM(0), xb = XMM(1);
     _PyJitReg a = REG(2), b = REG(3), t = REG(4), k = REG(5);
     _PyJitLabel a_int = _PyJitAsm_NewLabel(A), b_int = _PyJitAsm_NewLabel(A);
-    _PyJitLabel is_false = _PyJitAsm_NewLabel(A), is_true = _PyJitAsm_NewLabel(A);
-    _PyJitLabel done = _PyJitAsm_NewLabel(A);
+    _PyJitLabel exit = exit_label(aux);
+    _PyJitLabel is_false = exit >= 0 ? exit : _PyJitAsm_NewLabel(A);
+    _PyJitLabel is_true = _PyJitAsm_NewLabel(A);
     _PyJitAsm_Jcc(A, _PyJitCond_Not(inline_float_test(cx, t, a, k)), a_int);
     _PyJitAsm_MovqXR(A, xa, t);
     /* k still holds the float range */
@@ -469,8 +488,11 @@ LOWERING(PyValue_FloatOperandValues)
     int_to_double(cx, xa, a, t);
 
     _PyJitAsm_Bind(A, is_true);
+    if (exit >= 0) {
+        return _PyJitCond_NONE;
+    }
     _PyJitAsm_AluRR(A, _PyJitAlu_XOR, t, t);
-    return join_bool(cx, t, is_false, done);
+    return join_bool(cx, t, is_false, _PyJitAsm_NewLabel(A));
 }
 
 LOWERING(PyValue_FromInt64)                     // [dst, i, t]
@@ -488,7 +510,7 @@ LOWERING(PyValue_FromInt64)                     // [dst, i, t]
     _PyJitAsm_Bind(A, done);
     _PyJitArg arg = _PyJitArg_GPR(i);
     cold_call(cx, box, done, (const void *)_PyValue_BoxInt64, 1, 1, &arg,
-              _PyJitArg_GPR(dst), fail_label(aux));
+              _PyJitArg_GPR(dst), exit_label(aux));
     return _PyJitCond_NONE;
 }
 
@@ -505,7 +527,7 @@ LOWERING(PyValue_FromDouble)                    // [dst, x, t]
     _PyJitAsm_Bind(A, done);
     _PyJitArg arg = _PyJitArg_XMM(x);
     cold_call(cx, box, done, (const void *)_PyValue_BoxDouble, 1, 1, &arg,
-              _PyJitArg_GPR(dst), fail_label(aux));
+              _PyJitArg_GPR(dst), exit_label(aux));
     return _PyJitCond_NONE;
 }
 

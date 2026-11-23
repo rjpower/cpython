@@ -224,7 +224,7 @@ typedef struct {
     PyObject *linetable;  // bytes
     PyObject *last_frame_info;
     ptrdiff_t last_addrq;
-    uintptr_t pcmap;      // of the code's IR, or 0 if unreadable
+    uint32_t *pcmap;      // of the code's IR, read once, or NULL if unreadable
     uint32_t nwords;      // of the IR
 } CachedCodeMetadata;
 

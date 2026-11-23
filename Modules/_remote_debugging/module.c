@@ -173,6 +173,7 @@ cached_code_metadata_destroy(void *ptr)
     Py_DECREF(meta->file_name);
     Py_DECREF(meta->linetable);
     Py_XDECREF(meta->last_frame_info);
+    PyMem_RawFree(meta->pcmap);
     PyMem_RawFree(meta);
 }
 

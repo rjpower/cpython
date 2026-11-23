@@ -353,8 +353,27 @@ read_code_pcmap(RemoteUnwinderObject *unwinder, uintptr_t ir_addr,
         PyErr_Clear();
         return;
     }
-    meta->pcmap = GET_MEMBER(uintptr_t, ir, unwinder->debug_offsets.code_ir.pcmap);
-    meta->nwords = GET_MEMBER(uint32_t, ir, unwinder->debug_offsets.code_ir.nwords);
+    uintptr_t pcmap = GET_MEMBER(uintptr_t, ir, unwinder->debug_offsets.code_ir.pcmap);
+    uint32_t nwords = GET_MEMBER(uint32_t, ir, unwinder->debug_offsets.code_ir.nwords);
+    if (pcmap == 0 || nwords == 0) {
+        return;
+    }
+    // The map never changes once the code has its IR: read it whole, so that
+    // a sample costs no read per frame
+    uint32_t *copy = PyMem_RawMalloc((size_t)nwords * sizeof(uint32_t));
+    if (copy == NULL) {
+        return;
+    }
+    if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle, pcmap,
+                                              (size_t)nwords * sizeof(uint32_t),
+                                              copy) < 0)
+    {
+        PyErr_Clear();
+        PyMem_RawFree(copy);
+        return;
+    }
+    meta->pcmap = copy;
+    meta->nwords = nwords;
 }
 
 int
@@ -453,7 +472,7 @@ parse_code_object(RemoteUnwinderObject *unwinder,
         meta->linetable = linetable;
         meta->last_frame_info = NULL;
         meta->last_addrq = -1;
-        meta->pcmap = 0;
+        meta->pcmap = NULL;
         meta->nwords = 0;
         read_code_pcmap(unwinder, GET_MEMBER(uintptr_t, code_object,
                         unwinder->debug_offsets.code_object.ir), meta);
@@ -484,20 +503,8 @@ parse_code_object(RemoteUnwinderObject *unwinder,
     uintptr_t ip = ctx->instruction_pointer;
     ptrdiff_t word = (ptrdiff_t)(ip - ctx->ir_words) / (ptrdiff_t)sizeof(uint64_t);
     ptrdiff_t addrq = -1;
-    if (meta->pcmap != 0 && word >= 0 && (uint64_t)word < meta->nwords) {
-        uint32_t unit;
-        if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle,
-                meta->pcmap + (uintptr_t)word * sizeof(uint32_t),
-                sizeof(unit), &unit) < 0)
-        {
-            if (_Py_RemoteDebug_IsFatalReadError()) {
-                goto error;
-            }
-            PyErr_Clear();
-        }
-        else {
-            addrq = unit;
-        }
+    if (meta->pcmap != NULL && word >= 0 && (uint64_t)word < meta->nwords) {
+        addrq = meta->pcmap[word];
     }
 
     if (!unwinder->opcodes && meta->last_frame_info != NULL && meta->last_addrq == addrq) {

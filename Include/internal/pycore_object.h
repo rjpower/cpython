@@ -991,6 +991,15 @@ _PyObject_InlineValues(PyObject *obj)
     return (PyDictValues *)((char *)obj + tp->tp_basicsize);
 }
 
+/* The value slot at byte offset offset inside obj: an inline value, a
+   __slots__ member or a field of the instance's inline values, as the
+   attribute handlers' feedback names them. */
+static inline PyValue *
+_PyObject_ValueSlot(PyObject *obj, size_t offset)
+{
+    return (PyValue *)((char *)obj + offset);
+}
+
 extern PyObject ** _PyObject_ComputedDictPointer(PyObject *);
 extern int _PyObject_IsInstanceDictEmpty(PyObject *);
 

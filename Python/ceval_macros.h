@@ -962,15 +962,6 @@ method_poly_lookup(const _PyIRWord *words, const _PyFbHeader *h, PyObject *owner
 #define IR_METHOD_POLY_LOOKUP(H, OWNER) \
     method_poly_lookup(frame->ir_words, (H), (OWNER))
 
-static inline PyValue
-shape_read_dup(PyObject *owner, uint32_t offset)
-{
-    PyValueBorrow found = PyValue_Borrow(*(PyValue *)((char *)owner + offset));
-    /* The current type and shape guards prove that this slot is filled. */
-    assert(!PyValue_IsNull(found));
-    return PyValue_DUP(found);
-}
-
 /* The oparg that the generic handler of COMPARE_OP or CONTAINS_OP, with
  * entry FB at unit F, keeps in the arg field of the entry.  These sites
  * always have an entry of their own: the assembler assigns theirs first and

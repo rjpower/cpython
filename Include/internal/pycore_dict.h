@@ -530,6 +530,16 @@ _PyObject_Shape(PyObject *obj)
 #endif
 }
 
+/* The shape handlers' read of the slot at offset, a new count.  The
+   current type and shape guards prove that the slot is filled. */
+static inline PyValue
+shape_read_dup(PyObject *owner, uint32_t offset)
+{
+    PyValueBorrow found = PyValue_Borrow(*_PyObject_ValueSlot(owner, offset));
+    assert(!PyValue_IsNull(found));
+    return PyValue_DUP(found);
+}
+
 #ifdef Py_SHAPES
 static_assert(SHARED_KEYS_MAX_SIZE <= 32, "_PyShape.present is 32 bits wide");
 static_assert(_Py_SHAPE_MAX_PER_TYPE < _Py_SHAPE_NONE, "shape index overflow");

@@ -271,10 +271,10 @@ class OperandModeGeneratorTests(unittest.TestCase):
         self.assertLess(read, store)
         self.assertLess(store, close)
         self.assertNotIn("retire_published_values(", body)
-        helpers = (Path(test_tools.basepath) / "Python" / "ceval_macros.h").read_text()
+        helpers = (Path(test_tools.basepath) / "Include" / "internal" / "pycore_dict.h").read_text()
         read = helpers.split("shape_read_dup(PyObject *owner, uint32_t offset)", 1)[1]
         read = read.split("\n}", 1)[0]
-        self.assertIn("PyValue_Borrow(*(PyValue *)((char *)owner + offset))", read)
+        self.assertIn("PyValue_Borrow(*_PyObject_ValueSlot(owner, offset))", read)
         self.assertIn("assert(!PyValue_IsNull(found));", read)
         self.assertIn("return PyValue_DUP(found);", read)
         self.assertIn("int opcode = LOAD_ATTR_SHAPE;", body)

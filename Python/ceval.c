@@ -2573,6 +2573,8 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #undef IR_JIT_EVENT
 #pragma push_macro("IR_JIT_RESUME")
 #undef IR_JIT_RESUME
+#pragma push_macro("IR_STORE_RETURN")
+#undef IR_STORE_RETURN
 #define DISPATCH() return (_PyIRTransfer){frame, next_instr}
 #define DISPATCH_SAME_OPARG() return (_PyIRTransfer){frame, next_instr}
 #define DISPATCH_GOTO() \
@@ -2650,9 +2652,23 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
         Py_MUSTTAIL return ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, \
                                                   (REMAINING)); \
     } while (0)
-/* Compiled code runs the forms: it is in its unit already */
+/* Compiled code runs the forms: it is in its unit already, and leaves it
+ * at every frame switch for the driver, which finds the next frame's unit
+ * itself.  So a return store tests only a pending redirect, not the
+ * frame's jit_resume bit. */
 #define IR_JIT_EVENT() ((void)0)
 #define IR_JIT_RESUME() ((void)0)
+#define IR_STORE_RETURN(V) \
+    do { \
+        assert(_PyValue_IsHome(V)); \
+        if (frame->pending_redirect) { \
+            _PyFrame_SetReturnValueRare(frame, (V)); \
+            next_instr = frame->return_pc; \
+        } \
+        else { \
+            _PyFrame_PublishReturnSlot(frame, (V)); \
+        } \
+    } while (0)
 
 /* The event of an instrumented branch, jump or loop step, after the effect
  * (rule 12).  It is out of the evaluator, where the instrumented handlers
@@ -2819,6 +2835,14 @@ jit_run(PyThreadState *tstate, _PyJitUnit *unit, _PyInterpreterFrame *frame,
          * code, which frees the exec and its units while the unit runs:
          * the driver keeps the code until the unit has left. */
         PyCodeObject *code = (PyCodeObject *)Py_NewRef(_PyFrame_GetCode(frame));
+        /* A frame entered or resumed at its RESUME_JIT skips it when it
+         * would do nothing, as IR_SKIP_RESUME() skips a RESUME: its event
+         * is not due, as the code has a unit. */
+        if (IR_HANDLER(*next) == RESUME_JIT &&
+            _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) ==
+                FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(code->_co_instrumentation_version)) {
+            next++;
+        }
         frame->jit_resume = 1;
         impl->jit_frame = frame;
         _PyIRTransfer t = ((jit_entry)unit->code.start)(
@@ -2904,6 +2928,7 @@ ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfla
 #pragma pop_macro("GEN_STEP_EFFECT")
 #pragma pop_macro("IR_JIT_EVENT")
 #pragma pop_macro("IR_JIT_RESUME")
+#pragma pop_macro("IR_STORE_RETURN")
 
 /* The evaluator: every handler and label of the interpreter in one
  * function, which dispatches by computed goto (Python/ceval_macros.h).  Its

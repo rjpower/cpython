@@ -7485,7 +7485,7 @@ ir_run_FOR_ITER_GEN(
                         PyValue_XCLOSE(ir_resume_input);
                         PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
                     }
-                    _PyFrame_SetReturnValue(frame, ir_resume_input);
+                    _PyFrame_SetResumeValue(frame, ir_resume_input);
                     LOAD_IP(0);
                     IR_SKIP_RESUME();
                     DTRACE_FUNCTION_ENTRY();
@@ -13907,7 +13907,7 @@ ir_run_SEND(
                             PyValue_XCLOSE(ir_resume_input);
                             PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
                         }
-                        _PyFrame_SetReturnValue(frame, ir_resume_input);
+                        _PyFrame_SetResumeValue(frame, ir_resume_input);
                         LOAD_IP(0);
                         IR_SKIP_RESUME();
                         DTRACE_FUNCTION_ENTRY();
@@ -14171,7 +14171,7 @@ ir_run_SEND_GEN(
                         PyValue_XCLOSE(ir_resume_input);
                         PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
                     }
-                    _PyFrame_SetReturnValue(frame, ir_resume_input);
+                    _PyFrame_SetResumeValue(frame, ir_resume_input);
                     LOAD_IP(0);
                     IR_SKIP_RESUME();
                     DTRACE_FUNCTION_ENTRY();
@@ -22525,7 +22525,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                         PyValue_XCLOSE(ir_resume_input);
                         PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
                     }
-                    _PyFrame_SetReturnValue(frame, ir_resume_input);
+                    _PyFrame_SetResumeValue(frame, ir_resume_input);
                     LOAD_IP(0);
                     IR_SKIP_RESUME();
                     DTRACE_FUNCTION_ENTRY();
@@ -27445,7 +27445,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                         PyValue_XCLOSE(ir_resume_input);
                         PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);
                     }
-                    _PyFrame_SetReturnValue(frame, ir_resume_input);
+                    _PyFrame_SetResumeValue(frame, ir_resume_input);
                     LOAD_IP(0);
                     IR_SKIP_RESUME();
                     DTRACE_FUNCTION_ENTRY();

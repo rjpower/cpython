@@ -274,6 +274,19 @@ _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
     return 0;
 }
 
+/* V, the value a generator frame f resumes with, goes to the slot that f
+ * named.  Control does not come back to f by a return, so its jit_resume
+ * bit does not apply: f goes back to its unit at its RESUME_JIT. */
+static inline void
+_PyFrame_SetResumeValue(_PyInterpreterFrame *f, PyValue v)
+{
+    if (f->pending_redirect) {
+        _PyFrame_SetReturnValueRare(f, v);
+        return;
+    }
+    _PyFrame_PublishReturnSlot(f, v);
+}
+
 /* Materialize a compiler-proven virtual empty kwargs binding before a read
  * or before publishing a frame object to observers. */
 int _PyFrame_MaterializeKwargs(_PyInterpreterFrame *frame);

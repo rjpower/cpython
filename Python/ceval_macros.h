@@ -1076,12 +1076,14 @@ method_poly_lookup(const _PyIRWord *words, const _PyFbHeader *h, PyObject *owner
 #else
 #  define IR_SKIP_RESUME_TLBC() 1
 #endif
-#define IR_SKIP_RESUME() \
+#define IR_SKIP_RESUME() IR_SKIP_RESUME_IF(IR_HANDLER(*next_instr) == RESUME)
+/* IS_RESUME: the word at next_instr is a RESUME to skip */
+#define IR_SKIP_RESUME_IF(IS_RESUME) \
     do { \
         assert(next_instr == frame->instr_ptr); \
         /* A predicted branch, not arithmetic on the three loads: dispatch \
          * from the next word does not wait on them. */ \
-        if (IR_HANDLER(*next_instr) == RESUME && \
+        if ((IS_RESUME) && \
             _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) == \
                 FT_ATOMIC_LOAD_UINTPTR_ACQUIRE( \
                     _PyFrame_GetCode(frame)->_co_instrumentation_version) && \

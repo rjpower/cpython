@@ -91,7 +91,12 @@ IR_HOT_ROUTINE(gen_resume, PyValue gen_value)
             GEN_STEP_JUMP(GEN_RESUME_EFFECT, frame, resume, value);
         }
         next_instr = resume;
-        IR_SKIP_RESUME();
+        /* A frame that the chain passes through runs none of its words, so
+         * under the JIT its RESUME_JIT is skipped too: its warm-up event is
+         * not due, and it has nothing to hand off. */
+        IR_SKIP_RESUME_IF(IR_HANDLER(*next_instr) == RESUME ||
+                          (kind == GEN_RESUME_SEND &&
+                           IR_HANDLER(*next_instr) == RESUME_JIT));
         if (next_instr == resume) {
             GEN_STEP_JUMP(GEN_RESUME_EFFECT, frame, resume, value);
         }
@@ -142,7 +147,7 @@ IR_HOT_ROUTINE(gen_resume, PyValue gen_value)
     }
     /* Not a chain: the generator resumes at its instr_ptr, and the value
      * goes to the slot that the frame that entered it named. */
-    _PyFrame_SetReturnValue(frame, value);
+    _PyFrame_SetResumeValue(frame, value);
     LOAD_IP(0);
     IR_SKIP_RESUME();
     DTRACE_FUNCTION_ENTRY();

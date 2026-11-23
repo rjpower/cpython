@@ -5606,7 +5606,7 @@ class IREmitter(Emitter):
             self.emit("PyValue_XCLOSE(ir_resume_input);\n")
             self.emit("PROCESS_ERROR_AT(EXIT_NOTRACE, 0, frame->instr_ptr);\n")
             self.emit("}\n")
-            self.emit("_PyFrame_SetReturnValue(frame, ir_resume_input);\n")
+            self.emit("_PyFrame_SetResumeValue(frame, ir_resume_input);\n")
             self.emit("LOAD_IP(0);\n")
             self.emit("IR_SKIP_RESUME();\n")
             self.emit("DTRACE_FUNCTION_ENTRY();\n")

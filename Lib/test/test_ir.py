@@ -751,6 +751,20 @@ class AssemblerTest(unittest.TestCase):
         exec(code, {})
         self.assertGreater(sys.getsizeof(code), before)
 
+    def test_loop_in_a_finally_copy_that_never_runs(self):
+        # The stack code keeps the exceptional copy of a finally body whose
+        # try body cannot raise; lowering needs consistent depths in it
+        def f():
+            try:
+                pass
+            finally:
+                for value in range(3):
+                    continue
+            return value
+
+        self.assertEqual(f(), 2)
+        self.assertTrue(get_ir(f.__code__))
+
     def test_binary_op_handlers(self):
         # BINARY_OP runs the handler of its operation
         def f(a, b):

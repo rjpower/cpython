@@ -249,6 +249,26 @@ handler_base(const _PyRegCfg *cfg, int h)
 
 /* Conversion */
 
+/* The depth that the block needs at its start not to underflow, or -1 with
+ * an exception set. */
+static int
+unreached_depth(const _PyRegCfg *cfg, const _PyRegBlock *blk)
+{
+    int d = 0, low = 0;
+    for (int i = blk->start; i < blk->end; i++) {
+        const _PyRegOp *op = &cfg->ops[i];
+        int popped = _PyOpcode_num_popped(op->opcode, op->oparg);
+        int pushed = _PyOpcode_num_pushed(op->opcode, op->oparg);
+        if (popped < 0 || pushed < 0) {
+            PyErr_SetString(PyExc_SystemError, "invalid opcode");
+            return -1;
+        }
+        low = Py_MIN(low, d - popped);
+        d += pushed - popped;
+    }
+    return -low;
+}
+
 /* Fill in the flags of the blocks and their depths at entry. */
 static int
 mark_blocks(_PyRegCfg *cfg)
@@ -290,6 +310,9 @@ mark_blocks(_PyRegCfg *cfg)
         depth[b] = -1;
     }
     int ntodo = 0;
+    // A push that disagrees with a depth already found is an error in code
+    // that runs; code that never runs keeps the depth it found first
+    int dead = 0;
 #define PUSH(B, D) \
     do { \
         int b_ = (B), d_ = (D); \
@@ -297,7 +320,7 @@ mark_blocks(_PyRegCfg *cfg)
             depth[b_] = d_; \
             todo[ntodo++] = b_; \
         } \
-        else if (depth[b_] != d_) { \
+        else if (depth[b_] != d_ && !dead) { \
             PyErr_Format(PyExc_SystemError, \
                          "inconsistent stack depth at block %d", b_); \
             goto error; \
@@ -306,39 +329,78 @@ mark_blocks(_PyRegCfg *cfg)
     if (n > 0) {
         PUSH(0, 0);
     }
-    while (ntodo > 0) {
-        int b = todo[--ntodo];
-        _PyRegBlock *blk = &cfg->blocks[b];
-        int d = depth[b];
-        for (int i = blk->start; i < blk->end; i++) {
-            _PyRegOp *op = &cfg->ops[i];
-            int popped = _PyOpcode_num_popped(op->opcode, op->oparg);
-            int pushed = _PyOpcode_num_pushed(op->opcode, op->oparg);
-            if (popped < 0 || pushed < 0 || d < popped) {
-                PyErr_Format(PyExc_SystemError,
-                             "stack underflow at line %d", op->loc.lineno);
-                goto error;
+    int scan = 0;
+    for (;;) {
+        while (ntodo > 0) {
+            int b = todo[--ntodo];
+            _PyRegBlock *blk = &cfg->blocks[b];
+            int d = depth[b];
+            for (int i = blk->start; i < blk->end; i++) {
+                _PyRegOp *op = &cfg->ops[i];
+                int popped = _PyOpcode_num_popped(op->opcode, op->oparg);
+                int pushed = _PyOpcode_num_pushed(op->opcode, op->oparg);
+                if (popped < 0 || pushed < 0 || d < popped) {
+                    if (dead) {
+                        break;
+                    }
+                    PyErr_Format(PyExc_SystemError,
+                                 "stack underflow at line %d", op->loc.lineno);
+                    goto error;
+                }
+                if (op->except >= 0) {
+                    PUSH(op->except, cfg->blocks[op->except].startdepth);
+                }
+                d += pushed - popped;
+                if (op_jumps(op)) {
+                    PUSH(op->target, d);
+                }
             }
-            if (op->except >= 0) {
-                PUSH(op->except, cfg->blocks[op->except].startdepth);
-            }
-            d += pushed - popped;
-            if (op_jumps(op)) {
-                PUSH(op->target, d);
+            if (blk->falls_through) {
+                PUSH(b + 1, d);
             }
         }
-        if (blk->falls_through) {
-            PUSH(b + 1, d);
+        if (!dead) {
+            for (int b = 0; b < n; b++) {
+                cfg->blocks[b].reachable = depth[b] >= 0;
+            }
+            dead = 1;
         }
+        // Code that never runs still has stack depths that agree along its
+        // own edges, which the loops in it need.  Start from each block that
+        // no other block enters, with the depth its handler entry or the
+        // flowgraph gives, or the depth it needs not to underflow.
+        int seed = -1;
+        while (scan < n) {
+            _PyRegBlock *blk = &cfg->blocks[scan];
+            if (depth[scan] < 0 &&
+                (blk->is_handler ||
+                 (!blk->is_target && !(scan > 0 && cfg->blocks[scan - 1].falls_through))))
+            {
+                seed = blk->is_handler ? blk->startdepth
+                       : blk->word >= 0 ? blk->word
+                       : unreached_depth(cfg, blk);
+                if (seed < 0) {
+                    goto error;
+                }
+                break;
+            }
+            scan++;
+        }
+        if (scan >= n) {
+            break;
+        }
+        PUSH(scan, seed);
     }
 #undef PUSH
     for (int b = 0; b < n; b++) {
         _PyRegBlock *blk = &cfg->blocks[b];
         int hint = blk->word;
         blk->word = 0;
-        blk->reachable = depth[b] >= 0;
         if (depth[b] >= 0) {
             blk->startdepth = depth[b];
+            if (!blk->reachable) {
+                blk->continued = 0;
+            }
             continue;
         }
         // No path reaches the block, so it never runs.  It gets the depth
@@ -351,19 +413,10 @@ mark_blocks(_PyRegCfg *cfg)
             blk->startdepth = hint;
             continue;
         }
-        int d = 0, low = 0;
-        for (int i = blk->start; i < blk->end; i++) {
-            _PyRegOp *op = &cfg->ops[i];
-            int popped = _PyOpcode_num_popped(op->opcode, op->oparg);
-            int pushed = _PyOpcode_num_pushed(op->opcode, op->oparg);
-            if (popped < 0 || pushed < 0) {
-                PyErr_SetString(PyExc_SystemError, "invalid opcode");
-                goto error;
-            }
-            low = Py_MIN(low, d - popped);
-            d += pushed - popped;
+        blk->startdepth = unreached_depth(cfg, blk);
+        if (blk->startdepth < 0) {
+            goto error;
         }
-        blk->startdepth = -low;
     }
     // A continued block is entered with its predecessor's names, so both
     // must be reachable or neither

@@ -2852,9 +2852,20 @@ jit_run(PyThreadState *tstate, _PyJitUnit *unit, _PyInterpreterFrame *frame,
         if (t.next == NULL) {
             return t;
         }
-        unit = jit_unit_of(tstate, t.frame);
-        if (unit == NULL) {
-            return t;
+        if (t.frame == frame) {
+            /* Not a warm-up event: a unit leaves for a word that it does
+             * not run natively, as after a specialisation, and the newest
+             * unit runs on as it is while it is only stale */
+            unit = _PyFrame_Exec(frame)->jit_unit;
+            if (unit->invalid & _PyJIT_RETIRED) {
+                return t;
+            }
+        }
+        else {
+            unit = jit_unit_of(tstate, t.frame);
+            if (unit == NULL) {
+                return t;
+            }
         }
         frame = t.frame;
         next = t.next;

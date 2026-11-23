@@ -503,6 +503,24 @@ _PyCode_Validate(struct _PyCodeConstructor *con)
 
 /* The register IR (co->_co_ir) and the frame size, which depends on it, are
  * made by _PyCode_GetExec() when the code first runs. */
+/* The compiler cannot know whether types.coroutine() will be called, which
+ * sets a coroutine flag on a copy of the code object, so the GET_ITER of a
+ * 'yield from' says whether a coroutine is allowed once the flags are known.
+ * Upstream does this when it quickens the new code object. */
+static void
+fixup_yield_from_getiter(PyCodeObject *co)
+{
+    int allowed = co->co_flags & (CO_COROUTINE | CO_ITERABLE_COROUTINE);
+    _Py_CODEUNIT *code = _PyCode_CODE(co);
+    Py_ssize_t size = Py_SIZE(co);
+    for (Py_ssize_t i = 0; i < size; i += 1 + _PyOpcode_Caches[code[i].op.code]) {
+        if (code[i].op.code == GET_ITER && code[i].op.arg) {
+            code[i].op.arg = allowed ? GET_ITER_YIELD_FROM_NO_CHECK
+                                     : GET_ITER_YIELD_FROM_CORO_CHECK;
+        }
+    }
+}
+
 static int
 init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
 {
@@ -563,6 +581,7 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
 
     memcpy(_PyCode_CODE(co), PyBytes_AS_STRING(con->code),
            PyBytes_GET_SIZE(con->code));
+    fixup_yield_from_getiter(co);
     notify_code_watchers(PY_CODE_EVENT_CREATE, co);
     return 0;
 }

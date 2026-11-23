@@ -144,9 +144,9 @@ def parse_fact(word: str, where: Token | None) -> VFact:
 # The definition list (Include/internal/pycore_ir_components.h)
 
 COMPONENTS_HEADER = ROOT / "Include/internal/pycore_ir_components.h"
-ROW_KINDS = ("PRIMITIVE", "HELPER", "MACRO", "INTRINSIC", "DESTRUCTOR")
-RESULT_SHAPES = ("NONE", "SCALAR", "VIEW", "MEASURE", "TEST", "CONTEXT", "VALUE",
-                 "VALUE_OR_NULL")
+ROW_KINDS = ("PRIMITIVE", "HELPER", "MACRO", "INTRINSIC", "DESTRUCTOR", "FIELD")
+RESULT_SHAPES = ("NONE", "SCALAR", "VIEW", "PATH", "MEASURE", "TEST", "CONTEXT",
+                 "VALUE", "VALUE_OR_NULL", "DUP")
 BUILDS = ("gil", "free_threaded", "all")
 
 
@@ -161,7 +161,7 @@ class Result:
     shape: str
     mode: str = ""                          # VALUE, VALUE_OR_NULL
     facts: frozenset[VFact] = frozenset()   # VALUE, VALUE_OR_NULL
-    measure: str = ""                       # MEASURE
+    measure: str = ""                       # MEASURE; PATH: the path
     tests: tuple[tuple[frozenset[VFact], frozenset[VFact]], ...] = ()  # TEST
     reason: str = ""                        # CONTEXT
 
@@ -178,10 +178,14 @@ class Row:
     exits: frozenset[str] = frozenset()
     builds: frozenset[str] = frozenset()    # INTRINSIC
     callback_free: bool = False             # DESTRUCTOR
+    struct: str = ""                        # FIELD: the struct, the field,
+    field: str = ""                         # and the path of the pointer
+    on: str = ""                            # it is read through
 
     def new_owner(self) -> bool:
         "whether a call returns a value that its caller must release"
-        return self.result.shape in ("VALUE", "VALUE_OR_NULL") and self.result.mode == "owned"
+        return (self.result.shape in ("VALUE", "VALUE_OR_NULL", "DUP")
+                and self.result.mode == "owned")
 
 
 def _split_text(text: str) -> list[str]:
@@ -227,6 +231,12 @@ def _parse_result(text: str) -> Result:
     for shape in ("NONE", "SCALAR", "VIEW"):
         if text == shape:
             return Result(shape)
+    if (inner := _inner(text, "PATH")) is not None:
+        return Result("PATH", measure=inner.strip())
+    if (inner := _inner(text, "DUP")) is not None:
+        if inner.strip() != "owned":
+            raise ValueError("DUP(owned)")
+        return Result("DUP", "owned")
     if (inner := _inner(text, "MEASURE")) is not None:
         return Result("MEASURE", measure=inner.strip())
     if (inner := _inner(text, "CONTEXT")) is not None:
@@ -259,6 +269,15 @@ def _parse_names(text: str, head: str, allowed: tuple[str, ...]) -> frozenset[st
 
 
 def _parse_row(kind: str, fields: list[str]) -> Row:
+    if kind == "FIELD":
+        if len(fields) != 6:
+            raise ValueError("FIELD(struct, field, ctype, ON(path), result, EFFECTS(...))")
+        struct, name, ctype, on, result, effects = fields
+        if _inner(on, "ON") is None:
+            raise ValueError("expected ON(path)")
+        return Row(kind, f"{struct}.{name}", ctype, result=_parse_result(result),
+                   effects=_parse_names(effects, "EFFECTS", EFFECTS),
+                   struct=struct, field=name, on=_inner(on, "ON").strip())
     if kind == "DESTRUCTOR":
         if len(fields) != 2 or fields[1] not in ("callback_free",):
             raise ValueError("DESTRUCTOR(name, callback_free)")
@@ -345,6 +364,8 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
             check(f"&{row.name}", f"{row.ret} (*)({', '.join(row.params)})", row.name)
         elif row.kind == "DESTRUCTOR":
             check(f"&{row.name}", "void (*)(PyObject *)", row.name)
+        elif row.kind == "FIELD":
+            check(f"(({row.struct} *)0)->{row.field}", row.ret, row.name)
         elif row.kind == "PRIMITIVE":
             call = ", ".join(f"({p}){{0}}" for p in row.params)
             check(f"{row.name}({call})", row.ret, row.name)
@@ -584,30 +605,78 @@ def record_effect_sites(uop: Uop) -> list[tuple[Token, str]]:
 # ---------------------------------------------------------------------------
 # Guard facts (V9)
 
+def _unwrap(tokens: list[str], table: dict[str, Row]) -> list[str]:
+    "tokens without casts and the INTRINSIC identity forms around them"
+    tokens = _strip(_uncast(tokens))
+    while tokens and tokens[0] in table and table[tokens[0]].kind == "INTRINSIC":
+        args = _call(tokens, tokens[0])
+        if args is None or len(args) != 1:
+            break
+        tokens = _strip(_uncast(args[0]))
+    return tokens
+
+
 class Views:
     """What the names of a uop body stand for: an input is itself; a local
-    assigned from a VIEW row of a name is a view of that name"""
+    assigned from a VIEW row of a name is a view of that name, and one
+    assigned from a PATH row is a pointer along that path from it; any
+    other local stands for itself"""
 
     def __init__(self, uop: Uop, table: dict[str, Row]):
+        self.table = table
         self.names = {i.name: i.name for i in uop.stack.inputs if i.name != "unused"}
+        self.paths: dict[str, tuple[str, str]] = {}
+        self.locals: set[str] = set()
         texts = [t.text for t in _tokens(uop)]
         for i, t in enumerate(texts):
             if t != "=" or i == 0 or texts[i - 1] in self.names:
                 continue
+            self.locals.add(texts[i - 1])
             end = texts.index(";", i) if ";" in texts[i:] else len(texts)
-            rhs = _uncast(texts[i + 1:end])
-            if rhs and rhs[0] in table and table[rhs[0]].result.shape == "VIEW":
-                args = _call(rhs, rhs[0])
-                if args and len(args) == 1:
-                    inner = self.resolve(args[0])
-                    if inner is not None:
-                        self.names.setdefault(texts[i - 1], inner)
+            path = self.path(texts[i + 1:end])
+            if path is not None:
+                self.paths.setdefault(texts[i - 1], path)
+                continue
+            inner = self.resolve(texts[i + 1:end], locals_=False)
+            if inner is not None:
+                self.names.setdefault(texts[i - 1], inner)
 
-    def resolve(self, tokens: list[str]) -> str | None:
-        tokens = _uncast(tokens)
+    def resolve(self, tokens: list[str], locals_: bool = True) -> str | None:
+        "the input (or, if locals_, the local) that tokens stand for"
+        tokens = _unwrap(tokens, self.table)
         if len(tokens) == 1:
-            return self.names.get(tokens[0])
+            if tokens[0] in self.names:
+                return self.names[tokens[0]]
+            return tokens[0] if locals_ and tokens[0] in self.locals else None
+        call = _call_of(tokens, self.table)
+        if call is not None and call[0].result.shape == "VIEW" and len(call[1]) == 1:
+            return self.resolve(call[1][0], locals_)
         return None
+
+    def path(self, tokens: list[str]) -> tuple[str, str] | None:
+        "the (input, path) of a pointer along a PATH row from an input"
+        tokens = _unwrap(tokens, self.table)
+        if len(tokens) == 1:
+            return self.paths.get(tokens[0])
+        call = _call_of(tokens, self.table)
+        if call is not None and call[0].result.shape == "PATH" and call[1]:
+            name = self.resolve(call[1][0], locals_=False)
+            if name is not None:
+                return name, call[0].result.measure
+        return None
+
+    def field(self, tokens: list[str]) -> tuple[Row, str] | None:
+        """the FIELD row of a read `p->field` through a pointer p along a
+        path from an input, and that input"""
+        tokens = _unwrap(tokens, self.table)
+        if len(tokens) < 3 or tokens[-2] != "->":
+            return None
+        path = self.path(tokens[:-2])
+        if path is None:
+            return None
+        row = next((r for r in self.table.values() if r.kind == "FIELD"
+                    and r.field == tokens[-1] and r.on == path[1]), None)
+        return (row, path[0]) if row is not None else None
 
 
 def _call_of(tokens: list[str], table: dict[str, Row]) -> tuple[Row, list[list[str]]] | None:
@@ -655,6 +724,12 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
             return (_union(each) if holds == all_hold else _intersection(each)), reason
     if cond[:1] == ["!"]:
         return condition_facts(cond[1:], views, table, not holds)
+    cond = _unwrap(cond, table)
+    field = views.field(cond)
+    if field is not None and field[0].result.shape == "TEST":
+        true, false = field[0].result.tests[0]
+        found = true if holds else false
+        return ({field[1]: implied(found)} if found else {}), ""
     call = _call_of(cond, table)
     if call is not None and call[0].result.shape == "TEST":
         row, args = call
@@ -676,16 +751,20 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
             break
     else:
         return None
-    call = _call_of(sides[0], table)
-    if call is None or call[0].result.shape != "MEASURE":
+    field = views.field(sides[0])
+    call = _call_of(_unwrap(sides[0], table), table)
+    if field is not None and field[0].result.shape == "MEASURE":
+        measure, name = field[0].result.measure, field[1]
+    elif call is not None and call[0].result.shape == "MEASURE":
+        measure, name = call[0].result.measure, views.resolve(call[1][0])
+    else:
         return None
-    name = views.resolve(call[1][0])
     arg = " ".join(_strip(sides[1]))
     if name is None or not re.fullmatch(r"\w+", arg):
         return None
     if (op == "==") != holds:
         return {}, ""
-    return {name: implied({VFact(call[0].result.measure, arg)})}, ""
+    return {name: implied({VFact(measure, arg)})}, ""
 
 
 def _guard_condition_text(uop: Uop, site: Token) -> tuple[list[str], str]:
@@ -995,7 +1074,14 @@ class OwnershipWalk:
         call = _call_of(_uncast(rhs), self.table)
         # An `owned` output is an obligation whether or not its value needs a
         # physical count (1.2), so an inline value assigned to it is one too
-        value = call is not None and call[0].result.shape in ("VALUE", "VALUE_OR_NULL")
+        value = call is not None and call[0].result.shape in ("VALUE", "VALUE_OR_NULL", "DUP")
+        if value and call[0].result.shape == "DUP" and out is not None and not out.nullable:
+            # A DUP is NULL where its argument is: here it must not be
+            source = self.views.resolve(call[1][0]) if call[1] else None
+            if NONNULL not in state.facts.get(source, frozenset()):
+                self.fail(toks[0], f"`{lhs}` may be NULL: {call[0].name} of "
+                          f"`{' '.join(call[1][0]) if call[1] else ''}`, which nothing "
+                          "shows is not NULL")
         if value and (call[0].new_owner() or (out is not None and out.mode == "owned")):
             if state.owners.get(lhs) == HELD:
                 self.fail(toks[0], f"`{lhs}` is assigned a new owner while it holds one")
@@ -1037,7 +1123,7 @@ def check_results(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
                                          f"`{' '.join(rhs)}`", where)
                 continue
             call = _call_of(rhs, table)
-            if call is not None and call[0].result.shape in ("VALUE", "VALUE_OR_NULL"):
+            if call is not None and call[0].result.shape in ("VALUE", "VALUE_OR_NULL", "DUP"):
                 result = call[0].result
                 gives, mode, source = implied(result.facts), result.mode, call[0].name
             elif len(rhs) == 1 and rhs[0] in inputs:
@@ -1256,8 +1342,8 @@ def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...],
     values = {i.name: f"v{i.value}" for i in inputs}
     result = []
     for name, facts in stated.items():
-        if name in values:
-            result += [f.record(values[name]) for f in facts]
+        # A local's fact is recorded on the local, as the inference did
+        result += [f.record(values.get(name, name)) for f in facts]
     return tuple(result), reason or found[1]
 
 
@@ -1283,6 +1369,19 @@ def _stated_facts(cond: list[str], views: Views, table: dict[str, Row],
             for f in sorted(found[0].get(name, ())):
                 if f.kind == row.result.measure and f not in result.get(name, []):
                     result.setdefault(name, []).append(f)
+    # Reads of FIELD rows, `p->field`
+    for i, t in enumerate(cond):
+        if t != "->" or i + 1 >= len(cond):
+            continue
+        rows_ = [r for r in table.values() if r.kind == "FIELD" and r.field == cond[i + 1]]
+        for row in rows_:
+            stated = (row.result.tests[0][0] | row.result.tests[0][1]
+                      if row.result.shape == "TEST" else frozenset())
+            for name, facts in found[0].items():
+                for f in sorted(facts):
+                    if (f in stated or f.kind == row.result.measure) \
+                            and f not in result.get(name, []):
+                        result.setdefault(name, []).append(f)
     return result
 
 

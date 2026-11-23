@@ -22,9 +22,11 @@
  *
  * ARGS: per parameter a mode (borrowed, consumed, taken, scalar, object,
  * tstate, frame, out) and the facts it requires.
- * result: NONE, SCALAR, VIEW (the object of argument 0), MEASURE(kind) of
- * argument 0, TEST(true facts | false facts, ...) per argument,
- * CONTEXT("reason"), VALUE(mode facts), VALUE_OR_NULL(mode facts).
+ * result: NONE, SCALAR, VIEW (the object of argument 0), PATH(name) (a
+ * pointer along a named path from argument 0: its type, its inline
+ * values), MEASURE(kind) of argument 0, TEST(true facts | false facts, ...)
+ * per argument, CONTEXT("reason"), VALUE(mode facts), VALUE_OR_NULL(mode
+ * facts), DUP(owned) (a new owner of argument 0, NULL where it is).
  * EFFECTS: reads writes allocates raises releases runs_python polls
  * switches_frame.  The vocabulary is Tools/cases_generator/ir_contract.py's.
  *
@@ -34,6 +36,10 @@
  *   INTRINSIC(name, ARGS(...), result, BUILD(gil | free_threaded | all))
  *       a form that the generator treats as the identity or erases in the
  *       named builds
+ *   FIELD(struct, field, ctype, ON(path), result, EFFECTS(...))
+ *       a field read through a pointer along a path (`tp->tp_version_tag`
+ *       with tp the type of an operand): a MEASURE or a TEST of the
+ *       operand
  *
  * Rows for C functions are trusted declarations: the static checks hold
  * their types, not their effects, to the C definitions (rd/design.md
@@ -95,8 +101,31 @@
               ARGS(borrowed object), VIEW, EFFECTS()) \
     PRIMITIVE(PyValue_AsKnownObjectSteal, PyObject *, (PyValue), \
               ARGS(consumed object), VIEW, EFFECTS()) \
+    /* The type of a value or an object, a pointer along the path `type`, \
+     * and the version read through it */ \
     PRIMITIVE(PyValue_TYPE, PyTypeObject *, (PyValueBorrow), \
-              ARGS(borrowed), MEASURE(type), EFFECTS(reads)) \
+              ARGS(borrowed), PATH(type), EFFECTS(reads)) \
+    PRIMITIVE(Py_TYPE, PyTypeObject *, (PyObject *), \
+              ARGS(object), PATH(type), EFFECTS(reads)) \
+    FIELD(PyTypeObject, tp_version_tag, unsigned int, ON(type), \
+          MEASURE(type_version), EFFECTS(reads)) \
+    /* An object's inline values (pycore_object.h: at tp_basicsize; the \
+     * caller has the type's Py_TPFLAGS_INLINE_VALUES) and their flag */ \
+    PRIMITIVE(_PyObject_InlineValues, PyDictValues *, (PyObject *), \
+              ARGS(object), PATH(inline_values), EFFECTS(reads)) \
+    FIELD(PyDictValues, valid, uint8_t, ON(inline_values), \
+          TEST(has_values), EFFECTS(reads)) \
+    /* The address of a value slot at a byte offset: arithmetic only */ \
+    PRIMITIVE(_PyObject_ValueSlot, PyValue *, (PyObject *, size_t), \
+              ARGS(object, scalar), SCALAR, EFFECTS()) \
+    /* A new owner of a value, PyValue_NULL for PyValue_NULL: a count only */ \
+    PRIMITIVE(PyValue_XDUP, PyValue, (PyValueBorrow), \
+              ARGS(borrowed), DUP(owned), EFFECTS()) \
+    /* Identities: a borrowed view of a value; in a build with the GIL the \
+     * relaxed atomic loads are plain loads */ \
+    INTRINSIC(PyValue_Borrow, ARGS(borrowed), VIEW, BUILD(all)) \
+    INTRINSIC(FT_ATOMIC_LOAD_UINT_RELAXED, ARGS(scalar), SCALAR, BUILD(gil)) \
+    INTRINSIC(FT_ATOMIC_LOAD_UINT8, ARGS(scalar), SCALAR, BUILD(gil)) \
     /* _PyErr_Format -> PyUnicode_FromFormatV: formats with %s and the \
      * type's name only, which calls no Python; it allocates the message \
      * and replaces the current exception, releasing it: a finalizer */ \

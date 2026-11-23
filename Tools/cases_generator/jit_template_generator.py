@@ -196,6 +196,7 @@ class TOp:
     args: list
     attr: object = None
     when: str | None = None
+    exit: int | None = None     # a block that the op leaves for, when it gives NULL
 
 
 @dataclass
@@ -227,11 +228,12 @@ class Graph:
 
     def successors(self, b: TBlock) -> list[int]:
         term = b.term
+        exits = [op.exit for op in b.ops if op.exit is not None]
         if term[0] == "br":
-            return [term[2], term[3]]
+            return [term[2], term[3], *exits]
         if term[0] == "jmp":
-            return [term[1]]
-        return []
+            return [term[1], *exits]
+        return exits
 
     def rpo(self) -> list[int]:
         seen, order = set(), []
@@ -1241,6 +1243,43 @@ def dce(g: Graph) -> bool:
         changed = True
 
 
+class FailingBoxes(ir_leaf_eval.Context):
+    "A context in which every helper fails: it gives NULL"
+
+    def call(self, name: str, *args):
+        self.calls.append(name)
+        return 0
+
+
+@functools.cache
+def null_only_from_slow(name: str) -> bool:
+    """The primitive's result is NULL only when its slow path's helper
+    gives NULL: the spec, run with helpers that fail on integers and
+    doubles around the inline range, gives NULL only after a helper call"""
+    prim = ir_leaf.PRIMITIVES.get(name)
+    if prim is None or not prim.slow or len(prim.params) != 1 or prim.results != (ir_leaf.VALUE,):
+        return False
+    k = value_constants()
+    samples = {
+        "i64": [0, 1, -1, k["Py_INT_MIN"], k["Py_INT_MIN"] - 1, k["Py_INT_MAX"],
+                k["Py_INT_MAX"] + 1, 2**62, -2**62],
+        "f64": [0.0, -0.0, 1.5, -1e300, float("inf"), float("-inf"), float("nan")],
+    }.get(prim.params[0])
+    if samples is None:
+        return False
+    called = False
+    for x in samples:
+        cx = FailingBoxes(model_context().layout, None)
+        try:
+            result = prim.spec(cx, x)
+        except Exception:
+            return False
+        if not cx.calls and result == 0:
+            return False
+        called |= bool(cx.calls)
+    return called
+
+
 def prim_name(op: TOp) -> str | None:
     "The primitive of a prim op, whose attr is a name or (name, aux)"
     if op.kind != "prim":
@@ -1368,6 +1407,34 @@ def fuse_guards(g: Graph) -> bool:
     return False
 
 
+def fold_failed_boxes(g: Graph) -> bool:
+    """A primitive whose result is NULL only when its slow path fails, and
+    whose result is then tested to leave by an exit, leaves by it itself:
+    the hot path has no test"""
+    defs = definitions(g)
+    n = uses(g)
+    for i in g.rpo():
+        b = g.blocks[i]
+        if b.term[0] != "br" or not b.ops or n.get(b.term[1]) != 1:
+            continue
+        test = b.ops[-1]
+        word = null_tested(defs, b.term[1])
+        if word is None or test.results != [b.term[1]] or len(b.ops) < 2:
+            continue
+        op = defs.get(word)
+        if op is None or b.ops[-2] is not op or op.when or not isinstance(op.attr, str) \
+                or op.exit is not None or not null_only_from_slow(op.attr):
+            continue
+        exit_, rest = b.term[2], b.term[3]
+        if g.blocks[exit_].params or g.blocks[exit_].term[0] != "raise":
+            continue
+        b.ops.remove(test)
+        op.exit = exit_
+        b.term = ("jmp", rest, [])
+        return True
+    return False
+
+
 def thread_tests(g: Graph) -> bool:
     """A block that only tests a parameter for NULL, to leave by an exit,
     gets the test on each edge that cannot show the word not NULL: the edges
@@ -1441,6 +1508,7 @@ def simplify(g: Graph) -> None:
         changed |= thread_bool_phis(g)
         prune(g)
         changed |= fold_nulls(g)
+        changed |= fold_failed_boxes(g)
         changed |= fuse_guards(g)
         changed |= thread_tests(g)
         changed |= thread_branches(g)
@@ -2122,6 +2190,9 @@ class Emitter:
             aux = "NULL"
             if isinstance(op.attr, tuple):
                 aux = f"(const void *){op.attr[1]}"
+            if op.exit is not None:
+                # The label plus one that a NULL result leaves for
+                aux = f"(const void *)(intptr_t)({self.label(op.exit)} + 1)"
             self.lower(i, k, op, name, regs, argv, aux)
         elif kd == "call":
             helper = ir_leaf.HELPERS[op.attr]

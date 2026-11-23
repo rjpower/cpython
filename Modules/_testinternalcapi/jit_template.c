@@ -123,6 +123,10 @@ u64_tuple(const uint64_t *items, int n)
     return t;
 }
 
+static void *failing_malloc(void *ctx, size_t size) { return NULL; }
+static void *failing_calloc(void *ctx, size_t n, size_t size) { return NULL; }
+static void *failing_realloc(void *ctx, void *p, size_t size) { return NULL; }
+
 /* jit_lower(name, ops, gprs, xmms, aux, args_live) -> (cond, gprs_in, gprs, xmms)
 
    Runs the lowering of primitive `name` on the registers `ops` (its
@@ -181,11 +185,17 @@ jit_lower(PyObject *module, PyObject *args)
         }
     }
     const void *aux = NULL;
+    /* aux "exit": the label that a NULL result leaves for; the result reports
+       whether the lowering left by it.  "exit_fail": the same, with object
+       allocation failing while the code runs, so that a box fails */
+    int has_exit = 0, fail_boxes = 0;
     if (aux_name != Py_None) {
         const char *d = PyUnicode_AsUTF8(aux_name);
         if (d == NULL) {
             return NULL;
         }
+        fail_boxes = strcmp(d, "exit_fail") == 0;
+        has_exit = fail_boxes || strcmp(d, "exit") == 0;
         aux = strcmp(d, "_PyFloat_ExactDealloc") == 0
             ? (const void *)_PyFloat_ExactDealloc : (const void *)_PyLong_ExactDealloc;
     }
@@ -216,8 +226,21 @@ jit_lower(PyObject *module, PyObject *args)
         .target = -1, .slow = -1, .leave = -1,
     };
     emit_prologue(&a);
+    _PyJitLabel exit = -1;
+    if (has_exit) {
+        exit = _PyJitAsm_NewLabel(&a);
+        aux = (const void *)(intptr_t)(exit + 1);
+    }
     int cond = info->lower(&cx, ops, aux);
     assert(cx.cold_depth == 0);
+    if (has_exit) {
+        _PyJitLabel end = _PyJitAsm_NewLabel(&a);
+        _PyJitAsm_MovMI(&a, AT(_PyJitReg_RBP, offsetof(RegState, cond)), 0);
+        _PyJitAsm_Jmp(&a, end);
+        _PyJitAsm_Bind(&a, exit);
+        _PyJitAsm_MovMI(&a, AT(_PyJitReg_RBP, offsetof(RegState, cond)), 1);
+        _PyJitAsm_Bind(&a, end);
+    }
     if (info->predicate) {
         _PyJitLabel holds = _PyJitAsm_NewLabel(&a);
         _PyJitAsm_MovMI(&a, AT(_PyJitReg_RBP, offsetof(RegState, cond)), 1);
@@ -238,7 +261,20 @@ jit_lower(PyObject *module, PyObject *args)
         PyErr_SetString(PyExc_MemoryError, "cannot place the lowering");
         return NULL;
     }
+    PyMemAllocatorEx allocator;
+    if (fail_boxes) {
+        PyMem_GetAllocator(PYMEM_DOMAIN_OBJ, &allocator);
+        PyMemAllocatorEx failing = allocator;
+        failing.malloc = failing_malloc;
+        failing.calloc = failing_calloc;
+        failing.realloc = failing_realloc;
+        PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &failing);
+    }
     ((void (*)(RegState *))(uintptr_t)code.start)(&s);
+    if (fail_boxes) {
+        PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &allocator);
+        PyErr_Clear();
+    }
     _PyJitMemory_Free(&code);
 
     PyObject *gin = u64_tuple(s.gpr_in, 16);
@@ -247,7 +283,7 @@ jit_lower(PyObject *module, PyObject *args)
     PyObject *result = NULL;
     if (gin != NULL && gout != NULL && xout != NULL) {
         result = Py_BuildValue("(OOOO)",
-                               info->predicate ? (s.cond ? Py_True : Py_False) : Py_None,
+                               info->predicate || has_exit ? (s.cond ? Py_True : Py_False) : Py_None,
                                gin, gout, xout);
     }
     Py_XDECREF(gin);

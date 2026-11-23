@@ -157,16 +157,31 @@ _PyJitLower_Call(_PyJitWordCx *cx, const void *fn, int publish, int nargs,
     }
 }
 
-/* A call on a cold path that comes back: the lowering's slow path */
+/* A call on a cold path that comes back: the lowering's slow path.  If
+   fail is not negative, a call that gives NULL leaves for that label
+   instead of coming back. */
 static void
 cold_call(_PyJitWordCx *cx, _PyJitLabel from, _PyJitLabel back, const void *fn,
-          int publish, int nargs, const _PyJitArg *args, _PyJitArg result)
+          int publish, int nargs, const _PyJitArg *args, _PyJitArg result,
+          _PyJitLabel fail)
 {
     _PyJitLower_ColdBegin(cx);
     _PyJitAsm_Bind(A, from);
     _PyJitLower_Call(cx, fn, publish, nargs, args, result);
+    if (fail >= 0) {
+        _PyJitAsm_TestRR(A, (_PyJitReg)result.reg, (_PyJitReg)result.reg);
+        _PyJitAsm_Jcc(A, _PyJitCond_E, fail);
+    }
     _PyJitAsm_Jmp(A, back);
     _PyJitLower_ColdEnd(cx);
+}
+
+/* The label that a constructor's NULL result (a failed box) leaves for:
+   aux is that label plus one, or NULL for none */
+static _PyJitLabel
+fail_label(const void *aux)
+{
+    return (_PyJitLabel)(intptr_t)aux - 1;
 }
 
 /* Shared shapes */
@@ -473,7 +488,7 @@ LOWERING(PyValue_FromInt64)                     // [dst, i, t]
     _PyJitAsm_Bind(A, done);
     _PyJitArg arg = _PyJitArg_GPR(i);
     cold_call(cx, box, done, (const void *)_PyValue_BoxInt64, 1, 1, &arg,
-              _PyJitArg_GPR(dst));
+              _PyJitArg_GPR(dst), fail_label(aux));
     return _PyJitCond_NONE;
 }
 
@@ -490,7 +505,7 @@ LOWERING(PyValue_FromDouble)                    // [dst, x, t]
     _PyJitAsm_Bind(A, done);
     _PyJitArg arg = _PyJitArg_XMM(x);
     cold_call(cx, box, done, (const void *)_PyValue_BoxDouble, 1, 1, &arg,
-              _PyJitArg_GPR(dst));
+              _PyJitArg_GPR(dst), fail_label(aux));
     return _PyJitCond_NONE;
 }
 
@@ -617,7 +632,7 @@ close_value(_PyJitWordCx *cx, _PyJitReg w, _PyJitReg t, int may_be_null,
     _PyJitAsm_Bind(A, done);
     _PyJitArg arg = _PyJitArg_GPR(w);
     cold_call(cx, last, done, destroy ? destroy : (const void *)_Py_Dealloc,
-              destroy == NULL, 1, &arg, _PyJitArg_NONE);
+              destroy == NULL, 1, &arg, _PyJitArg_NONE, -1);
 }
 
 /* The last count of an exact int or float: its destructor, which runs no

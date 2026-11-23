@@ -63,7 +63,9 @@ typedef struct {
    among them.  A predicate sets the
    flags and returns the condition under which the primitive is true; any
    other lowering returns _PyJitCond_NONE.  aux is the destructor of
-   PyValue_CLOSE_SPECIALIZED and NULL for every other primitive. */
+   PyValue_CLOSE_SPECIALIZED; for PyValue_FromInt64 and PyValue_FromDouble
+   the label plus one that a NULL result (a box that failed) jumps to, or
+   NULL to give the NULL back; NULL for every other primitive. */
 #define _PyJitCond_NONE (-1)
 typedef int (*_PyJitLowering)(_PyJitWordCx *cx, const uint8_t *ops,
                               const void *aux);

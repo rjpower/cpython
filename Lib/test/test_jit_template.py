@@ -247,15 +247,38 @@ class LoweringTests(unittest.TestCase):
             for value in values:
                 expected = capi.leaf_primitive(name, value)
                 for ops, live in variants(name, rng, 2):
-                    with self.subTest(primitive=name, value=value, ops=ops):
-                        _, (w,), before, after = run(name, ops, (value,), rng, args_live=live)
-                        self.check_registers(name, ops, before, after, live)
-                        if w >> 48:
-                            self.assertEqual(w, expected)
-                        else:
-                            # A box, as C made: its value
-                            self.assertTrue(same(self.take(w), value))
-                            self.assertTrue(same(expected, value))
+                    # With an exit for a NULL result, which these never give:
+                    # the lowering never leaves by it
+                    for aux in (None, "exit"):
+                        with self.subTest(primitive=name, value=value, ops=ops, aux=aux):
+                            cond, (w,), before, after = run(name, ops, (value,), rng, aux,
+                                                            args_live=live)
+                            self.check_registers(name, ops, before, after, live)
+                            self.assertIs(cond, None if aux is None else False)
+                            if w >> 48:
+                                self.assertEqual(w, expected)
+                            else:
+                                # A box, as C made: its value
+                                self.assertTrue(same(self.take(w), value))
+                                self.assertTrue(same(expected, value))
+
+    def test_failed_box_leaves_by_the_exit(self):
+        "A box that fails gives NULL, and the lowering with an exit leaves by it"
+        rng = random.Random(91)
+        name = "PyValue_FromInt64"
+        for value in (2**60, -2**60, 2**50, -2**50 - 1):
+            for ops, live in variants(name, rng, 2):
+                with self.subTest(value=value, ops=ops):
+                    cond, (w,), before, after = run(name, ops, (value,), rng, "exit_fail",
+                                                    args_live=live)
+                    self.check_registers(name, ops, before, after, live)
+                    self.assertIs(cond, True)
+                    self.assertEqual(w, 0)
+        # Inline ints need no box
+        for ops, live in variants(name, rng, 2):
+            cond, (w,), before, after = run(name, ops, (7,), rng, "exit_fail", args_live=live)
+            self.assertIs(cond, False)
+            self.assertEqual(w, capi.leaf_primitive(name, 7))
 
     def test_counts(self):
         rng = random.Random(90)

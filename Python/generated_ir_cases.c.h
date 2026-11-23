@@ -3347,9 +3347,6 @@ ir_run_CALL_BOUND_METHOD_GENERAL(
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _EXPAND_METHOD
-            {
-            }
             // _CHECK_RECURSION_REMAINING
             {
                 if (tstate->py_recursion_remaining <= 1) {
@@ -3357,6 +3354,9 @@ ir_run_CALL_BOUND_METHOD_GENERAL(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
+            }
+            // _EXPAND_METHOD
+            {
             }
             // _PY_FRAME_GENERAL
             {
@@ -3490,6 +3490,12 @@ ir_run_CALL_BUILTIN_FAST(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
+                int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
+                if ((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 1 : 0)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
             }
             // _CHECK_RECURSION_LIMIT
             {
@@ -3502,14 +3508,8 @@ ir_run_CALL_BUILTIN_FAST(
             // _CALL_BUILTIN_FAST
             {
                 STAT_INC(CALL, hit);
-                _PyNativeCallResult call = call_builtin_values(
+                PyValue result = call_builtin_values(
                     tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-                if (call.miss) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-                PyValue result = call.value;
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -3583,14 +3583,8 @@ ir_run_CALL_BUILTIN_FAST_WITH_KEYWORDS(
             // _CALL_BUILTIN_FAST_WITH_KEYWORDS
             {
                 STAT_INC(CALL, hit);
-                _PyNativeCallResult call = call_builtin_values(
+                PyValue result = call_builtin_values(
                     tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-                if (call.miss) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-                PyValue result = call.value;
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -3732,15 +3726,6 @@ ir_run_CALL_EX_NON_PY_GENERAL(
             // _MAKE_CALLARGS_A_TUPLE
             {
             }
-            // _CHECK_IS_NOT_PY_CALLABLE_EX
-            {
-                PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_st);
-                if (Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
-                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
-                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
-                }
-            }
             // _CALL_FUNCTION_EX_NON_PY_GENERAL
             {
                 assert(frame->instr_ptr == this_instr);
@@ -3805,20 +3790,6 @@ ir_run_CALL_EX_PY(
             }
             // _MAKE_CALLARGS_A_TUPLE
             {
-            }
-            // _CHECK_IS_PY_CALLABLE_EX
-            {
-                PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_st);
-                if (Py_TYPE(func) != &PyFunction_Type) {
-                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
-                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
-                }
-                if (((PyFunctionObject *)func)->vectorcall != _PyFunction_Vectorcall) {
-                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
-                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
-                }
             }
             // _PY_FRAME_EX
             {
@@ -4541,6 +4512,23 @@ ir_run_CALL_METHOD_DESCRIPTOR_FAST(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
+                int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
+                if (n == 0) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if ((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 2 : 1)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyValue self = IR_CALL_ARG(0);
+                if (PyValue_TYPE(self) != method->d_common.d_type) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
             }
             // _CHECK_RECURSION_LIMIT
             {
@@ -4553,14 +4541,8 @@ ir_run_CALL_METHOD_DESCRIPTOR_FAST(
             // _CALL_METHOD_DESCRIPTOR_FAST
             {
                 STAT_INC(CALL, hit);
-                _PyNativeCallResult call = call_descriptor_values(
+                PyValue result = call_descriptor_values(
                     tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-                if (call.miss) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-                PyValue result = call.value;
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -4623,6 +4605,18 @@ ir_run_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
+                int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
+                if (n == 0) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyValue self = IR_CALL_ARG(0);
+                if (PyValue_TYPE(self) != method->d_common.d_type) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
             }
             // _CHECK_RECURSION_LIMIT
             {
@@ -4635,14 +4629,8 @@ ir_run_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS(
             // _CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS
             {
                 STAT_INC(CALL, hit);
-                _PyNativeCallResult call = call_descriptor_values(
+                PyValue result = call_descriptor_values(
                     tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-                if (call.miss) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-                PyValue result = call.value;
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -7473,12 +7461,15 @@ ir_run_FOR_ITER_GEN(
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
-                if (!gen_try_set_executing((PyGenObject *)gen)) {
+                if (!gen_may_claim(gen)) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
-                STAT_INC(FOR_ITER, hit);{
+                STAT_INC(FOR_ITER, hit);
+                if (!gen_claim(tstate, gen)) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }{
                     _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
                     PyValue ir_resume_input = PyValue_None;
                     if (_PY_IR_FOR_ITER == _PY_IR_SEND) {
@@ -14070,12 +14061,15 @@ ir_run_SEND_GEN(
                     assert(_PyOpcode_Deopt[opcode] == (SEND));
                     JUMP_TO_PREDICTED(SEND);
                 }
-                if (!gen_try_set_executing((PyGenObject *)gen)) {
+                if (!gen_may_claim(gen)) {
                     UPDATE_MISS_STATS(SEND);
                     assert(_PyOpcode_Deopt[opcode] == (SEND));
                     JUMP_TO_PREDICTED(SEND);
                 }
-                STAT_INC(SEND, hit);{
+                STAT_INC(SEND, hit);
+                if (!gen_claim(tstate, gen)) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }{
                     _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
                     PyValue ir_resume_input = PyValue_None;
                     if (_PY_IR_SEND == _PY_IR_SEND) {
@@ -14145,11 +14139,14 @@ ir_run_SEND_GEN_XFER_DISCARD(
                     UPDATE_MISS_STATS(SEND);
                     JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
                 }
-                if (!gen_try_set_executing((PyGenObject *)gen)) {
+                if (!gen_may_claim(gen)) {
                     UPDATE_MISS_STATS(SEND);
                     JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
                 }
-                STAT_INC(SEND, hit);{
+                STAT_INC(SEND, hit);
+                if (!gen_claim(tstate, gen)) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }{
                     _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
                     PyValue ir_resume_input = PyValue_None;
                     if (_PY_IR_SEND == _PY_IR_SEND) {
@@ -19542,9 +19539,6 @@ static const _PyIRForm ir_handler_forms[512] = {
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _EXPAND_METHOD
-            {
-            }
             // _CHECK_RECURSION_REMAINING
             {
                 if (tstate->py_recursion_remaining <= 1) {
@@ -19552,6 +19546,9 @@ static const _PyIRForm ir_handler_forms[512] = {
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
+            }
+            // _EXPAND_METHOD
+            {
             }
             // _PY_FRAME_GENERAL
             {
@@ -19677,6 +19674,12 @@ static const _PyIRForm ir_handler_forms[512] = {
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
+                int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
+                if ((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 1 : 0)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
             }
             // _CHECK_RECURSION_LIMIT
             {
@@ -19689,14 +19692,8 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _CALL_BUILTIN_FAST
             {
                 STAT_INC(CALL, hit);
-                _PyNativeCallResult call = call_builtin_values(
+                PyValue result = call_builtin_values(
                     tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-                if (call.miss) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-                PyValue result = call.value;
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -19766,14 +19763,8 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _CALL_BUILTIN_FAST_WITH_KEYWORDS
             {
                 STAT_INC(CALL, hit);
-                _PyNativeCallResult call = call_builtin_values(
+                PyValue result = call_builtin_values(
                     tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-                if (call.miss) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-                PyValue result = call.value;
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -19907,15 +19898,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _MAKE_CALLARGS_A_TUPLE
             {
             }
-            // _CHECK_IS_NOT_PY_CALLABLE_EX
-            {
-                PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_st);
-                if (Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
-                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
-                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
-                }
-            }
             // _CALL_FUNCTION_EX_NON_PY_GENERAL
             {
                 assert(frame->instr_ptr == this_instr);
@@ -19976,20 +19958,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             }
             // _MAKE_CALLARGS_A_TUPLE
             {
-            }
-            // _CHECK_IS_PY_CALLABLE_EX
-            {
-                PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_st);
-                if (Py_TYPE(func) != &PyFunction_Type) {
-                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
-                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
-                }
-                if (((PyFunctionObject *)func)->vectorcall != _PyFunction_Vectorcall) {
-                    UPDATE_MISS_STATS(CALL_FUNCTION_EX);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
-                    JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
-                }
             }
             // _PY_FRAME_EX
             {
@@ -20453,6 +20421,23 @@ static const _PyIRForm ir_handler_forms[512] = {
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
+                int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
+                if (n == 0) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if ((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 2 : 1)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyValue self = IR_CALL_ARG(0);
+                if (PyValue_TYPE(self) != method->d_common.d_type) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
             }
             // _CHECK_RECURSION_LIMIT
             {
@@ -20465,14 +20450,8 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _CALL_METHOD_DESCRIPTOR_FAST
             {
                 STAT_INC(CALL, hit);
-                _PyNativeCallResult call = call_descriptor_values(
+                PyValue result = call_descriptor_values(
                     tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-                if (call.miss) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-                PyValue result = call.value;
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -20531,6 +20510,18 @@ static const _PyIRForm ir_handler_forms[512] = {
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
+                int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
+                if (n == 0) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                PyValue self = IR_CALL_ARG(0);
+                if (PyValue_TYPE(self) != method->d_common.d_type) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
             }
             // _CHECK_RECURSION_LIMIT
             {
@@ -20543,14 +20534,8 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS
             {
                 STAT_INC(CALL, hit);
-                _PyNativeCallResult call = call_descriptor_values(
+                PyValue result = call_descriptor_values(
                     tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-                if (call.miss) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-                PyValue result = call.value;
                 if (PyValue_IsNull(result)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -22433,12 +22418,15 @@ static const _PyIRForm ir_handler_forms[512] = {
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
-                if (!gen_try_set_executing((PyGenObject *)gen)) {
+                if (!gen_may_claim(gen)) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
-                STAT_INC(FOR_ITER, hit);{
+                STAT_INC(FOR_ITER, hit);
+                if (!gen_claim(tstate, gen)) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }{
                     _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
                     PyValue ir_resume_input = PyValue_None;
                     if (_PY_IR_FOR_ITER == _PY_IR_SEND) {
@@ -27272,12 +27260,15 @@ static const _PyIRForm ir_handler_forms[512] = {
                     assert(_PyOpcode_Deopt[opcode] == (SEND));
                     JUMP_TO_PREDICTED(SEND);
                 }
-                if (!gen_try_set_executing((PyGenObject *)gen)) {
+                if (!gen_may_claim(gen)) {
                     UPDATE_MISS_STATS(SEND);
                     assert(_PyOpcode_Deopt[opcode] == (SEND));
                     JUMP_TO_PREDICTED(SEND);
                 }
-                STAT_INC(SEND, hit);{
+                STAT_INC(SEND, hit);
+                if (!gen_claim(tstate, gen)) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }{
                     _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
                     PyValue ir_resume_input = PyValue_None;
                     if (_PY_IR_SEND == _PY_IR_SEND) {
@@ -27343,11 +27334,14 @@ static const _PyIRForm ir_handler_forms[512] = {
                     UPDATE_MISS_STATS(SEND);
                     JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
                 }
-                if (!gen_try_set_executing((PyGenObject *)gen)) {
+                if (!gen_may_claim(gen)) {
                     UPDATE_MISS_STATS(SEND);
                     JUMP_TO_PREDICTED(SEND_XFER_DISCARD);
                 }
-                STAT_INC(SEND, hit);{
+                STAT_INC(SEND, hit);
+                if (!gen_claim(tstate, gen)) {
+                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }{
                     _PyInterpreterFrame *ir_resumed_frame = &gen->gi_iframe;
                     PyValue ir_resume_input = PyValue_None;
                     if (_PY_IR_SEND == _PY_IR_SEND) {

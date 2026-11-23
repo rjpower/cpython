@@ -1725,19 +1725,10 @@ call_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
  *
  * More than IR_OPERANDS_PER_WORD operands are gathered by call_vector(). */
 
-/* The result of a native handler's call: the handler deoptimizes when miss is
- * set, a guard that needs the operands having failed.  The guards of a builtin
- * function here are its fixed-arity value forms' (METH_VALUE | METH_O or
- * METH_NOARGS) number of arguments. */
-typedef struct {
-    PyValue value;
-    int miss;
-} _PyNativeCallResult;
-
-#define CALL_NATIVE_MISS ((_PyNativeCallResult){PyValue_NULL, 1})
-#define CALL_NATIVE_DONE(V) ((_PyNativeCallResult){(V), 0})
-
-static inline Py_ALWAYS_INLINE _PyNativeCallResult
+/* A builtin function.  Its handler's guard checked the call flags and the
+ * number of arguments of a fixed-arity value form (METH_VALUE | METH_O or
+ * METH_NOARGS). */
+static inline Py_ALWAYS_INLINE PyValue
 call_builtin_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
                     const _PyIRWord *head, _PyIRWord word,
                     PyValue callable, int first)
@@ -1746,11 +1737,9 @@ call_builtin_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
         (PyCFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
     int flags = func->m_ml->ml_flags;
     int n = (int)IR_C(word) - first;
-    if ((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 1 : 0)) {
-        return CALL_NATIVE_MISS;
-    }
+    assert(!(flags & (METH_O | METH_NOARGS)) || n == ((flags & METH_O) ? 1 : 0));
     if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
-        return CALL_NATIVE_DONE(call_vector(tstate, frame, head, callable));
+        return call_vector(tstate, frame, head, callable);
     }
     PyValue args[IR_OPERANDS_PER_WORD];
     CALL_NATIVE_GATHER(head, _PyFrame_Slots(frame), first, n, args);
@@ -1760,10 +1749,10 @@ call_builtin_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
         PyValue result = meth(_PyCFunction_GET_SELF_VALUE((PyObject *)func),
                               args, n, NULL);
         _PyValue_ASSERT_RESULT(tstate, result);
-        return CALL_NATIVE_DONE(result);
+        return result;
     }
-    return CALL_NATIVE_DONE(_PyValue_CallAdapter(
-        tstate, (PyObject *)func, func->vectorcall, args, (size_t)n, NULL));
+    return _PyValue_CallAdapter(
+        tstate, (PyObject *)func, func->vectorcall, args, (size_t)n, NULL);
 }
 
 /* A builtin class that has a vectorcall (its guard checked): the class's value
@@ -1792,10 +1781,11 @@ call_class_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                 args, (size_t)n, NULL);
 }
 
-/* A method descriptor: the receiver is operand first, which must be an exact
- * instance of the descriptor's type, and the callee takes it with the
- * arguments. */
-static inline Py_ALWAYS_INLINE _PyNativeCallResult
+/* A method descriptor: the receiver is operand first, and the callee takes it
+ * with the arguments.  Its handler's guard checked the call flags, the number
+ * of arguments and that the receiver is an exact instance of the
+ * descriptor's type. */
+static inline Py_ALWAYS_INLINE PyValue
 call_descriptor_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
                        const _PyIRWord *head, _PyIRWord word,
                        PyValue callable, int first)
@@ -1804,33 +1794,25 @@ call_descriptor_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
         (PyMethodDescrObject *)PyValue_AsKnownObjectBorrow(callable);
     int flags = descr->d_method->ml_flags;
     int n = (int)IR_C(word) - first;
-    if (n == 0 || ((flags & (METH_O | METH_NOARGS))
-                   && n != ((flags & METH_O) ? 2 : 1)))
-    {
-        return CALL_NATIVE_MISS;
-    }
+    assert(n > 0);
+    assert(!(flags & (METH_O | METH_NOARGS)) || n == ((flags & METH_O) ? 2 : 1));
     PyValue *slots = _PyFrame_Slots(frame);
+    assert(PyValue_TYPE(slots[_PyIR_CallOperand(head, first)]) ==
+           descr->d_common.d_type);
     if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
-        PyValue receiver = slots[_PyIR_CallOperand(head, first)];
-        if (PyValue_TYPE(receiver) != descr->d_common.d_type) {
-            return CALL_NATIVE_MISS;
-        }
-        return CALL_NATIVE_DONE(call_vector(tstate, frame, head, callable));
+        return call_vector(tstate, frame, head, callable);
     }
     PyValue args[IR_OPERANDS_PER_WORD];
     CALL_NATIVE_GATHER(head, slots, first, n, args);
-    if (PyValue_TYPE(args[0]) != descr->d_common.d_type) {
-        return CALL_NATIVE_MISS;
-    }
     if (flags & METH_VALUE) {
         _PyCFunctionValue meth = (_PyCFunctionValue)(void(*)(void))
                                  descr->d_method->ml_meth;
         PyValue result = meth(PyValue_Borrow(args[0]), args + 1, n - 1, NULL);
         _PyValue_ASSERT_RESULT(tstate, result);
-        return CALL_NATIVE_DONE(result);
+        return result;
     }
-    return CALL_NATIVE_DONE(_PyValue_CallAdapter(
-        tstate, (PyObject *)descr, descr->vectorcall, args, (size_t)n, NULL));
+    return _PyValue_CallAdapter(
+        tstate, (PyObject *)descr, descr->vectorcall, args, (size_t)n, NULL);
 }
 
 /* Move or count the first count (at most four) operands of fields, the twelve

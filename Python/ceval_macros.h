@@ -611,6 +611,42 @@ gen_try_set_executing(PyGenObject *gen)
     return false;
 }
 
+/* Whether a specialized send or loop step can claim gen for the frame that
+ * it pushes: gen is created or suspended, and no other thread holds it.  A
+ * read, for the handler's guard; gen_claim() then claims it. */
+static inline bool
+gen_may_claim(PyGenObject *gen)
+{
+    int8_t frame_state = FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state);
+#ifdef Py_GIL_DISABLED
+    return frame_state < FRAME_SUSPENDED_YIELD_FROM_LOCKED;
+#else
+    assert(frame_state != FRAME_SUSPENDED_YIELD_FROM_LOCKED);
+    return frame_state < FRAME_EXECUTING;
+#endif
+}
+
+/* Claim gen, which gen_may_claim() accepted.  With the GIL the claim is a
+ * store.  Free-threaded, another thread can claim gen between the guard and
+ * the claim; gen is then executing, and the claim raises what the generic
+ * send raises for an executing generator, and returns 0. */
+static inline int
+gen_claim(PyThreadState *tstate, PyGenObject *gen)
+{
+#ifdef Py_GIL_DISABLED
+    if (!gen_try_set_executing(gen)) {
+        _PyErr_SetString(tstate, PyExc_ValueError,
+                         PyCoro_CheckExact(gen) ? "coroutine already executing"
+                                                : "generator already executing");
+        return 0;
+    }
+#else
+    (void)tstate;
+    gen->gi_frame_state = FRAME_EXECUTING;
+#endif
+    return 1;
+}
+
 #define CALL_TP_ITERITEM_NO_ESCAPE(ITER, INDEX) \
     Py_TYPE(ITER)->_tp_iteritem((ITER), (INDEX))
 

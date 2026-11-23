@@ -72,6 +72,9 @@ class HandlerRecordTests(unittest.TestCase):
                 ("_POP_TOP_INT", {WRITES_HEAP}),
                 ("_POP_TOP", {MAY_RELEASE}),
                 ("_INIT_CALL_PY_EXACT_ARGS", {ALLOCATES}),
+                # The method's function becomes the callee as a view: no
+                # count moves and nothing escapes (contract87 TR)
+                ("_INIT_CALL_BOUND_METHOD_EXACT_ARGS", {READS_HEAP}),
                 ("_STORE_ATTR_SLOT", {READS_HEAP, WRITES_HEAP, MAY_RELEASE}),
                 ("_LIST_APPEND", set(EFFECTS))):
             with self.subTest(uop=name):
@@ -133,11 +136,20 @@ class HandlerRecordTests(unittest.TestCase):
                 self.assertEqual(record.feedback.fields,
                                  tuple(types[record.feedback.type]))
 
-    def test_guard_order_exceptions_are_exact(self):
-        # build_records() raises if a handler's list differs; each entry is
-        # a handler that exists
-        handlers = {v[0] for v in ir_records.GUARD_ORDER_EXCEPTIONS}
-        self.assertLessEqual(handlers, set(records))
+    def test_guards_precede_changes(self):
+        # build_records() raises otherwise; a frame switch is at its token,
+        # so the generator's guards precede it (contract87 TR)
+        self.assertNotHasAttr(ir_records, "GUARD_ORDER_EXCEPTIONS")
+        instructions = ir_generator.handler_instructions(analysis)
+        for name in ("FOR_ITER_GEN", "SEND_GEN", "CALL_BOUND_METHOD_EXACT_ARGS",
+                     "CALL_BOUND_METHOD_GENERAL", "CALL_EX_PY", "CALL_BUILTIN_FAST",
+                     "CALL_METHOD_DESCRIPTOR_FAST"):
+            with self.subTest(handler=name):
+                parts = [p for p in instructions[name].parts
+                         if isinstance(p, cases.analyzer.Uop)]
+                record = records[name]
+                self.assertEqual(
+                    ir_records.guard_order(parts[:len(record.uops)], record.uops), [])
 
     def test_transfers_are_typed(self):
         # Every way out of a uop is a typed transfer; none enters the

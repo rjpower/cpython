@@ -1132,7 +1132,7 @@ READER_CALLS = re.compile(
     r"_PyErr_Occurred|_PyErr_ExceptionMatches|_PyInterpreterState_GET|_PyThreadState_HasStackSpace|"
     r"PyExceptionInstance_Class|PyException_Get\w+|_PyCell_GetValue|_PyValueGuarded_Load|"
     r"_PyFb_\w+|_PyDataStack_Slots|_PyGen_GetGeneratorFromFrame|_PyClassMethod_GetFunc|"
-    r"backoff_counter_triggers|_PyEval_GeneratorReturnTarget|_PyUnicode_Equal|"
+    r"backoff_counter_triggers|_PyEval_GeneratorReturnTarget|_PyUnicode_Equal|gen_may_claim|"
     r"PyCFunction_GET_\w+|PyFunction_GET_\w+|_Py_ReachedRecursionLimit|PyUnicode_GET_LENGTH|"
     r"_PyShape_\w+|_PyDictValues_ShapeAfterAdd|_PyIR_\w+|IS_PEP523_HOOKED|"
     r"GETITEM|FRAME_CO_\w+|GLOBALS|BUILTINS|LOCALS|DK_\w+|_Py_atomic_load_\w+|"
@@ -1142,7 +1142,7 @@ READER_CALLS = re.compile(
 # Non-escaping calls that change existing objects or the thread state
 WRITER_CALLS = re.compile(
     r"FT_ATOMIC_STORE\w*|_PyDictValues_(AddToInsertionOrder|SetShape)|_PyFunction_SetVersion|"
-    r"_Py_LeaveRecursiveCall\w*|gen_prologue|gen_try_set_executing|PyCell_SwapTakeRef|"
+    r"_Py_LeaveRecursiveCall\w*|gen_prologue|gen_try_set_executing|gen_claim|PyCell_SwapTakeRef|"
     r"PyList_SET_ITEM|_PyFrame_(Initialize|MoveArgs|SetReturnValue)|_PyObject_GC_TRACK|"
     r"PyObject_GC_UnTrack|_Py_atomic_compare_exchange_\w+|_Py_(un)?set_eval_breaker_bit|"
     r"_PyThreadState_PopCValueSteal|_PyStolenTuple_Free")
@@ -1283,30 +1283,18 @@ def infer_effects(uop: Uop) -> frozenset[str]:
 CHANGES = frozenset((WRITES_HEAP, MAY_RELEASE, MAY_RUN_PYTHON))
 
 
-# The handlers whose guards follow a change, as (handler, uop of the change,
-# uop of the guard).  Contract87 TR reorders them; a new one is an error.
-GUARD_ORDER_EXCEPTIONS = frozenset((
-    # The method expansion writes the call window before the callee checks
-    *(("CALL_BOUND_METHOD_EXACT_ARGS", "_INIT_CALL_BOUND_METHOD_EXACT_ARGS", guard)
-      for guard in ("_CHECK_FUNCTION_VERSION", "_CHECK_FUNCTION_EXACT_ARGS",
-                    "_CHECK_STACK_SPACE", "_CHECK_RECURSION_REMAINING")),
-    ("CALL_BOUND_METHOD_GENERAL", "_EXPAND_METHOD", "_CHECK_RECURSION_REMAINING"),
-    # The argument tuple is made before the callable is checked
-    ("CALL_EX_NON_PY_GENERAL", "_MAKE_CALLARGS_A_TUPLE", "_CHECK_IS_NOT_PY_CALLABLE_EX"),
-    ("CALL_EX_PY", "_MAKE_CALLARGS_A_TUPLE", "_CHECK_IS_PY_CALLABLE_EX"),
-    # The native call declines a callee before it has an effect
-    *((name, uop, uop) for name, uop in (
-        ("CALL_BUILTIN_FAST", "_CALL_BUILTIN_FAST"),
-        ("CALL_BUILTIN_FAST_WITH_KEYWORDS", "_CALL_BUILTIN_FAST_WITH_KEYWORDS"),
-        ("CALL_METHOD_DESCRIPTOR_FAST", "_CALL_METHOD_DESCRIPTOR_FAST"),
-        ("CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS",
-         "_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS"))),
-    # gen_try_set_executing() claims the generator, then the frame checks
-    ("FOR_ITER_GEN", "_FOR_ITER_GEN_FRAME", "_FOR_ITER_GEN_FRAME"),
-    *((name, "_SEND_GEN_FRAME", "_SEND_GEN_FRAME") for name in (
-        "SEND_GEN", "SEND_GEN_XFER_DISCARD", "SEND_GEN_XFER_HOME", "SEND_GEN_XFER_POP_TOP",
-        "SEND_GEN_XFER_RETURN", "SEND_GEN_XFER_STORE_FAST", "SEND_GEN_XFER_STORE_LOCAL")),
-))
+def frame_switch_site(tokens: list[Token]) -> int | None:
+    """The position in tokens of the first site that switches the frame, as
+    analyzer.switches_frame() finds them, or None"""
+    for i, tkn in enumerate(tokens):
+        if tkn.kind != "IDENTIFIER":
+            continue
+        if tkn.text == "DISPATCH_INLINED" or "frame" in IR_MARKER_EFFECTS.get(tkn.text, ()):
+            return i
+        if (tkn.text == "frame" and i + 1 < len(tokens) and tokens[i + 1].kind == "EQUALS"
+                and tokens[i - 1].kind in ("SEMI", "LBRACE", "RBRACE", "EQUALS")):
+            return i
+    return None
 
 
 def guard_order(parts: list[Uop], uops: tuple[UopRecord, ...]) -> list[tuple[str, str]]:
@@ -1321,7 +1309,12 @@ def guard_order(parts: list[Uop], uops: tuple[UopRecord, ...]) -> list[tuple[str
         changes = [position[id(t)] for t, e in effect_sites(part)
                    if e is None or e in CHANGES]
         if uop_effects(part) & CHANGES:
-            changes.append(0)   # no token says where; assume the start
+            # A frame switch is at its token; a return or a poll, which no
+            # token says, is assumed at the start
+            p = part.properties
+            switch = (frame_switch_site(order)
+                      if not (p.returns or p.eval_breaker) else None)
+            changes.append(0 if switch is None else switch)
         first = min(changes, default=None)
         for guard in record.guards:
             at = position[id(guard.site)] if guard.site is not None else -1
@@ -1337,7 +1330,7 @@ def guard_order(parts: list[Uop], uops: tuple[UopRecord, ...]) -> list[tuple[str
 def check_record(record, parts: list[Uop]) -> None:
     """Refuse what the record of a handler cannot state: a transfer that
     is not typed, a guard with no fact or reason, a `pure` uop that changes the heap or runs Python, and a
-    guard that follows a change but is not in GUARD_ORDER_EXCEPTIONS.
+    guard that follows a change.
     parts are the uops of the instruction.
 
     The generator checks a record after the emitter's own checks, which
@@ -1361,14 +1354,12 @@ def check_record(record, parts: list[Uop]) -> None:
         if "pure" in part.annotations and changes:
             raise analysis_error(f"{part.name} is annotated pure but may "
                                  f"{' and '.join(sorted(changes))}", part.body.open)
-    name = record.handler
-    violations = {(name, *v) for v in guard_order(parts, record.uops)}
-    expected = {v for v in GUARD_ORDER_EXCEPTIONS if v[0] == name}
-    if violations != expected:
+    violations = guard_order(parts, record.uops)
+    if violations:
         raise analysis_error(
-            f"{name}: the guards that follow a change differ from "
-            f"ir_records.GUARD_ORDER_EXCEPTIONS: new {sorted(violations - expected)}, "
-            f"gone {sorted(expected - violations)}", record.instruction.where)
+            f"{record.handler}: the guards that follow a change, as (uop of the "
+            f"change, uop of the guard): {violations}; a guard must precede every "
+            "change", record.instruction.where)
 
 
 # The feedback schema, from the typedefs of Include/internal/pycore_feedback.h

@@ -678,8 +678,8 @@ class TestIRCases(unittest.TestCase):
              "spam_call(); DEOPT_IF(IS_PEP523_HOOKED(tstate));"),
             ("IR_INVOKE_GUARDED_PYTHON_CALL();",
              "IR_INVOKE_GUARDED_PYTHON_CALL(); IR_INVOKE_GUARDED_PYTHON_CALL();"),
-            ("_CHECK_METHOD_VERSION +\n            _EXPAND_METHOD +",
-             "_CHECK_METHOD_VERSION +\n            _PY_FRAME_GENERAL_GUARDED +\n"
+            ("_CHECK_RECURSION_REMAINING +\n            _EXPAND_METHOD +",
+             "_CHECK_RECURSION_REMAINING +\n            _PY_FRAME_GENERAL_GUARDED +\n"
              "            _EXPAND_METHOD +"),
             ("_MONITOR_CALL + _DO_CALL + _CHECK_PERIODIC_AT_END;",
              "_MONITOR_CALL + _PY_FRAME_GENERAL_GUARDED + _CHECK_PERIODIC_AT_END;"),

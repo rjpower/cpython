@@ -1626,9 +1626,11 @@ dummy_func(
             EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type);
             EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v),
                     "a created generator accepts only None");
-            EXIT_IF(!gen_try_set_executing((PyGenObject *)gen),
-                    "claims the generator for this frame: an effect, not a fact");
+            EXIT_IF(!gen_may_claim(gen), "the generator runs or has finished");
             STAT_INC(SEND, hit);
+            if (!gen_claim(tstate, gen)) {
+                ERROR_NO_POP();
+            }
             IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
         }
 
@@ -4148,9 +4150,11 @@ dummy_func(
             assert(PyValue_IsObject(iter));
             PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(Py_TYPE(gen) != &PyGen_Type);
-            EXIT_IF(!gen_try_set_executing((PyGenObject *)gen),
-                    "claims the generator for this frame: an effect, not a fact");
+            EXIT_IF(!gen_may_claim(gen), "the generator runs or has finished");
             STAT_INC(FOR_ITER, hit);
+            if (!gen_claim(tstate, gen)) {
+                ERROR_NO_POP();
+            }
             IR_ENTER_GENERATOR(gen, _PY_IR_FOR_ITER);
         }
 
@@ -4515,8 +4519,8 @@ dummy_func(
             unused/1 + // Skip over the entry distance
             _CHECK_PEP_523 +
             _CHECK_METHOD_VERSION +
-            _EXPAND_METHOD +
             _CHECK_RECURSION_REMAINING +
+            _EXPAND_METHOD +
             _PY_FRAME_GENERAL +
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
@@ -4890,15 +4894,16 @@ dummy_func(
                With METH_KEYWORDS it takes the _WITH_KEYWORDS handler. */
             EXIT_IF(flags != METH_FASTCALL
                     && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE);
+            int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
+            EXIT_IF((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 1 : 0),
+                    "the arguments do not fit the value form's fixed arity");
         }
 
         inline_ok op(_CALL_BUILTIN_FAST, (callable, self_or_null, args[oparg] -- res)) {
             /* Builtin METH_FASTCALL functions, without keywords */
             STAT_INC(CALL, hit);
-            _PyNativeCallResult call = call_builtin_values(
+            PyValue result = call_builtin_values(
                 tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-            DEOPT_IF(call.miss, "the native call declined the callee");
-            PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -4925,10 +4930,8 @@ dummy_func(
         inline_ok op(_CALL_BUILTIN_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- res)) {
             /* Builtin METH_FASTCALL | METH_KEYWORDS functions */
             STAT_INC(CALL, hit);
-            _PyNativeCallResult call = call_builtin_values(
+            PyValue result = call_builtin_values(
                 tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-            DEOPT_IF(call.miss, "the native call declined the callee");
-            PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -5092,14 +5095,16 @@ dummy_func(
             int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
             EXIT_IF(flags != (METH_FASTCALL | METH_KEYWORDS)
                     && flags != (METH_VALUE | METH_KEYWORDS));
+            int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
+            EXIT_IF(n == 0, "the call has no receiver");
+            PyValue self = IR_CALL_ARG(0);
+            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
         }
 
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- res)) {
             STAT_INC(CALL, hit);
-            _PyNativeCallResult call = call_descriptor_values(
+            PyValue result = call_descriptor_values(
                 tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-            DEOPT_IF(call.miss, "the native call declined the callee");
-            PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -5163,14 +5168,18 @@ dummy_func(
             int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
             EXIT_IF(flags != METH_FASTCALL
                     && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE);
+            int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
+            EXIT_IF(n == 0, "the call has no receiver");
+            EXIT_IF((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 2 : 1),
+                    "the arguments do not fit the value form's fixed arity");
+            PyValue self = IR_CALL_ARG(0);
+            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
         }
 
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST, (callable, self_or_null, args[oparg] -- res)) {
             STAT_INC(CALL, hit);
-            _PyNativeCallResult call = call_descriptor_values(
+            PyValue result = call_descriptor_values(
                 tstate, frame, this_instr, ir_word, callable, IR_CALL_FIRST());
-            DEOPT_IF(call.miss, "the native call declined the callee");
-            PyValue result = call.value;
             if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
@@ -5345,12 +5354,14 @@ dummy_func(
             IR_INVOKE_CALL();
         }
 
+        // call_run_ex() makes the argument tuple, which may run Python, and
+        // then derives the kind of call from the callable again: the guard
+        // before it is the only one
         macro(CALL_EX_PY) =
             unused/1 +
             _CHECK_PEP_523 +
             _CHECK_IS_PY_CALLABLE_EX +
             _MAKE_CALLARGS_A_TUPLE +
-            _CHECK_IS_PY_CALLABLE_EX +
             _PY_FRAME_EX +
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
@@ -5369,7 +5380,6 @@ dummy_func(
             unused/1 +
             _CHECK_IS_NOT_PY_CALLABLE_EX +
             _MAKE_CALLARGS_A_TUPLE +
-            _CHECK_IS_NOT_PY_CALLABLE_EX +
             _CALL_FUNCTION_EX_NON_PY_GENERAL +
             _CHECK_PERIODIC_AT_END;
 

@@ -1386,9 +1386,11 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
             EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type);
             EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v),
                     "a created generator accepts only None");
-            EXIT_IF(!gen_try_set_executing((PyGenObject *)gen),
-                    "claims the generator for this frame: an effect, not a fact");
+            EXIT_IF(!gen_may_claim(gen), "the generator runs or has finished");
             STAT_INC(SEND, hit);
+            if (!gen_claim(tstate, gen)) {
+                ERROR_NO_POP();
+            }
             IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
         }"""),
         (("iter", "null_or_index", "none"), ("iter", "null_or_index", "next"), """{

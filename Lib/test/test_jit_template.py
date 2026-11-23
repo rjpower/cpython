@@ -513,12 +513,14 @@ class TemplateTests(unittest.TestCase):
     def check_same(self, f, index, slots, objects):
         "The form and the template from the same slots"
         results = []
-        for use_template in (False, True):
+        # The template first: a failed guard may respecialise the word, and
+        # it then does so through the form's code on both sides
+        for use_template in (True, False):
             before = [sys.getrefcount(o) for o in objects]
             next_, slow, exc, out = capi.jit_template_run(f, index, dict(slots), use_template)
             after = [sys.getrefcount(o) for o in objects]
             results.append((next_, slow, exc, out, [b - a for a, b in zip(before, after)]))
-        form, template = results
+        template, form = results
         self.assertEqual(template[0], form[0], "next word")
         self.assertEqual(type(template[2]), type(form[2]))
         self.assertEqual(str(template[2]), str(form[2]))
@@ -531,15 +533,21 @@ class TemplateTests(unittest.TestCase):
 
     def test_templates_against_forms(self):
         for source, warm, handler, fields, cases in TEMPLATE_CASES:
-            f = self.compile(source, warm)
-            index, (_, *word_fields) = word_of(f, handler)
-            field_slots = dict(zip("ABCD", word_fields))
+            f = None
+            fast = 0
             for case in cases:
+                if f is None or capi.get_ir(f.__code__, True)[index][0] != handler:
+                    # A fresh function for a word that a case respecialised
+                    f = self.compile(source, warm)
+                    index, (_, *word_fields) = word_of(f, handler)
+                    field_slots = dict(zip("ABCD", word_fields))
                 with self.subTest(source=source, handler=handler, case=case):
                     slots = {field_slots[x]: v for x, v in zip(fields, case)}
                     objects = [v for v in case if not isinstance(v, (int, float)) or
                                type(v) is int and not -2**50 <= v < 2**50]
-                    self.check_same(f, index, slots, objects)
+                    fast += not self.check_same(f, index, slots, objects)[1]
+            with self.subTest(source=source, handler=handler):
+                self.assertGreater(fast, 0, "no case stayed on the template's code")
 
     def test_temporaries(self):
         "TEMPS puts the inputs of its last word in temporaries"

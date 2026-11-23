@@ -8,6 +8,7 @@
 
 #include "Python.h"
 #include "pycore_ceval.h"           // _PY_EVAL_EVENTS_MASK
+#include "pycore_code.h"            // COMPARISON_LESS_THAN
 #include "pycore_floatobject.h"     // _PyFloat_ExactDealloc()
 #include "pycore_frame.h"           // _PyInterpreterFrame
 #include "pycore_jit_lower.h"
@@ -689,6 +690,70 @@ LOWERING(PyValue_CLOSE_SPECIALIZED)
                 is_long ? (const void *)destroy_long : (const void *)destroy_float);
 #endif
     return _PyJitCond_NONE;
+}
+
+/* COMPARISON_BIT(x, y) & mask != 0, the compares' test, as a condition.
+   mask is a set of COMPARISON_* bits fixed when the code is made.  For
+   integers, which are never unordered, after `cmp x, y`: */
+int
+_PyJitLower_ComparisonInt(_PyJitWordCx *cx, const uint8_t *ops, int mask)  // [x, y]
+{
+    _PyJitAsm_AluRR(A, _PyJitAlu_CMP, REG(0), REG(1));
+    switch (mask & (COMPARISON_LESS_THAN | COMPARISON_GREATER_THAN | COMPARISON_EQUALS)) {
+        case COMPARISON_LESS_THAN: return _PyJitCond_L;
+        case COMPARISON_GREATER_THAN: return _PyJitCond_G;
+        case COMPARISON_EQUALS: return _PyJitCond_E;
+        case COMPARISON_LESS_THAN | COMPARISON_EQUALS: return _PyJitCond_LE;
+        case COMPARISON_GREATER_THAN | COMPARISON_EQUALS: return _PyJitCond_GE;
+        case COMPARISON_LESS_THAN | COMPARISON_GREATER_THAN: return _PyJitCond_NE;
+    }
+    Py_UNREACHABLE();
+}
+
+/* For doubles.  `ucomisd x, y` sets CF for less, ZF for equal, and all of
+   ZF, PF and CF for unordered; swapping the operands swaps less and
+   greater.  Every set of outcomes is one condition of one of the two orders
+   but ordered-equal and its complement, which take two. */
+int
+_PyJitLower_ComparisonDouble(_PyJitWordCx *cx, const uint8_t *ops, int mask)  // [x, y, t, u]
+{
+    enum { U = COMPARISON_UNORDERED, L = COMPARISON_LESS_THAN,
+           G = COMPARISON_GREATER_THAN, E = COMPARISON_EQUALS };
+    int swap = 0, cond;
+    switch (mask & (U | L | G | E)) {
+        case G: cond = _PyJitCond_A; break;
+        case G | E: cond = _PyJitCond_AE; break;
+        case U | L: cond = _PyJitCond_B; break;
+        case U | L | E: cond = _PyJitCond_BE; break;
+        case L: swap = 1; cond = _PyJitCond_A; break;
+        case L | E: swap = 1; cond = _PyJitCond_AE; break;
+        case U | G: swap = 1; cond = _PyJitCond_B; break;
+        case U | G | E: swap = 1; cond = _PyJitCond_BE; break;
+        case L | G: cond = _PyJitCond_NE; break;
+        case U | E: cond = _PyJitCond_E; break;
+        case U: cond = _PyJitCond_P; break;
+        case L | G | E: cond = _PyJitCond_NP; break;
+        case E:
+        case U | L | G:
+            _PyJitAsm_AluRR(A, _PyJitAlu_XOR, REG(2), REG(2));
+            _PyJitAsm_AluRR(A, _PyJitAlu_XOR, REG(3), REG(3));
+            _PyJitAsm_SseRR(A, _PyJitSse_UCOMISD, XMM(0), XMM(1));
+            if (mask & E) {
+                _PyJitAsm_Setcc(A, _PyJitCond_E, REG(2));
+                _PyJitAsm_Setcc(A, _PyJitCond_NP, REG(3));
+                _PyJitAsm_TestRR(A, REG(2), REG(3));
+            }
+            else {
+                _PyJitAsm_Setcc(A, _PyJitCond_NE, REG(2));
+                _PyJitAsm_Setcc(A, _PyJitCond_P, REG(3));
+                _PyJitAsm_AluRR(A, _PyJitAlu_OR, REG(2), REG(3));
+            }
+            return _PyJitCond_NE;
+        default:
+            Py_UNREACHABLE();   // never and always: no compare has them
+    }
+    _PyJitAsm_SseRR(A, _PyJitSse_UCOMISD, swap ? XMM(1) : XMM(0), swap ? XMM(0) : XMM(1));
+    return cond;
 }
 
 #define _PY_JIT_LOWERINGS_TABLE

@@ -301,7 +301,9 @@ INT_PAIRS = ([(a, b) for a in INTS[::2] for b in INTS[1::2]] +
 FLOATS_ = [0.0, -0.0, 1.5, -2.25, 1e300, -1e-300, math.inf, -math.inf]
 FLOAT_PAIRS = ([(a, b) for a in FLOATS_[::2] for b in FLOATS_[1::2]] +
                [(1.5, 2), (2, 1.5), (1.5, "x"), ("x", 1.5), (math.nan, 1.0),
-                (1.0, math.nan), (1e308, 1e308), (big(3), 1.0)])
+                (1.0, math.nan), (math.nan, math.nan), (1.5, 1.5), (0.0, -0.0),
+                (1.0, 0.0), (1e308, 1e308), (big(3), 1.0)])
+COMPARE_OPS = ("<", "<=", "==", "!=", ">", ">=")
 ANY = [None, True, False, 0, 1, "s", [], big(4), 2.5]
 BINARY = "def f(a, b):\n    x = 1\n    x = a {op} b\n    return x"
 TEMPS = "def f(a, b):\n    return (a {op} b) {op} (b {op} a)"
@@ -319,12 +321,18 @@ TEMPLATE_CASES = [
     *[(BINARY.format(op=op), (6.0, 3.0), handler, "ABC",
        [(Plain(), a, b) for a, b in FLOAT_PAIRS])
       for op, handler in (("+", "BINARY_OP_ADD_FLOAT"), ("-", "BINARY_OP_SUBTRACT_FLOAT"),
-                          ("*", "BINARY_OP_MULTIPLY_FLOAT"))],
-    ("def f(a, b):\n    x = 1\n    x = a < b\n    return x", (1, 2), "COMPARE_OP_INT", "ABC",
-     [(Plain(), a, b) for a, b in INT_PAIRS]),
-    *[(f"def f(a, b):\n    if a {op} b:\n        return 1\n    return 0", (1, 2),
-       "COMPARE_OP_JUMP_INT", "AB", INT_PAIRS)
-      for op in ("<", "<=", "==", "!=", ">", ">=")],
+                          ("*", "BINARY_OP_MULTIPLY_FLOAT"),
+                          ("/", "BINARY_OP_TRUEDIV_FLOAT"))],
+    *[(f"def f(a, b):\n    x = 1\n    x = a {op} b\n    return x", warm, handler, "ABC",
+       [(Plain(), a, b) for a, b in pairs])
+      for op in COMPARE_OPS
+      for warm, handler, pairs in (((1, 2), "COMPARE_OP_INT", INT_PAIRS),
+                                   ((1.0, 2.0), "COMPARE_OP_FLOAT", FLOAT_PAIRS))],
+    *[(f"def f(a, b):\n    if a {op} b:\n        return 1\n    return 0", warm, handler,
+       "AB", pairs)
+      for op in COMPARE_OPS
+      for warm, handler, pairs in (((1, 2), "COMPARE_OP_JUMP_INT", INT_PAIRS),
+                                   ((1.0, 2.0), "COMPARE_OP_JUMP_FLOAT", FLOAT_PAIRS))],
     *[(f"def f(a, b):\n    x = 1\n    x = a {op} b\n    return x", (None, None), "IS_OP",
        "ABC", [(Plain(), a, b) for a in ANY for b in ANY[::2]])
       for op in ("is", "is not")],

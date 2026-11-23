@@ -118,6 +118,12 @@ PyAPI_FUNC(void) _PyJitLower_Publish(_PyJitWordCx *cx, _PyJitReg scratch);
 PyAPI_FUNC(void) _PyJitLower_AluRK(_PyJitWordCx *cx, _PyJitAlu op, _PyJitReg dst,
                                    int64_t k, _PyJitReg scratch);
 
+/* COMPARISON_BIT(x, y) & mask != 0 for integers in general registers
+   [x, y] and for doubles in xmm registers [x, y] with general temporaries
+   [t, u]: emit the test, return its condition */
+PyAPI_FUNC(int) _PyJitLower_ComparisonInt(_PyJitWordCx *cx, const uint8_t *ops, int mask);
+PyAPI_FUNC(int) _PyJitLower_ComparisonDouble(_PyJitWordCx *cx, const uint8_t *ops, int mask);
+
 /* The templates (Python/jit_template.c).  A template emits a word whose
    handler has one in place of the call of its form: the word's handler
    check, its uops' code, and on the hot path a jump to cx->next or, when it
@@ -139,7 +145,6 @@ PyAPI_DATA(const void *const) _PyEval_JitRaiseExit;
 PyAPI_FUNC(void) _PyJitTemplate_Begin(_PyJitWordCx *cx);
 PyAPI_FUNC(void) _PyJitTemplate_Branch(_PyJitWordCx *cx, int cond);
 PyAPI_FUNC(void) _PyJitTemplate_Raise(_PyJitWordCx *cx, _PyJitLabel label);
-PyAPI_FUNC(int) _PyJitTemplate_MaskCond(int mask);
 PyAPI_FUNC(void) _PyJitTemplate_PtrAdd(_PyJitWordCx *cx, _PyJitReg dst, _PyJitReg base,
                                        _PyJitReg index, size_t size);
 

@@ -634,10 +634,10 @@ def _attr_text(attr) -> str:
 # sdiv srem udiv urem and or xor shl ashr lshr neg not lnot fadd fsub fmul
 # fdiv fneg), checked arithmetic (add_ovf sub_ovf mul_ovf, two results),
 # conversions (sext zext trunc sitofp uitofp fptosi tobool), compares (cmp
-# with attr eq ne slt sle sgt sge ult ule ugt uge; fcmp with oeq one olt ole
-# ogt oge), select.  Exits: exit_if (attr EXIT or DEOPT; the guard fails if
-# its operand is true), raise_if, report_edge.  Outputs: out (attr: the
-# output's name).
+# with attr eq ne slt sle sgt sge ult ule ugt uge; fcmp with oeq une olt ole
+# ogt oge, une true on unordered as C's != is), select.  Exits: exit_if (attr
+# EXIT or DEOPT; the guard fails if its operand is true), raise_if,
+# report_edge.  Outputs: out (attr: the output's name).
 TERMINATORS = ("br", "jmp", "next", "raise", "exit", "complete")
 
 
@@ -1042,7 +1042,7 @@ _ASSIGN_OPS = {"=": None, "+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%",
 _ARITH = {"+": ("add", "fadd"), "-": ("sub", "fsub"), "*": ("mul", "fmul"),
           "&": ("and", None), "|": ("or", None), "^": ("xor", None),
           "<<": ("shl", None)}
-_COMPARE = {"==": ("eq", "eq", "oeq"), "!=": ("ne", "ne", "one"),
+_COMPARE = {"==": ("eq", "eq", "oeq"), "!=": ("ne", "ne", "une"),
             "<": ("slt", "ult", "olt"), "<=": ("sle", "ule", "ole"),
             ">": ("sgt", "ugt", "ogt"), ">=": ("sge", "uge", "oge")}
 
@@ -1431,7 +1431,7 @@ class Translator:
             return self.emit1("cmp", "bool", (v, zero), "ne")[0]
         if t == "f64":
             zero = self.const("f64", 0.0)[0]
-            return self.emit1("fcmp", "bool", (v, zero), "one")[0]
+            return self.emit1("fcmp", "bool", (v, zero), "une")[0]
         zero = self.const(t, 0)[0]
         return self.emit1("cmp", "bool", (v, zero), "ne")[0]
 

@@ -1316,11 +1316,15 @@ class Emitter:
         elif kd == "cmp":
             self.w(f"_PyJitAsm_AluRR(a, _PyJitAlu_CMP, {self.R(args[0])}, {self.R(args[1])});")
             self.setcc(op, f"_PyJitCond_{CMP_CONDS[op.attr]}")
-        elif kd == "cmpmask":
+        elif kd == "cmpmask" or kd == "fcmp":
+            mask = op.attr if kd == "cmpmask" else FCMP_MASKS[op.attr]
+            ops = [self.R(args[0]), self.R(args[1])]
             if is_xmm(g.types[args[0]]):
-                raise Refused("a float COMPARISON_BIT")
-            self.w(f"_PyJitAsm_AluRR(a, _PyJitAlu_CMP, {self.R(args[0])}, {self.R(args[1])});")
-            self.setcc(op, f"_PyJitTemplate_MaskCond({op.attr})")
+                ops += [self.gpr(t) for t in self.temps(i, k, op, 2)]
+                fn = "_PyJitLower_ComparisonDouble"
+            else:
+                fn = "_PyJitLower_ComparisonInt"
+            self.setcc(op, f"{fn}(cx, (const uint8_t[]){{{', '.join(ops)}}}, {mask})")
         elif kd in ("xorb", "lnot"):
             c = self.cond(args[0])
             neg = "1" if kd == "lnot" else op.attr
@@ -1407,6 +1411,13 @@ class Emitter:
             self.setcc(op, call)
         else:
             self.w(f"{call};")
+
+
+# The fcmp predicates as the COMPARISON_* outcomes for which they hold
+FCMP_MASKS = {"oeq": "COMPARISON_EQUALS", "une": "COMPARISON_NOT_EQUALS",
+              "olt": "COMPARISON_LESS_THAN", "ogt": "COMPARISON_GREATER_THAN",
+              "ole": "(COMPARISON_LESS_THAN | COMPARISON_EQUALS)",
+              "oge": "(COMPARISON_GREATER_THAN | COMPARISON_EQUALS)"}
 
 
 def template_of(name: str, record) -> list[str]:

@@ -6,7 +6,7 @@
    are what they share.  See pycore_jit_lower.h. */
 
 #include "Python.h"
-#include "pycore_code.h"            // COMPARISON_LESS_THAN
+#include "pycore_code.h"            // COMPARISON_EQUALS
 #include "pycore_dict.h"            // PyDictUnicodeEntry
 #include "pycore_feedback.h"        // _PyFb_*
 #include "pycore_frame.h"           // _PyInterpreterFrame
@@ -52,22 +52,6 @@ _PyJitTemplate_Raise(_PyJitWordCx *cx, _PyJitLabel label)
     _PyJitArg args[2] = {_PyJitArg_GPR(_PyJit_TSTATE), _PyJitArg_GPR(_PyJit_FRAME)};
     _PyJitLower_Call(cx, _PyEval_JitRaiseExit, 1, 2, args, _PyJitArg_NONE);
     _PyJitAsm_Jmp(A, cx->leave);
-}
-
-/* The condition after `cmp x, y` of two integers under which
-   COMPARISON_BIT(x, y) & mask is not zero; mask is a compare's */
-int
-_PyJitTemplate_MaskCond(int mask)
-{
-    switch (mask & (COMPARISON_LESS_THAN | COMPARISON_GREATER_THAN | COMPARISON_EQUALS)) {
-        case COMPARISON_LESS_THAN: return _PyJitCond_L;
-        case COMPARISON_GREATER_THAN: return _PyJitCond_G;
-        case COMPARISON_EQUALS: return _PyJitCond_E;
-        case COMPARISON_LESS_THAN | COMPARISON_EQUALS: return _PyJitCond_LE;
-        case COMPARISON_GREATER_THAN | COMPARISON_EQUALS: return _PyJitCond_GE;
-        case COMPARISON_LESS_THAN | COMPARISON_GREATER_THAN: return _PyJitCond_NE;
-    }
-    Py_UNREACHABLE();
 }
 
 /* dst := base + index * size, dst distinct from base and index */

@@ -432,6 +432,13 @@ _PyJitAsm_AluMI(_PyJitAsm *a, _PyJitAlu op, _PyJitMem dst, int32_t imm)
 }
 
 void
+_PyJitAsm_AluMI32(_PyJitAsm *a, _PyJitAlu op, _PyJitMem dst, int32_t imm)
+{
+    emit_rm(a, 0, 0, fits_int8(imm) ? 0x83 : 0x81, op, dst);
+    emit_imm8_or_32(a, imm);
+}
+
+void
 _PyJitAsm_TestRR(_PyJitAsm *a, _PyJitReg x, _PyJitReg y)
 {
     emit_rr(a, 0, 1, 0x85, y, x, 0);
@@ -500,6 +507,12 @@ void
 _PyJitAsm_UnaryM(_PyJitAsm *a, _PyJitUnary op, _PyJitMem dst)
 {
     emit_rm(a, 0, 1, unary_forms[op].op, unary_forms[op].ext, dst);
+}
+
+void
+_PyJitAsm_UnaryM32(_PyJitAsm *a, _PyJitUnary op, _PyJitMem dst)
+{
+    emit_rm(a, 0, 0, unary_forms[op].op, unary_forms[op].ext, dst);
 }
 
 void

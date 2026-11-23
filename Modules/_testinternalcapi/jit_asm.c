@@ -63,6 +63,7 @@ label_of(Program *p, int64_t number)
     OP(alu_mr, 2, 1, _PyJitAsm_AluMR(A, v[0], M(0), v[1])) \
     OP(alu_ri, 3, 0, _PyJitAsm_AluRI(A, v[0], v[1], v[2])) \
     OP(alu_mi, 2, 1, _PyJitAsm_AluMI(A, v[0], M(0), v[1])) \
+    OP(alu_mi32, 2, 1, _PyJitAsm_AluMI32(A, v[0], M(0), v[1])) \
     OP(test_rr, 2, 0, _PyJitAsm_TestRR(A, v[0], v[1])) \
     OP(test_mr, 1, 1, _PyJitAsm_TestMR(A, M(0), v[0])) \
     OP(test_ri, 2, 0, _PyJitAsm_TestRI(A, v[0], v[1])) \
@@ -72,6 +73,7 @@ label_of(Program *p, int64_t number)
     OP(imul_rri, 3, 0, _PyJitAsm_ImulRRI(A, v[0], v[1], v[2])) \
     OP(unary_r, 2, 0, _PyJitAsm_UnaryR(A, v[0], v[1])) \
     OP(unary_m, 1, 1, _PyJitAsm_UnaryM(A, v[0], M(0))) \
+    OP(unary_m32, 1, 1, _PyJitAsm_UnaryM32(A, v[0], M(0))) \
     OP(shift_ri, 3, 0, _PyJitAsm_ShiftRI(A, v[0], v[1], v[2])) \
     OP(shift_rcl, 2, 0, _PyJitAsm_ShiftRCl(A, v[0], v[1])) \
     OP(setcc, 2, 0, _PyJitAsm_Setcc(A, v[0], v[1])) \

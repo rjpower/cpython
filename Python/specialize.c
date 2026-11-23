@@ -4035,7 +4035,7 @@ static_assert(offsetof(PyBytesObject, ob_sval) ==
               "static positions bytes must have the PyBytesObject layout");
 
 
-const struct _PyCode2 _Py_InitCleanup = {
+const struct _PyCode4 _Py_InitCleanup = {
     _PyVarObject_HEAD_INIT(&PyCode_Type, 2),
     .co_consts = (PyObject *)&_Py_SINGLETON(tuple_empty),
     .co_names = (PyObject *)&_Py_SINGLETON(tuple_empty),

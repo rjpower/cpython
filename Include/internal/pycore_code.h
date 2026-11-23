@@ -378,9 +378,10 @@ PyAPI_FUNC(int) _Py_Instrument(PyCodeObject *co, PyInterpreterState *interp);
 
 extern PyObject *_PyInstrumentation_BranchesIterator(PyCodeObject *code);
 
-struct _PyCode2 _PyCode_DEF(2);
+/* The size is in bytes: _Py_InitCleanup has two code units */
+struct _PyCode4 _PyCode_DEF(4);
 
-PyAPI_DATA(const struct _PyCode2) _Py_InitCleanup;
+PyAPI_DATA(const struct _PyCode4) _Py_InitCleanup;
 
 #ifdef Py_GIL_DISABLED
 

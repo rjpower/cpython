@@ -117,6 +117,9 @@ struct _ceval_state {
     struct _gil_runtime_state *gil;
     int own_gil;
     struct _pending_calls pending;
+    /* -X ir_forms: the evaluation loop runs frames by the function forms of
+       their words (Python/ceval.c, ir_execute_forms()) */
+    int ir_forms;
 };
 
 

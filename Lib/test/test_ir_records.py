@@ -72,6 +72,9 @@ class HandlerRecordTests(unittest.TestCase):
                 ("_POP_TOP_INT", {WRITES_HEAP}),
                 ("_POP_TOP", {MAY_RELEASE}),
                 ("_INIT_CALL_PY_EXACT_ARGS", {ALLOCATES}),
+                # The method's function becomes the callee as a view: no
+                # count moves and nothing escapes (contract87 TR)
+                ("_INIT_CALL_BOUND_METHOD_EXACT_ARGS", {READS_HEAP}),
                 ("_STORE_ATTR_SLOT", {READS_HEAP, WRITES_HEAP, MAY_RELEASE}),
                 ("_LIST_APPEND", set(EFFECTS))):
             with self.subTest(uop=name):
@@ -133,11 +136,53 @@ class HandlerRecordTests(unittest.TestCase):
                 self.assertEqual(record.feedback.fields,
                                  tuple(types[record.feedback.type]))
 
-    def test_guard_order_exceptions_are_exact(self):
-        # build_records() raises if a handler's list differs; each entry is
-        # a handler that exists
-        handlers = {v[0] for v in ir_records.GUARD_ORDER_EXCEPTIONS}
-        self.assertLessEqual(handlers, set(records))
+    def test_guards_precede_changes(self):
+        # build_records() raises otherwise; a frame switch is at its token,
+        # so the generator's guards precede it (contract87 TR)
+        self.assertNotHasAttr(ir_records, "GUARD_ORDER_EXCEPTIONS")
+        instructions = ir_generator.handler_instructions(analysis)
+        for name in ("FOR_ITER_GEN", "SEND_GEN", "CALL_BOUND_METHOD_EXACT_ARGS",
+                     "CALL_BOUND_METHOD_GENERAL", "CALL_EX_PY", "CALL_BUILTIN_FAST",
+                     "CALL_METHOD_DESCRIPTOR_FAST"):
+            with self.subTest(handler=name):
+                parts = [p for p in instructions[name].parts
+                         if isinstance(p, cases.analyzer.Uop)]
+                record = records[name]
+                self.assertEqual(
+                    ir_records.guard_order(parts[:len(record.uops)], record.uops), [])
+
+    def test_transfers_are_typed(self):
+        # Every way out of a uop is a typed transfer; none enters the
+        # evaluator (tiers87, C3)
+        self.assertNotHasAttr(ir_records, "EVALUATOR")
+        for record in records.values():
+            for uop in record.uops:
+                for transfer in uop.transfers:
+                    with self.subTest(handler=record.handler, uop=uop.name):
+                        self.assertIn(transfer.kind, ir_records.TRANSFER_KINDS)
+                        if transfer.site is not None and transfer.site.kind == "GOTO":
+                            self.assertIn(transfer.target, ir_records.ERROR_LABELS)
+
+    def test_jumps_to_the_same_word(self):
+        def transfers(handler):
+            return {(t.kind, t.target) for u in records[handler].uops for t in u.transfers}
+        # A specializer that rewrote the word runs it again
+        self.assertIn((ir_records.JUMP, "self"), transfers("TO_BOOL"))
+        # The monitor runs the word with the handler that it chose
+        self.assertIn((ir_records.JUMP, "self:handler"), transfers("INSTRUMENTED_INSTRUCTION"))
+
+    def test_native_send_yields(self):
+        # A send to a native iterator that suspends yields from the outer
+        # frame where the handler would fall through; a send to a generator
+        # always enters its frame
+        for consumer in ("DISCARD", "STORE_LOCAL", "RETURN", "HOME"):
+            for handler in ("SEND", "SEND_VIRTUAL", "SEND_ASYNC_GEN"):
+                last = records[f"{handler}_XFER_{consumer}"].uops[-1].transfers[-1]
+                self.assertEqual((last.kind, last.target), (ir_records.YIELD, "delegated"))
+            kinds = [t.kind for u in records[f"SEND_GEN_XFER_{consumer}"].uops
+                     for t in u.transfers]
+            self.assertNotIn(ir_records.YIELD, kinds)
+            self.assertEqual(kinds[-1], ir_records.ENTER_FRAME)
 
 
 class GeneratorTests(unittest.TestCase):
@@ -220,6 +265,28 @@ class GeneratorTests(unittest.TestCase):
                 DEAD(value);
             }
             macro(OP_INT) = _WRITE + _GUARD + _USE;
+            """)
+
+    def test_goto_into_the_evaluator_is_an_error(self):
+        with self.assertRaisesRegex(SyntaxError, "a uop may goto only an error label"):
+            self.generate("""
+            inst(OP_INT, (value -- res)) {
+                if (SPAM_FLAG(value)) {
+                    goto start_frame;
+                }
+                res = value;
+                DEAD(value);
+            }
+            """)
+
+    def test_evaluator_local_is_an_error(self):
+        with self.assertRaisesRegex(SyntaxError, "only the evaluator has"):
+            self.generate("""
+            inst(OP_INT, (value -- res)) {
+                SPAM_INT(lastopcode);
+                res = value;
+                DEAD(value);
+            }
             """)
 
 

@@ -1,52 +1,35 @@
-/* The plain generator transfers (rule 13 keeps the others in the steps of
- * Python/ceval_generator.h), as labels of ir_evaluate().  A handler sets
- * ir_gen_value and the other state that a label reads and jumps to it, by
- * the IR_GEN_* macros of Python/ceval_macros.h.  A chain of delegating
- * frames is one transfer: a label walks it in a loop, tests the thread's
- * share of the plain-transfer test once, and tests the frame's share at each
- * level.  The tables that tell the kind of transfer of a word are in
- * Python/ir_targets.h.
+/* The VM routines (tiers87, C2): the shared paths of the interpreter that a
+ * handler's transfer enters, the error routine and the plain generator
+ * transfers (rule 13 keeps the others in the steps of
+ * Python/ceval_generator.h).  Each routine is one definition with two
+ * bindings.  This file is included in ir_evaluate(), where IR_ROUTINE() and
+ * IR_HOT_ROUTINE() open a label and the routine's operands are the
+ * evaluator's locals of the same names, which the handlers' transfer macros
+ * set (Python/ceval_macros.h); and at file scope, where they open the
+ * routine's function form, ir_NAME(tstate, frame, next_instr, operands...),
+ * which returns a _PyIRTransfer and which the function forms of the handlers
+ * and compiled code call.  A routine leaves only through the macros that its
+ * binding defines:
  *
- * This file is included in ir_evaluate(), after its handlers. */
-
-/* The labels leave through two shared blocks, so that the evaluator has one
- * dispatch for them: gen_dispatch runs the word at next_instr, and
- * gen_stepped runs what a step returned. */
-#define GEN_STEP_JUMP(NAME, F, IP, V) \
-    do { \
-        ir_gen_transfer = ir_##NAME(tstate, (F), (IP), (V).bits); \
-        goto LABEL_gen_stepped; \
-    } while (0)
-#define GEN_STEP_EFFECT(REMAINING, IP, V) \
-    do { \
-        ir_gen_transfer = ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, \
-                                                 (REMAINING)); \
-        goto LABEL_gen_stepped; \
-    } while (0)
-
-HOT_LABEL(gen_dispatch)
-{
-    int opcode;
-    DISPATCH();
-}
-
-HOT_LABEL(gen_stepped)
-{
-    frame = ir_gen_transfer.frame;
-    next_instr = ir_gen_transfer.next;
-    if (next_instr == NULL) {
-        goto LABEL_outlined_exit;
-    }
-    goto LABEL_gen_dispatch;
-}
+ *   GEN_DISPATCH()               run the word at next_instr in frame;
+ *   GEN_STEP_JUMP(NAME, F, IP, V), GEN_STEP_EFFECT(REMAINING, IP, V)
+ *                                run a step of Python/ceval_generator.h and
+ *                                what it returns;
+ *   DISPATCH(), PROCESS_ERROR_AT(), IR_EXIT() and the IR_GEN_* transfers, as
+ *                                in a handler.
+ *
+ * A chain of delegating frames is one transfer: a routine walks it in a loop,
+ * tests the thread's share of the plain-transfer test once, and tests the
+ * frame's share at each level.  The tables that tell the kind of transfer of
+ * a word are in Python/ir_targets.h. */
 
 /* The value passes up from the SEND at next_instr, whose YIELD follows it,
  * through every delegating frame above: each level suspends in its YIELD and
  * hands the value to the SEND that resumed it, until the resumer is not one
  * whose outcome is native, and then the value goes to its return slot. */
-HOT_LABEL(gen_yield)
+IR_HOT_ROUTINE(gen_yield, PyValue gen_value)
 {
-    PyValue result = ir_gen_value;
+    PyValue result = gen_value;
     bool thread_plain = generator_thread_is_plain(tstate);
     for (;;) {
         _PyInstr *yield = next_instr + 1;
@@ -57,7 +40,7 @@ HOT_LABEL(gen_yield)
             frame->base[IR_B(word)] = result;
             _PyValue_CheckTemp(result);
             next_instr = yield;
-            goto LABEL_gen_dispatch;
+            GEN_DISPATCH();
         }
         INSTRUCTION_STATS(YIELD_DELEGATED);
         frame->instr_ptr = yield + 1;
@@ -81,19 +64,19 @@ HOT_LABEL(gen_yield)
     next_instr = frame->return_pc;
     if (_PyFrame_SetReturnValue(frame, result)) { next_instr = frame->return_pc; }
     LLTRACE_RESUME_FRAME();
-    goto LABEL_gen_dispatch;
+    GEN_DISPATCH();
 }
 
 /* The generator that frame has just entered, with its debit done, resumes
- * with ir_gen_value.  The word before its resume point tells how it
+ * with gen_value.  The word before its resume point tells how it
  * suspended.  If it was a delegation through a SEND that is native, its
  * resumption is the transfer of a send: the value goes down through the
  * RESUME and the loop back to the SEND, and the SEND enters the next
  * generator, and so on.  If it suspended with a native value-taking
  * resume, the value goes to its STORE_FAST. */
-HOT_LABEL(gen_resume)
+IR_HOT_ROUTINE(gen_resume, PyValue gen_value)
 {
-    PyValue value = ir_gen_value;
+    PyValue value = gen_value;
     bool thread_plain = generator_thread_is_plain(tstate);
     for (;;) {
         _PyInstr *resume = frame->instr_ptr;
@@ -128,7 +111,7 @@ HOT_LABEL(gen_resume)
             (void)closed;
             frame->instr_ptr = next_instr;
             ++next_instr;
-            goto LABEL_gen_dispatch;
+            GEN_DISPATCH();
         }
         _PyIRWord jump = *next_instr;
         assert(IR_HANDLER(jump) == JUMP_BACKWARD_NO_INTERRUPT);
@@ -164,19 +147,20 @@ HOT_LABEL(gen_resume)
     IR_SKIP_RESUME();
     DTRACE_FUNCTION_ENTRY();
     LLTRACE_RESUME_FRAME();
-    goto LABEL_gen_dispatch;
+    GEN_DISPATCH();
 }
 
-/* The generator frame ir_gen_dying has returned ir_gen_value to frame, which
+/* The generator frame gen_dying has returned gen_value to frame, which
  * was current when it ran and is current again; the frame is unlinked and its
  * recursion debit is done.  Retire it, with the value held in C, and route
  * the value to the resumer.  A finalizer that runs during the retirement can
  * redirect the resumer; a changed pc or control generation is taken as a
  * redirect. */
-HOT_LABEL(gen_return)
+IR_HOT_ROUTINE(gen_return, PyValue gen_value, _PyInterpreterFrame *gen_dying,
+           int gen_empty)
 {
-    _PyInterpreterFrame *dying = ir_gen_dying;
-    PyValue value = ir_gen_value;
+    _PyInterpreterFrame *dying = gen_dying;
+    PyValue value = gen_value;
     _PyInstr *site = frame->instr_ptr;
     uint8_t kind = generator_site_kind(frame, site, generator_completed_targets);
     uint64_t generation = generator_control_generation(frame);
@@ -187,7 +171,7 @@ HOT_LABEL(gen_return)
     tstate->exc_info = gen->gi_exc_state.previous_item;
     gen->gi_exc_state.previous_item = NULL;
     dying->previous = NULL;
-    _PyFrame_ClearGenerator(gen, ir_gen_empty ? _PyFrame_GetCode(dying)->co_nlocalsplus
+    _PyFrame_ClearGenerator(gen, gen_empty ? _PyFrame_GetCode(dying)->co_nlocalsplus
                                               : _PyFrame_NumSlots(dying));
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
     assert(frame == tstate->current_frame);
@@ -215,7 +199,7 @@ HOT_LABEL(gen_return)
         PyValue_XCLOSE(value);
         next_instr = frame->instr_ptr;
         LLTRACE_RESUME_FRAME();
-        goto LABEL_gen_dispatch;
+        GEN_DISPATCH();
     }
     if (kind == 0 || kind == GEN_COMPLETE_FOR_ITER) {
         /* A FOR that must be observed, a nonadmitted SEND or an interpreter
@@ -226,24 +210,22 @@ HOT_LABEL(gen_return)
             PROCESS_ERROR_AT(RAISE, 0, next_instr - 1);
         }
         LLTRACE_RESUME_FRAME();
-        goto LABEL_gen_dispatch;
+        GEN_DISPATCH();
     }
-    ir_gen_value = value;
-    next_instr = site;
-    goto LABEL_gen_complete;
+    IR_GEN_COMPLETE_AT(site, value);
 }
 
 /* The SEND or CLEANUP_THROW at next_instr, whose word has a native completed
- * outcome, completes with ir_gen_value.  It retires the send's
+ * outcome, completes with gen_value.  It retires the send's
  * inputs, which stay in their homes until now, and publishes the value as
  * the consumer of the word says.
  *
  * Sequential tests matter: one alias's decrement can make the next alias
  * final, so the inputs close one at a time, from the last.  The first input
  * is the receiver (gen_close_input). */
-HOT_LABEL(gen_complete)
+IR_HOT_ROUTINE(gen_complete, PyValue gen_value)
 {
-    PyValue result = ir_gen_value;
+    PyValue result = gen_value;
     _PyIRWord source_word = *next_instr;
     int kind = generator_site_kind(frame, next_instr, generator_completed_targets);
     assert(kind != 0);
@@ -272,7 +254,7 @@ HOT_LABEL(gen_complete)
             INSTRUCTION_STATS(POP_TOP);
             ++next_instr;
         }
-        goto LABEL_gen_dispatch;
+        GEN_DISPATCH();
     }
     case GEN_COMPLETE_HOME: {
         int destination = IR_A(source_word);
@@ -281,7 +263,7 @@ HOT_LABEL(gen_complete)
         _PyValue_CheckTemp(result);
         next_instr = exit;
         frame->instr_ptr = frame->return_pc = next_instr;
-        goto LABEL_gen_dispatch;
+        GEN_DISPATCH();
     }
     case GEN_COMPLETE_STORE:
     case GEN_COMPLETE_STORE_FAST: {
@@ -300,7 +282,7 @@ HOT_LABEL(gen_complete)
         (void)closed;
         frame->instr_ptr = frame->return_pc = exit;
         next_instr = exit + (explicit_store ? 1 : 0);
-        goto LABEL_gen_dispatch;
+        GEN_DISPATCH();
     }
     default: {
         /* The consumer is the RETURN: this frame returns the value in turn.
@@ -321,7 +303,24 @@ HOT_LABEL(gen_complete)
         next_instr = frame->return_pc;
         if (_PyFrame_SetReturnValue(frame, result)) { next_instr = frame->return_pc; }
         LLTRACE_RESUME_FRAME();
-        goto LABEL_gen_dispatch;
+        GEN_DISPATCH();
     }
     }
+}
+
+/* An error at origin unwinds by the exception table, with the ingress and
+ * checkpoint of entry, and either runs the handler that it finds or ends the
+ * activation. */
+IR_ROUTINE(process_error, _PyInstr *process_error_origin,
+           uint32_t process_error_entry)
+{
+    _PyIRErrorResult ir_error_result = _PyEval_ProcessError(
+        tstate, frame, process_error_origin, process_error_entry);
+    if (ir_error_result.disposition == _PyIR_ERROR_HANDLED) {
+        frame = tstate->current_frame;
+        next_instr = ir_error_result.next;
+        int opcode;
+        DISPATCH();
+    }
+    IR_EXIT(PyValue_NULL);
 }

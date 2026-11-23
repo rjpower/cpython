@@ -1069,7 +1069,7 @@ _PyIR_ExecCallFlags(const _PyIRWord *head, uint32_t nlocalsplus)
 }
 
 /* The feedback block of the executing copy whose word 0 is WORDS, which
- * is the one with entries (co_nfeedback is not 0) */
+ * is the one with entries (the code's nfeedback is not 0) */
 static inline _PyFbBlock *
 _PyIR_FbBlock(const _PyIRWord *words)
 {

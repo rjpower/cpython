@@ -4,6 +4,7 @@
 #include "pycore_descrobject.h"   // _PyGetSet_ValueRead()
 #include "pycore_dict.h"          // PyDict_GetValue()
 #include "pycore_function.h"      // FUNC_VERSION_FIRST_VALID
+#include "pycore_jit.h"           // _PyJitUnit
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"
 #include "pycore_long_value.h"    // _PyValue_AsInt()
@@ -2756,15 +2757,74 @@ IR_HOT_ROUTINE(gen_complete, PyValue gen_value);
 #undef IR_FUNCTION_FORMS
 #pragma GCC diagnostic pop
 
-/* The function-form executor (-X ir_forms): runs the activation's frames by
- * calling each word's function form, as the baseline JIT's B1 will, in place
- * of ir_evaluate().  It is a test of the forms.  A form that returns no word
- * has raised, which the error routine resolves, or has ended the
+#ifdef _PY_JIT_SUPPORTED
+const void *
+_PyEval_HandlerForm(int handler)
+{
+    assert(handler >= 0 && handler < IR_NUM_HANDLERS);
+    return (const void *)ir_handler_forms[handler];
+}
+
+/* The unit to run the transfer t in, or NULL to run its word by its form.
+ * last_frame and last_word are the frame and the word that the forms ran
+ * last (last_word is NULL after a unit ran), which tell a warm-up event: a
+ * frame switch (a call, a return, a resume, the activation's start) or a
+ * backward transfer.  Only at an event does a code warm up, compile or
+ * replace a stale unit; between events a stale unit runs as it is. */
+static inline _PyJitUnit *
+jit_unit_for(PyThreadState *tstate, _PyInterpreterFrame *last_frame,
+             _PyInstr *last_word, _PyIRTransfer t)
+{
+    if (t.frame->owner >= FRAME_OWNED_BY_INTERPRETER) {
+        return NULL;
+    }
+#ifdef Py_DEBUG
+    if (t.frame->lltrace >= 5) {
+        return NULL;
+    }
+#endif
+    _PyJitUnit *unit = _PyFrame_Exec(t.frame)->jit_unit;
+    if (unit != NULL && unit->invalid == 0) {
+        return unit;
+    }
+    if (t.frame == last_frame && t.next > last_word) {
+        return unit != NULL && !(unit->invalid & _PyJIT_RETIRED) ? unit : NULL;
+    }
+    return _PyJit_Event(tstate, t.frame);
+}
+
+typedef _PyIRTransfer (*jit_entry)(PyThreadState *tstate,
+                                   _PyInterpreterFrame *frame,
+                                   const void *entry);
+
+static inline _PyIRTransfer
+jit_enter(PyThreadState *tstate, _PyJitUnit *unit, _PyIRTransfer t)
+{
+    /* The unit addresses the words from frame->ir_words */
+    assert(t.frame->ir_words == unit->words);
+    assert(t.next >= t.frame->ir_words &&
+           t.next < t.frame->ir_words + unit->nwords);
+    return ((jit_entry)unit->code.start)(
+        tstate, t.frame, unit->entries[t.next - t.frame->ir_words]);
+}
+#endif
+
+/* The function-form executor (-X ir_forms), and the baseline JIT's
+ * activation loop: runs the activation's frames by calling each word's
+ * function form, as the baseline JIT's B1 does, in place of ir_evaluate().
+ * With the JIT on, a frame whose code has a unit runs in it, and the loop
+ * runs the transfer that the unit leaves with.  A form or unit that returns
+ * no word has raised, which the error routine resolves, or has ended the
  * activation. */
 static Py_NO_INLINE PyValue
 ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     _PyEvalActivation *activation = IR_ACTIVATION();
+#ifdef _PY_JIT_SUPPORTED
+    int jit = tstate->interp->ceval.jit != _PyJIT_OFF;
+    _PyInterpreterFrame *last_frame = NULL;
+    _PyInstr *last_word = NULL;
+#endif
     _PyIRTransfer t = throwflag ? ir_throw_error(tstate, frame, frame->instr_ptr)
                                 : ir_start_frame(tstate, frame, frame->instr_ptr);
     for (;;) {
@@ -2777,6 +2837,19 @@ ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfla
                                  activation->exit_entry);
             continue;
         }
+#ifdef _PY_JIT_SUPPORTED
+        if (jit) {
+            _PyJitUnit *unit = jit_unit_for(tstate, last_frame, last_word, t);
+            if (unit != NULL) {
+                last_frame = t.frame;
+                last_word = NULL;
+                t = jit_enter(tstate, unit, t);
+                continue;
+            }
+            last_frame = t.frame;
+            last_word = t.next;
+        }
+#endif
         frame = t.frame;
         _PyInstr *next_instr = t.next;
         _PyIRWord ir_word;

@@ -709,6 +709,12 @@ typedef struct _PyCodeExec {
     uint16_t const_first;
     uint16_t nconst;
     uint64_t call_plan_shape;
+    /* The baseline JIT (Include/internal/pycore_jit.h): the newest unit
+     * compiled from these words, valid or not, which chains the older ones;
+     * the warm-up events since the last compile attempt; and the compiles. */
+    struct _PyJitUnit *jit_unit;
+    uint32_t jit_heat;
+    uint32_t jit_compiles;
     uint32_t first_traceable;   // word index of the entry RESUME
     uint32_t nfixed;        // slots below the temporaries, which IR_IS_LOCAL() reads
 } _PyCodeExec;

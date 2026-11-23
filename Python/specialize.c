@@ -10,6 +10,7 @@
 #include "pycore_dict.h"          // DICT_KEYS_UNICODE
 #include "pycore_function.h"      // _PyFunction_GetVersionForCurrentState()
 #include "pycore_interpframe.h"   // FRAME_SPECIALS_SIZE
+#include "pycore_jit.h"           // _PyJit_NoteRewrite()
 #include "pycore_lazyimportobject.h" // PyLazyImport_CheckExact
 #include "pycore_list.h"          // _PyListIterObject, _PyList_Concat
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
@@ -351,6 +352,9 @@ set_opcode(_PyInstr *instr, int opcode)
     return 1;
 #else
     _PyIR_SetHandler(instr, opcode);
+    _PyCodeExec *exec = _PyFrame_Exec(current_frame());
+    assert(instr >= exec->words && instr < exec->words + exec->nwords);
+    _PyJit_NoteRewrite(exec);
     return 1;
 #endif
 }

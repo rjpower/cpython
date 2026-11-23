@@ -9,6 +9,7 @@
 #include "pycore_genobject.h"     // _PyGen_SetStopIterationValue()
 #include "pycore_interpframe.h"   // _PyFrame_GetBytecode()
 #include "pycore_ir_source.h"
+#include "pycore_jit.h"           // _PyJit_Retire()
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_modsupport.h"    // _PyModule_CreateInitialized()
@@ -91,6 +92,7 @@ word_opcode(_PyIRWord *words, int i)
 static inline void
 set_word_opcode(PyCodeObject *code, _PyIRWord *words, int i, int opcode)
 {
+    _PyJit_Retire(code->_co_exec);
     _PyIR_SetHandler(&words[i], _PyCode_HandlerFor(code, i, opcode));
 }
 

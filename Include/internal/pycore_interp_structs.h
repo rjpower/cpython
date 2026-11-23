@@ -120,6 +120,10 @@ struct _ceval_state {
     /* -X ir_forms: the evaluation loop runs frames by the function forms of
        their words (Python/ceval.c, ir_execute_forms()) */
     int ir_forms;
+    /* -X jit, PYTHON_JIT: the baseline JIT's mode (_PyJIT_OFF, _PyJIT_ON,
+       _PyJIT_ALWAYS in pycore_jit.h).  A mode other than off sets ir_forms,
+       since the forms executor is the JIT's activation loop. */
+    int jit;
 };
 
 

@@ -24,6 +24,7 @@ Data members:
 #include "pycore_initconfig.h"    // _PyStatus_EXCEPTION()
 #include "pycore_instruments.h"    // _PY_DEBUGGER_ENTRY_EVENT
 #include "pycore_interpframe.h"   // _PyFrame_GetFirstComplete()
+#include "pycore_jit.h"           // _PyJit_IsAvailable()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"          // _PY_LONG_MAX_STR_DIGITS_THRESHOLD
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
@@ -4489,7 +4490,7 @@ static int
 _jit_is_available_impl(PyObject *module)
 /*[clinic end generated code: output=6849a9cd2ff4aac9 input=d009d751ae64c9ef]*/
 {
-    return 0;
+    return _PyJit_IsAvailable();
 }
 
 /*[clinic input]
@@ -4502,7 +4503,7 @@ static int
 _jit_is_enabled_impl(PyObject *module)
 /*[clinic end generated code: output=55865f8de993fe42 input=0524151e857f4f3a]*/
 {
-    return 0;
+    return _PyInterpreterState_GET()->ceval.jit != _PyJIT_OFF;
 }
 
 /*[clinic input]
@@ -4515,9 +4516,20 @@ static int
 _jit_is_active_impl(PyObject *module)
 /*[clinic end generated code: output=7facca06b10064d4 input=081ee32563dc2086]*/
 {
-    /* The fork's JIT keeps no per-frame record of running native code, so
-       this cannot be answered cheaply and exactly. Always False for now. */
-    return false;
+#ifdef _PY_JIT_SUPPORTED
+    /* The activation loop runs a frame in its code's unit whenever the unit
+       is not retired (ir_execute_forms() in Python/ceval.c) */
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyInterpreterFrame *frame = tstate->current_frame;
+    if (tstate->interp->ceval.jit == _PyJIT_OFF || frame == NULL ||
+        frame->owner >= FRAME_OWNED_BY_INTERPRETER) {
+        return 0;
+    }
+    _PyJitUnit *unit = _PyFrame_Exec(frame)->jit_unit;
+    return unit != NULL && !(unit->invalid & _PyJIT_RETIRED);
+#else
+    return 0;
+#endif
 }
 
 static PyMethodDef _jit_methods[] = {

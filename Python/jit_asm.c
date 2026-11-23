@@ -232,8 +232,9 @@ rex_bits(int w, int reg, int index, int base)
     return (w ? 8 : 0) | ((reg >> 3) << 2) | ((index >> 3) << 1) | (base >> 3);
 }
 
-/* Register-direct operand.  `byte_rm` marks an 8-bit rm operand, for which
-   spl, bpl, sil and dil need an (empty) REX prefix. */
+/* `byte_rm` and `byte_reg` mark an 8-bit rm or reg operand, for which spl,
+   bpl, sil and dil need an (empty) REX prefix: without it the encodings
+   mean ah, ch, dh and bh.  A register-direct operand follows. */
 static void
 emit_rr(_PyJitAsm *a, uint8_t prefix, int w, uint32_t op, int reg, int rm,
         int byte_rm)
@@ -245,11 +246,12 @@ emit_rr(_PyJitAsm *a, uint8_t prefix, int w, uint32_t op, int reg, int rm,
 
 static void
 emit_rm(_PyJitAsm *a, uint8_t prefix, int w, uint32_t op, int reg,
-        _PyJitMem m)
+        _PyJitMem m, int byte_reg)
 {
     assert(m.index != _PyJitReg_RSP && m.index < 16 && m.base < 16);
     int index = m.index < 0 ? 0 : m.index;
-    emit_prefixes(a, prefix, rex_bits(w, reg, index, m.base), 0);
+    emit_prefixes(a, prefix, rex_bits(w, reg, index, m.base),
+                  byte_reg && reg >= 4);
     emit_opcode(a, op);
     int base = m.base & 7;
     int mod = m.disp == 0 && base != 5 ? 0 : fits_int8(m.disp) ? 1 : 2;
@@ -296,76 +298,105 @@ _PyJitAsm_MovImm(_PyJitAsm *a, _PyJitReg dst, int64_t imm)
 void
 _PyJitAsm_MovRM(_PyJitAsm *a, _PyJitReg dst, _PyJitMem src)
 {
-    emit_rm(a, 0, 1, 0x8B, dst, src);
+    emit_rm(a, 0, 1, 0x8B, dst, src, 0);
 }
 
 void
 _PyJitAsm_MovMR(_PyJitAsm *a, _PyJitMem dst, _PyJitReg src)
 {
-    emit_rm(a, 0, 1, 0x89, src, dst);
+    emit_rm(a, 0, 1, 0x89, src, dst, 0);
 }
 
 void
 _PyJitAsm_MovMI(_PyJitAsm *a, _PyJitMem dst, int32_t imm)
 {
-    emit_rm(a, 0, 1, 0xC7, 0, dst);
+    emit_rm(a, 0, 1, 0xC7, 0, dst, 0);
     emit_u32(a, (uint32_t)imm);
 }
 
 void
 _PyJitAsm_MovRM32(_PyJitAsm *a, _PyJitReg dst, _PyJitMem src)
 {
-    emit_rm(a, 0, 0, 0x8B, dst, src);
+    emit_rm(a, 0, 0, 0x8B, dst, src, 0);
 }
 
 void
 _PyJitAsm_MovMR32(_PyJitAsm *a, _PyJitMem dst, _PyJitReg src)
 {
-    emit_rm(a, 0, 0, 0x89, src, dst);
+    emit_rm(a, 0, 0, 0x89, src, dst, 0);
 }
 
 void
 _PyJitAsm_MovMI32(_PyJitAsm *a, _PyJitMem dst, int32_t imm)
 {
-    emit_rm(a, 0, 0, 0xC7, 0, dst);
+    emit_rm(a, 0, 0, 0xC7, 0, dst, 0);
     emit_u32(a, (uint32_t)imm);
+}
+
+void
+_PyJitAsm_MovMR8(_PyJitAsm *a, _PyJitMem dst, _PyJitReg src)
+{
+    emit_rm(a, 0, 0, 0x88, src, dst, 1);
+}
+
+void
+_PyJitAsm_MovMI8(_PyJitAsm *a, _PyJitMem dst, int imm)
+{
+    assert(imm >= INT8_MIN && imm <= UINT8_MAX);
+    emit_rm(a, 0, 0, 0xC6, 0, dst, 0);
+    emit_u8(a, (uint8_t)imm);
+}
+
+void
+_PyJitAsm_MovMR16(_PyJitAsm *a, _PyJitMem dst, _PyJitReg src)
+{
+    emit_rm(a, 0x66, 0, 0x89, src, dst, 0);
+}
+
+void
+_PyJitAsm_MovMI16(_PyJitAsm *a, _PyJitMem dst, int imm)
+{
+    assert(imm >= INT16_MIN && imm <= UINT16_MAX);
+    emit_rm(a, 0x66, 0, 0xC7, 0, dst, 0);
+    emit_u8(a, (uint8_t)imm);
+    emit_u8(a, (uint8_t)(imm >> 8));
 }
 
 // movzx to a 32-bit register zeroes the upper half, so no REX.W is needed.
 void
 _PyJitAsm_MovzxRM8(_PyJitAsm *a, _PyJitReg dst, _PyJitMem src)
 {
-    emit_rm(a, 0, 0, 0x0FB6, dst, src);
+    emit_rm(a, 0, 0, 0x0FB6, dst, src, 0);
 }
 
 void
 _PyJitAsm_MovzxRM16(_PyJitAsm *a, _PyJitReg dst, _PyJitMem src)
 {
-    emit_rm(a, 0, 0, 0x0FB7, dst, src);
+    emit_rm(a, 0, 0, 0x0FB7, dst, src, 0);
 }
 
 void
 _PyJitAsm_MovsxRM8(_PyJitAsm *a, _PyJitReg dst, _PyJitMem src)
 {
-    emit_rm(a, 0, 1, 0x0FBE, dst, src);
+    emit_rm(a, 0, 1, 0x0FBE, dst, src, 0);
 }
 
 void
 _PyJitAsm_MovsxRM16(_PyJitAsm *a, _PyJitReg dst, _PyJitMem src)
 {
-    emit_rm(a, 0, 1, 0x0FBF, dst, src);
+    emit_rm(a, 0, 1, 0x0FBF, dst, src, 0);
 }
 
 void
 _PyJitAsm_MovsxRM32(_PyJitAsm *a, _PyJitReg dst, _PyJitMem src)
 {
-    emit_rm(a, 0, 1, 0x63, dst, src);
+    emit_rm(a, 0, 1, 0x63, dst, src, 0);
 }
 
 void
 _PyJitAsm_Lea(_PyJitAsm *a, _PyJitReg dst, _PyJitMem src)
 {
-    emit_rm(a, 0, 1, 0x8D, dst, src);
+    emit_rm(a, 0, 1, 0x8D, dst, src, 0);
 }
 
 void
@@ -391,13 +422,13 @@ _PyJitAsm_AluRR(_PyJitAsm *a, _PyJitAlu op, _PyJitReg dst, _PyJitReg src)
 void
 _PyJitAsm_AluRM(_PyJitAsm *a, _PyJitAlu op, _PyJitReg dst, _PyJitMem src)
 {
-    emit_rm(a, 0, 1, 8 * op + 3, dst, src);
+    emit_rm(a, 0, 1, 8 * op + 3, dst, src, 0);
 }
 
 void
 _PyJitAsm_AluMR(_PyJitAsm *a, _PyJitAlu op, _PyJitMem dst, _PyJitReg src)
 {
-    emit_rm(a, 0, 1, 8 * op + 1, src, dst);
+    emit_rm(a, 0, 1, 8 * op + 1, src, dst, 0);
 }
 
 static void
@@ -427,14 +458,14 @@ _PyJitAsm_AluRI(_PyJitAsm *a, _PyJitAlu op, _PyJitReg dst, int32_t imm)
 void
 _PyJitAsm_AluMI(_PyJitAsm *a, _PyJitAlu op, _PyJitMem dst, int32_t imm)
 {
-    emit_rm(a, 0, 1, fits_int8(imm) ? 0x83 : 0x81, op, dst);
+    emit_rm(a, 0, 1, fits_int8(imm) ? 0x83 : 0x81, op, dst, 0);
     emit_imm8_or_32(a, imm);
 }
 
 void
 _PyJitAsm_AluMI32(_PyJitAsm *a, _PyJitAlu op, _PyJitMem dst, int32_t imm)
 {
-    emit_rm(a, 0, 0, fits_int8(imm) ? 0x83 : 0x81, op, dst);
+    emit_rm(a, 0, 0, fits_int8(imm) ? 0x83 : 0x81, op, dst, 0);
     emit_imm8_or_32(a, imm);
 }
 
@@ -447,7 +478,7 @@ _PyJitAsm_TestRR(_PyJitAsm *a, _PyJitReg x, _PyJitReg y)
 void
 _PyJitAsm_TestMR(_PyJitAsm *a, _PyJitMem x, _PyJitReg y)
 {
-    emit_rm(a, 0, 1, 0x85, y, x);
+    emit_rm(a, 0, 1, 0x85, y, x, 0);
 }
 
 void
@@ -466,7 +497,7 @@ _PyJitAsm_TestRI(_PyJitAsm *a, _PyJitReg x, int32_t imm)
 void
 _PyJitAsm_TestMI(_PyJitAsm *a, _PyJitMem x, int32_t imm)
 {
-    emit_rm(a, 0, 1, 0xF7, 0, x);
+    emit_rm(a, 0, 1, 0xF7, 0, x, 0);
     emit_u32(a, (uint32_t)imm);
 }
 
@@ -479,7 +510,7 @@ _PyJitAsm_ImulRR(_PyJitAsm *a, _PyJitReg dst, _PyJitReg src)
 void
 _PyJitAsm_ImulRM(_PyJitAsm *a, _PyJitReg dst, _PyJitMem src)
 {
-    emit_rm(a, 0, 1, 0x0FAF, dst, src);
+    emit_rm(a, 0, 1, 0x0FAF, dst, src, 0);
 }
 
 void
@@ -506,13 +537,13 @@ _PyJitAsm_UnaryR(_PyJitAsm *a, _PyJitUnary op, _PyJitReg dst)
 void
 _PyJitAsm_UnaryM(_PyJitAsm *a, _PyJitUnary op, _PyJitMem dst)
 {
-    emit_rm(a, 0, 1, unary_forms[op].op, unary_forms[op].ext, dst);
+    emit_rm(a, 0, 1, unary_forms[op].op, unary_forms[op].ext, dst, 0);
 }
 
 void
 _PyJitAsm_UnaryM32(_PyJitAsm *a, _PyJitUnary op, _PyJitMem dst)
 {
-    emit_rm(a, 0, 0, unary_forms[op].op, unary_forms[op].ext, dst);
+    emit_rm(a, 0, 0, unary_forms[op].op, unary_forms[op].ext, dst, 0);
 }
 
 void
@@ -548,7 +579,7 @@ _PyJitAsm_CmovRR(_PyJitAsm *a, _PyJitCond cond, _PyJitReg dst, _PyJitReg src)
 void
 _PyJitAsm_CmovRM(_PyJitAsm *a, _PyJitCond cond, _PyJitReg dst, _PyJitMem src)
 {
-    emit_rm(a, 0, 1, 0x0F40 | cond, dst, src);
+    emit_rm(a, 0, 1, 0x0F40 | cond, dst, src, 0);
 }
 
 /* Control flow */
@@ -585,13 +616,13 @@ _PyJitAsm_CallR(_PyJitAsm *a, _PyJitReg target)
 void
 _PyJitAsm_JmpM(_PyJitAsm *a, _PyJitMem target)
 {
-    emit_rm(a, 0, 0, 0xFF, 4, target);
+    emit_rm(a, 0, 0, 0xFF, 4, target, 0);
 }
 
 void
 _PyJitAsm_CallM(_PyJitAsm *a, _PyJitMem target)
 {
-    emit_rm(a, 0, 0, 0xFF, 2, target);
+    emit_rm(a, 0, 0, 0xFF, 2, target, 0);
 }
 
 void
@@ -633,13 +664,13 @@ _PyJitAsm_MovsdRR(_PyJitAsm *a, _PyJitXmm dst, _PyJitXmm src)
 void
 _PyJitAsm_MovsdRM(_PyJitAsm *a, _PyJitXmm dst, _PyJitMem src)
 {
-    emit_rm(a, 0xF2, 0, 0x0F10, dst, src);
+    emit_rm(a, 0xF2, 0, 0x0F10, dst, src, 0);
 }
 
 void
 _PyJitAsm_MovsdMR(_PyJitAsm *a, _PyJitMem dst, _PyJitXmm src)
 {
-    emit_rm(a, 0xF2, 0, 0x0F11, src, dst);
+    emit_rm(a, 0xF2, 0, 0x0F11, src, dst, 0);
 }
 
 void
@@ -672,7 +703,7 @@ _PyJitAsm_SseRR(_PyJitAsm *a, _PyJitSse op, _PyJitXmm dst, _PyJitXmm src)
 void
 _PyJitAsm_SseRM(_PyJitAsm *a, _PyJitSse op, _PyJitXmm dst, _PyJitMem src)
 {
-    emit_rm(a, sse_forms[op].prefix, 0, sse_forms[op].op, dst, src);
+    emit_rm(a, sse_forms[op].prefix, 0, sse_forms[op].op, dst, src, 0);
 }
 
 void

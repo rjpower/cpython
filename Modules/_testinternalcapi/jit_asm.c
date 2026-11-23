@@ -51,6 +51,10 @@ label_of(Program *p, int64_t number)
     OP(mov_rm32, 1, 1, _PyJitAsm_MovRM32(A, v[0], M(0))) \
     OP(mov_mr32, 1, 1, _PyJitAsm_MovMR32(A, M(0), v[0])) \
     OP(mov_mi32, 1, 1, _PyJitAsm_MovMI32(A, M(0), v[0])) \
+    OP(mov_mr8, 1, 1, _PyJitAsm_MovMR8(A, M(0), v[0])) \
+    OP(mov_mi8, 1, 1, _PyJitAsm_MovMI8(A, M(0), v[0])) \
+    OP(mov_mr16, 1, 1, _PyJitAsm_MovMR16(A, M(0), v[0])) \
+    OP(mov_mi16, 1, 1, _PyJitAsm_MovMI16(A, M(0), v[0])) \
     OP(movzx_rm8, 1, 1, _PyJitAsm_MovzxRM8(A, v[0], M(0))) \
     OP(movzx_rm16, 1, 1, _PyJitAsm_MovzxRM16(A, v[0], M(0))) \
     OP(movsx_rm8, 1, 1, _PyJitAsm_MovsxRM8(A, v[0], M(0))) \

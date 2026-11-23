@@ -881,6 +881,47 @@ class TemplateGraphTests(unittest.TestCase):
         self.assertNotIn("PyValue_XDUP", names)
         self.assertIn("PyValue_DUP", names)
 
+    def cse_loads(self, middle):
+        """A graph that loads a field of one object, runs the ops in middle
+        (TOp makers given the object and a value) and loads it again; the
+        number of loads of the field after CSE"""
+        g = jit_template_generator.Graph()
+        entry = g.blocks[g.entry]
+        obj = g.value(ir_leaf.VALUE)
+        entry.ops.append(jit_template_generator.TOp("view", [obj], [], "B"))
+        first = g.value("i64")
+        entry.ops.append(jit_template_generator.TOp("load", [first], [obj], "_PyRangeIterObject.len"))
+        for make in middle:
+            entry.ops.append(make(g, obj, first))
+        second = g.value("i64")
+        entry.ops.append(jit_template_generator.TOp("load", [second], [obj], "_PyRangeIterObject.len"))
+        entry.ops.append(jit_template_generator.TOp("store", [], [obj, second], "_PyRangeIterObject.len"))
+        entry.term = ("end", None)
+        jit_template_generator.cse(g)
+        return sum(op.kind == "load" for op in entry.ops)
+
+    def test_a_read_is_reused_until_a_write_may_change_it(self):
+        TOp = jit_template_generator.TOp
+        store = lambda field: lambda g, o, v: TOp("store", [], [o, v], field)
+        self.assertEqual(self.cse_loads([]), 1)
+        # Another field, or a count that is not this field's, leaves it
+        self.assertEqual(self.cse_loads([store("_PyRangeIterObject.start")]), 1)
+        self.assertEqual(self.cse_loads([lambda g, o, v: TOp("take", [], [o], None)]), 1)
+        # Its own field, a store through a type, a release and a helper that
+        # runs Python change it
+        self.assertEqual(self.cse_loads([store("_PyRangeIterObject.len")]), 2)
+        self.assertEqual(self.cse_loads([store("i64")]), 2)
+        self.assertEqual(self.cse_loads([lambda g, o, v: TOp("prim", [], [o], "PyValue_CLOSE")]), 2)
+        self.assertEqual(self.cse_loads([lambda g, o, v: TOp("call", [], [], "_Py_HandlePending")]), 2)
+        # Boxing allocates new objects and changes none
+        self.assertEqual(self.cse_loads([lambda g, o, v: TOp("call", [g.value(ir_leaf.VALUE)],
+                                                             [v], "_PyValue_BoxInt64")]), 1)
+
+    def test_range_iterator_reads_its_length_once(self):
+        graph = graph_of("FOR_ITER_RANGE")
+        loads = [op.attr for b in graph.blocks.values() for op in b.ops if op.kind == "load"]
+        self.assertEqual(loads.count("_PyRangeIterObject.len"), 1)
+
     def test_no_template_repeats_what_the_passes_remove(self):
         for handler, record in RECORDS.items():
             if record.form != "EMITTED" or not record.uops or any(u.leaf is None for u in record.uops):

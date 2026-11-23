@@ -1181,39 +1181,83 @@ def given_not_null(name: str) -> str | None:
     return None
 
 
-# The ops that compute the same result from the same arguments anywhere:
-# not loads, which a store between may change, nor the view of a slot
+# The ops that compute the same result from the same arguments anywhere
 CSE_KINDS = {"const", "jconst", "cache", "fieldaddr", "ptradd", "add", "sub", "mul", "and",
              "or", "xor", "shl", "ashr", "lshr", "neg", "not", "conv", "fadd", "fsub",
              "fmul", "fdiv"}
+# The effects that change memory that other ops read: a write to the heap, a
+# release (which may run a destructor) and Python.  Boxing allocates new
+# objects, and counts are not heap writes (CR); they change a count word,
+# which only a load of ob_refcnt reads.
+CHANGES_MEMORY = frozenset((ir_leaf.WRITES_HEAP, ir_leaf.MAY_RELEASE, ir_leaf.MAY_RUN_PYTHON))
+ALL = "all"
+
+
+def changes(op: TOp):
+    """What memory op may change that a read can have seen: ALL of it, the
+    set of the loads of fields (a store changes its field; the reads of
+    primitives, whose fields are not listed, count as a field, None), or
+    nothing"""
+    if op.kind == "store":
+        # A store through a type, not a field, may be to any field of it
+        return {op.attr, None} if op.attr in ir_leaf.FIELDS else ALL
+    if op.kind == "call":
+        return ALL if ir_leaf.HELPERS[op.attr].effects & CHANGES_MEMORY else set()
+    if op.kind == "take":
+        return {"PyObject.ob_refcnt"}
+    if op.kind == "prim":
+        name = prim_name(op)
+        if name in ir_leaf.PRIMITIVES:
+            effects = ir_leaf.PRIMITIVES[name].effects
+            if effects & CHANGES_MEMORY:
+                return ALL
+            if name in COUNT_PRIMS:
+                return {"PyObject.ob_refcnt"}
+    return set()
 
 
 def cse(g: Graph) -> bool:
-    "Reuse the result of an equal pure op in a dominating position"
+    """Reuse the result of an equal pure op in a dominating position, and
+    of a read (a load, a primitive that reads memory) that no op between
+    the two may have changed: the path between is the block's own ops, or
+    the single edge into a block that has one predecessor"""
     idom = dominators(g)
+    preds = g.preds()
     children: dict[int, list[int]] = {}
     for b, d in idom.items():
         children.setdefault(d, []).append(b)
     mapping: dict[int, int] = {}
 
+    def is_read(key) -> bool:
+        return key[0] == "load" or (key[0] == "prim" and ir_leaf.PRIMITIVES[key[1]].effects)
+
     def walk(i: int, seen: dict) -> None:
-        seen = dict(seen)
         b = g.blocks[i]
+        if len(preds[i]) != 1:
+            # Another path may reach it past a write
+            seen = {k: v for k, v in seen.items() if not is_read(k)}
+        seen = dict(seen)
         keep = []
         for op in b.ops:
-            pure = (op.kind in CSE_KINDS or
+            reads = op.kind == "load" or (op.kind == "prim" and isinstance(op.attr, str)
+                                          and op.attr in PURE_PRIMS and op.results
+                                          and ir_leaf.PRIMITIVES[op.attr].effects)
+            pure = (op.kind in CSE_KINDS or reads or
                     (op.kind == "prim" and isinstance(op.attr, str) and op.attr in PURE_PRIMS
                      and op.results))
-            if not pure and not is_pure(op):
-                # An effect: what read memory before it may differ after
-                seen = {k: v for k, v in seen.items()
-                        if not (k[0] == "prim" and ir_leaf.PRIMITIVES[k[1]].effects)}
             if pure and op.when is None and len(op.results) == 1:
                 key = (op.kind, op.attr, tuple(mapping.get(a, a) for a in op.args))
                 if key in seen:
                     mapping[op.results[0]] = seen[key]
                     continue
                 seen[key] = op.results[0]
+            gone = changes(op)
+            if gone:
+                # A load through a type, not a field, may read what any store wrote
+                seen = {k: v for k, v in seen.items()
+                        if not is_read(k) or (gone != ALL and (
+                            (k[0] == "load" and k[1] in ir_leaf.FIELDS and k[1] not in gone)
+                            or (k[0] == "prim" and None not in gone)))}
             keep.append(op)
         b.ops = keep
         for c in children.get(i, []):

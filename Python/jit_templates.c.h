@@ -1014,11 +1014,10 @@ jit_template_FOR_ITER_RANGE(_PyJitWordCx *cx)
     _PyJitAsm_Jcc(a, c18, cx->slow);
     _PyJitAsm_Bind(a, L7);
     _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJitReg_RAX, (int32_t)offsetof(_PyRangeIterObject, start)));
-    _PyJitAsm_MovRM(a, _PyJitReg_RDX, _PyJitMem_At(_PyJitReg_RAX, (int32_t)offsetof(_PyRangeIterObject, step)));
-    _PyJitAsm_MovRR(a, _PyJitReg_RSI, _PyJitReg_RCX);
-    _PyJitAsm_AluRR(a, _PyJitAlu_ADD, _PyJitReg_RSI, _PyJitReg_RDX);
-    _PyJitAsm_MovMR(a, _PyJitMem_At(_PyJitReg_RAX, (int32_t)offsetof(_PyRangeIterObject, start)), _PyJitReg_RSI);
-    _PyJitAsm_MovRM(a, _PyJitReg_RDX, _PyJitMem_At(_PyJitReg_RAX, (int32_t)offsetof(_PyRangeIterObject, len)));
+    _PyJitAsm_MovRM(a, _PyJitReg_RSI, _PyJitMem_At(_PyJitReg_RAX, (int32_t)offsetof(_PyRangeIterObject, step)));
+    _PyJitAsm_MovRR(a, _PyJitReg_RDI, _PyJitReg_RCX);
+    _PyJitAsm_AluRR(a, _PyJitAlu_ADD, _PyJitReg_RDI, _PyJitReg_RSI);
+    _PyJitAsm_MovMR(a, _PyJitMem_At(_PyJitReg_RAX, (int32_t)offsetof(_PyRangeIterObject, start)), _PyJitReg_RDI);
     _PyJitAsm_AluRI(a, _PyJitAlu_SUB, _PyJitReg_RDX, 1);
     _PyJitAsm_MovMR(a, _PyJitMem_At(_PyJitReg_RAX, (int32_t)offsetof(_PyRangeIterObject, len)), _PyJitReg_RDX);
     cx->live = 0x0; cx->live_xmm = 0x0;

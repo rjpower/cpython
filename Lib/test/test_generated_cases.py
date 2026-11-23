@@ -275,9 +275,9 @@ class TestAnalysisErrors(unittest.TestCase):
 
 
 def generator_labels_source():
-    "The inline generator paths that the handlers' IR_GEN_* macros enter"
+    "The generator routines that the handlers' IR_GEN_* macros enter"
     return (Path(__file__).resolve().parents[2] /
-            "Python" / "ceval_generator_labels.h").read_text()
+            "Python" / "ceval_routines.h").read_text()
 
 
 
@@ -474,7 +474,7 @@ class TestIRCases(unittest.TestCase):
         # The path resolves the consumer from the word at the source, which
         # looks through a monitor's wrapper, and never from the handler
         labels = generator_labels_source()
-        complete = labels[labels.index("HOT_LABEL(gen_complete)"):]
+        complete = labels[labels.index("IR_HOT_ROUTINE(gen_complete,"):]
         resolve = complete.index("generator_site_kind(frame, next_instr, "
                                  "generator_completed_targets)")
         guard = complete.index("assert(kind != 0);", resolve)
@@ -678,8 +678,8 @@ class TestIRCases(unittest.TestCase):
              "spam_call(); DEOPT_IF(IS_PEP523_HOOKED(tstate));"),
             ("IR_INVOKE_GUARDED_PYTHON_CALL();",
              "IR_INVOKE_GUARDED_PYTHON_CALL(); IR_INVOKE_GUARDED_PYTHON_CALL();"),
-            ("_CHECK_METHOD_VERSION +\n            _EXPAND_METHOD +",
-             "_CHECK_METHOD_VERSION +\n            _PY_FRAME_GENERAL_GUARDED +\n"
+            ("_CHECK_RECURSION_REMAINING +\n            _EXPAND_METHOD +",
+             "_CHECK_RECURSION_REMAINING +\n            _PY_FRAME_GENERAL_GUARDED +\n"
              "            _EXPAND_METHOD +"),
             ("_MONITOR_CALL + _DO_CALL + _CHECK_PERIODIC_AT_END;",
              "_MONITOR_CALL + _PY_FRAME_GENERAL_GUARDED + _CHECK_PERIODIC_AT_END;"),
@@ -3721,13 +3721,13 @@ class TestIRCases(unittest.TestCase):
         # The generic handlers set their operation and enter one body
         generic = code[code.index("TARGET(BINARY_OP_SUBTRACT)"):]
         generic = generic[:generic.index("}")]
-        self.assertIn("ir_binary_op = NB_SUBTRACT;", generic)
+        self.assertIn("binary_op_operation = NB_SUBTRACT;", generic)
         self.assertIn("goto LABEL_binary_op;", generic)
         self.assertEqual(code.count("LABEL(binary_op)"), 1)
         shared = code[code.index("LABEL(binary_op)"):]
         shared = shared[:shared.index("DISPATCH();")]
-        self.assertIn("int oparg = ir_binary_op;", shared)
-        self.assertIn("INSTRUCTION_STATS(_PyIR_BINARY_OP_FIRST + ir_binary_op);",
+        self.assertIn("int oparg = binary_op_operation;", shared)
+        self.assertIn("INSTRUCTION_STATS(_PyIR_BINARY_OP_FIRST + binary_op_operation);",
                       shared)
         handler = code[code.index("TARGET(BINARY_OP_ADD_INT)"):]
         handler = handler[:handler.index("DISPATCH();")]
@@ -3895,7 +3895,26 @@ class TestCallMarkers(unittest.TestCase):
         cls.analysis = analyzer.analyze_files([source])
         output = io.StringIO()
         ir_generator.generate_ir([source], cls.analysis, output, False)
-        cls.interpreter = expand_outlined(output.getvalue())
+        cls.generated = output.getvalue()
+        cls.interpreter = expand_outlined(cls.generated)
+
+    def test_every_handler_has_a_function_form(self):
+        # tiers87, C4: the forms section defines ir_run_NAME for every
+        # handler of the evaluator, and a table of them by handler number.
+        # A form leaves only through the transfer macros.
+        forms, inline = self.generated.split("#else  // IR_FUNCTION_FORMS")
+        forms = forms[forms.index("#ifdef IR_FUNCTION_FORMS"):]
+        handlers = set(re.findall(r"^\s*(?:HOT_)?TARGET\((\w+)\)(?: \{)?$", inline, re.M))
+        defined = set(re.findall(r"^ir_run_(\w+)\($", forms, re.M))
+        self.assertGreater(len(handlers), 300)
+        self.assertEqual(handlers, defined)
+        table = re.findall(r"^    \[(\d+)\] = ir_run_(\w+),$", forms, re.M)
+        self.assertEqual([int(i) for i, _ in table], list(range(len(table))))
+        self.assertLessEqual({name for _, name in table}, defined)
+        for name in ("start_frame", "throw_error"):
+            self.assertIn(f"\nir_{name}(\n", forms)
+        self.assertIsNone(re.search(
+            r"\bgoto\b|\bLABEL_\w+|\blastopcode\b", forms))
 
     def test_send_completion_events_without_instrumented_twin(self):
         output = io.StringIO()
@@ -3966,8 +3985,6 @@ class TestCallMarkers(unittest.TestCase):
                 self.assertIn("DISPATCH_INLINED(call_result.child)", body)
                 # The call's locals live in the out-of-line run (R-c)
                 self.assertNotIn("&call", body)
-        labels = re.findall(r"^\s*(call_fallback_\w+):", self.interpreter, re.M)
-        self.assertEqual(len(labels), len(set(labels)))
 
     def test_exact_method_guards_precede_the_push(self):
         # The bound method's function and receiver are adopted as borrows, so

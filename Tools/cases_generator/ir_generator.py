@@ -75,7 +75,7 @@ import argparse
 import io
 import ir_numbers
 from ir_records import (
-    ASSIGNMENTS, CONST, DEOPT, ENTER_FRAME, EXIT_GUARD, FEEDBACK, GUARD_TOKENS,
+    ASSIGNMENTS, CONST, DEOPT, ENTER_FRAME, EXIT_GUARD, FEEDBACK, GUARD_TOKENS, NEXT,
     IMMEDIATE, LOCAL, MAY_RAISE, OPERANDS, POLY_TABLE_READERS, RELEASE_LIKE,
     RUNS_PYTHON, SITE_TOKENS, SLOT, TARGET, TEMP, WINDOW, YIELD, CallShape, Fact,
     FeedbackOperand, FeedbackSchema, Guard, Operand, OperationRecord, Subjects,
@@ -119,6 +119,7 @@ from generators_common import (
     ROOT,
     Emitter,
     TokenIterator,
+    emit_to,
     enclosing_callee,
     find_local,
     instruction_macro_args,
@@ -1395,9 +1396,11 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
             EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type);
             EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v),
                     "a created generator accepts only None");
-            EXIT_IF(!gen_try_set_executing((PyGenObject *)gen),
-                    "claims the generator for this frame: an effect, not a fact");
+            EXIT_IF(!gen_may_claim(gen), "the generator runs or has finished");
             STAT_INC(SEND, hit);
+            if (!gen_claim(tstate, gen)) {
+                ERROR_NO_POP();
+            }
             IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
         }"""),
         (("iter", "null_or_index", "none"), ("iter", "null_or_index", "next"), """{
@@ -3480,8 +3483,6 @@ class IREmitter(Emitter):
         self.declared_roles: dict[str, set[str]] = {}
         self.stores_outputs = False  # the statement's uop is the last
         self.call_finished = False
-        self.call_fallback_used = False
-        self.call_fallback = ""
         self.call_has_feedback = False
         # The handler's call_run_*() and its constant arguments
         self.call_run = ""
@@ -5253,6 +5254,14 @@ class IREmitter(Emitter):
             self.abrupt_operand_origin = previous
             self.error_uop_name = None
 
+    def emit_return(self, tkn: Token, tkn_iter: TokenIterator) -> None:
+        "The activation ends with the value: an EXIT, which each binding defines"
+        self.out.start_line()
+        self.out.emit("IR_EXIT(")
+        semicolon = emit_to(self.out, tkn_iter, "SEMI")
+        self.out.emit(")")
+        self.emit(semicolon)
+
     def goto_label(self, goto: Token, label: Token, storage: Storage) -> None:
         self.check_owner_exit(goto)
         if label.text in ERROR_INGRESSES:
@@ -5386,9 +5395,6 @@ class IREmitter(Emitter):
         again; the path ends here"""
         assert inst is not None
         self.check_exit_inputs(tkn, storage)
-        if self.call_kind and self.call_effects_possible:
-            self.emit(f"if (call_state & CALL_EFFECTS) {{ goto {self.call_fallback}; }}\n")
-            self.call_fallback_used = True
         self.error_terminal_sources.add(id(tkn))
         self.emit(tkn)
         return False
@@ -5410,9 +5416,6 @@ class IREmitter(Emitter):
             self.error_terminal_sources.add(self.error_redispatch_origin)
         else:
             self.error_uncovered = True
-        if self.call_kind and self.call_effects_possible:
-            self.emit(f"if (call_state & CALL_EFFECTS) {{ goto {self.call_fallback}; }}\n")
-            self.call_fallback_used = True
         deopt = self.record.deopt if self.record is not None else ""
         kind, _, head = deopt.partition("(")
         head = head.rstrip(")")
@@ -5993,6 +5996,12 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
                               part.properties.oparg, tuple(guards),
                               transfers + uop_transfers(part, deopt), infer_effects(part),
                               result_facts(part, outs), "pure" in part.annotations))
+    if (boundary is not None and boundary.yielded == "DELEGATED"
+            and uops[-1].transfers[-1] == Transfer(NEXT)):
+        # A native send that the inner generator suspended yields its value
+        # where the handler would fall through (generate_handler())
+        last = uops[-1]
+        uops[-1] = replace(last, transfers=last.transfers[:-1] + (Transfer(YIELD, None, "delegated"),))
     results = []
     for j, (value, external, item, _) in enumerate(walk.outputs):
         if external >= 0 and walk.values[value].external >= 0:
@@ -6980,16 +6989,11 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     operation = record.operation
     transaction = uses_generic_call(inst)
     emitter.call_finished = False
-    # Only a call whose DSL says IR_BEGIN_CALL_EFFECTS can have effects
-    # that a later deopt must not repeat (its specialisation)
-    emitter.call_effects_possible = "IR_BEGIN_CALL_EFFECTS" in set(uop_tokens(inst))
-    emitter.call_fallback_used = False
-    emitter.call_fallback = f"call_fallback_{name}"
     is_target = inst.is_target and name == inst.name
     out.emit("\n")
     if emitter.shared_binary_op:
         out.emit("LABEL(binary_op) {\n")
-        handler_id = "_PyIR_BINARY_OP_FIRST + ir_binary_op"
+        handler_id = "_PyIR_BINARY_OP_FIRST + binary_op_operation"
     else:
         out.emit(f"TARGET({name}) {{\n")
         handler_id = canonical_handler(name)
@@ -7035,7 +7039,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
                  f"IR_FB({field_expr(fmt.fb)});\n")
     if record.oparg:
         if record.oparg == "OPERATION":
-            out.emit("int oparg = ir_binary_op;\n" if emitter.shared_binary_op
+            out.emit("int oparg = binary_op_operation;\n" if emitter.shared_binary_op
                      else f"int oparg = {operation};\n")
         elif record.oparg == "FUSED_OP":
             # D is the distance; the arg of the entry holds the operation
@@ -7186,9 +7190,6 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
         # themselves. Every ordinary successor must have such a commit; a
         # nonbranching handler has only its fallthrough successor to cover.
         emitter.normal_inputs_cleared = True
-    if call_window and emitter.call_fallback_used:
-        out.emit(f"{emitter.call_fallback}:;\n")
-        emitter.call_completion()
     out.start_line()
     out.emit("}")
     out.emit("\n")
@@ -7243,12 +7244,25 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     emitter.check_record_consumed()
 
 
-# What an outlined body cannot contain: a jump into the evaluator (other than
-# the call fallback inside the body), or state that only the evaluator has.
-OUTLINE_BLOCKERS = re.compile(
-    r"\bgoto\s+(?!call_fallback_)|JUMP_TO_LABEL|lastopcode|"
-    r"ir_binary_op")
-DEOPT_TARGET = re.compile(r"\bJUMP_TO_PREDICTED\((\w+)\)")
+# What a printed handler or routine body cannot contain (tiers87, C2 and C3):
+# a jump into the evaluator, or a local that only the evaluator has.  A body
+# leaves only through the transfer macros that both bindings define
+# (Python/ceval_macros.h, Python/ceval.c); the operands of the evaluator's
+# shared bodies are its locals only in the evaluator's binding of those
+# macros.  The shared BINARY_OP body reads its operation, the operand of its
+# routine.
+EVALUATOR_ONLY = re.compile(
+    r"\bgoto\b|\bLABEL_\w+|\bTARGET_\w+|\bopcode_targets\b|\bJUMP_TO_LABEL\b|"
+    r"\blastopcode\b|\b(?:process_error_origin|process_error_entry|gen_value|"
+    r"gen_dying|gen_empty|gen_transfer|binary_op_operation)\b")
+
+
+def check_body(name: str, text: str, where: object, routine_operand: str = "") -> None:
+    "Refuse a body that jumps into the evaluator or reads its state"
+    for match in EVALUATOR_ONLY.finditer(text):
+        if match.group(0) != routine_operand:
+            raise analysis_error(f"{name}: the body has `{match.group(0)}`, which "
+                                 "only the evaluator has (tiers87, C2 and C3)", where)
 
 
 # Rule 12.  The instrumented twin of an outlined instruction whose event
@@ -7314,33 +7328,71 @@ ir_run_{name}(
 """
 
 
-def outlined_function(name: str, text: str) -> str:
-    """The function that runs the body of handler `name`, emitted as a
-    handler.  It takes the evaluator's state that handlers use, and its
-    exits are returns (DISPATCH, PROCESS_ERROR_AT and the others, which
+FORM_PARAMETERS = ("PyThreadState *tstate, _PyInterpreterFrame *frame, "
+                   "_PyInstr *next_instr")
+
+
+def form_header(function: str, extra: str = ", _PyIRWord ir_word") -> str:
+    return (f"\nstatic Py_NO_INLINE _PyIRTransfer\n{function}(\n"
+            f"    {FORM_PARAMETERS}{extra})\n{{")
+
+
+def function_form(name: str, text: str) -> str:
+    """The function form of handler `name`, from the body printed for the
+    evaluator.  It takes the evaluator's state that handlers use, and its
+    exits are returns and tail calls (the transfer macros, which
     Python/ceval.c defines for it)."""
-    header = (f"\nstatic Py_NO_INLINE _PyIRTransfer\nir_run_{name}(\n"
-              "    PyThreadState *tstate, _PyInterpreterFrame *frame,\n"
-              "    _PyInstr *next_instr, _PyIRWord ir_word)\n{")
     marker = f"TARGET({name}) {{"
     assert marker in text
-    return text.replace(marker, header, 1)
+    return text.replace(marker, form_header(f"ir_run_{name}"), 1)
+
+
+# The operation of the shared BINARY_OP body: the operand of its routine,
+# ir_binary_op(), which the generic handlers pass from their number and the
+# specialisations' deopts from their entry
+BINARY_OP_OPERAND = "binary_op_operation"
+
+
+def binary_op_routine(text: str) -> str:
+    "The function form of the shared BINARY_OP body"
+    marker = "LABEL(binary_op) {"
+    assert marker in text
+    return text.replace(marker, form_header(
+        "ir_binary_op", f", _PyIRWord ir_word, int {BINARY_OP_OPERAND}"), 1)
+
+
+def binary_op_function(name: str, operation: str) -> str:
+    "The function form of the generic BINARY_OP handler `name`"
+    return (form_header(f"ir_run_{name}") +
+            f"\n    Py_MUSTTAIL return ir_binary_op(tstate, frame, next_instr, ir_word, "
+            f"{operation});\n}}\n")
+
+
+def event_twin_function(name: str, event: str, base: str) -> str:
+    """The function form of the twin `name` whose event, the function
+    `event`, precedes the effect of `base` (IR_RUN_EVENT in the evaluator)"""
+    return (form_header(f"ir_run_{name}") + f"""
+    _PyIRTransfer ir_t = {event}(tstate, frame, next_instr, ir_word);
+    if (ir_t.next != next_instr) {{
+        return ir_t;
+    }}
+    Py_MUSTTAIL return ir_run_{base}(tstate, frame, next_instr, ir_word);
+}}
+""")
 
 
 def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
                       outfile: TextIO, lines: bool,
                       checkpoints: dict[str, tuple[ErrorCheckpoint, ...]] | None = None
-                      ) -> tuple[list[str], set[str]]:
-    """Write the handlers to outfile.  An outlined handler is a call of its
-    function, which is returned with the heads that its deoptimisations go
-    to."""
+                      ) -> list[str]:
+    """Write the handlers to outfile, and return their function forms.  An
+    outlined handler's handler is a call of its form."""
     out = CWriter(outfile, 2, lines)
     emitter = IREmitter(out, analysis, formats)
     out.emit("\n")
     functions: list[str] = []
     twin_functions: list[str] = []
     outlined_names: set[str] = set()
-    deopt_heads: set[str] = set()
     # The generic handlers of BINARY_OP differ only in the operation.  Each
     # sets it and enters the one body, which handles any operation, so that
     # the body is in the evaluator once, not once per operation.
@@ -7354,9 +7406,10 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         if name in binary_ops:
             operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
             out.emit(f"TARGET({name}) {{\n")
-            out.emit(f"ir_binary_op = {operation};\n")
+            out.emit(f"{BINARY_OP_OPERAND} = {operation};\n")
             out.emit("goto LABEL_binary_op;\n")
             out.emit("}\n")
+            functions.append(binary_op_function(name, operation))
             if shared_binary_op_done:
                 continue
             shared_binary_op_done = True
@@ -7370,6 +7423,7 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
             continue
         if name in EVENT_TWINS:
             event, base = EVENT_TWINS[name]
+            twin_functions.append(event_twin_function(name, event, base))
             out.emit(f"TARGET({name}) {{\n")
             out.emit(f"IR_RUN_EVENT({event}, {base});\n")
             out.emit("}\n")
@@ -7386,31 +7440,25 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
                                 for part in inst.parts))
         outlined = ((inst.outlined or inst.properties.outlined or generic_head)
                     and not emitter.shared_binary_op)
-        text = None
-        if outlined:
-            buffer = io.StringIO()
-            body = CWriter(buffer, 2, lines)
-            emitter.out = body
-            generate_handler(name, inst, formats[name], emitter, body)
-            emitter.out = out
-            text = buffer.getvalue()
-            blocker = OUTLINE_BLOCKERS.search(text)
-            if blocker is not None and (inst.outlined or inst.properties.outlined):
-                raise analysis_error(
-                    f"{name} is outlined but its body has `{blocker.group(0)}`",
-                    inst.where)
-            if blocker is not None:
-                # A generic head whose body needs the evaluator stays in it
-                text = None
-        if text is not None:
-            deopt_heads.update(DEOPT_TARGET.findall(text))
-            functions.append(outlined_function(name, text))
-            outlined_names.add(name)
-            out.emit(f"TARGET({name}) {{\n")
-            out.emit(f"IR_RUN_OUTLINED(ir_run_{name});\n")
-            out.emit("}\n")
+        buffer = io.StringIO()
+        emitter.out = CWriter(buffer, 2, lines)
+        generate_handler(name, inst, formats[name], emitter, emitter.out)
+        emitter.out = out
+        text = buffer.getvalue()
+        if emitter.shared_binary_op:
+            check_body("binary_op", text, inst.where, BINARY_OP_OPERAND)
+            functions.append(binary_op_routine(text))
+            outfile.write(text)
         else:
-            generate_handler(name, inst, formats[name], emitter, out)
+            check_body(name, text, inst.where)
+            functions.append(function_form(name, text))
+            if outlined:
+                outlined_names.add(name)
+                out.emit(f"TARGET({name}) {{\n")
+                out.emit(f"IR_RUN_OUTLINED(ir_run_{name});\n")
+                out.emit("}\n")
+            else:
+                outfile.write(text)
         for checkpoint in (checkpoints or {}).get(name, ()):
             if emitter.error_checkpoint_sites.get(checkpoint.id) != checkpoint:
                 raise analysis_error("error checkpoint changed during final emission", inst.where)
@@ -7422,33 +7470,18 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         if twin in handlers and base not in outlined_names:
             raise analysis_error(f"the base {base} of {twin} is not outlined",
                                  handlers[twin].where)
-    return functions + twin_functions, deopt_heads
+    return functions + twin_functions
 
 
-def outlined_exit_label(deopt_heads: set[str]) -> str:
-    """The label that an outlined handler's stub goes to when the function
-    returned no word: the activation says why"""
-    lines = ["\n        LABEL(outlined_exit)\n        {\n",
-             "            _PyEvalActivation *activation = IR_ACTIVATION();\n",
-             "            switch (activation->exit_kind) {\n",
-             "            case _PyIR_EXIT_ERROR:\n",
-             "                ir_error_origin = activation->exit_next;\n",
-             "                ir_error_entry = activation->exit_entry;\n",
-             "                goto LABEL_process_error;\n",
-             "            case _PyIR_EXIT_START_FRAME:\n",
-             "                goto LABEL_start_frame;\n",
-             "            case _PyIR_EXIT_DEOPT:\n",
-             "                next_instr = activation->exit_next;\n",
-             "                switch (activation->exit_target) {\n",
-             "                case IR_DEOPT_TARGET_BINARY_OP:\n",
-             "                    ir_binary_op = (int)activation->exit_entry;\n",
-             "                    goto LABEL_binary_op;\n"]
-    for head in sorted(deopt_heads):
-        lines.append(f"                case IR_DEOPT_TARGET_{head}:\n")
-        lines.append(f"                    goto TARGET_{head};\n")
-    lines += ["                }\n", "            }\n",
-              "            Py_UNREACHABLE();\n", "        }\n"]
-    return "".join(lines)
+# The labels of bytecodes.c that start an activation's work, which the
+# function-form executor enters (ir_execute_forms() in Python/ceval.c) and a
+# frame entry tail-calls; the other labels are error ingresses, which the
+# emitter prints as PROCESS_ERROR_AT.
+ENTRY_LABELS = ("start_frame", "throw_error")
+
+
+def entry_labels(analysis: Analysis) -> list[str]:
+    return [name for name in ENTRY_LABELS if name in analysis.labels]
 
 
 def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
@@ -7468,6 +7501,57 @@ def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
     emitter.emit("int opcode = IR_HANDLER(*next_instr);\n")
     emitter.emit(UNKNOWN_OPCODE_HANDLER)
     emitter.emit("}\n\n")
+
+
+def label_forms(analysis: Analysis, formats: dict[str, IRFormat],
+                lines: bool) -> list[str]:
+    """The function forms of the entry labels, ir_<label>(tstate, frame,
+    next_instr), and of UNKNOWN_OPCODE, printed from the bodies that the
+    evaluator has.  A test's input may lack them."""
+    result = []
+    for name in entry_labels(analysis):
+        label = analysis.labels[name]
+        buffer = io.StringIO()
+        emitter = IREmitter(CWriter(buffer, 0, lines), analysis, formats)
+        storage = Storage(IRStack(), [], [], 0, False)
+        if label.spilled:
+            storage.spilled = 1
+            storage.stack.physical_sp = None
+        emitter.emit_tokens(label, storage, None)
+        text = buffer.getvalue()
+        check_body(name, text, label.body.open)
+        result.append(form_header(f"ir_{name}", "") + "\n" + text + "}\n")
+    result.append(form_header("ir_run_UNKNOWN_OPCODE") +
+                  "\nint opcode = IR_HANDLER(*next_instr);\n" +
+                  UNKNOWN_OPCODE_HANDLER + "}\n")
+    return result
+
+
+def form_table(analysis: Analysis) -> str:
+    """The function form of every handler number, as opcode_targets has its
+    label: ir_handler_forms[IR_HANDLER(word)] runs the word"""
+    ids = handler_ids(analysis)
+    by_index = {i: name for name, i in ids.items()}
+    lines = [f"static const _PyIRForm ir_handler_forms[{ir_numbers.IR_LIMIT}] = {{\n"]
+    for i in range(ir_numbers.IR_LIMIT):
+        name = generator_word_entry(by_index.get(i, "UNKNOWN_OPCODE"), analysis)
+        lines.append(f"    [{i}] = ir_run_{name},\n")
+    lines.append("};\n")
+    return "".join(lines)
+
+
+def form_declarations(analysis: Analysis) -> str:
+    "Every form, declared before the forms, which call one another"
+    ids = handler_ids(analysis)
+    names = sorted({generator_word_entry(name, analysis) for name in ids} | {"UNKNOWN_OPCODE"})
+    lines = [f"static _PyIRTransfer ir_run_{name}({FORM_PARAMETERS}, _PyIRWord ir_word);\n"
+             for name in names]
+    lines.append(f"static _PyIRTransfer ir_binary_op({FORM_PARAMETERS}, _PyIRWord ir_word, "
+                 f"int {BINARY_OP_OPERAND});\n")
+    lines += [f"static _PyIRTransfer ir_{name}({FORM_PARAMETERS});\n"
+              for name in entry_labels(analysis)]
+    lines.append(f"static const _PyIRForm ir_handler_forms[{ir_numbers.IR_LIMIT}];\n")
+    return "".join(lines)
 
 
 # The columns of the instruction contract (pycore_ir.h, _PyIRFormat) that
@@ -8683,17 +8767,16 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
     analyze_handlers(analysis, formats, checkpoints=checkpoints)
     write_header(__file__, filenames, outfile)
     cases = io.StringIO()
-    functions, deopt_heads = generate_ir_cases(
-        analysis, formats, cases, lines, checkpoints)
+    functions = generate_ir_cases(analysis, formats, cases, lines, checkpoints)
     # The file is included twice by Python/ceval.c: at file scope for the
-    # functions of the outlined handlers, and in ir_evaluate() for the rest
-    outfile.write("\n#ifdef IR_OUTLINED_FUNCTIONS\n")
-    outfile.write("enum {\n    IR_DEOPT_TARGET_BINARY_OP,\n")
-    for head in sorted(deopt_heads):
-        outfile.write(f"    IR_DEOPT_TARGET_{head},\n")
-    outfile.write("};\n")
+    # function forms of every handler and entry label, and in ir_evaluate()
+    # for the evaluator's handlers and labels
+    outfile.write("\n#ifdef IR_FUNCTION_FORMS\n")
+    outfile.write(form_declarations(analysis))
     outfile.writelines(functions)
-    outfile.write("#else  // IR_OUTLINED_FUNCTIONS\n")
+    outfile.writelines(label_forms(analysis, formats, lines))
+    outfile.write(form_table(analysis))
+    outfile.write("#else  // IR_FUNCTION_FORMS\n")
     outfile.write(f"""
             {INSTRUCTION_START_MARKER}
 """)
@@ -8705,9 +8788,8 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
     out = CWriter(outfile, 2, lines)
     emitter = IREmitter(out, analysis, formats)
     generate_ir_labels(analysis, emitter)
-    outfile.write(outlined_exit_label(deopt_heads))
     outfile.write(f"{LABEL_END_MARKER}\n")
-    outfile.write("#endif  // IR_OUTLINED_FUNCTIONS\n")
+    outfile.write("#endif  // IR_FUNCTION_FORMS\n")
 
 
 def num_handlers(analysis: Analysis) -> int:

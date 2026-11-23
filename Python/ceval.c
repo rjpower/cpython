@@ -1718,19 +1718,10 @@ call_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
  *
  * More than IR_OPERANDS_PER_WORD operands are gathered by call_vector(). */
 
-/* The result of a native handler's call: the handler deoptimizes when miss is
- * set, a guard that needs the operands having failed.  The guards of a builtin
- * function here are its fixed-arity value forms' (METH_VALUE | METH_O or
- * METH_NOARGS) number of arguments. */
-typedef struct {
-    PyValue value;
-    int miss;
-} _PyNativeCallResult;
-
-#define CALL_NATIVE_MISS ((_PyNativeCallResult){PyValue_NULL, 1})
-#define CALL_NATIVE_DONE(V) ((_PyNativeCallResult){(V), 0})
-
-static inline Py_ALWAYS_INLINE _PyNativeCallResult
+/* A builtin function.  Its handler's guard checked the call flags and the
+ * number of arguments of a fixed-arity value form (METH_VALUE | METH_O or
+ * METH_NOARGS). */
+static inline Py_ALWAYS_INLINE PyValue
 call_builtin_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
                     const _PyIRWord *head, _PyIRWord word,
                     PyValue callable, int first)
@@ -1739,11 +1730,9 @@ call_builtin_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
         (PyCFunctionObject *)PyValue_AsKnownObjectBorrow(callable);
     int flags = func->m_ml->ml_flags;
     int n = (int)IR_C(word) - first;
-    if ((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 1 : 0)) {
-        return CALL_NATIVE_MISS;
-    }
+    assert(!(flags & (METH_O | METH_NOARGS)) || n == ((flags & METH_O) ? 1 : 0));
     if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
-        return CALL_NATIVE_DONE(call_vector(tstate, frame, head, callable));
+        return call_vector(tstate, frame, head, callable);
     }
     PyValue args[IR_OPERANDS_PER_WORD];
     CALL_NATIVE_GATHER(head, _PyFrame_Slots(frame), first, n, args);
@@ -1753,10 +1742,10 @@ call_builtin_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
         PyValue result = meth(_PyCFunction_GET_SELF_VALUE((PyObject *)func),
                               args, n, NULL);
         _PyValue_ASSERT_RESULT(tstate, result);
-        return CALL_NATIVE_DONE(result);
+        return result;
     }
-    return CALL_NATIVE_DONE(_PyValue_CallAdapter(
-        tstate, (PyObject *)func, func->vectorcall, args, (size_t)n, NULL));
+    return _PyValue_CallAdapter(
+        tstate, (PyObject *)func, func->vectorcall, args, (size_t)n, NULL);
 }
 
 /* A builtin class that has a vectorcall (its guard checked): the class's value
@@ -1785,10 +1774,11 @@ call_class_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                 args, (size_t)n, NULL);
 }
 
-/* A method descriptor: the receiver is operand first, which must be an exact
- * instance of the descriptor's type, and the callee takes it with the
- * arguments. */
-static inline Py_ALWAYS_INLINE _PyNativeCallResult
+/* A method descriptor: the receiver is operand first, and the callee takes it
+ * with the arguments.  Its handler's guard checked the call flags, the number
+ * of arguments and that the receiver is an exact instance of the
+ * descriptor's type. */
+static inline Py_ALWAYS_INLINE PyValue
 call_descriptor_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
                        const _PyIRWord *head, _PyIRWord word,
                        PyValue callable, int first)
@@ -1797,33 +1787,25 @@ call_descriptor_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
         (PyMethodDescrObject *)PyValue_AsKnownObjectBorrow(callable);
     int flags = descr->d_method->ml_flags;
     int n = (int)IR_C(word) - first;
-    if (n == 0 || ((flags & (METH_O | METH_NOARGS))
-                   && n != ((flags & METH_O) ? 2 : 1)))
-    {
-        return CALL_NATIVE_MISS;
-    }
+    assert(n > 0);
+    assert(!(flags & (METH_O | METH_NOARGS)) || n == ((flags & METH_O) ? 2 : 1));
     PyValue *slots = _PyFrame_Slots(frame);
+    assert(PyValue_TYPE(slots[_PyIR_CallOperand(head, first)]) ==
+           descr->d_common.d_type);
     if (Py_UNLIKELY(first + n > IR_OPERANDS_PER_WORD)) {
-        PyValue receiver = slots[_PyIR_CallOperand(head, first)];
-        if (PyValue_TYPE(receiver) != descr->d_common.d_type) {
-            return CALL_NATIVE_MISS;
-        }
-        return CALL_NATIVE_DONE(call_vector(tstate, frame, head, callable));
+        return call_vector(tstate, frame, head, callable);
     }
     PyValue args[IR_OPERANDS_PER_WORD];
     CALL_NATIVE_GATHER(head, slots, first, n, args);
-    if (PyValue_TYPE(args[0]) != descr->d_common.d_type) {
-        return CALL_NATIVE_MISS;
-    }
     if (flags & METH_VALUE) {
         _PyCFunctionValue meth = (_PyCFunctionValue)(void(*)(void))
                                  descr->d_method->ml_meth;
         PyValue result = meth(PyValue_Borrow(args[0]), args + 1, n - 1, NULL);
         _PyValue_ASSERT_RESULT(tstate, result);
-        return CALL_NATIVE_DONE(result);
+        return result;
     }
-    return CALL_NATIVE_DONE(_PyValue_CallAdapter(
-        tstate, (PyObject *)descr, descr->vectorcall, args, (size_t)n, NULL));
+    return _PyValue_CallAdapter(
+        tstate, (PyObject *)descr, descr->vectorcall, args, (size_t)n, NULL);
 }
 
 /* Move or count the first count (at most four) operands of fields, the twelve
@@ -2534,73 +2516,135 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return error;
 }
 
-/* The outlined handlers (annotation `outlined` in Python/bytecodes.c): each
- * body of the generated file is a function of its own, run by IR_RUN_OUTLINED()
- * in the handler.  Its exits are returns: the next word dispatches in the
- * handler, and the others are described in the activation for the evaluator's
- * outlined_exit label. */
+/* The function forms (tiers87, C2).  Every handler's body is also a function
+ * of its own, ir_run_X(tstate, frame, next_instr, ir_word), and every VM
+ * routine (Python/ceval_routines.h) and DSL label is a function ir_NAME; each
+ * returns a _PyIRTransfer.  The evaluator's stub of an outlined handler calls
+ * its form (IR_RUN_OUTLINED()); the function-form executor,
+ * ir_execute_forms(), calls them all, as compiled code will.  Here the
+ * transfer macros are returns: the next word is returned; a deoptimisation,
+ * a frame entry, a VM routine and a handler run on the same word are tail
+ * calls; an error or the end of the activation returns no word and is
+ * described in the activation, for the caller to resolve. */
 #pragma push_macro("DISPATCH")
-#pragma push_macro("DISPATCH_SAME_OPARG")
-#pragma push_macro("DISPATCH_INLINED")
-#pragma push_macro("PROCESS_ERROR_AT")
-#pragma push_macro("JUMP_TO_PREDICTED")
-#pragma push_macro("IR_DEOPT_BINARY_OP")
 #undef DISPATCH
+#pragma push_macro("DISPATCH_SAME_OPARG")
 #undef DISPATCH_SAME_OPARG
+#pragma push_macro("DISPATCH_GOTO")
+#undef DISPATCH_GOTO
+#pragma push_macro("DISPATCH_INLINED")
 #undef DISPATCH_INLINED
+#pragma push_macro("PROCESS_ERROR_AT")
 #undef PROCESS_ERROR_AT
+#pragma push_macro("IR_EXIT")
+#undef IR_EXIT
+#pragma push_macro("JUMP_TO_PREDICTED")
 #undef JUMP_TO_PREDICTED
+#pragma push_macro("IR_DEOPT_BINARY_OP")
 #undef IR_DEOPT_BINARY_OP
+#pragma push_macro("IR_OBSERVE_EDGE")
+#undef IR_OBSERVE_EDGE
+#pragma push_macro("IR_HOLD_NEXT")
+#undef IR_HOLD_NEXT
+#pragma push_macro("IR_STEP_DONE")
+#undef IR_STEP_DONE
+#pragma push_macro("IR_REPORT_EDGE")
+#undef IR_REPORT_EDGE
+#pragma push_macro("IR_GEN_YIELD_AT")
+#undef IR_GEN_YIELD_AT
+#pragma push_macro("IR_GEN_COMPLETE_AT")
+#undef IR_GEN_COMPLETE_AT
+#pragma push_macro("IR_GEN_RETURN")
+#undef IR_GEN_RETURN
+#pragma push_macro("IR_GEN_RESUME")
+#undef IR_GEN_RESUME
+#pragma push_macro("IR_ROUTINE")
+#undef IR_ROUTINE
+#pragma push_macro("IR_HOT_ROUTINE")
+#undef IR_HOT_ROUTINE
+#pragma push_macro("GEN_DISPATCH")
+#undef GEN_DISPATCH
+#pragma push_macro("GEN_STEP_JUMP")
+#undef GEN_STEP_JUMP
+#pragma push_macro("GEN_STEP_EFFECT")
+#undef GEN_STEP_EFFECT
 #define DISPATCH() return (_PyIRTransfer){frame, next_instr}
 #define DISPATCH_SAME_OPARG() return (_PyIRTransfer){frame, next_instr}
+#define DISPATCH_GOTO() \
+    do { \
+        Py_MUSTTAIL return ir_handler_forms[opcode](tstate, frame, next_instr, ir_word); \
+    } while (0)
 #define DISPATCH_INLINED(NEW_FRAME) \
     do { \
         assert(!IS_PEP523_HOOKED(tstate)); \
         assert((NEW_FRAME)->previous == frame); \
         frame = tstate->current_frame = (NEW_FRAME); \
         CALL_STAT_INC(inlined_py_calls); \
-        IR_ACTIVATION()->exit_kind = _PyIR_EXIT_START_FRAME; \
-        return (_PyIRTransfer){frame, NULL}; \
+        Py_MUSTTAIL return ir_start_frame(tstate, frame, next_instr); \
     } while (0)
 #define PROCESS_ERROR_AT(ingress, checkpoint, origin) \
     do { \
         _PyEvalActivation *ir_exit = IR_ACTIVATION(); \
-        ir_exit->exit_kind = _PyIR_EXIT_ERROR; \
+        ir_exit->exit_kind = _PyIR_EXIT_RAISE; \
         ir_exit->exit_next = (origin); \
         ir_exit->exit_entry = \
             _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint); \
         return (_PyIRTransfer){frame, NULL}; \
     } while (0)
-#define JUMP_TO_PREDICTED(name) \
+#define IR_EXIT(V) \
     do { \
         _PyEvalActivation *ir_exit = IR_ACTIVATION(); \
-        ir_exit->exit_kind = _PyIR_EXIT_DEOPT; \
-        ir_exit->exit_target = IR_DEOPT_TARGET_##name; \
-        ir_exit->exit_next = this_instr; \
+        ir_exit->exit_kind = _PyIR_EXIT_VALUE; \
+        ir_exit->exit_value = (V); \
         return (_PyIRTransfer){frame, NULL}; \
+    } while (0)
+#define JUMP_TO_PREDICTED(name) \
+    do { \
+        Py_MUSTTAIL return ir_run_##name(tstate, frame, this_instr, ir_word); \
     } while (0)
 #define IR_DEOPT_BINARY_OP(F) \
     do { \
-        _PyEvalActivation *ir_exit = IR_ACTIVATION(); \
-        ir_exit->exit_kind = _PyIR_EXIT_DEOPT; \
-        ir_exit->exit_target = IR_DEOPT_TARGET_BINARY_OP; \
-        ir_exit->exit_entry = (uint32_t)((_PyFbHeader *)IR_FB(F))->arg; \
-        ir_exit->exit_next = this_instr; \
-        return (_PyIRTransfer){frame, NULL}; \
+        Py_MUSTTAIL return ir_binary_op( \
+            tstate, frame, this_instr, ir_word, \
+            (int)((_PyFbHeader *)IR_FB(F))->arg); \
     } while (0)
-#pragma push_macro("IR_OBSERVE_EDGE")
-#pragma push_macro("IR_HOLD_NEXT")
-#undef IR_HOLD_NEXT
 #define IR_HOLD_NEXT() ((void)0)
-#pragma push_macro("IR_STEP_DONE")
-#undef IR_STEP_DONE
 #define IR_STEP_DONE(STEP) return (STEP)
-#pragma push_macro("IR_REPORT_EDGE")
-#undef IR_REPORT_EDGE
 #define IR_REPORT_EDGE(TAKEN) (IR_ACTIVATION()->edge = (TAKEN))
-#undef IR_OBSERVE_EDGE
 #define IR_OBSERVE_EDGE(SOURCE, NEXT, EVENT, EDGE) \
     return ir_event_edge(tstate, frame, this_instr, (SOURCE), (NEXT), (EVENT), (EDGE))
+#define IR_GEN_YIELD_AT(SITE, V) \
+    do { \
+        Py_MUSTTAIL return ir_gen_yield(tstate, frame, (SITE), (V)); \
+    } while (0)
+#define IR_GEN_COMPLETE_AT(SITE, V) \
+    do { \
+        Py_MUSTTAIL return ir_gen_complete(tstate, frame, (SITE), (V)); \
+    } while (0)
+#define IR_GEN_RETURN(V, DYING, EMPTY) \
+    do { \
+        Py_MUSTTAIL return ir_gen_return(tstate, frame, next_instr, (V), \
+                                         (DYING), (EMPTY)); \
+    } while (0)
+#define IR_GEN_RESUME(V) \
+    do { \
+        Py_MUSTTAIL return ir_gen_resume(tstate, frame, next_instr, (V)); \
+    } while (0)
+#define IR_ROUTINE(NAME, ...) \
+    static Py_NO_INLINE _PyIRTransfer \
+    ir_##NAME(PyThreadState *tstate, _PyInterpreterFrame *frame, \
+              _PyInstr *next_instr, __VA_ARGS__)
+#define IR_HOT_ROUTINE IR_ROUTINE
+#define GEN_DISPATCH() return (_PyIRTransfer){frame, next_instr}
+#define GEN_STEP_JUMP(NAME, F, IP, V) \
+    do { \
+        Py_MUSTTAIL return ir_##NAME(tstate, (F), (IP), (V).bits); \
+    } while (0)
+#define GEN_STEP_EFFECT(REMAINING, IP, V) \
+    do { \
+        Py_MUSTTAIL return ir_GEN_COMPLETE_EFFECT(tstate, frame, (IP), (V).bits, \
+                                                  (REMAINING)); \
+    } while (0)
 
 /* The event of an instrumented branch, jump or loop step, after the effect
  * (rule 12).  It is out of the evaluator, where the instrumented handlers
@@ -2695,19 +2739,74 @@ static inline Py_ALWAYS_INLINE PyValue
 
 #include "ceval_generator.h"
 
-#define IR_OUTLINED_FUNCTIONS
+/* The routines and handlers are printed for the evaluator too, whose
+ * bindings of the transfer macros read some locals that the function forms'
+ * do not (an `int opcode` before a dispatch, a local that only a dispatch
+ * keeps live). */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+/* The routines call one another: gen_return completes a send, and a send
+ * whose consumer is a return returns. */
+IR_HOT_ROUTINE(gen_complete, PyValue gen_value);
+#include "ceval_routines.h"
+
+#define IR_FUNCTION_FORMS
 #include "generated_ir_cases.c.h"
-#undef IR_OUTLINED_FUNCTIONS
+#undef IR_FUNCTION_FORMS
+#pragma GCC diagnostic pop
+
+/* The function-form executor (-X ir_forms): runs the activation's frames by
+ * calling each word's function form, as the baseline JIT's B1 will, in place
+ * of ir_evaluate().  It is a test of the forms.  A form that returns no word
+ * has raised, which the error routine resolves, or has ended the
+ * activation. */
+static Py_NO_INLINE PyValue
+ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
+{
+    _PyEvalActivation *activation = IR_ACTIVATION();
+    _PyIRTransfer t = throwflag ? ir_throw_error(tstate, frame, frame->instr_ptr)
+                                : ir_start_frame(tstate, frame, frame->instr_ptr);
+    for (;;) {
+        if (t.next == NULL) {
+            if (activation->exit_kind == _PyIR_EXIT_VALUE) {
+                return activation->exit_value;
+            }
+            assert(activation->exit_kind == _PyIR_EXIT_RAISE);
+            t = ir_process_error(tstate, t.frame, NULL, activation->exit_next,
+                                 activation->exit_entry);
+            continue;
+        }
+        frame = t.frame;
+        _PyInstr *next_instr = t.next;
+        _PyIRWord ir_word;
+        int opcode;
+        NEXTOPARG();
+        PRE_DISPATCH_GOTO();
+        t = ir_handler_forms[opcode](tstate, frame, next_instr, ir_word);
+    }
+}
 #pragma pop_macro("DISPATCH")
 #pragma pop_macro("DISPATCH_SAME_OPARG")
+#pragma pop_macro("DISPATCH_GOTO")
 #pragma pop_macro("DISPATCH_INLINED")
 #pragma pop_macro("PROCESS_ERROR_AT")
+#pragma pop_macro("IR_EXIT")
 #pragma pop_macro("JUMP_TO_PREDICTED")
 #pragma pop_macro("IR_DEOPT_BINARY_OP")
 #pragma pop_macro("IR_OBSERVE_EDGE")
 #pragma pop_macro("IR_HOLD_NEXT")
 #pragma pop_macro("IR_STEP_DONE")
 #pragma pop_macro("IR_REPORT_EDGE")
+#pragma pop_macro("IR_GEN_YIELD_AT")
+#pragma pop_macro("IR_GEN_COMPLETE_AT")
+#pragma pop_macro("IR_GEN_RETURN")
+#pragma pop_macro("IR_GEN_RESUME")
+#pragma pop_macro("IR_ROUTINE")
+#pragma pop_macro("IR_HOT_ROUTINE")
+#pragma pop_macro("GEN_DISPATCH")
+#pragma pop_macro("GEN_STEP_JUMP")
+#pragma pop_macro("GEN_STEP_EFFECT")
 
 /* The evaluator: every handler and label of the interpreter in one
  * function, which dispatches by computed goto (Python/ceval_macros.h).  Its
@@ -2722,21 +2821,17 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 #include "ir_targets.h"
     _PyInstr *next_instr = frame->instr_ptr;
     _PyIRWord ir_word = 0;
-    /* The operation that the generic BINARY_OP handlers pass to their shared
-     * body, which is not live across a dispatch. */
-    int ir_binary_op;
-    /* What PROCESS_ERROR_AT passes to process_error */
-    _PyInstr *ir_error_origin;
-    uint32_t ir_error_entry;
-    /* What the IR_GEN_* macros pass to the generator labels
-     * (Python/ceval_generator_labels.h) */
-    PyValue ir_gen_value;
-    _PyInterpreterFrame *ir_gen_dying;
-    int ir_gen_empty;
-    _PyIRTransfer ir_gen_transfer;
-#ifdef Py_STATS
-    int lastopcode = 0;
-#endif
+    /* The operands of the shared bodies that the labels below read: the
+     * generic BINARY_OP's operation and the VM routines' (Python/
+     * ceval_routines.h), which the transfer macros set.  None is live across
+     * a dispatch. */
+    int binary_op_operation;
+    _PyInstr *process_error_origin;
+    uint32_t process_error_entry;
+    PyValue gen_value;
+    _PyInterpreterFrame *gen_dying;
+    int gen_empty;
+    _PyIRTransfer gen_transfer;
 
     if (throwflag) {
         goto LABEL_throw_error;
@@ -2749,23 +2844,36 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 
 #include "generated_ir_cases.c.h"
 
-#include "ceval_generator_labels.h"
-
-    /* The shared tail of PROCESS_ERROR_AT */
-    LABEL_process_error:
+    /* A function form returned no word: it raised (ir_execute_forms() has the
+     * same contract), and process_error resolves it. */
+    LABEL_outlined_exit:
     {
-        _PyIRErrorResult ir_error_result = _PyEval_ProcessError(
-            tstate, frame, ir_error_origin, ir_error_entry);
-        if (ir_error_result.disposition == _PyIR_ERROR_HANDLED) {
-            frame = tstate->current_frame;
-            next_instr = ir_error_result.next;
-            int opcode;
-            NEXTOPARG();
-            PRE_DISPATCH_GOTO();
-            DISPATCH_GOTO();
-        }
-        return PyValue_NULL;
+        _PyEvalActivation *activation = IR_ACTIVATION();
+        assert(activation->exit_kind == _PyIR_EXIT_RAISE);
+        process_error_origin = activation->exit_next;
+        process_error_entry = activation->exit_entry;
+        goto LABEL_process_error;
     }
+
+    /* The shared dispatch blocks of the generator routines: gen_dispatch runs
+     * the word at next_instr, and gen_stepped runs what a step returned. */
+    HOT_LABEL(gen_dispatch)
+    {
+        int opcode;
+        DISPATCH();
+    }
+
+    HOT_LABEL(gen_stepped)
+    {
+        frame = gen_transfer.frame;
+        next_instr = gen_transfer.next;
+        if (next_instr == NULL) {
+            goto LABEL_outlined_exit;
+        }
+        goto LABEL_gen_dispatch;
+    }
+
+#include "ceval_routines.h"
 }
 
 void
@@ -2938,7 +3046,9 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
         /* Because this avoids the RESUME, we need to update instrumentation */
         _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
     }
-    result = ir_evaluate(tstate, frame, throwflag);
+    result = tstate->interp->ceval.ir_forms
+        ? ir_execute_forms(tstate, frame, throwflag)
+        : ir_evaluate(tstate, frame, throwflag);
     /* The handler that returned, INTERPRETER_EXIT or exit_unwind_notrace,
      * left the entry frame */
     assert(tstate_impl->eval_activation == &activation);

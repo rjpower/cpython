@@ -3244,5 +3244,64 @@ class FusedJumpTest(AssemblerTestCase):
                 self.assertEqual(result, expected)
 
 
+FORMS_PROGRAM = """
+import sys
+
+def add(a, b):
+    return a + b
+
+def deep(n):
+    return 0 if n == 0 else 1 + deep(n - 1)
+
+def gen(n):
+    for i in range(n):
+        got = yield i
+        if got is not None:
+            yield got * 2
+
+def delegate(n):
+    return (yield from gen(n))
+
+async def coro(n):
+    return n + 1
+
+def run(c):
+    try:
+        c.send(None)
+    except StopIteration as e:
+        return e.value
+
+out = []
+for _ in range(3):
+    # Warm the specializations, then deoptimize them
+    out.append([add(i, 1) for i in range(100)][-1])
+    out.append(add(1.5, 2))
+    out.append(add("a", "b"))
+sys.setrecursionlimit(210000)
+out.append(deep(200000))
+g = delegate(5)
+out.append([next(g), g.send(3), next(g)])
+out.append(list(gen(4)))
+out.append(run(coro(41)))
+try:
+    add(1, None)
+except TypeError as e:
+    out.append(type(e).__name__)
+print(out)
+"""
+
+
+class FunctionFormTest(unittest.TestCase):
+    def test_forms_run_like_the_evaluator(self):
+        # -X ir_forms runs every word by its handler's function form.  The
+        # recursion is deeper than an 8 MB C stack would allow if entering a
+        # frame grew it.
+        from test.support import script_helper
+        expected = script_helper.assert_python_ok("-c", FORMS_PROGRAM).out
+        result = script_helper.assert_python_ok("-X", "ir_forms", "-c", FORMS_PROGRAM)
+        self.assertEqual(result.out, expected)
+        self.assertIn(b"200000", expected)
+
+
 if __name__ == "__main__":
     unittest.main()

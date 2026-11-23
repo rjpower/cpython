@@ -4323,15 +4323,47 @@ dict_update_common(PyObject *self, PyObject *args, PyObject *kwds,
     return result;
 }
 
-/* Note: dict.update() uses the METH_VARARGS|METH_KEYWORDS calling convention.
-   Using METH_FASTCALL|METH_KEYWORDS would make dict.update(**dict2) calls
-   slower, see the issue #29312. */
-static PyObject *
-dict_update(PyObject *self, PyObject *args, PyObject *kwds)
+/* dict.update([E, ]**F) on the value calling convention: the optional
+   positional operand goes to dict_update_arg_value, and the keywords, which
+   follow the positional values, are stored one by one. */
+static PyValue
+dict_update(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
+            PyObject *kwnames)
 {
-    if (dict_update_common(self, args, kwds, "update") != -1)
-        Py_RETURN_NONE;
-    return NULL;
+    PyObject *dict = PyValue_AsKnownObjectBorrow(self);
+    if (nargs > 1) {
+        PyErr_Format(PyExc_TypeError,
+                     "update expected at most 1 argument, got %zd", nargs);
+        return PyValue_NULL;
+    }
+    if (nargs == 1 && dict_update_arg_value(dict, PyValue_Borrow(args[0])) < 0) {
+        return PyValue_NULL;
+    }
+    if (kwnames != NULL) {
+        const PyValue *keyword_values = args + nargs;
+        Py_ssize_t nkwargs = PyTuple_GET_SIZE(kwnames);
+        int status = 0;
+        Py_BEGIN_CRITICAL_SECTION(dict);
+        /* Size once for the keywords, as dict_dict_merge() does. */
+        PyDictObject *mp = (PyDictObject *)dict;
+        if (USABLE_FRACTION(DK_SIZE(mp->ma_keys)) < nkwargs) {
+            status = dictresize(mp, estimate_log2_keysize(mp->ma_used + nkwargs),
+                                true);
+        }
+        for (Py_ssize_t i = 0; status == 0 && i < nkwargs; i++) {
+            /* Vectorcall keyword names are exact str with a hash, never
+               inline: the hash is cached or computed by the str itself. */
+            PyValueBorrow key = PyTuple_GET_VALUE(kwnames, i);
+            status = setitem_take2_lock_held_known_hash(
+                mp, PyValue_DUP(key), PyValue_DUP(keyword_values[i]),
+                hash_unicode_key(PyValue_AsKnownObjectBorrow(key)));
+        }
+        Py_END_CRITICAL_SECTION();
+        if (status < 0) {
+            return PyValue_NULL;
+        }
+    }
+    return PyValue_None;
 }
 
 /* Update unconditionally replaces existing items.
@@ -5508,7 +5540,7 @@ static PyMethodDef mapp_methods[] = {
     DICT_KEYS_METHODDEF
     DICT_ITEMS_METHODDEF
     DICT_VALUES_METHODDEF
-    {"update",          _PyCFunction_CAST(dict_update), METH_VARARGS | METH_KEYWORDS,
+    {"update",          _PyCFunction_CAST(dict_update), METH_VALUE | METH_KEYWORDS,
      update__doc__},
     DICT_FROMKEYS_METHODDEF
     DICT_CLEAR_METHODDEF

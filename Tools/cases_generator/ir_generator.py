@@ -75,12 +75,13 @@ import argparse
 import io
 import ir_numbers
 from ir_records import (
-    ASSIGNMENTS, CONST, DEOPT, ENTER_FRAME, EXIT_GUARD, FEEDBACK, GUARD_TOKENS, IMMEDIATE,
-    LOCAL, MAY_RAISE, OPERANDS, RELEASE_LIKE, RUNS_PYTHON, SITE_TOKENS, SLOT, TARGET, TEMP,
-    WINDOW, YIELD, CallShape, Fact, FeedbackOperand, FeedbackSchema, Guard, Operand,
-    OperationRecord, Subjects, Transfer, UopRecord, assigns_to, changes, check_record,
-    feedback_schema, guard_facts, infer_effects, passed_through, record_through,
-    result_facts, site_tokens, uop_transfers, walk_values,
+    ASSIGNMENTS, CONST, DEOPT, ENTER_FRAME, EXIT_GUARD, FEEDBACK, GUARD_TOKENS,
+    IMMEDIATE, LOCAL, MAY_RAISE, OPERANDS, POLY_TABLE_READERS, RELEASE_LIKE,
+    RUNS_PYTHON, SITE_TOKENS, SLOT, TARGET, TEMP, WINDOW, YIELD, CallShape, Fact,
+    FeedbackOperand, FeedbackSchema, Guard, Operand, OperationRecord, Subjects,
+    Transfer, UopRecord, assigns_to, changes, check_record, feedback_schema,
+    guard_facts, infer_effects, passed_through, record_through, result_facts,
+    site_tokens, uop_transfers, walk_values,
 )
 from ir_read_effects import (
     error_nonnull_value, null_value_condition, value_assignment, value_declaration,
@@ -710,7 +711,7 @@ OBJECT_RELEASES = {"Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF",
 # (OBJECT_READERS_SEEN); that a name only reads is checked by review.
 # Uses inside assert() vanish from release builds and are not checked.
 OBJECT_READERS = {
-    "IR_GUARD_SHAPE_READ",
+    "IR_GUARD_SHAPE_READ", "IR_METHOD_POLY_LOOKUP",
     # Statements
     "LOCK_OBJECT", "UNLOCK_OBJECT",
     # Type tests and accessors
@@ -6003,7 +6004,9 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
                or polls_at_end(name, inst)),
         specializes=fmt.fb != LOC_NONE and any(
             "specializing" in part.annotations for part, _, _ in walk.uops),
-        reads_poly_table=variant is not None and variant.shape_cases)
+        reads_poly_table=(variant is not None and variant.shape_cases) or any(
+            t.text in POLY_TABLE_READERS for part, _, _ in walk.uops
+            for t in part.body.tokens()))
 
 
 def build_records(analysis: Analysis,

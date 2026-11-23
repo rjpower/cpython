@@ -92,7 +92,10 @@ static int
 descr_check_value(PyDescrObject *descr, PyValueBorrow obj)
 {
     PyTypeObject *type = PyValue_TYPE(obj);
-    if (type != descr->d_type && !PyType_IsSubtype(type, descr->d_type)) {
+    /* Every object is an instance of object: the descriptors that object
+       defines (__class__, __dict__) apply without a walk of the MRO. */
+    if (type != descr->d_type && descr->d_type != &PyBaseObject_Type
+        && !PyType_IsSubtype(type, descr->d_type)) {
         PyErr_Format(PyExc_TypeError,
                      "descriptor '%V' for '%.100s' objects "
                      "doesn't apply to a '%.100s' object",

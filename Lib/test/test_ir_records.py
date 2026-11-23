@@ -98,6 +98,26 @@ class HandlerRecordTests(unittest.TestCase):
             with self.subTest(uop=uop):
                 self.assertEqual(results(handler, uop), facts)
 
+    def test_type_version_facts(self):
+        def facts(handler, uop):
+            [found] = [u for u in records[handler].uops if u.name == uop]
+            return {str(f) for g in found.guards for f in g.facts}
+
+        # A specific version, and a version without naming it
+        self.assertIn("TYPE_VERSION(v0, type_version)",
+                      facts("LOAD_ATTR_METHOD_WITH_VALUES", "_GUARD_TYPE_VERSION"))
+        self.assertIn("TYPE_VERSION(v0)",
+                      facts("LOAD_ATTR_METHOD_POLY", "_GUARD_TYPE_HAS_VERSION"))
+
+    def test_poly_table_readers(self):
+        # The poly execution variants and the handlers that call a
+        # POLY_TABLE_READERS macro
+        self.assertEqual(
+            {name for name, record in records.items() if record.reads_poly_table},
+            {"LOAD_ATTR_SHAPE_POLY", "LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP",
+             "LOAD_ATTR_METHOD_POLY"})
+        self.assertIn(READS_HEAP, ir_records.infer_effects(uops["_LOAD_ATTR_METHOD_POLY"]))
+
     def test_feedback_operands_are_schema_fields(self):
         for record in records.values():
             for uop in record.uops:

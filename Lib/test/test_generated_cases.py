@@ -3778,6 +3778,8 @@ class TestShapeReadMetadata(unittest.TestCase):
         source = (root / "Python/bytecodes.c").read_text()
         start = (root / "Python/ceval_macros.h").read_text().index("shape_read_offset(const _PyIRWord *words")
         macros = (root / "Python/ceval_macros.h").read_text()[start:][:600]
+        poly_start = (root / "Python/ceval_macros.h").read_text().index("poly_row_index(const _PyIRWord *words")
+        poly_rows = (root / "Python/ceval_macros.h").read_text()[poly_start:][:300]
         for suffix in ("", "_LOCAL_TEMP"):
             for poly in (False, True):
                 name = "LOAD_ATTR_SHAPE" + ("_POLY" if poly else "") + suffix
@@ -3785,13 +3787,14 @@ class TestShapeReadMetadata(unittest.TestCase):
                     handler, effects = self.shape_read_handler(source, name)
                     self.assertEqual("shape_read_offset(" in handler, poly)
                     if poly:
-                        # The handler passes the frame's words; the
-                        # function steps back over the executing copy's
-                        # header to the block of the poly tables
+                        # The handler passes the frame's words; the row
+                        # finder steps back over the executing copy's header
+                        # to the block of the poly tables
                         self.assertIn("shape_read_offset(frame->ir_words, fb,", handler)
                         self.assertNotIn("_PyFrame_Exec(frame)->feedback", handler)
-                        self.assertIn("_PyFbBlock *block = _PyIR_FbBlock(words);", macros)
-                        self.assertIn("_PyFb_PolyOf(block, &entry->h)", macros)
+                        self.assertIn("poly_row_index(words, h, version)", macros)
+                        self.assertIn("_PyFb_PolyOf(_PyIR_FbBlock(words), h)", macros)
+                        self.assertIn("_PyFb_PolyOf(_PyIR_FbBlock(words), h)", poly_rows)
                     self.assertEqual("_PyIR_LEARNED_ONLY" in effects, poly)
                     self.assertIn("uint32_t offset = " +
                                   ("ir_shape_offset" if poly else "fb->offset") + ";", handler)

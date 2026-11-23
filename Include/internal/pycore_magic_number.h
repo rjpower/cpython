@@ -385,8 +385,9 @@ Known values:
    64443: contract87 FR: the feedback vector precedes the executing words;
           its fields are signed units counted back from entry 0
    64444: contract87 FR revision: the fields count up toward entry 0, whose
-          field is IR_FB_SHARED */
-#define PYC_MAGIC_NUMBER 64444
+          field is IR_FB_SHARED
+   64445: contract87 AT (integration): LOAD_ATTR_METHOD_POLY, IR handler 412 */
+#define PYC_MAGIC_NUMBER 64445
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

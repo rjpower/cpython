@@ -11269,6 +11269,57 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_TRUE(
             DISPATCH();
         }
 
+        TARGET(LOAD_ATTR_METHOD_POLY) {
+            int opcode = LOAD_ATTR_METHOD_POLY;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_ATTR_METHOD_POLY);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_C(ir_word));
+            int oparg = (int)IR_D(ir_word);
+            (void)oparg;
+            PyValueBorrow owner;
+            PyValue attr;
+            PyValue *self_or_null;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            // _GUARD_TYPE_HAS_VERSION
+            {
+                owner = IR_VIEW(IR_B(ir_word));
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                if (Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner))->tp_version_tag == 0) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+            }
+            // _LOAD_ATTR_METHOD_POLY
+            {
+                self_or_null = ((oparg&1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
+                assert(oparg & 1);
+                PyValueBorrow method = IR_METHOD_POLY_LOOKUP(
+                    ((_PyFbHeader *)fb), _PyValue_AsKnownObjectBorrowPointer(owner));
+                if (PyValue_IsNull(method)) {
+                    UPDATE_MISS_STATS(LOAD_ATTR);
+                    JUMP_TO_PREDICTED(LOAD_ATTR);
+                }
+                STAT_INC(LOAD_ATTR, hit);
+                attr = PyValue_DUP(method);
+                ir_own_B = IR_DETACH(ir_word, B, owner);
+                self_or_null[0] = IR_TAKEN_POINTER(owner, ir_own_B);
+            }
+            IR_STORE_DST(ir_word, A, attr);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
+        }
+
         TARGET(LOAD_ATTR_METHOD_WITH_VALUES) {
             int opcode = LOAD_ATTR_METHOD_WITH_VALUES;
             (void)(opcode);

@@ -166,7 +166,11 @@ class TestCanonicalMethodCapture(unittest.TestCase):
         for cls, expected in variants[1:]:
             for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN):
                 self.assertEqual(invoke(cls(), lambda: 40), 41)
-            self.assertIn(expected, handlers(invoke))
+            # Rows of the two forms that the poly handler reads make the
+            # site read them; a lazy-dict row keeps the latest monomorphic form
+            self.assertIn("LOAD_ATTR_METHOD_POLY" if expected !=
+                          "LOAD_ATTR_METHOD_LAZY_DICT" else expected,
+                          handlers(invoke))
         [site] = [i for i in dis.get_instructions(invoke) if i.opname == "LOAD_ATTR"]
         kind, state, _, _, rows = _testinternalcapi.get_feedback(
             invoke.__code__, site.offset)

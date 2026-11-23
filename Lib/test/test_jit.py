@@ -415,5 +415,215 @@ class TestCompiled(JitTestCase):
         self.assertEqual(out.strip(), "True")
 
 
+# The scripts of TestHandOff start with this: a function compiles at its
+# first warm-up event until settle() raises the warm-up out of reach, so that
+# the functions made after it (fresh() copies a code object) stay in the
+# interpreter.
+HAND_OFF_PRELUDE = """
+import sys, types, _testinternalcapi as t
+t.set_jit_warmup(1)
+def settle():
+    t.set_jit_warmup(1 << 30)
+def fresh(f):
+    return types.FunctionType(f.__code__.replace(), f.__globals__, f.__name__)
+def compiled(f):
+    return t.jit_unit(f.__code__) is not None
+"""
+
+
+@unittest.skipIf(_testinternalcapi is None, "needs _testinternalcapi")
+class TestHandOff(JitTestCase):
+    """The evaluator hands a frame to its code's unit at a frame entry, a
+    return or yield into a frame that ran in its unit, a generator resume, a
+    backward jump and a handled exception; compiled code hands back at
+    every frame switch."""
+
+    def check_hand_off(self, source):
+        """The script prints the same in both modes and with the JIT off,
+        apart from the lines that start with 'jit', which hold what the JIT
+        did: under the JIT they must be as the script's expected line
+        ('jit-expect ...') says."""
+        source = HAND_OFF_PRELUDE + textwrap.dedent(source)
+        strip = lambda out: [l for l in out.splitlines() if not l.startswith("jit")]
+        expected = run(source, "jit=off")
+        for mode in ("always", "on"):
+            with self.subTest(mode=mode):
+                got = run(source, f"jit={mode}")
+                self.assertEqual(strip(got), strip(expected))
+                lines = [l.split() for l in got.splitlines() if l.startswith("jit")]
+                self.assertTrue(lines, got)
+                for name, *values in lines:
+                    want = name.split(":", 1)[1].split(",")
+                    self.assertEqual(values, want, f"{name}\n{got}")
+
+    def test_call_into_compiled_code(self):
+        # An interpreted caller enters its callee's unit at the callee's
+        # RESUME
+        self.check_hand_off("""
+            def callee(x):
+                return x + 1, sys._jit.is_active()
+            callee(0)
+            settle()
+            def caller():
+                return [callee(i) for i in range(3)], sys._jit.is_active()
+            caller = fresh(caller)
+            values, active = caller()
+            print([v for v, _ in values])
+            print("jit:True,True,True,False", *[a for _, a in values], active)
+        """)
+
+    def test_return_into_compiled_caller(self):
+        # A compiled caller goes back to its unit when an interpreted callee
+        # returns into it, and after a callee raised into it
+        self.check_hand_off("""
+            def callee():
+                return sys._jit.is_active()
+            def thrower():
+                raise KeyError(sys._jit.is_active())
+            def caller(f, g):
+                inner = f()
+                after = sys._jit.is_active()
+                try:
+                    g()
+                except KeyError as e:
+                    caught = e.args[0], sys._jit.is_active()
+                return inner, after, *caught
+            caller(callee, thrower)
+            settle()
+            print("jit:False,True,False,True", *caller(fresh(callee), fresh(thrower)))
+            print("jit:True", compiled(caller))
+        """)
+
+    def test_generator_resumed_into_compiled_code(self):
+        # An interpreted consumer, by next() and by a for loop, resumes a
+        # compiled generator in its unit, and the generator yields back
+        self.check_hand_off("""
+            def gen(n):
+                for i in range(n):
+                    yield i, sys._jit.is_active()
+            def delegate(n):
+                yield from gen(n)
+            list(gen(2)); list(delegate(1))
+            settle()
+            def consume():
+                g = gen(3)
+                first = next(g)
+                rest = [x for x in g]
+                return [first] + rest + list(delegate(2)), sys._jit.is_active()
+            items, active = fresh(consume)()
+            print([i for i, _ in items])
+            print("jit:True,True,True,True,True,False", *[a for _, a in items], active)
+        """)
+
+    def test_backward_jump_of_a_one_off_call(self):
+        # A one-off call warms up in its own loop and goes on compiled from
+        # a backward jump
+        self.check_hand_off("""
+            t.set_jit_warmup(50)
+            def once(n):
+                s = 0
+                seen = []
+                for i in range(n):
+                    s += i
+                    if i in (0, n - 1):
+                        seen.append(sys._jit.is_active())
+                return s, seen
+            s, seen = once(10000)
+            print(s)
+            print("jit:True", seen[-1])
+            print("jit:True", compiled(once))
+        """)
+
+    def test_exception_caught_in_compiled_frame(self):
+        self.check_hand_off("""
+            def f(n):
+                out = []
+                for i in range(n):
+                    try:
+                        if i % 2:
+                            raise ValueError(i)
+                        out.append({}[i])
+                    except KeyError:
+                        out.append(("key", sys._jit.is_active()))
+                    except ValueError as e:
+                        out.append(("value", sys._jit.is_active()))
+                return out
+            f(2)
+            settle()
+            out = f(4)
+            print([k for k, _ in out])
+            print("jit:True,True,True,True", *[a for _, a in out])
+        """)
+
+    def test_monitoring_switched_on_in_compiled_frame(self):
+        # An interpreted callee switches monitoring on and returns into a
+        # compiled caller, whose unit is retired: the caller goes on in the
+        # interpreter, with the interpreter's events.  So does a generator
+        # suspended in its unit, resumed after its unit was retired.
+        self.check_hand_off("""
+            mon = sys.monitoring
+            E = mon.events
+            TOOL = 3
+            events = []
+            mon.use_tool_id(TOOL, "test")
+            mon.register_callback(TOOL, E.LINE,
+                lambda code, line: events.append((code.co_name, line)))
+            def switch():
+                mon.set_events(TOOL, E.LINE)
+            def gen():
+                yield sys._jit.is_active()
+                yield sys._jit.is_active()
+            def f(on):
+                s = 0
+                for i in range(4):
+                    if on and i == 2:
+                        switch()
+                    s += i
+                return s, sys._jit.is_active()
+            f(False)
+            g = gen()
+            g_before = next(g)
+            settle()
+            s, before = f(False)
+            switch = fresh(switch)
+            s2, after = f(True)
+            g_after = next(g)
+            mon.set_events(TOOL, 0)
+            print(s, s2, events)
+            print("jit:True,False,True,False", before, after, g_before, g_after)
+        """)
+
+    def test_jit_handlers_only_with_the_jit(self):
+        # A code lowered with the JIT off holds none of the JIT's handlers
+        src = """
+            import _testinternalcapi as t
+            def f(n):
+                for i in range(n):
+                    pass
+            f(1)
+            names = {w[0] for w in t.get_ir(f.__code__, True)}
+            print(sorted(n for n in names if n.startswith(("RESUME", "JUMP_BACKWARD"))))
+        """
+        self.assertEqual(run(src, "jit=off").strip(), "['JUMP_BACKWARD', 'RESUME']")
+        for mode in ("on", "always"):
+            with self.subTest(mode=mode):
+                self.assertEqual(run(src, f"jit={mode}").strip(),
+                                 "['JUMP_BACKWARD_JIT', 'RESUME_JIT']")
+
+    def test_ir_forms_turns_the_jit_off(self):
+        # The forms executor runs no unit, so a JIT mode under -X ir_forms
+        # is off
+        src = """
+            import sys, _testinternalcapi as t
+            def f(): return 1
+            for i in range(100): f()
+            print(sys._jit.is_enabled(), t.jit_stats()["compiles"])
+        """
+        for mode in ("on", "always"):
+            with self.subTest(mode=mode):
+                self.assertEqual(run(src, "ir_forms", f"jit={mode}").split(),
+                                 ["False", "0"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -26,5 +26,6 @@ int _PyTestInternalCapi_Init_BorrowScope(PyObject *module);
 int _PyTestInternalCapi_Init_ValueSlots(PyObject *module);
 int _PyTestInternalCapi_Init_ValueCall(PyObject *module);
 int _PyTestInternalCapi_Init_Leaf(PyObject *module);
+int _PyTestInternalCapi_Init_JitAsm(PyObject *module);
 
 #endif // Py_TESTINTERNALCAPI_PARTS_H

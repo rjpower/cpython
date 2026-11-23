@@ -2,11 +2,10 @@
 // from the leaf IR of Python/bytecodes.c.
 // Do not edit!
 //
-// 73 templates.  The handlers whose uops are all leaf but that
+// 74 templates.  The handlers whose uops are all leaf but that
 // keep the call of their form:
 //   BINARY_OP_FLOOR_DIVIDE_INT: no emission of sdiv
 //   BINARY_OP_REMAINDER_INT: no emission of srem
-//   BINARY_OP_RSHIFT_INT: a shift by a variable count
 //   LOAD_ATTR_SHAPE_POLY: reads the site's table of cases
 //   LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP: reads the site's table of cases
 
@@ -285,6 +284,64 @@ jit_template_BINARY_OP_OR_INT(_PyJitWordCx *cx)
     int c22 = _PyJitLower_PyValue_IsNull(cx, (const uint8_t[]){_PyJitReg_RAX}, NULL);
     _PyJitAsm_Jcc(a, c22, raise);
     _PyJitAsm_Bind(a, L10);
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_B(ir_word))), 0);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_C(ir_word))), 0);
+    }
+    if ((ir_word & IR_F_LOCAL_A)) {
+        _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+    }
+    _PyJitAsm_MovMR(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), _PyJitReg_RAX);
+    if ((ir_word & IR_F_LOCAL_A)) {
+        cx->live = 0x0; cx->live_xmm = 0x0;
+        _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL);
+    }
+    _PyJitLower_ColdBegin(cx);
+    _PyJitTemplate_Raise(cx, raise);
+    _PyJitLower_ColdEnd(cx);
+}
+
+static void
+jit_template_BINARY_OP_RSHIFT_INT(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L3 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L10 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L11 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel raise = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_B(ir_word))));
+    _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_C(ir_word))));
+    int c5 = _PyJitLower_PyValue_IsInlineInt(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c5), cx->slow);
+    _PyJitAsm_Bind(a, L3);
+    _PyJitAsm_MovImm(a, _PyJitReg_RDX, 0);
+    int c11 = _PyJitLower_PyValue_IsInlineInt(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RSI}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c11), cx->slow);
+    _PyJitAsm_Bind(a, L7);
+    _PyJitLower_PyValue_InlineInt64(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RCX}, NULL);
+    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_RCX, _PyJitReg_RDX);
+    int c21 = _PyJitCond_L;
+    _PyJitAsm_Jcc(a, c21, cx->slow);
+    _PyJitAsm_Bind(a, L10);
+    _PyJitLower_PyValue_InlineInt64(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX}, NULL);
+    _PyJitAsm_MovImm(a, _PyJitReg_RDX, 63);
+    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_RCX, _PyJitReg_RDX);
+    int c25 = _PyJitCond_L;
+    _PyJitAsm_MovRR(a, _PyJitReg_RSI, _PyJitReg_RDX);
+    _PyJitAsm_CmovRR(a, c25, _PyJitReg_RSI, _PyJitReg_RCX);
+    _PyJitAsm_MovRR(a, _PyJitReg_RCX, _PyJitReg_RSI);
+    _PyJitAsm_ShiftRCl(a, _PyJitShift_SAR, _PyJitReg_RAX);
+    _PyJitLower_PyValue_FromInlineInt(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    int c31 = _PyJitLower_PyValue_IsNull(cx, (const uint8_t[]){_PyJitReg_RAX}, NULL);
+    _PyJitAsm_Jcc(a, c31, raise);
+    _PyJitAsm_Bind(a, L11);
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_B(ir_word))), 0);
     }
@@ -2769,6 +2826,7 @@ const _PyJitTemplate _PyJit_Templates[512] = {
     [136] = jit_template_BINARY_OP_MULTIPLY_FLOAT,
     [137] = jit_template_BINARY_OP_MULTIPLY_INT,
     [138] = jit_template_BINARY_OP_OR_INT,
+    [140] = jit_template_BINARY_OP_RSHIFT_INT,
     [143] = jit_template_BINARY_OP_SUBSCR_LIST_INT,
     [146] = jit_template_BINARY_OP_SUBSCR_TUPLE_INT,
     [148] = jit_template_BINARY_OP_SUBTRACT_FLOAT,

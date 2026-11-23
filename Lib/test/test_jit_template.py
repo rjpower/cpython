@@ -549,6 +549,12 @@ TEMPLATE_CASES = [
       for op, handler in (("+", "BINARY_OP_ADD_INT"), ("-", "BINARY_OP_SUBTRACT_INT"),
                           ("*", "BINARY_OP_MULTIPLY_INT"), ("&", "BINARY_OP_AND_INT"),
                           ("|", "BINARY_OP_OR_INT"), ("^", "BINARY_OP_XOR_INT"))],
+    # Counts below zero, inside the word, and past it
+    (BINARY.format(op=">>"), (6, 3), "BINARY_OP_RSHIFT_INT", "ABC",
+     [(Plain(), a, b) for a in INTS for b in (0, 1, 5, 62, 63, 64, 1000, -1)] +
+     [(Plain(), a, b) for a, b in INT_PAIRS[-8:]]),
+    (TEMPS.format(op=">>"), (6, 3), "BINARY_OP_RSHIFT_INT", "BC",
+     [(a, b) for a in INTS for b in (0, 5, 63, 64, -1)]),
     *[(TEMPS.format(op=op), (6, 3), handler, "BC", INT_PAIRS)
       for op, handler in (("+", "BINARY_OP_ADD_INT"), ("-", "BINARY_OP_SUBTRACT_INT"),
                           ("*", "BINARY_OP_MULTIPLY_INT"))],

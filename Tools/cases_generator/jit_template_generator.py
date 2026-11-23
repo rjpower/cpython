@@ -1055,6 +1055,8 @@ def load_records():
 GPR_NAMES = ["RAX", "RCX", "RDX", "RBX", "RSP", "RBP", "RSI", "RDI",
              "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"]
 GPR_POOL = [0, 1, 2, 6, 7, 8, 9, 10, 11]
+RCX = 1
+SHIFTS = {"shl": "SHL", "ashr": "SAR", "lshr": "SHR"}
 XMM_POOL = list(range(16))
 CMP_CONDS = {"eq": "E", "ne": "NE", "slt": "L", "sle": "LE", "sgt": "G", "sge": "GE",
              "ult": "B", "ule": "BE", "ugt": "A", "uge": "AE"}
@@ -1181,7 +1183,21 @@ class Allocation:
         self.live_after: dict[int, list[set]] = {}
         for i in g.blocks:
             self.block_live(i)
+        self.forbidden = self.clobbered(definitions(g))
         self.assign()
+
+    def clobbered(self, defs) -> dict[int, set[int]]:
+        """The registers each value may not take because an op that its
+        live range spans writes them: a shift by a variable count takes
+        its count in cl"""
+        forbidden: dict[int, set[int]] = {}
+        for i, b in self.g.blocks.items():
+            for op, after in zip(b.ops, self.live_after[i]):
+                if op.kind in SHIFTS and const_of(defs, op.args[1]) is None:
+                    count = op.args[1]
+                    for v in (after | set(op.results) | {op.args[0]}) - {count}:
+                        forbidden.setdefault(v, set()).add(RCX)
+        return forbidden
 
     def needs_reg(self, v: int) -> bool:
         return v not in self.flags
@@ -1208,6 +1224,8 @@ class Allocation:
 
     def pick(self, v: int, busy: set[int], prefer=()) -> None:
         kind = self.kind(v)
+        if kind == "g":
+            busy = busy | self.forbidden.get(v, set())
         pool = XMM_POOL if kind == "x" else GPR_POOL
         for r in prefer:
             if r in pool and r not in busy:
@@ -1592,13 +1610,17 @@ class Emitter:
                 self.w(f"_PyJitAsm_AluRR(a, _PyJitAlu_{ALU[kd]}, {self.R(res[0])}, {self.R(args[1])});")
             if kd in ("add", "sub", "mul"):
                 self.canonical(res[0])
-        elif kd in ("shl", "ashr", "lshr"):
+        elif kd in SHIFTS:
             n = const_of(self.defs, args[1])
-            if n is None:
-                raise Refused("a shift by a variable count")
+            sh = SHIFTS[kd]
             self.mov(res[0], args[0])
-            sh = {"shl": "SHL", "ashr": "SAR", "lshr": "SHR"}[kd]
-            self.w(f"_PyJitAsm_ShiftRI(a, _PyJitShift_{sh}, {self.R(res[0])}, {n});")
+            if n is None:
+                # The allocation keeps every other value out of rcx here
+                if self.alloc.reg[args[1]] != RCX:
+                    self.w(f"_PyJitAsm_MovRR(a, _PyJitReg_RCX, {self.R(args[1])});")
+                self.w(f"_PyJitAsm_ShiftRCl(a, _PyJitShift_{sh}, {self.R(res[0])});")
+            else:
+                self.w(f"_PyJitAsm_ShiftRI(a, _PyJitShift_{sh}, {self.R(res[0])}, {n});")
             if kd == "shl":
                 self.canonical(res[0])
         elif kd in ("neg", "not"):

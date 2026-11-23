@@ -215,6 +215,10 @@ PyAPI_FUNC(void) _PyJitAsm_ImulRR(_PyJitAsm *a, _PyJitReg dst, _PyJitReg src);
 PyAPI_FUNC(void) _PyJitAsm_ImulRM(_PyJitAsm *a, _PyJitReg dst, _PyJitMem src);
 PyAPI_FUNC(void) _PyJitAsm_ImulRRI(_PyJitAsm *a, _PyJitReg dst, _PyJitReg src, int32_t imm);
 
+/* Signed divide of rdx:rax by src: quotient in rax, remainder in rdx. */
+PyAPI_FUNC(void) _PyJitAsm_Cqo(_PyJitAsm *a);
+PyAPI_FUNC(void) _PyJitAsm_IdivR(_PyJitAsm *a, _PyJitReg src);
+
 PyAPI_FUNC(void) _PyJitAsm_UnaryR(_PyJitAsm *a, _PyJitUnary op, _PyJitReg dst);
 PyAPI_FUNC(void) _PyJitAsm_UnaryM(_PyJitAsm *a, _PyJitUnary op, _PyJitMem dst);
 

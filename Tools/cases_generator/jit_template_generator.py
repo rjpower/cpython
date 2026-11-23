@@ -1055,7 +1055,10 @@ def load_records():
 GPR_NAMES = ["RAX", "RCX", "RDX", "RBX", "RSP", "RBP", "RSI", "RDI",
              "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"]
 GPR_POOL = [0, 1, 2, 6, 7, 8, 9, 10, 11]
+RAX = 0
 RCX = 1
+RDX = 2
+DIVISIONS = {"sdiv": RAX, "srem": RDX}  # the register of each one's result
 SHIFTS = {"shl": "SHL", "ashr": "SAR", "lshr": "SHR"}
 XMM_POOL = list(range(16))
 CMP_CONDS = {"eq": "E", "ne": "NE", "slt": "L", "sle": "LE", "sgt": "G", "sge": "GE",
@@ -1189,10 +1192,14 @@ class Allocation:
     def clobbered(self, defs) -> dict[int, set[int]]:
         """The registers each value may not take because an op that its
         live range spans writes them: a shift by a variable count takes
-        its count in cl"""
+        its count in cl, and a signed division divides rdx:rax by its
+        divisor and leaves the quotient and the remainder in them"""
         forbidden: dict[int, set[int]] = {}
         for i, b in self.g.blocks.items():
             for op, after in zip(b.ops, self.live_after[i]):
+                if op.kind in DIVISIONS:
+                    for v in (after - set(op.results)) | {op.args[1]}:
+                        forbidden.setdefault(v, set()).update((RAX, RDX))
                 if op.kind in SHIFTS and const_of(defs, op.args[1]) is None:
                     count = op.args[1]
                     for v in (after | set(op.results) | {op.args[0]}) - {count}:
@@ -1623,6 +1630,17 @@ class Emitter:
                 self.w(f"_PyJitAsm_ShiftRI(a, _PyJitShift_{sh}, {self.R(res[0])}, {n});")
             if kd == "shl":
                 self.canonical(res[0])
+        elif kd in DIVISIONS:
+            if g.types[res[0]] != "i64":
+                raise Refused(f"a {g.types[res[0]]} division")
+            # The allocation keeps every other value, the divisor included,
+            # out of rax and rdx here
+            if self.alloc.reg[args[0]] != RAX:
+                self.w(f"_PyJitAsm_MovRR(a, _PyJitReg_RAX, {self.R(args[0])});")
+            self.w("_PyJitAsm_Cqo(a);")
+            self.w(f"_PyJitAsm_IdivR(a, {self.R(args[1])});")
+            if self.alloc.reg[res[0]] != DIVISIONS[kd]:
+                self.w(f"_PyJitAsm_MovRR(a, {self.R(res[0])}, {self.gpr(DIVISIONS[kd])});")
         elif kd in ("neg", "not"):
             self.mov(res[0], args[0])
             self.w(f"_PyJitAsm_UnaryR(a, _PyJitUnary_{kd.upper()}, {self.R(res[0])});")

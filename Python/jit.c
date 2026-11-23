@@ -268,7 +268,7 @@ emit_form_word(_PyJitCompiler *c, uint32_t i)
     _PyIRWord w = c->words[i];
     _PyJitLabel changed = _PyJitAsm_NewLabel(a);
     _PyJitLabel called = _PyJitAsm_NewLabel(a);
-#ifdef Py_DEBUG
+#ifndef NDEBUG
     /* base is fixed while a frame runs */
     _PyJitLabel base_ok = _PyJitAsm_NewLabel(a);
     _PyJitAsm_AluRM(a, _PyJitAlu_CMP, R(R15),

@@ -115,6 +115,12 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
             parts.append("_PyIR_H_IR_ONLY")
         if name.endswith("_NOFB"):
             parts.append("_PyIR_H_NOFB")
+        # The baseline JIT's forms of RESUME and JUMP_BACKWARD end in its
+        # warm-up event, which is nothing in compiled code: a unit compiles
+        # them as their base handler (Python/jit.c)
+        if inst is not None and any(isinstance(part, Uop) and part.name == "_JIT_EVENT"
+                                    for part in inst.parts):
+            parts.append("_PyIR_H_JIT_EVENT")
         if name in analysis.pseudos:
             parts.append("_PyIR_H_PSEUDO")
         if name in dispatch and (inst is None or not inst.family) \
@@ -266,7 +272,7 @@ def generate_ir_metadata(
                           ("BINARY_OP", 4), ("IR_ONLY", 8), ("NOFB", 16),
                           ("PSEUDO", 32), ("METADATA", 64), ("DISPATCH", 128),
                           ("PRISTINE", 256), ("ADAPTIVE", 512),
-                          ("SAVES_IP", 1024)):
+                          ("SAVES_IP", 1024), ("JIT_EVENT", 2048)):
             out.emit(f"#define _PyIR_H_{kind} {bit}\n")
         out.emit("\n")
         for ctype, table, values in (

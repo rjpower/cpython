@@ -451,6 +451,58 @@ FLOAT_PAIRS = ([(a, b) for a in FLOATS_[::2] for b in FLOATS_[1::2]] +
                 (1.0, 0.0), (1e308, 1e308), (big(3), 1.0)])
 COMPARE_OPS = ("<", "<=", "==", "!=", ">", ">=")
 ANY = [None, True, False, 0, 1, "s", [], big(4), 2.5]
+INDICES = [0, 1, 2, -1, -3, 3, 2**40, "x", True, big(1)]
+SEQUENCES = [[10, "s", big(2)], [], [None]]
+
+
+class Shape:
+    k = 5
+
+    def __init__(self, q=2):
+        self.p = 1
+        self.q = q
+
+    def m(self):
+        return self
+
+
+class Slots:
+    __slots__ = ("p", "q")
+    k = 6
+
+    def __init__(self, q=2):
+        self.p = 1
+        self.q = q
+
+    def m(self):
+        return self
+
+
+class Other:
+    k = 7
+
+    def __init__(self):
+        self.p = 1
+        self.q = 3
+
+    def m(self):
+        return self
+
+
+def owners():
+    "Instances on and off the paths that the attribute templates take"
+    extra = Shape()
+    extra.z = 1
+    missing = Shape()
+    del missing.q
+    unset = Slots()
+    del unset.q
+    return [Shape(), Shape(big(3)), Shape(2.5), Shape("s"), Slots(), Slots(None), extra,
+            missing, unset, Other(), None, 4]
+
+
+OWNERS = owners()
+TRUTHS = ANY + [[1], -5, big(0), Plain(), "", Shape()]
 BINARY = "def f(a, b):\n    x = 1\n    x = a {op} b\n    return x"
 TEMPS = "def f(a, b):\n    return (a {op} b) {op} (b {op} a)"
 TEMPLATE_CASES = [
@@ -495,6 +547,44 @@ TEMPLATE_CASES = [
      "POP_JUMP_IF_NONE", "A", [(x,) for x in ANY]),
     ("def f(a, b):\n    a = 5\n    return a", (1, 2), "LOAD_SMALL_INT_INLINE", "A",
      [(Plain(),), (None,), (big(5),), (3,)]),
+    *[("def f(a, b):\n    x = 1\n    x = a[b]\n    return x", (seq_type([1, 2, 3]), 1),
+       handler, "ABC", [(Plain(), seq, i) for seq in seqs for i in INDICES])
+      for seq_type, handler, seqs in (
+          (list, "BINARY_OP_SUBSCR_LIST_INT", SEQUENCES + [(1, 2), "ab"]),
+          (tuple, "BINARY_OP_SUBSCR_TUPLE_INT", [tuple(s) for s in SEQUENCES] + [[1, 2]]))],
+    # The list holds inline numbers: the template and the form store the
+    # same value in turn, which releases only inline values
+    ("def f(a, b):\n    a[b] = 5\n    return a", ([1, 2, 3], 1), "STORE_SUBSCR_LIST_INT", "ABC",
+     [(seq, i, v) for seq in ([1, 2, 3], [], (1, 2)) for i in INDICES for v in (7, 2.5)]),
+    ("def f(a, b):\n    x = 1\n    x = a\n    return x", (1, 2), ("LOAD_FAST", 0),
+     "AB", [(old, v) for old in (Plain(), None, 3) for v in ANY]),
+    ("def f(a, b):\n    return [a, b]", (1, 2), ("LOAD_FAST_BORROW", 0), "B",
+     [(v,) for v in ANY]),
+    ("def f(a, b):\n    a, b = b, a\n    return a", (1, 2), "STORE_FAST", "AB",
+     [(v, old) for v in ANY for old in (Plain(), None, 3)]),
+    ("def f(a, b):\n    return [x for x in a]", ([1], 2), "LOAD_FAST_AND_CLEAR", "B",
+     [(), *[(v,) for v in ANY]]),
+    *[("def f(a, b):\n    x = 'abc'\n    y = 2.5\n    z = 10**9\n    return x, y, z", (1, 2),
+       handler, "A", [(Plain(),), (None,), (3,), ()])
+      for handler in ("LOAD_CONST", "LOAD_CONST_INLINE_FLOAT", "LOAD_CONST_INLINE_INT")],
+    *[(f"def f(a, b):\n    x = 1\n    x = a.{name}\n    return x", (cls(), 1), handler,
+       "AB", [(old, o) for old in (Plain(), None) for o in OWNERS])
+      for cls, name, handler in ((Shape, "q", "LOAD_ATTR_SHAPE"), (Slots, "q", "LOAD_ATTR_SLOT"),
+                                 (Shape, "k", "LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES"),
+                                 (Slots, "k", "LOAD_ATTR_NONDESCRIPTOR_NO_DICT"))],
+    *[("def f(a, b):\n    return a.m()", (cls(), 1), handler, "B", [(o,) for o in OWNERS])
+      for cls, handler in ((Shape, "LOAD_ATTR_METHOD_WITH_VALUES"),
+                           (Slots, "LOAD_ATTR_METHOD_NO_DICT"))],
+    # Inline values only, as for the list store
+    *[("def f(a, b):\n    a.p = b\n    return a", (cls(), 1), handler, "AB",
+       [(o, v) for o in OWNERS for v in (7, 2.5)])
+      for cls, handler in ((Shape, "STORE_ATTR_SHAPE"), (Slots, "STORE_ATTR_SLOT"))],
+    *[("G = 5\ndef f(a, b):\n    x = 1\n    x = G + len(a)\n    return x", ([1], 0), handler,
+       "", [()]) for handler in ("LOAD_GLOBAL_MODULE", "LOAD_GLOBAL_BUILTIN")],
+    *[(f"def f(a, b):\n    if {neg}a:\n        return 1\n    return 0", (warm, 0),
+       f"POP_JUMP_IF_{sense}_{kind}", "A", [(x,) for x in TRUTHS])
+      for neg, sense in (("", "FALSE"), ("not ", "TRUE"))
+      for warm, kind in ((5, "INT"), ([], "LIST"), (None, "NONE"), (Shape(), "ALWAYS_TRUE"))],
 ]
 
 
@@ -510,16 +600,22 @@ class TemplateTests(unittest.TestCase):
                 pass
         return f
 
-    def check_same(self, f, index, slots, objects):
-        "The form and the template from the same slots"
+    def check_same(self, word, slots, objects):
+        """The form and the template from the same slots, each on the word
+        as compiled: word(fresh) gives the function and the word's index.
+        A guard that fails counts towards the word's respecialisation, so
+        after a slow path each side runs on a fresh function."""
         results = []
-        # The template first: a failed guard may respecialise the word, and
-        # it then does so through the form's code on both sides
+        fresh = False
         for use_template in (True, False):
+            f, index = word(fresh)
             before = [sys.getrefcount(o) for o in objects]
             next_, slow, exc, out = capi.jit_template_run(f, index, dict(slots), use_template)
             after = [sys.getrefcount(o) for o in objects]
             results.append((next_, slow, exc, out, [b - a for a, b in zip(before, after)]))
+            fresh = slow
+        if fresh:
+            word(True)
         template, form = results
         self.assertEqual(template[0], form[0], "next word")
         self.assertEqual(type(template[2]), type(form[2]))
@@ -533,19 +629,26 @@ class TemplateTests(unittest.TestCase):
 
     def test_templates_against_forms(self):
         for source, warm, handler, fields, cases in TEMPLATE_CASES:
-            f = None
+            handler, nth = handler if isinstance(handler, tuple) else (handler, -1)
+            current = None
+
+            def word(fresh=False):
+                nonlocal current
+                if (fresh or current is None or
+                        capi.get_ir(current[0].__code__, True)[current[1]][0] != handler):
+                    f = self.compile(source, warm)
+                    current = (f, word_of(f, handler, nth)[0])
+                return current
+
+            f, index = word()
+            field_slots = dict(zip("ABCD", capi.get_ir(f.__code__, True)[index][1:]))
             fast = 0
             for case in cases:
-                if f is None or capi.get_ir(f.__code__, True)[index][0] != handler:
-                    # A fresh function for a word that a case respecialised
-                    f = self.compile(source, warm)
-                    index, (_, *word_fields) = word_of(f, handler)
-                    field_slots = dict(zip("ABCD", word_fields))
                 with self.subTest(source=source, handler=handler, case=case):
                     slots = {field_slots[x]: v for x, v in zip(fields, case)}
                     objects = [v for v in case if not isinstance(v, (int, float)) or
                                type(v) is int and not -2**50 <= v < 2**50]
-                    fast += not self.check_same(f, index, slots, objects)[1]
+                    fast += not self.check_same(word, slots, objects)[1]
             with self.subTest(source=source, handler=handler):
                 self.assertGreater(fast, 0, "no case stayed on the template's code")
 

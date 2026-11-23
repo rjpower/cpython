@@ -23,18 +23,6 @@
 
 #define A (cx->a)
 
-/* The word still names the handler that the template was made for:
-   specialisation rewrites a word's handler with its feedback entry, and the
-   template's guards hold only against the entry of its own. */
-void
-_PyJitTemplate_Begin(_PyJitWordCx *cx)
-{
-    _PyJitAsm_MovzxRM16(A, _PyJitReg_RAX,
-                        _PyJitMem_At(_PyJit_WORDS, (int32_t)(cx->index * sizeof(_PyIRWord))));
-    _PyJitAsm_AluRI(A, _PyJitAlu_CMP, _PyJitReg_RAX, (int32_t)(cx->word & 0xFFFF));
-    _PyJitAsm_Jcc(A, _PyJitCond_NE, cx->slow);
-}
-
 void
 _PyJitTemplate_Branch(_PyJitWordCx *cx, int cond)
 {

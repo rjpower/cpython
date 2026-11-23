@@ -84,6 +84,7 @@ _PyJit_IsAvailable(void)
 #else
 
 #include "pycore_jit_asm.h"
+#include "pycore_jit_lower.h"       // _PyJit_Templates
 
 int
 _PyJit_IsAvailable(void)
@@ -303,6 +304,115 @@ emit_form_word(_PyJitCompiler *c, uint32_t i)
     _PyJitAsm_Section(a, section);
 }
 
+/* Word i, a template's, goes on to word dest of its frame by a native jump
+ * (dest > i: the next word or a forward target), with the unit's tests that
+ * emit_continuation() makes.  The tests are in a stub at stub when the word
+ * needs them; the hot jump to dest is the caller's.  A word whose dest has
+ * no block leaves with the transfer. */
+static void
+emit_template_stub(_PyJitCompiler *c, uint32_t i, uint32_t dest, _PyJitLabel stub)
+{
+    _PyJitAsm *a = c->a;
+    _PyJitAsm_Bind(a, stub);
+    _PyJitAsm_Lea(a, R(RDX), WORD_AT(dest));
+    _PyJitAsm_MovRR(a, R(RAX), R(R13));
+    _PyJitAsm_Jmp(a, dest <= i ? c->backedge : c->leave);
+}
+
+/* The tests on the way from word i to dest: a backward jump tests the
+ * invalid byte, the hot path of a word that may run Python tests RETIRED.
+ * A set bit goes to stub. */
+static void
+emit_template_tests(_PyJitCompiler *c, uint32_t i, uint32_t dest, int may_run_python,
+                    _PyJitLabel stub)
+{
+    _PyJitAsm *a = c->a;
+    if (dest <= i) {
+        _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
+        _PyJitAsm_TestRR(a, R(RCX), R(RCX));
+        _PyJitAsm_Jcc(a, _PyJitCond_NE, stub);
+    }
+    else if (may_run_python) {
+        _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
+        _PyJitAsm_TestRI(a, R(RCX), _PyJIT_RETIRED);
+        _PyJitAsm_Jcc(a, _PyJitCond_NE, stub);
+    }
+}
+
+static int
+has_block(_PyJitCompiler *c, uint32_t dest)
+{
+    return dest < c->nwords && c->labels[dest] >= 0;
+}
+
+/* Word i by its handler's inline template (B2): the handler check of a
+ * word that specialisation may rewrite, the template, and the exits.  The
+ * template's hot path falls through to the next word, whose block follows,
+ * or jumps to its static target; its failed guards go to the word as
+ * emit_form_word() runs it, in the cold section.  The hot path does not run
+ * the form, so it may run Python only through the effects that the handler
+ * has besides its deopts. */
+static void
+emit_template_word(_PyJitCompiler *c, uint32_t i, _PyJitTemplate template)
+{
+    _PyJitAsm *a = c->a;
+    _PyIRWord w = c->words[i];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(w));
+    int may_run_python = (fmt->effects & (MAY_RUN_PYTHON & ~_PyIR_DEOPTS)) != 0;
+    uint32_t next = i + (uint32_t)_PyIR_WordLength(w);
+    int target = static_target(c->words, i);
+    _PyJitWordCx cx = {
+        .a = a, .words = c->words, .word = w, .index = i,
+        .target = -1, .slow = _PyJitAsm_NewLabel(a), .leave = c->leave,
+    };
+    _PyJitLabel target_stub = -1;
+    if (target >= 0) {
+        if ((uint32_t)target > i && !may_run_python && has_block(c, (uint32_t)target)) {
+            cx.target = c->labels[target];
+        }
+        else {
+            cx.target = _PyJitAsm_NewLabel(a);
+            target_stub = _PyJitAsm_NewLabel(a);
+        }
+    }
+    if (_PyJit_HandlerMayChange(c->code, (int)i)) {
+        _PyJitAsm_MovzxRM16(a, R(RCX), WORD_AT(i));
+        _PyJitAsm_AluRI(a, _PyJitAlu_CMP, R(RCX), (int32_t)(w & 0xFFFF));
+        _PyJitAsm_Jcc(a, _PyJitCond_NE, cx.slow);
+    }
+    template(&cx);
+    assert(cx.cold_depth == 0);
+    /* The fall-through to the next word, whose block follows */
+    _PyJitLabel next_stub = -1;
+    if (may_run_python || !has_block(c, next)) {
+        next_stub = _PyJitAsm_NewLabel(a);
+        emit_template_tests(c, i, next, may_run_python, next_stub);
+        if (!has_block(c, next)) {
+            _PyJitAsm_Jmp(a, next_stub);
+        }
+    }
+    _PyJitSection section = a->current;
+    _PyJitAsm_Section(a, _PyJitSection_COLD);
+    if (next_stub >= 0) {
+        emit_template_stub(c, i, next, next_stub);
+    }
+    if (target_stub >= 0) {
+        /* The jump to the target, with its tests */
+        _PyJitAsm_Bind(a, cx.target);
+        emit_template_tests(c, i, (uint32_t)target, may_run_python, target_stub);
+        if (has_block(c, (uint32_t)target)) {
+            _PyJitAsm_Jmp(a, c->labels[target]);
+        }
+        else {
+            _PyJitAsm_Jmp(a, target_stub);
+        }
+        emit_template_stub(c, i, (uint32_t)target, target_stub);
+    }
+    _PyJitAsm_Bind(a, cx.slow);
+    emit_form_word(c, i);
+    _PyJitAsm_Section(a, section);
+}
+
 /* The unit's code: the frame, a block per head word and the entry table.
  * Returns the label of the table. */
 static _PyJitLabel
@@ -319,7 +429,13 @@ emit_unit(_PyJitCompiler *c)
     emit_frame(c);
     for (uint32_t i = 0; i < c->nwords; i += _PyIR_WordLength(c->words[i])) {
         _PyJitAsm_Bind(a, c->labels[i]);
-        emit_form_word(c, i);
+        _PyJitTemplate template = _PyJit_Templates[IR_HANDLER(c->words[i])];
+        if (template != NULL) {
+            emit_template_word(c, i, template);
+        }
+        else {
+            emit_form_word(c, i);
+        }
     }
     _PyJitLabel table = _PyJitAsm_NewLabel(a);
     _PyJitAsm_Section(a, _PyJitSection_COLD);

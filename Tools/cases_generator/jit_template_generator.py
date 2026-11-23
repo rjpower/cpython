@@ -281,6 +281,11 @@ def local_test(operand) -> str:
     return f"(ir_word & IR_F_LOCAL_{operand.field})"
 
 
+def unused_output(o) -> bool:
+    "An output array that the uop leaves unwritten (its slots keep NULL)"
+    return bool(o.array) and o.name == "unused"
+
+
 def input_operand(record, k: int):
     for o in record.operands:
         if o.kind == "SLOT" and o.detail == f"input {k}":
@@ -374,11 +379,26 @@ class Builder:
             bmap[b.id] = gb
             for p, gp in zip(b.params, gb.params):
                 lmap[p] = gp
+        outputs = [o for o in u.outputs if not unused_output(o)]
         out_types = [g.types[self.env[o.value]] if o.value in self.env and o.ownership == "THROUGH"
-                     else ir_leaf.VALUE for o in u.outputs]
+                     else ir_leaf.VALUE for o in outputs]
         merge = g.new_block(out_types + ["bool"])
-        cur.term = ("jmp", bmap[body.blocks[0].id].id, [])
         inputs = {i.name: i for i in u.inputs}
+        # The implicit object guards, which the forms put before the body
+        # (IREmitter.emit_object_inputs()): an input that the uop reads as
+        # an object and that may hold an inline value
+        for guard in u.guards:
+            if guard.site is not None:
+                continue
+            if self.effect:
+                raise Refused(f"{u.name}: an exit after an effect")
+            is_object = g.value("bool")
+            self.add(cur, "prim", [is_object], [self.env[inputs[guard.input].value]],
+                     "PyValue_IsPointerSpace")
+            nxt = g.new_block()
+            cur.term = ("br", is_object, nxt.id, self.exit_block("deopt"))
+            cur = nxt
+        cur.term = ("jmp", bmap[body.blocks[0].id].id, [])
         for b in body.blocks:
             gb = bmap[b.id]
             outs: dict[str, int] = {}
@@ -392,7 +412,7 @@ class Builder:
                 gb.term = ("jmp", bmap[term[1]].id, [lmap[a] for a in term[2]])
             elif kind == "next":
                 args = []
-                for o in u.outputs:
+                for o in outputs:
                     if o.array:
                         raise Refused("an array output")
                     if o.name in outs:
@@ -419,12 +439,12 @@ class Builder:
         any_branch = any(b.term[0] == "next" and b.term[1] is not None for b in body.blocks)
         # An output that every path gives the same value is that value: an
         # input passed through or aliased stays the view of its slot
-        incoming = [set() for _ in u.outputs]
+        incoming = [set() for _ in outputs]
         for b in g.blocks.values():
             if b.term is not None and b.term[0] == "jmp" and b.term[1] == merge.id:
                 for s, a in zip(incoming, b.term[2]):
                     s.add(a)
-        for o, p, s in zip(u.outputs, merge.params, incoming):
+        for o, p, s in zip(outputs, merge.params, incoming):
             self.env[o.value] = s.pop() if len(s) == 1 else p
         new_branch = merge.params[-1] if (any_branch or branch is not None) else None
         # The consumed inputs that live in slots are detached after the uop
@@ -508,21 +528,32 @@ class Builder:
     def epilogue(self, cur, branch):
         r = self.record
         old = []
-        for vid, operand in r.results:
-            if operand.kind != "SLOT":
-                raise Refused(f"a result in a {operand.kind}")
-            # The record's operand of the field says what it may name
-            operand = next(o for o in r.operands if o.kind == "SLOT" and o.field == operand.field)
+        values = {v.id: v for v in r.values}
+        for vid, result in r.results:
+            if result.kind != "SLOT":
+                raise Refused(f"a result in a {result.kind}")
+            if unused_output(values[vid]):
+                continue
+            # The record's operand of the field says what it may name.  A
+            # result after the first goes to the slots that follow dst's,
+            # which are temporaries, as is dst for a handler that never
+            # stores to a local.
+            operand = next(o for o in r.operands if o.kind == "SLOT" and o.field == result.field)
+            field = operand.field if result.position == 0 else f"{operand.field}+{result.position}"
+            may_be_local = (result.position == 0 and r.store_mode != "never" and
+                            ("LOCAL" in operand.may_name or "CONST" in operand.may_name))
+            if r.store_mode not in (None, "store", "never"):
+                raise Refused(f"store mode {r.store_mode}")
             v = self.env[vid]
             if v in self.views:
                 src = self.views[v]
                 if src.may_name != TEMP_ONLY:
                     self.add(cur, "take", [], [v], None, local_test(src))
-            if "LOCAL" in operand.may_name or "CONST" in operand.may_name:
+            if may_be_local:
                 o = self.g.value(ir_leaf.VALUE)
-                self.add(cur, "slot_load", [o], [], operand.field, local_test(operand))
+                self.add(cur, "slot_load", [o], [], field, local_test(operand))
                 old.append((o, operand))
-            self.add(cur, "slot_store", [], [v], operand.field)
+            self.add(cur, "slot_store", [], [v], field)
         cur.ops.extend(self.deferred)
         for o, operand in old:
             self.add(cur, "prim", [], [o], "PyValue_XCLOSE", local_test(operand))
@@ -1116,7 +1147,12 @@ class Emitter:
             if b.term[0] in ("br", "jmp") and succ and all(s in cold for s in succ):
                 cold.add(i)
         cold.discard(g.entry)
-        self.order = [i for i in order if i not in cold] + [i for i in order if i in cold]
+        # The end is the last hot block: the template falls through from it
+        # to the code after the template
+        ends = [i for i in order if g.blocks[i].term[0] == "end"]
+        assert len(ends) == 1 and ends[0] not in cold, ends
+        hot = [i for i in order if i not in cold and i != ends[0]] + ends
+        self.order = hot + [i for i in order if i in cold]
         self.cold = cold
 
     def temps(self, i: int, k: int, op: TOp, count: int, kind="g") -> list[int]:
@@ -1128,8 +1164,8 @@ class Emitter:
             raise Refused("out of registers for temporaries")
         return free[:count]
 
-    def live_masks(self, i: int, k: int, op: TOp) -> tuple[int, int]:
-        after = self.alloc.live_after[i][k] - set(op.results)
+    def live_masks(self, i: int, k: int, op: TOp, written=frozenset()) -> tuple[int, int]:
+        after = self.alloc.live_after[i][k] - set(op.results) - set(written)
         g = sum(1 << r for r in self.alloc.regs_of(after, "g"))
         x = sum(1 << r for r in self.alloc.regs_of(after, "x"))
         return g, x
@@ -1154,7 +1190,6 @@ class Emitter:
         uses_raise = any(b.term[0] == "raise" for b in g.blocks.values())
         if uses_raise:
             out_header.append("    _PyJitLabel raise = _PyJitAsm_NewLabel(a);")
-        self.w("_PyJitTemplate_Begin(cx);")
         in_cold = False
         for n, i in enumerate(self.order):
             if i in self.cold and not in_cold:
@@ -1203,7 +1238,6 @@ class Emitter:
         elif t[0] == "end":
             if t[1] is not None:
                 self.w(f"_PyJitTemplate_Branch(cx, {self.cond(t[1])});")
-            self.w("_PyJitAsm_Jmp(a, cx->next);")
         else:
             raise Refused(f"term {t[0]}")
 
@@ -1257,7 +1291,10 @@ class Emitter:
             self.w(f"_PyJitAsm_ShiftRI(a, _PyJitShift_SHR, {self.R(v)}, {n});")
 
     def slot(self, field: str) -> str:
-        return f"_PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_{field}(ir_word)))"
+        "The slot of a field, or of the slot n after a field's for 'F+n'"
+        base, _, n = field.partition("+")
+        index = f"(IR_{base}(ir_word) + {n})" if n else f"IR_{base}(ir_word)"
+        return f"_PyJitMem_At(_PyJit_BASE, (int32_t)(8 * {index}))"
 
     def op(self, i: int, k: int, op: TOp) -> None:
         g = self.g
@@ -1271,7 +1308,9 @@ class Emitter:
         elif kd == "slot_store":
             self.w(f"_PyJitAsm_MovMR(a, {self.slot(op.attr)}, {self.R(args[0])});")
         elif kd == "take":
-            self.lower(i, k, op, "PyValue_DUP", [args[0]], args)
+            # DUP returns its argument: the register is its result, which a
+            # call (a count in a Py_REF_DEBUG build) writes, as it holds it
+            self.lower(i, k, op, "PyValue_DUP", [args[0]], args, written={args[0]})
         elif kd == "const" or kd == "jconst":
             t = g.types[res[0]]
             expr = f"(int64_t)({op.attr})" if kd == "jconst" else const_expr(t, op.attr)
@@ -1423,7 +1462,7 @@ class Emitter:
             self.w(f"_PyJitAsm_ShiftRI(a, _PyJitShift_SHL, {self.R(r)}, {n});")
             self.w(f"_PyJitAsm_ShiftRI(a, _PyJitShift_{sh}, {self.R(r)}, {n});")
 
-    def lower(self, i, k, op, name, regs, argv, aux="NULL") -> None:
+    def lower(self, i, k, op, name, regs, argv, aux="NULL", written=frozenset()) -> None:
         lowering = LOWERINGS[name]
         prim = ir_leaf.PRIMITIVES[name]
         temps = self.temps(i, k, op, lowering.temps, "g")
@@ -1431,7 +1470,7 @@ class Emitter:
         ops = [self.R(r) for r in regs] + [self.R(x) for x in argv] + \
               [self.gpr(t) for t in temps] + [f"_PyJitXmm_{t}" for t in xtemps]
         if lowering.calls:
-            gm, xm = self.live_masks(i, k, op)
+            gm, xm = self.live_masks(i, k, op, written)
             self.w(f"cx->live = {gm:#x}; cx->live_xmm = {xm:#x};")
         call = (f"_PyJitLower_{name}(cx, (const uint8_t[]){{{', '.join(ops) or '0'}}}, {aux})")
         if is_predicate(prim):

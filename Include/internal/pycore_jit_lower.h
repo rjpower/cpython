@@ -44,14 +44,10 @@ typedef struct {
     uint32_t index;             // of the word: this_instr is WORDS + 8*index
     uint32_t live;              // GPRs live across the current op
     uint32_t live_xmm;          // xmm registers live across it
-    _PyJitLabel next;           // the next word
     _PyJitLabel target;         // the word's static target, or -1
-    int target_backward;        // the target is at or before the word
     _PyJitLabel slow;           // the word as B1 runs it: its form's call,
                                 // then the continuation on the transfer
-    _PyJitLabel resume;         // B1's continuation on a transfer in rax:rdx
     _PyJitLabel leave;          // leaves the unit with the transfer in rax:rdx
-    _PyJitLabel backedge;       // a stale unit's backward jump, target in rdx
     int cold_depth;             // nesting of _PyJitLower_ColdBegin()
     _PyJitSection cold_saved;   // the section that the outermost one left
 } _PyJitWordCx;
@@ -125,11 +121,13 @@ PyAPI_FUNC(int) _PyJitLower_ComparisonInt(_PyJitWordCx *cx, const uint8_t *ops, 
 PyAPI_FUNC(int) _PyJitLower_ComparisonDouble(_PyJitWordCx *cx, const uint8_t *ops, int mask);
 
 /* The templates (Python/jit_template.c).  A template emits a word whose
-   handler has one in place of the call of its form: the word's handler
-   check, its uops' code, and on the hot path a jump to cx->next or, when it
-   branches, to cx->target.  A failed guard jumps to cx->slow, which runs
-   the word as B1 does; an error leaves through cx->leave.  For a backward
-   target, cx->target is the compiler's check of the unit before the jump. */
+   handler has one in place of the call of its form: its uops' code, which
+   on the hot path ends by falling through to the code that follows the
+   template (the next word's continuation) or, when it branches, by a jump
+   to cx->target.  A failed guard jumps to cx->slow, which runs the word as
+   B1 does; an error leaves through cx->leave.  The compiler checks the
+   word's handler before the template when specialisation may rewrite it,
+   and puts the unit's tests (pycore_jit.h) behind the exits that need them. */
 typedef void (*_PyJitTemplate)(_PyJitWordCx *cx);
 
 /* By handler; NULL for a handler that keeps its form's call */
@@ -140,7 +138,6 @@ PyAPI_DATA(const _PyJitTemplate) _PyJit_Templates[];
 PyAPI_DATA(const void *const) _PyEval_JitRaiseExit;
 
 /* The pieces of the generated templates */
-PyAPI_FUNC(void) _PyJitTemplate_Begin(_PyJitWordCx *cx);
 PyAPI_FUNC(void) _PyJitTemplate_Branch(_PyJitWordCx *cx, int cond);
 PyAPI_FUNC(void) _PyJitTemplate_Raise(_PyJitWordCx *cx, _PyJitLabel label);
 PyAPI_FUNC(void) _PyJitTemplate_PtrAdd(_PyJitWordCx *cx, _PyJitReg dst, _PyJitReg base,

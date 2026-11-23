@@ -213,8 +213,7 @@ jit_lower(PyObject *module, PyObject *args)
         .index = (uint32_t)(frame->instr_ptr - frame->ir_words),
         .live = _PyJit_GPR_POOL & ~used,
         .live_xmm = _PyJit_XMM_POOL & ~used_xmm,
-        .next = -1, .target = -1, .slow = -1, .resume = -1,
-        .leave = -1, .backedge = -1,
+        .target = -1, .slow = -1, .leave = -1,
     };
     emit_prologue(&a);
     int cond = info->lower(&cx, ops, aux);
@@ -312,9 +311,8 @@ static_target(const _PyIRWord *words, uint32_t i)
 
 /* rax:rdx := {frame, word index}, then leave */
 static void
-emit_transfer(_PyJitAsm *a, _PyJitLabel label, int index, _PyJitLabel leave)
+emit_transfer(_PyJitAsm *a, int index, _PyJitLabel leave)
 {
-    _PyJitAsm_Bind(a, label);
     _PyJitAsm_MovRR(a, _PyJitReg_RAX, _PyJit_FRAME);
     _PyJitAsm_Lea(a, _PyJitReg_RDX, AT(_PyJit_WORDS, (int32_t)(index * sizeof(_PyIRWord))));
     _PyJitAsm_Jmp(a, leave);
@@ -332,9 +330,8 @@ build_unit(_PyInterpreterFrame *frame, uint32_t index, _PyJitTemplate template,
     _PyJitAsm_Init(&a);
     _PyJitWordCx cx = {
         .a = &a, .words = words, .word = w, .index = index,
-        .next = _PyJitAsm_NewLabel(&a), .target = _PyJitAsm_NewLabel(&a),
-        .slow = _PyJitAsm_NewLabel(&a), .resume = -1,
-        .leave = _PyJitAsm_NewLabel(&a), .backedge = -1,
+        .target = _PyJitAsm_NewLabel(&a), .slow = _PyJitAsm_NewLabel(&a),
+        .leave = _PyJitAsm_NewLabel(&a),
     };
     for (int i = 0; i < NSAVED; i++) {
         _PyJitAsm_Push(&a, saved[i]);
@@ -345,11 +342,16 @@ build_unit(_PyInterpreterFrame *frame, uint32_t index, _PyJitTemplate template,
     _PyJitAsm_MovRM(&a, _PyJit_WORDS, AT(_PyJit_FRAME, offsetof(_PyInterpreterFrame, ir_words)));
     _PyJitAsm_MovRM(&a, _PyJit_BASE, AT(_PyJit_FRAME, offsetof(_PyInterpreterFrame, base)));
     _PyJitAsm_MovImm(&a, _PyJit_UNIT, 0);
+    /* The handler check of a word that specialisation may rewrite */
+    _PyJitAsm_MovzxRM16(&a, _PyJitReg_RAX, AT(_PyJit_WORDS, (int32_t)(index * sizeof(_PyIRWord))));
+    _PyJitAsm_AluRI(&a, _PyJitAlu_CMP, _PyJitReg_RAX, (int32_t)(w & 0xFFFF));
+    _PyJitAsm_Jcc(&a, _PyJitCond_NE, cx.slow);
     template(&cx);
     assert(cx.cold_depth == 0);
     int target = static_target(words, index);
-    emit_transfer(&a, cx.next, (int)index + _PyIR_WordLength(w), cx.leave);
-    emit_transfer(&a, cx.target, target >= 0 ? target : (int)index, cx.leave);
+    emit_transfer(&a, (int)index + _PyIR_WordLength(w), cx.leave);
+    _PyJitAsm_Bind(&a, cx.target);
+    emit_transfer(&a, target >= 0 ? target : (int)index, cx.leave);
     _PyJitAsm_Bind(&a, cx.slow);
     _PyJitAsm_MovImm(&a, _PyJitReg_RAX, (int64_t)(uintptr_t)&slow_taken);
     _PyJitAsm_MovMI(&a, AT(_PyJitReg_RAX, 0), 1);

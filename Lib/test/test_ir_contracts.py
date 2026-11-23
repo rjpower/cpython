@@ -4,7 +4,8 @@ A uop of Python/bytecodes.c may declare its contract: modes and facts on its
 stack items, `effects(...)` and `exits(...)`.  Its record then comes from
 the declarations, and the generator verifies its body against them and
 against the rows of Include/internal/pycore_ir_components.h.  The pilot
-declares BINARY_OP's add arms and generic form and UNPACK_SEQUENCE."""
+declares BINARY_OP's add arms and generic form, UNPACK_SEQUENCE and
+LOAD_ATTR_INSTANCE_VALUE."""
 
 import os
 from pathlib import Path
@@ -26,7 +27,9 @@ BYTECODES = Path(test_tools.basepath) / "Python" / "bytecodes.c"
 SLICE = ("_GUARD_TOS_INT", "_GUARD_NOS_INT", "_BINARY_OP_ADD_INT", "_POP_TOP_INT",
          "_BINARY_OP_ADD_FLOAT", "_POP_TOP_NUMBER", "_SPECIALIZE_BINARY_OP", "_BINARY_OP",
          "_GUARD_TOS_TUPLE", "_GUARD_TOS_LIST", "_UNPACK_SEQUENCE_TUPLE",
-         "_UNPACK_SEQUENCE_LIST", "_SPECIALIZE_UNPACK_SEQUENCE", "_UNPACK_SEQUENCE")
+         "_UNPACK_SEQUENCE_LIST", "_SPECIALIZE_UNPACK_SEQUENCE", "_UNPACK_SEQUENCE",
+         "_GUARD_TYPE_VERSION", "_CHECK_MANAGED_OBJECT_HAS_VALUES",
+         "_LOAD_ATTR_INSTANCE_VALUE", "_NULL_SLOT_CONDITIONAL")
 
 
 def setUpModule():
@@ -48,7 +51,8 @@ class SliceTests(unittest.TestCase):
             with self.subTest(uop=name):
                 self.assertIsNotNone(ir_contract.contract_of(analysis.uops[name]))
         for name in ("BINARY_OP", "BINARY_OP_ADD_INT", "BINARY_OP_ADD_FLOAT",
-                     "UNPACK_SEQUENCE", "UNPACK_SEQUENCE_TUPLE", "UNPACK_SEQUENCE_LIST"):
+                     "UNPACK_SEQUENCE", "UNPACK_SEQUENCE_TUPLE", "UNPACK_SEQUENCE_LIST",
+                     "LOAD_ATTR_INSTANCE_VALUE"):
             with self.subTest(macro=name):
                 self.assertIsNotNone(analysis.instructions[name].region)
 
@@ -86,15 +90,26 @@ class SliceTests(unittest.TestCase):
         self.assertEqual([(facts(g), g.reason) for g in unpack.guards],
                          [([], "a free-threaded build's critical section"),
                           (["LENGTH(v0, oparg)"], "")])
+        # Facts read through a path from the operand: its type's version, its
+        # inline values' flag; and the loaded value's, recorded on the local
+        handler = "LOAD_ATTR_INSTANCE_VALUE"
+        self.assertEqual([facts(g) for g in uop_record(handler, "_GUARD_TYPE_VERSION").guards],
+                         [["OBJECT(v0)"], ["TYPE_VERSION(v0, type_version)"]])
+        has_values = uop_record(handler, "_CHECK_MANAGED_OBJECT_HAS_VALUES")
+        self.assertEqual([facts(g) for g in has_values.guards], [["INLINE_VALUES_VALID(v0)"]])
+        load = uop_record(handler, "_LOAD_ATTR_INSTANCE_VALUE")
+        self.assertEqual([facts(g) for g in load.guards], [["NOT_NULL(found)"]])
+        self.assertEqual(load.effects, {READS_HEAP, MAY_RELEASE})
 
     def test_component_checks_are_generated(self):
         checks = "\n".join(ir_contract.component_checks())
         table = ir_contract.rows()
         for row in table.values():
-            if row.kind in ("HELPER", "PRIMITIVE", "DESTRUCTOR"):
+            if row.kind in ("HELPER", "PRIMITIVE", "DESTRUCTOR", "FIELD"):
                 self.assertIn(f'"{row.name}: its C type differs', checks)
         self.assertIn("__typeof__(&_PyValue_BoxInt64), PyValue (*)(int64_t)", checks)
         self.assertIn("__typeof__(&_PyLong_ExactDealloc), void (*)(PyObject *)", checks)
+        self.assertIn("__typeof__(((PyTypeObject *)0)->tp_version_tag), unsigned int", checks)
         generated = (BYTECODES.parent / "generated_ir_cases.c.h").read_text()
         self.assertIn(checks, generated)
 
@@ -411,6 +426,45 @@ class VerifierTests(unittest.TestCase):
                 EXIT_IF(value.bits == 0);
             }
         """, r"is no combination of TEST rows, MEASURE comparisons and CONTEXT rows")
+
+    # Facts through paths, and a stale one
+
+    ATTR = """
+        op(_GUARD_VERSION, (type_version/2, owner: object -- owner: type_version(type_version)))
+            effects(reads) exits(next, miss)
+        {
+            PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
+            EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version);
+        }
+        op(_HAS_VALUES, (owner: object -- owner: has_values)) effects(reads) exits(next, miss) {
+            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+            EXIT_IF(!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid));
+        }
+        op(_CALL, (owner -- owner)) effects(runs_python) exits(next) {
+        }
+        op(_LOAD, (offset/1, owner: consumed has_values -- attr: owned))
+            effects(reads, releases) exits(next, deopt)
+        {
+            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
+            PyValueBorrow found = PyValue_Borrow(*_PyObject_ValueSlot(owner_o, offset));
+            %s
+            attr = PyValue_XDUP(found);
+            DECREF_INPUTS();
+        }
+        macro(OP) = _GUARD_VERSION + _HAS_VALUES + %s_LOAD;
+    """
+
+    def test_facts_through_paths(self):
+        self.verify(self.ATTR % ("DEOPT_IF(PyValue_IsNull(found));", ""))
+
+    def test_heap_fact_dies_at_a_call(self):
+        self.refuses(self.ATTR % ("DEOPT_IF(PyValue_IsNull(found));", "_CALL + "),
+                     r"_LOAD requires has_values of `owner`, which nothing before it "
+                     r"establishes or which an effect since killed")
+
+    def test_dup_of_a_value_that_may_be_null(self):
+        self.refuses(self.ATTR % ("", ""),
+                     r"`attr` may be NULL: PyValue_XDUP of `found`")
 
     # V10, V11: regions and rows
 

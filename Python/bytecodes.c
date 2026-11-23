@@ -2128,7 +2128,9 @@ dummy_func(
         // The NULL of a call's window needs no write: the slot is NULL by the
         // NULL invariant, and the assembler clears the bit in the word
         // (register-ir.md G4).  The stack model keeps the output.
-        leaf op(_NULL_SLOT_CONDITIONAL, ( -- unused[oparg & 1])) {
+        leaf op(_NULL_SLOT_CONDITIONAL, ( -- unused[oparg & 1]))
+            effects() exits(next)
+        {
         }
 
         macro(LOAD_GLOBAL) =
@@ -2739,7 +2741,10 @@ dummy_func(
             unused/8 +
             _LOAD_ATTR;
 
-        leaf op(_GUARD_TYPE_VERSION, (type_version/2, owner -- owner)) {
+        leaf op(_GUARD_TYPE_VERSION,
+                (type_version/2, owner: object -- owner: type_version(type_version)))
+            effects(reads) exits(next, miss)
+        {
             PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
             assert(type_version != 0);
             EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version);
@@ -2755,14 +2760,18 @@ dummy_func(
             }
         }
 
-        leaf op(_CHECK_MANAGED_OBJECT_HAS_VALUES, (owner -- owner)) {
+        leaf op(_CHECK_MANAGED_OBJECT_HAS_VALUES, (owner: object -- owner: has_values))
+            effects(reads) exits(next, miss)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
             assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
             EXIT_IF(!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid));
         }
 
-        leaf op(_LOAD_ATTR_INSTANCE_VALUE, (offset/1, owner -- attr)) {
+        leaf op(_LOAD_ATTR_INSTANCE_VALUE, (offset/1, owner: consumed has_values -- attr: owned))
+            effects(reads, releases) exits(next, deopt)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
             PyValueBorrow found = PyValue_Borrow(*value_ptr);
@@ -2772,7 +2781,7 @@ dummy_func(
             DECREF_INPUTS();
         }
 
-        macro(LOAD_ATTR_INSTANCE_VALUE) =
+        macro(LOAD_ATTR_INSTANCE_VALUE) region(inline) =
             unused/1 + // Skip over the entry distance
             _GUARD_TYPE_VERSION +
             _CHECK_MANAGED_OBJECT_HAS_VALUES +

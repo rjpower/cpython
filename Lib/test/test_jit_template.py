@@ -34,7 +34,8 @@ COUNTS = {"PyValue_DUP", "PyValue_XDUP", "PyValue_CLOSE", "PyValue_XCLOSE",
           "PyValue_CLOSE_SPECIALIZED", "PyValue_FromInt64", "PyValue_FromDouble"}
 # Tested on their own: they read the frame of the test's caller, or write
 FRAME = {"GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "GETLOCAL", "IR_SLOTS"}
-SLOTS = {"_PyObject_ShapeReadDup"}
+SLOTS = {"_PyObject_ShapeReadDup", "_PyDictValues_SetShape",
+         "_PyDictValues_AddToInsertionOrder"}
 APART = COUNTS | FRAME | SLOTS
 HIGH = [R8, R9, R10, R11, RSI, RDI]
 
@@ -373,6 +374,38 @@ class LoweringTests(unittest.TestCase):
                         if owned:
                             self.assertEqual(refcount(obj) - before_count, 1)
                             ctypes.pythonapi.Py_DecRef(ctypes.py_object(obj))
+
+    def test_dict_values_stores(self):
+        "The stores change an instance's values as C's do, run on one object and restored"
+        rng = random.Random(95)
+        holder = Holder()
+        values = capi.leaf_primitive("_PyObject_InlineValues", id(holder))
+        capacity = ctypes.c_uint8.from_address(values).value
+        start = LAYOUT.offsets["PyDictValues.values"]
+        size = start + 9 * capacity
+        saved = ctypes.string_at(values, size)
+
+        def restore():
+            ctypes.memmove(values, saved, size)
+
+        def snapshot():
+            return ctypes.string_at(values, size)
+
+        for name, arg_cases in (("_PyDictValues_SetShape", [0, 1, 7, 255, 0x105, 2**64 - 3]),
+                                ("_PyDictValues_AddToInsertionOrder", [0, 1, 17, 29])):
+            nres, nargs, _, _, kinds, _ = lowerings()[name]
+            for value in arg_cases:
+                restore()
+                capi.leaf_primitive(name, values, value)
+                expected = snapshot()
+                self.assertNotEqual(expected, saved)
+                for ops in assignments(kinds, nres, nargs, rng):
+                    with self.subTest(primitive=name, value=value, ops=ops):
+                        restore()
+                        _, _, before, after = run(name, ops, (values, value), rng)
+                        self.check_registers(name, ops, before, after)
+                        self.assertEqual(snapshot(), expected)
+        restore()
 
 
 if __name__ == "__main__":

@@ -829,6 +829,28 @@ LOWERING(DK_UNICODE_ENTRIES)                    // [dst, keys, t, k]
     return _PyJitCond_NONE;
 }
 
+/* The u8 fields of a dict's values: the insertion order array follows the
+   values, capacity of them. */
+
+LOWERING(_PyDictValues_SetShape)                // [values, shape]
+{
+    _PyJitAsm_MovMR8(A, AT(REG(0), offsetof(PyDictValues, shape)), REG(1));
+    return _PyJitCond_NONE;
+}
+
+LOWERING(_PyDictValues_AddToInsertionOrder)     // [values, ix, array, size]
+{
+    _PyJitReg values = REG(0), ix = REG(1), array = REG(2), size = REG(3);
+    _PyJitAsm_MovzxRM8(A, array, AT(values, offsetof(PyDictValues, capacity)));
+    _PyJitAsm_Lea(A, array, _PyJitMem_Indexed(values, array, 3,
+                                              offsetof(PyDictValues, values)));
+    _PyJitAsm_MovzxRM8(A, size, AT(values, offsetof(PyDictValues, size)));
+    _PyJitAsm_MovMR8(A, _PyJitMem_Indexed(array, size, 0, 0), ix);
+    _PyJitAsm_Lea(A, size, AT(size, 1));
+    _PyJitAsm_MovMR8(A, AT(values, offsetof(PyDictValues, size)), size);
+    return _PyJitCond_NONE;
+}
+
 LOWERING(_PyLong_IsZero)                        // [o, t]
 {
     _PyJitReg t = REG(1);

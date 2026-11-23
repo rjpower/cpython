@@ -91,6 +91,8 @@ LOWERINGS = {
     "_PyObject_ValueSlot": Lowering(),
     "_PyObject_ShapeReadDup": Lowering(1, calls=True),
     "DK_UNICODE_ENTRIES": Lowering(2),
+    "_PyDictValues_AddToInsertionOrder": Lowering(2),
+    "_PyDictValues_SetShape": Lowering(),
     "_PyLong_IsZero": Lowering(1),
     # The frame, in r13, and its slots, in r15
     "GLOBALS": Lowering(),

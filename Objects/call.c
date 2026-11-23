@@ -1259,12 +1259,21 @@ adapter_call(PyThreadState *tstate, PyObject *callable, vectorcallfunc of,
     slots[0] = NULL;
     int was_in_call;
     _PyBorrowMark mark = _PyBorrowCall_Enter(tstate, &was_in_call);
+    /* Only slots[0..total] are written; the callee reads no further. GCC
+       cannot see that and warns for the C-stack array of the small case. */
+#if defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
     PyObject *res = of(callable, vector, nargs | PY_VECTORCALL_ARGUMENTS_OFFSET,
                        kwnames);
+#if defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic pop
+#endif
     _PyBorrowCall_Exit(tstate, mark, was_in_call);
     if (boxed) {
         for (Py_ssize_t i = 0; i < total; i++) {
-            if (PyValue_IsInline(args[i])) {
+            if (PyValue_IsInline(PyValue_Borrow(args[i]))) {
                 Py_DECREF(vector[i]);
             }
         }

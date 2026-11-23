@@ -189,6 +189,15 @@ _PyJitAsm_QuadLabel(_PyJitAsm *a, _PyJitLabel label)
     emit_u64(a, 0);
 }
 
+void
+_PyJitAsm_Data(_PyJitAsm *a, const void *data, size_t size)
+{
+    uint8_t *p = append(a, size);
+    if (p != NULL) {
+        memcpy(p, data, size);
+    }
+}
+
 /* Instruction encoding.
 
    An instruction is: an optional mandatory prefix (66, F2, F3), REX, one to

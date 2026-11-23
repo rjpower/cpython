@@ -10,6 +10,7 @@ extern "C" {
 
 #include "pycore_ir.h"              // _PyCodeExec
 #include "pycore_jit_memory.h"      // _PyJitCode, _PY_JIT_SUPPORTED
+#include "pycore_jit_unwind.h"      // _PyJitUnwindEntry
 
 /* The baseline JIT (pyjit/design/proposals/tiers87.md, Phase 2; Python/jit.c).
 
@@ -69,6 +70,10 @@ typedef struct _PyJitUnit {
     const _PyIRWord *words;         // word 0 of the exec, r14 in the code
 #ifdef _PY_JIT_SUPPORTED
     _PyJitCode code;                // the entry at code.start
+    /* The unit's .eh_frame, in the code block after the code, and its
+     * registrations: backtrace() and gdb walk through the unit
+     * (Python/jit.c, build_unwind) */
+    _PyJitUnwindEntry unwind;
 #endif
     /* An address per word, in the code block; an operand word's traps */
     const void *const *entries;
@@ -137,7 +142,7 @@ PyAPI_FUNC(_PyJitUnit *) _PyJit_Compile(PyCodeObject *code);
 
 /* The function forms of the handlers, ir_handler_forms (Python/ceval.c), as
  * code addresses indexed by handler */
-extern const void *const *_PyEval_HandlerForms(void);
+PyAPI_FUNC(const void *const *) _PyEval_HandlerForms(void);
 
 #else  /* !_PY_JIT_SUPPORTED */
 

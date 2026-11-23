@@ -12,6 +12,7 @@
 #include "pycore_interpframe.h"     // _PyFrame_Exec()
 #include "pycore_ir.h"
 #include "pycore_jit.h"
+#include "pycore_jit_unwind.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
 
 #include <wchar.h>
@@ -83,6 +84,7 @@ _PyJit_IsAvailable(void)
 #else
 
 #include "pycore_jit_asm.h"
+#include "pycore_jit_lower.h"       // _PyJit_Templates
 
 int
 _PyJit_IsAvailable(void)
@@ -127,6 +129,28 @@ static_target(const _PyIRWord *words, uint32_t i)
 #define AT(B, D) _PyJitMem_At(R(B), (D))
 #define WORD_AT(I) AT(R14, (int32_t)((I) * sizeof(_PyIRWord)))
 
+/* The registers that a unit's frame saves below rbp, in push order, and
+ * their DWARF numbers. */
+static const struct {
+    _PyJitReg reg;
+    unsigned dwarf;
+} saved_regs[] = {
+    {R(RBX), DWRF_REG_BX}, {R(R12), DWRF_REG_12}, {R(R13), DWRF_REG_13},
+    {R(R14), DWRF_REG_14}, {R(R15), DWRF_REG_15},
+};
+#define NSAVED ((int)Py_ARRAY_LENGTH(saved_regs))
+
+/* Where the frame's rules change: labels after the instructions of the
+ * prologue and of the shared exit (emit_frame), for build_unwind(). */
+typedef struct {
+    _PyJitLabel pushed_rbp;
+    _PyJitLabel framed;                 // after mov rbp, rsp
+    _PyJitLabel pushed[NSAVED];
+    _PyJitLabel popped[NSAVED];
+    _PyJitLabel popped_rbp;             // at the ret
+    _PyJitLabel returned;               // after the ret
+} _PyJitFrameMarks;
+
 /* The state of one unit's compilation: the words, a label per head word
  * (-1 for the operand words) and the unit's shared exits.  Every piece
  * below may be emitted anywhere in the code, hot or cold: none falls
@@ -142,23 +166,46 @@ typedef struct {
     _PyJitLabel backedge;   // a backward jump of an invalid unit, in its frame
     _PyJitLabel live;       // call the live handler of the word at rdx
     _PyJitLabel trap;       // an operand word's entry, a broken invariant
+    _PyJitFrameMarks marks;
+    _PyJitLabel eh_frame;   // the unwind info, after the code
 } _PyJitCompiler;
+
+/* A label here */
+static _PyJitLabel
+mark(_PyJitAsm *a)
+{
+    _PyJitLabel label = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, label);
+    return label;
+}
 
 /* The entry, the shared exits and the stubs.  Registers at a word boundary:
  * r12 tstate, r13 frame, r14 word 0, r15 frame->base, rbx the unit; rsp is
- * 16-byte aligned. */
+ * 16-byte aligned.
+ *
+ * The frame is the one rule that the unwind info of build_unwind() states:
+ * rbp, set by the prologue, points at the saved rbp, so from there to the
+ * shared exit's pops the CFA is rbp + 16, the return address is at CFA - 8,
+ * and rbp and the registers of saved_regs are at CFA - 16, - 24 and below.
+ * The unit's code may change rsp freely (the stubs push; calls go below it),
+ * but nothing between the prologue and the exit may write rbp or the save
+ * slots, or run the exit's pops and ret anywhere else: the unwinder would
+ * read the wrong frame.  A template that needs rbp, or that leaves the unit
+ * by another path, must change the marks and the rows with it. */
 static void
 emit_frame(_PyJitCompiler *c)
 {
     _PyJitAsm *a = c->a;
+    _PyJitFrameMarks *m = &c->marks;
     /* enter(tstate, frame, address of the word's block) */
     _PyJitAsm_Push(a, R(RBP));
+    m->pushed_rbp = mark(a);
     _PyJitAsm_MovRR(a, R(RBP), R(RSP));
-    _PyJitAsm_Push(a, R(RBX));
-    _PyJitAsm_Push(a, R(R12));
-    _PyJitAsm_Push(a, R(R13));
-    _PyJitAsm_Push(a, R(R14));
-    _PyJitAsm_Push(a, R(R15));
+    m->framed = mark(a);
+    for (int i = 0; i < NSAVED; i++) {
+        _PyJitAsm_Push(a, saved_regs[i].reg);
+        m->pushed[i] = mark(a);
+    }
     _PyJitAsm_AluRI(a, _PyJitAlu_SUB, R(RSP), 8);
     _PyJitAsm_MovRR(a, R(R12), R(RDI));
     _PyJitAsm_MovRR(a, R(R13), R(RSI));
@@ -169,13 +216,14 @@ emit_frame(_PyJitCompiler *c)
 
     _PyJitAsm_Bind(a, c->leave);
     _PyJitAsm_AluRI(a, _PyJitAlu_ADD, R(RSP), 8);
-    _PyJitAsm_Pop(a, R(R15));
-    _PyJitAsm_Pop(a, R(R14));
-    _PyJitAsm_Pop(a, R(R13));
-    _PyJitAsm_Pop(a, R(R12));
-    _PyJitAsm_Pop(a, R(RBX));
+    for (int i = NSAVED - 1; i >= 0; i--) {
+        _PyJitAsm_Pop(a, saved_regs[i].reg);
+        m->popped[i] = mark(a);
+    }
     _PyJitAsm_Pop(a, R(RBP));
+    m->popped_rbp = mark(a);
     _PyJitAsm_Ret(a);
+    m->returned = mark(a);
 
     /* The stubs are cold */
     _PyJitAsm_Section(a, _PyJitSection_COLD);
@@ -208,6 +256,63 @@ emit_frame(_PyJitCompiler *c)
     _PyJitAsm_MovImm(a, R(R8), (int64_t)(uintptr_t)_PyEval_HandlerForms());
     _PyJitAsm_JmpM(a, _PyJitMem_Indexed(R(R8), R(RAX), 3, 0));
     _PyJitAsm_Section(a, _PyJitSection_HOT);
+}
+
+/* Advance the unwind info's location to the offset of label. */
+static void
+advance_to(const _PyJitAsm *a, _PyJitUnwind *u, size_t *at, _PyJitLabel label)
+{
+    size_t offset = _PyJitAsm_LabelOffset(a, label);
+    assert(offset >= *at);
+    _PyJitUnwind_Advance(u, (uint32_t)(offset - *at));
+    *at = offset;
+}
+
+/* The unit's .eh_frame, in buffer, for code_size bytes of code: the frame
+ * of emit_frame, row by row (the rule that holds up to the first row is the
+ * CIE's: CFA = rsp + 8, the return address at CFA - 8).
+ *
+ *   after push rbp          CFA = rsp + 16, rbp at CFA - 16
+ *   after mov rbp, rsp      CFA = rbp + 16: the body's rule, which holds
+ *                           through both sections
+ *   after each push         that register at CFA - 24, - 32, ...
+ *   the shared exit         remember the body's rule, then undo it pop by
+ *                           pop: each register is restored, and after pop
+ *                           rbp the CFA is rsp + 8
+ *   after ret               the body's rule again: the code that follows
+ *                           is the first word's block, then the cold stubs
+ *
+ * Returns the size with libgcc's terminator. */
+static size_t
+build_unwind(const _PyJitCompiler *c, size_t code_size, uint8_t *buffer)
+{
+    const _PyJitAsm *a = c->a;
+    const _PyJitFrameMarks *m = &c->marks;
+    _PyJitUnwind u;
+    size_t at = 0;
+    _PyJitUnwind_Begin(&u, buffer, code_size);
+    advance_to(a, &u, &at, m->pushed_rbp);
+    _PyJitUnwind_DefCfaOffset(&u, 16);
+    _PyJitUnwind_Offset(&u, DWRF_REG_BP, 2);
+    advance_to(a, &u, &at, m->framed);
+    _PyJitUnwind_DefCfaRegister(&u, DWRF_REG_BP);
+    for (int i = 0; i < NSAVED; i++) {
+        advance_to(a, &u, &at, m->pushed[i]);
+        _PyJitUnwind_Offset(&u, saved_regs[i].dwarf, 3 + i);
+    }
+    advance_to(a, &u, &at, c->leave);
+    _PyJitUnwind_RememberState(&u);
+    for (int i = NSAVED - 1; i >= 0; i--) {
+        advance_to(a, &u, &at, m->popped[i]);
+        _PyJitUnwind_Restore(&u, saved_regs[i].dwarf);
+    }
+    advance_to(a, &u, &at, m->popped_rbp);
+    _PyJitUnwind_DefCfa(&u, DWRF_REG_SP, 8);
+    _PyJitUnwind_Restore(&u, DWRF_REG_BP);
+    advance_to(a, &u, &at, m->returned);
+    _PyJitUnwind_RestoreState(&u);
+    _PyJitUnwind_End(&u);
+    return _PyJitUnwind_Terminate(&u);
 }
 
 /* The continuation of word i, with its transfer in rax:rdx: the next word or
@@ -266,7 +371,7 @@ emit_form_word(_PyJitCompiler *c, uint32_t i)
     _PyIRWord w = c->words[i];
     _PyJitLabel changed = _PyJitAsm_NewLabel(a);
     _PyJitLabel called = _PyJitAsm_NewLabel(a);
-#ifdef Py_DEBUG
+#ifndef NDEBUG
     /* base is fixed while a frame runs */
     _PyJitLabel base_ok = _PyJitAsm_NewLabel(a);
     _PyJitAsm_AluRM(a, _PyJitAlu_CMP, R(R15),
@@ -302,8 +407,117 @@ emit_form_word(_PyJitCompiler *c, uint32_t i)
     _PyJitAsm_Section(a, section);
 }
 
-/* The unit's code: the frame, a block per head word and the entry table.
- * Returns the label of the table. */
+/* Word i, a template's, goes on to word dest of its frame by a native jump
+ * (dest > i: the next word or a forward target), with the unit's tests that
+ * emit_continuation() makes.  The tests are in a stub at stub when the word
+ * needs them; the hot jump to dest is the caller's.  A word whose dest has
+ * no block leaves with the transfer. */
+static void
+emit_template_stub(_PyJitCompiler *c, uint32_t i, uint32_t dest, _PyJitLabel stub)
+{
+    _PyJitAsm *a = c->a;
+    _PyJitAsm_Bind(a, stub);
+    _PyJitAsm_Lea(a, R(RDX), WORD_AT(dest));
+    _PyJitAsm_MovRR(a, R(RAX), R(R13));
+    _PyJitAsm_Jmp(a, dest <= i ? c->backedge : c->leave);
+}
+
+/* The tests on the way from word i to dest: a backward jump tests the
+ * invalid byte, the hot path of a word that may run Python tests RETIRED.
+ * A set bit goes to stub. */
+static void
+emit_template_tests(_PyJitCompiler *c, uint32_t i, uint32_t dest, int may_run_python,
+                    _PyJitLabel stub)
+{
+    _PyJitAsm *a = c->a;
+    if (dest <= i) {
+        _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
+        _PyJitAsm_TestRR(a, R(RCX), R(RCX));
+        _PyJitAsm_Jcc(a, _PyJitCond_NE, stub);
+    }
+    else if (may_run_python) {
+        _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
+        _PyJitAsm_TestRI(a, R(RCX), _PyJIT_RETIRED);
+        _PyJitAsm_Jcc(a, _PyJitCond_NE, stub);
+    }
+}
+
+static int
+has_block(_PyJitCompiler *c, uint32_t dest)
+{
+    return dest < c->nwords && c->labels[dest] >= 0;
+}
+
+/* Word i by its handler's inline template (B2): the handler check of a
+ * word that specialisation may rewrite, the template, and the exits.  The
+ * template's hot path falls through to the next word, whose block follows,
+ * or jumps to its static target; its failed guards go to the word as
+ * emit_form_word() runs it, in the cold section.  The hot path does not run
+ * the form, so it may run Python only through the effects that the handler
+ * has besides its deopts. */
+static void
+emit_template_word(_PyJitCompiler *c, uint32_t i, _PyJitTemplate template)
+{
+    _PyJitAsm *a = c->a;
+    _PyIRWord w = c->words[i];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(w));
+    int may_run_python = (fmt->effects & (MAY_RUN_PYTHON & ~_PyIR_DEOPTS)) != 0;
+    uint32_t next = i + (uint32_t)_PyIR_WordLength(w);
+    int target = static_target(c->words, i);
+    _PyJitWordCx cx = {
+        .a = a, .words = c->words, .word = w, .index = i,
+        .target = -1, .slow = _PyJitAsm_NewLabel(a), .leave = c->leave,
+    };
+    _PyJitLabel target_stub = -1;
+    if (target >= 0) {
+        if ((uint32_t)target > i && !may_run_python && has_block(c, (uint32_t)target)) {
+            cx.target = c->labels[target];
+        }
+        else {
+            cx.target = _PyJitAsm_NewLabel(a);
+            target_stub = _PyJitAsm_NewLabel(a);
+        }
+    }
+    if (_PyJit_HandlerMayChange(c->code, (int)i)) {
+        _PyJitAsm_MovzxRM16(a, R(RCX), WORD_AT(i));
+        _PyJitAsm_AluRI(a, _PyJitAlu_CMP, R(RCX), (int32_t)(w & 0xFFFF));
+        _PyJitAsm_Jcc(a, _PyJitCond_NE, cx.slow);
+    }
+    template(&cx);
+    assert(cx.cold_depth == 0);
+    /* The fall-through to the next word, whose block follows */
+    _PyJitLabel next_stub = -1;
+    if (may_run_python || !has_block(c, next)) {
+        next_stub = _PyJitAsm_NewLabel(a);
+        emit_template_tests(c, i, next, may_run_python, next_stub);
+        if (!has_block(c, next)) {
+            _PyJitAsm_Jmp(a, next_stub);
+        }
+    }
+    _PyJitSection section = a->current;
+    _PyJitAsm_Section(a, _PyJitSection_COLD);
+    if (next_stub >= 0) {
+        emit_template_stub(c, i, next, next_stub);
+    }
+    if (target_stub >= 0) {
+        /* The jump to the target, with its tests */
+        _PyJitAsm_Bind(a, cx.target);
+        emit_template_tests(c, i, (uint32_t)target, may_run_python, target_stub);
+        if (has_block(c, (uint32_t)target)) {
+            _PyJitAsm_Jmp(a, c->labels[target]);
+        }
+        else {
+            _PyJitAsm_Jmp(a, target_stub);
+        }
+        emit_template_stub(c, i, (uint32_t)target, target_stub);
+    }
+    _PyJitAsm_Bind(a, cx.slow);
+    emit_form_word(c, i);
+    _PyJitAsm_Section(a, section);
+}
+
+/* The unit's code: the frame, a block per head word and the entry table,
+ * then its unwind info.  Returns the label of the table. */
 static _PyJitLabel
 emit_unit(_PyJitCompiler *c)
 {
@@ -318,7 +532,13 @@ emit_unit(_PyJitCompiler *c)
     emit_frame(c);
     for (uint32_t i = 0; i < c->nwords; i += _PyIR_WordLength(c->words[i])) {
         _PyJitAsm_Bind(a, c->labels[i]);
-        emit_form_word(c, i);
+        _PyJitTemplate template = _PyJit_Templates[IR_HANDLER(c->words[i])];
+        if (template != NULL) {
+            emit_template_word(c, i, template);
+        }
+        else {
+            emit_form_word(c, i);
+        }
     }
     _PyJitLabel table = _PyJitAsm_NewLabel(a);
     _PyJitAsm_Section(a, _PyJitSection_COLD);
@@ -327,12 +547,25 @@ emit_unit(_PyJitCompiler *c)
     for (uint32_t i = 0; i < c->nwords; i++) {
         _PyJitAsm_QuadLabel(a, c->labels[i] >= 0 ? c->labels[i] : c->trap);
     }
+
+    /* The unwind info lies in the unit's block, at the next multiple of 8
+     * after the code, where its FDE expects it. */
+    uint8_t frame[256];
+    size_t code_size = _PyJitAsm_Size(a);
+    _PyJitAsm_Align(a, 8);
+    c->eh_frame = mark(a);
+    assert(_PyJitAsm_LabelOffset(a, c->eh_frame) == _Py_SIZE_ROUND_UP(code_size, 8));
+    size_t frame_size = build_unwind(c, code_size, frame);
+    assert(frame_size <= sizeof(frame));
+    _PyJitAsm_Data(a, frame, frame_size);
     return table;
 }
 
 static void
 free_unit(_PyJitUnit *unit)
 {
+    /* The unwinder reads the frame to forget it: deregister before freeing */
+    _PyJitUnwind_Deregister(&unit->unwind);
     _PyJitMemory_Free(&unit->code);
     PyMem_RawFree(unit);
 }
@@ -369,6 +602,7 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     _PyJitLabel table = emit_unit(&c);
     int placed = _PyJitAsm_Place(&a, &unit->code);
     size_t table_offset = placed < 0 ? 0 : _PyJitAsm_LabelOffset(&a, table);
+    size_t frame_offset = placed < 0 ? 0 : _PyJitAsm_LabelOffset(&a, c.eh_frame);
     _PyJitAsm_Fini(&a);
     PyMem_RawFree(labels);
     exec->jit_compiles++;
@@ -385,18 +619,20 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     unit->entries = (const void *const *)(unit->code.start + table_offset);
     unit->older = exec->jit_unit;
     exec->jit_unit = unit;
+    /* The unit's name for gdb and for the perf map */
+    char name[512] = "py::jit";
+    PyObject *exc = PyErr_GetRaisedException();
+    const char *qualname = PyUnicode_AsUTF8(code->co_qualname);
+    const char *filename = PyUnicode_AsUTF8(code->co_filename);
+    if (qualname != NULL && filename != NULL) {
+        PyOS_snprintf(name, sizeof(name), "py::jit:%s:%s", qualname, filename);
+    }
+    PyErr_Clear();
+    PyErr_SetRaisedException(exc);
+    _PyJitUnwind_Register(&unit->unwind, &unit->code, frame_offset, name);
     if (interp->config.perf_profiling == 1) {
-        PyObject *exc = PyErr_GetRaisedException();
-        const char *qualname = PyUnicode_AsUTF8(code->co_qualname);
-        const char *filename = PyUnicode_AsUTF8(code->co_filename);
-        if (qualname != NULL && filename != NULL) {
-            char name[512];
-            PyOS_snprintf(name, sizeof(name), "py::jit:%s:%s", qualname, filename);
-            PyUnstable_WritePerfMapEntry(unit->code.start,
-                                         (unsigned int)unit->code.size, name);
-        }
-        PyErr_Clear();
-        PyErr_SetRaisedException(exc);
+        PyUnstable_WritePerfMapEntry(unit->code.start,
+                                     (unsigned int)frame_offset, name);
     }
     return unit;
 }

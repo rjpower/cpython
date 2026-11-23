@@ -4,6 +4,7 @@
 #include "pycore_descrobject.h"   // _PyGetSet_ValueRead()
 #include "pycore_dict.h"          // PyDict_GetValue()
 #include "pycore_function.h"      // FUNC_VERSION_FIRST_VALID
+#include "pycore_jit_lower.h"     // _PyEval_JitRaiseExit
 #include "pycore_jit.h"           // _PyJitUnit
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"
@@ -2787,6 +2788,18 @@ _PyEval_HandlerForms(void)
     return (const void *const *)ir_handler_forms;
 }
 
+/* The raise exit of a baseline JIT template (Python/jit_template.c): its
+ * handler's PROCESS_ERROR_AT(RAISE, 0, this_instr), where the template
+ * published this_instr as frame->instr_ptr.  Machine code calls it and
+ * takes the transfer in rax:rdx. */
+static _PyIRTransfer
+jit_raise_exit(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    _PyInstr *this_instr = frame->instr_ptr;
+    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+}
+
+const void *const _PyEval_JitRaiseExit = (const void *)jit_raise_exit;
 /* The unit that frame goes on in, or NULL to go on in the evaluator: its
  * code's newest unit, unless that is invalid, when the warm-up event
  * decides (a stale unit is recompiled; a retired one is not run).  It is

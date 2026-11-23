@@ -8,7 +8,7 @@ import os
 import sys
 import textwrap
 import unittest
-from test.support import script_helper
+from test.support import import_helper, script_helper
 
 try:
     import _testinternalcapi
@@ -623,6 +623,201 @@ class TestHandOff(JitTestCase):
             with self.subTest(mode=mode):
                 self.assertEqual(run(src, "ir_forms", f"jit={mode}").split(),
                                  ["False", "0"])
+
+
+def cfi_rows(program, initial):
+    """Run a CFI program (x86-64: code alignment 1, data alignment -8) from
+    the CIE's initial rule.  Returns [(location, rule)], one per location
+    that the program advances to, from 0; a rule is (CFA register, CFA
+    offset, {register: its offset from the CFA})."""
+    reg, offset, saved = initial
+    saved = dict(saved)
+    stack = []
+    rows = []
+    location = 0
+    i = 0
+
+    def uleb():
+        nonlocal i
+        value = shift = 0
+        while True:
+            byte = program[i]
+            i += 1
+            value |= (byte & 0x7F) << shift
+            shift += 7
+            if not byte & 0x80:
+                return value
+
+    def flush():
+        rows.append((location, (reg, offset, dict(saved))))
+
+    while i < len(program):
+        op = program[i]
+        i += 1
+        if op >> 6 == 1 or op in (0x02, 0x03):          # advance_loc, loc1, loc2
+            flush()
+            if op >> 6 == 1:
+                location += op & 0x3F
+            else:
+                width = op - 1
+                location += int.from_bytes(program[i:i + width], "little")
+                i += width
+        elif op >> 6 == 2:                              # offset
+            saved[op & 0x3F] = -8 * uleb()
+        elif op >> 6 == 3:                              # restore: no rule
+            saved.pop(op & 0x3F, None)
+        elif op == 0x00:                                # nop
+            pass
+        elif op == 0x0A:                                # remember_state
+            stack.append((reg, offset, dict(saved)))
+        elif op == 0x0B:                                # restore_state
+            reg, offset, saved = stack.pop()
+        elif op == 0x0C:                                # def_cfa
+            reg, offset = uleb(), uleb()
+        elif op == 0x0D:                                # def_cfa_register
+            reg = uleb()
+        elif op == 0x0E:                                # def_cfa_offset
+            offset = uleb()
+        else:
+            raise AssertionError(f"unexpected CFA opcode {op:#x}")
+    flush()
+    return rows
+
+
+@unittest.skipUnless(AVAILABLE, "the JIT is not available")
+@unittest.skipIf(_testinternalcapi is None, "requires _testinternalcapi")
+class TestUnwind(unittest.TestCase):
+    """A unit registers unwind info that states its frame exactly."""
+
+    RBX, RSP, RBP, RIP = 3, 7, 6, 16        # DWARF register numbers
+    PUSHED = (3, 12, 13, 14, 15)            # rbx, r12 to r15, in push order
+
+    def unit_of(self, source):
+        namespace = {}
+        exec(textwrap.dedent(source), namespace)
+        function = namespace["f"]
+        self.assertTrue(_testinternalcapi.jit_compile(function.__code__))
+        # The unit lives as long as the function's code, which the caller keeps
+        return function, _testinternalcapi.jit_unit(function.__code__)
+
+    def parse_frame(self, frame, frame_offset):
+        """Check the CIE and the FDE's header; returns the FDE's CFI program"""
+        def u32(offset):
+            return int.from_bytes(frame[offset:offset + 4], "little")
+        cie_size = u32(0)
+        cie = frame[4:4 + cie_size]
+        self.assertEqual(cie[:4], bytes(4))                  # a CIE
+        # version 1, "zR"; code alignment 1, data alignment -8, return
+        # address column 16, one byte of augmentation data (pc-relative,
+        # signed 32 bits); at entry CFA = rsp + 8 and the return address is
+        # at CFA - 8
+        self.assertEqual(cie[4:17], b"\x01zR\x00" + bytes(
+            [1, 0x78, self.RIP, 1, 0x1B, 0x0C, self.RSP, 8, 0x80 | self.RIP]))
+        self.assertEqual(cie[17], 1)
+        fde_start = 4 + cie_size
+        fde_size = u32(fde_start)
+        # The CIE pointer counts back from its own field to the CIE
+        self.assertEqual(u32(fde_start + 4), fde_start + 4)
+        # The pc is relative to its own field: the code is frame_offset
+        # bytes before the frame's start
+        pc_field = fde_start + 8
+        pc = int.from_bytes(frame[pc_field:pc_field + 4], "little", signed=True)
+        self.assertEqual(pc_field + pc, -frame_offset)
+        self.assertEqual(u32(pc_field + 4), frame_offset)    # the code's range
+        self.assertEqual(frame[pc_field + 8], 0)             # no augmentation data
+        self.assertEqual(frame[fde_start + 4 + fde_size:], bytes(4))   # the end
+        return frame[pc_field + 9:fde_start + 4 + fde_size]
+
+    def test_frame_states_the_code_exactly(self):
+        function, unit = self.unit_of("""
+            def f(n, total=0):
+                for i in range(n):
+                    total += i
+                return total
+        """)
+        ctypes = import_helper.import_module("ctypes")
+        start, size = unit["ranges"][0]
+        code = ctypes.string_at(start, size)
+        program = self.parse_frame(unit["eh_frame"], size)
+        entry = (self.RSP, 8, {self.RIP: -8})
+        rows = cfi_rows(program, entry)
+
+        def rule_at(pc):
+            return [rule for at, rule in rows if at <= pc][-1]
+
+        # The prologue, instruction by instruction
+        self.assertEqual(code[0], 0x55)                      # push rbp
+        self.assertEqual(rule_at(0), entry)
+        pushed_rbp = (self.RSP, 16, {self.RIP: -8, self.RBP: -16})
+        self.assertEqual(rule_at(1), pushed_rbp)
+        self.assertEqual(code[1:4], bytes([0x48, 0x89, 0xE5]))   # mov rbp, rsp
+        self.assertEqual(rule_at(3), pushed_rbp)
+        saved = {self.RIP: -8, self.RBP: -16}
+        self.assertEqual(rule_at(4), (self.RBP, 16, saved))
+        pc = 4
+        for n, reg in enumerate(self.PUSHED):                # push rbx, r12..r15
+            self.assertEqual(code[pc:pc + (1 if reg < 8 else 2)],
+                             bytes([0x50 + reg]) if reg < 8
+                             else bytes([0x41, 0x50 + reg - 8]))
+            self.assertEqual(rule_at(pc), (self.RBP, 16, saved))
+            pc += 1 if reg < 8 else 2
+            saved = {**saved, reg: -24 - 8 * n}
+            self.assertEqual(rule_at(pc), (self.RBP, 16, saved))
+        body = (self.RBP, 16, saved)
+        # The body's rule holds to the end of the code except in the shared
+        # exit, where each pop restores a register and pop rbp, at the ret,
+        # leaves the frame
+        leaving = [at for at, (reg, _, _) in rows if reg == self.RSP and at > 4]
+        self.assertEqual(len(leaving), 1)
+        ret = leaving[0]
+        self.assertEqual(code[ret - 1:ret + 1], bytes([0x5D, 0xC3]))   # pop rbp; ret
+        self.assertEqual(rule_at(ret), (self.RSP, 8, {self.RIP: -8}))
+        popped = dict(saved)
+        for reg in reversed(self.PUSHED):
+            del popped[reg]
+            at = [at for at, rule in rows
+                  if pc < at < ret and rule == (self.RBP, 16, popped)]
+            self.assertEqual(len(at), 1, popped)
+        self.assertEqual(rule_at(ret + 1), body)
+        self.assertEqual(rule_at(size - 1), body)
+
+    def test_backtrace_walks_through_units(self):
+        """backtrace(), which has no frame pointers to follow, finds the
+        return addresses of every compiled frame."""
+        out = run("""
+            import _testinternalcapi as t, operator
+            DEPTH = 10
+            def build(n):
+                if n == 0:
+                    return t.gnu_backtrace_unwind()
+                return operator.call(build, n - 1)
+            stack = build(DEPTH)
+            ranges = t.jit_unit(build.__code__)["ranges"]
+            print(sum(any(start <= a < start + size for start, size in ranges)
+                      for a in stack))
+            labels = t.classify_stack_addresses(stack)
+            print(labels.count("python"))
+        """, "jit=always")
+        in_unit, python = map(int, out.split())
+        self.assertGreaterEqual(in_unit, 11)    # build(10) down to build(0)
+        self.assertGreaterEqual(python, 10)
+
+    def test_units_come_and_go(self):
+        """Every unit's frame is deregistered when its code is freed
+        (libgcc aborts on a frame it does not know), including the units a
+        recompile replaced."""
+        out = run("""
+            import _testinternalcapi as t
+            for i in range(300):
+                namespace = {}
+                exec(f"def f(n):\\n    return n + {i}\\n", namespace)
+                f = namespace["f"]
+                t.jit_compile(f.__code__)
+                f(1)
+                del f, namespace
+            print("ok")
+        """, "jit=always")
+        self.assertEqual(out.strip(), "ok")
 
 
 if __name__ == "__main__":

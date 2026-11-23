@@ -3819,13 +3819,21 @@ static PyTypeObject _PyLegacyBranchEventHandler_Type = {
 
 
 /* The word of the branch that reports byte offset `offset` of co_code: the
- * first word of that instruction that is instrumented or is a branch. */
+ * first word of that instruction that is instrumented or is a branch.  A jump
+ * that a fused test and jump word folds has no word of its own: the word that
+ * covers it is the last one that starts before it. */
 static int
 branch_word(PyCodeObject *code, int offset)
 {
     int first = _PyCode_OffsetWord(code, offset);
+    if ((first == (int)code->_co_exec->nwords ||
+         _PyCode_WordOffset(code, first) != offset) && first > 0)
+    {
+        first--;
+    }
+    int start = _PyCode_WordOffset(code, first);
     for (int w = first; w < (int)code->_co_exec->nwords &&
-                        _PyCode_WordOffset(code, w) == offset; w++) {
+                        _PyCode_WordOffset(code, w) == start; w++) {
         int base = base_opcode(code, w);
         if (is_instrumented(word_opcode(exec_words(code), w)) ||
             base == SEND || base == FOR_ITER || IS_CONDITIONAL_JUMP_OPCODE(base)) {

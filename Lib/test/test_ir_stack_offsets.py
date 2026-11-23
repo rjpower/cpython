@@ -42,6 +42,12 @@ def branchy(xs):
     return n
 
 
+def equal(a, b):
+    if a == b:
+        return 1
+    return 2
+
+
 class OffsetTests(unittest.TestCase):
     def test_f_lasti_names_the_call_in_co_code(self):
         def f():
@@ -184,6 +190,32 @@ class OffsetTests(unittest.TestCase):
             with self.subTest(kind=kind):
                 self.assertTrue(found)
                 self.assertLessEqual(found, offsets)
+
+    def test_legacy_branch_event_of_a_fused_test_and_jump(self):
+        # A comparison and its jump are one word, whose branch events belong
+        # to the jump's offset
+        E = sys.monitoring.events
+        tool = sys.monitoring.DEBUGGER_ID
+        code = equal.__code__
+        seen = []
+
+        def branch(code_arg, source, destination):
+            seen.append(source)
+
+        equal(1, 1)
+        sys.monitoring.use_tool_id(tool, "test_ir_stack_offsets")
+        try:
+            sys.monitoring.register_callback(tool, E.BRANCH, branch)
+            sys.monitoring.set_local_events(tool, code, E.BRANCH)
+            equal(1, 1)
+            equal(1, 2)
+        finally:
+            sys.monitoring.set_local_events(tool, code, 0)
+            sys.monitoring.register_callback(tool, E.BRANCH, None)
+            sys.monitoring.free_tool_id(tool)
+        jump = next(instr.offset for instr in dis.get_instructions(code)
+                    if instr.opname == "POP_JUMP_IF_FALSE")
+        self.assertEqual(seen, [jump, jump])
 
     def test_frame_offsets_do_not_need_the_frame_to_have_run_ir(self):
         # A code object that has never run still answers for its offsets

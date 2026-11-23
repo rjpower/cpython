@@ -647,7 +647,7 @@ exit:
     Py_XDECREF(kwdict);
     Py_DECREF(argstuple);
 done:
-    _PyValue_AdapterRelease(args[0], self);
+    _PyValue_AdapterRelease(PyValue_Borrow(args[0]), self);
     return _PyValue_FromObjectResult(result);
 }
 

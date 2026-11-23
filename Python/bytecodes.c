@@ -234,7 +234,7 @@ dummy_func(
             value = PyValue_DUP(value_s);
         }
 
-        pure inst(LOAD_FAST, (-- value)) {
+        leaf pure inst(LOAD_FAST, (-- value)) {
             assert(!PyValue_IsNull(GETLOCAL(oparg)));
             value = PyValue_DUP(GETLOCAL(oparg));
         }
@@ -242,7 +242,7 @@ dummy_func(
         // A temporary owns its value (pyjit/design/pyvalue.md D4): the load
         // takes a count of a mortal object. A load that a fold absorbs
         // reads the local in place instead (Python/regcfg_passes.c).
-        pure inst (LOAD_FAST_BORROW, (-- value)) {
+        leaf pure inst (LOAD_FAST_BORROW, (-- value)) {
             assert(!PyValue_IsNull(GETLOCAL(oparg)));
             value = PyValue_DUP(GETLOCAL(oparg));
         }
@@ -259,7 +259,7 @@ dummy_func(
             LOAD_CONST_INLINE_FLOAT,
         };
 
-        pure inst(LOAD_CONST, (-- value)) {
+        leaf pure inst(LOAD_CONST, (-- value)) {
             value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
         }
 
@@ -285,7 +285,7 @@ dummy_func(
             value = PyValue_FromInlineInt(oparg);
         }
 
-        inst(LOAD_SMALL_INT_INLINE, (-- value)) {
+        leaf inst(LOAD_SMALL_INT_INLINE, (-- value)) {
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyValue_FromInlineInt(oparg);
             ERROR_IF(PyValue_IsNull(value));
@@ -305,17 +305,17 @@ dummy_func(
             STORE_FAST,
         };
 
-        pure inst(POP_TOP, (value --)) {
+        leaf pure inst(POP_TOP, (value --)) {
             PyValue_XCLOSE(value);
         }
 
-        inline_ok op(_POP_TOP_INT, (value --)) {
+        leaf inline_ok op(_POP_TOP_INT, (value --)) {
             assert(PyValue_LongCheckExact(value));
             PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
         }
 
         // An inline float owns no reference (see _POP_TOP_NUMBER).
-        inline_ok op(_POP_TOP_FLOAT, (value --)) {
+        leaf inline_ok op(_POP_TOP_FLOAT, (value --)) {
             assert(PyValue_IsInlineFloat(value));
             DEAD(value);
         }
@@ -324,7 +324,7 @@ dummy_func(
         // reference, so there is nothing to close. The compiler cannot prove
         // this from the float guard's two ranges, and a close here would
         // cost a pointer test and a dealloc call per operand.
-        inline_ok op(_POP_TOP_NUMBER, (value --)) {
+        leaf inline_ok op(_POP_TOP_NUMBER, (value --)) {
             assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
             DEAD(value);
         }
@@ -480,14 +480,14 @@ dummy_func(
 
         macro(TO_BOOL) = unused/1 + _SPECIALIZE_TO_BOOL + unused/2 + _TO_BOOL;
 
-        op(_GUARD_TOS_BOOL, (value -- value)) {
+        leaf op(_GUARD_TOS_BOOL, (value -- value)) {
             EXIT_IF(!PyValue_BoolCheck(value));
             STAT_INC(TO_BOOL, hit);
         }
 
         macro(TO_BOOL_BOOL) = unused/1 + unused/2 + _GUARD_TOS_BOOL;
 
-        inline_ok op(_TO_BOOL_INT, (value -- res, v)) {
+        leaf inline_ok op(_TO_BOOL_INT, (value -- res, v)) {
             STAT_INC(TO_BOOL, hit);
             bool zero;
             if (PyValue_IsInlineInt(value)) {
@@ -504,7 +504,7 @@ dummy_func(
         macro(TO_BOOL_INT) =
             _GUARD_TOS_EXACT_INT + unused/1 + unused/2 + _TO_BOOL_INT + _POP_TOP_INT;
 
-        op(_GUARD_NOS_LIST, (nos, unused -- nos, unused)) {
+        leaf op(_GUARD_NOS_LIST, (nos, unused -- nos, unused)) {
             PyObject *o = PyValue_AsKnownObjectBorrow(nos);
             EXIT_IF(!PyList_CheckExact(o));
         }
@@ -631,22 +631,22 @@ dummy_func(
         // The int guards accept an inline int only: a boxed exact int is
         // outside the inline range (canonical construction). The uops after
         // them read the value with PyValue_InlineInt64() or scaled.
-        inline_ok op(_GUARD_NOS_INT, (left, unused -- left, unused)) {
+        leaf inline_ok op(_GUARD_NOS_INT, (left, unused -- left, unused)) {
             EXIT_IF(!PyValue_IsInlineInt(left));
         }
 
-        inline_ok op(_GUARD_TOS_INT, (value -- value)) {
+        leaf inline_ok op(_GUARD_TOS_INT, (value -- value)) {
             EXIT_IF(!PyValue_IsInlineInt(value));
         }
 
-        inline_ok op(_GUARD_TOS_EXACT_INT, (value -- value)) {
+        leaf inline_ok op(_GUARD_TOS_EXACT_INT, (value -- value)) {
             EXIT_IF(!PyValue_LongCheckExact(value));
         }
 
         // Int arithmetic on inline operands, on scaled values (see
         // _PyValue_IntScaled()): int64 overflow is exactly a result outside
         // the inline range, which is boxed.
-        inline_ok pure op(_BINARY_OP_MULTIPLY_INT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_MULTIPLY_INT, (left, right -- res, l, r)) {
             int64_t a = _PyValue_IntScaled(left);
             int64_t b = PyValue_InlineInt64(right);
             int64_t product;
@@ -665,7 +665,7 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        inline_ok pure op(_BINARY_OP_ADD_INT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_ADD_INT, (left, right -- res, l, r)) {
             int64_t a = _PyValue_IntScaled(left);
             int64_t b = _PyValue_IntScaled(right);
             int64_t sum;
@@ -684,7 +684,7 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        inline_ok pure op(_BINARY_OP_SUBTRACT_INT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_SUBTRACT_INT, (left, right -- res, l, r)) {
             int64_t a = _PyValue_IntScaled(left);
             int64_t b = _PyValue_IntScaled(right);
             int64_t difference;
@@ -717,7 +717,7 @@ dummy_func(
         // exits, and BINARY_OP raises. The operands are int51, so int64
         // division does not trap; only Py_INT_MIN // -1 leaves the inline
         // range, and PyValue_FromInt64() boxes it.
-        inline_ok pure op(_BINARY_OP_FLOOR_DIVIDE_INT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_FLOOR_DIVIDE_INT, (left, right -- res, l, r)) {
             int64_t b = PyValue_InlineInt64(right);
             EXIT_IF(b == 0);
             int64_t a = PyValue_InlineInt64(left);
@@ -857,11 +857,11 @@ dummy_func(
         // The float guards accept an inline float only: a boxed exact float
         // is a NaN (canonical construction). The uops after them read the
         // value with PyValue_InlineFloat().
-        inline_ok op(_GUARD_NOS_FLOAT, (left, unused -- left, unused)) {
+        leaf inline_ok op(_GUARD_NOS_FLOAT, (left, unused -- left, unused)) {
             EXIT_IF(!PyValue_IsInlineFloat(left));
         }
 
-        inline_ok op(_GUARD_TOS_FLOAT, (value -- value)) {
+        leaf inline_ok op(_GUARD_TOS_FLOAT, (value -- value)) {
             EXIT_IF(!PyValue_IsInlineFloat(value));
         }
 
@@ -869,7 +869,7 @@ dummy_func(
         // an inline int (see PyValue_FloatOperandsCheck()). The test and the
         // reads are one step, so that two floats get a path of their own.
         // The result is inline unless it is NaN.
-        inline_ok pure op(_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)) {
             double a, b;
             EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
             STAT_INC(BINARY_OP, hit);
@@ -882,7 +882,7 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        inline_ok pure op(_BINARY_OP_ADD_FLOAT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_ADD_FLOAT, (left, right -- res, l, r)) {
             double a, b;
             EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
             STAT_INC(BINARY_OP, hit);
@@ -895,7 +895,7 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        inline_ok pure op(_BINARY_OP_SUBTRACT_FLOAT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_SUBTRACT_FLOAT, (left, right -- res, l, r)) {
             double a, b;
             EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
             STAT_INC(BINARY_OP, hit);
@@ -909,7 +909,7 @@ dummy_func(
         }
 
         // Division by zero exits, and BINARY_OP raises.
-        inline_ok pure op(_BINARY_OP_TRUEDIV_FLOAT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_TRUEDIV_FLOAT, (left, right -- res, l, r)) {
             double a, b;
             EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
             EXIT_IF(b == 0.0);
@@ -1066,22 +1066,22 @@ dummy_func(
 
         outlined macro(STORE_SLICE) = _SPECIALIZE_STORE_SLICE + _STORE_SLICE;
 
-        inline_ok op(_GUARD_ELEMENT_INT, (value -- value)) {
+        leaf inline_ok op(_GUARD_ELEMENT_INT, (value -- value)) {
             IR_GUARD_INLINE_INT(value);
         }
 
-        inline_ok op(_GUARD_ELEMENT_LIST, (container, unused -- container, unused)) {
+        leaf inline_ok op(_GUARD_ELEMENT_LIST, (container, unused -- container, unused)) {
             IR_GUARD_ELEMENT_TYPE(container, LIST);
         }
 
-        inline_ok op(_GUARD_ELEMENT_TUPLE, (container, unused -- container, unused)) {
+        leaf inline_ok op(_GUARD_ELEMENT_TUPLE, (container, unused -- container, unused)) {
             IR_GUARD_ELEMENT_TYPE(container, TUPLE);
         }
 
         macro(BINARY_OP_SUBSCR_LIST_INT) =
             _GUARD_ELEMENT_INT + _GUARD_ELEMENT_LIST + unused/5 + _BINARY_OP_SUBSCR_LIST_INT + _POP_TOP_INT + POP_TOP;
 
-        inline_ok op(_BINARY_OP_SUBSCR_LIST_INT, (list_st, sub_st -- res, ls, ss)) {
+        leaf inline_ok op(_BINARY_OP_SUBSCR_LIST_INT, (list_st, sub_st -- res, ls, ss)) {
             IR_GUARD_ELEMENT_INDEX(list_st, sub_st, index, FROM_END);
             res = IR_DUP_CANONICAL_ELEMENT(list_st, index);
             assert(!PyValue_IsNull(res));
@@ -1171,7 +1171,7 @@ dummy_func(
             _POP_TOP_INT +
             POP_TOP;
 
-        inline_ok op(_BINARY_OP_SUBSCR_TUPLE_INT, (tuple_st, sub_st -- res, ts, ss)) {
+        leaf inline_ok op(_BINARY_OP_SUBSCR_TUPLE_INT, (tuple_st, sub_st -- res, ts, ss)) {
             IR_GUARD_ELEMENT_INDEX(tuple_st, sub_st, index, NONNEGATIVE);
             res = IR_DUP_CANONICAL_ELEMENT(tuple_st, index);
             STAT_INC(BINARY_OP, hit);
@@ -1304,7 +1304,7 @@ dummy_func(
             _GUARD_TOS_INT + _GUARD_NOS_LIST + unused/1 + _STORE_SUBSCR_LIST_INT + POP_TOP + POP_TOP;
 
         // The index and stored value stay in canonical representation.
-        inline_ok op(_STORE_SUBSCR_LIST_INT, (value, list_st, sub_st -- ls, ss)) {
+        leaf inline_ok op(_STORE_SUBSCR_LIST_INT, (value, list_st, sub_st -- ls, ss)) {
             PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
             assert(PyList_CheckExact(list));
 
@@ -2072,7 +2072,7 @@ dummy_func(
         // The NULL of a call's window needs no write: the slot is NULL by the
         // NULL invariant, and the assembler clears the bit in the word
         // (register-ir.md G4).  The stack model keeps the output.
-        op(_NULL_SLOT_CONDITIONAL, ( -- unused[oparg & 1])) {
+        leaf op(_NULL_SLOT_CONDITIONAL, ( -- unused[oparg & 1])) {
         }
 
         macro(LOAD_GLOBAL) =
@@ -2087,14 +2087,14 @@ dummy_func(
         // names the dict the specialiser saw.  Builtins can be any object,
         // so _LOAD_GLOBAL_BUILTINS still checks the type before it reads
         // the keys.
-        op(_GUARD_GLOBALS_VERSION, (globals_version/1 --)) {
+        leaf op(_GUARD_GLOBALS_VERSION, (globals_version/1 --)) {
             PyDictObject *dict = (PyDictObject *)GLOBALS();
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
             DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version);
             assert(keys->dk_kind == DICT_KEYS_UNICODE);
         }
 
-        op(_LOAD_GLOBAL_MODULE, (globals_version/1, unused/1, index/1 -- res))
+        leaf op(_LOAD_GLOBAL_MODULE, (globals_version/1, unused/1, index/1 -- res))
         {
             PyDictObject *dict = (PyDictObject *)GLOBALS();
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
@@ -2108,7 +2108,7 @@ dummy_func(
             STAT_INC(LOAD_GLOBAL, hit);
         }
 
-        op(_LOAD_GLOBAL_BUILTINS, (builtins_version/1, index/1 -- res))
+        leaf op(_LOAD_GLOBAL_BUILTINS, (builtins_version/1, index/1 -- res))
         {
             PyDictObject *dict = (PyDictObject *)BUILTINS();
             DEOPT_IF(!PyDict_CheckExact(dict));
@@ -2683,7 +2683,7 @@ dummy_func(
             unused/8 +
             _LOAD_ATTR;
 
-        op(_GUARD_TYPE_VERSION, (type_version/2, owner -- owner)) {
+        leaf op(_GUARD_TYPE_VERSION, (type_version/2, owner -- owner)) {
             PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(owner));
             assert(type_version != 0);
             EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version);
@@ -2699,7 +2699,7 @@ dummy_func(
             }
         }
 
-        op(_CHECK_MANAGED_OBJECT_HAS_VALUES, (owner -- owner)) {
+        leaf op(_CHECK_MANAGED_OBJECT_HAS_VALUES, (owner -- owner)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             assert(Py_TYPE(owner_o)->tp_dictoffset < 0);
             assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
@@ -2734,11 +2734,11 @@ dummy_func(
             EXIT_IF(_PyObject_Shape(PyValue_AsKnownObjectBorrow(owner)) != shape);
         }
 
-        op(_GUARD_SHAPE_READ, (type_version/2, shape/0, owner -- owner)) {
+        leaf op(_GUARD_SHAPE_READ, (type_version/2, shape/0, owner -- owner)) {
             IR_GUARD_SHAPE_READ(PyValue_AsKnownObjectBorrow(owner), type_version, shape);
         }
 
-        op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr)) {
+        leaf op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr)) {
             attr = IR_DUP_SHAPE_READ(owner, offset);
             STAT_INC(LOAD_ATTR, hit);
             DECREF_INPUTS();
@@ -2751,11 +2751,11 @@ dummy_func(
             unused/5 +
             _NULL_SLOT_CONDITIONAL;
 
-        op(_GUARD_MODULE_EXACT, (owner -- owner)) {
+        leaf op(_GUARD_MODULE_EXACT, (owner -- owner)) {
             EXIT_IF(!PyModule_CheckExact(PyValue_AsKnownObjectBorrow(owner)));
         }
 
-        op(_LOAD_ATTR_MODULE, (dict_version/2, index/1, owner -- attr)) {
+        leaf op(_LOAD_ATTR_MODULE, (dict_version/2, index/1, owner -- attr)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             PyDictObject *dict = (PyDictObject *)((PyModuleObject *)owner_o)->md_dict;
             assert(dict != NULL);
@@ -3178,7 +3178,7 @@ dummy_func(
         macro(COMPARE_OP_STR) =
             _GUARD_TOS_UNICODE + _GUARD_NOS_UNICODE + unused/1 + _COMPARE_OP_STR + _POP_TOP_UNICODE + _POP_TOP_UNICODE;
 
-        inline_ok op(_COMPARE_OP_FLOAT, (left, right -- res, l, r)) {
+        leaf inline_ok op(_COMPARE_OP_FLOAT, (left, right -- res, l, r)) {
             STAT_INC(COMPARE_OP, hit);
             double dleft = PyValue_InlineFloat(left);
             double dright = PyValue_InlineFloat(right);
@@ -3193,7 +3193,7 @@ dummy_func(
         }
 
         // Similar to COMPARE_OP_FLOAT
-        inline_ok op(_COMPARE_OP_INT, (left, right -- res, l, r)) {
+        leaf inline_ok op(_COMPARE_OP_INT, (left, right -- res, l, r)) {
             STAT_INC(COMPARE_OP, hit);
             // Scaled values compare as the values do.
             int64_t ileft = _PyValue_IntScaled(left);
@@ -3231,7 +3231,7 @@ dummy_func(
 
         // A bit compare: the operands are canonical (see "Value identity"
         // in pycore_value.h).
-        inline_ok op(_IS_OP, (left, right -- b, l, r)) {
+        leaf inline_ok op(_IS_OP, (left, right -- b, l, r)) {
             int res = PyValue_Is(left, right) ^ oparg;
             b = res ? PyValue_True : PyValue_False;
             l = left;
@@ -3321,7 +3321,7 @@ dummy_func(
          * the handlers never poll the eval breaker.  The handlers stand for the
          * compare (their shadow, see ir_metadata_generator.py), and the
          * specialisations are those of the compare, in families of their own. */
-        ir_only op(_JUMP_IF_COND, (cond -- )) {
+        leaf ir_only op(_JUMP_IF_COND, (cond -- )) {
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
             DEAD(cond);
@@ -3511,7 +3511,7 @@ dummy_func(
             }
         }
 
-        tier1 inst(JUMP_FORWARD, (--)) {
+        leaf tier1 inst(JUMP_FORWARD, (--)) {
             JUMPTO(oparg);
         }
 
@@ -3538,7 +3538,7 @@ dummy_func(
             COPY, TO_BOOL, POP_JUMP_IF_TRUE,
         ];
 
-        replaced op(_POP_JUMP_IF_FALSE, (cond -- )) {
+        leaf replaced op(_POP_JUMP_IF_FALSE, (cond -- )) {
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsFalse(cond);
             DEAD(cond);
@@ -3548,7 +3548,7 @@ dummy_func(
             }
         }
 
-        replaced op(_POP_JUMP_IF_TRUE, (cond -- )) {
+        leaf replaced op(_POP_JUMP_IF_TRUE, (cond -- )) {
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsTrue(cond);
             DEAD(cond);
@@ -3558,7 +3558,7 @@ dummy_func(
             }
         }
 
-        op(_IS_NONE, (value -- b)) {
+        leaf op(_IS_NONE, (value -- b)) {
             if (PyValue_IsNone(value)) {
                 b = PyValue_True;
                 DEAD(value);
@@ -4025,7 +4025,7 @@ dummy_func(
             IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
         }
 
-        op(_ITER_CHECK_LIST, (iter, null_or_index -- iter, null_or_index)) {
+        leaf op(_ITER_CHECK_LIST, (iter, null_or_index -- iter, null_or_index)) {
             // GET_ITER always leaves an object, never an inline value.
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
@@ -4036,7 +4036,7 @@ dummy_func(
 #endif
         }
 
-        replaced op(_ITER_JUMP_LIST, (iter, null_or_index -- iter, null_or_index)) {
+        leaf replaced op(_ITER_JUMP_LIST, (iter, null_or_index -- iter, null_or_index)) {
 #ifdef Py_GIL_DISABLED
             // For free-threaded Python, the loop exit can happen at any point during
             // item retrieval, so it doesn't make much sense to check and jump
@@ -4054,7 +4054,7 @@ dummy_func(
 #endif
         }
 
-        replaced op(_ITER_NEXT_LIST, (iter, null_or_index -- iter, null_or_index, next)) {
+        leaf replaced op(_ITER_NEXT_LIST, (iter, null_or_index -- iter, null_or_index, next)) {
             PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
             assert(PyList_CheckExact(list_o));
             next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
@@ -4067,14 +4067,14 @@ dummy_func(
             _ITER_JUMP_LIST +
             _ITER_NEXT_LIST;
 
-        op(_ITER_CHECK_TUPLE, (iter, null_or_index -- iter, null_or_index)) {
+        leaf op(_ITER_CHECK_TUPLE, (iter, null_or_index -- iter, null_or_index)) {
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(Py_TYPE(iter_o) != &PyTuple_Type);
             assert(PyValue_IsTaggedIndex(null_or_index));
         }
 
-        replaced op(_ITER_JUMP_TUPLE, (iter, null_or_index -- iter, null_or_index)) {
+        leaf replaced op(_ITER_JUMP_TUPLE, (iter, null_or_index -- iter, null_or_index)) {
             PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
             (void)tuple_o;
             assert(Py_TYPE(tuple_o) == &PyTuple_Type);
@@ -4086,7 +4086,7 @@ dummy_func(
             }
         }
 
-        op(_ITER_NEXT_TUPLE, (iter, null_or_index -- iter, null_or_index, next)) {
+        leaf op(_ITER_NEXT_TUPLE, (iter, null_or_index -- iter, null_or_index, next)) {
             PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
             assert(Py_TYPE(tuple_o) == &PyTuple_Type);
             uintptr_t i = PyValue_UntagIndex(null_or_index);
@@ -4101,7 +4101,7 @@ dummy_func(
             _ITER_JUMP_TUPLE +
             _ITER_NEXT_TUPLE;
 
-        op(_ITER_CHECK_RANGE, (iter, null_or_index -- iter, null_or_index)) {
+        leaf op(_ITER_CHECK_RANGE, (iter, null_or_index -- iter, null_or_index)) {
             assert(PyValue_IsObject(iter));
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(Py_TYPE(r) != &PyRangeIter_Type);
@@ -4110,7 +4110,7 @@ dummy_func(
 #endif
         }
 
-        replaced op(_ITER_JUMP_RANGE, (iter, null_or_index -- iter, null_or_index)) {
+        leaf replaced op(_ITER_JUMP_RANGE, (iter, null_or_index -- iter, null_or_index)) {
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
             assert(Py_TYPE(r) == &PyRangeIter_Type);
 #ifdef Py_GIL_DISABLED
@@ -4123,7 +4123,7 @@ dummy_func(
             }
         }
 
-        op(_ITER_NEXT_RANGE, (iter, null_or_index -- iter, null_or_index, next)) {
+        leaf op(_ITER_NEXT_RANGE, (iter, null_or_index -- iter, null_or_index, next)) {
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
             assert(Py_TYPE(r) == &PyRangeIter_Type);
 #ifdef Py_GIL_DISABLED
@@ -4261,7 +4261,7 @@ dummy_func(
             DEAD(exc);
         }
 
-        op(_LOAD_ATTR_METHOD_WITH_VALUES, (class_value/4, owner -- attr, self)) {
+        leaf op(_LOAD_ATTR_METHOD_WITH_VALUES, (class_value/4, owner -- attr, self)) {
             assert(oparg & 1);
             /* Cached method object */
             STAT_INC(LOAD_ATTR, hit);
@@ -4280,7 +4280,7 @@ dummy_func(
             unused/2 +
             _LOAD_ATTR_METHOD_WITH_VALUES;
 
-        op(_LOAD_ATTR_METHOD_NO_DICT, (class_value/4, owner -- attr, self)) {
+        leaf op(_LOAD_ATTR_METHOD_NO_DICT, (class_value/4, owner -- attr, self)) {
             assert(oparg & 1);
             assert(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_dictoffset == 0);
             STAT_INC(LOAD_ATTR, hit);
@@ -4339,7 +4339,7 @@ dummy_func(
             unused/2 +
             _LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
 
-        op(_LOAD_ATTR_NONDESCRIPTOR_NO_DICT, (class_value/4, owner -- attr)) {
+        leaf op(_LOAD_ATTR_NONDESCRIPTOR_NO_DICT, (class_value/4, owner -- attr)) {
             assert((oparg & 1) == 0);
             assert(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_dictoffset == 0);
             STAT_INC(LOAD_ATTR, hit);
@@ -5479,7 +5479,7 @@ dummy_func(
             res = PyValue_FromObjectSteal(res_o);
         }
 
-        pure inst(COPY, (bottom, unused[oparg-1] -- bottom, unused[oparg-1], top)) {
+        leaf pure inst(COPY, (bottom, unused[oparg-1] -- bottom, unused[oparg-1], top)) {
             top = PyValue_DUP(bottom);
         }
 

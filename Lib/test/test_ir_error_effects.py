@@ -251,9 +251,11 @@ class ErrorEffectTests(unittest.TestCase):
                     self.assertIsNone(ir_generator.operand_error_sources(altered.instructions[name]))
 
             before = "value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));"
+            # The changed body leaves the leaf subset (ir_leaf.py)
             changed.write_text(text.replace(
                 before, "if (oparg) { ERROR_NO_POP(); } " + before +
-                " next_instr = this_instr;", 1))
+                " next_instr = this_instr;", 1).replace(
+                "leaf pure inst(LOAD_CONST,", "pure inst(LOAD_CONST,", 1))
             altered = analyzer.analyze_files([str(changed)])
             instruction = altered.instructions["LOAD_CONST"]
             self.assertIsNotNone(ir_generator.operand_error_sources(instruction))

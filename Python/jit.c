@@ -176,6 +176,9 @@ emit_frame(_PyJitCompiler *c)
     _PyJitAsm_Pop(a, R(RBP));
     _PyJitAsm_Ret(a);
 
+    /* The stubs are cold */
+    _PyJitAsm_Section(a, _PyJitSection_COLD);
+
     /* A warm-up event, which may recompile; then leave with the transfer,
      * whose frame is the unit's. */
     _PyJitAsm_Bind(a, c->backedge);
@@ -203,6 +206,7 @@ emit_frame(_PyJitCompiler *c)
     _PyJitAsm_MovRR(a, R(RSI), R(R13));
     _PyJitAsm_MovImm(a, R(R8), (int64_t)(uintptr_t)_PyEval_HandlerForms());
     _PyJitAsm_JmpM(a, _PyJitMem_Indexed(R(R8), R(RAX), 3, 0));
+    _PyJitAsm_Section(a, _PyJitSection_HOT);
 }
 
 /* The continuation of word i, with its transfer in rax:rdx: the next word or
@@ -280,11 +284,14 @@ emit_form_word(_PyJitCompiler *c, uint32_t i)
     _PyJitAsm_Bind(a, called);
     emit_continuation(c, i);
 
+    _PyJitSection section = a->current;
+    _PyJitAsm_Section(a, _PyJitSection_COLD);
     _PyJitAsm_Bind(a, changed);
     _PyJitAsm_Lea(a, R(RDX), WORD_AT(i));
     _PyJitAsm_LeaLabel(a, R(RAX), c->live);
     _PyJitAsm_CallR(a, R(RAX));
     _PyJitAsm_Jmp(a, called);
+    _PyJitAsm_Section(a, section);
 }
 
 /* The unit's code: the frame, a block per head word and the entry table.
@@ -306,6 +313,7 @@ emit_unit(_PyJitCompiler *c)
         emit_form_word(c, i);
     }
     _PyJitLabel table = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Section(a, _PyJitSection_COLD);
     _PyJitAsm_Align(a, 8);
     _PyJitAsm_Bind(a, table);
     for (uint32_t i = 0; i < c->nwords; i++) {

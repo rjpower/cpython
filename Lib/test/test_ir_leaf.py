@@ -140,7 +140,7 @@ for args in list(CASES["DK_UNICODE_ENTRIES"]):
 
 # Tested apart: they change memory, need the caller's frame, or allocate
 SEPARATE = {"PyValue_DUP", "PyValue_XDUP", "PyValue_CLOSE", "PyValue_XCLOSE",
-            "PyValue_CLOSE_SPECIALIZED", "shape_read_dup",
+            "PyValue_CLOSE_SPECIALIZED", "_PyObject_ShapeReadDup",
             "_PyDictValues_AddToInsertionOrder", "_PyDictValues_SetShape",
             "GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "GETLOCAL", "IR_SLOTS",
             "PyValue_FromInt64", "PyValue_FromDouble"}
@@ -282,8 +282,8 @@ class PrimitiveTests(unittest.TestCase):
         first = values + LAYOUT.offsets["PyDictValues.values"] - id(holder)
         for k, attr in enumerate(("a", "b")):
             offset = first + k * LAYOUT.sizes["PyValue"]
-            expected, cx = run_spec(ir_leaf.PRIMITIVES["shape_read_dup"], (id(holder), offset))
-            got = capi.leaf_primitive("shape_read_dup", id(holder), offset)
+            expected, cx = run_spec(ir_leaf.PRIMITIVES["_PyObject_ShapeReadDup"], (id(holder), offset))
+            got = capi.leaf_primitive("_PyObject_ShapeReadDup", id(holder), offset)
             self.assertEqual(got, expected)
             obj = getattr(holder, attr)
             if got & ~TAG == id(obj) and not got & TAG:
@@ -399,18 +399,6 @@ class CheckerTests(unittest.TestCase):
 
 BYTECODES = Path(test_tools.basepath) / "Python" / "bytecodes.c"
 
-# Where the leaf body's effects and CR's (ir_records.infer_effects) differ,
-# and which side is right
-EFFECT_DIFFERENCES = {
-    # CR counts _PyValueGuarded_Load as a heap read (ir_records.READER_CALLS),
-    # and the asserts' reads.  It is a change of type of the feedback word,
-    # an operand, and the release body reads nothing else: the leaf is right.
-    **{name: (frozenset(), frozenset({"READS_HEAP"})) for name in (
-        "_LOAD_ATTR_CLASS", "_LOAD_ATTR_METHOD_LAZY_DICT",
-        "_LOAD_ATTR_METHOD_NO_DICT", "_LOAD_ATTR_METHOD_WITH_VALUES",
-        "_LOAD_ATTR_NONDESCRIPTOR_NO_DICT", "_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES")},
-}
-
 
 class RecordTests(unittest.TestCase):
     @classmethod
@@ -436,12 +424,9 @@ class RecordTests(unittest.TestCase):
                 self.assertIsNotNone(uop.leaf, uop.name)
 
     def test_effects_agree_with_the_records(self):
-        differences = {}
         for uop in self.record_uops():
-            if uop.leaf is not None and uop.leaf.effects != uop.effects:
-                differences[uop.name] = (uop.leaf.effects - uop.effects,
-                                         uop.effects - uop.leaf.effects)
-        self.assertEqual(differences, EFFECT_DIFFERENCES)
+            if uop.leaf is not None:
+                self.assertEqual(uop.leaf.effects, uop.effects, uop.name)
 
     def test_leaf_helpers_are_declared(self):
         for uop in self.record_uops():

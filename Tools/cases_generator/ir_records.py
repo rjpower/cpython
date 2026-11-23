@@ -1120,7 +1120,7 @@ PURE_CALLS = re.compile(
     r"Py_ARRAY_LENGTH|_PyIR_AdoptTemp|GETLOCAL|Py_FatalError|PyValue_RefcountOnObject|"
     r"_PyFrame_AssertTemporariesClear|_PyManagedDictPointer_IsValues|doesnt_escape|"
     r"(advance|restart)_backoff_counter|_Py_GatherStats_GetIter|native_vector_capture|"
-    r"_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY|_PyObject_ValueSlot")
+    r"_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY|_PyObject_ValueSlot|_PyValueGuarded_Load")
 
 # Non-escaping calls that read the heap and change nothing
 READER_CALLS = re.compile(
@@ -1132,7 +1132,7 @@ READER_CALLS = re.compile(
     r"GetManagedDict|IsUniquelyReferenced|GC_IS_\w+|GC_MAY_BE_TRACKED)|_PyCode_\w+|"
     r"_?PyType_(HasFeature|IteratesByIndex|VALUE_SLOT|FastSubclass)|PyType_FastSubclass|"
     r"_PyErr_Occurred|_PyErr_ExceptionMatches|_PyInterpreterState_GET|_PyThreadState_HasStackSpace|"
-    r"PyExceptionInstance_Class|PyException_Get\w+|_PyCell_GetValue|_PyValueGuarded_Load|"
+    r"PyExceptionInstance_Class|PyException_Get\w+|_PyCell_GetValue|"
     r"_PyFb_\w+|_PyDataStack_Slots|_PyGen_GetGeneratorFromFrame|_PyClassMethod_GetFunc|"
     r"backoff_counter_triggers|_PyEval_GeneratorReturnTarget|_PyUnicode_Equal|gen_may_claim|"
     r"PyCFunction_GET_\w+|PyFunction_GET_\w+|_Py_ReachedRecursionLimit|PyUnicode_GET_LENGTH|"

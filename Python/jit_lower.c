@@ -9,6 +9,7 @@
 #include "Python.h"
 #include "pycore_ceval.h"           // _PY_EVAL_EVENTS_MASK
 #include "pycore_code.h"            // COMPARISON_LESS_THAN
+#include "pycore_dict.h"            // PyDictKeysObject
 #include "pycore_floatobject.h"     // _PyFloat_ExactDealloc()
 #include "pycore_frame.h"           // _PyInterpreterFrame
 #include "pycore_jit_lower.h"
@@ -689,6 +690,216 @@ LOWERING(PyValue_CLOSE_SPECIALIZED)
     close_value(cx, REG(0), REG(1), 0,
                 is_long ? (const void *)destroy_long : (const void *)destroy_float);
 #endif
+    return _PyJitCond_NONE;
+}
+
+/* Objects and types.  Operands are in the order of pycore_jit_lower.h; a
+   pointer is the object's address.  The primitives that the generator
+   reaches only through a guard (the C definitions assert it) do not repeat
+   the test. */
+
+static_assert(sizeof(PyValue) == 8, "the element scale of the lists and tuples");
+
+LOWERING(Py_TYPE)                               // [dst, o]
+{
+    _PyJitAsm_MovRM(A, REG(0), AT(REG(1), offsetof(PyObject, ob_type)));
+    return _PyJitCond_NONE;
+}
+
+/* Flags: the type of o is tp (E), through t */
+static _PyJitCond
+type_is_exactly(_PyJitWordCx *cx, _PyJitReg o, _PyJitReg t, PyTypeObject *tp)
+{
+    _PyJitAsm_MovImm(A, t, (int64_t)(uintptr_t)tp);
+    _PyJitAsm_AluMR(A, _PyJitAlu_CMP, AT(o, offsetof(PyObject, ob_type)), t);
+    return _PyJitCond_E;
+}
+
+#define CHECK_EXACT(NAME, TYPE) \
+    LOWERING(NAME)                                      /* [o, t] */ \
+    { \
+        return type_is_exactly(cx, REG(0), REG(1), &TYPE); \
+    }
+
+CHECK_EXACT(PyList_CheckExact, PyList_Type)
+CHECK_EXACT(PyTuple_CheckExact, PyTuple_Type)
+CHECK_EXACT(PyDict_CheckExact, PyDict_Type)
+CHECK_EXACT(PyModule_CheckExact, PyModule_Type)
+CHECK_EXACT(PyUnicode_CheckExact, PyUnicode_Type)
+CHECK_EXACT(PyFunction_Check, PyFunction_Type)
+
+LOWERING(PyList_GET_SIZE)                       // [dst, o]
+{
+    _PyJitAsm_MovRM(A, REG(0), AT(REG(1), offsetof(PyVarObject, ob_size)));
+    return _PyJitCond_NONE;
+}
+
+LOWERING(PyTuple_GET_SIZE)                      // [dst, o]
+{
+    _PyJitAsm_MovRM(A, REG(0), AT(REG(1), offsetof(PyVarObject, ob_size)));
+    return _PyJitCond_NONE;
+}
+
+LOWERING(_PyList_ITEMS)                         // [dst, o]
+{
+    _PyJitAsm_MovRM(A, REG(0), AT(REG(1), offsetof(PyListObject, ob_item)));
+    return _PyJitCond_NONE;
+}
+
+/* The items array is loaded before the index is used, and the result may
+   share the register of either argument, so the array goes through t. */
+LOWERING(PyList_GET_VALUE)                      // [dst, o, i, t]
+{
+    _PyJitAsm_MovRM(A, REG(3), AT(REG(1), offsetof(PyListObject, ob_item)));
+    _PyJitAsm_MovRM(A, REG(0), _PyJitMem_Indexed(REG(3), REG(2), 3, 0));
+    return _PyJitCond_NONE;
+}
+
+LOWERING(PyTuple_GET_VALUE)                     // [dst, o, i]
+{
+    _PyJitAsm_MovRM(A, REG(0), _PyJitMem_Indexed(REG(1), REG(2), 3,
+                                                 offsetof(PyTupleObject, ob_item)));
+    return _PyJitCond_NONE;
+}
+
+/* t := the offset of o's inline values from o: its type's basic size */
+static void
+inline_values_offset(_PyJitWordCx *cx, _PyJitReg o, _PyJitReg t)
+{
+    _PyJitAsm_MovRM(A, t, AT(o, offsetof(PyObject, ob_type)));
+    _PyJitAsm_MovRM(A, t, AT(t, offsetof(PyTypeObject, tp_basicsize)));
+}
+
+LOWERING(_PyObject_InlineValues)                // [dst, o, t]
+{
+    inline_values_offset(cx, REG(1), REG(2));
+    _PyJitAsm_Lea(A, REG(0), _PyJitMem_Indexed(REG(1), REG(2), 0, 0));
+    return _PyJitCond_NONE;
+}
+
+LOWERING(_PyObject_Shape)                       // [dst, o, t]
+{
+    inline_values_offset(cx, REG(1), REG(2));
+    _PyJitAsm_MovzxRM8(A, REG(0), _PyJitMem_Indexed(REG(1), REG(2), 0,
+                                                    offsetof(PyDictValues, shape)));
+    return _PyJitCond_NONE;
+}
+
+LOWERING(_PyObject_ValueSlot)                   // [dst, o, offset]
+{
+    _PyJitAsm_Lea(A, REG(0), _PyJitMem_Indexed(REG(1), REG(2), 0, 0));
+    return _PyJitCond_NONE;
+}
+
+/* The slot is filled (the type and shape guards prove it), so the count is
+   PyValue_DUP()'s, without the test for NULL. */
+LOWERING(_PyObject_ShapeReadDup)                // [dst, o, offset, t]
+{
+    _PyJitReg dst = REG(0);
+    _PyJitAsm_MovRM(A, dst, _PyJitMem_Indexed(REG(1), REG(2), 0, 0));
+#ifdef Py_REF_DEBUG
+    ref_call(cx, (const void *)ref_dup, 0, dst, _PyJitArg_GPR(dst));
+#else
+    dup_value(cx, dst, dst, REG(3), 0);
+#endif
+    return _PyJitCond_NONE;
+}
+
+/* 1 << n for the index sizes of a dict's keys: the shift count would have
+   to be in cl, which a lowering may not take. */
+static const uint64_t pow2[64] = {
+    0x1, 0x2, 0x4, 0x8,
+    0x10, 0x20, 0x40, 0x80,
+    0x100, 0x200, 0x400, 0x800,
+    0x1000, 0x2000, 0x4000, 0x8000,
+    0x10000, 0x20000, 0x40000, 0x80000,
+    0x100000, 0x200000, 0x400000, 0x800000,
+    0x1000000, 0x2000000, 0x4000000, 0x8000000,
+    0x10000000, 0x20000000, 0x40000000, 0x80000000,
+    0x100000000, 0x200000000, 0x400000000, 0x800000000,
+    0x1000000000, 0x2000000000, 0x4000000000, 0x8000000000,
+    0x10000000000, 0x20000000000, 0x40000000000, 0x80000000000,
+    0x100000000000, 0x200000000000, 0x400000000000, 0x800000000000,
+    0x1000000000000, 0x2000000000000, 0x4000000000000, 0x8000000000000,
+    0x10000000000000, 0x20000000000000, 0x40000000000000, 0x80000000000000,
+    0x100000000000000, 0x200000000000000, 0x400000000000000, 0x800000000000000,
+    0x1000000000000000, 0x2000000000000000, 0x4000000000000000, 0x8000000000000000,
+};
+
+LOWERING(DK_UNICODE_ENTRIES)                    // [dst, keys, t, k]
+{
+    _PyJitReg keys = REG(1), t = REG(2), k = REG(3);
+    _PyJitAsm_MovzxRM8(A, k, AT(keys, offsetof(PyDictKeysObject, dk_log2_index_bytes)));
+    _PyJitAsm_MovImm(A, t, (int64_t)(uintptr_t)pow2);
+    _PyJitAsm_MovRM(A, t, _PyJitMem_Indexed(t, k, 3, 0));
+    _PyJitAsm_Lea(A, REG(0), _PyJitMem_Indexed(keys, t, 0,
+                                               offsetof(PyDictKeysObject, dk_indices)));
+    return _PyJitCond_NONE;
+}
+
+/* The u8 fields of a dict's values: the insertion order array follows the
+   values, capacity of them. */
+
+LOWERING(_PyDictValues_SetShape)                // [values, shape]
+{
+    _PyJitAsm_MovMR8(A, AT(REG(0), offsetof(PyDictValues, shape)), REG(1));
+    return _PyJitCond_NONE;
+}
+
+LOWERING(_PyDictValues_AddToInsertionOrder)     // [values, ix, array, size]
+{
+    _PyJitReg values = REG(0), ix = REG(1), array = REG(2), size = REG(3);
+    _PyJitAsm_MovzxRM8(A, array, AT(values, offsetof(PyDictValues, capacity)));
+    _PyJitAsm_Lea(A, array, _PyJitMem_Indexed(values, array, 3,
+                                              offsetof(PyDictValues, values)));
+    _PyJitAsm_MovzxRM8(A, size, AT(values, offsetof(PyDictValues, size)));
+    _PyJitAsm_MovMR8(A, _PyJitMem_Indexed(array, size, 0, 0), ix);
+    _PyJitAsm_Lea(A, size, AT(size, 1));
+    _PyJitAsm_MovMR8(A, AT(values, offsetof(PyDictValues, size)), size);
+    return _PyJitCond_NONE;
+}
+
+LOWERING(_PyLong_IsZero)                        // [o, t]
+{
+    _PyJitReg t = REG(1);
+    _PyJitAsm_MovRM(A, t, AT(REG(0), offsetof(PyLongObject, long_value.lv_tag)));
+    _PyJitAsm_AluRI(A, _PyJitAlu_AND, t, SIGN_MASK);
+    _PyJitAsm_AluRI(A, _PyJitAlu_CMP, t, SIGN_ZERO);
+    return _PyJitCond_E;
+}
+
+/* The frame, in r13; its slots, in r15 (pycore_jit_lower.h) */
+
+LOWERING(GLOBALS)                               // [dst]
+{
+    _PyJitAsm_MovRM(A, REG(0), AT(_PyJit_FRAME, offsetof(_PyInterpreterFrame, f_globals)));
+    return _PyJitCond_NONE;
+}
+
+LOWERING(BUILTINS)                              // [dst]
+{
+    _PyJitAsm_MovRM(A, REG(0), AT(_PyJit_FRAME, offsetof(_PyInterpreterFrame, f_builtins)));
+    return _PyJitCond_NONE;
+}
+
+LOWERING(FRAME_CO_CONSTS)                       // [dst]
+{
+    _PyJitReg dst = REG(0);
+    _PyJitAsm_MovRM(A, dst, AT(_PyJit_FRAME, offsetof(_PyInterpreterFrame, f_executable)));
+    _PyJitAsm_MovRM(A, dst, AT(dst, offsetof(PyCodeObject, co_consts)));
+    return _PyJitCond_NONE;
+}
+
+LOWERING(IR_SLOTS)                              // [dst]
+{
+    _PyJitAsm_MovRR(A, REG(0), _PyJit_BASE);
+    return _PyJitCond_NONE;
+}
+
+/* The index is an i32 held sign-extended in its register */
+LOWERING(GETLOCAL)                              // [dst, i]
+{
+    _PyJitAsm_MovRM(A, REG(0), _PyJitMem_Indexed(_PyJit_BASE, REG(1), 3, 0));
     return _PyJitCond_NONE;
 }
 

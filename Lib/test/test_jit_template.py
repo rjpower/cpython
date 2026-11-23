@@ -24,7 +24,7 @@ with test_tools.imports_under_tool("cases_generator"):
 
 from test.test_ir_leaf import (
     FLOATS, INDEX_WORDS, INLINE_WORDS, NAN, OBJECTS, SEPARATE, TAG, WIDE_INTS,
-    cases, context, refcount, same, word,
+    cases, context, refcount, same, word, Holder, LAYOUT,
 )
 
 MASK = 2**64 - 1
@@ -36,6 +36,12 @@ FIXED = [RBX, R12, R13, R14, R15]
 # Tested on their own below: they change counts or allocate
 COUNTS = {"PyValue_DUP", "PyValue_XDUP", "PyValue_CLOSE", "PyValue_XCLOSE",
           "PyValue_CLOSE_SPECIALIZED", "PyValue_FromInt64", "PyValue_FromDouble"}
+# Tested on their own: they read the frame of the test's caller, or write
+FRAME = {"GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "GETLOCAL", "IR_SLOTS"}
+SLOTS = {"_PyObject_ShapeReadDup", "_PyDictValues_SetShape",
+         "_PyDictValues_AddToInsertionOrder"}
+APART = COUNTS | FRAME | SLOTS
+HIGH = [R8, R9, R10, R11, RSI, RDI]
 
 
 def double_bits(d):
@@ -58,9 +64,9 @@ def lowerings():
 
 
 def assignments(kinds, nres, nargs, rng, count=3, alias=True):
-    """Register assignments of a lowering's operands: distinct registers, and
-    unless not alias, each result in the register of an argument of its
-    kind."""
+    """Register assignments of a lowering's operands: distinct registers; if
+    alias, also each result in the register of each argument of its kind;
+    and the operands in the high registers."""
     out = []
     for _ in range(count):
         gprs, xmms = rng.sample(POOL, len(POOL)), rng.sample(range(16), 16)
@@ -71,7 +77,11 @@ def assignments(kinds, nres, nargs, rng, count=3, alias=True):
                 ops = list(out[0])
                 ops[r] = ops[a]
                 out.append(ops)
-                break
+    # The operands in the high registers: r8-r11, rsi and rdi, then the rest
+    gprs = rng.sample(HIGH, len(HIGH)) + rng.sample(
+        [r for r in POOL if r not in HIGH], len(POOL) - len(HIGH))
+    xmms = rng.sample(range(8, 16), 8) + rng.sample(range(8), 8)
+    out.append([gprs.pop(0) if k == "g" else xmms.pop(0) for k in kinds])
     return out
 
 
@@ -86,10 +96,12 @@ def variants(name, rng, count=2):
     return out
 
 
-def run(name, ops, args, rng, aux=None, args_live=False):
+def run(name, ops, args, rng, aux=None, args_live=False, leaf_out=None):
     """Run a lowering on args in the registers ops, with the arguments live
     after it if args_live.  Returns the predicate's value, the results and
-    the registers before and after."""
+    the registers before and after.  The frame primitives read the frame of
+    their Python caller, so a test of one asks for the C definition's
+    result here, in the same frame: leaf_out gets it."""
     nres, nargs, *_, kinds, _ = lowerings()[name]
     gprs, xmms = canaries(rng)
     for i, arg in enumerate(args):
@@ -98,6 +110,8 @@ def run(name, ops, args, rng, aux=None, args_live=False):
             xmms[reg] = double_bits(arg)
         else:
             gprs[reg] = arg & MASK
+    if leaf_out is not None:
+        leaf_out.append(capi.leaf_primitive(name, *args))
     cond, gprs, gout, xout = capi.jit_lower(name, tuple(ops), tuple(gprs), tuple(xmms),
                                             aux, args_live)
     results = [bits_double(xout[ops[i]]) if kinds[i] == "x" else gout[ops[i]]
@@ -109,6 +123,10 @@ def as_type(value, type_):
     if type_ == "i64" and value >= 2**63:
         return value - 2**64
     return value
+
+
+def a_function():
+    pass
 
 
 class LoweringTests(unittest.TestCase):
@@ -139,32 +157,78 @@ class LoweringTests(unittest.TestCase):
             self.assertEqual(kinds, jit_template_generator.operand_kinds(prim, lowering))
             self.assertEqual(predicate, jit_template_generator.is_predicate(prim))
 
+    def check_against_c(self, name, args, rng):
+        nres, nargs, ntemps, nxtemps, kinds, predicate = lowerings()[name]
+        prim = ir_leaf.PRIMITIVES[name]
+        if prim.pre is not None and not prim.pre(context(), *args):
+            return
+        expected = capi.leaf_primitive(name, *args)
+        for ops in assignments(kinds, nres, nargs, rng, count=2):
+            with self.subTest(primitive=name, args=args, ops=ops):
+                cond, results, before, after = run(name, ops, args, rng)
+                self.check_registers(name, ops, before, after)
+                if not predicate:
+                    self.assertIsNone(cond)
+                    self.assertTrue(same(as_type(results[0], prim.results[0]), expected),
+                                    (results, expected))
+                elif not nres:
+                    self.assertIs(cond, expected)
+                else:
+                    self.assertIs(cond, expected[0])
+                    if cond:
+                        self.assertTrue(same(tuple(results), expected[1:]),
+                                        (results, expected))
+
     def test_against_c(self):
         rng = random.Random(88)
-        for name, (nres, nargs, ntemps, nxtemps, kinds, predicate) in lowerings().items():
-            if name in COUNTS:
+        for name in lowerings():
+            if name in APART:
                 continue
             prim = ir_leaf.PRIMITIVES[name]
-            arg_cases = [()] if not prim.params else cases(prim)
+            for args in [()] if not prim.params else cases(prim):
+                self.check_against_c(name, args, rng)
+
+    def test_more_objects(self):
+        "Objects beyond test_ir_leaf's: types of other sizes, other lengths and key sizes"
+        class Wide:
+            def __init__(self, n):
+                for i in range(n):
+                    setattr(self, f"f{i}", i)
+        class Slotted(Holder):
+            __slots__ = ("c", "d")
+        instances = [Holder(), Slotted(), *(Wide(n) for n in (1, 5, 12)), Wide(12)]
+        # Dicts of every index width, with and without deletions
+        dicts = [{f"k{i}": i for i in range(n)} for n in (0, 1, 5, 6, 11, 22, 100, 300, 700, 5000)]
+        dicts.append({f"d{i}": i for i in range(40)})
+        del dicts[-1]["d3"]
+        dicts += [vars(unittest), Wide(3).__dict__]
+        keys = [ctypes.c_uint64.from_address(id(d) + LAYOUT.offsets["PyDictObject.ma_keys"]).value
+                for d in dicts]
+        lists = [[], [1], list(range(40)), ["a", None, 2**70, 1.5], [[]] * 3]
+        tuples = [(), (1,), tuple(range(40)), ("a", None, 2**70, 1.5)]
+        # Objects only: an int in the inline range has no object (False is the zero one)
+        ints = [2**70, -2**70, 2**64, True, False]
+        rng = random.Random(94)
+        extra = {
+            "Py_TYPE": [(id(o),) for o in [*instances, *dicts, *lists, *tuples, *ints]],
+            "_PyObject_InlineValues": [(id(o),) for o in instances if hasattr(o, "__dict__")],
+            "_PyObject_Shape": [(id(o),) for o in instances if hasattr(o, "__dict__")],
+            "_PyObject_ValueSlot": [(id(o), k) for o in instances for k in (0, 8, 16, 40, 100)],
+            "DK_UNICODE_ENTRIES": [(k,) for k in keys],
+            "_PyLong_IsZero": [(id(i),) for i in ints],
+            "PyList_GET_SIZE": [(id(o),) for o in lists],
+            "_PyList_ITEMS": [(id(o),) for o in lists],
+            "PyTuple_GET_SIZE": [(id(o),) for o in tuples],
+            "PyList_GET_VALUE": [(id(o), i) for o in lists for i in range(len(o))],
+            "PyTuple_GET_VALUE": [(id(o), i) for o in tuples for i in range(len(o))],
+        }
+        for name in ("PyList_CheckExact", "PyTuple_CheckExact", "PyDict_CheckExact",
+                     "PyModule_CheckExact", "PyUnicode_CheckExact", "PyFunction_Check"):
+            extra[name] = [(id(o),) for o in [*instances, *dicts, *lists, *tuples, "s", unittest,
+                                              len, a_function, str, int]]
+        for name, arg_cases in extra.items():
             for args in arg_cases:
-                if prim.pre is not None and not prim.pre(context(), *args):
-                    continue
-                expected = capi.leaf_primitive(name, *args)
-                for ops in assignments(kinds, nres, nargs, rng, count=2):
-                    with self.subTest(primitive=name, args=args, ops=ops):
-                        cond, results, before, after = run(name, ops, args, rng)
-                        self.check_registers(name, ops, before, after)
-                        if not predicate:
-                            self.assertIsNone(cond)
-                            self.assertTrue(same(as_type(results[0], prim.results[0]), expected),
-                                            (results, expected))
-                        elif not nres:
-                            self.assertIs(cond, expected)
-                        else:
-                            self.assertIs(cond, expected[0])
-                            if cond:
-                                self.assertTrue(same(tuple(results), expected[1:]),
-                                                (results, expected))
+                self.check_against_c(name, args, rng)
 
     def take(self, w):
         "The object that an owning word names, its count released"
@@ -264,6 +328,88 @@ class LoweringTests(unittest.TestCase):
                     del obj
                     _, _, before, after = run(name, ops, (w,), rng, aux, args_live=live)
                     self.check_registers(name, ops, before, after, live)
+
+    def test_frame(self):
+        "The frame primitives read the frame of run(): its globals, constants and slots"
+        rng = random.Random(92)
+        for name, cases_ in (("GLOBALS", [()]), ("BUILTINS", [()]), ("FRAME_CO_CONSTS", [()]),
+                             ("IR_SLOTS", [()]),
+                             # run()'s parameters are its first slots
+                             ("GETLOCAL", [(i,) for i in range(7)])):
+            nres, nargs, _, _, kinds, _ = lowerings()[name]
+            for args in cases_:
+                for ops in assignments(kinds, nres, nargs, rng):
+                    with self.subTest(primitive=name, args=args, ops=ops):
+                        expected = []
+                        _, (result,), before, after = run(name, ops, args, rng,
+                                                          leaf_out=expected)
+                        self.check_registers(name, ops, before, after)
+                        self.assertEqual(result, expected[0])
+        self.assertEqual(capi.leaf_primitive("GLOBALS"), id(globals()))
+
+    def instance_slots(self, obj):
+        "The byte offsets of an instance's inline value slots, from obj"
+        values = capi.leaf_primitive("_PyObject_InlineValues", id(obj))
+        first = values - id(obj) + LAYOUT.offsets["PyDictValues.values"]
+        return [first + 8 * i for i in range(2)]
+
+    def test_shape_read_dup(self):
+        "The slot's word, with a count of its own if it owns one"
+        rng = random.Random(93)
+        name = "_PyObject_ShapeReadDup"
+        for a, b in ((["x"], 2**70), (3.5, None), ("str", {1: 2}), (7, 1e300)):
+            holder = Holder()
+            holder.a, holder.b = a, b
+            for offset in self.instance_slots(holder):
+                expected = capi.leaf_primitive(name, id(holder), offset)
+                # An object that the slot owns, whose count C raised
+                owned = expected < 2**48 and not expected & TAG
+                if owned:
+                    obj = ctypes.cast(expected, ctypes.py_object).value
+                    ctypes.pythonapi.Py_DecRef(ctypes.py_object(obj))
+                for ops, live in variants(name, rng, 3):
+                    with self.subTest(slot=(a, b), offset=offset, ops=ops, live=live):
+                        if owned:
+                            before_count = refcount(obj)
+                        _, (result,), before, after = run(name, ops, (id(holder), offset),
+                                                          rng, args_live=live)
+                        self.check_registers(name, ops, before, after, live)
+                        self.assertEqual(result, expected)
+                        if owned:
+                            self.assertEqual(refcount(obj) - before_count, 1)
+                            ctypes.pythonapi.Py_DecRef(ctypes.py_object(obj))
+
+    def test_dict_values_stores(self):
+        "The stores change an instance's values as C's do, run on one object and restored"
+        rng = random.Random(95)
+        holder = Holder()
+        values = capi.leaf_primitive("_PyObject_InlineValues", id(holder))
+        capacity = ctypes.c_uint8.from_address(values).value
+        start = LAYOUT.offsets["PyDictValues.values"]
+        size = start + 9 * capacity
+        saved = ctypes.string_at(values, size)
+
+        def restore():
+            ctypes.memmove(values, saved, size)
+
+        def snapshot():
+            return ctypes.string_at(values, size)
+
+        for name, arg_cases in (("_PyDictValues_SetShape", [0, 1, 7, 255, 0x105, 2**64 - 3]),
+                                ("_PyDictValues_AddToInsertionOrder", [0, 1, 17, 29])):
+            nres, nargs, _, _, kinds, _ = lowerings()[name]
+            for value in arg_cases:
+                restore()
+                capi.leaf_primitive(name, values, value)
+                expected = snapshot()
+                self.assertNotEqual(expected, saved)
+                for ops in assignments(kinds, nres, nargs, rng):
+                    with self.subTest(primitive=name, value=value, ops=ops):
+                        restore()
+                        _, _, before, after = run(name, ops, (values, value), rng)
+                        self.check_registers(name, ops, before, after)
+                        self.assertEqual(snapshot(), expected)
+        restore()
 
 
 def word_of(func, handler, nth=-1):

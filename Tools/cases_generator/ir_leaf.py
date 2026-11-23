@@ -1839,19 +1839,12 @@ def translate(uop, cache_types: dict[str, str] | None = None) -> LeafBody:
     return Translator(uop, cache_types).translate()
 
 
-_LEAVES: dict[tuple, LeafBody | LeafError] = {}
-
-
 def leaf_of(uop, cache_types: dict[str, str]) -> LeafBody | None:
     "The leaf IR of uop, or None if its body is outside the subset"
-    key = (uop.name, id(uop), tuple(sorted(cache_types.items())))
-    if key not in _LEAVES:
-        try:
-            _LEAVES[key] = translate(uop, cache_types)
-        except LeafError as error:
-            _LEAVES[key] = error
-    result = _LEAVES[key]
-    return None if isinstance(result, LeafError) else result
+    try:
+        return translate(uop, cache_types)
+    except LeafError:
+        return None
 
 
 def check_leaf(record, parts) -> None:
@@ -1862,29 +1855,32 @@ def check_leaf(record, parts) -> None:
     for uop in record.uops:
         part = by_name[uop.name]
         if "leaf" in part.annotations and uop.leaf is None:
-            cache_types = {fb.name: fb.field.ctype for fb in uop.feedback}
-            key = (part.name, id(part), tuple(sorted(cache_types.items())))
-            error = _LEAVES[key]
-            from analyzer import analysis_error
-            raise analysis_error(f"{part.name} is annotated leaf, but {error}",
-                                 error.token or part.body.open)
+            # Translate again for the diagnostic: only this error path needs it
+            try:
+                translate(part, {fb.name: fb.field.ctype for fb in uop.feedback})
+            except LeafError as error:
+                from analyzer import analysis_error
+                raise analysis_error(f"{part.name} is annotated leaf, but {error}",
+                                     error.token or part.body.open)
 
 
-def report(records) -> list[str]:
-    """Report mode: every uop of the records, inside the subset with its
-    effects and helpers, or outside with the first construct the checker
-    refused.  build_records() has translated each uop into _LEAVES."""
-    names = {u.name for r in records.values() for u in r.uops}
+def report(records, parts) -> list[str]:
+    """Report mode: every uop of the records, once per feedback layout it is
+    used with, inside the subset with its effects and helpers, or outside with
+    the first construct the checker refused.  parts maps uop names to the
+    analyzer's uops."""
+    uses = {(u.name, tuple(sorted((fb.name, fb.field.ctype) for fb in u.feedback)))
+            for r in records.values() for u in r.uops}
     lines = []
-    for name in sorted(names):
-        results = {key[2]: result for key, result in _LEAVES.items() if key[0] == name}
-        for cache_types, result in sorted(results.items()):
-            if isinstance(result, LeafError):
-                lines.append(f"{name:44} out  {result}")
-            else:
-                effects = " ".join(e for e in EFFECTS if e in result.effects) or "-"
-                helpers = " ".join(sorted(result.helpers)) or "-"
-                lines.append(f"{name:44} LEAF effects {effects}; helpers {helpers}")
+    for name, cache_types in sorted(uses):
+        try:
+            result = translate(parts[name], dict(cache_types))
+        except LeafError as error:
+            lines.append(f"{name:44} out  {error}")
+            continue
+        effects = " ".join(e for e in EFFECTS if e in result.effects) or "-"
+        helpers = " ".join(sorted(result.helpers)) or "-"
+        lines.append(f"{name:44} LEAF effects {effects}; helpers {helpers}")
     inside = sum(" LEAF " in line for line in lines)
     lines.append(f"{inside} of {len(lines)} uops inside the leaf subset")
     return lines
@@ -1893,10 +1889,9 @@ def report(records) -> list[str]:
 def main() -> None:
     import argparse
     import sys
-    from analyzer import analyze_files
+    from analyzer import Uop, analyze_files
     from generators_common import DEFAULT_INPUT
     import ir_generator
-    import ir_leaf          # the module that build_records() fills, not __main__
     parser = argparse.ArgumentParser(description="Check the uops against the leaf subset")
     parser.add_argument("-o", "--output", default=None)
     parser.add_argument("--dump", action="append", default=[],
@@ -1905,12 +1900,15 @@ def main() -> None:
     args = parser.parse_args()
     analysis = analyze_files(args.input)
     records = ir_generator.build_records(analysis, ir_generator.compute_formats(analysis))
-    lines = ir_leaf.report(records)
+    parts = {part.name: part
+             for inst in ir_generator.handler_instructions(analysis).values()
+             for part in inst.parts if isinstance(part, Uop)}
+    lines = report(records, parts)
     for name in args.dump:
-        for key, result in ir_leaf._LEAVES.items():
-            if key[0] == name and isinstance(result, ir_leaf.LeafBody):
-                lines += [f"{name}:"] + ["  " + line for line in result.dump()]
-                break
+        leaf = next((u.leaf for r in records.values() for u in r.uops
+                     if u.name == name and u.leaf is not None), None)
+        if leaf is not None:
+            lines += [f"{name}:"] + ["  " + line for line in leaf.dump()]
     out = open(args.output, "w") if args.output else sys.stdout
     with out:
         out.write("\n".join(lines) + "\n")

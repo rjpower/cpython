@@ -193,7 +193,9 @@ run_op(Program *p, PyObject *op)
             else if (!is_mem && nints < MAX_INTS) {
                 long long x;
                 ok = int_item(op, k, &x);
-                v[nints++] = x;
+                if (ok == 0) {
+                    v[nints++] = x;
+                }
             }
             Py_DECREF(item);
             if (ok < 0) {

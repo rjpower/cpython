@@ -21,6 +21,7 @@
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_interpframe.h"     // _PyFrame_GetCode()
 #include "pycore_ir.h"
+#include "pycore_jit.h"              // _PyJit_FreeUnits()
 #include "pycore_opcode_metadata.h" // _PyOpcode_Deopt
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
@@ -1007,6 +1008,7 @@ _PyCode_ClearExec(PyCodeObject *co)
     }
     if (exec != NULL) {
         co->_co_exec = NULL;
+        _PyJit_FreeUnits(exec);
         char *base = (char *)exec;
         if (co->_co_ir->nfeedback) {
             _PyFbBlock *block = _PyIR_FbBlock(exec->words);

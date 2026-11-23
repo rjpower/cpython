@@ -11,6 +11,7 @@
 
 #include "pycore_floatobject.h"   // _PyFloat_ExactDealloc()
 #include "pycore_frame.h"         // _PyInterpreterFrame
+#include "pycore_jit.h"           // _PyEval_HandlerForms()
 #include "pycore_jit_lower.h"
 #include "pycore_jit_memory.h"
 #include "pycore_long.h"          // _PyLong_ExactDealloc()

@@ -135,10 +135,8 @@ typedef void (*_PyJitTemplate)(_PyJitWordCx *cx);
 /* By handler; NULL for a handler that keeps its form's call */
 PyAPI_DATA(const _PyJitTemplate) _PyJit_Templates[];
 
-/* Python/ceval.c: the function forms by handler, and the address of the
-   raise exit of a template, which machine code calls as
-   _PyIRTransfer f(PyThreadState *, _PyInterpreterFrame *) */
-PyAPI_FUNC(const void *const *) _PyEval_HandlerForms(void);
+/* Python/ceval.c: the address of the raise exit of a template, which
+   machine code calls as _PyIRTransfer f(PyThreadState *, _PyInterpreterFrame *) */
 PyAPI_DATA(const void *const) _PyEval_JitRaiseExit;
 
 /* The pieces of the generated templates */

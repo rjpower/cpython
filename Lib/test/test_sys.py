@@ -5,6 +5,7 @@ import io
 import locale
 import operator
 import os
+import platform
 import random
 import shutil
 import socket
@@ -2519,16 +2520,31 @@ this is invalid python code
         self.assertEqual(out, b"")
 
 class TestSysJIT(unittest.TestCase):
+    # The baseline JIT runs on Linux x86-64 in the GIL build (Python/jit.c)
+    SUPPORTED = (sys.platform == "linux" and platform.machine() == "x86_64"
+                 and not support.Py_GIL_DISABLED)
+
+    def query(self, *args):
+        out = assert_python_ok(*args, "-c", textwrap.dedent("""
+            import sys
+            def f():
+                return sys._jit.is_active()
+            print(sys._jit.is_available(), sys._jit.is_enabled(), f())
+        """)).out
+        return out.decode().split()
 
     def test_available(self):
-        self.assertIs(sys._jit.is_available(), False)
+        self.assertIs(sys._jit.is_available(), self.SUPPORTED)
 
-    def test_enabled(self):
-        self.assertIs(sys._jit.is_enabled(), False)
+    def test_off(self):
+        self.assertEqual(self.query("-X", "jit=off"),
+                         [str(self.SUPPORTED), "False", "False"])
 
-    def test_active(self):
-        # Always False: the JIT keeps no per-frame native-execution flag.
-        self.assertIs(sys._jit.is_active(), False)
+    def test_always(self):
+        # Under always the function runs compiled
+        expected = "True" if self.SUPPORTED else "False"
+        self.assertEqual(self.query("-X", "jit=always"),
+                         [expected, expected, expected])
 
 
 if __name__ == "__main__":

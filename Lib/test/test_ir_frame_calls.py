@@ -1,6 +1,7 @@
 """Direct Python binding and materialization of virtual empty kwargs."""
 
 import gc
+import inspect
 import itertools
 import sys
 import types
@@ -12,7 +13,6 @@ from test.support import import_helper
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 pending = _testinternalcapi.frame_has_virtual_kwargs
 ROUNDS = _testinternalcapi.SPECIALIZATION_THRESHOLD + 50
-VIRTUAL_KWARGS = 0x10000000
 
 
 def positional_caller(target):
@@ -321,9 +321,11 @@ class FrameCallTests(unittest.TestCase):
         for _ in range(ROUNDS):
             read(reader)
         self.assertEqual(events, ["method"] * ROUNDS)
-        # The executing copy names the discard slot, the last local
-        discard = len(_testinternalcapi.get_co_localskinds(read.__code__)) - 1
-        self.assertTrue(any(row[0] == "LOAD_ATTR_SLOT" and row[1] == discard
+        # The executing copy names a discard slot, a scratch register past
+        # the locals
+        nlocals = len(_testinternalcapi.get_co_localskinds(read.__code__))
+        self.assertTrue(any(row[0] == "LOAD_ATTR_SLOT" and
+                            nlocals <= row[1] != 4095
                             for row in _testinternalcapi.get_ir(read.__code__, True)))
 
     def test_discarded_custom_reader_results(self):
@@ -480,13 +482,19 @@ class FrameCallTests(unittest.TestCase):
         target.__defaults__ = tuple(range(70000))
         self.assertEqual(warm(call)[1], 69999)
 
-    def test_structural_code_replace_cancels_eligibility(self):
+    def test_structural_code_replace_reanalyses_eligibility(self):
         def target(value=0, *args, **kwargs):
             return pending()
 
-        self.assertTrue(target.__code__.co_flags & VIRTUAL_KWARGS)
+        self.assertTrue(warm(positional_caller(target)))
+        # The replaced code is lowered afresh: with no positional parameter
+        # the **kwargs local is still virtual, and without CO_VARKEYWORDS
+        # there is no kwargs to be virtual.
         replacement = target.__code__.replace(co_argcount=0)
-        self.assertFalse(replacement.co_flags & VIRTUAL_KWARGS)
+        replaced = types.FunctionType(replacement, globals())
+        self.assertTrue(warm(positional_caller(replaced)))
+        replacement = target.__code__.replace(
+            co_flags=target.__code__.co_flags & ~inspect.CO_VARKEYWORDS)
         replaced = types.FunctionType(replacement, globals())
         self.assertFalse(warm(positional_caller(replaced)))
 

@@ -3650,37 +3650,11 @@ class TestMagicNumber(unittest.TestCase):
     def test_magic_number_endianness(self):
         magic_number_bytes = _imp.pyc_magic_number_token.to_bytes(4, 'little')
         self.assertEqual(magic_number_bytes[2:], b'\r\n')
-        # Register IR uses a private namespace, separate from upstream and
-        # tracing-collector bytecode caches.
+        # The runtime uses a private cache namespace, separate from upstream's.
         magic_number = int.from_bytes(magic_number_bytes[:2], 'little')
-        self.assertEqual(magic_number, 64445)
+        self.assertEqual(magic_number, 64446)
         self.assertEqual(sys.implementation.cache_tag,
                          f'cpython-valrc1-{sys.version_info.major}{sys.version_info.minor}')
-
-    # The digest of Tools/cases_generator/ir_numbers.txt at the magic number
-    # above.  A handler number is a fact of the .pyc format, so a change to the
-    # table needs a new magic number (Include/internal/pycore_magic_number.h),
-    # and this pair then follows.  Comments other than `# removed:` and
-    # `# range` do not count.
-    PINNED_MAGIC_AND_TABLE = (
-        64445,
-        '3cdb9cdb7c7fb9506b4f2702ce90f7647c8009c8c7251809266a2ca82a67c9d5')
-
-    def test_handler_numbers_follow_magic_number(self):
-        table = (pathlib.Path(__file__).parents[3]
-                 / 'Tools' / 'cases_generator' / 'ir_numbers.txt')
-        if not table.is_file():
-            self.skipTest('the source tree is not available')
-        lines = [line.strip() for line in table.read_text().splitlines()
-                 if line.strip() and (not line.startswith('#')
-                                      or line.startswith(('# removed:', '# range ')))]
-        digest = hashlib.sha256('\n'.join(lines).encode()).hexdigest()
-        magic = _imp.pyc_magic_number_token & 0xFFFF
-        self.assertEqual(
-            (magic, digest), self.PINNED_MAGIC_AND_TABLE,
-            'ir_numbers.txt and the magic number must change together: bump '
-            'PYC_MAGIC_NUMBER when the table changes, then update '
-            'PINNED_MAGIC_AND_TABLE here')
 
 
 if __name__ == '__main__':

@@ -28,6 +28,7 @@
 #include "pycore_import.h"        // _PyImport_ClearExtension()
 #include "pycore_initconfig.h"    // _Py_GetConfigsAsDict()
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
+#include "pycore_ir_source.h"     // _PyIR_POSITION_RECORD
 #include "pycore_ir_outcomes.h"    // _PyIR_NormalPhysicalTransfer()
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
@@ -1399,21 +1400,6 @@ set_eval_frame_interp(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
-/* Set whether code constructors reject malformed images; return the old
- * setting. Release builds do not by default. */
-static PyObject *
-set_code_validation(PyObject *self, PyObject *arg)
-{
-    int enable = PyObject_IsTrue(arg);
-    if (enable < 0) {
-        return NULL;
-    }
-    _PyOptimizationConfig *config = &_PyInterpreterState_GET()->opt_config;
-    bool old = config->validate_code;
-    config->validate_code = enable;
-    return PyBool_FromLong(old);
-}
-
 static PyObject *
 is_specialization_enabled(PyObject *self, PyObject *Py_UNUSED(args))
 {
@@ -1775,12 +1761,12 @@ get_feedback(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "O!i", &PyCode_Type, &code, &i)) {
         return NULL;
     }
-    if (i < 0 || i >= Py_SIZE(code)) {
-        PyErr_SetString(PyExc_ValueError, "index out of range");
-        return NULL;
-    }
     _PyCodeExec *exec = _PyCode_GetExec(code);
     if (exec == NULL) {
+        return NULL;
+    }
+    if (i < 0 || i >= (int)exec->nwords) {
+        PyErr_SetString(PyExc_ValueError, "index out of range");
         return NULL;
     }
     int fb = _PyCode_InstrFbIndex(code, i);
@@ -1815,11 +1801,81 @@ get_feedback(PyObject *self, PyObject *args)
                          fields[0], fields[1], rows);
 }
 
-/* The words of CODE as the compiler emitted them, or with ADAPTIVE those of
- * its executing copy, which specialisation and instrumentation rewrite:
+/* The register IR of CODE, lowered if the code has not run, as a tuple: the
+ * words (bytes), the feedback initialisers (bytes), nfixed, nconst, nslots,
+ * the constant values, the exceptions in word units (bytes), the recovery
+ * records (bytes), the positions (bytes), the pcmap (bytes of uint32), the
+ * first traceable word, then the words of the executing copy and its
+ * feedback entries (bytes, or None if the code has not run). */
+static PyObject *
+get_ir_raw(PyObject *self, PyObject *code_obj)
+{
+    if (!PyCode_Check(code_obj)) {
+        PyErr_SetString(PyExc_TypeError, "argument must be a code object");
+        return NULL;
+    }
+    const _PyCodeIR *ir = _PyCode_GetIR((PyCodeObject *)code_obj);
+    if (ir == NULL) {
+        return NULL;
+    }
+    PyObject *consts = PyTuple_New(ir->nconst);
+    if (consts == NULL) {
+        return NULL;
+    }
+    for (uint32_t i = 0; i < ir->nconst; i++) {
+        PyValue v = PyValue_DUP(ir->const_values[i]);
+        PyObject *o = _PyValue_AsObjectAt(v, BOX_SITE_FRAME);
+        PyValue_CLOSE(v);
+        if (o == NULL) {
+            Py_DECREF(consts);
+            return NULL;
+        }
+        PyTuple_SET_ITEM(consts, i, o);
+    }
+    PyObject *exec_words = Py_NewRef(Py_None);
+    PyObject *feedback = Py_NewRef(Py_None);
+    _PyCodeExec *exec = ((PyCodeObject *)code_obj)->_co_exec;
+    if (exec != NULL) {
+        Py_SETREF(exec_words,
+                  PyBytes_FromStringAndSize((const char *)exec->words,
+                                            exec->nwords * sizeof(_PyIRWord)));
+        if (exec_words == NULL) {
+            Py_DECREF(consts);
+            Py_DECREF(feedback);
+            return NULL;
+        }
+        if (ir->nfeedback) {
+            // The vector of entries ends at the block, with entry 0
+            Py_ssize_t size = (Py_ssize_t)_PyCode_FbUnits(
+                (PyCodeObject *)code_obj) << IR_FB_UNIT_SHIFT;
+            Py_SETREF(feedback,
+                      PyBytes_FromStringAndSize(
+                          (const char *)_PyIR_FbBlock(exec->words) - size,
+                          size));
+            if (feedback == NULL) {
+                Py_DECREF(consts);
+                Py_DECREF(exec_words);
+                return NULL;
+            }
+        }
+    }
+    return Py_BuildValue(
+        "(y#y#IIINy#y#y#y#INN)",
+        (const char *)ir->words, (Py_ssize_t)(ir->nwords * sizeof(_PyIRWord)),
+        (const char *)ir->fbinit, (Py_ssize_t)(ir->nfeedback * sizeof(uint32_t)),
+        ir->nfixed, ir->nconst, ir->nslots, consts,
+        (const char *)ir->exceptions, (Py_ssize_t)ir->nexceptions,
+        (const char *)ir->records, (Py_ssize_t)(ir->nrecords * _PyIR_RECOVERY_RECORD),
+        (const char *)ir->positions, (Py_ssize_t)(ir->nrecords * _PyIR_POSITION_RECORD),
+        (const char *)ir->pcmap, (Py_ssize_t)(ir->nwords * sizeof(uint32_t)),
+        ir->first_traceable, exec_words, feedback);
+}
+
+/* The words that the lowering of CODE made, or with ADAPTIVE those of its
+ * executing copy, which specialisation and instrumentation rewrite:
  * per word a tuple (handler, a, b, c, d) of the name of its handler and its
  * fields.  The operand words of a call follow its head as words of their own,
- * named IR_OPERANDS.  The executing copy of code that has never run is co_code's. */
+ * named IR_OPERANDS.  Code that has never run is lowered by the call. */
 static PyObject *
 get_ir(PyObject *self, PyObject *args)
 {
@@ -1828,7 +1884,11 @@ get_ir(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "O!|p", &PyCode_Type, &code, &adaptive)) {
         return NULL;
     }
-    const _PyIRWord *words = _PyCode_WORDS(code);
+    const _PyCodeIR *ir = _PyCode_GetIR(code);
+    if (ir == NULL) {
+        return NULL;
+    }
+    const _PyIRWord *words = ir->words;
     if (adaptive && code->_co_exec != NULL) {
         words = code->_co_exec->words;
     }
@@ -1836,7 +1896,7 @@ get_ir(PyObject *self, PyObject *args)
     if (result == NULL) {
         return NULL;
     }
-    for (Py_ssize_t w = 0; w < Py_SIZE(code); w++) {
+    for (Py_ssize_t w = 0; w < (Py_ssize_t)ir->nwords; w++) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(words[w]);
         int handler = IR_HANDLER(word);
         const char *name = handler < IR_FIRST_ONLY_HANDLER
@@ -3424,7 +3484,6 @@ inline_locals(PyObject *self, PyObject *frame)
     }
     for (int i = 0; i < co->co_nlocalsplus; i++) {
         if (PyValue_IsInline(f->base[i]) &&
-            !(_PyLocals_GetKind(co->co_localspluskinds, i) & CO_FAST_CONST) &&
             PySet_Add(names, _PyTuple_GET_OBJECT(co->co_localsplusnames, i)) < 0)
         {
             Py_DECREF(names);
@@ -4638,6 +4697,28 @@ done:
     return result;
 }
 
+/* The register passes run when a code object is lowered, so lower it and the
+ * code objects in its constants */
+static int
+lower_nested(PyObject *code)
+{
+    if (_PyCode_GetIR((PyCodeObject *)code) == NULL) {
+        return -1;
+    }
+    PyObject *consts = ((PyCodeObject *)code)->co_consts;
+    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(consts); i++) {
+        PyValueBorrow value = PyTuple_GET_VALUE(consts, i);
+        if (!PyValue_IsObject(value)) {
+            continue;
+        }
+        PyObject *item = PyValue_AsKnownObjectBorrow(value);
+        if (PyCode_Check(item) && lower_nested(item) < 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 /* Compile source with copy propagation's kill at code that may run Python
  * turned off, so that test_ir_contract can show that the verifier rejects
  * the fold that results */
@@ -4651,6 +4732,9 @@ compile_without_copyprop_kill(PyObject *self, PyObject *args)
     }
     int old = _PyRegPass_SetKeepAcrossCode(1);
     PyObject *code = Py_CompileString(source, filename, Py_file_input);
+    if (code != NULL && lower_nested(code) < 0) {
+        Py_CLEAR(code);
+    }
     _PyRegPass_SetKeepAcrossCode(old);
     return code;
 }
@@ -4810,17 +4894,17 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
         return NULL;
     }
     PyCodeObject *code = (PyCodeObject *)code_object;
-    int nslots = _PyFrame_NumSlotsForCodeObject(code);
-    if (site < 0 || site > Py_SIZE(code) ||
-        reason < _PyIR_RETIRE_NONE || reason > _PyIR_RETIRE_STAGED_FAILURE ||
-        (dirty_home != -1 &&
-         (dirty_home < code->co_nlocalsplus || dirty_home >= nslots)))
-    {
-        PyErr_SetString(PyExc_ValueError, "invalid retirement control probe");
-        return NULL;
-    }
     _PyCodeExec *exec = _PyCode_GetExec(code);
     if (exec == NULL) {
+        return NULL;
+    }
+    int nslots = _PyFrame_NumSlotsForCodeObject(code);
+    if (site < 0 || site > (int)exec->nwords ||
+        reason < _PyIR_RETIRE_NONE || reason > _PyIR_RETIRE_STAGED_FAILURE ||
+        (dirty_home != -1 &&
+         (dirty_home < (int)exec->nfixed || dirty_home >= nslots)))
+    {
+        PyErr_SetString(PyExc_ValueError, "invalid retirement control probe");
         return NULL;
     }
     const _PyIRCodePlan *plan;
@@ -4853,27 +4937,7 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
     return PyLong_FromLong(status);
 }
 
-/* The words of a code object with the compiler's return selection applied to
- * a code object built by hand. */
-static PyObject *
-select_empty_returns(PyObject *self, PyObject *arg)
-{
-    if (!PyCode_Check(arg)) {
-        PyErr_SetString(PyExc_TypeError, "expected code");
-        return NULL;
-    }
-    PyObject *words;
-    if (_PyCode_SelectEmptyReturns((PyCodeObject *)arg, &words) < 0) {
-        return NULL;
-    }
-    if (words == NULL) {
-        return PyObject_GetAttrString(arg, "co_code");
-    }
-    return words;
-}
-
 static PyMethodDef module_functions[] = {
-    {"select_empty_returns", select_empty_returns, METH_O},
     {"test_frame_arena", test_frame_arena, METH_NOARGS},
     {"check_ir_retirement", _PyCFunction_CAST(check_ir_retirement),
      METH_VARARGS | METH_KEYWORDS, NULL},
@@ -4938,7 +5002,6 @@ static PyMethodDef module_functions[] = {
     {"set_eval_frame_record", set_eval_frame_record, METH_O, NULL},
     {"run_staged_provider", run_staged_provider, METH_VARARGS, NULL},
     {"is_specialization_enabled", is_specialization_enabled, METH_NOARGS, NULL},
-    {"set_code_validation", set_code_validation, METH_O, NULL},
     _TESTINTERNALCAPI_COMPILER_CLEANDOC_METHODDEF
     _TESTINTERNALCAPI_NEW_INSTRUCTION_SEQUENCE_METHODDEF
     _TESTINTERNALCAPI_COMPILER_CODEGEN_METHODDEF
@@ -4956,6 +5019,7 @@ static PyMethodDef module_functions[] = {
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
+    {"get_ir_raw", get_ir_raw, METH_O, NULL},
     {"ir_normal_physical_transfer", ir_normal_physical_transfer,
      METH_VARARGS, NULL},
     {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},

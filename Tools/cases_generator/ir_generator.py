@@ -1136,7 +1136,17 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 # CFG omits them (PUSH_NULL writes NULL into a temporary that the NULL
 # invariant already guarantees is NULL, register-ir.md G4).  They keep their
 # opcode number and their format, which the CFG reads, but have no handler.
-STACK_ONLY = ("PUSH_NULL",)
+STACK_ONLY = ("PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN", "LOAD_FAST_LOAD_FAST",
+              "LOAD_FAST_BORROW_LOAD_FAST_BORROW", "STORE_FAST_LOAD_FAST",
+              "STORE_FAST_STORE_FAST")
+
+# Handlers that the register passes make and that no stack bytecode has, but
+# whose opcode numbers lie in the opcode space (their instrumented forms are
+# tables indexed by opcode).  They are not in opcode.opmap, which lists what
+# co_code can hold.
+IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
+                "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
+                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
 
 
 def handler_ids(analysis: Analysis) -> dict[str, int]:
@@ -1537,7 +1547,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     # These semantic operations have distinct body/yield and completion
     # outcomes. Their completion markers replace JUMPBY, but the executable
     # ABI remains an explicit window and a real forward exit.
-    completes_step = group in {"FOR_ITER", "SEND"}
+    completes_step = group in {"FOR_ITER", "SEND", "CLEANUP_THROW"}
     array_inputs = completes_step or any(m.properties.window for m in members) or any(
         item.is_array() for m in members for item in io[m.name][0])
     jumps = completes_step or any(m.properties.jumps for m in members)
@@ -1545,7 +1555,8 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     forward = jumps and (group in FORWARD_JUMPS or fused)
     # A fused word's entry holds its operation and the sense of its jump
     has_fb = fused or any(uses_feedback(m) for m in members)
-    has_imm = any(m.properties.oparg for m in members)
+    # CLEANUP_THROW has no operand in co_code, but its word names the exit
+    has_imm = any(m.properties.oparg for m in members) or group == "CLEANUP_THROW"
     if not has_imm:
         imm_kind = None
     elif forward:
@@ -5460,6 +5471,10 @@ class IREmitter(Emitter):
         """
         kind, value, distance = self.macro_args(tkn, tkn_iter, 3)
         assert inst is not None
+        # IR_EXIT is the word's exit, for an instruction whose stack form has
+        # no operand (CLEANUP_THROW); SEND and FOR_ITER pass their oparg
+        if distance == "IR_EXIT":
+            distance = "oparg"
         entries = {
             "_PY_IR_FOR_ITER": "_PyEval_CompleteForIter",
             "_PY_IR_SEND": "_PyEval_CompleteSend",
@@ -5777,7 +5792,9 @@ def deopt_target(inst: Instruction, boundary: GeneratorBoundary | None,
 
 def oparg_source(inst: Instruction, fmt: IRFormat, operation: str | None) -> str:
     "Where the handler's oparg comes from: the IMMEDIATE operand's detail"
-    if not inst.properties.oparg:
+    # CLEANUP_THROW has no oparg in the stack form; its word keeps the jump
+    # distance for IR_EXIT
+    if not inst.properties.oparg and "IR_EXIT" not in uop_tokens(inst):
         return ""
     if operation is not None:
         return "OPERATION"

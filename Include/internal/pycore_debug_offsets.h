@@ -167,20 +167,30 @@ typedef struct _Py_DebugOffsets {
         uint64_t stacksize;
         uint64_t localsplusnames;
         uint64_t localspluskinds;
-        // The 8-byte IR words as the compiler emitted them; a frame runs
-        // a copy, whose first word interpreter_frame.ir_words points to, so
-        // (instr_ptr - ir_words) / 8 is the word index that the line table
-        // and the exception table use.
-        uint64_t co_words;
+        // The slots of a frame, with the frame's own header
+        uint64_t framesize;
         uint64_t co_tlbc;
+        // A frame runs the 8-byte IR words of the code's executing copy,
+        // whose first word interpreter_frame.ir_words points to; the word
+        // index (instr_ptr - ir_words) / 8 is mapped to the stack bytecode
+        // offset by the code's pcmap.
         uint64_t exec;
-        uint64_t nwords;
+        // The IR of the code, whose pcmap maps a word index to the code unit
+        // of the stack instruction that the line table is indexed by.
+        uint64_t ir;
     } code_object;
+
+    struct {
+        uint64_t size;
+        uint64_t nwords;
+        uint64_t pcmap;
+    } code_ir;
 
     struct {
         uint64_t size;
         uint64_t words;
         uint64_t nwords;
+        uint64_t nfixed;
     } code_exec;
 
     // PyObject offset;
@@ -424,15 +434,21 @@ _PyDebugOffsets_Validate(const _Py_DebugOffsets *offsets)
         .stacksize = offsetof(PyCodeObject, co_stacksize), \
         .localsplusnames = offsetof(PyCodeObject, co_localsplusnames), \
         .localspluskinds = offsetof(PyCodeObject, co_localspluskinds), \
-        .co_words = offsetof(PyCodeObject, co_words), \
+        .framesize = offsetof(PyCodeObject, co_framesize), \
         .co_tlbc = _Py_Debug_code_object_co_tlbc, \
         .exec = offsetof(PyCodeObject, _co_exec), \
-        .nwords = offsetof(PyVarObject, ob_size), \
+        .ir = offsetof(PyCodeObject, _co_ir), \
+    }, \
+    .code_ir = { \
+        .size = sizeof(_PyCodeIR), \
+        .nwords = offsetof(_PyCodeIR, nwords), \
+        .pcmap = offsetof(_PyCodeIR, pcmap), \
     }, \
     .code_exec = { \
         .size = sizeof(_PyCodeExec), \
         .words = offsetof(_PyCodeExec, words), \
         .nwords = offsetof(_PyCodeExec, nwords), \
+        .nfixed = offsetof(_PyCodeExec, nfixed), \
     }, \
     .pyobject = { \
         .size = sizeof(PyObject), \

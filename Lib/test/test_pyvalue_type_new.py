@@ -185,14 +185,24 @@ class TypeNewReferenceControls(unittest.TestCase):
 
 
 def candidate_call_state(code):
+    """The callable and argument values of the call that is executing.
+
+    The call word names its callable; the arguments follow in IR_OPERANDS
+    words, which may name constant slots or temporaries outside any window.
+    """
     import _testinternalcapi
     state = _testinternalcapi.native_scope_call_state(code)
-    _, _, nlocals, base, count, _, values, present, strong = state
+    _, index, nlocals, base, count, _, values, present, strong = state
     if present & ~strong:
         raise AssertionError("native input home lacks an owner")
-    if not (nlocals <= base and base + count <= len(values)):
-        raise AssertionError("invalid native call window")
-    return state
+    slots = []
+    for name, *fields in _testinternalcapi.get_ir(code)[index + 1:]:
+        if name != "IR_OPERANDS":
+            break
+        slots.extend(slot for slot in fields if slot != 4095)
+    if not all(slot < len(values) for slot in slots) or base >= len(values):
+        raise AssertionError("invalid native call operands")
+    return values[base], [values[slot] for slot in slots]
 
 
 class TypeNewCandidateTests(unittest.TestCase):
@@ -224,16 +234,15 @@ class TypeNewCandidateTests(unittest.TestCase):
             made = driver()
             self.assertEqual(made.value, 2147483647)
             self.assertEqual(len(states), 2)
-            for state in states:
-                base, values = state[3], state[6]
-                self.assertIs(values[base], target)
+            for callable_value, arguments in states:
+                self.assertIs(callable_value, target)
                 if expanded:
-                    self.assertEqual(state[4], 4)
-                    self.assertEqual(values[base + 2], args)
+                    self.assertEqual(len(arguments), 2)
+                    self.assertEqual(arguments[0], args)
                 else:
-                    self.assertEqual(values[base + 2], "Observed")
-                    self.assertIs(values[base + 3], bases)
-                    self.assertIs(values[base + 4], namespace)
+                    self.assertEqual(arguments[0], "Observed")
+                    self.assertIs(arguments[1], bases)
+                    self.assertIs(arguments[2], namespace)
 
     def test_delegation_observes_original_call_homes(self):
         states = []
@@ -256,9 +265,9 @@ class TypeNewCandidateTests(unittest.TestCase):
         made = driver()
         self.assertIs(type(made), Winner)
         self.assertEqual(made.value, 3.25)
-        state, = states
-        self.assertIs(state[6][state[3]], target)
-        self.assertIs(state[6][state[3] + 5], namespace)
+        (callable_value, arguments), = states
+        self.assertIs(callable_value, target)
+        self.assertIs(arguments[3], namespace)
 
     def test_frozendict_namespace(self):
         import builtins

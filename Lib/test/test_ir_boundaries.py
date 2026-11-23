@@ -1,18 +1,16 @@
 """Compact executable offsets and source-only LINE edges."""
 
-import _opcode
 import dis
 import marshal
-import struct
 import sys
 import unittest
 from test.support import import_helper
-from test.support.ir_semantics import (observation_records, observation_tables,
-                                       semantic_parts, position_parts)
+from test.support.ir_dis import IRCode
 
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
 
 
+# Instruction events and offsets name the stack bytecode
 def instructions(func):
     return list(dis.get_instructions(func))
 
@@ -20,13 +18,6 @@ def instructions(func):
 def warm(func, *args):
     for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 10):
         func(*args)
-
-
-def setUpModule():
-    # These tests construct malformed images and expect the constructor to
-    # reject them; release builds only do so on request.
-    from test.support.ir_semantics import code_validation
-    unittest.enterModuleContext(code_validation())
 
 
 class CompactBoundaryTests(unittest.TestCase):
@@ -40,69 +31,15 @@ class CompactBoundaryTests(unittest.TestCase):
         warm(func, False)
         for flag, expected in ((False, 22), (True, 11), ([], 22), ([1], 11)):
             self.assertEqual(func(flag), expected)
-        words = instructions(func)
-        self.assertNotIn('NOP', [i.opname for i in words])
-        self.assertEqual([i.offset for i in words], list(range(len(words))))
-        self.assertEqual(len(list(func.__code__.co_positions())), len(words))
-        self.assertTrue(any(start == end for start, end, line in func.__code__.co_lines()))
+        # The stack bytecode keeps its NOPs; the IR it lowers to has none
+        # and one position per word
+        ir = IRCode(func.__code__)
+        names = [row[0] for row in _testinternalcapi.get_ir(func.__code__)]
+        self.assertFalse([name for name in names if name.split('+')[0] == 'NOP'])
+        self.assertEqual(len(list(ir.co_positions())), len(names))
         restored = marshal.loads(marshal.dumps(func.__code__))
         self.assertEqual(list(restored.co_lines()), list(func.__code__.co_lines()))
         self.assertEqual(list(restored.co_positions()), list(func.__code__.co_positions()))
-
-    def test_empty_raw_location_table_normalizes_real_word_coverage(self):
-        def func():
-            return 7
-        code = func.__code__.replace(co_linetable=b'')
-        words = len(instructions(func))
-        self.assertTrue(code.co_linetable.startswith(b'IRSM'))
-        self.assertEqual(list(code.co_positions()), [(None, None, None, None)] * words)
-        self.assertEqual(list(code.co_lines()), [(0, words, None)])
-        restored = marshal.loads(marshal.dumps(code))
-        self.assertEqual(restored.co_linetable, code.co_linetable)
-        self.assertEqual(list(restored.co_positions()), list(code.co_positions()))
-
-    def test_source_map_decoder_bounds_and_stale_replacement(self):
-        def func(flag):
-            if flag:
-                pass
-            pass
-            return 7
-        code = func.__code__
-        raw = code.co_linetable
-        self.assertEqual(raw[:4], b'IRSM')
-        version, locations, records = struct.unpack_from('<III', raw, 4)
-        self.assertEqual(version, 2)
-        self.assertGreater(records, 0)
-        invalid = [b'IRSM', raw[:-1], raw + b'\0',
-                   b'\x80\x80', b'\xd0\x80\x00', b'\xd0\x00\x80',
-                   raw[:4] + struct.pack('<I', 1) + raw[8:],
-                   raw[:8] + struct.pack('<I', locations + 1) + raw[12:]]
-        for data in invalid:
-            with self.subTest(data=data[:16]):
-                with self.assertRaisesRegex(ValueError, 'source map'):
-                    code.replace(co_linetable=data)
-        semantic = code.co_exceptiontable
-        _, _, exception_size, _ = struct.unpack_from('<4sIII', semantic)
-        record = 16 + exception_size
-        for field, value in ((0, -2), (1, len(code.co_code) // 8),
-                             (2, 2), (3, len(code.co_code) // 8)):
-            corrupt = bytearray(semantic)
-            struct.pack_into('<i', corrupt, record + field * 4, value)
-            with self.subTest(field=field):
-                with self.assertRaisesRegex(ValueError, 'semantic recovery'):
-                    code.replace(co_exceptiontable=bytes(corrupt))
-        corrupt = bytearray(raw)
-        struct.pack_into('<i', corrupt, 16 + locations, 0)
-        with self.assertRaisesRegex(ValueError, 'optional source position'):
-            code.replace(co_linetable=bytes(corrupt))
-        with self.assertRaisesRegex(ValueError, 'matching semantic recovery'):
-            code.replace(co_code=code.co_code[8:] + code.co_code[:8])
-        self.assertEqual(code.replace().co_linetable, raw)
-        ranges = list(code.co_lines())
-        self.assertEqual([start for start, end, line in ranges],
-                         sorted(start for start, end, line in ranges))
-        self.assertTrue(all(0 <= start <= end <= len(code.co_code) // 8
-                            for start, end, line in ranges))
 
     def test_line_ranges_coalesce_adjacent_equal_source_lines(self):
         def func(flag):
@@ -115,7 +52,6 @@ class CompactBoundaryTests(unittest.TestCase):
         ranges = list(func.__code__.co_lines())
         for previous, current in zip(ranges, ranges[1:]):
             self.assertNotEqual(previous[2], current[2], (previous, current))
-        self.assertTrue(any(start == end for start, end, line in ranges))
         self.assertEqual(list(func.__code__.co_positions()), positions)
 
     def test_late_instruction_monitoring_names_only_real_words(self):
@@ -149,98 +85,6 @@ class CompactBoundaryTests(unittest.TestCase):
                     mon.set_events(tool, 0)
                     mon.set_local_events(tool, func.__code__, 0)
                     mon.free_tool_id(tool)
-
-    def test_source_only_lines_and_callback_exception_handler(self):
-        caught_lines = []
-        def func():
-            try:
-                pass
-                pass
-            except LookupError as error:
-                caught_lines.append(error.__traceback__.tb_lineno)
-                return 'caught'
-            raise LookupError('ordinary outside protected region')
-        first_pass = func.__code__.co_firstlineno + 2
-        for mode in ('trace', 'monitor'):
-            with self.subTest(mode=mode):
-                seen = []
-                caught_lines.clear()
-                def line(code, lineno):
-                    if code is func.__code__:
-                        seen.append(lineno)
-                        if lineno == first_pass + 1:
-                            raise LookupError('source edge')
-                if mode == 'trace':
-                    def tracer(frame, event, arg):
-                        if event == 'line':
-                            line(frame.f_code, frame.f_lineno)
-                        return tracer
-                    sys.settrace(tracer)
-                    try:
-                        self.assertEqual(func(), 'caught')
-                    finally:
-                        sys.settrace(None)
-                else:
-                    mon = sys.monitoring
-                    tool = mon.DEBUGGER_ID
-                    mon.use_tool_id(tool, 'source lines')
-                    try:
-                        mon.register_callback(tool, mon.events.LINE, line)
-                        mon.set_local_events(tool, func.__code__, mon.events.LINE)
-                        self.assertEqual(func(), 'caught')
-                    finally:
-                        mon.set_local_events(tool, func.__code__, 0)
-                        mon.free_tool_id(tool)
-                self.assertIn(first_pass, seen)
-                self.assertIn(first_pass + 1, seen)
-                self.assertEqual(caught_lines, [first_pass + 1])
-                with self.assertRaisesRegex(LookupError, 'ordinary outside'):
-                    func()
-
-    def test_nested_source_only_regions_keep_their_handlers(self):
-        def func():
-            try:
-                try:
-                    pass
-                    pass
-                except LookupError:
-                    return 'inner'
-            except ValueError:
-                return 'outer'
-            return 'normal'
-        last_pass = func.__code__.co_firstlineno + 4
-        records = observation_records(func.__code__)
-        passes = [record for record in records if record[3] in (last_pass - 1, last_pass)]
-        self.assertEqual(len(passes), 2, passes)
-        self.assertEqual({record[3] for record in passes}, {last_pass - 1, last_pass})
-        self.assertTrue(all(record[7] >= 0 for record in passes), passes)
-        for exception, expected in ((LookupError, 'inner'), (ValueError, 'outer')):
-            for mode in ('trace', 'monitor'):
-                with self.subTest(exception=exception, mode=mode):
-                    def line(code, lineno):
-                        if code is func.__code__ and lineno == last_pass:
-                            raise exception('nested source edge')
-                    if mode == 'trace':
-                        def tracer(frame, event, arg):
-                            if event == 'line':
-                                line(frame.f_code, frame.f_lineno)
-                            return tracer
-                        sys.settrace(tracer)
-                        try:
-                            self.assertEqual(func(), expected)
-                        finally:
-                            sys.settrace(None)
-                    else:
-                        mon = sys.monitoring
-                        tool = mon.DEBUGGER_ID
-                        mon.use_tool_id(tool, 'nested source lines')
-                        try:
-                            mon.register_callback(tool, mon.events.LINE, line)
-                            mon.set_local_events(tool, func.__code__, mon.events.LINE)
-                            self.assertEqual(func(), expected)
-                        finally:
-                            mon.set_local_events(tool, func.__code__, 0)
-                            mon.free_tool_id(tool)
 
     def test_empty_branch_join_and_loop_backedge_lines(self):
         def branch(flag):
@@ -341,8 +185,6 @@ class CompactBoundaryTests(unittest.TestCase):
                     warm(lambda: list(gen()))
                 code = gen.__code__
                 words = {i.offset: i for i in instructions(gen)}
-                records = observation_records(code)
-                self.assertTrue(all(words[record[1]].opname != 'RESUME' for record in records))
                 seen = []
 
                 def on_start(observed, offset):
@@ -378,27 +220,6 @@ class CompactBoundaryTests(unittest.TestCase):
                     mon.set_events(tool, 0)
                     mon.set_local_events(tool, code, 0)
                     iterator.close()
-
-    def test_source_map_cannot_observe_before_generator_resume(self):
-        def gen():
-            yield 1
-
-        code = gen.__code__
-        words = instructions(gen)
-        entry = next(i for i in words if i.opname == 'RESUME')
-        locations, _ = position_parts(code.co_linetable)
-        record = (entry.offset - 1, entry.offset, 0,
-                  code.co_firstlineno, code.co_firstlineno, -1, -1, -1, 0, 0)
-        exceptions, _ = semantic_parts(code.co_exceptiontable)
-        maps = observation_tables(locations, [record], exceptions)
-        for handler in ('RESUME', 'INSTRUMENTED_RESUME'):
-            with self.subTest(handler=handler):
-                encoded = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
-                encoded[entry.offset] = ((encoded[entry.offset] & ~_opcode.IR_HANDLER_MASK) |
-                                         dis._all_opmap[handler])
-                with self.assertRaisesRegex(ValueError, 'semantic recovery.*entry RESUME'):
-                    code.replace(co_code=struct.pack(f'<{len(encoded)}Q', *encoded),
-                                 **maps)
 
     def test_observed_delegation_dispatches_real_handlers(self):
         def leaf():

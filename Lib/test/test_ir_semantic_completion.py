@@ -1,6 +1,7 @@
 """Loop/send outcomes own their results and real continuations."""
 
-import dis
+from test.support import ir_dis as dis
+from opcode import opname
 import sys
 import unittest
 
@@ -38,8 +39,14 @@ class SemanticCompletionTests(unittest.TestCase):
 
         def on_stop(code, offset, exception):
             self.assertIs(code, consume.__code__)
-            word = _testinternalcapi.get_ir(code, True)[offset]
-            self.assertEqual(word[0], 'INSTRUMENTED_FOR_ITER')
+            # offset is a byte offset into the stack bytecode, which is not
+            # instrumented; the IR words lowered from that unit are
+            self.assertEqual(opname[code.co_code[offset]], 'FOR_ITER')
+            ir = dis.IRCode(code)
+            names = [word[0] for word, unit in
+                     zip(_testinternalcapi.get_ir(code, True), ir._pcmap)
+                     if unit == offset // 2]
+            self.assertIn('INSTRUMENTED_FOR_ITER', names)
             self.assertIs(type(exception), StopIteration)
             self.assertIs(exception.value, returned)
             stopped.append(offset)

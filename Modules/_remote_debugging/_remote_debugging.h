@@ -132,6 +132,7 @@ typedef enum _WIN32_THREADSTATE {
 #define SIZEOF_BYTES_OBJ sizeof(PyBytesObject)
 #define SIZEOF_CODE_OBJ sizeof(PyCodeObject)
 #define SIZEOF_CODE_EXEC sizeof(_PyCodeExec)
+#define SIZEOF_CODE_IR sizeof(_PyCodeIR)
 #define SIZEOF_GEN_OBJ sizeof(PyGenObject)
 #define SIZEOF_INTERP_FRAME sizeof(_PyInterpreterFrame)
 #define SIZEOF_LLIST_NODE sizeof(struct llist_node)
@@ -223,6 +224,8 @@ typedef struct {
     PyObject *linetable;  // bytes
     PyObject *last_frame_info;
     ptrdiff_t last_addrq;
+    uint32_t *pcmap;      // of the code's IR, read once, or NULL if unreadable
+    uint32_t nwords;      // of the IR
 } CachedCodeMetadata;
 
 /* Frame cache constants and types */

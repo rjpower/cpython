@@ -13,7 +13,7 @@
 #include "pycore_ir.h"              // _PyIR_Formats
 #include "pycore_ir_exception.h"    // shared semantic container decoder
 #include "pycore_list.h"            // PyList_GET_VALUE()
-#include "pycore_opcode_metadata.h" // IS_VALID_OPCODE, OPCODE_HAS_*, etc
+#include "pycore_opcode_metadata.h" // IS_STACK_OPCODE, OPCODE_HAS_*, etc
 #include "pycore_opcode_utils.h"
 #include "pycore_long_value.h"      // _PyValue_AsLong()
 #include "pycore_value.h"           // PyValue_IsNull()
@@ -83,7 +83,10 @@ _opcode_stack_effect_impl(PyObject *module, int opcode, PyValueBorrow oparg,
                 "stack_effect: jump must be False, True or None");
         return -1;
     }
-    int effect = PyCompile_OpcodeStackEffectWithJump(opcode, oparg_int, jump_int);
+    int effect = PY_INVALID_STACK_EFFECT;
+    if (IS_STACK_OPCODE(opcode)) {
+        effect = PyCompile_OpcodeStackEffectWithJump(opcode, oparg_int, jump_int);
+    }
     if (effect == PY_INVALID_STACK_EFFECT) {
         PyErr_SetString(PyExc_ValueError, "invalid opcode or oparg");
         return -1;
@@ -104,7 +107,7 @@ static int
 _opcode_is_valid_impl(PyObject *module, int opcode)
 /*[clinic end generated code: output=b0d918ea1d073f65 input=fe23e0aa194ddae0]*/
 {
-    return IS_VALID_OPCODE(opcode);
+    return IS_STACK_OPCODE(opcode);
 }
 
 /*[clinic input]
@@ -120,7 +123,7 @@ static int
 _opcode_has_arg_impl(PyObject *module, int opcode)
 /*[clinic end generated code: output=7a062d3b2dcc0815 input=93d878ba6361db5f]*/
 {
-    return IS_VALID_OPCODE(opcode) && OPCODE_HAS_ARG(opcode);
+    return IS_STACK_OPCODE(opcode) && OPCODE_HAS_ARG(opcode);
 }
 
 /*[clinic input]
@@ -136,7 +139,7 @@ static int
 _opcode_has_const_impl(PyObject *module, int opcode)
 /*[clinic end generated code: output=c646d5027c634120 input=a6999e4cf13f9410]*/
 {
-    return IS_VALID_OPCODE(opcode) && OPCODE_HAS_CONST(opcode);
+    return IS_STACK_OPCODE(opcode) && OPCODE_HAS_CONST(opcode);
 }
 
 /*[clinic input]
@@ -152,7 +155,7 @@ static int
 _opcode_has_name_impl(PyObject *module, int opcode)
 /*[clinic end generated code: output=b49a83555c2fa517 input=8faf669024d97fad]*/
 {
-    return IS_VALID_OPCODE(opcode) && OPCODE_HAS_NAME(opcode);
+    return IS_STACK_OPCODE(opcode) && OPCODE_HAS_NAME(opcode);
 }
 
 /*[clinic input]
@@ -168,7 +171,7 @@ static int
 _opcode_has_jump_impl(PyObject *module, int opcode)
 /*[clinic end generated code: output=e9c583c669f1c46a input=35f711274357a0c3]*/
 {
-    return IS_VALID_OPCODE(opcode) && OPCODE_HAS_JUMP(opcode);
+    return IS_STACK_OPCODE(opcode) && OPCODE_HAS_JUMP(opcode);
 }
 
 /*[clinic input]
@@ -189,7 +192,7 @@ static int
 _opcode_has_free_impl(PyObject *module, int opcode)
 /*[clinic end generated code: output=d81ae4d79af0ee26 input=117dcd5c19c1139b]*/
 {
-    return IS_VALID_OPCODE(opcode) && OPCODE_HAS_FREE(opcode);
+    return IS_STACK_OPCODE(opcode) && OPCODE_HAS_FREE(opcode);
 }
 
 /*[clinic input]
@@ -205,7 +208,7 @@ static int
 _opcode_has_local_impl(PyObject *module, int opcode)
 /*[clinic end generated code: output=da5a8616b7a5097b input=9a798ee24aaef49d]*/
 {
-    return IS_VALID_OPCODE(opcode) && OPCODE_HAS_LOCAL(opcode);
+    return IS_STACK_OPCODE(opcode) && OPCODE_HAS_LOCAL(opcode);
 }
 
 /*[clinic input]
@@ -221,7 +224,7 @@ static int
 _opcode_has_exc_impl(PyObject *module, int opcode)
 /*[clinic end generated code: output=41b68dff0ec82a52 input=db0e4bdb9bf13fa5]*/
 {
-    return IS_VALID_OPCODE(opcode) && IS_BLOCK_PUSH_OPCODE(opcode);
+    return IS_STACK_OPCODE(opcode) && IS_BLOCK_PUSH_OPCODE(opcode);
 }
 
 /*[clinic input]
@@ -540,7 +543,11 @@ static PyValue
 _opcode_get_exception_entries_impl(PyObject *module, PyCodeObject *code)
 /*[clinic end generated code: output=05d34b778bd6dfb2 input=2edb896bcdc0d4be]*/
 {
-    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code->co_exceptiontable);
+    // The tables are those of the IR, which code that has not run lacks
+    if (_PyCode_GetIR(code) == NULL) {
+        return PyValue_NULL;
+    }
+    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code);
     const unsigned char *p = semantic.exceptions;
     const unsigned char *end = p + semantic.exceptions_size;
     PyObject *result = PyList_New(0);
@@ -581,7 +588,11 @@ static PyValue
 _opcode_get_recovery_entries_impl(PyObject *module, PyCodeObject *code)
 /*[clinic end generated code: output=b4d0ef6562b1c562 input=d1c948c4bb399c17]*/
 {
-    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code->co_exceptiontable);
+    // The tables are those of the IR, which code that has not run lacks
+    if (_PyCode_GetIR(code) == NULL) {
+        return PyValue_NULL;
+    }
+    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code);
     PyObject *result = PyTuple_New(semantic.nrecords);
     if (result == NULL) {
         return PyValue_NULL;

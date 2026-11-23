@@ -279,7 +279,7 @@ instr_oparg(_PyInstr *instr)
     PyCodeObject *code = _PyFrame_GetCode(frame);
     int offset = _PyFrame_InstrOffset(frame, instr);
     int oparg = _PyCode_InstrOparg(code, offset);
-    _PyIRWord word = _PyCode_WORDS(code)[offset];
+    _PyIRWord word = _PyCode_IRWords(code)[offset];
     const _PyIRFormat *format = _PyIR_FormatOf(IR_HANDLER(word));
     if (format->operands == _PyIR_OPERANDS_CALL
         || format->operands == _PyIR_OPERANDS_KW)
@@ -724,7 +724,7 @@ specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
     assert(!PyErr_Occurred());
     if (handler == LOAD_ATTR_SHAPE) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
-        int nlocalsplus = _PyFrame_GetCode(current_frame())->co_nlocalsplus;
+        int nlocalsplus = (int)_PyFrame_Exec(current_frame())->nfixed;
         if (IR_B(word) < (uint32_t)nlocalsplus &&
             IR_A(word) >= (uint32_t)nlocalsplus &&
             IR_A(word) != (uint32_t)_PyFrame_DiscardSlot(current_frame())) {
@@ -1778,7 +1778,7 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
             return -1;
         }
     }
-    uint8_t opcode = metaclass_check ? LOAD_ATTR_CLASS_WITH_METACLASS_CHECK
+    int opcode = metaclass_check ? LOAD_ATTR_CLASS_WITH_METACLASS_CHECK
                                     : LOAD_ATTR_CLASS;
     switch (kind) {
         case MUTABLE:
@@ -2524,7 +2524,7 @@ _PyBindPlan_Init(_PyBindPlan *plan, PyCodeObject *code, int positional,
         bits |= _Py_CALL_BIND_VARARGS;
     }
     if (flags & CO_VARKEYWORDS) {
-        bits |= routed == 0 && (flags & CO_VIRTUAL_KWARGS)
+        bits |= routed == 0 && (code->_co_ir->flags & _PyIR_CODE_VIRTUAL_KWARGS)
             ? _Py_CALL_BIND_VIRTUAL_KWARGS : _Py_CALL_BIND_NEW_KWARGS;
     }
     if (bits & (_Py_CALL_BIND_VARARGS | _Py_CALL_BIND_NEW_KWARGS |
@@ -3775,7 +3775,7 @@ enum { TRUTH_BOOL, TRUTH_INT, TRUTH_LIST, TRUTH_NONE, TRUTH_STR,
 /* TO_BOOL and the conditional jumps, which test the truth of a value the
  * same way, choose a specialisation from their own row of ops. */
 static void
-specialize_truth(PyValueBorrow value_o, _PyInstr *instr, const uint8_t *ops)
+specialize_truth(PyValueBorrow value_o, _PyInstr *instr, const uint16_t *ops)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[TO_BOOL] == INLINE_CACHE_ENTRIES_TO_BOOL);
@@ -3790,7 +3790,7 @@ specialize_truth(PyValueBorrow value_o, _PyInstr *instr, const uint8_t *ops)
         return;
     }
     PyObject *value = PyValue_AsKnownObjectBorrow(value_o);
-    uint8_t specialized_op;
+    int specialized_op;
     if (PyBool_Check(value)) {
         specialized_op = ops[TRUTH_BOOL];
         goto success;
@@ -3846,7 +3846,7 @@ success:
 Py_NO_INLINE void
 _Py_Specialize_ToBool(PyValue value_o, _PyInstr *instr)
 {
-    static const uint8_t ops[TRUTH_COUNT] = {
+    static const uint16_t ops[TRUTH_COUNT] = {
         TO_BOOL_BOOL, TO_BOOL_INT, TO_BOOL_LIST, TO_BOOL_NONE, TO_BOOL_STR,
         TO_BOOL_ALWAYS_TRUE, 0,
     };
@@ -3856,12 +3856,12 @@ _Py_Specialize_ToBool(PyValue value_o, _PyInstr *instr)
 Py_NO_INLINE void
 (_Py_Specialize_PopJumpIf)(PyValueBorrow value_o, _PyInstr *instr)
 {
-    static const uint8_t if_false[TRUTH_COUNT] = {
+    static const uint16_t if_false[TRUTH_COUNT] = {
         POP_JUMP_IF_FALSE_BOOL, POP_JUMP_IF_FALSE_INT, POP_JUMP_IF_FALSE_LIST,
         POP_JUMP_IF_FALSE_NONE, POP_JUMP_IF_FALSE_STR,
         POP_JUMP_IF_FALSE_ALWAYS_TRUE, POP_JUMP_IF_FALSE_SLOT,
     };
-    static const uint8_t if_true[TRUTH_COUNT] = {
+    static const uint16_t if_true[TRUTH_COUNT] = {
         POP_JUMP_IF_TRUE_BOOL, POP_JUMP_IF_TRUE_INT, POP_JUMP_IF_TRUE_LIST,
         POP_JUMP_IF_TRUE_NONE, POP_JUMP_IF_TRUE_STR,
         POP_JUMP_IF_TRUE_ALWAYS_TRUE, POP_JUMP_IF_TRUE_SLOT,
@@ -4047,14 +4047,14 @@ const struct _PyCode2 _Py_InitCleanup = {
     .co_name = &_Py_ID(__init__),
     .co_qualname = &_Py_ID(__init__),
     .co_linetable = (PyObject *)&no_location,
-    ._co_firsttraceable = 2,
     .co_stacksize = 2,
     .co_framesize = 2 + FRAME_SPECIALS_SIZE,
-    // The same words as _PyIR_InitCleanupExec (Python/ir.c), which this
-    // static code object starts with as its executing copy
+    // The register form of these two instructions is _PyIR_InitCleanupExec
+    // (Python/ir.c), which this static code object holds already lowered
+    ._co_ir = &_PyIR_InitCleanupIR,
     ._co_exec = &_PyIR_InitCleanupExec,
-    .co_words = {
-        IR_WORD(EXIT_INIT_CHECK, 1, 0, 0, 0),
-        IR_WORD(RETURN_VALUE, 0, 0, 0, 0),
+    .co_code_adaptive = {
+        EXIT_INIT_CHECK, 0,
+        RETURN_VALUE, 0,
     }
 };

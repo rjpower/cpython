@@ -9,7 +9,6 @@ that is mortal, or a block of more than eight, takes the same path.
 
 import asyncio
 import gc
-import struct
 import sys
 import threading
 import types
@@ -17,6 +16,7 @@ import unittest
 import weakref
 
 from test.support import cpython_only, gc_collect
+from test.support.ir_dis import IRCode
 
 
 class Tracker:
@@ -32,9 +32,8 @@ class Tracker:
 
 def const_slot_indexes(code):
     """The co_consts index of each constant slot of code."""
-    table = struct.unpack("%dI" % (len(code.co_constslots) // 4),
-                          code.co_constslots)
-    return table[1::2]
+    consts = list(code.co_consts)
+    return tuple(consts.index(value) for value in IRCode(code).const_values)
 
 
 def with_mortal_constant(function, mortal):
@@ -324,7 +323,7 @@ class FrameReturnTests(unittest.TestCase):
 
     def test_mortal_constant_is_not_counted(self):
         def g(a):
-            return a + 1
+            return a + 1000     # beyond LOAD_SMALL_INT: a real constant
 
         mortal = 10 ** 30 + 12345       # a heap int, never immortal
         h = with_mortal_constant(g, mortal)
@@ -360,7 +359,7 @@ class FrameReturnTests(unittest.TestCase):
     def test_mortal_constant_with_frame_object(self):
         def k(a):
             frame = sys._getframe()
-            return frame, a + 1
+            return frame, a + 1000
 
         mortal = 10 ** 30 + 54321
         kh = with_mortal_constant(k, mortal)

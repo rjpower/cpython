@@ -180,9 +180,10 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
         formats = ir_generator.compute_formats(analysis)
         contracts = ir_generator.handler_contracts(analysis, formats)
         name = "LOAD_ATTR_CLASSMETHOD"
-        self.assertEqual(analysis.opmap[name], 111)
-        self.assertEqual(analysis.instructions[name].family.name, "LOAD_ATTR")
-        self.assertEqual(feedback_fields(analysis.instructions[name]),
+        # An execution-only handler: it has no number in the stack opmap
+        self.assertNotIn(name, analysis.opmap)
+        instruction = analysis.ir_only[name]
+        self.assertEqual(feedback_fields(instruction),
                          [(2, 2, "class_version"), (6, 4, "class_value")])
         self.assertEqual(formats[name].roles, formats["LOAD_ATTR"].roles)
         self.assertEqual(formats[name].fb_layout, "_PyFbAttr")

@@ -649,6 +649,46 @@ enum {
  * and cleared by a call. */
 #define IR_CONST_IMAGE_MAX 8
 
+/* The register IR of a code object, lowered from its stack bytecode (co_code)
+ * at the first call by _PyIR_LowerCode() and immutable after.  Its words are
+ * the pristine template that the executing copy (_PyCodeExec) is made from.
+ * The arrays follow the struct in one allocation.
+ *
+ * Slots are numbered [locals, cells, frees, constant homes, discard,
+ * temporaries]: co_nlocalsplus and co_localsplusnames are the stack code's,
+ * and the IR adds the constant homes and the discard slot after them.  nfixed
+ * counts the slots below the temporaries, nslots all of them. */
+typedef struct _PyCodeIR {
+    uint32_t nwords;
+    uint32_t nfixed;
+    uint32_t nslots;
+    uint32_t first_traceable;   // word index of the entry RESUME
+    uint32_t flags;             // _PyIR_CODE_*
+    uint32_t nfeedback;         // feedback entries, entry 0 included, or 0
+    uint32_t nconst;            // constant slots, from const_first
+    uint32_t const_first;
+    uint32_t nexceptions;       // bytes of exceptions
+    uint32_t nrecords;
+    uint32_t nbytes;            // of the allocation
+    _PyIRWord *words;
+    /* The value of each constant slot: an inline scalar or an immortal
+     * object, which needs no owner */
+    PyValueBorrow *const_values;
+    /* The code-unit offset in co_code of the stack instruction that each
+     * word stands for, non-decreasing. */
+    uint32_t *pcmap;
+    uint32_t *fbinit;           // per feedback entry, see _PyIR_FBINIT()
+    /* The exception table in word units, upstream's encoding */
+    uint8_t *exceptions;
+    /* nrecords encoded recovery events (_PyIRSemantic_EncodeEvent()), and the
+     * position of each (_PyIRPositions_EncodeEvent()) */
+    uint8_t *records;
+    uint8_t *positions;
+} _PyCodeIR;
+
+/* The compiler proved that reads of the empty **kwargs binding materialize it */
+#define _PyIR_CODE_VIRTUAL_KWARGS 1
+
 typedef struct _PyCodeExec {
     _PyIRWord *words;
     /* The constant slots (CO_FAST_CONST), which are consecutive: nconst of
@@ -669,7 +709,8 @@ typedef struct _PyCodeExec {
     uint16_t const_first;
     uint16_t nconst;
     uint64_t call_plan_shape;
-    uint32_t nlocalsplus;   // of the code, which IR_IS_LOCAL() reads
+    uint32_t first_traceable;   // word index of the entry RESUME
+    uint32_t nfixed;        // slots below the temporaries, which IR_IS_LOCAL() reads
 } _PyCodeExec;
 
 /* The feedback table of a code object, which follows its words: per entry, a
@@ -696,10 +737,61 @@ typedef struct {
 } _PyIRStaticExec;
 extern _PyIRStaticExec _PyIR_InitCleanup;
 #define _PyIR_InitCleanupExec (_PyIR_InitCleanup.exec)
+extern _PyCodeIR _PyIR_InitCleanupIR;
 
-/* The executing copy of co, allocated if this is its first call, or NULL
- * with an exception set. */
+/* The register IR of co and its executing copy, made if this is the first
+ * call, or NULL with an exception set (RuntimeError for a stack code that the
+ * IR cannot hold).  Everything that needs the IR of code that has not run
+ * calls one of these; the accessors below assert that it exists. */
 PyAPI_FUNC(_PyCodeExec *) _PyCode_GetExec(PyCodeObject *co);
+PyAPI_FUNC(const _PyCodeIR *) _PyCode_GetIR(PyCodeObject *co);
+
+/* The IR of a code object that has one.  The words never change. */
+static inline const _PyCodeIR *
+_PyCode_IR(PyCodeObject *co)
+{
+    assert(co->_co_ir != NULL);
+    return co->_co_ir;
+}
+#define _PyCode_IRWords(CO) (_PyCode_IR(CO)->words)
+#define _PyCode_IRSize(CO) ((Py_ssize_t)_PyCode_IR(CO)->nwords)
+#define _PyCode_FirstTraceable(CO) ((int)_PyCode_IR(CO)->first_traceable)
+/* The slots below the temporaries: locals, cells, free variables, constant
+ * homes and the discard slot.  co_nlocalsplus counts the first three. */
+#define _PyCode_IRFixed(CO) ((int)_PyCode_IR(CO)->nfixed)
+
+/* The offset in bytes into co_code of the stack instruction that word index
+ * `word` of the IR stands for: what f_lasti, tb_lasti, the line table and the
+ * monitoring events report.  Words of one instruction map to its offset, so
+ * the result never decreases.  The end of the code, or a word before the
+ * first, gives the length of co_code or -1. */
+static inline int
+_PyCode_WordOffset(PyCodeObject *co, int word)
+{
+    if (word < 0) {
+        return -1;
+    }
+    const _PyCodeIR *ir = _PyCode_IR(co);
+    if (word >= (int)ir->nwords) {
+        return (int)(Py_SIZE(co) * sizeof(_Py_CODEUNIT));
+    }
+    return (int)(ir->pcmap[word] * sizeof(_Py_CODEUNIT));
+}
+
+/* The first word index of the instruction at byte offset `offset` of
+ * co_code, or of the first instruction after it if it has no word of its own
+ * (a load that folded into its consumer); the number of words past the end.
+ * The inverse of _PyCode_WordOffset(). */
+extern int _PyCode_OffsetWord(PyCodeObject *co, int offset);
+
+/* Lower the stack bytecode of co: build its IR, or return NULL with an
+ * exception set. */
+extern _PyCodeIR *_PyIR_LowerCode(PyCodeObject *co);
+extern void _PyIR_Free(_PyCodeIR *ir);
+
+/* Select the empty form of the returns of ir that leave no scratch owner
+ * (Objects/codeobject.c), or return -1 with an exception set. */
+extern int _PyIR_SelectEmptyReturns(_PyCodeIR *ir);
 
 /* Prove the admitted immutable image of co and build its plan. NULL means no
  * certified site; allocation failure returns -1 with an exception. The caller
@@ -707,11 +799,6 @@ PyAPI_FUNC(_PyCodeExec *) _PyCode_GetExec(PyCodeObject *co);
  * does not keep plans: only tests and the shadow comparison below read them. */
 PyAPI_FUNC(int) _PyCode_BuildSemanticPlan(PyCodeObject *co, const _PyIRCodePlan **plan);
 PyAPI_FUNC(void) _PyCode_FreeSemanticPlan(const _PyIRCodePlan *plan);
-
-/* The words of co with each return whose scratch the proof finds empty
- * replaced by its empty form, or NULL with *words NULL if none is. This is
- * the selection the compiler makes (_PyCodeConstructor.select_returns). */
-PyAPI_FUNC(int) _PyCode_SelectEmptyReturns(PyCodeObject *co, PyObject **words);
 
 /* No allocation or callback. Query once before retirement cursor changes;
  * this development comparison never changes NULL authority. */
@@ -749,7 +836,7 @@ PyAPI_DATA(int) _PyIR_MaxForward;
  * reach the "too many temporaries" SyntaxError for code compiled after. */
 PyAPI_DATA(int) _PyIR_MaxSlots;
 
-/* Decoding the words of a code object (co_words), by word index.  These
+/* Decoding the words of a code object (its IR), by word index.  These
  * read the code object only, never its executing copy, whose handler ids
  * specialisation and instrumentation rewrite and whose slot-class flags
  * the copy derives, but whose fields are the same. */
@@ -760,7 +847,7 @@ PyAPI_DATA(int) _PyIR_MaxSlots;
 static inline int
 _PyCode_InstrHandler(PyCodeObject *co, int i)
 {
-    return IR_HANDLER(((const _PyIRWord *)co->co_words)[i]);
+    return IR_HANDLER(_PyCode_IRWords(co)[i]);
 }
 
 /* The number of words of the instruction at index i of co: 1, or a call
@@ -769,7 +856,7 @@ _PyCode_InstrHandler(PyCodeObject *co, int i)
 static inline int
 _PyCode_InstrLength(PyCodeObject *co, int i)
 {
-    return _PyIR_WordLength(((const _PyIRWord *)co->co_words)[i]);
+    return _PyIR_WordLength(_PyCode_IRWords(co)[i]);
 }
 
 /* The opcode of the stack instruction that handler stands for, without
@@ -982,7 +1069,7 @@ _PyIR_ExecCallFlags(const _PyIRWord *head, uint32_t nlocalsplus)
 }
 
 /* The feedback block of the executing copy whose word 0 is WORDS, which
- * is the one with entries (co_nfeedback is not 0) */
+ * is the one with entries (the code's nfeedback is not 0) */
 static inline _PyFbBlock *
 _PyIR_FbBlock(const _PyIRWord *words)
 {

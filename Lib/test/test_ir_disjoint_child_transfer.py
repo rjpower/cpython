@@ -7,7 +7,6 @@ import unittest
 
 import _testinternalcapi
 from test.test_ir_admission import construct
-from test.test_ir_transfer_admission import raw_encoded
 
 
 def routes(code):

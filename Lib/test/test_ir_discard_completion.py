@@ -1,6 +1,7 @@
 """Python child completion owns ignored results without a temporary POP."""
 
-import dis
+from test.support import ir_dis as dis
+import dis as stack_dis
 import gc
 import io
 from pathlib import Path
@@ -108,19 +109,21 @@ class DiscardCompletionTests(unittest.TestCase):
                 for _ in range(ROUNDS):
                     caller(make)
                 self.assertIn(VARIANTS[int(general)], handlers(caller))
-                call = next(i.offset for i in dis.get_instructions(caller)
+                call = next(i.offset for i in stack_dis.get_instructions(caller)
                             if i.opname == "CALL")
-                successor = next(i.offset for i in dis.get_instructions(caller)
-                                 if i.offset > call)
                 armed = True
                 try:
                     self.assertEqual(caller(make), 7)
                 finally:
                     sys.settrace(None)
                 # The child's cleanup armed opcode observation, which sees
-                # the instruction after the call; the result is released
-                # once, when the caller's frame is cleared
-                self.assertIn(("opcode", successor), seen)
+                # an instruction after the call (public byte offsets; the
+                # lowered code folds the discard POP_TOP away, so the first
+                # observed instruction need not be the bytecode successor);
+                # the result is released once, when the caller's frame is
+                # cleared
+                self.assertTrue(any(event == "opcode" and offset > call
+                                    for event, offset in seen))
                 self.assertEqual([event for event, _ in seen].count("result"), 1)
 
     def test_result_finalizer_enables_observation_after_discard_boundary(self):
@@ -155,9 +158,9 @@ class DiscardCompletionTests(unittest.TestCase):
                 for _ in range(ROUNDS):
                     caller(make)
                 self.assertIn(VARIANTS[0], handlers(caller))
-                call = next(i.offset for i in dis.get_instructions(caller)
+                call = next(i.offset for i in stack_dis.get_instructions(caller)
                             if i.opname == "CALL")
-                successor = next(i.offset for i in dis.get_instructions(caller)
+                successor = next(i.offset for i in stack_dis.get_instructions(caller)
                                  if i.offset > call)
                 if mode == "monitor":
                     mon.use_tool_id(tool, "discard finalizer")
@@ -196,12 +199,12 @@ class DiscardCompletionTests(unittest.TestCase):
         for _ in range(ROUNDS):
             caller(make)
         self.assertIn(VARIANTS[1], handlers(caller))
-        call = next(i.offset for i in dis.get_instructions(caller)
+        call = next(i.offset for i in stack_dis.get_instructions(caller)
                     if i.opname == "CALL")
-        successor = next(i.offset for i in dis.get_instructions(caller)
-                         if i.offset > call)
         def observer(code, offset):
-            if code is caller.__code__ and offset == successor:
+            # Public offsets are bytecode offsets; the lowered code folds
+            # the discard POP_TOP away, so observe the first later one
+            if code is caller.__code__ and offset > call:
                 raise LookupError("discard observer")
         mon.use_tool_id(tool, "discard completion")
         try:

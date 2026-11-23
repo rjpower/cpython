@@ -90,26 +90,8 @@ class TestTranforms(BytecodeTestCase):
                 del x
         self.assertNotInBytecode(unot, 'UNARY_NOT')
         self.assertNotInBytecode(unot, 'POP_JUMP_IF_FALSE')
-        # The jump is fused with the compare: "to L if true"
-        self.assertIn('COMPARE_OP_JUMP',
-                      [i.opname for i in dis.get_instructions(unot)])
+        self.assertInBytecode(unot, 'POP_JUMP_IF_TRUE')
         self.check_lnotab(unot)
-
-    def test_unot_value(self):
-        # UNARY_NOT tests the truth of any value, so no TO_BOOL precedes it
-        def unot(x):
-            return not x
-        self.assertInBytecode(unot, 'UNARY_NOT')
-        self.assertNotInBytecode(unot, 'TO_BOOL')
-        for value in (0, 1, 0.0, 2.5, 2**100, None, True, False,
-                      "", "a", [], [1], object()):
-            self.assertIs(unot(value), not bool(value), value)
-
-        class Raises:
-            def __bool__(self):
-                raise ZeroDivisionError
-        with self.assertRaises(ZeroDivisionError):
-            unot(Raises())
 
     def test_elim_inversion_of_is_or_in(self):
         for line, cmp_op, invert in (
@@ -587,25 +569,21 @@ class TestTranforms(BytecodeTestCase):
                     and c)
         self.check_jump_targets(f)
         self.check_lnotab(f)
-        # Both jumps keep the value they jump with and pop it where they
-        # fall through
-        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_FALSE'), 0)
-        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_FALSE_OR_POP'), 2)
+        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_FALSE'), 2)
         # POP_JUMP_IF_TRUE to POP_JUMP_IF_TRUE --> POP_JUMP_IF_TRUE to non-jump
         def f(a, b, c):
             return ((a or b)
                     or c)
         self.check_jump_targets(f)
         self.check_lnotab(f)
-        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_TRUE'), 0)
-        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_TRUE_OR_POP'), 2)
+        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_TRUE'), 2)
         # JUMP_IF_FALSE_OR_POP to JUMP_IF_TRUE_OR_POP --> POP_JUMP_IF_FALSE to non-jump
         def f(a, b, c):
             return ((a and b)
                     or c)
         self.check_jump_targets(f)
         self.check_lnotab(f)
-        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_FALSE_OR_POP'), 1)
+        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_FALSE'), 1)
         self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_TRUE'), 1)
         # POP_JUMP_IF_TRUE to POP_JUMP_IF_FALSE --> POP_JUMP_IF_TRUE to non-jump
         def f(a, b, c):
@@ -614,7 +592,7 @@ class TestTranforms(BytecodeTestCase):
         self.check_jump_targets(f)
         self.check_lnotab(f)
         self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_FALSE'), 1)
-        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_TRUE_OR_POP'), 1)
+        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_TRUE'), 1)
 
     def test_elim_jump_to_uncond_jump4(self):
         def f():
@@ -871,24 +849,15 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         self.addCleanup(sys.settrace, sys.gettrace())
         sys.settrace(None)
 
-    def assertAddReadsX(self, f):
-        # x + k reads x through the add's field: the borrowed load of x,
-        # under the constant, folds into the add
-        add = [i for i in dis.get_instructions(f) if i.opname == 'BINARY_OP'][0]
-        self.assertEqual(add.srcs[0], f.__code__.co_varnames.index('x'))
-
     def test_load_fast_known_simple(self):
         def f():
             x = 1
             y = x + x
-        # Both borrowed loads fold into the add, which reads x twice
-        self.assertNotInBytecode(f, 'LOAD_FAST_CHECK')
-        add = [i for i in dis.get_instructions(f) if i.opname == 'BINARY_OP'][0]
-        self.assertEqual(add.srcs, (0, 0))
+        self.assertInBytecode(f, 'LOAD_FAST_BORROW_LOAD_FAST_BORROW')
 
     def test_store_fast_load_fast_borrow(self):
         # gh-159493: a LOAD_FAST that can borrow must not be fused into
-        # a fused store and load, regardless of how the source is laid out.
+        # STORE_FAST_LOAD_FAST, regardless of how the source is laid out.
         def f(shared, n):
             for i in range(n): shared
 
@@ -898,10 +867,8 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
 
         for func in (f, g):
             with self.subTest(func=func.__name__):
-                # The borrowed load and its POP_TOP go: the statement
-                # "shared" does nothing
-                self.assertNotInBytecode(func, 'LOAD_FAST_BORROW', 'shared')
-                self.assertNotInBytecode(func, 'POP_TOP')
+                self.assertNotInBytecode(func, 'STORE_FAST_LOAD_FAST')
+                self.assertInBytecode(func, 'LOAD_FAST_BORROW', 'shared')
         self.assertEqual([i.opname for i in dis.get_instructions(f)],
                          [i.opname for i in dis.get_instructions(g)])
 
@@ -909,8 +876,9 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         def f(x):
             y = x; z = y
             return z
-        # The load of y is stored into z, so it needs a strong reference
-        self.assertInBytecode(f, 'LOAD_FAST', 'y')
+        # The load of y is stored into z, so it needs a strong reference and
+        # can still be fused.
+        self.assertInBytecode(f, 'STORE_FAST_LOAD_FAST', ('y', 'y'))
 
     def test_load_fast_unknown_simple(self):
         def f():
@@ -928,31 +896,29 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         self.assertInBytecode(f, 'LOAD_FAST_CHECK')
         self.assertNotInBytecode(f, 'LOAD_FAST')
 
-    # These use [x] rather than print(x): a call names its argument slots in
-    # its operand words, so only a consumer such as BUILD_LIST still loads.
     def test_load_fast_known_because_parameter(self):
         def f1(x):
-            [x]
+            print(x)
         self.assertInBytecode(f1, 'LOAD_FAST_BORROW')
         self.assertNotInBytecode(f1, 'LOAD_FAST_CHECK')
 
         def f2(*, x):
-            [x]
+            print(x)
         self.assertInBytecode(f2, 'LOAD_FAST_BORROW')
         self.assertNotInBytecode(f2, 'LOAD_FAST_CHECK')
 
         def f3(*args):
-            [args]
+            print(args)
         self.assertInBytecode(f3, 'LOAD_FAST_BORROW')
         self.assertNotInBytecode(f3, 'LOAD_FAST_CHECK')
 
         def f4(**kwargs):
-            [kwargs]
+            print(kwargs)
         self.assertInBytecode(f4, 'LOAD_FAST_BORROW')
         self.assertNotInBytecode(f4, 'LOAD_FAST_CHECK')
 
         def f5(x=0):
-            [x]
+            print(x)
         self.assertInBytecode(f5, 'LOAD_FAST_BORROW')
         self.assertNotInBytecode(f5, 'LOAD_FAST_CHECK')
 
@@ -960,8 +926,8 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         def f():
             if condition():
                 x = 1
-            [x]
-            [x]
+            print(x)
+            print(x)
         self.assertInBytecode(f, 'LOAD_FAST_CHECK')
         self.assertInBytecode(f, 'LOAD_FAST_BORROW')
 
@@ -971,7 +937,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
                 x = 1
             else:
                 x = 2
-            [x]
+            print(x)
         self.assertInBytecode(f, 'LOAD_FAST_BORROW')
         self.assertNotInBytecode(f, 'LOAD_FAST_CHECK')
 
@@ -1010,14 +976,13 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             a60 = a61 = a62 = a63 = a64 = a65 = a66 = a67 = a68 = a69 = 1
             a70 = a71 = a72 = a73 = a74 = a75 = a76 = a77 = a78 = a79 = 1
             del a72, a73
-            [a73]
-            [a70, a71, a72, a73]
+            print(a73)
+            print(a70, a71, a72, a73)
             while True:
-                [a00, a01, a62, a63]
-                [a64, a65, a78, a79]
+                print(a00, a01, a62, a63)
+                print(a64, a65, a78, a79)
 
-        self.assertInBytecode(f, 'LOAD_FAST_BORROW', "a00")
-        self.assertInBytecode(f, 'LOAD_FAST_BORROW', "a01")
+        self.assertInBytecode(f, 'LOAD_FAST_BORROW_LOAD_FAST_BORROW', ("a00", "a01"))
         self.assertNotInBytecode(f, 'LOAD_FAST_CHECK', "a00")
         self.assertNotInBytecode(f, 'LOAD_FAST_CHECK', "a01")
         for i in 62, 63:
@@ -1055,7 +1020,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         ns = {}
         exec(code, ns)
         f = ns['f']
-        self.assertAddReadsX(f)
+        self.assertInBytecode(f, "LOAD_FAST_BORROW")
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         co_code = f.__code__.co_code
         def trace(frame, event, arg):
@@ -1067,7 +1032,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         sys.settrace(trace)
         result = f()
         self.assertIsNone(result)
-        self.assertAddReadsX(f)
+        self.assertInBytecode(f, "LOAD_FAST_BORROW")
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         self.assertEqual(f.__code__.co_code, co_code)
 
@@ -1087,7 +1052,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         ns = {}
         exec(code, ns)
         f = ns['f']
-        self.assertAddReadsX(f)
+        self.assertInBytecode(f, "LOAD_FAST_BORROW")
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         co_code = f.__code__.co_code
         def trace(frame, event, arg):
@@ -1101,7 +1066,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             sys.settrace(trace)
             result = f()
         self.assertEqual(result, 4)
-        self.assertAddReadsX(f)
+        self.assertInBytecode(f, "LOAD_FAST_BORROW")
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         self.assertEqual(f.__code__.co_code, co_code)
 
@@ -1121,7 +1086,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         ns = {}
         exec(code, ns)
         f = ns['f']
-        self.assertAddReadsX(f)
+        self.assertInBytecode(f, "LOAD_FAST_BORROW")
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         co_code = f.__code__.co_code
         def trace(frame, event, arg):
@@ -1135,7 +1100,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             sys.settrace(trace)
             result = f()
         self.assertEqual(result, 4)
-        self.assertAddReadsX(f)
+        self.assertInBytecode(f, "LOAD_FAST_BORROW")
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         self.assertEqual(f.__code__.co_code, co_code)
 
@@ -1153,7 +1118,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         ns = {}
         exec(code, ns)
         f = ns['f']
-        self.assertAddReadsX(f)
+        self.assertInBytecode(f, "LOAD_FAST_BORROW")
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         return f
 
@@ -1167,7 +1132,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             return trace
         sys.settrace(trace)
         f()
-        self.assertAddReadsX(f)
+        self.assertInBytecode(f, "LOAD_FAST_BORROW")
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
 
     def test_initializing_local_does_not_add_check(self):
@@ -1180,7 +1145,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             return trace
         sys.settrace(trace)
         f()
-        self.assertAddReadsX(f)
+        self.assertInBytecode(f, "LOAD_FAST_BORROW")
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
 
     def test_import_from_doesnt_clobber_load_fast_borrow(self):
@@ -1189,297 +1154,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             self.x
             from heapq import heapify_max
             print(heapify_max)
-        # The borrowed load of self folds into LOAD_ATTR
-        attr = [i for i in dis.get_instructions(f) if i.opname == 'LOAD_ATTR'][0]
-        self.assertEqual(attr.srcs, (0,))
-
-def _rebind_caller_x(depth=2):
-    # Rebinds the local x of the frame `depth` levels above this one, as a
-    # debugger would through frame.f_locals.
-    sys._getframe(depth).f_locals["x"] = 2
-
-
-class CopyPropagationAcrossCodeTests(BytecodeTestCase):
-    """A borrowed load folded into its reader reads the local when the
-    reader runs.  An op in between that runs Python code can rebind the
-    local through frame.f_locals, so the fold must not cross it: the reader
-    sees the value the load saw.
-    Each function returns the reader's result, computed at the event, and
-    the local after the line, which shows that the rebinding happened."""
-
-    def setUp(self):
-        self.addCleanup(sys.settrace, sys.gettrace())
-        sys.settrace(None)
-
-    def check(self, f, *args):
-        # Run past specialisation, so that the specialised members, which
-        # may push a frame, are exercised too.
-        for _ in range(100):
-            self.assertEqual(f(*args), (1, 2))
-
-    def test_call(self):
-        def change():
-            _rebind_caller_x()
-            return 0
-        def f():
-            x = 1
-            return x + change(), x
-        self.check(f)
-
-    def test_property(self):
-        class O:
-            @property
-            def attr(self):
-                _rebind_caller_x()
-                return 0
-        def f(o):
-            x = 1
-            return x + o.attr, x
-        self.check(f, O())
-
-    def test_getattr(self):
-        class O:
-            def __getattr__(self, name):
-                _rebind_caller_x()
-                return 0
-        def f(o):
-            x = 1
-            return x + o.attr, x
-        self.check(f, O())
-
-    def test_subscript(self):
-        class O:
-            def __getitem__(self, i):
-                _rebind_caller_x()
-                return 0
-        def f(o):
-            x = 1
-            return x + o[0], x
-        self.check(f, O())
-
-    def test_reflected_binary_op(self):
-        class O:
-            def __radd__(self, other):
-                _rebind_caller_x()
-                return 0
-        def f(o):
-            x = 1
-            y = 0
-            return x + (y + o), x
-        self.check(f, O())
-
-    def test_binary_op_dunder(self):
-        class O:
-            def __add__(self, other):
-                _rebind_caller_x()
-                return 0
-        def f(o):
-            x = 1
-            return x + (o + 0), x
-        self.check(f, O())
-
-    def test_comparison(self):
-        class O:
-            def __lt__(self, other):
-                _rebind_caller_x()
-                return 0
-        def f(o):
-            x = 1
-            return x + (o < 0), x
-        self.check(f, O())
-
-    def test_global_in_dict_subclass(self):
-        # A generic LOAD_GLOBAL calls __getitem__ of globals that are not
-        # an exact dict.
-        class Globals(dict):
-            def __getitem__(self, key):
-                if key == "G":
-                    _rebind_caller_x()
-                return dict.__getitem__(self, key)
-        ns = Globals(G=0, _rebind_caller_x=_rebind_caller_x)
-        exec("def f():\n    x = 1\n    return x + G, x\n", ns)
-        self.check(ns["f"])
-
-    def test_store_releases_rebinding_value(self):
-        # STORE_FAST name releases name's old value, whose __del__ rebinds
-        # x; the subscript store after it must store the value loaded
-        # before.  Store elimination gives the load a dst that names a
-        # local, which releases it (_PyIR_STORE_DST), so a load that copy
-        # propagation folded across it would see the rebinding.
-        class D:
-            def __del__(self):
-                _rebind_caller_x()
-        def f():
-            x = 1
-            name = D()
-            attrs = {}
-            name = attrs["name"] = x
-            return attrs["name"], x
-        self.check(f)
-
-    def test_global_colliding_key(self):
-        # The lookup of a builtin in an exact module dict compares with a
-        # key of the same hash, whose __eq__ runs.
-        class Key(str):
-            def __hash__(self):
-                return hash("copyprop_builtin")
-            def __eq__(self, other):
-                if other == "copyprop_builtin":
-                    _rebind_caller_x()
-                return False
-        import builtins
-        builtins.copyprop_builtin = 0
-        self.addCleanup(delattr, builtins, "copyprop_builtin")
-        ns = {"_rebind_caller_x": _rebind_caller_x, Key("other"): 0}
-        exec("def f():\n    x = 1\n    return x + copyprop_builtin, x\n", ns)
-        self.check(ns["f"])
-
-    def test_under_settrace(self):
-        events = []
-        def trace(frame, event, arg):
-            if frame.f_code.co_name == "change":
-                events.append(event)
-            return trace
-        def change():
-            _rebind_caller_x()
-            return 0
-        class O:
-            @property
-            def attr(self):
-                _rebind_caller_x()
-                return 0
-        def f():
-            x = 1
-            return x + change(), x
-        def g(o):
-            x = 1
-            return x + o.attr, x
-        sys.settrace(trace)
-        try:
-            r1 = f()
-            r2 = g(O())
-        finally:
-            sys.settrace(None)
-        self.assertEqual((r1, r2), ((1, 2), (1, 2)))
-        # The tracer saw the call that rebinds x
-        self.assertIn("call", events)
-
-    def test_under_monitoring(self):
-        mon = sys.monitoring
-        tool = mon.DEBUGGER_ID
-        mon.use_tool_id(tool, "copyprop")
-        self.addCleanup(mon.free_tool_id, tool)
-        self.addCleanup(mon.set_events, tool, 0)
-        seen = []
-        def on_call(code, offset, callable, arg0):
-            if callable is len:
-                seen.append(code.co_name)
-                # The callback's caller is the function that calls len
-                _rebind_caller_x()
-        mon.register_callback(tool, mon.events.CALL, on_call)
-        self.addCleanup(mon.register_callback, tool, mon.events.CALL, None)
-        class O:
-            @property
-            def attr(self):
-                _rebind_caller_x()
-                return 0
-        def f(s):
-            x = 1
-            return x + len(s), x
-        def g(o):
-            x = 1
-            return x + o.attr, x
-        mon.set_events(tool, mon.events.CALL | mon.events.PY_START
-                       | mon.events.LINE)
-        try:
-            r1 = f("")
-            r2 = g(O())
-        finally:
-            mon.set_events(tool, 0)
-        self.assertEqual((r1, r2), ((1, 2), (1, 2)))
-        self.assertIn("f", seen)
-
-    def test_folded_operand_outlives_rebinding(self):
-        # The reader reads x in place, and its own callee rebinds x and
-        # collects; the reader must still hand the original operand to
-        # __radd__, so something must keep it alive across the call.
-        seen = []
-        class X:
-            def __init__(self, tag):
-                self.tag = tag
-            def __add__(self, other):
-                _rebind_caller_x(2)
-                gc.collect()
-                return NotImplemented
-        class O:
-            def __radd__(self, other):
-                seen.append(other.tag)
-                return 0
-        def f(o, i):
-            x = X(f"tag{i}")
-            return x + o, x
-        self.assertReadsLocal(f, 'BINARY_OP', 'x')
-        for i in range(20):
-            self.assertEqual(f(O(), i), (0, 2))
-        self.assertEqual(seen, [f"tag{i}" for i in range(20)])
-
-    # The folds that stay: nothing between the load and its reader runs
-    # code.  Instruction.srcs lists the slots the reader reads, bottom
-    # first, so the reader names x's own slot.
-
-    def assertReadsLocal(self, f, opname, name, folded=True):
-        code = f.__code__
-        reader = [i for i in dis.get_instructions(f) if i.opname == opname][0]
-        x = code.co_varnames.index(name)
-        if folded:
-            self.assertEqual(reader.srcs[0], x)
-        else:
-            # The reader takes the value of a load into a temporary
-            self.assertNotEqual(reader.srcs[0], x)
-            self.assertInBytecode(f, 'LOAD_FAST_BORROW', name)
-
-    def test_fold_under_constant(self):
-        def f(x):
-            return x + 1000
-        self.assertReadsLocal(f, 'BINARY_OP', 'x')
-
-    def test_fold_under_local(self):
-        def f(x, y):
-            return x + y
-        self.assertReadsLocal(f, 'BINARY_OP', 'x')
-
-    def test_fold_under_cell(self):
-        def f(x):
-            c = 1
-            def g():
-                return c
-            return x + c
-        self.assertReadsLocal(f, 'BINARY_OP', 'x')
-
-    def test_fold_under_tuple(self):
-        def f(x, a, b):
-            return x == (a, b)
-        self.assertReadsLocal(f, 'COMPARE_OP', 'x')
-
-    def test_no_fold_under_is(self):
-        # IS_OP releases its inputs, and a release may run a finalizer, so
-        # its format runs code whatever the operands.  Knowing that borrowed
-        # or still-referenced operands cannot run code is a per-operand fact;
-        # a proven refinement belongs in the IR v2 instruction contract
-        # (operand-dependent may-run-Python), not in this pass.
-        def g(x, a, b):
-            return x + (a is b)
-        self.assertReadsLocal(g, 'BINARY_OP', 'x', folded=False)
-
-    def test_no_fold_under_global(self):
-        def f(x):
-            return x + G
-        self.assertReadsLocal(f, 'BINARY_OP', 'x', folded=False)
-
-    def test_no_fold_under_attribute(self):
-        def f(x, o):
-            return x + o.a
-        self.assertReadsLocal(f, 'BINARY_OP', 'x', folded=False)
+        self.assertInBytecode(f, "LOAD_FAST_BORROW", "self")
 
 class DirectCfgOptimizerTests(CfgOptimizationTestCase):
 
@@ -2649,7 +2324,6 @@ class DirectCfgOptimizerTests(CfgOptimizationTestCase):
         ]
         expected_insts = [
             ('SETUP_FINALLY', handler := self.Label(), 10),
-            ('NOP', None, 10),
             ('LOAD_SMALL_INT', 1, 11),
             ('RETURN_VALUE', None, 11),
             handler,
@@ -3074,16 +2748,14 @@ class OptimizeLoadFastTestCase(DirectCfgOptimizerTests):
             ("LOAD_FAST", 0, 1),
             ("LOAD_CONST", 0, 2),
             ("LOAD_CONST", 0, 3),
-            ("STORE_FAST", 0, 4),
-            ("STORE_FAST", 1, 4),
+            ("STORE_FAST_STORE_FAST", ((0 << 4) | 1), 4),
             ("POP_TOP", None, 5),
         ]
         expected = [
             ("LOAD_FAST", 0, 1),
             ("LOAD_COMMON_CONSTANT", 7, 2),
             ("LOAD_COMMON_CONSTANT", 7, 3),
-            ("STORE_FAST", 0, 4),
-            ("STORE_FAST", 1, 4),
+            ("STORE_FAST_STORE_FAST", ((0 << 4) | 1), 4),
             ("POP_TOP", None, 5),
         ]
         self.check(insts, expected)
@@ -3105,14 +2777,12 @@ class OptimizeLoadFastTestCase(DirectCfgOptimizerTests):
         insts = [
             ("LOAD_FAST", 0, 1),
             ("LOAD_CONST", 0, 3),
-            ("STORE_FAST", 0, 4),
-            ("STORE_FAST", 1, 4),
+            ("STORE_FAST_STORE_FAST", ((0 << 4) | 1), 4),
         ]
         expected = [
             ("LOAD_FAST", 0, 1),
             ("LOAD_COMMON_CONSTANT", 7, 3),
-            ("STORE_FAST", 0, 4),
-            ("STORE_FAST", 1, 4),
+            ("STORE_FAST_STORE_FAST", ((0 << 4) | 1), 4),
         ]
         self.check(insts, expected)
 

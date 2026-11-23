@@ -1,43 +1,19 @@
 """Semantic iterator completion and explicit generator resume recipients."""
 
-import _opcode
-import dis
+import dis as stack_dis
+from test.support import ir_dis as dis
 import gc
 import struct
 import sys
 import unittest
 
-from test import test_ir
 from test.support import import_helper
-from test.support.ir_semantics import (semantic_table, semantic_parts, position_parts,
-                                       observation_tables, observation_records)
 
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
 
 
 def code_names(func):
     return [instruction.opname for instruction in dis.get_instructions(func)]
-
-
-def exception_item(value):
-    parts = [value & 63]
-    while value >> 6:
-        value >>= 6
-        parts.append((value & 63) | 64)
-    return bytes(reversed(parts))
-
-
-def exception_entry(*values):
-    data = bytearray(b''.join(exception_item(value) for value in values))
-    data[0] |= 128
-    return semantic_table(bytes(data))
-
-
-def setUpModule():
-    # These tests construct malformed images and expect the constructor to
-    # reject them; release builds only do so on request.
-    from test.support.ir_semantics import code_validation
-    unittest.enterModuleContext(code_validation())
 
 
 class SemanticCompletionTests(unittest.TestCase):
@@ -66,10 +42,11 @@ class SemanticCompletionTests(unittest.TestCase):
         throws = [i for i in instructions if i.opname == 'CLEANUP_THROW']
         self.assertEqual(len(throws), 2)
         offsets = {i.offset for i in instructions}
-        words = struct.unpack(f'<{len(outer.__code__.co_code) // 8}Q', outer.__code__.co_code)
+        ir_code = dis.IRCode(outer.__code__).co_code
+        words = struct.unpack(f'<{len(ir_code) // 8}Q', ir_code)
         for instruction in throws:
-            self.assertIn(instruction.jump_target, offsets)
-            self.assertEqual(instruction.jump_target, words[instruction.offset] >> 40)
+            # The word names its target, a word of the code
+            self.assertIn(words[instruction.offset] >> 40, offsets)
         self.assertNotIn('END_SEND', [i.opname for i in instructions])
         generator = outer()
         self.assertEqual(next(generator), 'ready')
@@ -158,7 +135,8 @@ class SemanticCompletionTests(unittest.TestCase):
                 exec('def gen():\n yield 1\n yield 2\n return 7\n'
                      'def consume():\n for value in gen():\n  pass\n', namespace)
                 consume = namespace['consume']
-                site = next(i.offset for i in dis.get_instructions(consume)
+                # Event offsets are byte offsets into the stack bytecode
+                site = next(i.offset for i in stack_dis.get_instructions(consume)
                             if i.opname == 'FOR_ITER')
                 counts = dict.fromkeys(kinds, 0)
                 for kind in kinds:
@@ -205,7 +183,8 @@ class SemanticCompletionTests(unittest.TestCase):
                             pass
                     except LookupError as error:
                         return error.__traceback__
-                site = next(i.offset for i in dis.get_instructions(consume)
+                # Event offsets are byte offsets into the stack bytecode
+                site = next(i.offset for i in stack_dis.get_instructions(consume)
                             if i.opname == 'FOR_ITER')
                 def callback(code, offset, *args):
                     if code is consume.__code__:
@@ -222,52 +201,6 @@ class SemanticCompletionTests(unittest.TestCase):
                 finally:
                     sys.monitoring.set_local_events(tool, consume.__code__, 0)
 
-    def test_constructor_rejects_window_and_handler_anchor_mismatch(self):
-        def consume(values):
-            for value in values:
-                pass
-            # The result is a temporary: the final return reads a scratch
-            # home, as a return of None (a constant slot) does not
-            return [0]
-        code = consume.__code__
-        words = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
-        site = next(i.offset for i in dis.get_instructions(consume)
-                    if i.opname == 'FOR_ITER')
-        base = (words[site] >> 28) & 4095
-        count = len(_testinternalcapi.get_co_localskinds(code)) + code.co_stacksize
-        words[site] = (words[site] & ~(4095 << 28)) | ((count - 1) << 28)
-        with self.assertRaisesRegex(ValueError, 'invalid register window'):
-            code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                         co_linetable=b'', co_exceptiontable=code.co_exceptiontable)
-        table = exception_entry(site, 1, len(words) - 1, (base + 1) << 1)
-        with self.assertRaisesRegex(ValueError, 'semantic completion'):
-            code.replace(co_exceptiontable=table, co_linetable=b'')
-
-        # A preserved prefix cannot grant an explicit read of the old iterator
-        # after completion, even when its physical home still exists.
-        words = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
-        words[-1] = dis.opmap['POP_TOP'] | (base << 16)
-        with self.assertRaisesRegex(ValueError, 'semantic completion'):
-            code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                         co_exceptiontable=table, co_linetable=b'')
-
-        def delegate():
-            yield from ()
-
-        code = delegate.__code__
-        words = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
-        site = next(i.offset for i in dis.get_instructions(delegate)
-                    if i.opname == 'SEND')
-        base = (words[site] >> 28) & 4095
-        words[site] = (words[site] & ~(4095 << 16)) | (base << 16)
-        words[-1] = dis.opmap['POP_TOP'] | (base << 16)
-        table = exception_entry(site, 1, len(words) - 1, (base + 1) << 1)
-        # Publishing a new completed result into B does not reconstruct the
-        # old receiver that this forged handler attempts to consume.
-        with self.assertRaisesRegex(ValueError, 'semantic completion'):
-            code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                         co_exceptiontable=table, co_linetable=b'')
-
     def test_post_completion_preserves_generator_stopiteration_wrapper(self):
         tool = sys.monitoring.PROFILER_ID
         event = sys.monitoring.events.BRANCH_RIGHT
@@ -278,7 +211,7 @@ class SemanticCompletionTests(unittest.TestCase):
             with self.subTest(error_type=error_type):
                 iterator = (value for value in ())
                 code = iterator.gi_code
-                site = next(i.offset for i in dis.get_instructions(code)
+                site = next(i.offset for i in stack_dis.get_instructions(code)
                             if i.opname == 'FOR_ITER')
 
                 def callback(observed, offset, *args):
@@ -297,31 +230,6 @@ class SemanticCompletionTests(unittest.TestCase):
                 finally:
                     sys.monitoring.set_local_events(tool, code, 0)
                     iterator.close()
-
-    def test_constructor_completion_proof_validates_local_roles_and_eh_structure(self):
-        iterator = (value for value in ())
-        self.addCleanup(iterator.close)
-        code = iterator.gi_code
-        code.replace()
-        instructions = list(dis.get_instructions(code))
-        site = next(i.offset for i in instructions if i.opname == 'FOR_ITER')
-        entry = next(e for e in dis.Bytecode(code).exception_entries
-                     if e.start <= site < e.end)
-        words = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
-        base = (words[site] >> 28) & 4095
-        words[entry.target] = dis.opmap['LOAD_FAST'] | (base << 28)
-        with self.assertRaisesRegex(ValueError, 'names local slot'):
-            code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                         co_linetable=b'', co_exceptiontable=code.co_exceptiontable)
-        table, _ = semantic_parts(code.co_exceptiontable)
-        first, _ = semantic_parts(exception_entry(site, 1, entry.target, entry.slot << 1))
-        second, _ = semantic_parts(exception_entry(0, 1, entry.target, entry.slot << 1))
-        malformed = (semantic_table(bytes([table[0] & 127]) + table[1:]),
-                     semantic_table(table + table), semantic_table(first + second))
-        for data in malformed:
-            with self.subTest(table=data):
-                with self.assertRaisesRegex(ValueError, 'semantic recovery'):
-                    code.replace(co_exceptiontable=data)
 
     def test_completion_line_landing_survives_finalizer_observation_changes(self):
         # Exercise this VM's completion retirement path; Python does not
@@ -385,169 +293,59 @@ class SemanticCompletionTests(unittest.TestCase):
         sys.monitoring.use_tool_id(tool, 'source-line-epoch')
         self.addCleanup(sys.monitoring.free_tool_id, tool)
         self.addCleanup(sys.monitoring.register_callback, tool, line_event, None)
-        for change in ('local', 'global', 'restart'):
-            for source_lines, trigger, expected in (((5,), 5, [1, 5, 5]),
-                                                     ((3, 5), 3, [1, 3, 5])):
-                with self.subTest(change=change, source_lines=source_lines):
-                    def consume():
-                        for value in ():
-                            pass
-                        pass
-                        pass
-                        return 'complete'
 
-                    code = consume.__code__
-                    site = next(i for i in dis.get_instructions(consume)
-                                if i.opname == 'FOR_ITER')
-                    raw = code.co_linetable
-                    version, size, _ = struct.unpack_from('<III', raw, 4)
-                    locations = raw[16:16 + size]
-                    # Deliberately specify the source-only edge independently
-                    # of which empty statements the compiler coalesces.
-                    records = [(site.offset, site.jump_target, 1,
-                                code.co_firstlineno + line, code.co_firstlineno + line,
-                                0, 1, -1, 0, 0) for line in source_lines]
-                    exceptions, _ = semantic_parts(code.co_exceptiontable)
-                    consume.__code__ = code.replace(
-                        **observation_tables(locations, records, exceptions))
-                    lines = []
-                    changed = []
+        def make():
+            def consume():
+                for value in ():
+                    pass
+                pass
+                pass
+                return 'complete'
+            return consume
 
-                    def callback(observed, line):
-                        if observed is not consume.__code__:
-                            return
-                        relative = line - observed.co_firstlineno
-                        lines.append(relative)
-                        if relative == trigger and not changed:
-                            self.assertEqual(sys._getframe(1).f_lasti, site.offset)
-                            changed.append(True)
-                            if change == 'local':
-                                sys.monitoring.set_local_events(tool, observed, 0)
-                                sys.monitoring.set_local_events(tool, observed, line_event)
-                            elif change == 'global':
-                                sys.monitoring.set_events(tool, 0)
-                                sys.monitoring.set_events(tool, line_event)
-                            else:
-                                sys.monitoring.restart_events()
+        def run(consume, change, trigger):
+            code = consume.__code__
+            lines = []
+            changed = []
 
-                    sys.monitoring.register_callback(tool, line_event, callback)
-                    try:
-                        if change == 'global':
-                            sys.monitoring.set_events(tool, line_event)
-                        else:
-                            sys.monitoring.set_local_events(tool, consume.__code__, line_event)
-                        self.assertEqual(consume(), 'complete')
-                        self.assertEqual(changed, [True])
-                        self.assertEqual(lines, expected)
-                    finally:
+            def callback(observed, line):
+                if observed is not code:
+                    return
+                relative = line - observed.co_firstlineno
+                lines.append(relative)
+                if relative == trigger and not changed:
+                    changed.append(True)
+                    if change == 'local':
+                        sys.monitoring.set_local_events(tool, observed, 0)
+                        sys.monitoring.set_local_events(tool, observed, line_event)
+                    elif change == 'global':
                         sys.monitoring.set_events(tool, 0)
-                        sys.monitoring.set_local_events(tool, consume.__code__, 0)
+                        sys.monitoring.set_events(tool, line_event)
+                    elif change == 'restart':
+                        sys.monitoring.restart_events()
 
-    def test_completion_handler_skips_only_untouched_window_holes(self):
-        def consume(values):
-            for outer in values:
-                for middle in outer:
-                    for value in middle:
-                        pass
-
-        code = consume.__code__
-        original = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
-        site = [i.offset for i in dis.get_instructions(consume)
-                if i.opname == 'FOR_ITER'][-1]
-        base = (original[site] >> 28) & 4095
-        self.assertGreaterEqual(base, len(_testinternalcapi.get_co_localskinds(code)) + 4)
-        exception = base - 1
-        table = exception_entry(site, 1, len(original), exception << 1)
-        # The retired inputs and not-yet-produced item are untouched middle
-        # positions; ordinary PRE unwind may leave all three unavailable.
-        # These are constructor proofs only: the synthetic handlers are not run.
-        shapes = {
-            'LIST_APPEND': (base - 1, 0, 4, 0),
-            'SET_ADD': (base - 1, 0, 4, 0),
-            'MAP_ADD': (base - 1, 0, 0, 4),
-            'DICT_MERGE': (base - 4, 5, 0, 0),
-            'DICT_UPDATE': (base - 1, 4, 0, 0),
-            'LIST_EXTEND': (base - 1, 4, 0, 0),
-            'SET_UPDATE': (base - 1, 4, 0, 0),
-            'COPY': (base - 1, 4, 0, 0),
-            'SWAP': (base - 1, 5, 0, 0),
-        }
-        for name, fields in shapes.items():
-            with self.subTest(opcode=name):
-                def replace(fields):
-                    words = original.copy()
-                    if name == 'SWAP':
-                        # Unwind clears the other endpoint beyond the retired
-                        # window. Give SWAP a real value there first; the
-                        # required-source negative below still reads base.
-                        words.append(dis.opmap['LOAD_CONST'] |
-                                     ((base + 3) << 16))
-                    handler = dis._all_opmap[name] | sum(
-                        value << shift for value, shift in zip(fields, (16, 28, 40, 52)))
-                    words.extend((handler, dis.opmap['RERAISE'] | (exception << 16)))
-                    return code.replace(
-                        co_code=struct.pack(f'<{len(words)}Q', *words),
-                        co_exceptiontable=table, co_linetable=b'',
-                        co_stacksize=max(code.co_stacksize, base + 8))
-                replace(fields)
-                # Moving the real collection/source onto a retired home must
-                # still fail; hole suppression is neither a definition nor NULL.
-                required = (base, *fields[1:])
-                with self.assertRaisesRegex(ValueError, 'semantic completion'):
-                    replace(required)
-                if name in ('LIST_APPEND', 'SET_ADD', 'MAP_ADD'):
-                    required = (fields[0], base, *fields[2:])
-                    with self.assertRaisesRegex(ValueError, 'semantic completion'):
-                        replace(required)
-
-    def test_completion_handler_attribute_deletion_uses_actual_handler_capability(self):
-        def consume(values):
-            for outer in values:
-                for value in outer:
-                    pass
-
-        code = consume.__code__
-        words = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
-        site = [i.offset for i in dis.get_instructions(consume)
-                if i.opname == 'FOR_ITER'][-1]
-        base = (words[site] >> 28) & 4095
-        self.assertGreaterEqual(base, len(_testinternalcapi.get_co_localskinds(code)) + 2)
-        exception = base - 1
-        table = exception_entry(site, 1, len(words), exception << 1)
-        for name in ('STORE_ATTR', 'STORE_ATTR_INSTANCE_VALUE'):
-            with self.subTest(handler=name):
-                # The feedback field (C) is that of the shared entry 0
-                handler = words + [dis._all_opmap[name] | (base << 28) | (4095 << 40),
-                                   dis.opmap['RERAISE'] | (exception << 16)]
-                def replace():
-                    return code.replace(co_code=struct.pack(f'<{len(handler)}Q', *handler),
-                                        co_exceptiontable=table, co_linetable=b'',
-                                        co_names=('attribute',))
-                if name == 'STORE_ATTR_INSTANCE_VALUE':
-                    with self.assertRaisesRegex(ValueError, 'semantic completion'):
-                        replace()
+            sys.monitoring.register_callback(tool, line_event, callback)
+            try:
+                if change == 'global':
+                    sys.monitoring.set_events(tool, line_event)
                 else:
-                    replace()
+                    sys.monitoring.set_local_events(tool, code, line_event)
+                self.assertEqual(consume(), 'complete')
+            finally:
+                sys.monitoring.set_events(tool, 0)
+                sys.monitoring.set_local_events(tool, code, 0)
+            return lines, changed
 
-    def test_nullable_deletion_value_cannot_alias_required_receiver(self):
-        def consume(values):
-            for outer in values:
-                for value in outer:
-                    pass
-
-        code = consume.__code__
-        words = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
-        site = [i.offset for i in dis.get_instructions(consume)
-                if i.opname == 'FOR_ITER'][-1]
-        base = (words[site] >> 28) & 4095
-        exception = base - 1
-        table = exception_entry(site, 1, len(words), exception << 1)
-        words.extend((dis.opmap['STORE_ATTR'] | (base << 16) | (base << 28) | (4095 << 40),
-                      dis.opmap['RERAISE'] | (exception << 16)))
-        with self.assertRaisesRegex(ValueError, 'semantic completion'):
-            code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                         co_exceptiontable=table, co_linetable=b'',
-                         co_names=('attribute',))
+        # Reconfiguring the observation from a callback, at any line, neither
+        # repeats nor drops a line the unchanged run delivers
+        expected, _ = run(make(), None, None)
+        self.assertGreaterEqual(len(expected), 3)
+        for change in ('local', 'global', 'restart'):
+            for trigger in expected[1:]:
+                with self.subTest(change=change, trigger=trigger):
+                    lines, changed = run(make(), change, trigger)
+                    self.assertEqual(changed, [True])
+                    self.assertEqual(lines, expected)
 
     def test_handler_reuses_unwind_cleared_null_call_self(self):
         def delegate(factory):
@@ -612,138 +410,6 @@ class SemanticCompletionTests(unittest.TestCase):
         finally:
             coroutine.close()
 
-    def test_ignored_window_dst_does_not_define_a_retired_owner(self):
-        def delegate(values):
-            yield from values
-
-        code = delegate.__code__
-        words = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
-        site = next(i.offset for i in dis.get_instructions(delegate)
-                    if i.opname == 'CLEANUP_THROW')
-        base = (words[site] >> 28) & 4095
-        handler = len(words)
-        exception = base + 4
-        words.extend((dis.opmap['PUSH_EXC_INFO'] | (base << 16) | (exception << 28),
-                      dis.opmap['POP_TOP'] | (base << 16),
-                      dis.opmap['RERAISE'] | ((exception + 1) << 16)))
-        table = exception_entry(site, 1, handler, exception << 1)
-        # PUSH_EXC_INFO publishes at its implicit B window; its ignored A
-        # field cannot recreate the old receiver that POP_TOP attempts to read.
-        with self.assertRaisesRegex(ValueError, f'pc={handler + 1} '):
-            code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                         co_exceptiontable=table, co_linetable=b'',
-                         co_stacksize=max(code.co_stacksize, exception + 2 -
-                                          len(_testinternalcapi.get_co_localskinds(code))))
-
-    def test_constructor_completion_proof_follows_source_callback_errors(self):
-        iterator = (value for value in ())
-        self.addCleanup(iterator.close)
-        code = iterator.gi_code
-        instructions = list(dis.get_instructions(code))
-        site = next(i.offset for i in instructions if i.opname == 'FOR_ITER')
-        entry = next(e for e in dis.Bytecode(code).exception_entries
-                     if e.start <= site < e.end)
-        words = list(struct.unpack(f'<{len(code.co_code) // 8}Q', code.co_code))
-        base = (words[site] >> 28) & 4095
-        new_handler = len(words)
-        words.append(dis.opmap['POP_TOP'] | (base << 16))
-        raw = code.co_linetable
-        version, locations_size, _ = struct.unpack_from('<III', raw, 4)
-        locations = raw[16:16 + locations_size] + b'\xf8'
-        event = (entry.target, entry.target + 1, 0,
-                 code.co_firstlineno, code.co_firstlineno, 0, 1,
-                 new_handler, entry.slot, int(entry.lasti))
-        exceptions, _ = semantic_parts(code.co_exceptiontable)
-        maps = observation_tables(locations, [event], exceptions)
-        with self.assertRaisesRegex(ValueError, 'semantic completion'):
-            code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                         **maps)
-
-    def test_constructor_terminal_observer_owners(self):
-        def iterate(values):
-            for value in values:
-                pass
-            return None
-
-        def choose(left, right):
-            return (left + 1) or right
-
-        def source_handler(code, site_name, edge, dst, read, nullable,
-                           ordinary=False):
-            words = list(struct.unpack(f'<{len(code.co_code) // 8}Q',
-                                       code.co_code))
-            # This fixture changes control/output geometry. Re-admit general
-            # returns rather than retaining the old image's empty certificate.
-            general_return = {
-                dis._all_opmap['RETURN_VALUE_EMPTY']: dis.opmap['RETURN_VALUE'],
-                dis._all_opmap['INSTRUMENTED_RETURN_VALUE_EMPTY']:
-                    dis.opmap['INSTRUMENTED_RETURN_VALUE'],
-            }
-            words = [(word & ~_opcode.IR_HANDLER_MASK) | general_return.get(word & _opcode.IR_HANDLER_MASK, word & _opcode.IR_HANDLER_MASK)
-                     for word in words]
-            instruction = next(i for i in dis.get_instructions(code)
-                               if i.opname == site_name)
-            site = instruction.offset
-            base = (words[site] >> 28) & 4095
-            self.assertGreaterEqual(base, code.co_nlocals)
-            if dst == 'result':
-                dst = base + 1
-            elif dst == 'window':
-                dst = base + 2
-            elif dst == 'discard':
-                dst = 4095
-            words[site] = (words[site] & ~(4095 << 16)) | (dst << 16)
-            home = {'item': base + 2, 'cursor': base + 1,
-                    'input': base, 'result': dst}[read]
-            handler = len(words)
-            if nullable:
-                words.append(dis.opmap['STORE_GLOBAL'] | (home << 16))
-                words.append(dis.opmap['RETURN_VALUE'])
-            else:
-                words.append(dis.opmap['RETURN_VALUE'] | (home << 16))
-            locations, _ = position_parts(code.co_linetable)
-            locations += bytes((0xf8 + len(words) - handler - 1,))
-            records = observation_records(code)
-            exceptions, _ = semantic_parts(code.co_exceptiontable)
-            if ordinary:
-                exceptions, _ = semantic_parts(exception_entry(
-                    site, 1, handler, (base + 4) << 1))
-            else:
-                records.append((site,
-                                instruction.jump_target if edge else site + 1,
-                                edge, code.co_firstlineno, code.co_firstlineno,
-                                0, 1, handler, base + 4, 0))
-            maps = observation_tables(locations, records, exceptions)
-            stacksize = max(code.co_stacksize, base + 5 - code.co_nlocals)
-            return code.replace(co_code=struct.pack(f'<{len(words)}Q', *words),
-                                co_names=code.co_names + ('terminal_sink',),
-                                co_stacksize=stacksize, **maps)
-
-        loop = iterate.__code__
-        self.assertIsNotNone(source_handler(loop, 'FOR_ITER', 0,
-                                            'window', 'item', False))
-        # The same encoded item read is valid after an observer commit but
-        # unavailable to an ordinary exception before FOR_ITER produces it.
-        with self.assertRaisesRegex(ValueError, 'semantic completion'):
-            source_handler(loop, 'FOR_ITER', 0, 'window', 'item', False,
-                           ordinary=True)
-        for dst, read, nullable in (('window', 'cursor', True),
-                                    ('discard', 'item', False)):
-            with self.subTest(dst=dst, read=read):
-                with self.assertRaisesRegex(ValueError, 'semantic completion'):
-                    source_handler(loop, 'FOR_ITER', 0, dst, read, nullable)
-        self.assertIsNotNone(source_handler(loop, 'FOR_ITER', 0,
-                                            'discard', 'item', True))
-
-        branch = choose.__code__
-        self.assertIsNotNone(source_handler(branch, 'JUMP_IF_TRUE_OR_POP', 0,
-                                            'result', 'result', True))
-        self.assertIsNotNone(source_handler(branch, 'JUMP_IF_TRUE_OR_POP', 1,
-                                            'result', 'result', False))
-        with self.assertRaisesRegex(ValueError, 'semantic completion'):
-            source_handler(branch, 'JUMP_IF_TRUE_OR_POP', 0,
-                           'result', 'input', True)
-
     def test_post_completion_restores_inlined_comprehension_local(self):
         tool = sys.monitoring.PROFILER_ID
         event = sys.monitoring.events.BRANCH_RIGHT
@@ -760,7 +426,7 @@ class SemanticCompletionTests(unittest.TestCase):
                 observed.append(('finally', value))
             return value
 
-        site = next(i.offset for i in dis.get_instructions(consume)
+        site = next(i.offset for i in stack_dis.get_instructions(consume)
                     if i.opname == 'FOR_ITER')
 
         def callback(code, offset, *args):
@@ -786,13 +452,21 @@ class SemanticCompletionTests(unittest.TestCase):
             ('def f():\n yield from (1, 2)\n', 'f', lambda f: list(f())),
         ):
             with self.subTest(source=source):
-                func = test_ir.relaxed_compile(source)[name]
-                instructions = list(dis.get_instructions(func))
-                words = struct.unpack(f'<{len(func.__code__.co_code) // 8}Q',
-                                      func.__code__.co_code)
-                helpers = {offset for offset, word in enumerate(words)
-                           if word & _opcode.IR_HANDLER_MASK == dis._ir_opmap['IR_JUMP']}
+                namespace = {}
+                exec(source, namespace)
+                func = namespace[name]
+                # Lowering relaxes every loop's jumps through helper words
+                # while the limit is zero
+                old = _testinternalcapi.set_ir_max_forward(0)
+                try:
+                    rows = _testinternalcapi.get_ir(func.__code__)
+                finally:
+                    _testinternalcapi.set_ir_max_forward(old)
+                ir = dis.IRCode(func.__code__)
+                helpers = {word for word, row in enumerate(rows)
+                           if row[0] == 'IR_JUMP'}
                 self.assertTrue(helpers)
+                valid = {i.offset for i in stack_dis.get_instructions(func)}
                 observed = []
                 def trace(frame, event, arg):
                     if frame.f_code is func.__code__:
@@ -805,11 +479,11 @@ class SemanticCompletionTests(unittest.TestCase):
                     run(func)
                 finally:
                     sys.settrace(None)
-                self.assertLessEqual(helpers, set(observed))
-                self.assertTrue(all(offset < len(instructions) for offset in observed))
-                body, completed = sorted(helpers)
-                self.assertEqual(observed.count(body), 2)
-                self.assertEqual(observed.count(completed), 1)
+                # Opcode events are per stack instruction, so a helper is
+                # observed as the instruction it was lowered from
+                self.assertLessEqual(set(observed), valid)
+                self.assertLessEqual({2 * ir._pcmap[word] for word in helpers},
+                                     set(observed))
 
     def test_mixed_line_instruction_ingress_and_suspension(self):
         events = sys.monitoring.events
@@ -886,7 +560,7 @@ class SemanticCompletionTests(unittest.TestCase):
                             run()
                             self.assertEqual(lines, expected_lines)
                             self.assertTrue(offsets)
-                            real = {i.offset for i in dis.get_instructions(func)
+                            real = {i.offset for i in stack_dis.get_instructions(func)
                                     if i.opname != 'RESUME'}
                             self.assertLessEqual(set(offsets), real)
                             disabled_line, disabled_offset = expected_lines[1], offsets[0]

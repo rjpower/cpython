@@ -1,29 +1,30 @@
 """Selected error snapshots come from reached post-flush Storage states."""
 
 import gc
+import marshal
 import sys
 import types
 import unittest
 from unittest import mock
 
 import _testinternalcapi
-import _opcode
-import opcode
+from test.test_ir_admission import construct
 
-from test.support.ir_semantics import position_table
-from test.test_ir_call_roles import routes
-from test.test_ir_completion import exception_entry
-from test.test_ir_transfer_admission import make_code
+
+def anext_code():
+    # The payload is a stack temporary that retires while the error unwinds
+    def f(make, iterator):
+        mutable = None
+        return (make(), iterator.__anext__())
+    return f.__code__
+
+
+def routes(code):
+    return (code, construct(code), code.replace(),
+            marshal.loads(marshal.dumps(code)))
 
 
 class ErrorCheckpointTests(unittest.TestCase):
-    def image(self, prefix=()):
-        return make_code([
-            ("RESUME", 0), *prefix,
-            ("LOAD_FAST_AND_CLEAR", 3, 0), ("LOAD_FAST", 4, 1),
-            ("GET_ANEXT", 5, 4), ("RETURN_VALUE", 5),
-        ], slots=5, locals=("payload", "iterator", "mutable")).replace(co_argcount=2)
-
     def test_actual_scope_keeps_survivors_through_monitor_and_retirement(self):
         monitor = sys.monitoring
         tool = monitor.DEBUGGER_ID
@@ -57,12 +58,12 @@ class ErrorCheckpointTests(unittest.TestCase):
         monitor.use_tool_id(tool, "selected-error-snapshot")
         try:
             monitor.register_callback(tool, monitor.events.RAISE, raised)
-            for code in routes(self.image()):
+            for code in routes(anext_code()):
                 function = types.FunctionType(code, globals())
                 monitor.set_local_events(tool, code, monitor.events.RAISE)
                 try:
                     try:
-                        function(Payload(), Iterator())
+                        function(Payload, Iterator())
                     except LookupError as error:
                         self.assertEqual(str(error), "selected snapshot")
                     else:
@@ -94,30 +95,24 @@ class ErrorCheckpointTests(unittest.TestCase):
         monitor.use_tool_id(tool, "scalar-error-actions")
         try:
             monitor.register_callback(tool, monitor.events.RAISE, raised)
-            # A may be an independent recipient, the consumed input itself,
-            # or a dynamic named binding. Replay coalesces these aliases
-            # before interpreting the actual VACATE of B.
-            for recipient in (5, 4, 2):
-                image = make_code([
-                    ("RESUME", 0), ("LOAD_FAST_AND_CLEAR", 3, 0),
-                    ("LOAD_FAST", 4, 1), ("DELETE_FAST", 1),
-                    ("UNARY_NOT", recipient, 4),
-                    ("RETURN_VALUE", recipient),
-                ], slots=5, locals=("payload", "value", "mutable")).replace(co_argcount=2)
-                for current in routes(image):
-                    function = types.FunctionType(current, globals())
-                    payload, value = object(), Value()
-                    monitor.set_local_events(tool, current, monitor.events.RAISE)
+            def f(payload, value):
+                mutable = None
+                return (payload, not value)
+
+            for current in routes(f.__code__):
+                function = types.FunctionType(current, globals())
+                payload, value = object(), Value()
+                monitor.set_local_events(tool, current, monitor.events.RAISE)
+                try:
                     try:
-                        try:
-                            function(payload, value)
-                        except LookupError as error:
-                            self.assertEqual(str(error), "retired scalar input")
-                        else:
-                            self.fail("the scalar predicate must fail")
-                    finally:
-                        monitor.set_local_events(tool, current, 0)
-                    self.assertEqual(observations[-1], [])
+                        function(payload, value)
+                    except LookupError as error:
+                        self.assertEqual(str(error), "retired scalar input")
+                    else:
+                        self.fail("the scalar predicate must fail")
+                finally:
+                    monitor.set_local_events(tool, current, 0)
+                self.assertEqual(observations[-1], [])
         finally:
             monitor.register_callback(tool, monitor.events.RAISE, None)
             monitor.free_tool_id(tool)
@@ -151,7 +146,7 @@ class ErrorCheckpointTests(unittest.TestCase):
                     except ValueError as error:
                         redirects.append(str(error))
                     else:
-                        self.fail("a native value operation is not an active CALL recipe")
+                        self.fail("an active operation cannot be redirected")
                     self.assertEqual(_testinternalcapi.gc_verify(), [])
 
         def raised(code, offset, exception):
@@ -160,18 +155,12 @@ class ErrorCheckpointTests(unittest.TestCase):
                 observations.append((_testinternalcapi.gc_verify(),
                                      frame.f_locals["mutable"]))
 
-        image = make_code([
-            ("RESUME", 0), ("LOAD_FAST_AND_CLEAR", 3, 0),
-            ("LOAD_FAST", 4, 1), ("DELETE_FAST", 1),
-            ("UNARY_INVERT", 5, 4), ("GET_ANEXT", 6, 5),
-            ("RETURN_VALUE", 6),
-        ], slots=5, locals=("payload", "value", "mutable")).replace(
-            co_argcount=2,
-            # Each real word has the same valid line and no columns. The
-            # ancestor redirect must reach the active-operation guard.
-            co_linetable=position_table(b"\xe8\x00" * 7))
-        self.assertEqual({line for line, *_ in image.co_positions()},
-                         {image.co_firstlineno})
+        # The Value is a stack temporary that retires inside ~
+        def f(payload, make):
+            mutable = None
+            return (~make()).__anext__()
+
+        image = f.__code__
         monitor.use_tool_id(tool, "published-result-error")
         try:
             monitor.register_callback(tool, monitor.events.RAISE, raised)
@@ -183,7 +172,7 @@ class ErrorCheckpointTests(unittest.TestCase):
                 monitor.set_local_events(tool, current, monitor.events.RAISE)
                 try:
                     try:
-                        function(payload, Value())
+                        function(payload, Value)
                     except LookupError as error:
                         self.assertEqual(str(error), "published scalar result")
                     else:
@@ -193,8 +182,6 @@ class ErrorCheckpointTests(unittest.TestCase):
                 self.assertEqual(observations[-1], ([], 42))
                 self.assertTrue(retired)
                 self.assertTrue(redirects)
-                self.assertTrue(all("unsupported active call recipe" in error
-                                    for error in redirects))
         finally:
             monitor.set_local_events(tool, Value.__del__.__code__, 0)
             monitor.register_callback(tool, monitor.events.LINE, None)
@@ -202,15 +189,14 @@ class ErrorCheckpointTests(unittest.TestCase):
             monitor.free_tool_id(tool)
 
     def test_new_handler_protocol_uses_explicit_control_until_transformed(self):
-        words = [
-            ("RESUME", 0), ("LOAD_FAST_AND_CLEAR", 3, 0),
-            ("LOAD_FAST", 4, 1), ("GET_ANEXT", 5, 4),
-            ("RETURN_VALUE", 5), ("POP_TOP", 6),
-            ("LOAD_CONST", 7), ("RETURN_VALUE", 7),
-        ]
-        code = make_code(words, slots=5,
-            locals=("payload", "iterator", "mutable")).replace(
-                co_argcount=2, co_exceptiontable=exception_entry(3, 1, 5, 6 << 1))
+        def f(payload, iterator):
+            mutable = None
+            try:
+                return iterator.__anext__()
+            except LookupError:
+                return None
+
+        code = f.__code__
         function = types.FunctionType(code, globals())
         observations = []
         monitor = sys.monitoring

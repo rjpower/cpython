@@ -1,43 +1,22 @@
 """Normal-edge NULL publication comes from the emitted final store."""
 
+import marshal
 from pathlib import Path
 import tempfile
 import types
 import unittest
 
-import _opcode
 import _testinternalcapi
-import opcode
 
-from test.test_ir_call_roles import routes
-from test.test_ir_transfer_admission import TransferAdmissionTests, make_code
+from test.test_ir_admission import construct
 
 
-def setUpModule():
-    # These tests construct malformed images and expect the constructor to
-    # reject them; release builds only do so on request.
-    from test.support.ir_semantics import code_validation
-    unittest.enterModuleContext(code_validation())
+def routes(code):
+    return (code, construct(code), code.replace(),
+            marshal.loads(marshal.dumps(code)))
 
 
 class EdgeNullTests(unittest.TestCase):
-    assert_rejected = TransferAdmissionTests.assert_rejected
-
-    def image(self, name, *, source=1):
-        return [("LOAD_CONST", 0), ("LOAD_CONST", source),
-                (name, 1, source, 5), ("IR_JUMP", 0, 0, 6),
-                ("IR_JUMP", 0, 0, 6), ("POP_TOP", 1),
-                ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0)]
-
-    def test_only_the_null_successor_releases_the_result_home(self):
-        for name in ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP"):
-            for source in (1, 2):
-                with self.subTest(handler=name, source=source):
-                    words = self.image(name, source=source)
-                    code = make_code(words)
-                    for admitted in routes(code):
-                        _testinternalcapi.get_ir(admitted, True)
-
     def test_actual_language_paths(self):
         def left(function, value):
             return function(value and 23)

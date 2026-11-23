@@ -171,7 +171,7 @@ IR_HOT_ROUTINE(gen_return, PyValue gen_value, _PyInterpreterFrame *gen_dying,
     tstate->exc_info = gen->gi_exc_state.previous_item;
     gen->gi_exc_state.previous_item = NULL;
     dying->previous = NULL;
-    _PyFrame_ClearGenerator(gen, gen_empty ? _PyFrame_GetCode(dying)->co_nlocalsplus
+    _PyFrame_ClearGenerator(gen, gen_empty ? (int)_PyFrame_Exec(dying)->nfixed
                                               : _PyFrame_NumSlots(dying));
     ((_PyThreadStateImpl *)tstate)->generator_return_kind = GENERATOR_RETURN;
     assert(frame == tstate->current_frame);

@@ -40,7 +40,7 @@ _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame)
     frame->pending_redirect = 0;
     frame->instr_ptr = frame->return_pc;
     _PyEval_InvalidateSourceErrors(_PyThreadState_GET(), frame);
-    _PyFrame_ClearTemporaries(frame, _PyFrame_GetCode(frame)->co_nlocalsplus);
+    _PyFrame_ClearTemporaries(frame, (int)_PyFrame_Exec(frame)->nfixed);
 }
 
 
@@ -99,7 +99,7 @@ _PyFrame_MaterializeKwargs(_PyInterpreterFrame *frame)
     if (slot == IR_NO_DST) {
         return 0;
     }
-    assert(slot < _PyFrame_GetCode(frame)->co_nlocalsplus);
+    assert(slot < _PyFrame_Exec(frame)->nfixed);
     assert(PyValue_IsNull(frame->base[slot]));
     /* As for frame-object allocation above, GC is scheduled, not run here.
      * Install the owner before a subsequent poll can invoke an observer. */
@@ -131,7 +131,7 @@ take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
         // This may be a newly-created generator or coroutine frame. Since it's
         // dead anyways, just pretend that the first RESUME ran:
         new_frame->instr_ptr = new_frame->ir_words
-            + _PyFrame_GetCode(new_frame)->_co_firsttraceable + 1;
+            + _PyFrame_Exec(new_frame)->first_traceable + 1;
     }
     assert(!_PyFrame_IsIncomplete(new_frame));
     assert(f->f_back == NULL);
@@ -283,12 +283,13 @@ PyUnstable_InterpreterFrame_GetCode(struct _PyInterpreterFrame *frame)
 int _Py_NO_SANITIZE_THREAD
 PyUnstable_InterpreterFrame_GetLasti(struct _PyInterpreterFrame *frame)
 {
-    return _PyInterpreterFrame_LASTI(frame);
+    return _PyCode_WordOffset(_PyFrame_GetCode(frame),
+                              _PyFrame_InstrOffset(frame, frame->instr_ptr));
 }
 
 int _Py_NO_SANITIZE_THREAD
 PyUnstable_InterpreterFrame_GetLine(_PyInterpreterFrame *frame)
 {
-    int addr = _PyInterpreterFrame_LASTI(frame);
-    return PyCode_Addr2Line(_PyFrame_GetCode(frame), addr);
+    return PyCode_Addr2Line(_PyFrame_GetCode(frame),
+                            PyUnstable_InterpreterFrame_GetLasti(frame));
 }

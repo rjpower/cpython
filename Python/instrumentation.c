@@ -101,7 +101,7 @@ static inline int
 relaxed_length(PyCodeObject *code, int i)
 {
     int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(code, i));
-    if ((opcode == FOR_ITER || opcode == SEND) && i + 2 < Py_SIZE(code) &&
+    if ((opcode == FOR_ITER || opcode == SEND) && i + 2 < _PyCode_IRSize(code) &&
         _PyCode_InstrHandler(code, i + 1) == IR_JUMP &&
         _PyCode_InstrHandler(code, i + 2) == IR_JUMP &&
         _PyCode_InstrTarget(code, i) == i + 2 &&
@@ -288,6 +288,30 @@ is_left_jump(int base)
     return base == POP_JUMP_IF_FALSE || base == POP_JUMP_IF_TRUE ||
            base == POP_JUMP_IF_NONE || base == POP_JUMP_IF_NOT_NONE ||
            base == JUMP_IF_FALSE_OR_POP || base == JUMP_IF_TRUE_OR_POP;
+}
+
+/* The byte offset in co_code that an event of the word at index `word`
+ * reports.  A branch word that fuses a test with its jump stands for the
+ * test's offset in the pcmap, but the branch events belong to the jump: find
+ * it among the stack instructions the word covers. */
+static int
+event_offset(PyCodeObject *code, int word, int event)
+{
+    int offset = _PyCode_WordOffset(code, word);
+    if (event != PY_MONITORING_EVENT_BRANCH_LEFT &&
+        event != PY_MONITORING_EVENT_BRANCH_RIGHT) {
+        return offset;
+    }
+    int end = _PyCode_WordOffset(code, word + 1) / (int)sizeof(_Py_CODEUNIT);
+    _Py_CODEUNIT *units = _PyCode_CODE(code);
+    for (int u = offset / (int)sizeof(_Py_CODEUNIT); u < end; ) {
+        int opcode = _PyOpcode_Deopt[units[u].op.code];
+        if (is_left_jump(opcode) || opcode == FOR_ITER || opcode == SEND) {
+            return u * (int)sizeof(_Py_CODEUNIT);
+        }
+        u += 1 + _PyOpcode_Caches[opcode];
+    }
+    return offset;
 }
 
 /* Does `event` at word index i of code live in monitoring->left_tools? */
@@ -619,7 +643,7 @@ dump_instrumentation_data(PyCodeObject *code, int star, FILE*out)
     dump_global_monitors("Global", _PyInterpreterState_GET()->monitors, out);
     dump_local_monitors("Code", data->local_monitors, out);
     dump_local_monitors("Active", data->active_monitors, out);
-    int code_len = (int)Py_SIZE(code);
+    int code_len = (int)_PyCode_IRSize(code);
     bool starred = false;
     PyCodeAddressRange range;
     _PyCode_InitAddressRange(code, &range);
@@ -630,7 +654,7 @@ dump_instrumentation_data(PyCodeObject *code, int star, FILE*out)
             fprintf(out, "**  ");
             starred = true;
         }
-        fprintf(out, "Offset: %d, line: %d %s: ", i, _PyCode_CheckLineNumber(i, &range), _PyOpcode_OpName[opcode]);
+        fprintf(out, "Offset: %d, line: %d %s: ", i, _PyCode_CheckLineNumber(_PyCode_WordOffset(code, i), &range), _PyOpcode_OpName[opcode]);
         dump_instrumentation_data_tools(code, data->tools, i, out);
         dump_instrumentation_data_lines(code, data->lines, i, out);
         dump_instrumentation_data_line_tools(code, data->line_tools, i, out);
@@ -693,7 +717,7 @@ sanity_check_instrumentation(PyCodeObject *code)
     assert(monitors_equals(
         code->_co_monitoring->active_monitors,
         active_monitors));
-    int code_len = (int)Py_SIZE(code);
+    int code_len = (int)_PyCode_IRSize(code);
     PyCodeAddressRange range;
     _PyCode_InitAddressRange(co, &range);
     _PyIRWord *words = exec_words(code);
@@ -753,7 +777,7 @@ sanity_check_instrumentation(PyCodeObject *code)
         }
         if (data->lines && _PyCode_GetOriginalOpcode(data->lines, i)) {
             int line1 = compute_line(code, get_line_delta(data->lines, i));
-            int line2 = _PyCode_CheckLineNumber(i, &range);
+            int line2 = _PyCode_CheckLineNumber(_PyCode_WordOffset(code, i), &range);
             CHECK(line1 == line2);
         }
         CHECK(valid_opcode(opcode));
@@ -1383,10 +1407,11 @@ call_instrumentation_vector_context(
     /* A borrowed word: the frame owns the code for the call. */
     args[1] = _borrowed_word(code);
     int offset = instr_offset(frame, instr);
-    /* Offsets visible to users are word indices, like those of dis and of
-     * the line and exception tables. They are inline ints: no allocation. */
+    /* Offsets visible to users are byte offsets into co_code, like those of
+     * dis and of the line and exception tables. They are inline ints: no
+     * allocation. */
     assert(PyValue_IsNull(args[2]));
-    args[2] = PyValue_FromInt64(instr_offset(frame, arg2));
+    args[2] = PyValue_FromInt64(event_offset(code, instr_offset(frame, arg2), event));
     PyInterpreterState *interp = tstate->interp;
     uint8_t tools = get_tools_for_instruction(code, interp, offset, event);
     size_t nargsf = (size_t) nargs | PY_VECTORCALL_ARGUMENTS_OFFSET;
@@ -1708,7 +1733,7 @@ _PyIR_ObserveStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
                 ? PY_MONITORING_EVENT_BRANCH_RIGHT : PY_MONITORING_EVENT_BRANCH_LEFT;
             if (get_tools_for_instruction(code, tstate->interp, from, event)) {
                 PyValue args[4] = {PyValue_NULL, PyValue_NULL, PyValue_NULL,
-                                  PyValue_FromInt64(dest_offset(frame, next))};
+                                  PyValue_FromInt64(_PyCode_WordOffset(code, dest_offset(frame, next)))};
                 _PyIRObserverSpec context = {frame, site, next, before.generation,
                     event, _PY_IR_OBSERVER_POST_COMMITTED,
                     _PyIR_EDGE_TAKEN, UINT32_MAX};
@@ -1725,7 +1750,7 @@ _PyIR_ObserveStep(PyThreadState *tstate, _PyInterpreterFrame *frame,
         {
             return result;
         }
-        int line = PyCode_Addr2Line(code, from);
+        int line = PyCode_Addr2Line(code, _PyCode_WordOffset(code, from));
         bool advanced = false;
         uint64_t epoch = code->_co_monitoring->line_epoch;
         int edge = _PyIR_EDGE_TAKEN;
@@ -1769,7 +1794,7 @@ _PyIR_ObserveCommittedBranch(PyThreadState *tstate, _PyInterpreterFrame *frame,
     _PyIRObserverSpec context = {frame, site, next, before.generation,
         event, _PY_IR_OBSERVER_POST_COMMITTED, edge, UINT32_MAX};
     PyValue args[4] = {PyValue_NULL, PyValue_NULL, PyValue_NULL,
-                      PyValue_FromInt64(dest_offset(frame, next))};
+                      PyValue_FromInt64(_PyCode_WordOffset(code, dest_offset(frame, next)))};
     if (call_instrumentation_vector_context(site, tstate, event, frame,
                                             reported_source, 3, args, &context)) {
         return (_PyIRObserverResult){-1, frame->instr_ptr};
@@ -1778,7 +1803,7 @@ _PyIR_ObserveCommittedBranch(PyThreadState *tstate, _PyInterpreterFrame *frame,
         return (_PyIRObserverResult){1, frame->instr_ptr};
     }
     if (code->_co_monitoring->active_monitors.tools[PY_MONITORING_EVENT_LINE]) {
-        int line = PyCode_Addr2Line(code, instr_offset(frame, site));
+        int line = PyCode_Addr2Line(code, _PyCode_WordOffset(code, instr_offset(frame, site)));
         bool advanced = false;
         uint64_t epoch = code->_co_monitoring->line_epoch;
         int status = source_edge_events(tstate, frame, instr_offset(frame, site),
@@ -1808,7 +1833,7 @@ _Py_call_instrumentation_jump(
     if (get_tools_for_instruction(code, tstate->interp,
                                   instr_offset(frame, instr), event))
     {
-        int to = dest_offset(frame, dest);
+        int to = _PyCode_WordOffset(code, dest_offset(frame, dest));
         PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL,
                             PyValue_FromInt64(to) };
         ObserverRedirectState before = observer_redirect_state(frame);
@@ -1825,7 +1850,7 @@ _Py_call_instrumentation_jump(
     {
         return dest;
     }
-    int source_line = PyCode_Addr2Line(code, instr_offset(frame, src));
+    int source_line = PyCode_Addr2Line(code, _PyCode_WordOffset(code, instr_offset(frame, src)));
     bool source_advanced = false;
     uint64_t source_epoch = code->_co_monitoring->line_epoch;
     int source_edge = event == PY_MONITORING_EVENT_BRANCH_LEFT
@@ -1883,7 +1908,7 @@ int
 _Py_Instrumentation_GetLine(PyCodeObject *code, _PyCoLineInstrumentationData *line_data, int index)
 {
     assert(line_data != NULL);
-    assert(index < Py_SIZE(code));
+    assert(index < _PyCode_IRSize(code));
     int line_delta = get_line_delta(line_data, index);
     int line = compute_line(code, line_delta);
     return line;
@@ -2068,7 +2093,7 @@ _Py_call_instrumentation_instruction(PyThreadState *tstate, _PyInterpreterFrame*
          code->_co_monitoring->local_monitors.tools[PY_MONITORING_EVENT_INSTRUCTION]
         );
     PyValue args[3] = { PyValue_NULL, _borrowed_word(code),
-                        PyValue_FromInt64(offset) };
+                        PyValue_FromInt64(_PyCode_WordOffset(code, offset)) };
     while (tools) {
         int tool = most_significant_bit(tools);
         assert(tool >= 0 && tool < 8);
@@ -2103,7 +2128,7 @@ initialize_tools(PyCodeObject *code)
     uint8_t* tools = code->_co_monitoring->tools;
 
     assert(tools != NULL);
-    int code_len = (int)Py_SIZE(code);
+    int code_len = (int)_PyCode_IRSize(code);
     _PyIRWord *words = exec_words(code);
     for (int i = 0; i < code_len; i++) {
         int opcode = word_opcode(words, i);
@@ -2161,16 +2186,16 @@ initialize_lines(_PyCoLineInstrumentationData *line_data, PyCodeObject *code, in
     ASSERT_WORLD_STOPPED_OR_LOCKED(code);
     assert(line_data != NULL);
     line_data->bytes_per_entry = bytes_per_entry;
-    int code_len = (int)Py_SIZE(code);
+    int code_len = (int)_PyCode_IRSize(code);
     PyCodeAddressRange range;
     _PyCode_InitAddressRange(code, &range);
     int current_line = -1;
     for (int i = 0; i < code_len; ) {
         int opcode = base_opcode(code, i);
-        int line = _PyCode_CheckLineNumber(i, &range);
+        int line = _PyCode_CheckLineNumber(_PyCode_WordOffset(code, i), &range);
         set_line_delta(line_data, i, compute_line_delta(code, line));
         int length = instr_length(code, i);
-        if (i < code->_co_firsttraceable) {
+        if (i < _PyCode_FirstTraceable(code)) {
             set_original_opcode(line_data, i, 0);
         }
         else {
@@ -2208,7 +2233,7 @@ initialize_lines(_PyCoLineInstrumentationData *line_data, PyCodeObject *code, in
         }
         i += length;
     }
-    for (int i = code->_co_firsttraceable; i < code_len; ) {
+    for (int i = _PyCode_FirstTraceable(code); i < code_len; ) {
         int opcode = base_opcode(code, i);
         int src = i;
         i += instr_length(code, i);
@@ -2245,7 +2270,7 @@ initialize_lines(_PyCoLineInstrumentationData *line_data, PyCodeObject *code, in
         }
     }
     /* Scan exception table */
-    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code->co_exceptiontable);
+    _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code);
     const unsigned char *scan = semantic.exceptions;
     const unsigned char *end = scan + semantic.exceptions_size;
     while (scan < end) {
@@ -2272,7 +2297,7 @@ initialize_line_tools(PyCodeObject *code, _Py_LocalMonitors *all_events)
     uint8_t *line_tools = code->_co_monitoring->line_tools;
 
     assert(line_tools != NULL);
-    int code_len = (int)Py_SIZE(code);
+    int code_len = (int)_PyCode_IRSize(code);
     for (int i = 0; i < code_len; i++) {
         line_tools[i] = all_events->tools[PY_MONITORING_EVENT_LINE];
     }
@@ -2312,7 +2337,7 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
 {
     ASSERT_WORLD_STOPPED_OR_LOCKED(code);
 
-    int code_len = (int)Py_SIZE(code);
+    int code_len = (int)_PyCode_IRSize(code);
     if (allocate_instrumentation_data(code)) {
         return -1;
     }
@@ -2364,8 +2389,8 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
             _PyCode_InitAddressRange(code, &range);
             int max_line = code->co_firstlineno + 1;
             _PyCode_InitAddressRange(code, &range);
-            for (int i = code->_co_firsttraceable; i < code_len; ) {
-                int line = _PyCode_CheckLineNumber(i, &range);
+            for (int i = _PyCode_FirstTraceable(code); i < code_len; ) {
+                int line = _PyCode_CheckLineNumber(_PyCode_WordOffset(code, i), &range);
                 if (line > max_line) {
                     max_line = line;
                 }
@@ -2492,7 +2517,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
 {
     ASSERT_WORLD_STOPPED_OR_LOCKED(code);
 
-    int code_len = (int)Py_SIZE(code);
+    int code_len = (int)_PyCode_IRSize(code);
     /* Exit early to avoid creating instrumentation
      * data for potential statically allocated code
      * objects.
@@ -2575,7 +2600,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
         goto done;
     }
     /* Insert instrumentation */
-    for (int i = code->_co_firsttraceable; i < code_len; i += instr_length(code, i)) {
+    for (int i = _PyCode_FirstTraceable(code); i < code_len; i += instr_length(code, i)) {
         int base = base_opcode(code, i);
         CHECK(base != 0);
         if (opcode_has_event(base) || base == SEND) {
@@ -2626,7 +2651,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
 
     if (removed_line_tools) {
         _PyCoLineInstrumentationData *line_data = code->_co_monitoring->lines;
-        for (int i = code->_co_firsttraceable; i < code_len;) {
+        for (int i = _PyCode_FirstTraceable(code); i < code_len;) {
             if (_PyCode_GetOriginalOpcode(line_data, i)) {
                 remove_line_tools(code, i, removed_line_tools);
             }
@@ -2634,7 +2659,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
         }
     }
     if (removed_per_instruction_tools) {
-        for (int i = code->_co_firsttraceable; i < code_len; i += _PyCode_InstrLength(code, i)) {
+        for (int i = _PyCode_FirstTraceable(code); i < code_len; i += _PyCode_InstrLength(code, i)) {
             int opcode = base_opcode(code, i);
             if (opcode == RESUME || opcode == END_FOR) {
                 continue;
@@ -2651,7 +2676,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
 
     if (new_line_tools) {
         _PyCoLineInstrumentationData *line_data = code->_co_monitoring->lines;
-        for (int i = code->_co_firsttraceable; i < code_len;) {
+        for (int i = _PyCode_FirstTraceable(code); i < code_len;) {
             if (_PyCode_GetOriginalOpcode(line_data, i)) {
                 add_line_tools(code, i, new_line_tools);
             }
@@ -2659,7 +2684,7 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
         }
     }
     if (new_per_instruction_tools) {
-        for (int i = code->_co_firsttraceable; i < code_len; i += _PyCode_InstrLength(code, i)) {
+        for (int i = _PyCode_FirstTraceable(code); i < code_len; i += _PyCode_InstrLength(code, i)) {
             int opcode = base_opcode(code, i);
             if (opcode == RESUME || opcode == END_FOR) {
                 continue;
@@ -2712,7 +2737,7 @@ done:;
         /* Restoring a forced wrapper above must not remove unchanged ordinary
          * branch monitoring when LINE itself has just been disabled. */
         if (!line_tools) {
-            for (int i = code->_co_firsttraceable; i < code_len; i += _PyCode_InstrLength(code, i)) {
+            for (int i = _PyCode_FirstTraceable(code); i < code_len; i += _PyCode_InstrLength(code, i)) {
                 int base = base_opcode(code, i);
                 if (opcode_has_event(base)) {
                     int event = EVENT_FOR_OPCODE[base];
@@ -2871,7 +2896,12 @@ _PyMonitoring_SetLocalEvents(PyCodeObject *code, int tool_id, _PyMonitoringEvent
     assert(0 <= tool_id && tool_id < PY_MONITORING_TOOL_IDS);
     PyInterpreterState *interp = _PyInterpreterState_GET();
     assert(events < (1 << _PY_MONITORING_UNGROUPED_EVENTS));
-    if (code->_co_firsttraceable >= Py_SIZE(code)) {
+    // The events are set on the words, which code that has not run lacks
+    if (_PyCode_GetIR(code) == NULL) {
+        return -1;
+    }
+    if (code->_co_exec != NULL &&
+        code->_co_exec->first_traceable >= code->_co_exec->nwords) {
         PyErr_Format(PyExc_SystemError, "cannot instrument shim code object '%U'", code->co_name);
         return -1;
     }
@@ -3788,6 +3818,31 @@ static PyTypeObject _PyLegacyBranchEventHandler_Type = {
 };
 
 
+/* The word of the branch that reports byte offset `offset` of co_code: the
+ * first word of that instruction that is instrumented or is a branch.  A jump
+ * that a fused test and jump word folds has no word of its own: the word that
+ * covers it is the last one that starts before it. */
+static int
+branch_word(PyCodeObject *code, int offset)
+{
+    int first = _PyCode_OffsetWord(code, offset);
+    if ((first == (int)code->_co_exec->nwords ||
+         _PyCode_WordOffset(code, first) != offset) && first > 0)
+    {
+        first--;
+    }
+    int start = _PyCode_WordOffset(code, first);
+    for (int w = first; w < (int)code->_co_exec->nwords &&
+                        _PyCode_WordOffset(code, w) == start; w++) {
+        int base = base_opcode(code, w);
+        if (is_instrumented(word_opcode(exec_words(code), w)) ||
+            base == SEND || base == FOR_ITER || IS_CONDITIONAL_JUMP_OPCODE(base)) {
+            return w;
+        }
+    }
+    return first;
+}
+
 static PyValue
 branch_handler_vectorcall(
     PyThreadState *tstate, PyObject *op, const PyValue *args,
@@ -3812,7 +3867,12 @@ branch_handler_vectorcall(
         }
     }
     PyValue disable = _borrowed_word(&_PyInstrumentation_DISABLE);
-    if (src_offset < 0 || src_offset >= Py_SIZE(code) || code->_co_exec == NULL) {
+    if (code->_co_exec == NULL || src_offset < 0 ||
+        src_offset >= (int)(Py_SIZE(code) * sizeof(_Py_CODEUNIT))) {
+        return disable;
+    }
+    src_offset = branch_word(code, src_offset);
+    if (src_offset >= (int)code->_co_exec->nwords) {
         return disable;
     }
     int opcode = word_opcode(exec_words(code), src_offset);
@@ -3918,8 +3978,12 @@ typedef struct {
 
 #define branchesiterator_CAST(op)   ((branchesiterator *)(op))
 
+/* The tuple of three word indices of code, as byte offsets into co_code */
 static PyObject *
-int_triple(int a, int b, int c) {
+int_triple(PyCodeObject *code, int a, int b, int c) {
+    a = event_offset(code, a, PY_MONITORING_EVENT_BRANCH_LEFT);
+    b = _PyCode_WordOffset(code, b);
+    c = _PyCode_WordOffset(code, c);
     PyObject *obja = PyLong_FromLong(a);
     PyObject *objb = NULL;
     PyObject *objc = NULL;
@@ -3949,14 +4013,14 @@ branchesiter_next(PyObject *op)
     branchesiterator *bi = branchesiterator_CAST(op);
     PyCodeObject *code = bi->bi_code;
     int offset = bi->bi_offset;
-    while (offset < Py_SIZE(code)) {
+    while (offset < _PyCode_IRSize(code)) {
         int opcode = base_opcode(code, offset);
         int next_offset = offset + instr_length(code, offset);
         switch (opcode) {
             case FOR_ITER: {
                 bi->bi_offset = next_offset;
                 int target = jump_dest(code, offset);
-                return int_triple(offset, next_offset, target);
+                return int_triple(code, offset, next_offset, target);
             }
             case POP_JUMP_IF_FALSE:
             case POP_JUMP_IF_TRUE:
@@ -3965,14 +4029,14 @@ branchesiter_next(PyObject *op)
             case JUMP_IF_FALSE_OR_POP:
             case JUMP_IF_TRUE_OR_POP: {
                 bi->bi_offset = next_offset;
-                return int_triple(offset, next_offset, jump_dest(code, offset));
+                return int_triple(code, offset, next_offset, jump_dest(code, offset));
             }
             case END_ASYNC_FOR: {
                 // Both async-for branch events refer to its semantic SEND.
                 int src_offset = _PyCode_InstrTarget(code, offset);
                 bi->bi_offset = next_offset;
                 assert(base_opcode(code, src_offset) == SEND);
-                return int_triple(src_offset, jump_dest(code, src_offset), next_offset);
+                return int_triple(code, src_offset, jump_dest(code, src_offset), next_offset);
             }
         }
         offset = next_offset;
@@ -4012,7 +4076,10 @@ static PyTypeObject _PyBranchesIterator = {
 PyObject *
 _PyInstrumentation_BranchesIterator(PyCodeObject *code)
 {
-
+    // The branches are those of the IR, which code that has not run lacks
+    if (_PyCode_GetIR(code) == NULL) {
+        return NULL;
+    }
     branchesiterator *bi = (branchesiterator *)PyType_GenericAlloc(&_PyBranchesIterator, 0);
     if (bi == NULL) {
         return NULL;

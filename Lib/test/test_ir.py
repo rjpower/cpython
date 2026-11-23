@@ -1,11 +1,12 @@
 """Tests for the register IR (Include/internal/pycore_ir.h) that the
 assembler (Python/assemble.c) emits."""
 
-import dis
+from test.support import ir_dis as dis
+import dis as stack_dis
 import gc
 import io
 import math
-import opcode
+from test.support import ir_dis as opcode
 import sys
 import types
 import unittest
@@ -14,7 +15,8 @@ import weakref
 import _opcode
 from test import support
 from test.support import import_helper
-from test.support.bytecode_helper import AssemblerTestCase, encode_words
+from test.support.bytecode_helper import AssemblerTestCase
+from test.support.ir_dis import IRCode
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 get_ir = _testinternalcapi.get_ir
@@ -41,7 +43,8 @@ def ordinary_handlers(func):
 
 
 def nlocalsplus(func):
-    return len(_testinternalcapi.get_co_localskinds(func.__code__))
+    "The slots before the first temporary: locals, constants and the discard slot"
+    return IRCode(func.__code__).nfixed
 
 
 def make_function(source, name="f"):
@@ -72,13 +75,6 @@ def trace(func, *args, opcodes=False):
 # The attributes are instance attributes, whose loads specialise.  A class
 # attribute holding an inline int is classified INLINE_VALUE and its load
 # stays generic (Python/specialize.c).
-def setUpModule():
-    # These tests construct malformed images and expect the constructor to
-    # reject them; release builds only do so on request.
-    from test.support.ir_semantics import code_validation
-    unittest.enterModuleContext(code_validation())
-
-
 class C:
     def __init__(self):
         self.attr = 5
@@ -89,11 +85,12 @@ class AssemblerTest(unittest.TestCase):
     def check_offsets(self, func):
         # An instruction per word, at the word's index, and line ranges
         # that cover the words
-        nwords = len(func.__code__.co_code) // 8
+        ir = IRCode(func.__code__)
+        nwords = len(ir.co_code) // 8
         self.assertEqual(len(get_ir(func.__code__)), nwords)
         self.assertEqual([instr.offset for instr in dis.get_instructions(func)],
                          list(range(nwords)))
-        ranges = [(start, end) for start, end, _ in func.__code__.co_lines()]
+        ranges = [(start, end) for start, end, _ in ir.co_lines()]
         self.assertEqual(ranges[0][0], 0)
         self.assertEqual(ranges[-1][1], nwords)
 
@@ -357,14 +354,16 @@ class AssemblerTest(unittest.TestCase):
         self.assertNotIn("INSTRUMENTED_LINE", handlers(f))
 
     def test_opcode_events(self):
-        # One event per word from the first RESUME on, at its index
+        # One event per instruction after the first RESUME, at its byte offset
+        # in the stack bytecode; the folded load of the owner has none
         def f(o):
             return o.attr
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(f(C()), 5)
         result, events = trace(f, C(), opcodes=True)
         self.assertEqual(result, 5)
-        lasti = list(range(1, len(get_ir(f.__code__))))
+        lasti = [i.offset for i in stack_dis.get_instructions(f)
+                 if i.opname not in ("RESUME", "LOAD_FAST_BORROW")]
         self.assertEqual([e[1] for e in events if e[0] == "opcode"], lasti)
         self.assertEqual(f(C()), 5)
 
@@ -441,8 +440,9 @@ class AssemblerTest(unittest.TestCase):
         self.assertGreaterEqual(len({dst for _, dst in seen}), 2)
         self.assertIn(source_line,
                       [line for event, _, line in events if event == "line"])
+        # Opcode events are at byte offsets of the stack bytecode
         self.assertTrue({offset for event, offset, _ in events if event == "opcode"}
-                        <= {i.offset for i in instructions})
+                        <= {i.offset for i in stack_dis.get_instructions(f)})
 
         def raising(frame, event, arg):
             if (frame.f_code is f.__code__ and event == "line" and
@@ -566,6 +566,10 @@ class AssemblerTest(unittest.TestCase):
         jump = [instr for instr in dis.get_instructions(f)
                 if instr.opname.startswith("COMPARE_OP_JUMP")][0]
         if_true = "if true" in jump.argrepr
+        # The event is at the stack bytecode's jump, which the word fuses
+        # with the compare
+        source = [instr.offset for instr in stack_dis.get_instructions(f)
+                  if instr.opname.startswith("POP_JUMP_IF")][0]
         xs = [1, 2, 3] * 100
         expected = ["right" if (x < 2) == if_true else "left" for x in xs]
         events = []
@@ -578,7 +582,7 @@ class AssemblerTest(unittest.TestCase):
                 sys.monitoring.register_callback(
                     tool, event,
                     lambda code, src, dst, name=name:
-                        events.append(name) if src == jump.offset else None)
+                        events.append(name) if src == source else None)
             sys.monitoring.set_local_events(tool, f.__code__,
                                             E.BRANCH_LEFT | E.BRANCH_RIGHT)
             self.assertEqual(f(xs), len(xs) // 3)
@@ -593,7 +597,8 @@ class AssemblerTest(unittest.TestCase):
     def test_f_lasti(self):
         def f():
             return sys._getframe().f_lasti
-        load_attr = [instr for instr in dis.get_instructions(f)
+        # f_lasti is a byte offset into the stack bytecode
+        load_attr = [instr for instr in stack_dis.get_instructions(f)
                      if instr.argval == "f_lasti"]
         self.assertEqual(f(), load_attr[0].offset)
 
@@ -620,7 +625,7 @@ class AssemblerTest(unittest.TestCase):
                   + "".join(f"    v = {i}.5\n" for i in range(nconsts))
                   + "    return v, o.attr\n")
         f = make_function(source)
-        self.assertGreater(len(f.__code__.co_code) // 8, 65535)
+        self.assertGreater(len(IRCode(f.__code__).co_code) // 8, 65535)
         self.assertGreater(f.__code__.co_names.index("attr"), IR_FIELD_MAX)
         ir = get_ir(f.__code__)
         # The last LOAD_CONST, which may push its constant inline, names it
@@ -661,24 +666,21 @@ class AssemblerTest(unittest.TestCase):
 
     def test_slot_limit(self):
         # Locals, cells, free variables, the discard slot and the stack share
-        # IR_MAX_SLOTS slots; code that needs more does not compile.
+        # IR_MAX_SLOTS slots; code that needs more cannot be lowered, which
+        # happens when it first runs.
         def make(nlocals):
             source = ("def f():\n"
                       + "".join(f"    v{i} = {i}\n" for i in range(nlocals))
                       + "    return [v0]\n")
             return make_function(source)
-        # The list's window is the one temporary; the discard slot is a
-        # hidden local
-        stacksize = make(1).__code__.co_stacksize
-        self.assertEqual(stacksize, 1)
-        f = make(IR_MAX_SLOTS - stacksize - 1)
-        self.assertEqual(f.__code__.co_nlocals + 1 + f.__code__.co_stacksize,
-                         IR_MAX_SLOTS)
-        self.assertEqual(nlocalsplus(f) + f.__code__.co_stacksize,
-                         IR_MAX_SLOTS)
+        # Slots other than the locals: the discard slot and the list's window
+        fixed = IRCode(call_and_return(make(1))).nslots - 1
+        f = make(IR_MAX_SLOTS - fixed)
         self.assertEqual(f(), [0])
-        with self.assertRaisesRegex(SyntaxError, "slots"):
-            make(IR_MAX_SLOTS - stacksize)
+        self.assertEqual(IRCode(f.__code__).nslots, IR_MAX_SLOTS)
+        g = make(IR_MAX_SLOTS - fixed + 1)
+        with self.assertRaisesRegex(RuntimeError, "needs .* slots"):
+            g()
 
     def test_shared_feedback_entry(self):
         # The sites that get no entry (fb 0) share entry 0, a header: they
@@ -725,21 +727,21 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(f(O(), 2.0), (-2, 3.0, True, True))
         with self.assertRaises(ZeroDivisionError):
             f(O(), 0)
-        header = f.__code__._co_feedback[-16:-12]  # kind, state, counter
+        header = IRCode(f.__code__)._co_feedback[-16:-12]  # kind, state, counter
         self.assertEqual(header[:2], bytes([0, 4]))  # COUNTER, OFF
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 8):
             f(O(), 2)
-        after = f.__code__._co_feedback[-16:-12]
+        after = IRCode(f.__code__)._co_feedback[-16:-12]
         self.assertEqual(after[:2], header[:2])
         # The counter of entry 0 stays unreachable (backoff bits 7)
         self.assertEqual(after[2] & 7, 7)
         self.assertEqual({handlers(f)[i.offset] for i in shared}, {"LOAD_ATTR"})
         # The shared entry is the header and nothing else is written
         dis.dis(f, adaptive=True, show_caches=True, file=io.StringIO())
-        fbinit = f.__code__.co_fbinit
+        fbinit = IRCode(f.__code__).co_fbinit
         self.assertLessEqual(int.from_bytes(fbinit[:4], sys.byteorder) & 0xFFFF,
                              4096)
-        self.assertEqual(len(f.__code__._co_feedback),
+        self.assertEqual(len(IRCode(f.__code__)._co_feedback),
                          (int.from_bytes(fbinit[:4], sys.byteorder) & 0xFFFF) * 8)
 
     def test_sizeof(self):
@@ -749,27 +751,19 @@ class AssemblerTest(unittest.TestCase):
         exec(code, {})
         self.assertGreater(sys.getsizeof(code), before)
 
-    def test_constructor_checks_the_words(self):
-        def f(a):
-            return a.attr
-        code = f.__code__
-        words = get_ir(code)
-        index = [k for k, word in enumerate(words) if word[0] == "LOAD_ATTR"][0]
-        _, a, b, c, d = words[index]
+    def test_loop_in_a_finally_copy_that_never_runs(self):
+        # The stack code keeps the exceptional copy of a finally body whose
+        # try body cannot raise; lowering needs consistent depths in it
+        def f():
+            try:
+                pass
+            finally:
+                for value in range(3):
+                    continue
+            return value
 
-        def with_word(word):
-            return code.co_code[:8 * index] + encode_words(word) \
-                + code.co_code[8 * (index + 1):]
-
-        nslots = nlocalsplus(f) + code.co_stacksize
-        with self.assertRaisesRegex(ValueError, "slot"):
-            code.replace(co_code=with_word(("LOAD_ATTR", nslots, b, c, d)))
-        with self.assertRaisesRegex(ValueError, "feedback"):
-            code.replace(co_code=with_word(("LOAD_ATTR", a, b, 0, d)))
-        with self.assertRaisesRegex(ValueError, "malformed"):
-            code.replace(co_code=code.co_code + b"\0")
-        self.assertEqual(code.replace(co_code=with_word(("LOAD_ATTR", a, b, c, d))),
-                         code)
+        self.assertEqual(f(), 2)
+        self.assertTrue(get_ir(f.__code__))
 
     def test_binary_op_handlers(self):
         # BINARY_OP runs the handler of its operation
@@ -813,32 +807,61 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(f(3, 1), 2)
 
 
+def call_and_return(function):
+    """The code of function, once it has run and so been lowered"""
+    function()
+    return function.__code__
+
+
+def lower_all(code):
+    """Lower code and the code objects it contains: the IR is built when code
+    first runs or is asked for, not when it is compiled"""
+    _testinternalcapi.get_ir(code)
+    for const in code.co_consts:
+        if isinstance(const, types.CodeType):
+            lower_all(const)
+
+
+def make_function_with_reach(source, reach, name="f"):
+    """A function whose IR is lowered with jumps reaching `reach` words"""
+    old = _testinternalcapi.set_ir_max_forward(reach)
+    try:
+        function = make_function(source, name)
+        lower_all(function.__code__)
+    finally:
+        _testinternalcapi.set_ir_max_forward(old)
+    return function
+
+
 def relaxed_compile(source):
-    """The namespace of source compiled with every loop relaxed"""
+    """The namespace of source with every loop relaxed"""
     old = _testinternalcapi.set_ir_max_forward(0)
     try:
         namespace = {}
         exec(source, namespace)
+        for value in namespace.values():
+            if isinstance(value, types.FunctionType):
+                lower_all(value.__code__)
     finally:
         _testinternalcapi.set_ir_max_forward(old)
     return namespace
 
 
 class SlotLimitTest(unittest.TestCase):
-    """Running out of slots is a SyntaxError naming the limit."""
+    """Running out of slots is a SyntaxError naming the limit, when the code
+    is lowered."""
 
     def test_too_many_temporaries(self):
         source = "def f(a, b, c, d):\n    return a + (b + (c + (d + a)))\n"
         old = _testinternalcapi.set_ir_max_slots(2)
         try:
+            f = make_function(source)
             with self.assertRaisesRegex(SyntaxError,
                                         r"too many temporaries.*limit 2"):
-                compile(source, "<limit>", "exec")
+                f(1, 2, 3, 4)
         finally:
             _testinternalcapi.set_ir_max_slots(old)
-        namespace = {}
-        exec(source, namespace)
-        self.assertEqual(namespace["f"](1, 2, 3, 4), 11)
+        self.assertEqual(f(1, 2, 3, 4), 11)
 
     def test_knob_range(self):
         for value in (-1, 4096):
@@ -849,19 +872,20 @@ class SlotLimitTest(unittest.TestCase):
 def fb_entries(code):
     """The (kind, unit, arg, units) of each entry of code's feedback table,
     entry 0 first, then the others in order of address"""
+    fbinit = IRCode(code).co_fbinit
     return [(kind, unit, arg, units) for kind, arg, units, unit in
-            ((*dis._feedback_entry(code.co_fbinit, u), u) for u in
-             [dis._fb_unit((int.from_bytes(code.co_fbinit[i:i + 4],
-                                               sys.byteorder) >> 16)
-                               & IR_FIELD_MAX)
-              for i in range(0, len(code.co_fbinit), 4)])]
+            ((*dis._feedback_entry(fbinit, u), u) for u in
+             [dis._fb_unit((int.from_bytes(fbinit[i:i + 4],
+                                           sys.byteorder) >> 16)
+                            & IR_FIELD_MAX)
+              for i in range(0, len(fbinit), 4)])]
 
 
 def fb_position(code, fb):
     """The unit of the entry at unit fb counted from the start of the vector,
     as the assembler places the entries: the first follows entry 0's 2 units
     in the order of placement"""
-    total = int.from_bytes(code.co_fbinit[:4], sys.byteorder) & 0xFFFF
+    total = int.from_bytes(IRCode(code).co_fbinit[:4], sys.byteorder) & 0xFFFF
     return fb + total
 
 
@@ -886,7 +910,7 @@ class FeedbackLayoutTest(unittest.TestCase):
         self.assertEqual(entries[0][3], 2)
         # Entries are in order of address, without gaps, and end where entry
         # 0 begins; entry 0 gives the total
-        total = int.from_bytes(code.co_fbinit[:4], sys.byteorder) & 0xFFFF
+        total = int.from_bytes(IRCode(code).co_fbinit[:4], sys.byteorder) & 0xFFFF
         position = 2
         sizes = {"UNARY": (24,), "BINARY": (32,), "ATTR": (48,),
                  "GLOBAL": (32,), "CALL": (40,), "BRANCH": (16, 24)}
@@ -910,7 +934,7 @@ class FeedbackLayoutTest(unittest.TestCase):
         self.assertLess(pre, after)
         o = types.SimpleNamespace(a=1, b=2, c=0, pre=0)
         self.assertEqual(f(o, 4), 1)
-        self.assertEqual(len(f.__code__._co_feedback), total * 8)
+        self.assertEqual(len(IRCode(f.__code__)._co_feedback), total * 8)
 
     def test_loop_sites_before_others(self):
         # In a function, the sites inside a loop get entries before the sites
@@ -977,7 +1001,7 @@ class FeedbackLayoutTest(unittest.TestCase):
         names = {i.argrepr for i in intrinsics}
         self.assertTrue(all(n.startswith(("INTRINSIC_COMPARE_", "INTRINSIC_CONTAINS_"))
                             for n in names), names)
-        total = int.from_bytes(f.__code__.co_fbinit[:4], sys.byteorder) & 0xFFFF
+        total = int.from_bytes(IRCode(f.__code__).co_fbinit[:4], sys.byteorder) & 0xFFFF
         self.assertEqual(total, 2 + 4 * 1023)
 
         import operator
@@ -1025,55 +1049,15 @@ class FeedbackLayoutTest(unittest.TestCase):
             lines.append("    t += o.attr")
         lines.append("    return t")
         f = make_function("\n".join(lines) + "\n")
-        total = int.from_bytes(f.__code__.co_fbinit[:4], sys.byteorder) & 0xFFFF
+        total = int.from_bytes(IRCode(f.__code__).co_fbinit[:4], sys.byteorder) & 0xFFFF
         self.assertLessEqual(total, 4096)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD * 3):
             self.assertEqual(f(O()), 10000)
-        self.assertEqual(len(f.__code__._co_feedback), total * 8)
+        self.assertEqual(len(IRCode(f.__code__)._co_feedback), total * 8)
         # Round trips through marshal and the constructor
         import marshal
         g = types.FunctionType(marshal.loads(marshal.dumps(f.__code__)), {})
         self.assertEqual(g(O()), 10000)
-        self.assertEqual(f.__code__.replace(co_fbinit=f.__code__.co_fbinit),
-                         f.__code__)
-
-    def test_fbinit_is_checked(self):
-        import struct
-        def f(a):
-            return a.x
-        c = f.__code__
-        entries = fb_entries(c)
-        self.assertEqual(entries[1][0], dis._FEEDBACK_KINDS.index("ATTR"))
-        def table(*words):
-            return struct.pack(f"<{len(words)}I", *words)
-        def word(kind, unit, arg):
-            # The entries before entry 0 have negative units, whose field
-            # counts up toward entry 0 (0xFFF)
-            return kind << 28 | (unit + IR_FIELD_MAX) << 16 | arg
-        attr = dis._FEEDBACK_KINDS.index("ATTR")
-        # Entry 0 and the one entry of 6 units that ends where it begins
-        good = table(word(0, 0, 8), word(attr, -6, 0))
-        self.assertEqual(c.replace(co_fbinit=good).co_fbinit, good)
-        bad = {
-            "entry 0 is not a counter": table(word(attr, 0, 8), word(attr, -6, 0)),
-            "unit out of order": table(word(0, 0, 14), word(attr, -6, 0),
-                                       word(attr, -12, 0)),
-            "entry does not fit": table(word(0, 0, 7), word(attr, -5, 0)),
-            "entry before the vector": table(word(0, 0, 8), word(attr, -7, 0)),
-            "entry in the header": table(word(0, 0, 8), word(attr, 0, 0)),
-            "past the limit": table(word(0, 0, 5000), word(attr, -6, 0)),
-            "no entry 0 units": table(word(0, 0, 1), word(attr, -6, 0)),
-        }
-        for name, fbinit in bad.items():
-            with self.subTest(name):
-                with self.assertRaisesRegex(ValueError, "malformed"):
-                    c.replace(co_fbinit=fbinit)
-        # A word that names a unit that starts no entry, or whose entry is
-        # too small for its handler
-        short = table(word(0, 0, 8), word(dis._FEEDBACK_KINDS.index("CALL"), -6, 0))
-        with self.assertRaisesRegex(ValueError, "feedback"):
-            c.replace(co_fbinit=short)
-
 
 class AllOps:
     """Supports every operation of COMPARE_OPS, with the operand on either side"""
@@ -1333,62 +1317,6 @@ class RelaxationTest(unittest.TestCase):
             jumps.append(word[0])
         return index, jumps
 
-    def test_for_iter_encoded_destination_geometry(self):
-        # Construction must reject a temporary A that the emitted move never
-        # writes. Mutated code is never executed.
-        for name, repeats in (("near", 1), ("far", IR_MAX_FORWARD)):
-            source = ("def f(xs):\n"
-                      "    n = 0\n"
-                      "    for x in xs:\n"
-                      + "        n = n + x\n" * repeats
-                      + "    return n\n")
-            code = make_function(source).__code__
-            ir = get_ir(code)
-            index = next(i for i, row in enumerate(ir) if row[0] == "FOR_ITER")
-            successors = [row[0] for row in ir[index + 1:index + 3]]
-            if name == "far":
-                self.assertEqual(successors, ["IR_JUMP", "IR_JUMP"])
-            else:
-                self.assertNotEqual(successors, ["IR_JUMP", "IR_JUMP"])
-            # The mutation below changes output geometry. Drop inherited
-            # empty-return certificates before the common proof selects them
-            # again, or keeps general frame-owned cleanup for residual homes.
-            return_general = {
-                dis._all_opmap["RETURN_VALUE_EMPTY"]: dis.opmap["RETURN_VALUE"],
-                dis._all_opmap["INSTRUMENTED_RETURN_VALUE_EMPTY"]:
-                    dis.opmap["INSTRUMENTED_RETURN_VALUE"],
-            }
-            source_words = [int.from_bytes(code.co_code[off:off + 8], "little")
-                            for off in range(0, len(code.co_code), 8)]
-            source_bytes = b"".join(
-                ((word & ~_opcode.IR_HANDLER_MASK) | return_general.get(word & _opcode.IR_HANDLER_MASK, word & _opcode.IR_HANDLER_MASK))
-                .to_bytes(8, "little") for word in source_words)
-            word = int.from_bytes(code.co_code[8 * index:8 * (index + 1)],
-                                  "little")
-            a, b, c, d = ((word >> shift) & IR_FIELD_MAX
-                          for shift in (16, 28, 40, 52))
-            self.assertGreaterEqual(b, code.co_nlocals)
-            stacksize = max(code.co_stacksize, b + 4 - code.co_nlocals)
-            for handler in ("FOR_ITER", "INSTRUMENTED_FOR_ITER"):
-                for dst in (a, b + 2, 0, IR_FIELD_MAX, b + 3):
-                    with self.subTest(shape=name, handler=handler, dst=dst):
-                        replacement = encode_words((opcode.opmap[handler],
-                                                    dst, b, c, d))
-                        data = (source_bytes[:8 * index] + replacement +
-                                source_bytes[8 * (index + 1):])
-
-                        def construct():
-                            return code.replace(
-                                co_code=data, co_stacksize=stacksize,
-                                co_exceptiontable=memoryview(code.co_exceptiontable).tobytes())
-
-                        if dst == b + 3:
-                            with self.assertRaisesRegex(ValueError,
-                                                        "semantic completion window"):
-                                construct()
-                        else:
-                            self.assertIsInstance(construct(), types.CodeType)
-
     def test_far_for_iter(self):
         nlines = IR_MAX_FORWARD
         source = ("def f(it):\n"
@@ -1483,13 +1411,6 @@ class RelaxationTest(unittest.TestCase):
         self.assertEqual(self.relaxed(relaxed, "FOR_ITER")[1], ["IR_JUMP"] * 2)
         self.assertEqual(self.relaxed(plain, "FOR_ITER")[1], [])
 
-        def canonical(func, offset):
-            # The index of the word at offset among the words that are not
-            # IR_JUMP
-            ir = get_ir(func.__code__)
-            self.assertNotEqual(ir[offset][0], "IR_JUMP")
-            return offset - sum(word[0] == "IR_JUMP" for word in ir[:offset])
-
         def branches(func):
             events = []
             E = sys.monitoring.events
@@ -1500,8 +1421,7 @@ class RelaxationTest(unittest.TestCase):
                     sys.monitoring.register_callback(
                         tool, event,
                         lambda code, src, dst, event=event:
-                            events.append((event, canonical(func, src),
-                                           canonical(func, dst))))
+                            events.append((event, src, dst)))
                 sys.monitoring.set_local_events(
                     tool, func.__code__,
                     E.BRANCH_LEFT | E.BRANCH_RIGHT | E.JUMP)
@@ -1511,28 +1431,26 @@ class RelaxationTest(unittest.TestCase):
                 sys.monitoring.free_tool_id(tool)
             return events
 
-        def opcodes(func):
-            result, events = trace(func, [0, 1, 1], opcodes=True)
-            ir = get_ir(func.__code__)
-            instructions = [offset for event, offset, _ in events if event == "opcode"]
-            for offset in instructions:
-                self.assertIn(offset, range(len(ir)))
-            helpers = [offset for offset in instructions if ir[offset][0] == "IR_JUMP"]
-            if func is relaxed:
-                site, _ = self.relaxed(func, "FOR_ITER")
-                self.assertEqual(helpers, [site + 1] * 3 + [site + 2])
-                for index, offset in enumerate(instructions):
-                    if ir[offset][0] == "IR_JUMP":
-                        self.assertGreater(index, 0)
-                        self.assertEqual(instructions[index - 1], site)
-            else:
-                self.assertEqual(helpers, [])
-            return result, [(event, canonical(func, lasti), line)
-                            for event, lasti, line in events
-                            if event != "opcode" or ir[lasti][0] != "IR_JUMP"]
-
+        # Offsets are those of the stack bytecode, which relaxation does not
+        # change, so the branch events are the same. The helper words after
+        # FOR_ITER have INSTRUCTION events at FOR_ITER's offset.
         self.assertEqual(branches(relaxed), branches(plain))
-        self.assertEqual(opcodes(relaxed), opcodes(plain))
+        relaxed_result, relaxed_events = trace(relaxed, [0, 1, 1], opcodes=True)
+        plain_result, plain_events = trace(plain, [0, 1, 1], opcodes=True)
+        self.assertEqual(relaxed_result, plain_result)
+        site = [instr.offset for instr in stack_dis.get_instructions(plain)
+                if instr.opname == "FOR_ITER"][0]
+        extra = [event for event in relaxed_events
+                 if event[0] == "opcode" and event[1] == site]
+        self.assertEqual(len(extra), 2 * len([
+            event for event in plain_events
+            if event[0] == "opcode" and event[1] == site]))
+        without_helpers = []
+        for event in relaxed_events:
+            if event[0] == "opcode" and without_helpers[-1:] == [event]:
+                continue
+            without_helpers.append(event)
+        self.assertEqual(without_helpers, plain_events)
 
 
 
@@ -1985,6 +1903,9 @@ class TruthTest(unittest.TestCase):
         jump = [instr for instr in dis.get_instructions(f)
                 if instr.opname.startswith("POP_JUMP_IF_")][0]
         if_true = jump.opname == "POP_JUMP_IF_TRUE"
+        # The event is at the stack bytecode's jump
+        source = [instr.offset for instr in stack_dis.get_instructions(f)
+                  if instr.opname.startswith("POP_JUMP_IF_")][0]
         expected = ["right" if bool(x) == if_true else "left" for x in xs]
         events = []
         E = sys.monitoring.events
@@ -1996,7 +1917,7 @@ class TruthTest(unittest.TestCase):
                 sys.monitoring.register_callback(
                     tool, event,
                     lambda code, src, dst, name=name:
-                        events.append(name) if src == jump.offset else None)
+                        events.append(name) if src == source else None)
             sys.monitoring.set_local_events(tool, f.__code__,
                                             E.BRANCH_LEFT | E.BRANCH_RIGHT)
             self.assertEqual(f(xs), 40)
@@ -2360,16 +2281,6 @@ class GeneratorRecipientTest(unittest.TestCase):
             for item in iterator:
                 pass
 
-        # No body instruction reads item. Construct the supported discarded
-        # recipient without changing the iterator window or exhausted target.
-        code = discard.__code__
-        words = [int.from_bytes(code.co_code[i:i + 8], "little")
-                 for i in range(0, len(code.co_code), 8)]
-        index = next(i for i, row in enumerate(get_ir(code)) if row[0] == "FOR_ITER")
-        words[index] = (words[index] & ~(IR_FIELD_MAX << 16)) | (IR_FIELD_MAX << 16)
-        discard.__code__ = code.replace(
-            co_code=b"".join(word.to_bytes(8, "little") for word in words),
-            co_linetable=b"", co_exceptiontable=code.co_exceptiontable)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(unpack(pairs()), [3, 7])
             self.assertIsNone(discard(pairs()))
@@ -2606,7 +2517,8 @@ class RegCfgTest(unittest.TestCase):
         def f(a, b, c, d):
             return (a + b) * (c + d)
         t = nlocalsplus(f)
-        self.assertEqual(f.__code__.co_stacksize, 2)
+        ir = IRCode(f.__code__)
+        self.assertEqual(ir.nslots - ir.nfixed, 2)
         self.assertEqual(words(f), [
             ("BINARY_OP_ADD", t, (0, 1)),
             ("BINARY_OP_ADD", t + 1, (2, 3)),
@@ -2992,11 +2904,7 @@ class FusedJumpTest(AssemblerTestCase):
         # does not fit is a compare and a jump of its own
         source = ("def f(a, b):\n    if a < b:\n        a = a + b\n"
                   "        b = b + a\n    return a, b\n")
-        old = _testinternalcapi.set_ir_max_forward(0)
-        try:
-            far = make_function(source)
-        finally:
-            _testinternalcapi.set_ir_max_forward(old)
+        far = make_function_with_reach(source, 0)
         near = make_function(source)
         self.assertEqual(fused_names(far), [])
         self.assertEqual(fused_names(near), ["COMPARE_OP_JUMP"])
@@ -3180,11 +3088,7 @@ class FusedJumpTest(AssemblerTestCase):
                   "        if x is y:\n            n += 100\n"
                   "        if x != y:\n            n += 1000\n"
                   "    return n\n")
-        old = _testinternalcapi.set_ir_max_forward(0)
-        try:
-            far = make_function(source)
-        finally:
-            _testinternalcapi.set_ir_max_forward(old)
+        far = make_function_with_reach(source, 0)
         near = make_function(source)
         self.assertEqual(fused_names(far), [])
         self.assertEqual(len(fused_names(near)), 4)
@@ -3194,11 +3098,7 @@ class FusedJumpTest(AssemblerTestCase):
         # Some reach: the jumps that fit fuse, the others do not
         for reach in (1, 2, 3, 5):
             with self.subTest(reach=reach):
-                old = _testinternalcapi.set_ir_max_forward(reach)
-                try:
-                    some = make_function(source)
-                finally:
-                    _testinternalcapi.set_ir_max_forward(old)
+                some = make_function_with_reach(source, reach)
                 self.assertLessEqual(len(fused_names(some)), 4)
                 self.assertEqual(some(xs, 2), near(xs, 2))
 

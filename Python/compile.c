@@ -23,7 +23,6 @@
 #include "pycore_flowgraph.h"     // _PyCfg_FromInstructionSequence()
 #include "pycore_list.h"
 #include "pycore_long_value.h"    // _PyValue_AsLong()
-#include "pycore_regcfg.h"        // _PyRegCfg_Free()
 #include "pycore_pystate.h"       // _Py_GetConfig()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_setobject.h"     // _PySet_NextValue()
@@ -1789,7 +1788,8 @@ optimize_and_assemble_code_unit(struct compiler_unit *u, PyObject *const_cache,
                                 int code_flags, PyObject *filename)
 {
     cfg_builder *g = NULL;
-    _PyRegCfg *regcfg = NULL;
+    instr_sequence optimized_instrs;
+    memset(&optimized_instrs, 0, sizeof(instr_sequence));
 
     PyCodeObject *co = NULL;
     PyObject *consts = consts_dict_keys_inorder(u->u_metadata.u_consts);
@@ -1811,8 +1811,9 @@ optimize_and_assemble_code_unit(struct compiler_unit *u, PyObject *const_cache,
 
     int stackdepth;
     int nlocalsplus;
-    if (_PyCfg_OptimizedCfgToRegCfg(g, &u->u_metadata, code_flags, &stackdepth,
-                                    &nlocalsplus, &regcfg) < 0) {
+    if (_PyCfg_OptimizedCfgToInstructionSequence(g, &u->u_metadata,
+                                                 &stackdepth, &nlocalsplus,
+                                                 &optimized_instrs) < 0) {
         goto error;
     }
 
@@ -1822,11 +1823,12 @@ optimize_and_assemble_code_unit(struct compiler_unit *u, PyObject *const_cache,
 
     /** Assembly **/
     co = _PyAssemble_MakeCodeObject(&u->u_metadata, const_cache, consts,
-                                    regcfg, nlocalsplus, code_flags, filename);
+                                    stackdepth, &optimized_instrs, nlocalsplus,
+                                    code_flags, filename);
 
 error:
     Py_XDECREF(consts);
-    _PyRegCfg_Free(regcfg);
+    PyInstructionSequence_Fini(&optimized_instrs);
     _PyCfgBuilder_Free(g);
     return co;
 }
@@ -2080,7 +2082,8 @@ _PyCompile_Assemble(_PyCompile_CodeUnitMetadata *umd, PyObject *filename,
     }
     cfg_builder *g = NULL;
     PyCodeObject *co = NULL;
-    _PyRegCfg *regcfg = NULL;
+    instr_sequence optimized_instrs;
+    memset(&optimized_instrs, 0, sizeof(instr_sequence));
 
     PyObject *const_cache = PyDict_New();
     if (const_cache == NULL) {
@@ -2098,8 +2101,9 @@ _PyCompile_Assemble(_PyCompile_CodeUnitMetadata *umd, PyObject *filename,
 
     int code_flags = 0;
     int stackdepth, nlocalsplus;
-    if (_PyCfg_OptimizedCfgToRegCfg(g, umd, code_flags, &stackdepth, &nlocalsplus,
-                                    &regcfg) < 0) {
+    if (_PyCfg_OptimizedCfgToInstructionSequence(g, umd,
+                                                 &stackdepth, &nlocalsplus,
+                                                 &optimized_instrs) < 0) {
         goto error;
     }
 
@@ -2107,14 +2111,15 @@ _PyCompile_Assemble(_PyCompile_CodeUnitMetadata *umd, PyObject *filename,
     if (consts == NULL) {
         goto error;
     }
-    co = _PyAssemble_MakeCodeObject(umd, const_cache, consts, regcfg,
+    co = _PyAssemble_MakeCodeObject(umd, const_cache,
+                                    consts, stackdepth, &optimized_instrs,
                                     nlocalsplus, code_flags, filename);
     Py_DECREF(consts);
 
 error:
     Py_DECREF(const_cache);
     _PyCfgBuilder_Free(g);
-    _PyRegCfg_Free(regcfg);
+    PyInstructionSequence_Fini(&optimized_instrs);
     return co;
 }
 

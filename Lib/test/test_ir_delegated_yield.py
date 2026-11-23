@@ -1,7 +1,6 @@
-"""Delegated suspension carries an admitted explicit receiver role."""
+"""Delegated suspension carries an explicit receiver role."""
 
-import marshal
-import opcode
+from test.support import ir_dis as opcode
 import sys
 from pathlib import Path
 import tempfile
@@ -10,9 +9,7 @@ import unittest
 
 import _opcode
 import _testinternalcapi
-from test.test_ir_admission import construct
 from test.test_ir_call_roles import routes
-from test.test_ir_transfer_admission import encoded, make_code
 
 
 CONTRACTS = _opcode.get_ir_contract()
@@ -25,115 +22,7 @@ def ordinary_name(name):
             + plus + flags)
 
 
-def setUpModule():
-    # These tests construct malformed images and expect the constructor to
-    # reject them; release builds only do so on request.
-    from test.support.ir_semantics import code_validation
-    unittest.enterModuleContext(code_validation())
-
-
 class DelegatedYieldTests(unittest.TestCase):
-    def assert_admitted(self, words, *, slots=6, bindings=()):
-        # These images exercise admission and cold plan construction only.
-        code = make_code(words, slots=slots, locals=bindings)
-        for admitted in routes(code):
-            self.assertEqual(_testinternalcapi.get_ir(admitted, True),
-                             _testinternalcapi.get_ir(code))
-        return code
-
-    def assert_rejected(self, code, words, message):
-        replacement = encoded(words)
-        for route in (construct, lambda co, **kw: co.replace(**kw)):
-            with self.assertRaisesRegex(ValueError, message):
-                route(code, co_code=replacement, co_linetable=b"")
-        payload = marshal.dumps(code)
-        self.assertEqual(payload.count(code.co_code), 1)
-        self.assertEqual(len(replacement), len(code.co_code))
-        with self.assertRaisesRegex(ValueError, message):
-            marshal.loads(payload.replace(code.co_code, replacement, 1))
-
-    def basic_image(self):
-        return [("LOAD_CONST", 0), ("LOAD_CONST", 2),
-                ("SEND", 0, 0, 0, 4), ("YIELD_DELEGATED", 2, 2, 0, 0),
-                ("POP_TOP", 2), ("POP_TOP", 0), ("IR_JUMP", 0, 0, 8),
-                ("POP_TOP", 0), ("LOAD_CONST", 0), ("RETURN_VALUE", 0)]
-
-    def test_send_body_output_is_independent_of_completion_recipient(self):
-        words = self.basic_image()
-        code = self.assert_admitted(words)
-        changed = words.copy()
-        changed[2] = ("SEND", 1, 0, 0, 4)
-        changed[7] = ("POP_TOP", 1)
-        self.assert_admitted(changed)
-        for field, value in ((1, 3), (2, 1), (3, 1), (4, 1)):
-            bad = words.copy()
-            row = list(bad[3])
-            row[field] = value
-            bad[3] = tuple(row)
-            if field in (1, 3):
-                # A separate empty recipient is valid; C is unused.
-                self.assert_admitted(bad)
-            else:
-                self.assert_rejected(code, bad, "delegated")
-
-    def test_swap_transports_receiver_without_a_contiguous_yield_window(self):
-        words = [("LOAD_CONST", 0), ("LOAD_CONST", 2),
-                 ("SEND", 0, 0, 0, 7), ("LOAD_CONST", 4), ("SWAP", 0, 5),
-                 ("YIELD_DELEGATED", 2, 2, 0, 4), ("POP_TOP", 2),
-                 ("POP_TOP", 4), ("POP_TOP", 0), ("IR_JUMP", 0, 0, 11),
-                 ("POP_TOP", 0), ("LOAD_CONST", 0), ("RETURN_VALUE", 0)]
-        code = self.assert_admitted(words)
-        bad = words.copy()
-        bad[5] = ("YIELD_DELEGATED", 2, 2, 0, 0)
-        self.assert_rejected(code, bad, "delegated SEND role proof")
-
-    def test_named_resume_recipient_and_full_scratch_extent(self):
-        self.assert_admitted([
-            ("LOAD_CONST", 1), ("LOAD_CONST", 3), ("SEND", 0, 1, 0, 4),
-            ("YIELD_DELEGATED", 0, 3, 0, 1), ("POP_TOP", 3),
-            ("POP_TOP", 1), ("IR_JUMP", 0, 0, 8), ("IR_JUMP", 0, 0, 8),
-            ("LOAD_CONST", 1), ("RETURN_VALUE", 1)], bindings=("recipient",))
-        self.assert_admitted([
-            ("LOAD_CONST", 4089), ("LOAD_CONST", 4091),
-            ("SEND", 4089, 4089, 0, 4),
-            ("YIELD_DELEGATED", 4093, 4091, 0, 4089),
-            ("POP_TOP", 4093), ("POP_TOP", 4089), ("IR_JUMP", 0, 0, 8),
-            ("POP_TOP", 4089), ("LOAD_CONST", 4089),
-            ("RETURN_VALUE", 4089)], slots=4094)
-
-    def test_a_missing_unknown_or_unreachable_send_cannot_certify(self):
-        words = self.basic_image()
-        code = self.assert_admitted(words)
-        for replacement in (("IR_JUMP", 0, 0, 3), ("UNARY_NOT", 2, 2)):
-            bad = words.copy()
-            bad[2] = replacement
-            self.assert_rejected(code, bad, "delegated")
-        bad = words.copy()
-        bad[2] = ("IR_JUMP", 0, 0, 8)
-        self.assert_rejected(code, bad, "entry proof")
-
-    def test_join_requires_matching_roles_on_every_predecessor(self):
-        words = [("LOAD_CONST", 0), ("LOAD_CONST", 2), ("LOAD_CONST", 4),
-                 ("POP_JUMP_IF_NONE", 4, 0, 6),
-                 ("SEND", 0, 0, 0, 6), ("IR_JUMP", 0, 0, 8),
-                 ("SEND", 0, 0, 0, 4), ("IR_JUMP", 0, 0, 8),
-                 ("YIELD_DELEGATED", 2, 2, 0, 0), ("POP_TOP", 2),
-                 ("POP_TOP", 0), ("POP_TOP", 0),
-                 ("LOAD_CONST", 0), ("RETURN_VALUE", 0)]
-        code = self.assert_admitted(words)
-        # Either arrival order must lose the proof if one arm did not SEND.
-        for site in (4, 6):
-            bad = words.copy()
-            bad[site] = ("IR_JUMP", 0, 0, 8)
-            self.assert_rejected(code, bad, "delegated SEND role proof")
-
-    def test_ordinary_yield_cannot_claim_an_implicit_receiver(self):
-        words = self.basic_image()
-        code = self.assert_admitted(words)
-        for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
-            words[3] = (name, 2, 2, 1)
-            self.assert_rejected(code, words, "explicit delegated yield")
-
     def test_real_generator_and_coroutine_forms_use_explicit_receiver(self):
         def outer(receiver):
             return (yield from receiver)

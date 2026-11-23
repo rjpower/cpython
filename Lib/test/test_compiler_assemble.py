@@ -142,12 +142,9 @@ class IsolatedAssembleTests(AssemblerTestCase):
         co = self.insts_to_code_object(insts, metadata)
         output = io.StringIO()
         dis.dis(co, file=output)
-        # The registers are the frame slots of the stack depths.  The code has
-        # no locals, so the hidden slots (the constant slot of None, then the
-        # discard slot) come first and the temporaries start at r2.
         exc_table = textwrap.dedent("""
                                        ExceptionTable:
-                                         L1 to L2 -> L2 [r2]
-                                         L2 to L3 -> L3 [r4] lasti
+                                         L1 to L2 -> L2 [0]
+                                         L2 to L3 -> L3 [1] lasti
                                     """)
         self.assertEndsWith(output.getvalue(), exc_table)

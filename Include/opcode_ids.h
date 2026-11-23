@@ -17,6 +17,7 @@ extern "C" {
 #define CALL_FUNCTION_EX                         4
 #define CHECK_EG_MATCH                           5
 #define CHECK_EXC_MATCH                          6
+#define CLEANUP_THROW                            7
 #define DELETE_SUBSCR                            8
 #define END_FOR                                  9
 #define END_SEND                                10
@@ -35,6 +36,7 @@ extern "C" {
 #define MATCH_MAPPING                           23
 #define MATCH_SEQUENCE                          24
 #define NOP                                     25
+#define NOT_TAKEN                               26
 #define POP_EXCEPT                              27
 #define POP_ITER                                28
 #define POP_TOP                                 29
@@ -72,6 +74,7 @@ extern "C" {
 #define DICT_MERGE                              61
 #define DICT_UPDATE                             62
 #define END_ASYNC_FOR                           63
+#define EXTENDED_ARG                            64
 #define FOR_ITER                                65
 #define GET_AWAITABLE                           66
 #define GET_ITER                                67
@@ -92,8 +95,8 @@ extern "C" {
 #define LOAD_FAST                               82
 #define LOAD_FAST_AND_CLEAR                     83
 #define LOAD_FAST_BORROW                        84
+#define LOAD_FAST_BORROW_LOAD_FAST_BORROW       85
 #define LOAD_FAST_CHECK                         86
-#define CLEANUP_THROW                           87
 #define LOAD_FROM_DICT_OR_DEREF                 88
 #define LOAD_FROM_DICT_OR_GLOBALS               89
 #define LOAD_GLOBAL                             90
@@ -117,8 +120,8 @@ extern "C" {
 #define STORE_ATTR                             108
 #define STORE_DEREF                            109
 #define STORE_FAST                             110
-#define LOAD_ATTR_CLASSMETHOD                  111
-#define POP_JUMP_IF_TRUE_SLOT                  112
+#define LOAD_FAST_LOAD_FAST                    111
+#define STORE_FAST_LOAD_FAST                   112
 #define STORE_GLOBAL                           113
 #define STORE_NAME                             114
 #define SWAP                                   115
@@ -132,7 +135,7 @@ extern "C" {
 #define TO_BOOL_STR                            123
 #define UNPACK_SEQUENCE_LIST                   124
 #define UNPACK_SEQUENCE_TUPLE                  125
-#define POP_JUMP_IF_FALSE_SLOT                 126
+#define STORE_FAST_STORE_FAST                  126
 #define MATERIALIZE_KWARGS                     127
 #define RESUME                                 128
 #define BINARY_OP_ADD_FLOAT                    129
@@ -276,7 +279,7 @@ extern "C" {
 #define HAVE_ARGUMENT                           41
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                233
-#define IR_NUM_HANDLERS                        413
+#define IR_NUM_HANDLERS                        416
 
 #ifdef __cplusplus
 }

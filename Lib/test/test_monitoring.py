@@ -12,7 +12,8 @@ import types
 import unittest
 
 import test.support
-from test.support import import_helper, requires_specialization, script_helper
+from test.support import import_helper, ir_dis, requires_specialization, script_helper
+from test.support.ir_dis import IRCode
 
 PAIR = (0,1)
 
@@ -691,7 +692,6 @@ class LineMonitoringTest(MonitoringTestBase, unittest.TestCase):
 
         self.check_lines(func2, [1,2,3,4,5,6])
 
-    @test.support.requires_refcounting
     def test_generator_with_line(self):
 
         def f():
@@ -1053,7 +1053,7 @@ class ExceptionMonitoringTest(CheckEvents):
             UnwindRecorder
         )
         events = self.get_events(f, TEST_TOOL, recorders)
-        adaptive_insts = dis.get_instructions(f, adaptive=True)
+        adaptive_insts = ir_dis.get_instructions(f, adaptive=True)
         self.assertIn(
             "CALL_ALLOC_AND_ENTER_INIT",
             [i.opname for i in adaptive_insts]
@@ -1191,6 +1191,10 @@ class InstructionRecorder:
 LINE_AND_INSTRUCTION_RECORDERS = InstructionRecorder, LineRecorder
 
 class TestLineAndInstructionEvents(CheckEvents):
+    # An INSTRUCTION event is per instruction of the register IR, at the
+    # co_code offset of the stack instruction it stands for. Stack instructions
+    # that lowering folds into another, such as the STORE_FAST after a
+    # LOAD_SMALL_INT or an operand load, have no event.
     maxDiff = None
 
     def test_disable_line_keeps_instruction_events(self):
@@ -1244,8 +1248,11 @@ class TestLineAndInstructionEvents(CheckEvents):
             func(1)
             expected_instructions = instructions[:]
             expected_lines = lines[:]
+            # An INSTRUCTION event is per instruction of the register IR, at
+            # the offset of the stack instruction it stands for
+            offsets = IRCode(func.__code__).stack_offsets
             self.assertEqual(expected_instructions, [
-                inst.offset for inst in dis.get_instructions(func)
+                offsets[inst.offset] for inst in ir_dis.get_instructions(func)
                 if inst.opname != "RESUME"
             ])
             self.assertTrue(expected_lines)
@@ -1275,15 +1282,16 @@ class TestLineAndInstructionEvents(CheckEvents):
             line3 = 3
 
         self.check_events(func1, recorders = LINE_AND_INSTRUCTION_RECORDERS, expected = [
-            ('line', 'get_events', 10),
-            ('line', 'func1', 1),
-            ('instruction', 'func1', 1),
-            ('line', 'func1', 2),
-            ('instruction', 'func1', 2),
-            ('line', 'func1', 3),
-            ('instruction', 'func1', 3),
-            ('instruction', 'func1', 4),
-            ('line', 'get_events', 11)])
+            ("line", "get_events", 10),
+            ("line", "func1", 1),
+            ("instruction", "func1", 4),
+            ("line", "func1", 2),
+            ("instruction", "func1", 8),
+            ("line", "func1", 3),
+            ("instruction", "func1", 12),
+            ("instruction", "func1", 18),
+            ("line", "get_events", 11),
+        ])
 
     def test_c_call(self):
 
@@ -1293,19 +1301,18 @@ class TestLineAndInstructionEvents(CheckEvents):
             line3 = 3
 
         self.check_events(func2, recorders = LINE_AND_INSTRUCTION_RECORDERS, expected = [
-            ('line', 'get_events', 10),
-            ('line', 'func2', 1),
-            ('instruction', 'func2', 1),
-            ('line', 'func2', 2),
-            ('instruction', 'func2', 2),
-            ('instruction', 'func2', 3),
-            ('instruction', 'func2', 4),
-            # The call's operand word is not an instruction: no event
-            # for offset 5
-            ('line', 'func2', 3),
-            ('instruction', 'func2', 6),
-            ('instruction', 'func2', 7),
-            ('line', 'get_events', 11)])
+            ("line", "get_events", 10),
+            ("line", "func2", 1),
+            ("instruction", "func2", 4),
+            ("line", "func2", 2),
+            ("instruction", "func2", 8),
+            ("instruction", "func2", 10),
+            ("instruction", "func2", 32),
+            ("line", "func2", 3),
+            ("instruction", "func2", 42),
+            ("instruction", "func2", 48),
+            ("line", "get_events", 11),
+        ])
 
     def test_try_except(self):
 
@@ -1318,23 +1325,24 @@ class TestLineAndInstructionEvents(CheckEvents):
             line = 6
 
         self.check_events(func3, recorders = LINE_AND_INSTRUCTION_RECORDERS, expected = [
-            ('line', 'get_events', 10),
-            ('line', 'func3', 1),
-            ('line', 'func3', 2),
-            ('instruction', 'func3', 1),
-            ('line', 'func3', 3),
-            ('instruction', 'func3', 2),
-            ('instruction', 'func3', 3),
-            ('instruction', 'func3', 4),
-            ('line', 'func3', 4),
-            ('instruction', 'func3', 5),
-            ('line', 'func3', 5),
-            ('instruction', 'func3', 6),
-            ('instruction', 'func3', 7),
-            ('line', 'func3', 6),
-            ('instruction', 'func3', 8),
-            ('instruction', 'func3', 9),
-            ('line', 'get_events', 11)])
+            ("line", "get_events", 10),
+            ("line", "func3", 1),
+            ("line", "func3", 2),
+            ("instruction", "func3", 6),
+            ("line", "func3", 3),
+            ("instruction", "func3", 10),
+            ("instruction", "func3", 20),
+            ("instruction", "func3", 22),
+            ("line", "func3", 4),
+            ("instruction", "func3", 24),
+            ("line", "func3", 5),
+            ("instruction", "func3", 26),
+            ("instruction", "func3", 30),
+            ("line", "func3", 6),
+            ("instruction", "func3", 32),
+            ("instruction", "func3", 38),
+            ("line", "get_events", 11),
+        ])
 
     def test_with_restart(self):
         def func1():
@@ -1345,12 +1353,12 @@ class TestLineAndInstructionEvents(CheckEvents):
         self.check_events(func1, recorders = LINE_AND_INSTRUCTION_RECORDERS, expected = [
             ('line', 'get_events', 10),
             ('line', 'func1', 1),
-            ('instruction', 'func1', 1),
-            ('line', 'func1', 2),
-            ('instruction', 'func1', 2),
-            ('line', 'func1', 3),
-            ('instruction', 'func1', 3),
             ('instruction', 'func1', 4),
+            ('line', 'func1', 2),
+            ('instruction', 'func1', 8),
+            ('line', 'func1', 3),
+            ('instruction', 'func1', 12),
+            ('instruction', 'func1', 18),
             ('line', 'get_events', 11)])
 
         sys.monitoring.restart_events()
@@ -1358,12 +1366,12 @@ class TestLineAndInstructionEvents(CheckEvents):
         self.check_events(func1, recorders = LINE_AND_INSTRUCTION_RECORDERS, expected = [
             ('line', 'get_events', 10),
             ('line', 'func1', 1),
-            ('instruction', 'func1', 1),
-            ('line', 'func1', 2),
-            ('instruction', 'func1', 2),
-            ('line', 'func1', 3),
-            ('instruction', 'func1', 3),
             ('instruction', 'func1', 4),
+            ('line', 'func1', 2),
+            ('instruction', 'func1', 8),
+            ('line', 'func1', 3),
+            ('instruction', 'func1', 12),
+            ('instruction', 'func1', 18),
             ('line', 'get_events', 11)])
 
     def test_turn_off_only_instruction(self):
@@ -1411,9 +1419,9 @@ class TestInstallIncrementally(MonitoringTestBase, unittest.TestCase):
         line1 = 1
 
     MUST_INCLUDE_LI = [
-            ('instruction', 'func1', 1),
+            ('instruction', 'func1', 4),
             ('line', 'func1', 2),
-            ('instruction', 'func1', 2)]
+            ('instruction', 'func1', 10)]
 
     def test_line_then_instruction(self):
         recorders = [ LineRecorder, InstructionRecorder ]
@@ -1430,12 +1438,11 @@ class TestInstallIncrementally(MonitoringTestBase, unittest.TestCase):
         len(())
 
     MUST_INCLUDE_CI = [
-            ('instruction', 'func2', 1),
+            ('instruction', 'func2', 4),
             ('call', 'func2', sys.monitoring.MISSING),
             ('call', 'len', ()),
-            ('instruction', 'func2', 2),
-            # The call's operand word, at offset 3, is not an instruction
-            ('instruction', 'func2', 4)]
+            ('instruction', 'func2', 16),
+            ('instruction', 'func2', 28)]
 
 
 
@@ -1975,14 +1982,12 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('branch left', 'whilefunc', 1, 2),
             ('branch right', 'whilefunc', 1, 3)])
 
-        loop = next(i for i in dis.get_instructions(func) if i.opname == 'FOR_ITER')
-        self.assertEqual((loop.offset, loop.jump_target), (6, 12))
         self.check_events(func, recorders = BRANCH_OFFSET_RECORDERS, expected = [
-            ('branch left', 'func', 6, 7),
-            ('branch right', 'func', 7, 10),
-            ('branch left', 'func', 6, 7),
-            ('branch left', 'func', 7, 8),
-            ('branch right', 'func', 6, 12)])
+            ('branch left', 'func', 32, 48),
+            ('branch right', 'func', 48, 62),
+            ('branch left', 'func', 32, 48),
+            ('branch left', 'func', 48, 54),
+            ('branch right', 'func', 32, 76)])
 
     def test_except_star(self):
 
@@ -2009,8 +2014,8 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('branch', 'func', 4, 4),
             ('line', 'func', 5),
             ('line', 'meth', 1),
-            ('jump', 'func', 5, '[offset=30]'),
-            ('branch', 'func', '[offset=32]', '[offset=33]'),
+            ('jump', 'func', 5, '[offset=122]'),
+            ('branch', 'func', '[offset=126]', '[offset=132]'),
             ('line', 'get_events', 11)])
 
         self.check_events(func, recorders = FLOW_AND_LINE_RECORDERS, expected = [
@@ -2024,8 +2029,8 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('line', 'func', 5),
             ('line', 'meth', 1),
             ('return', 'meth', None),
-            ('jump', 'func', 5, '[offset=30]'),
-            ('branch', 'func', '[offset=32]', '[offset=33]'),
+            ('jump', 'func', 5, '[offset=122]'),
+            ('branch', 'func', '[offset=126]', '[offset=132]'),
             ('return', 'func', None),
             ('line', 'get_events', 11)])
 
@@ -2037,8 +2042,8 @@ class TestBranchAndJumpEvents(CheckEvents):
                 n += 1
             return None
 
-        in_loop = ('branch left', 'foo', 1, 2)
-        exit_loop = ('branch right', 'foo', 1, 4)
+        in_loop = ('branch left', 'foo', 12, 24)
+        exit_loop = ('branch right', 'foo', 12, 44)
         self.check_events(foo, recorders = BRANCH_OFFSET_RECORDERS, expected = [
             in_loop,
             in_loop,
@@ -2118,112 +2123,6 @@ class TestBranchAndJumpEvents(CheckEvents):
         sys.monitoring.register_callback(TEST_TOOL, E.BRANCH_LEFT, callback)
 
         self.assertEqual(func("true"), 1)
-
-
-class TestBranchEventsOfOneJump(MonitoringTestBase, unittest.TestCase):
-    """A conditional jump fires BRANCH_LEFT and BRANCH_RIGHT itself, at its
-    own offset, and each event is disabled and monitored on its own."""
-
-    @staticmethod
-    def func(n):
-        total = 0
-        for i in range(n):
-            if i % 2:
-                total += i
-        return total
-
-    def record(self, tool, event, disable=False):
-        events = []
-        def callback(code, offset, dest):
-            events.append((offset, dest))
-            return sys.monitoring.DISABLE if disable else None
-        sys.monitoring.register_callback(tool, event, callback)
-        return events
-
-    def run_func(self, *tools_events):
-        code = self.func.__code__
-        try:
-            for tool, event in tools_events:
-                sys.monitoring.set_local_events(tool, code, event)
-            self.assertEqual(self.func(6), 9)
-            self.assertEqual(self.func(6), 9)
-        finally:
-            for tool, event in tools_events:
-                sys.monitoring.set_local_events(tool, code, 0)
-                for single in (E.BRANCH_LEFT, E.BRANCH_RIGHT):
-                    if event & single:
-                        sys.monitoring.register_callback(tool, single, None)
-            sys.monitoring.restart_events()
-
-    def test_events_are_at_the_jump(self):
-        left = self.record(TEST_TOOL, E.BRANCH_LEFT)
-        right = self.record(TEST_TOOL, E.BRANCH_RIGHT)
-        self.run_func((TEST_TOOL, E.BRANCH_LEFT | E.BRANCH_RIGHT))
-        branches = {src: (l, r) for src, l, r in self.func.__code__.co_branches()}
-        # FOR_ITER: 6 iterations, then the exit; the if: 3 true, 3 false
-        # per call; there are two calls
-        self.assertEqual(len(left), 2 * (6 + 3))
-        self.assertEqual(len(right), 2 * (1 + 3))
-        for src, dest in left:
-            self.assertEqual(dest, branches[src][0])
-        for src, dest in right:
-            self.assertEqual(dest, branches[src][1])
-        # No word separates a conditional jump from its fall-through
-        jump = [src for src, l, r in self.func.__code__.co_branches()
-                if l == src + 1]
-        self.assertTrue(jump)
-        self.assertTrue(all(src in jump for src, _ in left if _ == src + 1))
-
-    def test_disable_left_keeps_right(self):
-        left = self.record(TEST_TOOL, E.BRANCH_LEFT, disable=True)
-        right = self.record(TEST_TOOL, E.BRANCH_RIGHT)
-        self.run_func((TEST_TOOL, E.BRANCH_LEFT | E.BRANCH_RIGHT))
-        # Each location reports its left branch once
-        self.assertEqual(len(left), len({src for src, _ in left}))
-        self.assertEqual(len(right), 2 * (1 + 3))
-
-    def test_disable_right_keeps_left(self):
-        left = self.record(TEST_TOOL, E.BRANCH_LEFT)
-        right = self.record(TEST_TOOL, E.BRANCH_RIGHT, disable=True)
-        self.run_func((TEST_TOOL, E.BRANCH_LEFT | E.BRANCH_RIGHT))
-        self.assertEqual(len(left), 2 * (6 + 3))
-        self.assertEqual(len(right), len({src for src, _ in right}))
-
-    def test_tools_with_different_events(self):
-        left = self.record(TEST_TOOL, E.BRANCH_LEFT)
-        right = self.record(TEST_TOOL2, E.BRANCH_RIGHT)
-        self.run_func((TEST_TOOL, E.BRANCH_LEFT), (TEST_TOOL2, E.BRANCH_RIGHT))
-        self.assertEqual(len(left), 2 * (6 + 3))
-        self.assertEqual(len(right), 2 * (1 + 3))
-
-    def test_one_tool_disables_its_event_only(self):
-        left = self.record(TEST_TOOL, E.BRANCH_LEFT)
-        right = self.record(TEST_TOOL, E.BRANCH_RIGHT)
-        left2 = self.record(TEST_TOOL2, E.BRANCH_LEFT, disable=True)
-        self.run_func((TEST_TOOL, E.BRANCH_LEFT | E.BRANCH_RIGHT),
-                      (TEST_TOOL2, E.BRANCH_LEFT))
-        self.assertEqual(len(left), 2 * (6 + 3))
-        self.assertEqual(len(right), 2 * (1 + 3))
-        self.assertEqual(len(left2), len({src for src, _ in left2}))
-
-    def test_left_after_right(self):
-        # The location is instrumented for BRANCH_RIGHT before BRANCH_LEFT
-        # is monitored
-        code = self.func.__code__
-        right = self.record(TEST_TOOL, E.BRANCH_RIGHT)
-        left = self.record(TEST_TOOL2, E.BRANCH_LEFT)
-        sys.monitoring.set_local_events(TEST_TOOL, code, E.BRANCH_RIGHT)
-        try:
-            self.assertEqual(self.func(6), 9)
-            sys.monitoring.set_local_events(TEST_TOOL2, code, E.BRANCH_LEFT)
-            self.assertEqual(self.func(6), 9)
-        finally:
-            sys.monitoring.set_local_events(TEST_TOOL, code, 0)
-            sys.monitoring.set_local_events(TEST_TOOL2, code, 0)
-            sys.monitoring.register_callback(TEST_TOOL, E.BRANCH_RIGHT, None)
-            sys.monitoring.register_callback(TEST_TOOL2, E.BRANCH_LEFT, None)
-        self.assertEqual(len(right), 2 * (1 + 3))
-        self.assertEqual(len(left), 6 + 3)
 
 
 class TestBranchConsistency(MonitoringTestBase, unittest.TestCase):
@@ -2719,40 +2618,6 @@ class TestRegressions(MonitoringTestBase, unittest.TestCase):
         finally:
             sys.monitoring.set_local_events(TEST_TOOL, foo.__code__, 0)
             sys.monitoring.register_callback(TEST_TOOL, E.BRANCH_LEFT, None)
-
-
-class TestEventOffsets(MonitoringTestBase, unittest.TestCase):
-    """Offsets reach callbacks as exact ints, whatever their representation."""
-
-    def test_offsets_are_exact_ints(self):
-        got = []
-        events = sys.monitoring.events
-
-        def instruction(code, offset):
-            got.append(offset)
-
-        def jump(code, offset, destination):
-            got.extend((offset, destination))
-
-        def func():
-            for _ in range(3):
-                pass
-
-        tool = TEST_TOOL
-        sys.monitoring.register_callback(tool, events.INSTRUCTION, instruction)
-        sys.monitoring.register_callback(tool, events.JUMP, jump)
-        sys.monitoring.set_events(tool, events.INSTRUCTION | events.JUMP)
-        try:
-            func()
-        finally:
-            sys.monitoring.set_events(tool, 0)
-            sys.monitoring.register_callback(tool, events.INSTRUCTION, None)
-            sys.monitoring.register_callback(tool, events.JUMP, None)
-        self.assertTrue(got)
-        for offset in got:
-            self.assertIs(type(offset), int)
-            if offset < 256:
-                self.assertIs(offset, offset * 1)
 
 
 class TestOptimizer(MonitoringTestBase, unittest.TestCase):

@@ -1963,6 +1963,16 @@ while True:
                 except RuntimeError:
                     continue
                 break
+            # The child lowers the code it runs at startup to the register IR,
+            # so wait until it is in the loop before counting samples
+            for _ in busy_retry(SHORT_TIMEOUT):
+                try:
+                    threads = unwinder.get_stack_trace()[0].threads
+                except TRANSIENT_ERRORS:
+                    continue
+                if threads and "leaf" in [
+                        frame.funcname for frame in threads[0].frame_info]:
+                    break
             samples = 0
             for _ in range(10_000):
                 try:
@@ -4634,93 +4644,6 @@ class TestMetadataDegradation(RemoteInspectionTestBase):
                     except asyncio.CancelledError:
                         pass
             asyncio.run(main())
-        """))
-
-    def test_remote_delegated_discard_still_follows_receiver(self):
-        assert_python_ok("-c", textwrap.dedent("""
-            import asyncio
-            import opcode
-            import os
-            import _testinternalcapi
-            from _remote_debugging import RemoteUnwinder
-            from test.support.bytecode_helper import encode_words
-
-            async def delegate():
-                await asyncio.Future()
-
-            async def blocked():
-                await delegate()
-
-            # A public, admitted discard recipient is independent of D.
-            # Cancellation throws at the suspension; it does not execute a
-            # SEND with a discarded resume value in this control.
-            handlers = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_opmap}
-            rows = [tuple(row) for row in _testinternalcapi.get_ir(blocked.__code__)]
-            site = next(i for i, row in enumerate(rows) if row[0] == 'YIELD_DELEGATED')
-            name, a, b, c, d = rows[site]
-            rows[site] = name, _testinternalcapi.remote_debug_layout()['no_dst'], b, c, d
-            # Revalidate semantic recovery for the changed recipient; its
-            # proof describes the A role independently of optional positions.
-            blocked.__code__ = blocked.__code__.replace(
-                co_code=encode_words(
-                    *((handlers[name], *fields) for name, *fields in rows)),
-                co_linetable=b'', co_exceptiontable=blocked.__code__.co_exceptiontable)
-
-            async def main():
-                task = asyncio.create_task(blocked(), name='discard-target')
-                await asyncio.sleep(0)
-                coroutine = task.get_coro()
-                assert coroutine.cr_await.cr_code is delegate.__code__
-                try:
-                    trace = RemoteUnwinder(os.getpid()).get_all_awaited_by()
-                    targets = [target for info in trace for target in info.awaited_by
-                               if target.task_name == 'discard-target']
-                    assert len(targets) == 1, trace
-                    assert any(frame.funcname == 'delegate'
-                               for coro in targets[0].coroutine_stack
-                               for frame in coro.call_stack), targets
-                finally:
-                    task.cancel()
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        pass
-            asyncio.run(main())
-        """))
-
-    def test_malformed_remote_source_map_degrades_to_no_location(self):
-        # Construction rejects these maps. Corrupt only an isolated child's
-        # bytes to exercise remote-memory validation rather than construction.
-        assert_python_ok("-c", textwrap.dedent("""
-            import ctypes
-            import os
-            from _remote_debugging import RemoteUnwinder
-
-            def sample(read):
-                return read()
-
-            # Prepare its executing image while the semantic map is valid;
-            # the mutations below target remote-memory decoding.
-            sample(lambda: None)
-            table = sample.__code__.co_linetable
-            assert table[:4] == b'IRSM'
-            address = ctypes.pythonapi.PyBytes_AsString
-            address.argtypes = [ctypes.py_object]
-            address.restype = ctypes.c_void_p
-            pointer = address(table)
-            for offset, payload in ((4, b'\\x03\\0\\0\\0'),
-                                    (8, b'\\xff' * 4),
-                                    (12, b'\\xff' * 4)):
-                saved = table[offset:offset + 4]
-                try:
-                    ctypes.memmove(pointer + offset, payload, 4)
-                    trace = sample(RemoteUnwinder(os.getpid()).get_stack_trace)
-                finally:
-                    ctypes.memmove(pointer + offset, saved, 4)
-                frames = [frame for interpreter in trace for thread in interpreter.threads
-                          for frame in thread.frame_info if frame.funcname == 'sample']
-                assert len(frames) == 1, trace
-                assert frames[0].location is None, frames[0]
         """))
 
     def test_oversized_linetable_degrades_to_no_location(self):

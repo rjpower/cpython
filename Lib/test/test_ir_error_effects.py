@@ -235,8 +235,8 @@ class ErrorEffectTests(unittest.TestCase):
         changes = (
             ("&tstate->eval_breaker", "&frame->base[0]", "RESUME"),
             ("FT_ATOMIC_LOAD_UINTPTR_ACQUIRE", "opaque_metadata_reader", "RESUME"),
-            ("IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, oparg)",
-             "int changed_target = oparg; "
+            ("IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, IR_EXIT)",
+             "int changed_target = IR_EXIT; "
              "IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, changed_target)", "CLEANUP_THROW"),
             ("monitor_reraise(tstate, frame, this_instr)",
              "opaque_reraise(tstate, frame, this_instr)", "CLEANUP_THROW"),

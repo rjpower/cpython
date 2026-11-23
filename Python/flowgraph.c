@@ -1,7 +1,9 @@
 #include "Python.h"
 #include "opcode.h"
 #include "pycore_c_array.h"       // _Py_CArray_EnsureCapacity
+#include "pycore_code.h"          // _PyCode_CODE()
 #include "pycore_flowgraph.h"
+#include "pycore_ir_exception.h"  // _PyIR_ExceptionNext()
 #include "pycore_compile.h"
 #include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_intrinsics.h"
@@ -38,10 +40,13 @@ typedef _Py_SourceLocation location;
 typedef _PyJumpTargetLabel jump_target_label;
 
 typedef struct _PyCfgInstruction {
-    unsigned i_opcode : 16;
+    int i_opcode;
     unsigned i_source : 1; /* explicit source span, not propagated location */
     int i_oparg;
     _Py_SourceLocation i_loc;
+    /* Lowering only: the code-unit offset in co_code of the instruction that
+       this one stands for */
+    int i_srcoff;
     struct _PyCfgBasicblock *i_target; /* target block (if jump instruction) */
     struct _PyCfgBasicblock *i_except; /* target block when exception is raised */
 } cfg_instr;
@@ -71,6 +76,10 @@ typedef struct _PyCfgBasicblock {
     int b_predecessors;
     /* depth of stack upon entry of block, computed by stackdepth() */
     int b_startdepth;
+    /* Lowering only: the depth of the stack upon entry of an exception
+       handler, or -1 for a block that is not one.  The exception table has
+       it where the compiler had a SETUP instruction. */
+    int b_handler_depth;
     /* Basic block is an exception handler that preserves lasti */
     unsigned b_preserve_lasti : 1;
     /* Used by compiler passes to mark whether they have visited a basic block. */
@@ -192,6 +201,7 @@ cfg_builder_new_block(cfg_builder *g)
     b->b_list = g->g_block_list;
     g->g_block_list = b;
     b->b_label = NO_LABEL;
+    b->b_handler_depth = -1;
     return b;
 }
 
@@ -212,7 +222,7 @@ basicblock_addop(basicblock *b, int opcode, int oparg, location loc,
     i->i_opcode = opcode;
     i->i_oparg = oparg;
     i->i_loc = loc;
-    i->i_source = loc.lineno >= 0 && opcode != POP_BLOCK;
+    i->i_source = loc.lineno >= 0;
     i->i_except = except;
     // memory is already zero initialized
     assert(i->i_target == NULL);
@@ -562,6 +572,8 @@ normalize_jumps_in_block(cfg_builder *g, basicblock *b) {
 
     bool is_forward = last->i_target->b_visited == 0;
     if (is_forward) {
+        RETURN_IF_ERROR(
+            basicblock_addop(b, NOT_TAKEN, 0, last->i_loc, last->i_except));
         return SUCCESS;
     }
 
@@ -589,6 +601,9 @@ normalize_jumps_in_block(cfg_builder *g, basicblock *b) {
     if (backwards_jump == NULL) {
         return ERROR;
     }
+    RETURN_IF_ERROR(
+        basicblock_addop(backwards_jump, NOT_TAKEN, 0, last->i_loc,
+                         last->i_except));
     RETURN_IF_ERROR(
         basicblock_add_jump(backwards_jump, JUMP, target, last->i_loc,
                             last->i_except));
@@ -848,6 +863,13 @@ calculate_stackdepth(cfg_builder *g)
     if (stackdepth_push(&sp, entryblock, 0) < 0) {
         goto error;
     }
+    for (basicblock *b = entryblock; b != NULL; b = b->b_next) {
+        if (b->b_handler_depth >= 0 &&
+            stackdepth_push(&sp, b, b->b_handler_depth) < 0)
+        {
+            goto error;
+        }
+    }
     while (sp != stack) {
         basicblock *b = *--sp;
         int depth = b->b_startdepth;
@@ -948,10 +970,6 @@ label_exception_targets(basicblock *entryblock) {
                 handler = push_except_block(except_stack, instr);
             }
             else if (instr->i_opcode == POP_BLOCK) {
-                /* A source span inherited by this zero-word marker still
-                 * belongs to the region being exited. */
-                instr->i_except = handler;
-                instr->i_source = 0;
                 handler = pop_except_block(except_stack);
                 INSTR_SET_OP0(instr, NOP);
             }
@@ -1075,7 +1093,6 @@ basicblock_remove_redundant_nops(basicblock *bb) {
     /* Remove NOPs when legal to do so. */
     int dest = 0;
     int prev_lineno = -1;
-    basicblock *prev_except = NULL;
     for (int src = 0; src < bb->b_iused; src++) {
         int lineno = bb->b_instr[src].i_loc.lineno;
         if (bb->b_instr[src].i_opcode == NOP) {
@@ -1083,27 +1100,19 @@ basicblock_remove_redundant_nops(basicblock *bb) {
             if (lineno < 0) {
                 continue;
             }
-            /* Equal source lines do not imply equal observer exception state.
-             * In particular, line propagation can cross POP_BLOCK. */
-            if (prev_lineno == lineno &&
-                prev_except == bb->b_instr[src].i_except)
-            {
+            /* or, if the previous instruction had the same line number. */
+            if (prev_lineno == lineno) {
                 bb->b_instr[dest - 1].i_source |= bb->b_instr[src].i_source;
                 continue;
             }
             /* or, if the next instruction has same line number or no line number */
             if (src < bb->b_iused - 1) {
                 int next_lineno = bb->b_instr[src+1].i_loc.lineno;
-                if (next_lineno == lineno &&
-                    bb->b_instr[src+1].i_except == bb->b_instr[src].i_except)
-                {
+                if (next_lineno == lineno) {
                     bb->b_instr[src+1].i_source |= bb->b_instr[src].i_source;
                     continue;
                 }
-                if (next_lineno < 0 &&
-                    bb->b_instr[src+1].i_opcode != POP_BLOCK &&
-                    bb->b_instr[src+1].i_except == bb->b_instr[src].i_except)
-                {
+                if (next_lineno < 0) {
                     bb->b_instr[src+1].i_loc = bb->b_instr[src].i_loc;
                     bb->b_instr[src+1].i_source |= bb->b_instr[src].i_source;
                     continue;
@@ -1114,7 +1123,6 @@ basicblock_remove_redundant_nops(basicblock *bb) {
                 /* or if last instruction in BB and next BB has same line number */
                 if (next) {
                     location next_loc = NO_LOCATION;
-                    basicblock *next_except = NULL;
                     cfg_instr *next_source = NULL;
                     for (int next_i=0; next_i < next->b_iused; next_i++) {
                         cfg_instr *instr = &next->b_instr[next_i];
@@ -1123,13 +1131,10 @@ basicblock_remove_redundant_nops(basicblock *bb) {
                             continue;
                         }
                         next_loc = instr->i_loc;
-                        next_except = instr->i_except;
                         next_source = instr;
                         break;
                     }
-                    if (lineno == next_loc.lineno &&
-                        next_except == bb->b_instr[src].i_except)
-                    {
+                    if (lineno == next_loc.lineno) {
                         assert(next_source != NULL);
                         next_source->i_source |= bb->b_instr[src].i_source;
                         continue;
@@ -1141,7 +1146,6 @@ basicblock_remove_redundant_nops(basicblock *bb) {
         if (dest != src) {
             bb->b_instr[dest] = bb->b_instr[src];
         }
-        prev_except = bb->b_instr[dest].i_except;
         dest++;
         prev_lineno = lineno;
     }
@@ -2900,11 +2904,64 @@ optimize_cfg(cfg_builder *g, PyObject *consts, PyObject *const_cache,
     for (basicblock *b = g->g_entryblock; b != NULL; b = b->b_next) {
         RETURN_IF_ERROR(optimize_basic_block(const_cache, b, consts, consts_index));
     }
-    fold_truth_tests(g->g_entryblock);
     RETURN_IF_ERROR(remove_redundant_nops_and_pairs(g->g_entryblock));
     RETURN_IF_ERROR(remove_unreachable(g->g_entryblock));
     RETURN_IF_ERROR(remove_redundant_nops_and_jumps(g));
     assert(no_redundant_jumps(g));
+    return SUCCESS;
+}
+
+static void
+make_super_instruction(cfg_instr *inst1, cfg_instr *inst2, int super_op)
+{
+    int32_t line1 = inst1->i_loc.lineno;
+    int32_t line2 = inst2->i_loc.lineno;
+    /* Skip if instructions are on different lines */
+    if (line1 >= 0 && line2 >= 0 && line1 != line2) {
+        return;
+    }
+    if (inst1->i_oparg >= 16 || inst2->i_oparg >= 16) {
+        return;
+    }
+    INSTR_SET_OP1(inst1, super_op, (inst1->i_oparg << 4) | inst2->i_oparg);
+    INSTR_SET_OP0(inst2, NOP);
+}
+
+static int
+insert_superinstructions(cfg_builder *g)
+{
+    for (basicblock *b = g->g_entryblock; b != NULL; b = b->b_next) {
+
+        for (int i = 0; i < b->b_iused; i++) {
+            cfg_instr *inst = &b->b_instr[i];
+            int nextop = i+1 < b->b_iused ? b->b_instr[i+1].i_opcode : 0;
+            switch(inst->i_opcode) {
+                case LOAD_FAST:
+                    if (nextop == LOAD_FAST) {
+                        make_super_instruction(inst, &b->b_instr[i + 1], LOAD_FAST_LOAD_FAST);
+                    }
+                    break;
+                case LOAD_FAST_BORROW:
+                    if (nextop == LOAD_FAST_BORROW) {
+                        make_super_instruction(inst, &b->b_instr[i + 1],
+                                               LOAD_FAST_BORROW_LOAD_FAST_BORROW);
+                    }
+                    break;
+                case STORE_FAST:
+                    switch (nextop) {
+                        case LOAD_FAST:
+                            make_super_instruction(inst, &b->b_instr[i + 1], STORE_FAST_LOAD_FAST);
+                            break;
+                        case STORE_FAST:
+                            make_super_instruction(inst, &b->b_instr[i + 1], STORE_FAST_STORE_FAST);
+                            break;
+                    }
+                    break;
+            }
+        }
+    }
+    RETURN_IF_ERROR(remove_redundant_nops(g));
+    assert(no_redundant_nops(g));
     return SUCCESS;
 }
 
@@ -3118,6 +3175,7 @@ optimize_load_fast(cfg_builder *g)
             cfg_instr *instr = &block->b_instr[i];
             int opcode = instr->i_opcode;
             int oparg = instr->i_oparg;
+            assert(opcode != EXTENDED_ARG);
             switch (opcode) {
                 // Opcodes that load and store locals
                 case DELETE_FAST: {
@@ -3136,9 +3194,34 @@ optimize_load_fast(cfg_builder *g)
                     break;
                 }
 
+                case LOAD_FAST_LOAD_FAST: {
+                    PUSH_REF(i, oparg >> 4);
+                    PUSH_REF(i, oparg & 15);
+                    break;
+                }
+
                 case STORE_FAST: {
                     ref r = ref_stack_pop(&refs);
                     store_local(instr_flags, &refs, oparg, r);
+                    break;
+                }
+
+                case STORE_FAST_LOAD_FAST: {
+                    // STORE_FAST
+                    ref r = ref_stack_pop(&refs);
+                    store_local(instr_flags, &refs, oparg >> 4, r);
+                    // LOAD_FAST
+                    PUSH_REF(i, oparg & 15);
+                    break;
+                }
+
+                case STORE_FAST_STORE_FAST: {
+                    // STORE_FAST
+                    ref r = ref_stack_pop(&refs);
+                    store_local(instr_flags, &refs, oparg >> 4, r);
+                    // STORE_FAST
+                    r = ref_stack_pop(&refs);
+                    store_local(instr_flags, &refs, oparg & 15, r);
                     break;
                 }
 
@@ -3308,6 +3391,9 @@ optimize_load_fast(cfg_builder *g)
                     case LOAD_FAST:
                         instr->i_opcode = LOAD_FAST_BORROW;
                         break;
+                    case LOAD_FAST_LOAD_FAST:
+                        instr->i_opcode = LOAD_FAST_BORROW_LOAD_FAST_BORROW;
+                        break;
                     default:
                         break;
                 }
@@ -3352,6 +3438,7 @@ scan_block_for_locals(basicblock *b, basicblock ***sp)
     uint64_t unsafe_mask = b->b_unsafe_locals_mask;
     for (int i = 0; i < b->b_iused; i++) {
         cfg_instr *instr = &b->b_instr[i];
+        assert(instr->i_opcode != EXTENDED_ARG);
         if (instr->i_except != NULL) {
             maybe_push(instr->i_except, unsafe_mask, sp);
         }
@@ -3409,6 +3496,7 @@ fast_scan_many_locals(basicblock *entryblock, int nlocals)
         blocknum++;
         for (int i = 0; i < b->b_iused; i++) {
             cfg_instr *instr = &b->b_instr[i];
+            assert(instr->i_opcode != EXTENDED_ARG);
             int arg = instr->i_oparg;
             if (arg < 64) {
                 continue;
@@ -3772,8 +3860,15 @@ convert_pseudo_conditional_jumps(cfg_builder *g)
                             .i_target = NULL,
                             .i_except = except,
                 };
-                // The jump tests the truth of the copy: see fold_truth_tests()
                 RETURN_IF_ERROR(basicblock_insert_instruction(b, i++, &copy));
+                cfg_instr to_bool = {
+                            .i_opcode = TO_BOOL,
+                            .i_oparg = 0,
+                            .i_loc = loc,
+                            .i_target = NULL,
+                            .i_except = except,
+                };
+                RETURN_IF_ERROR(basicblock_insert_instruction(b, i++, &to_bool));
             }
         }
     }
@@ -3871,6 +3966,7 @@ copy_local_as_load(basicblock *entryblock)
     PyMem_Free(stack);
     return SUCCESS;
 }
+
 
 static int
 convert_pseudo_ops(cfg_builder *g)
@@ -4231,6 +4327,7 @@ fix_cell_offsets(_PyCompile_CodeUnitMetadata *umd, basicblock *entryblock, int *
         for (int i = 0; i < b->b_iused; i++) {
             cfg_instr *inst = &b->b_instr[i];
             // This is called before extended args are generated.
+            assert(inst->i_opcode != EXTENDED_ARG);
             int oldoffset = inst->i_oparg;
             switch(inst->i_opcode) {
                 case MAKE_CELL:
@@ -4251,8 +4348,7 @@ fix_cell_offsets(_PyCompile_CodeUnitMetadata *umd, basicblock *entryblock, int *
 }
 
 static int
-prepare_localsplus(_PyCompile_CodeUnitMetadata *umd, cfg_builder *g,
-                   int code_flags)
+prepare_localsplus(_PyCompile_CodeUnitMetadata *umd, cfg_builder *g)
 {
     assert(PyDict_GET_SIZE(umd->u_varnames) < INT_MAX);
     assert(PyDict_GET_SIZE(umd->u_cellvars) < INT_MAX);
@@ -4268,11 +4364,8 @@ prepare_localsplus(_PyCompile_CodeUnitMetadata *umd, cfg_builder *g,
         return ERROR;
     }
 
-    /* A generator's free variables and cells are made when the object is
-     * created (_PyGen_NewCall()), not by instructions of its code.  This must
-     * be called before fix_cell_offsets(). */
-    if (!IS_GENERATOR(code_flags) &&
-        insert_prefix_instructions(umd, g->g_entryblock, cellfixedoffsets, nfreevars)) {
+    // This must be called before fix_cell_offsets().
+    if (insert_prefix_instructions(umd, g->g_entryblock, cellfixedoffsets, nfreevars)) {
         PyMem_Free(cellfixedoffsets);
         return ERROR;
     }
@@ -4391,6 +4484,393 @@ _PyCfg_ToInstructionSequence(cfg_builder *g, _PyInstructionSequence *seq)
 }
 
 
+/***** Lowering: decoding stack bytecode *****/
+
+/* The register IR is derived from co_code (Python/ir.c).  The decoder turns
+ * the stack bytecode back into the CFG that the optimiser had before
+ * assembly, as far as the register CFG can tell: it folds EXTENDED_ARG, skips
+ * the inline caches, drops NOT_TAKEN, splits the superinstructions and the
+ * borrowing loads into the instructions that they fuse, and gives each
+ * instruction the location of its range in co_linetable and the handler of
+ * its range in co_exceptiontable.  A generator's cells and free variables are
+ * made when its frame is created, so its prefix instructions go. */
+
+typedef struct {
+    int opcode;
+    int oparg;
+    int start;          // of its first EXTENDED_ARG, which jumps and exception
+                        // ranges name, or of the opcode
+    int unit;           // of the opcode, after its EXTENDED_ARGs
+    int next;           // of the instruction after it and its caches
+    int target;         // unit of the jump target, or -1
+    int handler;        // unit of the exception handler, or -1
+    location loc;
+} decoded_instr;
+
+typedef struct {
+    int unit;           // of the handler
+    int depth;          // of the stack there, the exception included
+    int lasti;
+} handler_info;
+
+static int
+lowering_error(PyCodeObject *co, const char *what)
+{
+    PyErr_Format(PyExc_RuntimeError,
+                 "invalid bytecode in %U (%U:%d): %s",
+                 co->co_qualname, co->co_filename, co->co_firstlineno, what);
+    return ERROR;
+}
+
+/* The instructions of co, decoded, in order of unit */
+static int
+decode_instructions(PyCodeObject *co, decoded_instr **instrs, int *ninstrs,
+                    int **instr_of_unit)
+{
+    int units = (int)Py_SIZE(co);
+    const _Py_CODEUNIT *code = _PyCode_CODE(co);
+    decoded_instr *array = PyMem_Calloc(Py_MAX(units, 1), sizeof(decoded_instr));
+    int *index = PyMem_Malloc(Py_MAX(units, 1) * sizeof(int));
+    if (array == NULL || index == NULL) {
+        PyMem_Free(array);
+        PyMem_Free(index);
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    int n = 0;
+    for (int i = 0; i < units; i++) {
+        index[i] = -1;
+    }
+    int i = 0;
+    while (i < units) {
+        int oparg = 0;
+        int start = i;
+        while (i < units && code[i].op.code == EXTENDED_ARG) {
+            oparg = (oparg | code[i].op.arg) << 8;
+            i++;
+        }
+        if (i >= units) {
+            goto malformed;
+        }
+        int opcode = code[i].op.code;
+        oparg |= code[i].op.arg;
+        // Only the stack bytecode of the compiler, which is not specialised
+        // or instrumented, has a meaning here
+        if (!IS_STACK_OPCODE(opcode) || IS_PSEUDO_INSTR(opcode) ||
+            _PyOpcode_Deopt[opcode] != opcode ||
+            opcode >= MIN_INSTRUMENTED_OPCODE)
+        {
+            PyMem_Free(array);
+            PyMem_Free(index);
+            PyErr_Format(PyExc_SystemError, "unknown opcode %d", opcode);
+            return ERROR;
+        }
+        int next = i + 1 + _PyOpcode_Caches[opcode];
+        if (next > units) {
+            goto malformed;
+        }
+        decoded_instr *d = &array[n];
+        d->opcode = opcode;
+        d->oparg = oparg;
+        d->start = start;
+        d->unit = i;
+        d->next = next;
+        d->target = -1;
+        d->handler = -1;
+        d->loc = NO_LOCATION;
+        index[start] = n++;
+        i = next;
+    }
+    *instrs = array;
+    *ninstrs = n;
+    *instr_of_unit = index;
+    return SUCCESS;
+malformed:
+    PyMem_Free(array);
+    PyMem_Free(index);
+    return lowering_error(co, "an instruction does not decode");
+}
+
+/* The unit that the jump d goes to, as the assembler computed its oparg
+ * (Python/assemble.c) */
+static int
+jump_target_unit(const decoded_instr *d)
+{
+    switch (d->opcode) {
+        case JUMP_BACKWARD:
+        case JUMP_BACKWARD_NO_INTERRUPT:
+            return d->next - d->oparg;
+        case END_ASYNC_FOR:
+            // The oparg leads to the END_SEND from the SEND, which is the
+            // target.
+            return d->next - d->oparg - END_SEND_OFFSET;
+        default:
+            return d->next + d->oparg;
+    }
+}
+
+/* Give each instruction the location of the range of co_linetable that has
+ * its opcode */
+static int
+decode_locations(PyCodeObject *co, decoded_instr *instrs, int ninstrs)
+{
+    PyCodeAddressRange range;
+    _PyCode_InitAddressRange(co, &range);
+    int line, endline, col, endcol;
+    int k = 0;
+    int have = 0;
+    while (k < ninstrs) {
+        int byte = instrs[k].unit * (int)sizeof(_Py_CODEUNIT);
+        while (!have || byte >= range.ar_end) {
+            if (!_PyLineTable_NextLocation(&range, &line, &endline, &col,
+                                           &endcol))
+            {
+                // Code whose bytes were edited may outrun its table; the
+                // rest has no location, as in PyCode_Addr2Line
+                for (; k < ninstrs; k++) {
+                    instrs[k].loc = NO_LOCATION;
+                }
+                return SUCCESS;
+            }
+            have = 1;
+        }
+        instrs[k].loc = (location){line, endline, col, endcol};
+        k++;
+    }
+    return SUCCESS;
+}
+
+/* Give each instruction the handler of its range in co_exceptiontable and
+ * list the handlers */
+static int
+decode_exceptions(PyCodeObject *co, decoded_instr *instrs, int ninstrs,
+                  const int *instr_of_unit, handler_info **handlers,
+                  int *nhandlers)
+{
+    const unsigned char *cursor =
+        (const unsigned char *)PyBytes_AS_STRING(co->co_exceptiontable);
+    const unsigned char *end = cursor + PyBytes_GET_SIZE(co->co_exceptiontable);
+    int units = (int)Py_SIZE(co);
+    int nentries = 0;
+    handler_info *list = PyMem_Calloc(
+        Py_MAX(PyBytes_GET_SIZE(co->co_exceptiontable), 1), sizeof(handler_info));
+    if (list == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    int k = 0;
+    while (cursor < end) {
+        _PyIRExceptionEntry entry;
+        if (_PyIR_ExceptionNext(&cursor, end, &entry) < 0 ||
+            entry.end > units || entry.target >= units ||
+            instr_of_unit[entry.target] < 0)
+        {
+            PyMem_Free(list);
+            return lowering_error(co, "the exception table does not decode");
+        }
+        // The fields hold the depth and the lasti flag
+        handler_info info = {entry.target, entry.slot, entry.lasti};
+        int found = 0;
+        for (int h = 0; h < nentries; h++) {
+            found |= list[h].unit == info.unit;
+        }
+        if (!found) {
+            list[nentries++] = info;
+        }
+        while (k < ninstrs && instrs[k].start < entry.start) {
+            k++;
+        }
+        for (int j = k; j < ninstrs && instrs[j].start < entry.end; j++) {
+            instrs[j].handler = entry.target;
+        }
+    }
+    *handlers = list;
+    *nhandlers = nentries;
+    return SUCCESS;
+}
+
+/* The instructions that an upstream superinstruction or a borrowed load
+ * stands for: up to two, as opcode and oparg */
+static int
+split_instruction(const decoded_instr *d, int opcodes[2], int opargs[2])
+{
+    switch (d->opcode) {
+        case LOAD_FAST_LOAD_FAST:
+        case LOAD_FAST_BORROW_LOAD_FAST_BORROW:
+            opcodes[0] = opcodes[1] = LOAD_FAST;
+            opargs[0] = d->oparg >> 4;
+            opargs[1] = d->oparg & 15;
+            return 2;
+        case STORE_FAST_LOAD_FAST:
+            opcodes[0] = STORE_FAST;
+            opcodes[1] = LOAD_FAST;
+            opargs[0] = d->oparg >> 4;
+            opargs[1] = d->oparg & 15;
+            return 2;
+        case STORE_FAST_STORE_FAST:
+            opcodes[0] = opcodes[1] = STORE_FAST;
+            opargs[0] = d->oparg >> 4;
+            opargs[1] = d->oparg & 15;
+            return 2;
+        case LOAD_FAST_BORROW:
+            // optimize_load_fast() borrows again where the load can
+            opcodes[0] = LOAD_FAST;
+            opargs[0] = d->oparg;
+            return 1;
+        default:
+            opcodes[0] = d->opcode;
+            opargs[0] = d->oparg;
+            return 1;
+    }
+}
+
+static bool
+same_span(location a, location b)
+{
+    return a.lineno == b.lineno && a.end_lineno == b.end_lineno &&
+           a.col_offset == b.col_offset && a.end_col_offset == b.end_col_offset;
+}
+
+static int
+decode_code(PyCodeObject *co, cfg_builder *g)
+{
+    decoded_instr *instrs = NULL;
+    int *instr_of_unit = NULL;
+    handler_info *handlers = NULL;
+    basicblock **block_of_unit = NULL;
+    uint8_t *leader = NULL;
+    int ninstrs, nhandlers = 0;
+    int res = ERROR;
+    int units = (int)Py_SIZE(co);
+    RETURN_IF_ERROR(decode_instructions(co, &instrs, &ninstrs, &instr_of_unit));
+    if (decode_locations(co, instrs, ninstrs) < 0 ||
+        decode_exceptions(co, instrs, ninstrs, instr_of_unit, &handlers,
+                          &nhandlers) < 0)
+    {
+        goto done;
+    }
+    // The leaders: the entry, the targets and the instruction after each
+    // terminator, which follows its NOT_TAKEN
+    leader = PyMem_Calloc(Py_MAX(units, 1), 1);
+    block_of_unit = PyMem_Calloc(Py_MAX(units, 1), sizeof(basicblock *));
+    if (leader == NULL || block_of_unit == NULL) {
+        PyErr_NoMemory();
+        goto done;
+    }
+    leader[0] = 1;
+    for (int k = 0; k < ninstrs; k++) {
+        decoded_instr *d = &instrs[k];
+        if (OPCODE_HAS_JUMP(d->opcode)) {
+            d->target = jump_target_unit(d);
+            if (d->target < 0 || d->target >= units ||
+                instr_of_unit[d->target] < 0)
+            {
+                PyErr_Format(PyExc_RuntimeError,
+                             "invalid bytecode in %U (%U:%d): the %s at unit %d"
+                             " jumps to unit %d, which starts no instruction",
+                             co->co_qualname, co->co_filename,
+                             co->co_firstlineno, _PyOpcode_OpName[d->opcode],
+                             d->unit, d->target);
+                goto done;
+            }
+            leader[d->target] = 1;
+        }
+        if (IS_TERMINATOR_OPCODE(d->opcode) && k + 1 < ninstrs) {
+            int after = k + 1;
+            if (instrs[after].opcode == NOT_TAKEN) {
+                after++;
+            }
+            if (after < ninstrs) {
+                leader[instrs[after].start] = 1;
+            }
+        }
+    }
+    for (int h = 0; h < nhandlers; h++) {
+        leader[handlers[h].unit] = 1;
+    }
+    // The blocks, in order
+    basicblock *current = g->g_entryblock;
+    block_of_unit[0] = current;
+    for (int k = 0; k < ninstrs; k++) {
+        int unit = instrs[k].start;
+        if (leader[unit] && unit != 0) {
+            basicblock *b = cfg_builder_new_block(g);
+            if (b == NULL) {
+                goto done;
+            }
+            current->b_next = b;
+            current = b;
+        }
+        block_of_unit[unit] = current;
+    }
+    for (int h = 0; h < nhandlers; h++) {
+        basicblock *b = block_of_unit[handlers[h].unit];
+        b->b_handler_depth = handlers[h].depth + 1 + handlers[h].lasti;
+        b->b_preserve_lasti = handlers[h].lasti;
+    }
+    // The instructions
+    int is_generator = (co->co_flags &
+                        (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) != 0;
+    int in_generator_prefix = is_generator;
+    int after_return_generator = 0;
+    for (int k = 0; k < ninstrs; k++) {
+        decoded_instr *d = &instrs[k];
+        basicblock *b = block_of_unit[d->start];
+        if (d->opcode == NOT_TAKEN) {
+            continue;
+        }
+        if (in_generator_prefix) {
+            if (d->opcode == MAKE_CELL || d->opcode == COPY_FREE_VARS) {
+                continue;
+            }
+            in_generator_prefix = 0;
+        }
+        int opcodes[2], opargs[2];
+        int n = split_instruction(d, opcodes, opargs);
+        for (int j = 0; j < n; j++) {
+            int opcode = opcodes[j];
+            int oparg = opargs[j];
+            location loc = d->loc;
+            if (opcode == POP_TOP && after_return_generator) {
+                // The initial resume input is compiler bookkeeping
+                loc = NO_LOCATION;
+            }
+            after_return_generator = opcode == RETURN_GENERATOR;
+            if (opcode == JUMP_FORWARD || opcode == JUMP_BACKWARD) {
+                opcode = JUMP;
+            }
+            else if (opcode == JUMP_BACKWARD_NO_INTERRUPT) {
+                opcode = JUMP_NO_INTERRUPT;
+            }
+            basicblock *except = d->handler >= 0
+                ? block_of_unit[d->handler] : NULL;
+            int off = basicblock_next_instr(b);
+            if (off < 0) {
+                goto done;
+            }
+            cfg_instr *i = &b->b_instr[off];
+            i->i_opcode = opcode;
+            i->i_oparg = oparg;
+            i->i_loc = loc;
+            // Upstream propagates a location to the instructions that have
+            // none, so one equal to its predecessor's is not a source span
+            i->i_source = loc.lineno >= 0 &&
+                          !(off > 0 && same_span(b->b_instr[off - 1].i_loc, loc));
+            i->i_srcoff = d->unit;
+            i->i_except = except;
+            i->i_target = d->target >= 0 ? block_of_unit[d->target] : NULL;
+        }
+    }
+    res = SUCCESS;
+done:
+    PyMem_Free(leader);
+    PyMem_Free(instrs);
+    PyMem_Free(instr_of_unit);
+    PyMem_Free(handlers);
+    PyMem_Free(block_of_unit);
+    return res;
+}
+
 /* Hand the blocks to the register CFG (Python/regcfg.c), in layout order,
  * with jump targets and exception handlers as block indices. */
 static int
@@ -4431,10 +4911,27 @@ cfg_to_regcfg(cfg_builder *g, int nlocalsplus, int maxdepth,
             cfg_instr *instr = &b->b_instr[i];
             int target = HAS_TARGET(instr->i_opcode)
                 ? instr->i_target->b_predecessors : -1;
+            if (instr->i_opcode == CLEANUP_THROW) {
+                // The stack bytecode continues at the END_SEND after it,
+                // directly or by the jump that follows.  The word of the
+                // register IR names that exit and has no successor else.
+                basicblock *exit;
+                if (i + 1 < b->b_iused) {
+                    cfg_instr *jump = &b->b_instr[i + 1];
+                    assert(IS_UNCONDITIONAL_JUMP_OPCODE(jump->i_opcode));
+                    exit = jump->i_target;
+                    i++;
+                }
+                else {
+                    exit = next_nonempty_block(b->b_next);
+                }
+                target = exit->b_predecessors;
+            }
             int except = instr->i_except != NULL
                 ? instr->i_except->b_predecessors : -1;
             if (_PyRegCfg_AddInstr(cfg, instr->i_opcode, instr->i_oparg,
-                                   instr->i_loc, target, except) < 0)
+                                   instr->i_loc, instr->i_srcoff, target,
+                                   except) < 0)
             {
                 goto error;
             }
@@ -4453,20 +4950,73 @@ error:
 }
 
 int
-_PyCfg_OptimizedCfgToRegCfg(cfg_builder *g, _PyCompile_CodeUnitMetadata *umd,
-                            int code_flags, int *stackdepth, int *nlocalsplus,
-                            _PyRegCfg **result)
+_PyCfg_LowerCode(PyCodeObject *co, _PyRegCfg **result)
 {
     *result = NULL;
+    cfg_builder *g = _PyCfgBuilder_New();
+    if (g == NULL) {
+        return ERROR;
+    }
+    _PyRegCfg *cfg = NULL;
+    int res = ERROR;
+    if (decode_code(co, g) < 0) {
+        goto done;
+    }
+    /* The passes that the compiler runs for the register IR alone, on the
+     * stack bytecode as it was before upstream's passes inserted the TO_BOOL
+     * before a truth test and fused and borrowed the loads. */
+    fold_truth_tests(g->g_entryblock);
+    if (copy_local_as_load(g->g_entryblock) < 0) {
+        goto done;
+    }
+    int stackdepth = calculate_stackdepth(g);
+    if (stackdepth < 0) {
+        goto done;
+    }
+    if (optimize_load_fast(g) < 0 || remove_redundant_nops(g) < 0) {
+        goto done;
+    }
+    assert(no_redundant_nops(g));
+    if (cfg_to_regcfg(g, co->co_nlocalsplus, stackdepth, &cfg) < 0) {
+        goto done;
+    }
+    int flags = co->co_flags;
+    if ((flags & (CO_OPTIMIZED | CO_VARKEYWORDS)) ==
+            (CO_OPTIMIZED | CO_VARKEYWORDS) &&
+        !(flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)))
+    {
+        int kwargs_slot = co->co_argcount + co->co_kwonlyargcount
+                          + !!(flags & CO_VARARGS);
+        if (_PyRegCfg_PrepareKwargs(cfg, kwargs_slot) < 0) {
+            goto done;
+        }
+    }
+    if (_PyRegCfg_Build(cfg) < 0) {
+        goto done;
+    }
+    *result = cfg;
+    cfg = NULL;
+    res = SUCCESS;
+done:
+    _PyRegCfg_Free(cfg);
+    _PyCfgBuilder_Free(g);
+    return res;
+}
+
+int
+_PyCfg_OptimizedCfgToInstructionSequence(cfg_builder *g,
+                                     _PyCompile_CodeUnitMetadata *umd,
+                                     int *stackdepth, int *nlocalsplus,
+                                     _PyInstructionSequence *seq)
+{
     RETURN_IF_ERROR(convert_pseudo_conditional_jumps(g));
-    RETURN_IF_ERROR(copy_local_as_load(g->g_entryblock));
 
     *stackdepth = calculate_stackdepth(g);
     if (*stackdepth < 0) {
         return ERROR;
     }
 
-    *nlocalsplus = prepare_localsplus(umd, g, code_flags);
+    *nlocalsplus = prepare_localsplus(umd, g);
     if (*nlocalsplus < 0) {
         return ERROR;
     }
@@ -4485,29 +5035,17 @@ _PyCfg_OptimizedCfgToRegCfg(cfg_builder *g, _PyCompile_CodeUnitMetadata *umd,
      */
     RETURN_IF_ERROR(optimize_load_fast(g));
 
-    /* No superinstructions: the register CFG folds the loads into the
-     * instructions that consume them (Python/regcfg_passes.c). */
-    RETURN_IF_ERROR(remove_redundant_nops(g));
-    assert(no_redundant_nops(g));
+    /* Superinstructions are inserted after optimize_load_fast() so that a
+     * LOAD_FAST which can be borrowed is converted to LOAD_FAST_BORROW
+     * instead of being fused into a STORE_FAST_LOAD_FAST. Fusing adjacent
+     * instructions does not change which references are borrowed. */
+    RETURN_IF_ERROR(insert_superinstructions(g));
 
-    _PyRegCfg *cfg;
-    RETURN_IF_ERROR(cfg_to_regcfg(g, *nlocalsplus, *stackdepth, &cfg));
-    if ((code_flags & (CO_OPTIMIZED | CO_VARKEYWORDS)) ==
-            (CO_OPTIMIZED | CO_VARKEYWORDS) &&
-        !(code_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)))
-    {
-        int kwargs_slot = (int)(umd->u_posonlyargcount + umd->u_argcount +
-                               umd->u_kwonlyargcount) + !!(code_flags & CO_VARARGS);
-        if (_PyRegCfg_PrepareKwargs(cfg, kwargs_slot) < 0) {
-            _PyRegCfg_Free(cfg);
-            return ERROR;
-        }
-    }
-    if (_PyRegCfg_Build(cfg) < 0) {
-        _PyRegCfg_Free(cfg);
+    /* Can't modify the bytecode after computing jump offsets. */
+    if (_PyCfg_ToInstructionSequence(g, seq) < 0) {
         return ERROR;
     }
-    *result = cfg;
+
     return SUCCESS;
 }
 
@@ -4600,7 +5138,7 @@ _PyCompile_OptimizeCfg(PyObject *seq, PyObject *consts, int nlocals)
         goto error;
     }
 
-    if (remove_redundant_nops(g) < 0) {
+    if (insert_superinstructions(g) < 0) {
         goto error;
     }
 

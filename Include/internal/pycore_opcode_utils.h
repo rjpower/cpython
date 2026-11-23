@@ -22,6 +22,10 @@ extern "C" {
 #define HAS_TARGET(opcode) \
         (OPCODE_HAS_JUMP(opcode) || IS_BLOCK_PUSH_OPCODE(opcode))
 
+// The offset (in code units) of the END_SEND from the SEND in the `yield from`
+// sequence: END_ASYNC_FOR's oparg leads to it, and the jump target is the SEND.
+#define END_SEND_OFFSET 6
+
 /* opcodes that must be last in the basicblock */
 #define IS_TERMINATOR_OPCODE(opcode) \
         (OPCODE_HAS_JUMP(opcode) || IS_SCOPE_EXIT_OPCODE(opcode))
@@ -57,8 +61,7 @@ extern "C" {
 /* Effectful semantic jumps cannot be threaded or deleted as pure transfers. */
 #define IS_NO_FALLTHROUGH_OPCODE(opcode) \
         (IS_SCOPE_EXIT_OPCODE(opcode) || \
-         IS_UNCONDITIONAL_JUMP_OPCODE(opcode) || \
-         (opcode) == CLEANUP_THROW)
+         IS_UNCONDITIONAL_JUMP_OPCODE(opcode))
 
 #define IS_RETURN_OPCODE(opcode) \
         (opcode == RETURN_VALUE)

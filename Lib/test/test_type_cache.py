@@ -1,6 +1,6 @@
 """ Tests for the internal type cache in CPython. """
 import collections.abc
-import dis
+from test.support import ir_dis as dis
 import sys
 import unittest
 import warnings

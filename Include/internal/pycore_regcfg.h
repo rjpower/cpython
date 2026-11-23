@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 #include "pycore_ir.h"          // IR_MAX_SLOTS
+#include "pycore_opcode_utils.h" // IS_NO_FALLTHROUGH_OPCODE
 #include "pycore_symtable.h"    // _Py_SourceLocation
 
 /* The register CFG (boil/design/07-compiler-passes.md).
@@ -102,6 +103,8 @@ typedef struct _PyRegOp {
                             // of its names, plus one, set by
                             // _PyRegPass_KwNames()
     _Py_SourceLocation loc;
+    int srcoff;             // the code-unit offset in co_code of the stack
+                            // instruction that the op stands for
     int base;               // the slot of a window, set by compaction
     /* Set by the assembler */
     int handler;
@@ -142,10 +145,11 @@ typedef struct _PyRegCfg {
     int maxdepth;           // the deepest stack of the stack instructions
     /* Constant slots (_PyRegCfg_AssignConstSlots()): the registers
      * const_first .. const_first + nconst - 1 are hidden locals that no op
-     * writes, whose frame slots hold const_index[j] of co_consts. */
+     * writes, whose frame slots hold const_values[j].  Each is an inline
+     * scalar or an immortal object. */
     int const_first;
     int nconst;
-    int *const_index;
+    PyValueBorrow *const_values;
 } _PyRegCfg;
 
 int _PyRegCfg_PrepareKwargs(_PyRegCfg *cfg, int slot);
@@ -202,7 +206,8 @@ void _PyRegCfg_Free(_PyRegCfg *cfg);
 int _PyRegCfg_AddBlock(_PyRegCfg *cfg, int handler_depth, int preserve_lasti,
                        int depth_hint);
 int _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
-                       _Py_SourceLocation loc, int target, int except);
+                       _Py_SourceLocation loc, int srcoff, int target,
+                       int except);
 
 /* Convert the stack instructions into register ops, run the passes and
  * assign the slots. */
@@ -212,10 +217,14 @@ int _PyRegCfg_Build(_PyRegCfg *cfg);
  * through register fields and call operands alike, a hidden slot each (G6),
  * eight at most: the constant loads that copy propagation would fold if the
  * constant were a local go, the readers name the slot, and the slots are
- * inserted before the free variables (nfree of them), which move up with
- * the temporaries.  consts is the list of co_consts, to which the values
- * of LOAD_SMALL_INT and LOAD_COMMON_CONSTANT are added.  Compacts again. */
-int _PyRegCfg_AssignConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree);
+ * inserted after the locals, cells and free variables (nlocalsplus of them),
+ * with the discard slot after them; the temporaries move up.  consts is the
+ * tuple co_consts.  Compacts again. */
+int _PyRegCfg_AssignConstSlots(_PyRegCfg *cfg, PyObject *consts);
+
+/* Assign the constant slots and encode the ops as the IR of co: the second
+ * half of _PyIR_LowerCode() (Python/ir.c). */
+int _PyIR_Assemble(PyCodeObject *co, _PyRegCfg *cfg, _PyCodeIR **result);
 
 /* The slot of register v: v for a local, its slot for a temporary. */
 static inline int
@@ -272,8 +281,8 @@ int _PyRegPass_CallRoles(_PyRegCfg *cfg);
 int _PyRegCfg_VerifyCallRoles(_PyRegCfg *cfg);
 int _PyRegPass_TruthFold(_PyRegCfg *cfg);
 /* Returns the number of constant slots, or -1 */
-int _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree);
-void _PyRegPass_DiscardSlot(_PyRegCfg *cfg, int nfree);
+int _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts);
+void _PyRegPass_DiscardSlot(_PyRegCfg *cfg);
 int _PyRegPass_FuseJump(_PyRegCfg *cfg);
 
 /* For tests only (_testinternalcapi.compile_without_copyprop_kill()): if
@@ -287,6 +296,15 @@ int _PyRegCfg_AddOperands(_PyRegCfg *cfg, int n, int *index);
 
 /* Replace register from by to in every op of the region of block b. */
 void _PyRegCfg_Rename(_PyRegCfg *cfg, int b, int from, int to);
+
+/* Whether no op after one with this opcode is reached from it.  A
+ * CLEANUP_THROW falls through in the stack bytecode, but its word always
+ * continues at the exit that it names. */
+static inline int
+_PyRegOp_EndsFlow(int opcode)
+{
+    return IS_NO_FALLTHROUGH_OPCODE(opcode) || opcode == CLEANUP_THROW;
+}
 
 #ifdef __cplusplus
 }

@@ -8,9 +8,9 @@ compiler uses, with the generator's analysis of the instruction, with the
 feedback layouts and with sys.monitoring.
 """
 
-import dis
+from test.support import ir_dis as dis
 import io
-import opcode
+from test.support import ir_dis as opcode
 import os
 import re
 import sys
@@ -57,6 +57,12 @@ FEEDBACK = {
 }
 
 OPARGS = (0, 1, 2, 3, 7, 0x102)
+
+# Handlers that no stack bytecode has as an opcode (Tools/cases_generator/
+# ir_generator.py)
+IR_BASE_ONLY = ("JUMP_IF_FALSE_OR_POP", "JUMP_IF_TRUE_OR_POP",
+                "INSTRUMENTED_JUMP_IF_FALSE_OR_POP",
+                "INSTRUMENTED_JUMP_IF_TRUE_OR_POP", "MATERIALIZE_KWARGS")
 
 
 def extent(e, oparg):
@@ -214,7 +220,10 @@ class ContractTests(unittest.TestCase):
             with self.subTest(handler=opcode.opname[h]):
                 self.assertTrue(row.flags & _opcode.IR_VALID)
                 self.assertIn(opcode.opname[h], named)
-                self.assertIn(row.base, opcode.opmap.values())
+                # The handlers that only the IR has as base opcodes are not in
+                # opmap, which lists what co_code can hold
+                self.assertIn(row.base, {*opcode.opmap.values(),
+                                         *(opcode._ir_opmap[name] for name in IR_BASE_ONLY)})
                 self.assertIn(row.shadow, ROWS)
         for name in (*opcode._specialized_opmap, *opcode._ir_opmap):
             self.assertIn(name, BY_NAME)
@@ -237,6 +246,9 @@ class ContractTests(unittest.TestCase):
                 continue
             for oparg in OPARGS:
                 if not _opcode.has_arg(op) and oparg:
+                    continue
+                if opcode.opname[h] == "LOAD_ATTR_CLASSMETHOD" and not oparg & 1:
+                    # An IR-only specialisation of the method load
                     continue
                 try:
                     expected = _opcode.stack_effect(
@@ -335,7 +347,10 @@ class ContractTests(unittest.TestCase):
                 continue
             with self.subTest(name=name):
                 target = row.flags & (_opcode.IR_JUMPS | _opcode.IR_FORWARD)
-                self.assertEqual(bool(target), op in opcode.hasjump)
+                # CLEANUP_THROW is a jump only in the IR: it names the word
+                # that its handler continues at, which co_code does not
+                self.assertEqual(bool(target), op in opcode.hasjump
+                                 or name == "CLEANUP_THROW")
         self.assertEqual(
             {name for name in names_with(_opcode.IR_NAMES_TARGET, "flags")
              if not name.startswith("INSTRUMENTED_")},
@@ -389,8 +404,9 @@ class ContractTests(unittest.TestCase):
         seen = set()
         for module in (dis, email.message, json.decoder, unittest.case):
             for co in _code_objects(module):
-                fbinit = co.co_fbinit
-                for _, h, _, _, _, fb in dis._unpack_opargs(co.co_code, fbinit):
+                ir = dis.IRCode(co)
+                fbinit = ir.co_fbinit
+                for _, h, _, _, _, fb in dis._unpack_opargs(ir.co_code, fbinit):
                     if not fb or fbinit is None:
                         continue
                     kind, _, units = dis._feedback_entry(fbinit, fb)
@@ -501,7 +517,7 @@ class ContractTests(unittest.TestCase):
         for co in mine | {c for c in sample.__code__.co_consts
                           if isinstance(c, types.CodeType)}:
             allowed = added
-            for _, h, *_ in dis._unpack_opargs(co.co_code):
+            for _, h, *_ in dis._unpack_opargs(dis.IRCode(co).co_code):
                 if h in ROWS:
                     allowed |= ROWS[h].events
             with self.subTest(code=co.co_name):
@@ -862,6 +878,9 @@ class SourceScanTests(unittest.TestCase):
                 shadow = opcode.opname[row.shadow]
                 name = shadow if shadow in popped else opcode.opname[row.base]
             for oparg in OPARGS:
+                if opcode.opname[h] == "LOAD_ATTR_CLASSMETHOD" and not oparg & 1:
+                    # An IR-only specialisation of the method load
+                    continue
                 counts = (extent(row.reads, oparg),
                           extent(row.writes, oparg))
                 expected = (eval(popped[name], {"oparg": oparg}),

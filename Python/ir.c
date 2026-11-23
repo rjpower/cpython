@@ -15,7 +15,9 @@
 #include "Python.h"
 
 #include "pycore_backoff.h"         // adaptive_counter_warmup()
-#include "pycore_code.h"            // _PyCode_WORDS()
+#include "pycore_code.h"            // PyCodeObject
+#include "pycore_flowgraph.h"        // _PyCfg_LowerCode()
+#include "pycore_regcfg.h"           // _PyIR_Assemble()
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_interpframe.h"     // _PyFrame_GetCode()
 #include "pycore_ir.h"
@@ -26,9 +28,9 @@
 
 static_assert(sizeof(_PyCodeExec) % sizeof(_PyIRWord) == 0,
               "words must follow the header aligned");
-static_assert(sizeof(_PyCodeExec) - offsetof(_PyCodeExec, nlocalsplus) ==
-              sizeof(void *),
-              "keep the local-count offset relative to executing words");
+static_assert(sizeof(_PyCodeExec) - offsetof(_PyCodeExec, nfixed) ==
+              sizeof(uint32_t),
+              "keep the fixed-slot-count offset relative to executing words");
 static_assert(sizeof(_PyFbBlock) % sizeof(_PyIRWord) == 0,
               "entries must follow the feedback header aligned");
 static_assert(sizeof(_PyFbHeader) == IR_FB_FIRST_UNIT << IR_FB_UNIT_SHIFT,
@@ -50,12 +52,24 @@ _PyIRStaticExec _PyIR_InitCleanup = {
     .exec = {
         .words = _PyIR_InitCleanup.words,
         .nwords = 2,
-        .nlocalsplus = 0,
+        .first_traceable = 2,
+        .nfixed = 0,
     },
     .words = {
         IR_WORD(EXIT_INIT_CHECK, 1, 0, 0, 0),
         IR_WORD(RETURN_VALUE, 0, 0, 0, 0),
     },
+};
+
+/* The IR that the code object of the shim holds: no feedback, constant or
+ * exception, and each word stands for the instruction of its index. */
+static uint32_t init_cleanup_pcmap[2] = {0, 1};
+_PyCodeIR _PyIR_InitCleanupIR = {
+    .nwords = 2,
+    .nslots = 2,
+    .first_traceable = 2,
+    .words = _PyIR_InitCleanup.words,
+    .pcmap = init_cleanup_pcmap,
 };
 
 
@@ -434,8 +448,8 @@ call_operand_position(_PyIRWord word, int k)
 int
 _PyCode_InstrFoldedInputs(PyCodeObject *co, int i)
 {
-    assert(i >= 0 && i < Py_SIZE(co));
-    const _PyIRWord *words = _PyCode_WORDS(co);
+    assert(i >= 0 && i < _PyCode_IRSize(co));
+    const _PyIRWord *words = _PyCode_IRWords(co);
     _PyIRWord word = words[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (fmt->borrow_mask == 0) {
@@ -444,13 +458,13 @@ _PyCode_InstrFoldedInputs(PyCodeObject *co, int i)
     int n = 0;
     if (fmt->operands != _PyIR_OPERANDS_NONE) {
         for (int k = 0; k < _PyIR_CallSlotOperands(word); k++) {
-            n += _PyIR_CallOperand(&words[i], k) < co->co_nlocalsplus;
+            n += _PyIR_CallOperand(&words[i], k) < _PyCode_IRFixed(co);
         }
     }
     for (int r = 0; r < 4; r++) {
         int k = fmt->roles[r] - _PyIR_ROLE_IN0;
         if (k >= 0 && (fmt->borrow_mask & (1 << k))
-            && (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX) < co->co_nlocalsplus)
+            && (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX) < _PyCode_IRFixed(co))
         {
             n++;
         }
@@ -461,8 +475,8 @@ _PyCode_InstrFoldedInputs(PyCodeObject *co, int i)
 int
 _PyCode_InstrStoredLocal(PyCodeObject *co, int i)
 {
-    assert(i >= 0 && i < Py_SIZE(co));
-    _PyIRWord word = _PyCode_WORDS(co)[i];
+    assert(i >= 0 && i < _PyCode_IRSize(co));
+    _PyIRWord word = _PyCode_IRWords(co)[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (!(fmt->flags & _PyIR_STORE_DST)) {
         return -1;
@@ -470,7 +484,7 @@ _PyCode_InstrStoredLocal(PyCodeObject *co, int i)
     for (int r = 0; r < 4; r++) {
         if (fmt->roles[r] == _PyIR_ROLE_DST) {
             int dst = (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX);
-            return dst < co->co_nlocalsplus ? dst : -1;
+            return dst < _PyCode_IRFixed(co) ? dst : -1;
         }
     }
     return -1;
@@ -479,21 +493,21 @@ _PyCode_InstrStoredLocal(PyCodeObject *co, int i)
 int
 _PyCode_FbOrdinal(PyCodeObject *co, uint32_t unit)
 {
-    return _PyIR_FbFind(_PyCode_FBINIT(co), co->co_nfeedback, unit);
+    return _PyIR_FbFind(_PyCode_IR(co)->fbinit, (int)_PyCode_IR(co)->nfeedback, unit);
 }
 
 uint32_t
 _PyCode_FbUnits(PyCodeObject *co)
 {
-    return co->co_nfeedback ? _PyIR_FBINIT_ARG(_PyCode_FBINIT(co)[0]) : 0;
+    return (int)_PyCode_IR(co)->nfeedback ? _PyIR_FBINIT_ARG(_PyCode_IR(co)->fbinit[0]) : 0;
 }
 
 int
 _PyCode_InstrDepthBefore(PyCodeObject *co, int i, int *floor)
 {
-    assert(i >= 0 && i < Py_SIZE(co));
-    _PyIRWord word = _PyCode_WORDS(co)[i];
-    int nl = co->co_nlocalsplus;
+    assert(i >= 0 && i < _PyCode_IRSize(co));
+    _PyIRWord word = _PyCode_IRWords(co)[i];
+    int nl = _PyCode_IRFixed(co);
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     int depth = -1;
     int dst = -1;
@@ -571,14 +585,14 @@ _PyCode_InstrHoles(PyCodeObject *co, int i, int holes[4])
     if (named < 0) {
         return 0;
     }
-    const _PyIRWord *words = _PyCode_WORDS(co);
+    const _PyIRWord *words = _PyCode_IRWords(co);
     _PyIRWord word = words[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     int n = 0;
     if (fmt->operands != _PyIR_OPERANDS_NONE) {
         int extent = _PyIR_Extent(fmt->reads, _PyCode_InstrOparg(co, i));
         for (int k = 0; k < _PyIR_CallSlotOperands(word) && n < 4; k++) {
-            if (_PyIR_CallOperand(&words[i], k) < co->co_nlocalsplus) {
+            if (_PyIR_CallOperand(&words[i], k) < _PyCode_IRFixed(co)) {
                 holes[n++] = named - extent + call_operand_position(word, k);
             }
         }
@@ -587,7 +601,7 @@ _PyCode_InstrHoles(PyCodeObject *co, int i, int holes[4])
     for (int r = 0; r < 4; r++) {
         int k = fmt->roles[r] - _PyIR_ROLE_IN0;
         if (k >= 0 && (fmt->borrow_mask & (1 << k))
-            && (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX) < co->co_nlocalsplus)
+            && (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX) < _PyCode_IRFixed(co))
         {
             holes[n++] = named - fmt->ninputs + k;
         }
@@ -598,8 +612,8 @@ _PyCode_InstrHoles(PyCodeObject *co, int i, int holes[4])
 int
 _PyCode_InstrDiscards(PyCodeObject *co, int i)
 {
-    assert(i >= 0 && i < Py_SIZE(co));
-    _PyIRWord word = _PyCode_WORDS(co)[i];
+    assert(i >= 0 && i < _PyCode_IRSize(co));
+    _PyIRWord word = _PyCode_IRWords(co)[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (!(fmt->flags & _PyIR_DISCARDS)) {
         return 0;
@@ -615,8 +629,8 @@ _PyCode_InstrDiscards(PyCodeObject *co, int i)
 int
 _PyCode_InstrUnpackedLocals(PyCodeObject *co, int i)
 {
-    assert(i >= 0 && i < Py_SIZE(co));
-    _PyIRWord word = _PyCode_WORDS(co)[i];
+    assert(i >= 0 && i < _PyCode_IRSize(co));
+    _PyIRWord word = _PyCode_IRWords(co)[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (!(fmt->flags & _PyIR_UNPACKS)) {
         return 0;
@@ -624,7 +638,7 @@ _PyCode_InstrUnpackedLocals(PyCodeObject *co, int i)
     for (int r = 0; r < 4; r++) {
         if (fmt->roles[r] == _PyIR_ROLE_DST) {
             int dst = (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX);
-            if (dst >= co->co_nlocalsplus) {
+            if (dst >= _PyCode_IRFixed(co)) {
                 return 0;
             }
             return _PyIR_Extent(fmt->writes, _PyCode_InstrOparg(co, i));
@@ -636,8 +650,8 @@ _PyCode_InstrUnpackedLocals(PyCodeObject *co, int i)
 int
 _PyCode_InstrFbIndex(PyCodeObject *co, int i)
 {
-    assert(i >= 0 && i < Py_SIZE(co));
-    _PyIRWord word = _PyCode_WORDS(co)[i];
+    assert(i >= 0 && i < _PyCode_IRSize(co));
+    _PyIRWord word = _PyCode_IRWords(co)[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (fmt->fb == _PyIR_LOC_NONE) {
         return -1;
@@ -648,8 +662,8 @@ _PyCode_InstrFbIndex(PyCodeObject *co, int i)
 int
 _PyCode_InstrOparg(PyCodeObject *co, int i)
 {
-    assert(i >= 0 && i < Py_SIZE(co));
-    _PyIRWord word = _PyCode_WORDS(co)[i];
+    assert(i >= 0 && i < _PyCode_IRSize(co));
+    _PyIRWord word = _PyCode_IRWords(co)[i];
     int handler = IR_HANDLER(word);
     const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
     switch (fmt->imm) {
@@ -662,7 +676,7 @@ _PyCode_InstrOparg(PyCodeObject *co, int i)
             // The sites that need the operation have an entry of their own
             int i = _PyCode_FbOrdinal(co, read_field(word, fmt->fb));
             assert(i > 0);
-            return (int)_PyIR_FBINIT_ARG(_PyCode_FBINIT(co)[i]);
+            return (int)_PyIR_FBINIT_ARG(_PyCode_IR(co)->fbinit[i]);
         }
         default:
             if (fmt->flags & _PyIR_FORWARD) {
@@ -808,17 +822,16 @@ exec_discard_slot(_PyIRWord word, uint32_t discard)
 }
 
 static _PyCodeExec *
-make_exec(PyCodeObject *co)
+make_exec(PyCodeObject *co, const _PyCodeIR *ir)
 {
-    Py_ssize_t nwords = Py_SIZE(co);
-    int nfb = co->co_nfeedback;
+    Py_ssize_t nwords = ir->nwords;
+    int nfb = (int)ir->nfeedback;
     size_t words_size = (size_t)nwords * sizeof(_PyIRWord);
     size_t fb_size = nfb
         ? sizeof(_PyFbBlock) + ((size_t)_PyCode_FbUnits(co) << IR_FB_UNIT_SHIFT)
         : 0;
     // The image of the constant slots follows the words
-    int nconst = co->co_nconstslots;
-    const uint32_t *table = _PyCode_CONSTSLOTS(co);
+    int nconst = (int)ir->nconst;
     // The image has an even number of entries: the fill copies two at a
     // time, and the entry after an odd count is NULL
     size_t image_size = (size_t)(nconst + (nconst & 1)) * sizeof(PyValue);
@@ -834,39 +847,40 @@ make_exec(PyCodeObject *co)
     *exec = (_PyCodeExec){
         .words = words,
         .nwords = (uint32_t)nwords,
-        .nlocalsplus = (uint32_t)co->co_nlocalsplus,
+        .nfixed = ir->nfixed,
+        .first_traceable = ir->first_traceable,
         .nconst = (uint16_t)nconst,
     };
     // Without constants the block is empty and begins at the discard slot
     exec->const_first = nconst > 0
-        ? (uint16_t)table[0]
-        : (uint16_t)_PyFrame_DiscardSlotForCodeObject(co);
+        ? (uint16_t)ir->const_first
+        : (uint16_t)(ir->nfixed - 1);
     if (nconst > 0) {
-        // The frames borrow these: co_consts keeps them alive
+        // The frames borrow these: they are inline or immortal
         PyValueBorrow *values =
             (PyValueBorrow *)((char *)words + words_size);
         for (int j = 0; j < nconst; j++) {
-            values[j] = PyTuple_GET_VALUE(co->co_consts, table[2 * j + 1]);
+            values[j] = ir->const_values[j];
         }
         if (nconst & 1) {
             values[nconst] = PyValue_Borrow(PyValue_NULL);
         }
         exec->const_image = values;
     }
-    /* The slot-class flags are a cache of the fields and nlocalsplus,
-     * which handlers test in the word instead of loading nlocalsplus. */
-    const _PyIRWord *source = _PyCode_WORDS(co);
-    uint32_t discard = (uint32_t)_PyFrame_DiscardSlotForCodeObject(co);
+    /* The slot-class flags are a cache of the fields and nfixed,
+     * which handlers test in the word instead of loading nfixed. */
+    const _PyIRWord *source = ir->words;
+    uint32_t discard = ir->nfixed - 1;
     for (Py_ssize_t i = 0; i < nwords; i++) {
         assert(!(source[i] & IR_F_LOCAL_MASK));
         words[i] = exec_discard_slot(source[i], discard);
-        words[i] |= _PyIR_ExecLocalFlags(words[i], exec->nlocalsplus);
+        words[i] |= _PyIR_ExecLocalFlags(words[i], exec->nfixed);
     }
     /* A call is a head and its operand words, whose fields name its operands */
     for (Py_ssize_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
         if (_PyIR_HandlerHasOperands(IR_HANDLER(words[i]))) {
             words[i] = (words[i] & ~(IR_F_CALL_OWES_CALLABLE | IR_F_CALL_OWES_OPERANDS))
-                       | _PyIR_ExecCallFlags(&words[i], exec->nlocalsplus);
+                       | _PyIR_ExecCallFlags(&words[i], exec->nfixed);
         }
     }
     if (fb_size == 0) {
@@ -888,7 +902,7 @@ make_exec(PyCodeObject *co)
 #endif
     _Py_BackoffCounter counter = enable_counters
         ? adaptive_counter_warmup() : initial_unreachable_backoff_counter();
-    const uint32_t *fbinit = _PyCode_FBINIT(co);
+    const uint32_t *fbinit = ir->fbinit;
     for (int i = 1; i < nfb; i++) {
         _PyFbHeader *h = _PyIR_FbEntry(words, _PyIR_FBINIT_FIELD(fbinit[i]));
         h->kind = (uint8_t)_PyIR_FBINIT_KIND(fbinit[i]);
@@ -896,6 +910,38 @@ make_exec(PyCodeObject *co)
         h->arg = _PyIR_FBINIT_ARG(fbinit[i]);
     }
     return exec;
+}
+
+/* Lowering needs no GC allocation and no Python code, so it cannot re-enter
+ * itself on the same code object. */
+_PyCodeIR *
+_PyIR_LowerCode(PyCodeObject *co)
+{
+    _PyRegCfg *cfg;
+    _PyCodeIR *ir = NULL;
+    if (_PyCfg_LowerCode(co, &cfg) == 0) {
+        if (_PyIR_Assemble(co, cfg, &ir) < 0) {
+            ir = NULL;
+        }
+        _PyRegCfg_Free(cfg);
+    }
+    // The compiler's proof of which returns leave no scratch owner
+    if (ir != NULL && _PyIR_SelectEmptyReturns(ir) < 0) {
+        _PyIR_Free(ir);
+        ir = NULL;
+    }
+    if (ir == NULL) {
+        _PyErr_FormatNote("while lowering %U (%U:%d) to the register IR",
+                          co->co_qualname, co->co_filename, co->co_firstlineno);
+        return NULL;
+    }
+    return ir;
+}
+
+void
+_PyIR_Free(_PyCodeIR *ir)
+{
+    PyMem_Free(ir);
 }
 
 _PyCodeExec *
@@ -908,13 +954,49 @@ _PyCode_GetExec(PyCodeObject *co)
     Py_BEGIN_CRITICAL_SECTION(co);
     exec = co->_co_exec;
     if (exec == NULL) {
-        exec = make_exec(co);
+        _PyCodeIR *ir = co->_co_ir;
+        if (ir == NULL) {
+            ir = _PyIR_LowerCode(co);
+            if (ir != NULL) {
+                co->_co_ir = ir;
+                co->co_framesize = (int)ir->nslots + FRAME_SPECIALS_SIZE;
+            }
+        }
+        exec = ir == NULL ? NULL : make_exec(co, ir);
         if (exec != NULL) {
             FT_ATOMIC_STORE_PTR_RELEASE(co->_co_exec, exec);
         }
     }
     Py_END_CRITICAL_SECTION();
     return exec;
+}
+
+int
+_PyCode_OffsetWord(PyCodeObject *co, int offset)
+{
+    const _PyCodeIR *ir = _PyCode_IR(co);
+    uint32_t unit = (uint32_t)offset / sizeof(_Py_CODEUNIT);
+    // The first word whose instruction is at or after the unit
+    uint32_t lo = 0, hi = ir->nwords;
+    while (lo < hi) {
+        uint32_t mid = lo + (hi - lo) / 2;
+        if (ir->pcmap[mid] < unit) {
+            lo = mid + 1;
+        }
+        else {
+            hi = mid;
+        }
+    }
+    return (int)lo;
+}
+
+const _PyCodeIR *
+_PyCode_GetIR(PyCodeObject *co)
+{
+    if (_PyCode_GetExec(co) == NULL) {
+        return NULL;
+    }
+    return co->_co_ir;
 }
 
 void
@@ -925,17 +1007,21 @@ _PyCode_ClearExec(PyCodeObject *co)
      * the frame runs (pyjit/design/register-ir.md 1.10). */
     assert(Py_REFCNT(co) == 0);
     _PyCodeExec *exec = co->_co_exec;
-    if (exec == NULL || exec == &_PyIR_InitCleanupExec) {
+    if (exec == &_PyIR_InitCleanupExec) {
         return;
     }
-    co->_co_exec = NULL;
-    char *base = (char *)exec;
-    if (co->co_nfeedback) {
-        _PyFbBlock *block = _PyIR_FbBlock(exec->words);
-        _PyFb_Clear(block);
-        base = (char *)(block + 1) - block->size;
+    if (exec != NULL) {
+        co->_co_exec = NULL;
+        char *base = (char *)exec;
+        if (co->_co_ir->nfeedback) {
+            _PyFbBlock *block = _PyIR_FbBlock(exec->words);
+            _PyFb_Clear(block);
+            base = (char *)(block + 1) - block->size;
+        }
+        _PyMem_NoScanFree(base);
     }
-    _PyMem_NoScanFree(base);
+    _PyIR_Free(co->_co_ir);
+    co->_co_ir = NULL;
 }
 
 size_t
@@ -946,8 +1032,9 @@ _PyCode_ExecSizeOf(PyCodeObject *co)
         return 0;
     }
     size_t res = sizeof(_PyCodeExec) + exec->nwords * sizeof(_PyIRWord);
+    res += co->_co_ir->nbytes;
     res += (size_t)(exec->nconst + (exec->nconst & 1)) * sizeof(PyValueBorrow);
-    if (co->co_nfeedback) {
+    if (co->_co_ir->nfeedback) {
         _PyFbBlock *feedback = _PyIR_FbBlock(exec->words);
         res += feedback->size;
         if (feedback->npoly) {
@@ -986,7 +1073,7 @@ _PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason,
         return _PyIR_SHADOW_UNCOVERED;
     }
     uint32_t site = (uint32_t)((pc - start) / sizeof(_PyIRWord));
-    if (_PyIR_FormatOf(IR_HANDLER(co->co_words[site]))->transfer_kind !=
+    if (_PyIR_FormatOf(IR_HANDLER(_PyCode_IRWords(co)[site]))->transfer_kind !=
         _PyIR_TRANSFER_EXIT)
     {
         return _PyIR_SHADOW_UNCOVERED;
@@ -1009,7 +1096,7 @@ _PyIR_ShadowRetirement(_PyInterpreterFrame *frame, uint8_t reason,
     /* Nullable bindings, including hidden constants, keep their dynamic
      * authority. The first exact scratch shape is empty, so an inline value
      * is a mismatch too; testing mortal counts alone would miss it. */
-    for (int home = co->co_nlocalsplus;
+    for (int home = _PyCode_IRFixed(co);
          home < _PyFrame_NumSlotsForCodeObject(co); home++)
     {
         if (!PyValue_IsNull(frame->base[home])) {
@@ -1029,13 +1116,16 @@ frame_image_site(_PyInterpreterFrame *frame, const _PyInstr *origin, uint32_t *s
     }
     PyCodeObject *co = frame->f_executable;
     _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(co->_co_exec);
-    int nl = co->co_nlocalsplus;
-    int scratch = Py_MAX(co->co_stacksize, 1);
     if (exec == NULL || frame->base == NULL ||
-        frame->ir_words != exec->words || exec->nwords != Py_SIZE(co) ||
-        exec->nlocalsplus != nl || nl < 0 || nl > IR_MAX_SLOTS ||
-        scratch > IR_MAX_SLOTS - nl ||
-        _PyFrame_NumSlotsForCodeObject(co) != nl + scratch)
+        frame->ir_words != exec->words ||
+        exec->nwords != _PyCode_IR(co)->nwords)
+    {
+        return NULL;
+    }
+    int nl = _PyCode_IRFixed(co);
+    int nslots = (int)_PyCode_IR(co)->nslots;
+    if (exec->nfixed != nl || nl < 0 || nslots <= nl || nslots > IR_MAX_SLOTS ||
+        _PyFrame_NumSlotsForCodeObject(co) != nslots)
     {
         return NULL;
     }
@@ -1063,7 +1153,7 @@ _PyIR_DelegatedReceiverHome(_PyInterpreterFrame *frame)
         return -1;
     }
     PyCodeObject *co = frame->f_executable;
-    _PyIRWord word = co->co_words[continuation - 1];
+    _PyIRWord word = _PyCode_IRWords(co)[continuation - 1];
     int handler = IR_HANDLER(word);
     const _PyIRGeneratorBoundary *boundary = _PyIR_GeneratorBoundaryOf(handler);
     if (boundary == NULL) {
@@ -1078,8 +1168,8 @@ _PyIR_DelegatedReceiverHome(_PyInterpreterFrame *frame)
         dst = _PyFrame_DiscardSlotForCodeObject(co);
     }
     if (dst != frame->return_slot ||
-        outgoing < co->co_nlocalsplus || outgoing >= _PyFrame_NumSlotsForCodeObject(co) ||
-        receiver < co->co_nlocalsplus ||
+        outgoing < _PyCode_IRFixed(co) || outgoing >= _PyFrame_NumSlotsForCodeObject(co) ||
+        receiver < _PyCode_IRFixed(co) ||
         receiver >= _PyFrame_NumSlotsForCodeObject(co) ||
         receiver == dst || receiver == outgoing)
     {

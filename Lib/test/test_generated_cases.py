@@ -1304,7 +1304,9 @@ class TestIRCases(unittest.TestCase):
         for name in ("FOR_ITER", "SEND"):
             self.assertTrue(analysis.instructions[name].properties.jumps)
             self.assertTrue(analysis.instructions[name].properties.error_without_pop)
-        self.assertTrue(analysis.instructions["CLEANUP_THROW"].properties.jumps)
+        # The stack instruction falls through; the IR word's jump exit is
+        # declared by IR_EXIT
+        self.assertFalse(analysis.instructions["CLEANUP_THROW"].properties.jumps)
         throw_format = ir_generator.compute_formats(analysis)["CLEANUP_THROW"]
         self.assertTrue(throw_format.jump_always)
         self.assertFalse(throw_format.names_target)

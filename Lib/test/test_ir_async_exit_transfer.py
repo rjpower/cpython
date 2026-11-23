@@ -7,23 +7,9 @@ import unittest
 
 import _testinternalcapi
 from test.test_ir_call_roles import routes
-from test.test_ir_transfer_admission import make_code
 
 
 class AsyncExitTransferTests(unittest.TestCase):
-    def test_normal_exit_drains_inputs_and_preserves_only_prior_empty_tail(self):
-        # The unreachable SEND is a real metadata target, not a normal edge
-        # from END_ASYNC_FOR. These raw images are never executed.
-        words = [("LOAD_CONST", 0), ("LOAD_CONST", 1), ("POP_TOP", 2),
-                 ("END_ASYNC_FOR", 0, 0, 8, 0), ("LOAD_CONST", 0),
-                 ("CALL+NO_SELF", 0, 0, 0, 0), ("RETURN_VALUE", 0),
-                 ("IR_JUMP", 0, 0, 7), ("SEND", 0, 0, 0, 0),
-                 ("RETURN_VALUE", 0)]
-        code = make_code(words, slots=4)
-        for admitted in routes(code):
-            self.assertEqual(_testinternalcapi.get_ir(admitted, True),
-                             _testinternalcapi.get_ir(code))
-
     def test_nested_async_loop_reuses_call_window_on_exhaustion(self):
         class Pause:
             def __await__(self):

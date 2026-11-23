@@ -1,6 +1,7 @@
 """Guarded canonical class values and their result-retirement transaction."""
 
-import dis
+from test.support import ir_dis as dis
+from test.support.ir_dis import IRCode
 import sys
 import types
 import unittest
@@ -72,10 +73,10 @@ class TestCanonicalMethodCapture(unittest.TestCase):
                               for value in original.co_consts)
             stripped = original.replace(co_consts=constants, co_linetable=b'')
             self.assertEqual(stripped.co_code, original.co_code)
-            self.assertEqual(stripped.co_fbinit, original.co_fbinit)
+            self.assertEqual(IRCode(stripped).co_fbinit, IRCode(original).co_fbinit)
             self.assertEqual(stripped.co_exceptiontable, original.co_exceptiontable)
             positions = list(stripped.co_positions())
-            self.assertTrue(positions)
+            # An empty line table yields no positions at all
             self.assertEqual(positions, [(None, None, None, None)] * len(positions))
             return stripped
 
@@ -538,7 +539,7 @@ class TestGuardedClassValue(unittest.TestCase):
         # 4096-unit vector.
         self.assertEqual([site.fb for site in private], list(range(-4092, 0, 6)))
         self.assertEqual(len(shared), 18)
-        total = int.from_bytes(read.__code__.co_fbinit[:4], sys.byteorder) & 0xFFFF
+        total = int.from_bytes(IRCode(read.__code__).co_fbinit[:4], sys.byteorder) & 0xFFFF
         self.assertEqual(total, 4094)
         owner = Receiver()
         warm(read, owner)
@@ -546,7 +547,7 @@ class TestGuardedClassValue(unittest.TestCase):
         self.assertEqual({words[site.offset] for site in private},
                          {"LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES"})
         self.assertEqual({words[site.offset] for site in shared}, {"LOAD_ATTR"})
-        self.assertEqual(len(read.__code__._co_feedback), total * 8)
+        self.assertEqual(len(IRCode(read.__code__)._co_feedback), total * 8)
         Receiver.selected = 2
         self.assertEqual(read(owner), 2)
 

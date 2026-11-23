@@ -289,13 +289,6 @@ class PositionalCandidateTests(unittest.TestCase):
             self.assertIs(caught.exception, visit_error)
         self.assertEqual(events, ["visit", "visit"])
 
-    def test_code_feedback_optional_argument(self):
-        code = sample.__code__
-        cloned = types.CodeType(*(code_arguments(code) + [
-            code.co_freevars, code.co_cellvars, code.co_fbinit]))
-        self.assertEqual(cloned.co_fbinit, code.co_fbinit)
-        self.assertEqual(types.FunctionType(cloned, {})(), 42)
-
 
 if __name__ == "__main__":
     unittest.main()

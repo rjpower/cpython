@@ -455,11 +455,6 @@ typedef struct _rare_events {
 // Optimization configuration for the interpreter.
 typedef struct _PyOptimizationConfig {
     bool specialization_enabled;
-    /* Whether the code constructor re-proves the compiler's output and
-     * rejects malformed images. Assertion builds always do; release builds
-     * do under PYTHON_VALIDATE_CODE=1. The proofs only guard against
-     * hand-built code objects and corrupt .pyc files. */
-    bool validate_code;
 } _PyOptimizationConfig;
 
 struct

@@ -567,7 +567,7 @@ codegen_add_yield_from(compiler *c, location loc, int await)
     ADDOP_JUMP(c, loc, JUMP_NO_INTERRUPT, send);
 
     USE_LABEL(c, fail);
-    ADDOP_JUMP(c, loc, CLEANUP_THROW, exit);
+    ADDOP(c, loc, CLEANUP_THROW);
 
     USE_LABEL(c, exit);
     ADDOP(c, loc, END_SEND);
@@ -758,9 +758,7 @@ codegen_enter_scope(compiler *c, identifier name, int scope_type,
          before returning. */
         location loc = LOCATION(lineno, lineno, -1, -1);
         ADDOP_IN_SCOPE(c, loc, RETURN_GENERATOR);
-        /* The initial resume input is compiler bookkeeping, not a source
-         * statement before the generator's entry RESUME. */
-        ADDOP_IN_SCOPE(c, NO_LOCATION, POP_TOP);
+        ADDOP_IN_SCOPE(c, loc, POP_TOP);
     }
 
     ADDOP_I_IN_SCOPE(c, loc, RESUME, RESUME_AT_FUNC_START);
@@ -2325,6 +2323,7 @@ codegen_async_for(compiler *c, stmt_ty s)
     USE_LABEL(c, send);
     ADD_YIELD_FROM(c, loc, 1);
     ADDOP(c, loc, POP_BLOCK);  /* for SETUP_FINALLY */
+    ADDOP(c, loc, NOT_TAKEN);
 
     /* Success block for __anext__ */
     VISIT(c, expr, s->v.AsyncFor.target);
@@ -4060,8 +4059,19 @@ can_optimize_super_call(compiler *c, expr_ty attr)
     if (mangled == NULL) {
         return ERROR;
     }
-    Py_ssize_t arg = _PyCompile_DictAddObj(METADATA(c)->u_names, mangled);
+    // The index the name has, or would get; adding it here would move it
+    // ahead of the names that the instructions before it add
+    PyValue index = PyValue_NULL;
+    int found = _PyDict_GetValue((PyDictObject *)METADATA(c)->u_names,
+                                 PyValue_FromObjectBorrow(mangled), &index);
     Py_DECREF(mangled);
+    RETURN_IF_ERROR(found);
+    Py_ssize_t arg = PyDict_GET_SIZE(METADATA(c)->u_names);
+    if (found) {
+        arg = PyValue_IsInlineInt(index) ? PyValue_InlineInt64(index)
+                                         : _PyValue_IntAsSsize_t(index);
+        PyValue_CLOSE(index);
+    }
     RETURN_IF_ERROR(arg);
     return ((arg << 2) | 3) <= IR_FIELD_MAX;
 }

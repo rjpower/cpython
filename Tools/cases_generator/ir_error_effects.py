@@ -570,7 +570,7 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
                     or [t.text for t in arguments[0]] not in (
                         ["_PY_IR_FOR_ITER"], ["_PY_IR_SEND"], ["_PY_IR_SEND_THROW"])
                     or expression(arguments[1], variables, origin).kind != Kind.VALUE
-                    or [t.text for t in arguments[2]] != ["oparg"]):
+                    or [t.text for t in arguments[2]] not in (["oparg"], ["IR_EXIT"])):
                 return False
             helpers.add("IR_COMPLETE_STEP")
             _apply_native(expression(arguments[1], variables, origin), origin)

@@ -111,7 +111,8 @@ class CallOperandOwnershipTests(unittest.TestCase):
         def target(*arguments):
             self.fail("a failed preparation must not invoke its target")
 
-        for code in routes(template.__code__):
+        all_routes = routes(template.__code__)
+        for code in all_routes:
             invoke = types.FunctionType(code, {})
             for arguments in (None, 17, object()):
                 with self.subTest(arguments=arguments):
@@ -122,7 +123,7 @@ class CallOperandOwnershipTests(unittest.TestCase):
                 invoke(target, Arguments())
             self.assertIs(caught.exception, marker)
             marker.__traceback__ = None
-        self.assertEqual(events, ["iter"] * 4)
+        self.assertEqual(events, ["iter"] * len(all_routes))
 
     def test_exact_tuple_monitor_observes_evaluated_inputs_once(self):
         def template(target, arguments):

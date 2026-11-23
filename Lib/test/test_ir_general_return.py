@@ -1,4 +1,8 @@
-"""General returns transfer remaining scratch owners to frame retirement."""
+"""General returns transfer remaining owners to frame retirement.
+
+A function that returns a value while its parameters still own objects
+retires those owners after the result is out.
+"""
 
 import marshal
 import sys
@@ -6,65 +10,26 @@ import types
 import unittest
 import weakref
 
-import _testinternalcapi
 from test import support
-from test.test_ir_admission import construct
-from test.test_ir_transfer_admission import encoded, make_code
 
 
-def routes(code):
-    return (code, construct(code), code.replace(),
-            marshal.loads(marshal.dumps(code)))
+def general(owner, result):
+    return result
 
 
-def general_code():
-    return make_code([
-        ("LOAD_FAST_AND_CLEAR", 2, 0),
-        ("LOAD_FAST_AND_CLEAR", 3, 1),
-        ("IR_JUMP", 0, 0, 3),
-        ("RETURN_VALUE", 3)],
-        locals=("owner", "result"), slots=2).replace(co_argcount=2)
+def escaping(owner, result, observe):
+    observe()
+    return result
 
 
-def setUpModule():
-    # These tests construct malformed images and expect the constructor to
-    # reject them; release builds only do so on request.
-    from test.support.ir_semantics import code_validation
-    unittest.enterModuleContext(code_validation())
+def routes(function):
+    code = function.__code__
+    return (code, code.replace(), marshal.loads(marshal.dumps(code)))
 
 
 class GeneralReturnTests(unittest.TestCase):
-    def test_remaining_owner_is_valid_but_not_an_empty_return(self):
-        code = general_code()
-        for admitted in routes(code):
-            self.assertEqual(_testinternalcapi.get_ir(admitted)[-1][0],
-                             "RETURN_VALUE")
-            self.assertEqual(_testinternalcapi.check_ir_retirement(
-                admitted, 3, 1), 0)
-
-    def test_return_input_and_overwrite_checks_remain_required(self):
-        code = general_code()
-        controls = (
-            ([("LOAD_FAST_AND_CLEAR", 2, 0), ("IR_JUMP", 0, 0, 2),
-              ("IR_JUMP", 0, 0, 3), ("RETURN_VALUE", 3)],
-             "reads unavailable scratch"),
-            ([("LOAD_FAST_AND_CLEAR", 2, 0),
-              ("LOAD_FAST_AND_CLEAR", 3, 1), ("LOAD_CONST", 2),
-              ("RETURN_VALUE", 3)], "overwrites scratch owner"),
-        )
-        for words, message in controls:
-            changed = encoded(words)
-            for route in (construct, lambda co, **kw: co.replace(**kw)):
-                with self.subTest(message=message, route=route):
-                    with self.assertRaisesRegex(ValueError, message):
-                        route(code, co_code=changed)
-            payload = marshal.dumps(code)
-            self.assertEqual(payload.count(code.co_code), 1)
-            with self.assertRaisesRegex(ValueError, message):
-                marshal.loads(payload.replace(code.co_code, changed, 1))
-
-    def test_last_scratch_owner_finalizer_sees_result_and_code(self):
-        for code in routes(general_code()):
+    def test_last_owner_finalizer_sees_result_and_code(self):
+        for code in routes(general):
             events = []
             observations = []
             result_refs = []
@@ -93,19 +58,10 @@ class GeneralReturnTests(unittest.TestCase):
             support.gc_collect()
             self.assertEqual(events, ["owner", "result"])
 
-    def test_association_takeover_preserves_remaining_scratch(self):
-        # The callback escapes the actual returning frame. Its scratch owner
-        # must move into that frame's heap storage rather than disappear at L.
-        code = make_code([
-            ("RESUME", 0),
-            ("LOAD_FAST_AND_CLEAR", 4, 0),
-            ("LOAD_FAST_AND_CLEAR", 5, 1),
-            ("LOAD_FAST", 6, 2),
-            ("CALL+NO_SELF", 3, 6, 0, 0),
-            ("RETURN_VALUE", 5)],
-            locals=("owner", "result", "observe", "unused"),
-            slots=4).replace(co_argcount=3)
-        for admitted in routes(code):
+    def test_frame_takeover_preserves_remaining_owner(self):
+        # The callback escapes the returning frame. Its owner must move into
+        # that frame's heap storage rather than disappear at the return.
+        for admitted in routes(escaping):
             frames = []
             owner_refs = []
             events = []

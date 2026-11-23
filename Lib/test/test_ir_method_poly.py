@@ -1,13 +1,10 @@
 """A method load that saw several receiver types reads the site's poly rows."""
 
-import marshal
 import types
 import unittest
 
 from test import support
 from test.support import import_helper
-from test.test_ir_admission import construct
-from test.test_ir_transfer_admission import encoded, make_code
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 POLY = "LOAD_ATTR_METHOD_POLY"
@@ -49,21 +46,6 @@ def make_classes():
 
 EXPECTED = {"Base": "base", "Own": "own", "Inherited": "base",
             "Slotted": "slotted", "Deep": "deep:base"}
-
-
-class LearnedAdmissionTests(unittest.TestCase):
-    def test_public_images_cannot_supply_the_poly_handler(self):
-        # Its rows exist only in the feedback of a site that learned them
-        code = make_code([("LOAD_CONST", 0), ("RETURN_VALUE", 0)])
-        changed = encoded([(POLY, 1), ("RETURN_VALUE", 0)])
-        for route in (construct, lambda co, **kw: co.replace(**kw)):
-            with self.subTest(route=route):
-                with self.assertRaisesRegex(ValueError, "learned-only executable handler"):
-                    route(code, co_code=changed)
-        payload = marshal.dumps(code)
-        self.assertEqual(payload.count(code.co_code), 1)
-        with self.assertRaisesRegex(ValueError, "learned-only executable handler"):
-            marshal.loads(payload.replace(code.co_code, changed, 1))
 
 
 @unittest.skipIf(support.Py_GIL_DISABLED, "requires GIL specialization")

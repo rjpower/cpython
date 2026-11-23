@@ -399,8 +399,11 @@ sys_trace_stop_iteration_func(
         int64_t offset = PyValue_InlineInt64(offset_arg);
         if (PyCode_Check(code_obj) && Py_IS_TYPE(exc, (PyTypeObject *)PyExc_StopIteration)) {
             PyCodeObject *code = (PyCodeObject *)code_obj;
-            if (offset >= 0 && offset < Py_SIZE(code) &&
-                _PyIR_BaseOpcode(_PyCode_InstrHandler(code, (int)offset)) == FOR_ITER)
+            /* The event's offset is a byte offset into co_code. */
+            int word = offset >= 0 && offset < Py_SIZE(code) * (int)sizeof(_Py_CODEUNIT)
+                ? _PyCode_OffsetWord(code, (int)offset) : -1;
+            if (word >= 0 && word < _PyCode_IRSize(code) &&
+                _PyIR_BaseOpcode(_PyCode_InstrHandler(code, word)) == FOR_ITER)
             {
                 PyValue value = ((PyStopIterationObject *)exc)->value;
                 if (PyValue_IsNull(value) || PyValue_IsNone(value)) {
@@ -472,8 +475,12 @@ sys_trace_jump_func(
     assert(PyCode_Check(code));
     /* We can call _Py_Instrumentation_GetLine because we always set
     * line events for tracing */
-    int to_line = _Py_Instrumentation_GetLine(code, code->_co_monitoring->lines, to);
-    int from_line = _Py_Instrumentation_GetLine(code, code->_co_monitoring->lines, from);
+    /* The event's offsets are byte offsets into co_code; the line data and
+     * the observation records are indexed by word. */
+    int to_line = _Py_Instrumentation_GetLine(
+        code, code->_co_monitoring->lines, _PyCode_OffsetWord(code, to));
+    int from_line = _Py_Instrumentation_GetLine(
+        code, code->_co_monitoring->lines, _PyCode_OffsetWord(code, from));
     if (to_line != from_line) {
         /* Will be handled by target INSTRUMENTED_LINE */
         return disable;
@@ -482,7 +489,8 @@ sys_trace_jump_func(
     for (uint32_t i = 0; i < source.nrecords; i++) {
         _PyIRObservationEvent edge;
         _PyIRObservation_Event(&source, i, &edge);
-        if (edge.from == from && edge.to == to &&
+        if (_PyCode_WordOffset(code, edge.from) == from &&
+            _PyCode_WordOffset(code, edge.to) == to &&
             edge.edge == _PyIR_EDGE_TAKEN && edge.line >= 0 &&
             edge.line != from_line)
         {

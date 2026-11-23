@@ -1,7 +1,7 @@
 import collections
 import copy
 import pickle
-import dis
+from test.support import ir_dis as dis
 import sys
 import threading
 import types

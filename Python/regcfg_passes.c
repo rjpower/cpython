@@ -13,7 +13,7 @@
 #include "pycore_ir.h"
 #include "pycore_opcode_metadata.h"
 #include "pycore_opcode_utils.h"
-#include "pycore_list.h"            // PyList_GET_VALUE()
+#include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_regcfg.h"
 #include "pycore_value.h"           // PyValue_FromInlineInt()
 
@@ -535,6 +535,20 @@ live_neighbour(_PyRegCfg *cfg, int start, int end, int i, int step)
     return NULL;
 }
 
+/* Whether neighbour keeps the line event that op would otherwise give: it
+ * is on the line under the same handler and either states its span or has
+ * op's own, which is all that a propagated location can be. */
+static int
+holds_line(const _PyRegOp *neighbour, const _PyRegOp *op)
+{
+    return neighbour != NULL && neighbour->loc.lineno == op->loc.lineno &&
+           neighbour->except == op->except &&
+           ((neighbour->flags & _PyReg_SOURCE_ORIGIN) ||
+            (neighbour->loc.end_lineno == op->loc.end_lineno &&
+             neighbour->loc.col_offset == op->loc.col_offset &&
+             neighbour->loc.end_col_offset == op->loc.end_col_offset));
+}
+
 /* Remove the ops prod (if not NULL) and pop, keeping a NOP for the line
  * if nothing else in the region is on it. */
 static void
@@ -551,17 +565,11 @@ remove_with_line(_PyRegCfg *cfg, int start, int end, _PyRegOp *prod,
                                       (int)(first - cfg->ops), -1);
     _PyRegOp *after = live_neighbour(cfg, start, end,
                                      (int)(pop - cfg->ops), 1);
-    int line = first->loc.lineno;
-    int keeps_line = (before != NULL && before->loc.lineno == line &&
-                      before->except == first->except &&
-                      (before->flags & _PyReg_SOURCE_ORIGIN)) ||
-                     (after != NULL && after->loc.lineno == line &&
-                      after->except == first->except &&
-                      (after->flags & _PyReg_SOURCE_ORIGIN));
+    int keeps_line = holds_line(before, first) || holds_line(after, first);
     if (prod != NULL) {
         prod->opcode = _PyReg_DEAD;
     }
-    if (keeps_line && pop->loc.lineno == line) {
+    if (keeps_line && pop->loc.lineno == first->loc.lineno) {
         pop->opcode = _PyReg_DEAD;
     }
     else {
@@ -793,6 +801,7 @@ truth_fold_region(_PyRegCfg *cfg, int start, int end)
         copy->target = jump->target;
         copy->except = jump->except;
         copy->loc = jump->loc;
+        copy->srcoff = jump->srcoff;
         copy->npop = 1;
         copy->nout = 1;
         copy->flags |= _PyReg_JUMP_OUTPUT;
@@ -824,9 +833,9 @@ _PyRegPass_TruthFold(_PyRegCfg *cfg)
  * order of static use; window inputs (the BUILD_* ops, SEND) and every other
  * constant keep their loads.
  *
- * The slots sit between the cells and the free variables, so the free
- * variables and everything above them move up, and so do the opargs that
- * name them.  The pass runs after compaction, which the caller repeats. */
+ * The slots follow the locals, cells and free variables, so the temporaries
+ * move up, and so do the opargs that name them.  The pass runs after
+ * compaction, which the caller repeats. */
 
 #define CONST_SLOTS_MAX 8
 
@@ -836,7 +845,6 @@ typedef struct {
     int reader_k;
     uintptr_t bits;         // the constant
     PyValueBorrow value;
-    int index;              // in consts, or -1 for a value not in it
 } const_fold;
 
 /* Whether value may live in a constant slot: it needs no count, being an
@@ -849,22 +857,21 @@ slot_value(PyValueBorrow value)
 }
 
 /* Whether load is a load of a constant that can live in a slot, and if so
- * its value, bits and its index in consts (-1 if consts lacks it).  The
- * common constants are those that marshal can write back into consts. */
+ * its value and bits.  The frame borrows the value: it is not counted, so
+ * that nothing needs to keep it alive. */
 static int
 const_of_load(const _PyRegOp *load, PyObject *consts, PyValueBorrow *value,
-              uintptr_t *bits, int *index)
+              uintptr_t *bits)
 {
     if (load->opcode == LOAD_CONST) {
-        if (load->oparg >= PyList_GET_SIZE(consts)) {
+        if (load->oparg >= PyTuple_GET_SIZE(consts)) {
             return 0;
         }
-        *value = PyList_GET_VALUE(consts, load->oparg);
+        *value = PyTuple_GET_VALUE(consts, load->oparg);
         if (!slot_value(*value)) {
             return 0;
         }
         *bits = _PyValue_Identity(*value);
-        *index = load->oparg;
         return 1;
     }
     if (load->opcode == LOAD_SMALL_INT) {
@@ -884,14 +891,6 @@ const_of_load(const _PyRegOp *load, PyObject *consts, PyValueBorrow *value,
         return 0;
     }
     *bits = _PyValue_Identity(*value);
-    *index = -1;
-    // An equal entry may exist
-    for (Py_ssize_t i = 0; i < PyList_GET_SIZE(consts); i++) {
-        if (_PyValue_Identity(PyList_GET_VALUE(consts, i)) == *bits) {
-            *index = (int)i;
-            break;
-        }
-    }
     return 1;
 }
 
@@ -944,19 +943,17 @@ find_const_folds(_PyRegCfg *cfg, PyObject *consts, const_fold **folds,
                         f->load = (int)(load - cfg->ops);
                         f->reader = i;
                         f->reader_k = k;
-                        const_of_load(load, consts, &f->value, &f->bits,
-                                      &f->index);
+                        const_of_load(load, consts, &f->value, &f->bits);
                     }
                 }
             }
             npend = n;
             PyValueBorrow value;
             uintptr_t bits;
-            int index;
             if ((op->opcode == LOAD_CONST || op->opcode == LOAD_SMALL_INT
                  || op->opcode == LOAD_COMMON_CONSTANT)
                 && is_fresh(cfg, _PyReg_OUT(cfg, op)[0])
-                && const_of_load(op, consts, &value, &bits, &index))
+                && const_of_load(op, consts, &value, &bits))
             {
                 pend[npend].load = op;
                 pend[npend].reg = _PyReg_OUT(cfg, op)[0];
@@ -1007,21 +1004,20 @@ shift_slots(_PyRegCfg *cfg, int first_free, int k)
 }
 
 /* The discard slot, a hidden local that results nothing reads go to, after
- * the constant slots and before the free variables.  Every code has one. */
+ * the constant slots.  Every code has one. */
 void
-_PyRegPass_DiscardSlot(_PyRegCfg *cfg, int nfree)
+_PyRegPass_DiscardSlot(_PyRegCfg *cfg)
 {
-    shift_slots(cfg, cfg->nlocalsplus - nfree, 1);
+    shift_slots(cfg, cfg->nlocalsplus, 1);
 }
 
 int
-_PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
+_PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts)
 {
     const_fold *folds = NULL;
     int nfolds = 0;
     int nconst = 0;
     uintptr_t *keys = NULL;
-    int *key_index = NULL;
     PyValueBorrow *key_value = NULL;
     int *fold_slot = NULL;
     if (find_const_folds(cfg, consts, &folds, &nfolds) < 0) {
@@ -1029,11 +1025,9 @@ _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
     }
     // One slot per distinct constant, in order of use, while the frame fits
     keys = PyMem_Malloc(Py_MAX(nfolds, 1) * sizeof(uintptr_t));
-    key_index = PyMem_Malloc(Py_MAX(nfolds, 1) * sizeof(int));
     key_value = PyMem_Malloc(Py_MAX(nfolds, 1) * sizeof(PyValueBorrow));
     fold_slot = PyMem_Malloc(Py_MAX(nfolds, 1) * sizeof(int));
-    if (keys == NULL || key_index == NULL || key_value == NULL
-        || fold_slot == NULL)
+    if (keys == NULL || key_value == NULL || fold_slot == NULL)
     {
         PyErr_NoMemory();
         goto error;
@@ -1051,7 +1045,6 @@ _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
                 continue;
             }
             keys[nconst] = folds[f].bits;
-            key_index[nconst] = folds[f].index;
             key_value[nconst] = folds[f].value;
             nconst++;
         }
@@ -1060,19 +1053,7 @@ _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
     if (nconst == 0) {
         goto done;
     }
-    // A value that consts lacks gets an entry
-    for (int j = 0; j < nconst; j++) {
-        if (key_index[j] >= 0) {
-            continue;
-        }
-        if (PyList_AppendValue(consts, key_value[j]) < 0) {
-            goto error;
-        }
-        key_index[j] = (int)PyList_GET_SIZE(consts) - 1;
-        assert(_PyValue_Identity(PyList_GET_VALUE(consts, key_index[j]))
-               == keys[j]);
-    }
-    int first_free = cfg->nlocalsplus - nfree;
+    int first_free = cfg->nlocalsplus;
     shift_slots(cfg, first_free, nconst);
     for (int f = 0; f < nfolds; f++) {
         if (fold_slot[f] < 0) {
@@ -1090,23 +1071,21 @@ _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree)
     }
     cfg->const_first = first_free;
     cfg->nconst = nconst;
-    cfg->const_index = PyMem_Malloc(nconst * sizeof(int));
-    if (cfg->const_index == NULL) {
+    cfg->const_values = PyMem_Malloc(nconst * sizeof(PyValueBorrow));
+    if (cfg->const_values == NULL) {
         PyErr_NoMemory();
         goto error;
     }
-    memcpy(cfg->const_index, key_index, nconst * sizeof(int));
+    memcpy(cfg->const_values, key_value, nconst * sizeof(PyValueBorrow));
 done:
     PyMem_Free(folds);
     PyMem_Free(keys);
-    PyMem_Free(key_index);
     PyMem_Free(key_value);
     PyMem_Free(fold_slot);
     return nconst;
 error:
     PyMem_Free(folds);
     PyMem_Free(keys);
-    PyMem_Free(key_index);
     PyMem_Free(key_value);
     PyMem_Free(fold_slot);
     return ERROR;
@@ -1246,13 +1225,7 @@ elide_null_region(_PyRegCfg *cfg, int start, int end)
         assert(op->dst < 0 && op->nout == 1);
         _PyRegOp *before = live_neighbour(cfg, start, end, i, -1);
         _PyRegOp *after = live_neighbour(cfg, start, end, i, 1);
-        int line = op->loc.lineno;
-        int keeps_line = (before != NULL && before->loc.lineno == line &&
-                          before->except == op->except &&
-                          (before->flags & _PyReg_SOURCE_ORIGIN)) ||
-                         (after != NULL && after->loc.lineno == line &&
-                          after->except == op->except &&
-                          (after->flags & _PyReg_SOURCE_ORIGIN));
+        int keeps_line = holds_line(before, op) || holds_line(after, op);
         op->flags |= _PyReg_ELIDED | (keeps_line ? 0 : _PyReg_ELIDED_NOP);
     }
     return SUCCESS;

@@ -80,7 +80,7 @@ _PyLazyImport_New(_PyInterpreterFrame *frame, PyObject *builtins,
 
     if (frame != NULL) {
         m->lz_code = (PyCodeObject *)Py_NewRef(_PyFrame_GetCode(frame));
-        m->lz_instr_offset = _PyInterpreterFrame_LASTI(frame);
+        m->lz_instr_offset = PyUnstable_InterpreterFrame_GetLasti(frame);
     }
 
     _PyObject_GC_TRACK(m);

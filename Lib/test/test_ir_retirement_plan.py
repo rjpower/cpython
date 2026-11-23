@@ -5,7 +5,6 @@ import unittest
 
 import _testinternalcapi
 from test.test_ir_admission import construct
-from test.test_ir_transfer_admission import encoded, make_code
 
 
 NORMAL_RETURN, ERROR_UNWIND, HEAP_CLEAR, STAGED_FAILURE = range(1, 5)
@@ -18,52 +17,10 @@ def return_sites(code):
                           "INSTRUMENTED_RETURN_VALUE", "INSTRUMENTED_RETURN_VALUE_EMPTY"}]
 
 
-def setUpModule():
-    # These tests construct malformed images and expect the constructor to
-    # reject them; release builds only do so on request.
-    from test.support.ir_semantics import code_validation
-    unittest.enterModuleContext(code_validation())
-
-
 class RetirementPlanTests(unittest.TestCase):
     def routes(self, code):
         return (code, construct(code), code.replace(),
                 marshal.loads(marshal.dumps(code)))
-
-    def test_full_extent_and_canonical_null_comparison(self):
-        for home in (0, 63, 64, 128, 4093):
-            code = make_code([("LOAD_CONST", home), ("POP_TOP", home),
-                              ("LOAD_CONST", 0), ("RETURN_VALUE", 0)],
-                             slots=home + 1)
-            for admitted in self.routes(code):
-                with self.subTest(home=home, code=admitted):
-                    self.assertEqual(return_sites(admitted), [3])
-                    check = _testinternalcapi.check_ir_retirement
-                    self.assertEqual(check(admitted, 3, NORMAL_RETURN), EXACT)
-                    # An inline scalar owns no mortal count, but cannot occupy
-                    # an inactive scratch home in this exact NULL-control shape.
-                    # (the discard slot comes before the temporaries)
-                    self.assertEqual(check(admitted, 3, NORMAL_RETURN,
-                                           dirty_home=home + 1), MISMATCH)
-
-    def test_zero_stack_request_keeps_the_physical_scratch_home(self):
-        code = make_code([("LOAD_CONST", 0), ("RETURN_VALUE", 0)], slots=0)
-        for admitted in self.routes(code):
-            self.assertEqual(admitted.co_stacksize, 1)
-            self.assertEqual(return_sites(admitted), [1])
-            check = _testinternalcapi.check_ir_retirement
-            self.assertEqual(check(admitted, 1, NORMAL_RETURN), EXACT)
-            self.assertEqual(check(admitted, 1, NORMAL_RETURN, dirty_home=1),
-                             MISMATCH)
-        # Home0 is a real language input, not an absent zero-sized domain.
-        bad = encoded([("IR_JUMP", 0, 0, 1), ("RETURN_VALUE", 0)])
-        for route in (construct, lambda co, **kw: co.replace(**kw)):
-            with self.assertRaisesRegex(ValueError, "reads unavailable scratch"):
-                route(code, co_code=bad, co_stacksize=0)
-        payload = marshal.dumps(code)
-        self.assertEqual(payload.count(code.co_code), 1)
-        with self.assertRaisesRegex(ValueError, "reads unavailable scratch"):
-            marshal.loads(payload.replace(code.co_code, bad, 1))
 
     def test_default_still_checks_site_and_reason(self):
         def f(value):
@@ -77,7 +34,7 @@ class RetirementPlanTests(unittest.TestCase):
         self.assertEqual(check(code, sites[0], NORMAL_RETURN, unaligned=True),
                          UNCOVERED)
         self.assertEqual(check(code, 0, NORMAL_RETURN), UNCOVERED)
-        self.assertEqual(check(code, len(code.co_code) // 8, NORMAL_RETURN),
+        self.assertEqual(check(code, len(_testinternalcapi.get_ir(code)), NORMAL_RETURN),
                          UNCOVERED)
         for reason in (0, ERROR_UNWIND, HEAP_CLEAR, STAGED_FAILURE):
             self.assertEqual(check(code, sites[0], reason), UNCOVERED)
@@ -110,16 +67,6 @@ class RetirementPlanTests(unittest.TestCase):
             self.assertEqual(len(sites), 1)
             self.assertEqual(_testinternalcapi.check_ir_retirement(
                 code, sites[0], NORMAL_RETURN), UNCOVERED)
-
-    def test_all_covered_loop_fixed_point(self):
-        code = make_code([("LOAD_CONST", 0), ("POP_TOP", 0),
-                          ("LOAD_CONST", 1),
-                          ("POP_JUMP_IF_NONE", 1, 0, 5),
-                          ("IR_JUMP", 0, 0, 0),
-                          ("LOAD_CONST", 0), ("RETURN_VALUE", 0)])
-        for admitted in self.routes(code):
-            self.assertEqual(_testinternalcapi.check_ir_retirement(
-                admitted, 6, NORMAL_RETURN), EXACT)
 
 
 if __name__ == "__main__":

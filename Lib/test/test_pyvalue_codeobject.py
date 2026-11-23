@@ -1,13 +1,11 @@
 """Canonical constant interning and code-object input validation."""
 
 import math
-import opcode
 import sys
 import types
 import unittest
 
 from test.support import import_helper
-from test.support.bytecode_helper import encode_words
 
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
 
@@ -96,18 +94,12 @@ class PyValueCodeObjectTests(unittest.TestCase):
 
     def inline_constant_function(self, original, handler):
         # The constant is a list item, a window input that keeps its load;
-        # a return or a call operand would read a constant slot
-        code = original.__code__
-        words = _testinternalcapi.get_ir(code)
+        # a return or a call operand would read a constant slot. Lowering
+        # selects the inline form from the constant itself.
+        words = _testinternalcapi.get_ir(original.__code__)
         index = next(i for i, word in enumerate(words)
-                     if word[0] in ('LOAD_CONST', 'LOAD_CONST_INLINE_INT',
-                                    'LOAD_CONST_INLINE_FLOAT'))
-        word = (opcode._specialized_opmap[handler], *words[index][1:])
-        encoded = (code.co_code[:8 * index] + encode_words(word)
-                   + code.co_code[8 * (index + 1):])
-        code = code.replace(co_code=encoded)
-        self.assertEqual(_testinternalcapi.get_ir(code)[index][0], handler)
-        return types.FunctionType(code, {}), index
+                     if word[0] == handler)
+        return original, index
 
     def test_warmed_integer_replacement_falls_back(self):
         original, word_index = self.inline_constant_function(
@@ -138,9 +130,16 @@ class PyValueCodeObjectTests(unittest.TestCase):
                 consts = list(original.__code__.co_consts)
                 consts[index] = replacement
                 code = original.__code__.replace(co_consts=tuple(consts))
-                self.assertEqual(_testinternalcapi.get_ir(code)[word_index][0],
-                                 'LOAD_CONST')
-                self.assertIs(types.FunctionType(code, {})()[0], replacement)
+                # The replaced code lowers afresh: an integer that fits
+                # takes its own inline form, never the stale float one.
+                handler = _testinternalcapi.get_ir(code)[word_index][0]
+                self.assertNotEqual(handler, 'LOAD_CONST_INLINE_FLOAT')
+                result = types.FunctionType(code, {})()[0]
+                if handler == 'LOAD_CONST':
+                    self.assertIs(result, replacement)
+                else:
+                    self.assertEqual(handler, 'LOAD_CONST_INLINE_INT')
+                    self.assertEqual(result, replacement)
 
 
 if __name__ == '__main__':

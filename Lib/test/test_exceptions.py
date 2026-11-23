@@ -2962,9 +2962,7 @@ class PEP626Tests(unittest.TestCase):
         def f():
             1/0
         self.lineno_after_raise(f, 1)
-        # Each no-location entry covers one executable register word.
-        missing_locations = b'\xf8' * (len(f.__code__.co_code) // 8)
-        f.__code__ = f.__code__.replace(co_linetable=missing_locations)
+        f.__code__ = f.__code__.replace(co_linetable=b'\xf8\xf8\xf8\xf9\xf8\xf8\xf8')
         self.lineno_after_raise(f, None)
 
     def test_lineno_after_raise_in_with_exit(self):

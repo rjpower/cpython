@@ -4,9 +4,10 @@
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_ir.h"          // _PyCodeIR
+
 /* Semantic recovery is independent of optional line/column information.
- * The shared empty bytes object is the canonical no-EH/no-recovery case. */
-#define _PyIR_SEMANTIC_HEADER 16
+ * The exceptions and the recovery rows are arrays of the code's _PyCodeIR. */
 #define _PyIR_RECOVERY_FIELDS 6
 #define _PyIR_RECOVERY_RECORD (_PyIR_RECOVERY_FIELDS * 4)
 #define _PyIR_EDGE_FALLTHROUGH 0
@@ -40,50 +41,12 @@ _PyIRSemantic_Write32(unsigned char *p, uint32_t value)
     }
 }
 
-/* There is no unversioned nonempty semantic representation. */
-static inline int
-_PyIRSemantic_Decode(const char *bytes, Py_ssize_t size, _PyIRSemanticMap *map)
-{
-    const unsigned char *p = (const unsigned char *)bytes;
-    if (size == 0) {
-        *map = (_PyIRSemanticMap){p, 0, NULL, 0};
-        return 1;
-    }
-    if (size < _PyIR_SEMANTIC_HEADER || (uint64_t)size > UINT32_MAX ||
-        memcmp(p, "IRSC", 4) != 0 || _PyIRSemantic_Read32(p + 4) != 1)
-    {
-        return -1;
-    }
-    uint32_t nexceptions = _PyIRSemantic_Read32(p + 8);
-    uint32_t nrecords = _PyIRSemantic_Read32(p + 12);
-    uint64_t expected = _PyIR_SEMANTIC_HEADER + (uint64_t)nexceptions +
-                        (uint64_t)nrecords * _PyIR_RECOVERY_RECORD;
-    if (expected != (uint64_t)size || (!nexceptions && !nrecords)) {
-        return -1;
-    }
-    *map = (_PyIRSemanticMap){p + _PyIR_SEMANTIC_HEADER, nexceptions,
-                             p + _PyIR_SEMANTIC_HEADER + nexceptions, nrecords};
-    return 1;
-}
-
-/* The map of a code object's exception table, which its constructor has
- * validated (_PyIRSemantic_Decode()): only the sections are located here. */
 static inline _PyIRSemanticMap
-_PyIRSemantic_Stored(PyObject *exceptiontable)
+_PyIRSemantic_Stored(PyCodeObject *code)
 {
-    const unsigned char *p = (const unsigned char *)PyBytes_AS_STRING(exceptiontable);
-#ifndef NDEBUG
-    _PyIRSemanticMap checked;
-    assert(_PyIRSemantic_Decode((const char *)p, PyBytes_GET_SIZE(exceptiontable),
-                                &checked) == 1);
-#endif
-    if (PyBytes_GET_SIZE(exceptiontable) == 0) {
-        return (_PyIRSemanticMap){p, 0, NULL, 0};
-    }
-    uint32_t nexceptions = _PyIRSemantic_Read32(p + 8);
-    return (_PyIRSemanticMap){p + _PyIR_SEMANTIC_HEADER, nexceptions,
-                              p + _PyIR_SEMANTIC_HEADER + nexceptions,
-                              _PyIRSemantic_Read32(p + 12)};
+    const _PyCodeIR *ir = _PyCode_IR(code);
+    return (_PyIRSemanticMap){ir->exceptions, ir->nexceptions, ir->records,
+                              ir->nrecords};
 }
 
 static inline void
@@ -107,37 +70,6 @@ _PyIRSemantic_EncodeEvent(unsigned char *p, const _PyIRRecoveryEvent *event)
     for (int i = 0; i < _PyIR_RECOVERY_FIELDS; i++) {
         _PyIRSemantic_Write32(p + i * 4, (uint32_t)values[i]);
     }
-}
-
-static inline PyObject *
-_PyIRSemantic_Pack(const unsigned char *exceptions, uint32_t exceptions_size,
-                   const unsigned char *records, uint32_t nrecords)
-{
-    if (!exceptions_size && !nrecords) {
-        return Py_GetConstant(Py_CONSTANT_EMPTY_BYTES);
-    }
-    uint64_t size = _PyIR_SEMANTIC_HEADER + (uint64_t)exceptions_size +
-                    (uint64_t)nrecords * _PyIR_RECOVERY_RECORD;
-    if (size > PY_SSIZE_T_MAX || size > UINT32_MAX) {
-        return PyErr_NoMemory();
-    }
-    PyObject *result = PyBytes_FromStringAndSize(NULL, (Py_ssize_t)size);
-    if (result == NULL) {
-        return NULL;
-    }
-    unsigned char *p = (unsigned char *)PyBytes_AS_STRING(result);
-    memcpy(p, "IRSC", 4);
-    _PyIRSemantic_Write32(p + 4, 1);
-    _PyIRSemantic_Write32(p + 8, exceptions_size);
-    _PyIRSemantic_Write32(p + 12, nrecords);
-    if (exceptions_size) {
-        memcpy(p + _PyIR_SEMANTIC_HEADER, exceptions, exceptions_size);
-    }
-    if (nrecords) {
-        memcpy(p + _PyIR_SEMANTIC_HEADER + exceptions_size, records,
-               (size_t)nrecords * _PyIR_RECOVERY_RECORD);
-    }
-    return result;
 }
 
 /* Cold readers share the marked, sorted exception-table contract used by

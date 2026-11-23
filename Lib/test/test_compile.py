@@ -9,7 +9,6 @@ import marshal
 import math
 import opcode
 import os
-import struct
 import unittest
 import sys
 import ast
@@ -29,14 +28,6 @@ from test.support import (script_helper, requires_debug_ranges, run_code,
 from test.support.bytecode_helper import instructions_with_positions
 from test.support import os_helper
 from test.support.os_helper import FakePath
-
-def const_slot_values(code):
-    """The constant held by each constant slot of code, by slot"""
-    table = struct.unpack(f'{len(code.co_constslots) // 4}I',
-                          code.co_constslots)
-    return {slot: code.co_consts[index]
-            for slot, index in zip(table[::2], table[1::2])}
-
 
 class TestSpecifics(unittest.TestCase):
 
@@ -932,8 +923,7 @@ class TestSpecifics(unittest.TestCase):
         exec(code, g)
         f = g['f']
         expected = tuple([''] + [f't{i}' for i in range(N)])
-        # range(1) reads the 1 from a constant slot, which consts holds
-        self.assertEqual(f.__code__.co_consts, expected + (1,))
+        self.assertEqual(f.__code__.co_consts, expected)
         expected = "".join(expected[1:])
         self.assertEqual(expected, f())
 
@@ -947,11 +937,10 @@ class TestSpecifics(unittest.TestCase):
             "docstring"
             return 42
 
-        # The 42 that the return reads from a constant slot is in co_consts
         if f1.__doc__ is None:
             self.assertEqual(f1.__code__.co_consts, (42,))
         else:
-            self.assertEqual(f1.__code__.co_consts, (f1.__doc__, 42))
+            self.assertEqual(f1.__code__.co_consts, (f1.__doc__,))
 
     # This is a regression test for a CPython specific peephole optimizer
     # implementation bug present in a few releases.  It's assertion verifies
@@ -1151,9 +1140,9 @@ class TestSpecifics(unittest.TestCase):
         # Check that we did not raise but we also don't generate bytecode
         for func in funcs:
             opcodes = list(dis.get_instructions(func))
-            self.assertEqual(2, len(opcodes))
+            self.assertEqual(3, len(opcodes))
             self.assertEqual('RETURN_VALUE', opcodes[-1].opname)
-            self.assertIsNone(const_slot_values(func.__code__)[opcodes[-1].srcs[0]])
+            self.assertEqual(None, opcodes[1].argval)
 
     def test_consts_in_conditionals(self):
         def and_true(x):
@@ -1175,8 +1164,8 @@ class TestSpecifics(unittest.TestCase):
             with self.subTest(func=func):
                 opcodes = list(dis.get_instructions(func))
                 self.assertLessEqual(len(opcodes), 3)
+                self.assertIn('LOAD_', opcodes[-2].opname)
                 self.assertEqual('RETURN_VALUE', opcodes[-1].opname)
-                self.assertFalse([i for i in opcodes if 'JUMP' in i.opname])
 
     def test_empty_set_unpack_literal_bytecode_optimization(self):
         cases = {
@@ -1270,13 +1259,14 @@ class TestSpecifics(unittest.TestCase):
                 ('BUILD_LIST', 1),
                 ('RETURN_VALUE', None),
             ],
-            # The empty tuple is read from a constant slot
             '(*(),)': [
                 ('RESUME', 0),
+                ('LOAD_COMMON_CONSTANT', ()),
                 ('RETURN_VALUE', None),
             ],
             '(*(), *())': [
                 ('RESUME', 0),
+                ('LOAD_COMMON_CONSTANT', ()),
                 ('RETURN_VALUE', None),
             ],
             '(*(), 1)': [
@@ -1387,8 +1377,8 @@ class TestSpecifics(unittest.TestCase):
             args = [opcode.oparg for opcode in opcodes]
             self.assertNotIn(40, args)
             self.assertNotIn(5, args)
-            # 45 is read from a constant slot, or loaded
-            self.assertTrue(45 in args or 45 in code.co_consts)
+            self.assertIn('LOAD_SMALL_INT', instructions)
+            self.assertIn(45, args)
 
     def test_lineno_procedure_call(self):
         def call():
@@ -1446,7 +1436,7 @@ class TestSpecifics(unittest.TestCase):
                 code = func.__code__
                 [(start, end, line)] = code.co_lines()
                 self.assertEqual(start, 0)
-                self.assertEqual(end, len(code.co_code) // 8)
+                self.assertEqual(end, len(code.co_code))
                 self.assertEqual(line, code.co_firstlineno)
 
     def get_code_lines(self, code):
@@ -2756,9 +2746,12 @@ class TestSourcePositions(unittest.TestCase):
         # jump if c is false:
         self.assertOpcodeSourcePositionIs(compiled_code, 'POP_JUMP_IF_FALSE',
             line=2, end_line=2, column=15, end_column=16, occurrence=2)
-        # compare d and 0, and jump if the comparison is true: one fused word
-        self.assertOpcodeSourcePositionIs(compiled_code, 'COMPARE_OP_JUMP',
+        # compare d and 0
+        self.assertOpcodeSourcePositionIs(compiled_code, 'COMPARE_OP',
             line=4, end_line=4, column=8, end_column=13, occurrence=1)
+        # jump if comparison it True
+        self.assertOpcodeSourcePositionIs(compiled_code, 'POP_JUMP_IF_TRUE',
+            line=4, end_line=4, column=8, end_column=13, occurrence=2)
 
     @unittest.skipIf(sys.flags.optimize, "Assertions are disabled in optimized mode")
     def test_multiline_assert(self):
@@ -2771,9 +2764,8 @@ class TestSourcePositions(unittest.TestCase):
         self.assertOpcodeSourcePositionIs(compiled_code, 'LOAD_COMMON_CONSTANT',
             line=1, end_line=3, column=0, end_column=36, occurrence=1)
         #  The "error msg":
-        # (the constant 1000000 is read from a constant slot, with no load)
         self.assertOpcodeSourcePositionIs(compiled_code, 'LOAD_CONST',
-            line=3, end_line=3, column=25, end_column=36, occurrence=1)
+            line=3, end_line=3, column=25, end_column=36, occurrence=2)
         self.assertOpcodeSourcePositionIs(compiled_code, 'CALL',
             line=1, end_line=3, column=0, end_column=36, occurrence=1)
         self.assertOpcodeSourcePositionIs(compiled_code, 'RAISE_VARARGS',
@@ -3123,6 +3115,9 @@ class TestSourcePositions(unittest.TestCase):
         source = "del (\n lhs  \n   .    \n     rhs      \n       )"
         code = compile(source, "<test>", "exec")
         self.assertOpcodeSourcePositionIs(
+            code, "PUSH_NULL", line=4, end_line=4, column=5, end_column=8
+        )
+        self.assertOpcodeSourcePositionIs(
             code, "STORE_ATTR", line=4, end_line=4, column=5, end_column=8
         )
 
@@ -3239,23 +3234,19 @@ class TestSourcePositions(unittest.TestCase):
             start_line, end_line, _, _ = instr.positions
             self.assertEqual(start_line, end_line)
 
-        # The no-exception __exit__ call reads None three times, and the
-        # return reads it too: all four read the None constant slot, so
-        # nothing loads None.  The call and the returns have the locations
-        # of the context manager ('xyz').
+        # Expect four `None`-loading instructions:
+        # three for the no-exception __exit__ call, and one for the return.
+        # They should all have the locations of the context manager ('xyz').
 
         load_none = [instr for instr in dis.get_instructions(f) if
                      instr.opname in ('LOAD_CONST', 'LOAD_COMMON_CONSTANT')
                      and instr.argval is None]
-        exit_calls = [instr for instr in dis.get_instructions(f) if
-                      instr.opname == 'CALL' and instr.arg == 3]
         return_value = [instr for instr in dis.get_instructions(f) if
                         instr.opname == 'RETURN_VALUE']
 
-        self.assertEqual(len(load_none), 0)
-        self.assertEqual(len(exit_calls), 1)
+        self.assertEqual(len(load_none), 4)
         self.assertEqual(len(return_value), 2)
-        for instr in exit_calls + return_value:
+        for instr in load_none + return_value:
             start_line, end_line, start_col, end_col = instr.positions
             self.assertEqual(start_line, f.__code__.co_firstlineno + 1)
             self.assertEqual(end_line, f.__code__.co_firstlineno + 1)

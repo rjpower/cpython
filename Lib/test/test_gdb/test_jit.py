@@ -1,6 +1,7 @@
 """gdb walks through the baseline JIT's compiled units: each registers its
 symbol and unwind info through gdb's JIT interface (Python/jit_unwind.c)."""
 
+import re
 import sys
 import textwrap
 import unittest
@@ -41,13 +42,16 @@ class JitBacktraceTests(unittest.TestCase):
             '--eval-command=run',
             '--eval-command=bt',
             '--args', sys.executable, '-X', 'jit=always', '-S', '-c', source)
-        units = [line for line in out.splitlines()
-                 if "py::jit:build:" in line and line.startswith("#")]
+        frames = [line for line in out.splitlines() if line.startswith("#")]
+        units = [i for i, line in enumerate(frames) if "py::jit:build:" in line]
         # build(3) to build(0) each run in a unit
         self.assertGreaterEqual(len(units), 4, out)
-        # and the walk ends in main, not at the first unit
-        outermost = [line for line in out.splitlines() if line.startswith("#")][-1]
-        self.assertRegex(outermost, r" in (main|Py_BytesMain|pymain_main) ", out)
+        # and the walk goes on past the last unit to the program's entry
+        # (main may be a tail call, so gdb can also walk on into libc)
+        self.assertTrue(
+            any(re.search(r"\b(main|Py_BytesMain|pymain_main) \(", line)
+                for line in frames[units[-1] + 1:]),
+            out)
 
 
 if __name__ == "__main__":

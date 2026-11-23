@@ -43,6 +43,16 @@ _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame)
     _PyFrame_ClearTemporaries(frame, (int)_PyFrame_Exec(frame)->nfixed);
 }
 
+int
+_PyFrame_SetReturnValueRare(_PyInterpreterFrame *f, PyValue v)
+{
+    if (f->pending_redirect) {
+        _PyFrame_CompleteRedirect(f);
+    }
+    _PyFrame_PublishReturnSlot(f, v);
+    return 1;
+}
+
 
 int
 _PyFrame_Traverse(_PyInterpreterFrame *frame, visitproc visit, void *arg)

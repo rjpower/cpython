@@ -1113,9 +1113,18 @@ method_poly_lookup(const _PyIRWord *words, const _PyFbHeader *h, PyObject *owner
 #ifdef _PY_JIT_SUPPORTED
 #define IR_JIT_EVENT() \
     do { \
-        _PyJitUnit *ir_unit = _PyJit_Event(tstate, frame); \
-        if (ir_unit != NULL) { \
-            IR_STEP_DONE(jit_run(tstate, ir_unit, frame, next_instr)); \
+        _PyCodeExec *ir_exec = _PyFrame_Exec(frame); \
+        /* Most events count a code that has no unit and is not yet warm, \
+         * which needs no call */ \
+        if (ir_exec->jit_unit == NULL && \
+            ir_exec->jit_heat + 1 < tstate->interp->ceval.jit_warmup) { \
+            ir_exec->jit_heat++; \
+        } \
+        else { \
+            _PyJitUnit *ir_unit = _PyJit_Event(tstate, frame); \
+            if (ir_unit != NULL) { \
+                IR_STEP_DONE(jit_run(tstate, ir_unit, frame, next_instr)); \
+            } \
         } \
     } while (0)
 #define IR_JIT_RESUME() \

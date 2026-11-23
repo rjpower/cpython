@@ -255,16 +255,20 @@ _PyFrame_PublishReturnSlot(_PyInterpreterFrame *f, PyValue v)
 // moved the resume point of the frame.
 void _Py_COLD_FUNCTION _PyFrame_CompleteRedirect(_PyInterpreterFrame *frame);
 
+/* _PyFrame_SetReturnValue() when f has a pending redirect or has run in its
+ * code's compiled unit (jit_resume): returns 1. */
+int _Py_COLD_FUNCTION _PyFrame_SetReturnValueRare(_PyInterpreterFrame *f,
+                                                  PyValue v);
+
+/* V goes to the slot that f named; returns whether the frame needs more
+ * than that, which the caller resolves from f's return_pc on. */
 static inline int
 _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
 {
-    /* One test of the byte that holds both bits */
-    if (f->pending_redirect | f->jit_resume) {
-        if (f->pending_redirect) {
-            _PyFrame_CompleteRedirect(f);
-        }
-        _PyFrame_PublishReturnSlot(f, v);
-        return 1;
+    /* The two bits share a byte, and both lead to one call, so that this
+     * is one test of the byte */
+    if (f->pending_redirect || f->jit_resume) {
+        return _PyFrame_SetReturnValueRare(f, v);
     }
     _PyFrame_PublishReturnSlot(f, v);
     return 0;

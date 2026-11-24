@@ -321,6 +321,125 @@ class CallRoleTests(unittest.TestCase):
         # the callback that replaces the code runs too late to change it
         self.assertIs(result, payload)
 
+    def specialized(self, function):
+        "the specialized name of function's one call word"
+        return call_rows(function.__code__, True)[0][0]
+
+    def test_bound_method_operands_keep_their_values(self):
+        # A local callable (m(x), local B, no self slot) and a temporary
+        # one (h.cb(x)): the push takes the method's function and receiver,
+        # and the operands keep the method
+        class Receiver:
+            def method(self, value):
+                return self, value
+        receiver = Receiver()
+        holder = types.SimpleNamespace(cb=receiver.method)
+        def local(m, value):
+            result = m(value)
+            return result, m
+        def temporary(h, value):
+            return h.cb(value)
+        m = receiver.method
+        for _ in range(200):
+            result, after = local(m, 1)
+            self.assertEqual(result, (receiver, 1))
+            self.assertIs(after, m)
+            self.assertEqual(temporary(holder, 2), (receiver, 2))
+        self.assertIs(holder.cb.__self__, receiver)
+        if not support.Py_GIL_DISABLED:
+            self.assertEqual(self.specialized(local), "CALL_BOUND_METHOD_EXACT_ARGS+NO_SELF")
+            self.assertEqual(self.specialized(temporary), "CALL_BOUND_METHOD_EXACT_ARGS")
+
+    def check_released(self, make, invoke, misses):
+        """invoke(m) after specializing on make(): every call in misses
+        gives the generic call's result, and the method and its receiver
+        are released once"""
+        def run():
+            receiver, m = make()
+            for _ in range(200):
+                invoke(m, receiver)
+            for miss in misses:
+                miss(m, receiver)
+            gone = weakref.ref(receiver)
+            del receiver, m
+            gc.collect()
+            self.assertIsNone(gone())
+        run()
+
+    def test_bound_method_guards_miss_to_the_generic_call(self):
+        class Receiver:
+            def method(self, value):
+                return self, value
+        def two(self, a, b):
+            return self, a, b
+        def call(m, value):
+            return m(value)
+        def make():
+            receiver = Receiver()
+            return receiver, receiver.method
+        def invoke(m, receiver):
+            self.assertEqual(call(m, 1), (receiver, 1))
+        def other_function(m, receiver):
+            # _CHECK_METHOD_VERSION: another function
+            other = types.MethodType(lambda self, v: ("other", self, v), receiver)
+            self.assertEqual(call(other, 2), ("other", receiver, 2))
+        def wrong_arity(m, receiver):
+            # _CHECK_METHOD_VERSION, then the generic call raises: the
+            # function takes another number of arguments
+            with self.assertRaises(TypeError):
+                call(types.MethodType(two, receiver), 3)
+        def weakly_referenced(m, receiver):
+            # _CHECK_CALL_BOUND_METHOD_EXACT_ARGS: a method with a weakref
+            method = types.MethodType(Receiver.method, receiver)
+            ref = weakref.ref(method)
+            self.assertEqual(call(method, 4), (receiver, 4))
+            self.assertIs(ref(), method)
+        def replaced_code(m, receiver):
+            # The function's version changes with its code
+            function = m.__func__
+            saved = function.__code__
+            function.__code__ = (lambda self, v: ("new", v)).__code__
+            try:
+                self.assertEqual(call(m, 5), ("new", 5))
+            finally:
+                function.__code__ = saved
+            self.assertEqual(call(m, 6), (receiver, 6))
+        self.check_released(make, invoke, [other_function, wrong_arity,
+                                           weakly_referenced, replaced_code])
+        if not support.Py_GIL_DISABLED:
+            self.assertIn(self.specialized(call), ("CALL_BOUND_METHOD_EXACT_ARGS+NO_SELF",
+                                                   "CALL+NO_SELF"))
+
+    def test_bound_method_stack_space_and_recursion_limit(self):
+        # _CHECK_METHOD_STACK_SPACE: deep recursion through a bound method
+        # with a large frame crosses data stack chunks;
+        # _CHECK_RECURSION_REMAINING: the limit raises RecursionError
+        names = ", ".join(f"v{i}" for i in range(60))
+        namespace = {}
+        exec(f"def method(self, n):\n"
+             f"    {names} = (None,) * 60\n"
+             f"    if n == 0:\n        return self\n"
+             f"    return self.m(n - 1)\n", namespace)
+        class Holder:
+            pass
+        def run(depth, refs):
+            receiver = Holder()
+            receiver.m = types.MethodType(namespace["method"], receiver)
+            refs.append(weakref.ref(receiver))
+            try:
+                return receiver.m(depth) is receiver
+            finally:
+                receiver.m = None
+        refs = []
+        for _ in range(3):
+            self.assertTrue(run(400, refs))
+        with support.infinite_recursion(200):
+            with self.assertRaises(RecursionError):
+                run(10_000, refs)
+        self.assertTrue(run(400, refs))
+        gc.collect()
+        self.assertEqual([ref() for ref in refs], [None] * len(refs))
+
 
 if __name__ == "__main__":
     unittest.main()

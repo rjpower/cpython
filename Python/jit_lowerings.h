@@ -36,6 +36,7 @@ int _PyJitLower__PyValue_CodeConstant(_PyJitWordCx *cx, const uint8_t *ops, cons
 int _PyJitLower__PyValue_BoundLocal(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyValue_CellLocal(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyValue_CommonConstant(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower__PyValue_PublishedItem(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_Py_TYPE(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_PyList_CheckExact(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_PyTuple_CheckExact(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
@@ -53,6 +54,9 @@ int _PyJitLower__PyObject_InlineValues(_PyJitWordCx *cx, const uint8_t *ops, con
 int _PyJitLower__PyObject_Shape(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyObject_ValueSlot(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyObject_ShapeReadDup(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower__PyValueSlot_Exchange(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower__PyValueSlot_ExchangeFilled(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower__PyValueSlot_Fill(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_DK_UNICODE_ENTRIES(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyDictValues_AddToInsertionOrder(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyDictValues_SetShape(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
@@ -105,6 +109,7 @@ const _PyJitLoweringInfo _PyJit_Lowerings[] = {
     {"_PyValue_BoundLocal", _PyJitLower__PyValue_BoundLocal, 1, 1, 0, 0, "gg", 0},
     {"_PyValue_CellLocal", _PyJitLower__PyValue_CellLocal, 1, 1, 0, 0, "gg", 0},
     {"_PyValue_CommonConstant", _PyJitLower__PyValue_CommonConstant, 1, 1, 0, 0, "gg", 0},
+    {"_PyValue_PublishedItem", _PyJitLower__PyValue_PublishedItem, 1, 1, 0, 0, "gg", 0},
     {"Py_TYPE", _PyJitLower_Py_TYPE, 1, 1, 0, 0, "gg", 0},
     {"PyList_CheckExact", _PyJitLower_PyList_CheckExact, 0, 1, 1, 0, "gg", 1},
     {"PyTuple_CheckExact", _PyJitLower_PyTuple_CheckExact, 0, 1, 1, 0, "gg", 1},
@@ -122,6 +127,9 @@ const _PyJitLoweringInfo _PyJit_Lowerings[] = {
     {"_PyObject_Shape", _PyJitLower__PyObject_Shape, 1, 1, 1, 0, "ggg", 0},
     {"_PyObject_ValueSlot", _PyJitLower__PyObject_ValueSlot, 1, 2, 0, 0, "ggg", 0},
     {"_PyObject_ShapeReadDup", _PyJitLower__PyObject_ShapeReadDup, 1, 2, 1, 0, "gggg", 0},
+    {"_PyValueSlot_Exchange", _PyJitLower__PyValueSlot_Exchange, 1, 2, 1, 0, "gggg", 0},
+    {"_PyValueSlot_ExchangeFilled", _PyJitLower__PyValueSlot_ExchangeFilled, 1, 2, 1, 0, "gggg", 0},
+    {"_PyValueSlot_Fill", _PyJitLower__PyValueSlot_Fill, 0, 2, 0, 0, "gg", 0},
     {"DK_UNICODE_ENTRIES", _PyJitLower_DK_UNICODE_ENTRIES, 1, 1, 2, 0, "gggg", 0},
     {"_PyDictValues_AddToInsertionOrder", _PyJitLower__PyDictValues_AddToInsertionOrder, 0, 2, 2, 0, "gggg", 0},
     {"_PyDictValues_SetShape", _PyJitLower__PyDictValues_SetShape, 0, 2, 0, 0, "gg", 0},

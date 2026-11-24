@@ -322,14 +322,16 @@ class Family(Node):
 
 @dataclass
 class Boundary(Node):
-    """`boundary(SOURCE) at(last | enter) yields(delegated) completes(RETURN:
-    exits(return, raise), STORE_LOCAL, ...: exits(branch, raise))
-    resumes(SEND, STORE_LOCAL);`: the declared contract of the generator-
+    """`boundary(SOURCE) at(last | enter) yields(delegated) completion(send |
+    throw) completes(RETURN: exits(return, raise), STORE_LOCAL, ...:
+    exits(branch, raise)) resumes(SEND, STORE_LOCAL);`: the declared
+    contract of the generator-
     boundary variants (`SOURCE_XFER_CONSUMER`) of an instruction, or of
     every member of the family it heads (g3/design.md section 7)"""
     source: str
     at: str
     yields: str | None
+    completion: str | None
     # (consumers, their variants' declared exits), in declaration order
     completes: list[tuple[list[str], list[str]]]
     resumes: list[str]
@@ -684,11 +686,11 @@ class Parser(PLexer):
             return None
         source = self.require(lx.IDENTIFIER).text
         self.require(lx.RPAREN)
-        at, yields, completes, resumes = "", None, [], []
+        at, yields, completion, completes, resumes = "", None, None, [], []
         seen = set()
         while (tkn := self.peek()) and tkn.kind == lx.IDENTIFIER:
             clause = self.next().text
-            if clause not in ("at", "yields", "completes", "resumes"):
+            if clause not in ("at", "yields", "completion", "completes", "resumes"):
                 raise self.make_syntax_error(f"`{clause}` is not a clause of boundary()")
             if clause in seen:
                 raise self.make_syntax_error(f"A second {clause}() clause")
@@ -698,6 +700,8 @@ class Parser(PLexer):
                 at = self.require(lx.IDENTIFIER).text
             elif clause == "yields":
                 yields = self.require(lx.IDENTIFIER).text
+            elif clause == "completion":
+                completion = self.require(lx.IDENTIFIER).text
             elif clause == "resumes":
                 resumes = self.names()
             else:
@@ -718,7 +722,7 @@ class Parser(PLexer):
                         break
             self.require(lx.RPAREN)
         self.require(lx.SEMI)
-        return Boundary(source, at, yields, completes, resumes)
+        return Boundary(source, at, yields, completion, completes, resumes)
 
     def names(self) -> list[str]:
         "One or more identifiers, separated by commas"

@@ -316,6 +316,26 @@ def check_transfer_tokens() -> None:
 check_transfer_tokens()
 
 
+def replaced_input(uop: Uop, j: int) -> int | None:
+    """The index of the input whose stack entry the declared output j takes
+    over with a new value, or None.  A uop that advances a cursor declares an
+    inline output at the cursor's position, apart from the consumed input of
+    another name (F16): the entry is the input's, and the value is new"""
+    if not uop.clauses or j >= len(uop.stack.inputs):
+        return None
+    inputs, outputs = uop.stack.inputs, uop.stack.outputs
+    if any(item.is_array() for item in inputs[:j + 1] + outputs[:j + 1]):
+        return None
+    import ir_contract
+    contract = ir_contract.contract_of(uop)
+    output, input_ = contract.output(outputs[j].name), contract.input(inputs[j].name)
+    if (output is None or input_ is None or output.mode != "inline"
+            or input_.mode != "consumed"
+            or any(o.name == inputs[j].name for o in outputs)):
+        return None
+    return j
+
+
 def passed_through(uop: Uop, j: int) -> int | None:
     """The index of the input of uop that its output j passes through.
 
@@ -328,7 +348,7 @@ def passed_through(uop: Uop, j: int) -> int | None:
         for i, item in enumerate(inputs):
             if item.name == name:
                 return i
-        return None
+        return replaced_input(uop, j)
     if j < len(inputs) and not any(
             item.is_array() for item in inputs[:j + 1] + outputs[:j + 1]):
         return j
@@ -387,13 +407,15 @@ def assigns_to(uop: Uop, name: str) -> bool:
 
 def passes(uop: Uop, item: StackItem) -> bool:
     """Whether output item, named as an input, passes that input's value
-    through: declared without a mode, or for an undeclared uop, an output
-    that the body does not assign"""
+    through: declared without a mode and not exchanged, or for an undeclared
+    uop, an output that the body does not assign.  An exchanged output
+    (SWAP) keeps its home but takes another input's value"""
     if item.name == "unused":
         return True
     if uop.clauses:
         import ir_contract
-        return not ir_contract.contract_of(uop).output(item.name).mode
+        output = ir_contract.contract_of(uop).output(item.name)
+        return not output.mode and not output.exchange
     return not assigns_to(uop, item.name)
 
 
@@ -477,7 +499,11 @@ def walk_values(inst: Instruction) -> ValueWalk:
         for i, item in enumerate(part.stack.inputs):
             inputs.append((item.name, popped[i][0],
                            BORROWED if i in kept else CONSUMED, item.size,
-                           item.name != "unused" and changes(part, item.name, item.is_array())))
+                           item.name != "unused" and (
+                               changes(part, item.name, item.is_array())
+                               # a replaced cursor is a new value in its entry
+                               or (i < len(part.stack.outputs)
+                                   and replaced_input(part, i) is not None))))
         bound.append((part, inputs, outputs))
         if ends_handler(part):
             break
@@ -619,7 +645,7 @@ FACT_KINDS = frozenset((
     "ENCODING", "IS_NONE", "EXACT_TYPE", "NOT_TYPE", "SUBTYPE", "IDENTITY", "TYPE_VERSION",
     "CLASS_VERSION", "KEYS_VERSION", "SHAPE", "INLINE_VALUES_VALID",
     "FUNC_VERSION", "LENGTH", "IN_BOUNDS", "NON_NEGATIVE", "NON_ZERO",
-    "ARGCOUNT", "OPERAND_COUNT", "CONVENTION", "SELF", "TYPE_FLAG", "TYPE_SLOT",
+    "ARGCOUNT", "OPERAND_COUNT", "CONVENTION", "SELF", "METHOD", "TYPE_FLAG", "TYPE_SLOT",
     "VECTORCALL", "UNIQUE", "ASCII", "NOT_SUBTYPE", "KEYS_KIND", "ENTRY_KEY",
     "NO_MANAGED_DICT", "TAGGED_INDEX",
 ))
@@ -1187,7 +1213,7 @@ PURE_CALLS = re.compile(
     r"_PyFrame_AssertTemporariesClear|_PyManagedDictPointer_IsValues|doesnt_escape|"
     r"(advance|restart)_backoff_counter|_Py_GatherStats_GetIter|native_vector_capture|"
     r"_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY|_PyObject_ValueSlot|_PyValueGuarded_Load|"
-    r"_PyValue_CodeConstant|_PyValue_BoundLocal|_PyValue_CellLocal|_PyValue_CommonConstant|"
+    r"_PyValue_CodeConstant|_PyValue_BoundLocal|_PyValue_CellLocal|_PyValue_CommonConstant|_PyValue_PublishedItem|"
     r"_PyValue_NamesObject|_PyBinaryOp_ExtendDescr")
 
 # Non-escaping calls that read the heap and change nothing
@@ -1274,8 +1300,8 @@ def effect_sites(uop: Uop) -> list[tuple[Token, str | None]]:
     """The tokens of the body of uop that have an effect, in order, with it:
     None for a call that the tables do not know.  A uop with a declared
     contract has the sites of its rows (ir_contract.py)."""
+    import ir_contract
     if uop.clauses:
-        import ir_contract
         return ir_contract.record_effect_sites(uop)
     p = uop.properties
     tokens = [t for t in uop.body.tokens() if t.kind != "COMMENT"]
@@ -1326,6 +1352,11 @@ def effect_sites(uop: Uop) -> list[tuple[Token, str | None]]:
             sites += [(tkn, READS_HEAP), (tkn, WRITES_HEAP)]
         elif READER_CALLS.fullmatch(text):
             sites.append((tkn, READS_HEAP))
+        elif text in ir_contract.rows():
+            # A row declares the call; its effects are the row's (G0d1
+            # deletes the tables above, and with them this inference)
+            sites += [(tkn, e) for effect in sorted(ir_contract.rows()[text].effects)
+                      for e in sorted(ir_contract.RECORD_EFFECT[effect])]
         elif not text.isupper() or RELEASE_LIKE.search(text):
             # Not a statement macro (STAT_INC, TAKE, ...): it may do anything
             sites.append((tkn, None))

@@ -341,6 +341,16 @@ def _value_slot(cx, o, offset):
     return o + offset
 
 
+def _slot_exchange(cx, slot, w):
+    old = cx.load(slot, VALUE)
+    cx.store(slot, VALUE, w)
+    return old
+
+
+def _slot_fill(cx, slot, w):
+    cx.store(slot, VALUE, w)
+
+
 def _unicode_entries(cx, keys):
     log2 = cx.load(keys + cx.off("PyDictKeysObject.dk_log2_index_bytes"), "u8")
     return keys + cx.off("PyDictKeysObject.dk_indices") + (1 << log2)
@@ -506,6 +516,16 @@ PRIMITIVES = {p.name: p for p in (
        READS),
     _p("_PyObject_ValueSlot", [P, "u64"], ["PyValue*"], "Include/internal/pycore_object.h",
        _value_slot, doc="the value slot at a byte offset inside an object"),
+    _p("_PyValueSlot_Exchange", ["PyValue*", V], [V], "Include/internal/pycore_object.h",
+       _slot_exchange, frozenset((READS_HEAP, WRITES_HEAP)),
+       doc="the slot's value out, the word in"),
+    _p("_PyValueSlot_ExchangeFilled", ["PyValue*", V], [V], "Include/internal/pycore_object.h",
+       _slot_exchange, frozenset((READS_HEAP, WRITES_HEAP)),
+       pre=lambda cx, slot, w: cx.load(slot, VALUE) != 0,
+       doc="_PyValueSlot_Exchange for a slot that holds a value"),
+    _p("_PyValueSlot_Fill", ["PyValue*", V], [], "Include/internal/pycore_object.h",
+       _slot_fill, WRITES, pre=lambda cx, slot, w: cx.load(slot, VALUE) == 0,
+       doc="the word into a slot that holds NULL"),
     _p("_PyObject_ShapeReadDup", [P, "u32"], [V], DICT_H,
        lambda cx, o, off: _dup(cx, cx.load(o + off, VALUE)), READS,
        doc="the filled slot at a byte offset, with a count of its own"),
@@ -526,6 +546,9 @@ PRIMITIVES = {p.name: p for p in (
        doc="the home of a cell or free variable; the identity on its bits"),
     _p("_PyValue_CommonConstant", [V], [V], VALUE_H, lambda cx, w: w,
        doc="an interpreter's common constant; the identity on its bits"),
+    # The frame, an implicit operand
+    _p("_PyValue_PublishedItem", [V], [V], VALUE_H, lambda cx, w: w,
+       doc="an item of a published list or tuple; the identity on its bits"),
     # The frame, an implicit operand
     _p("GLOBALS", [], [P], MACROS_H, _frame_field("f_globals", P), READS, frame=True),
     _p("BUILTINS", [], [P], MACROS_H, _frame_field("f_builtins", P), READS, frame=True),

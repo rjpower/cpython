@@ -1593,7 +1593,11 @@ dummy_func(
             _GUARD_TOS_INT + _GUARD_NOS_LIST + unused/1 + _STORE_SUBSCR_LIST_INT + POP_TOP + POP_TOP;
 
         // The index and stored value stay in canonical representation.
-        leaf inline_ok op(_STORE_SUBSCR_LIST_INT, (value, list_st, sub_st -- ls, ss)) {
+        leaf inline_ok op(_STORE_SUBSCR_LIST_INT,
+                (value: consumed, list_st: taken exact(PyList_Type), sub_st: taken inline_int
+                 -- ls: moved(list_st) exact(PyList_Type), ss: moved(sub_st) inline_int))
+            effects(reads, writes, releases) exits(next, deopt)
+        {
             PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
             assert(PyList_CheckExact(list));
 
@@ -1606,18 +1610,17 @@ dummy_func(
             }
             if (index < 0 || index >= len) {
                 UNLOCK_OBJECT(list);
-                DEOPT_IF(true);
+                DEOPT_IF(true, "the index is out of range");
             }
             STAT_INC(STORE_SUBSCR, hit);
 
-            // a move: replaced below
-            PyValue old_value = _PyList_ITEMS(list)[index];
-            _PyList_ITEMS(list)[index] = TAKE(value);
-            assert(!PyValue_IsNull(old_value));
+            // A list's items are never NULL, and the index is in range
+            PyValue item = TAKE(value);
+            PyValue old_value = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index, item);
             UNLOCK_OBJECT(list);  // unlock before decrefs!
-            INPUTS_DEAD();
             ls = list_st;
             ss = sub_st;
+            INPUTS_DEAD();
             PyValue_CLOSE(old_value);
         }
 
@@ -1884,7 +1887,7 @@ dummy_func(
          * (its branch) runs the consumer's arm of the completion routine
          * (Python/ceval_routines.h), which returns from this frame for
          * RETURN and continues at the send's exit for the others. */
-        boundary(SEND) at(last) yields(delegated) completes(
+        boundary(SEND) at(last) yields(delegated) completion(send) completes(
             RETURN: exits(return, raise),
             STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));
 
@@ -1949,10 +1952,14 @@ dummy_func(
 
         macro(SEND) = unused/1 + _SPECIALIZE_SEND + _SEND;
 
-        inline_ok op(_SEND_GEN_FRAME, (receiver, null, v -- receiver, null, gen_frame)) {
-            EXIT_IF(!PyValue_IsObject(receiver));
+        inline_ok op(_SEND_GEN_FRAME,
+                (receiver, null: nullable, v: taken -- receiver, null, gen_frame: owned))
+            effects(runs_python, switches_frame) exits(miss, enter, raise)
+        {
+            EXIT_IF(!PyValue_IsObject(receiver), "a number is no generator");
             PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
-            EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type);
+            EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type,
+                    "the receiver is not a generator or a coroutine");
             EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v),
                     "a created generator accepts only None");
             EXIT_IF(!gen_may_claim(gen), "the generator runs or has finished");
@@ -1972,7 +1979,7 @@ dummy_func(
         /* SEND_GEN enters the generator's frame: the delegated yield and
          * the consumer's arm run when that frame yields or returns to this
          * word (Python/ceval_routines.h), not in this word's uops */
-        boundary(SEND_GEN) at(enter) yields(delegated) completes(
+        boundary(SEND_GEN) at(enter) yields(delegated) completion(send) completes(
             RETURN: exits(return, raise),
             STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));
 
@@ -2241,7 +2248,7 @@ dummy_func(
 
         /* As SEND's variants, for a throw into the delegated generator
          * that ended it: no delegated yield */
-        boundary(CLEANUP_THROW) at(last) completes(
+        boundary(CLEANUP_THROW) at(last) completion(throw) completes(
             RETURN: exits(return, raise),
             STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));
 
@@ -2312,7 +2319,6 @@ dummy_func(
                 DEAD(seq);
                 ERROR_IF(true);
             }
-            assert(PyValue_IsObject(seq));
             PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
             ERROR_IF(res == 0);
@@ -2366,7 +2372,6 @@ dummy_func(
                 DEAD(seq);
                 ERROR_IF(true);
             }
-            assert(PyValue_IsObject(seq));
             PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
             ERROR_IF(res == 0);
@@ -2709,7 +2714,6 @@ dummy_func(
                  -- interpolation: owned))
             effects(runs_python, releases) exits(next, raise)
         {
-            assert(PyValue_IsObject(str));
             PyObject *str_o = PyValue_AsKnownObjectBorrow(str);
             int conversion = oparg >> 2;
             PyObject *format_o;
@@ -2776,7 +2780,6 @@ dummy_func(
                               PyValue_TYPE(iterable_st)->tp_name);
                 ERROR_NO_POP();
             }
-            assert(PyValue_IsObject(iterable_st));
             PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
             PyObject *iterable = PyValue_AsKnownObjectBorrow(iterable_st);
 
@@ -2811,7 +2814,6 @@ dummy_func(
                               PyValue_TYPE(iterable)->tp_name);
                 ERROR_NO_POP();
             }
-            assert(PyValue_IsObject(iterable));
             int err = _PySet_Update(PyValue_AsKnownObjectBorrow(set),
                                     PyValue_AsKnownObjectBorrow(iterable));
             if (err < 0) {
@@ -2823,31 +2825,12 @@ dummy_func(
 
         outlined macro(SET_UPDATE) = _SET_UPDATE + POP_TOP;
 
-        outlined inst(BUILD_SET, (values[oparg] -- set)) {
-            PyObject *set_o = PySet_New(NULL);
-            if (set_o == NULL) {
-                DECREF_INPUTS();
-                ERROR_IF(true);
-            }
-
-            int err = 0;
-            for (Py_ssize_t i = 0; i < oparg; i++) {
-                PyValue value = IR_TAKE_INPUT(values, i);
-                if (err == 0) {
-                    err = _PySet_AddValueTakeRef((PySetObject *)set_o,
-                                                 value);
-                }
-                else {
-                    PyValue_CLOSE(value);
-                }
-            }
+        outlined inst(BUILD_SET, (values[oparg]: consumed -- set: owned))
+            effects(reads, writes, allocates, raises, releases, runs_python) exits(next, raise)
+        {
+            PyObject *set_o = IR_BUILD_SET(values);
             DEAD(values);
-            if (err) {
-                Py_DECREF(set_o);
-                ERROR_IF(true);
-            }
-
-            INPUTS_DEAD();
+            ERROR_IF(set_o == NULL);
             set = PyValue_FromObjectSteal(set_o);
         }
 
@@ -2904,7 +2887,6 @@ dummy_func(
                               PyValue_TYPE(update));
                 ERROR_NO_POP();
             }
-            assert(PyValue_IsObject(update));
             PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
             PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
 
@@ -2944,7 +2926,6 @@ dummy_func(
                               PyValue_TYPE(update));
                 ERROR_NO_POP();
             }
-            assert(PyValue_IsObject(update));
             PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
             PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
 
@@ -3526,17 +3507,19 @@ dummy_func(
             }
         }
 
-        inline_ok op(_STORE_ATTR_INSTANCE_VALUE, (offset/1, value, owner --)) {
+        inline_ok op(_STORE_ATTR_INSTANCE_VALUE,
+                (offset/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases) exits(next, miss)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
 
             assert(_PyObject_GetManagedDict(owner_o) == NULL);
             PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-            PyValue old_value = *value_ptr;  // a move: replaced below
 #ifdef Py_SHAPES
             /* This store does not grow the type's shapes.  An addition whose
              * transition is missing goes to STORE_ATTR, which creates it, so
              * that the instance keeps a shape. */
-            if (PyValue_IsNull(old_value)) {
+            if (PyValue_IsNull(*value_ptr)) {
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 if (_PyShape_TransitionMissing(Py_TYPE(owner_o), values->shape,
                                                value_ptr - values->values)) {
@@ -3546,7 +3529,8 @@ dummy_func(
             }
 #endif
             STAT_INC(STORE_ATTR, hit);
-            *value_ptr = TAKE(value);
+            PyValue item = TAKE(value);
+            PyValue old_value = _PyValueSlot_Exchange(value_ptr, item);
             if (PyValue_IsNull(old_value)) {
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 Py_ssize_t index = value_ptr - values->values;
@@ -3574,12 +3558,15 @@ dummy_func(
             _GUARD_DORV_NO_DICT +
             _STORE_ATTR_INSTANCE_VALUE;
 
-        leaf inline_ok op(_STORE_ATTR_SHAPE, (offset/1, value, owner --)) {
+        leaf inline_ok op(_STORE_ATTR_SHAPE,
+                (offset/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases) exits(next)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-            PyValue old_value = *value_ptr;  // a move: replaced below
-            assert(!PyValue_IsNull(old_value));
-            *value_ptr = TAKE(value);
+            PyValue item = TAKE(value);
+            // The shape guard shows the slot filled
+            PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
             STAT_INC(STORE_ATTR, hit);
             PyValue_XCLOSE(owner);
             PyValue_CLOSE(old_value);
@@ -3591,11 +3578,15 @@ dummy_func(
             _GUARD_SHAPE +
             _STORE_ATTR_SHAPE;
 
-        leaf inline_ok op(_STORE_ATTR_SHAPE_ADD, (shape_to/0, offset/1, value, owner --)) {
+        leaf inline_ok op(_STORE_ATTR_SHAPE_ADD,
+                (shape_to/0, offset/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases) exits(next)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-            assert(PyValue_IsNull(*value_ptr));
-            *value_ptr = TAKE(value);
+            PyValue item = TAKE(value);
+            // The shape guard shows the attribute absent: the slot holds NULL
+            _PyValueSlot_Fill(value_ptr, item);
             PyDictValues *values = _PyObject_InlineValues(owner_o);
             _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
             _PyDictValues_SetShape(values, (uint8_t)shape_to);
@@ -3609,7 +3600,10 @@ dummy_func(
             _GUARD_SHAPE +
             _STORE_ATTR_SHAPE_ADD;
 
-        inline_ok op(_STORE_ATTR_WITH_HINT, (hint/1, value, owner --)) {
+        inline_ok op(_STORE_ATTR_WITH_HINT,
+                (hint/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases, runs_python) exits(next, deopt, raise)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
             PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
@@ -3634,8 +3628,7 @@ dummy_func(
             // values, apart from its keys.
             PyValue *value_ptr = dict->ma_values == NULL ?
                 &ep->me_value : &dict->ma_values->values[hint];
-            PyValue old_value = *value_ptr;  // a move: replaced below
-            if (PyValue_IsNull(old_value)) {
+            if (PyValue_IsNull(*value_ptr)) {
                 UNLOCK_OBJECT(dict);
                 DEOPT_IF(true, "the hinted entry holds no value");
             }
@@ -3649,7 +3642,8 @@ dummy_func(
                 ERROR_IF(err < 0);
             }
             else {
-                *value_ptr = TAKE(value);
+                PyValue item = TAKE(value);
+                PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
                 UNLOCK_OBJECT(dict);
                 PyValue_XCLOSE(owner);
                 PyValue_XCLOSE(old_value);
@@ -3662,14 +3656,16 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             _STORE_ATTR_WITH_HINT;
 
-        leaf op(_STORE_ATTR_SLOT, (index/1, value, owner --)) {
+        leaf op(_STORE_ATTR_SLOT, (index/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases) exits(next, deopt)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
 
             DEOPT_IF(!LOCK_OBJECT(owner_o));
             PyValue *addr = _PyObject_ValueSlot(owner_o, index);
             STAT_INC(STORE_ATTR, hit);
-            PyValue old_value = *addr;  // a move: replaced below
-            *addr = TAKE(value);
+            PyValue item = TAKE(value);
+            PyValue old_value = _PyValueSlot_Exchange(addr, item);
             UNLOCK_OBJECT(owner_o);
             PyValue_XCLOSE(owner);
             PyValue_XCLOSE(old_value);
@@ -4590,9 +4586,11 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        replaced op(_FOR_ITER, (iter, null_or_index -- iter, null_or_index, next)) {
-            _PyStatusValue step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(iter), &window[1]);
-            null_or_index = window[1];
+        replaced op(_FOR_ITER, (iter, index: consumed -- iter, next_index: inline encoding(tagged_index|null), next: owned))
+            effects(runs_python) exits(next, branch, raise)
+        {
+            PyValue cursor = TAKE(index);
+            _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(iter), cursor);
             PyValue item = step.value;
             int found = step.status;
             if (found <= 0) {
@@ -4602,6 +4600,7 @@ dummy_func(
                 PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
                 IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
+            next_index = step.cursor;
             next = item;
         }
 
@@ -4611,12 +4610,17 @@ dummy_func(
         // index-protocol iterator; a NULL cursor steps an object-protocol
         // iterator through its C value slot, and a type without the slot
         // exits.
-        replaced op(_FOR_ITER_VIRTUAL, (iter, null_or_index -- iter, null_or_index, next)) {
-            assert(PyValue_IsObject(iter));
+        replaced op(_FOR_ITER_VIRTUAL,
+                (iter: assumed(object) by GET_ITER, index: consumed
+                 -- iter, next_index: inline encoding(tagged_index|null), next: owned))
+            effects(runs_python) exits(next, branch, raise, miss)
+        {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            if (PyValue_IsNull(null_or_index)) {
+            if (PyValue_IsNull(index)) {
                 _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(Py_TYPE(iter_o), iternext);
                 EXIT_IF(next_value == NULL, "the type has no iternext value slot");
+                PyValue spent = TAKE(index);
+                _PyValue_DropCursor(spent);
                 _PyStatusValue step = next_value(iter_o);
                 if (step.status != PYGEN_NEXT) {
                     // A StopIteration is the exhaustion; any other error
@@ -4627,22 +4631,24 @@ dummy_func(
                     PyValue completed = PyValue_IsNull(step.value) ? PyValue_None : step.value;
                     IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
                 }
+                next_index = PyValue_NULL;
                 next = step.value;
             }
             else {
-                Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+                Py_ssize_t position = PyValue_UntagIndex(index);
+                PyValue spent = TAKE(index);
+                _PyValue_DropCursor(spent);
                 _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
-                _PyValueIndexPair next_index = iteritem(iter_o, index);
-                index = next_index.index;
-                if (PyValue_IsNull(next_index.value)) {
-                    if (index < 0) {
+                _PyValueIndexPair item = iteritem(iter_o, position);
+                if (PyValue_IsNull(item.value)) {
+                    if (item.index < 0) {
                         ERROR_NO_POP();
                     }
                     PyValue completed = PyValue_None;
                     IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
                 }
-                null_or_index = PyValue_TagIndex(index);
-                next = next_index.value;
+                next_index = PyValue_TagIndex(item.index);
+                next = item.value;
             }
         }
 
@@ -4727,11 +4733,17 @@ dummy_func(
 #endif
         }
 
-        leaf replaced op(_ITER_NEXT_LIST, (iter, null_or_index -- iter, null_or_index, next)) {
+        leaf replaced op(_ITER_NEXT_LIST,
+                (iter: object, index: consumed -- iter, next_index: inline, next: owned))
+            effects(reads) exits(next)
+        {
             PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
             assert(PyList_CheckExact(list_o));
-            next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
-            null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
+            PyValueBorrow item = _PyValue_PublishedItem(
+                PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
+            next = PyValue_DUP(item);
+            next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
+            DEAD(index);
         }
 
         macro(FOR_ITER_LIST) =
@@ -4762,13 +4774,18 @@ dummy_func(
             }
         }
 
-        leaf op(_ITER_NEXT_TUPLE, (iter, null_or_index -- iter, null_or_index, next)) {
+        leaf op(_ITER_NEXT_TUPLE,
+                (iter: object, index: consumed -- iter, next_index: inline, next: owned))
+            effects(reads) exits(next)
+        {
             PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
             assert(Py_TYPE(tuple_o) == &PyTuple_Type);
-            uintptr_t i = PyValue_UntagIndex(null_or_index);
+            uintptr_t i = PyValue_UntagIndex(index);
             assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
-            next = PyValue_XDUP(PyTuple_GET_VALUE(tuple_o, i));
-            null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
+            PyValueBorrow item = _PyValue_PublishedItem(PyTuple_GET_VALUE(tuple_o, i));
+            next = PyValue_DUP(item);
+            next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
+            DEAD(index);
         }
 
         macro(FOR_ITER_TUPLE) =
@@ -4905,8 +4922,6 @@ dummy_func(
 
             // The exit function is any attribute value, a scalar included;
             // the call raises upstream's TypeError for one.
-            assert(PyValue_IsObject(val));
-            assert(PyValue_IsObjectOrNull(exit_self));
             PyObject *val_o = PyValue_AsKnownObjectBorrow(val);
 
             assert(val_o && PyExceptionInstance_Check(val_o));
@@ -4958,7 +4973,6 @@ dummy_func(
             else {
                 prev_exc = PyValue_None;
             }
-            assert(PyValue_IsObject(exc));
             assert(PyValue_ExceptionInstanceCheck(exc));
             exc_info->exc_value = PyValue_AsPyObjectNew(exc);
             new_exc = exc;
@@ -5327,16 +5341,44 @@ dummy_func(
             EXIT_IF(((PyMethodObject *)callable_o)->im_weakreflist != NULL);
         }
 
-        // The method's function and receiver are views, which the method
-        // operand keeps alive until the frame is pushed: the push counts
-        // them and releases the method.
-        op(_INIT_CALL_BOUND_METHOD_EXACT_ARGS, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
-            assert(!(call_state & CALL_SELF_PRESENT));
+        // The guards of the bound method's function, through the method
+        // (the function guards, taken through im_func)
+        op(_CHECK_METHOD_EXACT_ARGS,
+                (callable: exact(PyMethod_Type), null, unused[oparg]
+                 -- callable, null, unused[oparg]))
+            effects(reads) exits(next, miss)
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+            PyFunctionObject *func =
+                (PyFunctionObject *)((PyMethodObject *)callable_o)->im_func;
+            PyCodeObject *code = (PyCodeObject *)func->func_code;
+            EXIT_IF(code->co_argcount != oparg + 1,
+                    "the function takes another number of arguments");
+        }
+
+        op(_CHECK_METHOD_STACK_SPACE,
+                (callable: exact(PyMethod_Type), unused, unused[oparg]
+                 -- callable, unused, unused[oparg]))
+            effects(reads) exits(next, deopt)
+        {
+            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+            PyFunctionObject *func =
+                (PyFunctionObject *)((PyMethodObject *)callable_o)->im_func;
+            PyCodeObject *code = (PyCodeObject *)func->func_code;
+            DEOPT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));
+        }
+
+        // After the last guard: the push takes the method's function and
+        // receiver in its place (CALL_EXPANDED).  The operands stay the
+        // method and NULL, so no state of the word holds a view.
+        op(_INIT_CALL_BOUND_METHOD_EXACT_ARGS,
+                (callable: exact(PyMethod_Type), null, unused[oparg]
+                 -- callable, null, unused[oparg]))
+            effects() exits(next)
+            state(call_state: self(absent) -- call_state: self(absent) method(expanded))
+        {
             STAT_INC(CALL, hit);
-            self_or_null = ((PyMethodObject *)callable_o)->im_self;
-            call_state |= CALL_SELF_PRESENT | CALL_EXPANDED;
-            callable = _PyIR_AdoptTemp(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
+            call_state |= CALL_EXPANDED;
         }
 
         op(_CHECK_PEP_523, (--))
@@ -5376,8 +5418,9 @@ dummy_func(
         }
 
         // The child takes its callable and arguments from the operands
-        // (a temporary moves, a local is counted) at the arena top, and
-        // the bound method's operand is released.
+        // (a temporary moves, a local is counted) at the arena top; for a
+        // bound method (CALL_EXPANDED), its function and receiver, counted,
+        // and the method's operand is released.
         op(_INIT_CALL_PY_EXACT_ARGS,
                 (callable: consumed, self_or_null: consumed, args[oparg]: closed
                  -- new_frame: owned))
@@ -5413,11 +5456,11 @@ dummy_func(
             unused/1 + // Skip over the entry distance
             _CHECK_PEP_523 +
             _CHECK_CALL_BOUND_METHOD_EXACT_ARGS +
-            _INIT_CALL_BOUND_METHOD_EXACT_ARGS +
-            _CHECK_FUNCTION_VERSION +
-            _CHECK_FUNCTION_EXACT_ARGS +
-            _CHECK_STACK_SPACE +
+            _CHECK_METHOD_VERSION +
+            _CHECK_METHOD_EXACT_ARGS +
+            _CHECK_METHOD_STACK_SPACE +
             _CHECK_RECURSION_REMAINING +
+            _INIT_CALL_BOUND_METHOD_EXACT_ARGS +
             _INIT_CALL_PY_EXACT_ARGS +
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
@@ -6406,8 +6449,6 @@ dummy_func(
             effects(reads, writes) exits(next)
         {
             // The attribute is a tuple, dict or function that the compiler built
-            assert(PyValue_IsObject(func_in));
-            assert(PyValue_IsObject(attr_st));
             PyObject *func = PyValue_AsKnownObjectBorrow(func_in);
             PyObject *attr = PyValue_AsKnownObjectSteal(attr_st);
             func_out = TAKE(func_in);
@@ -6528,7 +6569,9 @@ dummy_func(
         macro(BINARY_OP) region(shared) = unused/1 + _SPECIALIZE_BINARY_OP + unused/4 + _BINARY_OP;
 
         pure inst(SWAP, (bottom, unused[oparg-2], top --
-                    bottom, unused[oparg-2], top)) {
+                    bottom: moved(top), unused[oparg-2], top: moved(bottom)))
+            effects() exits(next)
+        {
             PyValue temp = bottom;
             bottom = top;
             top = temp;

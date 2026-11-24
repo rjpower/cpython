@@ -83,6 +83,7 @@ LOWERINGS = {
     "_PyValue_BoundLocal": Lowering(),
     "_PyValue_CellLocal": Lowering(),
     "_PyValue_CommonConstant": Lowering(),
+    "_PyValue_PublishedItem": Lowering(),
     # Objects and types
     "Py_TYPE": Lowering(),
     "PyList_CheckExact": Lowering(1),
@@ -101,6 +102,9 @@ LOWERINGS = {
     "_PyObject_Shape": Lowering(1),
     "_PyObject_ValueSlot": Lowering(),
     "_PyObject_ShapeReadDup": Lowering(1, calls=True),
+    "_PyValueSlot_Exchange": Lowering(1),
+    "_PyValueSlot_ExchangeFilled": Lowering(1),
+    "_PyValueSlot_Fill": Lowering(),
     "DK_UNICODE_ENTRIES": Lowering(2),
     "_PyDictValues_AddToInsertionOrder": Lowering(2),
     "_PyDictValues_SetShape": Lowering(),
@@ -577,6 +581,14 @@ class Builder:
                 return gb
             if name != "COMPARISON_BIT" and name not in LOWERINGS:
                 raise Refused(f"no lowering of {name}")
+            # A local's input that a primitive consumes needs a count of its
+            # own, as one that a store moves elsewhere does
+            prim_row = row(name)
+            for arg, row_arg in zip(args, prim_row.args if prim_row else ()):
+                if row_arg.mode == "consumed" and arg in self.views:
+                    operand = self.views[arg]
+                    if operand.may_name != TEMP_ONLY:
+                        self.add(gb, "take", [], [arg], None, local_test(operand))
         if k == "store" and args[1] in self.views:
             operand = self.views[args[1]]
             if operand.may_name != TEMP_ONLY:

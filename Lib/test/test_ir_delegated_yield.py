@@ -233,7 +233,8 @@ class DelegatedYieldTests(unittest.TestCase):
             changed.write_text(text.replace(guard,
                 guard + "\n_PyFrame_SetReturnValue(alias, PyValue_None);", 1))
             altered = analyzer.analyze_files([str(changed)])
-            self.assertFalse(altered.uops["_GUARD_TOS_IS_NONE"].properties.escapes)
+            # A call that no row declares may run anything
+            self.assertTrue(altered.uops["_GUARD_TOS_IS_NONE"].properties.escapes)
             altered_formats = ir_generator.compute_formats(altered)
             # The write precedes the guard of the next uop.  The uop declares
             # its contract, so the verifier refuses the call (it has no row)

@@ -768,8 +768,8 @@ typedef struct {
 #define CALL_PERIODIC 16
 #define CALL_SELF_PRESENT 32
 #define CALL_KWARGS_PRESENT 64
-/* The callable operand is a bound method that the handler expanded in
- * registers: callable and self_or_null are its function and receiver. */
+/* The callable operand is a bound method whose function and receiver the
+ * push takes in its place: the operands stay the method and NULL. */
 #define CALL_EXPANDED 256
 
 /* What a call handler reads from its word: whether the call has a self
@@ -996,6 +996,35 @@ _Py_BuildMap_ValueSteal(
                                           half_args);
     clear_value_arguments(frame, arguments, half_args * 2);
     return res;
+}
+
+PyObject *
+_Py_BuildSet_ValueSteal(
+    _PyInterpreterFrame *frame,
+    PyValue *arguments,
+    int total_args)
+{
+    /* As _Py_BuildMap_ValueSteal: a window of temporaries that own their
+     * values.  Each value is taken from its home and moves into the set,
+     * or is closed once an add has failed (or the set was not made); every
+     * home is empty on return. */
+    _PyValue_RecheckWindow(arguments, total_args);
+    PyObject *set = PySet_New(NULL);
+    int err = set == NULL;
+    for (int i = 0; i < total_args; i++) {
+        PyValue value = _PyFrame_TakeHome(frame, &arguments[i]);
+        if (err == 0) {
+            err = _PySet_AddValueTakeRef((PySetObject *)set, value);
+        }
+        else {
+            PyValue_CLOSE(value);
+        }
+    }
+    if (err) {
+        Py_XDECREF(set);
+        return NULL;
+    }
+    return set;
 }
 
 /* Out of line: the vectorcall's argument array is a local, which would be
@@ -1261,10 +1290,10 @@ value_load_global(PyObject *globals, PyObject *builtins, PyObject *name)
 static _PyStatusValue
 _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                PyValueBorrow iter, PyValue *index_ptr);
-static inline Py_ALWAYS_INLINE _PyStatusValue
+static inline Py_ALWAYS_INLINE _PyForIterStep
 _PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
                                      _PyInterpreterFrame *frame,
-                                     PyValueBorrow iter, PyValue *index_ptr);
+                                     PyValueBorrow iter, PyValue cursor);
 static int _PyForIter_StopIsExhaustion(PyThreadState *tstate,
                                          _PyInterpreterFrame *frame);
 
@@ -1914,14 +1943,16 @@ _PyEval_RetireThreadFrameWithResult(PyThreadState *tstate,
 }
 
 /* The function of the call at head as an owner for its callee: a temporary
- * moves out of its home and a local is counted.  expanded: callable is the
- * function of the bound method that the callable operand is, and is counted. */
+ * moves out of its home and a local is counted.  expanded: callable is a
+ * bound method, whose function is counted; the method stays in its home. */
 static inline Py_ALWAYS_INLINE PyValue
 call_exact_function(PyValue *slots, _PyIRWord word, PyValue callable,
                     int expanded)
 {
     if (expanded) {
-        return PyValue_DUP(callable);
+        PyMethodObject *method =
+            (PyMethodObject *)PyValue_AsKnownObjectBorrow(callable);
+        return PyValue_DUP(PyValue_FromObjectBorrow(method->im_func));
     }
     PyValue *home = &slots[IR_B(word)];
     PyValue function = *home;
@@ -1934,22 +1965,23 @@ call_exact_function(PyValue *slots, _PyIRWord word, PyValue callable,
 
 /* Move the operands of the call at head, whose callee takes exactly these
  * arguments, to arguments, the first slots of its frame: a temporary moves
- * and a local is counted.  expanded: the receiver of the bound method that
- * the callable operand is comes first, counted, and the method operand is
- * released. */
+ * and a local is counted.  expanded: callable is a bound method, whose
+ * receiver comes first, counted, and the method operand is released. */
 static inline Py_ALWAYS_INLINE void
 call_fill_exact(PyValue *slots, _PyInterpreterFrame *frame,
-                const _PyIRWord *head, _PyIRWord word, PyValue self,
+                const _PyIRWord *head, _PyIRWord word, PyValue callable,
                 int call_state, PyValue *arguments)
 {
     int expanded = (call_state & CALL_EXPANDED) != 0;
     if (expanded) {
-        *arguments++ = PyValue_DUP(self);
+        PyMethodObject *method =
+            (PyMethodObject *)PyValue_AsKnownObjectBorrow(callable);
+        *arguments++ = PyValue_DUP(method->im_self);
     }
     int n = (int)IR_C(word);
     // The self operand is NULL at run time for a class attribute that is
-    // not a method: the arguments follow its slot
-    // (the method of a bound-method operand replaced a self that was NULL)
+    // not a method, and for a bound-method operand: the arguments follow
+    // its slot
     int skip = (word & IR_F_NO_SELF) == 0 &&
         (expanded || !(call_state & CALL_SELF_PRESENT));
     if (Py_UNLIKELY(n > IR_OPERANDS_PER_WORD)) {
@@ -1974,18 +2006,24 @@ call_fill_exact(PyValue *slots, _PyInterpreterFrame *frame,
 }
 
 /* Push the frame of the Python function callable for the call at head, whose
- * operands fill its first arguments.  The guards checked the stack space and
- * that the callee takes exactly these arguments (call_fill_exact()). */
+ * operands fill its first arguments; with CALL_EXPANDED, of the function of
+ * the bound method callable, with its receiver first.  The guards checked the
+ * stack space and that the callee takes exactly these arguments
+ * (call_fill_exact()). */
 static inline Py_ALWAYS_INLINE _PyInterpreterFrame *
 call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
                 const _PyIRWord *head, _PyIRWord word, PyValue callable,
                 PyValue self, int call_state)
 {
     int expanded = (call_state & CALL_EXPANDED) != 0;
+    // The self operand moves from its home with the arguments; a bound
+    // method's is NULL
+    assert(!expanded || PyValue_IsNull(self));
+    (void)self;
     PyValue *slots = _PyFrame_Slots(frame);
     PyValue function = call_exact_function(slots, word, callable, expanded);
     _PyInterpreterFrame *pushed = _PyFrame_PushUnchecked(tstate, function, frame);
-    call_fill_exact(slots, frame, head, word, self, call_state, pushed->base);
+    call_fill_exact(slots, frame, head, word, callable, call_state, pushed->base);
     return pushed;
 }
 
@@ -7547,15 +7585,16 @@ _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *na
 }
 
 /* FOR_ITER's step: the item and 1, the completion value and 0, or the
- * error and -1; a StopIteration is the completion. */
-static inline Py_ALWAYS_INLINE _PyStatusValue
+ * error and -1; a StopIteration is the completion.  The cursor goes in and
+ * comes out, advanced by an item of an index-protocol iterator. */
+static inline Py_ALWAYS_INLINE _PyForIterStep
 _PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
                                      _PyInterpreterFrame *frame,
-                                     PyValueBorrow iter, PyValue *index_ptr)
+                                     PyValueBorrow iter, PyValue cursor)
 {
-    _PyStatusValue result = {0, PyValue_NULL};
+    _PyForIterStep result = {0, PyValue_NULL, cursor};
     PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-    PyValueBorrow index = PyValue_Borrow(*index_ptr);
+    PyValueBorrow index = PyValue_Borrow(cursor);
     if (PyValue_IsTaggedIndex(index)) {
         intptr_t i = PyValue_UntagIndex(index);
         assert(i >= 0);
@@ -7566,7 +7605,7 @@ _PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
             result.status = i < 0 ? -1 : 0;
             return result;
         }
-        *index_ptr = PyValue_TagIndex(i);
+        result.cursor = PyValue_TagIndex(i);
         result.status = 1;
         return result;
     }
@@ -7586,7 +7625,9 @@ _PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
      * StopIteration once and keeps the returned owner without fabricating
      * a separate RAISE. Both are the caller's status and value as they are. */
     if (step.status != PYGEN_ERROR) {
-        return step;
+        result.status = step.status;
+        result.value = step.value;
+        return result;
     }
     if (_PyForIter_StopIsExhaustion(tstate, frame)) {
         return result;
@@ -7615,7 +7656,9 @@ static Py_NO_INLINE _PyStatusValue
 _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                PyValueBorrow iter, PyValue *index_ptr)
 {
-    return _PyForIter_VirtualIteratorNextInline(tstate, frame, iter, index_ptr);
+    _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(tstate, frame, iter, *index_ptr);
+    *index_ptr = step.cursor;
+    return (_PyStatusValue){step.status, step.value};
 }
 
 /* Check if a 'cls' provides the given special method. */

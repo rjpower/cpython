@@ -59,6 +59,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(PyValue_UntagIndex((PyValu
               "PyValue_UntagIndex: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IncrementTaggedIndexNoOverflow((PyValue){0})), PyValue),
               "PyValue_IncrementTaggedIndexNoOverflow: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_DropCursor), void (*)(PyValue)),
+              "_PyValue_DropCursor: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(PyValue_FromInt64((int64_t){0})), PyValue),
               "PyValue_FromInt64: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_BoxInt64), PyValue (*)(int64_t)),
@@ -157,6 +159,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_CellLocal((PyValu
               "_PyValue_CellLocal: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_CommonConstant((PyValueBorrow){0})), PyValueBorrow),
               "_PyValue_CommonConstant: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_PublishedItem((PyValueBorrow){0})), PyValueBorrow),
+              "_PyValue_PublishedItem: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_AsKnownObjectSteal), PyObject * (*)(PyValue)),
               "PyValue_AsKnownObjectSteal: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_TYPE), PyTypeObject * (*)(PyValueBorrow)),
@@ -183,6 +187,12 @@ static_assert(__builtin_types_compatible_p(__typeof__(((PyDictValues *)0)->valid
               "PyDictValues.valid: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyObject_ValueSlot((PyObject *){0}, (size_t){0})), PyValue *),
               "_PyObject_ValueSlot: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValueSlot_Exchange((PyValue *){0}, (PyValue){0})), PyValue),
+              "_PyValueSlot_Exchange: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValueSlot_ExchangeFilled((PyValue *){0}, (PyValue){0})), PyValue),
+              "_PyValueSlot_ExchangeFilled: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValueSlot_Fill((PyValue *){0}, (PyValue){0})), void),
+              "_PyValueSlot_Fill: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyObject_Shape((PyObject *){0})), uint32_t),
               "_PyObject_Shape: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyObject_ShapeReadDup((PyObject *){0}, (uint32_t){0})), PyValue),
@@ -277,6 +287,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PySuper_LookupValue), _P
               "_PySuper_LookupValue: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyTemplate_Build), PyObject * (*)(PyObject *, PyObject *)),
               "_PyTemplate_Build: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyClassMethod_GetFunc), PyObject * (*)(PyObject *)),
+              "_PyClassMethod_GetFunc: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyType_IteratesByIndex), int (*)(PyTypeObject *)),
               "_PyType_IteratesByIndex: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyUnicode_Equal), int (*)(PyObject *, PyObject *)),
@@ -426,6 +438,7 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_ProcessError), _P
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_EnterRecursivePy), int (*)(PyThreadState *)),
               "_Py_EnterRecursivePy: its C type differs from pycore_ir_components.h");
 static_assert((CALL_SELF_PRESENT) != 0, "call_state: CALL_SELF_PRESENT is no bit");
+static_assert((CALL_EXPANDED) != 0, "call_state: CALL_EXPANDED is no bit");
 static_assert(__builtin_types_compatible_p(__typeof__(&IS_PEP523_HOOKED), bool (*)(PyThreadState *)),
               "IS_PEP523_HOOKED: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyFunction_GET_CODE), PyObject * (*)(PyObject *)),
@@ -476,7 +489,7 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyForIter_StopIsExhausti
               "_PyForIter_StopIsExhaustion: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyForIter_VirtualIteratorNext), _PyStatusValue (*)(PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *)),
               "_PyForIter_VirtualIteratorNext: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(&_PyForIter_VirtualIteratorNextInline), _PyStatusValue (*)(PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *)),
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyForIter_VirtualIteratorNextInline), _PyForIterStep (*)(PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue)),
               "_PyForIter_VirtualIteratorNextInline: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyGen_GetGeneratorFromFrame), PyGenObject * (*)(_PyInterpreterFrame *)),
               "_PyGen_GetGeneratorFromFrame: its C type differs from pycore_ir_components.h");
@@ -3198,7 +3211,6 @@ ir_run_BUILD_INTERPOLATION(
             format = &window[2];
             str = window[1];
             value = window[0];
-            assert(PyValue_IsObject(str));
             PyObject *str_o = _PyValue_AsKnownObjectBorrowPointer(str);
             int conversion = oparg >> 2;
             PyObject *format_o;
@@ -3325,31 +3337,9 @@ ir_run_BUILD_SET(
             PyValue *values;
             PyValue set;
             values = &window[0];
-            PyObject *set_o = PySet_New(NULL);
+            PyObject *set_o = _Py_BuildSet_ValueSteal(frame, values, oparg);
             if (set_o == NULL) {
-                PyValue tmp;
-                for (int _i = oparg; --_i >= 0;) {
-                    tmp = values[_i];
-                    values[_i] = PyValue_NULL;
-                    PyValue_CLOSE(tmp);
-                }
                 IR_CLEAR_SLOTS(&window[0], oparg);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            int err = 0;
-            for (Py_ssize_t i = 0; i < oparg; i++) {
-                PyValue value = _PyFrame_TakeHome(frame, &values[i]);
-                if (err == 0) {
-                    err = _PySet_AddValueTakeRef((PySetObject *)set_o,
-                        value);
-                }
-                else {
-                    PyValue_CLOSE(value);
-                }
-            }
-            if (err) {
-                IR_CLEAR_SLOTS(&window[0], oparg);
-                Py_DECREF(set_o);
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             set = PyValue_FromObjectSteal(set_o);
@@ -3796,53 +3786,49 @@ ir_run_CALL_BOUND_METHOD_EXACT_ARGS(
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _INIT_CALL_BOUND_METHOD_EXACT_ARGS
-            {
-                self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
-                assert(!(call_state & CALL_SELF_PRESENT));
-                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                STAT_INC(CALL, hit);
-                self_or_null = ((PyMethodObject *)callable_o)->im_self;
-                call_state |= CALL_SELF_PRESENT | CALL_EXPANDED;
-                callable = _PyIR_AdoptTemp(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
-            }
-            // _CHECK_FUNCTION_VERSION
+            // _CHECK_METHOD_VERSION
             {
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(callable))) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                if (!PyFunction_Check(callable_o)) {
+                if (Py_TYPE(callable_o) != &PyMethod_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyFunctionObject *func = (PyFunctionObject *)callable_o;
-                if (func->func_version != func_version) {
+                PyObject *func = ((PyMethodObject *)callable_o)->im_func;
+                if (!PyFunction_Check(func)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (((PyFunctionObject *)func)->func_version != func_version) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (call_state & CALL_SELF_PRESENT) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _CHECK_FUNCTION_EXACT_ARGS
+            // _CHECK_METHOD_EXACT_ARGS
             {
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                assert(PyFunction_Check(callable_o));
-                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                PyFunctionObject *func =
+                (PyFunctionObject *)((PyMethodObject *)callable_o)->im_func;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
-                if (code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0)) {
+                if (code->co_argcount != oparg + 1) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _CHECK_STACK_SPACE
+            // _CHECK_METHOD_STACK_SPACE
             {
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                PyFunctionObject *func =
+                (PyFunctionObject *)((PyMethodObject *)callable_o)->im_func;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
                     UPDATE_MISS_STATS(CALL);
@@ -3858,8 +3844,14 @@ ir_run_CALL_BOUND_METHOD_EXACT_ARGS(
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
+            // _INIT_CALL_BOUND_METHOD_EXACT_ARGS
+            {
+                STAT_INC(CALL, hit);
+                call_state |= CALL_EXPANDED;
+            }
             // _INIT_CALL_PY_EXACT_ARGS
             {
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 STAT_INC(CALL, hit);
                 _PyInterpreterFrame *pushed_frame = call_push_exact(
                     tstate, frame, this_instr, ir_word, callable, self_or_null, call_state);
@@ -7609,7 +7601,6 @@ ir_run_DICT_MERGE(
                               PyValue_TYPE(update));
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                assert(PyValue_IsObject(update));
                 PyObject *dict_o = _PyValue_AsKnownObjectBorrowPointer(dict);
                 PyObject *update_o = _PyValue_AsKnownObjectBorrowPointer(update);
                 _PyStatusObject merged = value_dict_merge_uniq(dict_o, update_o);
@@ -7663,7 +7654,6 @@ ir_run_DICT_UPDATE(
                               PyValue_TYPE(update));
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                assert(PyValue_IsObject(update));
                 PyObject *dict_o = _PyValue_AsKnownObjectBorrowPointer(dict);
                 PyObject *update_o = _PyValue_AsKnownObjectBorrowPointer(update);
                 int err = PyDict_Update(dict_o, update_o);
@@ -7943,6 +7933,8 @@ ir_run_FOR_ITER(
             (void)window;
             PyValue iter;
             PyValue null_or_index;
+            PyValue index;
+            PyValue next_index;
             PyValue next;
             // _SPECIALIZE_FOR_ITER
             {
@@ -7962,13 +7954,14 @@ ir_run_FOR_ITER(
             }
             // _FOR_ITER
             {
-                _PyStatusValue step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(iter), &window[1]);
-                null_or_index = window[1];
+                index = null_or_index;
+                PyValue cursor = index;
+                window[1] = PyValue_NULL;
+                _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(iter), cursor);
                 PyValue item = step.value;
                 int found = step.status;
                 if (found <= 0) {
                     if (found < 0) {
-                        IR_SET_TEMP(window[1], null_or_index);
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;{
@@ -7978,9 +7971,10 @@ ir_run_FOR_ITER(
                         DISPATCH();
                     }
                 }
+                next_index = step.cursor;
                 next = item;
             }
-            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[1], next_index);
             IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -8127,6 +8121,8 @@ ir_run_FOR_ITER_LIST(
             (void)window;
             PyValue iter;
             PyValue null_or_index;
+            PyValue index;
+            PyValue next_index;
             PyValue next;
             // _ITER_CHECK_LIST
             {
@@ -8169,12 +8165,16 @@ ir_run_FOR_ITER_LIST(
             }
             // _ITER_NEXT_LIST
             {
+                index = null_or_index;
                 PyObject *list_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(PyList_CheckExact(list_o));
-                next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
-                null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
+                PyValueBorrow item = _PyValue_PublishedItem(
+                    PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
+                assert(!PyValue_IsNull(item));
+                next = PyValue_DUP(item);
+                next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
             }
-            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[1], next_index);
             IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -8278,6 +8278,8 @@ ir_run_FOR_ITER_TUPLE(
             (void)window;
             PyValue iter;
             PyValue null_or_index;
+            PyValue index;
+            PyValue next_index;
             PyValue next;
             // _ITER_CHECK_TUPLE
             {
@@ -8310,14 +8312,17 @@ ir_run_FOR_ITER_TUPLE(
             }
             // _ITER_NEXT_TUPLE
             {
+                index = null_or_index;
                 PyObject *tuple_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
-                uintptr_t i = PyValue_UntagIndex(null_or_index);
+                uintptr_t i = PyValue_UntagIndex(index);
                 assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
-                next = PyValue_XDUP(PyTuple_GET_VALUE(tuple_o, i));
-                null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
+                PyValueBorrow item = _PyValue_PublishedItem(PyTuple_GET_VALUE(tuple_o, i));
+                assert(!PyValue_IsNull(item));
+                next = PyValue_DUP(item);
+                next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
             }
-            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[1], next_index);
             IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -8343,19 +8348,23 @@ ir_run_FOR_ITER_VIRTUAL(
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue iter;
-            PyValue null_or_index;
+            PyValue index;
+            PyValue next_index;
             PyValue next;
-            null_or_index = window[1];
+            index = window[1];
             iter = window[0];
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
-            if (PyValue_IsNull(null_or_index)) {
+            if (PyValue_IsNull(index)) {
                 _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(Py_TYPE(iter_o), iternext);
                 if (next_value == NULL) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
+                PyValue spent = index;
+                _PyValue_DropCursor(spent);
+                window[1] = PyValue_NULL;
                 _PyStatusValue step = next_value(iter_o);
                 if (step.status != PYGEN_NEXT) {
                     if (step.status == PYGEN_ERROR && !_PyForIter_StopIsExhaustion(tstate, frame)) {
@@ -8368,15 +8377,18 @@ ir_run_FOR_ITER_VIRTUAL(
                         DISPATCH();
                     }
                 }
+                next_index = PyValue_NULL;
                 next = step.value;
             }
             else {
-                Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+                Py_ssize_t position = PyValue_UntagIndex(index);
+                PyValue spent = index;
+                _PyValue_DropCursor(spent);
                 _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
-                _PyValueIndexPair next_index = iteritem(iter_o, index);
-                index = next_index.index;
-                if (PyValue_IsNull(next_index.value)) {
-                    if (index < 0) {
+                window[1] = PyValue_NULL;
+                _PyValueIndexPair item = iteritem(iter_o, position);
+                if (PyValue_IsNull(item.value)) {
+                    if (item.index < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     PyValue completed = PyValue_None;{
@@ -8386,10 +8398,10 @@ ir_run_FOR_ITER_VIRTUAL(
                         DISPATCH();
                     }
                 }
-                null_or_index = PyValue_TagIndex(index);
-                next = next_index.value;
+                next_index = PyValue_TagIndex(item.index);
+                next = item.value;
             }
-            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[1], next_index);
             IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -10090,7 +10102,6 @@ ir_run_LIST_EXTEND(
                               PyValue_TYPE(iterable_st)->tp_name);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                assert(PyValue_IsObject(iterable_st));
                 PyObject *list = _PyValue_AsKnownObjectBorrowPointer(list_st);
                 PyObject *iterable = _PyValue_AsKnownObjectBorrowPointer(iterable_st);
                 PyObject *none_val = _PyList_Extend((PyListObject *)list, iterable);
@@ -14126,7 +14137,6 @@ ir_run_PUSH_EXC_INFO(
             else {
                 prev_exc = PyValue_None;
             }
-            assert(PyValue_IsObject(exc));
             assert(PyValue_ExceptionInstanceCheck(exc));
             exc_info->exc_value = PyValue_AsPyObjectNew(exc);
             new_exc = exc;
@@ -15249,8 +15259,6 @@ ir_run_SET_FUNCTION_ATTRIBUTE(
             attr_st = IR_VIEW(IR_B(ir_word));
             assert(PyValue_IsObject(attr_st));
             assert(!PyValue_IsNull(func_in) && (PyValue_TYPE(func_in) == &PyFunction_Type));
-            assert(PyValue_IsObject(func_in));
-            assert(PyValue_IsObject(attr_st));
             PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_in);
             ir_own_B = IR_DETACH(ir_word, B, attr_st);
             PyObject *attr = _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(attr_st, ir_own_B));
@@ -15296,7 +15304,6 @@ ir_run_SET_UPDATE(
                               PyValue_TYPE(iterable)->tp_name);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                assert(PyValue_IsObject(iterable));
                 int err = _PySet_Update(_PyValue_AsKnownObjectBorrowPointer(set),
                                     _PyValue_AsKnownObjectBorrowPointer(iterable));
                 if (err < 0) {
@@ -15443,10 +15450,9 @@ ir_run_STORE_ATTR_INSTANCE_VALUE(
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(_PyObject_GetManagedDict(owner_o) == NULL);
                 PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-                PyValue old_value = *value_ptr;
                 #ifdef Py_SHAPES
 
-                if (PyValue_IsNull(old_value)) {
+                if (PyValue_IsNull(*value_ptr)) {
                     PyDictValues *values = _PyObject_InlineValues(owner_o);
                     if (_PyShape_TransitionMissing(Py_TYPE(owner_o), values->shape,
                             value_ptr - values->values)) {
@@ -15461,7 +15467,8 @@ ir_run_STORE_ATTR_INSTANCE_VALUE(
                 #endif
                 STAT_INC(STORE_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue old_value = _PyValueSlot_Exchange(value_ptr, item);
                 if (PyValue_IsNull(old_value)) {
                     PyDictValues *values = _PyObject_InlineValues(owner_o);
                     Py_ssize_t index = value_ptr - values->values;
@@ -15532,10 +15539,10 @@ ir_run_STORE_ATTR_SHAPE(
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-                PyValue old_value = *value_ptr;
-                assert(!PyValue_IsNull(old_value));
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
+                assert(!PyValue_IsNull(old_value));
                 STAT_INC(STORE_ATTR, hit);
                 ir_own_A = IR_DETACH(ir_word, A, owner);
                 (void)(ir_own_A);
@@ -15598,9 +15605,9 @@ ir_run_STORE_ATTR_SHAPE_ADD(
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-                assert(PyValue_IsNull(*value_ptr));
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                _PyValueSlot_Fill(value_ptr, item);
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
                 _PyDictValues_SetShape(values, (uint8_t)shape_to);
@@ -15661,9 +15668,9 @@ ir_run_STORE_ATTR_SLOT(
                 }
                 PyValue *addr = _PyObject_ValueSlot(owner_o, index);
                 STAT_INC(STORE_ATTR, hit);
-                PyValue old_value = *addr;
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *addr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue old_value = _PyValueSlot_Exchange(addr, item);
                 UNLOCK_OBJECT(owner_o);
                 ir_own_A = IR_DETACH(ir_word, A, owner);
                 (void)(ir_own_A);
@@ -15752,8 +15759,7 @@ ir_run_STORE_ATTR_WITH_HINT(
                 }
                 PyValue *value_ptr = dict->ma_values == NULL ?
                 &ep->me_value : &dict->ma_values->values[hint];
-                PyValue old_value = *value_ptr;
-                if (PyValue_IsNull(old_value)) {
+                if (PyValue_IsNull(*value_ptr)) {
                     UNLOCK_OBJECT(dict);
                     if (true) {
                         UPDATE_MISS_STATS(STORE_ATTR);
@@ -15775,7 +15781,9 @@ ir_run_STORE_ATTR_WITH_HINT(
                 }
                 else {
                     ir_own_B = IR_DETACH(ir_word, B, value);
-                    *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                    PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                    PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
+                    assert(!PyValue_IsNull(old_value));
                     UNLOCK_OBJECT(dict);
                     ir_own_A = IR_DETACH(ir_word, A, owner);
                     (void)(ir_own_A);
@@ -16183,15 +16191,15 @@ ir_run_STORE_SUBSCR_LIST_INT(
                     }
                 }
                 STAT_INC(STORE_SUBSCR, hit);
-                PyValue old_value = _PyList_ITEMS(list)[index];
                 ir_own_C = IR_DETACH(ir_word, C, value);
-                _PyList_ITEMS(list)[index] = IR_TAKEN_REQUIRED(value, ir_own_C);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_C);
+                PyValue old_value = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index, item);
                 assert(!PyValue_IsNull(old_value));
                 UNLOCK_OBJECT(list);
-                ir_own_A = IR_DETACH(ir_word, A, list_st);
-                ir_own_B = IR_DETACH(ir_word, B, sub_st);
                 ls = list_st;
                 ss = sub_st;
+                ir_own_A = IR_DETACH(ir_word, A, ls);
+                ir_own_B = IR_DETACH(ir_word, B, ss);
                 PyValue_CLOSE(old_value);
             }
             // _POP_TOP
@@ -16694,7 +16702,6 @@ ir_run_UNPACK_EX(
                 window[0] = PyValue_NULL;
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
-            assert(PyValue_IsObject(seq));
             PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
             window[0] = PyValue_NULL;
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
@@ -16756,7 +16763,6 @@ ir_run_UNPACK_SEQUENCE(
                     window[0] = PyValue_NULL;
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                assert(PyValue_IsObject(seq));
                 PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
                 window[0] = PyValue_NULL;
                 int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
@@ -16927,8 +16933,6 @@ ir_run_WITH_EXCEPT_START(
             exit_func = window[0];
             assert(PyValue_IsObject(val));
             PyObject *exc;
-            assert(PyValue_IsObject(val));
-            assert(PyValue_IsObjectOrNull(exit_self));
             PyObject *val_o = _PyValue_AsKnownObjectBorrowPointer(val);
             assert(val_o && PyExceptionInstance_Check(val_o));
             exc = PyExceptionInstance_Class(val_o);
@@ -20114,53 +20118,49 @@ static const _PyIRForm ir_handler_forms[512] = {
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _INIT_CALL_BOUND_METHOD_EXACT_ARGS
-            {
-                self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
-                assert(!(call_state & CALL_SELF_PRESENT));
-                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                STAT_INC(CALL, hit);
-                self_or_null = ((PyMethodObject *)callable_o)->im_self;
-                call_state |= CALL_SELF_PRESENT | CALL_EXPANDED;
-                callable = _PyIR_AdoptTemp(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
-            }
-            // _CHECK_FUNCTION_VERSION
+            // _CHECK_METHOD_VERSION
             {
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(callable))) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                if (!PyFunction_Check(callable_o)) {
+                if (Py_TYPE(callable_o) != &PyMethod_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyFunctionObject *func = (PyFunctionObject *)callable_o;
-                if (func->func_version != func_version) {
+                PyObject *func = ((PyMethodObject *)callable_o)->im_func;
+                if (!PyFunction_Check(func)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (((PyFunctionObject *)func)->func_version != func_version) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (call_state & CALL_SELF_PRESENT) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _CHECK_FUNCTION_EXACT_ARGS
+            // _CHECK_METHOD_EXACT_ARGS
             {
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                assert(PyFunction_Check(callable_o));
-                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                PyFunctionObject *func =
+                (PyFunctionObject *)((PyMethodObject *)callable_o)->im_func;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
-                if (code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0)) {
+                if (code->co_argcount != oparg + 1) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _CHECK_STACK_SPACE
+            // _CHECK_METHOD_STACK_SPACE
             {
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                PyFunctionObject *func =
+                (PyFunctionObject *)((PyMethodObject *)callable_o)->im_func;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
                     UPDATE_MISS_STATS(CALL);
@@ -20176,8 +20176,14 @@ static const _PyIRForm ir_handler_forms[512] = {
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
+            // _INIT_CALL_BOUND_METHOD_EXACT_ARGS
+            {
+                STAT_INC(CALL, hit);
+                call_state |= CALL_EXPANDED;
+            }
             // _INIT_CALL_PY_EXACT_ARGS
             {
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 STAT_INC(CALL, hit);
                 _PyInterpreterFrame *pushed_frame = call_push_exact(
                     tstate, frame, this_instr, ir_word, callable, self_or_null, call_state);
@@ -23200,6 +23206,8 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)window;
             PyValue iter;
             PyValue null_or_index;
+            PyValue index;
+            PyValue next_index;
             PyValue next;
             // _ITER_CHECK_LIST
             {
@@ -23242,12 +23250,16 @@ static const _PyIRForm ir_handler_forms[512] = {
             }
             // _ITER_NEXT_LIST
             {
+                index = null_or_index;
                 PyObject *list_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(PyList_CheckExact(list_o));
-                next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
-                null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
+                PyValueBorrow item = _PyValue_PublishedItem(
+                    PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
+                assert(!PyValue_IsNull(item));
+                next = PyValue_DUP(item);
+                next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
             }
-            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[1], next_index);
             IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -23343,6 +23355,8 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)window;
             PyValue iter;
             PyValue null_or_index;
+            PyValue index;
+            PyValue next_index;
             PyValue next;
             // _ITER_CHECK_TUPLE
             {
@@ -23375,14 +23389,17 @@ static const _PyIRForm ir_handler_forms[512] = {
             }
             // _ITER_NEXT_TUPLE
             {
+                index = null_or_index;
                 PyObject *tuple_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
-                uintptr_t i = PyValue_UntagIndex(null_or_index);
+                uintptr_t i = PyValue_UntagIndex(index);
                 assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
-                next = PyValue_XDUP(PyTuple_GET_VALUE(tuple_o, i));
-                null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
+                PyValueBorrow item = _PyValue_PublishedItem(PyTuple_GET_VALUE(tuple_o, i));
+                assert(!PyValue_IsNull(item));
+                next = PyValue_DUP(item);
+                next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
             }
-            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[1], next_index);
             IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -23404,19 +23421,23 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue iter;
-            PyValue null_or_index;
+            PyValue index;
+            PyValue next_index;
             PyValue next;
-            null_or_index = window[1];
+            index = window[1];
             iter = window[0];
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
-            if (PyValue_IsNull(null_or_index)) {
+            if (PyValue_IsNull(index)) {
                 _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(Py_TYPE(iter_o), iternext);
                 if (next_value == NULL) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
+                PyValue spent = index;
+                _PyValue_DropCursor(spent);
+                window[1] = PyValue_NULL;
                 _PyStatusValue step = next_value(iter_o);
                 if (step.status != PYGEN_NEXT) {
                     if (step.status == PYGEN_ERROR && !_PyForIter_StopIsExhaustion(tstate, frame)) {
@@ -23429,15 +23450,18 @@ static const _PyIRForm ir_handler_forms[512] = {
                         DISPATCH();
                     }
                 }
+                next_index = PyValue_NULL;
                 next = step.value;
             }
             else {
-                Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+                Py_ssize_t position = PyValue_UntagIndex(index);
+                PyValue spent = index;
+                _PyValue_DropCursor(spent);
                 _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
-                _PyValueIndexPair next_index = iteritem(iter_o, index);
-                index = next_index.index;
-                if (PyValue_IsNull(next_index.value)) {
-                    if (index < 0) {
+                window[1] = PyValue_NULL;
+                _PyValueIndexPair item = iteritem(iter_o, position);
+                if (PyValue_IsNull(item.value)) {
+                    if (item.index < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     PyValue completed = PyValue_None;{
@@ -23447,10 +23471,10 @@ static const _PyIRForm ir_handler_forms[512] = {
                         DISPATCH();
                     }
                 }
-                null_or_index = PyValue_TagIndex(index);
-                next = next_index.value;
+                next_index = PyValue_TagIndex(item.index);
+                next = item.value;
             }
-            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[1], next_index);
             IR_MOVE_RESULT_TO_DST(ir_word, A, window[2], next);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -28537,10 +28561,9 @@ static const _PyIRForm ir_handler_forms[512] = {
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(_PyObject_GetManagedDict(owner_o) == NULL);
                 PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-                PyValue old_value = *value_ptr;
                 #ifdef Py_SHAPES
 
-                if (PyValue_IsNull(old_value)) {
+                if (PyValue_IsNull(*value_ptr)) {
                     PyDictValues *values = _PyObject_InlineValues(owner_o);
                     if (_PyShape_TransitionMissing(Py_TYPE(owner_o), values->shape,
                             value_ptr - values->values)) {
@@ -28555,7 +28578,8 @@ static const _PyIRForm ir_handler_forms[512] = {
                 #endif
                 STAT_INC(STORE_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue old_value = _PyValueSlot_Exchange(value_ptr, item);
                 if (PyValue_IsNull(old_value)) {
                     PyDictValues *values = _PyObject_InlineValues(owner_o);
                     Py_ssize_t index = value_ptr - values->values;
@@ -28622,10 +28646,10 @@ static const _PyIRForm ir_handler_forms[512] = {
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-                PyValue old_value = *value_ptr;
-                assert(!PyValue_IsNull(old_value));
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
+                assert(!PyValue_IsNull(old_value));
                 STAT_INC(STORE_ATTR, hit);
                 ir_own_A = IR_DETACH(ir_word, A, owner);
                 (void)(ir_own_A);
@@ -28684,9 +28708,9 @@ static const _PyIRForm ir_handler_forms[512] = {
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-                assert(PyValue_IsNull(*value_ptr));
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                _PyValueSlot_Fill(value_ptr, item);
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
                 _PyDictValues_SetShape(values, (uint8_t)shape_to);
@@ -28743,9 +28767,9 @@ static const _PyIRForm ir_handler_forms[512] = {
                 }
                 PyValue *addr = _PyObject_ValueSlot(owner_o, index);
                 STAT_INC(STORE_ATTR, hit);
-                PyValue old_value = *addr;
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *addr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue old_value = _PyValueSlot_Exchange(addr, item);
                 UNLOCK_OBJECT(owner_o);
                 ir_own_A = IR_DETACH(ir_word, A, owner);
                 (void)(ir_own_A);
@@ -28830,8 +28854,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 }
                 PyValue *value_ptr = dict->ma_values == NULL ?
                 &ep->me_value : &dict->ma_values->values[hint];
-                PyValue old_value = *value_ptr;
-                if (PyValue_IsNull(old_value)) {
+                if (PyValue_IsNull(*value_ptr)) {
                     UNLOCK_OBJECT(dict);
                     if (true) {
                         UPDATE_MISS_STATS(STORE_ATTR);
@@ -28853,7 +28876,9 @@ static const _PyIRForm ir_handler_forms[512] = {
                 }
                 else {
                     ir_own_B = IR_DETACH(ir_word, B, value);
-                    *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                    PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                    PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
+                    assert(!PyValue_IsNull(old_value));
                     UNLOCK_OBJECT(dict);
                     ir_own_A = IR_DETACH(ir_word, A, owner);
                     (void)(ir_own_A);
@@ -29068,15 +29093,15 @@ static const _PyIRForm ir_handler_forms[512] = {
                     }
                 }
                 STAT_INC(STORE_SUBSCR, hit);
-                PyValue old_value = _PyList_ITEMS(list)[index];
                 ir_own_C = IR_DETACH(ir_word, C, value);
-                _PyList_ITEMS(list)[index] = IR_TAKEN_REQUIRED(value, ir_own_C);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_C);
+                PyValue old_value = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index, item);
                 assert(!PyValue_IsNull(old_value));
                 UNLOCK_OBJECT(list);
-                ir_own_A = IR_DETACH(ir_word, A, list_st);
-                ir_own_B = IR_DETACH(ir_word, B, sub_st);
                 ls = list_st;
                 ss = sub_st;
+                ir_own_A = IR_DETACH(ir_word, A, ls);
+                ir_own_B = IR_DETACH(ir_word, B, ss);
                 PyValue_CLOSE(old_value);
             }
             // _POP_TOP

@@ -37,6 +37,7 @@ with test_tools.imports_under_tool("cases_generator"):
     import analyzer
     from analyzer import StackItem
     from cwriter import CWriter
+    import ir_contract
     import ir_generator
     import ir_records
     import stack
@@ -281,6 +282,16 @@ def generator_labels_source():
 
 
 
+TEST_ROWS = """
+#define TEST_ROWS(PRIMITIVE, HELPER, MACRO) \\
+    MACRO(SPAM, ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(reads), EXITS()) \\
+    MACRO(SPAM_FLAG, ARGS(), SCALAR, EFFECTS(), EXITS()) \\
+    MACRO(SPAM_KEEP, ARGS(scalar), NONE, EFFECTS(), EXITS()) \\
+    MACRO(EGGS, ARGS(scalar, scalar), SCALAR, EFFECTS(), EXITS()) \\
+    MACRO(HAM, ARGS(scalar, scalar), SCALAR, EFFECTS(), EXITS())
+"""
+
+
 class TestIRCases(unittest.TestCase):
     """The register IR backend: ir_generator.py and ir_metadata_generator.py"""
 
@@ -301,6 +312,12 @@ class TestIRCases(unittest.TestCase):
                                     ir_generator.OBJECT_READERS | {"SPAM", "spam_call"})
         readers.start()
         self.addCleanup(readers.stop)
+        # The analyzer takes a call for one that can run code unless a row
+        # says otherwise: these upper-case stand-ins have rows that declare
+        # no effect that reenters
+        rows = mock.patch.dict(ir_contract.rows(), ir_contract.parse_rows(TEST_ROWS))
+        rows.start()
+        self.addCleanup(rows.stop)
 
     def tearDown(self) -> None:
         os.remove(self.temp_input_filename)
@@ -1082,7 +1099,9 @@ class TestIRCases(unittest.TestCase):
         # own, so it aliases no input
         self.assertEqual(instruction.parts[0].aliased_outputs, ())
         predicate = "coro_awaitable_can_transfer"
-        self.assertIn(predicate, analyzer.NON_ESCAPING_FUNCTIONS)
+        # The row declares no reentry, so the call does not escape
+        self.assertFalse(ir_contract.rows()[predicate].effects & ir_contract.REENTRY)
+        self.assertFalse(analyzer.call_escapes(predicate))
         self.assertNotIn(predicate, analyzer.IR_MARKER_EFFECTS)
         effect = ir_generator.analyze_error_effects(self.analyze(
             "\ninst(OP, (value --)) { if (coro_awaitable_can_transfer(value)) { assert(true); } }\n"
@@ -2874,9 +2893,6 @@ class TestIRCases(unittest.TestCase):
              "RETIRE", "PyValue_XCLOSE", "PyValue_DUP"),
             ("COPY", "bottom, unused[oparg-1] -- bottom, unused[oparg-1], top",
              "top = PyValue_DUP(bottom);", "COPY", "PyValue_DUP(bottom)", "bottom"),
-            ("SWAP", "bottom, unused[oparg-2], top -- bottom, unused[oparg-2], top",
-             "PyValue temp = bottom; bottom = top; top = temp;",
-             "SWAP", "top = temp;", ""),
         )
         for name, effect, body, kind, old, new in cases:
             with self.subTest(handler=name):
@@ -2889,6 +2905,22 @@ class TestIRCases(unittest.TestCase):
                 self.assertIn(old, body)
                 self.assertEqual(kind_for(body.replace(old, new)),
                                  "_PyIR_TRANSFER_UNKNOWN")
+
+    def test_swap_transfer_comes_from_the_exchange(self):
+        # The swap is the declared exchange (ir_contract.check_exchange),
+        # not the body text: undeclared, the same body proves nothing
+        body = "PyValue temp = bottom; bottom = top; top = temp;"
+        def kind_for(effect, clauses=""):
+            analysis = self.analyze(f"\ninst(SWAP, ({effect})) {clauses} {{ {body} }}\n")
+            inst = analysis.instructions["SWAP"]
+            fmt = ir_generator.compute_formats(analysis)["SWAP"]
+            return ir_generator.normal_transfer_kind(inst, fmt)
+        self.assertEqual(kind_for("bottom, unused[oparg-2], top -- "
+                                  "bottom: moved(top), unused[oparg-2], top: moved(bottom)",
+                                  "effects() exits(next)"),
+                         "_PyIR_TRANSFER_SWAP")
+        self.assertEqual(kind_for("bottom, unused[oparg-2], top -- bottom, unused[oparg-2], top"),
+                         "_PyIR_TRANSFER_UNKNOWN")
 
     def test_transparent_leaf_still_has_a_consumer_recipe(self):
         source = "\nir_only inst(IR_JUMP, (--)) { JUMPTO(oparg); }\n"
@@ -3032,7 +3064,7 @@ class TestIRCases(unittest.TestCase):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
         expected = {"BUILD_STRING": "IR_BUILD_STRING", "BUILD_MAP": "IR_BUILD_MAP",
-                    "_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
+                    "BUILD_SET": "IR_BUILD_SET", "_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
         for name, helper in expected.items():
             part = analysis.uops[name]
             self.assertTrue(ir_generator.home_operation_contract(part))
@@ -3048,7 +3080,7 @@ class TestIRCases(unittest.TestCase):
             self.assertNotIn(marker, analyzer.IR_MARKER_EFFECTS)
             escapes = {escape.call.text for escape in part.properties.escaping_calls.values()}
             self.assertEqual(marker in escapes,
-                             analyzer.IR_HELPER_CALLEES[marker] not in analyzer.NON_ESCAPING_FUNCTIONS)
+                             bool(ir_contract.rows()[marker].effects & ir_contract.REENTRY))
 
     def test_input_drain_requires_its_sole_owning_array(self):
         def check(source):
@@ -3131,7 +3163,7 @@ class TestIRCases(unittest.TestCase):
         for source in ("value = opaque();", "value = PyValue_NULL;",
                        "value.bits &= 0;", "value++;", "opaque(&((value)));",
                        "PyValue value;", "PyValue value = PyValue_None;",
-                       "PyValue_CLEAR(value);", "PyValue_XSETREF(value, PyValue_NULL);",
+                       "PyValue_CLEAR(value);", "Py_XSETREF(value, PyValue_NULL);",
                        "PyValue_CLOSE(value);"):
             with self.subTest(source=source):
                 self.assertFalse(changes(source)["value"])
@@ -4015,14 +4047,21 @@ class TestCallMarkers(unittest.TestCase):
             self.assertTrue(invoke.switches_frame)
         self.assertFalse(self.analysis.uops["_MONITOR_CALL"].properties.always_exits)
 
-    def test_exact_activation_does_not_escape(self):
+    def test_exact_activation_escapes_as_its_row_declares(self):
+        # call_push_exact releases the callable (its row: `releases`), which
+        # can run a finalizer; nothing else in the uop escapes
+        self.assertTrue(analyzer.call_escapes("call_push_exact"))
         properties = self.analysis.uops["_INIT_CALL_PY_EXACT_ARGS"].properties
-        self.assertFalse(properties.escapes)
+        self.assertTrue(properties.escapes)
         self.assertFalse(properties.error_without_pop)
         self.assertFalse(properties.sync_sp)
 
-    def test_pure_latch_and_unrelated_uppercase_macro(self):
-        for marker in ("IR_BEGIN_CALL_EFFECTS", "UNRELATED_MACRO"):
+    def test_pure_latch_and_undeclared_macro(self):
+        # A row decides, never an upper-case name: the latch declares no
+        # effect, a macro with no row escapes
+        node, = parse_src("op(_OP, (--)) { UNRELATED_MACRO(); }")
+        self.assertTrue(analyzer.compute_properties(node).escapes)
+        for marker in ("IR_BEGIN_CALL_EFFECTS",):
             node, = parse_src(f"op(_OP, (--)) {{ {marker}(); }}")
             properties = analyzer.compute_properties(node)
             self.assertFalse(properties.escapes)
@@ -4056,17 +4095,20 @@ class TestCallMarkers(unittest.TestCase):
                 self.assertNotIn("&call", body)
 
     def test_exact_method_guards_precede_the_push(self):
-        # The bound method's function and receiver are adopted as borrows, so
-        # every guard runs before call_push_exact() counts or moves anything,
-        # and a failed guard falls back to the generic call with the operands
-        # untouched
+        # Every guard, through the method's im_func, runs before the
+        # expansion, which only sets CALL_EXPANDED: the operands stay the
+        # method and NULL, call_push_exact() counts the function and the
+        # receiver, and a failed guard falls back to the generic call with
+        # the operands untouched
         for name in ("CALL_BOUND_METHOD_EXACT_ARGS",):
             with self.subTest(handler=name):
                 body = self.interpreter.split(f"TARGET({name}) {{", 1)[1].split("TARGET(", 1)[0]
                 push = body.index("call_push_exact(")
-                self.assertIn("call_state |= CALL_SELF_PRESENT | CALL_EXPANDED", body[:push])
-                self.assertGreaterEqual(body[:push].count("JUMP_TO_PREDICTED("), 4)
-                self.assertNotIn("JUMP_TO_PREDICTED(", body[push:])
+                expand = body.index("call_state |= CALL_EXPANDED;")
+                self.assertGreaterEqual(body[:expand].count("JUMP_TO_PREDICTED("), 8)
+                self.assertNotIn("JUMP_TO_PREDICTED(", body[expand:])
+                self.assertLess(expand, push)
+                self.assertNotIn("_PyIR_AdoptTemp", body)
                 self.assertNotIn("call_fallback_", body)
 
     def test_handlers_take_no_local_address(self):

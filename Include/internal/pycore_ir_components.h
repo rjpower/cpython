@@ -26,7 +26,7 @@
  *       a macro that the generator expands; its C is generated
  *
  * ARGS: per parameter a mode (borrowed, consumed, taken, scalar, object,
- * tstate, frame, out) and the facts it requires.  On a `PyObject *`
+ * tstate, frame, out, lvalue: a macro argument it assigns) and the facts it requires.  On a `PyObject *`
  * parameter, `consumed object` is a stolen object pointer; on a PyValue,
  * `object` is the fact.
  * result: NONE, SCALAR, VIEW (the object of argument 0), PATH(name) (a
@@ -51,6 +51,14 @@
  * EFFECTS: reads writes allocates raises releases runs_python polls
  * switches_frame.  A `releases` may run a finalizer, which may run Python
  * and write the frame's homes (FrameLocalsProxy).
+ * HOMES(canonical | unknown), OBSERVER(none): optional columns of a row
+ * with a reentry effect.  Without HOMES, the code it runs may vacate
+ * scratch homes (a debugger's redirect) but leaves the others canonical or
+ * NULL; `canonical` says that it leaves initialized homes canonical or
+ * NULL (a finalizer or a dunder method: no redirect), `unknown` that it
+ * promises nothing.  OBSERVER(none): it opens no observer context of the
+ * current frame (ir_error_effects.py derives the source's error-path
+ * effects from them).
  * FEEDBACK: the feedback the row reads and writes, transitively:
  * read(f) and write(f) with f one of counter (the entry header's counter),
  * entry (every field of the site's entry, the counter included) and
@@ -287,6 +295,15 @@
               ARGS(borrowed), SCALAR, EFFECTS()) \
     PRIMITIVE(PyValue_IncrementTaggedIndexNoOverflow, PyValue, (PyValue), \
               ARGS(consumed), VALUE(inline tagged_index), EFFECTS()) \
+    /* Evidence (G0d4), pycore_value.h, a static inline function: a no-op \
+     * (a cast to void, with an assert of the representation).  GET_ITER \
+     * leaves a for loop's cursor as NULL (the object protocol) or a tagged \
+     * index (the index protocol), both of which owe no count, and nothing \
+     * but the loop's steps changes it; a step that consumes the cursor \
+     * without a use of it drops it here (no memory, no call, no failure, \
+     * no callback). */ \
+    HELPER(_PyValue_DropCursor, void, (PyValue), \
+              ARGS(consumed), NONE, EFFECTS()) \
     /* PyValue_FromInt64 (pycore_value.h): _PyValue_FromIntScaled when the \
      * int fits inline, else _PyValue_BoxInt64, which gives NULL only when \
      * its allocation fails */ \
@@ -396,7 +413,7 @@
      * to PyValue_NULL; the release is XCLOSE's (releases, which can run \
      * a finalizer) */ \
     MACRO(PyValue_CLEAR, \
-        ARGS(scalar), SCALAR, EFFECTS(releases), EXITS()) \
+        ARGS(lvalue), SCALAR, EFFECTS(releases), EXITS()) \
     /* Reviewed G0c2 (pycore_value.h): _PyValue_PointerSteal of an object     \
      * that is not an exact int or float (asserted); the value owns the       \
      * argument's count. Never NULL (asserted), no callback.                  */ \
@@ -459,7 +476,7 @@
      * form it is the value itself; in the IR forms the detached owner's \
      * count moves, or a local's value gets a new count (PyValue_XDUP: a \
      * count only).  No callback, no failure; it is not a C function */ \
-    MACRO(TAKE, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS(), TAKES_VIEW()) \
+    MACRO(TAKE, ARGS(consumed), VALUE(moved(0) null_iff(0)), EFFECTS(), EXITS(), TAKES_VIEW()) \
     /* Evidence (G0d3): OWNER(x) is a generator replacer like TAKE \
      * (IREmitter.take_view): the owner of x's input, PyValue_NULL for a \
      * local, which only IR_RETIRE_PUBLISHED may read; for a value that is \
@@ -551,7 +568,8 @@
      * allocated by the slot (covered by runs_python).  Callbacks: the \
      * slot, and the release of an old result a slot discards */ \
     HELPER(_PyValue_Invert, PyValue, (PyValueBorrow), \
-        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python), \
+        HOMES(canonical), OBSERVER(none)) \
     /* Evidence (G0c batch 6): Objects/abstract.c _PyValue_IsInstance \
      * (PyObject_IsInstance): exact-type fast path, then the metaclass's \
      * __instancecheck__ or the class's __bases__ walk (Python code and \
@@ -570,7 +588,8 @@
      * is borrowed on every path.  A NULL argument is not admitted: the \
      * slow path dereferences it */ \
     HELPER(_PyValue_IsTrue, int, (PyValueBorrow), \
-        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed), SCALAR, EFFECTS(runs_python), \
+        HOMES(canonical), OBSERVER(none)) \
     /* Objects/longobject.c: the shift of a nonzero word by a count >= 0 \
      * through long_lshift_spans().  It gives PyValue_NULL with an exception \
      * set where the result would have too many digits (OverflowError) or \
@@ -585,7 +604,8 @@
         EFFECTS(allocates, raises)) \
     /* _PyValue_Negative: see _PyValue_Invert above */ \
     HELPER(_PyValue_Negative, PyValue, (PyValueBorrow), \
-        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python), \
+        HOMES(canonical), OBSERVER(none)) \
     /* Evidence (G0c batch 6): Include/internal/pycore_value.h: builds the \
      * view of an object pointer. No count change, no call, no failure, no \
      * callback. The object must outlive the view: its owner is the \
@@ -599,7 +619,8 @@
      * 'bad operand type for unary +' and NULL. Returns an owner, or NULL \
      * with an exception set. The argument is borrowed. `runs_python`. */ \
     HELPER(_PyValue_Positive, PyValue, (PyValueBorrow), \
-        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python), \
+        HOMES(canonical), OBSERVER(none)) \
     /* pycore_value.h: a debug check, erased with the GIL */ \
     INTRINSIC(_PyValue_RecheckHome, ARGS(scalar), NONE, BUILD(gil)) \
     /* Include/internal/pycore_value.h: in assert builds a loop of \
@@ -715,6 +736,13 @@
      * any code runs; pystate.c clears them at finalization only */ \
     PRIMITIVE(_PyValue_CommonConstant, PyValueBorrow, (PyValueBorrow), \
               ARGS(borrowed), VALUE(borrowed assumed(nonnull) by interpreter), EFFECTS()) \
+    /* G0d1: an item within the length of a published list or tuple. \
+     * Only a container under construction (PyList_New(n), PyTuple_New(n)) \
+     * holds NULL, and code reads only published ones: listobject.c and \
+     * tupleobject.c store an object into every slot before the container \
+     * escapes, and a list's length bounds its set items */ \
+    PRIMITIVE(_PyValue_PublishedItem, PyValueBorrow, (PyValueBorrow), \
+              ARGS(borrowed), VALUE(borrowed assumed(nonnull) by container), EFFECTS()) \
     /* Reviewed G0c2 (pycore_value.h): for a pointer-space word returns its   \
      * pointer, taking over its count if the value owns one, else a new       \
      * reference (Py_NewRef) to the immortal or borrowed object; a            \
@@ -783,6 +811,28 @@
     /* The address of a value slot at a byte offset: arithmetic only */ \
     PRIMITIVE(_PyObject_ValueSlot, PyValue *, (PyObject *, size_t), \
               ARGS(object, scalar), SCALAR, EFFECTS()) \
+    /* Evidence (G0d4), pycore_object.h, a static inline function: loads the \
+     * slot and stores the value into it (a read and a write, no call, no \
+     * failure, no callback).  The value moves into the slot, and the \
+     * previous contents come out as an owner: PyValue_NULL for a slot never \
+     * assigned, with no exception set (VALUE_OR_NULL, as _PyCell_SwapValue: \
+     * the caller closes it with PyValue_XCLOSE, which runs the finalizer \
+     * after any unlock). */ \
+    PRIMITIVE(_PyValueSlot_Exchange, PyValue, (PyValue *, PyValue), \
+              ARGS(scalar, consumed), VALUE_OR_NULL(owned), EFFECTS(reads, writes)) \
+    /* Evidence (G0d4), pycore_object.h: _PyValueSlot_Exchange for a slot that \
+     * holds a value.  The caller's guards show it: a shape names only filled \
+     * slots (_GUARD_SHAPE), a list item is never NULL once published (the \
+     * list's length bounds the index), and the hint's entry is tested for \
+     * NULL before the store.  The function asserts it. */ \
+    PRIMITIVE(_PyValueSlot_ExchangeFilled, PyValue, (PyValue *, PyValue), \
+              ARGS(scalar, consumed), VALUE(owned assumed(nonnull) by guards), \
+              EFFECTS(reads, writes)) \
+    /* Evidence (G0d4), pycore_object.h: a store of the value into a slot \
+     * that holds NULL (the shape guard shows the attribute is absent): it \
+     * moves in, nothing is displaced, no call, no failure, no callback. */ \
+    PRIMITIVE(_PyValueSlot_Fill, void, (PyValue *, PyValue), \
+              ARGS(scalar, consumed), NONE, EFFECTS(writes)) \
     /* The shape of an object's inline values (pycore_dict.h: a read of \
      * _PyObject_InlineValues(obj)->shape) \
      * Evidence: pycore_dict.h returns _PyObject_InlineValues(obj)->shape\
@@ -821,12 +871,12 @@
      * (NULL for a local), or _PyValue_XCLOSE_POINTER for a value known to \
      * be in pointer space (pycore_value.h) */ \
     PRIMITIVE(PyValue_XCLOSE, void, (PyValue), \
-              ARGS(consumed), NONE, EFFECTS(releases), \
+              ARGS(consumed), NONE, EFFECTS(releases), HOMES(canonical), OBSERVER(none), \
               VIEW_CLOSE(PyValue_XCLOSE), POINTER_FORM(_PyValue_XCLOSE_POINTER)) \
     /* Evidence (G0d3): as PyValue_XCLOSE: a view's owner is released by \
      * XCLOSE, which tests for the NULL of a local */ \
     PRIMITIVE(PyValue_CLOSE, void, (PyValue), \
-              ARGS(consumed nonnull), NONE, EFFECTS(releases), \
+              ARGS(consumed nonnull), NONE, EFFECTS(releases), HOMES(canonical), OBSERVER(none), \
               VIEW_CLOSE(PyValue_XCLOSE), POINTER_FORM(_PyValue_XCLOSE_POINTER)) \
     /* Identities: a borrowed view of a value; in a build with the GIL the \
      * relaxed atomic loads are plain loads */ \
@@ -997,6 +1047,11 @@
      * no effect (G0c9; the seed's `reads` was over-declared).                */ \
     MACRO(Py_IsNone, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* Evidence (G0d2): Include/pyerrors.h: PyType_FastSubclass(Py_TYPE(x), \
+     * Py_TPFLAGS_BASE_EXC_SUBCLASS), a load of the type's flags: no call \
+     * into other code, no write.  Every use in bytecodes.c is in an assert. */ \
+    MACRO(PyExceptionInstance_Check, \
+        ARGS(object), SCALAR, EFFECTS(reads), EXITS()) \
     /* Include/refcount.h: `_Py_NewRef(_PyObject_CAST(obj))`, an increment \
      * (a count change is no effect, 1.3) returning obj: the result is a \
      * new reference the caller owes.  No call (immortal check inline), no \
@@ -1034,13 +1089,13 @@
      * Callbacks: the old value's deallocator.  Root's correction; the only \
      * uop caller is _POP_EXCEPT (G0a5) */ \
     MACRO(Py_XSETREF, \
-        ARGS(scalar, consumed object), NONE, EFFECTS(releases), EXITS()) \
+        ARGS(lvalue, consumed object), NONE, EFFECTS(releases), EXITS()) \
     /* Include/refcount.h: Py_CLEAR(op) sets the lvalue op to NULL, then \
      * Py_DECREFs its old value if it was not NULL.  The old value's \
      * finalizer may run Python (releases).  No failure; callbacks: the old \
      * value's deallocator.  _POP_EXCEPT clears the handled exception */ \
     MACRO(Py_CLEAR, \
-        ARGS(scalar), NONE, EFFECTS(releases), EXITS()) \
+        ARGS(lvalue), NONE, EFFECTS(releases), EXITS()) \
     /* Evidence (G0c8): ceval_macros.h:255-257: in the GIL build the macro is empty (no \
      * statement); in the free-threaded build it reports the thread's quiescent state to \
      * the QSBR reclaimer, which this scoped GIL product never builds. */ \
@@ -1193,6 +1248,11 @@
      * PyValue_FromObjectSteal) */ \
     HELPER(_PyTemplate_Build, PyObject *, (PyObject *, PyObject *), \
         ARGS(object, object), VALUE_OR_NULL(owned), EFFECTS(allocates, raises)) \
+    /* G0d2.  Objects/funcobject.c: `return ((classmethod *)self)->cm_callable`, \
+     * a load of the wrapped callable, borrowed from the classmethod: no call, no \
+     * failure, no write.  Its caller was a name in analyzer.NON_ESCAPING_FUNCTIONS. */ \
+    HELPER(_PyClassMethod_GetFunc, PyObject *, (PyObject *), \
+        ARGS(object), SCALAR, EFFECTS(reads)) \
     /* Reviewed G0c5.  pycore_typeobject.h: type->_tp_iteritem != NULL && \
      * type->tp_iter != _PyType_SlotIter, two loads of the type and an \
      * address compare.  Callees: none.  It cannot fail and runs no \
@@ -1835,8 +1895,11 @@
      * an implicit operand of the call's uops, which a uop reads and writes \
      * only through its state(...) clause.  CALL_SELF_PRESENT is set where \
      * the call has a self operand; the generator initializes the local \
-     * from the word with IR_CALL_SELF_STATE (G0a4) */ \
-    STATE(call_state, int, BITS(CALL_SELF_PRESENT: self(present) | self(absent)), \
+     * from the word with IR_CALL_SELF_STATE (G0a4).  CALL_EXPANDED is set \
+     * where the callable operand is a bound method whose function and \
+     * receiver the push takes in its place (G3a) */ \
+    STATE(call_state, int, BITS(CALL_SELF_PRESENT: self(present) | self(absent), \
+                                CALL_EXPANDED: method(expanded) | method(whole)), \
           INIT(IR_CALL_SELF_STATE)) \
     /* Evidence (Python/ceval_macros.h, a static inline function since G0c \
      * batch 6; it was a macro).  One load of interp->eval_frame and a \
@@ -2014,13 +2077,14 @@
      * frame of the exactly-matching Python function \
      * (_PyFrame_PushUnchecked: a write of the data stack and tstate) and \
      * moves the operands into its first slots (call_fill_exact: a \
-     * temporary operand moves out of its home, a local is counted; a bound \
-     * method that the call expanded has its receiver counted and its \
-     * method operand released by call_release_callable, which is a \
+     * temporary operand moves out of its home, a local is counted; for a \
+     * bound method (CALL_EXPANDED) its function and receiver are counted \
+     * and its method operand released by call_release_callable, which is a \
      * release: the guard _CHECK_CALL_BOUND_METHOD_EXACT_ARGS makes the \
      * method have no weakrefs, but the row's contract is the function's). \
-     * callable is a view of the function for an expanded call, else the \
-     * home's value, which moves out; self is the receiver. No failure path \
+     * callable is the callable operand, the function or (CALL_EXPANDED) \
+     * the bound method; self is the self operand, NULL for a bound method; \
+     * a temporary of either moves out of its home. No failure path \
      * (the guards checked space and arity). Callbacks: none in the checked \
      * case; the release of the method operand is `releases`. */ \
     HELPER(call_push_exact, _PyInterpreterFrame *, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, PyValue, int), \
@@ -2064,7 +2128,7 @@
      * Failure: NULL with an exception set; success: a new reference to \
      * the awaitable. */ \
     HELPER(_PyEval_GetANext, PyObject *, (PyObject *), \
-        ARGS(object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(object), VALUE_OR_NULL(owned), EFFECTS(runs_python), HOMES(canonical)) \
     /* Python/ceval.c.  Borrows its operand.  Callees: PyErr_Format and \
      * _PyEval_FormatAwaitableError (reads the type, may run Python \
      * through _PyEval_SpecialMethodCanSuggest's lookups), \
@@ -2073,7 +2137,7 @@
      * number is no awaitable; a coroutine already being awaited); \
      * success: a new reference. */ \
     HELPER(_PyEval_GetAwaitable, PyObject *, (PyValueBorrow, int), \
-        ARGS(borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python), HOMES(unknown)) \
     /* Reviewed G0c5 (ceval.c).  Called with an error set.  Callees: \
      * _PyErr_ExceptionMatches (a read; PyErr_GivenExceptionMatches walks \
      * the exception's MRO, which a metaclass __subclasscheck__ cannot \
@@ -2109,7 +2173,8 @@
      * Py_TYPE(iter)->_tp_iteritem (the SLOT _Py_iteritemfunc: reads, \
      * allocates and raises, no Python) is called with the untagged index; \
      * an item advances *index_ptr (the only store: through the pointer, \
-     * to the caller's window cell, a tagged index) and gives {1, item}; at \
+     * to the caller's window cell, a tagged index; the value form returns \
+     * it in the result) and gives {1, item}; at \
      * the end {0, NULL} with no exception; on failure {-1, NULL} with an \
      * exception set and the cursor unchanged.  Any other cursor: the \
      * iternext value slot (the SLOT _Py_iternextvaluefunc: arbitrary \
@@ -2125,9 +2190,16 @@
      * which consumes it).  Borrowed `iter` is never released; the index \
      * pointer is not an ownership argument (the cursor is an inline \
      * word).  Callbacks: yes (runs_python covers the rest) */ \
-    HELPER(_PyForIter_VirtualIteratorNextInline, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *), \
-        ARGS(tstate, frame, borrowed, scalar), \
-        CASES(status==-1 value(null) raised, status==0 value(owned nullable), status==1 value(owned)), EFFECTS(runs_python)) \
+    /* G0d4: the cursor goes in by value (consumed: it owes no count) and \
+     * comes out in the result's `cursor`, a tagged index or NULL as it \
+     * went in, advanced to the item's index on {1, item}; the other \
+     * outcomes return it as it was.  The out-of-line form keeps the \
+     * pointer for the steps that are not FOR_ITER's own. */ \
+    HELPER(_PyForIter_VirtualIteratorNextInline, _PyForIterStep, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue), \
+        ARGS(tstate, frame, borrowed, consumed), \
+        CASES(status==-1 value(null) cursor(inline encoding(tagged_index|null)) raised, \
+              status==0 value(owned nullable) cursor(inline encoding(tagged_index|null)), \
+              status==1 value(owned) cursor(inline encoding(tagged_index|null))), EFFECTS(runs_python)) \
     /* Include/internal/pycore_genobject.h, a static inline function: \
      * `frame - offsetof(PyGenObject, gi_iframe)`, address arithmetic with \
      * no dereference (the owner assertion is Py_DEBUG only).  No call, \
@@ -2860,6 +2932,16 @@
      * Failure: NULL with an exception set (unhashable key, MemoryError, a \
      * key's __hash__/__eq__ may run Python) */ \
     MACRO(IR_BUILD_MAP, ARGS(consumed), VALUE_OR_NULL(owned), \
+          EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
+          EXITS()) \
+    /* Evidence (Python/ceval.c _Py_BuildSet_ValueSteal): PySet_New, then \
+     * each value taken from its home (_PyFrame_TakeHome) and stolen by \
+     * _PySet_AddValueTakeRef, or closed once an add has failed or the set \
+     * was not made: the values are consumed on every path.  Failure: NULL \
+     * with an exception set (MemoryError, unhashable, or an element's \
+     * __hash__/__eq__, which may run Python); the half-built set is \
+     * released */ \
+    MACRO(IR_BUILD_SET, ARGS(consumed), VALUE_OR_NULL(owned), \
           EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
           EXITS()) \
     /* _PyObject_LookupSpecialMethod: 1 found, 0 missing (the uop raises), \

@@ -73,6 +73,15 @@ _PyValue_CommonConstant(PyValueBorrow value)
 }
 #define _PyValue_CommonConstant(V0) (_PyValue_CommonConstant)(PyValue_Borrow(V0))
 
+/* An item within the length of a published list or tuple (_ITER_NEXT_LIST,
+   _ITER_NEXT_TUPLE): only a container under construction holds NULL. */
+static inline PyValueBorrow
+_PyValue_PublishedItem(PyValueBorrow value)
+{
+    return value;
+}
+#define _PyValue_PublishedItem(V0) (_PyValue_PublishedItem)(PyValue_Borrow(V0))
+
 /* The box argument (pyjit/design/proposals/value-api-g.md, section 1.1).
  * In stats builds every box primitive takes a _PyBoxAt: the site class
  * (BOX_SITE_*), the kind (BOX_KIND_*) and the owner, the code that the box
@@ -116,6 +125,15 @@ typedef struct {
 
 static_assert(PYGEN_ERROR == -1 && PYGEN_RETURN == 0 && PYGEN_NEXT == 1,
               "_PyStatusValue's statuses are PySendResult's");
+
+/* A for loop's step: a _PyStatusValue and the cursor that the loop goes on
+ * with (unchanged unless the step took an item of an index-protocol
+ * iterator).  Three words, returned through memory. */
+typedef struct {
+    int status;
+    PyValue value;
+    PyValue cursor;
+} _PyForIterStep;
 
 /* A handler's boxes of inline inputs, which it passes to C code that takes
  * objects; it releases them when it finishes. The generated bound counts its
@@ -428,6 +446,15 @@ PyValue_IncrementTaggedIndexNoOverflow(PyValue r)
     assert(PyValue_UntagIndex(r) < ((intptr_t)1 << 47) - 1);
     _PyValue_BITS(r)++;
     return r;
+}
+
+/* A for loop's cursor that the step does not use (the object protocol's NULL,
+   or a tagged index that a step replaces): it owes nothing */
+static inline void
+_PyValue_DropCursor(PyValue cursor)
+{
+    assert(PyValue_IsNull(cursor) || PyValue_IsTaggedIndex(cursor));
+    (void)cursor;
 }
 
 /* The box primitive. at (stats builds) names the site class, the kind and

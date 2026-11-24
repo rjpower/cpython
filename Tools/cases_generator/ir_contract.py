@@ -73,6 +73,10 @@ KILLS = frozenset(("writes", "releases", "runs_python", "polls", "switches_frame
 # never runs: a cache, RESERVED, the stack-only opcodes, operand words
 EXITS = ("next", "branch", "jump", "miss", "deopt", "raise", "enter", "return",
          "yield", "exit", "redirect", "abort")
+# The exits after which no compiled code of the word's frame state runs: the
+# error route and the evaluator's exit.  A redirect continues the frame at
+# another word, so its effects are kept.
+LEAVING_EXITS = frozenset(("raise", "exit"))
 
 # Feedback access (design 1.6, section 6): what a row or a uop reads and
 # writes of its site's feedback, transitively.  `entry` is every field of
@@ -89,8 +93,9 @@ INPUT_MODES = ("borrowed", "consumed", "taken", "closed")
 # uop on next and on raise (design 1.2)
 UNOWNED = ("", "borrowed", "closed")
 OUTPUT_MODES = ("owned", "inline", "borrowed", "moved")
+# `lvalue`: a macro argument that the macro assigns (PyValue_CLEAR(x) sets x)
 ARG_MODES = ("borrowed", "consumed", "taken", "scalar", "object", "tstate", "frame",
-             "out", "destructor")
+             "out", "lvalue", "destructor")
 
 # Facts: the vocabulary's words and the record's Fact kinds.  A fact with an
 # argument is written `kind(arg)`; `exact(T1|T2)` is a union of exact types,
@@ -107,7 +112,8 @@ FACT_KIND = {
     "type_slot": "TYPE_SLOT", "class_version": "CLASS_VERSION",
     "func_version": "FUNC_VERSION", "argcount": "ARGCOUNT", "vectorcall": "VECTORCALL",
     "convention": "CONVENTION", "ascii": "ASCII", "no_managed_dict": "NO_MANAGED_DICT",
-    "unique": "UNIQUE", "self": "SELF", "tagged_index": "TAGGED_INDEX",
+    "unique": "UNIQUE", "self": "SELF", "method": "METHOD",
+    "tagged_index": "TAGGED_INDEX",
     # Every representation word is one record kind, ENCODING, with the set
     # of kinds of word that it allows (VFact.record)
     **{word: "ENCODING" for word in ("nonnull", "null", "inline", "inline_int",
@@ -116,7 +122,7 @@ FACT_KIND = {
 VOCABULARY_OF_KIND = {v: k for k, v in FACT_KIND.items() if v != "ENCODING"}
 FACTS_WITH_ARGUMENT = frozenset(("exact", "type_version", "shape", "keys_version", "length",
                                  "in_bounds", "is", "subtype", "not_subtype", "not_exact",
-                                 "type_flag", "type_slot", "self", "encoding"))
+                                 "type_flag", "type_slot", "self", "method", "encoding"))
 # The call-shape kinds take a value where the guard names one
 FACTS_WITH_OPTIONAL_ARGUMENT = frozenset(("class_version", "func_version", "argcount",
                                           "vectorcall", "convention"))
@@ -132,9 +138,11 @@ HEAP_FACTS = frozenset(("type_version", "has_values", "shape", "keys_version", "
 SITE_FACTS = frozenset(("unique",))
 # Facts of a handler's state (a STATE row's item, call_state): they live
 # for the handler's run, and only a declared write of the item kills them;
-# heap kills and reentry do not (item 2 of G0a4, V8's implicit operands)
-STATE_FACTS = frozenset(("self",))
-STATE_ARGS = {"self": ("present", "absent")}
+# heap kills and reentry do not (item 2 of G0a4, V8's implicit operands).
+# method(expanded): the callable operand is a bound method whose function
+# and receiver the push takes in its place (CALL_EXPANDED)
+STATE_FACTS = frozenset(("self", "method"))
+STATE_ARGS = {"self": ("present", "absent"), "method": ("expanded", "whole")}
 # The representation table (design 1.1; the table of words in
 # pycore_value.h): each encoding of a value that is not NULL and not an
 # object, the TEST row that decides it, and the exact type of its values.
@@ -559,6 +567,15 @@ class Row:
     # continues, and that path's successor is published at the body's end
     # as next is
     successor: frozenset[str] = frozenset()
+    # HOMES(canonical | unknown): what code that a reentrant row runs does to
+    # the frame's homes.  Without it a reentrant row can vacate scratch homes
+    # (a debugger's redirect) and leaves canonical values or NULL elsewhere;
+    # `canonical` says it leaves initialized homes canonical-or-NULL, as a
+    # finalizer or a dunder method does, `unknown` that nothing is promised
+    homes: str = ""
+    # OBSERVER(none): the code that a reentrant row runs opens no observer
+    # (instrumentation) context of the current frame
+    observer: str = ""
     # CONSTANT: how the constant is held, VALUE (a PyValue, ret PyValue) or
     # OBJECT (a static object named by its address, ret its C type)
     representation: str = ""
@@ -689,9 +706,11 @@ def _parse_result(text: str) -> Result:
             if moved and shape == "VALUE":
                 # Argument k itself: its value, its identity and its
                 # obligation (a move, as an output's moved(x))
-                if len(words) > 1:
+                # null_iff(k) says it is NULL exactly where argument k is
+                k = int(moved.group(1))
+                if words[1:] not in ([], [f"null_iff({k})"]):
                     raise ValueError(f"VALUE(moved(k)) is argument k as it is: {text}")
-                return Result(shape, "moved", moved=int(moved.group(1)))
+                return Result(shape, "moved", moved=k, null_iff=k if words[1:] else -1)
             if not words or words[0] not in ("owned", "inline", "borrowed"):
                 raise ValueError(f"{shape} needs a mode: {text}")
             rest, assumed = _assumptions(words[1:], None)
@@ -766,10 +785,10 @@ def feedback_covered(access: tuple[str, str], declared) -> bool:
 # The optional columns after a row's fixed ones, by row kind
 OPTIONAL_COLUMNS = {
     "PRIMITIVE": ("FEEDBACK", "CONJOINS", "NONNULL_FORM", "SLOW", "TAKES_VIEW", "VIEW_CLOSE",
-                  "POINTER_FORM", "IDENTITY"),
-    "HELPER": ("FEEDBACK", "SLOW", "TAKES_VIEW"),
+                  "POINTER_FORM", "HOMES", "OBSERVER", "IDENTITY"),
+    "HELPER": ("FEEDBACK", "SLOW", "TAKES_VIEW", "HOMES", "OBSERVER"),
     "ROUTINE": ("FEEDBACK",),
-    "MACRO": ("FEEDBACK", "TAKES_VIEW"),
+    "MACRO": ("FEEDBACK", "TAKES_VIEW", "HOMES", "OBSERVER"),
     "SLOT": ("FEEDBACK",),
 }
 
@@ -803,6 +822,8 @@ def _row_options(fields: list[str], fixed: int, kind: str) -> dict:
             "takes_view": found.get("TAKES_VIEW", False),
             "view_close": found.get("VIEW_CLOSE", ""),
             "pointer_form": found.get("POINTER_FORM", ""),
+            "homes": found.get("HOMES", ""),
+            "observer": found.get("OBSERVER", ""),
             "identity": found.get("IDENTITY", False)}
 
 
@@ -944,6 +965,11 @@ def parse_rows(text: str, source: str = "pycore_ir_components.h") -> dict[str, R
             if k >= 0 and (k >= len(row.args)
                            or row.args[k].mode not in ("borrowed", "consumed", "taken")):
                 raise ValueError(f"null_iff({k}): argument {k} is no value argument")
+            if row.homes not in ("", "canonical", "unknown") or row.observer not in ("", "none"):
+                raise ValueError("HOMES(canonical | unknown), OBSERVER(none)")
+            if (row.homes or row.observer) and not row.effects & REENTRY:
+                raise ValueError("HOMES and OBSERVER describe the code a reentrant row runs: "
+                                 "the row declares no reentry effect")
             if row.result.shape == "HOME" and row.effects & {"reads", "writes"}:
                 raise ValueError("a HOME row addresses a frame home, which is not the heap: "
                                  "it declares no reads or writes")
@@ -1182,6 +1208,9 @@ class Item:
     # The facts its value has at the handler's entry from a producer (F7);
     # not requirements, and not in facts
     assumed: tuple[Assumption, ...] = ()
+    # An exchange (SWAP): the pass-through input whose value this
+    # pass-through output takes (check_exchange(), verify_exchange())
+    exchange: str = ""
 
     @property
     def nullable(self) -> bool:
@@ -1212,6 +1241,14 @@ class Contract:
         "the effects that may occur on a path to next, which kill its facts"
         return self.effects - {e for e, _ in self.confined}
 
+    def continuing_effects(self) -> frozenset[str]:
+        """the effects that may occur on a path after which compiled code
+        goes on: every effect except one confined to exits that leave the
+        word's frame state (raise, exit).  An effect confined to branch
+        stays: the branch's target runs after it, and the baseline JIT tests
+        RETIRED after a word that may run Python"""
+        return self.effects - {e for e, on in self.confined if on <= LEAVING_EXITS}
+
     def state_item(self, name: str) -> tuple[str, frozenset, frozenset] | None:
         return next((i for i in self.state if i[0] == name), None)
 
@@ -1222,7 +1259,7 @@ class Contract:
         return next((o for o in self.outputs if o.name == name), None)
 
     def record_effects(self) -> frozenset[str]:
-        return frozenset().union(*(RECORD_EFFECT[e] for e in self.effects))
+        return frozenset().union(*(RECORD_EFFECT[e] for e in self.continuing_effects()))
 
 
 # moved(home): an output that takes the value and the obligation of the
@@ -1262,6 +1299,13 @@ def _item(stack_item, modes: tuple[str, ...], where: Token) -> Item:
             facts.append(parse_fact(w, where))
     if not mode and not through and name != "unused":
         raise analysis_error(f"`{name}` declares no mode ({', '.join(modes)})", where)
+    if mode == "moved" and through and "moved" in modes and source != HOME_SOURCE:
+        # An exchange: the output keeps its home and takes the value of
+        # another pass-through input (check_exchange())
+        if facts or nullable:
+            raise analysis_error(f"`{name}` is exchanged, which takes no facts", where)
+        return Item(name, "", "", frozenset(), ORDINARY_WORDS - {"null"},
+                    stack_item.is_array(), stack_item.size, assumed, exchange=source)
     if mode and through:
         raise analysis_error(f"`{name}` passes through, so it takes no mode", where)
     # `nullable` spells the item without its default, nonnull
@@ -1385,6 +1429,74 @@ def _parse_effects(name: str, words: list[str], where: Token
     return frozenset(effects), tuple(sorted(confined, key=lambda c: c[0]))
 
 
+def _homes(items, stack_items) -> dict[str, tuple[str, ...]]:
+    "each item's home: the sizes of the stack items below it"
+    return {item.name: tuple(s.size or "1" for s in stack_items[:k])
+            for k, item in enumerate(items)}
+
+
+def check_exchange(uop: Uop, inputs: tuple[Item, ...], outputs: tuple[Item, ...],
+                   where: Token) -> None:
+    """An exchange (SWAP): pass-through outputs that take `moved(x)` of
+    pass-through inputs.  Each item in it keeps its home, and the outputs
+    are a permutation of the inputs, with no fixed point; no other output
+    moves from an exchanged input"""
+    exchanged = [o for o in outputs if o.exchange]
+    if not exchanged:
+        return
+    through = {i.name for i in inputs if not i.mode and i.name != "unused"}
+    for o in outputs:
+        if o.mode == "moved" and o.source in {e.exchange for e in exchanged}:
+            raise analysis_error(f"{uop.name}: `{o.name}` is no pass-through, and moves "
+                                 f"from `{o.source}`, which is exchanged", where)
+    for o in exchanged:
+        if o.exchange not in through:
+            raise analysis_error(f"{uop.name}: `{o.name}` takes `{o.exchange}`, which is "
+                                 "no pass-through input", where)
+        if o.exchange == o.name:
+            raise analysis_error(f"{uop.name}: `{o.name}` is exchanged with itself", where)
+    names, sources = {o.name for o in exchanged}, [o.exchange for o in exchanged]
+    if set(sources) != names or len(set(sources)) != len(sources):
+        raise analysis_error(f"{uop.name}: the exchange of {', '.join(sorted(names))} "
+                             f"takes {', '.join(sorted(sources))}: no permutation", where)
+    homes_in = _homes(inputs, uop.stack.inputs)
+    homes_out = _homes(outputs, uop.stack.outputs)
+    for name in sorted(names):
+        if homes_in[name] != homes_out[name]:
+            raise analysis_error(f"{uop.name}: `{name}` is exchanged, and its home "
+                                 "changes", where)
+
+
+def verify_exchange(uop: Uop, contract: Contract) -> None:
+    """The body of an exchange does exactly its permutation: copies between
+    the exchanged names and PyValue temporaries, nothing else, and no call;
+    at its end each exchanged output holds the input it declares"""
+    exchanged = {o.name: o.exchange for o in contract.outputs if o.exchange}
+    if contract.effects or contract.exits != {"next"}:
+        raise analysis_error(f"{uop.name}: an exchange has effects() exits(next)",
+                             uop.body.open)
+    values = {name: name for name in exchanged}
+    for stmt in uop.body.body:
+        text = [t.text for t in stmt.tokens() if t.kind != "COMMENT"]
+        if text[:1] == ["PyValue"]:
+            text = text[1:]
+            if len(text) == 4 and text[0] not in values:
+                values[text[0]] = None
+        if (len(text) != 4 or text[1] != "=" or text[3] != ";"
+                or text[0] not in values or text[2] not in values
+                or values[text[2]] is None):
+            raise analysis_error(f"{uop.name}: an exchange's body only copies between "
+                                 f"{', '.join(sorted(exchanged))} and temporaries: "
+                                 f"`{' '.join(t.text for t in stmt.tokens())}`",
+                                 next(iter(stmt.tokens()), uop.body.open))
+        values[text[0]] = values[text[2]]
+    for name, source in sorted(exchanged.items()):
+        if values[name] != source:
+            raise analysis_error(f"{uop.name}: the body leaves `{name}` with "
+                                 f"`{values[name]}`, and it declares moved({source})",
+                                 uop.body.close)
+
+
 def contract_of(uop: Uop) -> Contract | None:
     "uop's declared contract, or None if it declares none"
     if id(uop) in _CONTRACTS:
@@ -1417,6 +1529,7 @@ def contract_of(uop: Uop) -> Contract | None:
                 raise analysis_error(f"{uop.name}: the output `{o.name}` is assumed; an "
                                      "assumption is of a value that reaches the handler "
                                      "(F7), and an output's facts are shown", where)
+        check_exchange(uop, inputs, outputs, where)
         feedback = parse_feedback(uop.clauses.get("feedback", ()), where)
         state = parse_state(uop, uop.clauses.get("state"), where)
         paths = parse_paths(uop, uop.clauses.get("paths"), where)
@@ -2801,23 +2914,34 @@ class OwnershipWalk:
         return self.simple(fold_fields(stmt.contents, self.structs), state)
 
     def write_state(self, toks: list[Token], texts: list[str], state: _State) -> None:
-        """A declared write of a STATE item kills its facts; `|= BIT | ...`
-        then states each bit set, `&= ~BIT` it clear"""
+        """A declared write of a STATE item: `|= BIT | ...` states each bit
+        set, `&= ~BIT` it clear, and kills the facts of the bits it writes;
+        any other assignment kills all its facts.  A term that is no bit of
+        the item's row is refused: an undeclared bit states nothing"""
         name, op = texts[0], texts[1]
         row = self.table[name]
         rhs = _strip(texts[2:-1] if texts[-1] == ";" else texts[2:])
-        facts: set[VFact] = set()
         bits = {b[0]: b for b in row.bits}
+
+        def bit(term: list[str]) -> tuple[str, frozenset, frozenset]:
+            if len(term) != 1 or term[0] not in bits:
+                self.fail(toks[0], f"`{name} {op} {' '.join(rhs)}` writes "
+                          f"`{' '.join(term)}`, which is no bit of `{name}` "
+                          f"({', '.join(bits)})")
+            return bits[term[0]]
+
         if op == "|=":
-            for term in _split(rhs, "|"):
-                term = _strip(term)
-                if len(term) == 1 and term[0] in bits:
-                    facts |= bits[term[0]][1]
-        elif op == "&=" and len(rhs) == 2 and rhs[0] == "~" and rhs[1] in bits:
-            facts |= bits[rhs[1]][2]
+            written = [bit(_strip(term)) for term in _split(rhs, "|")]
+            facts = frozenset().union(*(b[1] for b in written))
+        elif op == "&=" and len(rhs) == 2 and rhs[0] == "~":
+            written = [bit(rhs[1:])]
+            facts = written[0][2]
+        else:
+            written, facts = list(row.bits), frozenset()
+        kinds = {f.kind for b in written for f in b[1] | b[2]}
         state.facts[name] = frozenset(
             f for f in state.facts.get(name, frozenset())
-            if f.kind not in STATE_FACTS) | facts
+            if f.kind not in kinds) | facts
 
     def owes_nothing(self, facts: frozenset) -> bool:
         "whether a value with facts is inline or a CONSTANT row's (V8's roots)"
@@ -4184,6 +4308,9 @@ def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None 
     table = with_slots(uop, rows() if table is None else table)
     contract = contract_of(uop)
     if contract is None or (id(uop), implicit_guards) in _VERIFIED:
+        return
+    if any(o.exchange for o in contract.outputs):
+        verify_exchange(uop, contract)
         return
     check_slots(uop, table)
     check_state_reads(uop, contract, table)

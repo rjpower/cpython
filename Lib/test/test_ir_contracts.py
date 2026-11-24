@@ -17,6 +17,7 @@ import tempfile
 import textwrap
 import unittest
 import weakref
+from unittest import mock
 
 from test import support
 from test.support import import_helper
@@ -142,7 +143,6 @@ class SliceTests(unittest.TestCase):
 
     # The reviewed corrections of G0c, each listed with its evidence in the
     # batch's differences.md and in the commit that made it.  Batch 8:
-    # MATERIALIZE_KWARGS is PyDict_New and one store, which run no Python;
     # INSTRUMENTED_JUMP takes PROCESS_ERROR_AT when the event fails, so
     # _MONITOR_END_ASYNC_FOR may raise.  G0d1: it leaves by the redirect exit
     # when a callback redirects the frame, which the record cannot say
@@ -152,25 +152,8 @@ class SliceTests(unittest.TestCase):
         'CACHE/_CACHE: declares exits(abort), the record has ',
         'IR_OPERANDS/_IR_OPERANDS: declares exits(abort), the record has ',
         'RESERVED/_RESERVED: declares exits(abort), the record has ',
-        # G0d1: _PUSH_EXC_INFO moves the handled exception out with
-        # _PyErr_StackItemTakeValue, whose row reads and writes; the
-        # inference has no entry for it and assumes any call
-        'PUSH_EXC_INFO.record.format.runs_code: inferred true, declared false',
-        'PUSH_EXC_INFO.record.uops[0].effects: inferred 6 entries '
-        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
-        '"READS_HEAP", "WRITES_HEAP"], declared 2 ["READS_HEAP", "WRITES_HEAP"]',
-        'MATERIALIZE_KWARGS.record.format.runs_code: inferred true, declared false',
-        'MATERIALIZE_KWARGS.record.uops[0].effects: inferred 6 entries '
-        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
-        '"READS_HEAP", "WRITES_HEAP"], declared 3 ["ALLOCATES", "MAY_RAISE", '
-        '"WRITES_HEAP"]',
         'INSTRUMENTED_END_ASYNC_FOR/_MONITOR_END_ASYNC_FOR: declares exits(next, '
         'raise, redirect), the record has next',
-        # Batch 3: _PyTemplate_Build is a GC allocation and runs no Python
-        'BUILD_TEMPLATE.record.uops[0].effects: inferred 6 entries '
-        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
-        '"READS_HEAP", "WRITES_HEAP"], declared 3 ["ALLOCATES", "MAY_RAISE", '
-        '"MAY_RELEASE"]',
         # Batch 7: no word executes RETURN_GENERATOR, so its result is NULL
         # (F19); _GUARD_TOS_IS_NONE tests the identity of the word with
         # PyValue_None (F20)
@@ -197,12 +180,6 @@ class SliceTests(unittest.TestCase):
               'inferred "", declared "PyValue_None"',
               f'{handler}.record.uops[0].guards[0].facts[0].kind: '
               'inferred "IS_NONE", declared "IDENTITY"')),
-        # G0c9: BUILD_LIST is IR_BUILD_LIST (_PyList_FromValueStealOnSuccess),
-        # an allocation that runs no Python, as BUILD_TUPLE's twin row says
-        'BUILD_LIST.record.format.runs_code: inferred true, declared false',
-        'BUILD_LIST.record.uops[0].effects: inferred 6 entries '
-        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
-        '"READS_HEAP", "WRITES_HEAP"], declared 2 ["ALLOCATES", "MAY_RAISE"]',
         # G0c9: _GET_ITER's second result is a tagged index or NULL
         # (_PyEval_GetIter's row, G0a5's representation table)
         'GET_ITER.record.uops[1].results: inferred 0 entries [], declared 1 '
@@ -219,6 +196,15 @@ class SliceTests(unittest.TestCase):
         'the record has raise, return, yield',
         'CLEANUP_THROW_XFER_RETURN/_CLEANUP_THROW: declares exits(branch, raise), '
         'the record has raise, return',
+        # G3a: SWAP's exchange keeps every home (pass-throughs); the walk
+        # reads the copies as a consume of each input, and each output as
+        # the other input's value, whose count moves to it (ALIAS, from
+        # the declared moved(x) since G0d1).  A record from the
+        # declaration reads Item.exchange.
+        'SWAP/_SWAP: input `bottom` is declared a pass-through, the record has CONSUMED',
+        'SWAP/_SWAP: input `top` is declared a pass-through, the record has CONSUMED',
+        'SWAP/_SWAP: output `bottom` is declared a pass-through, the record has ALIAS',
+        'SWAP/_SWAP: output `top` is declared a pass-through, the record has ALIAS',
         # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
         # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
         'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '
@@ -239,13 +225,18 @@ class SliceTests(unittest.TestCase):
         '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
         'LOAD_GLOBAL_BUILTIN.record.uops[1].guards[0].facts[0].subject: '
         'inferred "builtins", declared "dict"',
-        # Batch 6: _INIT_CALL_PY_EXACT_ARGS pushes a frame, which writes the heap and
-        # releases the callable; SET_FUNCTION_ATTRIBUTE runs no code; the call
-        # uops complete in place (exits next, G0d removes the inference)
-        'CALL_BOUND_METHOD_EXACT_ARGS.record.uops[7].effects: inferred 1 entries ["ALLOCATES"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
-        'CALL_PY_EXACT_ARGS.record.uops[5].effects: inferred 1 entries ["ALLOCATES"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
-        'SET_FUNCTION_ATTRIBUTE.record.format.runs_code: inferred true, declared false',
-        'SET_FUNCTION_ATTRIBUTE.record.uops[0].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 2 ["READS_HEAP", "WRITES_HEAP"]',
+        # G0d2 (analyzer and effect_sites read the rows): MATERIALIZE_KWARGS,
+        # BUILD_TEMPLATE and BUILD_LIST no longer differ.
+        # A call escapes where its row declares a reentry effect, and the
+        # inference reads an escape as every effect at once: the frame pushes
+        # release the callable (call_push_exact), while the declaration says
+        # which effects they have; the inference of the builders reads the
+        # rows of their calls, which state fewer effects than the uop declares
+        'BUILD_INTERPOLATION.record.uops[0].effects: inferred 3 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE"], declared 6 ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
+        'BUILD_SLICE.record.uops[0].effects: inferred 3 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE"], declared 6 ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
+        'SET_FUNCTION_ATTRIBUTE.record.uops[0].effects: inferred 1 entries ["WRITES_HEAP"], declared 2 ["READS_HEAP", "WRITES_HEAP"]',
+        'CALL_BOUND_METHOD_EXACT_ARGS.record.uops[7].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
+        'CALL_PY_EXACT_ARGS.record.uops[5].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
         'CALL/_DO_CALL: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_BOUND_METHOD_GENERAL/_PY_FRAME_GENERAL: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_EX_NON_PY_GENERAL/_CALL_FUNCTION_EX_NON_PY_GENERAL: declares exits(enter, next, raise), the record has enter, raise',
@@ -256,6 +247,88 @@ class SliceTests(unittest.TestCase):
         'CALL_KW_NON_PY/_CALL_KW_NON_PY: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_KW_PY/_PY_FRAME_KW_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_PY_GENERAL/_PY_FRAME_GENERAL_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
+        # G0d4: the iterator family's cursor has distinct names (`index` in,
+        # `next_index` out, as the F16 rule asks).  The inference reads the
+        # handlers with their declarations removed, where nothing says that
+        # the output replaces the input in the same stack position (ir_records'
+        # replaced_input reads that from the declared modes), so it takes the
+        # FOR_ITER group for a plain push and a discarded window.  The declared
+        # records keep the group's format and mark the replaced cursor changed
+        # (its entry holds a new value); the leaf records of the uops differ
+        # only in the cursor's encoding fact, which GET_ITER and the cursor
+        # helper establish.
+        'FOR_ITER.record.format.discards: inferred false, declared true',
+        'FOR_ITER.record.format.dst_offset: inferred 1, declared 2',
+        'FOR_ITER.record.format.store_dst: inferred false, declared true',
+        'FOR_ITER.record.layout.move_dst: inferred null, declared 2',
+        'FOR_ITER.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
+        'FOR_ITER.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'FOR_ITER.record.outputs[1][1]: inferred -1, declared 1',
+        'FOR_ITER.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
+        'FOR_ITER.record.outputs[1][2].peek: inferred false, declared true',
+        'FOR_ITER.record.store_mode: inferred null, declared "store"',
+        'FOR_ITER.record.uops[1].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", "subject": "v2"}]',
+        'FOR_ITER_DICT_ITEMS.record.format.discards: inferred false, declared true',
+        'FOR_ITER_DICT_ITEMS.record.format.dst_offset: inferred 1, declared 2',
+        'FOR_ITER_DICT_ITEMS.record.format.store_dst: inferred false, declared true',
+        'FOR_ITER_DICT_ITEMS.record.layout.move_dst: inferred null, declared 2',
+        'FOR_ITER_DICT_ITEMS.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
+        'FOR_ITER_DICT_ITEMS.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'FOR_ITER_DICT_ITEMS.record.store_mode: inferred null, declared "store"',
+        'FOR_ITER_GEN.record.format.discards: inferred false, declared true',
+        'FOR_ITER_GEN.record.format.dst_offset: inferred 1, declared 2',
+        'FOR_ITER_GEN.record.format.store_dst: inferred false, declared true',
+        'FOR_ITER_GEN.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'FOR_ITER_GEN.record.results: inferred 0 entries [], declared 1 [[-1, {"__type": "Operand", "detail": "callee return", "field": "A", "kind": "SLOT", "may_name": [], "position": null}]]',
+        'FOR_ITER_GEN.record.store_mode: inferred null, declared "return"',
+        'FOR_ITER_LIST.record.format.discards: inferred false, declared true',
+        'FOR_ITER_LIST.record.format.dst_offset: inferred 1, declared 2',
+        'FOR_ITER_LIST.record.format.store_dst: inferred false, declared true',
+        'FOR_ITER_LIST.record.layout.move_dst: inferred null, declared 2',
+        'FOR_ITER_LIST.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
+        'FOR_ITER_LIST.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'FOR_ITER_LIST.record.outputs[1][1]: inferred -1, declared 1',
+        'FOR_ITER_LIST.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
+        'FOR_ITER_LIST.record.outputs[1][2].peek: inferred false, declared true',
+        'FOR_ITER_LIST.record.store_mode: inferred null, declared "store"',
+        'FOR_ITER_RANGE.record.format.discards: inferred false, declared true',
+        'FOR_ITER_RANGE.record.format.dst_offset: inferred 1, declared 2',
+        'FOR_ITER_RANGE.record.format.store_dst: inferred false, declared true',
+        'FOR_ITER_RANGE.record.layout.move_dst: inferred null, declared 2',
+        'FOR_ITER_RANGE.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
+        'FOR_ITER_RANGE.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'FOR_ITER_RANGE.record.store_mode: inferred null, declared "store"',
+        'FOR_ITER_TUPLE.record.format.discards: inferred false, declared true',
+        'FOR_ITER_TUPLE.record.format.dst_offset: inferred 1, declared 2',
+        'FOR_ITER_TUPLE.record.format.store_dst: inferred false, declared true',
+        'FOR_ITER_TUPLE.record.layout.move_dst: inferred null, declared 2',
+        'FOR_ITER_TUPLE.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
+        'FOR_ITER_TUPLE.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'FOR_ITER_TUPLE.record.outputs[1][1]: inferred -1, declared 1',
+        'FOR_ITER_TUPLE.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
+        'FOR_ITER_TUPLE.record.outputs[1][2].peek: inferred false, declared true',
+        'FOR_ITER_TUPLE.record.store_mode: inferred null, declared "store"',
+        'FOR_ITER_VIRTUAL.record.format.discards: inferred false, declared true',
+        'FOR_ITER_VIRTUAL.record.format.dst_offset: inferred 1, declared 2',
+        'FOR_ITER_VIRTUAL.record.format.store_dst: inferred false, declared true',
+        'FOR_ITER_VIRTUAL.record.layout.move_dst: inferred null, declared 2',
+        'FOR_ITER_VIRTUAL.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
+        'FOR_ITER_VIRTUAL.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'FOR_ITER_VIRTUAL.record.outputs[1][1]: inferred -1, declared 1',
+        'FOR_ITER_VIRTUAL.record.outputs[1][2].name: inferred "next_index", declared "index"',
+        'FOR_ITER_VIRTUAL.record.store_mode: inferred null, declared "store"',
+        'FOR_ITER_VIRTUAL.record.uops[0].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", "subject": "v2"}]',
+        'FOR_ITER.record.uops[1].inputs[1].changed: inferred false, declared true',
+        'FOR_ITER_LIST.record.uops[2].inputs[1].changed: inferred false, declared true',
+        'FOR_ITER_TUPLE.record.uops[2].inputs[1].changed: inferred false, declared true',
+        'FOR_ITER_VIRTUAL.record.uops[0].inputs[1].changed: inferred false, declared true',
+        'INSTRUMENTED_FOR_ITER.record.format.discards: inferred false, declared true',
+        'INSTRUMENTED_FOR_ITER.record.format.dst_offset: inferred 1, declared 2',
+        'INSTRUMENTED_FOR_ITER.record.format.store_dst: inferred false, declared true',
+        'INSTRUMENTED_FOR_ITER.record.layout.move_dst: inferred null, declared 2',
+        'INSTRUMENTED_FOR_ITER.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
+        'INSTRUMENTED_FOR_ITER.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'INSTRUMENTED_FOR_ITER.record.store_mode: inferred null, declared "store"',
     ]
 
     # Batch 5 and G0c9: the assume op of `iter: assumed(object) by GET_ITER`
@@ -266,19 +339,21 @@ class SliceTests(unittest.TestCase):
         ("FOR_ITER_RANGE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
         # G0d1: a yield is declared (`exits(yield)`); with the declarations
         # removed the inference no longer reads the generator's state, and
-        # a frame switch that no site names is an entry
+        # a frame switch that no site names is an entry.  The boundary
+        # variants' lines fall under LISTED_BOUNDARY_FAMILIES (G0d2)
         ("YIELD_VALUE.record.uops[1].transfers[0].kind:", '"ENTER_FRAME", declared "YIELD"'),
         ("INSTRUMENTED_YIELD_VALUE.record.uops[2].transfers[0].kind:",
          '"ENTER_FRAME", declared "YIELD"'),
-        ("INSTRUMENTED_YIELD_VALUE_XFER_SEND.record.uops[2].transfers[0].kind:",
-         '"ENTER_FRAME", declared "YIELD"'),
-        ("INSTRUMENTED_YIELD_VALUE_XFER_STORE_LOCAL.record.uops[2].transfers[0].kind:",
-         '"ENTER_FRAME", declared "YIELD"'),
-        ("YIELD_VALUE_XFER_SEND.record.uops[1].transfers[0].kind:",
-         '"ENTER_FRAME", declared "YIELD"'),
-        ("YIELD_VALUE_XFER_STORE_LOCAL.record.uops[1].transfers[0].kind:",
-         '"ENTER_FRAME", declared "YIELD"'),
     ]
+
+    # G0d2: the generator boundary is checked against the declarations of
+    # the SEND family's uops (send_source_contract), so the inference, which
+    # reads undeclared bodies, finds no boundary in the handlers that cross
+    # one: their records differ as a family, not one by one
+    LISTED_BOUNDARY_FAMILIES = re.compile(
+        r"(CLEANUP_THROW|INSTRUMENTED_YIELD_DELEGATED|INSTRUMENTED_YIELD_VALUE|"
+        r"SEND|SEND_ASYNC_GEN|SEND_GEN|SEND_VIRTUAL|YIELD_DELEGATED|YIELD_VALUE)"
+        r"_XFER_\w+\.record\.")
 
     def test_declarations_equal_the_inference(self):
         with cases.handle_stderr():
@@ -286,7 +361,9 @@ class SliceTests(unittest.TestCase):
         # Every reported line is a reviewed difference: an exact line
         # (LISTED_DIFFERENCES) or a long leaf-IR line named by its prefix and
         # a substring it must contain (LISTED_LEAF_DIFFERENCES)
-        reported = lines[:-1]
+        reported = [line for line in lines[:-1]
+                    if line in self.LISTED_DIFFERENCES
+                    or not self.LISTED_BOUNDARY_FAMILIES.match(line)]
         exact = [line for line in reported if line in self.LISTED_DIFFERENCES]
         self.assertCountEqual(exact, self.LISTED_DIFFERENCES)
         leaf = [line for line in reported if line not in self.LISTED_DIFFERENCES]
@@ -365,6 +442,10 @@ class VerifierTests(unittest.TestCase):
         os.close(fd)
         self.addCleanup(os.remove, self.filename)
         self.table = ir_contract.rows() | ir_contract.parse_rows(EXTRA_ROWS)
+        # The analyzer decides which calls escape from the rows too
+        patch = mock.patch.object(ir_contract, "rows", return_value=self.table)
+        patch.start()
+        self.addCleanup(patch.stop)
 
     def verify(self, source, temporaries=False):
         with open(self.filename, "w") as f:
@@ -405,6 +486,92 @@ class VerifierTests(unittest.TestCase):
                 DECREF_INPUTS();
             }
         """, r"OP: `flies` is not an effect")
+
+
+    # The exchange (SWAP): pass-through outputs that take each other's inputs
+
+    EXCHANGE = """
+        inst(OP, (bottom, unused[oparg-2], top --
+                  bottom: moved(top), unused[oparg-2], top: moved(bottom)))
+            effects() exits(next)
+        {
+            %s
+        }
+    """
+
+    def test_exchange_accepts_swap(self):
+        result = self.verify(self.EXCHANGE % "PyValue temp = bottom; bottom = top; top = temp;")
+        contract = ir_contract.contract_of(result.uops["OP"])
+        self.assertEqual({o.name: o.exchange for o in contract.outputs if o.exchange},
+                         {"bottom": "top", "top": "bottom"})
+        self.assertEqual({i.mode for i in contract.inputs}, {""})
+
+    def test_exchange_body_exchanges(self):
+        self.refuses(self.EXCHANGE % "PyValue temp = bottom; top = temp;",
+                     r"OP: the body leaves `bottom` with `bottom`, and it declares moved\(top\)")
+        self.refuses(self.EXCHANGE % "PyValue temp = bottom; bottom = top; top = temp; "
+                                     "PyValue_CLOSE(temp);",
+                     r"OP: an exchange's body only copies between bottom, top and temporaries")
+        self.refuses(self.EXCHANGE % "PyValue temp = bottom; bottom = PyValue_None; top = temp;",
+                     r"OP: an exchange's body only copies")
+        self.refuses("""
+            inst(OP, (bottom, unused[oparg-2], top --
+                      bottom: moved(top), unused[oparg-2], top: moved(bottom)))
+                effects(releases) exits(next)
+            {
+                PyValue temp = bottom; bottom = top; top = temp;
+            }
+        """, r"OP: an exchange has effects\(\) exits\(next\)")
+
+    def test_exchange_is_of_pass_throughs(self):
+        self.refuses("""
+            inst(OP, (bottom, top -- bottom: moved(top), top: moved(bottom), copy: moved(top)))
+                effects() exits(next)
+            {
+                PyValue temp = bottom; bottom = top; top = temp;
+            }
+        """, r"OP: `copy` is no pass-through, and moves from `top`, which is exchanged")
+        self.refuses("""
+            inst(OP, (bottom, top -- bottom: moved(bottom), top))
+                effects() exits(next)
+            {
+            }
+        """, r"OP: `bottom` is exchanged with itself")
+
+    def test_exchange_is_a_permutation(self):
+        self.refuses("""
+            inst(OP, (a, b, c -- a: moved(b), b: moved(c), c))
+                effects() exits(next)
+            {
+                a = b; b = c;
+            }
+        """, r"OP: the exchange of a, b takes b, c: no permutation")
+        self.refuses("""
+            inst(OP, (a, b, c -- a: moved(c), b: moved(c), c: moved(a)))
+                effects() exits(next)
+            {
+                PyValue t = a; a = c; b = c; c = t;
+            }
+        """, r"no permutation")
+
+    def test_exchange_keeps_homes(self):
+        self.refuses("""
+            inst(OP, (bottom, unused[oparg], top --
+                      bottom: moved(top), unused[oparg+1], top: moved(bottom)))
+                effects() exits(next)
+            {
+                PyValue temp = bottom; bottom = top; top = temp;
+            }
+        """, r"OP: `top` is exchanged, and its home changes")
+
+    def test_swap_is_a_declared_exchange(self):
+        swap = analysis.instructions["SWAP"]
+        contract = ir_contract.contract_of(swap.parts[0])
+        self.assertEqual({o.name: o.exchange for o in contract.outputs if o.exchange},
+                         {"bottom": "top", "top": "bottom"})
+        formats = ir_generator.compute_formats(analysis)
+        self.assertEqual(ir_generator.normal_transfer_kind(swap, formats["SWAP"]),
+                         "_PyIR_TRANSFER_SWAP")
 
     # V1, V2
 
@@ -1472,10 +1639,29 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual(rows["spam"].result.failure, "NEGATIVE")
         with self.assertRaisesRegex(SyntaxError, r"row spam: HELPER: 6 columns, then "
                                                  r"optionally each of FEEDBACK\(\.\.\.\), "
-                                                 r"SLOW\(\.\.\.\), TAKES_VIEW\(\.\.\.\) once; got 'EXITS\(next\)'"):
+                                                 r"SLOW\(\.\.\.\), TAKES_VIEW\(\.\.\.\), "
+                                                 r"HOMES\(\.\.\.\), OBSERVER\(\.\.\.\) once; "
+                                                 r"got 'EXITS\(next\)'"):
             ir_contract.parse_rows(
                 "#define X(PRIMITIVE, HELPER, MACRO) "
                 "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(), EXITS(next))")
+
+    def test_homes_and_observer_describe_a_reentrant_row(self):
+        rows = ir_contract.parse_rows(
+            "#define X(PRIMITIVE, HELPER, MACRO) "
+            "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(runs_python), "
+            "HOMES(canonical), OBSERVER(none))")
+        self.assertEqual((rows["spam"].homes, rows["spam"].observer), ("canonical", "none"))
+        for columns, message in (("HOMES(canonical)", "declares no reentry effect"),
+                                 ("OBSERVER(none)", "declares no reentry effect")):
+            with self.assertRaisesRegex(SyntaxError, message):
+                ir_contract.parse_rows(
+                    "#define X(PRIMITIVE, HELPER, MACRO) "
+                    f"HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(reads), {columns})")
+        with self.assertRaisesRegex(SyntaxError, r"HOMES\(canonical \| unknown\)"):
+            ir_contract.parse_rows(
+                "#define X(PRIMITIVE, HELPER, MACRO) "
+                "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(runs_python), HOMES(any))")
 
     # F1: fact kinds, their classes and lifetimes
 
@@ -1761,10 +1947,10 @@ class VerifierTests(unittest.TestCase):
                 res = held;
             }
         """, r"`res` is not written before IR_OBSERVE_COMMITTED_BRANCH")
-        # The generator's replacer and the declaration name the same row;
-        # the generator selecting it by declaration is a follow-up (G0d)
-        self.assertEqual({r.name for r in self.table.values() if r.committed},
-                         {"IR_OBSERVE_COMMITTED_BRANCH"})
+        # The generator's observer replacer is selected by the declaration
+        self.assertEqual(ir_generator.committed_markers(),
+                         {r.name for r in self.table.values() if r.committed})
+        self.assertIn("IR_OBSERVE_COMMITTED_BRANCH", ir_generator.committed_markers())
         # next publishes, and a guard exit restarts the word: neither is
         # committed, nor a successor
         for mark in ("committed", "successor"):
@@ -1871,6 +2057,33 @@ class VerifierTests(unittest.TestCase):
                      r"confines an effect to next")
         self.refuses(source % "reads, runs_python(branch|nowhere)",
                      r"confines an effect to nowhere, which is no exit")
+
+    def test_a_confined_effect_is_exported_where_compiled_code_goes_on(self):
+        # The record, the metadata and the stub plans read the effects of the
+        # paths after which compiled code goes on: an effect confined to
+        # raise leaves them, one confined to branch stays (the branch's
+        # target runs after it)
+        source = """
+            op(_JUMP, (iter: object, null_or_index -- iter, null_or_index))
+                effects(reads, %s) exits(next, branch, raise)
+            {
+                _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
+                if (r->len <= 0) {
+                    PyValue completed = PyValue_None;
+                    IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
+                }
+            }
+        """
+        contract = ir_contract.contract_of(self.verify(
+            source % "runs_python(branch|raise)").uops["_JUMP"])
+        self.assertNotIn("runs_python", contract.next_effects())
+        self.assertIn("runs_python", contract.continuing_effects())
+        # An effect confined to raise alone is not on a path that goes on
+        self.assertEqual(
+            ir_contract.Contract((), (), frozenset(("runs_python", "reads")),
+                                 frozenset(("next", "raise")), confined=(
+                ("runs_python", frozenset(("raise",))),)).continuing_effects(),
+            frozenset(("reads",)))
 
     def test_the_representation_table(self):
         # _TO_BOOL_INT: an exact int whose one encoding tested false is an
@@ -2715,7 +2928,10 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual((row.kind, row.ret, row.init), ("STATE", "int", "IR_CALL_SELF_STATE"))
         self.assertEqual(row.bits, (("CALL_SELF_PRESENT",
                                      frozenset({ir_contract.VFact("self", "present")}),
-                                     frozenset({ir_contract.VFact("self", "absent")})),))
+                                     frozenset({ir_contract.VFact("self", "absent")})),
+                                    ("CALL_EXPANDED",
+                                     frozenset({ir_contract.VFact("method", "expanded")}),
+                                     frozenset({ir_contract.VFact("method", "whole")}))))
         self.assertIn('static_assert((CALL_SELF_PRESENT) != 0, '
                       '"call_state: CALL_SELF_PRESENT is no bit");',
                       ir_contract.component_checks(self.table))
@@ -2724,6 +2940,8 @@ class VerifierTests(unittest.TestCase):
                  r"null is no fact of a handler's state"),
                 ("STATE(spam, int, BITS(SPAM: self(maybe) | self(absent)), INIT(SPAM_INIT))",
                  r"self\(maybe\) is no fact of a handler's state"),
+                ("STATE(spam, int, BITS(SPAM: method(bound) | method(whole)), INIT(SPAM_INIT))",
+                 r"method\(bound\) is no fact of a handler's state"),
                 ("STATE(spam, int, BITS(SPAM: self(present) | self(absent)))",
                  r"STATE\(name, ctype, BITS")]:
             with self.subTest(bad=bad):
@@ -2765,7 +2983,7 @@ class VerifierTests(unittest.TestCase):
                      r"exact\(PyLong_Type\) is no fact of a handler's state")
 
     def test_a_declared_write_of_the_state(self):
-        # _INIT_CALL_BOUND_METHOD_EXACT_ARGS: self(absent) to self(present)
+        # A declared write of call_state: self(absent) to self(present)
         source = """
             op(_OP, (x: object -- x: object)) effects(%s) exits(next)
                 state(call_state: self(absent) -- call_state: %s)
@@ -2774,10 +2992,25 @@ class VerifierTests(unittest.TestCase):
                 %s
             }
         """
-        write = "call_state |= CALL_SELF_PRESENT | CALL_EXPANDED;"
+        write = "call_state |= CALL_SELF_PRESENT;"
         self.verify(source % ("", "self(present)", write))
         self.refuses(source % ("", "self(absent)", write),
                      r"`call_state` is declared self\(absent\), which nothing establishes")
+        # Each bit states its own facts, and a write kills only those of
+        # the bits it writes: CALL_EXPANDED leaves self(absent)
+        self.verify(source % ("", "self(absent) method(expanded)",
+                              "call_state |= CALL_EXPANDED;"))
+        self.verify(source % ("", "self(present) method(expanded)",
+                              "call_state |= CALL_SELF_PRESENT | CALL_EXPANDED;"))
+        self.refuses(source % ("", "self(absent)", "call_state |= CALL_EXPANDED;"),
+                     r"the body establishes method\(expanded\) of `call_state`, which the "
+                     r"uop does not declare")
+        # A bit that the STATE row does not list states nothing: refused
+        self.refuses(source % ("", "self(absent)", "call_state |= CALL_KWARGS_PRESENT;"),
+                     r"writes `CALL_KWARGS_PRESENT`, which is no bit of `call_state` "
+                     r"\(CALL_SELF_PRESENT, CALL_EXPANDED\)")
+        self.refuses(source % ("", "self(absent)", "call_state &= ~CALL_KWARGS_PRESENT;"),
+                     r"writes `CALL_KWARGS_PRESENT`, which is no bit of `call_state`")
         # Heap kills leave the state's facts
         self.verify(source % ("writes", "self(absent)",
                               "spam_write(PyValue_AsKnownObjectBorrow(x));"))
@@ -3910,26 +4143,32 @@ class ObjectRowTests(unittest.TestCase):
         self.assertEqual([r() for r in refs], [None, None])
 
 
-SEND_CLAUSE = """        boundary(SEND) at(last) yields(delegated) completes(
+SEND_CLAUSE = """        boundary(SEND) at(last) yields(delegated) completion(send) completes(
             RETURN: exits(return, raise),
             STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));"""
 SEND_GEN_CLAUSE = SEND_CLAUSE.replace("boundary(SEND) at(last)",
                                       "boundary(SEND_GEN) at(enter)")
-CLEANUP_CLAUSE = """        boundary(CLEANUP_THROW) at(last) completes(
+CLEANUP_CLAUSE = """        boundary(CLEANUP_THROW) at(last) completion(throw) completes(
             RETURN: exits(return, raise),
             STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));"""
+
+
+def expand_variant(analysis, formats, name):
+    "Generate the generator-boundary variant name to no output; its emitter"
+    insts = ir_generator.handler_instructions(analysis)
+    out = ir_generator.CWriter.null()
+    emitter = ir_generator.IREmitter(out, analysis, formats)
+    emitter.handler_format = formats[name]
+    emitter.allowed_error_checkpoints = None
+    ir_generator.generate_handler(name, insts[name], formats[name], emitter, out)
+    return emitter
 
 
 def expand_variants(analysis):
     "Generate each generator-boundary variant to no output"
     formats = ir_generator.compute_formats(analysis)
-    insts = ir_generator.handler_instructions(analysis)
     for name in ir_generator.generator_boundaries(analysis):
-        out = ir_generator.CWriter.null()
-        emitter = ir_generator.IREmitter(out, analysis, formats)
-        emitter.handler_format = formats[name]
-        emitter.allowed_error_checkpoints = None
-        ir_generator.generate_handler(name, insts[name], formats[name], emitter, out)
+        expand_variant(analysis, formats, name)
 
 
 class BoundaryTests(unittest.TestCase):
@@ -4021,6 +4260,41 @@ class BoundaryTests(unittest.TestCase):
         # A native send yields and completes in its own uops
         self.refuses([(SEND_CLAUSE, SEND_CLAUSE.replace("at(last)", "at(enter)"))],
                      r"SEND\w*_XFER_\w+: departs at\(enter\), and its expansion reaches")
+
+    def test_completion_is_declared(self):
+        # completion(...) names the completion step's kind; GEN_THROWING in
+        # the completed table comes from completion(throw)
+        boundaries = ir_generator.generator_boundaries(analysis)
+        self.assertEqual(boundaries["CLEANUP_THROW_XFER_POP_TOP"].completion, "throw")
+        self.assertEqual(boundaries["SEND_GEN_XFER_POP_TOP"].completion, "send")
+        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace("completion(throw)",
+                                                              "completion(send)"))],
+                     r"CLEANUP_THROW_XFER_\w+: completes with _PY_IR_SEND_THROW, and its "
+                     r"boundary\(\.\.\.\) clause declares completion\(send\)")
+        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace(" completion(throw)", ""))],
+                     r"boundary\(CLEANUP_THROW\): completes\(\.\.\.\) and "
+                     r"completion\(send\) or completion\(throw\) go together")
+
+    def test_completion_transfers_are_completion_sites(self):
+        # The departing uop's branches (returns, in a RETURN variant) are the
+        # completions that the body lowers; any other branch is refused
+        formats = ir_generator.compute_formats(analysis)
+        with cases.handle_stderr():
+            for name in ("SEND_VIRTUAL_XFER_POP_TOP", "SEND_VIRTUAL_XFER_RETURN"):
+                emitter = expand_variant(analysis, formats, name)
+                record = records[name]
+                boundary = record.generator_boundary
+                completions = emitter.boundary_completions
+                self.assertTrue(completions)
+                ir_generator.check_boundary_expansion(
+                    name, boundary, record, emitter.boundary_reached, completions,
+                    record.instruction.where)
+                with self.subTest(name=name), self.assertRaisesRegex(
+                        SyntaxError, rf"{name}: _SEND_VIRTUAL's (branch|return) at line "
+                                     r"\d+ is no generator completion"):
+                    ir_generator.check_boundary_expansion(
+                        name, boundary, record, emitter.boundary_reached, completions[1:],
+                        record.instruction.where)
 
     def test_member_clause_differs_only_in_departure(self):
         self.refuses([(SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace("HOME, ", ""))],

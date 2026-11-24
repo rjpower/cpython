@@ -387,7 +387,6 @@ _PyIR_Stub_UNPACK_SEQUENCE(
                     window[0] = PyValue_NULL;
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                assert(PyValue_IsObject(seq));
                 PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
                 window[0] = PyValue_NULL;
                 int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);

@@ -604,6 +604,12 @@ LOWERING(_PyValue_CommonConstant)               // [dst, w]
     return _PyJitCond_NONE;
 }
 
+LOWERING(_PyValue_PublishedItem)                // [dst, w]
+{
+    move(cx, REG(0), REG(1));
+    return _PyJitCond_NONE;
+}
+
 LOWERING(_Py_EvalBreakerHasEvents)              // []
 {
     _PyJitAsm_TestMI(A, AT(_PyJit_TSTATE, offsetof(PyThreadState, eval_breaker)),
@@ -900,6 +906,29 @@ LOWERING(_PyObject_ShapeReadDup)                // [dst, o, offset, t]
 #else
     dup_value(cx, dst, dst, REG(3), 0);
 #endif
+    return _PyJitCond_NONE;
+}
+
+/* The value out of the slot, the word in; the result may share the register
+   of either argument, so the old value goes through t. */
+LOWERING(_PyValueSlot_Exchange)                 // [dst, slot, w, t]
+{
+    _PyJitReg t = REG(3);
+    _PyJitAsm_MovRM(A, t, AT(REG(1), 0));
+    _PyJitAsm_MovMR(A, AT(REG(1), 0), REG(2));
+    _PyJitAsm_MovRR(A, REG(0), t);
+    return _PyJitCond_NONE;
+}
+
+/* The same machine code: the slot's contents are not tested */
+LOWERING(_PyValueSlot_ExchangeFilled)           // [dst, slot, w, t]
+{
+    return _PyJitLower__PyValueSlot_Exchange(cx, ops, aux);
+}
+
+LOWERING(_PyValueSlot_Fill)                     // [slot, w]
+{
+    _PyJitAsm_MovMR(A, AT(REG(0), 0), REG(1));
     return _PyJitCond_NONE;
 }
 

@@ -653,6 +653,8 @@ def seed_clauses(uop, facts: dict, table, overrides: dict) -> Clauses:
             # The CONSTANT row PyValue_NULL, VALUE(inline null): a NULL
             # output owns nothing, and `null` says what the record holds
             w = ["inline", "null"]
+        elif "out:" + item.name in overrides:
+            w = [f"moved({overrides['out:' + item.name]})"]
         else:
             found = vocab(facts["results"].get(item.name, ()), f"a result fact of `{item.name}`")
             w = ["owned"] + words(found)
@@ -703,12 +705,18 @@ def _always_null(uop, name: str) -> bool:
     return bool(rhs) and all(r == ["PyValue_NULL"] for r in rhs)
 
 
-def _alias_source(uop, name: str) -> str | None:
+def _alias_source(uop, name: str, depth: int = 0) -> str | None:
     ins = {i.name for i in uop.stack.inputs}
     for where, rhs in ir_contract._assignments(uop, name):
         rhs = ir_records._uncast(rhs)
         if len(rhs) == 1 and rhs[0] in ins:
             return rhs[0]
+        if len(rhs) == 1 and re.fullmatch(r"[A-Za-z_]\w*", rhs[0]) and depth < 3:
+            # A local that holds an input's value (G0a3: identity through
+            # locals): the input it was assigned from
+            source = _alias_source(uop, rhs[0], depth + 1)
+            if source is not None:
+                return source
         # `out = TAKE(in)`: the move of an input (ir_generator.VIEW_TAKES)
         args = ir_records._call(rhs, *sorted(ir_generator.VIEW_TAKES - {"PyValue_AsKnownObjectSteal"}))
         if args is not None and len(args) == 1 and len(args[0]) == 1 and args[0][0] in ins:
@@ -936,6 +944,10 @@ OVERRIDE = re.compile(r"on raise, `(\w+)` is still owned, but the site declares 
 # DEAD(x) of an input the body neither releases nor moves: the skeleton
 # closes it after the uop, on next and on raise, which is `closed` (F4)
 CLOSE = re.compile(r"DEAD\(`(\w+)`\) drops an owned value")
+# An output assigned a local that holds an input's value: the verifier
+# names the move it expects (G0a3), and the record decides
+MOVE = re.compile(r"`(\w+)` is declared owned, but is assigned `\w+`, which is the input "
+                  r"`(\w+)`'s value: declare moved\((\w+)\)")
 REQUIREMENT = re.compile(r"passes `([^`]*)` to (\w+), which requires ([\w(), ]+) of it")
 REQUIRES = "requires"     # the overrides' key of an input's requirements
 
@@ -1003,6 +1015,12 @@ def main() -> None:
                 m = OVERRIDE.search(error)
                 if m and name in seeded and overrides[name].get(m.group(1)) != "taken":
                     overrides[name][m.group(1)] = "taken"
+                    retried.add(name)
+                    changed = True
+                    continue
+                m = MOVE.search(error)
+                if m and name in seeded and overrides[name].get("out:" + m.group(1)) != m.group(3):
+                    overrides[name]["out:" + m.group(1)] = m.group(3)
                     retried.add(name)
                     changed = True
                     continue

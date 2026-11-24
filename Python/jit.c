@@ -450,21 +450,22 @@ plan_of(_PyJitCompiler *c, _PyIRWord w)
 /* r8 of resolve_status(): the word's handler bits as compiled */
 #define COMPILED_HANDLER_BITS 0xFFFF
 
-/* The cold path of a planned word's nonzero status (g1a/abi.md), shared by
- * every site: a miss runs the family's generic stub on the word, then the
- * plan-change test (staleness by execution, rd/design.md section 6: the
- * unit is marked only if the word's handler is no longer the one compiled;
- * RETIRED is kept.  A unit at the cap has no planned words).  Returns a frame and the word to
- * leave for (no word: the error route, whose exit the stub has set), or no
- * frame to go on in the unit at the word returned: the next word, or the
- * same word again after a redispatch.  A status with ESCAPED tests RETIRED
- * before its successor.  No planned arm branches: no status is BRANCH. */
 /* What resolve_status() decides, in rax:rdx as the unit's transfers are */
 typedef struct {
     _PyInterpreterFrame *frame;
     _PyIRWord *next;
 } resolved_status;
 
+/* The cold path of a planned word's nonzero status (g1a/abi.md), shared by
+ * every site: a miss runs the family's generic stub on the word, then the
+ * plan-change test (staleness by execution, rd/design.md section 6: the
+ * unit is marked only if the word's handler is no longer the one compiled;
+ * RETIRED is kept; a unit at the cap has no planned words).  Returns a
+ * frame and the word to leave for (no word: the error route, whose exit
+ * the stub has set), or no frame to go on in the unit at the word
+ * returned: the next word, or the same word again after a redispatch.  A
+ * status with ESCAPED tests RETIRED before its successor.  No planned arm
+ * branches: no status is BRANCH. */
 static resolved_status
 resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site,
                int status, uint32_t compiled, _PyJitUnit *unit)
@@ -494,9 +495,9 @@ resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *sit
 
 /* The cold path of planned word i, in the cold section: status (or -1),
  * entered with a stub's nonzero status in eax, or miss (or -1), entered
- * when the arm's guard failed with the word untouched.  resolve_status() decides; the
- * unit leaves with its transfer, or goes on at the next word or the word
- * again. */
+ * when the arm's guard failed with the word untouched.  resolve_status()
+ * decides; the unit leaves with its transfer, or goes on at the next word
+ * or the word again. */
 static void
 emit_status_cold(_PyJitCompiler *c, uint32_t i, _PyJitLabel status, _PyJitLabel miss)
 {
@@ -507,7 +508,9 @@ emit_status_cold(_PyJitCompiler *c, uint32_t i, _PyJitLabel status, _PyJitLabel 
     if (miss >= 0) {
         _PyJitAsm_Bind(a, miss);
         _PyJitAsm_MovImm(a, R(RCX), _PyIR_MISS);
-        _PyJitAsm_Jmp(a, resolve);
+        if (status >= 0) {
+            _PyJitAsm_Jmp(a, resolve);
+        }
     }
     if (status >= 0) {
         _PyJitAsm_Bind(a, status);
@@ -740,16 +743,15 @@ emit_template_word(_PyJitCompiler *c, uint32_t i, _PyJitTemplate template)
     }
     for (int k = 0; k < cx.nreleases && k < _PyJit_MAX_RELEASES; k++) {
         _PyJitAsm_Bind(a, cx.release_tail[k]);
-        if (release_exit) {
-            _PyJitLabel leave_next = _PyJitAsm_NewLabel(a);
-            _PyJitLabel back = _PyJitAsm_NewLabel(a);
-            emit_retired_test(c, leave_next);
-            _PyJitAsm_Jmp(a, back);
-            _PyJitAsm_Bind(a, leave_next);
-            emit_leave_at(c, next);
-            _PyJitAsm_Bind(a, back);
+        if (!release_exit) {
+            _PyJitAsm_Jmp(a, cx.release_back[k]);
+            continue;
         }
+        _PyJitLabel leave_next = _PyJitAsm_NewLabel(a);
+        emit_retired_test(c, leave_next);
         _PyJitAsm_Jmp(a, cx.release_back[k]);
+        _PyJitAsm_Bind(a, leave_next);
+        emit_leave_at(c, next);
     }
     if (planned) {
         emit_status_cold(c, i, -1, cx.slow);

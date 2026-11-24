@@ -3612,35 +3612,6 @@ class TestIRCases(unittest.TestCase):
         for name in ("_UNPACK_SEQUENCE_TUPLE", "_UNPACK_SEQUENCE_LIST", "BUILD_SET"):
             self.assertTrue(ir_generator.home_operation_contract(analysis.uops[name]))
 
-    def test_native_entry_requires_actual_body_and_owning_scalar_io(self):
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        inst = analysis.instructions["INTERPRETER_EXIT"]
-        self.assertTrue(ir_generator.native_entry_input_contract(inst))
-        part = inst.parts[0]
-        extra = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
-        part.body.body.append(extra.instructions["OP"].parts[0].body.body[0])
-        try:
-            with self.assertRaises(SyntaxError):
-                ir_generator.native_entry_input_contract(inst)
-        finally:
-            part.body.body.pop()
-        item = part.stack.inputs[0]
-        for attribute, changed in (("name", "other"), ("peek", True), ("size", "1")):
-            old = getattr(item, attribute)
-            setattr(item, attribute, changed)
-            try:
-                with self.assertRaises(SyntaxError):
-                    ir_generator.native_entry_input_contract(inst)
-            finally:
-                setattr(item, attribute, old)
-        old = inst.name
-        inst.name = "OTHER_NATIVE_SHAPE"
-        try:
-            self.assertFalse(ir_generator.native_entry_input_contract(inst))
-        finally:
-            inst.name = old
-
     def test_steal_success_handoff_requires_terminal_ownership_sequence(self):
         body = """{
             PyObject *object = IR_BUILD_TUPLE(values);
@@ -4505,19 +4476,16 @@ class TestCallMarkers(unittest.TestCase):
             self.assertFalse(properties.sync_sp)
 
     def test_prelude_and_actual_destination_terminal_paths(self):
-        for name in ("CALL",
-                     "CALL_PY_GENERAL", "CALL_BOUND_METHOD_GENERAL",
-                     "CALL_KW", "CALL_KW_NON_PY", "CALL_KW_PY",
+        for name in ("CALL_KW", "CALL_KW_NON_PY", "CALL_KW_PY",
                      "CALL_FUNCTION_EX", "CALL_EX_NON_PY_GENERAL", "CALL_EX_PY",
-                     "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW",
-                     "INSTRUMENTED_CALL_FUNCTION_EX"):
+                     "INSTRUMENTED_CALL_KW", "INSTRUMENTED_CALL_FUNCTION_EX"):
             with self.subTest(name=name):
                 body = self.interpreter.split(f"TARGET({name}) {{", 1)[1].split("TARGET(", 1)[0]
                 # The out-of-line run reads the operand words; the handler
                 # keeps no record of the call of its own
                 invoke = min(body.index(run) for run in (
                     "call_run_", "call_bind_") if run in body)
-                for preparation in ("_Py_Specialize_Call",):
+                for preparation in ("_Py_Specialize_CallKw",):
                     if preparation in body:
                         self.assertLess(body.index(preparation), invoke)
                 self.assertNotIn("IR_MOVE_TO_DST", body[invoke:])

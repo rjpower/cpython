@@ -2472,8 +2472,6 @@ borrowed_word(PyObject *obj)
 
 /* The handlers' calls (call_run_*), after the binder
  * (eval_frame_push_and_init_code), which they use. */
-static _PyCallResult call_run_vector(
-    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
 static _PyCallResult call_run_keywords(
     PyThreadState *, _PyInterpreterFrame *, _PyInstr *, int);
 static _PyCallResult call_run_ex(
@@ -3147,28 +3145,6 @@ ir_event_edge(PyThreadState *tstate, _PyInterpreterFrame *frame,
 /* The events that precede the effect of an instrumented twin (rule 12).  Each
  * leaves the state as the twin's handler left it at the event: an error
  * unwinds with the operand as the event took it. */
-static Py_NO_INLINE _PyIRTransfer
-ir_event_return(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    _PyInstr *this_instr = next_instr;
-    frame->instr_ptr = this_instr;
-    PyValueBorrow val = IR_VIEW(IR_A(ir_word));
-    /* The callbacks can run code, so the event holds the value. */
-    PyValue held = PyValue_DUP(val);
-    int err = _Py_call_instrumentation_arg(
-        tstate, PY_MONITORING_EVENT_PY_RETURN, frame, this_instr, held);
-    if (err) {
-        /* The base would have taken the operand: so does the error. */
-        PyValue operand = IR_DETACH(ir_word, A, val);
-        PyValue_XCLOSE(operand);
-        PyValue_CLOSE(held);
-        PROCESS_ERROR_AT(RAISE, 0, this_instr);
-    }
-    PyValue_CLOSE(held);
-    return (_PyIRTransfer){frame, this_instr};
-}
-
 static Py_NO_INLINE _PyIRTransfer
 ir_event_yield(PyThreadState *tstate, _PyInterpreterFrame *frame,
                _PyInstr *next_instr, _PyIRWord ir_word)
@@ -5752,13 +5728,6 @@ call_run(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *head,
         return (_PyCallResult){-1, NULL};
     }
     return (_PyCallResult){0, NULL};
-}
-
-static Py_NO_INLINE _PyCallResult
-call_run_vector(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                _PyInstr *head, int flags)
-{
-    return call_run(tstate, frame, head, flags, 0);
 }
 
 static Py_NO_INLINE _PyCallResult

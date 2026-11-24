@@ -1297,7 +1297,9 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
 # CFG omits them (PUSH_NULL writes NULL into a temporary that the NULL
 # invariant already guarantees is NULL, register-ir.md G4).  They keep their
 # opcode number and their format, which the CFG reads, but have no handler.
-STACK_ONLY = ("PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN", "LOAD_FAST_LOAD_FAST",
+STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
+              "INSTRUMENTED_RETURN_VALUE", "INTERPRETER_EXIT", "EXIT_INIT_CHECK",
+              "PUSH_NULL", "EXTENDED_ARG", "NOT_TAKEN", "LOAD_FAST_LOAD_FAST",
               "LOAD_FAST_BORROW_LOAD_FAST_BORROW", "STORE_FAST_LOAD_FAST",
               "STORE_FAST_STORE_FAST")
 
@@ -2479,7 +2481,6 @@ class SlotLayout:
     temp_fields: tuple[str, ...] = ()
     store_dst: bool = False         # dst may name a local
     canonical_frame_transfer: bool = False  # proven unchanged canonical slot input
-    native_entry: bool = False  # checked native interpreter-exit homes
     call_kind: str | None = None
     call_results: frozenset[str] = frozenset()  # names of a call's outputs
     # Window: the slot, above the inputs', whose result goes to a dst that
@@ -3072,10 +3073,7 @@ class IRStack(Stack):
             role = self.call_input_role(PointerOffset(p, (), ()))
             if role is not None:
                 out.emit(f"if (call_state & {role}) {{\n")
-            if self.layout.native_entry:
-                out.emit(f"IR_SLOT({f}) = PyValue_NULL;\n")
-            else:
-                out.emit(f"_PyFrame_WriteHome(frame, &IR_SLOT({f}), PyValue_NULL);\n")
+            out.emit(f"_PyFrame_WriteHome(frame, &IR_SLOT({f}), PyValue_NULL);\n")
             if role is not None:
                 out.emit("}\n")
             self.take_field(self.layout.in_fields[p])
@@ -3085,9 +3083,8 @@ class IRStack(Stack):
             raise StackError(f"no variable holds the view of the input "
                              f"in {f} when the handler takes it")
         field = self.layout.in_fields[p]
-        macro = "IR_DETACH_NATIVE" if self.layout.native_entry else "IR_DETACH"
         consume = ("PyValue_NULL" if field in self.layout.local_fields else
-                   f"{macro}({FIELD_ARGS[field]}, {names[-1]})")
+                   f"IR_DETACH({FIELD_ARGS[field]}, {names[-1]})")
         out.emit(f"{owner_name(field)} = {consume};\n")
         self.take_field(field)
 
@@ -5027,7 +5024,7 @@ class IREmitter(Emitter):
                                  for t in stmt.contents)
         if inst is not None and uses_generic_call(inst):
             transaction_marker |= any(t.text in {
-                "_Py_Specialize_Call", "_Py_Specialize_CallKw",
+                "_Py_Specialize_CallKw",
                 "_Py_Specialize_CallFunctionEx"} for t in stmt.contents)
         previous = self.cannot_escape
         self.statement = stmt
@@ -5921,22 +5918,19 @@ def oparg_source(inst: Instruction, fmt: IRFormat, operation: str | None) -> str
 def call_shape(name: str, inst: Instruction, fmt: IRFormat) -> CallShape | None:
     "How the window of a call handler is a call, or None"
     call_family = inst.family.name if inst.family is not None else inst.name
-    call_family = {"INSTRUMENTED_CALL": "CALL",
-                   "INSTRUMENTED_CALL_KW": "CALL_KW"}.get(call_family, call_family)
+    call_family = {"INSTRUMENTED_CALL_KW": "CALL_KW"}.get(call_family, call_family)
     if not fmt.window or call_family not in (
-            "CALL", "CALL_KW", "CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX"):
+            "CALL_KW", "CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX"):
         return None
     inputs, _ = external_io(inst)
     count = " + ".join(f"({item.size or '1'})" for item in inputs)
     kind = ("CALL_EX" if call_family in
             ("CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX") else
-            "CALL_KEYWORDS" if call_family == "CALL_KW" else
-            "CALL_VECTOR")
+            "CALL_KEYWORDS")
     # call_run_*() derives the operand count from its kind
     fixed = sum(1 for item in inputs if not item.size)
     arrays = [item.size for item in inputs if item.size]
-    expected = {"CALL_VECTOR": (2, ["oparg"]),
-                "CALL_KEYWORDS": (3, ["oparg"]),
+    expected = {"CALL_KEYWORDS": (3, ["oparg"]),
                 "CALL_EX": (4, [])}[kind]
     if uses_generic_call(inst) and (fixed, arrays) != expected:
         raise analysis_error(
@@ -5947,8 +5941,7 @@ def call_shape(name: str, inst: Instruction, fmt: IRFormat) -> CallShape | None:
     if polls_at_end(name, inst):
         flags.append("CALL_PERIODIC")
     return CallShape(kind,
-                     {"CALL_VECTOR": "call_run_vector",
-                      "CALL_KEYWORDS": "call_run_keywords",
+                     {"CALL_KEYWORDS": "call_run_keywords",
                       "CALL_EX": "call_run_ex"}[kind],
                      "(" + (" | ".join(flags) or "0") + ")",
                      "oparg" if inst.properties.oparg else "0")
@@ -6076,7 +6069,6 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
     call = call_shape(name, inst, fmt)
     variant = EXECUTION_VARIANTS.get(name)
     layout = replace(layout, canonical_frame_transfer=canonical_frame_transfer_input(inst),
-                     native_entry=native_entry_input_contract(inst),
                      call_kind=call.kind if call is not None else None,
                      call_results=(frozenset(o.item.name for o in outputs)
                                    if call is not None else frozenset()))
@@ -6966,29 +6958,6 @@ def canonical_body_tokens(part: Uop) -> list[str]:
             if token.kind != "COMMENT"]
 
 
-def native_entry_input_contract(inst: Instruction) -> bool:
-    if inst.name != "INTERPRETER_EXIT":
-        return False
-    parts = [part for part in inst.parts if isinstance(part, Uop)]
-    expected = """{
-        assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
-        assert(_PyFrame_IsIncomplete(frame));
-        tstate->current_frame = frame->previous;
-        assert(!_PyErr_Occurred(tstate));
-        PyValue result = TAKE(retval);
-        INPUTS_DEAD();
-        assert(frame == &IR_ACTIVATION()->entry.frame);
-        LLTRACE_RESUME_FRAME();
-        return result;
-    }"""
-    if (len(parts) != 1 or len(inst.parts) != 1 or
-            [(item.name, item.peek, item.size) for item in parts[0].stack.inputs] !=
-                [("retval", False, "")] or parts[0].stack.outputs or
-            statement_shape(parts[0].body) != statement_shape(
-                Parser(expected, "<native entry ownership>").block())):
-        raise analysis_error("native interpreter exit needs its checked contract", inst.where)
-    return True
-
 
 def canonical_frame_transfer_input(inst: Instruction) -> bool:
     """A return or yield transfers a canonical home owner unchanged.
@@ -7478,8 +7447,6 @@ EDGE_TWINS = {
 # Python/ceval.c, and the twin goes on to the base's handler with the same
 # word.  The event is the twin's first part in the DSL.
 EVENT_TWINS = {
-    "INSTRUMENTED_RETURN_VALUE": ("ir_event_return", "RETURN_VALUE"),
-    "INSTRUMENTED_RETURN_VALUE_EMPTY": ("ir_event_return", "RETURN_VALUE_EMPTY"),
     "INSTRUMENTED_YIELD_VALUE": ("ir_event_yield", "YIELD_VALUE"),
     "INSTRUMENTED_YIELD_DELEGATED": ("ir_event_yield", "YIELD_DELEGATED"),
     "INSTRUMENTED_END_FOR": ("ir_event_end_for", "END_FOR"),
@@ -9044,7 +9011,6 @@ def handler_effects(record: OperationRecord) -> list[str]:
             ("_PyIR_POLLS", record.polls),
             ("_PyIR_PURE", bool(record.uops) and all(uop.pure for uop in record.uops)),
             ("_PyIR_SPECIALIZES", record.specializes),
-            ("_PyIR_NATIVE_ONLY", record.layout.native_entry),
             ("_PyIR_LEARNED_ONLY", record.reads_poly_table)):
         if present:
             bits.append(bit)

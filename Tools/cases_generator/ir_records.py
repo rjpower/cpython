@@ -189,7 +189,7 @@ class UopRecord:
 @dataclass(frozen=True)
 class CallShape:
     "How a call handler's window is a call (call_run_*() in Python/ceval.c)"
-    kind: str                   # CALL_VECTOR, CALL_KEYWORDS or CALL_EX
+    kind: str                   # CALL_KEYWORDS or CALL_EX
     run: str                    # the call_run_* function
     flags: str                  # its CALL_* flags, a C expression
     argc: str                   # the argument count, a C expression

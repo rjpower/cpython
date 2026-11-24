@@ -444,27 +444,6 @@ leaf_probe__BINARY_OP_XOR_INT(_PyInterpreterFrame *frame, PyValue *stack_pointer
 }
 
 static int
-leaf_probe__CHECK_FUNCTION_VERSION(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    uint32_t func_version = (uint32_t)caches[0];
-    PyValue callable;
-    callable = stack_pointer[-2 - oparg];
-    PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-    if (!PyFunction_Check(callable_o)) {
-        return LEAF_PROBE_EXIT;
-    }
-    PyFunctionObject *func = (PyFunctionObject *)callable_o;
-    if (func->func_version != func_version) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
 leaf_probe__CHECK_FUNCTION_VERSION_KW(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -638,51 +617,6 @@ leaf_probe__GUARD_BUILTIN_METACLASS(_PyInterpreterFrame *frame, PyValue *stack_p
     }
     PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
     if (Py_TYPE(owner_o) != &PyType_Type) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__GUARD_CALLABLE_STR_1(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue callable;
-    callable = stack_pointer[-3];
-    if (!_PyValue_NamesObject(callable, &PyUnicode_Type)) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__GUARD_CALLABLE_TUPLE_1(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue callable;
-    callable = stack_pointer[-3];
-    if (!_PyValue_NamesObject(callable, &PyTuple_Type)) {
-        return LEAF_PROBE_EXIT;
-    }
-    result->stack_pointer = stack_pointer;
-    return LEAF_PROBE_NEXT;
-}
-
-static int
-leaf_probe__GUARD_CALLABLE_TYPE_1(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
-    const uint64_t *caches, struct leaf_probe_result *result)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue callable;
-    callable = stack_pointer[-3];
-    if (!_PyValue_NamesObject(callable, &PyType_Type)) {
         return LEAF_PROBE_EXIT;
     }
     result->stack_pointer = stack_pointer;
@@ -2285,7 +2219,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_BINARY_OP_SUBTRACT_INT", leaf_probe__BINARY_OP_SUBTRACT_INT, 2},
     {"_BINARY_OP_TRUEDIV_FLOAT", leaf_probe__BINARY_OP_TRUEDIV_FLOAT, 2},
     {"_BINARY_OP_XOR_INT", leaf_probe__BINARY_OP_XOR_INT, 2},
-    {"_CHECK_FUNCTION_VERSION", leaf_probe__CHECK_FUNCTION_VERSION, 2},
     {"_CHECK_FUNCTION_VERSION_KW", leaf_probe__CHECK_FUNCTION_VERSION_KW, 3},
     {"_CHECK_MANAGED_OBJECT_HAS_VALUES", leaf_probe__CHECK_MANAGED_OBJECT_HAS_VALUES, 1},
     {"_CHECK_PERIODIC", leaf_probe__CHECK_PERIODIC, 0},
@@ -2295,9 +2228,6 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_END_FOR", leaf_probe__END_FOR, 1},
     {"_END_SEND", leaf_probe__END_SEND, 3},
     {"_GUARD_BUILTIN_METACLASS", leaf_probe__GUARD_BUILTIN_METACLASS, 1},
-    {"_GUARD_CALLABLE_STR_1", leaf_probe__GUARD_CALLABLE_STR_1, 3},
-    {"_GUARD_CALLABLE_TUPLE_1", leaf_probe__GUARD_CALLABLE_TUPLE_1, 3},
-    {"_GUARD_CALLABLE_TYPE_1", leaf_probe__GUARD_CALLABLE_TYPE_1, 3},
     {"_GUARD_ELEMENT_INT", leaf_probe__GUARD_ELEMENT_INT, 1},
     {"_GUARD_ELEMENT_LIST", leaf_probe__GUARD_ELEMENT_LIST, 2},
     {"_GUARD_ELEMENT_TUPLE", leaf_probe__GUARD_ELEMENT_TUPLE, 2},

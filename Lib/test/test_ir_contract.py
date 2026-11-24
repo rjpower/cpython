@@ -612,8 +612,7 @@ class AnalyzerTests(unittest.TestCase):
         # (Tools/cases_generator/ir_records.py)
         formats = self.ir_generator.compute_formats(self.analysis)
         bits = ("RAISES", "ESCAPES", "RUNS_PYTHON", "DEOPTS", "SUSPENDS",
-                "PUSHES_FRAME", "POLLS", "PURE", "SPECIALIZES", "NATIVE_ONLY",
-                "LEARNED_ONLY")
+                "PUSHES_FRAME", "POLLS", "PURE", "SPECIALIZES", "LEARNED_ONLY")
         for name, inst in self.insts.items():
             record = self.ir_generator.build_record(
                 name, inst, formats[name], self.analysis, formats)

@@ -307,7 +307,7 @@ extern helper classify_call(at:Site, f:Fb<Call>, fn:B, a:Args)
   feedback(read(entry), write(entry))
   c _PyRop_ClassifyCall as case_index
   evidence(
-    review: "P4. specialize.c: _Py_Specialize_Call with its handler choice"
+    review: "P4. specialize.c: the old _Py_Specialize_Call's handler choice"
             "collected (as attr_classify): CALL_PY_EXACT_ARGS,"
             "CALL_BOUND_METHOD_EXACT_ARGS and CALL_ALLOC_AND_ENTER_INIT are the"
             "first three cases, anything else is other.",

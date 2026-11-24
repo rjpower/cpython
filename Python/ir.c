@@ -225,9 +225,7 @@ generator_completed_shape(const _PyIRWord *words, int nwords, int nl, int pc)
     if (home < nl) {
         return _PyIR_GEN_CONSUMER_STORE_LOCAL;
     }
-    if ((generator_is(words[target], RETURN_VALUE) ||
-         generator_is(words[target], RETURN_VALUE_EMPTY) ||
-         _PyIR_BaseOpcode(IR_HANDLER(words[target])) == RETURN_VALUE) &&
+    if (_PyIR_BaseOpcode(IR_HANDLER(words[target])) == RETURN_VALUE &&
         (int)IR_A(words[target]) == home)
     {
         return _PyIR_GEN_CONSUMER_RETURN;
@@ -747,14 +745,6 @@ ordinary_handler_for(int handler, int opcode)
         // wrapper.  The handlers' base, not the deopt table, takes an
         // instrumented opcode to its stack op.
         return fmt->twin;
-    }
-    if (handler == RETURN_VALUE_EMPTY || handler == INSTRUMENTED_RETURN_VALUE_EMPTY) {
-        if (opcode == RETURN_VALUE) {
-            return RETURN_VALUE_EMPTY;
-        }
-        if (opcode == INSTRUMENTED_RETURN_VALUE) {
-            return INSTRUMENTED_RETURN_VALUE_EMPTY;
-        }
     }
     if (handler == YIELD_DELEGATED || handler == INSTRUMENTED_YIELD_DELEGATED) {
         if (opcode == YIELD_VALUE) {

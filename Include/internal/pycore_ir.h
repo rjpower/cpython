@@ -328,8 +328,6 @@ enum {
 #define _PyIR_PURE          0x100   // annotated pure (HAS_PURE_FLAG)
 #define _PyIR_SPECIALIZES   0x200   // a generic handler whose entry's
                                     // counter drives specialisation
-#define _PyIR_NATIVE_ONLY   0x800   // checked synthetic activation homes;
-                                    // never admitted in a code image
 #define _PyIR_LEARNED_ONLY  0x1000  // requires a reached feedback nomination;
                                     // never admitted in a code image
 

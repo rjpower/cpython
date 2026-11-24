@@ -245,6 +245,19 @@ CHECK_CASES = [
      '  Run():\n    publish [] retire [] at F.Done;\n    exit run();', [
          (21, 5, 'a macro does not publish; it returns a case and its arm publishes'),
      ]),
+    ('shared leaves frame', 'feedback(read(entry.kind)) exits(next, again)',
+     'feedback(read(entry.kind)) exits(next, again, return)', [
+         (40, 16, 'exit return is not an exit of family F (next, miss, again, raise)'),
+         (40, 16, 'a shared arm completes the word in a stub, which cannot leave the '
+                  'frame (return): make it split'),
+         (40, 16, 'declared exit return is not reached'),
+     ]),
+    ('observer', 'arm F.A inline',
+     'arm F.Observed inline', [
+         (23, 1, "an observed wrapper needs its family's events: F declares no "
+                 "events(...)"),
+         (23, 23, 'an observed wrapper adapts nothing (miss)'),
+     ]),
     ('callee', 'box(scale(l))',
      'box(scael(l))', [
          (30, 14, 'no row, macro or primitive scael'),

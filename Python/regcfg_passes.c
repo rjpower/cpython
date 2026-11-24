@@ -15,6 +15,7 @@
 #include "pycore_opcode_utils.h"
 #include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_regcfg.h"
+#include "pycore_rop_metadata.h"    // ROP_HANDLER_Call_Generic
 #include "pycore_value.h"           // PyValue_FromInlineInt()
 
 #undef SUCCESS
@@ -1268,7 +1269,7 @@ call_roles(_PyRegCfg *cfg, int verify)
         _PyRegOp *op = &cfg->ops[i];
         needed |= verify
             ? (op->flags & (_PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS)) != 0
-            : op->opcode == CALL || op->opcode == CALL_KW ||
+            : op->opcode == ROP_HANDLER_Call_Generic || op->opcode == CALL_KW ||
               op->opcode == CALL_FUNCTION_EX;
     }
     if (!needed) {
@@ -1354,7 +1355,8 @@ call_roles(_PyRegCfg *cfg, int verify)
                 continue;
             }
             int roles = 0;
-            if (proof.reached[b] && (op->opcode == CALL || op->opcode == CALL_KW ||
+            if (proof.reached[b] && (op->opcode == ROP_HANDLER_Call_Generic ||
+                                    op->opcode == CALL_KW ||
                                     op->opcode == CALL_FUNCTION_EX))
             {
                 // CALL_FUNCTION_EX has no self operand, whatever its

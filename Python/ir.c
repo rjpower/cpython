@@ -25,6 +25,7 @@
 #include "pycore_opcode_metadata.h" // _PyOpcode_Deopt
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
+#include "pycore_rop_metadata.h"    // _PyRop_SelectReturn(), ROP_HANDLER_*
 #include "pycore_value.h"
 
 static_assert(sizeof(_PyCodeExec) % sizeof(_PyIRWord) == 0,
@@ -44,8 +45,8 @@ static_assert(FB_COUNTER < 16 && FB_CALL < 16, "a kind has 4 bits in co_fbinit")
 
 
 /* _Py_InitCleanup (Python/specialize.c) runs with self in slot 0 and the
- * result of __init__ in slot 1: EXIT_INIT_CHECK checks slot 1, and
- * RETURN_VALUE returns slot 0. The explicit continuation names the first
+ * result of __init__ in slot 1: InitResult.Check checks slot 1, and the
+ * Return arm of a thread frame returns slot 0. The explicit continuation names the first
  * real word. Both slots are temporaries, so the words carry no slot-class
  * flag, and the header precedes the words, as in every executing copy, for
  * IR_IS_LOCAL(). */
@@ -57,8 +58,9 @@ _PyIRStaticExec _PyIR_InitCleanup = {
         .nfixed = 0,
     },
     .words = {
-        IR_WORD(EXIT_INIT_CHECK, 1, 0, 0, 0),
-        IR_WORD(RETURN_VALUE, 0, 0, 0, 0),
+        IR_WORD(ROP_HANDLER_InitResult_Check, 1, 0, 0, 0),
+        IR_WORD(_PyRop_SelectReturn(ROP_SELECT_THREAD_FRAME, ROP_SELECT_LIVE_SCRATCH),
+                0, 0, 0, 0),
     },
 };
 
@@ -224,7 +226,8 @@ generator_completed_shape(const _PyIRWord *words, int nwords, int nl, int pc)
         return _PyIR_GEN_CONSUMER_STORE_LOCAL;
     }
     if ((generator_is(words[target], RETURN_VALUE) ||
-         generator_is(words[target], RETURN_VALUE_EMPTY)) &&
+         generator_is(words[target], RETURN_VALUE_EMPTY) ||
+         _PyIR_BaseOpcode(IR_HANDLER(words[target])) == RETURN_VALUE) &&
         (int)IR_A(words[target]) == home)
     {
         return _PyIR_GEN_CONSUMER_RETURN;
@@ -737,10 +740,12 @@ ordinary_handler_for(int handler, int opcode)
     }
     if (handler >= IR_NUM_OLD_HANDLERS && fmt->twin != 0 &&
         opcode >= MIN_INSTRUMENTED_OPCODE && opcode < IR_FIRST_ONLY_HANDLER &&
-        _PyOpcode_Deopt[opcode] == _PyIR_BaseOpcode(handler))
+        _PyIR_HandlerBase[opcode] == _PyIR_HandlerBase[handler])
     {
         // A register instruction arm of a family that has events: the
-        // instrumented form of its stack op runs the arm's observed wrapper.
+        // instrumented form of its stack op runs the arm's observed
+        // wrapper.  The handlers' base, not the deopt table, takes an
+        // instrumented opcode to its stack op.
         return fmt->twin;
     }
     if (handler == RETURN_VALUE_EMPTY || handler == INSTRUMENTED_RETURN_VALUE_EMPTY) {

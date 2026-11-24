@@ -1053,10 +1053,12 @@ class ExceptionMonitoringTest(CheckEvents):
             UnwindRecorder
         )
         events = self.get_events(f, TEST_TOOL, recorders)
-        adaptive_insts = ir_dis.get_instructions(f, adaptive=True)
+        # The call adapted to Call.Init, which enters __init__ above its
+        # cleanup frame (the shim)
         self.assertIn(
-            "CALL_ALLOC_AND_ENTER_INIT",
-            [i.opname for i in adaptive_insts]
+            "Call.Init",
+            [word[0].partition("+")[0]
+             for word in _testinternalcapi.get_ir(f.__code__, True)]
         )
         #There should be only one unwind event
         expected = [

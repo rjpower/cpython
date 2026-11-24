@@ -173,7 +173,9 @@ class ForceArmTests(unittest.TestCase):
     def test_the_contract_export_has_a_row_for_each_arm(self):
         contract = _opcode.get_ir_contract()
         handlers = capi.arm_handlers()
-        self.assertEqual(len(contract), max(handlers.values()) + 1)
+        # An arm of a family with events has an observed twin after the arms
+        twins = {contract[h].twin for h in handlers.values()} - {None}
+        self.assertEqual(len(contract), max(twins.union(handlers.values())) + 1)
         row = contract[handlers["Add.Int"]]
         self.assertEqual(row.base, dis.opmap["BINARY_OP"])
         self.assertEqual(row.ninputs, 2)

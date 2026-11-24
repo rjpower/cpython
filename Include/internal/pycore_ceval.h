@@ -163,13 +163,12 @@ extern void _PyEval_Fini(void);
 
 extern PyObject* _PyEval_GetBuiltins(PyThreadState *tstate);
 
-/* The frame of the __init__ function init (an owner) for the call at
- * current, with self (an owner) and the call's operands as its arguments.
- * Success consumes them, releases the call's class operand and returns an
+/* The frame of the cached __init__ of the class callable (borrowed) for the
+ * call at current, with a new instance and the call's operands as its
+ * arguments.  Success releases the call's class operand and returns an
  * unpublished child.  On failure it has closed what it took. */
 extern _PyInterpreterFrame *_PyEval_CreateInitFrame(
-    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue,
-    _PyInstr *);
+    PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, _PyInstr *);
 
 // Trampoline API
 

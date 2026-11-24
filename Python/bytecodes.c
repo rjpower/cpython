@@ -5595,44 +5595,40 @@ dummy_func(
                     "the type version differs from the cache's");
         }
 
-        op(_ALLOCATE_OBJECT, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
+        // The class's cached __init__ takes the call: a pure guard, before
+        // anything is allocated or counted
+        op(_CHECK_INIT_FUNCTION,
+                (callable: subtype(PyType_Type), self_or_null, unused[oparg]
+                 -- callable, self_or_null, unused[oparg]))
+            effects(reads) exits(next, miss)
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-            assert(!(call_state & CALL_SELF_PRESENT));
-            assert(PyType_Check(callable_o));
             PyTypeObject *tp = (PyTypeObject *)callable_o;
             assert(tp->tp_new == PyBaseObject_Type.tp_new);
             assert(tp->tp_flags & Py_TPFLAGS_HEAPTYPE);
             assert(tp->tp_alloc == PyType_GenericAlloc);
-
             PyHeapTypeObject *cls = (PyHeapTypeObject *)callable_o;
             PyFunctionObject *init_func = (PyFunctionObject *)FT_ATOMIC_LOAD_PTR_ACQUIRE(cls->_spec_cache.init);
-            EXIT_IF(init_func->vectorcall != _PyFunction_Vectorcall);
+            EXIT_IF(init_func->vectorcall != _PyFunction_Vectorcall,
+                    "the cached __init__ is called another way");
             PyCodeObject *code = (PyCodeObject *)init_func->func_code;
             EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize + _Py_InitCleanup.co_framesize));
-            PyValue init_owner = PyValue_DUP(PyValue_FromObjectBorrow(init_func));
-            STAT_INC(CALL, hit);
-            PyObject *self_o = PyType_GenericAlloc(tp, 0);
-            if (self_o == NULL) {
-                PyValue_CLOSE(init_owner);
-                ERROR_NO_POP();
-            }
-            // callable and self_or_null are owners from here on, which
-            // _CREATE_INIT_FRAME consumes; the class operand is released
-            // with the frame's other operands.
-            self_or_null = PyValue_FromObjectSteal(self_o);
-            callable = init_owner;
         }
 
+        // The helper counts the cached __init__, allocates the instance and
+        // pushes the frames; the class and the arguments stay in their homes
+        // until it releases or moves them, and on failure they are the
+        // unwinder's
         op(_CREATE_INIT_FRAME,
-                (init: consumed, self: consumed, args[oparg]: closed -- init_frame: owned))
+                (callable: closed, self_or_null: closed, args[oparg]: closed
+                 -- init_frame: owned))
             effects(runs_python) exits(next, raise)
         {
+            STAT_INC(CALL, hit);
             _PyInterpreterFrame *temp = _PyEval_CreateInitFrame(
-                tstate, frame, this_instr, init, self, next_instr);
-            // Success and failure both consumed init and self; the operands
-            // that remain are the unwinder's
-            DEAD(init);
-            DEAD(self);
+                tstate, frame, this_instr, callable, next_instr);
+            DEAD(callable);
+            DEAD(self_or_null);
             DEAD(args);
             if (temp == NULL) {
                 ERROR_NO_POP();
@@ -5645,8 +5641,8 @@ dummy_func(
             unused/1 +
             _CHECK_PEP_523 +
             _CHECK_OBJECT +
+            _CHECK_INIT_FUNCTION +
             _CHECK_RECURSION_REMAINING +
-            _ALLOCATE_OBJECT +
             _CREATE_INIT_FRAME +
             _PUSH_FRAME;
 

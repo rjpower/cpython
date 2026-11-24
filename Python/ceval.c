@@ -4455,22 +4455,34 @@ create_init_frame_window(PyThreadState *tstate, _PyInterpreterFrame *caller,
 }
 
 /* The frame of a class's __init__ for CALL_ALLOC_AND_ENTER_INIT, called with
- * the call at current: init (the function) and self (the new instance) are
- * owners that the helper consumes, and the operands fill the arguments after
- * self.  A temporary operand moves, a local is counted, and the class
- * operand is released.  On failure it has closed what it took and the error
- * is set; the caller's unwind clears the homes that remain. */
+ * the call at current, whose callable operand is the class: the guards
+ * (_CHECK_OBJECT, _CHECK_INIT_FUNCTION) checked the class and its cached
+ * __init__, which the helper counts, and it allocates the instance.  The
+ * operands fill the arguments after the instance: a temporary moves, a local
+ * is counted, and the class operand is released.  On failure it has closed
+ * what it took and the error is set; the caller's unwind clears the homes
+ * that remain, the class among them. */
 _PyInterpreterFrame *
 _PyEval_CreateInitFrame(PyThreadState *tstate, _PyInterpreterFrame *caller,
-                        _PyInstr *current, PyValue init, PyValue self,
-                        _PyInstr *next)
+                        _PyInstr *current, PyValue callable, _PyInstr *next)
 {
+    PyTypeObject *tp = (PyTypeObject *)PyValue_AsKnownObjectBorrow(callable);
+    PyFunctionObject *init_func = (PyFunctionObject *)FT_ATOMIC_LOAD_PTR_ACQUIRE(
+        ((PyHeapTypeObject *)tp)->_spec_cache.init);
+    // Counted first: the allocation may collect, and a finalizer may
+    // replace the class's __init__
+    PyValue init = PyValue_DUP(PyValue_FromObjectBorrow(init_func));
+    PyObject *self_o = PyType_GenericAlloc(tp, 0);
+    if (self_o == NULL) {
+        PyValue_CLOSE(init);
+        return NULL;
+    }
+    PyValue self = PyValue_FromObjectSteal(self_o);
     _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*current);
     /* The class call has no self: its operand list starts with the slot of a
      * self that was NULL at run time, which is not an argument. */
     int first = (word & IR_F_NO_SELF) ? 0 : 1;
     int nargs = (int)IR_C(word) - first;
-    PyFunctionObject *init_func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(init);
     PyCodeObject *init_code = (PyCodeObject *)init_func->func_code;
     if ((init_code->co_flags & CO_OPTIMIZED) &&
         !code_creates_generator(init_code) &&

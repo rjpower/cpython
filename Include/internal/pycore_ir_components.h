@@ -2513,21 +2513,26 @@
      * runs_python: reads, allocates, raises.                                 */ \
     HELPER(_PyEval_CheckExceptTypeValidValue, int, (PyThreadState *, PyValueBorrow), \
         ARGS(tstate, borrowed), STATUS(NEGATIVE, , object), EFFECTS(reads, allocates, raises)) \
-    /* Evidence (G0c batch 6): Python/ceval.c: _PyEval_CreateInitFrame: \
-     * init (the function) and self (the new instance) are consumed on \
-     * every return (its comment; create_init_frame_window and \
-     * create_init_frame close them on failure: PyValue_CLOSE(init), \
-     * PyValue_CLOSE(self) when the window cannot be allocated, \
-     * PyValue_CLEAR of every window slot on failure). On success it pushes \
-     * the init trampoline shim and the init frame (the arguments move or \
-     * are counted from the caller's homes, the class operand is released: \
-     * call_release_callable) and returns the child frame; on failure it \
-     * returns NULL with an exception set (MemoryError, or a binding error \
-     * from create_init_frame_slow). The operands that remain are the \
-     * caller's unwinder's. Callbacks: the binding of defaults and keywords \
-     * and the release of the class operand may run Python: `runs_python`. */ \
-    HELPER(_PyEval_CreateInitFrame, _PyInterpreterFrame *, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue, _PyInstr *), \
-        ARGS(tstate, frame, scalar, consumed, consumed, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* Evidence (G3a; Python/ceval.c _PyEval_CreateInitFrame).  callable \
+     * is the class operand, borrowed: the guards _CHECK_OBJECT and \
+     * _CHECK_INIT_FUNCTION checked it and its cached __init__.  The helper \
+     * reads _spec_cache.init and counts it (PyValue_DUP), then allocates \
+     * the instance (PyType_GenericAlloc: allocates; a collection may run \
+     * finalizers, so runs_python).  On success it pushes the init \
+     * trampoline shim and the init frame (_PyFrame_PushTrampolineUnchecked, \
+     * _PyFrame_PushUnchecked: writes of the data stack and tstate), moves \
+     * or counts the operands from the caller's homes into the frame \
+     * (call_take_operands; create_init_frame_window binds defaults and \
+     * keywords, which may raise and run Python), releases the class \
+     * operand from its home (call_release_callable: releases, may run \
+     * Python) and returns the child.  On failure (MemoryError from the \
+     * allocation or the window, a binding TypeError) it returns NULL with \
+     * the exception set, having closed init, the instance and every operand \
+     * it took; the homes that remain, the class among them, are the \
+     * caller's unwinder's (the uop declares them closed). */ \
+    HELPER(_PyEval_CreateInitFrame, _PyInterpreterFrame *, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, _PyInstr *), \
+        ARGS(tstate, frame, scalar, borrowed, scalar), SCALAR, \
+        EFFECTS(reads, writes, allocates, raises, releases, runs_python)) \
     /* Python/ceval.c.  Consumes obj on every return (an inline obj owes \
      * nothing): the non-object path raises TypeError through \
      * _PyErr_Format and owes nothing; every other path closes obj \

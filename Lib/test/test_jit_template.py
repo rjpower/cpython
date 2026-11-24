@@ -749,9 +749,10 @@ TEMPLATE_CASES = [
     ("import math\ndef f(a, b):\n    x = 1\n    x = math.pi\n    return x", (1, 2),
      "LOAD_ATTR_MODULE", "AB",
      [(old, m) for old in (Plain(), None) for m in (math, sys, Shape(), 4)]),
-    # A window of two temporaries.  The translator renames most SWAPs away;
-    # a chained comparison still exchanges its two operands in place.
-    ("def f(a, b):\n    return a < b < 3", (1, 2), "SWAP", ("A", "A+1"),
+    # A window of two temporaries.  The resolver renames most SWAPs away;
+    # a with statement still stages its exit and value with one.
+    ("def f(a, b):\n    with a:\n        return b", (contextlib.nullcontext(), 2),
+     "SWAP", ("A", "A+1"),
      [(x, y) for x in ANY[::2] for y in (Plain(), 7)]),
     ("def f(a, b):\n    x = 1\n    x = a < b < 3\n    return x", (1, 2), "POP_TOP", "A",
      [(x,) for x in ANY + [Plain()]]),

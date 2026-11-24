@@ -128,6 +128,7 @@ class RefKind(enum.Enum):
     home = "read from home"           # use(x): dies at reentry
     interior = "heap interior"        # a row's result: dies at any heap kill
     control = "control value"         # a computed head or frame: dies at reentry
+    anchored = "anchored borrow"      # arg(anchors, i): lives while the anchors do
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +136,7 @@ class Ref:
     kind: RefKind
     span: SrcSpan
     what: str
+    anchor: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -620,6 +622,9 @@ def take(w: Walk, st: State, vid: str, span: SrcSpan, by: str) -> Token | None:
         return None
     del st.live[vid]
     st.gone[vid] = (span, by)
+    for n, ref in st.refs.items():
+        if ref.anchor == vid:
+            st.dead[n] = (span, by)
     return token
 
 
@@ -727,7 +732,13 @@ def call_value(w: Walk, st: State, e: Call, name: str | None) -> str | None:
     if is_linear(t):
         st.live[vid] = Token(e.span, f"{e.callee}(...)")
     kind = ref_kind(t)
-    if kind is not None:
+    anchor = next((a for p, a in zip(callee.params, args)
+                   if p.name in callee.contract.borrows
+                   and handle_of(p.type) == Handle.Anchors), None)
+    if kind is not None and anchor is not None:
+        # A borrow projected from an anchor lives as long as the anchor token
+        st.refs[vid] = Ref(RefKind.anchored, e.span, f"{e.callee}(...)", anchor)
+    elif kind is not None:
         st.refs[vid] = Ref(kind, e.span, f"{e.callee}(...)")
     ensure(w, st, callee, RESULT_CASE, args, [vid])
     return vid
@@ -767,6 +778,8 @@ def kill(st: State, effects: frozenset[Effect], span: SrcSpan, what: str) -> Non
                 and not (reentry and any(s in homes for s in f.subjects))}
     for n, ref in st.refs.items():
         if n in st.dead:
+            continue
+        if ref.kind == RefKind.anchored:
             continue
         if ref.kind == RefKind.interior or reentry:
             st.dead[n] = why

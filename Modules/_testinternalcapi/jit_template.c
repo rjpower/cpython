@@ -462,15 +462,22 @@ clear_and_pop(PyThreadState *tstate, _PyInterpreterFrame *frame)
    index by its template if template, else by its form.  Returns the index
    of the next word (None if the word raised), whether the template took its
    slow path, the exception it raised, and every slot after it as
-   slot_object() gives it.  The frame is then cleared and popped. */
+   slot_object() gives it.  The frame is then cleared and popped.
+
+   mode is 0 for the form, 1 (or true) for the template and 2 for the
+   word's completion stub, whose status replaces the next index.  A handler
+   0 or more replaces the word's handler while it runs, so that a word
+   that the translator does not yet produce, a register arm, can be run;
+   the word keeps the replacement. */
 static PyObject *
 jit_template_run(PyObject *module, PyObject *args)
 {
     PyObject *func, *slots;
     unsigned int index;
     int use_template;
-    if (!PyArg_ParseTuple(args, "O!IO!p", &PyFunction_Type, &func, &index,
-                          &PyDict_Type, &slots, &use_template))
+    int handler = -1;
+    if (!PyArg_ParseTuple(args, "O!IO!i|i", &PyFunction_Type, &func, &index,
+                          &PyDict_Type, &slots, &use_template, &handler))
     {
         return NULL;
     }
@@ -489,6 +496,10 @@ jit_template_run(PyObject *module, PyObject *args)
         tstate, PyValue_FromObjectSteal(Py_NewRef(func)), previous);
     int nslots = _PyFrame_NumSlots(frame);
     const _PyIRWord *words = (const _PyIRWord *)frame->ir_words;
+    if (handler >= 0) {
+        _PyInstr *site = (_PyInstr *)&words[index];
+        *site = (*site & ~(_PyIRWord)IR_HANDLER_MASK) | (_PyIRWord)handler;
+    }
     _PyIRWord w = words[index];
     frame->instr_ptr = (_PyInstr *)&words[index];
     Py_ssize_t pos = 0;
@@ -530,11 +541,24 @@ jit_template_run(PyObject *module, PyObject *args)
     }
     tstate->current_frame = frame;
     Transfer t;
+    int status = -1;
     slow_taken = 0;
-    if (use_template) {
+    if (use_template == 2) {
+        const _PyIRStubPlan *plan = &_PyIR_StubPlans[_PyJit_CompiledHandler(w)];
+        if (plan->stub == NULL) {
+            tstate->current_frame = previous;
+            clear_and_pop(tstate, frame);
+            PyErr_SetString(PyExc_ValueError, "the word has no stub");
+            return NULL;
+        }
+        status = ((int (*)(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *))
+                  plan->stub)(tstate, frame, (_PyIRWord *)&words[index]);
+        t = (Transfer){frame, status & _PyIR_RAISED ? NULL : (_PyInstr *)&words[index]};
+    }
+    else if (use_template) {
         /* The plan's arm, as emit_unit() compiles it: a RESUME word runs
          * its family's baseline(RESUME_CHECK) template */
-        _PyJitTemplate template = _PyJit_TemplateOf(_PyJit_ArmOf(_PyJit_PlanOf(w, 0), w));
+        _PyJitTemplate template = _PyJit_Templates[_PyJit_ArmOf(_PyJit_PlanOf(w, 0), w)];
         _PyJitCode unit;
         if (template == NULL || build_unit(frame, index, template, &unit, NULL) < 0) {
             tstate->current_frame = previous;
@@ -561,7 +585,8 @@ jit_template_run(PyObject *module, PyObject *args)
         PyTuple_SET_ITEM(out, i, o);
     }
     assert(t.frame == frame || t.next == NULL);
-    PyObject *next = t.next == NULL ? Py_NewRef(Py_None)
+    PyObject *next = status >= 0 ? PyLong_FromLong(status)
+        : t.next == NULL ? Py_NewRef(Py_None)
         : PyLong_FromLong((long)(t.next - (_PyInstr *)words));
     clear_and_pop(tstate, frame);
     if (out == NULL || next == NULL) {
@@ -600,7 +625,7 @@ jit_template_size(PyObject *module, PyObject *args)
     _PyInterpreterFrame *frame = _PyFrame_PushUnchecked(
         tstate, PyValue_FromObjectSteal(Py_NewRef(func)), tstate->current_frame);
     _PyIRWord w = ((const _PyIRWord *)frame->ir_words)[index];
-    _PyJitTemplate template = _PyJit_TemplateOf(_PyJit_CompiledHandler(w));
+    _PyJitTemplate template = _PyJit_Templates[_PyJit_CompiledHandler(w)];
     _PyJitCode unit;
     size_t bytes[2];
     int built = template == NULL ? -1 : build_unit(frame, index, template, &unit, bytes);

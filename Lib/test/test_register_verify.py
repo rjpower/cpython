@@ -644,7 +644,37 @@ class TransferTests(unittest.TestCase):
                 self.assertEqual(sorted(found), sorted(expected))
 
 
+# A borrow projected from an anchor lives as long as the anchor token
+ANCHORED = VERIFY_BASE + """\
+extern helper arg(a:Anchors, i:Size) -> B effects(reads) feedback() borrows(a) pending;
+macro anchored_across(a:Anchors) cases(done()) effects(writes, reads) feedback() borrows(a)
+{
+  entry():
+    let w:B = arg(a, 0);
+    let _:Unit = scribble();
+    let v:B = peek(w);
+    exit done();
+}
+macro anchored_after_close(a:Anchors) cases(done()) effects(releases, reads) feedback()
+{
+  entry():
+    let w:B = arg(a, 0);
+    let _:Unit = drop_anchors(a);
+    let v:B = peek(w);
+    exit done();
+}
+"""
+
+
 class VerifyTests(unittest.TestCase):
+    def test_anchored_borrow(self):
+        found = verify_source(ANCHORED)
+        self.assertEqual(len(found), 1, found)
+        (line, column, definition, message) = found[0]
+        self.assertEqual(definition, "anchored_after_close")
+        self.assertTrue(message.startswith("borrow: w (anchored borrow by arg(...)"),
+                        message)
+
     def test_base_is_clean(self):
         self.assertEqual(verify_source(VERIFY_BASE), [])
 

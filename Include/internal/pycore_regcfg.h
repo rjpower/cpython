@@ -337,7 +337,6 @@ int _PyRegCfg_Compact(_PyRegCfg *cfg);
 int _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical);
 
 /* The passes, in the order the driver runs them */
-int _PyRegPass_SwapRename(_PyRegCfg *cfg);
 int _PyRegPass_CopyProp(_PyRegCfg *cfg);
 int _PyRegPass_StoreElim(_PyRegCfg *cfg);
 int _PyRegPass_UnpackLocals(_PyRegCfg *cfg);

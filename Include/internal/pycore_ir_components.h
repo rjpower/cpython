@@ -109,14 +109,14 @@
     PRIMITIVE(PyValue_IsNull, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(null | nonnull), EFFECTS()) \
     PRIMITIVE(PyValue_IsInlineInt, bool, (PyValueBorrow), \
-              ARGS(borrowed), TEST(inline_int), EFFECTS()) \
+              ARGS(borrowed), TEST(inline_int | rest), EFFECTS()) \
     /* PyValue_IsObject (Include/internal/pycore_pyvalue.h): bits > 2, in \
      * pointer space and not tagged.  It is false for NULL (bits 0), so its \
      * false branch says `inline` only of a value that is not NULL: the \
      * argument must be.  Every caller in bytecodes.c tests a stack operand \
      * or an argument slot, which is not NULL */ \
     PRIMITIVE(PyValue_IsObject, int, (PyValueBorrow), \
-              ARGS(borrowed nonnull), TEST(object | inline), EFFECTS()) \
+              ARGS(borrowed nonnull), TEST(object | rest), EFFECTS()) \
     /* Each tag test below is a comparison of the word's bits against the \
      * region bounds of pycore_value.h (the cited predicate); none reads \
      * memory.  A test with no fact of the vocabulary to declare declares \
@@ -124,11 +124,11 @@
     PRIMITIVE(PyValue_IsPointerSpace, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(), EFFECTS()) \
     PRIMITIVE(PyValue_IsInline, bool, (PyValueBorrow), \
-              ARGS(borrowed), TEST(inline), EFFECTS()) \
+              ARGS(borrowed), TEST(inline | rest), EFFECTS()) \
     PRIMITIVE(PyValue_IsInlineFloat, bool, (PyValueBorrow), \
-              ARGS(borrowed), TEST(inline_float), EFFECTS()) \
+              ARGS(borrowed), TEST(inline_float | rest), EFFECTS()) \
     PRIMITIVE(PyValue_IsTaggedIndex, bool, (PyValueBorrow), \
-              ARGS(borrowed), TEST(), EFFECTS()) \
+              ARGS(borrowed), TEST(tagged_index | rest), EFFECTS()) \
     /* (a & b) >= Py_INT_BASE: exactly IsInlineInt(a) and IsInlineInt(b) \
      * (the comment above its definition in pycore_value.h: the AND has the \
      * top Py_INT_SHIFT bits set only if both words do) */ \
@@ -173,11 +173,11 @@
               ARGS(scalar), VALUE(inline inline_float), EFFECTS()) \
     /* Tagged indices (pycore_value.h): arithmetic on the word */ \
     PRIMITIVE(PyValue_TagIndex, PyValue, (intptr_t), \
-              ARGS(scalar), VALUE(inline), EFFECTS()) \
+              ARGS(scalar), VALUE(inline tagged_index), EFFECTS()) \
     PRIMITIVE(PyValue_UntagIndex, intptr_t, (PyValueBorrow), \
               ARGS(borrowed), SCALAR, EFFECTS()) \
     PRIMITIVE(PyValue_IncrementTaggedIndexNoOverflow, PyValue, (PyValue), \
-              ARGS(consumed), VALUE(inline), EFFECTS()) \
+              ARGS(consumed), VALUE(inline tagged_index), EFFECTS()) \
     /* PyValue_FromInt64 (pycore_value.h): _PyValue_FromIntScaled when the \
      * int fits inline, else _PyValue_BoxInt64, which gives NULL only when \
      * its allocation fails */ \
@@ -1180,7 +1180,7 @@
     /* ceval.c: {iterable, tagged index 0}, {iterator, NULL}, or {NULL, NULL} with an exception set (G0a4: a CASES result) */ \
     HELPER(_PyEval_GetIter, _PyValuePair, (PyValue, int), \
         ARGS(consumed, scalar), \
-        CASES(first(null) second(null) raised, first(owned) second(inline nullable)), EFFECTS(runs_python)) \
+        CASES(first(null) second(null) raised, first(owned) second(inline encoding(tagged_index|null))), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_ImportFromValue, PyValue, (PyThreadState *, PyValueBorrow, PyObject *), \
         ARGS(tstate, borrowed, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \

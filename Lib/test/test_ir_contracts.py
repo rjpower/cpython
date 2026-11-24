@@ -1460,6 +1460,111 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % "reads, runs_python(branch|nowhere)",
                      r"confines an effect to nowhere, which is no exit")
 
+    def test_the_representation_table(self):
+        # _TO_BOOL_INT: an exact int whose one encoding tested false is an
+        # object
+        source = """
+            op(_OP, (value: consumed exact(%s) -- res: owned exact(PyBool_Type), v: moved(value)))
+                effects(reads) exits(next)
+            {
+                bool zero;
+                if (%s(value)) {
+                    zero = 0;
+                }
+                else {
+                    zero = _PyLong_IsZero((PyLongObject *)PyValue_AsKnownObjectBorrow(value));
+                }
+                res = zero ? PyValue_False : PyValue_True;
+                v = value;
+                DEAD(value);
+            }
+        """
+        self.verify(source % ("PyLong_Type", "PyValue_IsInlineInt"))
+        # The false test of an encoding the type lacks says nothing
+        self.refuses(source % ("PyLong_Type", "PyValue_IsInlineFloat"),
+                     r"passes `value` to PyValue_AsKnownObjectBorrow, which requires "
+                     r".*object")
+        # Two types, two encodings: one tested false leaves the other
+        self.refuses(source % ("PyLong_Type|PyFloat_Type", "PyValue_IsInlineInt"),
+                     r"passes `value` to PyValue_AsKnownObjectBorrow, which requires "
+                     r".*object")
+        # exact(T) and inline: T's one encoding
+        self.verify("""
+            op(_OP, (value: exact(PyLong_Type) -- value)) effects() exits(next, miss) {
+                EXIT_IF(!PyValue_IsInline(value));
+                int64_t n = PyValue_InlineInt64(value);
+            }
+        """.replace("value)) effects()", "value: inline_int)) effects()"))
+        # The table against the tag definitions: each encoding's TEST row
+        # tests it, and pycore_value.h's table of words has one region of
+        # each beside the pointer space
+        for encoding, (test, _) in ir_contract.ENCODINGS.items():
+            with self.subTest(encoding=encoding):
+                # A partition: true, the encoding; false, the rest
+                row = self.table[test]
+                self.assertEqual(row.result.tests, ((
+                    frozenset({ir_contract.VFact(encoding)}),
+                    frozenset({ir_contract.VFact(ir_contract.EXCLUDES, encoding)})),))
+        header = Path(__file__).parents[2] / "Include/internal/pycore_value.h"
+        words = re.findall(r"^\s+0x[0-9A-F]{4}(?:-0x[0-9A-F]{4})?\s+\S.*?\s{2,}(\w.*)$",
+                           header.read_text(), re.M)
+        regions = {"index": "tagged_index", "inline float": "inline_float",
+                   "inline int51": "inline_int"}
+        found = {regions[w.split(" (")[0].split(",")[0]] for w in words
+                 if w.split(" (")[0].split(",")[0] in regions}
+        self.assertEqual(found, set(ir_contract.ENCODINGS))
+
+    def test_is_object_is_a_partition(self):
+        # PyValue_IsObject: true, an object; false, the value's kinds of
+        # word but object.  _UNPACK_SEQUENCE drops a number on the false arm
+        self.verify("""
+            op(_OP, (seq: consumed -- unused[oparg], top[0]: owned))
+                effects(runs_python) exits(next, raise)
+            {
+                if (!PyValue_IsObject(seq)) {
+                    _PyErr_Format(tstate, PyExc_TypeError, "cannot unpack", PyValue_TYPE(seq)->tp_name);
+                    DEAD(seq);
+                    ERROR_IF(true);
+                }
+                PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
+                int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
+                ERROR_IF(res == 0);
+            }
+        """)
+        # A cursor is a tagged index where it is no object: not a number
+        source = """
+            op(_OP, (iter: %s -- iter)) effects() exits(next) {
+                if (!PyValue_IsObject(iter)) {
+                    int64_t n = PyValue_InlineInt64(iter);
+                }
+            }
+        """
+        self.verify(source % "exact(PyLong_Type)")
+        self.refuses(source % "encoding(object|tagged_index)",
+                     r"passes `iter` to PyValue_InlineInt64, which requires")
+
+    def test_a_union_of_encodings_with_null(self):
+        # _GET_ITER's index_or_null: a tagged index, or NULL
+        source = """
+            op(_OP, (-- index_or_null: owned %s)) effects() exits(next) {
+                if (oparg) {
+                    index_or_null = PyValue_TagIndex(0);
+                }
+                else {
+                    index_or_null = %s;
+                }
+            }
+        """
+        self.verify(source % ("encoding(tagged_index|null)", "PyValue_NULL"))
+        self.verify(source % ("encoding(tagged_index|null)", "PyValue_TagIndex(1)"))
+        self.refuses(source % ("tagged_index", "PyValue_NULL"),
+                     r"`index_or_null` may be NULL from PyValue_NULL")
+        self.refuses(source % ("encoding(tagged_index|null)", "PyValue_FromDoubleNotNaN(1.0)"),
+                     r"`index_or_null` is declared encoding\(null\|tagged_index\)|"
+                     r"`index_or_null` is declared encoding\(tagged_index\|null\)")
+        self.refuses(source % ("encoding(tagged_index|spam)", "PyValue_NULL"),
+                     r"spam is no kind of word")
+
     def test_identities_of_static_objects(self):
         # F21, _GUARD_LOAD_SUPER_ATTR_METHOD: a CONSTANT row names a static
         # object by address; a comparison with it establishes is(K)
@@ -2117,7 +2222,8 @@ class VerifierTests(unittest.TestCase):
             }
         """).uops["_OP"])
         self.assertEqual(contract.outputs[0], ir_contract.Item(
-            "value", "owned", ir_contract.HOME_SOURCE, nullable=True))
+            "value", "owned", ir_contract.HOME_SOURCE, words=ir_contract.ORDINARY_WORDS))
+        self.assertTrue(contract.outputs[0].nullable)
 
     # F18: a frame home is not the heap
 
@@ -2415,7 +2521,7 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual(ir_contract.implied({null}), {null})
         # A word that is NULL where a guard passes declares it
         source = """
-            op(_GUARD, (x -- x: %s)) effects() exits(next, deopt) {
+            op(_GUARD, (x: nullable -- x: %s)) effects() exits(next, deopt) {
                 DEOPT_IF(!PyValue_IsNull(x));
             }
         """

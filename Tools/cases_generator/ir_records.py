@@ -599,7 +599,7 @@ FACT_KINDS = frozenset((
     "FUNC_VERSION", "LENGTH", "IN_BOUNDS", "NON_NEGATIVE", "NON_ZERO",
     "ARGCOUNT", "OPERAND_COUNT", "CALL_FLAGS", "SELF", "TYPE_FLAG", "TYPE_SLOT",
     "VECTORCALL", "UNIQUE", "ASCII", "NOT_SUBTYPE", "KEYS_KIND", "ENTRY_KEY",
-    "NO_MANAGED_DICT",
+    "NO_MANAGED_DICT", "TAGGED_INDEX", "ENCODING",
 ))
 
 # Predicates of the thread or interpreter, which hold no fact of an operand

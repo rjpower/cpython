@@ -88,7 +88,8 @@ ARG_MODES = ("borrowed", "consumed", "taken", "scalar", "object", "tstate", "fra
 # Facts: the vocabulary's words and the record's Fact kinds.  A fact with an
 # argument is written `kind(arg)`; `exact(T1|T2)` is a union of exact types,
 # `type_slot(slot,fn)` a type slot's value, `in_bounds(x)` an index within
-# the length of input x, `is(K)` the identity of a CONSTANT row's value.
+# the length of input x, `is(K)` the identity of a CONSTANT row's value,
+# `encoding(E1|E2|null)` a union of encodings (the representation table).
 FACT_KIND = {
     "nonnull": "NOT_NULL", "inline": "NUMBER", "inline_int": "INLINE_INT",
     "inline_float": "INLINE_FLOAT", "object": "OBJECT", "exact": "EXACT_TYPE",
@@ -100,12 +101,13 @@ FACT_KIND = {
     "type_slot": "TYPE_SLOT", "class_version": "CLASS_VERSION",
     "func_version": "FUNC_VERSION", "argcount": "ARGCOUNT", "vectorcall": "VECTORCALL",
     "call_flags": "CALL_FLAGS", "ascii": "ASCII", "no_managed_dict": "NO_MANAGED_DICT",
-    "unique": "UNIQUE", "self": "SELF",
+    "unique": "UNIQUE", "self": "SELF", "tagged_index": "TAGGED_INDEX",
+    "encoding": "ENCODING",
 }
 VOCABULARY_OF_KIND = {v: k for k, v in FACT_KIND.items()}
 FACTS_WITH_ARGUMENT = frozenset(("exact", "type_version", "shape", "keys_version", "length",
                                  "in_bounds", "is", "subtype", "not_subtype", "not_exact",
-                                 "type_flag", "type_slot", "self"))
+                                 "type_flag", "type_slot", "self", "encoding"))
 # The call-shape kinds take a value where the guard names one
 FACTS_WITH_OPTIONAL_ARGUMENT = frozenset(("class_version", "func_version", "argcount",
                                           "vectorcall", "call_flags"))
@@ -124,7 +126,22 @@ SITE_FACTS = frozenset(("unique",))
 # heap kills and reentry do not (item 2 of G0a4, V8's implicit operands)
 STATE_FACTS = frozenset(("self",))
 STATE_ARGS = {"self": ("present", "absent")}
-NUMBER_TYPES = ("PyLong_Type", "PyFloat_Type")
+# The representation table (design 1.1; the table of words in
+# pycore_value.h): each encoding of a value that is not NULL and not an
+# object, the TEST row that decides it, and the exact type of its values.
+# A tagged index (a FOR_ITER cursor, a saved lasti) is no Python value and
+# has no type.  A type without an encoding here is an object whenever it is
+# exact; the static constants (PyValue_None, PyValue_True) are objects.
+ENCODINGS = {
+    "inline_int": ("PyValue_IsInlineInt", "PyLong_Type"),
+    "inline_float": ("PyValue_IsInlineFloat", "PyFloat_Type"),
+    "tagged_index": ("PyValue_IsTaggedIndex", None),
+}
+# The members of an `encoding(...)` union: the encodings, an object, NULL
+WORD_KINDS = (*ENCODINGS, "object", "null")
+TYPE_ENCODINGS = {t: frozenset(e for e, (_, ty) in ENCODINGS.items() if ty == t)
+                  for t in sorted({ty for _, ty in ENCODINGS.values() if ty})}
+NUMBER_TYPES = tuple(TYPE_ENCODINGS)
 
 
 @dataclass(frozen=True, order=True)
@@ -151,25 +168,105 @@ OBJECT = VFact("object")
 INLINE = VFact("inline")
 
 
+# The representation lattice.  What a value's word may be is one set of
+# kinds of word (WORD_KINDS); every representation fact is a spelling of a
+# set in it, and word_kinds() intersects them.  An ordinary value is never a
+# tagged index: a value may be one only where a declaration or a row says
+# so (a cursor), by naming tagged_index.
+ALL_WORDS = frozenset(WORD_KINDS)
+ORDINARY_WORDS = ALL_WORDS - {"tagged_index"}
+INLINE_WORDS = frozenset(e for e, (_, ty) in ENCODINGS.items() if ty)
+SPELLINGS = {"null": frozenset({"null"}), "object": frozenset({"object"}),
+             "inline": INLINE_WORDS, **{e: frozenset({e}) for e in ENCODINGS}}
+# The facts that only an object has
+OBJECT_KINDS = frozenset(("type_version", "has_values", "shape", "keys_version", "length",
+                          "subtype", "type_flag", "type_slot", "class_version",
+                          "func_version", "ascii", "no_managed_dict", "unique"))
+# excludes(S): the value's set, whatever it is, minus S: a TEST row's
+# `rest` side (the false side of PyValue_IsObject is the value's kinds of
+# word but object).  It stays with the value's facts, so that it applies
+# to the set the value has; it is no vocabulary word and is not exported
+EXCLUDES = "excludes"
+REPRESENTATION = frozenset((*SPELLINGS, "nonnull", "encoding", EXCLUDES))
+
+
+def _members(fact: VFact) -> frozenset[str]:
+    return frozenset(fact.arg.split("|")) if fact.arg else frozenset()
+
+
+def word_kinds(facts, universe: frozenset[str] | None = None) -> frozenset[str]:
+    """The kinds of word a value with facts may be: the intersection of the
+    sets that its facts spell, within all kinds if one names tagged_index
+    and the ordinary ones if none does"""
+    if universe is None:
+        explicit = any("tagged_index" in (_members(f) if f.kind == "encoding" else {f.kind})
+                       for f in facts)
+        universe = ALL_WORDS if explicit else ORDINARY_WORDS
+    found = set(universe)
+    for f in facts:
+        if f.kind in SPELLINGS:
+            found &= SPELLINGS[f.kind]
+        elif f.kind == "encoding":
+            found &= _members(f)
+        elif f.kind == EXCLUDES:
+            found -= _members(f)
+        elif f.kind == "exact":
+            # exact(T): T's encodings (the representation table), or an object
+            found &= {"object"}.union(*(TYPE_ENCODINGS.get(t, ())
+                                        for t in f.arg.split("|")))
+        elif f.kind in OBJECT_KINDS:
+            found &= {"object"}
+        else:
+            # Any other fact (nonnull, is(K), in_bounds(x)...) is of a value
+            found.discard("null")
+    return frozenset(found)
+
+
+def spelled(kinds: frozenset[str]) -> set[VFact]:
+    "the plain spellings of a set of kinds of word: each one that contains it"
+    found = set()
+    if "null" not in kinds:
+        found.add(NONNULL)
+    elif kinds == {"null"}:
+        found.add(NULL_FACT)
+    if kinds and "null" not in kinds:
+        found |= {VFact(name) for name, s in SPELLINGS.items() if kinds <= s}
+    return found
+
+
 def implied(facts) -> frozenset[VFact]:
-    "facts and every fact that they imply (design.md 1.1)"
-    result = set(facts)
-    for f in list(result):
-        if f.kind == "inline_int":
-            result |= {INLINE, VFact("exact", "PyLong_Type")}
-        elif f.kind == "inline_float":
-            result |= {INLINE, VFact("exact", "PyFloat_Type")}
-        elif f.kind == "exact" and not set(f.arg.split("|")) & set(NUMBER_TYPES):
-            result.add(OBJECT)
-        elif f.kind in ("type_version", "has_values", "keys_version", "length", "subtype",
-                        "type_flag", "type_slot", "class_version", "func_version",
-                        "ascii", "no_managed_dict", "unique"):
-            result.add(OBJECT)
-        elif f.kind == "shape":
-            result |= {VFact("has_values"), OBJECT}
-    if result and NULL_FACT not in result:
-        result.add(NONNULL)
+    """facts and every fact that they imply (design.md 1.1), with their
+    representation in its one form: the kinds of word they allow, spelled
+    by the plain words that contain it and by encoding(...) where those do
+    not say it exactly"""
+    facts = set(facts)
+    if any(f.kind == "shape" for f in facts):
+        facts.add(VFact("has_values"))
+    kinds = word_kinds(facts)
+    for e, (_, ty) in ENCODINGS.items():
+        if kinds == {e} and ty:
+            facts.add(VFact("exact", ty))
+    result = {f for f in facts if f.kind not in REPRESENTATION or f.kind == EXCLUDES}
+    result |= spelled(kinds)
+    if word_kinds(result) != kinds or ("tagged_index" in kinds and kinds != {"tagged_index"}):
+        result.add(VFact("encoding", "|".join(sorted(kinds))))
     return frozenset(result)
+
+
+def satisfied(fact: VFact, facts) -> bool:
+    "whether facts show fact; a representation fact, by a set within its own"
+    if fact.kind not in REPRESENTATION:
+        return fact in facts
+    have = word_kinds(facts)
+    return have <= word_kinds({fact}, ALL_WORDS if "tagged_index" in have else ORDINARY_WORDS)
+
+
+def _type_encodings(facts) -> frozenset[str] | None:
+    "The encodings that a value's exact types allow, if it has an exact type"
+    types = _exact_types(facts)
+    if types is None:
+        return None
+    return frozenset().union(*(TYPE_ENCODINGS.get(t, frozenset()) for t in types))
 
 
 def without_heap_facts(facts: frozenset[VFact]) -> frozenset[VFact]:
@@ -187,9 +284,14 @@ def parse_fact(word: str, where: Token | None) -> VFact:
                    f"({', '.join(sorted(FACT_KIND))})")
         raise analysis_error(message, where) if where else ValueError(message)
     kind, arg = m.group(1), m.group(2) or ""
-    shape = {"exact": r"\w+(\|\w+)*", "type_slot": r"\w+,\w+"}.get(kind, r"\w+")
+    shape = {"exact": r"\w+(\|\w+)*", "encoding": r"\w+(\|\w+)*",
+             "type_slot": r"\w+,\w+"}.get(kind, r"\w+")
     if arg and not re.fullmatch(shape, arg):
         message = f"`{word}`: the argument of `{kind}` is {shape}"
+        raise analysis_error(message, where) if where else ValueError(message)
+    if kind == "encoding" and not set(arg.split("|")) <= set(WORD_KINDS):
+        message = (f"`{word}`: {', '.join(sorted(set(arg.split('|')) - set(WORD_KINDS)))} "
+                   f"is no kind of word ({', '.join(WORD_KINDS)})")
         raise analysis_error(message, where) if where else ValueError(message)
     if kind in FACTS_WITH_OPTIONAL_ARGUMENT:
         pass
@@ -508,8 +610,14 @@ def _parse_result(text: str) -> Result:
                     bar = i
                     break
             true, false = entry[:bar], entry[bar + 1:]
-            tests.append((frozenset(parse_fact(w, None) for w in true.split()),
-                          frozenset(parse_fact(w, None) for w in false.split())))
+            yes = frozenset(parse_fact(w, None) for w in true.split())
+            if false.split() == ["rest"]:
+                # A partition: where the test fails, the value is what it
+                # was but for the kinds of word the true side spells
+                no = frozenset({VFact(EXCLUDES, "|".join(sorted(word_kinds(yes, ALL_WORDS))))})
+            else:
+                no = frozenset(parse_fact(w, None) for w in false.split())
+            tests.append((yes, no))
         return Result("TEST", tests=tuple(tests))
     for shape in ("VALUE_OR_NULL", "VALUE"):
         if (inner := _inner(text, shape)) is not None:
@@ -967,12 +1075,18 @@ class Item:
     mode: str                   # "" for a pass-through
     source: str = ""            # moved(x): x
     facts: frozenset[VFact] = frozenset()
-    nullable: bool = False
+    # The kinds of word its value may be (the representation lattice): its
+    # facts', not NULL unless it is declared `nullable` or a union with null
+    words: frozenset[str] = ORDINARY_WORDS - {"null"}
     array: bool = False
     size: str = ""              # an array's size, as declared
     # The facts its value has at the handler's entry from a producer (F7);
     # not requirements, and not in facts
     assumed: tuple[Assumption, ...] = ()
+
+    @property
+    def nullable(self) -> bool:
+        return "null" in self.words
 
 
 @dataclass(frozen=True)
@@ -1051,7 +1165,11 @@ def _item(stack_item, modes: tuple[str, ...], where: Token) -> Item:
         raise analysis_error(f"`{name}` declares no mode ({', '.join(modes)})", where)
     if mode and through:
         raise analysis_error(f"`{name}` passes through, so it takes no mode", where)
-    return Item(name, mode, source, frozenset(facts), nullable,
+    # `nullable` spells the item without its default, nonnull
+    kinds = word_kinds(set(facts) | (set() if nullable else {NONNULL}))
+    if any(f.kind == "encoding" and "null" in f.arg.split("|") for f in facts):
+        kinds = word_kinds(facts)       # encoding(tagged_index|null)
+    return Item(name, mode, source, frozenset(facts), kinds,
                 stack_item.is_array(), stack_item.size, assumed)
 
 
@@ -1801,6 +1919,11 @@ def _intersection(found: list[Facts]) -> Facts:
         if all(t is not None for t in types) and not any(f.kind == "exact" for f in common):
             union = frozenset.union(*types)
             common = implied(common | {VFact("exact", "|".join(sorted(union)))})
+        # The kinds of word join by their union: NULL on one path and a
+        # tagged index on another is encoding(null|tagged_index)
+        union = frozenset.union(*(word_kinds(f[n]) for f in found))
+        if word_kinds(common) != union:
+            common = implied(common | {VFact("encoding", "|".join(sorted(union)))})
         result[n] = common
     return result
 
@@ -1883,10 +2006,14 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
     if call is not None and call[0].result.shape == "TEST":
         row, args = call
         facts: dict[str, frozenset[VFact]] = {}
-        for arg, (true, false) in zip(args, row.result.tests):
+        for spec, arg, (true, false) in zip(row.args, args, row.result.tests):
             found = true if holds else false
             if not found:
                 continue
+            if any(f.kind == EXCLUDES for f in found):
+                # The rest of what the argument may be, which the row
+                # requires of it
+                found = found | spec.facts
             name = views.resolve(arg)
             if name is None:
                 return None
@@ -2130,7 +2257,8 @@ class OwnershipWalk:
         left in a home that a reentry site may have rewritten"""
         if self.exit is None or name in self.exit.rehomed:
             return frozenset()
-        return without_site_facts(self.exit.facts.get(name, frozenset()))
+        return frozenset(f for f in without_site_facts(self.exit.facts.get(name, frozenset()))
+                         if f.kind != EXCLUDES)
 
     # -- exits
 
@@ -2238,7 +2366,8 @@ class OwnershipWalk:
                     self.fail(where, f"`{out.name}` may be NULL from {source}, and nothing "
                               "raises on it on every path to next")
                 self.fail(where, f"on next, `{out.name}` is not assigned on every path")
-            missing = implied(out.facts) - live
+            missing = {f for f in implied(out.facts) - live
+                       if not satisfied(f, live)}
             if missing:
                 self.fail(where, f"on next, `{out.name}` is declared "
                           f"{', '.join(sorted(map(str, missing)))}, which does not hold on "
@@ -2283,8 +2412,13 @@ class OwnershipWalk:
             if spec.mode == "owned":
                 st.owners[field_] = HELD
                 self.new.add(field_)
-            facts = spec.facts | ({INLINE} if spec.mode == "inline" else set())
-            if spec.nullable:
+            # An inline value owes nothing: it is no object
+            facts = spec.facts | ({VFact(EXCLUDES, "object")} if spec.mode == "inline"
+                                  else set())
+            if any(f.kind == "encoding" and "null" in _members(f) for f in spec.facts):
+                # A union with null says what the field is on either path
+                st.assign(field_, facts, None, name)
+            elif spec.nullable:
                 st.assign(field_, frozenset(), facts | {NONNULL}, name)
             else:
                 st.assign(field_, facts | {NONNULL}, None, name)
@@ -2387,8 +2521,9 @@ class OwnershipWalk:
 
     def owes_nothing(self, facts: frozenset) -> bool:
         "whether a value with facts is inline or a CONSTANT row's (V8's roots)"
-        return INLINE in facts or any(
-            f.kind == "is" and is_value_constant(self.table.get(f.arg)) for f in facts)
+        # A word that is neither an object nor NULL: an inline number, a
+        # tagged index
+        return not word_kinds(facts) & {"object", "null"} or any(f.kind == "is" and is_value_constant(self.table.get(f.arg)) for f in facts)
 
     def join(self, ends: list[_State | None]) -> _State | None:
         """where paths meet: the same obligations; the facts that all of them
@@ -3351,7 +3486,8 @@ def check_results(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
             for gives, mode, source in _value_results(uop, where, rhs, table, inputs):
                 if NULL_FACT in gives:
                     continue        # NULL: the walk holds it to nullable
-                missing = sorted(map(str, implied(out.facts) - gives - {NONNULL}))
+                missing = sorted(str(f) for f in implied(out.facts) - gives - {NONNULL}
+                                 if not satisfied(f, gives))
                 if missing:
                     raise analysis_error(
                         f"{uop.name}: `{out.name}` is declared {', '.join(missing)}, but "
@@ -3920,7 +4056,14 @@ def _stated_facts(cond: list[str], views: Views, table: dict[str, Row],
             name = views.resolve(arg)
             if name is None:
                 continue
-            for f in sorted(true | false):
+            sides = set(true | false)
+            have = found[0].get(name, frozenset())
+            if any(f.kind == EXCLUDES for f in false):
+                # A `rest` side, where the test failed, states what remains
+                # in the plain words the record has today (records: G0d)
+                sides = set(true) if true <= have else {
+                    f for f in have if f.kind in SPELLINGS}
+            for f in sorted(sides):
                 if f in found[0].get(name, ()) and f not in result.get(name, []):
                     result.setdefault(name, []).append(f)
         if row.result.shape == "MEASURE":

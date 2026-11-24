@@ -974,10 +974,11 @@ class TemplateGraphTests(unittest.TestCase):
         self.assertEqual(facts("PyValue_IsNull"), (False, True))
         self.assertEqual(facts("PyValue_IsObject"), (True, False))
         self.assertEqual(facts("PyValue_IsInlineInt"), (True, False))
-        # No fact is declared of these: they show nothing, though a word
+        # No fact is declared of this: it shows nothing, though a word
         # outside pointer space is not NULL
         self.assertEqual(facts("PyValue_IsPointerSpace"), (False, False))
-        self.assertEqual(facts("PyValue_IsTaggedIndex"), (False, False))
+        # A tagged index is an encoding of the representation table
+        self.assertEqual(facts("PyValue_IsTaggedIndex"), (True, False))
         # A primitive without a row shows nothing
         self.assertEqual(facts("no_such_primitive"), (False, False))
 

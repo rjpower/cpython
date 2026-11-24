@@ -3769,12 +3769,21 @@ class TestShapeReadMetadata(unittest.TestCase):
 
     def shape_read_handler(self, source, name):
         # These cases test the generator's shape-read rules, which run after
-        # the declared contract's verifier; _LOAD_ATTR_SHAPE's declaration
-        # would refuse most edits first, so the edits run on it undeclared
-        declared = ("leaf op(_LOAD_ATTR_SHAPE, (offset/1, owner: consumed -- attr: owned))\n"
-                    "            effects(reads, releases) exits(next)\n        {")
-        source = source.replace(
-            declared, "leaf op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr)) {", 1)
+        # the declared contract's verifier; the declarations of
+        # _LOAD_ATTR_SHAPE and _GUARD_SHAPE_READ would refuse most edits
+        # first, so the edits run on them undeclared
+        undeclared = (
+            ("leaf op(_LOAD_ATTR_SHAPE, (offset/1, owner: consumed -- attr: owned))\n"
+             "            effects(reads, releases) exits(next)\n        {",
+             "leaf op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr)) {"),
+            ("leaf op(_GUARD_SHAPE_READ,\n"
+             "                (type_version/2, shape/0, owner: object\n"
+             "                 -- owner: shape(shape) type_version(type_version)))\n"
+             "            effects(reads) exits(next, miss)\n        {",
+             "leaf op(_GUARD_SHAPE_READ, (type_version/2, shape/0, owner -- owner)) {"),
+        )
+        for declared, bare in undeclared:
+            source = source.replace(declared, bare, 1)
         Path(self.temp_input_filename).write_text(source)
         analysis = analyzer.analyze_files([self.temp_input_filename])
         formats = ir_generator.compute_formats(analysis)

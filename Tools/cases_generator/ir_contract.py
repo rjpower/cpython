@@ -3116,8 +3116,13 @@ class OwnershipWalk:
                                       f"exact({destructor.frees}), which it is not shown "
                                       "to be")
                 name = views.resolve(arg)
-                if name is not None and spec.facts:
-                    missing = implied(spec.facts) - state.facts.get(name, frozenset())
+                nested = name is None and _call_of(_uncast(arg), self.table) is not None
+                if spec.facts and (name is not None or nested):
+                    # What the argument is shown to be: a named value's
+                    # facts, or a nested row call's result facts
+                    missing = implied(spec.facts) - (
+                        state.facts.get(name, frozenset()) if name is not None
+                        else argument_facts(arg, self.table))
                     if missing:
                         self.fail(tkn, f"passes `{' '.join(arg)}` to {row.name}, which "
                                   f"requires {', '.join(sorted(map(str, missing)))} of it")
@@ -4018,6 +4023,20 @@ def check_identities(uop: Uop, contract: Contract, table: dict[str, Row]) -> Non
 
 
 _VERIFIED: set[int] = set()
+
+
+def argument_facts(arg: list[str], table: dict[str, Row]) -> frozenset:
+    """The facts of an argument that is a row's call: its result's facts,
+    with nonnull for a VALUE that is never NULL; none for anything else"""
+    call = _call_of(_uncast(arg), table)
+    if call is None:
+        return frozenset()
+    result = call[0].result
+    if result.shape == "VALUE" and result.null_iff < 0:
+        return implied(result.facts | {NONNULL})
+    if result.shape in ("VALUE", "VALUE_OR_NULL"):
+        return implied(result.facts) - {NONNULL}
+    return frozenset()
 
 
 def assumed_result_of(texts: list[str], table: dict[str, Row]) -> tuple[str, Row] | None:

@@ -2000,7 +2000,8 @@ def names_target_only(inst: Instruction) -> bool:
 # their packed opargs keep role IMM.
 SLOT_VALUE_READS = {        # f(GETLOCAL(oparg), ...) reads the slot's value
     "PyValue_DUP", "PyValue_IsNull", "PyCell_NewValue",
-    "PyValue_AsKnownObjectBorrow", "PyValue_Borrow",
+    "PyValue_AsKnownObjectBorrow", "PyValue_Borrow", "_PyValue_BoundLocal",
+    "_PyValue_CellLocal",
 }
 SLOT_ADDRESS_READS: set[str] = set()  # f(&GETLOCAL(oparg)) reads the slot in place
 SLOT_ADDRESS_WRITES = {     # f(&GETLOCAL(oparg), ...) may store to the slot
@@ -8445,9 +8446,9 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
         return "_PyIR_TRANSFER_PRESERVE" if bodies_match(body) else unknown
 
     scalar = {
-        "LOAD_CONST": "{ value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); }",
-        "LOAD_CONST_INLINE_INT": "{ value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); assert(PyValue_IsInlineInt(value)); }",
-        "LOAD_CONST_INLINE_FLOAT": "{ value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); assert(PyValue_IsInlineFloat(value)); }",
+        "LOAD_CONST": "{ PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); value = PyValue_DUP(constant); }",
+        "LOAD_CONST_INLINE_INT": "{ PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); value = PyValue_DUP(constant); assert(PyValue_IsInlineInt(value)); }",
+        "LOAD_CONST_INLINE_FLOAT": "{ PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); value = PyValue_DUP(constant); assert(PyValue_IsInlineFloat(value)); }",
         "LOAD_COMMON_CONSTANT": "{ assert(oparg < NUM_COMMON_CONSTANTS); value = PyValue_DUP(tstate->interp->common_consts[oparg]); }",
         "LOAD_SMALL_INT": "{ assert(oparg < _PY_NSMALLPOSINTS); value = PyValue_FromInlineInt(oparg); }",
         "LOAD_SMALL_INT_INLINE": "{ assert(oparg < _PY_NSMALLPOSINTS); value = PyValue_FromInlineInt(oparg); }",
@@ -8466,10 +8467,14 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
         }
     """
     if inst.name in ("LOAD_FAST", "LOAD_FAST_BORROW", "LOAD_FAST_CHECK"):
-        body = ("{ PyValueBorrow value_s = PyValue_Borrow(GETLOCAL(oparg)); "
-                + unbound + " value = PyValue_DUP(value_s); }") \
-            if inst.name == "LOAD_FAST_CHECK" else \
-            "{ assert(!PyValue_IsNull(GETLOCAL(oparg))); value = PyValue_DUP(GETLOCAL(oparg)); }"
+        body = {
+            "LOAD_FAST_CHECK": ("{ PyValueBorrow value_s = PyValue_Borrow(GETLOCAL(oparg)); "
+                                + unbound + " value = PyValue_DUP(value_s); }"),
+            "LOAD_FAST": ("{ PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg)); "
+                          "value = PyValue_DUP(local); }"),
+            "LOAD_FAST_BORROW": ("{ assert(!PyValue_IsNull(GETLOCAL(oparg))); "
+                                 "value = PyValue_DUP(GETLOCAL(oparg)); }"),
+        }[inst.name]
         if bodies_match(body) and scalar_shape(0, 1):
             return "_PyIR_TRANSFER_LOCAL_DUP"
         return unknown

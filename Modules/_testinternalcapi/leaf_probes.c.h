@@ -1610,7 +1610,8 @@ leaf_probe__LOAD_CONST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int o
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
     PyValue value;
-    value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+    PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+    value = PyValue_DUP(constant);
     stack_pointer[0] = value;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -1625,7 +1626,8 @@ leaf_probe__LOAD_CONST_INLINE_FLOAT(_PyInterpreterFrame *frame, PyValue *stack_p
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
     PyValue value;
-    value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+    PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+    value = PyValue_DUP(constant);
     stack_pointer[0] = value;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -1640,7 +1642,8 @@ leaf_probe__LOAD_CONST_INLINE_INT(_PyInterpreterFrame *frame, PyValue *stack_poi
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
     PyValue value;
-    value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+    PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+    value = PyValue_DUP(constant);
     stack_pointer[0] = value;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -1655,7 +1658,8 @@ leaf_probe__LOAD_FAST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int op
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
     PyValue value;
-    value = PyValue_DUP(GETLOCAL(oparg));
+    PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+    value = PyValue_DUP(local);
     stack_pointer[0] = value;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);

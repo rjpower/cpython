@@ -118,6 +118,9 @@ HELPERS = {
     "DECREF_INPUTS": native_helper((), Kind.VOID, callback=True, canonical_clear=True),
     "INPUTS_DEAD": native_helper((), Kind.VOID),
     "GETLOCAL": native_helper((Kind.SCALAR,), Kind.VALUE),
+    # The identities that state what the compiler shows of a word
+    **{name: native_helper((Kind.VALUE,), Kind.VALUE)
+       for name in ("_PyValue_CodeConstant", "_PyValue_BoundLocal", "_PyValue_CellLocal")},
     "PyTuple_GET_VALUE": native_helper((Kind.TUPLE, Kind.SCALAR), Kind.VALUE),
     "_PyTuple_GET_VALUE": native_helper((Kind.TUPLE, Kind.SCALAR), Kind.VALUE),
     "_PyEval_GetANext": native_helper((Kind.OBJECT,), Kind.OBJECT, True, True,
@@ -672,8 +675,9 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
             declaration, kind = 2, Kind.OBJECT
         elif observer_wrapper and texts[:2] == ["PyCodeObject", "*"]:
             declaration, kind = 2, Kind.CODE
-        elif texts[:1] in (["PyValue"], ["int"], ["uintptr_t"]):
-            declaration, kind = 1, Kind.VALUE if texts[0] == "PyValue" else Kind.SCALAR
+        elif texts[:1] in (["PyValue"], ["PyValueBorrow"], ["int"], ["uintptr_t"]):
+            declaration, kind = 1, (Kind.VALUE if texts[0] in ("PyValue", "PyValueBorrow")
+                                    else Kind.SCALAR)
         if declaration:
             if (len(tokens) < declaration + 3 or tokens[declaration].kind != "IDENTIFIER"
                     or texts[declaration] in variables or texts[declaration] in reserved

@@ -149,6 +149,12 @@ static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_AsKnownObjectBorr
               "_PyValue_AsKnownObjectBorrowPointer: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyValueGuarded_Load((_PyValueGuarded){0})), PyValueBorrow),
               "_PyValueGuarded_Load: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_CodeConstant((PyValueBorrow){0})), PyValueBorrow),
+              "_PyValue_CodeConstant: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_BoundLocal((PyValueBorrow){0})), PyValueBorrow),
+              "_PyValue_BoundLocal: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_CellLocal((PyValueBorrow){0})), PyValueBorrow),
+              "_PyValue_CellLocal: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_AsKnownObjectSteal), PyObject * (*)(PyValue)),
               "PyValue_AsKnownObjectSteal: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_TYPE), PyTypeObject * (*)(PyValueBorrow)),
@@ -7492,7 +7498,9 @@ ir_run_DELETE_DEREF(
             INSTRUCTION_STATS(DELETE_DEREF);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
-            PyObject *cell = PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            assert(!PyValue_IsNull(cell_v) && (PyValue_TYPE(cell_v) == &PyCell_Type));
+            PyObject *cell = PyValue_AsKnownObjectBorrow(cell_v);
             PyValue old = _PyCell_SwapValue((PyCellObject *)cell, PyValue_NULL);
             if (PyValue_IsNull(old)) {
                 _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
@@ -11730,7 +11738,9 @@ ir_run_LOAD_CONST(
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue value;
-            value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            assert(!PyValue_IsNull(constant));
+            value = PyValue_DUP(constant);
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -11754,7 +11764,9 @@ ir_run_LOAD_CONST_INLINE_FLOAT(
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue value;
-            value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            assert(!PyValue_IsNull(constant));
+            value = PyValue_DUP(constant);
             assert(PyValue_IsInlineFloat(value));
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
@@ -11779,7 +11791,9 @@ ir_run_LOAD_CONST_INLINE_INT(
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue value;
-            value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            assert(!PyValue_IsNull(constant));
+            value = PyValue_DUP(constant);
             assert(PyValue_IsInlineInt(value));
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
@@ -11804,7 +11818,9 @@ ir_run_LOAD_DEREF(
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
-            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            assert(!PyValue_IsNull(cell_v) && (PyValue_TYPE(cell_v) == &PyCell_Type));
+            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
             value = _PyCell_GetValue(cell);
             if (PyValue_IsNull(value)) {
                 _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
@@ -11834,8 +11850,9 @@ ir_run_LOAD_FAST(
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
-            assert(!PyValue_IsNull(GETLOCAL(oparg)));
-            value = PyValue_DUP(GETLOCAL(oparg));
+            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+            assert(!PyValue_IsNull(local));
+            value = PyValue_DUP(local);
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -11961,7 +11978,9 @@ ir_run_LOAD_FROM_DICT_OR_DEREF(
             }
             PyValue selected;
             if (found.status == 0) {
-                PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+                PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+                assert(!PyValue_IsNull(cell_v) && (PyValue_TYPE(cell_v) == &PyCell_Type));
+                PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
                 selected = _PyCell_GetValue(cell);
                 if (PyValue_IsNull(selected)) {
                     _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
@@ -15783,7 +15802,9 @@ ir_run_STORE_DEREF(
             (void)oparg;
             PyValue v;
             v = IR_SLOT(IR_A(ir_word));
-            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            assert(!PyValue_IsNull(cell_v) && (PyValue_TYPE(cell_v) == &PyCell_Type));
+            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
             PyValue owned = v;
             _PyFrame_WriteHome(frame, &IR_SLOT(IR_A(ir_word)), PyValue_NULL);
             _PyCell_SetValue(cell, owned);
@@ -26156,7 +26177,9 @@ static const _PyIRForm ir_handler_forms[512] = {
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue value;
-            value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            assert(!PyValue_IsNull(constant));
+            value = PyValue_DUP(constant);
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -26176,7 +26199,9 @@ static const _PyIRForm ir_handler_forms[512] = {
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue value;
-            value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            assert(!PyValue_IsNull(constant));
+            value = PyValue_DUP(constant);
             assert(PyValue_IsInlineFloat(value));
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
@@ -26197,7 +26222,9 @@ static const _PyIRForm ir_handler_forms[512] = {
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue value;
-            value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            assert(!PyValue_IsNull(constant));
+            value = PyValue_DUP(constant);
             assert(PyValue_IsInlineInt(value));
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
@@ -26218,7 +26245,9 @@ static const _PyIRForm ir_handler_forms[512] = {
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
-            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            assert(!PyValue_IsNull(cell_v) && (PyValue_TYPE(cell_v) == &PyCell_Type));
+            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
             value = _PyCell_GetValue(cell);
             if (PyValue_IsNull(value)) {
                 _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
@@ -26244,8 +26273,9 @@ static const _PyIRForm ir_handler_forms[512] = {
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
-            assert(!PyValue_IsNull(GETLOCAL(oparg)));
-            value = PyValue_DUP(GETLOCAL(oparg));
+            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+            assert(!PyValue_IsNull(local));
+            value = PyValue_DUP(local);
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -28848,7 +28878,9 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)oparg;
             PyValue v;
             v = IR_SLOT(IR_A(ir_word));
-            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            assert(!PyValue_IsNull(cell_v) && (PyValue_TYPE(cell_v) == &PyCell_Type));
+            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
             PyValue owned = v;
             _PyFrame_WriteHome(frame, &IR_SLOT(IR_A(ir_word)), PyValue_NULL);
             _PyCell_SetValue(cell, owned);

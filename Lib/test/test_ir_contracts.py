@@ -1170,6 +1170,35 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"_BAD_NULL: passes `v` to PyValue_IsObject, which requires nonnull of it")
 
+    def test_a_nested_row_call_is_checked_by_its_result(self):
+        # An argument that is a row's call is what the row's result says:
+        # PyTuple_GET_VALUE's SCALAR result is not shown to be nonnull, and
+        # _PyValue_CodeConstant's assumed result is, once bound (F7)
+        self.refuses("""
+            op(_OP, (-- value: owned)) effects(reads) exits(next) {
+                value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            }
+        """, r"_OP: passes `PyTuple_GET_VALUE \( FRAME_CO_CONSTS , oparg \)` to "
+             r"PyValue_DUP, which requires nonnull of it")
+        self.refuses("""
+            op(_OP, (-- value: owned)) effects() exits(next) {
+                value = PyValue_DUP(GETLOCAL(oparg));
+            }
+        """, r"_OP: passes `GETLOCAL \( oparg \)` to PyValue_DUP, which requires "
+             r"nonnull of it")
+        self.verify("""
+            op(_OP, (-- value: owned)) effects(reads) exits(next) {
+                PyValueBorrow constant = _PyValue_CodeConstant(
+                    PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+                value = PyValue_DUP(constant);
+            }
+        """)
+        self.verify("""
+            op(_OP, (-- value: owned)) effects(reads) exits(next) {
+                value = PyValue_DUP(PyValue_FromObjectBorrow(Py_None));
+            }
+        """)
+
     def test_null_iff_names_a_value_argument(self):
         for k in ("1", "0"):
             with self.subTest(k=k):

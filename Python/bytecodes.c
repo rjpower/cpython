@@ -279,8 +279,8 @@ dummy_func(
         leaf pure inst(LOAD_FAST, (-- value: owned))
             effects() exits(next)
         {
-            assert(!PyValue_IsNull(GETLOCAL(oparg)));
-            value = PyValue_DUP(GETLOCAL(oparg));
+            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+            value = PyValue_DUP(local);
         }
 
         // A temporary owns its value (pyjit/design/pyvalue.md D4): the load
@@ -305,15 +305,19 @@ dummy_func(
             LOAD_CONST_INLINE_FLOAT,
         };
 
-        leaf pure inst(LOAD_CONST, (-- value)) {
-            value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+        leaf pure inst(LOAD_CONST, (-- value: owned))
+            effects(reads) exits(next)
+        {
+            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            value = PyValue_DUP(constant);
         }
 
         // The constant is an inline int.
         inst(LOAD_CONST_INLINE_INT, (-- value: owned))
             effects(reads) exits(next)
         {
-            value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            value = PyValue_DUP(constant);
             assert(PyValue_IsInlineInt(value));
         }
 
@@ -322,7 +326,8 @@ dummy_func(
         inst(LOAD_CONST_INLINE_FLOAT, (-- value: owned))
             effects(reads) exits(next)
         {
-            value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            value = PyValue_DUP(constant);
             assert(PyValue_IsInlineFloat(value));
         }
 
@@ -2566,7 +2571,8 @@ dummy_func(
         outlined inst(DELETE_DEREF, (--))
             effects(runs_python) exits(next, raise)
         {
-            PyObject *cell = PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            PyObject *cell = PyValue_AsKnownObjectBorrow(cell_v);
             // Can't use ERROR_IF here.
             // Fortunately we don't need its superpower.
             PyValue old = _PyCell_SwapValue((PyCellObject *)cell, PyValue_NULL);
@@ -2599,7 +2605,8 @@ dummy_func(
             }
             PyValue selected;
             if (found.status == 0) {
-                PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+                PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+                PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
                 selected = _PyCell_GetValue(cell);
                 if (PyValue_IsNull(selected)) {
                     _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
@@ -2617,7 +2624,8 @@ dummy_func(
         inst(LOAD_DEREF, ( -- value: owned))
             effects(runs_python) exits(next, raise)
         {
-            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
             value = _PyCell_GetValue(cell);
             if (PyValue_IsNull(value)) {
                 _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
@@ -2628,7 +2636,8 @@ dummy_func(
         inst(STORE_DEREF, (v: consumed --))
             effects(writes, releases) exits(next)
         {
-            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
             PyValue owned = v;
             DEAD(v);
             _PyCell_SetValue(cell, owned);

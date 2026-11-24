@@ -692,6 +692,24 @@
      * generator asserts it after each call (F7) */ \
     PRIMITIVE(_PyValueGuarded_Load, PyValueBorrow, (_PyValueGuarded), \
               ARGS(scalar), VALUE(borrowed assumed(nonnull) by specializer), EFFECTS()) \
+    /* Identities on a word that state what the compiler shows of it \
+     * (pycore_value.h); the generator asserts it after each call (F7). \
+     * An item of a code object's co_consts: the compiler stores objects \
+     * only (compile.c's constant cache), so it is never PyValue_NULL */ \
+    PRIMITIVE(_PyValue_CodeConstant, PyValueBorrow, (PyValueBorrow), \
+              ARGS(borrowed), VALUE(borrowed assumed(nonnull) by compiler), EFFECTS()) \
+    /* A local that LOAD_FAST reads: the compiler emits LOAD_FAST only \
+     * where flowgraph.c's analysis shows the local bound on every path, \
+     * and LOAD_FAST_CHECK elsewhere */ \
+    PRIMITIVE(_PyValue_BoundLocal, PyValueBorrow, (PyValueBorrow), \
+              ARGS(borrowed), VALUE(borrowed assumed(nonnull) by compiler), EFFECTS()) \
+    /* The home of a cell or free variable: MAKE_CELL (a cell variable) and \
+     * COPY_FREE_VARS (a free variable, from the closure's cells), which the \
+     * compiler emits at the start of the code, fill it with its cell, and \
+     * no instruction stores anything else there */ \
+    PRIMITIVE(_PyValue_CellLocal, PyValueBorrow, (PyValueBorrow), \
+              ARGS(borrowed), VALUE(borrowed assumed(exact(PyCell_Type)) by compiler), \
+              EFFECTS()) \
     /* Reviewed G0c2 (pycore_value.h): for a pointer-space word returns its   \
      * pointer, taking over its count if the value owns one, else a new       \
      * reference (Py_NewRef) to the immortal or borrowed object; a            \

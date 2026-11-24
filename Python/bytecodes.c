@@ -1178,12 +1178,11 @@ dummy_func(
             assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(right)));
 
             assert(IR_IS_LOCAL(IR_DST));
-            PyValue *target_local = &IR_SLOT(IR_DST);
             assert(PyUnicode_CheckExact(left_o));
             // The local may hold any word (an inline number, None, NULL):
             // compare the words, not an object read from it.  `held` is a
             // copy; the local keeps its owner until it is cleared below
-            PyValue held = *target_local;
+            PyValue held = IR_SLOT(IR_DST);
             EXIT_IF(!PyValue_Is(held, left),
                     "the next word stores the result to the left operand's local");
             STAT_INC(BINARY_OP, hit);
@@ -1211,7 +1210,7 @@ dummy_func(
             // The local still holds the string; its owner moves to `held`,
             // which the guard showed is left's string
             assert(Py_REFCNT(left_o) >= 1);
-            *target_local = PyValue_NULL;
+            IR_SLOT(IR_DST) = PyValue_NULL;
             PyObject *temp = PyValue_AsKnownObjectSteal(held);
             PyObject *right_o = PyValue_AsKnownObjectSteal(right);
             temp = value_unicode_append(temp, right_o);
@@ -1725,12 +1724,12 @@ dummy_func(
                 cause = PyValue_ObjectOrNull(args[1]);
                 cause_is_number = cause == NULL;
             }
-            /* do_raise consumes independent object owners; homes remain
-             * canonical until their semantic input ownership is detached. */
-            Py_XINCREF(exc);
-            Py_XINCREF(cause);
+            /* do_raise consumes independent object owners, made before
+             * the inputs are released */
+            PyObject *exc_owner = Py_XNewRef(exc);
+            PyObject *cause_owner = Py_XNewRef(cause);
             DECREF_INPUTS();
-            int err = do_raise(tstate, exc, cause, cause_is_number);
+            int err = do_raise(tstate, exc_owner, cause_owner, cause_is_number);
             if (err) {
                 assert(oparg == 0);
                 monitor_reraise(tstate, frame, this_instr);
@@ -2919,7 +2918,7 @@ dummy_func(
                         _PyErr_Format(tstate, PyExc_TypeError,
                                         "'%T' object is not a mapping",
                                         update_o);
-                        Py_DECREF(exc);
+                        Py_XDECREF(exc);
                     }
                     else {
                         _PyErr_ChainExceptions1(exc);
@@ -4902,7 +4901,7 @@ dummy_func(
                We call FOURTH(type(TOP), TOP, GetTraceback(TOP)).
                Then we push the __exit__ return value.
             */
-            PyObject *exc, *tb;
+            PyObject *exc;
 
             // The exit function is any attribute value, a scalar included;
             // the call raises upstream's TypeError for one.
@@ -4912,13 +4911,12 @@ dummy_func(
 
             assert(val_o && PyExceptionInstance_Check(val_o));
             exc = PyExceptionInstance_Class(val_o);
-            PyObject *original_tb = tb = PyException_GetTraceback(val_o);
-            if (tb == NULL) {
-                tb = Py_None;
-            }
+            // A new reference or NULL; the call is passed None for NULL
+            PyObject *original_tb = PyException_GetTraceback(val_o);
             assert(PyValue_IsTaggedIndex(lasti));
             (void)lasti; // Shut up compiler warning if asserts are off
-            res = with_exit_call(exit_func, exit_self, exc, val_o, tb);
+            res = with_exit_call(exit_func, exit_self, exc, val_o,
+                                 original_tb == NULL ? Py_None : original_tb);
             Py_XDECREF(original_tb);
             ERROR_IF(PyValue_IsNull(res));
         }

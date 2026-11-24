@@ -1249,6 +1249,77 @@ class VerifierTests(unittest.TestCase):
         self.refuses(field % (dup, ""), r"_OP: passes `found\.value` to PyValue_DUP, "
                      r"which requires nonnull of it")
 
+    def test_a_consumed_argument_names_an_owner(self):
+        # A consumed or taken argument passes an obligation: a name that
+        # holds one, a row's new owner as it is made, or a value that owes
+        # no count.  A borrow names none
+        self.refuses("""
+            op(_OP, (--)) effects(releases) exits(next) {
+                PyValueBorrow b = _PyValue_BoundLocal(GETLOCAL(oparg));
+                PyValue_CLOSE(b);
+            }
+        """, r"_OP: PyValue_CLOSE consumes `b`, which names no owner")
+        # An object pointer that a row returns without a count
+        self.refuses("""
+            op(_OP, (v: borrowed object --)) effects(reads, releases) exits(next) {
+                PyObject *cls = PyExceptionInstance_Class(PyValue_AsKnownObjectBorrow(v));
+                Py_XDECREF(cls);
+            }
+        """, r"_OP: Py_XDECREF consumes `cls`, which names no owner")
+        # A home load whose home still holds it
+        self.refuses("""
+            op(_OP, (--)) effects(releases) exits(next) {
+                PyValue tmp = GETLOCAL(oparg);
+                PyValue_XCLOSE(tmp);
+            }
+        """, r"_OP: PyValue_XCLOSE consumes `tmp`, which names no owner")
+        # An object owner is consumed once
+        self.refuses("""
+            op(_OP, (v: borrowed object --)) effects(reads, releases) exits(next) {
+                PyObject *tb = PyException_GetTraceback(PyValue_AsKnownObjectBorrow(v));
+                Py_XDECREF(tb);
+                Py_XDECREF(tb);
+            }
+        """, r"_OP: Py_XDECREF consumes `tb`, which is already consumed or moved")
+
+    @support.subTests("body", [
+        # _DELETE_FAST and _MAKE_CELL: a home move
+        ("""PyValue tmp = GETLOCAL(oparg);
+           GETLOCAL(oparg) = PyValue_NULL;
+           PyValue_XCLOSE(tmp);""", "next"),
+        # _BINARY_OP_INPLACE_ADD_UNICODE: the same through IR_SLOT
+        ("""PyValue held = IR_SLOT(IR_DST);
+           IR_SLOT(IR_DST) = PyValue_NULL;
+           PyValue_XCLOSE(held);""", "next"),
+        # _END_ASYNC_FOR and _CLEANUP_THROW: Py_NewRef's new owner, passed
+        ("""_PyErr_SetRaisedException(tstate, Py_NewRef(PyValue_AsKnownObjectBorrow(v)));""", "next"),
+        # _RAISE_VARARGS: Py_XNewRef's owners, NULL where the object is
+        ("""PyObject *o = PyValue_ObjectOrNull(v);
+           PyObject *owner = Py_XNewRef(o);
+           Py_XDECREF(owner);""", "next"),
+        # _MAKE_CELL: PyCell_NewValue's new cell
+        ("""PyObject *cell = PyCell_NewValue(v);
+           ERROR_IF(cell == NULL);
+           PyValue c = PyValue_FromObjectSteal(cell);
+           PyValue_CLOSE(c);""", "next, raise"),
+        # _DICT_UPDATE: the raised exception's owner
+        ("""PyObject *exc = _PyErr_GetRaisedException(tstate);
+           if (oparg) { Py_XDECREF(exc); }
+           else { _PyErr_ChainExceptions1(exc); }""", "next"),
+        # _WITH_EXCEPT_START: a new reference or NULL
+        ("""PyObject *tb = PyException_GetTraceback(PyValue_AsKnownObjectBorrow(v));
+           Py_XDECREF(tb);""", "next"),
+        # _DELETE_DEREF and _INSERT_NULL: NULL owes nothing
+        ("""PyValue_XCLOSE(PyValue_NULL);""", "next"),
+    ])
+    def test_consumed_arguments_that_name_owners(self, body):
+        body, exits = body
+        self.verify("""
+            op(_OP, (v: borrowed object --)) effects(runs_python) exits(%s) {
+                %s
+            }
+        """ % (exits, body))
+
     def test_an_identity_test_shares_facts(self):
         # PyValue_Is is declared IDENTITY(): where it holds, its arguments
         # are one word, so a copy of a home that is `left` has left's facts
@@ -2868,10 +2939,11 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % "GETLOCAL(oparg + 1) = value;",
                      r"on next, `trash` is declared moved\(home\), but the home it is "
                      r"loaded from still holds it")
+        # The home is overwritten on one path only: there `tmp` takes its
+        # obligation (a home move), and the paths disagree
         self.refuses(source % "if (oparg) { GETLOCAL(oparg) = value; } else { "
                               "GETLOCAL(oparg + 1) = value; }",
-                     r"`trash` is declared moved\(home\), but is assigned `tmp`, which "
-                     r"differs by path")
+                     r"`tmp` is owned on one path and not on another where they join")
         # Only a home's value
         self.refuses("""
             op(_OP, (-- value: moved(home))) effects() exits(next) {

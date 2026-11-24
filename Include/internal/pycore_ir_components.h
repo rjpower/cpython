@@ -864,9 +864,10 @@
      * closes it (the input's home still holds a count, so it is not the \
      * last), then _PyObject_GC_TRACK.  Returns a new cell or NULL with \
      * an exception.  The input is borrowed.  runs_python over-declares \
-     * (allocates and raises is the contract); G1 may narrow it */ \
+     * (allocates and raises is the contract); G1 may narrow it.  G0d1: \
+     * VALUE_OR_NULL(owned), the new cell (SCALAR hid it) */ \
     HELPER(PyCell_NewValue, PyObject *, (PyValueBorrow), \
-        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Evidence (G0c batch 6): Python/errors.c PyErr_Format -> \
      * _PyErr_FormatV: formats the message (PyUnicode_FromFormatV, an \
      * allocation) and sets the exception with _PyErr_SetObject; always \
@@ -902,7 +903,7 @@
      * critical section (free-threaded only).  A new reference or NULL \
      * with no exception set.  No callee that runs Python. */ \
     HELPER(PyException_GetTraceback, PyObject *, (PyObject *), \
-        ARGS(object), SCALAR, EFFECTS(reads)) \
+        ARGS(object), VALUE_OR_NULL(owned), EFFECTS(reads)) \
     /* pycore_lazyimportobject.h (a static inline function): \
      * Py_IS_TYPE(op, &PyLazyImport_Type), a read of ob_type; no callee, \
      * no failure */ \
@@ -967,9 +968,10 @@
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* Include/object.h: drops a count, and on zero calls the \
      * deallocator, which can run a finalizer, weakref callbacks and \
-     * __del__ (releases).  A C macro over public API: not converted */ \
+     * __del__ (releases).  A C macro over public API: not converted.  \
+     * G0d1: it consumes its argument's owner (SCALAR said it took none) */ \
     MACRO(Py_DECREF, \
-        ARGS(scalar), SCALAR, EFFECTS(releases), EXITS()) \
+        ARGS(consumed object), NONE, EFFECTS(releases), EXITS()) \
     /* Reviewed (G0c batch 1).  Py_FatalError(msg) is a C macro of \
      * Include/cpython/pyerrors.h: `_Py_FatalErrorFunc(__func__, msg)`, a \
      * _Py_NO_RETURN function (Python/pylifecycle.c) that prints the \
@@ -998,9 +1000,14 @@
     /* Include/refcount.h: `_Py_NewRef(_PyObject_CAST(obj))`, an increment \
      * (a count change is no effect, 1.3) returning obj: the result is a \
      * new reference the caller owes.  No call (immortal check inline), no \
-     * failure. */ \
+     * failure.  G0d1: VALUE(owned), the new reference (SCALAR hid it) */ \
     MACRO(Py_NewRef, \
-        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+        ARGS(scalar), VALUE(owned), EFFECTS(), EXITS()) \
+    /* Include/refcount.h: `_Py_XNewRef(_PyObject_CAST(obj))`, Py_NewRef \
+     * with a NULL test: a new reference the caller owes, NULL exactly \
+     * where obj is.  No call, no failure (G0d1: _RAISE_VARARGS's owners) */ \
+    MACRO(Py_XNewRef, \
+        ARGS(borrowed), VALUE(owned null_iff(0)), EFFECTS(), EXITS()) \
     /* Include/object.h: ob_size = size, a store through the object.  \
      * The seed said runs_python; the store runs nothing, so writes */ \
     MACRO(Py_SET_SIZE, \
@@ -1009,9 +1016,10 @@
     MACRO(Py_SIZE, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
     /* Include/object.h: as Py_DECREF, with a NULL test.  A C macro \
-     * over public API: not converted */ \
+     * over public API: not converted.  G0d1: it consumes its argument's \
+     * owner, which may be NULL */ \
     MACRO(Py_XDECREF, \
-        ARGS(scalar), SCALAR, EFFECTS(releases), EXITS()) \
+        ARGS(consumed), NONE, EFFECTS(releases), EXITS()) \
     /* Evidence (G0c batch 6): Include/refcount.h: a count increment of op \
      * if it is not NULL (and not immortal); no call, no failure, no \
      * callback. A count change is an ownership event, not an effect (the \
@@ -1096,7 +1104,7 @@
      * thread's field becomes NULL).  It reads and writes the thread state \
      * and calls nothing, so writes, not runs_python (the seed's) */ \
     HELPER(_PyErr_GetRaisedException, PyObject *, (PyThreadState *), \
-        ARGS(tstate), SCALAR, EFFECTS(reads, writes)) \
+        ARGS(tstate), VALUE_OR_NULL(owned), EFFECTS(reads, writes)) \
     /* pycore_pyerrors.h: moves the handled exception's reference out of \
      * the stack item (the field becomes NULL) and returns it, or NULL when \
      * none is handled.  No callee, no failure, no callback (G0d1: \
@@ -1282,7 +1290,9 @@
      * .object; another error leaves .object NULL).  The caller owns \
      * .object and releases it (X form).  Both arguments are borrowed */ */ \
     HELPER(value_dict_merge_uniq, _PyStatusObject, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object, object), \
+        CASES(status<0 object(owned nullable) raised, status>=0 object(null)), \
+        EFFECTS(runs_python)) \
     /* Reviewed G0c2 (Python/ceval.c). Wraps _PyEval_ExceptionGroupMatch      \
      * (exception_group_match: isinstance checks, split()/derive of the       \
      * group: arbitrary Python). Returns {match, rest} as new references,     \
@@ -1472,7 +1482,7 @@
      * the eval breaker, which a later poll runs.  Failure: NULL with \
      * MemoryError set; success: a new reference.  No callback. */ \
     HELPER(PyDict_New, PyObject *, (), \
-        ARGS(), SCALAR, EFFECTS(allocates, raises)) \
+        ARGS(), VALUE_OR_NULL(owned exact(PyDict_Type)), EFFECTS(allocates, raises)) \
     /* Objects/dictobject.c: pop_check_dict (TypeError for a frozendict, \
      * SystemError for a non-dict: -1) then _PyDict_PopValue -> \
      * pop_lock_held: _PyValue_Hash of the key (the key's __hash__ runs \
@@ -2685,9 +2695,10 @@
     /* Evidence (G0c8): pycore_ir.h:147: `(int)(W & IR_HANDLER_MASK)`, bits of the word. */ \
     MACRO(IR_HANDLER, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* Reviewed G0c2 (ceval_macros.h): the frame's home slot addressed by     \
-     * an operand field; a read of the frame's slot array (reads), no         \
-     * failure, no callback.                                                  */ \
-    MACRO(IR_SLOT, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+     * an operand field; no failure, no callback.  G0d1: ceval_macros.h's     \
+     * `IR_SLOT(F)` is `IR_SLOTS()[(F)]`, the expansion of GETLOCAL, so it is \
+     * a HOME as GETLOCAL is: a frame home, not the heap (no reads)           */ \
+    MACRO(IR_SLOT, ARGS(scalar), HOME, EFFECTS(), EXITS()) \
     /* Evidence (G0c8): the generator's expansion (ir_generator.py:2871): the operand word k of \
      * a call, read in place, never owned or closed (a view).  A read of the executing \
      * copy's words. */ \

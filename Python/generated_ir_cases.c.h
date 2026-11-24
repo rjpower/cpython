@@ -1535,9 +1535,8 @@ ir_run_BINARY_OP_INPLACE_ADD_UNICODE(
                 assert(PyUnicode_CheckExact(left_o));
                 assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(right)));
                 assert(IR_IS_LOCAL(IR_A(ir_word)));
-                PyValue *target_local = &IR_SLOT(IR_A(ir_word));
                 assert(PyUnicode_CheckExact(left_o));
-                PyValue held = *target_local;
+                PyValue held = IR_SLOT(IR_A(ir_word));
                 if (!PyValue_Is(held, left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
@@ -1546,7 +1545,7 @@ ir_run_BINARY_OP_INPLACE_ADD_UNICODE(
                 ir_own_B = IR_DETACH(ir_word, B, left);
                 (void)(ir_own_B);
                 assert(Py_REFCNT(left_o) >= 1);
-                *target_local = PyValue_NULL;
+                IR_SLOT(IR_A(ir_word)) = PyValue_NULL;
                 PyObject *temp = PyValue_AsKnownObjectSteal(held);
                 ir_own_C = IR_DETACH(ir_word, C, right);
                 PyObject *right_o = _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(right, ir_own_C));
@@ -7677,7 +7676,7 @@ ir_run_DICT_UPDATE(
                             _PyErr_Format(tstate, PyExc_TypeError,
                                       "'%T' object is not a mapping",
                                       update_o);
-                            Py_DECREF(exc);
+                            Py_XDECREF(exc);
                         }
                         else {
                             _PyErr_ChainExceptions1(exc);
@@ -14174,8 +14173,8 @@ ir_run_RAISE_VARARGS(
                 cause = PyValue_ObjectOrNull(args[1]);
                 cause_is_number = cause == NULL;
             }
-            Py_XINCREF(exc);
-            Py_XINCREF(cause);
+            PyObject *exc_owner = Py_XNewRef(exc);
+            PyObject *cause_owner = Py_XNewRef(cause);
             PyValue tmp;
             for (int _i = oparg; --_i >= 0;) {
                 tmp = args[_i];
@@ -14183,7 +14182,7 @@ ir_run_RAISE_VARARGS(
                 PyValue_CLOSE(tmp);
             }
             IR_CLEAR_SLOTS(&window[0], oparg);
-            int err = do_raise(tstate, exc, cause, cause_is_number);
+            int err = do_raise(tstate, exc_owner, cause_owner, cause_is_number);
             if (err) {
                 assert(oparg == 0);
                 monitor_reraise(tstate, frame, this_instr);
@@ -16927,19 +16926,17 @@ ir_run_WITH_EXCEPT_START(
             exit_self = window[1];
             exit_func = window[0];
             assert(PyValue_IsObject(val));
-            PyObject *exc, *tb;
+            PyObject *exc;
             assert(PyValue_IsObject(val));
             assert(PyValue_IsObjectOrNull(exit_self));
             PyObject *val_o = _PyValue_AsKnownObjectBorrowPointer(val);
             assert(val_o && PyExceptionInstance_Check(val_o));
             exc = PyExceptionInstance_Class(val_o);
-            PyObject *original_tb = tb = PyException_GetTraceback(val_o);
-            if (tb == NULL) {
-                tb = Py_None;
-            }
+            PyObject *original_tb = PyException_GetTraceback(val_o);
             assert(PyValue_IsTaggedIndex(lasti));
             (void)lasti;
-            res = with_exit_call(exit_func, exit_self, exc, val_o, tb);
+            res = with_exit_call(exit_func, exit_self, exc, val_o,
+                                 original_tb == NULL ? Py_None : original_tb);
             IR_SET_TEMP(window[5], res);
             Py_XDECREF(original_tb);
             if (PyValue_IsNull(res)) {
@@ -18355,9 +18352,8 @@ static const _PyIRForm ir_handler_forms[512] = {
                 assert(PyUnicode_CheckExact(left_o));
                 assert(PyUnicode_CheckExact(_PyValue_AsKnownObjectBorrowPointer(right)));
                 assert(IR_IS_LOCAL(IR_A(ir_word)));
-                PyValue *target_local = &IR_SLOT(IR_A(ir_word));
                 assert(PyUnicode_CheckExact(left_o));
-                PyValue held = *target_local;
+                PyValue held = IR_SLOT(IR_A(ir_word));
                 if (!PyValue_Is(held, left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
@@ -18366,7 +18362,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 ir_own_B = IR_DETACH(ir_word, B, left);
                 (void)(ir_own_B);
                 assert(Py_REFCNT(left_o) >= 1);
-                *target_local = PyValue_NULL;
+                IR_SLOT(IR_A(ir_word)) = PyValue_NULL;
                 PyObject *temp = PyValue_AsKnownObjectSteal(held);
                 ir_own_C = IR_DETACH(ir_word, C, right);
                 PyObject *right_o = _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(right, ir_own_C));

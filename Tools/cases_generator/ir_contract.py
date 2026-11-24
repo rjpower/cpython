@@ -3120,6 +3120,17 @@ class OwnershipWalk:
                                | (frozenset() if item.nullable else {NONNULL}))
         return argument_facts(arg, self.table)
 
+    def passes_no_owner(self, arg: list[str], name: str | None, state: _State) -> bool:
+        """Whether an argument that names no owner may still be consumed: a
+        row's new owner, passed as it is made, NULL, or a value that owes
+        no count (owes_nothing)"""
+        call = _call_of(_uncast(_unwrap(arg, self.table)), self.table)
+        if call is not None and call[0].new_owner():
+            return True
+        shown = implied(state.facts.get(name, frozenset()) if name is not None
+                        else self.expression_facts(arg, state))
+        return NULL_FACT in shown or bool(shown) and self.owes_nothing(shown)
+
     def take(self, name: str, state: _State, where: Token, what: str) -> None:
         "an owner's obligation leaves it (a consumption or a move)"
         item = self.declared.get(name)
@@ -3177,6 +3188,10 @@ class OwnershipWalk:
                     state.facts[name] = without_site_facts(state.facts[name])
                 if spec.mode in ("consumed", "taken"):
                     owner = self.owner_of(arg, state)
+                    if owner is None and not self.passes_no_owner(arg, name, state):
+                        self.fail(tkn, f"{row.name} "
+                                  f"{'consumes' if spec.mode == 'consumed' else 'takes'} "
+                                  f"`{' '.join(arg)}`, which names no owner")
                     if owner is not None:
                         self.take(owner, state, tkn, f"{row.name} "
                                   f"{'consumes' if spec.mode == 'consumed' else 'takes'}")
@@ -3476,6 +3491,11 @@ class OwnershipWalk:
             for name, origin in list(state.origins.items()):
                 if key is not None and origin == _home_origin(key):
                     state.origins[name] = HOME_SOURCE
+                    if name not in state.owners and name not in self.declared:
+                        # A home move (`tmp = GETLOCAL(i); GETLOCAL(i) = v;`):
+                        # the home's old obligation is the local's now
+                        state.owners[name] = HELD
+                        self.new.add(name)
             self.kill_home_loads(state)
             return
         if i >= 2 and texts[i - 2] in ("->", ".") or not re.fullmatch(r"\w+", lhs):

@@ -126,8 +126,9 @@
      * PyValue_IsTaggedIndex is `bits - Py_INDEX_BASE < Py_DOUBLE_OFFSET - \
      * Py_INDEX_BASE`; PyValue_IsInline is `bits >= Py_DOUBLE_OFFSET`, an \
      * int or a float, never a True, False or None word.  No call, no \
-     * allocation, no callback, no failure.  The vocabulary has no \
-     * tagged_index fact, so TEST() is all a tagged-index test can say */ \
+     * allocation, no callback, no failure.  This branch's vocabulary has \
+     * no tagged_index fact, so PyValue_IsTaggedIndex says TEST(); G0a5's \
+     * representation table corrects the token to TEST(tagged_index) */ \
     PRIMITIVE(PyValue_IsPointerSpace, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(), EFFECTS()) \
     PRIMITIVE(PyValue_IsInline, bool, (PyValueBorrow), \
@@ -206,8 +207,8 @@
               ARGS(scalar), VALUE(inline), EFFECTS()) \
     /* PyValue_UntagIndex (pycore_value.h): a shift of the word's bits, no \
      * memory, no failure.  It asserts PyValue_IsTaggedIndex(r) (a \
-     * precondition of the caller's contract that the vocabulary cannot \
-     * state: no tagged_index fact) */ \
+     * precondition of the caller's contract that this branch's \
+     * vocabulary cannot state: no tagged_index fact yet) */ \
     PRIMITIVE(PyValue_UntagIndex, intptr_t, (PyValueBorrow), \
               ARGS(borrowed), SCALAR, EFFECTS()) \
     PRIMITIVE(PyValue_IncrementTaggedIndexNoOverflow, PyValue, (PyValue), \

@@ -12622,6 +12622,7 @@ ir_run_MAKE_FUNCTION(
             {
                 codeobj_st = IR_VIEW(IR_B(ir_word));
                 assert(PyValue_IsObject(codeobj_st));
+                assert(PyValue_IsObject(codeobj_st));
                 PyObject *codeobj = _PyValue_AsKnownObjectBorrowPointer(codeobj_st);
                 PyFunctionObject *func_obj = (PyFunctionObject *)
                 PyFunction_New(codeobj, GLOBALS());
@@ -12721,6 +12722,7 @@ ir_run_MATCH_CLASS(
                 names = window[2];
                 type = window[1];
                 subject = window[0];
+                assert(PyValue_IsObject(names));
                 assert(PyValue_IsObject(names));
                 assert(PyTuple_CheckExact(_PyValue_AsKnownObjectBorrowPointer(names)));
                 PyObject *attrs_o = _PyEval_MatchClass(tstate,

@@ -1843,7 +1843,9 @@ dummy_func(
             awaitable = PyValue_FromObjectSteal(awaitable_o);
         }
 
-        outlined inst(GET_AWAITABLE, (iterable -- iter)) {
+        outlined inst(GET_AWAITABLE, (iterable: consumed -- iter: owned))
+            effects(runs_python) exits(next, raise)
+        {
             if (coro_awaitable_can_transfer(iterable)) {
                 iter = TAKE(iterable);
             }

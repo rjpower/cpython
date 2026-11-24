@@ -201,6 +201,9 @@ class SliceTests(unittest.TestCase):
         'GET_ITER.record.uops[1].results: inferred 0 entries [], declared 1 '
         '[{"__type": "Fact", "arg": "tagged_index|null", "kind": "ENCODING", '
         '"subject": "v2"}]',
+        # G0c9: GET_AWAITABLE's coroutine arm passes the input's reference
+        # on and the other arm makes a new one; the result is owned on both
+        'GET_AWAITABLE/_GET_AWAITABLE: output `iter` is declared owned, the record has ALIAS',
         # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
         # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
         'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '

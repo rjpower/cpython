@@ -1,0 +1,174 @@
+// Add: ordinary addition (Appendix A, batch P2).
+
+family Add(dst:Dst, x:Src, y:Src, fb:Fb<Binary>)
+  exits(next, miss, again, raise, redirect);
+
+point Add.BoxFailed(current, site, pending) keep(x, y) spent() defs() held();
+point Add.OpFailed(current, site, pending) keep() spent(y, x) defs() held();
+point Add.Done(current, next_head, clear) keep() spent(y, x) defs(dst) held();
+
+// Integer rows
+
+extern primitive both_inline_int(a:B, b:B) -> Bool
+  effects()
+  test(inline_int(a), inline_int(b))
+  c PyValue_BothInlineInt as bool
+  evidence(
+    review: "Reviewed G0c2. pycore_value.h: (a & b) >= Py_INT_BASE on the two words.",
+    contract: "No memory, no failure, no callback; true exactly when both words are"
+              "inline ints (the AND has the top Py_INT_SHIFT bits set only if both do).",
+    lowering: "jit_lower.c LOWERING(PyValue_BothInlineInt)",
+    test: "test_ir_leaf CASES[PyValue_BothInlineInt]");
+
+extern primitive int_scaled(v:B) -> Scaled51
+  effects()
+  requires(inline_int(v))
+  c _PyValue_IntScaled as scalar
+  evidence(
+    review: "Reviewed G0c2. pycore_value.h: the word shifted left by Py_INT_SHIFT.",
+    contract: "Inline int required (asserted); pure bit arithmetic.",
+    lowering: "jit_lower.c LOWERING(_PyValue_IntScaled)",
+    test: "test_ir_leaf CASES");
+
+extern primitive from_int_scaled(s:Scaled51) -> O
+  effects()
+  ensures(result.inline_int(result))
+  c _PyValue_FromIntScaled as value
+  evidence(
+    review: "Reviewed G0c2. pycore_value.h: ((uint64_t)s >> Py_INT_SHIFT) | Py_INT_BASE.",
+    contract: "s is a multiple of 2**Py_INT_SHIFT (asserted). Never NULL, owns no"
+              "count, no memory.",
+    lowering: "jit_lower.c LOWERING(_PyValue_FromIntScaled)",
+    test: "test_ir_leaf CASES[_PyValue_FromIntScaled]");
+
+// The scaled sum: fits(s) when a + b does not overflow 64 bits; else
+// overflow(w) with w the unscaled sum of the two int51s, which fits in 64
+// bits and lies outside the int51 range.  The case carries the value its
+// fact is about, so the fact stays unary.  Declared ahead of its C body and
+// lowering (F2).
+extern primitive add_checked_scaled(a:Scaled51, b:Scaled51)
+  cases(fits(s:Scaled51), overflow(w:I64))
+  effects()
+  ensures(overflow.outside_i51(w))
+  pending;
+
+extern helper box_i64(v:I64)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, raises)
+  requires(outside_i51(v))
+  ensures(ok.exact<int>(z))
+  c _PyValue_BoxInt64 as value_or_null
+  evidence(
+    review: "Reviewed G0c2. Python/pyvalue.c: PyLong_FromLongLong then"
+            "_PyValue_PointerSteal.",
+    contract: "NULL with MemoryError set only if the allocation fails. The argument"
+              "is outside the inline range (asserted), so the result is a new boxed"
+              "int. No finalizer, no Python.");
+
+extern helper value_binary_op(op:Enum<Numeric>, a:B, b:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c value_binary_op as value_or_null
+  evidence(
+    review: "Reviewed G0c2 (Python/ceval.c): _PyValue_BinaryOps[op](lhs, rhs) ->"
+            "PyNumber_* -> an nb_* slot -> any __add__ or the __r*__ fallback.",
+    contract: "Both operands borrowed on every path; the result owned, or NULL with"
+              "an exception set. Callbacks: arbitrary Python.");
+
+// Records the origin and control stamp, calls value_binary_op once and
+// checks the frame on return; a redirect discharges any uncommitted result.
+macro binary_at_origin(op:Enum<Numeric>, a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+  pending;
+
+// Adaptation policy (addendum section 2)
+macro adapt_before_use_add(f:Fb<Binary>, x:Src, y:Src)
+  cases(run(), changed(t:Ticket<Binary>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    branch both_inline_int(use(x), use(y)) -> Chosen(), Other();
+  Chosen():
+    let c:Candidate<Binary> = candidate(Add.Int);
+    call install(f, c) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Binary>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+arm Add.Int inline
+  effects(writes, allocates, raises, releases)
+  feedback()
+  exits(next, miss, raise)
+  ensures(next.exact<int>(dst))
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard both_inline_int(l, r) else miss;
+    let a:Scaled51 = int_scaled(l);
+    let b:Scaled51 = int_scaled(r);
+    call add_checked_scaled(a, b) {
+      fits -> Fits();
+      overflow -> Overflow();
+    }
+  Fits(s:Scaled51):
+    goto Finish(from_int_scaled(s));
+  Overflow(full:I64):
+    call box_i64(full) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(Add.BoxFailed, e);
+  Finish(z:O):
+    publish [dst = z] retire [spent(y), spent(x), old(dst)] at Add.Done;
+    exit next();
+}
+
+arm Add.Generic shared
+  effects(runs_python, raises)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise, redirect)
+{
+  entry():
+    call adapt_before_use_add(fb, x, y) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Binary>):
+    exit again(t);
+  Run():
+    let a:Anchors = anchor_for_call([x, y]);
+    call binary_at_origin(NB_ADD, a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(y), spent(x), old(dst)] at Add.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [y, x], e);
+    exit raise(Add.OpFailed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}

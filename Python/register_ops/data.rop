@@ -1,0 +1,114 @@
+// Family interfaces of Appendix A, "Data, bindings, constructors, and
+// matching".  Arms come with their batches.
+
+enum BuildKind(TUPLE, LIST, SET, MAP);
+enum ElementKind(LIST_APPEND, SET_ADD, MAP_PUT);
+enum UpdateKind(LIST_EXTEND, SET_UPDATE, DICT_UPDATE);
+enum CellMode(MAKE, GET, MAPPING_GET, CELL_SET, CELL_DELETE, COPY_FREE);
+enum NamespaceScope(LOCALS, NAME, MAPPING, BUILD_CLASS, GLOBAL);
+enum ImportMode(IMPORT_NAME, IMPORT_FROM, LAZY_NAME, LAZY_FROM);
+enum TextKind(JOIN, INTERPOLATION, TEMPLATE);
+enum ConvertKind(STR, REPR, ASCII);
+enum PatternKind(MATCH_MAPPING, MATCH_SEQUENCE, MATCH_KEYS, MATCH_CLASS);
+enum FunctionMode(MAKE_FUNCTION, SET_FIELD);
+enum FunctionField(DEFAULTS, KWDEFAULTS, ANNOTATIONS, CLOSURE, ANNOTATE);
+// Include/internal/pycore_intrinsics.h: one typed signature per ID
+enum IntrinsicId(INTRINSIC_PRINT, INTRINSIC_IMPORT_STAR, INTRINSIC_STOPITERATION_ERROR,
+                 INTRINSIC_ASYNC_GEN_WRAP, INTRINSIC_UNARY_POSITIVE,
+                 INTRINSIC_LIST_TO_TUPLE, INTRINSIC_TYPEVAR, INTRINSIC_PARAMSPEC,
+                 INTRINSIC_TYPEVARTUPLE, INTRINSIC_SUBSCRIPT_GENERIC,
+                 INTRINSIC_TYPEALIAS, INTRINSIC_BUILD_FROZENSET,
+                 INTRINSIC_PREP_RERAISE_STAR, INTRINSIC_TYPEVAR_WITH_BOUND,
+                 INTRINSIC_TYPEVAR_WITH_CONSTRAINTS, INTRINSIC_SET_FUNCTION_TYPE_PARAMS,
+                 INTRINSIC_SET_TYPEPARAM_DEFAULT, INTRINSIC_ADD_CONDITIONAL_ANNOTATION,
+                 INTRINSIC_MATCH_CLASS_ISINSTANCE);
+
+// 1C: items and slices
+
+family GetItem(dst:Dst, obj:Src, key:Src, fb:Fb<Item>)
+  exits(next, enter, raise, miss, again);
+
+family SetItem(obj:Src, key:Src, value:Src, fb:Fb<Item>)
+  exits(next, raise, miss, again);
+
+family DelItem(obj:Src, key:Src)
+  exits(next, raise);
+
+family SliceRead(dst:Dst, obj:Src, start:Src, stop:Src)
+  exits(next, raise);
+
+family SliceWrite(obj:Src, start:Src, stop:Src, value:Src)
+  exits(next, raise);
+
+family BuildSlice(dst:Dst, parts:Span<Src>)
+  exits(next, raise);
+
+// 1E: displays, updates, comprehension insertion, keyword merge, unpack
+
+family Build(dst:Dst, kind:Enum<BuildKind>, items:Span<Src>)
+  exits(next, raise);
+
+family AddElement(container:Src, kind:Enum<ElementKind>, item:Src, value:Maybe<Src>)
+  exits(next, raise);
+
+family UpdateContainer(container:Src, kind:Enum<UpdateKind>, source:Src)
+  exits(next, raise);
+
+family MergeKeywords(dict:Src, source:Src, fn:Src)
+  exits(next, raise);
+
+family Unpack(dsts:Span<Dst>, source:Src, before:U8, after:Maybe<U8>, fb:Fb<Unpack>)
+  exits(next, raise, miss, again);
+
+// 1F: namespaces, cells, globals, annotations, import
+
+family Cell(mode:Enum<CellMode>, cell:Cell, value:Maybe<Src>, dst:Maybe<Dst>,
+            frees:Span<Free>)
+  exits(next, raise);
+
+family NamespaceRead(dst:Dst, scope:Enum<NamespaceScope>, name:Maybe<Name>,
+                     mapping:Maybe<Src>)
+  exits(next, raise);
+
+family NamespaceWrite(scope:Enum<NamespaceScope>, name:Name, value:Maybe<Src>,
+                      mode:Enum<WriteMode>)
+  exits(next, raise);
+
+family GlobalRead(dst:Dst, name:Name, fb:Fb<Global>)
+  exits(next, raise, miss, again);
+
+family SetupAnnotations()
+  exits(next, raise);
+
+family Import(dst:Dst, mode:Enum<ImportMode>, name:Name, level:Maybe<Src>,
+              fromlist:Maybe<Src>, module:Maybe<Src>, flags:U8)
+  exits(next, raise);
+
+// 1G: text
+
+family BuildText(dst:Dst, kind:Enum<TextKind>, parts:Span<Src>, flags:U8)
+  exits(next, raise);
+
+family Convert(dst:Dst, value:Src, kind:Enum<ConvertKind>)
+  exits(next, raise);
+
+family Format(dst:Dst, value:Src, spec:Maybe<Src>)
+  exits(next, raise);
+
+// 1H: length and patterns
+
+family Length(dst:Dst, value:Src)
+  exits(next, raise);
+
+family Pattern(dst:Maybe<Dst>, subject:Src, kind:Enum<PatternKind>, cls:Maybe<Src>,
+               names:Maybe<Src>, count:Maybe<U8>, mismatch:NearHead)
+  exits(next, branch, raise);
+
+// 1I: functions and intrinsics
+
+family Function(mode:Enum<FunctionMode>, dst:Maybe<Dst>, target:Src, value:Maybe<Src>,
+                field:Maybe<Enum<FunctionField>>)
+  exits(next, raise);
+
+family Intrinsic(dst:Dst, id:Enum<IntrinsicId>, args:Span<Src>)
+  exits(next, raise);

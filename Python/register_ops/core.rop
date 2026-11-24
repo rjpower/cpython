@@ -1,0 +1,80 @@
+// Shared declarations of the register instruction definitions: enums,
+// value tests, the adaptation rows and the call-boundary macros that more
+// than one family uses.
+
+// The numeric operations of `Add` and `Binary` (Include/opcode.h's NB_*)
+enum Numeric(NB_ADD, NB_AND, NB_FLOOR_DIVIDE, NB_LSHIFT, NB_MATRIX_MULTIPLY,
+             NB_MULTIPLY, NB_REMAINDER, NB_OR, NB_POWER, NB_RSHIFT, NB_SUBTRACT,
+             NB_TRUE_DIVIDE, NB_XOR, NB_INPLACE_ADD, NB_INPLACE_AND,
+             NB_INPLACE_FLOOR_DIVIDE, NB_INPLACE_LSHIFT, NB_INPLACE_MATRIX_MULTIPLY,
+             NB_INPLACE_MULTIPLY, NB_INPLACE_REMAINDER, NB_INPLACE_OR,
+             NB_INPLACE_POWER, NB_INPLACE_RSHIFT, NB_INPLACE_SUBTRACT,
+             NB_INPLACE_TRUE_DIVIDE, NB_INPLACE_XOR);
+
+// Value tests
+
+extern primitive is_object(v:B) -> Bool
+  effects()
+  test(object(v))
+  c PyValue_IsObject as int_as_bool
+  evidence(
+    review: "Reviewed G0c batch 1 (pycore_pyvalue.h): bits > 2, bits < Py_PTR_LIMIT"
+            "and bit 1 clear.",
+    contract: "A comparison of the word: no memory, no callee, no failure. A B is"
+              "never NULL, which the C row requires.",
+    lowering: "jit_lower.c LOWERING(PyValue_IsObject)",
+    test: "test_ir_leaf CASES");
+
+extern primitive as_object(v:B) -> Obj
+  effects()
+  requires(object(v))
+  c PyValue_AsKnownObjectBorrow as pointer
+  evidence(
+    review: "pycore_value.h: the object pointer of a word that holds an object.",
+    contract: "Bit arithmetic on the word, no heap access, no count, no failure.",
+    lowering: "jit_lower.c LOWERING(PyValue_AsKnownObjectBorrow)",
+    test: "test_ir_leaf CASES");
+
+extern primitive present(m:Maybe<B>) -> Bool
+  effects()
+  test(present(m))
+  pending;
+
+// Adaptation (addendum section 2): rows around the adaptive counter and
+// the coherent recipe store.  No C code picks a handler number.
+
+extern helper tick<K>(f:Fb<K>)
+  cases(quiet(), due())
+  effects(reads, writes)
+  feedback(read(counter), write(counter))
+  pending;
+
+extern helper backoff<K>(f:Fb<K>) -> Unit
+  effects(writes)
+  feedback(write(counter))
+  pending;
+
+extern helper install<K>(f:Fb<K>, c:Candidate<K>)
+  cases(changed(t:Ticket<K>), same(), blocked())
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+  pending;
+
+// The call boundary (operation dictionary): anchors, retirement after a
+// failed or abandoned call.  Their bodies come with P2.
+
+macro anchor_for_call(s:Span<Src>) -> Anchors
+  effects()
+  feedback()
+  pending;
+
+macro retire_failed_call(a:Anchors, s:Span<Src>, e:Err) -> Err
+  effects(releases)
+  feedback()
+  spends(s)
+  pending;
+
+macro retire_abandoned(a:Anchors, r:Route) -> Route
+  effects(releases)
+  feedback()
+  pending;

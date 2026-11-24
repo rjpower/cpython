@@ -1,0 +1,60 @@
+// GetAttr: attribute load (Appendix A, batch P3).  A recipe is evidence for
+// this site's name and an admitted lookup path; the duplicate precedes any
+// release of the receiver.
+
+family GetAttr(dst:Dst, obj:Src, name:Name, fb:Fb<Attr>)
+  exits(next, miss, again, enter, raise, redirect);
+
+point GetAttr.Done(current, next_head, clear) keep() spent(obj) defs(dst) held();
+
+// Instance-slot evidence: a recipe for this name on the observed type, read
+// coherently from the site's entry.  Declared ahead of its C body (F2).
+extern helper admitted_instance_slot(f:Fb<Attr>, n:Name)
+  cases(hit(r:Recipe<Attr>), absent())
+  effects(reads)
+  feedback(read(entry.kind), read(entry.type_version), read(entry.offset))
+  pending;
+
+// guard_current_nonzero_type_version: the object's type has the recipe's
+// live nonzero version
+extern primitive instance_version(o:Obj, r:Recipe<Attr>) -> Bool
+  effects(reads)
+  test(type_version(o, r))
+  pending;
+
+// guard_managed_inline_values_valid
+extern primitive valid_inline_values(o:Obj) -> Bool
+  effects(reads)
+  test(has_values(o))
+  pending;
+
+// The slot the recipe names; vacant on a valid instance is NULL
+extern primitive borrow_value_slot(o:Obj, r:Recipe<Attr>) -> Maybe<B>
+  effects(reads)
+  requires(type_version(o, r), has_values(o))
+  pending;
+
+arm GetAttr.Instance inline
+  effects(reads, writes, releases)
+  feedback(read(entry.kind), read(entry.type_version), read(entry.offset))
+  exits(next, miss)
+{
+  entry():
+    call admitted_instance_slot(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    guard valid_inline_values(o) else miss;
+    let item:Maybe<B> = borrow_value_slot(o, r);
+    guard present(item) else miss;
+    let result:O = dup(unwrap(item));
+    publish [dst = result] retire [spent(obj), old(dst)] at GetAttr.Done;
+    exit next();
+  Miss():
+    exit miss();
+}

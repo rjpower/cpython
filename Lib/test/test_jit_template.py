@@ -3,7 +3,9 @@
 (Python/jit_templates.c.h) against its handler's function form on one word
 of a frame."""
 
+import contextlib
 import ctypes
+import dataclasses
 import math
 import random
 import struct
@@ -12,13 +14,16 @@ import unittest
 import weakref
 
 from test import test_tools
+from test import support
 from test.support import import_helper
+from test.support.script_helper import assert_python_ok
 
 capi = import_helper.import_module("_testinternalcapi")
 if not hasattr(capi, "jit_lower"):
     raise unittest.SkipTest("the JIT is not supported on this platform")
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
+    import ir_contract
     import ir_leaf
     import jit_template_generator
 
@@ -274,20 +279,26 @@ class LoweringTests(unittest.TestCase):
     def test_failed_box_leaves_by_the_exit(self):
         "A box that fails gives NULL, and the lowering with an exit leaves by it"
         rng = random.Random(91)
-        name = "PyValue_FromInt64"
-        for value in (2**60, -2**60, 2**50, -2**50 - 1):
+        for name, failing, inline in (("PyValue_FromInt64", (2**60, -2**60, 2**50, -2**50 - 1), 7),
+                                      ("PyValue_FromDouble", (NAN, -NAN), 1.5)):
+            # A boxed float comes from a freelist unless it is empty: hold
+            # more NaNs than it keeps, so that the box allocates
+            held = [NAN * x for x in (2.0,) * 300]
+            for value in failing:
+                for ops, live in variants(name, rng, 2):
+                    with self.subTest(primitive=name, value=value, ops=ops):
+                        cond, (w,), before, after = run(name, ops, (value,), rng, "exit_fail",
+                                                        args_live=live)
+                        self.check_registers(name, ops, before, after, live)
+                        self.assertIs(cond, True)
+                        self.assertEqual(w, 0)
+            # Inline values need no box
             for ops, live in variants(name, rng, 2):
-                with self.subTest(value=value, ops=ops):
-                    cond, (w,), before, after = run(name, ops, (value,), rng, "exit_fail",
-                                                    args_live=live)
-                    self.check_registers(name, ops, before, after, live)
-                    self.assertIs(cond, True)
-                    self.assertEqual(w, 0)
-        # Inline ints need no box
-        for ops, live in variants(name, rng, 2):
-            cond, (w,), before, after = run(name, ops, (7,), rng, "exit_fail", args_live=live)
-            self.assertIs(cond, False)
-            self.assertEqual(w, capi.leaf_primitive(name, 7))
+                cond, (w,), before, after = run(name, ops, (inline,), rng, "exit_fail",
+                                                args_live=live)
+                self.assertIs(cond, False)
+                self.assertEqual(w, capi.leaf_primitive(name, inline))
+            del held
 
     def test_counts(self):
         rng = random.Random(90)
@@ -725,6 +736,67 @@ def slot_of(field_slots, field):
     return field_slots[name] + int(n or 0)
 
 
+class FailedBoxTests(unittest.TestCase):
+    """The failure edge of a box that leaves by the exit (SLOW rows): in
+    compiled code, a failed allocation raises MemoryError at the word, with
+    the inputs still in their homes, and the function works after it"""
+
+    @support.nomemtest
+    def test_box_failure_raises_at_the_word_and_leaves_the_inputs(self):
+        assert_python_ok("-c", """if 1:
+            import gc
+            import _testcapi
+            import _testinternalcapi as capi
+
+            inf = float("inf")
+            nan = float("nan")
+            cases = (
+                # PyValue_FromInt64 in the floor division of two ints
+                ("BINARY_OP_FLOOR_DIVIDE_INT", "a // b", (-2**50, -1), 2**50, (6, 3), 2),
+                # PyValue_FromDouble of a NaN
+                ("BINARY_OP_ADD_FLOAT", "a + b", (inf, -inf), nan, (1.5, 2.5), 4.0),
+            )
+            for handler, expression, args, boxed, safe, safe_result in cases:
+                namespace = {}
+                exec(f"def f(a, b):\\n    return {expression}\\n"
+                     "def g(a, b):\\n    try:\\n        x = f(a, b)\\n"
+                     "    except MemoryError:\\n        return ('failed', a, b)\\n    return x\\n",
+                     namespace)
+                f, g = namespace["f"], namespace["g"]
+                for _ in range(300):
+                    g(*safe)
+                    g(*args)
+                words = [row[0] for row in capi.get_ir(f.__code__, True)]
+                assert handler in words, words
+                a, b = args
+                failed = 0
+                for skip in range(4):
+                    gc.collect()
+                    gc.disable()
+                    # A boxed float comes from a freelist unless it is empty:
+                    # hold more NaNs than it keeps, so that the box allocates
+                    held = [nan * x for x in (2.0,) * 300]
+                    # skip allocations succeed, then exactly one fails
+                    _testcapi.set_nomemory(skip, skip + 1)
+                    try:
+                        got = g(a, b)
+                    finally:
+                        _testcapi.remove_mem_hooks()
+                        gc.enable()
+                    del held
+                    if isinstance(got, tuple) and got[:1] == ("failed",):
+                        failed += 1
+                        assert got[1] is a and got[2] is b, got
+                    else:
+                        assert got == boxed or got != got, got
+                    # The function works after the failure
+                    again = g(a, b)
+                    assert again == boxed or again != again, again
+                    assert g(*safe) == safe_result
+                assert failed, (handler, "no allocation failure reached the box")
+            """, PYTHON_JIT="always")
+
+
 class TemplateTests(unittest.TestCase):
     def compile(self, source, warm):
         namespace = {}
@@ -833,44 +905,187 @@ def prims_of(graph):
             for op in block.ops if op.kind == "prim"]
 
 
+@contextlib.contextmanager
+def declared(name, **changes):
+    """The component row `name` with columns changed, for the generator that
+    reads ir_contract.rows(): a declaration withdrawn or altered"""
+    table = ir_contract.rows()
+    saved = table[name]
+    if "result" in changes:
+        changes["result"] = dataclasses.replace(saved.result, **changes["result"])
+    table[name] = dataclasses.replace(saved, **changes)
+    try:
+        yield
+    finally:
+        table[name] = saved
+
+
+def prim_graph(*steps):
+    """A graph for the passes: one word v, then each step (name, test) as a
+    block that tests v (`test` is the primitive, whose false side leaves by
+    a deopt) or, with test None, ends in the primitive on v.  Returns the
+    graph and its ops by step"""
+    g = jit_template_generator.Graph()
+    TOp = jit_template_generator.TOp
+    block = g.blocks[g.entry]
+    v = g.value(ir_leaf.VALUE)
+    block.ops.append(TOp("view", [v], [], "B"))
+    deopt = g.new_block()
+    deopt.term = ("deopt",)
+    ops = []
+    for name, test in steps:
+        if test:
+            c = g.value("bool")
+            op = TOp("prim", [c], [v], name)
+            block.ops.append(op)
+            nxt = g.new_block()
+            block.term = ("br", c, nxt.id, deopt.id) if test == "continue" else \
+                ("br", c, deopt.id, nxt.id)
+            block = nxt
+        else:
+            op = TOp("prim", [], [v], name)
+            block.ops.append(op)
+        ops.append(op)
+    block.term = ("end", None)
+    return g, ops
+
+
 class TemplateGraphTests(unittest.TestCase):
-    "What the generator reads from the primitives' specs, and the graphs it builds with it"
+    "What the generator reads from the component rows, and the graphs it builds with it"
 
     def test_tests_for_null(self):
-        found = {name for name in ir_leaf.PRIMITIVES if jit_template_generator.is_null_test(name)}
+        found = {name for name in ir_contract.rows() if jit_template_generator.is_null_test(name)}
         self.assertEqual(found, {"PyValue_IsNull"})
 
     def test_tests_of_both(self):
         self.assertEqual(jit_template_generator.both_test("PyValue_IsInlineInt"),
                          "PyValue_BothInlineInt")
-        found = {name for name in ir_leaf.PRIMITIVES
+        found = {name for name in ir_contract.rows()
                  if jit_template_generator.both_test(name) is not None}
         self.assertEqual(found, {"PyValue_IsInlineInt"})
+        with declared("PyValue_BothInlineInt", conjoins=""):
+            self.assertIsNone(jit_template_generator.both_test("PyValue_IsInlineInt"))
 
     def test_what_a_test_shows(self):
         facts = jit_template_generator.test_facts
         self.assertEqual(facts("PyValue_IsNull"), (False, True))
         self.assertEqual(facts("PyValue_IsObject"), (True, False))
         self.assertEqual(facts("PyValue_IsInlineInt"), (True, False))
-        # NULL is in pointer space: only a word outside it is not NULL
-        self.assertEqual(facts("PyValue_IsPointerSpace"), (False, True))
-        self.assertEqual(facts("PyValue_IsTaggedIndex"), (True, False))
+        # No fact is declared of these: they show nothing, though a word
+        # outside pointer space is not NULL
+        self.assertEqual(facts("PyValue_IsPointerSpace"), (False, False))
+        self.assertEqual(facts("PyValue_IsTaggedIndex"), (False, False))
+        # A primitive without a row shows nothing
+        self.assertEqual(facts("no_such_primitive"), (False, False))
 
     def test_results_that_are_never_null(self):
-        found = {name for name in ir_leaf.PRIMITIVES if jit_template_generator.never_null(name)}
-        self.assertEqual(found, {"_PyValue_FromIntScaled", "PyValue_FromInlineInt",
-                                 "PyValue_TagIndex"})
-        # The claim against the spec on its own domain
-        for name in found:
+        found = {name for name in ir_contract.rows() if jit_template_generator.never_null(name)}
+        scalar = {name for name in found if name in ir_leaf.PRIMITIVES
+                  and all(p not in (ir_leaf.VALUE, "PyObject*")
+                          for p in ir_leaf.PRIMITIVES[name].params)}
+        self.assertLessEqual({"_PyValue_FromIntScaled", "PyValue_FromInlineInt",
+                              "PyValue_TagIndex", "PyValue_DUP"}, found)
+        # The declaration against the C definition on its domain
+        for name in scalar:
             prim = ir_leaf.PRIMITIVES[name]
             for args in cases(prim):
                 if prim.pre is None or prim.pre(context(), *args):
                     self.assertNotEqual(capi.leaf_primitive(name, *args), 0, (name, args))
+        with declared("_PyValue_FromIntScaled", result={"shape": "VALUE_OR_NULL"}):
+            self.assertFalse(jit_template_generator.never_null("_PyValue_FromIntScaled"))
 
     def test_primitives_for_a_word_that_is_not_null(self):
-        given = {name: jit_template_generator.given_not_null(name) for name in ir_leaf.PRIMITIVES}
+        given = {name: jit_template_generator.given_not_null(name) for name in ir_contract.rows()}
         self.assertEqual({k: v for k, v in given.items() if v},
-                         {"PyValue_XDUP": "PyValue_DUP", "PyValue_XCLOSE": "PyValue_CLOSE"})
+                         {"PyValue_XDUP": "PyValue_DUP"})
+
+    def test_results_that_fail_only_in_their_slow_path(self):
+        found = {name for name in ir_contract.rows()
+                 if jit_template_generator.null_only_from_slow(name)}
+        self.assertEqual(found, {"PyValue_FromInt64", "PyValue_FromDouble"})
+
+    def graph_names(self, handler):
+        graph = graph_of(handler)
+        return graph, prims_of(graph)
+
+    def test_without_conjoins_the_guards_stay_two(self):
+        with declared("PyValue_BothInlineInt", conjoins=""):
+            graph, names = self.graph_names("BINARY_OP_ADD_INT")
+        self.assertEqual(names.count("PyValue_IsInlineInt"), 2)
+        self.assertNotIn("PyValue_BothInlineInt", names)
+
+    def test_without_a_nonnull_form_the_test_for_null_stays_in_the_primitive(self):
+        with declared("PyValue_DUP", nonnull_form=""):
+            graph, names = self.graph_names("LOAD_ATTR_INSTANCE_VALUE")
+        self.assertIn("PyValue_XDUP", names)
+        self.assertNotIn("PyValue_DUP", names)
+        # The form is chosen where the word is known not NULL
+        for declare in (False, True):
+            g, (test, dup) = prim_graph(("PyValue_IsNull", "leave"), ("PyValue_XDUP", None))
+            with contextlib.ExitStack() as stack:
+                if declare:
+                    stack.enter_context(declared("PyValue_DUP", nonnull_form=""))
+                jit_template_generator.fold_nulls(g)
+            self.assertEqual(dup.attr, "PyValue_XDUP" if declare else "PyValue_DUP")
+
+    def test_a_column_that_breaks_the_reviewed_conditions_is_not_used(self):
+        facts = {"inline_int": frozenset((ir_contract.VFact("inline_int"),))}
+        arg = ir_contract.rows()["PyValue_IsInlineInt"].args[0]
+        # A conjunction that is not total, or has an effect
+        with declared("PyValue_BothInlineInt",
+                      args=(dataclasses.replace(arg, facts=facts["inline_int"]), arg)):
+            self.assertIsNone(jit_template_generator.both_test("PyValue_IsInlineInt"))
+        with declared("PyValue_BothInlineInt", effects=frozenset(("reads",))):
+            self.assertIsNone(jit_template_generator.both_test("PyValue_IsInlineInt"))
+        # A form that requires more than a non-NULL argument, or other feedback
+        dup = ir_contract.rows()["PyValue_DUP"]
+        more = dataclasses.replace(dup.args[0], facts=dup.args[0].facts | facts["inline_int"])
+        with declared("PyValue_DUP", args=(more,)):
+            self.assertIsNone(jit_template_generator.given_not_null("PyValue_XDUP"))
+        with declared("PyValue_DUP", feedback=frozenset((("read", "counter"),))):
+            self.assertIsNone(jit_template_generator.given_not_null("PyValue_XDUP"))
+        # A slow path with other parameters, or effects beyond the row's
+        with declared("PyValue_FromInt64", params=("int32_t",)):
+            self.assertFalse(jit_template_generator.null_only_from_slow("PyValue_FromInt64"))
+        with declared("PyValue_FromInt64", effects=frozenset(("raises",))):
+            self.assertFalse(jit_template_generator.null_only_from_slow("PyValue_FromInt64"))
+
+    def test_without_slow_the_box_keeps_its_test_and_has_no_exit(self):
+        for handler, name in (("FOR_ITER_RANGE", "PyValue_FromInt64"),
+                              ("BINARY_OP_ADD_FLOAT", "PyValue_FromDouble")):
+            with self.subTest(handler=handler):
+                def box():
+                    graph = graph_of(handler)
+                    return [op for b in graph.blocks.values() for op in b.ops
+                            if jit_template_generator.prim_name(op) == name], graph
+                (op,), graph = box()
+                self.assertIsNotNone(op.exit)
+                with declared(name, slow=""):
+                    (op,), graph = box()
+                self.assertIsNone(op.exit)
+                self.assertIn("PyValue_IsNull", prims_of(graph))
+
+    def test_without_the_declared_test_for_null_nothing_is_dropped(self):
+        # After a test of IsNull that leaves where it holds, a second one is dropped
+        g, (first, second) = prim_graph(("PyValue_IsNull", "leave"), ("PyValue_IsNull", "leave"))
+        jit_template_generator.fold_nulls(g)
+        self.assertEqual(second.kind, "const")
+        with declared("PyValue_IsNull", result={"tests": ((frozenset(), frozenset()),)}):
+            g, (first, second) = prim_graph(("PyValue_IsNull", "leave"),
+                                            ("PyValue_IsNull", "leave"))
+            jit_template_generator.fold_nulls(g)
+            self.assertEqual(second.kind, "prim")
+
+    def test_a_declared_true_side_shows_the_word_not_null(self):
+        g, (first, second) = prim_graph(("PyValue_IsInlineInt", "continue"),
+                                        ("PyValue_IsNull", "leave"))
+        jit_template_generator.fold_nulls(g)
+        self.assertEqual(second.kind, "const")
+        with declared("PyValue_IsInlineInt", result={"tests": ((frozenset(), frozenset()),)}):
+            g, (first, second) = prim_graph(("PyValue_IsInlineInt", "continue"),
+                                            ("PyValue_IsNull", "leave"))
+            jit_template_generator.fold_nulls(g)
+            self.assertEqual(second.kind, "prim")
 
     def test_add_int_has_one_guard_and_tests_the_box_only(self):
         graph = graph_of("BINARY_OP_ADD_INT")

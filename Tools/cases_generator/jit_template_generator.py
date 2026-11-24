@@ -17,13 +17,11 @@ lowerings' prototypes and table) and Python/jit_templates.c.h.
 """
 
 import argparse
-import functools
-import re
 from dataclasses import dataclass, replace
 
 import ir_generator
 import ir_leaf
-import ir_leaf_eval
+import ir_contract
 import ir_numbers
 from analyzer import analyze_files
 from generators_common import DEFAULT_INPUT, ROOT
@@ -981,218 +979,142 @@ def dominators(g: Graph) -> dict[int, int]:
 
 
 # ---------------------------------------------------------------------------
-# Facts from the primitives' models.  A primitive's spec (ir_leaf.py) is
-# executable, so what a pass needs to know of a primitive is read from the
-# spec, not listed by name:
-# - which test is the test for NULL;
-# - which two-operand test is a primitive's test of both operands, so that
-#   two guards on one exit become one;
-# - which results are never NULL, by running the spec on words of which
-#   only some bits are known;
-# - which primitive is another with a precondition that the argument is not
-#   NULL (the same spec), so that the argument's known nonnull-ness picks it.
-# The numbers of the value encoding come from the headers that define them.
+# Facts declared by the component rows (Include/internal/pycore_ir_components.h,
+# read through ir_contract.rows()).  A pass uses a fact of a primitive only
+# where its row declares it: what a test shows of its word, the test of both
+# words that conjoins a single-word test (CONJOINS), the form of a primitive
+# for a word that is not NULL (NONNULL_FORM), the result that is NULL only
+# when its slow path fails (SLOW), the results that are never NULL (a VALUE
+# result without null_iff), and the effects that CSE reads.  A primitive
+# without a row, or a row without the column, gets none of these.
 
-HEADERS = ("Include/internal/pycore_pyvalue.h", "Include/internal/pycore_value.h")
-WORD_CONSTANTS = ("Py_PTR_LIMIT", "Py_INDEX_BASE", "Py_DOUBLE_OFFSET", "Py_INT_BASE",
-                  "Py_OWNED_MASK")
+def row(name):
+    "The component row of a primitive or helper, or None"
+    return ir_contract.rows().get(name) if isinstance(name, str) else None
 
 
-@functools.cache
-def value_constants() -> dict[str, int]:
-    "The names of ir_leaf.CONSTANTS that the value headers define, evaluated"
-    defines = {}
-    for header in HEADERS:
-        for m in re.finditer(r"^#\s*define\s+(\w+)\s+(.+)$", (ROOT / header).read_text(),
-                             re.M):
-            defines[m.group(1)] = m.group(2)
-    values: dict[str, int] = {}
-
-    def value(name: str) -> int:
-        if name not in values:
-            expr = re.sub(r"\(\s*(?:uintptr_t|int64_t)\s*\)", "", defines[name])
-            expr = re.sub(r"[A-Za-z_]\w*", lambda m: str(value(m.group(0)))
-                          if m.group(0) in defines else m.group(0), expr)
-            values[name] = ir_leaf.u64(eval(expr)) if name in WORD_CONSTANTS else eval(expr)
-        return values[name]
-
-    return {name: value(name) for name in ir_leaf.CONSTANTS if name in defines}
+def single_test(name: str):
+    "The (true facts, false facts) of a one-argument TEST row, or None"
+    r = row(name)
+    if r is None or r.result.shape != "TEST" or len(r.args) != 1 or len(r.result.tests) != 1:
+        return None
+    return r.result.tests[0]
 
 
-@functools.cache
-def model_context() -> ir_leaf_eval.Context:
-    # Static objects have distinct aligned addresses in pointer space
-    symbols = {name: 0x7F00_0000_0000 + 0x1000 * n for n, name in enumerate(ir_leaf.SYMBOLS)}
-    layout = ir_leaf_eval.Layout(value_constants(), {}, {}, symbols)
-    return ir_leaf_eval.Context(layout, None)
-
-
-@functools.cache
-def sample_words() -> tuple[int, ...]:
-    "Words on each side of every boundary of the encoding, and the tags"
-    k = value_constants()
-    edges = [0, 1, 2, 3, 4, 8, 16, k["Py_PTR_LIMIT"], k["Py_INDEX_BASE"],
-             k["Py_DOUBLE_OFFSET"], k["Py_INT_BASE"], k["Py_OWNED_MASK"], 2**64 - 1]
-    words = {ir_leaf.u64(e + d) for e in edges for d in (-2, -1, 0, 1, 2)}
-    # Pointers, indices, floats and ints inside their regions
-    words |= {0x7F00_0000_1000, 0x7F00_0000_1001, 0xFFF8_0000_0000_0005,
-              0xFFFF_FFFF_FFFF_FFFB, 0x4000_0000_0000_0000, 0x0001_0000_0000_0007}
-    return tuple(sorted(words))
-
-
-def is_test(prim: ir_leaf.Primitive, nargs: int) -> bool:
-    "A pure test of nargs words"
-    return (prim.params == (ir_leaf.VALUE,) * nargs and prim.results == ("bool",)
-            and not prim.effects and prim.pre is None)
-
-
-def model(prim: ir_leaf.Primitive, *args):
-    return prim.spec(model_context(), *args)
-
-
-@functools.cache
 def is_null_test(name: str) -> bool:
-    prim = ir_leaf.PRIMITIVES.get(name)
-    if prim is None or not is_test(prim, 1):
-        return False
-    try:
-        return all(bool(model(prim, w)) == (w == 0) for w in sample_words())
-    except Exception:
-        return False
+    """The test whose false side declares the word not NULL and whose true
+    side declares nothing (`TEST(| nonnull)`): the negation of that fact, so
+    that a word known not NULL decides it"""
+    t = single_test(name)
+    return t is not None and not t[0] and ir_contract.NONNULL in ir_contract.implied(t[1])
 
 
-@functools.cache
 def test_facts(name: str) -> tuple[bool, bool]:
-    """What a test of one word shows about NULL: that the word is not NULL
-    when the test holds, when it does not"""
-    prim = ir_leaf.PRIMITIVES.get(name)
-    if prim is None or not is_test(prim, 1):
+    """What a test of one word declares about NULL: that the word is not NULL
+    when the test holds, when it does not.  The false side counts only for
+    the negation of a fact (is_null_test): a false side of another test
+    holds under that test's own precondition"""
+    t = single_test(name)
+    if t is None:
         return False, False
-    try:
-        holds = {w: bool(model(prim, w)) for w in sample_words()}
-    except Exception:
-        return False, False
-    return all(w != 0 for w, h in holds.items() if h), holds[0]
+    return (ir_contract.NONNULL in ir_contract.implied(t[0]), is_null_test(name))
 
 
-@functools.cache
+def conjoins_ok(pair, one) -> bool:
+    """The review's conditions for fusing one test of two words for two
+    tests of one word: neither row has an effect or feedback, both are total
+    (no argument fact or precondition), and the C parameter types and
+    argument modes match"""
+    return (not pair.effects and not one.effects and not pair.feedback and not one.feedback
+            and len(pair.args) == 2 and len(one.args) == 1
+            and pair.params == one.params * 2
+            and all(not a.facts for a in (*pair.args, *one.args))
+            and all(a.mode == one.args[0].mode for a in pair.args))
+
+
 def both_test(name: str) -> str | None:
-    """The primitive that tests two words and holds when the named one holds
-    of each (a test of both operands), or None"""
-    prim = ir_leaf.PRIMITIVES.get(name)
-    if prim is None or not is_test(prim, 1):
-        return None
-    words = sample_words()
-    try:
-        single = {w: bool(model(prim, w)) for w in words}
-        for other, candidate in ir_leaf.PRIMITIVES.items():
-            if other not in LOWERINGS or not is_test(candidate, 2):
-                continue
-            if all(bool(model(candidate, a, b)) == (single[a] and single[b])
-                   for a in words for b in words):
-                return other
-    except Exception:
-        pass
+    "The two-argument test that CONJOINS the named test, or None"
+    one = row(name)
+    for r in ir_contract.rows().values():
+        if r.conjoins == name and r.name in LOWERINGS and conjoins_ok(r, one):
+            return r.name
     return None
 
 
-class Unknown(Exception):
-    "The spec does something that known bits cannot follow"
-
-
-class Bits:
-    """A 64-bit word of which some bits are known: `ones` are 1 and `zeros`
-    are 0.  Only what the value tests and constructors do to words: and, or,
-    xor, complement and logical shifts by a constant."""
-
-    def __init__(self, ones: int = 0, zeros: int = 0) -> None:
-        self.ones, self.zeros = ones, zeros
-
-    @staticmethod
-    def of(x) -> "Bits":
-        if isinstance(x, Bits):
-            return x
-        x = ir_leaf.u64(x)
-        return Bits(x, ~x & ir_leaf.MASK64)
-
-    def __and__(self, o):
-        o = Bits.of(o)
-        return Bits(self.ones & o.ones, self.zeros | o.zeros)
-
-    def __or__(self, o):
-        o = Bits.of(o)
-        return Bits(self.ones | o.ones, self.zeros & o.zeros)
-
-    def __xor__(self, o):
-        o = Bits.of(o)
-        return Bits((self.ones & o.zeros) | (self.zeros & o.ones),
-                    (self.ones & o.ones) | (self.zeros & o.zeros))
-
-    def __invert__(self):
-        return Bits(self.zeros, self.ones)
-
-    def __rshift__(self, n: int):
-        top = ir_leaf.MASK64 & ~(ir_leaf.MASK64 >> n)
-        return Bits(self.ones >> n, (self.zeros >> n) | top)
-
-    def __lshift__(self, n: int):
-        return Bits((self.ones << n) & ir_leaf.MASK64,
-                    ((self.zeros << n) | ((1 << n) - 1)) & ir_leaf.MASK64)
-
-    __rand__, __ror__, __rxor__ = __and__, __or__, __xor__
-
-    def __bool__(self):
-        raise Unknown("a test of unknown bits")
-
-
-@functools.cache
 def never_null(name: str) -> bool:
-    "The primitive's one word result has a bit that is always 1: not NULL"
-    prim = ir_leaf.PRIMITIVES.get(name)
-    if prim is None or prim.results != (ir_leaf.VALUE,) or prim.effects or len(prim.params) != 1:
+    "The primitive's value result is declared never NULL: VALUE without null_iff"
+    r = row(name)
+    return r is not None and r.result.shape == "VALUE" and r.result.null_iff < 0
+
+
+def nonnull_form_ok(form, general) -> bool:
+    """The review's conditions for choosing `form` for `general` when the
+    argument is not NULL: the argument modes are equal and the form adds
+    nothing but nonnull, the result shape and mode are equal and its facts
+    at least general's, the feedback is equal and the effects within"""
+    if len(form.args) != 1 or len(general.args) != 1 or form.params != general.params:
         return False
-    try:
-        result = prim.spec(model_context(), Bits())
-    except Exception:
+    a, b = form.args[0], general.args[0]
+    if a.mode != b.mode or a.facts - {ir_contract.NONNULL} != b.facts - {ir_contract.NONNULL}:
         return False
-    return isinstance(result, Bits) and result.ones != 0
+    x, y = form.result, general.result
+    return ((x.shape, x.mode) == (y.shape, y.mode) and x.facts >= y.facts
+            and (x.null_iff < 0 or x.null_iff == y.null_iff)
+            and form.feedback == general.feedback and form.effects <= general.effects)
 
 
-def same_spec(a, b) -> bool:
-    "One function, or the same code closed over equal cells"
-    return a is b or (a.__code__ is b.__code__ and a.__defaults__ == b.__defaults__
-                      and [c.cell_contents for c in a.__closure__ or ()] ==
-                      [c.cell_contents for c in b.__closure__ or ()])
-
-
-@functools.cache
 def given_not_null(name: str) -> str | None:
-    """The primitive with the same spec whose precondition is that its one
-    argument is not NULL: what the named one is when its argument is not
-    NULL"""
-    prim = ir_leaf.PRIMITIVES.get(name)
-    if prim is None or prim.pre is not None or len(prim.params) != 1:
-        return None
-    for other, candidate in ir_leaf.PRIMITIVES.items():
-        if (other != name and other in LOWERINGS and same_spec(candidate.spec, prim.spec)
-                and candidate.params == prim.params and candidate.results == prim.results
-                and candidate.effects == prim.effects and candidate.pre is not None
-                and all(bool(candidate.pre(model_context(), w)) == (w != 0)
-                        for w in sample_words())):
-            return other
+    "The primitive that declares itself the named one for a word that is not NULL"
+    general = row(name)
+    for r in ir_contract.rows().values():
+        if r.nonnull_form == name and r.name in LOWERINGS and nonnull_form_ok(r, general):
+            return r.name
     return None
+
+
+def null_only_from_slow(name: str) -> bool:
+    """The primitive's result is NULL only when its declared slow path's
+    helper fails: the helper takes the primitive's parameters and gives its
+    result mode, within the primitive's effects"""
+    r = row(name)
+    if r is None or not r.slow:
+        return False
+    h = row(r.slow)
+    return (h is not None and h.kind == "HELPER" and h.params == r.params
+            and h.result.mode == r.result.mode and h.effects <= r.effects)
+
+
+def changes_counts(r) -> bool:
+    "A row that takes a count away from its argument or gives a new one"
+    return r.new_owner() or any(a.mode in ("consumed", "taken") for a in r.args)
 
 
 # The ops that compute the same result from the same arguments anywhere
 CSE_KINDS = {"const", "jconst", "cache", "fieldaddr", "ptradd", "add", "sub", "mul", "and",
              "or", "xor", "shl", "ashr", "lshr", "neg", "not", "conv", "fadd", "fsub",
              "fmul", "fdiv"}
-# The effects that change memory that other ops read: a write to the heap, a
-# release (which may run a destructor) and Python.  Boxing allocates new
-# objects, and counts are not heap writes (CR); they change a count word,
-# which only a load of ob_refcnt reads.
-CHANGES_MEMORY = frozenset((ir_leaf.WRITES_HEAP, ir_leaf.MAY_RELEASE, ir_leaf.MAY_RUN_PYTHON))
+# The effects that change memory that other ops read are the contract's
+# KILLS: a write to the heap, a release (which may run a destructor), Python,
+# a poll and a frame switch.  Boxing allocates new objects, and counts are
+# not heap writes (CR); they change a count word, which only a load of
+# ob_refcnt reads.
 ALL = "all"
+
+
+def effects_of(op: TOp):
+    """The declared effects of the primitive or helper of op, or None where
+    its row is missing.  A close through a named destructor adds the
+    destructor's: the row of its name, or none where it has no row"""
+    r = row(prim_name(op) if op.kind == "prim" else op.attr)
+    if r is None:
+        return None
+    effects = set(r.effects)
+    if op.kind == "prim" and any(a.mode == "destructor" for a in r.args):
+        d = row(op.attr[1]) if isinstance(op.attr, tuple) else None
+        if d is None:
+            return None
+        effects |= d.effects
+    return effects
 
 
 def changes(op: TOp):
@@ -1203,19 +1125,26 @@ def changes(op: TOp):
     if op.kind == "store":
         # A store through a type, not a field, may be to any field of it
         return {op.attr, None} if op.attr in ir_leaf.FIELDS else ALL
-    if op.kind == "call":
-        return ALL if ir_leaf.HELPERS[op.attr].effects & CHANGES_MEMORY else set()
+    if op.kind in ("slot_store", "detach"):
+        # A home is not the heap, but a primitive may read one
+        return {None}
     if op.kind == "take":
-        return {"PyObject.ob_refcnt"}
-    if op.kind == "prim":
-        name = prim_name(op)
-        if name in ir_leaf.PRIMITIVES:
-            effects = ir_leaf.PRIMITIVES[name].effects
-            if effects & CHANGES_MEMORY:
-                return ALL
-            if name in COUNT_PRIMS:
-                return {"PyObject.ob_refcnt"}
+        return {"PyObject.ob_refcnt", None}
+    if op.kind in ("call", "prim"):
+        effects = effects_of(op)
+        if effects is None or effects & ir_contract.KILLS:
+            return ALL
+        if op.kind == "prim" and changes_counts(row(prim_name(op))):
+            return {"PyObject.ob_refcnt"}
     return set()
+
+
+def reads_only(op: TOp) -> bool:
+    "A primitive whose row declares at most a read, and no count: equal calls give equal results"
+    if op.kind != "prim" or not isinstance(op.attr, str) or op.attr not in LOWERINGS:
+        return False
+    r = row(op.attr)
+    return r is not None and r.effects <= {"reads"} and not changes_counts(r)
 
 
 def cse(g: Graph) -> bool:
@@ -1231,7 +1160,7 @@ def cse(g: Graph) -> bool:
     mapping: dict[int, int] = {}
 
     def is_read(key) -> bool:
-        return key[0] == "load" or (key[0] == "prim" and ir_leaf.PRIMITIVES[key[1]].effects)
+        return key[0] == "load" or (key[0] == "prim" and "reads" in row(key[1]).effects)
 
     def walk(i: int, seen: dict) -> None:
         b = g.blocks[i]
@@ -1241,12 +1170,7 @@ def cse(g: Graph) -> bool:
         seen = dict(seen)
         keep = []
         for op in b.ops:
-            reads = op.kind == "load" or (op.kind == "prim" and isinstance(op.attr, str)
-                                          and op.attr in PURE_PRIMS and op.results
-                                          and ir_leaf.PRIMITIVES[op.attr].effects)
-            pure = (op.kind in CSE_KINDS or reads or
-                    (op.kind == "prim" and isinstance(op.attr, str) and op.attr in PURE_PRIMS
-                     and op.results))
+            pure = op.kind in CSE_KINDS or op.kind == "load" or (reads_only(op) and op.results)
             if pure and op.when is None and len(op.results) == 1:
                 key = (op.kind, op.attr, tuple(mapping.get(a, a) for a in op.args))
                 if key in seen:
@@ -1287,43 +1211,6 @@ def dce(g: Graph) -> bool:
         if not removed:
             return changed
         changed = True
-
-
-class FailingBoxes(ir_leaf_eval.Context):
-    "A context in which every helper fails: it gives NULL"
-
-    def call(self, name: str, *args):
-        self.calls.append(name)
-        return 0
-
-
-@functools.cache
-def null_only_from_slow(name: str) -> bool:
-    """The primitive's result is NULL only when its slow path's helper
-    gives NULL: the spec, run with helpers that fail on integers and
-    doubles around the inline range, gives NULL only after a helper call"""
-    prim = ir_leaf.PRIMITIVES.get(name)
-    if prim is None or not prim.slow or len(prim.params) != 1 or prim.results != (ir_leaf.VALUE,):
-        return False
-    k = value_constants()
-    samples = {
-        "i64": [0, 1, -1, k["Py_INT_MIN"], k["Py_INT_MIN"] - 1, k["Py_INT_MAX"],
-                k["Py_INT_MAX"] + 1, 2**62, -2**62],
-        "f64": [0.0, -0.0, 1.5, -1e300, float("inf"), float("-inf"), float("nan")],
-    }.get(prim.params[0])
-    if samples is None:
-        return False
-    called = False
-    for x in samples:
-        cx = FailingBoxes(model_context().layout, None)
-        try:
-            result = prim.spec(cx, x)
-        except Exception:
-            return False
-        if not cx.calls and result == 0:
-            return False
-        called |= bool(cx.calls)
-    return called
 
 
 def prim_name(op: TOp) -> str | None:
@@ -1637,7 +1524,8 @@ def cond_result(op: TOp) -> int:
 
 def reads_memory(op: TOp) -> bool:
     if op.kind == "prim":
-        return bool(ir_leaf.PRIMITIVES[op.attr].effects)
+        effects = effects_of(op)
+        return effects is None or bool(effects)
     return op.kind not in ("cmp", "fcmp", "cmpmask", "xorb", "lnot")
 
 

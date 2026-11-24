@@ -7,8 +7,11 @@ argument list closes, and fails on any byte that no token or trivia
 consumed.  The grammar is in the F0 language reference.
 """
 
+import enum
 import re
+from collections.abc import Callable
 from pathlib import Path
+from typing import TypeVar
 
 import lexer
 from lexer import Token
@@ -41,6 +44,9 @@ SPLIT = frozenset((lexer.RSHIFT, lexer.GE, lexer.RSHIFTEQUAL))
 WORD_KINDS = frozenset((lexer.IDENTIFIER, lexer.ANNOTATION, *lexer.keywords.values()))
 DECIMAL = re.compile(r"0|[1-9][0-9]*")
 TRIVIA = frozenset(" \t\n")
+
+X = TypeVar("X")
+E = TypeVar("E", bound=enum.Enum)
 
 
 class Tok:
@@ -194,8 +200,8 @@ class Parser:
             raise self.error(f"expected a number, found '{self.tok.text}'")
         return int(self.take().text)
 
-    def comma_list(self, close: str, item):  # type: ignore[no-untyped-def]
-        items = []
+    def comma_list(self, close: str, item: Callable[[], X]) -> tuple[X, ...]:
+        items: list[X] = []
         if not self.peek(close):
             items.append(item())
             while self.accept(","):
@@ -203,12 +209,12 @@ class Parser:
         self.expect(close)
         return tuple(items)
 
-    def nonempty(self, close: str, item):  # type: ignore[no-untyped-def]
+    def nonempty(self, close: str, item: Callable[[], X]) -> tuple[X, ...]:
         if self.peek(close):
             raise self.error("expected at least one item")
         return self.comma_list(close, item)
 
-    def enum_word(self, catalog, what: str):  # type: ignore[no-untyped-def]
+    def enum_word(self, catalog: type[E], what: str) -> tuple[E, Tok]:
         tok = self.ident(what)
         try:
             return catalog(tok.text), tok
@@ -280,7 +286,8 @@ class Parser:
             self.expect(word)
             lists.append(self.names())
         self.expect(";")
-        return Point(name.text, frame, pc, exc, *lists, span=start.span)
+        keep, spent, defs, held = lists
+        return Point(name.text, frame, pc, exc, keep, spent, defs, held, start.span)
 
     def arm(self) -> Arm:
         start = self.take()

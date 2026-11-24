@@ -32,7 +32,7 @@ NOWHERE = SrcSpan("<builtin>", 0, 0, 0, 0)
 
 
 def _span() -> SrcSpan:
-    return field(default=NOWHERE, compare=False, repr=False)  # type: ignore[return-value]
+    return field(default=NOWHERE, compare=False, repr=False)
 
 
 @dataclass(frozen=True, slots=True)

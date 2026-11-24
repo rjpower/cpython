@@ -127,10 +127,25 @@ class SliceTests(unittest.TestCase):
                     inferred.add(exits[ir_records.GUARD_TOKENS[name]])
                 self.assertLessEqual(inferred - {"next"}, set(table[name].exits))
 
+    # The reviewed corrections of G0c, each listed with its evidence in the
+    # batch's differences.md and in the commit that made it.  Batch 8:
+    # MATERIALIZE_KWARGS is PyDict_New and one store, which run no Python;
+    # INSTRUMENTED_JUMP takes PROCESS_ERROR_AT when the event fails, so
+    # _MONITOR_END_ASYNC_FOR may raise
+    LISTED_DIFFERENCES = [
+        'MATERIALIZE_KWARGS.record.format.runs_code: inferred true, declared false',
+        'MATERIALIZE_KWARGS.record.uops[0].effects: inferred 6 entries '
+        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
+        '"READS_HEAP", "WRITES_HEAP"], declared 3 ["ALLOCATES", "MAY_RAISE", '
+        '"WRITES_HEAP"]',
+        'INSTRUMENTED_END_ASYNC_FOR/_MONITOR_END_ASYNC_FOR: declares exits(next, '
+        'raise), the record has next',
+    ]
+
     def test_declarations_equal_the_inference(self):
         with cases.handle_stderr():
             lines = ir_contract_diff.report(str(BYTECODES))
-        self.assertEqual(lines[:-1], [])
+        self.assertCountEqual(lines[:-1], self.LISTED_DIFFERENCES)
         self.assertRegex(lines[-1], r"^\d+ handlers compared; \d+ of \d+ uops declared$")
 
     def test_component_checks_are_generated(self):

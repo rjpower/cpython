@@ -11,11 +11,11 @@
 
 /* The arms' handler ids follow the old handlers, in definition order */
 #define ROP_FIRST_HANDLER IR_NUM_HANDLERS
-#define ROP_NUM_HANDLERS 14
+#define ROP_NUM_HANDLERS 18
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,
               "the arms' handler ids fit the handler field");
 #define ROP_NUM_FAMILIES 68
-#define ROP_NUM_ARMS 14
+#define ROP_NUM_ARMS 18
 
 /* Family numbers, in name order */
 enum {
@@ -93,28 +93,37 @@ enum {
 #define ROP_HANDLER_Add_Int (ROP_FIRST_HANDLER + 0)
 #define ROP_HANDLER_Add_Generic (ROP_FIRST_HANDLER + 1)
 #define ROP_HANDLER_Call_Exact (ROP_FIRST_HANDLER + 2)
-#define ROP_HANDLER_Return_Ordinary (ROP_FIRST_HANDLER + 3)
-#define ROP_HANDLER_Return_Empty (ROP_FIRST_HANDLER + 4)
-#define ROP_HANDLER_Return_Generator (ROP_FIRST_HANDLER + 5)
-#define ROP_HANDLER_Return_External (ROP_FIRST_HANDLER + 6)
-#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 7)
-#define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 8)
-#define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 9)
-#define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 10)
-#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 11)
-#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 12)
-#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 13)
+#define ROP_HANDLER_Call_BoundExact (ROP_FIRST_HANDLER + 3)
+#define ROP_HANDLER_Call_Init (ROP_FIRST_HANDLER + 4)
+#define ROP_HANDLER_Call_Generic (ROP_FIRST_HANDLER + 5)
+#define ROP_HANDLER_InitResult_Check (ROP_FIRST_HANDLER + 6)
+#define ROP_HANDLER_Return_Ordinary (ROP_FIRST_HANDLER + 7)
+#define ROP_HANDLER_Return_Empty (ROP_FIRST_HANDLER + 8)
+#define ROP_HANDLER_Return_Generator (ROP_FIRST_HANDLER + 9)
+#define ROP_HANDLER_Return_External (ROP_FIRST_HANDLER + 10)
+#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 11)
+#define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 12)
+#define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 13)
+#define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 14)
+#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 15)
+#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 16)
+#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 17)
 
 /* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */
 #define ROP_POINT_Add_BoxFailed 1
 #define ROP_POINT_Add_Done 2
 #define ROP_POINT_Add_OpFailed 3
-#define ROP_POINT_Call_Returned 4
-#define ROP_POINT_GetAttr_Done 5
-#define ROP_POINT_GetAttr_Failed 6
-#define ROP_POINT_GetMethod_Done 7
-#define ROP_POINT_GetMethod_Failed 8
-#define ROP_POINT_Return_Delivered 9
+#define ROP_POINT_Call_Done 4
+#define ROP_POINT_Call_Failed 5
+#define ROP_POINT_Call_PollFailed 6
+#define ROP_POINT_Call_Returned 7
+#define ROP_POINT_GetAttr_Done 8
+#define ROP_POINT_GetAttr_Failed 9
+#define ROP_POINT_GetMethod_Done 10
+#define ROP_POINT_GetMethod_Failed 11
+#define ROP_POINT_InitResult_Done 12
+#define ROP_POINT_InitResult_Wrong 13
+#define ROP_POINT_Return_Delivered 14
 
 /* How a family's operands sit in its words (Program.encodings): the field
  * kind, the role of a home, the bit offset in the 64-bit-per-word image of
@@ -615,6 +624,10 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Add.Int", ROP_HANDLER_Add_Int, ROP_FAMILY_Add, 1},
     {"Add.Generic", ROP_HANDLER_Add_Generic, ROP_FAMILY_Add, 1},
     {"Call.Exact", ROP_HANDLER_Call_Exact, ROP_FAMILY_Call, 1},
+    {"Call.BoundExact", ROP_HANDLER_Call_BoundExact, ROP_FAMILY_Call, 1},
+    {"Call.Init", ROP_HANDLER_Call_Init, ROP_FAMILY_Call, 1},
+    {"Call.Generic", ROP_HANDLER_Call_Generic, ROP_FAMILY_Call, 1},
+    {"InitResult.Check", ROP_HANDLER_InitResult_Check, ROP_FAMILY_InitResult, 1},
     {"Return.Ordinary", ROP_HANDLER_Return_Ordinary, ROP_FAMILY_Return, 1},
     {"Return.Empty", ROP_HANDLER_Return_Empty, ROP_FAMILY_Return, 1},
     {"Return.Generator", ROP_HANDLER_Return_Generator, ROP_FAMILY_Return, 1},
@@ -628,16 +641,21 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"GetMethod.PolyMethod", ROP_HANDLER_GetMethod_PolyMethod, ROP_FAMILY_GetMethod, 1},
 };
 
-static const _PyRopPoint _PyRop_Points[9] = {
+static const _PyRopPoint _PyRop_Points[14] = {
     {"Add.BoxFailed", ROP_FAMILY_Add, 1, 0, 0, 1, (1 << 1) | (1 << 2), 0, 0, 0},
     {"Add.Done", ROP_FAMILY_Add, 2, 0, 1, 0, 0, (1 << 2) | (1 << 1), (1 << 0), 0},
     {"Add.OpFailed", ROP_FAMILY_Add, 3, 0, 0, 1, 0, (1 << 2) | (1 << 1), 0, 0},
-    {"Call.Returned", ROP_FAMILY_Call, 4, 1, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
-    {"GetAttr.Done", ROP_FAMILY_GetAttr, 5, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
-    {"GetAttr.Failed", ROP_FAMILY_GetAttr, 6, 0, 0, 1, 0, (1 << 1), 0, 0},
-    {"GetMethod.Done", ROP_FAMILY_GetMethod, 7, 0, 1, 0, 0, (1 << 2), (1 << 0) | (1 << 1), 0},
-    {"GetMethod.Failed", ROP_FAMILY_GetMethod, 8, 0, 0, 1, 0, (1 << 2), 0, 0},
-    {"Return.Delivered", ROP_FAMILY_Return, 9, 1, 3, 0, 0, (1 << 0), 0, 0},
+    {"Call.Done", ROP_FAMILY_Call, 4, 0, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
+    {"Call.Failed", ROP_FAMILY_Call, 5, 0, 0, 1, 0, (1 << 1) | (1 << 2), 0, 0},
+    {"Call.PollFailed", ROP_FAMILY_Call, 6, 0, 0, 1, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
+    {"Call.Returned", ROP_FAMILY_Call, 7, 1, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
+    {"GetAttr.Done", ROP_FAMILY_GetAttr, 8, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
+    {"GetAttr.Failed", ROP_FAMILY_GetAttr, 9, 0, 0, 1, 0, (1 << 1), 0, 0},
+    {"GetMethod.Done", ROP_FAMILY_GetMethod, 10, 0, 1, 0, 0, (1 << 2), (1 << 0) | (1 << 1), 0},
+    {"GetMethod.Failed", ROP_FAMILY_GetMethod, 11, 0, 0, 1, 0, (1 << 2), 0, 0},
+    {"InitResult.Done", ROP_FAMILY_InitResult, 12, 0, 1, 0, 0, (1 << 0), 0, 0},
+    {"InitResult.Wrong", ROP_FAMILY_InitResult, 13, 0, 0, 1, (1 << 0), 0, 0, 0},
+    {"Return.Delivered", ROP_FAMILY_Return, 14, 1, 3, 0, 0, (1 << 0), 0, 0},
 };
 
 /* Static selection (rop_catalog.Select): the members of each dimension */

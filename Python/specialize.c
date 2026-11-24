@@ -2927,6 +2927,88 @@ _Py_Specialize_Call(PyValue callable_st, PyValue self_or_null_st, _PyInstr *inst
     }
 }
 
+/* The evidence row of Call (classify_call, Python/register_ops/calls.rop):
+ * the arm that a call of fn at site stands for, as the index of its case
+ * (exact, bound_exact, init, other), with the site's entry filled for that
+ * arm.  The decisions are specialize_py_call's and specialize_class_call's;
+ * every other callable is "other", which runs in Call.Generic. */
+enum { CALL_CASE_EXACT, CALL_CASE_BOUND_EXACT, CALL_CASE_INIT, CALL_CASE_OTHER };
+
+static bool
+call_classify_function(_PyFbCall *fb, PyFunctionObject *func, int nargs)
+{
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()) ||
+        func->vectorcall != _PyFunction_Vectorcall ||
+        function_signature(code) != SIMPLE_SIGNATURE ||
+        code->co_argcount != nargs || code_creates_generator(code) ||
+        !prepare_function_exec(code))
+    {
+        return false;
+    }
+    int version = _PyFunction_GetVersionForCurrentState(func);
+    if (!_PyFunction_IsVersionValid(version)) {
+        return false;
+    }
+    fb->func_version = version;
+    return true;
+}
+
+static bool
+call_classify_class(_PyFbCall *fb, PyTypeObject *tp)
+{
+    if ((tp->tp_flags & Py_TPFLAGS_IMMUTABLETYPE) ||
+        Py_TYPE(tp) != &PyType_Type || tp->tp_new != PyBaseObject_Type.tp_new) {
+        return false;
+    }
+    unsigned int tp_version = 0;
+    PyObject *init = get_init_for_simple_managed_python_class(tp, &tp_version);
+    bool cached = tp_version != 0 && init != NULL &&
+        _PyType_CacheInitForSpecialization((PyHeapTypeObject *)tp, init, tp_version);
+    Py_XDECREF(init);
+    if (cached) {
+        fb->type_version = tp_version;
+    }
+    return cached;
+}
+
+int
+_PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
+                    const _PyIRWord *head)
+{
+    assert(site == head);
+    (void)site;
+    if (is_shared_entry(&fb->h) || !PyValue_IsObject(fn)) {
+        return CALL_CASE_OTHER;
+    }
+    memset(&fb->h + 1, 0, sizeof(_PyFbCall) - sizeof(_PyFbHeader));
+    _PyIRWord word = head[0];
+    // The arguments the callee receives, a self that is present among them
+    int self_slot = (word & IR_F_NO_SELF) == 0;
+    int self_present = self_slot && !PyValue_IsNull(
+        _PyFrame_Slots(current_frame())[_PyIR_CallOperand(head, 0)]);
+    int nargs = (int)IR_C(word) - (self_slot && !self_present);
+    PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
+    if (PyFunction_Check(callable)) {
+        return call_classify_function(fb, (PyFunctionObject *)callable, nargs)
+            ? CALL_CASE_EXACT : CALL_CASE_OTHER;
+    }
+    if (self_present) {
+        return CALL_CASE_OTHER;
+    }
+    if (PyMethod_Check(callable)) {
+        PyObject *func = ((PyMethodObject *)callable)->im_func;
+        return PyFunction_Check(func) &&
+            call_classify_function(fb, (PyFunctionObject *)func, nargs + 1)
+            ? CALL_CASE_BOUND_EXACT : CALL_CASE_OTHER;
+    }
+    if (PyType_Check(callable)) {
+        return call_classify_class(fb, (PyTypeObject *)callable)
+            ? CALL_CASE_INIT : CALL_CASE_OTHER;
+    }
+    return CALL_CASE_OTHER;
+}
+
 Py_NO_INLINE void
 _Py_Specialize_CallKw(PyValue callable_st, PyValue self_or_null,
                      PyValue kwnames, _PyInstr *instr, int nargs)

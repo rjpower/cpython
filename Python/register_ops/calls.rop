@@ -24,8 +24,16 @@ family Return(value:Src)
 
 // The caller goes on here when the child returns: the child's value is dst
 point Call.Returned(caller, next_head, clear) keep() spent(fn, args) defs(dst) held();
+// A native call's result, or the end poll's failure after it was published
+point Call.Done(current, next_head, clear) keep() spent(fn, args) defs(dst) held();
+point Call.PollFailed(current, site, pending) keep() spent(fn, args) defs(dst) held();
+// The call failed before it entered a frame or returned
+point Call.Failed(current, site, pending) keep() spent(fn, args) defs() held();
 // The value has gone to the caller's return slot
 point Return.Delivered(caller, resume_head, clear) keep() spent(value) defs() held();
+// __init__ returned None, or something else
+point InitResult.Done(current, next_head, clear) keep() spent(value) defs() held();
+point InitResult.Wrong(current, site, pending) keep(value) spent() defs() held();
 
 // Admission of a call that enters its callee's frame
 
@@ -84,6 +92,242 @@ extern helper push_exact(t:Thread, f:Frame, fn:Src, a:Args) -> NewFrame
             "temporaries are cleared.",
     contract: "Infallible: the guards checked the space and the argument count. No"
               "callback: moves and counts only (releases is the spend of the operands).");
+
+// A bound method call: the method's function, with its receiver first
+
+extern helper self_absent(f:Frame, a:Args) -> Bool
+  effects(reads)
+  c _PyRop_SelfAbsent as bool
+  evidence(
+    review: "P4. ceval.c: the call has no self operand, or its home is NULL at run"
+            "time (the CALL_SELF_PRESENT tests of _CHECK_CALL_BOUND_METHOD_EXACT_ARGS"
+            "and _CHECK_OBJECT).",
+    contract: "Reads the self operand's home; no memory, no failure.");
+
+extern helper method_version(fn:B, f:Fb<Call>) -> Bool
+  effects(reads)
+  feedback(read(entry.func_version))
+  test(exact<method>(fn))
+  c _PyRop_MethodVersion as bool
+  evidence(
+    review: "P4. ceval.c: fn is exactly a bound method whose im_func is a function"
+            "with the site's func_version (_CHECK_METHOD_VERSION).",
+    contract: "Reads the word, the method and its function; no memory, no failure.");
+
+extern helper no_weakrefs(fn:B) -> Bool
+  effects(reads)
+  requires(exact<method>(fn))
+  c _PyRop_NoWeakrefs as bool
+  evidence(
+    review: "P4. ceval.c: im_weakreflist is NULL (_CHECK_CALL_BOUND_METHOD_EXACT_ARGS):"
+            "releasing the method then runs no callback before the push.",
+    contract: "One read; no memory, no failure.");
+
+extern helper exact_positional_bound(f:Frame, fn:B, a:Args) -> Bool
+  effects(reads)
+  requires(exact<method>(fn))
+  c _PyRop_ExactPositionalBound as bool
+  evidence(
+    review: "P4. ceval.c: the function's co_argcount is the arguments and the"
+            "receiver (_CHECK_METHOD_EXACT_ARGS).",
+    contract: "Reads the code and the self operand's home; no memory, no failure.");
+
+extern helper frame_space_bound(t:Thread, fn:B) -> Bool
+  effects(reads)
+  requires(exact<method>(fn))
+  c _PyRop_FrameSpaceBound as bool
+  evidence(
+    review: "P4. ceval.c: _PyThreadState_HasStackSpace for the function's"
+            "co_framesize (_CHECK_METHOD_STACK_SPACE).",
+    contract: "Reads the arena bounds; no memory, no failure.");
+
+// The child takes the receiver and the function, counted, and the arguments
+// (a temporary moves, a local is counted); the method is released, which
+// runs no callback (no_weakrefs) and no finalizer: the child counts both
+// of its parts
+extern helper push_bound_exact(t:Thread, f:Frame, fn:Src, a:Args) -> NewFrame
+  effects(reads, writes, releases)
+  spends(fn, a)
+  requires(exact<method>(fn))
+  c _PyRop_PushBoundExact as pointer
+  evidence(
+    review: "P4. ceval.c: call_push_exact with CALL_EXPANDED, as"
+            "_INIT_CALL_BOUND_METHOD_EXACT_ARGS and _INIT_CALL_PY_EXACT_ARGS.",
+    contract: "Infallible: the guards checked the space and the argument count.");
+
+// A class call that runs the class's cached __init__ in a frame
+
+extern helper class_version(fn:B, f:Fb<Call>) -> Bool
+  effects(reads)
+  feedback(read(entry.type_version))
+  c _PyRop_ClassVersion as bool
+  evidence(
+    review: "P4. ceval.c: fn is a type whose tp_version_tag is the site's"
+            "type_version, which is not 0 (_CHECK_OBJECT).",
+    contract: "Reads the word and the type; no memory, no failure.");
+
+extern helper init_frame_ready(t:Thread, fn:B) -> Bool
+  effects(reads)
+  c _PyRop_InitFrameReady as bool
+  evidence(
+    review: "P4. ceval.c: the cached __init__ runs through _PyFunction_Vectorcall"
+            "and the arena holds its frame and the cleanup frame"
+            "(_CHECK_INIT_FUNCTION).  class_version guards the cache.",
+    contract: "Reads the type's cache, the function and the arena; no failure.");
+
+// The instance, then the cleanup frame (InitResult.Check, Return) and the
+// __init__ frame above it; the class operand is released.  On failure the
+// operands still in their homes are closed with the exception set aside.
+extern helper push_init(t:Thread, f:Frame, fn:Src, a:Args)
+  cases(entered(c:NewFrame), err(e:Err))
+  effects(reads, writes, allocates, releases, raises)
+  spends(fn, a)
+  c _PyRop_PushInit as pointer_or_raised
+  evidence(
+    review: "P4. ceval.c: _PyEval_CreateInitFrame (_CREATE_INIT_FRAME), then the"
+            "operands it left in their homes on failure (call_release_rest).",
+    contract: "The allocation may collect, and a finalizer may run Python before"
+              "anything moves; the cache was counted first.  The child is current"
+              "on return: its previous frame is the cleanup frame.");
+
+// Any callable
+
+// A Python function, or a bound method of one with no self operand, whose
+// frame the call pushes: PEP 523 is not hooked, the function is called
+// through _PyFunction_Vectorcall and its code does not create a generator
+// (a generator function is called through vectorcall)
+extern helper python_target(t:Thread, f:Frame, fn:B, a:Args) -> Bool
+  effects(reads)
+  c _PyRop_PythonTarget as bool
+  evidence(
+    review: "P4. ceval.c: call_expand_method and call_is_python_function, as"
+            "call_run decides, and code_creates_generator.",
+    contract: "Reads the callable and the code; no memory, no failure.");
+
+// The child frame of a Python call, bound by the call's plan or generally
+// (defaults, *args, **kwargs); the operands move or are counted
+extern helper push_python(t:Thread, f:Frame, fn:Src, a:Args)
+  cases(entered(c:NewFrame), err(e:Err))
+  effects(reads, writes, allocates, releases, raises)
+  spends(fn, a)
+  c _PyRop_PushPython as pointer_or_raised
+  evidence(
+    review: "P4. ceval.c: call_run's Python path: call_bind_positional with a plan"
+            "of the call, else call_push_python; on failure the operands left in"
+            "their homes are closed with the exception set aside.",
+    contract: "The child is current on return and the method operand of an expanded"
+              "bound method was released with it current, as the old call did; a"
+              "finalizer may run then.  A binding error raises.");
+
+// The vectorcall of a native callee (or of anything call_native is given) on
+// the operands in their homes, which it borrows: a temporary cannot change,
+// and a local's old value lives on in f_overwritten_fast_locals
+extern helper call_native(t:Thread, f:Frame, fn:Src, a:Args)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_CallNative as value_or_null
+  evidence(
+    review: "P4. ceval.c: call_vector_impl after call_expand_method, as call_run's"
+            "native path.",
+    contract: "Borrows every operand for the call; the result is a new owner.");
+
+extern helper retire_failed_args(f:Frame, fn:Src, a:Args, e:Err) -> Err
+  effects(releases)
+  spends(fn, a)
+  c _PyRop_RetireFailedArgs as handle
+  evidence(
+    review: "P4. ceval.c: call_release_rest over every operand and the callable,"
+            "with the pending exception set aside.",
+    contract: "Closes each temporary operand and the callable; a finalizer may run"
+              "Python.  The exception is pending again on return.");
+
+// The poll after a call returns (CALL_PERIODIC): signals and the GC
+extern helper end_poll(t:Thread, f:Frame)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises, polls)
+  c _PyRop_EndPoll as int_zero_ok
+  evidence(
+    review: "P4. ceval_macros.h: check_periodics_at_end (_CHECK_PERIODIC_AT_END).",
+    contract: "A signal handler or a finalizer may run Python and raise.");
+
+// Adaptation evidence (specialize.c): the call specializer in collecting
+// mode fills the site's entry and answers with the arm the call stands for
+extern helper classify_call(at:Site, f:Fb<Call>, fn:B, a:Args)
+  cases(exact(), bound_exact(), init(), other())
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry))
+  c _PyRop_ClassifyCall as case_index
+  evidence(
+    review: "P4. specialize.c: _Py_Specialize_Call with its handler choice"
+            "collected (as attr_classify): CALL_PY_EXACT_ARGS,"
+            "CALL_BOUND_METHOD_EXACT_ARGS and CALL_ALLOC_AND_ENTER_INIT are the"
+            "first three cases, anything else is other.",
+    contract: "Writes the site's entry (func_version, type_version, the type's init"
+              "cache) and sets no handler.  No Python runs.");
+
+macro adapt_before_use_call(f:Fb<Call>, fn:Src, a:Args)
+  cases(run(), changed(t:Ticket<Call>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_call(site, f, use(fn), a) {
+      exact -> Exact();
+      bound_exact -> Bound();
+      init -> Init();
+      other -> Other();
+    }
+  Exact():
+    let ce:Candidate<Call> = candidate(Call.Exact);
+    call install(site, f, ce) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Bound():
+    let cb:Candidate<Call> = candidate(Call.BoundExact);
+    call install(site, f, cb) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Init():
+    let ci:Candidate<Call> = candidate(Call.Init);
+    call install(site, f, ci) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Call>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+// InitResult
+
+extern helper is_none(v:B) -> Bool
+  effects()
+  c PyValue_IsNone as bool
+  evidence(
+    review: "P4. pycore_value.h: the word is None's.",
+    contract: "A comparison of the word; no memory, no failure.");
+
+extern helper init_result_error(v:B)
+  cases(err(e:Err))
+  effects(allocates, raises)
+  c _PyRop_InitResultError as raised
+  evidence(
+    review: "P4. bytecodes.c EXIT_INIT_CHECK: the TypeError and its message.",
+    contract: "Sets the exception; formats the type's name, runs no Python.");
 
 // Return
 
@@ -174,6 +418,105 @@ arm Call.Exact split
     guard recursion_budget(thread) else miss;
     let c:NewFrame = push_exact(thread, frame, fn, args);
     exit enter(c) resume Call.Returned;
+}
+
+arm Call.BoundExact split
+  effects(reads, writes, releases, switches_frame)
+  feedback(read(entry.func_version))
+  exits(enter, miss)
+{
+  entry():
+    guard default_eval_frame(thread) else miss;
+    guard self_absent(frame, args) else miss;
+    guard method_version(use(fn), fb) else miss;
+    guard no_weakrefs(use(fn)) else miss;
+    guard exact_positional_bound(frame, use(fn), args) else miss;
+    guard frame_space_bound(thread, use(fn)) else miss;
+    guard recursion_budget(thread) else miss;
+    let c:NewFrame = push_bound_exact(thread, frame, fn, args);
+    exit enter(c) resume Call.Returned;
+}
+
+arm Call.Init split
+  effects(reads, writes, allocates, releases, raises, switches_frame)
+  feedback(read(entry.type_version))
+  exits(enter, raise, miss)
+{
+  entry():
+    guard default_eval_frame(thread) else miss;
+    guard self_absent(frame, args) else miss;
+    guard class_version(use(fn), fb) else miss;
+    guard init_frame_ready(thread, use(fn)) else miss;
+    guard recursion_budget(thread) else miss;
+    call push_init(thread, frame, fn, args) {
+      entered -> Enter();
+      err -> Failed();
+    }
+  Enter(c:NewFrame):
+    exit enter(c) resume Call.Returned;
+  Failed(e:Err):
+    exit raise(Call.Failed, e);
+}
+
+arm Call.Generic shared
+  effects(runs_python, raises, polls, switches_frame)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, enter, raise, again)
+{
+  entry():
+    call adapt_before_use_call(fb, fn, args) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Call>):
+    exit again(t);
+  Run():
+    branch python_target(thread, frame, use(fn), args) -> Python(), Native();
+  Python():
+    call push_python(thread, frame, fn, args) {
+      entered -> Enter();
+      err -> Failed();
+    }
+  Enter(c:NewFrame):
+    exit enter(c) resume Call.Returned;
+  Failed(e:Err):
+    exit raise(Call.Failed, e);
+  Native():
+    call call_native(thread, frame, fn, args) {
+      ok -> Result();
+      err -> NativeFailed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
+    call end_poll(thread, frame) {
+      ok -> Next();
+      err -> PollFailed();
+    }
+  Next():
+    exit next();
+  PollFailed(pe:Err):
+    exit raise(Call.PollFailed, pe);
+  NativeFailed(ne:Err):
+    let saved:Err = retire_failed_args(frame, fn, args, ne);
+    exit raise(Call.Failed, saved);
+}
+
+arm InitResult.Check split
+  effects(writes, allocates, raises, releases)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    branch is_none(use(value)) -> Done(), Wrong();
+  Done():
+    publish [] retire [spent(value)] at InitResult.Done;
+    exit next();
+  Wrong():
+    call init_result_error(use(value)) {
+      err -> Raised();
+    }
+  Raised(e:Err):
+    exit raise(InitResult.Wrong, e);
 }
 
 arm Return.Ordinary split select(thread_frame, live_scratch)

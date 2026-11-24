@@ -378,7 +378,9 @@ do { \
 #define DISPATCH_INLINED(NEW_FRAME)                              \
     do {                                                         \
         assert(!IS_PEP523_HOOKED(tstate));                       \
-        assert((NEW_FRAME)->previous == frame);                  \
+        /* An __init__ call enters above its cleanup frame */    \
+        assert((NEW_FRAME)->previous == frame ||                 \
+               (NEW_FRAME)->previous->previous == frame);        \
         frame = tstate->current_frame = (NEW_FRAME);             \
         CALL_STAT_INC(inlined_py_calls);                         \
         JUMP_TO_LABEL(start_frame);                              \

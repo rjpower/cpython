@@ -502,6 +502,10 @@ class ArmLowerer:
                          f"&IR_SLOT(IR_{self.slot(operand).name}(ir_word))")
         return self.homes[operand]
 
+    def is_vector(self, operand: str) -> bool:
+        p = self.placements.get(operand)
+        return p is not None and p.kind is FieldKind.vector
+
     def local_flag(self, operand: str) -> str:
         return f"IR_F_LOCAL_{self.slot(operand).name}"
 
@@ -762,6 +766,11 @@ class ArmLowerer:
                 raise Unsupported(f"{self.arm.name}: debt {d.kind.name} is not lowered yet")
         owners: dict[str, str | None] = {}
         for d in spent:
+            if self.is_vector(d.subject):
+                # An argument vector's temporaries close after the bindings
+                # (_PyRop_SpendArgs), all but a home that a binding now holds
+                owners[d.subject] = None
+                continue
             if d.subject in self.acquired:
                 # acquire() already took the owner or a count of its own
                 owners[d.subject] = None
@@ -788,8 +797,11 @@ class ArmLowerer:
             home = self.home(b.target)
             self.emit(f"_PyFrame_WriteHome(frame, {home}, {self.expr(b.value)});")
             self.emit(f"_PyValue_CheckHome(*{home});")
+        kept = self.home(s.bindings[0].target) if len(s.bindings) == 1 else "NULL"
         for d in s.debts:
-            if d.kind is DebtKind.spent and owners[d.subject] is not None:
+            if d.kind is DebtKind.spent and self.is_vector(d.subject):
+                self.emit(f"_PyRop_SpendArgs(frame, this_instr, {kept});")
+            elif d.kind is DebtKind.spent and owners[d.subject] is not None:
                 self.emit(f"PyValue_XCLOSE({owners[d.subject]});")
             elif d.kind is DebtKind.old:
                 self.emit(f"PyValue_XCLOSE(old_{d.subject});")
@@ -859,7 +871,11 @@ class ArmLowerer:
         ret = f"{x.c.symbol}({', '.join(args)})"
         if x.contract.effect_set & ESCAPING_CALL:
             self.emit("IR_STUB_ESCAPE();")
-        if not inline:
+        if conv.returns is CReturn.void:
+            # The row's one outcome always holds (raised)
+            self.emit(f"{ret};")
+            ret = ""
+        elif not inline:
             call = ret
             ret = self.new_temp(RETURN_C[conv.returns], "ret")
             self.emit(f"{ret} = {call};")

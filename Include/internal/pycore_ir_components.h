@@ -991,11 +991,6 @@
      * into other code, no write.  Every use in bytecodes.c is in an assert. */ \
     MACRO(PyExceptionInstance_Check, \
         ARGS(object), SCALAR, EFFECTS(reads), EXITS()) \
-    /* Evidence (G0d2): pycore_pyvalue.h: PyValue_IsObject, or the NULL word \
-     * of an empty slot; bit tests of the word, no memory read.  Every use \
-     * in bytecodes.c is in an assert. */ \
-    HELPER(PyValue_IsObjectOrNull, int, (PyValueBorrow), \
-        ARGS(borrowed), SCALAR, EFFECTS()) \
     /* Include/refcount.h: `_Py_NewRef(_PyObject_CAST(obj))`, an increment \
      * (a count change is no effect, 1.3) returning obj: the result is a \
      * new reference the caller owes.  No call (immortal check inline), no \

@@ -966,16 +966,20 @@ def find_object_inputs(
     Conversions inside assert() are ignored, since they vanish from release
     builds. Arrays are left to the C helpers that convert their elements.
 
-    An input that op asserts to be an object, with
-    `assert(PyValue_IsObject(name))`, can never hold an inline value by
-    construction of the bytecode, so it needs no test.  So can one whose
-    contract declares `assumed(object) by <producer>`: the generator
-    asserts each assumption in every execution form (ir_contract.py, F7).
+    An input whose contract declares `assumed(object) by <producer>` can
+    never hold an inline value by construction of the bytecode, so it needs
+    no test: the generator asserts each assumption in every execution form
+    (ir_contract.py, F7).  An undeclared op may say the same with
+    `assert(PyValue_IsObject(name))`.
     """
     scalars = {item.name for item in stack.inputs if not item.is_array()}
     found: list[str] = []
     asserted: list[str] = [item.name for item in stack.inputs
                            if item.name in scalars and "assumed(object)" in item.contract]
+    # A declared uop has no use for the scan: its contract's walk proves the
+    # object fact of every conversion (a row's `object` argument), so an
+    # assert is no evidence.  An undeclared uop keeps it until it is declared
+    scanned = not op.clauses
     tokens = list(op.block.tokens())
     i = 0
     while i < len(tokens):
@@ -993,7 +997,7 @@ def find_object_inputs(
                         break
                 i += 1
             texts = [t.text for t in tokens[start:i + 1]]
-            if (len(texts) == 7
+            if (scanned and len(texts) == 7
                     and texts[2] in ("PyValue_IsObject", "PyValue_IsObjectOrNull")
                     and texts[4] in scalars and texts[4] not in asserted):
                 asserted.append(texts[4])

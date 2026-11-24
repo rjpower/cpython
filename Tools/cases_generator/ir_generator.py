@@ -5667,6 +5667,11 @@ class IREmitter(Emitter):
         for var in storage.inputs:
             if var.name not in uop.object_inputs or var.known_object:
                 continue
+            if uop.clauses and not guard:
+                # The contract's walk proved the object fact of the
+                # conversion, which a row requires of its argument
+                var.known_object = True
+                continue
             self.out.start_line()
             # Test the slot rather than the local where the slot holds the
             # value, which is cheaper (see _PyValue_TopBitsAt())

@@ -92,7 +92,6 @@ SIGNATURES = {
     "PyValue_IsNull": _signature((Kind.VALUE,), Kind.SCALAR),
     "PyValue_IsNone": _signature((Kind.VALUE,), Kind.SCALAR),
     "PyValue_IsObject": _signature((Kind.VALUE,), Kind.SCALAR),
-    "PyValue_IsObjectOrNull": _signature((Kind.VALUE,), Kind.SCALAR),
     "PyExceptionInstance_Check": _signature((Kind.OBJECT,), Kind.SCALAR),
     "PyValue_IsInlineInt": _signature((Kind.VALUE,), Kind.SCALAR),
     "PyValue_IsInlineFloat": _signature((Kind.VALUE,), Kind.SCALAR),

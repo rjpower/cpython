@@ -192,6 +192,8 @@ STUB_PREAMBLE = """\
 #undef PROCESS_ERROR_AT
 #pragma push_macro("IR_STUB_ESCAPE")
 #undef IR_STUB_ESCAPE
+#pragma push_macro("IR_REDIRECT")
+#undef IR_REDIRECT
 #pragma push_macro("PyValue_CLOSE")
 #undef PyValue_CLOSE
 #pragma push_macro("PyValue_XCLOSE")
@@ -208,6 +210,12 @@ STUB_PREAMBLE = """\
         return ir_status | _PyIR_RAISED; \\
     } while (0)
 #define IR_STUB_ESCAPE() (ir_status |= _PyIR_ESCAPED)
+#define IR_REDIRECT() do { \\
+        if (frame->pending_redirect) { \\
+            _PyFrame_CompleteRedirect(frame); \\
+        } \\
+        return ir_status | _PyIR_ESCAPED | _PyIR_REDIRECT; \\
+    } while (0)
 #define PyValue_CLOSE(V) _PyIR_STUB_RELEASE(PyValue_CLOSE, V)
 #define PyValue_XCLOSE(V) _PyIR_STUB_RELEASE(PyValue_XCLOSE, V)
 """
@@ -215,6 +223,7 @@ STUB_PREAMBLE = """\
 STUB_EPILOGUE = """\
 #pragma pop_macro("PyValue_XCLOSE")
 #pragma pop_macro("PyValue_CLOSE")
+#pragma pop_macro("IR_REDIRECT")
 #pragma pop_macro("IR_STUB_ESCAPE")
 #pragma pop_macro("PROCESS_ERROR_AT")
 #pragma pop_macro("JUMP_TO_PREDICTED")

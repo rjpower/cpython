@@ -599,7 +599,7 @@ static const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {
 
 static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Add.Int", ROP_HANDLER_Add_Int, ROP_FAMILY_Add, 1},
-    {"Add.Generic", ROP_HANDLER_Add_Generic, ROP_FAMILY_Add, 0},
+    {"Add.Generic", ROP_HANDLER_Add_Generic, ROP_FAMILY_Add, 1},
     {"GetAttr.Instance", ROP_HANDLER_GetAttr_Instance, ROP_FAMILY_GetAttr, 0},
 };
 

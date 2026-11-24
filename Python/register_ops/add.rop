@@ -83,14 +83,33 @@ extern helper value_binary_op(op:Enum<Numeric>, a:B, b:B)
     contract: "Both operands borrowed on every path; the result owned, or NULL with"
               "an exception set. Callbacks: arbitrary Python.");
 
-// Records the origin and control stamp, calls value_binary_op once and
-// checks the frame on return; a redirect discharges any uncommitted result.
+// Calls value_binary_op once on the anchored operands.  A redirect that
+// won while Python ran discharges the result that was not committed and
+// hands the route back.
 macro binary_at_origin(op:Enum<Numeric>, a:Anchors)
   cases(ok(z:O), err(e:Err), redirected(r:Route))
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases)
   feedback()
   borrows(a)
-  pending;
+{
+  entry():
+    call value_binary_op(op, arg(a, 0), arg(a, 1)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
 
 // Adaptation policy (addendum section 2)
 macro adapt_before_use_add(f:Fb<Binary>, x:Src, y:Src)

@@ -33,6 +33,7 @@
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
 #include "pycore_jit.h"           // _PyJitUnit
 #include "pycore_jit_lower.h"     // _PyJit_Templates
+#include "pycore_rop_metadata.h"  // _PyRop_Arms
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_list.h"          // _PyList_SetItemTakeValue()
 #include "pycore_object.h"        // _PyObject_IsFreed()
@@ -1801,6 +1802,28 @@ get_feedback(PyObject *self, PyObject *args)
     }
     return Py_BuildValue("(ssIIN)", kinds[h->kind], states[h->state],
                          fields[0], fields[1], rows);
+}
+
+/* {arm name: handler number} of the register instruction arms */
+static PyObject *
+rop_arm_handlers(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyObject *arms = PyDict_New();
+    if (arms == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i < ROP_NUM_ARMS; i++) {
+        PyObject *handler = PyLong_FromLong(_PyRop_Arms[i].handler);
+        if (handler == NULL ||
+            PyDict_SetItemString(arms, _PyRop_Arms[i].name, handler) < 0)
+        {
+            Py_XDECREF(handler);
+            Py_DECREF(arms);
+            return NULL;
+        }
+        Py_DECREF(handler);
+    }
+    return arms;
 }
 
 /* The register IR of CODE, lowered if the code has not run, as a tuple: the
@@ -5266,6 +5289,7 @@ static PyMethodDef module_functions[] = {
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
     {"get_ir_raw", get_ir_raw, METH_O, NULL},
+    {"rop_arm_handlers", rop_arm_handlers, METH_NOARGS, NULL},
     {"ir_normal_physical_transfer", ir_normal_physical_transfer,
      METH_VARARGS, NULL},
     {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},

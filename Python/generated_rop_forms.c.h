@@ -4,7 +4,6 @@
 // Do not edit!
 //
 // Arms left out, and what blocks each:
-//   Add.Generic: pending: binary_at_origin
 //   GetAttr.Instance: pending: admitted_instance_slot, borrow_value_slot, instance_version, present, valid_inline_values
 
 /* A family with no generic arm cannot miss: no word selects its arms yet. */
@@ -13,6 +12,96 @@
     Py_FatalError("register instruction family " #FAMILY " has no generic arm")
 #endif
 
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_Add_Generic(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // Add.Generic (shared)
+    int opcode = ROP_HANDLER_Add_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 1;
+    INSTRUCTION_STATS(ROP_HANDLER_Add_Generic);
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    _PyRopAnchors a;
+    PyValue ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_add2_c;
+    int ret2;
+    PyValue z;
+    PyValue binary_at_origin1_value;
+    PyValue binary_at_origin1_kept;
+    PyValue binary_at_origin1_dropped;
+    if (!_PyFb_TickQuiet(((_PyFbHeader *)IR_FB(IR_D(ir_word))))) {
+        goto rop_Add_Generic_adapt_before_use_add2_Sample;
+    }
+    rop_Add_Generic_adapt_before_use_add2_Run:
+    rop_Add_Generic_Run:
+    a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_C)}, {home_x, home_y}});
+    IR_STUB_ESCAPE();
+    ret1 = value_binary_op(NB_ADD, _PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1));
+    if (PyValue_IsNull(ret1)) {
+        goto rop_Add_Generic_binary_at_origin1_Failed;
+    }
+    binary_at_origin1_value = ret1;
+    if (_PyRop_RedirectPending(frame)) {
+        binary_at_origin1_dropped = binary_at_origin1_value;
+        goto rop_Add_Generic_binary_at_origin1_Moved;
+    }
+    binary_at_origin1_kept = binary_at_origin1_value;
+    z = binary_at_origin1_kept;
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_x = _PyFrame_TakeHome(frame, home_x);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        own_y = _PyFrame_TakeHome(frame, home_y);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    _PyRop_CloseAnchors(&a);
+    PyValue_XCLOSE(own_y);
+    PyValue_XCLOSE(own_x);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+    rop_Add_Generic_adapt_before_use_add2_Sample:
+    if (PyValue_BothInlineInt(PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
+        goto rop_Add_Generic_adapt_before_use_add2_Chosen;
+    }
+    goto rop_Add_Generic_adapt_before_use_add2_Other;
+    rop_Add_Generic_adapt_before_use_add2_Chosen:
+    adapt_before_use_add2_c = ROP_HANDLER_Add_Int;
+    ret2 = _PyRop_Install(this_instr, ((_PyFbHeader *)IR_FB(IR_D(ir_word))), adapt_before_use_add2_c);
+    if (ret2 == 0) {
+        goto rop_Add_Generic_adapt_before_use_add2_Run;
+    }
+    if (ret2 < 0) {
+        goto rop_Add_Generic_adapt_before_use_add2_Run;
+    }
+    next_instr = this_instr;
+    DISPATCH_SAME_OPARG();
+    rop_Add_Generic_adapt_before_use_add2_Other:
+    _PyRop_Backoff(((_PyFbHeader *)IR_FB(IR_D(ir_word))));
+    goto rop_Add_Generic_Run;
+    rop_Add_Generic_binary_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}});
+    PROCESS_ERROR_AT(RAISE, 3, this_instr);
+    rop_Add_Generic_binary_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(binary_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    _PyRop_RetireAbandoned(&a);
+    IR_REDIRECT();
+}
 
 static Py_NO_INLINE _PyIRTransfer
 ir_run_Add_Int(
@@ -43,7 +132,7 @@ ir_run_Add_Int(
     l = PyValue_Borrow(*home_x);
     r = PyValue_Borrow(*home_y);
     if (!PyValue_BothInlineInt(l, r)) {
-        ROP_NO_GENERIC(Add);
+        JUMP_TO_PREDICTED(Add_Generic);
     }
     a = _PyValue_IntScaled(l);
     b = _PyValue_IntScaled(r);

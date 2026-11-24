@@ -194,7 +194,8 @@ class Row:
     effects: frozenset[str] = frozenset()
     exits: frozenset[str] = frozenset()
     builds: frozenset[str] = frozenset()    # INTRINSIC
-    callback_free: bool = False             # DESTRUCTOR
+    callback_free: bool = False             # DESTRUCTOR, and the type it frees
+    frees: str = ""
     feedback: frozenset[tuple[str, str]] = frozenset()     # (read|write, field)
     struct: str = ""                        # FIELD: the struct, the field,
     field: str = ""                         # and the path of the pointer
@@ -364,9 +365,11 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
                    effects=_parse_names(effects, "EFFECTS", EFFECTS),
                    struct=struct, field=name, on=_inner(on, "ON").strip())
     if kind == "DESTRUCTOR":
-        if len(fields) != 2 or fields[1] not in ("callback_free",):
-            raise ValueError("DESTRUCTOR(name, callback_free)")
-        return Row(kind, fields[0], callback_free=True, effects=frozenset(("writes",)))
+        if (len(fields) != 3 or fields[2] not in ("callback_free",)
+                or not re.fullmatch(r"\w+", fields[1])):
+            raise ValueError("DESTRUCTOR(name, type, callback_free)")
+        return Row(kind, fields[0], callback_free=True, effects=frozenset(("writes",)),
+                   frees=fields[1])
     if kind == "INTRINSIC":
         if len(fields) != 4:
             raise ValueError("INTRINSIC(name, ARGS(...), result, BUILD(...))")
@@ -423,6 +426,10 @@ def parse_rows(text: str, source: str = "pycore_ir_components.h") -> dict[str, R
             continue
         try:
             row = _parse_row(m.group(1), fields)
+            k = row.result.null_iff
+            if k >= 0 and (k >= len(row.args)
+                           or row.args[k].mode not in ("borrowed", "consumed", "taken")):
+                raise ValueError(f"null_iff({k}): argument {k} is no value argument")
         except ValueError as e:
             raise SyntaxError(f"{source}: row {fields[0]}: {e}") from None
         if row.name in rows:
@@ -1451,6 +1458,19 @@ class OwnershipWalk:
             taken = []
             views = self.views_at(state)
             for arg, spec in zip(args, row.args):
+                destructor = (self.table.get(" ".join(_unwrap(arg, self.table)))
+                              if spec.mode == "destructor" else None)
+                if destructor is not None and destructor.kind == "DESTRUCTOR":
+                    # It frees only objects of exactly its type
+                    for value, vspec in zip(args, row.args):
+                        if vspec.mode != "consumed":
+                            continue
+                        facts = state.facts.get(views.resolve(value), frozenset())
+                        if INLINE not in facts and VFact("exact", destructor.frees) not in facts:
+                            self.fail(tkn, f"closes `{' '.join(value)}` through "
+                                      f"{destructor.name}, which frees only "
+                                      f"exact({destructor.frees}), which it is not shown "
+                                      "to be")
                 name = views.resolve(arg)
                 if name is not None and spec.facts:
                     missing = implied(spec.facts) - state.facts.get(name, frozenset())

@@ -234,7 +234,11 @@ class VerifierTests(unittest.TestCase):
                 PyValue_CLOSE_SPECIALIZED(value, %s);
             }
         """
-        self.verify(source % "_PyLong_ExactDealloc")
+        # A destructor frees only its type
+        self.refuses(source % "_PyLong_ExactDealloc",
+                     r"closes `value` through _PyLong_ExactDealloc, which frees only "
+                     r"exact\(PyLong_Type\), which it is not shown to be")
+        self.verify(source.replace("PyList_Type", "PyLong_Type") % "_PyLong_ExactDealloc")
         # An exact type's deallocator is no exemption: a list's releases its items
         self.refuses(source % "spam_dealloc",
                      r"may releases \(spam_dealloc is no callback_free DESTRUCTOR row\)")
@@ -960,6 +964,37 @@ class VerifierTests(unittest.TestCase):
                 int64_t n = _PyValue_IntScaled(v);
             }
         """, r"_STALE: passes `v` to _PyValue_IntScaled, which requires .*inline_int")
+
+    def test_is_object_needs_a_value(self):
+        # PyValue_IsObject(NULL) is false: its false branch says inline only
+        # of a value that is not NULL.  (Astra's `v: inline` output parses
+        # as a mode on a pass-through; `nonnull` is the fact it implied)
+        self.refuses("""
+            op(_BAD_NULL, (v: nullable -- v: nonnull)) effects() exits(next, miss) {
+                EXIT_IF(PyValue_IsObject(v));
+            }
+        """, r"_BAD_NULL: passes `v` to PyValue_IsObject, which requires nonnull of it")
+
+    def test_null_iff_names_a_value_argument(self):
+        for k in ("1", "0"):
+            with self.subTest(k=k):
+                text = ("#define X(PRIMITIVE, HELPER, MACRO) "
+                        "PRIMITIVE(spam, PyValue, (int, PyValueBorrow), "
+                        f"ARGS(scalar, borrowed), VALUE(owned null_iff({k})), EFFECTS())")
+                if k == "1":
+                    ir_contract.parse_rows(text)
+                else:
+                    with self.assertRaisesRegex(SyntaxError, r"null_iff\(0\): argument 0 "
+                                                             r"is no value argument"):
+                        ir_contract.parse_rows(text)
+        with self.assertRaisesRegex(SyntaxError, r"null_iff\(2\)"):
+            ir_contract.parse_rows("#define X(PRIMITIVE, HELPER, MACRO) "
+                                   "PRIMITIVE(spam, PyValue, (PyValueBorrow), ARGS(borrowed), "
+                                   "VALUE(owned null_iff(2)), EFFECTS())")
+
+    def test_poly_lookup_reads_feedback(self):
+        self.assertEqual(ir_contract.rows()["IR_METHOD_POLY_LOOKUP"].feedback,
+                         {("read", "entry")})
 
     def test_intrinsic_outside_its_build(self):
         self.refuses("""

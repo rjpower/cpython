@@ -1630,21 +1630,46 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
     contracts = [contract_of(p) for p in parts]
     if not parts or any(c is None for c in contracts):
         return
-    # A stack of value numbers; facts by value
-    stack: list[int | None] = []
+    # A stack of value numbers; facts by value.  An array is one value, its
+    # elements' common facts, with its declared size
+    stack: list[int] = []
     facts: dict[int, frozenset[VFact]] = {}
+    sizes: dict[int, str] = {}
     fresh = iter(range(1, 1 << 20))
     restartable, why = True, ""
-    for part, contract in zip(parts, contracts):
-        if any(i.array for i in contract.inputs):
-            return      # arrays have no static depth: the pilot stops here
-        n = len(contract.inputs)
-        while len(stack) < n:
+
+    def pop(item: Item) -> int | None:
+        "The value of an input, or None if the stack's depth is unknown"
+        if item.array:
+            if stack and sizes.get(stack[-1]) == item.size:
+                return stack.pop()
+            if not item.size.isdigit():
+                # An array of another size, or of values not pushed as one:
+                # the depth below it is unknown
+                return None
+            elements = [pop(Item(item.name, item.mode)) for _ in range(int(item.size))]
+            if None in elements:
+                return None
             v = next(fresh)
-            stack.insert(0, v)
-            facts[v] = frozenset({NONNULL})
-        bound = dict(zip((i.name for i in contract.inputs), stack[len(stack) - n:]))
-        del stack[len(stack) - n:]
+            facts[v] = frozenset.intersection(frozenset({NONNULL}),
+                                              *(facts[e] for e in elements))
+            sizes[v] = item.size
+            return v
+        if stack:
+            if stack[-1] in sizes:
+                return None         # an array whose elements are not known apart
+            return stack.pop()
+        v = next(fresh)
+        facts[v] = frozenset({NONNULL})
+        return v
+
+    for index, (part, contract) in enumerate(zip(parts, contracts)):
+        bound: dict[str, int] = {}
+        for item in reversed(contract.inputs):
+            value = pop(item)
+            if value is None:
+                return      # V8 holds up to here; the rest has no static depth
+            bound[item.name] = value
         guards = any(t.text in GUARDS for t, _ in body_calls(part))
         implicit = []
         for item in contract.inputs:
@@ -1677,28 +1702,56 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
             homes = set(stack) | {bound[i.name] for i in contract.inputs if not i.mode
                                   and contract.output(i.name) is not None}
             for v in homes:
-                if v is not None:
-                    facts[v] = frozenset()
+                facts[v] = frozenset()
         changes = contract.effects - {"reads", "raises"}
-        if restartable and (changes or any(i.mode for i in contract.inputs)
-                            or any(o.mode in ("owned", "inline") for o in contract.outputs)):
-            restartable = False
-            why = (f"{part.name}, which may {', '.join(sorted(changes))}" if changes
-                   else f"{part.name}, which takes or makes an owner")
+        if restartable and changes:
+            restartable, why = False, f"{part.name}, which may {', '.join(sorted(changes))}"
+        if restartable and any(o.mode in ("owned", "inline") for o in contract.outputs):
+            restartable, why = False, f"{part.name}, which makes an owner"
+        last = index == len(parts) - 1
+        for step, name in skeleton_steps(contract, last):
+            # The generator's skeleton around the bodies (design.md 3.1),
+            # placed where it emits them
+            if restartable and step in ("detach", "publish"):
+                restartable = False
+                why = (f"the skeleton's detachment of `{name}` after {part.name}"
+                       if step == "detach" else
+                       f"the skeleton's publication of `{name}`")
+            if step == "close":
+                # The displaced value's close may run a finalizer, which can
+                # replace any home's value (design.md 3.2)
+                facts = {v: frozenset() for v in facts}
         for item in contract.outputs:
-            if item.array:
-                stack.append(None)
-                continue
-            if not item.mode:
+            if not item.mode and item.name in bound:
                 value = bound[item.name]
+            elif not item.mode:
+                # A window's slots the uop leaves as they are, which no
+                # input names: unknown values
+                value = next(fresh)
+                facts[value] = frozenset()
             elif item.mode == "moved":
                 value = bound[item.source]
             else:
                 value = next(fresh)
                 facts[value] = frozenset()
-            if value is not None:
-                facts[value] = implied(facts.get(value, frozenset()) | item.facts)
+            facts[value] = implied(facts.get(value, frozenset()) | item.facts)
+            if item.array:
+                sizes[value] = item.size
             stack.append(value)
+
+
+def skeleton_steps(contract: Contract, last: bool) -> list[tuple[str, str]]:
+    """The skeleton's steps after a uop, in the order the generator emits
+    them: each input taken from its home is detached at the end of the uop
+    that takes it (IR_DETACH; a consumed input's home is cleared no later);
+    after the word's last uop the outputs are published to their homes
+    (IR_STORE_DST) and each displaced old value is closed (ir_old)"""
+    steps = [("detach", i.name) for i in contract.inputs
+             if i.mode in ("consumed", "taken") and i.name != "unused"]
+    if last:
+        steps += [("publish", o.name) for o in contract.outputs if o.name != "unused"]
+        steps += [("close", o.name) for o in contract.outputs if o.name != "unused"]
+    return steps
 
 
 # ---------------------------------------------------------------------------

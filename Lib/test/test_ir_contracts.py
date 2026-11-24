@@ -701,6 +701,50 @@ class VerifierTests(unittest.TestCase):
                      r"on next, the output array `values` is partly written, but it is "
                      r"published whole")
 
+    def test_guard_after_a_skeleton_detachment(self):
+        # The skeleton detaches a taken input from its home at the end of the
+        # uop that takes it; a guard in a later uop cannot restart the word
+        source = """
+            leaf op(_GUARD, (value -- value: inline_int)) effects() exits(next, miss) {
+                EXIT_IF(!PyValue_IsInlineInt(value));
+            }
+            op(_KEEP, (value: taken -- kept: moved(value))) effects() exits(next) {
+                kept = value;
+            }
+            macro(OP) = %s;
+        """
+        self.verify(source % "_GUARD + _KEEP")
+        self.refuses(source % "_KEEP + _GUARD",
+                     r"OP: the guard in _GUARD follows the skeleton's detachment of "
+                     r"`value` after _KEEP, so the word cannot restart")
+
+    def test_array_facts_across_uops(self):
+        # An array output is one value on the handler's stack, which a later
+        # uop's array input of the same size binds
+        source = """
+            op(_MAKE, (seq: consumed exact(PyTuple_Type) -- values[oparg]: owned))
+                effects(reads, releases) exits(next, miss)
+            {
+                PyObject *seq_o = PyValue_AsKnownObjectBorrow(seq);
+                EXIT_IF(PyTuple_GET_SIZE(seq_o) != oparg);
+                IR_UNPACK_ITEMS(values, _PyTuple_ITEMS(seq_o), oparg);
+                DECREF_INPUTS();
+            }
+            op(_USE, (values[oparg]%s -- values[oparg])) effects() exits(next) {
+            }
+            op(_GUARD_SEQ, (seq: object -- seq: exact(PyTuple_Type)))
+                effects(reads) exits(next, miss)
+            {
+                PyObject *o = PyValue_AsKnownObjectBorrow(seq);
+                EXIT_IF(!PyTuple_CheckExact(o));
+            }
+            macro(OP) = _GUARD_SEQ + _MAKE + _USE;
+        """
+        self.verify(source % "")
+        self.refuses(source % ": inline_int",
+                     r"OP: _USE requires .*inline_int.* of `values`, which nothing before "
+                     r"it establishes")
+
     def test_intrinsic_outside_its_build(self):
         self.refuses("""
             inst(OP, (value -- value)) effects() exits(next) {

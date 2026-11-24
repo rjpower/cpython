@@ -260,7 +260,9 @@ dummy_func(
             LOAD_FAST,
         };
 
-        inst(LOAD_FAST_CHECK, (-- value)) {
+        inst(LOAD_FAST_CHECK, (-- value: owned))
+            effects(runs_python) exits(next, raise)
+        {
             PyValueBorrow value_s = PyValue_Borrow(GETLOCAL(oparg));
             if (PyValue_IsNull(value_s)) {
                 _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,

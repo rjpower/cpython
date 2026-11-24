@@ -28,7 +28,7 @@ SOURCES = {
 
 def arms():
     """The handler numbers of the arms, from the compiled metadata"""
-    return capi.rop_arm_handlers()
+    return capi.arm_handlers()
 
 
 def compiled(kind):

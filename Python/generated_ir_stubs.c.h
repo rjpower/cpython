@@ -634,12 +634,12 @@ _PyIR_Stub_BINARY_OP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWor
 
 /* The stubs of the register instruction arms, defined in generated_rop_stubs.c.h */
 static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
-static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_Add_Float(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_Add_Text(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_Add_Extended(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 const _PyIRStubPlan _PyIR_StubPlans[512] = {
     [419] = {_PyIR_PLAN_INLINE, 0, 419, NULL, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Int

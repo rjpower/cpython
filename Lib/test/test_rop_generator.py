@@ -9,6 +9,7 @@ from test import support, test_tools
 
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
+    import ir_generator
     import ir_leaf
     import ir_leaf_eval
     import rop_check
@@ -130,7 +131,7 @@ class AddIntTemplateTests(unittest.TestCase):
 
 
 SHARED = """\
-family F(dst:Dst, x:Src) exits(next, miss);
+family F(dst:Dst, x:Src) exits(next, miss) ops(NOP);
 point F.Done(current, next_head, clear) keep() spent(x) defs(dst) held();
 extern primitive is_int(v:B) -> Bool
   effects()
@@ -164,6 +165,119 @@ class StubTests(unittest.TestCase):
         (entry,) = rop_generator.arm_entries(p)
         self.assertEqual((entry.name, entry.region, entry.stub),
                          ("F_Copy", "shared", "_PyIR_Rop_Stub_F_Copy"))
+
+
+WRAPPED = """\
+extern primitive is_int(v:B) -> Bool
+  effects()
+  test(inline_int(v))
+  c PyValue_IsInlineInt as bool
+  evidence(review: "r", contract: "c", lowering: "l", test: "t");
+family F(dst:Dst, x:Src, fb:Fb<Call>) exits(next, miss) ops(CALL)
+  events(CALL, C_RETURN);
+family G(dst:Dst, x:Src) exits(next, miss) ops(NOP);
+arm F.A shared effects() feedback() exits(next, miss)
+{
+  entry():
+    let v:B = use(x);
+    guard is_int(v) else miss;
+    exit next();
+}
+arm G.A shared effects() feedback() exits(next, miss)
+{
+  entry():
+    let v:B = use(x);
+    guard is_int(v) else miss;
+    exit next();
+}
+arm F.B shared effects() feedback() exits(next, miss)
+{
+  entry():
+    let v:B = use(x);
+    guard is_int(v) else miss;
+    exit next();
+}
+"""
+
+
+def wrapped_entries():
+    program = rop_check.check([rop_syntax.parse(WRAPPED, "t.rop")])
+    assert program.diagnostics == (), program.diagnostics
+    p = rop_generator.Products(program, rop_generator.number_arms(program), {}, {}, {}, {})
+    return rop_generator.arm_entries(p)
+
+
+class ArmRowTests(unittest.TestCase):
+    """The per-handler tables list every arm, and the wrappers of families
+    that declare events after the arms"""
+
+    def test_a_family_with_events_gets_a_twin_per_arm_after_the_arms(self):
+        entries = wrapped_entries()
+        self.assertEqual([e.dotted for e in entries],
+                         ["F.A", "G.A", "F.B", "F.A.Observed", "F.B.Observed"])
+        fa, ga, fb, fa_twin, fb_twin = entries
+        self.assertEqual((fa.twin, ga.twin, fb.twin), (3, None, 4))
+        self.assertEqual((fa_twin.observes, fb_twin.observes), (0, 2))
+        self.assertEqual(fa.events, ("CALL", "C_RETURN"))
+        self.assertEqual(fa_twin.events, fa.events)
+        self.assertEqual(ga.events, ())
+        self.assertEqual({e.base for e in entries if e.dotted.startswith("F.")}, {"CALL"})
+        self.assertFalse(any(e.emitted for e in entries))
+
+    def test_the_handler_ids_of_the_twins_are_defined(self):
+        import io
+        program = rop_check.check([rop_syntax.parse(WRAPPED, "t.rop")])
+        p = rop_generator.Products(program, rop_generator.number_arms(program), {}, {}, {}, {})
+        out = io.StringIO()
+        rop_generator.write_metadata(out, p, [])
+        text = out.getvalue()
+        self.assertIn("#define ROP_NUM_HANDLERS 5", text)
+        self.assertIn("#define ROP_HANDLER_F_A_Observed (ROP_FIRST_HANDLER + 3)", text)
+        self.assertIn("#define ROP_HANDLER_F_B_Observed (ROP_FIRST_HANDLER + 4)", text)
+
+    def test_add_int_row_is_derived_from_its_encoding_and_declarations(self):
+        entries = rop_generator.arm_entries(products())
+        add_int = next(e for e in entries if e.dotted == "Add.Int")
+        fmt = add_int.format
+        self.assertEqual(add_int.base, "BINARY_OP")
+        self.assertEqual(fmt.roles, ("_PyIR_ROLE_DST", "_PyIR_ROLE_IN0 + 0",
+                                     "_PyIR_ROLE_IN0 + 1", "_PyIR_ROLE_FB"))
+        self.assertEqual((fmt.fb, fmt.fb_schema, fmt.ninputs, fmt.dst, fmt.writes),
+                         ("_PyIR_LOC_D", "Binary", 2, -2, 1))
+        self.assertEqual(fmt.effects, ("_PyIR_RAISES", "_PyIR_DEOPTS"))
+        self.assertEqual(fmt.operands, "_PyIR_OPERANDS_NONE")
+        generic = next(e for e in entries if e.dotted == "Add.Generic")
+        self.assertIn("_PyIR_SPECIALIZES", generic.format.effects)
+        self.assertIn("_PyIR_ESCAPES", generic.format.effects)
+
+    def test_every_arm_has_a_row_in_every_generated_table(self):
+        entries = rop_generator.arm_entries(products())
+        header = (ROOT / "Include/internal/pycore_ir_metadata.h").read_text()
+        ids = (ROOT / "Include/opcode_ids.h").read_text()
+        old = int(re.search(r"IR_NUM_OLD_HANDLERS\s+(\d+)", ids).group(1))
+        total = int(re.search(r"IR_NUM_HANDLERS\s+(\d+)", ids).group(1))
+        self.assertEqual(total, old + len(entries))
+        for entry in entries:
+            handler = old + entry.index
+            for table in ("_PyIR_HandlerFlags", "_PyIR_HandlerBase",
+                          "_PyIR_GeneratorBoundaries"):
+                with self.subTest(arm=entry.dotted, table=table):
+                    section = header[header.index(f"{table}[IR_NUM_HANDLERS] = {{"):]
+                    section = section[:section.index("};")]
+                    self.assertRegex(section, rf"\[{handler}\] = ")
+            self.assertIn(f'[{handler} - IR_FIRST_ONLY_HANDLER] = "{entry.dotted}"', header)
+            self.assertIn(f"[{handler}] = {{ .flags = _PyIR_VALID", header)
+
+    def test_too_many_handlers_name_the_overflow(self):
+        import types
+        analysis = types.SimpleNamespace(
+            numbers=types.SimpleNamespace(num_old_handlers=419))
+        arms = [None] * 94
+        with self.assertRaisesRegex(ir_generator.ir_numbers.NumberError,
+                                    "419 old handlers and 94 arms and wrappers need "
+                                    "513 handler ids, past the 512"):
+            ir_generator.num_handlers(analysis, arms)
+        self.assertEqual(ir_generator.num_handlers(analysis, arms[:93]), 512)
 
 
 ENVIRONMENT = """\

@@ -28,7 +28,7 @@ def verify_source(src: str, filename: str = "base.rop") -> list[tuple[int, int, 
 VERIFY_BASE = """\
 enum Op(PLUS, MINUS);
 family F(dst:Dst, x:Src, y:Src, fb:Fb<Binary>)
-  exits(next, miss, again, raise, redirect);
+  exits(next, miss, again, raise, redirect) ops(NOP);
 point F.Done(current, next_head, clear) keep() spent(y, x) defs(dst) held();
 point F.Kept(current, site, pending) keep(x, y) spent() defs() held();
 point F.Gone(current, site, pending) keep() spent(y, x) defs() held();
@@ -207,7 +207,7 @@ arm F.Generic shared
     let now:Route = retire_gone(a, route);
     exit redirect(now);
 }
-family H(x:Src, y:Src, fb:Fb<Binary>) exits(branch, raise, enter);
+family H(x:Src, y:Src, fb:Fb<Binary>) exits(branch, raise, enter) ops(NOP);
 point H.Kept(current, site, pending) keep(x, y) spent() defs() held();
 point H.Child(child, target, clear) keep() spent(y, x) defs() held();
 arm H.Cont split
@@ -241,7 +241,7 @@ arm H.Enter split
     publish [] retire [spent(y), spent(x)] at H.Child;
     exit enter(f, next_head);
 }
-family Two(p:Dst, q:Dst, x:Src) exits(next);
+family Two(p:Dst, q:Dst, x:Src) exits(next) ops(NOP);
 point Two.Done(current, next_head, clear) keep() spent(x) defs(p, q) held();
 arm Two.Both inline
   effects(writes, releases)
@@ -470,7 +470,7 @@ VERIFY_CASES = [
 
 # A source acquired from an operand, held by the raise checkpoint
 HELD = """\
-family H(x:Src, fb:Fb<Binary>) exits(next, raise);
+family H(x:Src, fb:Fb<Binary>) exits(next, raise) ops(NOP);
 point H.Held(current, site, pending) keep() spent() defs() held(x);
 point H.Done(current, next_head, clear) keep() spent(x) defs() held();
 extern helper keep_o(o:O) cases(ok(), err(e:Err)) effects(raises, releases) pending;

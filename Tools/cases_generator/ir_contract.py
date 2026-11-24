@@ -2160,6 +2160,12 @@ UNWRITTEN, WRITTEN, PARTIAL, PENDING = "unwritten", "written", "partly written",
 TAKEN = "taken:"
 
 
+# The calls on an input that kill it in the generator's storage
+# (generators_common.Emitter.value_kill)
+SKELETON_KILLS = frozenset({"PyValue_CLOSE", "PyValue_XCLOSE", "PyValue_CLOSE_SPECIALIZED",
+                            "PyValue_AsKnownObjectSteal"})
+
+
 def obligated(status: str | None) -> bool:
     "whether an owner's status still owes a release: held, or held if a row fails"
     return status is not None and (status == HELD or status.startswith(TAKEN))
@@ -2221,6 +2227,9 @@ class _State:
     # The row that assigned the next word on this path (JUMPTO): the word
     # may then only continue to its end
     successor: str = ""
+    # The inputs that the generator's storage has killed (DEAD, INPUTS_DEAD,
+    # the close and steal forms): DECREF_INPUTS closes every other input
+    dead: set[str] = field(default_factory=set)
 
     def copy(self) -> "_State":
         return _State(dict(self.owners), dict(self.facts), dict(self.pending),
@@ -2228,7 +2237,7 @@ class _State:
                       dict(self.status), self.restartable, self.why, dict(self.bindings),
                       dict(self.origins), dict(self.null_when), dict(self.signs),
                       set(self.exact), set(self.decided), self.split, self.no_exception,
-                      self.successor)
+                      self.successor, set(self.dead))
 
     def end_restart(self, why: str) -> None:
         if self.restartable:
@@ -2638,6 +2647,7 @@ class OwnershipWalk:
                                            else None)
             first.facts = _intersection([first.facts, other.facts])
             first.pending = pending
+            first.dead &= other.dead
             first.sources.update(other.sources)
             for name, why in other.rehomed.items():
                 first.rehomed.setdefault(name, why)
@@ -2834,6 +2844,12 @@ class OwnershipWalk:
         nested call passes what its own row says)"""
         tokens = _unwrap(arg, self.table)
         if len(tokens) != 1:
+            # A borrowed view written in the argument passes what a local
+            # assigned from it would; a consuming view takes on its own
+            call = _call_of(tokens, self.table)
+            if (call is not None and call[0].result.shape == "VIEW" and len(call[1]) == 1
+                    and call[0].args[0].mode != "consumed"):
+                return self.owner_of(call[1][0], state)
             return None
         if tokens[0] in state.owners:
             return tokens[0]
@@ -2856,6 +2872,9 @@ class OwnershipWalk:
         """the calls among tokens: their argument requirements (V8 inside the
         body) and the obligations they consume"""
         for tkn, args in _calls_in(tokens):
+            if (tkn.text in SKELETON_KILLS and len(args) == 1
+                    and len(args[0]) == 1 and args[0][0] in self.declared):
+                state.dead.add(args[0][0])
             row = self.table.get(tkn.text)
             if row is None:
                 continue
@@ -3018,10 +3037,12 @@ class OwnershipWalk:
             name = self.views_at(state).resolve(texts[2:_close(texts, 1)])
             if name is not None:
                 self.discharge(name, state, toks[0])
+                state.dead.add(name)
             return state
         if head == "INPUTS_DEAD":
             for name in self.declared:
                 self.discharge(name, state, toks[0])
+                state.dead.add(name)
             return state
         if head == "DECREF_INPUTS":
             # The emitters close the inputs that are still held
@@ -3029,6 +3050,11 @@ class OwnershipWalk:
                 if state.owners[name] == HELD and item.mode in UNOWNED:
                     self.fail(toks[0], f"DECREF_INPUTS releases `{name}`, declared "
                               f"{item.mode or 'a pass-through'}")
+                if (state.owners[name] == GONE and name not in state.dead
+                        and item.mode not in UNOWNED):
+                    # The generator closes it again: a second release
+                    self.fail(toks[0], f"DECREF_INPUTS releases `{name}`, which is "
+                              f"already consumed or moved: mark it DEAD(`{name}`) first")
                 state.owners[name] = GONE
             self.effects(toks, state)
             state.end_restart("DECREF_INPUTS")

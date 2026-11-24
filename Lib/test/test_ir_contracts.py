@@ -1699,6 +1699,26 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % ("borrowed", "PyValue_AsKnownObjectBorrow"),
                      r"SPAM_STEAL consumes `x`, declared borrowed, which it does not own")
 
+    def test_decref_inputs_after_a_consumption(self):
+        # DECREF_INPUTS closes every input the generator has not killed, so
+        # an input a row consumed is closed twice unless it is marked DEAD
+        double = r"DECREF_INPUTS releases `value`, which is already consumed or moved"
+        source = """
+            op(_OP, (value: consumed%s -- res: moved(value))) effects(releases) exits(next) {
+                PyValue r = %s;
+                %sDECREF_INPUTS();
+                res = r;
+            }
+        """
+        self.refuses(source % ("", "TAKE(value)", ""), double)
+        self.verify(source % ("", "TAKE(value)", "DEAD(value);\n"))
+        # A borrowed view written in the argument passes the input's count
+        source = source.replace("moved(value)", "owned")
+        self.refuses(source % (" object", "SPAM_STEAL(PyValue_AsKnownObjectBorrow(value))",
+                               ""), double)
+        self.verify(source % (" object", "SPAM_STEAL(PyValue_AsKnownObjectBorrow(value))",
+                              "DEAD(value);\n"))
+
     # F7: assumed(fact) by <producer>
 
     def test_assumed_inputs(self):

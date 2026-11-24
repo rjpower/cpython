@@ -719,8 +719,10 @@ class TestIRCases(unittest.TestCase):
              "_CHECK_RECURSION_REMAINING +"),
             ("_CHECK_RECURSION_REMAINING +\n            _PY_FRAME_KW_GUARDED +",
              "_PY_FRAME_KW_GUARDED +"),
-            ("op(_PY_FRAME_KW_GUARDED, (callable, self_or_null, args[oparg], kwnames -- new_frame))",
-             "op(_PY_FRAME_KW_GUARDED, (callable, self_or_null, args[oparg] -- new_frame))"),
+            ("(callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken\n"
+             "                 -- new_frame: owned))",
+             "(callable: taken, self_or_null: taken, args[oparg]: taken\n"
+             "                 -- new_frame: owned))"),
             ("_CHECK_METHOD_VERSION_KW +\n            _EXPAND_METHOD_KW +",
              "_CHECK_METHOD_VERSION_KW +\n            _PY_FRAME_KW_GUARDED +"),
             ("_MONITOR_CALL_KW +\n            _DO_CALL_KW;",
@@ -3766,6 +3768,13 @@ class TestShapeReadMetadata(unittest.TestCase):
         self.temp_input_filename = str(Path(directory.name) / "source.c")
 
     def shape_read_handler(self, source, name):
+        # These cases test the generator's shape-read rules, which run after
+        # the declared contract's verifier; _LOAD_ATTR_SHAPE's declaration
+        # would refuse most edits first, so the edits run on it undeclared
+        declared = ("leaf op(_LOAD_ATTR_SHAPE, (offset/1, owner: consumed -- attr: owned))\n"
+                    "            effects(reads, releases) exits(next)\n        {")
+        source = source.replace(
+            declared, "leaf op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr)) {", 1)
         Path(self.temp_input_filename).write_text(source)
         analysis = analyzer.analyze_files([self.temp_input_filename])
         formats = ir_generator.compute_formats(analysis)

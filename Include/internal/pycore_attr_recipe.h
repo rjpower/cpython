@@ -34,6 +34,13 @@ typedef struct {
     _PyValueGuarded class_value;    // the cached method or class value
 } _PyAttrRecipe;
 
+static inline bool
+_PyAttr_ValidInlineValues(PyObject *o)
+{
+    assert(Py_TYPE(o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
+    return FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(o)->valid) != 0;
+}
+
 /* The site's recipe when its entry holds a live type version */
 static inline bool
 _PyAttr_AdmittedInstanceSlot(const _PyFbAttr *fb, PyObject *name,
@@ -189,13 +196,6 @@ static inline bool
 _PyAttr_InstanceVersion(PyObject *o, _PyAttrRecipe r)
 {
     return FT_ATOMIC_LOAD_UINT_RELAXED(Py_TYPE(o)->tp_version_tag) == r.type_version;
-}
-
-static inline bool
-_PyAttr_ValidInlineValues(PyObject *o)
-{
-    assert(Py_TYPE(o)->tp_flags & Py_TPFLAGS_INLINE_VALUES);
-    return FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(o)->valid) != 0;
 }
 
 static inline PyValueBorrow

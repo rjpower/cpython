@@ -226,6 +226,17 @@ ENVIRONMENT = {
     "next_head": Handle.Head,
 }
 
+# The C expression of each implicit name in every product.  The prologue of
+# a case, a function form and a stub binds the same names: `this_instr` is
+# the head's address (the stub's `site`), `next_instr` the head after the
+# instruction.  The activation has no C value yet and is not listed.
+ENVIRONMENT_C = {
+    "thread": "tstate",
+    "frame": "frame",
+    "site": "this_instr",
+    "next_head": "next_instr",
+}
+
 # Types of which an owner, error or resource must be accounted for: `_`
 # cannot discard them (rule 2), and F1 tracks them as linear tokens.
 LINEAR_HANDLES = frozenset({Handle.O, Handle.Err, Handle.Claim, Handle.Pin,

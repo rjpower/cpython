@@ -5,7 +5,8 @@
 //
 // Arms left out, and what blocks each:
 //   Add.Generic: pending: anchor_for_call, backoff, binary_at_origin, install, retire_abandoned, retire_failed_call, tick
-//   GetAttr.Instance: pending: admitted_instance_slot, borrow_value_slot, instance_version, present, valid_inline_values
+//   GetAttr.Generic: pending: adapt_before_use_getattr, anchor_for_call, getattr_at_origin, retire_abandoned, retire_failed_call
+//   GetMethod.Generic: pending: adapt_before_use_getmethod, anchor_for_call, getmethod_at_origin, retire_abandoned, retire_failed_call
 
 /* A family with no generic arm cannot miss: no word selects its arms yet. */
 #ifndef ROP_NO_GENERIC
@@ -68,4 +69,246 @@
                 goto rop_Add_Int_Finish;
             }
             PROCESS_ERROR_AT(RAISE, 1, this_instr);
+        }
+
+        TARGET(GetAttr_Instance) {
+            // GetAttr.Instance (inline)
+            int opcode = ROP_HANDLER_GetAttr_Instance;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_GetAttr_Instance);
+            _PyAttrRecipe out1;
+            PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow v;
+            PyObject * o;
+            PyValueBorrow item;
+            PyValue result;
+            PyValue own_obj = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            _PyAttrRecipe r;
+            if (!_PyAttr_AdmittedInstanceSlot((const _PyFbAttr *)IR_FB(IR_D(ir_word)), GETITEM(FRAME_CO_NAMES, IR_C(ir_word)), &out1)) {
+                goto rop_GetAttr_Instance_Miss;
+            }
+            r = out1;
+            v = PyValue_Borrow(*home_obj);
+            if (!PyValue_IsObject(v)) {
+                ROP_NO_GENERIC(GetAttr);
+            }
+            o = PyValue_AsKnownObjectBorrow(v);
+            if (!_PyAttr_InstanceVersion(o, r)) {
+                ROP_NO_GENERIC(GetAttr);
+            }
+            if (!_PyAttr_ValidInlineValues(o)) {
+                ROP_NO_GENERIC(GetAttr);
+            }
+            item = _PyAttr_BorrowValueSlot(o, r);
+            if (!_PyValue_BorrowPresent(item)) {
+                ROP_NO_GENERIC(GetAttr);
+            }
+            result = PyValue_DUP(item);
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_obj = _PyFrame_TakeHome(frame, home_obj);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, result);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(own_obj);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_GetAttr_Instance_Miss:
+            ROP_NO_GENERIC(GetAttr);
+        }
+
+        TARGET(GetAttr_Shape) {
+            // GetAttr.Shape (inline)
+            int opcode = ROP_HANDLER_GetAttr_Shape;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_GetAttr_Shape);
+            _PyAttrRecipe out1;
+            PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow v;
+            PyObject * o;
+            PyValue result;
+            PyValue own_obj = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            _PyAttrRecipe r;
+            if (!_PyAttr_AdmittedShape((const _PyFbAttr *)IR_FB(IR_D(ir_word)), GETITEM(FRAME_CO_NAMES, IR_C(ir_word)), &out1)) {
+                goto rop_GetAttr_Shape_Miss;
+            }
+            r = out1;
+            v = PyValue_Borrow(*home_obj);
+            if (!PyValue_IsObject(v)) {
+                ROP_NO_GENERIC(GetAttr);
+            }
+            o = PyValue_AsKnownObjectBorrow(v);
+            if (!_PyAttr_InstanceVersion(o, r)) {
+                ROP_NO_GENERIC(GetAttr);
+            }
+            if (!_PyAttr_ShapeCurrent(o, r)) {
+                ROP_NO_GENERIC(GetAttr);
+            }
+            result = PyValue_DUP(_PyAttr_BorrowValueSlotFilled(o, r));
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_obj = _PyFrame_TakeHome(frame, home_obj);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, result);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(own_obj);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_GetAttr_Shape_Miss:
+            ROP_NO_GENERIC(GetAttr);
+        }
+
+        TARGET(GetAttr_PolyShape) {
+            // GetAttr.PolyShape (inline)
+            int opcode = ROP_HANDLER_GetAttr_PolyShape;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_GetAttr_PolyShape);
+            PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow v;
+            PyObject * o;
+            _PyAttrRecipe out1;
+            PyValue result;
+            PyValue own_obj = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            _PyAttrRecipe r;
+            v = PyValue_Borrow(*home_obj);
+            if (!PyValue_IsObject(v)) {
+                ROP_NO_GENERIC(GetAttr);
+            }
+            o = PyValue_AsKnownObjectBorrow(v);
+            if (!_PyAttr_PolyShape(frame, (const _PyFbAttr *)IR_FB(IR_D(ir_word)), o, &out1)) {
+                goto rop_GetAttr_PolyShape_Miss;
+            }
+            r = out1;
+            result = PyValue_DUP(_PyAttr_BorrowValueSlotFilled(o, r));
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_obj = _PyFrame_TakeHome(frame, home_obj);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, result);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(own_obj);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_GetAttr_PolyShape_Miss:
+            ROP_NO_GENERIC(GetAttr);
+        }
+
+        TARGET(GetMethod_MethodValues) {
+            // GetMethod.MethodValues (inline)
+            int opcode = ROP_HANDLER_GetMethod_MethodValues;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 2;
+            INSTRUCTION_STATS(ROP_HANDLER_GetMethod_MethodValues);
+            _PyAttrRecipe out1;
+            PyValue *const home_obj = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow v;
+            PyObject * o;
+            PyValue method;
+            PyValue receiver;
+            PyValue old_callable;
+            PyValue *const home_callable = &IR_SLOT(IR_A(ir_word));
+            PyValue old_self_dst;
+            PyValue *const home_self_dst = &IR_SLOT(IR_B(ir_word));
+            _PyAttrRecipe r;
+            if (!_PyAttr_AdmittedMethod((const _PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)), GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out1)) {
+                goto rop_GetMethod_MethodValues_Miss;
+            }
+            r = out1;
+            v = PyValue_Borrow(*home_obj);
+            if (!PyValue_IsObject(v)) {
+                ROP_NO_GENERIC(GetMethod);
+            }
+            o = PyValue_AsKnownObjectBorrow(v);
+            if (!_PyAttr_InstanceVersion(o, r)) {
+                ROP_NO_GENERIC(GetMethod);
+            }
+            if (!_PyAttr_ValidInlineValues(o)) {
+                ROP_NO_GENERIC(GetMethod);
+            }
+            method = PyValue_DUP(_PyAttr_BorrowMethod(r));
+            receiver = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_obj) : _PyFrame_TakeHome(frame, home_obj));
+            old_callable = *home_callable;
+            old_self_dst = *home_self_dst;
+            _PyFrame_WriteHome(frame, home_callable, method);
+            _PyValue_CheckHome(*home_callable);
+            _PyFrame_WriteHome(frame, home_self_dst, receiver);
+            _PyValue_CheckHome(*home_self_dst);
+            PyValue_XCLOSE(old_callable);
+            PyValue_XCLOSE(old_self_dst);
+            DISPATCH();
+            rop_GetMethod_MethodValues_Miss:
+            ROP_NO_GENERIC(GetMethod);
+        }
+
+        TARGET(GetMethod_PolyMethod) {
+            // GetMethod.PolyMethod (inline)
+            int opcode = ROP_HANDLER_GetMethod_PolyMethod;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 2;
+            INSTRUCTION_STATS(ROP_HANDLER_GetMethod_PolyMethod);
+            PyValue *const home_obj = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow v;
+            PyObject * o;
+            _PyAttrRecipe out1;
+            PyValue method;
+            PyValue receiver;
+            PyValue old_callable;
+            PyValue *const home_callable = &IR_SLOT(IR_A(ir_word));
+            PyValue old_self_dst;
+            PyValue *const home_self_dst = &IR_SLOT(IR_B(ir_word));
+            _PyAttrRecipe r;
+            v = PyValue_Borrow(*home_obj);
+            if (!PyValue_IsObject(v)) {
+                ROP_NO_GENERIC(GetMethod);
+            }
+            o = PyValue_AsKnownObjectBorrow(v);
+            if (!_PyAttr_PolyMethod(frame, (const _PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)), o, &out1)) {
+                goto rop_GetMethod_PolyMethod_Miss;
+            }
+            r = out1;
+            if (!_PyAttr_ValidReceiver(o, r)) {
+                ROP_NO_GENERIC(GetMethod);
+            }
+            method = PyValue_DUP(_PyAttr_BorrowMethod(r));
+            receiver = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_obj) : _PyFrame_TakeHome(frame, home_obj));
+            old_callable = *home_callable;
+            old_self_dst = *home_self_dst;
+            _PyFrame_WriteHome(frame, home_callable, method);
+            _PyValue_CheckHome(*home_callable);
+            _PyFrame_WriteHome(frame, home_self_dst, receiver);
+            _PyValue_CheckHome(*home_self_dst);
+            PyValue_XCLOSE(old_callable);
+            PyValue_XCLOSE(old_self_dst);
+            DISPATCH();
+            rop_GetMethod_PolyMethod_Miss:
+            ROP_NO_GENERIC(GetMethod);
         }

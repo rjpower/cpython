@@ -15,7 +15,7 @@ generated C uses the value API and never `.bits`.
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from rop_catalog import (Schema, SchemaCtor, CONVENTIONS, CReturn, CSource, CTest, DebtKind, Effect, Fact,
+from rop_catalog import (ENVIRONMENT_C, Schema, SchemaCtor, CONVENTIONS, CReturn, CSource, CTest, DebtKind, Effect, Fact,
                          FieldKind,
                          Handle, Scalar, Slot, Wrap)
 from rop_check import GraphInfo, Program
@@ -46,9 +46,6 @@ HANDLE_C = {
 
 # Effects after which Python may have run: a stub reports ESCAPED
 ESCAPING = frozenset({Effect.runs_python, Effect.polls})
-
-# The implicit environment values of a graph that the handler's scope holds
-ENVIRONMENT_C = {"frame": "frame", "thread": "tstate"}
 
 # Names the handler's C scope owns
 RESERVED = frozenset({

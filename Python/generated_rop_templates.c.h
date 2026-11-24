@@ -4,7 +4,11 @@
 // Do not edit!
 //
 // 1 templates.  Inline arms that keep the call of their form:
-//   GetAttr.Instance: GetAttr.Instance: admitted_instance_slot has no C body (pending)
+//   GetAttr.Instance: GetAttr.Instance: fb is not a leaf value
+//   GetAttr.PolyShape: GetAttr.PolyShape: let o has no leaf type
+//   GetAttr.Shape: GetAttr.Shape: fb is not a leaf value
+//   GetMethod.MethodValues: GetMethod.MethodValues: fb is not a leaf value
+//   GetMethod.PolyMethod: GetMethod.PolyMethod: let o has no leaf type
 
 // The leaf graph of Add.Int:
 //   b0:

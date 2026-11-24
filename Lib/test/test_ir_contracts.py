@@ -1565,6 +1565,33 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % ("encoding(tagged_index|spam)", "PyValue_NULL"),
                      r"spam is no kind of word")
 
+    def test_a_frame_switch_is_at_its_token(self):
+        # _SEND_GEN_FRAME: the guards before IR_ENTER_GENERATOR restart the
+        # word; the switch is where the row that names it is called
+        self.verify("""
+            op(_OP, (receiver: object, null: nullable, v: taken -- receiver, null, gen_frame: owned))
+                effects(runs_python, switches_frame) exits(miss, enter, raise)
+            {
+                PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
+                EXIT_IF(Py_TYPE(gen) != &PyGen_Type, "not a generator");
+                IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
+            }
+        """)
+        # Nothing follows the switch: a guard there is refused, not skipped
+        source = """
+            op(_OP, (callable: taken, self_or_null: taken, args[oparg]: taken -- new_frame: owned))
+                effects(runs_python, switches_frame) exits(miss, raise, enter)
+            {
+                %s
+                IR_INVOKE_CALL();
+                %s
+            }
+        """
+        guard = 'EXIT_IF(oparg > 3, "too many arguments");'
+        self.verify(source % (guard, ""))
+        self.refuses(source % ("", guard),
+                     r"this statement follows IR_INVOKE_CALL, which never returns")
+
     def test_identities_of_static_objects(self):
         # F21, _GUARD_LOAD_SUPER_ATTR_METHOD: a CONSTANT row names a static
         # object by address; a comparison with it establishes is(K)

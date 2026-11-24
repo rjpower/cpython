@@ -1582,7 +1582,11 @@ def effect_sites(uop: Uop, table: dict[str, Row] | None = None) -> list[Site]:
     p = uop.properties
     if p.eval_breaker:
         sites.append(Site(uop.body.open, "polls", "the uop polls the eval breaker"))
-    if p.switches_frame or p.returns:
+    if (p.switches_frame or p.returns) and not any(
+            s.effect == "switches_frame" for s in sites):
+        # A uop whose frame switch no row names switches at its start; one
+        # that a row names (IR_ENTER_GENERATOR) switches there, after the
+        # guards before it
         sites.append(Site(uop.body.open, "switches_frame", "the uop switches frames"))
     return sites
 
@@ -2380,6 +2384,15 @@ class OwnershipWalk:
         for i, stmt in enumerate(stmts):
             state = self.stmt(stmt, state)
             if state is None:
+                ender = next((t.text for t in stmt.tokens() if t.text in self.table
+                              and ends_path(self.table[t.text])), None) \
+                    if isinstance(stmt, SimpleStmt) else None
+                if ender is not None and i + 1 < len(stmts):
+                    # Nothing after a row that never returns runs: a guard
+                    # there (after IR_ENTER_GENERATOR's frame switch) would
+                    # never be checked
+                    self.fail(next(iter(stmts[i + 1].tokens())), f"this statement follows "
+                              f"{ender}, which never returns, so it never runs")
                 return None
             if state.split is not None:
                 # A CASES result: the rest of the block once per outcome,

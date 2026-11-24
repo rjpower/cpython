@@ -3979,8 +3979,11 @@ dummy_func(
             exc_match = PyValue_FromObjectSteal(match_o);
         }
 
-        outlined inst(CHECK_EXC_MATCH, (left, right -- left, b)) {
-            assert(PyValue_IsObject(left));
+        outlined inst(CHECK_EXC_MATCH,
+                (left: assumed(object) by exception_unwind, right: consumed
+                 -- left, b: owned exact(PyBool_Type)))
+            effects(runs_python, releases) exits(next, raise)
+        {
             PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
             // Taken before the check, which can run code
             PyValue held_right = TAKE(right);

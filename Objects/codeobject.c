@@ -789,6 +789,7 @@ is_delegated_yield_handler(int handler)
 }
 
 typedef struct {
+    const _PyCodeIR *ir;
     const _PyIRWord *words;
     int n;
     int nl;
@@ -1859,21 +1860,30 @@ semantic_abrupt_floor(const semantic_image *image, int pc)
     return dst >= image->nl && dst != IR_NO_DST ? Py_MIN(base, dst) : base;
 }
 
+/* The recipe of the edge (index + 1, or 0) puts values in some homes of the
+ * retained prefix: those are not vacant. */
 static void
 semantic_exception_entry(const semantic_image *image,
                          const semantic_worklist *work, uint64_t *out,
                          const uint64_t *incoming, int floor,
-                         int slot, int lasti)
+                         int slot, int lasti, int recipe)
 {
     semantic_handler_entry(image, work, out, slot, lasti);
     if (incoming == NULL) {
         return;
     }
+    const int32_t *moves = _PyIR_Recipe(image->ir, recipe);
     for (int home = image->nl; home < Py_MIN(floor, slot - lasti); home++) {
         int bit = home - image->nl;
         uint64_t mask = UINT64_C(1) << (bit % 64);
-        out[SEM_NO_HOME * work->nwords + bit / 64] |=
-            incoming[SEM_NO_HOME * work->nwords + bit / 64] & mask;
+        int moved = 0;
+        for (int q = 0; moves != NULL && q < moves[0]; q++) {
+            moved |= moves[2 + 2 * q] == home;
+        }
+        if (!moved) {
+            out[SEM_NO_HOME * work->nwords + bit / 64] |=
+                incoming[SEM_NO_HOME * work->nwords + bit / 64] & mask;
+        }
     }
 }
 
@@ -1941,7 +1951,9 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
     const unsigned char *exceptions = image->semantic.exceptions;
     const unsigned char *exception_end = exceptions + image->semantic.exceptions_size;
     int scratch = image->scratch;
-    if (!_PyIR_ExceptionTableValid(exceptions, exception_end, n, nl, nl + scratch)) {
+    if (!_PyIR_ExceptionTableValid(image->ir, exceptions, exception_end, n, nl,
+                                   nl + scratch))
+    {
         PyErr_SetString(PyExc_ValueError, "code: invalid exception table");
         return -1;
     }
@@ -2097,7 +2109,8 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
                     if (!work.blocks[block_at[pc]].reached)
                     {
                         semantic_exception_entry(image, &work, abrupt, NULL, 0,
-                                                 entry->slot, entry->lasti);
+                                                 entry->slot, entry->lasti,
+                                                 entry->recipe);
                         semantic_exception_enqueue(&work, block_at[entry->target], abrupt);
                         break;
                     }
@@ -2111,7 +2124,8 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
                         !work.blocks[block_at[event.from]].reached)
                     {
                         semantic_exception_entry(image, &work, abrupt, NULL, 0,
-                                                 event.exc_slot, event.lasti);
+                                                 event.exc_slot, event.lasti,
+                                                 event.recipe);
                         semantic_exception_enqueue(&work, block_at[event.handler], abrupt);
                     }
                 }
@@ -2132,7 +2146,8 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
                     _PyIRRecoveryEvent event;
                     _PyIRSemantic_Event(&source, (uint32_t)i, &event);
                     semantic_exception_entry(image, &work, abrupt, NULL, 0,
-                                             event.exc_slot, event.lasti);
+                                             event.exc_slot, event.lasti,
+                                             event.recipe);
                     semantic_exception_enqueue(&work, block_at[event.handler], abrupt);
                 }
             }
@@ -2149,7 +2164,8 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
                      * exists even when its source receipt is uncovered. */
                     int floor = _PyIR_OBSERVER_ENTRY_ABSENCE ? nl + scratch : nl;
                     semantic_exception_entry(image, &work, abrupt, state, floor,
-                                             entry->slot, entry->lasti);
+                                             entry->slot, entry->lasti,
+                                             entry->recipe);
                     semantic_exception_enqueue(&work, block_at[entry->target], abrupt);
                 }
                 if (entry != NULL &&
@@ -2157,7 +2173,8 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
                 {
                     semantic_exception_entry(image, &work, abrupt, state,
                                              semantic_abrupt_floor(image, i),
-                                             entry->slot, entry->lasti);
+                                             entry->slot, entry->lasti,
+                                             entry->recipe);
                     semantic_exception_enqueue(&work, block_at[entry->target], abrupt);
                 }
                 (void)semantic_step(image, &work, state, i, 0, &complete);
@@ -2304,6 +2321,7 @@ static semantic_image
 code_semantic_image(const _PyCodeIR *ir)
 {
     return (semantic_image){
+        .ir = ir,
         .words = ir->words,
         .n = (int)ir->nwords,
         .nl = (int)ir->nfixed,

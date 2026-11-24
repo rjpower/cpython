@@ -505,7 +505,7 @@ skip_to_next_entry(unsigned char *p, unsigned char *end) {
 static Py_NO_INLINE _PyExceptionHandler
 get_exception_handler(PyCodeObject *code, int index)
 {
-    _PyExceptionHandler none = {0, 0, 0, 0};
+    _PyExceptionHandler none = {0};
     _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code);
     unsigned char *start = (unsigned char *)semantic.exceptions;
     unsigned char *end = start + semantic.exceptions_size;
@@ -542,11 +542,13 @@ get_exception_handler(PyCodeObject *code, int index)
         }
         scan = parse_varint(scan, &size);
         if (start_offset + size > index) {
-            int handler, slot_and_lasti;
+            int handler, slot_and_lasti, recipe;
             scan = parse_varint(scan, &handler);
-            parse_varint(scan, &slot_and_lasti);
-            _PyExceptionHandler found = {1, slot_and_lasti >> 1, handler,
-                                         slot_and_lasti & 1};
+            scan = parse_varint(scan, &slot_and_lasti);
+            parse_varint(scan, &recipe);
+            _PyExceptionHandler found = {
+                .exc_slot = slot_and_lasti >> 1, .handler = handler,
+                .recipe = recipe, .handled = 1, .lasti = slot_and_lasti & 1};
             return found;
         }
         scan = skip_to_next_entry(scan, end);

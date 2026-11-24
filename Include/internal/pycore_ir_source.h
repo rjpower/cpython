@@ -67,7 +67,7 @@ typedef struct {
 typedef struct {
     int32_t from, to, edge;
     int32_t line, end_line, column, end_column, offset;
-    int32_t handler, exc_slot, lasti;
+    int32_t handler, exc_slot, lasti, recipe;
 } _PyIRObservationEvent;
 
 static inline _PyIRObservationMap
@@ -93,7 +93,7 @@ _PyIRObservation_Event(const _PyIRObservationMap *map, uint32_t index,
         recovery.from, recovery.to, recovery.edge,
         position.line, position.end_line, position.column, position.end_column,
         position.offset,
-        recovery.handler, recovery.exc_slot, recovery.lasti,
+        recovery.handler, recovery.exc_slot, recovery.lasti, recovery.recipe,
     };
 }
 

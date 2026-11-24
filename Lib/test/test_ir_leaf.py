@@ -120,6 +120,10 @@ CASES = {
                              for tag in (0, TAG)],
     "PyValue_FloatOperandValues": [(a, b) for a in LIVE_WORDS[::2] for b in LIVE_WORDS[::3]],
     "_PyValue_FromIntScaled": [(i << K["Py_INT_SHIFT"],) for i in INTS],
+    # The int51 boundaries: sums that fit 64 bits when scaled, and sums that overflow
+    "_PyValue_AddCheckedScaled": [
+        (a << K["Py_INT_SHIFT"], b << K["Py_INT_SHIFT"])
+        for a in INTS for b in INTS],
     "COMPARISON_BIT": [(a, b) for a in INTS[::3] for b in INTS[::3]] +
                       [(a, b) for a in FLOATS[::2] + [NAN] for b in FLOATS[::3] + [NAN]],
     "PyValue_TagIndex": [(i,) for i in (-1, 0, 1, 7, 2**40, 2**47 - 1)],

@@ -273,6 +273,16 @@ def _from_int64(cx, i):
     return cx.call("_PyValue_BoxInt64", i)
 
 
+def _add_checked_scaled(cx, a, b):
+    """The scaled sum of two int51s, or on 64-bit overflow their exact sum.
+    Both results are written, so the overflow case has a payload."""
+    exact = a + b
+    if -(1 << 63) <= exact < (1 << 63):
+        return False, exact
+    shift = cx.k("Py_INT_SHIFT")
+    return True, (a >> shift) + (b >> shift)
+
+
 def _from_double(cx, d):
     if not math.isnan(d):
         return _from_double_not_nan(cx, d)
@@ -466,6 +476,10 @@ PRIMITIVES = {p.name: p for p in (
     _p("PyValue_FloatOperandValues", [V, V], [B, "f64", "f64"], VALUE_H,
        _float_operand_values,
        doc="the bool result and the two out-parameters, written only if true"),
+    _p("_PyValue_AddCheckedScaled", ["i64", "i64"], [B, "i64"], VALUE_H,
+       _add_checked_scaled,
+       pre=lambda cx, a, b: all(x % (1 << cx.k("Py_INT_SHIFT")) == 0 for x in (a, b)),
+       doc="overflowed, and the scaled sum or, on overflow, the exact int51 sum"),
     _p("PyValue_FromInt64", ["i64"], [V], VALUE_H, _from_int64, BOXES,
        slow="_PyValue_BoxInt64"),
     _p("PyValue_FromDouble", ["f64"], [V], VALUE_H, _from_double, BOXES,

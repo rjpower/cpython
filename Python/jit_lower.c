@@ -414,6 +414,39 @@ LOWERING(_PyValue_FromIntScaled)
     return _PyJitCond_NONE;
 }
 
+/* [out, a, b, t, u]: a and b are int51 words scaled by Py_INT_SHIFT.  out
+   gets their sum, or when the 64-bit add overflows, the exact sum of the two
+   int51s (the wrapped sum shifted back, less 2**51, plus 2**52 if the wrapped
+   sum is negative), and the lowering leaves by the label in aux.  The hot
+   path is the add and one branch. */
+LOWERING(_PyValue_AddCheckedScaled)
+{
+    _PyJitReg out = REG(0), a = REG(1), b = REG(2), t = REG(3), u = REG(4);
+    _PyJitLabel exit = exit_label(aux);
+    assert(exit >= 0);
+    _PyJitLabel over = _PyJitAsm_NewLabel(A);
+    if (out == b) {
+        _PyJitAsm_AluRR(A, _PyJitAlu_ADD, out, a);
+    }
+    else {
+        move(cx, out, a);
+        _PyJitAsm_AluRR(A, _PyJitAlu_ADD, out, b);
+    }
+    _PyJitAsm_Jcc(A, _PyJitCond_O, over);
+    _PyJitLower_ColdBegin(cx);
+    _PyJitAsm_Bind(A, over);
+    move(cx, u, out);
+    _PyJitAsm_ShiftRI(A, _PyJitShift_SHR, u, 63);
+    _PyJitAsm_ShiftRI(A, _PyJitShift_SHL, u, 52);
+    _PyJitAsm_ShiftRI(A, _PyJitShift_SAR, out, Py_INT_SHIFT);
+    _PyJitAsm_MovImm(A, t, (int64_t)1 << 51);
+    _PyJitAsm_AluRR(A, _PyJitAlu_SUB, out, t);
+    _PyJitAsm_AluRR(A, _PyJitAlu_ADD, out, u);
+    _PyJitAsm_Jmp(A, exit);
+    _PyJitLower_ColdEnd(cx);
+    return _PyJitCond_NONE;
+}
+
 LOWERING(PyValue_InlineInt64)
 {
     move(cx, REG(0), REG(1));

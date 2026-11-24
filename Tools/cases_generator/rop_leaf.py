@@ -245,33 +245,14 @@ class LeafBuilder:
             raise Unsupported(f"{self.arm.name}: {t.callee} has no leaf lowering")
 
     def add_checked_scaled(self, args: tuple[int, ...], edges) -> None:
-        """The checked add of the scaled words: add_ovf, and for the
-        overflow case the exact sum of the two int51s.  The wrapped scaled
-        sum of an overflow has the sign opposite to the true sum, so the
-        exact sum is the wrapped sum shifted back by Py_INT_SHIFT, plus
-        2**51 if the wrapped sum is negative and minus 2**51 if it is not.
-        Neither operand stays live past the add, which therefore runs in
-        place."""
-        a, b = args
-        total, overflowed = self.emit("add_ovf", ("i64", "bool"), (a, b))
+        """The checked add of the scaled words, a primitive of the closed
+        set: the bool says which case, the i64 is the payload of both"""
+        overflowed, out = self.emit(
+            "prim", ("bool", "i64"), args, "_PyValue_AddCheckedScaled")
         here = self.cur
-        fits = self.new_block()
-        over = self.new_block()
-        here.term = ("br", overflowed, over.id, fits.id)
-        self.cur = fits
-        fits.term = self.jump(edges["fits"].target, (total,))
-        self.cur = over
-        shift = self.emit1("const", "i64", (), "Py_INT_SHIFT")
-        scaled_back = self.emit1("ashr", "i64", (total, shift))
-        sign_bit = self.emit1("const", "i64", (), 63)
-        sign = self.emit1("ashr", "i64", (total, sign_bit))
-        two_51 = self.emit1("const", "i64", (), 1 << 51)
-        two_52 = self.emit1("const", "i64", (), 1 << 52)
-        up = self.emit1("and", "i64", (sign, two_52))
-        low = self.emit1("sub", "i64", (scaled_back, two_51))
-        wide = self.emit1("add", "i64", (low, up))
-        over.term = self.jump(edges["overflow"].target, (wide,))
-        self.cur = here
+        over = self.edge_block(edges["overflow"].target, (out,))
+        fits = self.edge_block(edges["fits"].target, (out,))
+        here.term = ("br", overflowed, over, fits)
 
 
 def leaf_of_arm(program: Program, arm: Arm) -> ArmLeaf:
@@ -337,7 +318,12 @@ class TemplateBuilder:
             for op in b.ops:
                 gb = self.op(op, gb, lmap, views, published)
             term = b.term
-            if term[0] == "br":
+            if term[0] == "br" and self.leaves_by_exit(gb, lmap[term[1]]):
+                # The primitive branches to the overflow case itself
+                gb.ops[-1].exit = bmap[term[2]].id
+                gb.ops[-1].results = gb.ops[-1].results[1:]
+                gb.term = ("jmp", bmap[term[3]].id, [])
+            elif term[0] == "br":
                 gb.term = ("br", lmap[term[1]], bmap[term[2]].id, bmap[term[3]].id)
             elif term[0] == "jmp":
                 gb.term = ("jmp", bmap[term[1]].id, [lmap[a] for a in term[2]])
@@ -349,6 +335,14 @@ class TemplateBuilder:
                 gb.term = ("jmp", self.exit_block("deopt"), [])
         self.epilogue(merge, views)
         return g
+
+    @staticmethod
+    def leaves_by_exit(gb, cond: int) -> bool:
+        """Whether the block's last op is the checked add whose bool is cond:
+        its lowering leaves for the overflow case by a branch of its own"""
+        last = gb.ops[-1] if gb.ops else None
+        return (last is not None and last.kind == "prim"
+                and last.attr == "_PyValue_AddCheckedScaled" and last.results[0] == cond)
 
     def op(self, op, gb, lmap, views, published):
         g = self.g

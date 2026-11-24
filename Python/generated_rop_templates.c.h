@@ -15,34 +15,25 @@
 //     exit_if EXIT %6
 //     %7:i64 = prim _PyValue_IntScaled %3
 //     %8:i64 = prim _PyValue_IntScaled %4
-//     %9:i64, %10:bool = add_ovf %7, %8
-//     br %10, b6, b5
+//     %9:bool, %10:i64 = prim _PyValue_AddCheckedScaled %7, %8
+//     br %9, b5, b6
 //   b1(%0:i64):
-//     %20:value = prim _PyValue_FromIntScaled %0
-//     jmp b4(%20)
+//     %11:value = prim _PyValue_FromIntScaled %0
+//     jmp b4(%11)
 //   b2(%1:i64):
-//     %21:value = call _PyValue_BoxInt64 %1
-//     %22:bool = prim PyValue_IsNull %21
-//     raise_if %22
-//     jmp b4(%21)
+//     %12:value = call _PyValue_BoxInt64 %1
+//     %13:bool = prim PyValue_IsNull %12
+//     raise_if %13
+//     jmp b4(%12)
 //   b3:
 //     raise
 //   b4(%2:value):
 //     out dst %2
 //     next
 //   b5:
-//     jmp b1(%9)
+//     jmp b2(%10)
 //   b6:
-//     %11:i64 = const Py_INT_SHIFT
-//     %12:i64 = ashr %9, %11
-//     %13:i64 = const 63
-//     %14:i64 = ashr %9, %13
-//     %15:i64 = const 2251799813685248
-//     %16:i64 = const 4503599627370496
-//     %17:i64 = and %14, %16
-//     %18:i64 = sub %12, %15
-//     %19:i64 = add %18, %17
-//     jmp b2(%19)
+//     jmp b1(%10)
 static void
 jit_template_Add_Int(_PyJitWordCx *cx)
 {
@@ -51,9 +42,8 @@ jit_template_Add_Int(_PyJitWordCx *cx)
     (void)ir_word;
     _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L9 = _PyJitAsm_NewLabel(a);
-    _PyJitLabel L6 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L5 = _PyJitAsm_NewLabel(a);
-    _PyJitLabel L7 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L6 = _PyJitAsm_NewLabel(a);
     _PyJitLabel L11 = _PyJitAsm_NewLabel(a);
     _PyJitLabel raise = _PyJitAsm_NewLabel(a);
     _PyJitAsm_Bind(a, L0);
@@ -64,11 +54,8 @@ jit_template_Add_Int(_PyJitWordCx *cx)
     _PyJitAsm_Bind(a, L9);
     _PyJitLower__PyValue_IntScaled(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX}, NULL);
     _PyJitLower__PyValue_IntScaled(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RCX}, NULL);
-    _PyJitAsm_AluRR(a, _PyJitAlu_ADD, _PyJitReg_RAX, _PyJitReg_RCX);
-    int c12 = _PyJitCond_O;
-    _PyJitAsm_Jcc(a, c12, L7);
-    _PyJitAsm_Bind(a, L6);
-    _PyJitLower__PyValue_FromIntScaled(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX, _PyJitReg_RCX}, NULL);
+    _PyJitLower__PyValue_AddCheckedScaled(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX, _PyJitReg_RCX, _PyJitReg_RDX, _PyJitReg_RSI}, (const void *)(intptr_t)(L6 + 1));
+    _PyJitLower__PyValue_FromIntScaled(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX, _PyJitReg_RDX}, NULL);
     _PyJitAsm_Bind(a, L5);
     if (!(ir_word & IR_F_LOCAL_B)) {
         _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_B(ir_word))), 0);
@@ -77,31 +64,21 @@ jit_template_Add_Int(_PyJitWordCx *cx)
         _PyJitAsm_MovMI(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_C(ir_word))), 0);
     }
     if ((ir_word & IR_F_LOCAL_A)) {
-        _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
+        _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))));
     }
-    _PyJitAsm_MovMR(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), _PyJitReg_RAX);
+    _PyJitAsm_MovMR(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * IR_A(ir_word))), _PyJitReg_RCX);
     if ((ir_word & IR_F_LOCAL_A)) {
         cx->live = 0x0; cx->live_xmm = 0x0;
-        _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL);
+        _PyJitLower_PyValue_XCLOSE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL);
     }
     _PyJitLower_ColdBegin(cx);
-    _PyJitAsm_Bind(a, L7);
-    _PyJitAsm_MovImm(a, _PyJitReg_RCX, (int64_t)(Py_INT_SHIFT));
-    _PyJitAsm_MovRR(a, _PyJitReg_RDX, _PyJitReg_RAX);
-    _PyJitAsm_ShiftRCl(a, _PyJitShift_SAR, _PyJitReg_RDX);
-    _PyJitAsm_MovImm(a, _PyJitReg_RCX, 63);
-    _PyJitAsm_ShiftRI(a, _PyJitShift_SAR, _PyJitReg_RAX, 63);
-    _PyJitAsm_MovImm(a, _PyJitReg_RCX, (int64_t)0x8000000000000ULL);
-    _PyJitAsm_MovImm(a, _PyJitReg_RSI, (int64_t)0x10000000000000ULL);
-    _PyJitAsm_AluRR(a, _PyJitAlu_AND, _PyJitReg_RAX, _PyJitReg_RSI);
-    _PyJitAsm_AluRR(a, _PyJitAlu_SUB, _PyJitReg_RDX, _PyJitReg_RCX);
-    _PyJitAsm_AluRR(a, _PyJitAlu_ADD, _PyJitReg_RDX, _PyJitReg_RAX);
+    _PyJitAsm_Bind(a, L6);
     cx->live = 0x0; cx->live_xmm = 0x0;
-    _PyJitLower_Call(cx, (const void *)_PyValue_BoxInt64, 1, 1, (const _PyJitArg[]){_PyJitArg_GPR(_PyJitReg_RDX)}, _PyJitArg_GPR(_PyJitReg_RDX));
-    int c15 = _PyJitLower_PyValue_IsNull(cx, (const uint8_t[]){_PyJitReg_RDX}, NULL);
+    _PyJitLower_Call(cx, (const void *)_PyValue_BoxInt64, 1, 1, (const _PyJitArg[]){_PyJitArg_GPR(_PyJitReg_RAX)}, _PyJitArg_GPR(_PyJitReg_RAX));
+    int c15 = _PyJitLower_PyValue_IsNull(cx, (const uint8_t[]){_PyJitReg_RAX}, NULL);
     _PyJitAsm_Jcc(a, c15, raise);
     _PyJitAsm_Bind(a, L11);
-    _PyJitAsm_MovRR(a, _PyJitReg_RAX, _PyJitReg_RDX);
+    _PyJitAsm_MovRR(a, _PyJitReg_RCX, _PyJitReg_RAX);
     _PyJitAsm_Jmp(a, L5);
     _PyJitTemplate_Raise(cx, raise);
     _PyJitLower_ColdEnd(cx);

@@ -212,10 +212,30 @@
            ARGS(borrowed, scalar, scalar), NONE, EFFECTS(runs_python), \
            FEEDBACK(read(entry), write(entry), write(handler)))
 
+/* The evaluator's labels (bytecodes.c label(...)): the routines behind them */
+#define _PyIR_COMPONENTS_LABELS(PRIMITIVE, HELPER, MACRO) \
+    /* error, exception_unwind, exit_unwind, exit_unwind_notrace and \
+     * throw_error enter it through IR_PROCESS_ERROR (Python/ceval.c).  It \
+     * records the traceback and runs the raise, handled and unwind \
+     * monitoring callbacks (Python), clears the frame's scratch homes \
+     * (releases), pops frames that do not handle the exception \
+     * (switches_frame), and either returns the handler's word in the frame \
+     * that handles it (jump) or leaves the evaluator (exit) */ \
+    ROUTINE(_PyEval_ProcessError, _PyIRErrorResult, \
+            (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, uint32_t), \
+            ARGS(tstate, frame, scalar, scalar), SCALAR, \
+            EFFECTS(runs_python, switches_frame), EXITS(jump, exit)) \
+    /* start_frame (Python/ceval_macros.h): the recursion check, which \
+     * counts down the thread's remaining depth; nonzero \
+     * with RecursionError set */ \
+    HELPER(_Py_EnterRecursivePy, int, (PyThreadState *), \
+           ARGS(tstate), STATUS(NONZERO), EFFECTS(writes, allocates, raises))
+
 #define _PyIR_COMPONENTS(PRIMITIVE, HELPER, MACRO) \
     _PyIR_COMPONENTS_VALUES(PRIMITIVE, HELPER, MACRO) \
     _PyIR_COMPONENTS_OBJECTS(PRIMITIVE, HELPER, MACRO) \
     _PyIR_COMPONENTS_CONTAINERS(PRIMITIVE, HELPER, MACRO) \
-    _PyIR_COMPONENTS_SPECIALIZATION(PRIMITIVE, HELPER, MACRO)
+    _PyIR_COMPONENTS_SPECIALIZATION(PRIMITIVE, HELPER, MACRO) \
+    _PyIR_COMPONENTS_LABELS(PRIMITIVE, HELPER, MACRO)
 
 #endif /* !Py_INTERNAL_IR_COMPONENTS_H */

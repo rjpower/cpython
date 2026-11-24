@@ -1432,7 +1432,8 @@ leaf_probe__LOAD_ATTR_METHOD_LAZY_DICT(_PyInterpreterFrame *frame, PyValue *stac
     PyValue owner, attr, self;
     owner = stack_pointer[-1];
     STAT_INC(LOAD_ATTR, hit);
-    attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
+    PyValueBorrow method = _PyValueGuarded_Load(class_value);
+    attr = PyValue_DUP(method);
     self =      owner ;
     stack_pointer[-1] = attr;
     stack_pointer[0] = self;
@@ -1452,7 +1453,8 @@ leaf_probe__LOAD_ATTR_METHOD_NO_DICT(_PyInterpreterFrame *frame, PyValue *stack_
     PyValue owner, attr, self;
     owner = stack_pointer[-1];
     STAT_INC(LOAD_ATTR, hit);
-    attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
+    PyValueBorrow method = _PyValueGuarded_Load(class_value);
+    attr = PyValue_DUP(method);
     self =      owner ;
     stack_pointer[-1] = attr;
     stack_pointer[0] = self;
@@ -1472,7 +1474,8 @@ leaf_probe__LOAD_ATTR_METHOD_WITH_VALUES(_PyInterpreterFrame *frame, PyValue *st
     PyValue owner, attr, self;
     owner = stack_pointer[-1];
     STAT_INC(LOAD_ATTR, hit);
-    attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
+    PyValueBorrow method = _PyValueGuarded_Load(class_value);
+    attr = PyValue_DUP(method);
     self =      owner ;
     stack_pointer[-1] = attr;
     stack_pointer[0] = self;

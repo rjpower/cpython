@@ -8727,6 +8727,7 @@ ir_run_IMPORT_NAME(
             PyValue res;
             fromlist = window[1];
             level = window[0];
+            assert(PyValue_IsObject(fromlist));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
             assert(PyValue_IsObject(fromlist));
@@ -10648,11 +10649,13 @@ ir_run_LOAD_ATTR_METHOD_LAZY_DICT(
                 _PyValueGuarded class_value = fb->class_value;
                 assert(oparg & 1);
                 STAT_INC(LOAD_ATTR, hit);
-                assert(PyValue_IsObject(_PyValueGuarded_Load(class_value)));
+                PyValueBorrow method = _PyValueGuarded_Load(class_value);
+                assert(!PyValue_IsNull(method));
+                assert(PyValue_IsObject(method));
                 assert(_PyType_HasFeature(
-                                      Py_TYPE(PyValue_AsKnownObjectBorrow(_PyValueGuarded_Load(class_value))),
+                                      Py_TYPE(PyValue_AsKnownObjectBorrow(method)),
                                       Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
+                attr = PyValue_DUP(method);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
                 self = IR_TAKEN_POINTER(owner, ir_own_B);
             }
@@ -10708,11 +10711,13 @@ ir_run_LOAD_ATTR_METHOD_NO_DICT(
                 assert(oparg & 1);
                 assert(Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner))->tp_dictoffset == 0);
                 STAT_INC(LOAD_ATTR, hit);
-                assert(PyValue_IsObject(_PyValueGuarded_Load(class_value)));
+                PyValueBorrow method = _PyValueGuarded_Load(class_value);
+                assert(!PyValue_IsNull(method));
+                assert(PyValue_IsObject(method));
                 assert(_PyType_HasFeature(
-                                      Py_TYPE(PyValue_AsKnownObjectBorrow(_PyValueGuarded_Load(class_value))),
+                                      Py_TYPE(PyValue_AsKnownObjectBorrow(method)),
                                       Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
+                attr = PyValue_DUP(method);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
                 self = IR_TAKEN_POINTER(owner, ir_own_B);
             }
@@ -10833,11 +10838,13 @@ ir_run_LOAD_ATTR_METHOD_WITH_VALUES(
                 _PyValueGuarded class_value = fb->class_value;
                 assert(oparg & 1);
                 STAT_INC(LOAD_ATTR, hit);
-                assert(PyValue_IsObject(_PyValueGuarded_Load(class_value)));
+                PyValueBorrow method = _PyValueGuarded_Load(class_value);
+                assert(!PyValue_IsNull(method));
+                assert(PyValue_IsObject(method));
                 assert(_PyType_HasFeature(
-                                      Py_TYPE(PyValue_AsKnownObjectBorrow(_PyValueGuarded_Load(class_value))),
+                                      Py_TYPE(PyValue_AsKnownObjectBorrow(method)),
                                       Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
+                attr = PyValue_DUP(method);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
                 self = IR_TAKEN_POINTER(owner, ir_own_B);
             }
@@ -11888,6 +11895,7 @@ ir_run_LOAD_FROM_DICT_OR_DEREF(
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             class_dict_st = IR_VIEW(IR_B(ir_word));
+            assert(PyValue_IsObject(class_dict_st));
             PyObject *name;
             assert(PyValue_IsObject(class_dict_st));
             PyObject *class_dict = _PyValue_AsKnownObjectBorrowPointer(class_dict_st);
@@ -11943,6 +11951,7 @@ ir_run_LOAD_FROM_DICT_OR_GLOBALS(
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             mod_or_class_dict = IR_VIEW(IR_B(ir_word));
+            assert(PyValue_IsObject(mod_or_class_dict));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             assert(PyValue_IsObject(mod_or_class_dict));
             PyObject *namespace = _PyValue_AsKnownObjectBorrowPointer(mod_or_class_dict);
@@ -12002,10 +12011,11 @@ ir_run_LOAD_GLOBAL(
             {
                 res = &IR_SLOT(IR_A(ir_word));
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                _PyFrame_WriteHome(frame, &res[0], value_load_global(GLOBALS(), BUILTINS(), name));
-                if (PyValue_IsNull(res[0])) {
+                PyValue found = value_load_global(GLOBALS(), BUILTINS(), name);
+                if (PyValue_IsNull(found)) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
+                _PyFrame_WriteHome(frame, &res[0], found);
             }
             // _NULL_SLOT_CONDITIONAL
             {
@@ -15783,7 +15793,6 @@ ir_run_STORE_GLOBAL(
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             int err;
             if (PyValue_IsNull(v)) {
-                ir_own_A = IR_DETACH(ir_word, A, v);
                 err = PyDict_PopValue(GLOBALS(), PyValue_FromObjectBorrow(name), NULL);
                 if (err == 0) {
                     err = -1;
@@ -15793,9 +15802,9 @@ ir_run_STORE_GLOBAL(
             }
             else {
                 err = PyDict_SetValue(GLOBALS(), PyValue_FromObjectBorrow(name), v);
-                ir_own_A = IR_DETACH(ir_word, A, v);
-                (void)(ir_own_A);
             }
+            ir_own_A = IR_DETACH(ir_word, A, v);
+            (void)(ir_own_A);
             if (err < 0) {
                 PyValue_XCLOSE(ir_own_A);
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -25151,11 +25160,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 _PyValueGuarded class_value = fb->class_value;
                 assert(oparg & 1);
                 STAT_INC(LOAD_ATTR, hit);
-                assert(PyValue_IsObject(_PyValueGuarded_Load(class_value)));
+                PyValueBorrow method = _PyValueGuarded_Load(class_value);
+                assert(!PyValue_IsNull(method));
+                assert(PyValue_IsObject(method));
                 assert(_PyType_HasFeature(
-                                      Py_TYPE(PyValue_AsKnownObjectBorrow(_PyValueGuarded_Load(class_value))),
+                                      Py_TYPE(PyValue_AsKnownObjectBorrow(method)),
                                       Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
+                attr = PyValue_DUP(method);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
                 self = IR_TAKEN_POINTER(owner, ir_own_B);
             }
@@ -25207,11 +25218,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 assert(oparg & 1);
                 assert(Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner))->tp_dictoffset == 0);
                 STAT_INC(LOAD_ATTR, hit);
-                assert(PyValue_IsObject(_PyValueGuarded_Load(class_value)));
+                PyValueBorrow method = _PyValueGuarded_Load(class_value);
+                assert(!PyValue_IsNull(method));
+                assert(PyValue_IsObject(method));
                 assert(_PyType_HasFeature(
-                                      Py_TYPE(PyValue_AsKnownObjectBorrow(_PyValueGuarded_Load(class_value))),
+                                      Py_TYPE(PyValue_AsKnownObjectBorrow(method)),
                                       Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
+                attr = PyValue_DUP(method);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
                 self = IR_TAKEN_POINTER(owner, ir_own_B);
             }
@@ -25324,11 +25337,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 _PyValueGuarded class_value = fb->class_value;
                 assert(oparg & 1);
                 STAT_INC(LOAD_ATTR, hit);
-                assert(PyValue_IsObject(_PyValueGuarded_Load(class_value)));
+                PyValueBorrow method = _PyValueGuarded_Load(class_value);
+                assert(!PyValue_IsNull(method));
+                assert(PyValue_IsObject(method));
                 assert(_PyType_HasFeature(
-                                      Py_TYPE(PyValue_AsKnownObjectBorrow(_PyValueGuarded_Load(class_value))),
+                                      Py_TYPE(PyValue_AsKnownObjectBorrow(method)),
                                       Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_DUP(_PyValueGuarded_Load(class_value));
+                attr = PyValue_DUP(method);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
                 self = IR_TAKEN_POINTER(owner, ir_own_B);
             }

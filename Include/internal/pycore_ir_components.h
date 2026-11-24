@@ -790,7 +790,7 @@
      * after any unlock). */ \
     PRIMITIVE(_PyValueSlot_Exchange, PyValue, (PyValue *, PyValue), \
               ARGS(scalar, consumed), VALUE_OR_NULL(owned), EFFECTS(reads, writes)) \
-    /* Evidence (G0d4), pycore_object.h: _PyValueSlot_Exchange for a slot that \
+    /* Evidence (G0d4), pycore_value.h: _PyValueSlot_Exchange for a slot that \
      * holds a value.  The caller's guards show it: a shape names only filled \
      * slots (_GUARD_SHAPE), a list item is never NULL once published (the \
      * list's length bounds the index), and the hint's entry is tested for \
@@ -798,7 +798,7 @@
     PRIMITIVE(_PyValueSlot_ExchangeFilled, PyValue, (PyValue *, PyValue), \
               ARGS(scalar, consumed), VALUE(owned assumed(nonnull) by guards), \
               EFFECTS(reads, writes)) \
-    /* Evidence (G0d4), pycore_object.h: a store of the value into a slot \
+    /* Evidence (G0d4), pycore_value.h: a store of the value into a slot \
      * that holds NULL (the shape guard shows the attribute is absent): it \
      * moves in, nothing is displaced, no call, no failure, no callback. */ \
     PRIMITIVE(_PyValueSlot_Fill, void, (PyValue *, PyValue), \

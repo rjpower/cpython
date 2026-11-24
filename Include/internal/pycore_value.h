@@ -1544,6 +1544,37 @@ _PyValue_CloseStack(PyValue *arguments, int total_args)
     }
 }
 
+/* The stores of a value into a value slot (an inline value, a __slots__
+   member, a dict's value, a list item).  The slot's previous value moves out
+   to the caller, which closes it after any unlock, as the attribute handlers
+   did.  Exchange: the slot may hold NULL. */
+static inline PyValue
+_PyValueSlot_Exchange(PyValue *slot, PyValue value)
+{
+    PyValue old = *slot;
+    *slot = value;
+    return old;
+}
+
+/* ExchangeFilled: the slot holds a value, by the guards of the handler (the
+   shape, the dict hint, the list's length). */
+static inline PyValue
+_PyValueSlot_ExchangeFilled(PyValue *slot, PyValue value)
+{
+    PyValue old = *slot;
+    assert(!PyValue_IsNull(old));
+    *slot = value;
+    return old;
+}
+
+/* Fill: the slot holds NULL, by the shape guard. */
+static inline void
+_PyValueSlot_Fill(PyValue *slot, PyValue value)
+{
+    assert(PyValue_IsNull(*slot));
+    *slot = value;
+}
+
 #ifdef __cplusplus
 }
 #endif

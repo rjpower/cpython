@@ -1000,37 +1000,6 @@ _PyObject_ValueSlot(PyObject *obj, size_t offset)
     return (PyValue *)((char *)obj + offset);
 }
 
-/* The stores of a value into a value slot (an inline value, a __slots__
-   member, a dict's value, a list item).  The slot's previous value moves out
-   to the caller, which closes it after any unlock, as the attribute handlers
-   did.  Exchange: the slot may hold NULL. */
-static inline PyValue
-_PyValueSlot_Exchange(PyValue *slot, PyValue value)
-{
-    PyValue old = *slot;
-    *slot = value;
-    return old;
-}
-
-/* ExchangeFilled: the slot holds a value, by the guards of the handler (the
-   shape, the dict hint, the list's length). */
-static inline PyValue
-_PyValueSlot_ExchangeFilled(PyValue *slot, PyValue value)
-{
-    PyValue old = *slot;
-    assert(old.bits != 0);   // not PyValue_NULL
-    *slot = value;
-    return old;
-}
-
-/* Fill: the slot holds NULL, by the shape guard. */
-static inline void
-_PyValueSlot_Fill(PyValue *slot, PyValue value)
-{
-    assert(slot->bits == 0);   // PyValue_NULL
-    *slot = value;
-}
-
 extern PyObject ** _PyObject_ComputedDictPointer(PyObject *);
 extern int _PyObject_IsInstanceDictEmpty(PyObject *);
 

@@ -131,7 +131,13 @@ class SliceTests(unittest.TestCase):
     def test_declarations_equal_the_inference(self):
         with cases.handle_stderr():
             lines = ir_contract_diff.report(str(BYTECODES))
-        self.assertEqual(lines[:-1], [])
+        # The reviewed differences (G0c): the assume op of `iter: assumed(object)
+        # by GET_ITER` in the leaf IR of the two iterator guards
+        listed = ["FOR_ITER_LIST.record.uops[0].leaf.blocks[0].ops:",
+                  "FOR_ITER_TUPLE.record.uops[0].leaf.blocks[0].ops:"]
+        self.assertEqual([line.split(" ")[0] for line in lines[:-1]], listed)
+        for line in lines[:-1]:
+            self.assertIn('"kind": "assume"', line)
         self.assertRegex(lines[-1], r"^\d+ handlers compared; \d+ of \d+ uops declared$")
 
     def test_component_checks_are_generated(self):

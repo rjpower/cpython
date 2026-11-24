@@ -498,7 +498,22 @@ leaf_probe(PyObject *Py_UNUSED(module), PyObject *args)
                          (unsigned long long)result.completed.bits);
 }
 
+// rop_add_checked_scaled(a, b): the C definition of the register row
+// add_checked_scaled (Python/register_ops/add.rop), as (overflowed, out)
+static PyObject *
+rop_add_checked_scaled(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    long long a, b;
+    if (!PyArg_ParseTuple(args, "LL", &a, &b)) {
+        return NULL;
+    }
+    int64_t out;
+    bool overflowed = _PyValue_AddCheckedScaled(a, b, &out);
+    return Py_BuildValue("OL", overflowed ? Py_True : Py_False, (long long)out);
+}
+
 static PyMethodDef test_methods[] = {
+    {"rop_add_checked_scaled", rop_add_checked_scaled, METH_VARARGS},
     {"leaf_probe", leaf_probe, METH_VARARGS},
     {"leaf_primitive", _PyCFunction_CAST(leaf_primitive), METH_FASTCALL},
     {"leaf_primitive_names", leaf_primitive_names, METH_NOARGS},

@@ -1,0 +1,583 @@
+"""Tests of the register instruction checker, Tools/cases_generator/rop_verify.py:
+each arm and macro proved correct against its own declarations."""
+
+import unittest
+from pathlib import Path
+
+from test import test_tools
+
+test_tools.skip_if_missing("cases_generator")
+with test_tools.imports_under_tool("cases_generator"):
+    import rop_check
+    import rop_syntax
+    import rop_verify
+
+ROP_DIR = Path(test_tools.basepath) / "Python" / "register_ops"
+
+
+def verify_source(src: str, filename: str = "base.rop") -> list[tuple[int, int, str, str]]:
+    program = rop_check.check([rop_syntax.parse(src, filename)])
+    assert not program.diagnostics, [str(d) for d in program.diagnostics]
+    return [(d.span.line, d.span.column, d.definition, d.message)
+            for d in rop_verify.verify(program)]
+
+
+# Definitions that pass the checker and use every construct it reasons
+# about; each case below changes one piece and lists the diagnostics that
+# result (line, column, definition, rule: message)
+VERIFY_BASE = """\
+enum Op(PLUS, MINUS);
+family F(dst:Dst, x:Src, y:Src, fb:Fb<Binary>)
+  exits(next, miss, again, raise, redirect);
+point F.Done(current, next_head, clear) keep() spent(y, x) defs(dst) held();
+point F.Kept(current, site, pending) keep(x, y) spent() defs() held();
+point F.Gone(current, site, pending) keep() spent(y, x) defs() held();
+extern primitive both(a:B, b:B) -> Bool effects() test(inline_int(a), inline_int(b)) pending;
+extern primitive scale(v:B) -> Scaled51 effects() requires(inline_int(v)) pending;
+extern primitive unscale(s:Scaled51) -> O effects() ensures(result.inline_int(result)) pending;
+extern primitive add(a:Scaled51, b:Scaled51) cases(fits(s:Scaled51), over(w:I64)) effects() ensures(over.outside_i51(w)) pending;
+extern helper box(v:I64) cases(ok(z:O), err(e:Err)) effects(allocates, raises) requires(outside_i51(v)) ensures(ok.exact<int>(z)) pending;
+extern helper op(a:B, b:B) cases(ok(z:O), err(e:Err)) effects(runs_python, raises) pending;
+extern primitive is_obj(v:B) -> Bool effects() test(object(v)) pending;
+extern primitive as_obj(v:B) -> Obj effects() requires(object(v)) pending;
+extern helper slot_recipe(f:Fb<Binary>) cases(hit(r:Recipe<Binary>), absent()) effects(reads) feedback(read(entry.kind)) pending;
+extern primitive version(o:Obj, r:Recipe<Binary>) -> Bool effects(reads) test(type_version(o, r)) pending;
+extern primitive valid(o:Obj) -> Bool effects(reads) test(has_values(o)) pending;
+extern primitive slot(o:Obj, r:Recipe<Binary>) -> Maybe<B> effects(reads) requires(type_version(o, r), has_values(o)) pending;
+extern primitive present(m:Maybe<B>) -> Bool effects() test(present(m)) pending;
+extern helper scribble() -> Unit effects(writes) pending;
+extern primitive peek(v:B) -> B effects(reads) pending;
+extern helper op3(a:B, b:B) cases(ok(z:O), err(e:Err), redirected(r:Route)) effects(runs_python, raises) pending;
+extern helper alloc() -> Unit effects(allocates) pending;
+extern helper drop_anchors(a:Anchors) -> Unit effects(releases) pending;
+extern helper close_one() -> Unit effects(releases) pending;
+extern helper tick<K>(f:Fb<K>) cases(quiet(), due()) effects(reads, writes) feedback(read(counter), write(counter)) pending;
+extern helper install<K>(f:Fb<K>, c:Candidate<K>) cases(changed(t:Ticket<K>), same()) effects(reads, writes, allocates) feedback(read(entry), write(entry), write(handler)) pending;
+extern helper commit<K>(t:Ticket<K>) -> Unit effects(writes) pending;
+extern routine finish(f:Fb<Binary>) cases(done(h:Head), err(e:Err)) effects(reads, raises) pending;
+extern helper fill(n:Size) cases(ok(s:Span<O>), err(e:Err, part:Span<O>)) effects(allocates, raises) pending;
+extern helper drop_all(s:Span<O>) -> Unit effects(releases) pending;
+extern helper new_frame() cases(ok(f:Frame), err(e:Err)) effects(allocates, raises) pending;
+macro anchor(s:Span<Src>) -> Anchors effects() feedback() pending;
+macro call_at(a:Anchors) cases(ok(z:O), err(e:Err), redirected(r:Route)) effects(runs_python, raises) feedback() borrows(a) pending;
+macro retire_failed(a:Anchors, s:Span<Src>, e:Err) -> Err effects(releases) feedback() spends(s) pending;
+macro retire_gone(a:Anchors, r:Route) -> Route effects(releases) feedback() pending;
+macro adapt(f:Fb<Binary>, x:Src, y:Src)
+  cases(run(), changed(t:Ticket<Binary>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    branch both(use(x), use(y)) -> Chosen(), Run();
+  Chosen():
+    let c:Candidate<Binary> = candidate(F.Int);
+    call install(f, c) {
+      changed -> Changed();
+      same -> Run();
+    }
+  Changed(t:Ticket<Binary>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+macro take_both(h:InOut<O>, k:InOut<O>) cases(ok(a:O, b:O)) effects(writes) feedback()
+{
+  entry():
+    let a:O = move(h);
+    let b:O = move(k);
+    exit ok(a, b);
+}
+macro fill_or_raise(n:Size) cases(ok(s:Span<O>), err(e:Err)) effects(allocates, raises, releases) feedback()
+{
+  entry():
+    call fill(n) {
+      ok -> Ok();
+      err -> Failed();
+    }
+  Ok(s:Span<O>):
+    exit ok(s);
+  Failed(e:Err, part:Span<O>):
+    let _:Unit = drop_all(part);
+    exit err(e);
+}
+macro keep_anchor(a:Anchors) cases(done()) effects(releases) feedback() borrows(a)
+{
+  entry():
+    exit done();
+}
+macro retire_all(a:Anchors, s:Span<Src>, e:Err) -> Err effects(releases) feedback() spends(s)
+{
+  entry():
+    let r:Err = retire_failed(a, s, e);
+    exit result(r);
+}
+macro walk_all(s:Span<Src>) cases(done()) effects() feedback()
+{
+  entry():
+    each s limit length body Body exhaust Done();
+  Body(e:Src, i:Size):
+    advance Body;
+  Done():
+    exit done();
+}
+arm F.Int inline
+  effects(writes, allocates, raises, releases)
+  feedback()
+  exits(next, miss, raise)
+  ensures(next.exact<int>(dst))
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard both(l, r) else miss;
+    let a:Scaled51 = scale(l);
+    let b:Scaled51 = scale(r);
+    call add(a, b) {
+      fits -> Fits();
+      over -> Over();
+    }
+  Fits(s:Scaled51):
+    goto Finish(unscale(s));
+  Over(w:I64):
+    call box(w) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(F.Kept, e);
+  Finish(z:O):
+    publish [dst = z] retire [spent(y), spent(x), old(dst)] at F.Done;
+    exit next();
+}
+arm F.Slot inline
+  effects(reads, writes, allocates, releases)
+  feedback(read(entry.kind))
+  exits(next, miss)
+{
+  entry():
+    let v:B = use(x);
+    guard is_obj(v) else miss;
+    let o:Obj = as_obj(v);
+    call slot_recipe(fb) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Binary>):
+    guard version(o, r) else miss;
+    guard valid(o) else miss;
+    let item:Maybe<B> = slot(o, r);
+    guard present(item) else miss;
+    let z:O = dup(unwrap(item));
+    publish [dst = z] retire [spent(y), spent(x), old(dst)] at F.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+arm F.Generic shared
+  effects(runs_python, raises)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise, redirect)
+{
+  entry():
+    call adapt(fb, x, y) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Binary>):
+    exit again(t);
+  Run():
+    let a:Anchors = anchor([x, y]);
+    call call_at(a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Moved();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(y), spent(x), old(dst)] at F.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed(a, [y, x], e);
+    exit raise(F.Gone, saved);
+  Moved(route:Route):
+    let now:Route = retire_gone(a, route);
+    exit redirect(now);
+}
+family H(x:Src, y:Src, fb:Fb<Binary>) exits(branch, raise, enter);
+point H.Kept(current, site, pending) keep(x, y) spent() defs() held();
+point H.Child(child, target, clear) keep() spent(y, x) defs() held();
+arm H.Cont split
+  effects(reads, raises, releases)
+  feedback()
+  exits(branch, raise)
+{
+  entry():
+    call finish(fb) {
+      done -> Done();
+      err -> Failed();
+    }
+  Done(h:Head):
+    exit branch(h);
+  Failed(e:Err):
+    exit raise(H.Kept, e);
+}
+arm H.Enter split
+  effects(allocates, raises, writes, releases, switches_frame)
+  feedback()
+  exits(enter, raise)
+{
+  entry():
+    call new_frame() {
+      ok -> Go();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(H.Kept, e);
+  Go(f:Frame):
+    publish [] retire [spent(y), spent(x)] at H.Child;
+    exit enter(f, next_head);
+}
+family Two(p:Dst, q:Dst, x:Src) exits(next);
+point Two.Done(current, next_head, clear) keep() spent(x) defs(p, q) held();
+arm Two.Both inline
+  effects(writes, releases)
+  feedback()
+  exits(next)
+{
+  entry():
+    let v:B = use(x);
+    let o:O = dup(v);
+    let o2:O = dup(v);
+    publish [p = o, q = o2] retire [spent(x), old(p), old(q)] at Two.Done;
+    exit next();
+}
+"""
+
+VERIFY_CASES = [
+    ('miss after dup',
+     '    guard present(item) else miss;\n    let z:O = dup(unwrap(item));\n',
+     '    let z:O = dup(unwrap(item));\n    guard present(item) else miss;\n', [
+         (146, 19, 'F.Slot', 'facts: unwrap(item) requires present(item), which no dominating fact proves'),
+         (147, 5, 'F.Slot', 'restart: guard present(item) else miss follows dup(unwrap(item)) at base.rop:146: the word cannot restart'),
+     ]),
+    ('interior across runs_python',
+     '    call call_at(a) {',
+     '    let w:B = peek(use(x));\n    call op3(w, w) {', [
+         (168, 5, 'F.Generic', 'borrow: w (heap interior by peek(...) at base.rop:167) crosses call op3 (runs_python), which can invalidate it; pass an anchor the call cannot invalidate'),
+     ]),
+    ('home borrow across runs_python',
+     '    call call_at(a) {',
+     '    let w:B = use(x);\n    call op3(w, w) {', [
+         (168, 5, 'F.Generic', 'borrow: w (read from home by use(x) at base.rop:167) crosses call op3 (runs_python), which can invalidate it; pass an anchor the call cannot invalidate'),
+     ]),
+    ('partial span',
+     '    let _:Unit = drop_all(part);\n',
+     '', [
+         (77, 5, 'fill_or_raise', 'ownership: exit err leaves part (made by case err of fill at base.rop:72) unaccounted'),
+     ]),
+    ('enter unspecified',
+     '    publish [] retire [spent(y), spent(x)] at H.Child;\n    exit enter(f, next_head);',
+     '    exit enter(frame, next_head);', [
+         (213, 5, 'H.Enter', 'control: exit enter(frame, ...): the current frame is not a child frame'),
+         (213, 5, 'H.Enter', 'control: exit enter: no publish names the owner map at the transfer (a point of frame role child)'),
+     ]),
+    ('completion target',
+     '  Done(h:Head):\n    exit branch(h);',
+     '  Done(h:Head):\n    let _:Unit = close_one();\n    exit branch(h);', [
+         (197, 17, 'H.Cont', 'control: h (control value by case done of finish at base.rop:192) is used after call close_one (releases) at base.rop:196, which can invalidate it'),
+     ]),
+    ('join extra owner',
+     '  Fits(s:Scaled51):\n    goto Finish(unscale(s));',
+     '  Fits(s:Scaled51):\n    let k:Anchors = anchor([x, y]);\n    goto Finish(unscale(s));', [
+         (126, 3, 'F.Int', 'ownership: k (made by anchor(...) at base.rop:117) is live on the edge from Fits to Finish, which cannot see it: it is never discharged'),
+     ]),
+    ('join owners',
+     '    guard both(l, r) else miss;\n    let a:Scaled51 = scale(l);\n    let b:Scaled51 = scale(r);\n    call add(a, b) {\n      fits -> Fits();\n      over -> Over();\n    }\n  Fits(s:Scaled51):\n',
+     '    guard both(l, r) else miss;\n    let k:Anchors = anchor([x, y]);\n    let a:Scaled51 = scale(l);\n    let b:Scaled51 = scale(r);\n    call add(a, b) {\n      fits -> Fits();\n      over -> Over();\n    }\n  Fits(s:Scaled51):\n    let _:Unit = drop_anchors(k);\n', [
+         (126, 5, 'F.Int', 'ownership: exit raise leaves k (made by anchor(...) at base.rop:110) unaccounted'),
+         (127, 3, 'F.Int', 'join: at Finish, k is live from Over but consumed by call drop_anchors at base.rop:118 from Fits: incompatible owners'),
+     ]),
+    ('guard after action',
+     '    guard present(item) else miss;',
+     '    let _:Unit = alloc();\n    guard present(item) else miss;', [
+         (147, 5, 'F.Slot', 'restart: guard present(item) else miss follows call alloc at base.rop:146: the word cannot restart'),
+     ]),
+    ('stale interior',
+     '    guard present(item) else miss;\n',
+     '    guard present(item) else miss;\n    let _:Unit = scribble();\n', [
+         (148, 26, 'F.Slot', 'borrow: item (heap interior by slot(...) at base.rop:145) is used after call scribble (writes) at base.rop:147, which can invalidate it'),
+     ]),
+    ('unrelated recipes',
+     '  Check(r:Recipe<Binary>):\n    guard version(o, r) else miss;\n    guard valid(o) else miss;\n    let item:Maybe<B> = slot(o, r);',
+     '  Check(r:Recipe<Binary>):\n    guard version(o, r) else miss;\n    call slot_recipe(fb) {\n      hit -> Other();\n      absent -> Miss();\n    }\n  Other(r2:Recipe<Binary>):\n    guard valid(o) else miss;\n    let item:Maybe<B> = slot(o, r2);', [
+         (150, 25, 'F.Slot', 'facts: call slot requires type_version(o, r2), which no dominating fact proves'),
+     ]),
+    ('duplicate move',
+     '    let b:O = move(k);',
+     '    let b:O = move(h);', [
+         (64, 20, 'take_both', 'ownership: h is used after the move at base.rop:63 vacated it'),
+     ]),
+    ('again without ticket',
+     '  Retry(t:Ticket<Binary>):\n    exit again(t);',
+     '  Retry(t:Ticket<Binary>):\n    let _:Unit = commit(t);\n    exit again(t);', [
+         (165, 5, 'F.Generic', 'again: exit again(t) has no fresh ticket: t was consumed by call commit at base.rop:164'),
+         (165, 5, 'F.Generic', 'again: exit again follows call commit at base.rop:164: the ticket is not fresh'),
+     ]),
+    ('token unaccounted',
+     '  Failed(e:Err):\n    exit raise(F.Kept, e);',
+     '  Failed(e:Err):\n    let extra:O = dup(use(x));\n    exit raise(F.Kept, e);', [
+         (125, 5, 'F.Int', 'ownership: exit raise leaves extra (made by dup(use(x)) at base.rop:124) unaccounted'),
+     ]),
+    ('point keep',
+     '    exit raise(F.Kept, e);\n  Finish',
+     '    exit raise(F.Gone, e);\n  Finish', [
+         (124, 5, 'F.Int', 'points: raise at F.Gone: F.Gone lists x in spent, but x is intact'),
+         (124, 5, 'F.Int', 'points: raise at F.Gone: F.Gone lists y in spent, but y is intact'),
+     ]),
+    ('undeclared effect',
+     '  effects(writes, allocates, raises, releases)\n  feedback()\n  exits(next, miss, raise)',
+     '  effects(writes, raises, releases)\n  feedback()\n  exits(next, miss, raise)', [
+         (119, 5, 'F.Int', 'effects: call box may allocates, which effects(writes, raises, releases) does not declare'),
+     ]),
+    ('requires unproven',
+     '    let l:B = use(x);\n    let r:B = use(y);\n    guard both(l, r) else miss;\n    let a:Scaled51 = scale(l);',
+     '    let l:B = use(x);\n    let r:B = use(y);\n    let a:Scaled51 = scale(l);\n    guard both(l, r) else miss;', [
+         (109, 22, 'F.Int', 'facts: call scale requires inline_int(l), which no dominating fact proves'),
+     ]),
+    ('two outputs one owner',
+     '[p = o, q = o2]',
+     '[p = o, q = o]', [
+         (227, 21, 'Two.Both', 'publish: p and q both take o: two outputs need two owners'),
+         (228, 5, 'Two.Both', 'ownership: exit next leaves o2 (made by dup(v) at base.rop:226) unaccounted'),
+     ]),
+    ('old missing',
+     'old(p), old(q)]',
+     'old(p)]', [
+         (227, 5, 'Two.Both', 'publish: q is bound but its displaced owner is not retired: add old(q)'),
+     ]),
+    ('old twice',
+     'old(p), old(q)]',
+     'old(p), old(q), old(q)]', [
+         (227, 63, 'Two.Both', 'publish: old(q) is retired twice: one home has one displaced owner'),
+     ]),
+    ('use after spent',
+     'at Two.Done;\n',
+     'at Two.Done;\n    let w:B = use(x);\n', [
+         (228, 19, 'Two.Both', 'ownership: x is used after it was spent by publish at Two.Done at base.rop:227'),
+     ]),
+    ('spent twice',
+     'retire [spent(x), old(p)',
+     'retire [spent(x), spent(x), old(p)', [
+         (227, 47, 'Two.Both', 'publish: spent(x) is retired twice: a repeated operand makes one claim on its temporary'),
+     ]),
+    ('again not fresh',
+     '  Retry(t:Ticket<Binary>):\n    exit again(t);',
+     '  Retry(t:Ticket<Binary>):\n    let _:Unit = scribble();\n    exit again(t);', [
+         (165, 5, 'F.Generic', 'again: exit again follows call scribble at base.rop:164: the ticket is not fresh'),
+     ]),
+    ('feedback undeclared',
+     '  feedback(read(entry.kind))\n  exits(next, miss)',
+     '  feedback()\n  exits(next, miss)', [
+         (138, 5, 'F.Slot', 'feedback: call slot_recipe may read entry.kind, which feedback() does not declare'),
+     ]),
+    ('family exits',
+     'arm H.Cont split',
+     'arm H.Cont shared', [
+         (201, 3, 'H.Enter', 'family: exits enter of H.Enter are not exits of the generic arm H.Cont'),
+     ]),
+    ('acquire twice',
+     '    let o:O = dup(v);\n    let o2:O = dup(v);',
+     '    let o:O = acquire(x);\n    let o2:O = acquire(x);', [
+         (226, 16, 'Two.Both', 'ownership: acquire(x): x was already acquired at base.rop:225; a dying source has one owner'),
+     ]),
+    ('borrowed consumed',
+     '  entry():\n    exit done();',
+     '  entry():\n    let _:Unit = drop_anchors(a);\n    exit done();', [
+         (83, 18, 'keep_anchor', 'ownership: call drop_anchors: a is borrowed from the caller (borrows); the macro cannot consume it'),
+     ]),
+    ('macro ensures',
+     'macro take_both(h:InOut<O>, k:InOut<O>) cases(ok(a:O, b:O)) effects(writes) feedback()',
+     'macro take_both(h:InOut<O>, k:InOut<O>) cases(ok(a:O, b:O)) effects(writes) feedback() ensures(ok.inline_int(a))', [
+         (65, 5, 'take_both', 'facts: exit ok ensures inline_int(a), which no dominating fact proves'),
+     ]),
+    ('heap kill',
+     '    guard valid(o) else miss;\n    let item',
+     '    guard valid(o) else miss;\n    let _:Unit = close_one();\n    let item', [
+         (146, 25, 'F.Slot', 'facts: call slot requires type_version(o, r), which no dominating fact proves'),
+         (146, 25, 'F.Slot', 'facts: call slot requires has_values(o), which no dominating fact proves'),
+         (146, 30, 'F.Slot', 'borrow: o (heap interior by as_obj(...) at base.rop:137) is used after call close_one (releases) at base.rop:145, which can invalidate it'),
+         (147, 5, 'F.Slot', 'restart: guard present(item) else miss follows call close_one at base.rop:145: the word cannot restart'),
+     ]),
+    ('join facts',
+     'ensures(next.exact<int>(dst))',
+     'ensures(next.inline_int(dst))', [
+         (127, 5, 'F.Int', 'facts: exit next ensures inline_int(dst), which no dominating fact proves'),
+     ]),
+    ('held',
+     '  entry():\n    call finish(fb) {',
+     '  entry():\n    let k:O = acquire(x);\n    call finish(fb) {', [
+         (197, 5, 'H.Cont', 'points: exit branch: x is acquired by acquire(x) at base.rop:191, but no publish names a point for it'),
+         (197, 5, 'H.Cont', 'ownership: exit branch leaves k (made by acquire(x) at base.rop:191) unaccounted'),
+         (199, 5, 'H.Cont', 'points: raise at H.Kept: H.Kept lists x in keep, but x is acquired by acquire(x) at base.rop:191 with k outstanding'),
+         (199, 5, 'H.Cont', 'ownership: exit raise leaves k (made by acquire(x) at base.rop:191) unaccounted'),
+     ]),
+    ('loop token',
+     '  Body(e:Src, i:Size):\n    advance Body;',
+     '  Body(e:Src, i:Size):\n    let k:Anchors = anchor([e]);\n    advance Body;', [
+         (97, 5, 'walk_all', 'ownership: advance Body: k (made by anchor(...) at base.rop:96) is live at the end of the iteration'),
+     ]),
+    ('spends undeclared',
+     '-> Err effects(releases) feedback() spends(s)\n{',
+     '-> Err effects(releases) feedback()\n{', [
+         (89, 5, 'retire_all', 'ownership: exit result: s is spent by call retire_failed at base.rop:88, which spends() does not declare'),
+     ]),
+    ('reentry identity',
+     '    guard both(l, r) else miss;\n    let a:Scaled51',
+     '    guard both(l, r) else miss;\n    let _:Unit = close_one();\n    let a:Scaled51', [
+         (111, 22, 'F.Int', 'facts: call scale requires inline_int(l), which no dominating fact proves'),
+         (111, 28, 'F.Int', 'borrow: l (read from home by use(x) at base.rop:107) is used after call close_one (releases) at base.rop:110, which can invalidate it'),
+         (112, 22, 'F.Int', 'facts: call scale requires inline_int(r), which no dominating fact proves'),
+         (112, 28, 'F.Int', 'borrow: r (read from home by use(y) at base.rop:108) is used after call close_one (releases) at base.rop:110, which can invalidate it'),
+     ]),
+    ('publish releases',
+     'arm Two.Both inline\n  effects(writes, releases)',
+     'arm Two.Both inline\n  effects(writes)', [
+         (227, 5, 'Two.Both', 'effects: publish at Two.Done may releases, which effects(writes) does not declare'),
+     ]),
+    ('publish point',
+     'point Two.Done(current, next_head, clear) keep() spent(x) defs(p, q)',
+     'point Two.Done(current, next_head, clear) keep(x) spent() defs(p)', [
+         (227, 5, 'Two.Both', 'points: publish at Two.Done: Two.Done does not list q in defs, but q is defined by publish at Two.Done at base.rop:227'),
+         (227, 5, 'Two.Both', 'points: publish at Two.Done: Two.Done lists x in keep, but x is spent by publish at Two.Done at base.rop:227'),
+     ]),
+    ('spends unmet',
+     '    let r:Err = retire_failed(a, s, e);\n    exit result(r);',
+     '    let _:Unit = drop_anchors(a);\n    exit result(e);', [
+         (89, 5, 'retire_all', 'ownership: exit result: spends(s) is declared, but s is intact'),
+     ]),
+
+]
+
+
+# A source acquired from an operand, held by the raise checkpoint
+HELD = """\
+family H(x:Src, fb:Fb<Binary>) exits(next, raise);
+point H.Held(current, site, pending) keep() spent() defs() held(x);
+point H.Done(current, next_head, clear) keep() spent(x) defs() held();
+extern helper keep_o(o:O) cases(ok(), err(e:Err)) effects(raises, releases) pending;
+arm H.A inline effects(writes, releases, raises) feedback() exits(next, raise)
+{
+  entry():
+    let k:O = acquire(x);
+    call check(fb) {
+      ok -> Ok();
+      err -> Failed();
+    }
+  Ok():
+    publish [] retire [spent(x), owned(k)] at H.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(H.Held, e);
+}
+extern helper check(f:Fb<Binary>) cases(ok(), err(e:Err)) effects(raises) pending;
+"""
+
+
+class VerifyTests(unittest.TestCase):
+    def test_base_is_clean(self):
+        self.assertEqual(verify_source(VERIFY_BASE), [])
+
+    def test_negative_fixtures(self):
+        for name, old, new, expected in VERIFY_CASES:
+            with self.subTest(name):
+                self.assertIn(old, VERIFY_BASE)
+                found = verify_source(VERIFY_BASE.replace(old, new, 1))
+                self.assertTrue(expected)
+                self.assertEqual(sorted(found), sorted(expected))
+
+    def test_every_rule_has_a_fixture(self):
+        rules = {message.split(":")[0] for _, _, _, diags in VERIFY_CASES
+                 for _, _, _, message in diags}
+        self.assertEqual(rules, {r.value for r in rop_verify.Rule})
+
+    def test_diagnostic_format(self):
+        src = VERIFY_BASE.replace("    let b:O = move(k);", "    let b:O = move(h);", 1)
+        program = rop_check.check([rop_syntax.parse(src, "core.rop")])
+        self.assertEqual([str(d) for d in rop_verify.verify(program)], [
+            "core.rop:64:20: take_both: ownership: h is used after the move at "
+            "core.rop:63 vacated it"])
+
+    def test_held(self):
+        self.assertEqual(verify_source(HELD), [])
+        src = HELD.replace("held(x);", "held();", 1)
+        self.assertEqual(verify_source(src), [
+            (17, 5, "H.A", "points: raise at H.Held: H.Held does not list x, but x is "
+             "acquired by acquire(x) at base.rop:8 with k outstanding"),
+            (17, 5, "H.A", "ownership: exit raise leaves k (made by acquire(x) at "
+             "base.rop:8) unaccounted"),
+        ])
+
+
+def rop_files() -> list[Path]:
+    return sorted(ROP_DIR.glob("*.rop"))
+
+
+class PilotTests(unittest.TestCase):
+    """The checked-in definitions, rows and pending macros taken at their
+    declared signatures."""
+
+    def test_pilot_is_clean(self):
+        program = rop_verify.load(rop_files())
+        self.assertEqual([str(d) for d in program.diagnostics], [])
+        self.assertEqual(rop_verify.missing_generic(program), ("GetAttr",))
+
+    # Changes to the pilot that the checker refuses
+    MUTATIONS = [
+        ("add.rop", "  effects(writes, allocates, raises, releases)\n",
+         "  effects(writes, raises, releases)\n",
+         ["add.rop:135:5: Add.Int: effects: call box_i64 may allocates, which "
+          "effects(writes, raises, releases) does not declare"]),
+        ("add.rop", "    exit raise(Add.OpFailed, saved);",
+         "    exit raise(Add.BoxFailed, saved);",
+         ["add.rop:170:5: Add.Generic: points: raise at Add.BoxFailed: Add.BoxFailed "
+          "lists x in keep, but x is spent by call retire_failed_call at add.rop:169",
+          "add.rop:170:5: Add.Generic: points: raise at Add.BoxFailed: Add.BoxFailed "
+          "lists y in keep, but y is spent by call retire_failed_call at add.rop:169"]),
+        ("getattr.rop", "    guard present(item) else miss;\n"
+         "    let result:O = dup(unwrap(item));\n",
+         "    let result:O = dup(unwrap(item));\n"
+         "    guard present(item) else miss;\n",
+         ["getattr.rop:54:24: GetAttr.Instance: facts: unwrap(item) requires "
+          "present(item), which no dominating fact proves",
+          "getattr.rop:55:5: GetAttr.Instance: restart: guard present(item) else miss "
+          "follows dup(unwrap(item)) at getattr.rop:54: the word cannot restart"]),
+        ("core.rop", "  spends(s)\n", "",
+         # Without its spends(s), the macro leaves the sources the point
+         # declares spent
+         ["add.rop:170:5: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
+          "lists x in spent, but x is intact",
+          "add.rop:170:5: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
+          "lists y in spent, but y is intact"]),
+    ]
+
+    def test_pilot_mutations(self):
+        for filename, old, new, expected in self.MUTATIONS:
+            with self.subTest(old):
+                files = []
+                for path in rop_files():
+                    text = path.read_text()
+                    if path.name == filename:
+                        self.assertIn(old, text)
+                        text = text.replace(old, new, 1)
+                    files.append(rop_syntax.parse(text, path.name))
+                program = rop_check.check(files)
+                found = [str(d) for d in program.diagnostics + rop_verify.verify(program)]
+                self.assertEqual(found, expected)
+
+
+if __name__ == "__main__":
+    unittest.main()

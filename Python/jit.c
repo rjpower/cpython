@@ -621,7 +621,7 @@ typedef struct {
  * the stub has set), or no frame to go on in the unit at the word
  * returned: the next word, or the same word again after a redispatch.  A
  * status with ESCAPED tests RETIRED before its successor.  No planned arm
- * branches: no status is BRANCH. */
+ * branches except by the BRANCH status of a conditional register arm. */
 static resolved_status
 resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site,
                int status, uint32_t compiled, _PyJitUnit *unit)
@@ -646,6 +646,13 @@ resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *sit
         return (resolved_status){frame, frame->instr_ptr};
     }
     _PyIRWord *next = (status & _PyIR_AGAIN) ? site : site + _PyIR_WordLength(*site);
+    if (status & _PyIR_BRANCH) {
+        /* The word completed at its static target (a conditional branch
+         * arm: BranchTruth's shared arms) */
+        const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*site));
+        assert(fmt->flags & _PyIR_FORWARD);
+        next = site + 1 + _PyIR_FormatDistance(fmt, *site);
+    }
     if ((status & _PyIR_ESCAPED) && (unit->invalid & _PyJIT_RETIRED)) {
         return (resolved_status){frame, next};
     }
@@ -706,6 +713,23 @@ emit_status_cold(_PyJitCompiler *c, uint32_t i, _PyJitLabel status, _PyJitLabel 
     _PyJitAsm_Lea(a, R(RCX), WORD_AT(i));
     _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
     _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[i]);
+    int target = static_target(c->words, i);
+    if (target >= 0 && ((uint32_t)target >= c->nwords || c->labels[target] < 0)) {
+        /* A branch to a word the unit has no block for: it leaves there */
+        if (next < c->nwords && c->labels[next] >= 0) {
+            _PyJitAsm_Lea(a, R(RCX), WORD_AT(next));
+            _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
+            _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[next]);
+        }
+        _PyJitAsm_MovRR(a, R(RAX), R(R13));
+        _PyJitAsm_Jmp(a, c->leave);
+        return;
+    }
+    if (target >= 0) {
+        _PyJitAsm_Lea(a, R(RCX), WORD_AT((uint32_t)target));
+        _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
+        _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[target]);
+    }
     emit_goto(c, next);
 }
 

@@ -28,6 +28,7 @@
 #include "pycore_pystate.h"           // _Py_GetConfig()
 #include "pycore_regcfg.h"
 #include "pycore_rop_metadata.h"      // ROP_HANDLER_Add_Generic
+#include "pycore_rop_rows.h"          // BRANCH_IF_FALSE
 
 #undef SUCCESS
 #undef ERROR
@@ -1037,9 +1038,65 @@ rule_binary_op(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, dst);
 }
 
+/* TO_BOOL and UNARY_NOT: the Truth family (Python/register_ops/truth.rop),
+ * whose register instruction starts on Truth.Generic with the operand in,
+ * dst out and the sense in the immediate; the word installs the arm the
+ * operand calls for. */
+static int
+rule_truth(_PyRegTr *t, const _PyRegOp *src)
+{
+    int use, dst;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, &use));
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Truth_Generic, &use, 1,
+                                  &dst, 1, &op));
+    op->oparg = src->opcode == UNARY_NOT;
+    return _PyRegTr_Push(t, dst);
+}
+
+/* The conditional jumps.  A branch reads its operand and, on the jump
+ * edge, binds the target's parameters as the stack op did, so the rule is
+ * the stack op's with the register instruction's handler and immediate:
+ * the mode of BranchTruth (the jump is taken when the test is true or
+ * false), the sense of BranchNone (the jump is taken when the operand is
+ * None). */
+static int
+rule_branch(_PyRegTr *t, const _PyRegOp *src)
+{
+    int handler, imm;
+    switch (src->opcode) {
+        case POP_JUMP_IF_FALSE:
+            handler = ROP_HANDLER_BranchTruth_Generic, imm = BRANCH_IF_FALSE;
+            break;
+        case POP_JUMP_IF_TRUE:
+            handler = ROP_HANDLER_BranchTruth_Generic, imm = BRANCH_IF_TRUE;
+            break;
+        case POP_JUMP_IF_NONE:
+            handler = ROP_HANDLER_BranchNone_Test, imm = 1;
+            break;
+        default:
+            assert(src->opcode == POP_JUMP_IF_NOT_NONE);
+            handler = ROP_HANDLER_BranchNone_Test, imm = 0;
+            break;
+    }
+    RETURN_IF_ERROR(_PyRegTr_Legacy(t, src));
+    _PyRegOp *op = &t->ops[t->nops - 1];
+    assert(op->opcode == src->opcode);
+    op->opcode = handler;
+    op->oparg = imm;
+    return SUCCESS;
+}
+
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
     [BINARY_OP] = rule_binary_op,
+    [TO_BOOL] = rule_truth,
+    [UNARY_NOT] = rule_truth,
+    [POP_JUMP_IF_FALSE] = rule_branch,
+    [POP_JUMP_IF_TRUE] = rule_branch,
+    [POP_JUMP_IF_NONE] = rule_branch,
+    [POP_JUMP_IF_NOT_NONE] = rule_branch,
     [SWAP] = rule_swap,
 };
 

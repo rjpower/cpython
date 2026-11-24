@@ -512,7 +512,8 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
 
     for row in table.values():
         if row.kind in ("HELPER", "ROUTINE"):
-            check(f"&{row.name}", f"{row.ret} (*)({', '.join(row.params)})", row.name)
+            check(f"&{row.name}", f"{row.ret} (*)({', '.join(row.params) or 'void'})",
+                  row.name)
         elif row.kind == "DESTRUCTOR":
             check(f"&{row.name}", "void (*)(PyObject *)", row.name)
         elif row.kind == "FIELD":

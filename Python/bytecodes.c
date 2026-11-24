@@ -1708,18 +1708,19 @@ dummy_func(
             PyObject *cause = NULL;
             if (oparg > 0) {
                 // A number is not an exception
-                if (!PyValue_IsObject(args[0])) {
+                exc = PyValue_ObjectOrNull(args[0]);
+                if (exc == NULL) {
                     _PyErr_SetString(tstate, PyExc_TypeError,
                                      "exceptions must derive from BaseException");
                     ERROR_IF(true, holding(args));
                 }
-                exc = PyValue_AsKnownObjectBorrow(args[0]);
             }
             // A number is not a cause: do_raise reports it after the
             // exception is made
-            bool cause_is_number = oparg == 2 && !PyValue_IsObject(args[1]);
-            if (oparg == 2 && !cause_is_number) {
-                cause = PyValue_AsKnownObjectBorrow(args[1]);
+            bool cause_is_number = false;
+            if (oparg == 2) {
+                cause = PyValue_ObjectOrNull(args[1]);
+                cause_is_number = cause == NULL;
             }
             /* do_raise consumes independent object owners; homes remain
              * canonical until their semantic input ownership is detached. */
@@ -2119,7 +2120,7 @@ dummy_func(
             _PyErr_StackItem *exc_info = tstate->exc_info;
             if (PyValue_IsNone(exc_value)) {
                 DEAD(exc_value);    // immortal: it owes no count
-                Py_XSETREF(exc_info->exc_value, NULL);
+                Py_CLEAR(exc_info->exc_value);
             }
             else {
                 PyObject *exc = PyValue_AsKnownObjectSteal(exc_value);
@@ -2667,7 +2668,7 @@ dummy_func(
         }
 
         outlined inst(BUILD_INTERPOLATION,
-                (value: consumed, str: consumed object, format[oparg & 1]: consumed
+                (value: consumed, str: consumed object, format[oparg & 1]: consumed object
                  -- interpolation: owned))
             effects(runs_python, releases) exits(next, raise)
         {

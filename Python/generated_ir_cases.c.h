@@ -12986,7 +12986,7 @@ ir_run_POP_EXCEPT(
             _PyErr_StackItem *exc_info = tstate->exc_info;
             if (PyValue_IsNone(exc_value)) {
                 ir_own_A = IR_DETACH(ir_word, A, exc_value);
-                Py_XSETREF(exc_info->exc_value, NULL);
+                Py_CLEAR(exc_info->exc_value);
             }
             else {
                 ir_own_A = IR_DETACH(ir_word, A, exc_value);
@@ -14157,16 +14157,17 @@ ir_run_RAISE_VARARGS(
             PyObject *exc = NULL;
             PyObject *cause = NULL;
             if (oparg > 0) {
-                if (!PyValue_IsObject(args[0])) {
+                exc = PyValue_ObjectOrNull(args[0]);
+                if (exc == NULL) {
                     _PyErr_SetString(tstate, PyExc_TypeError,
                                      "exceptions must derive from BaseException");
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                exc = PyValue_AsKnownObjectBorrow(args[0]);
             }
-            bool cause_is_number = oparg == 2 && !PyValue_IsObject(args[1]);
-            if (oparg == 2 && !cause_is_number) {
-                cause = PyValue_AsKnownObjectBorrow(args[1]);
+            bool cause_is_number = false;
+            if (oparg == 2) {
+                cause = PyValue_ObjectOrNull(args[1]);
+                cause_is_number = cause == NULL;
             }
             Py_XINCREF(exc);
             Py_XINCREF(cause);

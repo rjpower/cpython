@@ -1022,6 +1022,12 @@
      * uop caller is _POP_EXCEPT (G0a5) */ \
     MACRO(Py_XSETREF, \
         ARGS(scalar, consumed object), NONE, EFFECTS(releases), EXITS()) \
+    /* Include/refcount.h: Py_CLEAR(op) sets the lvalue op to NULL, then \
+     * Py_DECREFs its old value if it was not NULL.  The old value's \
+     * finalizer may run Python (releases).  No failure; callbacks: the old \
+     * value's deallocator.  _POP_EXCEPT clears the handled exception */ \
+    MACRO(Py_CLEAR, \
+        ARGS(scalar), NONE, EFFECTS(releases), EXITS()) \
     /* Evidence (G0c8): ceval_macros.h:255-257: in the GIL build the macro is empty (no \
      * statement); in the free-threaded build it reports the thread's quiescent state to \
      * the QSBR reclaimer, which this scoped GIL product never builds. */ \

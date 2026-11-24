@@ -471,7 +471,14 @@ def seed_rows(analysis, table, ctypes, macros, effects_of) -> tuple[list[SeedRow
                         and arg[0].endswith("Dealloc") and arg[0] not in table:
                     passed.add(arg[0])
     for name in sorted(passed - {r.name for r in rows}):
-        rows.append(SeedRow(name, "DESTRUCTOR", [f"DESTRUCTOR({name}, callback_free)"],
+        # The exact type a deallocator frees, by the name _Py<T>_ExactDealloc;
+        # a deallocator of more than one type has no row
+        m = re.fullmatch(r"_Py(\w+?)_ExactDealloc", name)
+        if m is None or "Or" in m.group(1):
+            refused[name] = "a deallocator of no single exact type"
+            continue
+        rows.append(SeedRow(name, "DESTRUCTOR",
+                            [f"DESTRUCTOR({name}, Py{m.group(1)}_Type, callback_free)"],
                             ["ir_records.NOT_RELEASES"], topic(name)))
     return rows, refused
 

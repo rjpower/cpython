@@ -82,6 +82,12 @@ typedef struct _PyRegOp {
     int16_t npop;
     int16_t nimplicit;      // registers live until the op, after in[nread]
     int16_t nout;
+    /* The ingress recipe of the exceptional edge: the handler finds the
+     * last nrecipe implicit inputs at the parameter homes that
+     * operands[recipe ...] number by stack position.  The unwinder moves
+     * them there. */
+    int16_t nrecipe;
+    int recipe;
     int in;                 // index of in[0] in the operand pool
     int out;                // index of out[0]
     int dst;                // the local that dst names instead of out[], -1
@@ -258,6 +264,33 @@ int _PyRegCfg_AssignConstSlots(_PyRegCfg *cfg, PyObject *consts);
 /* Assign the constant slots and encode the ops as the IR of co: the second
  * half of _PyIR_LowerCode() (Python/ir.c). */
 int _PyIR_Assemble(PyCodeObject *co, _PyRegCfg *cfg, _PyCodeIR **result);
+
+/* Whether the recipe of op's exceptional edge supplies the parameter of
+ * stack position k */
+static inline int
+_PyRegOp_RecipeDst(const _PyRegCfg *cfg, const _PyRegOp *op, int k)
+{
+    for (int q = 0; q < op->nrecipe; q++) {
+        if (cfg->operands[op->recipe + q] == k) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Whether register v is a value that op's recipe moves */
+static inline int
+_PyRegOp_RecipeSource(const _PyRegCfg *cfg, const _PyRegOp *op, int v)
+{
+    const int *src = &cfg->operands[op->in + op->nread + op->nimplicit
+                                    - op->nrecipe];
+    for (int q = 0; q < op->nrecipe; q++) {
+        if (src[q] == v) {
+            return 1;
+        }
+    }
+    return 0;
+}
 
 /* The slot of register v: v for a local, its slot for a temporary. */
 static inline int

@@ -180,7 +180,7 @@ class EmissionTests(unittest.TestCase):
                          for k in range(len(ops))}
         entries = _opcode.get_exception_entries(code)
         self.assertTrue(entries)
-        for start, end, target, slot, lasti in entries:
+        for start, end, target, slot, lasti, recipe in entries:
             self.assertNotIn(start, operand_words)
             self.assertNotIn(end, operand_words)
             self.assertNotIn(target, operand_words)

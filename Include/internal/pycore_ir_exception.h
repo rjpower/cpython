@@ -8,7 +8,7 @@
 
 /* Semantic recovery is independent of optional line/column information.
  * The exceptions and the recovery rows are arrays of the code's _PyCodeIR. */
-#define _PyIR_RECOVERY_FIELDS 6
+#define _PyIR_RECOVERY_FIELDS 7
 #define _PyIR_RECOVERY_RECORD (_PyIR_RECOVERY_FIELDS * 4)
 #define _PyIR_EDGE_FALLTHROUGH 0
 #define _PyIR_EDGE_TAKEN 1
@@ -22,6 +22,7 @@ typedef struct {
 
 typedef struct {
     int32_t from, to, edge, handler, exc_slot, lasti;
+    int32_t recipe;             // index + 1 in the code's recipes, or 0
 } _PyIRRecoveryEvent;
 static_assert(sizeof(_PyIRRecoveryEvent) == _PyIR_RECOVERY_RECORD,
               "recovery serialization must not contain padding");
@@ -73,10 +74,15 @@ _PyIRSemantic_EncodeEvent(unsigned char *p, const _PyIRRecoveryEvent *event)
 }
 
 /* Cold readers share the marked, sorted exception-table contract used by
- * runtime lookup. Geometry is passed explicitly for code construction. */
+ * runtime lookup. Geometry is passed explicitly for code construction.
+ * The IR's entries have a fifth field, the ingress recipe of the edge
+ * (_PyCodeIR.recipes); co_exceptiontable's have four. */
 typedef struct {
-    int start, end, target, slot, lasti;
+    int start, end, target, slot, lasti, recipe;
 } _PyIRExceptionEntry;
+
+#define _PyIR_EXCEPTION_FIELDS 5
+#define _PyCODE_EXCEPTION_FIELDS 4
 
 static inline int
 _PyIR_ExceptionVarint(const unsigned char **cursor, const unsigned char *end,
@@ -96,11 +102,11 @@ _PyIR_ExceptionVarint(const unsigned char **cursor, const unsigned char *end,
 }
 
 static inline int
-_PyIR_ExceptionNext(const unsigned char **cursor, const unsigned char *end,
-                    _PyIRExceptionEntry *entry)
+_PyIR_ExceptionDecode(const unsigned char **cursor, const unsigned char *end,
+                      int nfields, _PyIRExceptionEntry *entry)
 {
-    int fields[4];
-    for (int f = 0; f < 4; f++) {
+    int fields[_PyIR_EXCEPTION_FIELDS] = {0};
+    for (int f = 0; f < nfields; f++) {
         const unsigned char *first = *cursor;
         if (*cursor == end || ((**cursor & 128) != (f == 0 ? 128 : 0)) ||
             _PyIR_ExceptionVarint(cursor, end, &fields[f]) < 0)
@@ -117,12 +123,64 @@ _PyIR_ExceptionNext(const unsigned char **cursor, const unsigned char *end,
         return -1;
     }
     *entry = (_PyIRExceptionEntry){fields[0], fields[0] + fields[1],
-                                   fields[2], fields[3] >> 1, fields[3] & 1};
+                                   fields[2], fields[3] >> 1, fields[3] & 1,
+                                   fields[4]};
     return 0;
 }
 
+/* The next entry of an IR exception table */
 static inline int
-_PyIR_ExceptionTableValid(const unsigned char *cursor, const unsigned char *end,
+_PyIR_ExceptionNext(const unsigned char **cursor, const unsigned char *end,
+                    _PyIRExceptionEntry *entry)
+{
+    return _PyIR_ExceptionDecode(cursor, end, _PyIR_EXCEPTION_FIELDS, entry);
+}
+
+/* The recipe of index + 1 in the code's recipes, NULL for none: its count,
+ * then its pairs */
+static inline const int32_t *
+_PyIR_Recipe(const _PyCodeIR *ir, int recipe)
+{
+    return recipe ? &ir->recipes[recipe - 1] : NULL;
+}
+
+/* Whether recipe index + 1 of ir is whole, with sources in the frame and
+ * each home below the handler's floor once */
+static inline int
+_PyIR_RecipeValid(const _PyCodeIR *ir, int recipe, int nlocals, int floor)
+{
+    if (recipe == 0) {
+        return 1;
+    }
+    if (recipe < 0 || (uint32_t)recipe > ir->nrecipes) {
+        return 0;
+    }
+    const int32_t *r = &ir->recipes[recipe - 1];
+    int n = r[0];
+    if (n <= 0 || n > _PyIR_RECIPE_MAX ||
+        (uint32_t)(recipe + 2 * n) > ir->nrecipes)
+    {
+        return 0;
+    }
+    for (int q = 0; q < n; q++) {
+        int src = r[1 + 2 * q], home = r[2 + 2 * q];
+        if (src < nlocals || src >= (int)ir->nslots ||
+            home < nlocals || home >= floor || src == home)
+        {
+            return 0;
+        }
+        for (int p = 0; p < q; p++) {
+            if (r[2 + 2 * p] == home || r[1 + 2 * p] == src) {
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+static inline int
+_PyIR_ExceptionTableValid(const _PyCodeIR *ir, const unsigned char *cursor,
+                          const unsigned char *end,
                           int nwords, int nlocals, int nslots)
 {
     int previous_end = 0;
@@ -131,7 +189,9 @@ _PyIR_ExceptionTableValid(const unsigned char *cursor, const unsigned char *end,
         if (_PyIR_ExceptionNext(&cursor, end, &entry) < 0 ||
             entry.start < previous_end || entry.end <= entry.start ||
             entry.end > nwords || entry.target >= nwords ||
-            entry.slot - entry.lasti < nlocals || entry.slot >= nslots)
+            entry.slot - entry.lasti < nlocals || entry.slot >= nslots ||
+            !_PyIR_RecipeValid(ir, entry.recipe, nlocals,
+                               entry.slot - entry.lasti))
         {
             return 0;
         }

@@ -1367,6 +1367,7 @@ typedef struct {
     int from, to, next, reverse_next, floor;
     /* -1 is a pre-operation error; 0/1 is a committed normal outcome. */
     int phase;
+    int recipe;     // an exceptional edge's ingress recipe, or 0
 } RegisterResumeEdge;
 
 typedef struct {
@@ -1589,8 +1590,8 @@ register_resume_handlers(PyCodeObject *code, RegisterResumeAnalysis *analysis)
     _PyIRSemanticMap semantic = _PyIRSemantic_Stored(code);
     const unsigned char *cursor = semantic.exceptions;
     const unsigned char *end = cursor + semantic.exceptions_size;
-    if (!_PyIR_ExceptionTableValid(cursor, end, analysis->n, analysis->nl,
-                                   analysis->nl + analysis->nt))
+    if (!_PyIR_ExceptionTableValid(_PyCode_IR(code), cursor, end, analysis->n,
+                                   analysis->nl, analysis->nl + analysis->nt))
     {
         PyErr_SetString(PyExc_ValueError, "jump requires a canonical exception table");
         return -1;
@@ -1618,11 +1619,12 @@ register_resume_handlers(PyCodeObject *code, RegisterResumeAnalysis *analysis)
 
 static void
 register_resume_add_edge(RegisterResumeAnalysis *analysis, int from, int to,
-                         int floor, int phase)
+                         int floor, int phase, int recipe)
 {
     int index = analysis->nedges++;
     analysis->edges[index] = (RegisterResumeEdge){from, to,
-        analysis->edge_heads[from], analysis->reverse_heads[to], floor, phase};
+        analysis->edge_heads[from], analysis->reverse_heads[to], floor, phase,
+        recipe};
     analysis->edge_heads[from] = analysis->reverse_heads[to] = index;
 }
 
@@ -1665,13 +1667,14 @@ register_resume_graph(PyCodeObject *code, RegisterResumeAnalysis *analysis)
         register_resume_successors(code, i, next);
         for (int k = 0; k < 2; k++) {
             if (next[k] >= 0 && next[k] < analysis->n) {
-                register_resume_add_edge(analysis, i, next[k], -1, k);
+                register_resume_add_edge(analysis, i, next[k], -1, k, 0);
             }
         }
         _PyIRExceptionEntry handler = analysis->handlers[i];
         if (handler.target >= 0) {
             register_resume_add_edge(analysis, i, handler.target,
-                                     handler.slot - handler.lasti, -1);
+                                     handler.slot - handler.lasti, -1,
+                                     handler.recipe);
         }
     }
     for (uint32_t j = 0; j < source.nrecords; j++) {
@@ -1681,18 +1684,44 @@ register_resume_graph(PyCodeObject *code, RegisterResumeAnalysis *analysis)
         analysis->source_heads[event->from] = (int)j;
         if (event->handler >= 0) {
             register_resume_add_edge(analysis, event->from, event->handler,
-                                     event->exc_slot - event->lasti, event->edge);
+                                     event->exc_slot - event->lasti, event->edge,
+                                     event->recipe);
         }
     }
     return 0;
 }
 
+/* The source home of the value that recipe puts in home, or home */
+static int
+register_recipe_source(const int32_t *recipe, int home)
+{
+    for (int q = 0; recipe != NULL && q < recipe[0]; q++) {
+        if (recipe[2 + 2 * q] == home) {
+            return recipe[1 + 2 * q];
+        }
+    }
+    return home;
+}
+
+/* A recipe writes its homes */
+static void
+register_recipe_writes(PyCodeObject *code, int index, int nl,
+                       unsigned char *null_home)
+{
+    const int32_t *recipe = _PyIR_Recipe(_PyCode_IR(code), index);
+    for (int q = 0; recipe != NULL && q < recipe[0]; q++) {
+        null_home[recipe[2 + 2 * q] - nl] = 0;
+    }
+}
+
 /* Exception and lasti are supplied by unwind. Only preserved-prefix inputs
- * are requirements on the failing instruction's pre-success state. */
+ * are requirements on the failing instruction's pre-success state; the
+ * recipe of the edge moves some of them from elsewhere. */
 static void
 register_resume_error_needs(RegisterResumeAnalysis *analysis, const uint64_t *live,
                              uint64_t *work,
-                             int target, int slot, int lasti)
+                             int target, int slot, int lasti,
+                             const int32_t *recipe)
 {
     if (target < 0) {
         return;
@@ -1701,7 +1730,8 @@ register_resume_error_needs(RegisterResumeAnalysis *analysis, const uint64_t *li
     const uint64_t *needed = live + (size_t)target * analysis->stride;
     for (int j = 0; j < prefix; j++) {
         if (needed[j / 64] & ((uint64_t)1 << (j % 64))) {
-            work[j / 64] |= (uint64_t)1 << (j % 64);
+            int from = register_recipe_source(recipe, analysis->nl + j) - analysis->nl;
+            work[from / 64] |= (uint64_t)1 << (from % 64);
         }
     }
 }
@@ -1938,6 +1968,7 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                 if (handler.lasti) {
                     null_home[handler.slot - nl - 1] = 0;
                 }
+                register_recipe_writes(code, handler.recipe, nl, null_home);
             }
         }
         for (uint32_t r = 0; r < analysis->nsource; r++) {
@@ -1947,6 +1978,7 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                 if (event.lasti) {
                     null_home[event.exc_slot - nl - 1] = 0;
                 }
+                register_recipe_writes(code, event.recipe, nl, null_home);
             }
         }
         /* These facts describe boundary states, never an active child's
@@ -1986,7 +2018,8 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                             _PyIRRecoveryEvent event = analysis->source_events[r];
                             if (event.edge == k) {
                                 register_resume_error_needs(analysis, lane_live, edge, event.handler,
-                                                            event.exc_slot, event.lasti);
+                                                            event.exc_slot, event.lasti,
+                                                            _PyIR_Recipe(_PyCode_IR(code), event.recipe));
                             }
                         }
                         if (lane != REGISTER_REQUIRE_ALL) {
@@ -2029,7 +2062,8 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                  * requirements needed by the handler. */
                 _PyIRExceptionEntry handler = analysis->handlers[i];
                 register_resume_error_needs(analysis, lane_live, work, handler.target,
-                                            handler.slot, handler.lasti);
+                                            handler.slot, handler.lasti,
+                                            _PyIR_Recipe(_PyCode_IR(code), handler.recipe));
                 /* Transparent observation can hide the runtime reader. Use its
                  * recovered handler, never a family-wide NULL capability. */
                 _PyInstr *instr = _PyFrame_InstrAt(frame, i);
@@ -2407,11 +2441,26 @@ register_stopped_state_bind(PyFrameObject *self, RegisterResumeAnalysis *analysi
     return 1;
 }
 
+/* The recipe moves its sources to its homes first; unwind then clears
+ * from the floor */
 static void
 register_context_unwind(RegisterResumeAnalysis *analysis, int *origins,
-                         int slot, int lasti)
+                         int slot, int lasti, const int32_t *recipe)
 {
-    for (int j = Py_MAX(slot - lasti - analysis->nl, 0); j < analysis->nt; j++) {
+    int nl = analysis->nl;
+    if (recipe != NULL) {
+        int moved[_PyIR_RECIPE_MAX];
+        for (int q = 0; q < recipe[0]; q++) {
+            moved[q] = origins[recipe[1 + 2 * q] - nl];
+        }
+        for (int q = 0; q < recipe[0]; q++) {
+            origins[recipe[1 + 2 * q] - nl] = 0;
+        }
+        for (int q = 0; q < recipe[0]; q++) {
+            origins[recipe[2 + 2 * q] - nl] = moved[q];
+        }
+    }
+    for (int j = Py_MAX(slot - lasti - nl, 0); j < analysis->nt; j++) {
         origins[j] = 0;
     }
 }
@@ -2496,7 +2545,8 @@ register_resume_contexts(PyCodeObject *code, RegisterResumeAnalysis *analysis)
             if (handler.target >= 0) {
                 memcpy(error, before, (size_t)nt * sizeof(int));
                 register_context_forget_reads(code, i, analysis, error);
-                register_context_unwind(analysis, error, handler.slot, handler.lasti);
+                register_context_unwind(analysis, error, handler.slot, handler.lasti,
+                                        _PyIR_Recipe(_PyCode_IR(code), handler.recipe));
                 changed |= register_context_join(analysis, handler.target, context,
                                                   saved_before, error);
             }
@@ -2518,7 +2568,8 @@ register_resume_contexts(PyCodeObject *code, RegisterResumeAnalysis *analysis)
                     _PyIRRecoveryEvent event = analysis->source_events[r];
                     if (event.edge == k && event.handler >= 0) {
                         memcpy(error, work, (size_t)nt * sizeof(int));
-                        register_context_unwind(analysis, error, event.exc_slot, event.lasti);
+                        register_context_unwind(analysis, error, event.exc_slot, event.lasti,
+                                                _PyIR_Recipe(_PyCode_IR(code), event.recipe));
                         changed |= register_context_join(analysis, event.handler, after,
                                                       saved_work, error);
                     }
@@ -2929,10 +2980,16 @@ register_caught_slice(PyCodeObject *code, RegisterResumeAnalysis *analysis,
             if (j <= i) {
                 goto done;  /* repeated producer/iteration is not the same owner */
             }
+            /* An exceptional edge releases from its floor, and its recipe
+             * moves values and releases what their homes held */
             int floor = analysis->edges[e].floor;
+            const int32_t *recipe = _PyIR_Recipe(_PyCode_IR(code),
+                                                 analysis->edges[e].recipe);
             for (int h = 0; h < analysis->nt; h++) {
+                int home = analysis->nl + h;
                 if (register_plan_has(plan, h) && floor >= 0 &&
-                    analysis->nl + h >= floor)
+                    (home >= floor ||
+                     register_recipe_source(recipe, home) != home))
                 {
                     goto done;
                 }

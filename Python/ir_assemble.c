@@ -48,6 +48,7 @@ struct assembler {
     buffer a_exceptions;       /* the exception table, in word units */
     buffer a_records;          /* recovery events of the source-only spans */
     buffer a_positions;        /* the position of each */
+    buffer a_recipes;          /* the ingress recipes, int32_t entries */
     uint32_t *a_pcmap;
 };
 
@@ -85,6 +86,7 @@ assemble_free(struct assembler *a)
     PyMem_Free(a->a_exceptions.data);
     PyMem_Free(a->a_records.data);
     PyMem_Free(a->a_positions.data);
+    PyMem_Free(a->a_recipes.data);
     PyMem_Free(a->a_pcmap);
 }
 
@@ -122,11 +124,51 @@ assemble_emit_exception_table_item(struct assembler *a, int value, int msb)
 }
 
 /* See InternalDocs/exception_handling.md for details of layout */
-#define MAX_SIZE_OF_ENTRY 20
+#define MAX_SIZE_OF_ENTRY 25
+
+/* The ingress recipe of op's exceptional edge, as an index + 1 in the
+ * recipe table, or 0: the pairs of a source slot and a parameter's home that
+ * compaction did not already make one.  Equal recipes share an entry. */
+static int
+assemble_recipe(struct assembler *a, _PyRegCfg *cfg, const _PyRegOp *op,
+                int *index)
+{
+    *index = 0;
+    const int *src = &cfg->operands[op->in + op->nread + op->nimplicit
+                                    - op->nrecipe];
+    int32_t entry[1 + 2 * _PyIR_RECIPE_MAX];
+    int n = 0;
+    for (int q = 0; q < op->nrecipe; q++) {
+        int from = _PyRegCfg_Slot(cfg, src[q]);
+        int home = _PyRegCfg_Slot(
+            cfg, _PyReg_CANON(cfg, cfg->operands[op->recipe + q]));
+        if (from != home) {
+            entry[1 + 2 * n] = from;
+            entry[2 + 2 * n] = home;
+            n++;
+        }
+    }
+    if (n == 0) {
+        return SUCCESS;
+    }
+    entry[0] = n;
+    size_t size = (size_t)(1 + 2 * n) * sizeof(int32_t);
+    const int32_t *table = (const int32_t *)a->a_recipes.data;
+    size_t count = a->a_recipes.size / sizeof(int32_t);
+    for (size_t at = 0; at < count; at += 1 + 2 * (size_t)table[at]) {
+        if (table[at] == n && memcmp(&table[at], entry, size) == 0) {
+            *index = (int)at + 1;
+            return SUCCESS;
+        }
+    }
+    RETURN_IF_ERROR(buffer_write(&a->a_recipes, entry, size));
+    *index = (int)count + 1;
+    return SUCCESS;
+}
 
 static int
 assemble_emit_exception_table_entry(struct assembler *a, int start, int end,
-                                    _PyRegCfg *cfg, int h)
+                                    _PyRegCfg *cfg, int h, int recipe)
 {
     RETURN_IF_ERROR(buffer_reserve(&a->a_exceptions, MAX_SIZE_OF_ENTRY));
     int size = end-start;
@@ -143,31 +185,39 @@ assemble_emit_exception_table_entry(struct assembler *a, int start, int end,
     assemble_emit_exception_table_item(a, size, 0);
     assemble_emit_exception_table_item(a, target, 0);
     assemble_emit_exception_table_item(a, slot_lasti, 0);
+    assemble_emit_exception_table_item(a, recipe, 0);
     return SUCCESS;
 }
 
+/* An entry per range of words with one handler and one recipe */
 static int
 assemble_exception_table(struct assembler *a, _PyRegCfg *cfg)
 {
     int ioffset = 0;
-    int handler = -1;
+    int handler = -1, recipe = 0;
     int start = -1;
     for (int i = 0; i < cfg->nops; i++) {
         _PyRegOp *op = &cfg->ops[i];
-        if (op->except != handler) {
+        int op_recipe = recipe;
+        if (op->except >= 0 && op->nwords) {
+            RETURN_IF_ERROR(assemble_recipe(a, cfg, op, &op_recipe));
+        }
+        if (op->except != handler || op_recipe != recipe) {
             if (handler >= 0 && ioffset > start) {
                 RETURN_IF_ERROR(
                     assemble_emit_exception_table_entry(a, start, ioffset,
-                                                        cfg, handler));
+                                                        cfg, handler, recipe));
             }
             start = ioffset;
             handler = op->except;
+            recipe = op_recipe;
         }
         ioffset += op->nwords;
     }
     if (handler >= 0 && ioffset > start) {
         RETURN_IF_ERROR(assemble_emit_exception_table_entry(a, start, ioffset,
-                                                            cfg, handler));
+                                                            cfg, handler,
+                                                            recipe));
     }
     return SUCCESS;
 }
@@ -206,13 +256,14 @@ assemble_source_edge(struct assembler *a, _PyRegCfg *cfg, int from,
         }
         _PyIRRecoveryEvent event = {
             .from = from, .to = to, .edge = edge,
-            .handler = -1, .exc_slot = 0, .lasti = 0,
+            .handler = -1, .exc_slot = 0, .lasti = 0, .recipe = 0,
         };
         if (op->except >= 0) {
             _PyRegBlock *handler = &cfg->blocks[op->except];
             event.handler = handler->word;
             event.exc_slot = cfg->nlocalsplus + handler->startdepth - 1;
             event.lasti = handler->preserve_lasti;
+            RETURN_IF_ERROR(assemble_recipe(a, cfg, op, &event.recipe));
         }
         unsigned char encoded[_PyIR_RECOVERY_RECORD];
         _PyIRSemantic_EncodeEvent(encoded, &event);
@@ -1272,6 +1323,7 @@ make_ir(struct assembler *a, _PyRegCfg *cfg, int nfixed, int nslots,
     size_t nconst = (size_t)cfg->nconst;
     size_t nexc = a->a_exceptions.size;
     size_t nrecords = a->a_records.size / _PyIR_RECOVERY_RECORD;
+    size_t nrecipes = a->a_recipes.size / sizeof(int32_t);
     size_t size = ALIGN8(sizeof(_PyCodeIR))
         + ALIGN8(nwords * sizeof(_PyIRWord))
         + ALIGN8(nconst * sizeof(PyValueBorrow))
@@ -1279,7 +1331,8 @@ make_ir(struct assembler *a, _PyRegCfg *cfg, int nfixed, int nslots,
         + ALIGN8(nfb * sizeof(uint32_t))
         + ALIGN8(nexc)
         + ALIGN8(nrecords * _PyIR_RECOVERY_RECORD)
-        + ALIGN8(nrecords * _PyIR_POSITION_RECORD);
+        + ALIGN8(nrecords * _PyIR_POSITION_RECORD)
+        + ALIGN8(nrecipes * sizeof(int32_t));
     char *block = PyMem_Malloc(size);
     if (block == NULL) {
         PyErr_NoMemory();
@@ -1317,6 +1370,12 @@ make_ir(struct assembler *a, _PyRegCfg *cfg, int nfixed, int nslots,
     if (nrecords) {
         memcpy(p, a->a_positions.data, nrecords * _PyIR_POSITION_RECORD);
     }
+    p += ALIGN8(nrecords * _PyIR_POSITION_RECORD);
+    ir->recipes = (int32_t *)p;
+    if (nrecipes) {
+        memcpy(p, a->a_recipes.data, nrecipes * sizeof(int32_t));
+    }
+    ir->nrecipes = (uint32_t)nrecipes;
     ir->nwords = (uint32_t)nwords;
     ir->nfixed = (uint32_t)nfixed;
     ir->nslots = (uint32_t)nslots;

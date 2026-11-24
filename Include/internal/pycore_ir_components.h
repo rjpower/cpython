@@ -45,9 +45,11 @@
  * in its feedback(...) clause; its cache operands are reads of their
  * fields.  The vocabulary is Tools/cases_generator/ir_contract.py's.
  *
- *   DESTRUCTOR(name, callback_free)
- *       a deallocator reviewed to release nothing: a close through it
- *       `writes` (frees memory) and does not `release`
+ *   DESTRUCTOR(name, type, callback_free)
+ *       a deallocator of objects of exactly type, reviewed to release
+ *       nothing: a close through it requires exact(type) of the value (or
+ *       an inline value, which it does not reach), `writes` (frees memory)
+ *       and does not `release`
  *   INTRINSIC(name, ARGS(...), result, BUILD(gil | free_threaded | all))
  *       a form that the generator treats as the identity or erases in the
  *       named builds
@@ -73,8 +75,13 @@
               ARGS(borrowed), TEST(| nonnull), EFFECTS()) \
     PRIMITIVE(PyValue_IsInlineInt, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(inline_int), EFFECTS()) \
+    /* PyValue_IsObject (Include/internal/pycore_pyvalue.h): bits > 2, in \
+     * pointer space and not tagged.  It is false for NULL (bits 0), so its \
+     * false branch says `inline` only of a value that is not NULL: the \
+     * argument must be.  Every caller in bytecodes.c tests a stack operand \
+     * or an argument slot, which is not NULL */ \
     PRIMITIVE(PyValue_IsObject, int, (PyValueBorrow), \
-              ARGS(borrowed), TEST(object | inline), EFFECTS()) \
+              ARGS(borrowed nonnull), TEST(object | inline), EFFECTS()) \
     /* Inline ints: scaled values, see _PyValue_IntScaled() */ \
     PRIMITIVE(_PyValue_IntScaled, int64_t, (PyValueBorrow), \
               ARGS(borrowed inline_int), SCALAR, EFFECTS()) \
@@ -104,7 +111,7 @@
     /* _PyLong_ExactDealloc (Objects/longobject.c): re-immortalizes a small \
      * int, else _Py_FREELIST_FREE or PyObject_Free; an int holds no \
      * reference, so nothing is released and no Python runs */ \
-    DESTRUCTOR(_PyLong_ExactDealloc, callback_free) \
+    DESTRUCTOR(_PyLong_ExactDealloc, PyLong_Type, callback_free) \
     /* The generic binary operation: value_binary_op -> PyNumber_* -> an \
      * nb_* slot -> any __add__ and friends: runs Python */ \
     HELPER(value_binary_op, PyValue, (int, PyValueBorrow, PyValueBorrow), \
@@ -257,9 +264,10 @@
     MACRO(IR_REPORT_EDGE, ARGS(scalar), NONE, EFFECTS(), EXITS()) \
     /* IR_METHOD_POLY_LOOKUP (ceval_macros.h): method_poly_lookup() reads the \
      * polymorphic entry's payload and loads a guarded class value; NULL is \
-     * a miss that the uop tests (no raise).  Result is the borrowed method */ \
+     * a miss that the uop tests (no raise).  Result is the borrowed method. \
+     * The payload is the site's feedback entry */ \
     MACRO(IR_METHOD_POLY_LOOKUP, ARGS(scalar, object), \
-          VALUE(borrowed), EFFECTS(reads), EXITS()) \
+          VALUE(borrowed), EFFECTS(reads), EXITS(), FEEDBACK(read(entry))) \
     /* Markers that emit no code or a fixed statement \
      * (ir_generator.py: generator_marker, metadata_passthrough, call_effects, \
      * and the prepare_call no-op; IR_MARKER_EFFECTS has an empty set for \

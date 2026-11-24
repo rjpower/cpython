@@ -519,7 +519,9 @@ dummy_func(
                     PyValue_CLOSE(held);
                     DISPATCH_REDIRECT();
                 }
-                next_instr = jump.next;
+                // Unredirected, the call returns the destination it was
+                // given (instrumentation.c), so the word goes on to next
+                assert(jump.next == next_instr);
             }
             val = held;
         }
@@ -4740,10 +4742,11 @@ dummy_func(
         // Contract (G0d1): the iterator is GET_ITER's object; the step
         // (_PyDictIterItem_Next) writes the two locals and may raise; exhaustion
         // completes the step (IR_COMPLETE_STEP: branch, runs Python); a wrong type
-        // or an instrumented unpack word misses.
+        // or an instrumented unpack word misses. A step continues after the
+        // unpack word (`next_instr++`), not at the next word: jump (G0d1, V12).
         ir_only op(_FOR_ITER_DICT_ITEMS,
                 (iter: assumed(object) by GET_ITER, null_or_index -- iter, null_or_index, unused))
-            effects(runs_python) exits(next, branch, raise, miss)
+            effects(runs_python) exits(jump, branch, raise, miss)
         {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(Py_TYPE(iter_o) != &PyDictIterItem_Type);

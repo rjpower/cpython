@@ -317,7 +317,8 @@ class ErrorEffectTests(unittest.TestCase):
                 "leaf pure inst(LOAD_CONST,", "pure inst(LOAD_CONST,", 1).replace(
                 "inst(LOAD_CONST, (-- value: owned))\n            effects(reads) exits(next)",
                 "inst(LOAD_CONST, (-- value: owned))\n"
-                "            effects(reads, raises) exits(next, raise)", 1))
+                # The moved next_instr is where the word continues (V12)
+                "            effects(reads, raises) exits(jump, raise)", 1))
             altered = analyzer.analyze_files([str(changed)])
             instruction = altered.instructions["LOAD_CONST"]
             self.assertIsNotNone(ir_generator.operand_error_sources(instruction))
@@ -447,7 +448,8 @@ class ErrorEffectTests(unittest.TestCase):
              r"unsupported generator-entry recipient"),
             ("IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);",
              "IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg + 1);",
-             r"IR_COMPLETE_STEP takes 3 variables"),
+             # V13, before the recipe's "IR_COMPLETE_STEP takes 3 variables"
+             r"_SEND: IR_COMPLETE_STEP's target is `oparg \+ 1`, which is no operand"),
             ("EXIT_IF(!PyValue_IsNone(val));",
              "PyValue *alias = &val; EXIT_IF(!PyValue_IsNone(val));",
              declared + r"uses `val` in a form the walk does not model"),

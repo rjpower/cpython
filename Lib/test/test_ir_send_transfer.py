@@ -86,7 +86,9 @@ class SendTransferTests(unittest.TestCase):
             changed.write_text(text.replace(marker, marker.replace("oparg", "oparg + 1"), 1))
             analysis = analyzer.analyze_files([str(changed)])
             formats = ir_generator.compute_formats(analysis)
-            with self.assertRaisesRegex(SyntaxError, "IR_COMPLETE_STEP takes 3 variables"):
+            # V13 refuses a target that is no operand before the recipe
+            # check ("IR_COMPLETE_STEP takes 3 variables") sees it
+            with self.assertRaisesRegex(SyntaxError, r"IR_COMPLETE_STEP's target is `oparg \+ 1`, which is no operand"):
                 ir_generator.handler_contracts(analysis, formats)
 
 

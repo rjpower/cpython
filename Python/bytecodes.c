@@ -669,15 +669,21 @@ dummy_func(
         // The one guarded form for a value that is None or an instance of a
         // type with no __bool__ or __len__ (the version covers those
         // slots): None is false, any such instance true.
-        op(_GUARD_NONE_OR_TYPE_VERSION, (type_version/2, value -- value)) {
+        op(_GUARD_NONE_OR_TYPE_VERSION, (type_version/2, value: object -- value: object))
+            effects(reads) exits(next, miss)
+        {
             assert(type_version != 0);
             if (!PyValue_IsNone(value)) {
                 PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(value));
-                EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version);
+                EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version,
+                        "a value other than None must have the type version the word was specialized for");
             }
         }
 
-        op(_TRUTH_NONE_OR_PLAIN, (value -- res, v)) {
+        op(_TRUTH_NONE_OR_PLAIN,
+                (value: consumed -- res: owned exact(PyBool_Type), v: moved(value)))
+            effects() exits(next)
+        {
             res = PyValue_IsNone(value) ? PyValue_False : PyValue_True;
             v = value;
             DEAD(value);

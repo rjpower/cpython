@@ -1866,7 +1866,7 @@ dummy_func(
          * (its branch) runs the consumer's arm of the completion routine
          * (Python/ceval_routines.h), which returns from this frame for
          * RETURN and continues at the send's exit for the others. */
-        boundary(SEND) at(last) yields(delegated) completes(
+        boundary(SEND) at(last) yields(delegated) completion(send) completes(
             RETURN: exits(return, raise),
             STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));
 
@@ -1954,7 +1954,7 @@ dummy_func(
         /* SEND_GEN enters the generator's frame: the delegated yield and
          * the consumer's arm run when that frame yields or returns to this
          * word (Python/ceval_routines.h), not in this word's uops */
-        boundary(SEND_GEN) at(enter) yields(delegated) completes(
+        boundary(SEND_GEN) at(enter) yields(delegated) completion(send) completes(
             RETURN: exits(return, raise),
             STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));
 
@@ -2214,7 +2214,7 @@ dummy_func(
 
         /* As SEND's variants, for a throw into the delegated generator
          * that ended it: no delegated yield */
-        boundary(CLEANUP_THROW) at(last) completes(
+        boundary(CLEANUP_THROW) at(last) completion(throw) completes(
             RETURN: exits(return, raise),
             STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));
 

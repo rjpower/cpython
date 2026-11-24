@@ -211,6 +211,8 @@ class GeneratorBoundary:
     base: str
     # Where the variant departs (analyzer.Boundary.at), as its clause states
     at: str
+    # The completion its consumer completes (analyzer.Boundary.completion)
+    completion: str
     yielded: str = "NONE"
     completed: str = "NONE"
     resume: str = "NONE"
@@ -234,6 +236,11 @@ GENERATOR_COMPLETIONS = {
     "POP_TOP": ("GEN_COMPLETE_POP_TOP", ("branch", "raise")),
 }
 
+# The completion step that a variant's completion(...) names: the kind of
+# its departing uop's IR_COMPLETE_STEP.  A throw's completion continues at
+# the word's exit (GEN_THROWING in the completed table).
+GENERATOR_COMPLETION_KINDS = {"send": "_PY_IR_SEND", "throw": "_PY_IR_SEND_THROW"}
+
 # The resume routine's arms, by the consumer that a yield's variant fuses
 GENERATOR_RESUMES = {"SEND": "GEN_RESUME_SEND", "STORE_LOCAL": "GEN_RESUME_STORE"}
 
@@ -251,8 +258,8 @@ def generator_boundaries(analysis: Analysis) -> dict[str, GeneratorBoundary]:
         if clause is None:
             clause = family
         elif family is not None and (
-                (clause.yields, clause.completes, clause.resumes) !=
-                (family.yields, family.completes, family.resumes)):
+                (clause.yields, clause.completion, clause.completes, clause.resumes) !=
+                (family.yields, family.completion, family.completes, family.resumes)):
             raise analysis_error(f"boundary({name}) may differ from its family's "
                                  f"boundary({family.source}) only in at(...)", clause.where)
         if clause is None:
@@ -268,13 +275,13 @@ def generator_boundaries(analysis: Analysis) -> dict[str, GeneratorBoundary]:
                 raise analysis_error(f"boundary({clause.source}): {consumer} has no "
                                      "arm in the completion routine", clause.where)
             result[f"{name}_XFER_{consumer}"] = GeneratorBoundary(
-                name, clause.at, clause.yields, consumer, exits=exits)
+                name, clause.at, clause.completion, clause.yields, consumer, exits=exits)
         for consumer in clause.resumes:
             if consumer not in GENERATOR_RESUMES:
                 raise analysis_error(f"boundary({clause.source}): {consumer} has no "
                                      "arm in the resume routine", clause.where)
             result[f"{name}_XFER_{consumer}"] = GeneratorBoundary(
-                name, clause.at, resume=consumer)
+                name, clause.at, clause.completion, resume=consumer)
     return result
 
 
@@ -283,9 +290,11 @@ def boundary_departure(uop: UopRecord, boundary: GeneratorBoundary,
     """The departing (last) uop of a generator-boundary variant, with the
     exits its boundary(...) clause declares: a delegated yield takes the
     place of its fall-through, and a completion that returns takes the
-    place of its branch, which runs the consumer.  A variant that departs
-    at(enter) yields and completes in the frame that it enters, and its
-    uop keeps its exits."""
+    place of its branches, which run the consumer.  That every branch is a
+    completion is checked against the lowered completions, not assumed
+    (check_boundary_expansion()).  A variant that departs at(enter) yields
+    and completes in the frame that it enters, and its uop keeps its
+    exits."""
     transfers = uop.transfers
     if boundary.at == "enter":
         if not any(t.kind == ENTER_FRAME for t in transfers):
@@ -314,6 +323,7 @@ BOUNDARY_EXIT_KINDS = {"yield": YIELD, "return": RETURN, "branch": BRANCH,
 
 def check_boundary_expansion(name: str, boundary: GeneratorBoundary,
                              record: OperationRecord, reached: set[str],
+                             completions: list[tuple[Token, str]],
                              where: Token) -> None:
     """VT1 and VT3 over the expansion of a generator-boundary variant: the
     exits that its emitted body reaches (reached: IR_GEN_YIELD, the yield
@@ -321,7 +331,13 @@ def check_boundary_expansion(name: str, boundary: GeneratorBoundary,
     completion arm of its consumer for "complete", are each an exit of
     its record, and each exit that its boundary(...) clause adds is
     reached.  Lowering grants nothing.  A variant that departs at(enter)
-    reaches its enter and nothing that the clause adds."""
+    reaches its enter and nothing that the clause adds.
+
+    completions are the generator completions that the body lowers, each
+    IR_COMPLETE_STEP's token and kind.  Each is of the kind that the
+    clause's completion(...) names, and the departing uop's completion
+    transfers (boundary_departure()) are exactly at these sites: a branch
+    of any other kind is refused, not taken for a completion."""
     if boundary.at == "enter":
         if reached != {"enter"}:
             raise analysis_error(f"{name}: departs at(enter), and its expansion "
@@ -336,6 +352,17 @@ def check_boundary_expansion(name: str, boundary: GeneratorBoundary,
         if omitted:
             raise analysis_error(f"{name}: its expansion reaches {sorted(omitted)}, "
                                  "which its boundary(...) clause omits", where)
+    for tkn, kind in completions:
+        if kind != GENERATOR_COMPLETION_KINDS.get(boundary.completion):
+            raise analysis_error(f"{name}: completes with {kind}, and its boundary(...) "
+                                 f"clause declares completion({boundary.completion})", tkn)
+    if boundary.at == "last" and boundary.completed != "NONE":
+        sites = {id(tkn) for tkn, _ in completions}
+        for t in record.uops[-1].transfers:
+            if t.kind in (BRANCH, RETURN) and (t.site is None or id(t.site) not in sites):
+                line = t.site.line if t.site is not None else "?"
+                raise analysis_error(f"{name}: {record.uops[-1].name}'s {t.kind.lower()} "
+                                     f"at line {line} is no generator completion", where)
     kinds = {t.kind for uop in record.uops for t in uop.transfers}
     for exit in sorted(exits):
         if BOUNDARY_EXIT_KINDS[exit] not in kinds:
@@ -3521,8 +3548,10 @@ class IREmitter(Emitter):
         self.error_finalized = False
         self.error_local_dst = False
         self.generator_boundary = None
-        # The exits that a generator-boundary variant's body reaches
+        # The exits that a generator-boundary variant's body reaches, and
+        # the completions it lowers (IR_COMPLETE_STEP's token and kind)
         self.boundary_reached: set[str] = set()
+        self.boundary_completions: list[tuple[Token, str]] = []
         self.send_source_parts = None
         self.error_redispatch_origin = None
         self.error_checkpoint_sites = {}
@@ -5638,6 +5667,7 @@ class IREmitter(Emitter):
             self.emit("IR_GEN_COMPLETE(ir_completed);\n")
             self.emit("}\n")
             self.boundary_reached.add("complete")
+            self.boundary_completions.append((tkn, kind))
             self.abrupt_operand_sources.add(id(tkn))
             self.error_terminal_sources.add(id(tkn))
             self.error_finalized = True
@@ -6939,7 +6969,8 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     emit_handler(record, emitter, out, {})
     if record.generator_boundary is not None:
         check_boundary_expansion(name, record.generator_boundary, record,
-                                 emitter.boundary_reached, inst.where)
+                                 emitter.boundary_reached,
+                                 emitter.boundary_completions, inst.where)
     check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
     ir_leaf.check_leaf(record, [p for p in inst.parts if isinstance(p, Uop)])
 
@@ -7117,6 +7148,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     emitter.uop_index = 0
     emitter.generator_boundary = record.generator_boundary
     emitter.boundary_reached = set()
+    emitter.boundary_completions = []
     emitter.pending_owner = None
     emitter.close_count = 0
     emitter.shape_read_guards = 0
@@ -9315,7 +9347,7 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
             if column == "Yielded" and boundary.yielded == "DELEGATED":
                 target = "1"
             elif column == "Completed" and boundary.completed != "NONE":
-                target = ("GEN_THROWING | " if boundary.base == "CLEANUP_THROW" else ""
+                target = ("GEN_THROWING | " if boundary.completion == "throw" else ""
                           ) + GENERATOR_COMPLETIONS[boundary.completed][0]
             elif column == "Resume":
                 if boundary.resume != "NONE":

@@ -3576,26 +3576,32 @@ class ObjectRowTests(unittest.TestCase):
         self.assertEqual([r() for r in refs], [None, None])
 
 
-SEND_CLAUSE = """        boundary(SEND) at(last) yields(delegated) completes(
+SEND_CLAUSE = """        boundary(SEND) at(last) yields(delegated) completion(send) completes(
             RETURN: exits(return, raise),
             STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));"""
 SEND_GEN_CLAUSE = SEND_CLAUSE.replace("boundary(SEND) at(last)",
                                       "boundary(SEND_GEN) at(enter)")
-CLEANUP_CLAUSE = """        boundary(CLEANUP_THROW) at(last) completes(
+CLEANUP_CLAUSE = """        boundary(CLEANUP_THROW) at(last) completion(throw) completes(
             RETURN: exits(return, raise),
             STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));"""
+
+
+def expand_variant(analysis, formats, name):
+    "Generate the generator-boundary variant name to no output; its emitter"
+    insts = ir_generator.handler_instructions(analysis)
+    out = ir_generator.CWriter.null()
+    emitter = ir_generator.IREmitter(out, analysis, formats)
+    emitter.handler_format = formats[name]
+    emitter.allowed_error_checkpoints = None
+    ir_generator.generate_handler(name, insts[name], formats[name], emitter, out)
+    return emitter
 
 
 def expand_variants(analysis):
     "Generate each generator-boundary variant to no output"
     formats = ir_generator.compute_formats(analysis)
-    insts = ir_generator.handler_instructions(analysis)
     for name in ir_generator.generator_boundaries(analysis):
-        out = ir_generator.CWriter.null()
-        emitter = ir_generator.IREmitter(out, analysis, formats)
-        emitter.handler_format = formats[name]
-        emitter.allowed_error_checkpoints = None
-        ir_generator.generate_handler(name, insts[name], formats[name], emitter, out)
+        expand_variant(analysis, formats, name)
 
 
 class BoundaryTests(unittest.TestCase):
@@ -3687,6 +3693,41 @@ class BoundaryTests(unittest.TestCase):
         # A native send yields and completes in its own uops
         self.refuses([(SEND_CLAUSE, SEND_CLAUSE.replace("at(last)", "at(enter)"))],
                      r"SEND\w*_XFER_\w+: departs at\(enter\), and its expansion reaches")
+
+    def test_completion_is_declared(self):
+        # completion(...) names the completion step's kind; GEN_THROWING in
+        # the completed table comes from completion(throw)
+        boundaries = ir_generator.generator_boundaries(analysis)
+        self.assertEqual(boundaries["CLEANUP_THROW_XFER_POP_TOP"].completion, "throw")
+        self.assertEqual(boundaries["SEND_GEN_XFER_POP_TOP"].completion, "send")
+        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace("completion(throw)",
+                                                              "completion(send)"))],
+                     r"CLEANUP_THROW_XFER_\w+: completes with _PY_IR_SEND_THROW, and its "
+                     r"boundary\(\.\.\.\) clause declares completion\(send\)")
+        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace(" completion(throw)", ""))],
+                     r"boundary\(CLEANUP_THROW\): completes\(\.\.\.\) and "
+                     r"completion\(send\) or completion\(throw\) go together")
+
+    def test_completion_transfers_are_completion_sites(self):
+        # The departing uop's branches (returns, in a RETURN variant) are the
+        # completions that the body lowers; any other branch is refused
+        formats = ir_generator.compute_formats(analysis)
+        with cases.handle_stderr():
+            for name in ("SEND_VIRTUAL_XFER_POP_TOP", "SEND_VIRTUAL_XFER_RETURN"):
+                emitter = expand_variant(analysis, formats, name)
+                record = records[name]
+                boundary = record.generator_boundary
+                completions = emitter.boundary_completions
+                self.assertTrue(completions)
+                ir_generator.check_boundary_expansion(
+                    name, boundary, record, emitter.boundary_reached, completions,
+                    record.instruction.where)
+                with self.subTest(name=name), self.assertRaisesRegex(
+                        SyntaxError, rf"{name}: _SEND_VIRTUAL's (branch|return) at line "
+                                     r"\d+ is no generator completion"):
+                    ir_generator.check_boundary_expansion(
+                        name, boundary, record, emitter.boundary_reached, completions[1:],
+                        record.instruction.where)
 
     def test_member_clause_differs_only_in_departure(self):
         self.refuses([(SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace("HOME, ", ""))],

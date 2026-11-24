@@ -84,6 +84,3 @@ jit_template_Add_Int(_PyJitWordCx *cx)
     _PyJitLower_ColdEnd(cx);
 }
 
-const _PyJitTemplate _PyJit_RopTemplates[ROP_NUM_HANDLERS] = {
-    [ROP_HANDLER_Add_Int - ROP_FIRST_HANDLER] = jit_template_Add_Int,
-};

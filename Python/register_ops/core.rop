@@ -43,38 +43,77 @@ extern primitive present(m:Maybe<B>) -> Bool
 // Adaptation (addendum section 2): rows around the adaptive counter and
 // the coherent recipe store.  No C code picks a handler number.
 
+// True (quiet) when the counter has not triggered, and then advances it; a
+// shared or absent entry never triggers and is not written.
 extern helper tick<K>(f:Fb<K>)
   cases(quiet(), due())
   effects(reads, writes)
   feedback(read(counter), write(counter))
-  pending;
+  c _PyFb_TickQuiet as bool_cases
+  evidence(
+    review: "Reviewed P2. ceval_macros.h: the old _SPECIALIZE_* ops' test and advance"
+            "of the counter (_PyFb_CounterTriggers, _PyFb_AdvanceCounter).",
+    contract: "No memory, no Python, no failure. Quiet: the counter was advanced."
+              "Due: the counter was left as it was; the shared header's counter is"
+              "unreachable, so it is always quiet and never written.");
 
 extern helper backoff<K>(f:Fb<K>) -> Unit
   effects(writes)
   feedback(write(counter))
-  pending;
+  c _PyRop_Backoff as unit
+  evidence(
+    review: "Reviewed P2. specialize.c unspecialize(): the counter takes"
+            "adaptive_counter_backoff(counter), the existing constants.",
+    contract: "One store to the entry's counter. No memory, no Python, no failure.");
 
-extern helper install<K>(f:Fb<K>, c:Candidate<K>)
+// Publishes the candidate arm's handler in the word at `at` and records
+// it in the entry; `changed` carries the proof that the word now selects a
+// different arm.  A shared entry, a lost race with instrumentation and a
+// word that already selects the arm give blocked or same.
+extern helper install<K>(at:Site, f:Fb<K>, c:Candidate<K>)
   cases(changed(t:Ticket<K>), same(), blocked())
   effects(reads, writes, allocates)
   feedback(read(entry), write(entry), write(handler))
-  pending;
+  c _PyRop_Install as ticket_status
+  evidence(
+    review: "Reviewed P2. specialize.c specialize_handler(): set_opcode, the"
+            "cooldown counter and fb_record, in the old order.",
+    contract: "Never raises, runs no Python. changed: the word's handler is the"
+              "candidate and the counter has the cooldown. same: the word already"
+              "had it. blocked: the entry is the shared header or instrumentation"
+              "won the word; nothing was written.");
 
 // The call boundary (operation dictionary): anchors, retirement after a
-// failed or abandoned call.  Their bodies come with P2.
+// failed or abandoned call.
 
-macro anchor_for_call(s:Span<Src>) -> Anchors
-  effects()
+// An anchor is the value read from each source, held by an owner of its own
+// when the source is a local that the call could reassign.  A temporary is
+// held by its home.
+extern helper anchor_for_call(s:Span<Src>) -> Anchors
+  effects(allocates)
   feedback()
-  pending;
+  c _PyRop_AnchorForCall as handle
+  evidence(
+    review: "Reviewed P2. pycore_rop_rows.h: PyValue_DUP of each local source.",
+    contract: "At most 4 sources. Never fails: the owners are counted references of"
+              "values already held by homes. The sources are left in their homes.");
 
-macro retire_failed_call(a:Anchors, s:Span<Src>, e:Err) -> Err
+extern helper retire_failed_call(a:Anchors, s:Span<Src>, e:Err) -> Err
   effects(releases)
   feedback()
   spends(s)
-  pending;
+  c _PyRop_RetireFailedCall as handle
+  evidence(
+    review: "Reviewed P2. pycore_rop_rows.h: the closes of the old BINARY_OP error"
+            "path, with the pending exception set aside around them.",
+    contract: "Closes the anchors' owners, then takes each temporary source out of"
+              "its home in the order listed and closes it. The exception that was"
+              "pending is pending again on return. A finalizer may run Python.");
 
-macro retire_abandoned(a:Anchors, r:Route) -> Route
+extern helper retire_abandoned(a:Anchors, r:Route) -> Route
   effects(releases)
   feedback()
-  pending;
+  c _PyRop_RetireAbandoned as handle
+  evidence(
+    review: "Reviewed P2. pycore_rop_rows.h: closes the anchors' owners.",
+    contract: "Closes the anchors' owners only; the route is returned as it came.");

@@ -20,6 +20,7 @@
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
 #include "pycore_opcode_utils.h"  // RESUME_AT_FUNC_START
 #include "pycore_pylifecycle.h"   // _PyOS_URandomNonblock()
+#include "pycore_rop_rows.h"      // _PyRop_Install()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_unicodeobject.h" // _PyUnicodeASCIIIter_Type
 #include "pycore_value_ops.h"     // _PyObject_GenericGetAttrValue()
@@ -787,6 +788,35 @@ unspecialize(_PyInstr *instr)
         assert(!is_shared_entry(h));
         set_counter(h, adaptive_counter_backoff(load_counter(h)));
     }
+}
+
+/* The adaptation rows of the register instruction families
+ * (Python/register_ops/core.rop; pycore_rop_rows.h). */
+
+void
+_PyRop_Backoff(_PyFbHeader *h)
+{
+    assert(!is_shared_entry(h));
+    set_counter(h, adaptive_counter_backoff(load_counter(h)));
+}
+
+int
+_PyRop_Install(_PyInstr *instr, _PyFbHeader *h, int handler)
+{
+    if (is_shared_entry(h)) {
+        return -1;
+    }
+    /* A nomination that does not change the word still consumes the
+     * attempt, so the site does not sample again at once */
+    set_counter(h, adaptive_counter_cooldown());
+    if (IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr)) == handler) {
+        return 0;
+    }
+    if (!set_opcode(instr, handler)) {
+        return -1;
+    }
+    fb_record(instr, h, handler);
+    return 1;
 }
 
 static FunctionSignature function_signature(PyCodeObject *code);

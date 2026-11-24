@@ -4,7 +4,7 @@
 // Do not edit!
 //
 // Arms left out, and what blocks each:
-//   Add.Generic: pending: anchor_for_call, backoff, binary_at_origin, install, retire_abandoned, retire_failed_call, tick
+//   Add.Generic: pending: binary_at_origin
 //   GetAttr.Instance: pending: admitted_instance_slot, borrow_value_slot, instance_version, present, valid_inline_values
 
 /* A family with no generic arm cannot miss: no word selects its arms yet. */

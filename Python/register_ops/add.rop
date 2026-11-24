@@ -107,7 +107,7 @@ macro adapt_before_use_add(f:Fb<Binary>, x:Src, y:Src)
     branch both_inline_int(use(x), use(y)) -> Chosen(), Other();
   Chosen():
     let c:Candidate<Binary> = candidate(Add.Int);
-    call install(f, c) {
+    call install(site, f, c) {
       changed -> Changed();
       same -> Run();
       blocked -> Run();

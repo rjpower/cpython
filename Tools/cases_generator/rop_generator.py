@@ -290,6 +290,16 @@ def template_texts(p: Products) -> tuple[dict[str, list[str]], dict[str, str]]:
     return made, refused
 
 
+def template_arm_names(paths: list[Path] | None = None) -> list[str]:
+    """The C names of the arms that have a template, for the one table of
+    templates that jit_template_generator.py writes"""
+    program = rop_check.load(paths or sorted(ROP_DIR.glob("*.rop")))
+    if program.diagnostics:
+        raise GenerateError("\n".join(str(d) for d in program.diagnostics))
+    made, _ = template_texts(lower_all(program, number_arms(program)))
+    return [c_name(name) for name in made]
+
+
 def write_templates(out: TextIO, p: Products, sources: list[str]) -> None:
     made, refused = template_texts(p)
     write_header(__file__, sources, out)
@@ -299,10 +309,6 @@ def write_templates(out: TextIO, p: Products, sources: list[str]) -> None:
     out.write("\n")
     for lines in made.values():
         out.write("\n".join(lines) + "\n\n")
-    out.write("const _PyJitTemplate _PyJit_RopTemplates[ROP_NUM_HANDLERS] = {\n")
-    for name in made:
-        out.write(f"    [{handler(name)} - ROP_FIRST_HANDLER] = jit_template_{c_name(name)},\n")
-    out.write("};\n")
 
 
 # Metadata

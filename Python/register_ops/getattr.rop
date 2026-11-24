@@ -123,7 +123,7 @@ extern helper classify_getattr(v:B, at:Site, f:Fb<Attr>, n:Name)
   cases(instance(r:Recipe<Attr>), shape(r:Recipe<Attr>), module(r:Recipe<Attr>),
         hint(r:Recipe<Attr>), value_slot(r:Recipe<Attr>), pointer_slot(r:Recipe<Attr>),
         class_(r:Recipe<Attr>), nondescriptor_values(r:Recipe<Attr>),
-        nondescriptor_no_dict(r:Recipe<Attr>), none())
+        nondescriptor_no_dict(r:Recipe<Attr>), getset(r:Recipe<Attr>), none())
   effects(reads, writes, allocates)
   feedback(read(entry), write(entry))
   c _PyAttr_ClassifyGetAttr as case_index
@@ -162,6 +162,7 @@ macro adapt_before_use_getattr(f:Fb<Attr>, o:Src, n:Name)
       class_ -> LClass();
       nondescriptor_values -> LNonDescriptorValues();
       nondescriptor_no_dict -> LNonDescriptorNoDict();
+      getset -> LGetSet();
       none -> Other();
     }
   Instance(ri:Recipe<Attr>):
@@ -236,6 +237,13 @@ macro adapt_before_use_getattr(f:Fb<Attr>, o:Src, n:Name)
       same -> Run();
       blocked -> Run();
     }
+  LGetSet(rGetSet:Recipe<Attr>):
+    let cLGetSet:Candidate<Attr> = candidate(GetAttr.GetSet, rGetSet);
+    call install(site, f, cLGetSet) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
   Other():
     let _:Unit = backoff(f);
     exit run();
@@ -243,6 +251,76 @@ macro adapt_before_use_getattr(f:Fb<Attr>, o:Src, n:Name)
     exit changed(t);
   Run():
     exit run();
+}
+
+// A getset descriptor with a value getter, found under the owner's type
+// version.  The getter runs Python, so the call is anchored like Generic's;
+// a miss before it leaves the word to Generic.
+macro getset_at_origin(recipe:Recipe<Attr>, a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_getset_read(recipe, arg(a, 0)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+extern helper value_getset_read(recipe:Recipe<Attr>, v:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyAttr_GetSetRead as value_or_null
+  evidence(
+    review: "descrobject.c _PyGetSet_ValueRead: the descriptor's value getter, called with the owner.",
+    contract: "The descriptor is loaded from the recipe inside the call and the owner is borrowed, as the old handler did; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (the getter).");
+
+arm GetAttr.GetSet inline
+  effects(runs_python, raises, releases)
+  feedback(read(entry))
+  exits(next, miss, raise, redirect)
+{
+  entry():
+    call admitted_recipe(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    let a:Anchors = anchor_for_call([obj]);
+    call getset_at_origin(r, a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(obj), old(dst)] at GetAttr.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [obj], e);
+    exit raise(GetAttr.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+  Miss():
+    exit miss();
 }
 
 arm GetAttr.Generic shared

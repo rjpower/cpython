@@ -561,11 +561,11 @@ def rop_files() -> list[Path]:
     return sorted(ROP_DIR.glob("*.rop"))
 
 
-def at(filename: str, text: str, column: int | None = None) -> str:
-    """filename:line, and :column if given, of the first line of the
-    checked-in definition file that contains text"""
+def at(filename: str, text: str, column: int | None = None, nth: int = 0) -> str:
+    """filename:line, and :column if given, of the nth line (the first by
+    default) of the checked-in definition file that contains text"""
     lines = (ROP_DIR / filename).read_text().splitlines()
-    line = next(i for i, source in enumerate(lines, 1) if text in source)
+    line = [i for i, source in enumerate(lines, 1) if text in source][nth]
     return f"{filename}:{line}" if column is None else f"{filename}:{line}:{column}"
 
 
@@ -587,7 +587,9 @@ class PilotTests(unittest.TestCase):
         retire = at("add.rop", "let saved:Err = retire_failed_call(")
         dup = at("getattr.rop", "let result:O = dup(unwrap(item));")
         guard = at("getattr.rop", "guard present(item) else miss;")
-        raise_attr = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5)
+        # The GetSet arm raises first; Generic's is the second
+        raise_getset = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5)
+        raise_attr = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5, nth=1)
         raise_method = at("getattr.rop", "exit raise(GetMethod.Failed, saved);", 5)
         mutations = [
             ("add.rop", "  effects(writes, allocates, raises, releases)\n",
@@ -616,6 +618,8 @@ class PilotTests(unittest.TestCase):
               "lists x in spent, but x is intact",
               f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
               "lists y in spent, but y is intact",
+              f"{raise_getset}: GetAttr.GetSet: points: raise at GetAttr.Failed: "
+              "GetAttr.Failed lists obj in spent, but obj is intact",
               f"{raise_attr}: GetAttr.Generic: points: raise at GetAttr.Failed: "
               "GetAttr.Failed lists obj in spent, but obj is intact",
               f"{raise_method}: GetMethod.Generic: points: raise at GetMethod.Failed: "

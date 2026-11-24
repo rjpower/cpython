@@ -1761,7 +1761,7 @@ success:
  * cases of classify_getattr (GetAttr words) or classify_getmethod (GetMethod
  * words); -1 where the family has no such arm.  The last case of each row is
  * "none".  A nomination of a handler without an arm (a property, an
- * overridden __getattribute__, a getset) is "none": the site stays generic. */
+ * overridden __getattribute__, a getset in method position) is "none": the site stays generic. */
 typedef struct {
     int handler;
     int arm;
@@ -1781,6 +1781,7 @@ static const attr_arm attr_arms[] = {
     {LOAD_ATTR_CLASS_WITH_METACLASS_CHECK, ROP_HANDLER_GetAttr_Class, 6, -1},
     {LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES, ROP_HANDLER_GetAttr_NonDescriptorValues, 7, -1},
     {LOAD_ATTR_NONDESCRIPTOR_NO_DICT, ROP_HANDLER_GetAttr_NonDescriptorNoDict, 8, -1},
+    {LOAD_ATTR_GETSET, ROP_HANDLER_GetAttr_GetSet, 9, -1},
     {LOAD_ATTR_METHOD_WITH_VALUES, ROP_HANDLER_GetMethod_MethodValues, -1, 0},
     {LOAD_ATTR_METHOD_NO_DICT, ROP_HANDLER_GetMethod_NoDict, -1, 1},
     {LOAD_ATTR_METHOD_LAZY_DICT, ROP_HANDLER_GetMethod_LazyDict, -1, 2},
@@ -1808,7 +1809,7 @@ attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
     attr_collect = &nominated;
     (_Py_Specialize_LoadAttr)(owner, site, name);
     attr_collect = NULL;
-    int none = method ? 4 : 9;
+    int none = method ? 4 : 10;
     const attr_arm *chosen = attr_arm_of(nominated.handler, method);
     if (chosen == NULL) {
         return none;

@@ -20,6 +20,7 @@ extern "C" {
 #include "pycore_function.h"    // _PyClassMethod_GetFunc()
 #include "pycore_moduleobject.h" // PyModuleObject
 #include "pycore_ir.h"          // _PyIR_FbBlock()
+#include "pycore_descrobject.h"  // _PyGetSet_ValueRead()
 #include "pycore_object.h"
 #include "pycore_value_ops.h"     // _PyValue_GetAttr()      // _PyObject_ValueSlot()
 #include "pycore_rop_metadata.h" // ROP_HANDLER_GetMethod_MethodValues
@@ -394,6 +395,13 @@ static inline void
 _PyRop_DiscardMaybe(PyValue z)
 {
     PyValue_XCLOSE(z);
+}
+
+static inline PyValue
+_PyAttr_GetSetRead(_PyAttrRecipe r, PyValueBorrow owner)
+{
+    PyValueBorrow descr = _PyValueGuarded_LoadObject(r.class_value);
+    return (_PyGetSet_ValueRead)(PyValue_AsKnownObjectBorrow(descr), owner);
 }
 
 #endif /* !Py_INTERNAL_ATTR_RECIPE_H */

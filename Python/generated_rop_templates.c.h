@@ -5,6 +5,7 @@
 //
 // 1 templates.  Inline arms that keep the call of their form:
 //   GetAttr.Class: GetAttr.Class: fb is not a leaf value
+//   GetAttr.GetSet: GetAttr.GetSet: fb is not a leaf value
 //   GetAttr.Hint: GetAttr.Hint: fb is not a leaf value
 //   GetAttr.Instance: GetAttr.Instance: fb is not a leaf value
 //   GetAttr.Module: GetAttr.Module: fb is not a leaf value

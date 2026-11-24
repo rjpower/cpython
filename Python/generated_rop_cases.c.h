@@ -119,24 +119,26 @@
             int ret3;
             int adapt_before_use_getattr2_ci;
             int ret4;
-            int adapt_before_use_getattr2_cLNonDescriptorNoDict;
+            int adapt_before_use_getattr2_cLGetSet;
             int ret5;
-            int adapt_before_use_getattr2_cLNonDescriptorValues;
+            int adapt_before_use_getattr2_cLNonDescriptorNoDict;
             int ret6;
-            int adapt_before_use_getattr2_cLClass;
+            int adapt_before_use_getattr2_cLNonDescriptorValues;
             int ret7;
-            int adapt_before_use_getattr2_cLPointerSlot;
+            int adapt_before_use_getattr2_cLClass;
             int ret8;
-            int adapt_before_use_getattr2_cLValueSlot;
+            int adapt_before_use_getattr2_cLPointerSlot;
             int ret9;
-            int adapt_before_use_getattr2_cLHint;
+            int adapt_before_use_getattr2_cLValueSlot;
             int ret10;
-            int adapt_before_use_getattr2_cLModule;
+            int adapt_before_use_getattr2_cLHint;
             int ret11;
-            int adapt_before_use_getattr2_cp;
+            int adapt_before_use_getattr2_cLModule;
             int ret12;
-            int adapt_before_use_getattr2_cm;
+            int adapt_before_use_getattr2_cp;
             int ret13;
+            int adapt_before_use_getattr2_cm;
+            int ret14;
             PyValue z;
             PyValue getattr_at_origin1_value;
             PyValue getattr_at_origin1_kept;
@@ -151,6 +153,7 @@
             _PyAttrRecipe adapt_before_use_getattr2_rClass;
             _PyAttrRecipe adapt_before_use_getattr2_rNonDescriptorValues;
             _PyAttrRecipe adapt_before_use_getattr2_rNonDescriptorNoDict;
+            _PyAttrRecipe adapt_before_use_getattr2_rGetSet;
             if (!_PyFb_TickQuiet(&((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h)) {
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Sample;
             }
@@ -214,6 +217,10 @@
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_LNonDescriptorNoDict;
             }
             if (ret3 == 9) {
+                adapt_before_use_getattr2_rGetSet = out2;
+                goto rop_GetAttr_Generic_adapt_before_use_getattr2_LGetSet;
+            }
+            if (ret3 == 10) {
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Other;
             }
             adapt_before_use_getattr2_ri = out2;
@@ -231,9 +238,9 @@
             rop_GetAttr_Generic_adapt_before_use_getattr2_Other:
             _PyRop_Backoff(&((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h);
             goto rop_GetAttr_Generic_Run;
-            rop_GetAttr_Generic_adapt_before_use_getattr2_LNonDescriptorNoDict:
-            adapt_before_use_getattr2_cLNonDescriptorNoDict = ROP_HANDLER_GetAttr_NonDescriptorNoDict;
-            ret5 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLNonDescriptorNoDict);
+            rop_GetAttr_Generic_adapt_before_use_getattr2_LGetSet:
+            adapt_before_use_getattr2_cLGetSet = ROP_HANDLER_GetAttr_GetSet;
+            ret5 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLGetSet);
             if (ret5 > 0) {
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Changed;
             }
@@ -241,9 +248,9 @@
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
             }
             goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
-            rop_GetAttr_Generic_adapt_before_use_getattr2_LNonDescriptorValues:
-            adapt_before_use_getattr2_cLNonDescriptorValues = ROP_HANDLER_GetAttr_NonDescriptorValues;
-            ret6 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLNonDescriptorValues);
+            rop_GetAttr_Generic_adapt_before_use_getattr2_LNonDescriptorNoDict:
+            adapt_before_use_getattr2_cLNonDescriptorNoDict = ROP_HANDLER_GetAttr_NonDescriptorNoDict;
+            ret6 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLNonDescriptorNoDict);
             if (ret6 > 0) {
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Changed;
             }
@@ -251,9 +258,9 @@
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
             }
             goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
-            rop_GetAttr_Generic_adapt_before_use_getattr2_LClass:
-            adapt_before_use_getattr2_cLClass = ROP_HANDLER_GetAttr_Class;
-            ret7 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLClass);
+            rop_GetAttr_Generic_adapt_before_use_getattr2_LNonDescriptorValues:
+            adapt_before_use_getattr2_cLNonDescriptorValues = ROP_HANDLER_GetAttr_NonDescriptorValues;
+            ret7 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLNonDescriptorValues);
             if (ret7 > 0) {
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Changed;
             }
@@ -261,9 +268,9 @@
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
             }
             goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
-            rop_GetAttr_Generic_adapt_before_use_getattr2_LPointerSlot:
-            adapt_before_use_getattr2_cLPointerSlot = ROP_HANDLER_GetAttr_PointerSlot;
-            ret8 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLPointerSlot);
+            rop_GetAttr_Generic_adapt_before_use_getattr2_LClass:
+            adapt_before_use_getattr2_cLClass = ROP_HANDLER_GetAttr_Class;
+            ret8 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLClass);
             if (ret8 > 0) {
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Changed;
             }
@@ -271,9 +278,9 @@
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
             }
             goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
-            rop_GetAttr_Generic_adapt_before_use_getattr2_LValueSlot:
-            adapt_before_use_getattr2_cLValueSlot = ROP_HANDLER_GetAttr_ValueSlot;
-            ret9 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLValueSlot);
+            rop_GetAttr_Generic_adapt_before_use_getattr2_LPointerSlot:
+            adapt_before_use_getattr2_cLPointerSlot = ROP_HANDLER_GetAttr_PointerSlot;
+            ret9 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLPointerSlot);
             if (ret9 > 0) {
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Changed;
             }
@@ -281,9 +288,9 @@
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
             }
             goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
-            rop_GetAttr_Generic_adapt_before_use_getattr2_LHint:
-            adapt_before_use_getattr2_cLHint = ROP_HANDLER_GetAttr_Hint;
-            ret10 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLHint);
+            rop_GetAttr_Generic_adapt_before_use_getattr2_LValueSlot:
+            adapt_before_use_getattr2_cLValueSlot = ROP_HANDLER_GetAttr_ValueSlot;
+            ret10 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLValueSlot);
             if (ret10 > 0) {
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Changed;
             }
@@ -291,13 +298,23 @@
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
             }
             goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
-            rop_GetAttr_Generic_adapt_before_use_getattr2_LModule:
-            adapt_before_use_getattr2_cLModule = ROP_HANDLER_GetAttr_Module;
-            ret11 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLModule);
+            rop_GetAttr_Generic_adapt_before_use_getattr2_LHint:
+            adapt_before_use_getattr2_cLHint = ROP_HANDLER_GetAttr_Hint;
+            ret11 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLHint);
             if (ret11 > 0) {
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Changed;
             }
             if (ret11 == 0) {
+                goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
+            }
+            goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
+            rop_GetAttr_Generic_adapt_before_use_getattr2_LModule:
+            adapt_before_use_getattr2_cLModule = ROP_HANDLER_GetAttr_Module;
+            ret12 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cLModule);
+            if (ret12 > 0) {
+                goto rop_GetAttr_Generic_adapt_before_use_getattr2_Changed;
+            }
+            if (ret12 == 0) {
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
             }
             goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
@@ -309,21 +326,21 @@
             goto rop_GetAttr_Generic_adapt_before_use_getattr2_Mono;
             rop_GetAttr_Generic_adapt_before_use_getattr2_Poly:
             adapt_before_use_getattr2_cp = ROP_HANDLER_GetAttr_PolyShape;
-            ret12 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cp);
-            if (ret12 > 0) {
+            ret13 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cp);
+            if (ret13 > 0) {
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Changed;
             }
-            if (ret12 == 0) {
+            if (ret13 == 0) {
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
             }
             goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
             rop_GetAttr_Generic_adapt_before_use_getattr2_Mono:
             adapt_before_use_getattr2_cm = ROP_HANDLER_GetAttr_Shape;
-            ret13 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cm);
-            if (ret13 > 0) {
+            ret14 = _PyRop_Install(this_instr, &((_PyFbAttr *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getattr2_cm);
+            if (ret14 > 0) {
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Changed;
             }
-            if (ret13 == 0) {
+            if (ret14 == 0) {
                 goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
             }
             goto rop_GetAttr_Generic_adapt_before_use_getattr2_Run;
@@ -640,6 +657,79 @@
             DISPATCH();
             rop_GetAttr_Instance_Miss:
             JUMP_TO_PREDICTED(GetAttr_Generic);
+        }
+
+        TARGET(GetAttr_GetSet) {
+            // GetAttr.GetSet (inline)
+            int opcode = ROP_HANDLER_GetAttr_GetSet;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_GetAttr_GetSet);
+            _PyAttrRecipe out1;
+            PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow v;
+            PyObject * o;
+            _PyRopAnchors a;
+            PyValue ret2;
+            PyValue own_obj = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            _PyAttrRecipe r;
+            PyValue z;
+            PyValue getset_at_origin1_value;
+            PyValue getset_at_origin1_kept;
+            PyValue getset_at_origin1_dropped;
+            if (!_PyAttr_AdmittedRecipe(((_PyFbAttr *)IR_FB(IR_D(ir_word))), GETITEM(FRAME_CO_NAMES, IR_C(ir_word)), &out1)) {
+                goto rop_GetAttr_GetSet_Miss;
+            }
+            r = out1;
+            v = PyValue_Borrow(*home_obj);
+            if (!PyValue_IsObject(v)) {
+                JUMP_TO_PREDICTED(GetAttr_Generic);
+            }
+            o = PyValue_AsKnownObjectBorrow(v);
+            if (!_PyAttr_InstanceVersion(o, r)) {
+                JUMP_TO_PREDICTED(GetAttr_Generic);
+            }
+            a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_obj}});
+            IR_STUB_ESCAPE();
+            ret2 = _PyAttr_GetSetRead(r, _PyRop_AnchorArg(&a, 0));
+            if (PyValue_IsNull(ret2)) {
+                goto rop_GetAttr_GetSet_getset_at_origin1_Failed;
+            }
+            getset_at_origin1_value = ret2;
+            if (_PyRop_RedirectPending(frame)) {
+                getset_at_origin1_dropped = getset_at_origin1_value;
+                goto rop_GetAttr_GetSet_getset_at_origin1_Moved;
+            }
+            getset_at_origin1_kept = getset_at_origin1_value;
+            z = getset_at_origin1_kept;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_obj = _PyFrame_TakeHome(frame, home_obj);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_CloseAnchors(&a);
+            PyValue_XCLOSE(own_obj);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_GetAttr_GetSet_Miss:
+            JUMP_TO_PREDICTED(GetAttr_Generic);
+            rop_GetAttr_GetSet_getset_at_origin1_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_obj}});
+            PROCESS_ERROR_AT(RAISE, 5, this_instr);
+            rop_GetAttr_GetSet_getset_at_origin1_Moved:
+            IR_STUB_ESCAPE();
+            _PyRop_DiscardResult(getset_at_origin1_dropped);
+            IR_STUB_ESCAPE();
+            _PyRop_RetireAbandoned(&a);
+            IR_REDIRECT();
         }
 
         TARGET(GetAttr_Shape) {

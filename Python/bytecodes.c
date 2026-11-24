@@ -2106,9 +2106,12 @@ dummy_func(
             }
         }
 
-        outlined tier1 inst(RERAISE, (values[oparg], exc_st -- values[oparg])) {
-            // An exception being handled is an instance of BaseException
-            assert(PyValue_IsObject(exc_st));
+        outlined tier1 inst(RERAISE,
+                (values[oparg], exc_st: consumed assumed(object) by exception_unwind -- values[oparg]))
+            effects(runs_python) exits(raise)
+        {
+            // An exception being handled is an instance of BaseException;
+            // the generator asserts the declared assumed(object)
             PyObject *exc = PyValue_AsKnownObjectSteal(exc_st);
 
             assert(oparg >= 0 && oparg <= 2);
@@ -4161,7 +4164,9 @@ dummy_func(
         // The jump of the None-or-plain form tests the None the guard
         // allowed, without forming the bool: the object path then carries no
         // result to select.
-        op(_POP_JUMP_IF_FALSE_NONE_OR_PLAIN, (value -- v)) {
+        op(_POP_JUMP_IF_FALSE_NONE_OR_PLAIN, (value: consumed -- v: moved(value)))
+            effects() exits(next, branch)
+        {
             int flag = PyValue_IsNone(value);
             IR_REPORT_EDGE(flag);
             v = value;
@@ -4171,7 +4176,9 @@ dummy_func(
             }
         }
 
-        op(_POP_JUMP_IF_TRUE_NONE_OR_PLAIN, (value -- v)) {
+        op(_POP_JUMP_IF_TRUE_NONE_OR_PLAIN, (value: consumed -- v: moved(value)))
+            effects() exits(next, branch)
+        {
             int flag = !PyValue_IsNone(value);
             IR_REPORT_EDGE(flag);
             v = value;
@@ -4217,7 +4224,9 @@ dummy_func(
         // register passes make it from those three (Python/regcfg_passes.c);
         // the result slot is NULL where it falls through.  It has no
         // feedback entry, since its fields fill the word.
-        inst(JUMP_IF_FALSE_OR_POP, (cond -- res)) {
+        inst(JUMP_IF_FALSE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
+            effects(runs_python) exits(next, branch, raise)
+        {
             // Taken before the truth test, which can run code
             PyValue held = TAKE(cond);
             int truth = _PyValue_IsTrue(held);
@@ -4235,7 +4244,9 @@ dummy_func(
             }
         }
 
-        inst(JUMP_IF_TRUE_OR_POP, (cond -- res)) {
+        inst(JUMP_IF_TRUE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
+            effects(runs_python) exits(next, branch, raise)
+        {
             // Taken before the truth test, which can run code
             PyValue held = TAKE(cond);
             int truth = _PyValue_IsTrue(held);

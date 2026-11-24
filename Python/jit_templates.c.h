@@ -937,19 +937,30 @@ jit_template_FOR_ITER_LIST(_PyJitWordCx *cx)
     _PyJitAsm_Bind(a, L0);
     _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * (IR_B(ir_word) + 0))));
     _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * (IR_B(ir_word) + 1))));
+#ifndef NDEBUG
+    {
+        _PyJitLabel ok = _PyJitAsm_NewLabel(a);
+        _PyJitLabel trap = _PyJitAsm_NewLabel(a);
+        _PyJitAsm_Push(a, _PyJitReg_RCX);
+        _PyJitAsm_Push(a, _PyJitReg_RDX);
+        _PyJitAsm_Jcc(a, (_PyJitCond)_PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL), ok);
+        _PyJitAsm_Bind(a, trap);
+        _PyJitAsm_Data(a, (const uint8_t[]){0x0f, 0x0b}, 2);  /* ud2 */
+        _PyJitAsm_Bind(a, ok);
+        _PyJitAsm_Pop(a, _PyJitReg_RDX);
+        _PyJitAsm_Pop(a, _PyJitReg_RCX);
+    }
+#endif
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX}, NULL);
-    _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RAX}, NULL);
-    _PyJitAsm_MovImm(a, _PyJitReg_RSI, (int64_t)(uintptr_t)&PyList_Type);
-    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_RDX, _PyJitReg_RSI);
-    int c9 = _PyJitCond_NE;
-    _PyJitAsm_Jcc(a, c9, cx->slow);
+    int c7 = _PyJitLower_PyList_CheckExact(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c7), cx->slow);
     _PyJitAsm_Bind(a, L3);
     _PyJitLower_PyValue_UntagIndex(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RCX}, NULL);
     _PyJitAsm_MovRR(a, _PyJitReg_RSI, _PyJitReg_RDX);
     _PyJitLower_PyList_GET_SIZE(cx, (const uint8_t[]){_PyJitReg_RDI, _PyJitReg_RAX}, NULL);
     _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_RSI, _PyJitReg_RDI);
-    int c19 = _PyJitCond_AE;
-    _PyJitAsm_Jcc(a, c19, cx->slow);
+    int c18 = _PyJitCond_AE;
+    _PyJitAsm_Jcc(a, c18, cx->slow);
     _PyJitAsm_Bind(a, L7);
     _PyJitLower_PyList_GET_VALUE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX, _PyJitReg_RDX, _PyJitReg_RSI}, NULL);
     cx->live = 0x2; cx->live_xmm = 0x0;
@@ -1034,18 +1045,29 @@ jit_template_FOR_ITER_TUPLE(_PyJitWordCx *cx)
     _PyJitAsm_Bind(a, L0);
     _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * (IR_B(ir_word) + 0))));
     _PyJitAsm_MovRM(a, _PyJitReg_RCX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * (IR_B(ir_word) + 1))));
+#ifndef NDEBUG
+    {
+        _PyJitLabel ok = _PyJitAsm_NewLabel(a);
+        _PyJitLabel trap = _PyJitAsm_NewLabel(a);
+        _PyJitAsm_Push(a, _PyJitReg_RCX);
+        _PyJitAsm_Push(a, _PyJitReg_RDX);
+        _PyJitAsm_Jcc(a, (_PyJitCond)_PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL), ok);
+        _PyJitAsm_Bind(a, trap);
+        _PyJitAsm_Data(a, (const uint8_t[]){0x0f, 0x0b}, 2);  /* ud2 */
+        _PyJitAsm_Bind(a, ok);
+        _PyJitAsm_Pop(a, _PyJitReg_RDX);
+        _PyJitAsm_Pop(a, _PyJitReg_RCX);
+    }
+#endif
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX}, NULL);
-    _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RAX}, NULL);
-    _PyJitAsm_MovImm(a, _PyJitReg_RSI, (int64_t)(uintptr_t)&PyTuple_Type);
-    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_RDX, _PyJitReg_RSI);
-    int c9 = _PyJitCond_NE;
-    _PyJitAsm_Jcc(a, c9, cx->slow);
+    int c7 = _PyJitLower_PyTuple_CheckExact(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c7), cx->slow);
     _PyJitAsm_Bind(a, L3);
     _PyJitLower_PyValue_UntagIndex(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RCX}, NULL);
     _PyJitLower_PyTuple_GET_SIZE(cx, (const uint8_t[]){_PyJitReg_RSI, _PyJitReg_RAX}, NULL);
     _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_RDX, _PyJitReg_RSI);
-    int c19 = _PyJitCond_AE;
-    _PyJitAsm_Jcc(a, c19, cx->slow);
+    int c18 = _PyJitCond_AE;
+    _PyJitAsm_Jcc(a, c18, cx->slow);
     _PyJitAsm_Bind(a, L7);
     _PyJitLower_PyTuple_GET_VALUE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX, _PyJitReg_RDX}, NULL);
     cx->live = 0x2; cx->live_xmm = 0x0;

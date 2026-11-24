@@ -4255,9 +4255,11 @@ dummy_func(
             unused/1 + _SPECIALIZE_GET_ITER +
             _GET_ITER;
 
-        op(_GUARD_ITERATOR, (iterable -- iterable)) {
+        op(_GUARD_ITERATOR, (iterable: object -- iterable))
+            effects(reads) exits(next, miss)
+        {
             PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
-            EXIT_IF(tp->tp_iter != PyObject_SelfIter);
+            EXIT_IF(tp->tp_iter != PyObject_SelfIter, "the type's tp_iter is not PyObject_SelfIter");
             STAT_INC(GET_ITER, hit);
         }
 
@@ -4266,9 +4268,11 @@ dummy_func(
             _GUARD_ITERATOR +
             PUSH_NULL;
 
-        op(_GUARD_ITER_VIRTUAL, (iterable -- iterable)) {
+        op(_GUARD_ITER_VIRTUAL, (iterable: object -- iterable))
+            effects(reads) exits(next, miss)
+        {
             PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
-            EXIT_IF(!_PyType_IteratesByIndex(tp));
+            EXIT_IF(!_PyType_IteratesByIndex(tp), "the type iterates by index");
             STAT_INC(GET_ITER, hit);
         }
 
@@ -4460,14 +4464,19 @@ dummy_func(
             IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
         }
 
-        leaf op(_ITER_CHECK_LIST, (iter, null_or_index -- iter, null_or_index)) {
+        leaf op(_ITER_CHECK_LIST,
+                (iter: assumed(object) by GET_ITER, null_or_index
+                 -- iter: exact(PyList_Type), null_or_index))
+            effects(reads) exits(next, miss)
+        {
             // GET_ITER always leaves an object, never an inline value.
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            EXIT_IF(Py_TYPE(iter_o) != &PyList_Type);
+            EXIT_IF(!PyList_CheckExact(iter_o));
             assert(PyValue_IsTaggedIndex(null_or_index));
 #ifdef Py_GIL_DISABLED
-            EXIT_IF(!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o));
+            EXIT_IF(!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o),
+                    "a list another thread owns, and that is not shared");
 #endif
         }
 
@@ -4502,10 +4511,14 @@ dummy_func(
             _ITER_JUMP_LIST +
             _ITER_NEXT_LIST;
 
-        leaf op(_ITER_CHECK_TUPLE, (iter, null_or_index -- iter, null_or_index)) {
+        leaf op(_ITER_CHECK_TUPLE,
+                (iter: assumed(object) by GET_ITER, null_or_index
+                 -- iter: exact(PyTuple_Type), null_or_index))
+            effects(reads) exits(next, miss)
+        {
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            EXIT_IF(Py_TYPE(iter_o) != &PyTuple_Type);
+            EXIT_IF(!PyTuple_CheckExact(iter_o));
             assert(PyValue_IsTaggedIndex(null_or_index));
         }
 

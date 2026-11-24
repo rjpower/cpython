@@ -561,11 +561,12 @@ def rop_files() -> list[Path]:
     return sorted(ROP_DIR.glob("*.rop"))
 
 
-def at(filename: str, text: str, column: int | None = None) -> str:
-    """filename:line, and :column if given, of the first line of the
-    checked-in definition file that contains text"""
+def at(filename: str, text: str, column: int | None = None, last: bool = False) -> str:
+    """filename:line, and :column if given, of the first line (the last, if
+    last) of the checked-in definition file that contains text"""
     lines = (ROP_DIR / filename).read_text().splitlines()
-    line = next(i for i, source in enumerate(lines, 1) if text in source)
+    found = [i for i, source in enumerate(lines, 1) if text in source]
+    line = found[-1] if last else found[0]
     return f"{filename}:{line}" if column is None else f"{filename}:{line}:{column}"
 
 
@@ -583,8 +584,11 @@ class PilotTests(unittest.TestCase):
         # the lines of the checked-in files, found by their text, so that
         # edits elsewhere in the pilot leave the expectations intact.
         box = at("add.rop", "call box_i64(full)", 5)
-        raise_ = at("add.rop", "exit raise(Add.OpFailed, saved);", 5)
-        retire = at("add.rop", "let saved:Err = retire_failed_call(")
+        # Add.Extended and Add.Generic end alike; the mutations edit the
+        # last block, Add.Generic's
+        raise_ = at("add.rop", "exit raise(Add.OpFailed, saved);", 5, last=True)
+        retire = at("add.rop", "let saved:Err = retire_failed_call(", last=True)
+        raise_ext = at("add.rop", "exit raise(Add.OpFailed, saved);", 5)
         dup = at("getattr.rop", "let result:O = dup(unwrap(item));")
         guard = at("getattr.rop", "guard present(item) else miss;")
         mutations = [
@@ -610,7 +614,11 @@ class PilotTests(unittest.TestCase):
             ("core.rop", "  spends(s)\n", "",
              # Without its spends(s), the macro leaves the sources the point
              # declares spent
-             [f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
+             [f"{raise_ext}: Add.Extended: points: raise at Add.OpFailed: Add.OpFailed "
+              "lists x in spent, but x is intact",
+              f"{raise_ext}: Add.Extended: points: raise at Add.OpFailed: Add.OpFailed "
+              "lists y in spent, but y is intact",
+              f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
               "lists x in spent, but x is intact",
               f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
               "lists y in spent, but y is intact"]),
@@ -622,7 +630,9 @@ class PilotTests(unittest.TestCase):
                     text = path.read_text()
                     if path.name == filename:
                         self.assertIn(old, text)
-                        text = text.replace(old, new, 1)
+                        # The last occurrence: Add.Generic's block
+                        head, _, tail = text.rpartition(old)
+                        text = head + new + tail if "exit raise" in old else text.replace(old, new, 1)
                     files.append(rop_syntax.parse(text, path.name))
                 program = rop_check.check(files)
                 found = [str(d) for d in program.diagnostics + rop_verify.verify(program)]

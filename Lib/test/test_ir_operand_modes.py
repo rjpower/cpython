@@ -13,7 +13,7 @@ from test.support import import_helper
 from unittest import mock
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
-VARIANT = "LOAD_ATTR_SHAPE_LOCAL_TEMP"
+VARIANT = "GetAttr.Shape"
 ROUNDS = _testinternalcapi.SPECIALIZATION_THRESHOLD * 3
 
 
@@ -40,7 +40,7 @@ class OperandModeTests(unittest.TestCase):
                                   _testinternalcapi.get_ir(read.__code__)])
         # Both public disassembly paths must accept a physical handler > 255.
         adaptive = {instr.opname for instr in dis.get_instructions(read, adaptive=True)}
-        self.assertIn("LOAD_ATTR_SHAPE", adaptive)
+        self.assertIn("GetAttr.Shape", adaptive)
         self.assertNotIn("LOAD_ATTR", adaptive)
         dis.dis(read, adaptive=True, file=io.StringIO())
 
@@ -63,7 +63,7 @@ class OperandModeTests(unittest.TestCase):
             self.assertIs(read_to_local(owner), owner.value)
         for read in (read_temporary, read_to_local):
             self.assertNotIn(VARIANT, handlers(read))
-            self.assertIn("LOAD_ATTR_SHAPE", handlers(read))
+            self.assertIn("GetAttr.Shape", handlers(read))
 
     def test_object_alias_and_result_lifetime(self):
         class Owner:
@@ -145,7 +145,7 @@ class OperandModeTests(unittest.TestCase):
         self.assertEqual(kind, "ATTR")
         self.assertTrue(rows)
         self.assertNotIn(opcode._ir_opmap[VARIANT], [row[2] for row in rows])
-        self.assertIn(opcode._specialized_opmap["LOAD_ATTR_SHAPE"],
+        self.assertIn(_testinternalcapi.arm_handlers()["GetAttr.Shape"],
                       [row[2] for row in rows])
         self.assertNotIn(VARIANT, handlers(read))
 
@@ -215,7 +215,7 @@ class OperandModeTests(unittest.TestCase):
     def test_metadata_domain(self):
         import _opcode
         h = opcode._ir_opmap[VARIANT]
-        base_handler = opcode._specialized_opmap["LOAD_ATTR_SHAPE"]
+        base_handler = _testinternalcapi.arm_handlers()["GetAttr.Shape"]
         row = _opcode.get_ir_contract()[h]
         base = _opcode.get_ir_contract()[base_handler]
         self.assertGreater(h, 255)
@@ -248,10 +248,10 @@ class OperandModeGeneratorTests(unittest.TestCase):
         gen = self.generator
         formats = gen.compute_formats(self.analysis)
         contracts = gen.handler_contracts(self.analysis, formats)
-        self.assertIs(formats[VARIANT], formats["LOAD_ATTR_SHAPE"])
-        self.assertEqual(contracts[VARIANT], contracts["LOAD_ATTR_SHAPE"])
+        self.assertIs(formats[VARIANT], formats["GetAttr.Shape"])
+        self.assertEqual(contracts[VARIANT], contracts["GetAttr.Shape"])
         self.assertEqual(self.metadata.shadow_of(VARIANT, self.analysis),
-                         "LOAD_ATTR_SHAPE")
+                         "GetAttr.Shape")
         _, bases, flags = self.metadata.handler_facts(self.analysis, formats)
         self.assertEqual(bases[VARIANT], "LOAD_ATTR")
         self.assertIn("_PyIR_H_SPECIALIZED", flags[VARIANT])
@@ -280,7 +280,7 @@ class OperandModeGeneratorTests(unittest.TestCase):
         self.assertIn("int opcode = LOAD_ATTR_SHAPE;", body)
 
     def test_synthetic_instruction_without_specialization_family(self):
-        inst = self.analysis.instructions["LOAD_ATTR_SHAPE"]
+        inst = self.analysis.instructions["GetAttr.Shape"]
         with mock.patch.object(inst, "family", None):
             self.assertNotIn(VARIANT, self.generator.execution_variants(self.analysis))
             self.assertNotIn(VARIANT, self.generator.handler_ids(self.analysis))
@@ -290,7 +290,7 @@ class OperandModeGeneratorTests(unittest.TestCase):
         for local, temp in ((("A",), ()), ((), ("B",)), (("D",), ()),
                             (("B",), ("B",))):
             with self.subTest(local=local, temp=temp):
-                variant = gen.ExecutionVariant("LOAD_ATTR_SHAPE", local, temp)
+                variant = gen.ExecutionVariant("GetAttr.Shape", local, temp)
                 with mock.patch.dict(gen.EXECUTION_VARIANTS, {VARIANT: variant}):
                     with self.assertRaisesRegex(ValueError, "invalid operand modes"):
                         gen.compute_formats(self.analysis)

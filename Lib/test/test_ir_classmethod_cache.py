@@ -8,9 +8,17 @@ import weakref
 from test.support import (cpython_only, requires_gil_enabled,
                           requires_specialization, reset_code, gc_collect)
 from test.support.import_helper import import_module
-from test.test_ir_attr_cache import handlers, warm
+from test.test_ir_attr_cache import handlers, warm as warm_threshold
 
 _testinternalcapi = import_module("_testinternalcapi")
+
+
+def warm(invoke, owner):
+    # A unit compiled before the site specialised keeps running the generic
+    # arm, which publishes the bound method, until its warm-up recompiles it
+    warm_threshold(invoke, owner)
+    for _ in range(100):
+        invoke(owner)
 
 
 def make_invoke():
@@ -25,12 +33,14 @@ def make_invoke():
 class TestClassMethodCache(unittest.TestCase):
     def assert_cached(self, invoke):
         names = handlers(invoke)
-        self.assertIn("LOAD_ATTR_CLASSMETHOD", names)
+        self.assertIn("GetMethod.ClassMethod", names)
         self.assertIn("CALL_PY_EXACT_ARGS", names)
         self.assertNotIn("CALL_BOUND_METHOD_EXACT_ARGS", names)
 
     def warm_invoke(self, invoke, cls, value=7):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+            invoke(cls, value)
+        for _ in range(100):
             invoke(cls, value)
         self.assert_cached(invoke)
 
@@ -94,7 +104,7 @@ class TestClassMethodCache(unittest.TestCase):
         reset_code(capture)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             capture(Receiver, lambda: 7)
-        self.assertIn("LOAD_ATTR_CLASSMETHOD", handlers(capture))
+        self.assertIn("GetMethod.ClassMethod", handlers(capture))
 
         def mutate():
             descriptor.__init__(original)
@@ -123,7 +133,7 @@ class TestClassMethodCache(unittest.TestCase):
         reset_code(capture)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             capture(Receiver, lambda: 7)
-        self.assertIn("LOAD_ATTR_CLASSMETHOD", handlers(capture))
+        self.assertIn("GetMethod.ClassMethod", handlers(capture))
 
         def mutate():
             Receiver.__bases__ = (Other,)
@@ -148,7 +158,7 @@ class TestClassMethodCache(unittest.TestCase):
         reset_code(capture)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             capture(Receiver, lambda: 7)
-        self.assertIn("LOAD_ATTR_CLASSMETHOD", handlers(capture))
+        self.assertIn("GetMethod.ClassMethod", handlers(capture))
 
         def mutate():
             original.__code__ = replacement.__code__
@@ -169,7 +179,7 @@ class TestClassMethodCache(unittest.TestCase):
 
         reset_code(invoke)
         warm(invoke, Receiver)
-        self.assertIn("LOAD_ATTR_CLASSMETHOD", handlers(invoke))
+        self.assertIn("GetMethod.ClassMethod", handlers(invoke))
         self.assertIn("CALL_PY_GENERAL", handlers(invoke))
         function = Receiver.__dict__["selected"].__func__
         function.__defaults__ = (20,)
@@ -197,7 +207,7 @@ class TestClassMethodCache(unittest.TestCase):
             invoke.__code__, site.offset)
         self.assertEqual((kind, state, len(rows)), ("ATTR", "POLY", 3))
         self.assertEqual({row[2] for row in rows},
-                         {dis._ir_opmap["LOAD_ATTR_CLASSMETHOD"]})
+                         {_testinternalcapi.arm_handlers()["GetMethod.ClassMethod"]})
         for cls in classes:
             cls.__dict__["selected"].__init__(replacement)
             self.assertEqual(invoke(cls, 21), ("replacement", cls, 21))
@@ -220,7 +230,7 @@ class TestClassMethodCache(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             source.append(Receiver)
             capture(source, lambda: 7)
-        self.assertIn("LOAD_ATTR_CLASSMETHOD", handlers(capture))
+        self.assertIn("GetMethod.ClassMethod", handlers(capture))
         function_ref, class_ref = weakref.ref(original), weakref.ref(Receiver)
         del original, Receiver
 
@@ -264,7 +274,7 @@ class TestClassMethodCache(unittest.TestCase):
             invoke = make_invoke()
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
                 self.assertEqual(invoke(cls, 17), (cls, 17))
-            self.assertNotIn("LOAD_ATTR_CLASSMETHOD", handlers(invoke))
+            self.assertNotIn("GetMethod.ClassMethod", handlers(invoke))
         owner = Receiver()
         owner.selected = lambda value: value + 1
         self.assertEqual(make_invoke()(owner, 17), 18)
@@ -281,7 +291,7 @@ class TestClassMethodCache(unittest.TestCase):
         reset_code(capture)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             capture(Receiver, lambda: 7)
-        self.assertIn("LOAD_ATTR_CLASSMETHOD", handlers(capture))
+        self.assertIn("GetMethod.ClassMethod", handlers(capture))
         marker = ValueError("argument")
 
         def fail():
@@ -336,8 +346,7 @@ class TestClassMethodCache(unittest.TestCase):
             for event in events:
                 mon.register_callback(tool, event, None)
             mon.free_tool_id(tool)
-        for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN):
-            invoke(Receiver, 7)
+        warm(invoke, Receiver)
         self.assert_cached(invoke)
 
     def test_adaptive_name_and_original_code(self):
@@ -349,10 +358,10 @@ class TestClassMethodCache(unittest.TestCase):
         invoke = make_invoke()
         original = invoke.__code__.co_code
         self.warm_invoke(invoke, Receiver)
-        self.assertIn("LOAD_ATTR_CLASSMETHOD", dis._ir_opmap)
+        self.assertIn("GetMethod.ClassMethod", _testinternalcapi.arm_handlers())
         self.assertEqual(invoke.__code__.co_code, original)
         # ir_dis shows an execution-only handler as the instruction it runs
-        self.assertIn("LOAD_ATTR_CLASSMETHOD", handlers(invoke))
+        self.assertIn("GetMethod.ClassMethod", handlers(invoke))
 
 
 if __name__ == "__main__":

@@ -34,9 +34,9 @@ class TestCanonicalMethodCapture(unittest.TestCase):
     def receiver_types(self):
         receivers = []
         for name, base, namespace, handler in (
-            ("WithValues", object, {}, "LOAD_ATTR_METHOD_WITH_VALUES"),
-            ("NoDict", object, {"__slots__": ()}, "LOAD_ATTR_METHOD_NO_DICT"),
-            ("LazyDict", Exception, {}, "LOAD_ATTR_METHOD_LAZY_DICT"),
+            ("WithValues", object, {}, "GetMethod.MethodValues"),
+            ("NoDict", object, {"__slots__": ()}, "GetMethod.NoDict"),
+            ("LazyDict", Exception, {}, "GetMethod.LazyDict"),
         ):
             def selected(self, value):
                 return value + 1
@@ -90,7 +90,7 @@ class TestCanonicalMethodCapture(unittest.TestCase):
         owner = Owner()
         for _ in range(4 * _testinternalcapi.SPECIALIZATION_THRESHOLD):
             self.assertEqual(invoke(owner), 42)
-        self.assertIn('LOAD_ATTR_METHOD_WITH_VALUES', handlers(invoke))
+        self.assertIn('GetMethod.MethodValues', handlers(invoke))
         self.assertIn('CALL_PY_EXACT_ARGS', handlers(invoke))
         self.assertEqual(invoke(owner), 42)
 
@@ -100,7 +100,7 @@ class TestCanonicalMethodCapture(unittest.TestCase):
                 owner, invoke = self.invoker(cls, expected)
                 cls.selected = lambda self, value: value + 2
                 self.assertEqual(invoke(owner, lambda: 40), 42)
-                if expected != "LOAD_ATTR_METHOD_NO_DICT":
+                if expected != "GetMethod.NoDict":
                     owner.__dict__["selected"] = lambda value: value + 3
                     self.assertEqual(invoke(owner, lambda: 40), 43)
                     del owner.selected
@@ -155,8 +155,8 @@ class TestCanonicalMethodCapture(unittest.TestCase):
                 reset_code(invoke)
                 for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
                     self.assertEqual(invoke(), 40)
-                expected = ("LOAD_ATTR_METHOD_WITH_VALUES" if slots is None else
-                            "LOAD_ATTR_METHOD_NO_DICT")
+                expected = ("GetMethod.MethodValues" if slots is None else
+                            "GetMethod.NoDict")
                 self.assertIn(expected, handlers(invoke))
                 gc_collect()
                 self.assertTrue(all(ref() is None for ref in references))
@@ -169,8 +169,8 @@ class TestCanonicalMethodCapture(unittest.TestCase):
                 self.assertEqual(invoke(cls(), lambda: 40), 41)
             # Rows of the two forms that the poly handler reads make the
             # site read them; a lazy-dict row keeps the latest monomorphic form
-            self.assertIn("LOAD_ATTR_METHOD_POLY" if expected !=
-                          "LOAD_ATTR_METHOD_LAZY_DICT" else expected,
+            self.assertIn("GetMethod.PolyMethod" if expected !=
+                          "GetMethod.LazyDict" else expected,
                           handlers(invoke))
         [site] = [i for i in dis.get_instructions(invoke) if i.opname == "LOAD_ATTR"]
         kind, state, _, _, rows = _testinternalcapi.get_feedback(
@@ -185,8 +185,8 @@ class TestCanonicalMethodCapture(unittest.TestCase):
 @requires_specialization
 class TestDirectClassValue(unittest.TestCase):
     def assert_cached(self, read, *, metaclass=False):
-        expected = ("LOAD_ATTR_CLASS_WITH_METACLASS_CHECK" if metaclass else
-                    "LOAD_ATTR_CLASS")
+        expected = ("GetAttr.Class" if metaclass else
+                    "GetAttr.Class")
         self.assertIn(expected, handlers(read))
 
     def test_canonical_and_object_values(self):
@@ -268,7 +268,8 @@ class TestDirectClassValue(unittest.TestCase):
         reset_code(invoke)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             self.assertEqual(invoke(Receiver, 31), 31)
-        self.assert_cached(invoke)
+        # A plain function in method position stays on the generic arm
+        self.assertIn("GetMethod.Generic", handlers(invoke))
         Receiver.selected = 1
         with self.assertRaises(TypeError):
             invoke(Receiver, 31)
@@ -291,8 +292,8 @@ class TestDirectClassValue(unittest.TestCase):
             read.__code__, site.offset)
         self.assertEqual((kind, state, len(rows)), ("ATTR", "POLY", 3))
         self.assertEqual({row[2] for row in rows}, {
-            dis._specialized_opmap["LOAD_ATTR_CLASS"],
-            dis._specialized_opmap["LOAD_ATTR_CLASS_WITH_METACLASS_CHECK"],
+            _testinternalcapi.arm_handlers()["GetAttr.Class"],
+            _testinternalcapi.arm_handlers()["GetAttr.Class"],
         })
         for cls in classes:
             cls.selected = [42]
@@ -336,8 +337,8 @@ class TestDirectClassValue(unittest.TestCase):
 @requires_specialization
 class TestGuardedClassValue(unittest.TestCase):
     def assert_cached(self, read, *, slots=False):
-        expected = ("LOAD_ATTR_NONDESCRIPTOR_NO_DICT" if slots else
-                    "LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES")
+        expected = ("GetAttr.NonDescriptorNoDict" if slots else
+                    "GetAttr.NonDescriptorValues")
         self.assertIn(expected, handlers(read))
 
     def test_canonical_values_and_object_identity(self):
@@ -516,8 +517,7 @@ class TestGuardedClassValue(unittest.TestCase):
         kind, state, _, _, rows = _testinternalcapi.get_feedback(
             read.__code__, site.offset)
         self.assertEqual((kind, state, len(rows)), ("ATTR", "POLY", 3))
-        self.assertTrue(all(row[2] == dis._specialized_opmap[
-            "LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES"] for row in rows))
+        self.assertTrue(all(row[2] == _testinternalcapi.arm_handlers()["GetAttr.NonDescriptorValues"] for row in rows))
         for owner in owners:
             self.assertIs(read(owner), type(owner).selected)
 
@@ -545,8 +545,8 @@ class TestGuardedClassValue(unittest.TestCase):
         warm(read, owner)
         words = handlers(read)
         self.assertEqual({words[site.offset] for site in private},
-                         {"LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES"})
-        self.assertEqual({words[site.offset] for site in shared}, {"LOAD_ATTR"})
+                         {"GetAttr.NonDescriptorValues"})
+        self.assertEqual({words[site.offset] for site in shared}, {"GetAttr.Generic"})
         self.assertEqual(len(IRCode(read.__code__)._co_feedback), total * 8)
         Receiver.selected = 2
         self.assertEqual(read(owner), 2)

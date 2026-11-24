@@ -120,13 +120,13 @@ class AssemblerTest(unittest.TestCase):
             return o.attr
         ir = get_ir(f.__code__)
         self.assertNotIn("LOAD_FAST_BORROW", [word[0] for word in ir])
-        attr = [word for word in ir if word[0] == "LOAD_ATTR"][0]
+        attr = [word for word in ir if word[0] == "GetAttr.Generic"][0]
         self.assertEqual(attr[1], nlocalsplus(f))
         self.assertEqual(attr[2], 0)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(f(C()), 5)
         if SPECIALIZES:
-            self.assertNotIn("LOAD_ATTR", handlers(f))
+            self.assertNotIn("GetAttr.Generic", handlers(f))
         # The words of the code object stay as the compiler emitted them
         self.assertEqual(get_ir(f.__code__), ir)
 
@@ -168,8 +168,8 @@ class AssemblerTest(unittest.TestCase):
             references.append(weakref.ref(owner.value))
             return owner
 
-        for cls, expected_handler in ((Slotted, "LOAD_ATTR_SLOT"),
-                                      (Shaped, "LOAD_ATTR_SHAPE")):
+        for cls, expected_handler in ((Slotted, "GetAttr.ValueSlot"),
+                                      (Shaped, "GetAttr.Shape")):
             for local in (False, True):
                 with self.subTest(cls=cls.__name__, local=local):
                     if local:
@@ -183,7 +183,7 @@ class AssemblerTest(unittest.TestCase):
                             "def f(factory, cls, Old):\n"
                             "    return factory(cls).value\n")
                     attr = next(word for word in get_ir(read.__code__)
-                                if word[0] == "LOAD_ATTR")
+                                if word[0] == "GetAttr.Generic")
                     if local:
                         self.assertLess(attr[1], nlocalsplus(read))
                     else:
@@ -244,11 +244,11 @@ class AssemblerTest(unittest.TestCase):
                         if type(value) not in (int, float):
                             self.assertIs(result, value)
                     if SPECIALIZES:
-                        expected = ("LOAD_ATTR_SHAPE" if local else
-                                    "LOAD_ATTR_SHAPE_LOCAL_TEMP")
+                        expected = ("GetAttr.Shape" if local else
+                                    "GetAttr.Shape")
                         self.assertIn(expected, handlers(read))
                     attr = next(word for word in get_ir(read.__code__)
-                                if word[0] == "LOAD_ATTR")
+                                if word[0] == "GetAttr.Generic")
                     self.assertEqual(attr[1] < nlocalsplus(read), local)
 
     @support.requires_refcounting
@@ -288,12 +288,12 @@ class AssemblerTest(unittest.TestCase):
                              "    result = factory().value\n"
                              "    return result\n")
         attr = next(word for word in get_ir(read.__code__)
-                    if word[0] == "LOAD_ATTR")
+                    if word[0] == "GetAttr.Generic")
         self.assertLess(attr[1], nlocalsplus(read))
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             read(factory, Old)
         if SPECIALIZES:
-            self.assertIn("LOAD_ATTR_SHAPE", handlers(read))
+            self.assertIn("GetAttr.Shape", handlers(read))
         observe = True
         try:
             result = read(factory, Old)
@@ -316,7 +316,7 @@ class AssemblerTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(f(C()), 5)
         if SPECIALIZES:
-            self.assertNotIn("LOAD_ATTR", handlers(f))
+            self.assertNotIn("GetAttr.Generic", handlers(f))
         for _ in range(3):
             self.assertIsNone(f(object()))
 
@@ -337,7 +337,9 @@ class AssemblerTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
             self.assertEqual(f(P()), "caught")
         if SPECIALIZES:
-            self.assertIn("LOAD_ATTR_PROPERTY", handlers(f))
+            # A property stays on the generic arm until the frame-pushing
+            # arm of P3b
+            self.assertIn("GetAttr.Generic", handlers(f))
 
     def test_line_events(self):
         def f(o):
@@ -646,7 +648,7 @@ class AssemblerTest(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 1):
             self.assertEqual(f(C()), (last, 5))
         if SPECIALIZES:
-            self.assertNotIn("LOAD_ATTR", handlers(f))
+            self.assertNotIn("GetAttr.Generic", handlers(f))
         self.assertEqual(f(D()), (last, 6))
         lines = 0
 
@@ -715,9 +717,9 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(len(shared), nsites + 6 - len(owned))
         self.assertEqual({i.argval for i in shared}, {"attr", "other"})
         ir = handlers(f)
-        self.assertEqual({ir[i.offset] for i in shared}, {"LOAD_ATTR"})
+        self.assertEqual({ir[i.offset] for i in shared}, {"GetAttr.Generic"})
         if SPECIALIZES:
-            self.assertNotEqual(ir[owned[0].offset], "LOAD_ATTR")
+            self.assertNotEqual(ir[owned[0].offset], "GetAttr.Generic")
         # The binary operations, last in source order, have no entry left
         # and keep the handlers of their operations
         for name in ("BINARY_OP_SUBTRACT", "BINARY_OP_FLOOR_DIVIDE"):
@@ -735,7 +737,7 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(after[:2], header[:2])
         # The counter of entry 0 stays unreachable (backoff bits 7)
         self.assertEqual(after[2] & 7, 7)
-        self.assertEqual({handlers(f)[i.offset] for i in shared}, {"LOAD_ATTR"})
+        self.assertEqual({handlers(f)[i.offset] for i in shared}, {"GetAttr.Generic"})
         # The shared entry is the header and nothing else is written
         dis.dis(f, adaptive=True, show_caches=True, file=io.StringIO())
         fbinit = IRCode(f.__code__).co_fbinit
@@ -1471,8 +1473,8 @@ class FoldTest(unittest.TestCase):
             return o.x + o.y
         t = nlocalsplus(g)
         self.assertEqual(words(g), [
-            ("LOAD_ATTR", t, (0,)),
-            ("LOAD_ATTR", t + 1, (0,)),
+            ("GetAttr.Generic", t, (0,)),
+            ("GetAttr.Generic", t + 1, (0,)),
             ("BINARY_OP_ADD", t, (t, t + 1)),
             ("RETURN_VALUE_EMPTY", None, (t,)),
         ])

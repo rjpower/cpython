@@ -3160,8 +3160,11 @@ dummy_func(
          * GetAttr or GetMethod (Python/register_ops/getattr.rop). */
         tier1 inst(LOAD_ATTR,
                 (unused/9, owner: consumed -- attr: owned, self_or_null[oparg&1]: owned nullable))
-            effects() exits(abort)
+            effects(reads) exits(abort)
         {
+            /* The name operand keeps dis and the name flag of the opcode */
+            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
+            (void)name;
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
@@ -4811,15 +4814,6 @@ dummy_func(
 
 
 
-        /* A type without a version has no row in a poly table. */
-        // Contract (G0d1): a read of the type's version tag; no row establishes an
-        // unnamed version, so the guard gives its reason.
-        ir_only op(_GUARD_TYPE_HAS_VERSION, (owner: object -- owner))
-            effects(reads) exits(next, miss)
-        {
-            EXIT_IF(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_version_tag == 0,
-                    "the type has no version");
-        }
 
 
 

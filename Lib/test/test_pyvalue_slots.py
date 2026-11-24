@@ -237,7 +237,7 @@ class PyValueSlotTests(unittest.TestCase):
             events.clear()
             self.assertEqual(read(), 1234567)
             check(events)
-        self.assertIn('LOAD_ATTR_SLOT', executing_handlers(read))
+        self.assertIn('GetAttr.ValueSlot', executing_handlers(read))
         events.clear()
         reenter = True
         try:
@@ -291,7 +291,7 @@ class PyValueSlotTests(unittest.TestCase):
 class PointerFieldTests(unittest.TestCase):
     """LOAD_ATTR_SLOT_POINTER: a PyObject * member or the type of the owner."""
 
-    HANDLER = 'LOAD_ATTR_SLOT_POINTER'
+    HANDLER = 'GetAttr.PointerSlot'
 
     def warm(self, function, *args):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
@@ -445,7 +445,7 @@ class PointerFieldTests(unittest.TestCase):
 
         frame = sys._getframe()
         self.assertIs(self.warm(code, frame), frame.f_code)
-        self.assertIn('LOAD_ATTR_GETSET', executing_handlers(code))
+        self.assertIn('GetAttr.GetSet', executing_handlers(code))
 
 
 if __name__ == '__main__':

@@ -106,9 +106,9 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
         output = self.generate(source, runtime=True)
-        for name in ("LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES",
-                     "LOAD_ATTR_NONDESCRIPTOR_NO_DICT", "LOAD_ATTR_CLASS",
-                     "LOAD_ATTR_CLASS_WITH_METACLASS_CHECK"):
+        for name in ("GetAttr.NonDescriptorValues",
+                     "GetAttr.NonDescriptorNoDict", "GetAttr.Class",
+                     "GetAttr.Class"):
             with self.subTest(name=name):
                 start = output.index(f"TARGET({name}) {{")
                 end = output.find("TARGET(", start + 1)
@@ -126,10 +126,10 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
                 self.assertLess(store, close)
                 self.assertNotIn("retire_published_values(", handler)
                 self.assertNotIn("PyObject *class_value", handler)
-                if name.startswith("LOAD_ATTR_CLASS"):
+                if name.startswith("GetAttr.Class"):
                     self.assertIn("class_version = fb->class_version", handler)
                     self.assertNotIn("fb->descr", handler)
-                if name == "LOAD_ATTR_CLASS_WITH_METACLASS_CHECK":
+                if name == "GetAttr.Class":
                     self.assertLess(handler.index("type_version = fb->type_version"),
                                     handler.index("class_version = fb->class_version"))
 
@@ -143,8 +143,8 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
         formats = ir_generator.compute_formats(analysis)
         contracts = ir_generator.handler_contracts(analysis, formats)
         for name, number, versions in (
-            ("LOAD_ATTR_CLASS", 189, [(2, 2, "class_version")]),
-            ("LOAD_ATTR_CLASS_WITH_METACLASS_CHECK", 190,
+            ("GetAttr.Class", 189, [(2, 2, "class_version")]),
+            ("GetAttr.Class", 190,
              [(2, 2, "type_version"), (4, 2, "class_version")]),
         ):
             with self.subTest(name=name):
@@ -191,7 +191,7 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
             from opcode_metadata_generator import feedback_fields
         formats = ir_generator.compute_formats(analysis)
         contracts = ir_generator.handler_contracts(analysis, formats)
-        name = "LOAD_ATTR_CLASSMETHOD"
+        name = "GetMethod.ClassMethod"
         # An execution-only handler: it has no number in the stack opmap
         self.assertNotIn(name, analysis.opmap)
         instruction = analysis.ir_only[name]

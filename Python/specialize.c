@@ -845,7 +845,12 @@ _PyRop_Install(_PyInstr *instr, _PyFbHeader *h, int handler)
     if (!set_opcode(instr, handler)) {
         return -1;
     }
-    fb_record(instr, h, handler);
+    // A poly arm reads the rows that its own nomination found: it adds none
+    if (handler != ROP_HANDLER_GetAttr_PolyShape &&
+        handler != ROP_HANDLER_GetMethod_PolyMethod)
+    {
+        fb_record(instr, h, handler);
+    }
     return 1;
 }
 

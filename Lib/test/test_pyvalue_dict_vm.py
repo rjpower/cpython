@@ -373,7 +373,7 @@ class PyValueDictVMTests(unittest.TestCase):
         module.x = 2147483647
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             self.assertEqual(read(module), 2147483647)
-        self.assertIn('LOAD_ATTR_MODULE', handlers(read))
+        self.assertIn('GetAttr.Module', handlers(read))
         module.x = None
         self.assertIsNone(read(module))
         del module.x
@@ -390,7 +390,7 @@ class PyValueDictVMTests(unittest.TestCase):
         for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN + 1):
             self.assertEqual(read(owner), 3.25)
         self.assertTrue(set(handlers(read)) & {
-            'LOAD_ATTR_WITH_HINT', 'LOAD_ATTR_INSTANCE_VALUE', 'LOAD_ATTR_SHAPE'})
+            'GetAttr.Hint', 'GetAttr.Instance', 'GetAttr.Shape'})
         Owner.x = property(lambda self: 2147483647)
         self.assertEqual(read(owner), 2147483647)
 
@@ -423,7 +423,7 @@ class PyValueDictVMTests(unittest.TestCase):
 
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
             read(Owner)
-        self.assertTrue(set(handlers(read)) & {'LOAD_ATTR_INSTANCE_VALUE', 'LOAD_ATTR_SHAPE'})
+        self.assertTrue(set(handlers(read)) & {'GetAttr.Instance', 'GetAttr.Shape'})
         observe = True
         try:
             self.assertEqual(read(Owner), 2147483647)
@@ -669,7 +669,7 @@ class PyValueDictVMTests(unittest.TestCase):
             self.assertEqual(read(Owner()), 2147483647)
             self.assertEqual(property_call(Owner()), 31)
             self.assertEqual(method_call(Owner()), 2147483647)
-        self.assertTrue(any(name.startswith('LOAD_ATTR_METHOD')
+        self.assertTrue(any(name.startswith('GetMethod.Method')
                             for name in handlers(method_call)))
 
 

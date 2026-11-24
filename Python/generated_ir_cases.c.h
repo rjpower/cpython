@@ -1527,7 +1527,7 @@ ir_run_BINARY_OP_INPLACE_ADD_UNICODE(
                 assert(IR_IS_LOCAL(IR_A(ir_word)));
                 PyValue *target_local = &IR_SLOT(IR_A(ir_word));
                 assert(PyUnicode_CheckExact(left_o));
-                if (PyValue_AsKnownObjectBorrow(*target_local) != left_o) {
+                if (!PyValue_Is(*target_local, left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
@@ -18332,7 +18332,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 assert(IR_IS_LOCAL(IR_A(ir_word)));
                 PyValue *target_local = &IR_SLOT(IR_A(ir_word));
                 assert(PyUnicode_CheckExact(left_o));
-                if (PyValue_AsKnownObjectBorrow(*target_local) != left_o) {
+                if (!PyValue_Is(*target_local, left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }

@@ -1175,7 +1175,9 @@ dummy_func(
             assert(IR_IS_LOCAL(IR_DST));
             PyValue *target_local = &IR_SLOT(IR_DST);
             assert(PyUnicode_CheckExact(left_o));
-            EXIT_IF(PyValue_AsKnownObjectBorrow(*target_local) != left_o,
+            // The local may hold any word (an inline number, None, NULL):
+            // compare the words, not an object read from it
+            EXIT_IF(!PyValue_Is(*target_local, left),
                     "the next word stores the result to the left operand's local");
             STAT_INC(BINARY_OP, hit);
             /* Handle `left = left + right` or `left += right` for str.

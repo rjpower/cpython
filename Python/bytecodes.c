@@ -1741,7 +1741,7 @@ dummy_func(
 
         // The result remains C-owned through child retirement. Completion
         // publishes it to the caller or consumes it as a loop/send outcome.
-        returns op(_RETURN_VALUE, (retval: consumed --))
+        op(_RETURN_VALUE, (retval: consumed --))
             effects(switches_frame) exits(return, raise)
         {
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
@@ -1762,7 +1762,7 @@ dummy_func(
             IR_RETURN_TO_CALLER(temp, generator_return);
         }
 
-        ir_only returns op(_RETURN_VALUE_EMPTY, (retval: consumed --))
+        ir_only op(_RETURN_VALUE_EMPTY, (retval: consumed --))
             effects(switches_frame) exits(return, raise)
         {
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);

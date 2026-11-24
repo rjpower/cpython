@@ -21,6 +21,8 @@ record.
 from dataclasses import dataclass
 import re
 
+import analyzer
+
 from analyzer import (CALL_INVOKE_MARKERS, IR_MARKER_EFFECTS, Instruction, StackItem,
                       Uop, analysis_error)
 from generators_common import ROOT
@@ -533,12 +535,8 @@ def conditional(stmts: list[Stmt], token: Token, inside: bool = False) -> bool |
     return None
 
 
-def suspends_frame(uop: Uop) -> bool:
-    "Whether uop marks its generator's frame suspended: a yield"
-    tokens = " ".join(t.text for t in uop.body.tokens())
-    return bool(re.search(r"\bgi_frame_state\s*=\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens)
-                or re.search(r"\bFT_ATOMIC_STORE_INT8_RELEASE\s*\(\s*\w+\s*->\s*"
-                             r"gi_frame_state\s*,\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens))
+# The declared exits that continue in another frame, and their transfers
+SWITCH_TRANSFERS = (("enter", ENTER_FRAME), ("return", RETURN), ("yield", YIELD))
 
 
 def uop_transfers(uop: Uop, deopt_target: str) -> tuple[Transfer, ...]:
@@ -563,16 +561,26 @@ def uop_transfers(uop: Uop, deopt_target: str) -> tuple[Transfer, ...]:
                 if kind == JUMP and not target and conditional(uop.body.body, token):
                     kind = BRANCH
                 result.append(Transfer(kind, token, target))
-    # A frame switch that no site names continues in the other frame, in
-    # place of the next word
-    p = uop.properties
-    if p.returns and not any(t.kind == RETURN for t in result):
-        result.append(Transfer(RETURN))
-    elif p.switches_frame and not any(t.kind in (ENTER_FRAME, RETURN, YIELD) for t in result):
-        result.append(Transfer(YIELD if suspends_frame(uop) else ENTER_FRAME))
-    elif not p.always_exits:
+    # A body that switches frames with no site that names the switch
+    # (`frame = ...`) continues in the other frame in place of the next
+    # word, by the switch exits the uop declares (ir_contract.body_exits)
+    if (analyzer.assigns_frame(list(uop.body.tokens()))
+            and not any(t.kind in (ENTER_FRAME, RETURN, YIELD) for t in result)):
+        declared = declared_exits(uop)
+        result.extend(Transfer(kind) for exit, kind in SWITCH_TRANSFERS
+                      if exit in declared)
+    elif not uop.properties.always_exits:
         result.append(Transfer(NEXT))
     return tuple(result)
+
+
+def declared_exits(uop: Uop) -> frozenset[str]:
+    """uop's declared exits.  Until the cutover removes the undeclared form,
+    a uop without a contract that switches frames continues in the frame it
+    pushed"""
+    import ir_contract
+    contract = ir_contract.contract_of(uop)
+    return contract.exits if contract is not None else frozenset(("enter",))
 
 
 # Guard facts (tiers87, C5).  A guard fails when its condition holds, and

@@ -25,6 +25,7 @@ import dataclasses
 from dataclasses import dataclass, field
 import re
 
+import analyzer
 from analyzer import IR_MARKER_EFFECTS, Instruction, Uop, analysis_error
 from generators_common import ROOT
 from lexer import Token
@@ -1675,7 +1676,7 @@ def effect_sites(uop: Uop, table: dict[str, Row] | None = None) -> list[Site]:
     p = uop.properties
     if p.eval_breaker:
         sites.append(Site(uop.body.open, "polls", "the uop polls the eval breaker"))
-    if (p.switches_frame or p.returns) and not any(
+    if analyzer.assigns_frame(list(uop.body.tokens())) and not any(
             s.effect == "switches_frame" for s in sites):
         # A uop whose frame switch no row names switches at its start; one
         # that a row names (IR_ENTER_GENERATOR) switches there, after the
@@ -3763,11 +3764,16 @@ def check_results(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
                                          f"{source} gives an {mode} value", where)
 
 
-def body_exits(uop: Uop, table: dict[str, Row], implicit_guards: int) -> set[str]:
+SWITCH_EXITS = frozenset(("enter", "return", "yield"))
+
+
+def body_exits(uop: Uop, table: dict[str, Row], implicit_guards: int,
+               declared: frozenset[str] = frozenset()) -> set[str]:
     """The exits that uop's body takes: its sites' (the DSL's, its rows',
-    `goto` an error label, `return` from the evaluator), and those of its
-    properties: `returns` pops the frame and `switches_frame` continues in
-    another, each in place of `next` (the record's transfers)"""
+    `goto` an error label, `return` from the evaluator).  A body that
+    switches frames with no site that names the switch (`frame = ...`)
+    continues in the other frame in place of `next`, by the switch exits the
+    uop declares: the body cannot say which, and nothing infers it"""
     exits = set()
     tokens = _tokens(uop)
     for i, tkn in enumerate(tokens):
@@ -3792,22 +3798,26 @@ def body_exits(uop: Uop, table: dict[str, Row], implicit_guards: int) -> set[str
                           ir_records.conditional(uop.body.body, tkn) else exit)
     if implicit_guards:
         exits.add("miss")
-    p = uop.properties
-    if p.returns:
-        if "return" not in exits:
-            exits.add("return")
-    elif p.switches_frame:
-        if not exits & {"enter", "return", "yield"}:
-            exits.add("yield" if ir_records.suspends_frame(uop) else "enter")
-    elif not p.always_exits:
+    if analyzer.assigns_frame(list(uop.body.tokens())):
+        if not exits & SWITCH_EXITS:
+            exits |= declared & SWITCH_EXITS
+    elif not uop.properties.always_exits:
         exits.add("next")
     return exits
 
 
 def check_exits(uop: Uop, contract: Contract, table: dict[str, Row],
                 implicit_guards: int) -> None:
-    "V7: the declared exits are the body's"
-    actual = body_exits(uop, table, implicit_guards)
+    """V7: the declared exits are the body's; VT1: a uop declares
+    switches_frame exactly when it declares enter, return or yield"""
+    switches = "switches_frame" in contract.effects
+    if switches != bool(contract.exits & SWITCH_EXITS):
+        raise analysis_error(
+            f"{uop.name}: " + (f"declares switches_frame, but none of the exits "
+                               f"{', '.join(sorted(SWITCH_EXITS))}" if switches else
+                               f"declares exits({', '.join(sorted(contract.exits & SWITCH_EXITS))}), "
+                               "but not the effect switches_frame"), uop.body.open)
+    actual = body_exits(uop, table, implicit_guards, contract.exits)
     if actual != set(contract.exits):
         raise analysis_error(f"{uop.name}: declares exits({', '.join(sorted(contract.exits))}), "
                              f"but the body takes {', '.join(sorted(actual))}", uop.body.open)

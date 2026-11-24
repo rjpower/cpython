@@ -221,6 +221,20 @@ class SliceTests(unittest.TestCase):
     LISTED_LEAF_DIFFERENCES = [
         ("FOR_ITER_LIST.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
         ("FOR_ITER_TUPLE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
+        # G0d1: a yield is declared (`exits(yield)`); with the declarations
+        # removed the inference no longer reads the generator's state, and
+        # a frame switch that no site names is an entry
+        ("YIELD_VALUE.record.uops[1].transfers[0].kind:", '"ENTER_FRAME", declared "YIELD"'),
+        ("INSTRUMENTED_YIELD_VALUE.record.uops[2].transfers[0].kind:",
+         '"ENTER_FRAME", declared "YIELD"'),
+        ("INSTRUMENTED_YIELD_VALUE_XFER_SEND.record.uops[2].transfers[0].kind:",
+         '"ENTER_FRAME", declared "YIELD"'),
+        ("INSTRUMENTED_YIELD_VALUE_XFER_STORE_LOCAL.record.uops[2].transfers[0].kind:",
+         '"ENTER_FRAME", declared "YIELD"'),
+        ("YIELD_VALUE_XFER_SEND.record.uops[1].transfers[0].kind:",
+         '"ENTER_FRAME", declared "YIELD"'),
+        ("YIELD_VALUE_XFER_STORE_LOCAL.record.uops[1].transfers[0].kind:",
+         '"ENTER_FRAME", declared "YIELD"'),
     ]
 
     def test_declarations_equal_the_inference(self):
@@ -2035,6 +2049,26 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"passes `x` to PyValue_AsKnownObjectBorrow, which requires .*object of it")
 
+    def test_a_frame_switch_is_declared(self):
+        # The switches_frame effect and the switch exits (enter, return,
+        # yield) are the authority; the body's `frame =` is held to them and
+        # never names which switch it is
+        source = """
+            op(_OP, (--)) effects(%s) exits(%s) {
+                frame = tstate->current_frame;
+            }
+        """
+        self.verify(source % ("switches_frame", "enter"))
+        self.verify(source % ("switches_frame", "yield"))
+        self.refuses(source % ("switches_frame", "next"),
+                     r"declares switches_frame, but none of the exits enter, return, yield")
+        self.refuses(source % ("reads", "next"), r"may switches_frame")
+        self.refuses("""
+            op(_OP, (--)) effects() exits(enter) {
+                int x = 0;
+            }
+        """, r"declares exits\(enter\), but not the effect switches_frame")
+
     def test_a_redirect_is_its_own_exit(self):
         # _MONITOR_RESUME, _YIELD_VALUE_EVENT: after a callback moved the
         # frame, the word leaves for the word it chose (DISPATCH_REDIRECT),
@@ -2770,15 +2804,16 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"`return` is a form the walk does not model")
 
-    def test_frame_properties_give_exits(self):
+    def test_a_switch_exit_needs_a_switch(self):
+        # A declared switch exit names how the body's frame switch leaves;
+        # a body that does not switch completes, whatever it declares
         source = """
-            returns op(_RET, (--)) effects(switches_frame) exits(%s) {
+            op(_RET, (--)) effects(switches_frame) exits(%s) {
                 int x = 0;
             }
         """
-        self.verify(source % "return")
-        self.refuses(source % "next, return",
-                     r"declares exits\(next, return\), but the body takes return")
+        self.refuses(source % "return",
+                     r"declares exits\(return\), but the body takes next")
 
     # F4: inputs the skeleton closes
 

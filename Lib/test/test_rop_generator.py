@@ -315,7 +315,7 @@ class EnvironmentTests(unittest.TestCase):
 
 
 INDEXED = """\
-family F(dst:Dst, x:Src, fb:Fb<Attr>) exits(next, miss);
+family F(dst:Dst, x:Src, fb:Fb<Attr>) exits(next, miss) ops(LOAD_ATTR);
 extern helper classify(v:B, f:Fb<Attr>)
   cases(first(r:Recipe<Attr>), second(), none())
   effects(reads)

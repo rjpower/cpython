@@ -5,6 +5,14 @@
 
 #ifdef IR_FUNCTION_FORMS
 /* The rows of pycore_ir_components.h against their C definitions */
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_None), PyValue),
+              "PyValue_None: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_True), PyValue),
+              "PyValue_True: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_False), PyValue),
+              "PyValue_False: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(PyValue_NULL), PyValue),
+              "PyValue_NULL: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsNull((PyValueBorrow){0})), bool),
               "PyValue_IsNull: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsInlineInt((PyValueBorrow){0})), bool),

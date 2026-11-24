@@ -32,6 +32,8 @@
  * values), MEASURE(kind) of argument 0, TEST(true facts | false facts, ...)
  * per argument, CONTEXT("reason"), VALUE(mode facts [null_iff(k)])
  * (infallible; with null_iff(k) NULL exactly where argument k is),
+ * VALUE(moved(k)) (argument k itself, a consumed one, with its
+ * obligation: TAKE),
  * VALUE_OR_NULL(mode facts) (NULL means raised), STATUS(ZERO | NEGATIVE |
  * NONZERO) (the failure value of an int status: raised, and the `out`
  * arguments unwritten).
@@ -57,6 +59,10 @@
  *       a field read through a pointer along a path (`tp->tp_version_tag`
  *       with tp the type of an operand): a MEASURE or a TEST of the
  *       operand
+ *   CONSTANT(name, VALUE(inline facts))
+ *       a static immortal value (V8's roots): PyValue_None, PyValue_True,
+ *       PyValue_False and PyValue_NULL, whose fact is `null`, the negation
+ *       of nonnull
  *
  * Rows for C functions are trusted declarations: the static checks hold
  * their types, not their effects, to the C definitions (rd/design.md
@@ -70,9 +76,17 @@
 
 /* Values and numbers */
 #define _PyIR_COMPONENTS_VALUES(PRIMITIVE, HELPER, MACRO) \
-    /* Tag tests: bits in, no memory */ \
+    /* Static immortal values (pycore_value.h): None, True and False are \
+     * their static objects' addresses tagged Py_TAG_REFCNT, which no count \
+     * changes, and NULL is bits 0 */ \
+    CONSTANT(PyValue_None, VALUE(inline exact(_PyNone_Type))) \
+    CONSTANT(PyValue_True, VALUE(inline exact(PyBool_Type))) \
+    CONSTANT(PyValue_False, VALUE(inline exact(PyBool_Type))) \
+    CONSTANT(PyValue_NULL, VALUE(inline null)) \
+    /* Tag tests: bits in, no memory.  PyValue_IsNull is bits == 0: NULL \
+     * exactly when it holds */ \
     PRIMITIVE(PyValue_IsNull, bool, (PyValueBorrow), \
-              ARGS(borrowed), TEST(| nonnull), EFFECTS()) \
+              ARGS(borrowed), TEST(null | nonnull), EFFECTS()) \
     PRIMITIVE(PyValue_IsInlineInt, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(inline_int), EFFECTS()) \
     /* PyValue_IsObject (Include/internal/pycore_pyvalue.h): bits > 2, in \

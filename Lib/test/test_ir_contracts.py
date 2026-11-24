@@ -158,10 +158,6 @@ EXTRA_ROWS = """
     HELPER(T, PyValue, (PyValue), ARGS(taken), \\
            VALUE_OR_NULL(owned), EFFECTS(allocates, raises)) \\
     MACRO(SPAM_GUARD, ARGS(scalar), NONE, EFFECTS(), EXITS(miss)) \
-    CONSTANT(PyValue_None, VALUE(inline exact(_PyNone_Type))) \
-    CONSTANT(PyValue_True, VALUE(inline exact(PyBool_Type))) \
-    CONSTANT(PyValue_False, VALUE(inline exact(PyBool_Type))) \
-    CONSTANT(PyValue_NULL, VALUE(inline null)) \
     MACRO(TAKE, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS()) \
     HELPER(_PyValue_Size, Py_ssize_t, (PyValueBorrow), ARGS(borrowed), SCALAR, \
            EFFECTS(runs_python)) \
@@ -1304,6 +1300,21 @@ class VerifierTests(unittest.TestCase):
                                                  r"value"):
             ir_contract.parse_rows("#define X(PRIMITIVE, HELPER, MACRO) "
                                    "CONSTANT(SPAM, VALUE(owned))")
+
+    def test_null_is_the_negation_of_nonnull(self):
+        # PyValue_IsNull declares both sides; `null` implies nothing more
+        null = ir_contract.parse_fact("null", None)
+        self.assertEqual(self.table["PyValue_IsNull"].result.tests,
+                         ((frozenset({null}), frozenset({ir_contract.NONNULL})),))
+        self.assertEqual(ir_contract.implied({null}), {null})
+        # A word that is NULL where a guard passes declares it
+        source = """
+            op(_GUARD, (x -- x: %s)) effects() exits(next, deopt) {
+                DEOPT_IF(!PyValue_IsNull(x));
+            }
+        """
+        self.verify(source % "null")
+        self.refuses(source % "nonnull", r"the guards establish null of `x`")
 
     def test_a_null_arm_follows_its_condition(self):
         # _CALL_INTRINSIC_2: NULL exactly where the raise's condition holds

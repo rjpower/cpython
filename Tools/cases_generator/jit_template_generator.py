@@ -1002,11 +1002,12 @@ def single_test(name: str):
 
 
 def is_null_test(name: str) -> bool:
-    """The test whose false side declares the word not NULL and whose true
-    side declares nothing (`TEST(| nonnull)`): the negation of that fact, so
-    that a word known not NULL decides it"""
+    """The test whose true side declares the word NULL and whose false side
+    not NULL (`TEST(null | nonnull)`): `null` contradicts a known nonnull,
+    so that a word known not NULL decides it"""
     t = single_test(name)
-    return t is not None and not t[0] and ir_contract.NONNULL in ir_contract.implied(t[1])
+    return (t is not None and ir_contract.NULL_FACT in t[0]
+            and ir_contract.NONNULL in ir_contract.implied(t[1]))
 
 
 def test_facts(name: str) -> tuple[bool, bool]:

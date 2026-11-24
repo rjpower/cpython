@@ -971,13 +971,31 @@ class Contract:
         return frozenset().union(*(RECORD_EFFECT[e] for e in self.effects))
 
 
+# moved(home): an output that takes the value and the obligation of the
+# operand home it is loaded from, which the uop overwrites on every path to
+# next (_SWAP_FAST, _LOAD_FAST_AND_CLEAR).  To the stack it is a new owner,
+# mode owned with source home; a home may hold NULL, so it may be NULL
+HOME_SOURCE = "home"
+
+
+def _home_origin(key: str) -> str:
+    "the origin of a value loaded from home `key` that the uop has not yet overwritten"
+    return f"{HOME_SOURCE}({key})"
+
+
 def _item(stack_item, modes: tuple[str, ...], where: Token) -> Item:
     name, through = stack_item.name, stack_item.peek
     mode, source, facts = "", "", []
     words, assumed = _assumptions(list(stack_item.contract), where)
+    nullable = stack_item.nullable
     for w in words:
         m = re.fullmatch(r"moved\((\w+)\)", w)
-        if m and "moved" in modes:
+        if m and "moved" in modes and m.group(1) == HOME_SOURCE:
+            # A new owner on the stack, whose obligation was the home's (the
+            # record's OWNED); a home may hold NULL, an unbound local
+            mode, source = "owned", HOME_SOURCE
+            nullable = True
+        elif m and "moved" in modes:
             mode, source = "moved", m.group(1)
         elif w in modes and mode and w in FACT_KIND:
             # `inline` is a mode and a fact: after the mode it is the fact
@@ -992,7 +1010,7 @@ def _item(stack_item, modes: tuple[str, ...], where: Token) -> Item:
         raise analysis_error(f"`{name}` declares no mode ({', '.join(modes)})", where)
     if mode and through:
         raise analysis_error(f"`{name}` passes through, so it takes no mode", where)
-    return Item(name, mode, source, frozenset(facts), stack_item.nullable,
+    return Item(name, mode, source, frozenset(facts), nullable,
                 stack_item.is_array(), stack_item.size, assumed)
 
 
@@ -2083,6 +2101,10 @@ class OwnershipWalk:
                 continue
             live = state.facts.get(out.name, frozenset())
             source = state.sources.get(out.name)
+            if out.source == HOME_SOURCE and state.origins.get(out.name) != HOME_SOURCE:
+                self.fail(where, f"on next, `{out.name}` is declared moved(home), but the "
+                          "home it is loaded from still holds it on some path: overwrite "
+                          "the home")
             # An output declared `null` is NULL on next (_PUSH_NULL)
             if not out.nullable and NULL_FACT not in out.facts and NONNULL not in live:
                 if source is not None:
@@ -2424,6 +2446,15 @@ class OwnershipWalk:
         start = next((j for j in range(len(lhs) - 1, -1, -1) if lhs[j] in (";", "{", "}")), -1)
         call = _call_of(lhs[start + 1:], self.table)
         return call is not None and call[0].result.shape == "HOME"
+
+    def home_key(self, tokens: list[str]) -> str | None:
+        "the home that a HOME row call at the end of tokens addresses, as text"
+        start = next((j for j in range(len(tokens) - 1, -1, -1)
+                      if tokens[j] in (";", "{", "}", "=")), -1)
+        call = _call_of(_uncast(_strip(tokens[start + 1:])), self.table)
+        if call is None or call[0].result.shape != "HOME":
+            return None
+        return f"{call[0].name}({', '.join(' '.join(a) for a in call[1])})"
 
     def kill_home_loads(self, state: _State) -> None:
         "The values loaded from homes may be gone: their facts die (F18)"
@@ -2778,10 +2809,16 @@ class OwnershipWalk:
             return
         if self.home_store(texts, i):
             # A home write (F18): the value's obligation moves into the
-            # home, and what was loaded from a home dies
+            # home, and what was loaded from a home dies.  The home's old
+            # value is no longer the home's: a moved(home) output loaded
+            # from it takes it
             if len(rhs) == 1 and rhs[0] in state.owners:
                 self.take(rhs[0], state, toks[0], "moves into a home")
                 state.end_restart(f"the store of `{rhs[0]}` into a home")
+            key = self.home_key(texts[:i])
+            for name, origin in list(state.origins.items()):
+                if key is not None and origin == _home_origin(key):
+                    state.origins[name] = HOME_SOURCE
             self.kill_home_loads(state)
             return
         if i >= 2 and texts[i - 2] in ("->", ".") or not re.fullmatch(r"\w+", lhs):
@@ -2841,6 +2878,13 @@ class OwnershipWalk:
         if NULL_FACT in state.facts.get(out.name, frozenset()):
             return
         what = f"`{out.name}` is declared {out.mode or 'a pass-through'}"
+        if out.source == HOME_SOURCE:
+            if not (origin or "").startswith(HOME_SOURCE):
+                self.fail(toks[0], f"`{out.name}` is declared moved(home), but is assigned "
+                          f"`{' '.join(rhs)}`, which "
+                          + ("differs by path" if origin is None
+                             else "is no value loaded from a home"))
+            return
         if out.mode == "moved" and origin != out.source:
             self.fail(toks[0], f"`{out.name}` is declared moved({out.source}), but is "
                       f"assigned `{' '.join(rhs)}`, which "
@@ -2897,14 +2941,14 @@ class OwnershipWalk:
             # or NULL.  Its facts and identity go with it
             facts = state.facts[rhs[0]]
             if (out is not None and out.mode == "owned" and INLINE not in facts
-                    and NULL_FACT not in facts):
+                    and NULL_FACT not in facts and out.source != HOME_SOURCE):
                 self.fail(toks[0], f"`{lhs}` is declared owned, but `{rhs[0]}` holds no "
                           f"owner (from {state.sources.get(rhs[0], 'its assignment')}): "
                           "no owner moves")
             state.assign(lhs, facts, state.pending.get(rhs[0]),
                          state.sources.get(rhs[0], rhs[0]))
             state.origins[lhs] = state.origins.get(rhs[0], "")
-            if out is not None and out.mode == "owned":
+            if out is not None and (out.mode == "owned" or out.source == HOME_SOURCE):
                 state.owners[lhs] = NULL if NULL_FACT in facts else HELD
                 self.new.add(lhs)
             if out is not None:
@@ -2921,6 +2965,11 @@ class OwnershipWalk:
             # A home load: a borrowed copy of the home's value, whose facts
             # die at a home write and a reentry
             state.assign(lhs, frozenset(), None, row.name)
+            state.origins[lhs] = _home_origin(self.home_key(_uncast(rhs)) or "")
+            if out is not None and out.source == HOME_SOURCE:
+                # The home's obligation, once the uop overwrites the home
+                state.owners[lhs] = HELD
+                self.new.add(lhs)
             if out is not None:
                 state.end_restart(f"the assignment of the output `{lhs}`")
             return
@@ -3140,7 +3189,8 @@ def check_results(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
     so is a moved output's identity (check_identity)"""
     inputs = {i.name: i for i in contract.inputs}
     for out in contract.outputs:
-        if out.mode in ("", "borrowed", "moved"):
+        # A moved(home) output's value is a home's, which the walk checks
+        if out.mode in ("", "borrowed", "moved") or out.source == HOME_SOURCE:
             continue
         for where, rhs in _assignments(uop, out.name):
             for gives, mode, source in _value_results(uop, where, rhs, table, inputs):

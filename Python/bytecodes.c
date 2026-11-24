@@ -285,7 +285,9 @@ dummy_func(
             value = PyValue_DUP(GETLOCAL(oparg));
         }
 
-        leaf inst(LOAD_FAST_AND_CLEAR, (-- value)) {
+        leaf inst(LOAD_FAST_AND_CLEAR, (-- value: moved(home)))
+            effects() exits(next)
+        {
             value = GETLOCAL(oparg);
             GETLOCAL(oparg) = PyValue_NULL;
         }
@@ -339,7 +341,9 @@ dummy_func(
 
         macro(STORE_FAST) = _SWAP_FAST + POP_TOP;
 
-        leaf op(_SWAP_FAST, (value -- trash)) {
+        leaf op(_SWAP_FAST, (value: consumed -- trash: moved(home)))
+            effects() exits(next)
+        {
             PyValue tmp = GETLOCAL(oparg);  // a move: replaced below
             GETLOCAL(oparg) = value;
             _PyValue_CheckHome(value);

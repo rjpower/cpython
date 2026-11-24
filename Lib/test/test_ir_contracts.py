@@ -1827,6 +1827,50 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"`#elif` is a preprocessor form the walk does not model")
 
+    # Item 4 of G0a4: a move out of an operand home
+
+    def test_a_move_out_of_a_home(self):
+        # _LOAD_FAST_AND_CLEAR and _SWAP_FAST: the output takes the home's
+        # value and obligation once the uop overwrites the home
+        self.verify("""
+            op(_OP, (-- value: moved(home))) effects() exits(next) {
+                value = GETLOCAL(oparg);
+                GETLOCAL(oparg) = PyValue_NULL;
+            }
+        """)
+        source = """
+            op(_OP, (value: consumed -- trash: moved(home))) effects() exits(next) {
+                PyValue tmp = GETLOCAL(oparg);
+                %s
+                trash = tmp;
+            }
+        """
+        self.verify(source % "GETLOCAL(oparg) = value;")
+        # The home still holds it: two owners
+        self.refuses(source % "GETLOCAL(oparg + 1) = value;",
+                     r"on next, `trash` is declared moved\(home\), but the home it is "
+                     r"loaded from still holds it")
+        self.refuses(source % "if (oparg) { GETLOCAL(oparg) = value; } else { "
+                              "GETLOCAL(oparg + 1) = value; }",
+                     r"`trash` is declared moved\(home\), but is assigned `tmp`, which "
+                     r"differs by path")
+        # Only a home's value
+        self.refuses("""
+            op(_OP, (-- value: moved(home))) effects() exits(next) {
+                value = PyValue_None;
+            }
+        """, r"`value` is declared moved\(home\), but is assigned `PyValue_None`, which "
+             r"is no value loaded from a home")
+        # It may be NULL, an unbound local; the stack sees a new owner
+        contract = ir_contract.contract_of(self.verify("""
+            op(_OP, (-- value: moved(home))) effects() exits(next) {
+                value = GETLOCAL(oparg);
+                GETLOCAL(oparg) = PyValue_NULL;
+            }
+        """).uops["_OP"])
+        self.assertEqual(contract.outputs[0], ir_contract.Item(
+            "value", "owned", ir_contract.HOME_SOURCE, nullable=True))
+
     # F18: a frame home is not the heap
 
     def test_homes_are_their_own_location(self):

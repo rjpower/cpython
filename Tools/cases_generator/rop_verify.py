@@ -37,7 +37,7 @@ from rop_model import (RESULT_CASE, Advance, Arm, Block, BoolLit, Branch, Call,
                        CallTerm, Cases, Contract, Diagnostic, Each, Exit, Expr, Extern,
                        FactUse, Family, Goto, Guard, HandleType, Let, Macro, Name, Nat,
                        Param, Point, Publish, Returns, SchemaType, SpanLit, SrcSpan,
-                       Target, Type, WrapType, DISCARD, ENTRY)
+                       Tail, Target, Type, WrapType, DISCARD, ENTRY)
 from rop_print import expr_text
 
 
@@ -84,6 +84,11 @@ REFERENCE_HANDLES = frozenset({Handle.B, Handle.Obj, Handle.Fun, Handle.Gen,
 # Control values that a callback can make stale: a head that a row
 # computed (a completion target), not a target operand or next_head
 CONTROL_HANDLES = frozenset({Handle.Head})
+
+# The row that pins the departing frame's code before a return or yield
+# releases the frame: compiled code may still be running in it
+PIN_DEPARTING = "pin_departing"
+DEPARTING_EXITS = frozenset({"return", "yield"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,11 +187,12 @@ class State:
     points: frozenset[str] = frozenset()
     # The homes as the last publish left them, checked against its point
     published: frozenset[tuple[str, HomeState]] | None = None
+    pinned: Event | None = None        # pin_departing on this path
 
     def copy(self) -> "State":
         return State(dict(self.live), dict(self.gone), dict(self.homes), set(self.facts),
                      dict(self.refs), dict(self.dead), dict(self.alias), self.action,
-                     self.commit, self.points, self.published)
+                     self.commit, self.points, self.published, self.pinned)
 
     def canonical(self, name: str) -> str:
         while name in self.alias:
@@ -201,7 +207,8 @@ class State:
 
     def signature(self) -> tuple[object, ...]:
         return (frozenset(self.live), frozenset(self.gone), frozenset(self.homes.items()),
-                frozenset(self.facts), frozenset(self.dead), self.points)
+                frozenset(self.facts), frozenset(self.dead), self.points,
+                self.pinned is not None)
 
 
 Callee = Extern | Macro
@@ -394,7 +401,7 @@ def entry_state(w: Walk, params: tuple[Param, ...]) -> State:
             st.homes[p.name] = HomeState(Home.full)
         elif is_linear(t):
             st.live[p.name] = Token(p.span, "the caller", None, p.name in w.contract.borrows)
-        elif w.family is not None and is_source(t) and handle_of(t) != Handle.Args:
+        elif w.family is not None and is_source(t):
             st.homes[p.name] = HomeState(Home.intact)
         elif w.family is not None and is_dest(t):
             st.homes[p.name + "/dst"] = HomeState(Home.untouched)
@@ -465,6 +472,8 @@ def run_block(w: Walk, b: Block, st: State,
     elif isinstance(t, Advance):
         check_loop_tokens(w, st, t)
         new_back.setdefault(t.body, []).append((b.label, st.copy()))
+    elif isinstance(t, Tail):
+        do_tail(w, st, t)
     else:
         do_exit(w, st, t)
 
@@ -578,6 +587,8 @@ def merge(w: Walk, b: Block, edges: list[tuple[str, State]],
         out.points = out.points | s.points if out.points and s.points else frozenset()
         if out.published != s.published:
             out.published = None
+        if s.pinned is None:
+            out.pinned = None
     for k in list(out.live):
         if k not in params and not visible(w, k, label):
             del out.live[k]
@@ -810,6 +821,8 @@ def apply_call(w: Walk, st: State, callee: Callee, exprs: tuple[Expr, ...],
                     spend(w, st, item.name, item.span, what)
     for e in sorted(effects, key=lambda x: x.value):
         use_effect(w, st, e, span, what)
+    if callee.name == PIN_DEPARTING and st.pinned is None:
+        st.pinned = (span, what)
     if effects - {Effect.reads}:
         adapt = is_feedback_write(c) and effects <= ADAPTATION
         set_action(st, span, what, adaptation=adapt)
@@ -1095,7 +1108,12 @@ def do_exit(w: Walk, st: State, t: Exit) -> None:
         if point is not None:
             accounted = check_point(w, st, point, t.span, f"raise at {point_name}",
                                     held_tokens=True)
-    elif kind in ("enter", "return"):
+    elif kind == "enter":
+        use_effect(w, st, Effect.switches_frame, t.span, what)
+        if args[0] is not None:
+            take(w, st, args[0], t.span, what)
+        check_enter(w, st, t)
+    elif kind == "return":
         use_effect(w, st, Effect.switches_frame, t.span, what)
         check_transfer(w, st, t, kind)
     elif kind in ("yield", "redirect", "exit"):
@@ -1105,6 +1123,8 @@ def do_exit(w: Walk, st: State, t: Exit) -> None:
             take(w, st, args[0], t.span, what)
     if kind in ("next", "branch", "jump"):
         check_completion(w, st, t, what)
+    if kind in DEPARTING_EXITS:
+        check_pinned(w, st, t.span, what)
     for n, tok in sorted(st.live.items()):
         if n in accounted:
             continue
@@ -1141,15 +1161,41 @@ def check_completion(w: Walk, st: State, t: Exit, what: str) -> None:
                      f"{hs.text()}, but no publish names a point for it")
 
 
+def do_tail(w: Walk, st: State, t: Tail) -> None:
+    """`tail r(args)`: the routine is taken at its declaration and finishes
+    the word by its own exits; nothing may be left outstanding."""
+    x = w.program.externs[t.callee]
+    what = f"tail {t.callee}"
+    args = [value(w, st, a) for a in t.args]
+    apply_call(w, st, x, t.args, args, t.span)
+    if DEPARTING_EXITS & set(x.contract.exits):
+        check_pinned(w, st, t.span, what)
+    for n, tok in sorted(st.live.items()):
+        w.report(t.span, Rule.ownership, f"{what} leaves {display(n)} (made by "
+                 f"{tok.what} at {tok.span}) unaccounted")
+
+
+def check_pinned(w: Walk, st: State, span: SrcSpan, what: str) -> None:
+    if st.pinned is None:
+        w.report(span, Rule.control, f"{what} releases the departing frame, whose "
+                 f"code is not pinned on this path: call {PIN_DEPARTING}() first")
+
+
+def check_enter(w: Walk, st: State, t: Exit) -> None:
+    """`exit enter(c) resume P`: the caller's homes are P's when the child
+    returns, except P's definition, which the child's value makes.  It is
+    not defined before the transfer."""
+    p = w.program.points.get(t.resume or "")
+    if p is None:
+        return
+    check_point(w, st, p, t.span, f"exit enter resume {p.name}", held_tokens=False,
+                resume=True)
+
+
 def check_transfer(w: Walk, st: State, t: Exit, kind: str) -> None:
-    """A direct frame transfer names its frame and its owner map: a point
-    with the matching frame role published on every path, and a frame that
-    is not the current one."""
-    role = FrameRole.child if kind == "enter" else FrameRole.caller
-    frame = t.args[0] if t.args else None
-    if kind == "enter" and isinstance(frame, Name) and frame.name == "frame":
-        w.report(t.span, Rule.control, "exit enter(frame, ...): the current frame is "
-                 "not a child frame")
+    """A return names its frame and its owner map: a point with the caller
+    frame role published on every path."""
+    role = FrameRole.caller
     points = [w.program.points.get(p) for p in sorted(st.points)]
     if not points or any(p is None or p.frame != role for p in points):
         w.report(t.span, Rule.control, f"exit {kind}: no publish names the owner map "
@@ -1162,10 +1208,11 @@ def check_transfer(w: Walk, st: State, t: Exit, kind: str) -> None:
 
 
 def check_point(w: Walk, st: State, p: Point, span: SrcSpan, what: str,
-                held_tokens: bool) -> set[str]:
+                held_tokens: bool, resume: bool = False) -> set[str]:
     """The point's keep, spent, defs and held lists against the homes and
     owners: a source is kept if intact, spent if spent, held if an owner
-    acquired from it is outstanding; a destination is a def if published.
+    acquired from it is outstanding; a destination is a def if published
+    (at a resume point, defined later by the child's return, so not yet).
     Returns the tokens the point accounts for (those held)."""
     roles: dict[str, str] = {}
     for role, names in (("keep", p.keep), ("spent", p.spent), ("held", p.held)):
@@ -1177,6 +1224,11 @@ def check_point(w: Walk, st: State, p: Point, span: SrcSpan, what: str,
             name = h.removesuffix("/dst")
             declared = name in p.defs
             actual = hs.state == Home.defined
+            if resume:
+                if actual:
+                    w.report(span, Rule.points, f"{what}: {name} is {hs.text()} "
+                             f"before the child returns; the return defines it")
+                continue
             if declared != actual:
                 w.report(span, Rule.points, f"{what}: {p.name} "
                          f"{'lists' if declared else 'does not list'} {name} in defs, "

@@ -207,8 +207,7 @@ static const _PyRopOperand _PyRop_Operands_BuildText[] = {
 static const _PyRopOperand _PyRop_Operands_Call[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"fn", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
-    {"self", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 40, IR_F_LOCAL_C},  /* Maybe<Src> */
-    {"args", ROP_FIELD_VECTOR, ROP_ROLE_NONE, 0, 0, 0, 0},  /* Args */
+    {"args", ROP_FIELD_VECTOR, ROP_ROLE_NONE, 0, 12, 40, 0},  /* Args */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 52, 0},  /* Fb<Call> */
 };
 static const _PyRopOperand _PyRop_Operands_CallEx[] = {
@@ -221,8 +220,7 @@ static const _PyRopOperand _PyRop_Operands_CallEx[] = {
 static const _PyRopOperand _PyRop_Operands_CallKw[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"fn", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
-    {"self", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 40, IR_F_LOCAL_C},  /* Maybe<Src> */
-    {"args", ROP_FIELD_VECTOR, ROP_ROLE_NONE, 0, 0, 0, 0},  /* Args */
+    {"args", ROP_FIELD_VECTOR, ROP_ROLE_NONE, 0, 12, 40, 0},  /* Args */
     {"names", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 52, IR_F_LOCAL_D},  /* Src */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 64, 0},  /* Fb<Call> */
 };
@@ -538,9 +536,9 @@ static const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {
     [ROP_FAMILY_Build] = {"Build", 3, 0, _PyRop_Operands_Build},
     [ROP_FAMILY_BuildSlice] = {"BuildSlice", 2, 0, _PyRop_Operands_BuildSlice},
     [ROP_FAMILY_BuildText] = {"BuildText", 4, 0, _PyRop_Operands_BuildText},
-    [ROP_FAMILY_Call] = {"Call", 5, 0, _PyRop_Operands_Call},
+    [ROP_FAMILY_Call] = {"Call", 4, 0, _PyRop_Operands_Call},
     [ROP_FAMILY_CallEx] = {"CallEx", 5, 1, _PyRop_Operands_CallEx},
-    [ROP_FAMILY_CallKw] = {"CallKw", 6, 1, _PyRop_Operands_CallKw},
+    [ROP_FAMILY_CallKw] = {"CallKw", 5, 1, _PyRop_Operands_CallKw},
     [ROP_FAMILY_Cell] = {"Cell", 5, 0, _PyRop_Operands_Cell},
     [ROP_FAMILY_CleanupThrow] = {"CleanupThrow", 5, 1, _PyRop_Operands_CleanupThrow},
     [ROP_FAMILY_Compare] = {"Compare", 6, 1, _PyRop_Operands_Compare},

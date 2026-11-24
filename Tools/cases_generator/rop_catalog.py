@@ -217,6 +217,25 @@ class ExitKind(enum.Enum):
     redirect = "redirect"
 
 
+# The static evidence that selects an arm of a family without a miss
+# (`select(...)`): the translator, or a static word array, knows it when it
+# emits the word.  Each dimension has exactly one member that holds; an arm
+# names at most one member per dimension, and omitting a dimension admits
+# every member of it.
+class Select(enum.Enum):
+    thread_frame = "thread_frame"          # the code runs in a thread frame
+    generator_frame = "generator_frame"    # in a generator-owned frame
+    entry_frame = "entry_frame"            # the evaluator's entry frame
+    vacant_scratch = "vacant_scratch"      # every temporary but the operand is vacant
+    live_scratch = "live_scratch"          # some other temporary may hold a value
+
+
+SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
+    "frame": (Select.thread_frame, Select.generator_frame, Select.entry_frame),
+    "scratch": (Select.vacant_scratch, Select.live_scratch),
+}
+
+
 # The environment every graph may read: the declared execution context
 ENVIRONMENT = {
     "thread": Handle.Thread,
@@ -450,6 +469,14 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("value_or_null", CReturn.value,
           COutcome(CTest.nonnull, _RES, (_RES,), False),
           COutcome(CTest.null, _RES, (_EXC,), True)),
+    # Always raises: void, with the exception set
+    _conv("raised", CReturn.void, COutcome(CTest.always, _RES, (_EXC,), True)),
+    # A pointer, or NULL with the exception set
+    _conv("pointer_or_raised", CReturn.pointer,
+          COutcome(CTest.nonnull, _RES, (_RES,), False),
+          COutcome(CTest.null, _RES, (_EXC,), True)),
+    # A routine's binding: a macro that leaves the word itself (`tail`)
+    _conv("tail", CReturn.void, COutcome(CTest.always, _RES, (), False), single=True),
     # hit(p)/absent(): a pointer or NULL, no exception
     _conv("pointer_or_null", CReturn.pointer,
           COutcome(CTest.nonnull, _RES, (_RES,), False),

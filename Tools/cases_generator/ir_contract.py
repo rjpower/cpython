@@ -637,6 +637,7 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
         lines.append(f"static_assert(__builtin_types_compatible_p(__typeof__({expr}), {ctype}),")
         lines.append(f"              \"{name}: its C type differs from pycore_ir_components.h\");")
 
+    constants = []
     for row in table.values():
         if row.kind in ("HELPER", "ROUTINE"):
             check(f"&{row.name}", f"{row.ret} (*)({', '.join(row.params) or 'void'})",
@@ -649,7 +650,14 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
             call = ", ".join(f"({p}){{0}}" for p in row.params)
             check(f"{row.name}({call})", row.ret, row.name)
         elif row.kind == "CONSTANT":
-            check(row.name, "PyValue", row.name)
+            constants.append(row.name)
+    if constants:
+        # A constant's compound literal holds an address, which is no constant
+        # expression at file scope (GCC refuses it without optimization)
+        lines.append("static inline void _PyIR_CheckConstants(void) {")
+        for name in constants:
+            check(name, "PyValue", name)
+        lines.append("}")
     return lines
 
 

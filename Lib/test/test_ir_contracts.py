@@ -137,11 +137,15 @@ class SliceTests(unittest.TestCase):
         checks = "\n".join(ir_contract.component_checks())
         table = ir_contract.rows()
         for row in table.values():
-            if row.kind in ("HELPER", "PRIMITIVE", "DESTRUCTOR", "FIELD"):
+            if row.kind in ("HELPER", "PRIMITIVE", "DESTRUCTOR", "FIELD", "CONSTANT"):
                 self.assertIn(f'"{row.name}: its C type differs', checks)
         self.assertIn("__typeof__(&_PyValue_BoxInt64), PyValue (*)(int64_t)", checks)
         self.assertIn("__typeof__(&_PyLong_ExactDealloc), void (*)(PyObject *)", checks)
         self.assertIn("__typeof__(((PyTypeObject *)0)->tp_version_tag), unsigned int", checks)
+        # at block scope: an address in a file-scope literal is no constant
+        self.assertIn("static inline void _PyIR_CheckConstants(void) {\n"
+                      "static_assert(__builtin_types_compatible_p("
+                      "__typeof__(PyValue_None), PyValue),", checks)
         generated = (BYTECODES.parent / "generated_ir_cases.c.h").read_text()
         self.assertIn(checks, generated)
 

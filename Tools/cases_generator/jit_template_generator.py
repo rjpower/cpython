@@ -21,6 +21,7 @@ from dataclasses import dataclass, replace
 
 import ir_generator
 import ir_leaf
+import ir_contract
 import ir_numbers
 from analyzer import analyze_files
 from generators_common import DEFAULT_INPUT, ROOT
@@ -40,13 +41,15 @@ class Lowering:
     temps: int = 0          # general registers
     xtemps: int = 0         # xmm registers
     calls: bool = False     # may call a helper: the live registers are saved
+    exits: bool = False     # takes the exit for NULL (a constructor) or false (a
+                            # predicate that branches to make its bool) as aux
 
 
 LOWERINGS = {
     # Tags
     "PyValue_IsNull": Lowering(),
     "PyValue_IsPointerSpace": Lowering(1),
-    "PyValue_IsObject": Lowering(1),
+    "PyValue_IsObject": Lowering(1, exits=True),
     "PyValue_IsInline": Lowering(1),
     "PyValue_IsInlineInt": Lowering(1),
     "PyValue_IsInlineFloat": Lowering(2),
@@ -57,8 +60,8 @@ LOWERINGS = {
     "PyValue_IsTrue": Lowering(1),
     "PyValue_IsFalse": Lowering(1),
     "PyValue_IsNone": Lowering(1),
-    "PyValue_BoolCheck": Lowering(2),
-    "PyValue_LongCheckExact": Lowering(2),
+    "PyValue_BoolCheck": Lowering(2, exits=True),
+    "PyValue_LongCheckExact": Lowering(2, exits=True),
     # Numbers
     "_PyValue_IntScaled": Lowering(),
     "_PyValue_FromIntScaled": Lowering(1),
@@ -66,9 +69,9 @@ LOWERINGS = {
     "PyValue_FromInlineInt": Lowering(1),
     "PyValue_InlineFloat": Lowering(1),
     "PyValue_FromDoubleNotNaN": Lowering(1),
-    "PyValue_FloatOperandValues": Lowering(2),
-    "PyValue_FromInt64": Lowering(1, calls=True),
-    "PyValue_FromDouble": Lowering(1, calls=True),
+    "PyValue_FloatOperandValues": Lowering(2, exits=True),
+    "PyValue_FromInt64": Lowering(1, calls=True, exits=True),
+    "PyValue_FromDouble": Lowering(1, calls=True, exits=True),
     "PyValue_TagIndex": Lowering(1),
     "PyValue_UntagIndex": Lowering(),
     "PyValue_IncrementTaggedIndexNoOverflow": Lowering(),
@@ -193,6 +196,7 @@ class TOp:
     args: list
     attr: object = None
     when: str | None = None
+    exit: int | None = None     # a block that the op leaves for, when it gives NULL
 
 
 @dataclass
@@ -208,6 +212,7 @@ class Graph:
         self.types: dict[int, str] = {}
         self.blocks: dict[int, TBlock] = {}
         self.count = 0
+        self.block_count = 0
         self.entry = self.new_block().id
 
     def value(self, t: str) -> int:
@@ -216,17 +221,19 @@ class Graph:
         return self.count
 
     def new_block(self, param_types=()) -> TBlock:
-        b = TBlock(len(self.blocks), [self.value(t) for t in param_types], [])
+        b = TBlock(self.block_count, [self.value(t) for t in param_types], [])
+        self.block_count += 1
         self.blocks[b.id] = b
         return b
 
     def successors(self, b: TBlock) -> list[int]:
         term = b.term
+        exits = [op.exit for op in b.ops if op.exit is not None]
         if term[0] == "br":
-            return [term[2], term[3]]
+            return [term[2], term[3], *exits]
         if term[0] == "jmp":
-            return [term[1]]
-        return []
+            return [term[1], *exits]
+        return exits
 
     def rpo(self) -> list[int]:
         seen, order = set(), []
@@ -881,6 +888,10 @@ def fold(g: Graph) -> bool:
             if d is not None and d.kind == "lnot":
                 b.term = ("br", d.args[0], t[3], t[2])
                 changed = True
+            elif d is not None and d.kind == "xorb" and d.attr in ("0", "1") and d.when is None:
+                b.term = ("br", d.args[0], t[3], t[2]) if d.attr == "1" else \
+                    ("br", d.args[0], t[2], t[3])
+                changed = True
     return changed
 
 
@@ -967,39 +978,176 @@ def dominators(g: Graph) -> dict[int, int]:
     return idom
 
 
-# The ops that compute the same result from the same arguments anywhere:
-# not loads, which a store between may change, nor the view of a slot
+# ---------------------------------------------------------------------------
+# Facts declared by the component rows (Include/internal/pycore_ir_components.h,
+# read through ir_contract.rows()).  A pass uses a fact of a primitive only
+# where its row declares it: what a test shows of its word, the test of both
+# words that conjoins a single-word test (CONJOINS), the form of a primitive
+# for a word that is not NULL (NONNULL_FORM), the result that is NULL only
+# when its slow path fails (SLOW), the results that are never NULL (a VALUE
+# result without null_iff), and the effects that CSE reads.  A primitive
+# without a row, or a row without the column, gets none of these.
+
+def row(name):
+    "The component row of a primitive or helper, or None"
+    return ir_contract.rows().get(name) if isinstance(name, str) else None
+
+
+def single_test(name: str):
+    "The (true facts, false facts) of a one-argument TEST row, or None"
+    r = row(name)
+    if r is None or r.result.shape != "TEST" or len(r.args) != 1 or len(r.result.tests) != 1:
+        return None
+    return r.result.tests[0]
+
+
+def is_null_test(name: str) -> bool:
+    """The test whose false side declares the word not NULL and whose true
+    side declares nothing (`TEST(| nonnull)`): the negation of that fact, so
+    that a word known not NULL decides it"""
+    t = single_test(name)
+    return t is not None and not t[0] and ir_contract.NONNULL in ir_contract.implied(t[1])
+
+
+def test_facts(name: str) -> tuple[bool, bool]:
+    """What a test of one word declares about NULL: that the word is not NULL
+    when the test holds, when it does not.  The false side counts only for
+    the negation of a fact (is_null_test): a false side of another test
+    holds under that test's own precondition"""
+    t = single_test(name)
+    if t is None:
+        return False, False
+    return (ir_contract.NONNULL in ir_contract.implied(t[0]), is_null_test(name))
+
+
+def both_test(name: str) -> str | None:
+    "The two-argument test that CONJOINS the named test, or None"
+    for r in ir_contract.rows().values():
+        if r.conjoins == name and r.name in LOWERINGS:
+            return r.name
+    return None
+
+
+def never_null(name: str) -> bool:
+    "The primitive's value result is declared never NULL: VALUE without null_iff"
+    r = row(name)
+    return r is not None and r.result.shape == "VALUE" and r.result.null_iff < 0
+
+
+def given_not_null(name: str) -> str | None:
+    "The primitive that declares itself the named one for a word that is not NULL"
+    for r in ir_contract.rows().values():
+        if r.nonnull_form == name and r.name in LOWERINGS:
+            return r.name
+    return None
+
+
+def null_only_from_slow(name: str) -> bool:
+    "The primitive's result is NULL only when its declared slow path's helper fails"
+    r = row(name)
+    return r is not None and bool(r.slow)
+
+
+def changes_counts(r) -> bool:
+    "A row that takes a count away from its argument or gives a new one"
+    return r.new_owner() or any(a.mode in ("consumed", "taken") for a in r.args)
+
+
+# The ops that compute the same result from the same arguments anywhere
 CSE_KINDS = {"const", "jconst", "cache", "fieldaddr", "ptradd", "add", "sub", "mul", "and",
              "or", "xor", "shl", "ashr", "lshr", "neg", "not", "conv", "fadd", "fsub",
              "fmul", "fdiv"}
+# The effects that change memory that other ops read are the contract's
+# KILLS: a write to the heap, a release (which may run a destructor), Python,
+# a poll and a frame switch.  Boxing allocates new objects, and counts are
+# not heap writes (CR); they change a count word, which only a load of
+# ob_refcnt reads.
+ALL = "all"
+
+
+def effects_of(op: TOp):
+    """The declared effects of the primitive or helper of op, or None where
+    its row is missing.  A close through a named destructor adds the
+    destructor's: the row of its name, or none where it has no row"""
+    r = row(prim_name(op) if op.kind == "prim" else op.attr)
+    if r is None:
+        return None
+    effects = set(r.effects)
+    if op.kind == "prim" and any(a.mode == "destructor" for a in r.args):
+        d = row(op.attr[1]) if isinstance(op.attr, tuple) else None
+        if d is None:
+            return None
+        effects |= d.effects
+    return effects
+
+
+def changes(op: TOp):
+    """What memory op may change that a read can have seen: ALL of it, the
+    set of the loads of fields (a store changes its field; the reads of
+    primitives, whose fields are not listed, count as a field, None), or
+    nothing"""
+    if op.kind == "store":
+        # A store through a type, not a field, may be to any field of it
+        return {op.attr, None} if op.attr in ir_leaf.FIELDS else ALL
+    if op.kind in ("slot_store", "detach"):
+        # A home is not the heap, but a primitive may read one
+        return {None}
+    if op.kind == "take":
+        return {"PyObject.ob_refcnt", None}
+    if op.kind in ("call", "prim"):
+        effects = effects_of(op)
+        if effects is None or effects & ir_contract.KILLS:
+            return ALL
+        if op.kind == "prim" and changes_counts(row(prim_name(op))):
+            return {"PyObject.ob_refcnt"}
+    return set()
+
+
+def reads_only(op: TOp) -> bool:
+    "A primitive whose row declares at most a read, and no count: equal calls give equal results"
+    if op.kind != "prim" or not isinstance(op.attr, str) or op.attr not in LOWERINGS:
+        return False
+    r = row(op.attr)
+    return r is not None and r.effects <= {"reads"} and not changes_counts(r)
 
 
 def cse(g: Graph) -> bool:
-    "Reuse the result of an equal pure op in a dominating position"
+    """Reuse the result of an equal pure op in a dominating position, and
+    of a read (a load, a primitive that reads memory) that no op between
+    the two may have changed: the path between is the block's own ops, or
+    the single edge into a block that has one predecessor"""
     idom = dominators(g)
+    preds = g.preds()
     children: dict[int, list[int]] = {}
     for b, d in idom.items():
         children.setdefault(d, []).append(b)
     mapping: dict[int, int] = {}
 
+    def is_read(key) -> bool:
+        return key[0] == "load" or (key[0] == "prim" and "reads" in row(key[1]).effects)
+
     def walk(i: int, seen: dict) -> None:
-        seen = dict(seen)
         b = g.blocks[i]
+        if len(preds[i]) != 1:
+            # Another path may reach it past a write
+            seen = {k: v for k, v in seen.items() if not is_read(k)}
+        seen = dict(seen)
         keep = []
         for op in b.ops:
-            pure = (op.kind in CSE_KINDS or
-                    (op.kind == "prim" and isinstance(op.attr, str) and op.attr in PURE_PRIMS
-                     and op.results))
-            if not pure and not is_pure(op):
-                # An effect: what read memory before it may differ after
-                seen = {k: v for k, v in seen.items()
-                        if not (k[0] == "prim" and ir_leaf.PRIMITIVES[k[1]].effects)}
+            pure = op.kind in CSE_KINDS or op.kind == "load" or (reads_only(op) and op.results)
             if pure and op.when is None and len(op.results) == 1:
                 key = (op.kind, op.attr, tuple(mapping.get(a, a) for a in op.args))
                 if key in seen:
                     mapping[op.results[0]] = seen[key]
                     continue
                 seen[key] = op.results[0]
+            gone = changes(op)
+            if gone:
+                # A load through a type, not a field, may read what any store wrote
+                seen = {k: v for k, v in seen.items()
+                        if not is_read(k) or (gone != ALL and (
+                            (k[0] == "load" and k[1] in ir_leaf.FIELDS and k[1] not in gone)
+                            or (k[0] == "prim" and None not in gone)))}
             keep.append(op)
         b.ops = keep
         for c in children.get(i, []):
@@ -1029,6 +1177,252 @@ def dce(g: Graph) -> bool:
         changed = True
 
 
+def prim_name(op: TOp) -> str | None:
+    "The primitive of a prim op, whose attr is a name or (name, aux)"
+    if op.kind != "prim":
+        return None
+    return op.attr[0] if isinstance(op.attr, tuple) else op.attr
+
+
+def never_null_result(g: Graph, op: TOp) -> bool:
+    "The op's one result is not NULL, from its primitive's spec or its constant"
+    if op.when is not None:
+        return False
+    if op.kind == "prim":
+        return isinstance(op.attr, str) and never_null(op.attr)
+    if op.kind == "const" and isinstance(op.attr, str) and g.types[op.results[0]] == ir_leaf.VALUE:
+        return ir_leaf.VALUE_CONSTANTS[op.attr][0] is not None
+    return False
+
+
+def null_tested(defs, c: int) -> int | None:
+    "The word that the bool c tests for NULL, if it does"
+    d = defs.get(c)
+    if d is not None and d.kind == "prim" and isinstance(d.attr, str) and d.when is None \
+            and is_null_test(d.attr):
+        return d.args[0]
+    return None
+
+
+def shown_not_null(defs, c: int) -> tuple[int, bool] | None:
+    """(word, edge): the bool c is a test of one word that shows it not NULL
+    on the edge taken when c is `edge`"""
+    d = defs.get(c)
+    if d is None or d.kind != "prim" or not isinstance(d.attr, str) or d.when is not None \
+            or len(d.args) != 1:
+        return None
+    on_true, on_false = test_facts(d.attr)
+    if on_true or on_false:
+        return d.args[0], on_true
+    return None
+
+
+def not_null_facts(g: Graph) -> tuple[set[int], dict[int, frozenset]]:
+    """The values that are not NULL wherever they are defined (results of
+    primitives that never give NULL, parameters that every edge gives such
+    a value) and, for each block, those that a test on the path to it has
+    shown not NULL"""
+    defs = definitions(g)
+    preds = g.preds()
+    idom = dominators(g)
+    always: set[int] = set()
+    entry: dict[int, frozenset] = {}
+    for i in g.rpo():
+        b = g.blocks[i]
+        if i == g.entry:
+            entry[i] = frozenset()
+        elif len(preds[i]) == 1:
+            q = g.blocks[preds[i][0]]
+            entry[i] = entry[q.id]
+            t = q.term
+            if t[0] == "br" and t[2] != t[3] and i in t[2:]:
+                shown = shown_not_null(defs, t[1])
+                if shown is not None and shown[1] == (i == t[2]):
+                    entry[i] = entry[i] | {shown[0]}
+        else:
+            entry[i] = entry[idom[i]]
+        for k, p in enumerate(b.params):
+            if all(g.blocks[q].term[2][k] in always or g.blocks[q].term[2][k] in entry[q]
+                   for q in preds[i]):
+                always.add(p)
+        for op in b.ops:
+            if op.results and never_null_result(g, op):
+                always.add(op.results[0])
+    return always, entry
+
+
+def fold_nulls(g: Graph) -> bool:
+    "A test for NULL of a word that is not NULL is false; a primitive that tolerates NULL, given one that is not, is the one that does not"
+    always, entry = not_null_facts(g)
+    changed = False
+    for i, b in g.blocks.items():
+        known = always | entry[i]
+        for op in b.ops:
+            if op.kind != "prim" or not isinstance(op.attr, str) or op.when is not None:
+                continue
+            if is_null_test(op.attr) and op.args[0] in known:
+                op.kind, op.args, op.attr = "const", [], 0
+                changed = True
+            elif op.args and op.args[0] in known and given_not_null(op.attr) is not None:
+                op.attr = given_not_null(op.attr)
+                changed = True
+    return changed
+
+
+def fuse_guards(g: Graph) -> bool:
+    """Two tests of words that lead to one exit, the second alone in its
+    block, are one test of both words when a primitive's spec says it is
+    that: `br P(a), N, E` and N `br P(b), M, E` become `br Both(a, b), M, E`"""
+    defs = definitions(g)
+    preds = g.preds()
+    n = uses(g)
+    for i in g.rpo():
+        x = g.blocks[i]
+        if x.term[0] != "br":
+            continue
+        c, nid, exit_ = x.term[1:]
+        blk = g.blocks[nid]
+        d = defs.get(c)
+        if (nid == exit_ or preds[nid] != [i] or len(blk.ops) != 1 or blk.term[0] != "br"
+                or blk.term[3] != exit_ or d is None or d not in x.ops or n.get(c) != 1):
+            continue
+        e = blk.ops[0]
+        if blk.term[1] != e.results[0] or n.get(e.results[0]) != 1:
+            continue
+        name = prim_name(d)
+        if name is None or name != prim_name(e) or d.when or e.when \
+                or not isinstance(d.attr, str) or len(d.args) != 1 or len(e.args) != 1 \
+                or d.args[0] == e.args[0]:
+            continue
+        both = both_test(name)
+        if both is None:
+            continue
+        f = g.value("bool")
+        x.ops.append(TOp("prim", [f], [d.args[0], e.args[0]], both))
+        x.term = ("br", f, blk.term[2], exit_)
+        return True
+    return False
+
+
+def exit_on_false(g: Graph) -> bool:
+    """A predicate whose lowering branches to make its bool, tested last in
+    its block to continue or to leave by an exit, leaves by it itself: its
+    false paths jump there, and the true path has no flags to test"""
+    n = uses(g)
+    for i in g.rpo():
+        b = g.blocks[i]
+        if b.term[0] != "br" or not b.ops or n.get(b.term[1]) != 1:
+            continue
+        op = b.ops[-1]
+        name = prim_name(op)
+        if (op.kind != "prim" or op.when or not isinstance(op.attr, str) or op.exit is not None
+                or name not in LOWERINGS or not LOWERINGS[name].exits
+                or not is_predicate(ir_leaf.PRIMITIVES[name]) or op.results[0] != b.term[1]):
+            continue
+        cont, exit_ = b.term[2], b.term[3]
+        if g.blocks[exit_].params or g.blocks[exit_].term[0] not in ("deopt", "raise") \
+                or g.blocks[cont].term[0] in ("deopt", "raise"):
+            continue
+        op.exit = exit_
+        op.results = op.results[1:]
+        b.term = ("jmp", cont, [])
+        return True
+    return False
+
+
+def fold_failed_boxes(g: Graph) -> bool:
+    """A primitive whose result is NULL only when its slow path fails, and
+    whose result is then tested to leave by an exit, leaves by it itself:
+    the hot path has no test"""
+    defs = definitions(g)
+    n = uses(g)
+    for i in g.rpo():
+        b = g.blocks[i]
+        if b.term[0] != "br" or not b.ops or n.get(b.term[1]) != 1:
+            continue
+        test = b.ops[-1]
+        word = null_tested(defs, b.term[1])
+        if word is None or test.results != [b.term[1]] or len(b.ops) < 2:
+            continue
+        op = defs.get(word)
+        if op is None or b.ops[-2] is not op or op.when or not isinstance(op.attr, str) \
+                or op.exit is not None or not null_only_from_slow(op.attr) \
+                or not LOWERINGS[op.attr].exits:
+            continue
+        exit_, rest = b.term[2], b.term[3]
+        if g.blocks[exit_].params or g.blocks[exit_].term[0] != "raise":
+            continue
+        b.ops.remove(test)
+        op.exit = exit_
+        b.term = ("jmp", rest, [])
+        return True
+    return False
+
+
+def thread_tests(g: Graph) -> bool:
+    """A block that only tests a parameter for NULL, to leave by an exit,
+    gets the test on each edge that cannot show the word not NULL: the edges
+    that can are past it"""
+    defs = definitions(g)
+    preds = g.preds()
+    n = uses(g)
+    always, entry = not_null_facts(g)
+    for i in g.rpo():
+        b = g.blocks[i]
+        if not b.params or len(b.ops) != 1 or b.term[0] != "br" or i == g.entry:
+            continue
+        op, c = b.ops[0], b.term[1]
+        if op.results != [c] or n.get(c) != 1 or null_tested(defs, c) not in b.params:
+            continue
+        exit_, rest = b.term[2], b.term[3]
+        if g.blocks[exit_].params or g.blocks[exit_].term[0] not in ("deopt", "raise"):
+            continue
+        k = b.params.index(op.args[0])
+        incoming = [(q, g.blocks[q].term[2][k]) for q in preds[i]]
+        known = [arg in always or arg in entry[q] for q, arg in incoming]
+        if not any(known):
+            continue
+        for (q, arg), done in zip(incoming, known):
+            if done:
+                continue
+            blk = g.blocks[q]
+            t = g.value("bool")
+            blk.ops.append(TOp("prim", [t], [arg], op.attr))
+            goes_on = g.new_block()
+            goes_on.term = ("jmp", i, blk.term[2])
+            blk.term = ("br", t, exit_, goes_on.id)
+        b.ops = []
+        b.term = ("jmp", rest, [])
+        return True
+    return False
+
+
+def thread_branches(g: Graph) -> bool:
+    """A block that only branches on its one bool parameter is skipped by
+    its predecessors: one that gives a constant goes where it leads, another
+    branches on the value it gives"""
+    defs = definitions(g)
+    n = uses(g)
+    preds = g.preds()
+    for i in g.rpo():
+        b = g.blocks[i]
+        if i == g.entry or b.ops or len(b.params) != 1 or b.term[0] != "br" \
+                or b.term[1] != b.params[0] or n.get(b.params[0]) != 1:
+            continue
+        yes, no = b.term[2], b.term[3]
+        if g.blocks[yes].params or g.blocks[no].params or yes == no:
+            continue
+        for q in preds[i]:
+            blk = g.blocks[q]
+            arg = blk.term[2][0]
+            k = const_of(defs, arg)
+            blk.term = ("jmp", yes if k else no, []) if k is not None else \
+                ("br", arg, yes, no)
+        del g.blocks[i]
+        return True
+    return False
+
+
 def simplify(g: Graph) -> None:
     prune(g)
     while True:
@@ -1036,6 +1430,13 @@ def simplify(g: Graph) -> None:
         changed |= thread_jumps(g)
         changed |= fold(g)
         changed |= thread_bool_phis(g)
+        prune(g)
+        changed |= fold_nulls(g)
+        changed |= fold_failed_boxes(g)
+        changed |= fuse_guards(g)
+        changed |= thread_tests(g)
+        changed |= thread_branches(g)
+        changed |= exit_on_false(g)
         prune(g)
         changed |= cse(g)
         changed |= dce(g)
@@ -1075,7 +1476,8 @@ def flag_producer(g: Graph, op: TOp) -> bool:
     "op sets the flags for its bool result (the last for checked arithmetic)"
     if op.kind == "prim":
         name = op.attr[0] if isinstance(op.attr, tuple) else op.attr
-        return name in LOWERINGS and is_predicate(ir_leaf.PRIMITIVES[name])
+        return (op.exit is None and name in LOWERINGS
+                and is_predicate(ir_leaf.PRIMITIVES[name]))
     return op.kind in ("cmp", "fcmp", "cmpmask", "xorb", "lnot", "add_ovf", "sub_ovf",
                        "mul_ovf")
 
@@ -1086,7 +1488,8 @@ def cond_result(op: TOp) -> int:
 
 def reads_memory(op: TOp) -> bool:
     if op.kind == "prim":
-        return bool(ir_leaf.PRIMITIVES[op.attr].effects)
+        effects = effects_of(op)
+        return effects is None or bool(effects)
     return op.kind not in ("cmp", "fcmp", "cmpmask", "xorb", "lnot")
 
 
@@ -1177,10 +1580,34 @@ def liveness(g: Graph) -> dict[int, set]:
     return live_in
 
 
+def cold_blocks(g: Graph) -> set[int]:
+    """The blocks placed after the template's hot code: those with a helper
+    call, those that only lead to cold ones and those that only cold ones
+    reach (the end excepted: the template falls through from it)"""
+    order = [i for i in g.rpo() if g.blocks[i].term[0] not in ("deopt", "raise")]
+    preds = g.preds()
+    cold: set[int] = set()
+    changed = True
+    while changed:
+        changed = False
+        for i in reversed(order):
+            b = g.blocks[i]
+            if i in cold or i == g.entry or b.term[0] == "end":
+                continue
+            succ = [s for s in g.successors(b) if g.blocks[s].term[0] not in ("deopt", "raise")]
+            if (any(op.kind == "call" for op in b.ops)
+                    or (b.term[0] in ("br", "jmp") and succ and all(s in cold for s in succ))
+                    or (preds[i] and all(q in cold for q in preds[i]))):
+                cold.add(i)
+                changed = True
+    return cold
+
+
 class Allocation:
     def __init__(self, g: Graph, flags: set[int]) -> None:
         self.g = g
         self.flags = flags
+        self.cold = cold_blocks(g)
         self.reg: dict[int, int] = {}
         self.live_in = liveness(g)
         self.live_after: dict[int, list[set]] = {}
@@ -1249,10 +1676,15 @@ class Allocation:
         for i in g.rpo():
             b = g.blocks[i]
             entry_live = self.live_in[i]
-            for p in b.params:
+            preds = self.g.preds()[i]
+            for n, p in enumerate(b.params):
                 if self.needs_reg(p):
                     k = self.kind(p)
-                    self.pick(p, self.regs_of(entry_live - {p}, k))
+                    # The register that a hot edge gives it in: no move there
+                    given = [self.g.blocks[q].term[2][n] for q in sorted(
+                        preds, key=lambda q: q in self.cold)]
+                    prefer = [self.reg[a] for a in given if a in self.reg and self.kind(a) == k]
+                    self.pick(p, self.regs_of(entry_live - {p}, k), prefer)
             for op, after in zip(b.ops, self.live_after[i]):
                 for j, r in enumerate(op.results):
                     if not self.needs_reg(r):
@@ -1308,8 +1740,7 @@ def immediates(g: Graph, defs) -> set[int]:
     """The integer constants that fit an imm32 and that only ops taking
     their second operand as an immediate use: they are never in a register"""
     candidates = {r for r, op in defs.items() if op.kind == "const" and
-                  (k := const_of(defs, r)) is not None and -2**31 <= k < 2**31 and
-                  g.types[r] != "bool"}
+                  (k := const_of(defs, r)) is not None and -2**31 <= k < 2**31}
     for b in g.blocks.values():
         for op in b.ops:
             for n, a in enumerate(op.args):
@@ -1366,21 +1797,11 @@ class Emitter:
     def is_exit(self, i: int) -> bool:
         return self.g.blocks[i].term[0] in ("deopt", "raise")
 
-    # Layout: hot blocks in order, cold ones (with a helper call, or only
-    # leading to cold ones) after them
+    # Layout: hot blocks in order, cold ones after them
     def layout(self) -> None:
         g = self.g
         order = [i for i in g.rpo() if not self.is_exit(i)]
-        cold = set()
-        for i in reversed(order):
-            b = g.blocks[i]
-            if any(op.kind == "call" for op in b.ops):
-                cold.add(i)
-                continue
-            succ = [s for s in g.successors(b) if not self.is_exit(s)]
-            if b.term[0] in ("br", "jmp") and succ and all(s in cold for s in succ):
-                cold.add(i)
-        cold.discard(g.entry)
+        cold = cold_blocks(g)
         # The end is the last hot block: the template falls through from it
         # to the code after the template
         ends = [i for i in order if g.blocks[i].term[0] == "end"]
@@ -1659,8 +2080,12 @@ class Emitter:
         elif kd == "conv":
             self.conv(i, k, op)
         elif kd == "cmp" and args[1] in self.imms:
-            self.w(f"_PyJitAsm_AluRI(a, _PyJitAlu_CMP, {self.R(args[0])}, "
-                   f"{const_of(self.defs, args[1])});")
+            if const_of(self.defs, args[1]) == 0:
+                # test sets the flags that a compare with zero does
+                self.w(f"_PyJitAsm_TestRR(a, {self.R(args[0])}, {self.R(args[0])});")
+            else:
+                self.w(f"_PyJitAsm_AluRI(a, _PyJitAlu_CMP, {self.R(args[0])}, "
+                       f"{const_of(self.defs, args[1])});")
             self.setcc(op, f"_PyJitCond_{CMP_CONDS[op.attr]}")
         elif kd == "cmp":
             self.w(f"_PyJitAsm_AluRR(a, _PyJitAlu_CMP, {self.R(args[0])}, {self.R(args[1])});")
@@ -1687,11 +2112,15 @@ class Emitter:
             if name not in LOWERINGS:
                 raise Refused(f"{name} unfused")
             prim = ir_leaf.PRIMITIVES[name]
-            regs = [r for r in res if not (is_predicate(prim) and r == res[0])]
+            regs = [r for r in res if not (is_predicate(prim) and r == res[0]
+                                           and op.exit is None)]
             argv = args
             aux = "NULL"
             if isinstance(op.attr, tuple):
                 aux = f"(const void *){op.attr[1]}"
+            if op.exit is not None:
+                # The label plus one that a NULL result leaves for
+                aux = f"(const void *)(intptr_t)({self.label(op.exit)} + 1)"
             self.lower(i, k, op, name, regs, argv, aux)
         elif kd == "call":
             helper = ir_leaf.HELPERS[op.attr]
@@ -1759,7 +2188,7 @@ class Emitter:
             gm, xm = self.live_masks(i, k, op, written)
             self.w(f"cx->live = {gm:#x}; cx->live_xmm = {xm:#x};")
         call = (f"_PyJitLower_{name}(cx, (const uint8_t[]){{{', '.join(ops) or '0'}}}, {aux})")
-        if is_predicate(prim):
+        if is_predicate(prim) and op.exit is None:
             self.setcc(op, call)
         else:
             self.w(f"{call};")

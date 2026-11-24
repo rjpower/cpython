@@ -82,6 +82,45 @@
      * or an argument slot, which is not NULL */ \
     PRIMITIVE(PyValue_IsObject, int, (PyValueBorrow), \
               ARGS(borrowed nonnull), TEST(object | inline), EFFECTS()) \
+    /* Each tag test below is a comparison of the word's bits against the \
+     * region bounds of pycore_value.h (the cited predicate); none reads \
+     * memory.  A test with no fact of the vocabulary to declare declares \
+     * none */ \
+    PRIMITIVE(PyValue_IsPointerSpace, bool, (PyValueBorrow), \
+              ARGS(borrowed), TEST(), EFFECTS()) \
+    PRIMITIVE(PyValue_IsInline, bool, (PyValueBorrow), \
+              ARGS(borrowed), TEST(inline), EFFECTS()) \
+    PRIMITIVE(PyValue_IsInlineFloat, bool, (PyValueBorrow), \
+              ARGS(borrowed), TEST(inline_float), EFFECTS()) \
+    PRIMITIVE(PyValue_IsTaggedIndex, bool, (PyValueBorrow), \
+              ARGS(borrowed), TEST(), EFFECTS()) \
+    /* (a & b) >= Py_INT_BASE: exactly IsInlineInt(a) and IsInlineInt(b) \
+     * (the comment above its definition in pycore_value.h: the AND has the \
+     * top Py_INT_SHIFT bits set only if both words do) */ \
+    PRIMITIVE(PyValue_BothInlineInt, bool, (PyValueBorrow, PyValueBorrow), \
+              ARGS(borrowed, borrowed), TEST(inline_int, inline_int), EFFECTS(), \
+              CONJOINS(PyValue_IsInlineInt)) \
+    /* Bits compared with bits (pycore_value.h: PyValue_Is, \
+     * _PyValue_NamesObject, PyValue_IsTrue, IsFalse, IsNone).  A word that \
+     * is True, False or None is an object word: a static object's address \
+     * with Py_TAG_REFCNT */ \
+    PRIMITIVE(PyValue_Is, bool, (PyValueBorrow, PyValueBorrow), \
+              ARGS(borrowed, borrowed), TEST(,), EFFECTS()) \
+    PRIMITIVE(_PyValue_NamesObject, bool, (PyValueBorrow, PyObject *), \
+              ARGS(borrowed, object), TEST(,), EFFECTS()) \
+    PRIMITIVE(PyValue_IsTrue, bool, (PyValueBorrow), \
+              ARGS(borrowed), TEST(object), EFFECTS()) \
+    PRIMITIVE(PyValue_IsFalse, bool, (PyValueBorrow), \
+              ARGS(borrowed), TEST(object), EFFECTS()) \
+    PRIMITIVE(PyValue_IsNone, bool, (PyValueBorrow), \
+              ARGS(borrowed), TEST(object), EFFECTS()) \
+    /* VALUE_CHECK_FUNC(Bool) and PyValue_LongCheckExact (pycore_value.h): \
+     * an object word, and its type read through ob_type.  The object check \
+     * dereferences the word, so NULL is not admitted */ \
+    PRIMITIVE(PyValue_BoolCheck, bool, (PyValueBorrow), \
+              ARGS(borrowed nonnull), TEST(exact(PyBool_Type)), EFFECTS(reads)) \
+    PRIMITIVE(PyValue_LongCheckExact, bool, (PyValueBorrow), \
+              ARGS(borrowed nonnull), TEST(exact(PyLong_Type)), EFFECTS(reads)) \
     /* Inline ints: scaled values, see _PyValue_IntScaled() */ \
     PRIMITIVE(_PyValue_IntScaled, int64_t, (PyValueBorrow), \
               ARGS(borrowed inline_int), SCALAR, EFFECTS()) \
@@ -89,6 +128,27 @@
               ARGS(borrowed inline_int), SCALAR, EFFECTS()) \
     PRIMITIVE(_PyValue_FromIntScaled, PyValue, (int64_t), \
               ARGS(scalar), VALUE(inline inline_int), EFFECTS()) \
+    /* Inline constructors (pycore_value.h): the caller has checked the \
+     * range; the result is a word with tag bits set, never NULL */ \
+    PRIMITIVE(PyValue_FromInlineInt, PyValue, (int64_t), \
+              ARGS(scalar), VALUE(inline inline_int), EFFECTS()) \
+    PRIMITIVE(PyValue_InlineFloat, double, (PyValueBorrow), \
+              ARGS(borrowed inline_float), SCALAR, EFFECTS()) \
+    PRIMITIVE(PyValue_FromDoubleNotNaN, PyValue, (double), \
+              ARGS(scalar), VALUE(inline inline_float), EFFECTS()) \
+    /* Tagged indices (pycore_value.h): arithmetic on the word */ \
+    PRIMITIVE(PyValue_TagIndex, PyValue, (intptr_t), \
+              ARGS(scalar), VALUE(inline), EFFECTS()) \
+    PRIMITIVE(PyValue_UntagIndex, intptr_t, (PyValueBorrow), \
+              ARGS(borrowed), SCALAR, EFFECTS()) \
+    PRIMITIVE(PyValue_IncrementTaggedIndexNoOverflow, PyValue, (PyValue), \
+              ARGS(consumed), VALUE(inline), EFFECTS()) \
+    /* PyValue_FromInt64 (pycore_value.h): _PyValue_FromIntScaled when the \
+     * int fits inline, else _PyValue_BoxInt64, which gives NULL only when \
+     * its allocation fails */ \
+    PRIMITIVE(PyValue_FromInt64, PyValue, (int64_t), \
+              ARGS(scalar), VALUE_OR_NULL(owned exact(PyLong_Type)), \
+              EFFECTS(allocates, raises), SLOW(_PyValue_BoxInt64)) \
     /* A new int outside the inline range: allocates, and raises \
      * MemoryError when that fails; calls no Python */ \
     HELPER(_PyValue_BoxInt64, PyValue, (int64_t), \
@@ -100,9 +160,20 @@
     PRIMITIVE(PyValue_FloatOperandValues, bool, \
               (PyValueBorrow, PyValueBorrow, double *, double *), \
               ARGS(borrowed, borrowed, out, out), TEST(inline, inline), EFFECTS()) \
+    /* A NaN is boxed by _PyValue_BoxDouble (PyValue_FromDouble in \
+     * pycore_value.h), which gives NULL only when its allocation fails; any \
+     * other double is an inline float */ \
+    HELPER(_PyValue_BoxDouble, PyValue, (double), \
+           ARGS(scalar), VALUE_OR_NULL(owned exact(PyFloat_Type)), \
+           EFFECTS(allocates, raises)) \
     PRIMITIVE(PyValue_FromDouble, PyValue, (double), \
               ARGS(scalar), VALUE_OR_NULL(owned exact(PyFloat_Type)), \
-              EFFECTS(allocates, raises)) \
+              EFFECTS(allocates, raises), SLOW(_PyValue_BoxDouble)) \
+    /* a * b of two words below 2**60 in magnitude: a new int outside the \
+     * inline range, or NULL where allocation fails (pycore_value.h) */ \
+    HELPER(_PyValue_MultiplyInt64, PyValue, (int64_t, int64_t), \
+           ARGS(scalar, scalar), VALUE_OR_NULL(owned exact(PyLong_Type)), \
+           EFFECTS(allocates, raises)) \
     /* The close of an owned value through a named deallocator.  Its effect \
      * is the deallocator's: `writes` for a DESTRUCTOR row, `releases` for \
      * any other (ir_contract.py) */ \
@@ -112,6 +183,9 @@
      * int, else _Py_FREELIST_FREE or PyObject_Free; an int holds no \
      * reference, so nothing is released and no Python runs */ \
     DESTRUCTOR(_PyLong_ExactDealloc, PyLong_Type, callback_free) \
+    /* _PyFloat_ExactDealloc (Objects/floatobject.c): _Py_FREELIST_FREE of \
+     * the float, or PyObject_Free; a float holds no reference */ \
+    DESTRUCTOR(_PyFloat_ExactDealloc, PyFloat_Type, callback_free) \
     /* The generic binary operation: value_binary_op -> PyNumber_* -> an \
      * nb_* slot -> any __add__ and friends: runs Python */ \
     HELPER(value_binary_op, PyValue, (int, PyValueBorrow, PyValueBorrow), \
@@ -122,6 +196,11 @@
 #define _PyIR_COMPONENTS_OBJECTS(PRIMITIVE, HELPER, MACRO) \
     PRIMITIVE(PyValue_AsKnownObjectBorrow, PyObject *, (PyValueBorrow), \
               ARGS(borrowed object), VIEW, EFFECTS()) \
+    PRIMITIVE(_PyValue_AsKnownObjectBorrowPointer, PyObject *, (PyValueBorrow), \
+              ARGS(borrowed object), VIEW, EFFECTS()) \
+    /* The identity on a feedback word's bits (pycore_value.h) */ \
+    PRIMITIVE(_PyValueGuarded_Load, PyValueBorrow, (_PyValueGuarded), \
+              ARGS(scalar), SCALAR, EFFECTS()) \
     PRIMITIVE(PyValue_AsKnownObjectSteal, PyObject *, (PyValue), \
               ARGS(consumed object), VIEW, EFFECTS()) \
     /* The type of a value or an object, a pointer along the path `type`, \
@@ -141,9 +220,36 @@
     /* The address of a value slot at a byte offset: arithmetic only */ \
     PRIMITIVE(_PyObject_ValueSlot, PyValue *, (PyObject *, size_t), \
               ARGS(object, scalar), SCALAR, EFFECTS()) \
+    /* The shape of an object's inline values (pycore_dict.h: a read of \
+     * _PyObject_InlineValues(obj)->shape) */ \
+    PRIMITIVE(_PyObject_Shape, uint32_t, (PyObject *), \
+              ARGS(object), SCALAR, EFFECTS(reads)) \
+    /* The slot at an offset, a new count (pycore_dict.h): the shape guards \
+     * have shown the slot filled, so the value is not NULL */ \
+    PRIMITIVE(_PyObject_ShapeReadDup, PyValue, (PyObject *, uint32_t), \
+              ARGS(object, scalar), VALUE(owned), EFFECTS(reads)) \
+    /* The two writes of an object's inline values (pycore_dict.h) */ \
+    PRIMITIVE(_PyDictValues_AddToInsertionOrder, void, (PyDictValues *, Py_ssize_t), \
+              ARGS(scalar, scalar), NONE, EFFECTS(reads, writes)) \
+    PRIMITIVE(_PyDictValues_SetShape, void, (PyDictValues *, uint8_t), \
+              ARGS(scalar, scalar), NONE, EFFECTS(writes)) \
     /* A new owner of a value, PyValue_NULL for PyValue_NULL: a count only */ \
     PRIMITIVE(PyValue_XDUP, PyValue, (PyValueBorrow), \
               ARGS(borrowed), VALUE(owned null_iff(0)), EFFECTS()) \
+    /* PyValue_DUP (pycore_value.h) is XDUP without the test for NULL: its \
+     * argument is not NULL */ \
+    PRIMITIVE(PyValue_DUP, PyValue, (PyValueBorrow), \
+              ARGS(borrowed nonnull), VALUE(owned), EFFECTS(), \
+              NONNULL_FORM(PyValue_XDUP)) \
+    /* PyValue_XCLOSE and PyValue_CLOSE (pycore_value.h): the count falls, \
+     * and the last count's release calls _Py_Dealloc, which may run a \
+     * finalizer.  CLOSE is XCLOSE without the test for NULL; it declares \
+     * no NONNULL_FORM, which test_columns_against_c would check by closing \
+     * generated words */ \
+    PRIMITIVE(PyValue_XCLOSE, void, (PyValue), \
+              ARGS(consumed), NONE, EFFECTS(releases)) \
+    PRIMITIVE(PyValue_CLOSE, void, (PyValue), \
+              ARGS(consumed nonnull), NONE, EFFECTS(releases)) \
     /* Identities: a borrowed view of a value; in a build with the GIL the \
      * relaxed atomic loads are plain loads */ \
     INTRINSIC(PyValue_Borrow, ARGS(borrowed), VIEW, BUILD(all)) \
@@ -164,6 +270,29 @@
               ARGS(object), TEST(exact(PyList_Type)), EFFECTS(reads)) \
     PRIMITIVE(PyTuple_CheckExact, int, (PyObject *), \
               ARGS(object), TEST(exact(PyTuple_Type)), EFFECTS(reads)) \
+    /* Py_IS_TYPE of the named type: a read of ob_type */ \
+    PRIMITIVE(PyDict_CheckExact, int, (PyObject *), \
+              ARGS(object), TEST(exact(PyDict_Type)), EFFECTS(reads)) \
+    PRIMITIVE(PyModule_CheckExact, int, (PyObject *), \
+              ARGS(object), TEST(exact(PyModule_Type)), EFFECTS(reads)) \
+    PRIMITIVE(PyUnicode_CheckExact, int, (PyObject *), \
+              ARGS(object), TEST(exact(PyUnicode_Type)), EFFECTS(reads)) \
+    PRIMITIVE(PyFunction_Check, int, (PyObject *), \
+              ARGS(object), TEST(exact(PyFunction_Type)), EFFECTS(reads)) \
+    /* An element of a list or tuple: a borrow rooted by the container \
+     * (pycore_list.h, pycore_tuple.h).  A tuple under construction holds \
+     * NULL, so no fact is declared of it */ \
+    PRIMITIVE(PyList_GET_VALUE, PyValueBorrow, (PyObject *, Py_ssize_t), \
+              ARGS(object, scalar), SCALAR, EFFECTS(reads)) \
+    PRIMITIVE(PyTuple_GET_VALUE, PyValueBorrow, (PyObject *, Py_ssize_t), \
+              ARGS(object, scalar), SCALAR, EFFECTS(reads)) \
+    /* pycore_long.h: the sign bits of lv_tag */ \
+    PRIMITIVE(_PyLong_IsZero, bool, (const PyLongObject *), \
+              ARGS(object), TEST(), EFFECTS(reads)) \
+    /* pycore_dict.h: the address of the entries after the index table, \
+     * from dk_log2_index_bytes */ \
+    PRIMITIVE(DK_UNICODE_ENTRIES, PyDictUnicodeEntry *, (PyDictKeysObject *), \
+              ARGS(scalar), SCALAR, EFFECTS(reads)) \
     PRIMITIVE(PyList_GET_SIZE, Py_ssize_t, (PyObject *), \
               ARGS(object), MEASURE(length), EFFECTS(reads)) \
     PRIMITIVE(PyTuple_GET_SIZE, Py_ssize_t, (PyObject *), \
@@ -204,6 +333,15 @@
               ARGS(scalar), SCALAR, EFFECTS(reads), FEEDBACK(read(counter))) \
     PRIMITIVE(_PyFb_AdvanceCounter, void, (_PyFbHeader *), \
               ARGS(scalar), NONE, EFFECTS(writes), FEEDBACK(write(counter))) \
+    /* Python/ceval_macros.h: a load and test of tstate->eval_breaker */ \
+    PRIMITIVE(_Py_EvalBreakerHasEvents, bool, (PyThreadState *), \
+              ARGS(tstate), CONTEXT("the thread's eval breaker"), EFFECTS(reads)) \
+    /* _Py_HandlePending (Python/ceval_gil.c): stop-the-world, signal \
+     * handlers and pending calls (Python code), the collector (finalizers); \
+     * -1 with an exception set */ \
+    HELPER(_Py_HandlePending, int, (PyThreadState *), \
+           ARGS(tstate), STATUS(NEGATIVE), \
+           EFFECTS(reads, writes, allocates, raises, releases, runs_python, polls)) \
     /* The specializers rewrite the word's handler and its feedback entry \
      * from the operands (Python/specialize.c).  Not reviewed: the effects \
      * are today's inference (all of them).  Their transitive callees \
@@ -250,6 +388,15 @@
      * and Python/ceval_macros.h that read the word, the frame or the \
      * activation, and write nothing */ \
     MACRO(IR_ACTIVATION, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
+    /* Frame fields of Python/ceval_macros.h: GLOBALS() is frame->f_globals, \
+     * BUILTINS() frame->f_builtins, FRAME_CO_CONSTS the code object's \
+     * constants, IR_SLOTS() frame->base (an address, fixed for the \
+     * activation), GETLOCAL(i) the home IR_SLOTS()[i] */ \
+    MACRO(GLOBALS, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
+    MACRO(BUILTINS, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
+    MACRO(FRAME_CO_CONSTS, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
+    MACRO(IR_SLOTS, ARGS(), SCALAR, EFFECTS(), EXITS()) \
+    MACRO(GETLOCAL, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
     MACRO(IR_C, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     MACRO(IR_D, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     MACRO(IR_HANDLER, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \

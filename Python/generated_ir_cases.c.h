@@ -11917,8 +11917,9 @@ ir_run_LOAD_FAST_BORROW(
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
-            assert(!PyValue_IsNull(GETLOCAL(oparg)));
-            value = PyValue_DUP(GETLOCAL(oparg));
+            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+            assert(!PyValue_IsNull(local));
+            value = PyValue_DUP(local);
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -26344,8 +26345,9 @@ static const _PyIRForm ir_handler_forms[512] = {
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
-            assert(!PyValue_IsNull(GETLOCAL(oparg)));
-            value = PyValue_DUP(GETLOCAL(oparg));
+            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+            assert(!PyValue_IsNull(local));
+            value = PyValue_DUP(local);
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
             DISPATCH();

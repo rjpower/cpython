@@ -1693,7 +1693,8 @@ leaf_probe__LOAD_FAST_BORROW(_PyInterpreterFrame *frame, PyValue *stack_pointer,
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
     PyValue value;
-    value = PyValue_DUP(GETLOCAL(oparg));
+    PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+    value = PyValue_DUP(local);
     stack_pointer[0] = value;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);

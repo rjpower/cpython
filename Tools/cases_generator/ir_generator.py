@@ -8638,8 +8638,8 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
                                 + unbound + " value = PyValue_DUP(value_s); }"),
             "LOAD_FAST": ("{ PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg)); "
                           "value = PyValue_DUP(local); }"),
-            "LOAD_FAST_BORROW": ("{ assert(!PyValue_IsNull(GETLOCAL(oparg))); "
-                                 "value = PyValue_DUP(GETLOCAL(oparg)); }"),
+            "LOAD_FAST_BORROW": ("{ PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg)); "
+                                 "value = PyValue_DUP(local); }"),
         }[inst.name]
         if bodies_match(body) and scalar_shape(0, 1):
             return "_PyIR_TRANSFER_LOCAL_DUP"

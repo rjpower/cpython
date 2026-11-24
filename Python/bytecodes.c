@@ -286,9 +286,12 @@ dummy_func(
         // A temporary owns its value (pyjit/design/pyvalue.md D4): the load
         // takes a count of a mortal object. A load that a fold absorbs
         // reads the local in place instead (Python/regcfg_passes.c).
-        leaf pure inst (LOAD_FAST_BORROW, (-- value)) {
-            assert(!PyValue_IsNull(GETLOCAL(oparg)));
-            value = PyValue_DUP(GETLOCAL(oparg));
+        // The compiler emits it, as LOAD_FAST, only for a bound local
+        leaf pure inst(LOAD_FAST_BORROW, (-- value: owned))
+            effects() exits(next)
+        {
+            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+            value = PyValue_DUP(local);
         }
 
         leaf inst(LOAD_FAST_AND_CLEAR, (-- value: moved(home)))

@@ -1960,6 +1960,21 @@ jit_template_LOAD_FAST_BORROW(_PyJitWordCx *cx)
     _PyJitAsm_Bind(a, L0);
     _PyJitAsm_MovImm(a, _PyJitReg_RAX, (int64_t)((int)IR_B(ir_word)));
     _PyJitLower_GETLOCAL(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX}, NULL);
+    _PyJitLower__PyValue_BoundLocal(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX}, NULL);
+#ifndef NDEBUG
+    {
+        _PyJitLabel ok = _PyJitAsm_NewLabel(a);
+        _PyJitLabel trap = _PyJitAsm_NewLabel(a);
+        _PyJitAsm_Push(a, _PyJitReg_RCX);
+        _PyJitAsm_Push(a, _PyJitReg_RDX);
+        _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)_PyJitLower_PyValue_IsNull(cx, (const uint8_t[]){_PyJitReg_RAX}, NULL)), ok);
+        _PyJitAsm_Bind(a, trap);
+        _PyJitAsm_Data(a, (const uint8_t[]){0x0f, 0x0b}, 2);  /* ud2 */
+        _PyJitAsm_Bind(a, ok);
+        _PyJitAsm_Pop(a, _PyJitReg_RDX);
+        _PyJitAsm_Pop(a, _PyJitReg_RCX);
+    }
+#endif
     cx->live = 0x0; cx->live_xmm = 0x0;
     _PyJitLower_PyValue_DUP(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX, _PyJitReg_RCX}, NULL);
     if ((ir_word & IR_F_LOCAL_A)) {

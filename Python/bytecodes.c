@@ -6657,14 +6657,14 @@ dummy_func(
         }
 
         tier1 inst(CACHE, (--))
-            effects() exits(next)
+            effects() exits(abort)
         {
             assert(0 && "Executing a cache.");
             Py_FatalError("Executing a cache.");
         }
 
         tier1 inst(RESERVED, (--))
-            effects() exits(next)
+            effects() exits(abort)
         {
             assert(0 && "Executing RESERVED instruction.");
             Py_FatalError("Executing RESERVED instruction.");
@@ -6676,7 +6676,7 @@ dummy_func(
          * drops NOT_TAKEN and splits the superinstructions.  The stack
          * effects are the compiler's. */
         tier1 inst(EXTENDED_ARG, ( -- ))
-            effects() exits(next)
+            effects() exits(abort)
         {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
@@ -6684,31 +6684,39 @@ dummy_func(
         }
 
         tier1 inst(NOT_TAKEN, ( -- ))
-            effects() exits(next)
+            effects() exits(abort)
         {
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        tier1 inst(LOAD_FAST_LOAD_FAST, ( -- value1, value2)) {
+        tier1 inst(LOAD_FAST_LOAD_FAST, ( -- value1: owned, value2: owned))
+            effects() exits(abort)
+        {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        tier1 inst(LOAD_FAST_BORROW_LOAD_FAST_BORROW, ( -- value1, value2)) {
+        tier1 inst(LOAD_FAST_BORROW_LOAD_FAST_BORROW, ( -- value1: owned, value2: owned))
+            effects() exits(abort)
+        {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        tier1 inst(STORE_FAST_LOAD_FAST, (value1 -- value2)) {
+        tier1 inst(STORE_FAST_LOAD_FAST, (value1: consumed -- value2: owned))
+            effects() exits(abort)
+        {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        tier1 inst(STORE_FAST_STORE_FAST, (value2, value1 --)) {
+        tier1 inst(STORE_FAST_STORE_FAST, (value2: consumed, value1: consumed --))
+            effects() exits(abort)
+        {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
@@ -6728,7 +6736,9 @@ dummy_func(
         // The words after a call head that name its operands, four slots
         // each (_PyIR_WordLength()).  The head consumes them, so no
         // dispatch reaches one.
-        ir_only no_save_ip inst(IR_OPERANDS, ( -- )) {
+        ir_only no_save_ip inst(IR_OPERANDS, ( -- ))
+            effects() exits(abort)
+        {
             assert(0 && "Executing operand words.");
             Py_FatalError("Executing operand words.");
         }

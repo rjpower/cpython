@@ -147,6 +147,11 @@ class SliceTests(unittest.TestCase):
     # _MONITOR_END_ASYNC_FOR may raise.  G0d1: it leaves by the redirect exit
     # when a callback redirects the frame, which the record cannot say
     LISTED_DIFFERENCES = [
+        # G0d1: a handler that never runs ends the process (Py_FatalError):
+        # its one exit is abort, for which the record has no transfer
+        'CACHE/_CACHE: declares exits(abort), the record has ',
+        'IR_OPERANDS/_IR_OPERANDS: declares exits(abort), the record has ',
+        'RESERVED/_RESERVED: declares exits(abort), the record has ',
         # G0d1: _PUSH_EXC_INFO moves the handled exception out with
         # _PyErr_StackItemTakeValue, whose row reads and writes; the
         # inference has no entry for it and assumes any call
@@ -2150,6 +2155,24 @@ class VerifierTests(unittest.TestCase):
         self.verify(source % "next, raise, redirect")
         self.refuses(source % "next, raise",
                      r"declares exits\(next, raise\), but the body takes next, raise, redirect")
+
+    def test_a_handler_that_never_runs_declares_abort(self):
+        # CACHE, RESERVED, the stack-only opcodes, IR_OPERANDS: the body
+        # ends the process (Py_FatalError), so abort is its one exit, and
+        # its outputs are never made
+        source = """
+            op(_OP, (value1: consumed -- value2: owned)) effects() exits(%s) {
+                Py_FatalError("Executing a stack-only instruction.");
+            }
+        """
+        self.verify(source % "abort")
+        self.refuses(source % "next",
+                     r"declares exits\(next\), but the body takes abort")
+        self.refuses("""
+            op(_OP, (--)) effects() exits(abort) {
+                int x = 0;
+            }
+        """, r"declares exits\(abort\), but the body takes next")
 
     def test_an_assumption_on_a_temporary_survives_a_reentry(self):
         # INSTRUMENTED_END_ASYNC_FOR: a temporary is replaced only by a

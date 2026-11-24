@@ -952,12 +952,10 @@
      * _Py_NO_RETURN function (Python/pylifecycle.c) that prints the \
      * message and the traceback of every thread, then aborts the \
      * process.  It cannot become a function (it names __func__).  It \
-     * never returns; the row's EXITS() is the conservative reading (the \
-     * uops that call it declare `next`, which is over-declared and \
-     * sound); a declared `exit` would need CACHE and RESERVED (batch 8) \
-     * to say so too */ \
+     * never returns: its one exit is abort (G0d1), the declared exit of \
+     * the handlers that never run */ \
     MACRO(Py_FatalError, \
-        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS(abort)) \
     /* Include/refcount.h, a static inline function: an immortality test \
      * and an increment; no call, no failure, no callback.  Free-threaded \
      * it is atomic, outside the scoped product. */ \

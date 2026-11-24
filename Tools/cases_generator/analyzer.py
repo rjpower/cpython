@@ -923,6 +923,7 @@ def find_escaping_api_calls(instr: parser.CodeDef) -> dict[SimpleStmt, EscapingC
 
 EXITS = {
     "DISPATCH",
+    "Py_FatalError",
     "Py_UNREACHABLE",
     "DISPATCH_INLINED",
     "DISPATCH_GOTO",

@@ -69,8 +69,10 @@ KILLS = frozenset(("writes", "releases", "runs_python", "polls", "switches_frame
 # debugger's f_lineno jump, which retires the temporaries it does not keep);
 # the word leaves for frame->instr_ptr without the rest of its handler.  On
 # the uop's other exits no callback redirected the frame.
+# abort: the process ends (Py_FatalError), the only exit of a handler that
+# never runs: a cache, RESERVED, the stack-only opcodes, operand words
 EXITS = ("next", "branch", "jump", "miss", "deopt", "raise", "enter", "return",
-         "yield", "exit", "redirect")
+         "yield", "exit", "redirect", "abort")
 
 # Feedback access (design 1.6, section 6): what a row or a uop reads and
 # writes of its site's feedback, transitively.  `entry` is every field of
@@ -1752,7 +1754,8 @@ def ends_path(row: Row) -> bool:
     """whether a call of row never returns to the body: a terminal marker,
     or a row whose exits are committed and none is next"""
     return ("terminal" in IR_MARKER_EFFECTS.get(row.name, ())
-            or bool(row.committed) and "next" not in row.exits)
+            or bool(row.committed) and "next" not in row.exits
+            or row.exits == {"abort"})
 
 
 def check_effects(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:

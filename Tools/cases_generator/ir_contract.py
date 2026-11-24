@@ -4083,7 +4083,14 @@ def _value_results(uop: Uop, where: Token, rhs: list[str], table: dict[str, Row]
         # An assumed fact holds at entry (F7), as in the walk; a value that
         # is never an object owns nothing, so it moves as an inline one
         facts = implied(item.facts | {a.fact for a in item.assumed})
-        return [(facts, "inline" if "object" not in word_kinds(facts) else "moved", rhs[0])]
+        entry = [(facts, "inline" if "object" not in word_kinds(facts) else "moved", rhs[0])]
+        if rhs[0] in seen:
+            return entry
+        # The declaration describes the entry value only: a value the body
+        # assigns to the input later is an alternative of its own
+        return entry + [r for at, value in _assignments(uop, rhs[0])
+                        for r in _value_results(uop, at, value, table, inputs,
+                                                seen | {rhs[0]})]
     if len(rhs) == 1 and rhs[0].count(".") == 1:
         # A value field of a CASES result: what each outcome that is not
         # NULL gives (F6)
@@ -4183,7 +4190,16 @@ def body_exits(uop: Uop, table: dict[str, Row], implicit_guards: int,
                             for site in switches)):
             exits.add("next")
     elif not uop.properties.always_exits:
-        exits.add("next")
+        # A body that moves next_instr and runs to its end continues where
+        # it moved it (_FOR_ITER_DICT_ITEMS steps over the unpack word): a
+        # jump, on the paths that move it
+        moves = [conditional for tkn, written in position_writes(tokens)
+                 if written == "next_instr"
+                 for conditional in [ir_records.conditional(uop.body.body, tkn)]]
+        if moves:
+            exits.add("jump")
+        if not any(c is False for c in moves):
+            exits.add("next")
     return exits
 
 
@@ -4202,6 +4218,70 @@ def check_exits(uop: Uop, contract: Contract, table: dict[str, Row],
     if actual != set(contract.exits):
         raise analysis_error(f"{uop.name}: declares exits({', '.join(sorted(contract.exits))}), "
                              f"but the body takes {', '.join(sorted(actual))}", uop.body.open)
+
+
+# The exits that leave a word at the position its body wrote
+POSITION_EXITS = frozenset(("jump", "redirect"))
+# The exits whose continuation reads frame->instr_ptr: the unwinder looks up
+# the handler at it (exception_unwind), and a suspended frame resumes at it
+INSTR_PTR_EXITS = frozenset(("raise", "yield"))
+POSITION_WRITES = frozenset(("=", "+=", "-=", "++", "--"))
+
+
+def position_writes(tokens: list[Token]) -> list[tuple[Token, str]]:
+    "The sites where tokens write next_instr or frame->instr_ptr, with which"
+    sites = []
+    for i, tkn in enumerate(tokens):
+        after = tokens[i + 1].text if i + 1 < len(tokens) else ""
+        before = tokens[i - 1].text if i > 0 else ""
+        written = after in POSITION_WRITES or before in ("++", "--")
+        if tkn.text == "next_instr" and written:
+            sites.append((tkn, "next_instr"))
+        elif (tkn.text == "instr_ptr" and before == "->" and i > 1
+                and tokens[i - 2].text == "frame" and written):
+            sites.append((tokens[i - 2], "frame->instr_ptr"))
+    return sites
+
+
+def check_position_writes(uop: Uop, contract: Contract) -> None:
+    """V12: a body that writes the frame's position (next_instr or
+    frame->instr_ptr) declares an exit that leaves there, jump or redirect.
+    Two writes are allowed because a declared exit fixes their destination:
+    - next_instr after a frame switch is where the switch exit (yield,
+      enter, return) continues, in the frame switched to: _YIELD_VALUE's
+      `next_instr = frame->return_pc`, the caller's resume point;
+    - frame->instr_ptr in a uop whose every exit is raise or yield is where
+      that exit continues: the unwinder looks up the handler at it
+      (exception_unwind; RERAISE), and the suspended frame resumes at it
+      (_YIELD_VALUE's `frame->instr_ptr++`)"""
+    switches = [s.begin for s in analyzer.frame_switch_sites(list(uop.body.tokens()))]
+    exits = set(contract.exits)
+    for tkn, written in position_writes(_tokens(uop)):
+        if exits & POSITION_EXITS:
+            continue
+        if written == "next_instr" and any(at < tkn.begin for at in switches):
+            continue
+        if written == "frame->instr_ptr" and exits <= INSTR_PTR_EXITS:
+            continue
+        raise analysis_error(
+            f"{uop.name}: writes {written}, but declares exits({', '.join(sorted(exits))}), "
+            "none of which leaves there: declare jump or redirect", tkn)
+
+
+def check_completion_targets(uop: Uop) -> None:
+    """V13: IR_COMPLETE_STEP's target is an operand of the word, oparg or a
+    declared cache operand (IR_EXIT names the word's exit, which is oparg).
+    The generator lowers it as the word's normal completion; a local could
+    hold any position"""
+    operands = {"oparg", "IR_EXIT"} | {c.name for c in uop.caches if c.name != "unused"}
+    for tkn, args in body_calls(uop):
+        if tkn.text != "IR_COMPLETE_STEP":
+            continue
+        target = args[2] if len(args) == 3 else []
+        if len(target) != 1 or target[0] not in operands:
+            raise analysis_error(
+                f"{uop.name}: IR_COMPLETE_STEP's target is `{' '.join(target)}`, which is "
+                "no operand: pass oparg or a declared cache operand", tkn)
 
 
 def check_guard_facts(uop: Uop, contract: Contract, walk: OwnershipWalk) -> None:
@@ -4449,6 +4529,8 @@ def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None 
     check_results(uop, contract, table)
     walk = walk_of(uop, table)
     check_exits(uop, contract, table, implicit_guards)
+    check_position_writes(uop, contract)
+    check_completion_targets(uop)
     check_guard_facts(uop, contract, walk)
     check_state_facts(uop, contract, walk)
     if table is _ROWS:

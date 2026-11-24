@@ -3969,7 +3969,7 @@ class TestIRCases(unittest.TestCase):
             with self.subTest(handler=name):
                 self.assertIn(expected, contracts[name].ownership_events)
         # A completion at another continuation does not describe the declared
-        # taken edge. One uncovered sibling removes the family-wide grant.
+        # taken edge: V13 refuses a target held in a local
         text = source.read_text()
         old = "IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);"
         self.assertIn(old, text)
@@ -3978,10 +3978,9 @@ class TestIRCases(unittest.TestCase):
             stream.write(text.replace(old, changed_route, 1))
         changed = analyzer.analyze_files([self.temp_input_filename])
         changed_formats = ir_generator.compute_formats(changed)
-        changed_contracts = ir_generator.handler_contracts(changed, changed_formats)
-        for name in names:
-            with self.subTest(uncovered_handler=name):
-                self.assertNotIn(expected, changed_contracts[name].ownership_events)
+        with self.assertRaisesRegex(SyntaxError,
+                r"IR_COMPLETE_STEP's target is `changed_target`, which is no operand"):
+            ir_generator.handler_contracts(changed, changed_formats)
 
     def test_normal_transfer_real_family_coverage(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"

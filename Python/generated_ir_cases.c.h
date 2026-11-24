@@ -9089,7 +9089,7 @@ ir_run_INSTRUMENTED_END_SEND(
                     _PyValue_XCLOSE_POINTER(ir_own_B);
                     DISPATCH_REDIRECT();
                 }
-                next_instr = jump.next;
+                assert(jump.next == next_instr);
             }
             val = held;
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), val);
@@ -23878,7 +23878,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                     _PyValue_XCLOSE_POINTER(ir_own_B);
                     DISPATCH_REDIRECT();
                 }
-                next_instr = jump.next;
+                assert(jump.next == next_instr);
             }
             val = held;
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), val);

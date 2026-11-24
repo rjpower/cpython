@@ -2480,6 +2480,90 @@ class VerifierTests(unittest.TestCase):
         self.verify(source % ("tagged_index", "inline tagged_index"))
         self.refuses(source % ("", "inline"), r"next_index. is declared inline, but index gives an moved value")
 
+    def test_a_reassigned_input_gives_each_value(self):
+        # A consumed input's declared facts describe its entry value. After
+        # the body assigns it another input, an output copied from it is
+        # that value too, so an owner cannot leave as an inline output
+        source = """
+            op(_OP, (index: consumed %s, other: consumed %s -- next_index: inline)) effects() exits(next) {
+                DEAD(index);
+                index = other;
+                DEAD(other);
+                next_index = index;
+            }
+        """
+        self.verify(source % ("tagged_index", "tagged_index"))
+        self.refuses(source % ("tagged_index", ""),
+                     r"next_index. is declared inline, but other gives an moved value")
+        self.refuses(source % ("assumed(tagged_index) by GET_ITER", ""),
+                     r"next_index. is declared inline, but other gives an moved value")
+
+    def test_a_position_write_declares_where_it_leaves(self):
+        # V12: a body that writes next_instr or frame->instr_ptr declares an
+        # exit that leaves there. A switch exit leaves through next_instr
+        # written after the switch, and raise or yield through frame->instr_ptr
+        position = r"writes %s, but declares exits\(%s\), none of which leaves there"
+        self.verify("""
+            op(_OP, (--)) effects() exits(next, jump) {
+                if (oparg) {
+                    next_instr = this_instr;
+                    DISPATCH_SAME_OPARG();
+                }
+            }
+        """)
+        self.refuses("""
+            op(_OP, (--)) effects(raises) exits(raise) {
+                next_instr = this_instr;
+                goto exception_unwind;
+            }
+        """, position % ("next_instr", "raise"))
+        # RERAISE: the unwinder looks up the handler at frame->instr_ptr
+        source = """
+            op(_OP, (--)) effects(reads, writes, raises) exits(%s) {
+                frame->instr_ptr = this_instr;
+                %s
+            }
+        """
+        self.verify(source % ("raise", "goto exception_unwind;"))
+        self.refuses(source % ("next", ""), position % ("frame->instr_ptr", "next"))
+        # _YIELD_VALUE places the frame it switched to; a write before the
+        # switch would move the frame it leaves
+        source = """
+            op(_OP, (--)) effects(reads, switches_frame) exits(enter) {
+                %s
+            }
+        """
+        self.verify(source % "frame = frame->previous;\nnext_instr = frame->instr_ptr;")
+        self.refuses(source % "next_instr = this_instr;\nframe = frame->previous;",
+                     position % ("next_instr", "enter"))
+        # _FOR_ITER_DICT_ITEMS: a body that moves next_instr and runs to its
+        # end continues there, a jump and not next
+        source = """
+            op(_OP, (--)) effects() exits(%s) {
+                next_instr++;
+            }
+        """
+        self.verify(source % "jump")
+        self.refuses(source % "next", r"declares exits\(next\), but the body takes jump")
+
+    def test_a_completion_targets_an_operand(self):
+        # V13: IR_COMPLETE_STEP's target is oparg or a declared cache
+        # operand, which the generator lowers as the word's completion
+        source = """
+            op(_OP, (%s--)) effects(reads, writes, raises, runs_python) exits(next, branch, raise) {
+                if (oparg) {
+                    %s
+                    IR_COMPLETE_STEP(_PY_IR_FOR_ITER, PyValue_None, %s);
+                }
+            }
+        """
+        self.verify(source % ("", "", "oparg"))
+        self.verify(source % ("target/1 ", "", "target"))
+        self.refuses(source % ("", "int target = oparg;", "target"),
+                     r"IR_COMPLETE_STEP's target is `target`, which is no operand")
+        self.refuses(source % ("", "", "oparg + 1"),
+                     r"IR_COMPLETE_STEP's target is `oparg \+ 1`, which is no operand")
+
     def test_a_redirect_is_its_own_exit(self):
         # _MONITOR_RESUME, _YIELD_VALUE_EVENT: after a callback moved the
         # frame, the word leaves for the word it chose (DISPATCH_REDIRECT),

@@ -15,6 +15,8 @@ import tempfile
 import textwrap
 import unittest
 
+from test.support import import_helper
+
 from test import test_generated_cases as cases
 from test import test_tools
 
@@ -887,3 +889,110 @@ class VerifierTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# Rows that use the columns that name another row; TA declares the tree's
+COLUMN_ROWS = """
+#define TEST_COLUMNS(PRIMITIVE, HELPER, MACRO) \\
+    PRIMITIVE(PyValue_BothInlineInt, bool, (PyValueBorrow, PyValueBorrow), \\
+              ARGS(borrowed, borrowed), TEST(inline_int, inline_int), EFFECTS(), \\
+              CONJOINS(PyValue_IsInlineInt)) \\
+    PRIMITIVE(PyValue_DUP, PyValue, (PyValueBorrow), ARGS(borrowed nonnull), \\
+              VALUE(owned), EFFECTS(), NONNULL_FORM(PyValue_XDUP)) \\
+    PRIMITIVE(PyValue_FromInt64, PyValue, (int64_t), ARGS(scalar), \\
+              VALUE_OR_NULL(owned exact(PyLong_Type)), EFFECTS(allocates, raises), \\
+              SLOW(_PyValue_BoxInt64))
+"""
+
+
+def column_rows(text=COLUMN_ROWS):
+    table = ir_contract.rows() | ir_contract.parse_rows(text)
+    ir_contract.check_columns(table)
+    return table
+
+
+class ColumnTests(unittest.TestCase):
+    "CONJOINS, NONNULL_FORM and SLOW: declared, checked, then tested in C"
+
+    def test_columns_parse(self):
+        table = column_rows()
+        self.assertEqual(table["PyValue_BothInlineInt"].conjoins, "PyValue_IsInlineInt")
+        self.assertEqual(table["PyValue_DUP"].nonnull_form, "PyValue_XDUP")
+        self.assertEqual(table["PyValue_FromInt64"].slow, "_PyValue_BoxInt64")
+        with self.assertRaisesRegex(SyntaxError, r"optionally each of .* once"):
+            ir_contract.parse_rows(COLUMN_ROWS.replace(
+                "CONJOINS(PyValue_IsInlineInt)",
+                "CONJOINS(PyValue_IsInlineInt), CONJOINS(PyValue_IsInlineInt)"))
+        with self.assertRaisesRegex(SyntaxError, r"optionally each of FEEDBACK"):
+            ir_contract.parse_rows("""
+                #define X(PRIMITIVE, HELPER, MACRO) \\
+                    MACRO(SPAM, ARGS(), NONE, EFFECTS(), EXITS(), SLOW(spam))
+            """)
+        with self.assertRaisesRegex(SyntaxError, r"names no row"):
+            column_rows(COLUMN_ROWS.replace("SLOW(_PyValue_BoxInt64)", "SLOW(spam)"))
+
+    def test_conjoins_is_checked(self):
+        with self.assertRaisesRegex(SyntaxError, r"PyValue_BothInlineInt: CONJOINS\("
+                                                 r"PyValue_IsNull\): its TEST is"):
+            column_rows(COLUMN_ROWS.replace("CONJOINS(PyValue_IsInlineInt)",
+                                            "CONJOINS(PyValue_IsNull)"))
+        with self.assertRaisesRegex(SyntaxError, r"a two-argument TEST of a one-argument"):
+            column_rows(COLUMN_ROWS.replace("CONJOINS(PyValue_IsInlineInt)",
+                                            "CONJOINS(_PyValue_IntScaled)"))
+
+    def test_nonnull_form_is_checked(self):
+        with self.assertRaisesRegex(SyntaxError, r"PyValue_DUP: NONNULL_FORM\(PyValue_XDUP\): "
+                                                 r"it requires nonnull of its argument"):
+            column_rows(COLUMN_ROWS.replace("ARGS(borrowed nonnull)", "ARGS(borrowed)"))
+        with self.assertRaisesRegex(SyntaxError, r"its result differs"):
+            column_rows(COLUMN_ROWS.replace("VALUE(owned), EFFECTS(), NONNULL",
+                                            "VALUE(borrowed), EFFECTS(), NONNULL"))
+
+    def test_slow_is_checked(self):
+        with self.assertRaisesRegex(SyntaxError, r"PyValue_FromInt64: SLOW\(_PyValue_BoxInt64\): "
+                                                 r"the row declares fewer effects"):
+            column_rows(COLUMN_ROWS.replace("EFFECTS(allocates, raises), \\\n",
+                                            "EFFECTS(allocates), \\\n"))
+        with self.assertRaisesRegex(SyntaxError, r"a HELPER that can fail"):
+            column_rows(COLUMN_ROWS.replace("SLOW(_PyValue_BoxInt64)",
+                                            "SLOW(PyValue_IsNull)"))
+
+    def test_columns_against_c(self):
+        """Each declared column against the C definitions on generated
+        values; test_jit_template holds each lowering to the same
+        definitions, so the lowerings follow"""
+        capi = import_helper.import_module("_testinternalcapi")
+        if not hasattr(capi, "leaf_primitive"):
+            self.skipTest("no leaf primitives")
+        from test import test_ir_leaf as leaf
+        table = column_rows()
+        for row in table.values():
+            if row.conjoins:
+                one = ir_leaf.PRIMITIVES[row.conjoins]
+                words = [w for (w,) in leaf.cases(one)]
+                for a in words:
+                    for b in words:
+                        with self.subTest(row=row.name, a=a, b=b):
+                            self.assertEqual(bool(capi.leaf_primitive(row.name, a, b)),
+                                             bool(capi.leaf_primitive(one.name, a))
+                                             and bool(capi.leaf_primitive(one.name, b)))
+            if row.nonnull_form:
+                general = ir_leaf.PRIMITIVES[row.nonnull_form]
+                for (w,) in leaf.cases(general):
+                    if w == 0:
+                        continue
+                    with self.subTest(row=row.name, w=w):
+                        mine = capi.leaf_primitive(row.name, w)
+                        theirs = capi.leaf_primitive(general.name, w)
+                        capi.leaf_primitive("PyValue_CLOSE", mine)
+                        capi.leaf_primitive("PyValue_CLOSE", theirs)
+                        self.assertEqual(mine, theirs)
+            if row.slow:
+                # The model's slow path is the declared helper, and on values
+                # whose allocation succeeds the result is not NULL
+                self.assertEqual(ir_leaf.PRIMITIVES[row.name].slow, row.slow)
+                for i in leaf.WIDE_INTS:
+                    with self.subTest(row=row.name, i=i):
+                        w = capi.leaf_primitive(row.name, i)
+                        self.assertNotEqual(w, 0)
+                        capi.leaf_primitive("PyValue_CLOSE", w)

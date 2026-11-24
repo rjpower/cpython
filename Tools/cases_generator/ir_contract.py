@@ -198,6 +198,15 @@ class Row:
     struct: str = ""                        # FIELD: the struct, the field,
     field: str = ""                         # and the path of the pointer
     on: str = ""                            # it is read through
+    # CONJOINS(t): a two-argument TEST that holds exactly when the
+    # one-argument TEST t holds of both arguments (guard fusion)
+    conjoins: str = ""
+    # NONNULL_FORM(f): f with the precondition that its one argument is
+    # not NULL, which a caller may use after a non-NULL test
+    nonnull_form: str = ""
+    # SLOW(h): a VALUE_OR_NULL result is NULL only when the slow-path
+    # helper h fails; the fast path cannot fail
+    slow: str = ""
 
     def new_owner(self) -> bool:
         "whether a call returns a value that its caller must release"
@@ -310,14 +319,37 @@ def feedback_covered(access: tuple[str, str], declared) -> bool:
                for m, d in declared)
 
 
-def _row_feedback(fields: list[str], fixed: int, kind: str) -> frozenset[tuple[str, str]]:
-    "the optional FEEDBACK(...) column after a row's fixed ones"
-    if len(fields) == fixed:
-        return frozenset()
-    inner = _inner(fields[-1], "FEEDBACK") if len(fields) == fixed + 1 else None
-    if inner is None:
-        raise ValueError(f"{kind}: {fixed} columns, then an optional FEEDBACK(...)")
-    return parse_feedback(_split_text(inner))
+# The optional columns after a row's fixed ones, by row kind
+OPTIONAL_COLUMNS = {
+    "PRIMITIVE": ("FEEDBACK", "CONJOINS", "NONNULL_FORM", "SLOW"),
+    "HELPER": ("FEEDBACK", "SLOW"),
+    "ROUTINE": ("FEEDBACK",),
+    "MACRO": ("FEEDBACK",),
+}
+
+
+def _row_options(fields: list[str], fixed: int, kind: str) -> dict:
+    """The optional columns after a row's fixed ones, each at most once:
+    FEEDBACK(...) as (mode, field) pairs, the others as the row they name"""
+    allowed = OPTIONAL_COLUMNS[kind]
+    found: dict = {}
+    for text in fields[fixed:]:
+        head = next((h for h in allowed if _inner(text, h) is not None), None)
+        if head is None or head in found:
+            raise ValueError(f"{kind}: {fixed} columns, then optionally each of "
+                             f"{', '.join(f'{h}(...)' for h in allowed)} once; "
+                             f"got {text.strip()!r}")
+        inner = _inner(text, head)
+        if head == "FEEDBACK":
+            found[head] = parse_feedback(_split_text(inner))
+        elif not re.fullmatch(r"\w+", inner.strip()):
+            raise ValueError(f"{head}(name) names one row")
+        else:
+            found[head] = inner.strip()
+    return {"feedback": found.get("FEEDBACK", frozenset()),
+            "conjoins": found.get("CONJOINS", ""),
+            "nonnull_form": found.get("NONNULL_FORM", ""),
+            "slow": found.get("SLOW", "")}
 
 
 def _parse_row(kind: str, fields: list[str]) -> Row:
@@ -341,7 +373,7 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
         return Row(kind, name, args=_parse_args(_inner(args, "ARGS")),
                    result=_parse_result(result), builds=_parse_names(builds, "BUILD", BUILDS))
     if kind == "MACRO":
-        if len(fields) not in (5, 6):
+        if len(fields) < 5:
             raise ValueError("MACRO(name, ARGS(...), result, EFFECTS(...), EXITS(...)"
                              "[, FEEDBACK(...)])")
         name, args, result, effects, exits = fields[:5]
@@ -349,11 +381,12 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
                    result=_parse_result(result),
                    effects=_parse_names(effects, "EFFECTS", EFFECTS),
                    exits=_parse_names(exits, "EXITS", EXITS),
-                   feedback=_row_feedback(fields, 5, kind))
+                   **_row_options(fields, 5, kind))
     fixed = 7 if kind == "ROUTINE" else 6
-    if len(fields) not in (fixed, fixed + 1):
+    if len(fields) < fixed:
         raise ValueError(f"{kind}(name, ret, (params), ARGS(...), result, EFFECTS(...)"
-                         f"{', EXITS(...)' if kind == 'ROUTINE' else ''}[, FEEDBACK(...)])")
+                         f"{', EXITS(...)' if kind == 'ROUTINE' else ''}"
+                         f"[, {'][, '.join(f'{h}(...)' for h in OPTIONAL_COLUMNS[kind])}])")
     name, ret, params, args, result, effects = fields[:6]
     params = params.strip()
     if not (params.startswith("(") and params.endswith(")")):
@@ -364,7 +397,7 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
               _parse_names(effects, "EFFECTS", EFFECTS),
               exits=(_parse_names(fields[6], "EXITS", EXITS) if kind == "ROUTINE"
                      else frozenset()),
-              feedback=_row_feedback(fields, fixed, kind))
+              **_row_options(fields, fixed, kind))
     fixed = [p for p in row.params if p != "..."]
     if len(row.args) != len(fixed):
         raise ValueError(f"{len(row.args)} ARGS for {len(fixed)} parameters")
@@ -397,12 +430,71 @@ def parse_rows(text: str, source: str = "pycore_ir_components.h") -> dict[str, R
     return rows
 
 
+def check_columns(table: dict[str, Row]) -> None:
+    """The columns that name another row: the row exists and fits.  They
+    are declarations; test_ir_contracts holds them to the C definitions on
+    generated values"""
+    def fail(row: Row, message: str):
+        raise SyntaxError(f"pycore_ir_components.h: row {row.name}: {message}")
+
+    def named(row: Row, column: str, name: str) -> Row:
+        if name not in table:
+            fail(row, f"{column}({name}) names no row")
+        return table[name]
+
+    for row in table.values():
+        if row.conjoins:
+            one = named(row, "CONJOINS", row.conjoins)
+            if (row.result.shape != "TEST" or len(row.args) != 2
+                    or one.result.shape != "TEST" or len(one.args) != 1):
+                fail(row, f"CONJOINS({one.name}): a two-argument TEST of a "
+                     "one-argument TEST")
+            if any(a.mode != one.args[0].mode for a in row.args):
+                fail(row, f"CONJOINS({one.name}): its arguments' modes differ from "
+                     f"{one.name}'s")
+            true = one.result.tests[0][0] if one.result.tests else frozenset()
+            if any(t != (true, frozenset()) for t in row.result.tests) \
+                    or len(row.result.tests) != 2:
+                fail(row, f"CONJOINS({one.name}): its TEST is "
+                     f"{', '.join(sorted(map(str, true))) or 'nothing'} of each argument "
+                     "when true, and nothing of either when false")
+        if row.nonnull_form:
+            general = named(row, "NONNULL_FORM", row.nonnull_form)
+            if len(row.args) != 1 or len(general.args) != 1 or row.params != general.params \
+                    or row.ret != general.ret:
+                fail(row, f"NONNULL_FORM({general.name}): one argument, and the C type "
+                     f"of {general.name}")
+            if (row.result.shape, row.result.mode) != (general.result.shape,
+                                                       general.result.mode):
+                fail(row, f"NONNULL_FORM({general.name}): its result differs from "
+                     f"{general.name}'s")
+            if NONNULL not in implied(row.args[0].facts) \
+                    or NONNULL in implied(general.args[0].facts):
+                fail(row, f"NONNULL_FORM({general.name}): it requires nonnull of its "
+                     f"argument, which {general.name} does not")
+            if not row.effects <= general.effects:
+                fail(row, f"NONNULL_FORM({general.name}): effects beyond "
+                     f"{general.name}'s")
+        if row.slow:
+            helper = named(row, "SLOW", row.slow)
+            if row.result.shape != "VALUE_OR_NULL":
+                fail(row, f"SLOW({helper.name}): a VALUE_OR_NULL result")
+            if helper.kind != "HELPER" or helper.result.shape not in ("VALUE_OR_NULL",
+                                                                       "STATUS"):
+                fail(row, f"SLOW({helper.name}): a HELPER that can fail (VALUE_OR_NULL "
+                     "or STATUS)")
+            if not helper.effects <= row.effects:
+                fail(row, f"SLOW({helper.name}): the row declares fewer effects than "
+                     f"{helper.name}")
+
+
 _ROWS: dict[str, Row] = {}
 
 
 def rows() -> dict[str, Row]:
     if not _ROWS:
         _ROWS.update(parse_rows(COMPONENTS_HEADER.read_text()))
+        check_columns(_ROWS)
     return _ROWS
 
 

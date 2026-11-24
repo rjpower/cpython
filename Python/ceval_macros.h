@@ -217,7 +217,7 @@
     } while (0)
 
 /* The activation of the evaluation loop that runs the handler
- * (_PyEvalActivation, Python/ceval.h) */
+ * (_PyEvalActivation, Include/internal/pycore_ceval.h) */
 #define IR_ACTIVATION() (((_PyThreadStateImpl *)tstate)->eval_activation)
 
 /* Whether frame runs the executing copy of its code, as it must at every
@@ -1159,7 +1159,7 @@ method_poly_lookup(const _PyIRWord *words, const _PyFbHeader *h, PyObject *owner
     } while (0)
 #define IR_JIT_RESUME() \
     do { \
-        if (frame->jit_resume) { \
+        if (frame->jit_flags & _PyFrame_JIT_RESUME) { \
             IR_STEP_DONE(jit_resume(tstate, frame, next_instr)); \
         } \
     } while (0)

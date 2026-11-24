@@ -95,7 +95,7 @@ typedef struct _PyThreadStateImpl {
 
     _PyBorrowStack borrow;
 
-    // The innermost activation of the evaluation loop (Python/ceval.h,
+    // The innermost activation of the evaluation loop (pycore_ceval.h,
     // _PyEvalActivation), or NULL.  Stack-switching code saves and restores
     // it with current_frame.
     struct _PyEvalActivation *eval_activation;

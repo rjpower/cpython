@@ -1,5 +1,6 @@
 """Tests of the JIT's x86-64 assembler and code memory
-(Include/internal/pycore_jit_asm.h, Python/jit_asm.c, Python/jit_memory.c).
+(Include/internal/pycore_jit_asm.h, Python/jit_asm.c, Python/jit_memory.c),
+and of the machine code that every unit shares (the switch routine).
 
 A program is a list of tuples, ("name", argument...), run by the hooks in
 Modules/_testinternalcapi/jit_asm.c.  An argument is an int (register,
@@ -15,10 +16,12 @@ import shutil
 import struct
 import subprocess
 import sys
+import sysconfig
 import tempfile
+import textwrap
 import unittest
 from test import support
-from test.support import import_helper, warnings_helper
+from test.support import import_helper, script_helper, warnings_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 if not hasattr(_testinternalcapi, "jit_asm_place"):
@@ -688,6 +691,173 @@ def maps_entry(address):
             if low <= address < high:
                 return match[3]
     return None
+
+
+STALE, RETIRED = 1, 2
+# Whether the core checks assertions: the test modules always do
+ASSERTIONS = "-DNDEBUG" not in (sysconfig.get_config_var("PY_CFLAGS") or "")
+
+
+def suspended(source):
+    """A generator function compiled from source (named g) and a generator
+    of it suspended at its first yield"""
+    namespace = {}
+    exec(textwrap.dedent(source), namespace)
+    g = namespace["g"]
+    gen = g([1, 2])
+    next(gen)
+    return g, gen
+
+
+SOURCE = """
+    def g(x):
+        total = 0
+        for i in x:
+            total += max(i, 1)
+            yield total
+        yield len(x)
+"""
+
+
+@unittest.skipUnless(hasattr(_testinternalcapi, "jit_switch_probe") and
+                     sys._jit.is_available(), "the JIT is not available")
+class SwitchRoutineTests(unittest.TestCase):
+    """A unit's switch routine (Python/jit.c, emit_switch_routine()), run
+    for a generator's frame on a native frame that the probe builds as a
+    unit's prologue does: it enters the newest unit of the frame's code at
+    the frame's word, or leaves through its unit's shared exit."""
+
+    def compiled(self, source=SOURCE):
+        g, gen = suspended(source)
+        self.assertTrue(_testinternalcapi.jit_compile(g.__code__))
+        return g, gen
+
+    def test_enters_every_head_word(self):
+        g, gen = self.compiled()
+        unit = _testinternalcapi.jit_unit(g.__code__)
+        heads = 0
+        for i in range(unit["nwords"]):
+            path, info = _testinternalcapi.jit_switch_probe(g.__code__, gen=gen, index=i)
+            with self.subTest(index=i):
+                self.assertEqual(path, "enter")
+                self.assertIn(info["entry"], (i, -1))
+                self.assertTrue(info["in_code"])
+            heads += info["entry"] == i
+        # An operand word's entry is the unit's trap, no head's block
+        self.assertEqual(heads, unit["heads"])
+        self.assertLess(heads, unit["nwords"])
+
+    def test_loads_the_frame_and_keeps_the_books(self):
+        g, gen = self.compiled()
+        before = _testinternalcapi.jit_stats()["switches"]
+        path, info = _testinternalcapi.jit_switch_probe(g.__code__, gen=gen)
+        self.assertEqual(path, "enter")
+        self.assertGreaterEqual(info["entry"], 0)
+        for key in ("frame", "words", "base", "newest", "resume", "jit_frame"):
+            self.assertIs(info[key], True, key)
+        self.assertIs(info["recompiled"], False)
+        self.assertIs(info["invalid"], False)
+        self.assertIs(info["recorded"], True if ASSERTIONS else None)
+        self.assertEqual(info["switches"], 1)
+        self.assertEqual(_testinternalcapi.jit_stats()["switches"], before + 1)
+
+    def test_any_unit_switches_into_another(self):
+        # The routine of one code's unit enters another code's unit
+        g, gen = self.compiled()
+        other, _ = self.compiled(SOURCE.replace("max", "min"))
+        path, info = _testinternalcapi.jit_switch_probe(other.__code__, gen=gen)
+        self.assertEqual(path, "enter")
+        self.assertTrue(info["newest"] and info["frame"])
+
+    def test_a_frame_without_a_unit_leaves(self):
+        g, _ = self.compiled()
+        # A generator that has not started: its code has never run
+        namespace = {}
+        exec(textwrap.dedent(SOURCE), namespace)
+        gen = namespace["g"]([1, 2])
+        self.assertIsNone(_testinternalcapi.jit_unit(gen.gi_code))
+        before = _testinternalcapi.jit_stats()["switches"]
+        for index in (None, 0):
+            with self.subTest(index=index):
+                path, same, word = _testinternalcapi.jit_switch_probe(
+                    g.__code__, gen=gen, index=index)
+                self.assertEqual(path, "leave")
+                self.assertIs(same, True)
+                if index is not None:
+                    self.assertEqual(word, index)
+        self.assertEqual(_testinternalcapi.jit_stats()["switches"], before)
+
+    def test_a_stale_unit_is_recompiled(self):
+        g, gen = self.compiled()
+        units = _testinternalcapi.jit_unit(g.__code__)["units"]
+        result = _testinternalcapi.jit_switch_probe(g.__code__, gen=gen, invalid=STALE)
+        if not sys._jit.is_enabled():
+            # The warm-up event compiles nothing with the JIT off
+            self.assertEqual(result[0], "leave")
+            return
+        path, info = result
+        self.assertEqual(path, "enter")
+        self.assertIs(info["recompiled"], True)
+        self.assertIs(info["newest"], True)
+        self.assertIs(info["invalid"], False)
+        self.assertEqual(_testinternalcapi.jit_unit(g.__code__)["units"], units + 1)
+
+    def test_a_stale_unit_at_the_cap_runs_on(self):
+        g, gen = self.compiled()
+        while _testinternalcapi.jit_unit(g.__code__)["compiles"] < 8:
+            self.assertTrue(_testinternalcapi.jit_compile(g.__code__))
+        result = _testinternalcapi.jit_switch_probe(g.__code__, gen=gen, invalid=STALE)
+        if not sys._jit.is_enabled():
+            self.assertEqual(result[0], "leave")
+            return
+        path, info = result
+        self.assertEqual(path, "enter")
+        self.assertIs(info["recompiled"], False)
+        self.assertIs(info["invalid"], False)
+
+    def test_a_retired_unit_leaves(self):
+        g, gen = self.compiled()
+        other, _ = self.compiled(SOURCE.replace("max", "min"))
+        tool = 4
+        sys.monitoring.use_tool_id(tool, "test_jit_asm")
+        try:
+            sys.monitoring.set_local_events(tool, g.__code__, sys.monitoring.events.LINE)
+            self.assertEqual(_testinternalcapi.jit_unit(g.__code__)["invalid"] & RETIRED,
+                             RETIRED)
+            path, same, _ = _testinternalcapi.jit_switch_probe(other.__code__, gen=gen)
+            self.assertEqual(path, "leave")
+            self.assertIs(same, True)
+        finally:
+            sys.monitoring.set_local_events(tool, g.__code__, 0)
+            sys.monitoring.free_tool_id(tool)
+
+    def check_stops(self, probe):
+        source = textwrap.dedent(SOURCE) + textwrap.dedent(f"""
+            import _testinternalcapi as t
+            gen = g([1, 2])
+            next(gen)
+            t.jit_compile(g.__code__)
+            {probe}
+        """)
+        _, _, err = script_helper.assert_python_failure("-c", source)
+        self.assertIn(b"an operand word entered", err)
+
+    def test_jumping_to_an_operand_word_stops(self):
+        # The routine finds trap for an operand word's index; a site that
+        # jumped there would stop in every build
+        self.check_stops("""
+            unit = t.jit_unit(g.__code__)
+            index = next(i for i in range(unit["nwords"])
+                         if t.jit_switch_probe(g.__code__, gen=gen, index=i)[1]["entry"] < 0)
+            t.jit_switch_probe(g.__code__, gen=gen, index=index, jump=True)
+        """)
+
+    @unittest.skipUnless(ASSERTIONS, "the bounds check is an assertion")
+    def test_a_word_out_of_bounds_stops(self):
+        self.check_stops("""
+            nwords = t.jit_unit(g.__code__)["nwords"]
+            t.jit_switch_probe(g.__code__, gen=gen, index=nwords)
+        """)
 
 
 @unittest.skipUnless(os.path.exists("/proc/self/maps"), "needs /proc")

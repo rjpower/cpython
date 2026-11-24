@@ -28,7 +28,7 @@ extern "C" {
    JUMP_BACKWARD_JIT (a backward jump), which the lowering gives a code
    under a mode other than off, count a warm-up event and enter the unit
    once the code has one; and a return or yield into a frame that has run in
-   its unit (_PyInterpreterFrame.jit_resume), or an exception handled in it,
+   its unit (_PyFrame_JIT_RESUME), or an exception handled in it,
    goes back to the unit.
 
    A unit is entered by calling its code as
@@ -36,7 +36,10 @@ extern "C" {
        _PyIRTransfer enter(PyThreadState *tstate, _PyInterpreterFrame *frame,
                            const void *entry);
 
-   where entry is entries[word index].  At every word boundary of the code
+   where entry is entries[word index].  A frame switch inside a unit goes
+   through the unit's switch routine, which enters the unit of the frame
+   that is now current on the same native frame (g3/design.md section 1).
+   At every word boundary of the code
    r12 holds tstate, r13 frame, r14 word 0 of the frame's executing copy, r15
    frame->base and rbx the unit; the stack is 16-byte aligned; every value
    is in the frame.  A word that specialisation can rewrite runs the handler
@@ -90,6 +93,13 @@ enum {
 #define _PyJIT_STALE    1   // compiled code found a word whose handler changed
 #define _PyJIT_RETIRED  2   // the code is monitored: leave at once
 
+/* The spill reservation of every unit's native frame, below the six saved
+ * registers (g3/design.md section 6).  It is one size for every unit: after
+ * a switch, a frame that one unit's prologue built is torn down by another
+ * unit's shared exit.  8 keeps rsp 16-byte aligned at every word boundary;
+ * continuation descriptors (G4) add to it. */
+#define _PyJIT_SPILL_BYTES 8
+
 /* Warm-up events (frame entries and backward transfers) before jit=on
  * compiles a code object, and the most compiles of one code object. */
 #define _PyJIT_WARMUP       32
@@ -111,6 +121,8 @@ typedef struct _PyJitUnit {
 #endif
     /* An address per word, in the code block; an operand word's traps */
     const void *const *entries;
+    /* The unit's switch routine (Python/jit.c, emit_frame()), in the code */
+    const void *switch_routine;
     struct _PyJitUnit *older;       // the unit this one replaced, or NULL
 } _PyJitUnit;
 
@@ -145,6 +157,16 @@ extern PyStatus _PyJit_InitInterpreter(PyInterpreterState *interp);
 
 /* Whether the JIT can run in this process (its code memory is reserved). */
 PyAPI_FUNC(int) _PyJit_IsAvailable(void);
+
+/* The execution pin (g3/design.md section 2): compiled code (a stub or a
+ * function form) that departs frame by a return or a yield calls this after
+ * the arm's last guard, before anything can drop the last reference to the
+ * frame's code.  Stores a new reference to the code in the evaluation
+ * loop's activation, then releases the previous pin: store first, so that a
+ * pin of the same code never drops it.  Returns _PyIR_ESCAPED if the
+ * release deallocated (a code's weakref callbacks run Python), else 0. */
+PyAPI_FUNC(int) _PyJit_PinDeparting(PyThreadState *tstate,
+                                    struct _PyInterpreterFrame *frame);
 
 #ifdef _PY_JIT_SUPPORTED
 

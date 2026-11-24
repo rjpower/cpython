@@ -480,8 +480,10 @@
     /* Evidence (G0d3): OWNER(x) is a generator replacer like TAKE \
      * (IREmitter.take_view): the owner of x's input, PyValue_NULL for a \
      * local, which only IR_RETIRE_PUBLISHED may read; for a value that is \
-     * not a view, x itself.  No callback, no failure; not a C function */ \
-    MACRO(OWNER, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS(), TAKES_VIEW()) \
+     * not a view, x itself.  No callback, no failure; not a C function. \
+     * G0d1: a local's view has no owner, so OWNER is NULL there whatever x \
+     * is (G0d2's report): x's obligation or NULL, VALUE_OR_NULL(moved(0)) */ \
+    MACRO(OWNER, ARGS(consumed), VALUE_OR_NULL(moved(0)), EFFECTS(), EXITS(), TAKES_VIEW()) \
     /* Evidence (G0c batch 6): Include/internal/pycore_interpframe.h: \
      * copies the bits of a view into an owner: no count changes. The \
      * caller must have cleared the slot that held the count (its comment). \

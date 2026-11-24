@@ -703,6 +703,12 @@ def _parse_result(text: str) -> Result:
         if (inner := _inner(text, shape)) is not None:
             words = inner.split()
             moved = re.fullmatch(r"moved\((\d+)\)", words[0]) if words else None
+            if moved and shape == "VALUE_OR_NULL":
+                # Argument k's obligation, or NULL where it holds none (a
+                # local's view: OWNER), whatever argument k's value is
+                if words[1:]:
+                    raise ValueError(f"VALUE_OR_NULL(moved(k)) takes no facts: {text}")
+                return Result(shape, "moved", moved=int(moved.group(1)))
             if moved and shape == "VALUE":
                 # Argument k itself: its value, its identity and its
                 # obligation (a move, as an output's moved(x))
@@ -3814,8 +3820,14 @@ class OwnershipWalk:
                           "obligation")
             state.owners[lhs] = HELD
             self.new.add(lhs)
-            state.assign(lhs, state.facts.get(source, frozenset()),
-                         state.pending.get(source), owner)
+            if result.shape == "VALUE_OR_NULL":
+                # NULL or the argument's value: its facts once a test
+                # shows it is not NULL
+                state.assign(lhs, frozenset(),
+                             state.facts.get(source, frozenset()) | {NONNULL}, owner)
+            else:
+                state.assign(lhs, state.facts.get(source, frozenset()),
+                             state.pending.get(source), owner)
             state.origins[lhs] = (owner if owner in self.declared
                                   else state.origins.get(owner, ""))
             state.end_restart(f"the move of `{owner}` by {row.name}")

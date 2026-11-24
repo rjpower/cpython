@@ -374,6 +374,16 @@ class SliceTests(unittest.TestCase):
             self.assertIn(needs[line.split(" ")[0]], line)
         self.assertRegex(lines[-1], r"^\d+ handlers compared; \d+ of \d+ uops declared$")
 
+    def test_owner_may_be_null(self):
+        # OWNER(x) moves x's obligation, or is NULL for a local's view
+        # whatever x is: no value transport, unlike TAKE (null_iff(0))
+        table = ir_contract.rows()
+        owner, take = table["OWNER"].result, table["TAKE"].result
+        self.assertEqual((owner.shape, owner.mode, owner.moved), ("VALUE_OR_NULL", "moved", 0))
+        self.assertEqual((take.shape, take.moved, take.null_iff), ("VALUE", 0, 0))
+        self.assertIsNone(ir_leaf.intrinsic("OWNER"))
+        self.assertIsNotNone(ir_leaf.intrinsic("TAKE"))
+
     def test_a_steal_is_declared(self):
         # PyValue_FromNonNumberSteal steals its object (the in-place add's
         # `temp`, now that the walk admits it)

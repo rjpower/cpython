@@ -586,7 +586,9 @@ def intrinsic(name: str):
         return None
     if row.kind == "INTRINSIC" and row.builds & {ir_contract.BUILD, "all"}:
         return row
-    if row.kind == "MACRO" and row.takes_view and row.result.moved >= 0:
+    if (row.kind == "MACRO" and row.takes_view and row.result.moved >= 0
+            and row.result.shape == "VALUE"):
+        # A value transport (TAKE); OWNER may be NULL whatever its argument is
         return row
     return None
 

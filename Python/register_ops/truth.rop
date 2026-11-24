@@ -38,7 +38,7 @@ extern primitive bool_is_true(v:B) -> Bool
     lowering: "jit_lower.c LOWERING(PyValue_IsTrue)",
     test: "test_ir_leaf CASES");
 
-extern primitive is_none(v:B) -> Bool
+extern primitive exact_none(v:B) -> Bool
   effects()
   test(exact<NoneType>(v))
   c PyValue_IsNone as bool
@@ -334,7 +334,7 @@ macro adapt_before_use_truth(f:Fb<Truth>, v:Src)
   TryList():
     branch exact_list(use(v)) -> PickList(), TryNone();
   TryNone():
-    branch is_none(use(v)) -> PickNone(), TryStr();
+    branch exact_none(use(v)) -> PickNone(), TryStr();
   TryStr():
     branch exact_str(use(v)) -> PickStr(), TryObject();
   TryObject():
@@ -429,7 +429,7 @@ macro adapt_before_use_branch_truth(f:Fb<Truth>, v:Src, mode:Enum<BranchMode>)
   TryList():
     branch exact_list(use(v)) -> PickList(), TryNone();
   TryNone():
-    branch is_none(use(v)) -> PickNone(), TryStr();
+    branch exact_none(use(v)) -> PickNone(), TryStr();
   TryStr():
     branch exact_str(use(v)) -> PickStr(), TryObject();
   TryObject():
@@ -555,7 +555,7 @@ arm Truth.None inline
 {
   entry():
     let v:B = use(value);
-    guard is_none(v) else miss;
+    guard exact_none(v) else miss;
     goto Finish(truth_object(false, invert));
   Finish(z:O):
     publish [dst = z] retire [spent(value), old(dst)] at Truth.Done;
@@ -727,7 +727,7 @@ arm BranchTruth.None inline
 {
   entry():
     let v:B = use(value);
-    guard is_none(v) else miss;
+    guard exact_none(v) else miss;
     guard branch_drops(mode) else miss;
     goto Test(false);
   Test(hit:Bool):
@@ -870,7 +870,7 @@ arm BranchNone.Test inline
 {
   entry():
     let v:B = use(value);
-    goto Test(is_none(v));
+    goto Test(exact_none(v));
   Test(hit:Bool):
     branch same_bool(sense, hit) -> Taken(), Fall();
   Taken():

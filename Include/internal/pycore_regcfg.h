@@ -78,6 +78,9 @@ extern "C" {
                                     // j takes the value of implicit input j
 #define _PyReg_SLOT_RECIPE    16384 // its recipe's operands are pairs of a
                                     // source slot and a home, not registers
+#define _PyReg_MOVE_SLOTS     32768 // a Move that resolution made: in[]
+                                    // holds its two counts, then its
+                                    // destination and source slots
 
 typedef struct _PyRegOp {
     int opcode;             // the stack instruction, or _PyReg_DEAD
@@ -144,6 +147,7 @@ typedef struct _PyRegBlock {
 typedef struct _PyRegCfg {
     int nlocalsplus;
     int virtual_kwargs;     // compiler-proven immutable, uncaptured kwargs local
+    int generator;          // a return leaves a generator's frame
     int nvregs;             // registers allocated, fresh included
     _PyRegOp *ops;
     int nops;
@@ -192,7 +196,7 @@ int _PyRegCfg_PrepareKwargs(_PyRegCfg *cfg, int slot);
 static inline int
 _PyRegOp_Through(const _PyRegOp *op, const _PyIRFormat *fmt)
 {
-    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+    if (_PyIR_CALL_SHAPED(fmt->operands)) {
         return 0;
     }
     return fmt->dst == _PyIR_NO_DST ? op->nout : op->npop + fmt->dst;

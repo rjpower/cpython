@@ -3,7 +3,7 @@
 //   Python/register_ops/add.rop, Python/register_ops/calls.rop, Python/register_ops/core.rop, Python/register_ops/data.rop, Python/register_ops/getattr.rop, Python/register_ops/truth.rop, Python/register_ops/values.rop
 // Do not edit!
 //
-// 8 stubs.
+// 11 stubs.
 
 /* The whole-word completion stubs of the shared register arms (g1a/abi.md):
  * the arm's statements with the transfer macros bound to status returns.
@@ -390,7 +390,7 @@ _PyIR_Rop_Stub_Truth_Generic(
     rop_Truth_Generic_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
-    PROCESS_ERROR_AT(RAISE, 15, this_instr);
+    PROCESS_ERROR_AT(RAISE, 23, this_instr);
     rop_Truth_Generic_truth_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         truth_at_origin1_hit = false;
@@ -878,7 +878,7 @@ _PyIR_Rop_Stub_Truth_Slot(
     rop_Truth_Slot_slot_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
-    PROCESS_ERROR_AT(RAISE, 15, this_instr);
+    PROCESS_ERROR_AT(RAISE, 23, this_instr);
     rop_Truth_Slot_slot_truth_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         slot_truth_at_origin1_hit = false;
@@ -981,6 +981,71 @@ _PyIR_Rop_Stub_BranchTruth_Slot(
     }
     _PyRop_CloseAnchors(&a);
     PyValue_XCLOSE(own_value);
+    DISPATCH();
+}
+
+static Py_NO_INLINE int
+_PyIR_Rop_Stub_Move_Transfer(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
+{
+    _PyInstr *next_instr = site;
+    _PyIRWord ir_word = *site;
+    int ir_status = 0;
+
+    // Move.Transfer (shared)
+    int opcode = ROP_HANDLER_Move_Transfer;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+    INSTRUCTION_STATS(ROP_HANDLER_Move_Transfer);
+    _PyRop_ParallelMove(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &(_PyRopSpan){frame, this_instr, opcode, IR_A(ir_word), IR_B(ir_word)});
+    DISPATCH();
+}
+
+static Py_NO_INLINE int
+_PyIR_Rop_Stub_Move_Retire(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
+{
+    _PyInstr *next_instr = site;
+    _PyIRWord ir_word = *site;
+    int ir_status = 0;
+
+    // Move.Retire (shared)
+    int opcode = ROP_HANDLER_Move_Retire;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+    INSTRUCTION_STATS(ROP_HANDLER_Move_Retire);
+    _PyRop_ParallelMove(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &(_PyRopSpan){frame, this_instr, opcode, IR_A(ir_word), IR_B(ir_word)});
+    IR_STUB_ESCAPE();
+    _PyRop_CloseRest(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &(_PyRopSpan){frame, this_instr, opcode, IR_A(ir_word), IR_B(ir_word)});
+    DISPATCH();
+}
+
+static Py_NO_INLINE int
+_PyIR_Rop_Stub_Move_Copy(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
+{
+    _PyInstr *next_instr = site;
+    _PyIRWord ir_word = *site;
+    int ir_status = 0;
+
+    // Move.Copy (shared)
+    int opcode = ROP_HANDLER_Move_Copy;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+    INSTRUCTION_STATS(ROP_HANDLER_Move_Copy);
+    _PyRop_CopyHomes(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &(_PyRopSpan){frame, this_instr, opcode, IR_A(ir_word), IR_B(ir_word)});
     DISPATCH();
 }
 

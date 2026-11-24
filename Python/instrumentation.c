@@ -2477,7 +2477,7 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
         }
         _PyCoMonitoringData *monitoring = code->_co_monitoring;
         uint8_t old_tools = monitoring->active_monitors.tools[PY_MONITORING_EVENT_INSTRUCTION];
-        for (int i = 0; i < code_len; i++) {
+        for (int i = 0; i < code_len; i += instr_length(code, i)) {
             int opcode = word_opcode(exec_words(code), i);
             if (opcode == INSTRUMENTED_LINE) {
                 opcode = _PyCode_GetOriginalOpcode(monitoring->lines, i);
@@ -2498,6 +2498,8 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
             // Initialize all of the instructions so if local events change while another thread is executing
             // we know what the original opcode was.
             _PyIRWord *words = exec_words(code);
+            /* Every entry, the operand words' too: de-instrumentation may
+             * read any index that a source edge names. */
             for (int i = 0; i < code_len; i++) {
                 code->_co_monitoring->per_instruction_opcodes[i] = word_opcode(words, i);
             }
@@ -2604,7 +2606,9 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
         goto done;
     }
     /* Insert instrumentation */
-    for (int i = _PyCode_FirstTraceable(code); i < code_len; i += instr_length(code, i)) {
+    for (int i = _PyCode_FirstTraceable(code), length; i < code_len; i += length) {
+        /* Read before the body: a wrapper that it installs has no operand words */
+        length = instr_length(code, i);
         int base = base_opcode(code, i);
         CHECK(base != 0);
         if (opcode_has_event(base) || base == SEND) {
@@ -2656,14 +2660,17 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     if (removed_line_tools) {
         _PyCoLineInstrumentationData *line_data = code->_co_monitoring->lines;
         for (int i = _PyCode_FirstTraceable(code); i < code_len;) {
+            int length = instr_length(code, i);
             if (_PyCode_GetOriginalOpcode(line_data, i)) {
                 remove_line_tools(code, i, removed_line_tools);
             }
-            i += instr_length(code, i);
+            i += length;
         }
     }
     if (removed_per_instruction_tools) {
-        for (int i = _PyCode_FirstTraceable(code); i < code_len; i += _PyCode_InstrLength(code, i)) {
+        for (int i = _PyCode_FirstTraceable(code), length; i < code_len; i += length) {
+            /* Read before the body: a wrapper that it installs has no operand words */
+            length = _PyCode_InstrLength(code, i);
             int opcode = base_opcode(code, i);
             if (opcode == RESUME || opcode == END_FOR) {
                 continue;
@@ -2681,14 +2688,17 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
     if (new_line_tools) {
         _PyCoLineInstrumentationData *line_data = code->_co_monitoring->lines;
         for (int i = _PyCode_FirstTraceable(code); i < code_len;) {
+            int length = instr_length(code, i);
             if (_PyCode_GetOriginalOpcode(line_data, i)) {
                 add_line_tools(code, i, new_line_tools);
             }
-            i += instr_length(code, i);
+            i += length;
         }
     }
     if (new_per_instruction_tools) {
-        for (int i = _PyCode_FirstTraceable(code); i < code_len; i += _PyCode_InstrLength(code, i)) {
+        for (int i = _PyCode_FirstTraceable(code), length; i < code_len; i += length) {
+            /* Read before the body: a wrapper that it installs has no operand words */
+            length = _PyCode_InstrLength(code, i);
             int opcode = base_opcode(code, i);
             if (opcode == RESUME || opcode == END_FOR) {
                 continue;
@@ -2741,7 +2751,9 @@ done:;
         /* Restoring a forced wrapper above must not remove unchanged ordinary
          * branch monitoring when LINE itself has just been disabled. */
         if (!line_tools) {
-            for (int i = _PyCode_FirstTraceable(code); i < code_len; i += _PyCode_InstrLength(code, i)) {
+            for (int i = _PyCode_FirstTraceable(code), length; i < code_len; i += length) {
+                /* Read before the body: a wrapper that it installs has no operand words */
+                length = _PyCode_InstrLength(code, i);
                 int base = base_opcode(code, i);
                 if (opcode_has_event(base)) {
                     int event = EVENT_FOR_OPCODE[base];
@@ -3837,7 +3849,7 @@ branch_word(PyCodeObject *code, int offset)
     }
     int start = _PyCode_WordOffset(code, first);
     for (int w = first; w < (int)code->_co_exec->nwords &&
-                        _PyCode_WordOffset(code, w) == start; w++) {
+                        _PyCode_WordOffset(code, w) == start; w += _PyCode_InstrLength(code, w)) {
         int base = base_opcode(code, w);
         if (is_instrumented(word_opcode(exec_words(code), w)) ||
             base == SEND || base == FOR_ITER || IS_CONDITIONAL_JUMP_OPCODE(base)) {

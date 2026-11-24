@@ -8,7 +8,7 @@
 #include "pycore_opcode_utils.h"    // IS_BACKWARDS_JUMP_OPCODE
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
-#include "pycore_rop_metadata.h"    // ROP_FIRST_HANDLER
+#include "pycore_rop_metadata.h"    // ROP_HANDLER_Call_Generic, ROP_FIRST_HANDLER
 #include "pycore_symtable.h"        // _Py_SourceLocation
 #include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_value.h"           // Canonical constant representation
@@ -446,6 +446,88 @@ encode_operand_words(_PyRegCfg *cfg, _PyRegOp *op, _PyIRWord *words)
     }
 }
 
+/* The spans of a Move (Python/register_ops/values.rop): the counts of its
+ * destinations and sources, and their slots in that order.  Resolution's
+ * moves hold slots (_PyReg_MOVE_SLOTS); a translated Move names its
+ * destinations as outputs and its sources as inputs. */
+static void
+move_spans(_PyRegCfg *cfg, const _PyRegOp *op, int counts[2], int *elems)
+{
+    if (op->flags & _PyReg_MOVE_SLOTS) {
+        const int *e = &cfg->operands[op->in];
+        counts[0] = e[0];
+        counts[1] = e[1];
+        for (int k = 0; k < e[0] + e[1]; k++) {
+            elems[k] = e[2 + k];
+        }
+        return;
+    }
+    counts[0] = op->nout;
+    counts[1] = op->nread;
+    for (int j = 0; j < op->nout; j++) {
+        elems[j] = _PyRegCfg_Slot(cfg, _PyReg_OUT(cfg, op)[j]);
+    }
+    for (int k = 0; k < op->nread; k++) {
+        elems[op->nout + k] = _PyRegCfg_Slot(cfg, _PyReg_IN(cfg, op)[k]);
+    }
+}
+
+static int
+move_nelems(_PyRegCfg *cfg, const _PyRegOp *op)
+{
+    if (op->flags & _PyReg_MOVE_SLOTS) {
+        return cfg->operands[op->in] + cfg->operands[op->in + 1];
+    }
+    return op->nout + op->nread;
+}
+
+/* The words of a span instruction (pycore_ir.h, _PyIR_SpanElement()): the
+ * counts in the head's COUNT fields, the first elements in its ELEMENT
+ * fields, the rest in operand words of four fields each. */
+static int
+span_word_count(const _PyIRFormat *fmt, int nelems)
+{
+    int nhead = 0;
+    for (int f = 0; f < 4; f++) {
+        nhead += fmt->roles[f] == _PyIR_ROLE_ELEMENT;
+    }
+    return 1 + fmt->fixed_words
+           + operand_word_count(nelems > nhead ? nelems - nhead : 0);
+}
+
+static int
+encode_spans(_PyRegCfg *cfg, _PyRegOp *op, _PyIRWord *words)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
+    int n = move_nelems(cfg, op);
+    int counts[2];
+    int *elems = PyMem_Malloc(Py_MAX(n, 1) * sizeof(int));
+    if (elems == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    move_spans(cfg, op, counts, elems);
+    uint32_t fields[4];
+    int c = 0, e = 0;
+    for (int f = 0; f < 4; f++) {
+        fields[f] = fmt->roles[f] == _PyIR_ROLE_COUNT ? (uint32_t)counts[c++]
+                  : fmt->roles[f] == _PyIR_ROLE_ELEMENT
+                    ? (e < n ? (uint32_t)elems[e++] : IR_FIELD_MAX)
+                  : 0;
+    }
+    assert(c == 2);
+    words[0] = IR_WORD(op->handler, fields[0], fields[1], fields[2], fields[3]);
+    for (int w = 0; e < n; w++) {
+        for (int f = 0; f < IR_OPERANDS_PER_WORD; f++) {
+            fields[f] = e < n ? (uint32_t)elems[e++] : IR_FIELD_MAX;
+        }
+        words[1 + fmt->fixed_words + w] = IR_WORD(IR_OPERANDS, fields[0],
+                                                  fields[1], fields[2], fields[3]);
+    }
+    PyMem_Free(elems);
+    return SUCCESS;
+}
+
 /* The call-role flags of op's word, which the CallRoles pass proved
  * (Python/regcfg_passes.c): IR_F_NO_SELF for CALL and CALL_KW,
  * IR_F_NO_KW for CALL_FUNCTION_EX. */
@@ -455,7 +537,7 @@ call_role_flags(const _PyRegOp *op)
     if (op->opcode == CALL_FUNCTION_EX) {
         return (op->flags & _PyReg_CALL_NO_KWARGS) ? IR_F_NO_KW : 0;
     }
-    if (op->opcode == CALL || op->opcode == CALL_KW) {
+    if (op->opcode == ROP_HANDLER_Call_Generic || op->opcode == CALL_KW) {
         return (op->flags & _PyReg_CALL_NO_SELF) ? IR_F_NO_SELF : 0;
     }
     assert(!(op->flags & (_PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS)));
@@ -469,6 +551,10 @@ choose_handler(_PyRegOp *op, PyObject *consts)
 {
     int opcode = op->opcode;
     int oparg = op->oparg;
+    /* A rule that emitted a register family's arm named its handler */
+    if (opcode >= IR_NUM_OLD_HANDLERS) {
+        return opcode;
+    }
     if (opcode == YIELD_VALUE && oparg == 1) {
         return YIELD_DELEGATED;
     }
@@ -486,13 +572,6 @@ choose_handler(_PyRegOp *op, PyObject *consts)
             return ERROR;
         }
         return _PyIR_BINARY_OP_FIRST + oparg;
-    }
-    /* A return that finds the stack holding only its result leaves no scratch
-     * slot owning a reference: each op retires the inputs it pops, and the
-     * unwinder retires the stack above a handler's depth.  Such a return skips
-     * the clearing of the scratch slots. */
-    if (opcode == RETURN_VALUE && op->depth == 1) {
-        return RETURN_VALUE_EMPTY;
     }
     // Canonical scalar constants have the same representation in every
     // supported interpreter.
@@ -548,7 +627,7 @@ handler_oparg(_PyRegCfg *cfg, _PyRegOp *op)
         _PyRegOp *jump = (fmt->flags & _PyIR_FUSED) ? &cfg->ops[op->fuse] : op;
         return jump_target(cfg, jump) - (op->word + 1);
     }
-    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+    if (_PyIR_CALL_SHAPED(fmt->operands)) {
         return call_noperands(op);
     }
     if (op->opcode == LOAD_GLOBAL) {
@@ -950,7 +1029,7 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
             return ERROR;
         }
         op->nwords = 1;
-        if (_PyIR_FormatOf(op->handler)->operands != _PyIR_OPERANDS_NONE) {
+        if (_PyIR_CALL_SHAPED(_PyIR_FormatOf(op->handler)->operands)) {
             op->noperands = call_noperands(op);
             if (op->noperands > IR_FIELD_MAX) {
                 return too_large("call operands", op->noperands);
@@ -959,6 +1038,13 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
                 return too_large("call keyword names constant", op->kwnames - 1);
             }
             op->nwords += operand_word_count(op->noperands);
+        }
+        else if (_PyIR_FormatOf(op->handler)->operands == _PyIR_OPERANDS_SPANS) {
+            int n = move_nelems(cfg, op);
+            if (n > 2 * IR_FIELD_MAX) {
+                return too_large("parallel move", n);
+            }
+            op->nwords = span_word_count(_PyIR_FormatOf(op->handler), n);
         }
     }
     for (int i = 0; i < cfg->nops; i++) {
@@ -1355,8 +1441,12 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
             if (op->nwords == 0) {
                 continue;
             }
+            if (_PyIR_FormatOf(op->handler)->operands == _PyIR_OPERANDS_SPANS) {
+                RETURN_IF_ERROR(encode_spans(cfg, op, &words[w]));
+                continue;
+            }
             RETURN_IF_ERROR(encode(cfg, op, blk->reachable, &words[w]));
-            if (_PyIR_FormatOf(op->handler)->operands != _PyIR_OPERANDS_NONE) {
+            if (_PyIR_CALL_SHAPED(_PyIR_FormatOf(op->handler)->operands)) {
                 encode_operand_words(cfg, op, &words[w + 1]);
             }
             else if (op->nwords > 1) {

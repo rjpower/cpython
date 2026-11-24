@@ -750,11 +750,6 @@ TEMPLATE_CASES = [
     ("import math\ndef f(a, b):\n    x = 1\n    x = math.pi\n    return x", (1, 2),
      "LOAD_ATTR_MODULE", "AB",
      [(old, m) for old in (Plain(), None) for m in (math, sys, Shape(), 4)]),
-    # A window of two temporaries.  The resolver renames most SWAPs away;
-    # a with statement still stages its exit and value with one.
-    ("def f(a, b):\n    with a:\n        return b", (contextlib.nullcontext(), 2),
-     "SWAP", ("A", "A+1"),
-     [(x, y) for x in ANY[::2] for y in (Plain(), 7)]),
     ("def f(a, b):\n    x = 1\n    x = a < b < 3\n    return x", (1, 2), "POP_TOP", "A",
      [(x,) for x in ANY + [Plain()]]),
     # Each run adds the attribute to a new instance
@@ -926,6 +921,18 @@ class TemplateTests(unittest.TestCase):
                     fast += not self.check_same(word, slots, objects)[1]
             with self.subTest(source=source, handler=handler):
                 self.assertGreater(fast, 0, "no case stayed on the template's code")
+
+    def test_move_is_a_shared_stub(self):
+        "A Move word calls its function form through the shared stub"
+        # The resolver renames most moves away; a with statement still
+        # stages its exit and value with a Move of one pair
+        f = self.compile("def f(a, b):\n    with a:\n        return b",
+                         (contextlib.nullcontext(), 2))
+        index = word_of(f, "Move.Transfer")[0]
+        self.assertTrue(capi.jit_compile(f.__code__))
+        self.assertEqual(capi.jit_unit(f.__code__)["plans"][index],
+                         ("Move.Transfer", "shared", "stub", "Move.Transfer"))
+        self.assertEqual(f(contextlib.nullcontext(), 2), 2)
 
     def test_resume_check_misses_when_instrumentation_changes(self):
         "RESUME_CHECK's template stays on its code until monitoring changes the version"

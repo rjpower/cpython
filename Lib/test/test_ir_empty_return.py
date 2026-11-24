@@ -9,10 +9,9 @@ import unittest
 import _testinternalcapi
 
 
-def returns(code):
-    return [row[0] for row in _testinternalcapi.get_ir(code)
-            if row[0].endswith("RETURN_VALUE") or
-            row[0].endswith("RETURN_VALUE_EMPTY")]
+def returns(code, adaptive=False):
+    return [row[0] for row in _testinternalcapi.get_ir(code, adaptive)
+            if row[0].startswith("Return.")]
 
 
 def constant():
@@ -40,7 +39,7 @@ def routes(function):
 class EmptyReturnTests(unittest.TestCase):
     def test_compiler_selection_survives_every_route(self):
         for code in routes(constant):
-            self.assertEqual(returns(code), ["RETURN_VALUE_EMPTY"])
+            self.assertEqual(returns(code), ["Return.Empty"])
             self.assertEqual(types.FunctionType(code, {})(), 42)
 
     def test_monitoring_keeps_the_selected_return_form(self):
@@ -61,13 +60,10 @@ class EmptyReturnTests(unittest.TestCase):
                     for enabled in (False, True, False, True):
                         monitor.set_local_events(tool, code, event if enabled else 0)
                         function(*argument)
-                        expected = [("INSTRUMENTED_" if enabled else "") + name
+                        # The observed wrapper of the selected arm
+                        expected = [name + (".Observed" if enabled else "")
                                     for name in plain]
-                        self.assertEqual(
-                            [row[0] for row in _testinternalcapi.get_ir(code, True)
-                             if row[0].endswith("RETURN_VALUE") or
-                             row[0].endswith("RETURN_VALUE_EMPTY")],
-                            expected)
+                        self.assertEqual(returns(code, True), expected)
                     monitor.set_local_events(tool, code, 0)
                     self.assertEqual(sum(actual is code for actual, _ in seen), previous + 2)
         finally:

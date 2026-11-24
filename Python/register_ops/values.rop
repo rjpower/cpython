@@ -4,7 +4,6 @@
 // takes its origin as an operand.
 
 enum ConstKind(POOL, SMALL, COMMON);
-enum MoveRetire(KEEP_SOURCES, RETIRE_SOURCES);
 enum PollMode(POLL, NO_POLL);
 // The four conditional jumps of the old bytecode: the sense of the test and
 // whether the jump edge keeps the tested owner (JUMP_IF_x_OR_POP)
@@ -41,8 +40,78 @@ family SaveLocal(dst:Dst, local:Local)
 family LocalDelete(local:Local)
   exits(next, raise) ops(DELETE_FAST);
 
-family Move(dsts:Span<Dst>, srcs:Span<Src>, retire:Enum<MoveRetire>)
-  exits(next) ops(SWAP, COPY);
+// A parallel assignment of homes: what translation could not make a
+// rename (an edge's residual bindings, staging, a second owner, a
+// retirement at its own origin).  The arm is the mode, chosen by the
+// lowering through its `select`.  Element i of `srcs` goes to element i of
+// `dsts`; `srcs` may be longer, by the sources that Retire closes.
+family Move(dsts:Span<Dst>, srcs:Span<Src>)
+  exits(next) ops(SWAP, COPY, POP_TOP);
+
+// Every source's owner goes to its destination as if all moved at once: a
+// destination is vacant or another pair's source.  The sources that no
+// pair writes are left vacant.  A cycle turns through one rooted local.
+extern helper parallel_move(d:Span<Dst>, s:Span<Src>) -> Unit
+  effects(reads, writes)
+  c _PyRop_ParallelMove as unit
+  evidence(
+    review: "ceval.c _PyFrame_ParallelMove: the unwinder's recipe routine, which"
+            "swaps each pair whose home no pending pair reads and turns each"
+            "cycle through one C local.",
+    contract: "Moves owners between homes of the frame. Destinations are vacant or"
+              "sources of the set (the verifier's rule), so nothing is closed: no"
+              "Python, no failure.");
+
+// Closes the sources after the first len(d), which a parallel move left
+// in place, after every home of the set is written
+extern helper close_rest(d:Span<Dst>, s:Span<Src>) -> Unit
+  effects(writes, releases, runs_python)
+  c _PyRop_CloseRest as unit
+  evidence(
+    review: "pycore_rop_rows.h: takes each source past the pairs out of its home,"
+            "then closes it.",
+    contract: "The homes are vacant before any close, so a finalizer finds the frame"
+              "as the instruction leaves it. A close may run Python; it cannot fail.");
+
+// Each destination takes a second owner of its source, which keeps its own
+extern helper copy_homes(d:Span<Dst>, s:Span<Src>) -> Unit
+  effects(reads, writes)
+  c _PyRop_CopyHomes as unit
+  evidence(
+    review: "pycore_rop_rows.h: PyValue_DUP of each source into its vacant destination.",
+    contract: "Counts only; destinations are vacant, so nothing is closed: no Python,"
+              "no failure.");
+
+arm Move.Transfer shared select(transfer)
+  effects(reads, writes)
+  feedback()
+  exits(next)
+{
+  entry():
+    let _:Unit = parallel_move(dsts, srcs);
+    exit next();
+}
+
+arm Move.Retire shared select(retire)
+  effects(reads, writes, releases, runs_python)
+  feedback()
+  exits(next)
+{
+  entry():
+    let _:Unit = parallel_move(dsts, srcs);
+    let _:Unit = close_rest(dsts, srcs);
+    exit next();
+}
+
+arm Move.Copy shared select(copy)
+  effects(reads, writes)
+  feedback()
+  exits(next)
+{
+  entry():
+    let _:Unit = copy_homes(dsts, srcs);
+    exit next();
+}
 
 // P5: truth, jumps, conditional retention, None branches
 

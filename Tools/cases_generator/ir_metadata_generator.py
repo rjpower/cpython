@@ -259,6 +259,11 @@ def arm_row(analysis: Analysis, arm: ir_numbers.ArmEntry) -> str:
     events = bits([f"(1u << PY_MONITORING_EVENT_{e})" for e in arm.events])
     fixed = f".fixed_words = {fmt.fixed_words}, " if fmt.fixed_words else ""
     dst = "_PyIR_NO_DST" if fmt.dst is None else str(fmt.dst)
+    # sys.monitoring sees an observed wrapper as the instrumented form of
+    # its family's stack op, as it sees an old handler's twin
+    shadow = arm.base
+    if arm.observes is not None and f"INSTRUMENTED_{arm.base}" in analysis.opmap:
+        shadow = f"INSTRUMENTED_{arm.base}"
     return (
         f"{{ .flags = {bits(list(fmt.flags))}, .effects = {bits(list(fmt.effects))}, "
         f".roles = {{ {', '.join(fmt.roles)} }}, .imm = {fmt.imm}, "
@@ -273,7 +278,7 @@ def arm_row(analysis: Analysis, arm: ir_numbers.ArmEntry) -> str:
         f".observer_outcome = {{ _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }}, "
         f".reads = {{ {fmt.ninputs}, _PyIR_EXT_FIXED }}, "
         f".writes = {{ {fmt.writes}, _PyIR_EXT_FIXED }}, "
-        f".through = {{ 0, _PyIR_EXT_FIXED }}, .shadow = {arm.base}, "
+        f".through = {{ 0, _PyIR_EXT_FIXED }}, .shadow = {shadow}, "
         f".twin = {twin}, .events = {events} }}")
 
 

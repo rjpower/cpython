@@ -251,11 +251,15 @@ class Select(enum.Enum):
     entry_frame = "entry_frame"            # the evaluator's entry frame
     vacant_scratch = "vacant_scratch"      # every temporary but the operand is vacant
     live_scratch = "live_scratch"          # some other temporary may hold a value
+    transfer = "transfer"                  # Move: each source's owner goes to its destination
+    retire = "retire"                      # Move: transfer, then close the sources left over
+    copy = "copy"                          # Move: each destination takes a second owner
 
 
 SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "frame": (Select.thread_frame, Select.generator_frame, Select.entry_frame),
     "scratch": (Select.vacant_scratch, Select.live_scratch),
+    "move": (Select.transfer, Select.retire, Select.copy),
 }
 
 
@@ -478,6 +482,10 @@ class Convention:
     returns: CReturn
     single: bool
     outcomes: tuple[COutcome, ...]
+    # The C result is the index of the case, in declaration order; a case
+    # with one payload value gets it through the last C parameter.  The row
+    # declares any number of cases.
+    indexed: bool = False
 
 
 def _conv(name: str, returns: CReturn, *outcomes: COutcome, single: bool = False
@@ -525,6 +533,8 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("bool_out_hit", CReturn.bool,
           COutcome(CTest.true, _RES, (CSource.out,), False, "hit"),
           COutcome(CTest.false, _RES, (), False, "absent")),
+    # k(): the int is the position of the case among the row's cases
+    Convention("case_index", CReturn.int_status, False, (), True),
     # A status int: 0 is success, negative raised
     _conv("int_zero_ok", CReturn.int_status,
           COutcome(CTest.zero, _RES, (), False),

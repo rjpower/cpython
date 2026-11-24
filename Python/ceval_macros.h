@@ -158,6 +158,35 @@
         goto LABEL_gen_resume; \
     } while (0)
 
+/* The frame transfers of the register instructions (Python/register_ops),
+ * over the bindings of DISPATCH_INLINED, DISPATCH and IR_GEN_RETURN that the
+ * evaluator and the function forms each make.
+ *
+ * ROP_ENTER: `exit enter(NEW) resume P`.  The caller goes on at next_instr
+ * with the child's value in SLOT, P's definition, when NEW returns.
+ * ROP_RETURN: `exit return(CALLER, HEAD)`.  The value is in the caller's
+ * slot already; the caller goes on at HEAD, in its unit if it ran in one.
+ * ROP_GEN_RETURN: `tail generator_return(CALLER, V, DYING)`. */
+#define ROP_ENTER(NEW, SLOT) \
+    do { \
+        frame->return_slot = (uint16_t)(SLOT); \
+        frame->return_pc = next_instr; \
+        DISPATCH_INLINED(NEW); \
+    } while (0)
+#define ROP_RETURN(CALLER, HEAD) \
+    do { \
+        frame = (CALLER); \
+        next_instr = (HEAD); \
+        IR_JIT_RESUME(); \
+        LLTRACE_RESUME_FRAME(); \
+        DISPATCH(); \
+    } while (0)
+#define ROP_GEN_RETURN(CALLER, V, DYING) \
+    do { \
+        frame = (CALLER); \
+        IR_GEN_RETURN((V), (DYING), 0); \
+    } while (0)
+
 /* The forms of these that do not depend on the binding */
 #define IR_GEN_YIELD(V) IR_GEN_YIELD_AT(this_instr, (V))
 /* Likewise V from the frame that a delegating YIELD has just suspended, if
@@ -356,7 +385,9 @@ do { \
 #define DISPATCH_INLINED(NEW_FRAME)                              \
     do {                                                         \
         assert(!IS_PEP523_HOOKED(tstate));                       \
-        assert((NEW_FRAME)->previous == frame);                  \
+        /* An __init__ call enters above its cleanup frame */    \
+        assert((NEW_FRAME)->previous == frame ||                 \
+               (NEW_FRAME)->previous->previous == frame);        \
         frame = tstate->current_frame = (NEW_FRAME);             \
         CALL_STAT_INC(inlined_py_calls);                         \
         JUMP_TO_LABEL(start_frame);                              \

@@ -69,7 +69,7 @@ class SpecializationPreservationTests(unittest.TestCase):
 
         for value in range(ROUNDS):
             self.assertEqual(build(value).value, value)
-        self.assertIn("CALL_ALLOC_AND_ENTER_INIT", ordinary_names(build))
+        self.assertIn("Call.Init", ordinary_names(build))
         for _, _, row in sites(build):
             self.assertEqual(row.generator_boundary_flags, 0)
 

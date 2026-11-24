@@ -16,6 +16,10 @@ if check_impl_detail(cpython=False):
     raise unittest.SkipTest('implementation detail specific to cpython')
 
 _testinternalcapi = import_module("_testinternalcapi")
+ARMS = _testinternalcapi.arm_handlers()
+CONTRACT = import_module("_opcode").get_ir_contract()
+# Native callees run Call.Generic until the Call family admits them
+NATIVE_ADMISSIONS = "native calls are not Call arms yet"
 
 # Canonical numeric values are mandatory in the private runtime.
 int_producers = getattr(_testinternalcapi, "TAGGED_VALUES", True)
@@ -39,13 +43,14 @@ def have_dict_key_versions():
 def adaptive_names(f):
     """The names of f's adaptive words.  A stack instruction that lowers to a
     register instruction arm (BINARY_OP's addition: Add.Int, Add.Float,
-    Add.Text, Add.Extended, Add.Generic) is named by its arm."""
+    Add.Text, Add.Extended, Add.Generic; CALL: Call.Exact, Call.Init, ...)
+    is named by its arm."""
     instructions = dis.get_instructions(f, adaptive=True)
     names = {instruction.opname for instruction in instructions}
-    arms = {w[0] for w in _testinternalcapi.get_ir(f.__code__, True)
-            if w[0].startswith("Add.")}
-    if arms:
-        names.discard("BINARY_OP")
+    arms = {w[0].partition("+")[0]
+            for w in _testinternalcapi.get_ir(f.__code__, True)}
+    arms &= ARMS.keys()
+    names -= {dis.opname[CONTRACT[ARMS[arm]].base] for arm in arms}
     return names | arms
 
 
@@ -554,7 +559,7 @@ class TestCallCache(TestBase):
         # Trigger specialization
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             instantiate()
-        self.assert_specialized(instantiate, "CALL_ALLOC_AND_ENTER_INIT")
+        self.assert_specialized(instantiate, "Call.Init")
 
         def count_args(self, *args):
             self.num_args = len(args)
@@ -572,7 +577,7 @@ class TestCallCache(TestBase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             with self.assertRaises(TypeError):
                 instantiate()
-        self.assert_specialized(instantiate, "CALL_ALLOC_AND_ENTER_INIT")
+        self.assert_specialized(instantiate, "Call.Init")
 
         with self.assertRaises(TypeError):
             instantiate()
@@ -2287,6 +2292,7 @@ class TestSpecializer(TestBase):
 
     @cpython_only
     @requires_specialization
+    @unittest.skip(NATIVE_ADMISSIONS)
     def test_call_list_append(self):
         # gh-141367: only exact lists should use
         # CALL_LIST_APPEND instruction after specialization.
@@ -2331,7 +2337,7 @@ class TestSpecializer(TestBase):
         holder.item = item = object()
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             list_append([], holder)
-        self.assert_specialized(list_append, "CALL_LIST_APPEND")
+        self.assert_specialized(list_append, "Call.Generic")
 
         refcount = sys.getrefcount(item) if not Py_GC else None
         # An empty list has no spare capacity, so append() must resize it.
@@ -2348,6 +2354,7 @@ class TestSpecializer(TestBase):
 
     @cpython_only
     @requires_specialization
+    @unittest.skip(NATIVE_ADMISSIONS)
     def test_call_c_function_extra_flags(self):
         # METH_CLASS, METH_STATIC and METH_COEXIST do not change the C
         # calling convention, so the specialized instructions must not

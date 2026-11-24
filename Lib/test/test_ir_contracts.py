@@ -142,22 +142,11 @@ class SliceTests(unittest.TestCase):
 
     # The reviewed corrections of G0c, each listed with its evidence in the
     # batch's differences.md and in the commit that made it.  Batch 8:
-    # MATERIALIZE_KWARGS is PyDict_New and one store, which run no Python;
     # INSTRUMENTED_JUMP takes PROCESS_ERROR_AT when the event fails, so
     # _MONITOR_END_ASYNC_FOR may raise
     LISTED_DIFFERENCES = [
-        'MATERIALIZE_KWARGS.record.format.runs_code: inferred true, declared false',
-        'MATERIALIZE_KWARGS.record.uops[0].effects: inferred 6 entries '
-        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
-        '"READS_HEAP", "WRITES_HEAP"], declared 3 ["ALLOCATES", "MAY_RAISE", '
-        '"WRITES_HEAP"]',
         'INSTRUMENTED_END_ASYNC_FOR/_MONITOR_END_ASYNC_FOR: declares exits(next, '
         'raise), the record has next',
-        # Batch 3: _PyTemplate_Build is a GC allocation and runs no Python
-        'BUILD_TEMPLATE.record.uops[0].effects: inferred 6 entries '
-        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
-        '"READS_HEAP", "WRITES_HEAP"], declared 3 ["ALLOCATES", "MAY_RAISE", '
-        '"MAY_RELEASE"]',
         # Batch 7: no word executes RETURN_GENERATOR, so its result is NULL
         # (F19); _YIELD_VALUE moves the yielded value into the caller's
         # frame (F5); _GUARD_TOS_IS_NONE tests the identity of the word
@@ -224,18 +213,18 @@ class SliceTests(unittest.TestCase):
         '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
         'LOAD_GLOBAL_BUILTIN.record.uops[1].guards[0].facts[0].subject: '
         'inferred "builtins", declared "dict"',
-        # G0d2: a call escapes where its row declares a reentry effect, and the
+        # G0d2 (analyzer and effect_sites read the rows): MATERIALIZE_KWARGS,
+        # BUILD_TEMPLATE and BUILD_LIST no longer differ.
+        # A call escapes where its row declares a reentry effect, and the
         # inference reads an escape as every effect at once: the frame pushes
         # release the callable (call_push_exact), while the declaration says
-        # which effects they have; BUILD_LIST's allocation is the row's, which
-        # the inference does not name
-        'BUILD_LIST.record.uops[0].effects: inferred 1 entries ["MAY_RAISE"], declared 2 ["ALLOCATES", "MAY_RAISE"]',
+        # which effects they have; the inference of the builders reads the
+        # rows of their calls, which state fewer effects than the uop declares
+        'BUILD_INTERPOLATION.record.uops[0].effects: inferred 3 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE"], declared 6 ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
+        'BUILD_SLICE.record.uops[0].effects: inferred 3 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE"], declared 6 ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
+        'SET_FUNCTION_ATTRIBUTE.record.uops[0].effects: inferred 1 entries ["WRITES_HEAP"], declared 2 ["READS_HEAP", "WRITES_HEAP"]',
         'CALL_BOUND_METHOD_EXACT_ARGS.record.uops[7].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
         'CALL_PY_EXACT_ARGS.record.uops[5].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
-        # Batch 6: SET_FUNCTION_ATTRIBUTE runs no code; the call
-        # uops complete in place (exits next, G0d removes the inference)
-        'SET_FUNCTION_ATTRIBUTE.record.format.runs_code: inferred true, declared false',
-        'SET_FUNCTION_ATTRIBUTE.record.uops[0].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 2 ["READS_HEAP", "WRITES_HEAP"]',
         'CALL/_DO_CALL: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_BOUND_METHOD_GENERAL/_PY_FRAME_GENERAL: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_EX_NON_PY_GENERAL/_CALL_FUNCTION_EX_NON_PY_GENERAL: declares exits(enter, next, raise), the record has enter, raise',

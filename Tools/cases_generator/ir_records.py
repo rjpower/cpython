@@ -1274,9 +1274,10 @@ def effect_sites(uop: Uop) -> list[tuple[Token, str | None]]:
         elif READER_CALLS.fullmatch(text):
             sites.append((tkn, READS_HEAP))
         elif text in ir_contract.rows():
-            # A row declares the call; its effects are the row's, which this
-            # table of an undeclared body does not restate (G0d1 deletes it)
-            continue
+            # A row declares the call; its effects are the row's (G0d1
+            # deletes the tables above, and with them this inference)
+            sites += [(tkn, e) for effect in sorted(ir_contract.rows()[text].effects)
+                      for e in sorted(ir_contract.RECORD_EFFECT[effect])]
         elif not text.isupper() or RELEASE_LIKE.search(text):
             # Not a statement macro (STAT_INC, TAKE, ...): it may do anything
             sites.append((tkn, None))

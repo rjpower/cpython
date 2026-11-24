@@ -1,0 +1,1178 @@
+"""Resolution and structural checks of register instruction definitions.
+
+`load(paths)` parses `.rop` files and checks them; `check(files)` checks
+parsed files.  Both return a `Program`: the declarations by name, a
+`GraphInfo` per arm and macro (the types of its names, block order,
+predecessors and dominators) and the diagnostics.  F0 checks names, types,
+graph shape, edges, exits and layouts; ownership, facts and effect
+coverage are F1's, on the same Program.
+
+Run as a script: `rop_check.py [FILE.rop ...]` (default: every file in
+Python/register_ops) prints the diagnostics and the pending rows and
+macros, and exits 1 on any diagnostic.
+"""
+
+import argparse
+import math
+import sys
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field, replace
+from pathlib import Path
+from typing import Any
+
+from rop_catalog import (CONVENTIONS, ENVIRONMENT, EVIDENCE_KEYS, EVIDENCE_PRIMITIVE,
+                         EVIDENCE_REQUIRED, FEEDBACK_ROOTS, LAYOUTS, LINEAR_HANDLES,
+                         LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
+                         DebtKind, Effect, ExitKind, FieldKind, Handle, Layout,
+                         RowKind, Scalar, Schema, SchemaCtor, Slot, Wrap)
+from rop_model import (RESULT_CASE, Advance, Arm, Block, BoolLit, Branch, Call,
+                       CallTerm, Cases, Contract, Decl, Diagnostic, Each, EnumDecl,
+                       EnumType, Exit, Expr, Extern, FactUse, Family, Goto, Graph,
+                       Guard, HandleType, Let, Macro, Name, Nat, PairType, Param,
+                       Point, Publish, Result, Returns, RopError, ScalarType,
+                       SchemaRef, SchemaType, SchemaVar, SourceFile, SpanLit, SrcSpan,
+                       Target, Term, Type, WrapType, DISCARD, ENTRY, NOWHERE)
+from rop_print import expr_text, type_text
+import rop_header
+import rop_syntax
+from ir_contract import Row
+
+ROOT = Path(__file__).resolve().parents[2]
+ROP_DIR = ROOT / "Python" / "register_ops"
+
+
+def T(h: Handle) -> HandleType:
+    return HandleType(h)
+
+
+def S(s: Scalar) -> ScalarType:
+    return ScalarType(s)
+
+
+BOOL, UNIT, SIZE = S(Scalar.Bool), S(Scalar.Unit), S(Scalar.Size)
+SRC, DST, B, O = T(Handle.Src), T(Handle.Dst), T(Handle.B), T(Handle.O)
+
+# The payload types of each arm exit.  None stands for the family's own
+# feedback schema (`again(Ticket<K>)`).
+EXIT_PAYLOAD: dict[ExitKind, tuple[Type | None, ...]] = {
+    ExitKind.next: (),
+    ExitKind.branch: (T(Handle.Head),),
+    ExitKind.jump: (T(Handle.Head),),
+    ExitKind.miss: (),
+    ExitKind.again: (None,),
+    ExitKind.raise_: (T(Handle.Point), T(Handle.Err)),
+    ExitKind.enter: (T(Handle.Frame), T(Handle.Head)),
+    ExitKind.return_: (T(Handle.Frame), T(Handle.Head)),
+    ExitKind.yield_: (T(Handle.Route),),
+    ExitKind.exit: (O,),
+    ExitKind.redirect: (T(Handle.Route),),
+}
+EXIT_NAMES = {e.value: e for e in ExitKind}
+
+# Operand roles: the types a point may list as kept or spent sources, and
+# as definitions
+SOURCE_HANDLES = frozenset({Handle.Src, Handle.Local, Handle.Cell, Handle.Free,
+                            Handle.IterPair, Handle.Args})
+DEST_HANDLES = frozenset({Handle.Dst, Handle.Local, Handle.Cell, Handle.IterPair})
+
+
+# Language primitives (operation dictionary, P).  Actions may stand only as
+# the outermost expression of a `let`.
+@dataclass(frozen=True, slots=True)
+class Primitive:
+    name: str
+    params: tuple[Type, ...]
+    result: Type
+    action: bool
+
+
+PRIMITIVES = {p.name: p for p in (
+    Primitive("use", (SRC,), B, False),
+    Primitive("dup", (B,), O, True),
+    Primitive("move", (WrapType(Wrap.InOut, O),), O, True),
+    Primitive("acquire", (SRC,), O, True),
+)}
+# unwrap(Maybe<T>) -> T, given `present` (F1); candidate(Family.Arm[, recipe])
+UNWRAP = "unwrap"
+CANDIDATE = "candidate"
+SPECIAL_PRIMITIVES = frozenset((UNWRAP, CANDIDATE))
+
+
+@dataclass(frozen=True, slots=True)
+class GraphInfo:
+    """What the checks computed of one arm or macro graph.  `types` maps
+    every name the graph can read (operands, environment, block parameters
+    and lets) to its type; `order` lists reachable blocks in reverse
+    postorder; `idom` gives each reachable block's immediate dominator
+    (None for entry), computed without `advance` backedges."""
+    definition: str
+    types: Mapping[str, Type]
+    order: tuple[str, ...]
+    preds: Mapping[str, tuple[str, ...]]
+    idom: Mapping[str, str | None]
+    exits_used: frozenset[str]
+
+
+@dataclass(frozen=True)
+class Program:
+    files: tuple[SourceFile, ...]
+    enums: Mapping[str, EnumDecl]
+    families: Mapping[str, Family]
+    points: Mapping[str, Point]
+    arms: Mapping[str, Arm]
+    macros: Mapping[str, Macro]
+    externs: Mapping[str, Extern]
+    graphs: Mapping[str, GraphInfo]
+    diagnostics: tuple[Diagnostic, ...]
+
+    @property
+    def pending(self) -> tuple[str, ...]:
+        """Rows without a C body and macros without a graph."""
+        rows = [n for n, e in self.externs.items() if e.c is None]
+        macros = [n for n, m in self.macros.items() if m.graph is None]
+        return tuple(sorted(rows) + sorted(macros))
+
+    def arms_of(self, family: str) -> tuple[Arm, ...]:
+        return tuple(a for a in self.arms.values() if a.family == family)
+
+
+# Helpers
+
+def is_linear(t: Type) -> bool:
+    if isinstance(t, HandleType):
+        return t.handle in LINEAR_HANDLES
+    return isinstance(t, SchemaType) and t.ctor in LINEAR_SCHEMA_CTORS
+
+
+def substitute(t: Type, binding: Mapping[str, Schema]) -> Type:
+    if isinstance(t, SchemaType) and isinstance(t.schema, SchemaVar):
+        bound = binding.get(t.schema.name)
+        return SchemaType(t.ctor, bound) if bound else t
+    if isinstance(t, WrapType):
+        return WrapType(t.wrap, substitute(t.arg, binding))
+    if isinstance(t, PairType):
+        return PairType(substitute(t.first, binding), substitute(t.second, binding))
+    return t
+
+
+def unify(param: Type, arg: Type, binding: dict[str, Schema]) -> bool:
+    """Whether `arg` has type `param`, binding the schema variables."""
+    if isinstance(param, SchemaType) and isinstance(param.schema, SchemaVar):
+        if not isinstance(arg, SchemaType) or arg.ctor != param.ctor:
+            return False
+        if isinstance(arg.schema, SchemaVar):
+            return False
+        bound = binding.setdefault(param.schema.name, arg.schema)
+        return bound == arg.schema
+    if isinstance(param, WrapType):
+        return (isinstance(arg, WrapType) and arg.wrap == param.wrap
+                and unify(param.arg, arg.arg, binding))
+    if isinstance(param, PairType):
+        return (isinstance(arg, PairType) and unify(param.first, arg.first, binding)
+                and unify(param.second, arg.second, binding))
+    return param == arg
+
+
+def feedback_schemas(params: Iterable[Param]) -> list[SchemaRef]:
+    return [p.type.schema for p in params
+            if isinstance(p.type, SchemaType) and p.type.ctor == SchemaCtor.Fb]
+
+
+def result_cases(result: Result) -> dict[str, tuple[Param, ...]]:
+    if isinstance(result, Returns):
+        return {RESULT_CASE: (Param(RESULT_CASE, result.type, result.span),)}
+    return {c.name: c.params for c in result.cases}
+
+
+def imm_bits(t: Type, enums: Mapping[str, EnumDecl]) -> int | None:
+    """The bits an immediate of type t needs, or None if t is no immediate."""
+    if isinstance(t, ScalarType):
+        return t.scalar.bits if t.scalar != Scalar.Unit else None
+    if isinstance(t, EnumType):
+        members = len(enums[t.name].members) if t.name in enums else 1
+        return max(1, math.ceil(math.log2(members)))
+    if isinstance(t, WrapType) and t.wrap == Wrap.Maybe:
+        inner = imm_bits(t.arg, enums)
+        return None if inner is None else inner + 1
+    return None
+
+
+HOME_HANDLES = frozenset({Handle.Src, Handle.Dst, Handle.Local, Handle.Cell,
+                          Handle.Free, Handle.IterPair})
+
+
+def field_kinds(t: Type) -> frozenset[FieldKind]:
+    """The layout field kinds that can hold an operand of type t."""
+    inner = t.arg if isinstance(t, WrapType) and t.wrap == Wrap.Maybe else t
+    if isinstance(inner, HandleType):
+        h = inner.handle
+        if h in HOME_HANDLES:
+            return frozenset({FieldKind.home})
+        if h == Handle.Name:
+            return frozenset({FieldKind.name})
+        if h == Handle.Const:
+            return frozenset({FieldKind.const})
+        if h == Handle.Head and inner is t:
+            return frozenset({FieldKind.target, FieldKind.delta})
+        if h == Handle.Args and inner is t:
+            return frozenset({FieldKind.vector})
+        return frozenset()
+    if isinstance(t, SchemaType) and t.ctor == SchemaCtor.Fb:
+        return frozenset({FieldKind.feedback})
+    if (isinstance(t, WrapType) and t.wrap == Wrap.Span and isinstance(t.arg, HandleType)
+            and t.arg.handle in HOME_HANDLES):
+        return frozenset({FieldKind.vector})
+    if isinstance(inner, (ScalarType, EnumType)):
+        return frozenset({FieldKind.imm})
+    return frozenset()
+
+
+def check_layouts() -> list[str]:
+    """The layout catalog's own consistency: no field slot used twice or
+    overlapping another, each slot wide enough for its kind."""
+    problems = []
+    for lay in LAYOUTS.values():
+        used: list[Slot] = []
+        for f in lay.fields:
+            if f.slot != Slot.VEC:
+                for other in used:
+                    lo, hi = f.slot.offset, f.slot.offset + f.slot.width
+                    olo, ohi = other.offset, other.offset + other.width
+                    if lo < ohi and olo < hi:
+                        problems.append(f"layout {lay.name}: {f.slot.name} overlaps "
+                                        f"{other.name}")
+                used.append(f.slot)
+            if f.slot != Slot.VEC and f.slot.width < f.kind.min_width:
+                problems.append(f"layout {lay.name}: {f.slot.name} has {f.slot.width} "
+                                f"bits, a {f.kind.name} field needs {f.kind.min_width}")
+            if (f.slot == Slot.VEC) != (f.kind == FieldKind.vector):
+                problems.append(f"layout {lay.name}: {f.slot.name} cannot hold a "
+                                f"{f.kind.name} field")
+    return problems
+
+
+# The checker
+
+@dataclass
+class Checker:
+    """Accumulates diagnostics while the checks walk the declarations."""
+    files: tuple[SourceFile, ...]
+    diagnostics: list[Diagnostic] = field(default_factory=list)
+    enums: dict[str, EnumDecl] = field(default_factory=dict)
+    members: dict[str, list[str]] = field(default_factory=dict)
+    families: dict[str, Family] = field(default_factory=dict)
+    points: dict[str, Point] = field(default_factory=dict)
+    arms: dict[str, Arm] = field(default_factory=dict)
+    macros: dict[str, Macro] = field(default_factory=dict)
+    externs: dict[str, Extern] = field(default_factory=dict)
+    graphs: dict[str, GraphInfo] = field(default_factory=dict)
+    callees: dict[str, frozenset[str]] = field(default_factory=dict)
+
+    def report(self, span: SrcSpan, definition: str, message: str) -> None:
+        self.diagnostics.append(Diagnostic(span, definition, message))
+
+
+def check(files: Iterable[SourceFile]) -> Program:
+    c = Checker(tuple(files))
+    collect(c)
+    for e in c.enums.values():
+        check_enum(c, e)
+    for fam in c.families.values():
+        check_family(c, fam)
+    for p in c.points.values():
+        check_point(c, p)
+    for x in c.externs.values():
+        check_extern(c, x)
+    for m in c.macros.values():
+        check_macro(c, m)
+    for a in c.arms.values():
+        check_arm(c, a)
+    check_macro_recursion(c)
+    return Program(c.files, dict(c.enums), dict(c.families), dict(c.points),
+                   dict(c.arms), dict(c.macros), dict(c.externs), dict(c.graphs),
+                   tuple(sorted(c.diagnostics, key=diagnostic_order)))
+
+
+def diagnostic_order(d: Diagnostic) -> tuple[str, int, int]:
+    return (d.span.filename, d.span.line, d.span.column)
+
+
+def load(paths: Iterable[Path], header: Mapping[str, Row] | None = None) -> Program:
+    """Parse and check, and hold the externs to the header's rows (`header`,
+    by default pycore_ir_components.h's).  A syntax error is the one
+    diagnostic of an empty program."""
+    files = []
+    for path in paths:
+        try:
+            files.append(rop_syntax.parse_file(path))
+        except RopError as e:
+            return Program((), {}, {}, {}, {}, {}, {}, {}, (e.diagnostic,))
+    program = check(files)
+    rows = rop_header.header_rows() if header is None else header
+    extra = rop_header.disagreements(program.externs, rows)
+    return replace(program, diagnostics=tuple(sorted(
+        program.diagnostics + tuple(extra), key=diagnostic_order)))
+
+
+def collect(c: Checker) -> None:
+    callables: dict[str, Decl] = {}
+    for f in c.files:
+        for d in f.decls:
+            if isinstance(d, EnumDecl):
+                table: dict[str, Any] = c.enums
+            elif isinstance(d, Family):
+                table = c.families
+            elif isinstance(d, Point):
+                table = c.points
+            elif isinstance(d, Arm):
+                table = c.arms
+            elif isinstance(d, Macro):
+                table = c.macros
+            else:
+                table = c.externs
+            if d.name in table:
+                c.report(d.span, d.name, f"{d.name} is declared twice; first at "
+                         f"{table[d.name].span}")
+                continue
+            if isinstance(d, (Macro, Extern)):
+                if d.name in PRIMITIVES or d.name in SPECIAL_PRIMITIVES:
+                    c.report(d.span, d.name, f"{d.name} is a language primitive")
+                    continue
+                if d.name in callables:
+                    c.report(d.span, d.name, f"{d.name} is declared twice; first at "
+                             f"{callables[d.name].span}")
+                    continue
+                callables[d.name] = d
+            table[d.name] = d
+    for e in c.enums.values():
+        for m in e.members:
+            c.members.setdefault(m, []).append(e.name)
+
+
+def check_enum(c: Checker, e: EnumDecl) -> None:
+    if len(set(e.members)) != len(e.members):
+        c.report(e.span, e.name, "an enum member is listed twice")
+
+
+def check_type(c: Checker, t: Type, span: SrcSpan, definition: str) -> None:
+    if isinstance(t, EnumType) and t.name not in c.enums:
+        c.report(span, definition, f"Enum<{t.name}>: no enum {t.name} is declared")
+    elif isinstance(t, WrapType):
+        check_type(c, t.arg, span, definition)
+    elif isinstance(t, PairType):
+        check_type(c, t.first, span, definition)
+        check_type(c, t.second, span, definition)
+
+
+def check_params(c: Checker, params: Iterable[Param], definition: str,
+                 taken: Iterable[str] = ()) -> None:
+    seen = set(taken)
+    for p in params:
+        check_type(c, p.type, p.span, definition)
+        if p.name in seen or p.name in ENVIRONMENT:
+            c.report(p.span, definition, f"parameter {p.name} is defined twice")
+        seen.add(p.name)
+
+
+def check_family(c: Checker, fam: Family) -> None:
+    check_params(c, fam.params, fam.name)
+    if "." in fam.name:
+        c.report(fam.span, fam.name, "a family name is not qualified")
+    for name in fam.exits:
+        if name not in EXIT_NAMES:
+            c.report(fam.span, fam.name, f"exit {name} is not an arm exit (one of: "
+                     f"{', '.join(EXIT_NAMES)})")
+    if len(set(fam.exits)) != len(fam.exits):
+        c.report(fam.span, fam.name, "an exit is listed twice")
+    schemas = feedback_schemas(fam.params)
+    if len(schemas) > 1:
+        c.report(fam.span, fam.name, "a family has at most one feedback operand")
+    if "again" in fam.exits and not schemas:
+        c.report(fam.span, fam.name, "exit again needs a feedback operand: its ticket "
+                 "is over the family's schema")
+    layout = LAYOUTS.get(fam.layout)
+    if layout is None:
+        c.report(fam.span, fam.name, f"layout {fam.layout} is not in the catalog")
+        return
+    check_family_layout(c, fam, layout)
+
+
+def check_family_layout(c: Checker, fam: Family, layout: Layout) -> None:
+    if len(layout.fields) != len(fam.params):
+        c.report(fam.span, fam.name, f"layout {layout.name} has {len(layout.fields)} "
+                 f"fields for {len(fam.params)} operands")
+    for p, f in zip(fam.params, layout.fields):
+        kinds = field_kinds(p.type)
+        if f.kind not in kinds:
+            c.report(p.span, fam.name, f"operand {p.name}:{type_text(p.type)} cannot "
+                     f"be held in field {f.slot.name} of layout {layout.name}, a "
+                     f"{f.kind.name} field")
+            continue
+        bits = imm_bits(p.type, c.enums) if f.kind == FieldKind.imm else None
+        if bits is not None and bits > f.slot.width:
+            c.report(p.span, fam.name, f"operand {p.name}:{type_text(p.type)} needs "
+                     f"{bits} bits; field {f.slot.name} of layout {layout.name} has "
+                     f"{f.slot.width}")
+
+
+def check_point(c: Checker, p: Point) -> None:
+    parts = p.name.split(".")
+    fam = c.families.get(parts[0])
+    if len(parts) != 2 or fam is None:
+        c.report(p.span, p.name, f"point {p.name} does not name a family's point "
+                 "(Family.Point)")
+        return
+    operands = {q.name: q.type for q in fam.params}
+
+    def role(names: tuple[str, ...], what: str, handles: frozenset[Handle]) -> None:
+        for n in names:
+            t = operands.get(n)
+            if t is None:
+                c.report(p.span, p.name, f"{what}({n}): {fam.name} has no operand {n}")
+                continue
+            inner = t.arg if isinstance(t, WrapType) else t
+            if handles and not (isinstance(inner, HandleType) and inner.handle in handles):
+                c.report(p.span, p.name, f"{what}({n}): operand {n} is "
+                         f"{type_text(t)}, not a {what} role")
+
+    role(p.keep, "keep", SOURCE_HANDLES)
+    role(p.spent, "spent", SOURCE_HANDLES)
+    role(p.defs, "defs", DEST_HANDLES)
+    role(p.held, "held", frozenset())
+
+
+def check_contract(c: Checker, contract: Contract, definition: str,
+                   params: tuple[Param, ...], edges: Mapping[str, tuple[Param, ...]],
+                   exits_allowed: bool) -> None:
+    effects = [e.effect for e in contract.effects]
+    if len(set(effects)) != len(effects):
+        c.report(contract.span, definition, "an effect is listed twice")
+    names = {p.name for p in params}
+    for e in contract.effects:
+        for n in e.on:
+            if n not in names:
+                c.report(e.span, definition, f"{e.effect.value} on ({n}): no operand {n}")
+    schemas = feedback_schemas(params)
+    for a in contract.feedback:
+        root, _, rest = a.field.partition(".")
+        if not schemas:
+            c.report(a.span, definition, f"{a.mode.value}({a.field}): no feedback "
+                     "operand")
+        elif root not in FEEDBACK_ROOTS or (rest and root != "entry"):
+            c.report(a.span, definition, f"{a.mode.value}({a.field}): not counter, "
+                     "entry, handler or entry.<field>")
+        elif rest and not any(isinstance(s, Schema) and rest in SCHEMA_FIELDS[s]
+                              for s in schemas):
+            known = sorted({f for s in schemas if isinstance(s, Schema)
+                            for f in SCHEMA_FIELDS[s]})
+            c.report(a.span, definition, f"{a.mode.value}({a.field}): the schema has no "
+                     f"field {rest} (fields: {', '.join(known)})")
+    if contract.exits and not exits_allowed:
+        c.report(contract.span, definition, "only an arm or a routine declares exits")
+    for n in contract.exits:
+        if n not in EXIT_NAMES:
+            c.report(contract.span, definition, f"exit {n} is not an arm exit")
+    for f in contract.requires:
+        check_fact(c, f, definition, names)
+    for ef in contract.ensures:
+        if ef.edge not in edges:
+            c.report(ef.span, definition, f"ensures {ef.edge}.{ef.fact.fact.value}: "
+                     f"{ef.edge} is not an exit or case of {definition}")
+            continue
+        check_fact(c, ef.fact, definition, names | {p.name for p in edges[ef.edge]})
+
+
+def check_fact(c: Checker, f: FactUse, definition: str, names: set[str]) -> None:
+    if len(f.subjects) != f.fact.arity:
+        c.report(f.span, definition, f"fact {f.fact.value} takes {f.fact.arity} "
+                 f"subject{'s' if f.fact.arity > 1 else ''}, not {len(f.subjects)}")
+    for s in f.subjects:
+        if s not in names:
+            c.report(f.span, definition, f"fact {f.fact.value}({', '.join(f.subjects)}): "
+                     f"no operand {s}")
+
+
+def check_result(c: Checker, result: Result, definition: str,
+                 params: tuple[Param, ...]) -> None:
+    if isinstance(result, Returns):
+        check_type(c, result.type, result.span, definition)
+        return
+    seen: set[str] = set()
+    for case in result.cases:
+        if case.name in seen:
+            c.report(case.span, definition, f"case {case.name} is declared twice")
+        seen.add(case.name)
+        check_params(c, case.params, definition, (p.name for p in params))
+
+
+def check_extern(c: Checker, x: Extern) -> None:
+    check_params(c, x.params, x.name)
+    check_result(c, x.result, x.name, x.params)
+    check_contract(c, x.contract, x.name, x.params, result_cases(x.result),
+                   x.kind == RowKind.routine)
+    if isinstance(x.result, Returns) and Effect.raises in x.contract.effect_set:
+        c.report(x.span, x.name, "a row with one outcome cannot raise: declare its "
+                 "error as a case")
+    if x.test:
+        if not (isinstance(x.result, Returns) and x.result.type == BOOL):
+            c.report(x.span, x.name, "test(...) is the true edge of a -> Bool row")
+        for f in x.test:
+            check_fact(c, f, x.name, {p.name for p in x.params})
+    if x.c is None:
+        return
+    conv = CONVENTIONS.get(x.c.convention)
+    if conv is None:
+        c.report(x.c.span, x.name, f"convention {x.c.convention} is not in the "
+                 f"catalog (one of: {', '.join(CONVENTIONS)})")
+    elif conv.single != isinstance(x.result, Returns):
+        shape = "-> T" if conv.single else "cases(...)"
+        c.report(x.c.span, x.name, f"convention {conv.name} maps onto a {shape} row")
+    elif isinstance(x.result, Cases):
+        if len(x.result.cases) != len(conv.outcomes):
+            c.report(x.c.span, x.name, f"convention {conv.name} has "
+                     f"{len(conv.outcomes)} outcomes; the row declares "
+                     f"{len(x.result.cases)} cases")
+        for case, outcome in zip(x.result.cases, conv.outcomes):
+            if len(case.params) != len(outcome.payload):
+                c.report(case.span, x.name, f"case {case.name} has {len(case.params)} "
+                         f"payload values; outcome {outcome.test.value} of "
+                         f"{conv.name} gives {len(outcome.payload)}")
+            elif outcome.raised and case.params[-1].type != T(Handle.Err):
+                c.report(case.span, x.name, f"case {case.name} is the raised outcome "
+                         f"of {conv.name}: its payload is Err")
+    keys = [e.key for e in x.c.evidence]
+    for e in x.c.evidence:
+        if e.key not in EVIDENCE_KEYS:
+            c.report(e.span, x.name, f"evidence {e.key} is not one of: "
+                     f"{', '.join(EVIDENCE_KEYS)}")
+    if len(set(keys)) != len(keys):
+        c.report(x.c.span, x.name, "an evidence item is given twice")
+    required = EVIDENCE_REQUIRED + (EVIDENCE_PRIMITIVE if x.kind == RowKind.primitive
+                                    else ())
+    missing = [k for k in required if k not in keys]
+    if missing:
+        c.report(x.c.span, x.name, f"c {x.c.symbol} needs evidence: "
+                 f"{', '.join(missing)}")
+
+
+def check_macro(c: Checker, m: Macro) -> None:
+    check_params(c, m.params, m.name)
+    check_result(c, m.result, m.name, m.params)
+    check_contract(c, m.contract, m.name, m.params, result_cases(m.result), False)
+    if m.graph is not None:
+        check_graph(c, m.name, m.graph, m.params, None, m)
+
+
+def check_arm(c: Checker, a: Arm) -> None:
+    parts = a.name.split(".")
+    fam = c.families.get(parts[0])
+    if len(parts) != 2 or fam is None:
+        c.report(a.span, a.name, f"arm {a.name} does not name a family's arm "
+                 "(Family.Arm)")
+        return
+    edges = {n: () for n in a.contract.exits}
+    check_contract(c, a.contract, a.name, fam.params, edges, True)
+    for n in a.contract.exits:
+        if n not in fam.exits:
+            c.report(a.contract.span, a.name, f"exit {n} is not an exit of family "
+                     f"{fam.name} ({', '.join(fam.exits)})")
+    check_graph(c, a.name, a.graph, fam.params, fam, None)
+
+
+# Graphs
+
+@dataclass
+class Scope:
+    """One graph's names and what the walk has found."""
+    definition: str
+    family: Family | None
+    macro: Macro | None
+    exits: frozenset[str]
+    types: dict[str, Type]
+    defs: dict[str, tuple[str, int]]      # name -> (block, statement index)
+    blocks: dict[str, Block]
+    used_exits: set[str] = field(default_factory=set)
+    idom: dict[str, str | None] = field(default_factory=dict)
+    callees: set[str] = field(default_factory=set)
+
+
+OPERAND = -1        # the definition index of operands, environment and params
+
+
+def successors(b: Block) -> list[tuple[str, bool]]:
+    """(label, is_backedge) for each edge out of b."""
+    t = b.term
+    if isinstance(t, Goto):
+        return [(t.target.label, False)]
+    if isinstance(t, Branch):
+        return [(t.if_true.label, False), (t.if_false.label, False)]
+    if isinstance(t, CallTerm):
+        return [(e.target.label, False) for e in t.edges]
+    if isinstance(t, Each):
+        return [(t.body, False), (t.exhaust.label, False)]
+    if isinstance(t, Advance):
+        return [(t.body, True)]
+    return []
+
+
+def check_graph(c: Checker, definition: str, graph: Graph, operands: tuple[Param, ...],
+                family: Family | None, macro: Macro | None) -> None:
+    if family is not None:
+        exits = frozenset(c.arms[definition].contract.exits)
+        declared = c.arms[definition].contract.span
+    else:
+        assert macro is not None
+        exits = frozenset(result_cases(macro.result))
+        declared = macro.result.span
+    blocks: dict[str, Block] = {}
+    for b in graph.blocks:
+        if b.label in blocks:
+            c.report(b.span, definition, f"block {b.label} is defined twice; first at "
+                     f"{blocks[b.label].span}")
+        else:
+            blocks[b.label] = b
+    first = graph.blocks[0]
+    if first.label != ENTRY or first.params:
+        c.report(first.span, definition, "the first block is entry()")
+    types: dict[str, Type] = dict(ENVIRONMENT_TYPES)
+    defs: dict[str, tuple[str, int]] = {n: ("", OPERAND) for n in ENVIRONMENT}
+    for p in operands:
+        types[p.name] = p.type
+        defs[p.name] = ("", OPERAND)
+    scope = Scope(definition, family, macro, exits, types, defs, blocks)
+    order, preds = graph_shape(c, scope, graph)
+    scope.idom = dominators(order, preds)
+    for b in graph.blocks:
+        define_block(c, scope, b)
+    for label in order:
+        check_block(c, scope, blocks[label])
+    for n in sorted(exits - scope.used_exits):
+        c.report(declared, definition, f"declared {'exit' if family else 'case'} {n} "
+                 "is not reached")
+    c.graphs[definition] = GraphInfo(definition, dict(types), tuple(order),
+                                     {k: tuple(v) for k, v in preds.items()},
+                                     dict(scope.idom), frozenset(scope.used_exits))
+    if macro is not None:
+        c.callees[definition] = frozenset(scope.callees)
+
+
+ENVIRONMENT_TYPES = {n: HandleType(h) for n, h in ENVIRONMENT.items()}
+
+
+def graph_shape(c: Checker, scope: Scope, graph: Graph
+                ) -> tuple[list[str], dict[str, list[str]]]:
+    """Reverse postorder of the reachable blocks without backedges, and
+    their predecessors.  Reports unknown labels, cycles other than
+    each/advance and unreachable blocks."""
+    blocks = scope.blocks
+    bodies: dict[str, Each] = {}
+    for b in graph.blocks:
+        if isinstance(b.term, Each):
+            if b.term.body in bodies:
+                c.report(b.term.span, scope.definition, f"block {b.term.body} is the "
+                         "body of two each loops")
+            bodies[b.term.body] = b.term
+    for b in graph.blocks:
+        for label, back in successors(b):
+            if label not in blocks:
+                c.report(b.term.span, scope.definition, f"no block {label}")
+            elif label in bodies and not back and not (
+                    isinstance(b.term, Each) and b.term.body == label):
+                c.report(b.term.span, scope.definition, f"block {label} is the body of "
+                         f"the each at {bodies[label].span}; only each and advance "
+                         "enter it")
+        if isinstance(b.term, Advance) and b.term.body not in bodies:
+            c.report(b.term.span, scope.definition, f"advance {b.term.body}: "
+                     f"{b.term.body} is not the body of an each")
+    order: list[str] = []
+    preds: dict[str, list[str]] = {}
+    state: dict[str, int] = {}          # 1 on the DFS stack, 2 done
+
+    def visit(label: str) -> None:
+        state[label] = 1
+        for succ, back in successors(blocks[label]):
+            if succ not in blocks or back:
+                continue
+            preds.setdefault(succ, []).append(label)
+            if state.get(succ) == 1:
+                c.report(blocks[label].term.span, scope.definition,
+                         f"edge {label} -> {succ} closes a cycle; only each/advance "
+                         "may loop")
+            elif succ not in state:
+                visit(succ)
+        state[label] = 2
+        order.append(label)
+
+    first = graph.blocks[0].label
+    preds[first] = []
+    visit(first)
+    order.reverse()
+    for b in graph.blocks:
+        if b.label not in state and blocks.get(b.label) is b:
+            c.report(b.span, scope.definition, f"block {b.label} is unreachable")
+    return order, preds
+
+
+def dominators(order: list[str], preds: Mapping[str, list[str]]) -> dict[str, str | None]:
+    """Immediate dominators of an acyclic graph given in reverse postorder."""
+    index = {label: i for i, label in enumerate(order)}
+    idom: dict[str, str | None] = {}
+    for label in order:
+        ps = [p for p in preds.get(label, []) if p in idom or p == label]
+        if not ps:
+            idom[label] = None
+            continue
+        common = ps[0]
+        for p in ps[1:]:
+            common = meet(idom, index, common, p)
+        idom[label] = common
+    return idom
+
+
+def meet(idom: Mapping[str, str | None], index: Mapping[str, int], a: str, b: str
+         ) -> str:
+    """The nearest common dominator of a and b."""
+    while a != b:
+        while index[a] > index[b]:
+            up = idom[a]
+            assert up is not None
+            a = up
+        while index[b] > index[a]:
+            up = idom[b]
+            assert up is not None
+            b = up
+    return a
+
+
+def dominates(idom: Mapping[str, str | None], a: str, b: str) -> bool:
+    node: str | None = b
+    while node is not None:
+        if node == a:
+            return True
+        node = idom.get(node)
+    return False
+
+
+def define(c: Checker, scope: Scope, name: str, t: Type, block: str, index: int,
+           span: SrcSpan) -> None:
+    if name == DISCARD:
+        return
+    if name in scope.defs:
+        where, _ = scope.defs[name]
+        first = f"block {where}" if where else "the operands"
+        c.report(span, scope.definition, f"{name} is assigned twice; first in {first}")
+        return
+    scope.defs[name] = (block, index)
+    scope.types[name] = t
+
+
+def define_block(c: Checker, scope: Scope, b: Block) -> None:
+    for p in b.params:
+        check_type(c, p.type, p.span, scope.definition)
+        define(c, scope, p.name, p.type, b.label, OPERAND, p.span)
+    for i, s in enumerate(b.stmts):
+        if isinstance(s, Let):
+            check_type(c, s.type, s.span, scope.definition)
+            define(c, scope, s.name, s.type, b.label, i, s.span)
+
+
+def check_block(c: Checker, scope: Scope, b: Block) -> None:
+    for i, s in enumerate(b.stmts):
+        if isinstance(s, Guard):
+            if scope.family is None:
+                c.report(s.span, scope.definition, "guard ... else miss in a macro, "
+                         "whose exits are its cases")
+            elif "miss" not in scope.exits:
+                c.report(s.span, scope.definition, "guard ... else miss where miss is "
+                         "not a declared exit")
+            scope.used_exits.add("miss")
+            expect(c, scope, s.cond, BOOL, b.label, i, outer=False)
+        elif isinstance(s, Let):
+            if s.name == DISCARD and not (isinstance(s.type, ScalarType)):
+                c.report(s.span, scope.definition, f"_ discards only Unit or a scalar, "
+                         f"not {type_text(s.type)}")
+            expect(c, scope, s.value, s.type, b.label, i, outer=True)
+        else:
+            check_publish(c, scope, s, b.label, i)
+    check_term(c, scope, b, len(b.stmts))
+
+
+def check_publish(c: Checker, scope: Scope, s: Publish, block: str, i: int) -> None:
+    seen: set[str] = set()
+    for bind in s.bindings:
+        t = operand_type(scope, bind.target)
+        if bind.target in seen:
+            c.report(bind.span, scope.definition, f"publish binds {bind.target} twice")
+        seen.add(bind.target)
+        if t is None or not is_dst(t):
+            c.report(bind.span, scope.definition, f"publish [{bind.target} = ...]: "
+                     f"{bind.target} is not a destination operand")
+        expect(c, scope, bind.value, O, block, i, outer=False)
+    for d in s.debts:
+        want = {DebtKind.spent: SRC, DebtKind.old: DST,
+                DebtKind.roots: T(Handle.Anchors), DebtKind.owned: O}[d.kind]
+        if d.kind in (DebtKind.spent, DebtKind.old):
+            t = operand_type(scope, d.subject)
+            ok = t is not None and (t == want or t == WrapType(Wrap.Maybe, want))
+            if not ok:
+                c.report(d.span, scope.definition, f"{d.kind.value}({d.subject}): "
+                         f"{d.subject} is not a {type_text(want)} operand")
+        else:
+            expect(c, scope, Name(d.subject, d.span), want, block, i, outer=False)
+    check_point_ref(c, scope, s.point, s.span, block, i)
+
+
+def is_dst(t: Type) -> bool:
+    return t == DST or t == WrapType(Wrap.Maybe, DST)
+
+
+def operand_type(scope: Scope, name: str) -> Type | None:
+    where = scope.defs.get(name)
+    if where is None or where[1] != OPERAND or where[0]:
+        return None
+    return scope.types.get(name)
+
+
+def check_point_ref(c: Checker, scope: Scope, name: str, span: SrcSpan, block: str,
+                    i: int) -> None:
+    if scope.family is None:
+        expect(c, scope, Name(name, span), T(Handle.Point), block, i, outer=False)
+        return
+    p = c.points.get(name)
+    if p is None:
+        c.report(span, scope.definition, f"no point {name}")
+    elif p.family != scope.family.name:
+        c.report(span, scope.definition, f"point {name} is not a point of "
+                 f"{scope.family.name}")
+
+
+def check_target(c: Checker, scope: Scope, t: Target, prefix: tuple[Type, ...],
+                 block: str, i: int, what: str) -> None:
+    target = scope.blocks.get(t.label)
+    if target is None:
+        return
+    want = [p.type for p in target.params]
+    if len(prefix) + len(t.args) != len(want):
+        payload = f" (payload {len(prefix)} + {len(t.args)} given)" if prefix else ""
+        c.report(t.span, scope.definition, f"{what} {t.label} takes {len(want)} "
+                 f"arguments, not {len(prefix) + len(t.args)}{payload}")
+        return
+    for k, (have, need) in enumerate(zip(prefix, want)):
+        if have != need:
+            c.report(t.span, scope.definition, f"{what} {t.label}: payload value {k} "
+                     f"is {type_text(have)}; parameter {target.params[k].name} is "
+                     f"{type_text(need)}")
+    for arg, need in zip(t.args, want[len(prefix):]):
+        expect(c, scope, arg, need, block, i, outer=False)
+
+
+def check_term(c: Checker, scope: Scope, b: Block, i: int) -> None:
+    t = b.term
+    if isinstance(t, Goto):
+        check_target(c, scope, t.target, (), b.label, i, "goto")
+    elif isinstance(t, Branch):
+        expect(c, scope, t.cond, BOOL, b.label, i, outer=False)
+        check_target(c, scope, t.if_true, (), b.label, i, "branch to")
+        check_target(c, scope, t.if_false, (), b.label, i, "branch to")
+    elif isinstance(t, CallTerm):
+        check_status_call(c, scope, t, b.label, i)
+    elif isinstance(t, Each):
+        check_each(c, scope, t, b.label, i)
+    elif isinstance(t, Advance):
+        if t.body in scope.blocks and not dominates(scope.idom, t.body, b.label):
+            c.report(t.span, scope.definition, f"advance {t.body} from block {b.label}, "
+                     f"which is outside the body of {t.body}")
+    else:
+        check_exit(c, scope, t, b.label, i)
+
+
+def check_status_call(c: Checker, scope: Scope, t: CallTerm, block: str, i: int) -> None:
+    where = f"call {t.callee} at {t.span}"
+    callee = c.externs.get(t.callee) or c.macros.get(t.callee)
+    if callee is None:
+        known = t.callee in PRIMITIVES or t.callee in SPECIAL_PRIMITIVES
+        c.report(t.span, scope.definition, f"{where}: " + (
+            f"{t.callee} is a language primitive with one result: use let" if known
+            else f"no row or macro {t.callee}"))
+        return
+    if isinstance(callee, Macro):
+        scope.callees.add(callee.name)
+    if isinstance(callee.result, Returns):
+        c.report(t.span, scope.definition, f"{where}: {t.callee} has one result: use "
+                 "let")
+        return
+    binding = check_args(c, scope, t.callee, callee.params, t.args, t.span, block, i)
+    cases = {case.name: case for case in callee.result.cases}
+    seen: set[str] = set()
+    for e in t.edges:
+        case = cases.get(e.case)
+        if case is None:
+            c.report(e.span, scope.definition, f"{where}: {t.callee} has no case "
+                     f"{e.case} (cases: {', '.join(cases)})")
+            continue
+        if e.case in seen:
+            c.report(e.span, scope.definition, f"{where} has two edges for {e.case}")
+        seen.add(e.case)
+        payload = tuple(substitute(p.type, binding) for p in case.params)
+        check_target(c, scope, e.target, payload, block, i, f"edge {e.case} ->")
+    for name in cases:
+        if name not in seen:
+            c.report(t.span, scope.definition, f"{where} has no edge for {name}")
+
+
+def element_type(t: Type) -> Type | None:
+    if isinstance(t, WrapType) and t.wrap == Wrap.Span:
+        return t.arg
+    if isinstance(t, SchemaType) and t.ctor == SchemaCtor.Rows:
+        return SchemaType(SchemaCtor.Recipe, t.schema)
+    return None
+
+
+def check_each(c: Checker, scope: Scope, t: Each, block: str, i: int) -> None:
+    over = type_of(c, scope, t.over, None, block, i, outer=False)
+    element = None if over is None else element_type(over)
+    if over is not None and element is None:
+        c.report(t.span, scope.definition, f"each over {expr_text(t.over)}: "
+                 f"{type_text(over)} is not a Span or Rows")
+    if t.limit is not None and t.limit < 1:
+        c.report(t.span, scope.definition, "each limit is at least 1")
+    body = scope.blocks.get(t.body)
+    if body is not None and element is not None:
+        want = (element, SIZE)
+        have = tuple(p.type for p in body.params)
+        if have != want:
+            c.report(body.span, scope.definition, f"each body {t.body} takes "
+                     f"({type_text(element)}, Size), not "
+                     f"({', '.join(type_text(x) for x in have)})")
+    check_target(c, scope, t.exhaust, (), block, i, "exhaust")
+
+
+def check_exit(c: Checker, scope: Scope, t: Exit, block: str, i: int) -> None:
+    if t.kind not in scope.exits:
+        what = "exit" if scope.family else "case"
+        c.report(t.span, scope.definition, f"exit {t.kind}: {t.kind} is not a declared "
+                 f"{what} of {scope.definition} ({', '.join(sorted(scope.exits))})")
+        return
+    scope.used_exits.add(t.kind)
+    if scope.family is None:
+        assert scope.macro is not None
+        want = tuple(p.type for p in result_cases(scope.macro.result)[t.kind])
+    else:
+        schemas = feedback_schemas(scope.family.params)
+        family_ticket = SchemaType(SchemaCtor.Ticket, schemas[0]) if schemas else None
+        want = tuple(family_ticket if w is None else w
+                     for w in EXIT_PAYLOAD[EXIT_NAMES[t.kind]])
+    if len(t.args) != len(want):
+        c.report(t.span, scope.definition, f"exit {t.kind} takes {len(want)} "
+                 f"arguments, not {len(t.args)}")
+        return
+    for k, (arg, need) in enumerate(zip(t.args, want)):
+        if need == T(Handle.Point) and scope.family is not None:
+            if isinstance(arg, Name):
+                check_point_ref(c, scope, arg.name, arg.span, block, i)
+            else:
+                c.report(t.span, scope.definition, f"exit {t.kind}: argument {k} names "
+                         "a point")
+            continue
+        if need is None:
+            continue
+        expect(c, scope, arg, need, block, i, outer=False)
+
+
+# Expressions
+
+def expect(c: Checker, scope: Scope, e: Expr, want: Type, block: str, i: int,
+           outer: bool) -> None:
+    have = type_of(c, scope, e, want, block, i, outer)
+    if have is not None and have != want:
+        c.report(e.span, scope.definition, f"{expr_text(e)} is {type_text(have)}, "
+                 f"expected {type_text(want)}")
+
+
+def resolve_name(c: Checker, scope: Scope, e: Name, block: str, i: int) -> Type | None:
+    if e.name in scope.defs:
+        where, at = scope.defs[e.name]
+        if where:
+            if where == block and at >= i and at != OPERAND:
+                c.report(e.span, scope.definition, f"{e.name} is used before its let "
+                         f"in block {block}")
+            elif where != block and not dominates(scope.idom, where, block):
+                c.report(e.span, scope.definition, f"{e.name} is used in block {block}, "
+                         f"which block {where} (its definition) does not dominate")
+        return scope.types[e.name]
+    enum, _, member = e.name.rpartition(".")
+    if enum and enum in c.enums and member in c.enums[enum].members:
+        return EnumType(enum)
+    owners = c.members.get(e.name, [])
+    if len(owners) == 1:
+        return EnumType(owners[0])
+    if len(owners) > 1:
+        c.report(e.span, scope.definition, f"{e.name} is a member of "
+                 f"{', '.join(owners)}: qualify it")
+        return None
+    if e.name in c.points:
+        return T(Handle.Point)
+    c.report(e.span, scope.definition, f"unknown name {e.name}")
+    return None
+
+
+def type_of(c: Checker, scope: Scope, e: Expr, want: Type | None, block: str, i: int,
+            outer: bool) -> Type | None:
+    if isinstance(e, Name):
+        return resolve_name(c, scope, e, block, i)
+    if isinstance(e, BoolLit):
+        return BOOL
+    if isinstance(e, Nat):
+        if not isinstance(want, ScalarType) or want.scalar in (Scalar.Unit, Scalar.Bool):
+            c.report(e.span, scope.definition, f"number {e.value} needs a numeric "
+                     "context")
+            return None
+        bits = want.scalar.bits
+        if e.value >= 2 ** bits:
+            c.report(e.span, scope.definition, f"{e.value} does not fit "
+                     f"{type_text(want)}")
+        return want
+    if isinstance(e, SpanLit):
+        element = want.arg if isinstance(want, WrapType) and want.wrap == Wrap.Span else None
+        items = e.items
+        if element is None and want is None and items:
+            element = type_of(c, scope, items[0], None, block, i, outer=False)
+            items = items[1:]
+            if element is None:
+                return None
+        if element is None:
+            c.report(e.span, scope.definition, "a [...] list needs a Span context")
+            return None
+        for item in items:
+            expect(c, scope, item, element, block, i, outer=False)
+        return WrapType(Wrap.Span, element)
+    return type_of_call(c, scope, e, block, i, outer)
+
+
+def type_of_call(c: Checker, scope: Scope, e: Call, block: str, i: int, outer: bool
+                 ) -> Type | None:
+    if e.callee == UNWRAP:
+        if len(e.args) != 1:
+            c.report(e.span, scope.definition, "unwrap takes one argument")
+            return None
+        t = type_of(c, scope, e.args[0], None, block, i, outer=False)
+        if t is None:
+            return None
+        if not (isinstance(t, WrapType) and t.wrap == Wrap.Maybe):
+            c.report(e.span, scope.definition, f"unwrap({expr_text(e.args[0])}): "
+                     f"{type_text(t)} is not a Maybe")
+            return None
+        return t.arg
+    if e.callee == CANDIDATE:
+        return type_of_candidate(c, scope, e, block, i)
+    prim = PRIMITIVES.get(e.callee)
+    if prim is not None:
+        if prim.action and not outer:
+            c.report(e.span, scope.definition, f"{e.callee}(...) is an action: only "
+                     "the outermost expression of a let")
+        if len(e.args) != len(prim.params):
+            c.report(e.span, scope.definition, f"{e.callee} takes {len(prim.params)} "
+                     f"arguments, not {len(e.args)}")
+            return prim.result
+        for arg, need in zip(e.args, prim.params):
+            expect(c, scope, arg, need, block, i, outer=False)
+        return prim.result
+    callee = c.externs.get(e.callee) or c.macros.get(e.callee)
+    if callee is None:
+        c.report(e.span, scope.definition, f"no row, macro or primitive {e.callee}")
+        return None
+    if isinstance(callee, Macro):
+        scope.callees.add(callee.name)
+    if isinstance(callee.result, Cases):
+        c.report(e.span, scope.definition, f"{e.callee} has cases "
+                 f"({', '.join(k.name for k in callee.result.cases)}): use a call "
+                 "terminator")
+        return None
+    if not outer and not callee.contract.effect_set <= READ_ONLY_EFFECTS:
+        c.report(e.span, scope.definition, f"{e.callee}(...) is an action (effects "
+                 f"{', '.join(sorted(x.value for x in callee.contract.effect_set))}): "
+                 "only the outermost expression of a let")
+    binding = check_args(c, scope, e.callee, callee.params, e.args, e.span, block, i)
+    return substitute(callee.result.type, binding)
+
+
+def check_args(c: Checker, scope: Scope, callee: str, params: tuple[Param, ...],
+               args: tuple[Expr, ...], span: SrcSpan, block: str, i: int
+               ) -> dict[str, Schema]:
+    binding: dict[str, Schema] = {}
+    if len(args) != len(params):
+        c.report(span, scope.definition, f"{callee} takes {len(params)} arguments, "
+                 f"not {len(args)}")
+        return binding
+    for arg, p in zip(args, params):
+        want = substitute(p.type, binding)
+        have = type_of(c, scope, arg, want, block, i, outer=False)
+        if have is None:
+            continue
+        if not unify(want, have, binding):
+            c.report(arg.span, scope.definition, f"{callee}: argument {p.name} is "
+                     f"{type_text(want)}; {expr_text(arg)} is {type_text(have)}")
+    return binding
+
+
+def type_of_candidate(c: Checker, scope: Scope, e: Call, block: str, i: int
+                      ) -> Type | None:
+    if not e.args or not isinstance(e.args[0], Name):
+        c.report(e.span, scope.definition, "candidate(Family.Arm[, recipe]) names an arm")
+        return None
+    arm = c.arms.get(e.args[0].name)
+    if arm is None:
+        c.report(e.args[0].span, scope.definition, f"candidate: no arm {e.args[0].name}")
+        return None
+    fam = c.families.get(arm.family)
+    schemas = feedback_schemas(fam.params) if fam else []
+    if not schemas:
+        c.report(e.span, scope.definition, f"candidate: family {arm.family} has no "
+                 "feedback schema")
+        return None
+    schema = schemas[0]
+    if len(e.args) > 2:
+        c.report(e.span, scope.definition, "candidate takes an arm and at most a recipe")
+    elif len(e.args) == 2:
+        expect(c, scope, e.args[1], SchemaType(SchemaCtor.Recipe, schema), block, i,
+               outer=False)
+    return SchemaType(SchemaCtor.Candidate, schema)
+
+
+def check_macro_recursion(c: Checker) -> None:
+    state: dict[str, int] = {}
+
+    def visit(name: str, path: list[str]) -> None:
+        state[name] = 1
+        for callee in sorted(c.callees.get(name, ())):
+            if state.get(callee) == 1:
+                cycle = path[path.index(callee):] + [callee] if callee in path else [
+                    name, callee]
+                c.report(c.macros[name].span, name, "macro expansion recurses: "
+                         + " -> ".join(cycle))
+            elif callee not in state:
+                visit(callee, path + [callee])
+        state[name] = 2
+
+    for name in sorted(c.macros):
+        if name not in state:
+            visit(name, [name])
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("files", nargs="*", type=Path)
+    args = parser.parse_args(argv)
+    files = args.files or sorted(ROP_DIR.glob("*.rop"))
+    program = load(files)
+    for d in program.diagnostics:
+        print(d, file=sys.stderr)
+    if not program.diagnostics:
+        print(f"{len(program.families)} families, {len(program.arms)} arms, "
+              f"{len(program.macros)} macros, {len(program.externs)} rows")
+        print("pending: " + ", ".join(program.pending))
+    return 1 if program.diagnostics else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

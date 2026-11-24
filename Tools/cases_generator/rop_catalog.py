@@ -379,6 +379,7 @@ class CSource(enum.Enum):
     result = "result"                # the C return value itself
     value = "value"                  # a status_value's value field
     exception = "exception"          # the pending exception: an Err token
+    nonzero = "nonzero"              # the C result compared with 0, as a Bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -412,6 +413,9 @@ _RES, _VAL, _EXC = CSource.result, CSource.value, CSource.exception
 CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("unit", CReturn.void, COutcome(CTest.always, _RES, (), False), single=True),
     _conv("bool", CReturn.bool, COutcome(CTest.always, _RES, (_RES,), False), single=True),
+    # An int test (nonzero is true) as a Bool
+    _conv("int_as_bool", CReturn.int_status,
+          COutcome(CTest.always, _RES, (CSource.nonzero,), False), single=True),
     _conv("scalar", CReturn.scalar, COutcome(CTest.always, _RES, (_RES,), False),
           single=True),
     _conv("value", CReturn.value, COutcome(CTest.always, _RES, (_RES,), False),

@@ -242,6 +242,36 @@ class SliceTests(unittest.TestCase):
         'CALL_KW_NON_PY/_CALL_KW_NON_PY: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_KW_PY/_PY_FRAME_KW_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_PY_GENERAL/_PY_FRAME_GENERAL_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
+        # G0d2: _SEND and _SEND_VIRTUAL are declared, with the cursor by
+        # value under distinct names (`index` in, `next_index` out, F16), as
+        # G0d4's iterator uops are: the inference reads the handlers with
+        # their declarations removed, and takes the renamed cursor for a push
+        # (format and output lines) where the declaration marks the replaced
+        # cursor changed.  SEND_GEN and SEND_ASYNC_GEN share the group's
+        # format.  _SEND may enter a generator or run to the end of its body
+        # (exits next), _SEND_VIRTUAL's fused transfers yield in place of its
+        # next, as SEND_ASYNC_GEN's do
+        'SEND.record.format.dst_offset: inferred 1, declared 2',
+        'SEND.record.outputs[1][1]: inferred -1, declared 1',
+        'SEND.record.outputs[1][2].name: inferred "next_index", declared "unused"',
+        'SEND.record.outputs[1][2].peek: inferred false, declared true',
+        'SEND.record.uops[1].inputs[1].changed: inferred false, declared true',
+        'SEND.record.uops[1].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", "subject": "v3"}]',
+        'SEND_ASYNC_GEN.record.format.dst_offset: inferred 1, declared 2',
+        'SEND_GEN.record.format.dst_offset: inferred 1, declared 2',
+        'SEND_VIRTUAL.record.format.dst_offset: inferred 1, declared 2',
+        'SEND_VIRTUAL.record.outputs[1][1]: inferred -1, declared 1',
+        'SEND_VIRTUAL.record.outputs[1][2].name: inferred "next_index", declared "nos"',
+        'SEND_VIRTUAL.record.outputs[1][2].peek: inferred false, declared true',
+        'SEND_VIRTUAL.record.uops[2].inputs[1].changed: inferred false, declared true',
+        'SEND_VIRTUAL_XFER_DISCARD/_SEND_VIRTUAL: declares exits(branch, next, raise), '
+        'the record has branch, raise, yield',
+        'SEND_VIRTUAL_XFER_RETURN/_SEND_VIRTUAL: declares exits(branch, next, raise), '
+        'the record has raise, return, yield',
+        'SEND_XFER_DISCARD/_SEND: declares exits(branch, enter, next, raise), '
+        'the record has branch, enter, raise, yield',
+        'SEND_XFER_RETURN/_SEND: declares exits(branch, enter, next, raise), '
+        'the record has enter, raise, return, yield',
         # G0d4: the iterator family's cursor has distinct names (`index` in,
         # `next_index` out, as the F16 rule asks).  The inference reads the
         # handlers with their declarations removed, where nothing says that
@@ -2352,6 +2382,36 @@ class VerifierTests(unittest.TestCase):
                 int x = 0;
             }
         """, r"declares exits\(enter\), but not the effect switches_frame")
+
+    def test_a_switch_on_some_paths_leaves_next(self):
+        # _SEND: the generator is entered when it can be claimed; otherwise
+        # the body runs on to its end
+        source = """
+            op(_OP, (--)) effects(switches_frame) exits(%s) {
+                if (oparg) {
+                    frame = tstate->current_frame;
+                }
+            }
+        """
+        self.verify(source % "enter, next")
+        self.refuses(source % "enter", r"declares exits\(enter\), but the body takes enter, next")
+
+    def test_assumed_cursor_encodings(self):
+        # A FOR_ITER cursor is a tagged index (GET_ITER, for exact lists and
+        # tuples), a SEND's one a tagged index or NULL
+        source = """
+            op(_OP, (cursor: consumed assumed(%s) by GET_ITER --)) effects() exits(next) {
+                DEAD(cursor);
+            }
+        """
+        for fact, text in (
+                ("tagged_index", "assert(PyValue_IsTaggedIndex(cursor));"),
+                ("encoding(tagged_index|null)",
+                 "assert(PyValue_IsTaggedIndex(cursor) || PyValue_IsNull(cursor));")):
+            with self.subTest(fact=fact):
+                analysis = self.verify(source % fact)
+                self.assertEqual(
+                    ir_contract.assumed_assertions(analysis.uops["_OP"], None), [text])
 
     def test_a_redirect_is_its_own_exit(self):
         # _MONITOR_RESUME, _YIELD_VALUE_EVENT: after a callback moved the

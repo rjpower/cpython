@@ -374,7 +374,11 @@ class TestIRCases(unittest.TestCase):
         for before, after in (
             ("assert(JUMP_TARGET(oparg) < next_instr);",
              "unknown_effect(); assert(JUMP_TARGET(oparg) < next_instr);"),
-            ("_PyValue_Send(receiver_o, v)", "unknown_send(receiver_o, v)"),
+            # A call that no row declares is refused by the verifier of the
+            # uop's declaration; the closure holds the declaration to what a
+            # SEND may do
+            ("effects(runs_python, switches_frame) exits(next, branch, enter, raise)",
+             "effects(runs_python, switches_frame, polls) exits(next, branch, enter, raise)"),
         ):
             with self.subTest(mutation=before):
                 self.assertIn(before, source)
@@ -430,8 +434,8 @@ class TestIRCases(unittest.TestCase):
         ir_generator.generate_handler(name, instructions[name], formats[name],
                                       emitter, out)
         body = output.getvalue()
-        update = body.index("null_or_index = PyValue_TagIndex(index);")
-        publish = body.index("IR_SET_TEMP(window[1], null_or_index);", update)
+        update = body.index("next_index = PyValue_TagIndex(item.index);")
+        publish = body.index("IR_SET_TEMP(window[1], next_index);", update)
         clear = body.index("window[2] = PyValue_NULL;", publish)
         transfer = body.index("IR_GEN_YIELD(next);", clear)
         self.assertLess(update, publish)

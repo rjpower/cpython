@@ -14476,8 +14476,9 @@ ir_run_SEND(
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue receiver;
-            PyValue null_or_index;
+            PyValue index;
             PyValue v;
+            PyValue next_index;
             PyValue retval;
             // _SPECIALIZE_SEND
             {
@@ -14497,8 +14498,9 @@ ir_run_SEND(
             // _SEND
             {
                 v = window[2];
-                null_or_index = window[1];
+                index = window[1];
                 assert(PyValue_IsObject(receiver));
+                assert(PyValue_IsTaggedIndex(index) || PyValue_IsNull(index));
                 PyObject *receiver_o = _PyValue_AsKnownObjectBorrowPointer(receiver);
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 if (!IS_PEP523_HOOKED(tstate) &&
@@ -14531,14 +14533,15 @@ ir_run_SEND(
                         DISPATCH();
                     }
                 }
-                if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                    _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(receiver), &window[1]);
-                    null_or_index = window[1];
-                    PyValue item = next.value;
-                    int found = next.status;
+                if (!PyValue_IsNull(index) && PyValue_IsNone(v)) {
+                    PyValue cursor = index;
+                    window[1] = PyValue_NULL;
+                    window[2] = PyValue_NULL;
+                    _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(receiver), cursor);
+                    PyValue item = step.value;
+                    int found = step.status;
                     if (found <= 0) {
                         if (found < 0) {
-                            IR_SET_TEMP(window[1], null_or_index);
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;{
@@ -14548,6 +14551,7 @@ ir_run_SEND(
                             DISPATCH();
                         }
                     }
+                    next_index = step.cursor;
                     retval = item;
                 }
                 else {
@@ -14565,10 +14569,12 @@ ir_run_SEND(
                     }
                     window[2] = PyValue_NULL;
                     PyValue_CLOSE(v);
+                    next_index = index;
                     retval = sent.value;
+                    window[1] = PyValue_NULL;
                 }
             }
-            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[1], next_index);
             IR_SET_TEMP(window[2], retval);
             DISPATCH();
         }
@@ -14891,8 +14897,9 @@ ir_run_SEND_VIRTUAL(
             PyValue val;
             PyValue nos;
             PyValue iter;
-            PyValue null_or_index;
+            PyValue index;
             PyValue none;
+            PyValue next_index;
             PyValue next;
             // _GUARD_TOS_IS_NONE
             {
@@ -14915,16 +14922,19 @@ ir_run_SEND_VIRTUAL(
             // _SEND_VIRTUAL
             {
                 none = val;
-                null_or_index = nos;
+                index = nos;
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
-                Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+                Py_ssize_t position = PyValue_UntagIndex(index);
+                PyValue spent = index;
+                _PyValue_DropCursor(spent);
                 _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
-                _PyValueIndexPair next_index = iteritem(iter_o, index);
-                index = next_index.index;
-                if (PyValue_IsNull(next_index.value)) {
-                    if (index < 0) {
+                window[1] = PyValue_NULL;
+                window[2] = PyValue_NULL;
+                _PyValueIndexPair item = iteritem(iter_o, position);
+                if (PyValue_IsNull(item.value)) {
+                    if (item.index < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     PyValue completed = PyValue_None;{
@@ -14934,10 +14944,10 @@ ir_run_SEND_VIRTUAL(
                         DISPATCH();
                     }
                 }
-                next = next_index.value;
-                null_or_index = PyValue_TagIndex(index);
+                next = item.value;
+                next_index = PyValue_TagIndex(item.index);
             }
-            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[1], next_index);
             IR_SET_TEMP(window[2], next);
             DISPATCH();
         }
@@ -14964,8 +14974,9 @@ ir_run_SEND_VIRTUAL_XFER_DISCARD(
             PyValue val;
             PyValue nos;
             PyValue iter;
-            PyValue null_or_index;
+            PyValue index;
             PyValue none;
+            PyValue next_index;
             PyValue next;
             // _GUARD_TOS_IS_NONE
             {
@@ -14986,16 +14997,19 @@ ir_run_SEND_VIRTUAL_XFER_DISCARD(
             // _SEND_VIRTUAL
             {
                 none = val;
-                null_or_index = nos;
+                index = nos;
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
-                Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+                Py_ssize_t position = PyValue_UntagIndex(index);
+                PyValue spent = index;
+                _PyValue_DropCursor(spent);
                 _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
-                _PyValueIndexPair next_index = iteritem(iter_o, index);
-                index = next_index.index;
-                if (PyValue_IsNull(next_index.value)) {
-                    if (index < 0) {
+                window[1] = PyValue_NULL;
+                window[2] = PyValue_NULL;
+                _PyValueIndexPair item = iteritem(iter_o, position);
+                if (PyValue_IsNull(item.value)) {
+                    if (item.index < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     PyValue completed = PyValue_None;{
@@ -15004,10 +15018,10 @@ ir_run_SEND_VIRTUAL_XFER_DISCARD(
                         IR_GEN_COMPLETE(ir_completed);
                     }
                 }
-                next = next_index.value;
-                null_or_index = PyValue_TagIndex(index);
+                next = item.value;
+                next_index = PyValue_TagIndex(item.index);
             }
-            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[1], next_index);
             assert(_PyValue_IsHome(next));
             window[2] = PyValue_NULL;
             IR_GEN_YIELD(next);
@@ -15034,8 +15048,9 @@ ir_run_SEND_XFER_DISCARD(
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue receiver;
-            PyValue null_or_index;
+            PyValue index;
             PyValue v;
+            PyValue next_index;
             PyValue retval;
             // _SPECIALIZE_SEND
             {
@@ -15055,8 +15070,9 @@ ir_run_SEND_XFER_DISCARD(
             // _SEND
             {
                 v = window[2];
-                null_or_index = window[1];
+                index = window[1];
                 assert(PyValue_IsObject(receiver));
+                assert(PyValue_IsTaggedIndex(index) || PyValue_IsNull(index));
                 PyObject *receiver_o = _PyValue_AsKnownObjectBorrowPointer(receiver);
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 if (!IS_PEP523_HOOKED(tstate) &&
@@ -15084,14 +15100,15 @@ ir_run_SEND_XFER_DISCARD(
                         IR_GEN_RESUME(ir_resume_input);
                     }
                 }
-                if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                    _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(receiver), &window[1]);
-                    null_or_index = window[1];
-                    PyValue item = next.value;
-                    int found = next.status;
+                if (!PyValue_IsNull(index) && PyValue_IsNone(v)) {
+                    PyValue cursor = index;
+                    window[1] = PyValue_NULL;
+                    window[2] = PyValue_NULL;
+                    _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(receiver), cursor);
+                    PyValue item = step.value;
+                    int found = step.status;
                     if (found <= 0) {
                         if (found < 0) {
-                            IR_SET_TEMP(window[1], null_or_index);
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;{
@@ -15100,6 +15117,7 @@ ir_run_SEND_XFER_DISCARD(
                             IR_GEN_COMPLETE(ir_completed);
                         }
                     }
+                    next_index = step.cursor;
                     retval = item;
                 }
                 else {
@@ -15118,10 +15136,13 @@ ir_run_SEND_XFER_DISCARD(
                         IR_GEN_JUMP(GEN_YIELD_INPUT_EFFECT, frame, this_instr, sent.value);
                     }
                     window[2] = PyValue_NULL;
+                    next_index = index;
                     retval = sent.value;
+                    window[1] = PyValue_NULL;
+                    window[2] = PyValue_NULL;
                 }
             }
-            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[1], next_index);
             assert(_PyValue_IsHome(retval));
             window[2] = PyValue_NULL;
             IR_GEN_YIELD(retval);
@@ -28179,8 +28200,9 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue val;
             PyValue nos;
             PyValue iter;
-            PyValue null_or_index;
+            PyValue index;
             PyValue none;
+            PyValue next_index;
             PyValue next;
             // _GUARD_TOS_IS_NONE
             {
@@ -28203,16 +28225,19 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _SEND_VIRTUAL
             {
                 none = val;
-                null_or_index = nos;
+                index = nos;
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
-                Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+                Py_ssize_t position = PyValue_UntagIndex(index);
+                PyValue spent = index;
+                _PyValue_DropCursor(spent);
                 _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
-                _PyValueIndexPair next_index = iteritem(iter_o, index);
-                index = next_index.index;
-                if (PyValue_IsNull(next_index.value)) {
-                    if (index < 0) {
+                window[1] = PyValue_NULL;
+                window[2] = PyValue_NULL;
+                _PyValueIndexPair item = iteritem(iter_o, position);
+                if (PyValue_IsNull(item.value)) {
+                    if (item.index < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     PyValue completed = PyValue_None;{
@@ -28222,10 +28247,10 @@ static const _PyIRForm ir_handler_forms[512] = {
                         DISPATCH();
                     }
                 }
-                next = next_index.value;
-                null_or_index = PyValue_TagIndex(index);
+                next = item.value;
+                next_index = PyValue_TagIndex(item.index);
             }
-            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[1], next_index);
             IR_SET_TEMP(window[2], next);
             DISPATCH();
         }
@@ -28248,8 +28273,9 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue val;
             PyValue nos;
             PyValue iter;
-            PyValue null_or_index;
+            PyValue index;
             PyValue none;
+            PyValue next_index;
             PyValue next;
             // _GUARD_TOS_IS_NONE
             {
@@ -28270,16 +28296,19 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _SEND_VIRTUAL
             {
                 none = val;
-                null_or_index = nos;
+                index = nos;
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
-                Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+                Py_ssize_t position = PyValue_UntagIndex(index);
+                PyValue spent = index;
+                _PyValue_DropCursor(spent);
                 _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
-                _PyValueIndexPair next_index = iteritem(iter_o, index);
-                index = next_index.index;
-                if (PyValue_IsNull(next_index.value)) {
-                    if (index < 0) {
+                window[1] = PyValue_NULL;
+                window[2] = PyValue_NULL;
+                _PyValueIndexPair item = iteritem(iter_o, position);
+                if (PyValue_IsNull(item.value)) {
+                    if (item.index < 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                     PyValue completed = PyValue_None;{
@@ -28288,10 +28317,10 @@ static const _PyIRForm ir_handler_forms[512] = {
                         IR_GEN_COMPLETE(ir_completed);
                     }
                 }
-                next = next_index.value;
-                null_or_index = PyValue_TagIndex(index);
+                next = item.value;
+                next_index = PyValue_TagIndex(item.index);
             }
-            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[1], next_index);
             assert(_PyValue_IsHome(next));
             window[2] = PyValue_NULL;
             IR_GEN_YIELD(next);
@@ -28314,8 +28343,9 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue receiver;
-            PyValue null_or_index;
+            PyValue index;
             PyValue v;
+            PyValue next_index;
             PyValue retval;
             // _SPECIALIZE_SEND
             {
@@ -28335,8 +28365,9 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _SEND
             {
                 v = window[2];
-                null_or_index = window[1];
+                index = window[1];
                 assert(PyValue_IsObject(receiver));
+                assert(PyValue_IsTaggedIndex(index) || PyValue_IsNull(index));
                 PyObject *receiver_o = _PyValue_AsKnownObjectBorrowPointer(receiver);
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 if (!IS_PEP523_HOOKED(tstate) &&
@@ -28364,14 +28395,15 @@ static const _PyIRForm ir_handler_forms[512] = {
                         IR_GEN_RESUME(ir_resume_input);
                     }
                 }
-                if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                    _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(receiver), &window[1]);
-                    null_or_index = window[1];
-                    PyValue item = next.value;
-                    int found = next.status;
+                if (!PyValue_IsNull(index) && PyValue_IsNone(v)) {
+                    PyValue cursor = index;
+                    window[1] = PyValue_NULL;
+                    window[2] = PyValue_NULL;
+                    _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(receiver), cursor);
+                    PyValue item = step.value;
+                    int found = step.status;
                     if (found <= 0) {
                         if (found < 0) {
-                            IR_SET_TEMP(window[1], null_or_index);
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;{
@@ -28380,6 +28412,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                             IR_GEN_COMPLETE(ir_completed);
                         }
                     }
+                    next_index = step.cursor;
                     retval = item;
                 }
                 else {
@@ -28398,10 +28431,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                         IR_GEN_JUMP(GEN_YIELD_INPUT_EFFECT, frame, this_instr, sent.value);
                     }
                     window[2] = PyValue_NULL;
+                    next_index = index;
                     retval = sent.value;
+                    window[1] = PyValue_NULL;
+                    window[2] = PyValue_NULL;
                 }
             }
-            IR_SET_TEMP(window[1], null_or_index);
+            IR_SET_TEMP(window[1], next_index);
             assert(_PyValue_IsHome(retval));
             window[2] = PyValue_NULL;
             IR_GEN_YIELD(retval);

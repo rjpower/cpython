@@ -402,6 +402,8 @@
      * callback */ \
     PRIMITIVE(Py_TYPE, PyTypeObject *, (PyObject *), \
               ARGS(object), PATH(type), EFFECTS(reads)) \
+    /* A plain read of the type's version tag: no callee, no failure, no \
+     * callback */ \
     FIELD(PyTypeObject, tp_version_tag, unsigned int, ON(type), \
           MEASURE(type_version), EFFECTS(reads)) \
     /* The value slots that uops call (pycore_value_slots.h), read through \
@@ -438,6 +440,8 @@
      * caller has the type's Py_TPFLAGS_INLINE_VALUES) and their flag */ \
     PRIMITIVE(_PyObject_InlineValues, PyDictValues *, (PyObject *), \
               ARGS(object), PATH(inline_values), EFFECTS(reads)) \
+    /* A plain read of the values' validity byte (Include/internal/ \
+     * pycore_dict.h): no callee, no failure, no callback */ \
     FIELD(PyDictValues, valid, uint8_t, ON(inline_values), \
           TEST(has_values), EFFECTS(reads)) \
     /* The address of a value slot at a byte offset: arithmetic only */ \

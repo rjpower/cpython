@@ -3137,7 +3137,7 @@ dummy_func(
             }
             found = ep->me_value;
             if (PyValue_IsNull(found)) {
-                EXIT_IF(true, "the hinted entry holds no value");
+                EXIT_IF(true);
             }
             STAT_INC(LOAD_ATTR, hit);
             attr = PyValue_XDUP(found);

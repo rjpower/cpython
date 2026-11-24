@@ -1205,6 +1205,25 @@ class VerifierTests(unittest.TestCase):
             }
         """)
 
+    def test_an_identity_test_shares_facts(self):
+        # PyValue_Is is declared IDENTITY(): where it holds, its arguments
+        # are one word, so a copy of a home that is `left` has left's facts
+        # (_BINARY_OP_INPLACE_ADD_UNICODE's target local)
+        source = """
+            op(_OP, (left: exact(PyUnicode_Type) -- left)) effects(reads) exits(next, miss) {
+                PyValue held = IR_SLOT(IR_DST);
+                %s
+                PyObject *o = PyValue_AsKnownObjectBorrow(held);
+            }
+        """
+        self.verify(source % "EXIT_IF(!PyValue_Is(held, left));")
+        self.refuses(source % "",
+                     r"passes `held` to PyValue_AsKnownObjectBorrow, which requires "
+                     r"nonnull, object of it")
+        # Where the test fails, nothing is learned
+        self.refuses(source % "EXIT_IF(PyValue_Is(held, left));",
+                     r"passes `held` to PyValue_AsKnownObjectBorrow")
+
     def test_null_iff_names_a_value_argument(self):
         for k in ("1", "0"):
             with self.subTest(k=k):

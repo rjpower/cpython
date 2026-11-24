@@ -1537,7 +1537,8 @@ ir_run_BINARY_OP_INPLACE_ADD_UNICODE(
                 assert(IR_IS_LOCAL(IR_A(ir_word)));
                 PyValue *target_local = &IR_SLOT(IR_A(ir_word));
                 assert(PyUnicode_CheckExact(left_o));
-                if (!PyValue_Is(*target_local, left)) {
+                PyValue held = *target_local;
+                if (!PyValue_Is(held, left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
@@ -1545,12 +1546,12 @@ ir_run_BINARY_OP_INPLACE_ADD_UNICODE(
                 ir_own_B = IR_DETACH(ir_word, B, left);
                 (void)(ir_own_B);
                 assert(Py_REFCNT(left_o) >= 1);
-                PyObject *temp = PyValue_AsKnownObjectSteal(*target_local);
+                *target_local = PyValue_NULL;
+                PyObject *temp = PyValue_AsKnownObjectSteal(held);
                 ir_own_C = IR_DETACH(ir_word, C, right);
                 PyObject *right_o = _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(right, ir_own_C));
                 temp = value_unicode_append(temp, right_o);
                 _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
-                *target_local = PyValue_NULL;
                 if (temp == NULL) {
                     _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
@@ -18356,7 +18357,8 @@ static const _PyIRForm ir_handler_forms[512] = {
                 assert(IR_IS_LOCAL(IR_A(ir_word)));
                 PyValue *target_local = &IR_SLOT(IR_A(ir_word));
                 assert(PyUnicode_CheckExact(left_o));
-                if (!PyValue_Is(*target_local, left)) {
+                PyValue held = *target_local;
+                if (!PyValue_Is(held, left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
@@ -18364,12 +18366,12 @@ static const _PyIRForm ir_handler_forms[512] = {
                 ir_own_B = IR_DETACH(ir_word, B, left);
                 (void)(ir_own_B);
                 assert(Py_REFCNT(left_o) >= 1);
-                PyObject *temp = PyValue_AsKnownObjectSteal(*target_local);
+                *target_local = PyValue_NULL;
+                PyObject *temp = PyValue_AsKnownObjectSteal(held);
                 ir_own_C = IR_DETACH(ir_word, C, right);
                 PyObject *right_o = _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(right, ir_own_C));
                 temp = value_unicode_append(temp, right_o);
                 _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
-                *target_local = PyValue_NULL;
                 if (temp == NULL) {
                     _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);

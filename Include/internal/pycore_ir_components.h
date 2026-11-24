@@ -193,7 +193,7 @@
     /* Reviewed G0c2. pycore_value.h: compares the words' bits, ignoring      \
      * bit 0 of a pointer; no memory, no failure, no callback.                */ \
     PRIMITIVE(PyValue_Is, bool, (PyValueBorrow, PyValueBorrow), \
-              ARGS(borrowed, borrowed), TEST(,), EFFECTS()) \
+              ARGS(borrowed, borrowed), TEST(,), EFFECTS(), IDENTITY()) \
     /* Evidence (G0c batch 6): Include/internal/pycore_value.h: compares \
      * the word, tag bit cleared, with the address of op. No call, no \
      * failure, no callback. Its true result is the identity of the value's \

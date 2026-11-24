@@ -1181,8 +1181,10 @@ dummy_func(
             PyValue *target_local = &IR_SLOT(IR_DST);
             assert(PyUnicode_CheckExact(left_o));
             // The local may hold any word (an inline number, None, NULL):
-            // compare the words, not an object read from it
-            EXIT_IF(!PyValue_Is(*target_local, left),
+            // compare the words, not an object read from it.  `held` is a
+            // copy; the local keeps its owner until it is cleared below
+            PyValue held = *target_local;
+            EXIT_IF(!PyValue_Is(held, left),
                     "the next word stores the result to the left operand's local");
             STAT_INC(BINARY_OP, hit);
             /* Handle `left = left + right` or `left += right` for str.
@@ -1206,13 +1208,14 @@ dummy_func(
              */
             PyValue_CLOSE_SPECIALIZED(left, _PyUnicode_ExactDealloc);
             DEAD(left);
-            // The local still holds the string
+            // The local still holds the string; its owner moves to `held`,
+            // which the guard showed is left's string
             assert(Py_REFCNT(left_o) >= 1);
-            PyObject *temp = PyValue_AsKnownObjectSteal(*target_local);
+            *target_local = PyValue_NULL;
+            PyObject *temp = PyValue_AsKnownObjectSteal(held);
             PyObject *right_o = PyValue_AsKnownObjectSteal(right);
             temp = value_unicode_append(temp, right_o);
             _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
-            *target_local = PyValue_NULL;
             ERROR_IF(temp == NULL);
             res = PyValue_FromNonNumberSteal(temp);
         }

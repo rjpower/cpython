@@ -542,6 +542,10 @@ class Row:
     # space
     view_close: str = ""
     pointer_form: str = ""
+    # IDENTITY(): a two-argument TEST that holds exactly when its arguments
+    # are one word (one object, or one inline value), so where it holds
+    # each has the other's facts but those of one site (PyValue_Is)
+    identity: bool = False
     # STATE: per bit, (bit, facts where it is set, facts where it is clear),
     # and the macro of the handler's word that initializes the item
     bits: tuple[tuple[str, frozenset, frozenset], ...] = ()
@@ -762,7 +766,7 @@ def feedback_covered(access: tuple[str, str], declared) -> bool:
 # The optional columns after a row's fixed ones, by row kind
 OPTIONAL_COLUMNS = {
     "PRIMITIVE": ("FEEDBACK", "CONJOINS", "NONNULL_FORM", "SLOW", "TAKES_VIEW", "VIEW_CLOSE",
-                  "POINTER_FORM"),
+                  "POINTER_FORM", "IDENTITY"),
     "HELPER": ("FEEDBACK", "SLOW", "TAKES_VIEW"),
     "ROUTINE": ("FEEDBACK",),
     "MACRO": ("FEEDBACK", "TAKES_VIEW"),
@@ -784,9 +788,9 @@ def _row_options(fields: list[str], fixed: int, kind: str) -> dict:
         inner = _inner(text, head)
         if head == "FEEDBACK":
             found[head] = parse_feedback(_split_text(inner))
-        elif head == "TAKES_VIEW":
+        elif head in ("TAKES_VIEW", "IDENTITY"):
             if inner.strip():
-                raise ValueError("TAKES_VIEW() is a flag")
+                raise ValueError(f"{head}() is a flag")
             found[head] = True
         elif not re.fullmatch(r"\w+", inner.strip()):
             raise ValueError(f"{head}(name) names one row")
@@ -798,7 +802,8 @@ def _row_options(fields: list[str], fixed: int, kind: str) -> dict:
             "slow": found.get("SLOW", ""),
             "takes_view": found.get("TAKES_VIEW", False),
             "view_close": found.get("VIEW_CLOSE", ""),
-            "pointer_form": found.get("POINTER_FORM", "")}
+            "pointer_form": found.get("POINTER_FORM", ""),
+            "identity": found.get("IDENTITY", False)}
 
 
 def _parse_row(kind: str, fields: list[str]) -> Row:
@@ -994,6 +999,10 @@ def check_columns(table: dict[str, Row]) -> None:
             if not (is_value_constant(instance)
                     and VFact("exact", row.name) in instance.result.facts):
                 fail(row, f"INSTANCES({name}): not a VALUE CONSTANT of exact({row.name})")
+        if row.identity and (row.result.shape != "TEST" or len(row.args) != 2
+                             or any(a.mode != "borrowed" or a.facts for a in row.args)
+                             or row.effects):
+            fail(row, "IDENTITY(): a TEST of two borrowed values, without effects")
         if row.conjoins:
             # Fusion must not change failure or short-circuit behaviour: both
             # tests are total (no precondition beyond a borrowed value), have
@@ -2908,12 +2917,32 @@ class OwnershipWalk:
                 views.names[name] = bound
         return views
 
+    def refine_identity(self, state: _State, cond: list[str], holds: bool) -> None:
+        """Where an IDENTITY() test holds, its two named arguments are one
+        word: each has the other's facts, but those of one site"""
+        cond = _strip(cond)
+        while cond[:1] == ["!"]:
+            cond, holds = _strip(cond[1:]), not holds
+        call = _call_of(_unwrap(cond, self.table), self.table)
+        if not holds or call is None or not call[0].identity:
+            return
+        views = self.views_at(state)
+        names = [views.resolve(a) for a in call[1]]
+        if None in names:
+            return
+        a, b = names
+        facts_a = without_site_facts(state.facts.get(a, frozenset()))
+        facts_b = without_site_facts(state.facts.get(b, frozenset()))
+        state.add_facts(a, facts_b)
+        state.add_facts(b, facts_a)
+
     def refine(self, state: _State, cond: list[str], holds: bool) -> None:
         self.refine_status(state, cond, holds)
         found = condition_facts(cond, self.views_at(state), self.table, holds)
         if found:
             for name, facts in found[0].items():
                 state.add_facts(name, facts)
+        self.refine_identity(state, cond, holds)
         # `PyValue_IsNull(x)`: a new owner that is NULL owes nothing; the
         # owners that the row which made x takes are the caller's again
         cond = _strip(cond)

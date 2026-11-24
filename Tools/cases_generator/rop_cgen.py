@@ -47,6 +47,9 @@ HANDLE_C = {
 # Effects after which Python may have run: a stub reports ESCAPED
 ESCAPING = frozenset({Effect.runs_python, Effect.polls})
 
+# The implicit environment values of a graph that the handler's scope holds
+ENVIRONMENT_C = {"frame": "frame", "thread": "tstate"}
+
 # Names the handler's C scope owns
 RESERVED = frozenset({
     "frame", "tstate", "next_instr", "ir_word", "opcode", "this_instr",
@@ -396,6 +399,8 @@ class ArmLowerer:
         if isinstance(e, Name):
             if e.name in self.placements:
                 return self.operand_value(e.name)
+            if e.name in ENVIRONMENT_C:
+                return ENVIRONMENT_C[e.name]
             return self.local(e.name)
         if isinstance(e, Nat):
             return str(e.value)

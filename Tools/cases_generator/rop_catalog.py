@@ -454,6 +454,11 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("pointer_or_null", CReturn.pointer,
           COutcome(CTest.nonnull, _RES, (_RES,), False),
           COutcome(CTest.null, _RES, (), False)),
+    # hit(v)/absent(): the bool says whether the value written through the
+    # last parameter is there; no exception
+    _conv("bool_out_hit", CReturn.bool,
+          COutcome(CTest.true, _RES, (CSource.out,), False, "hit"),
+          COutcome(CTest.false, _RES, (), False, "absent")),
     # A status int: 0 is success, negative raised
     _conv("int_zero_ok", CReturn.int_status,
           COutcome(CTest.zero, _RES, (), False),

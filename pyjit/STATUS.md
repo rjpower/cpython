@@ -36,12 +36,15 @@ completion stubs with 23-byte sites; and G0b's seed, 195 of 351 uops
 declared with unchanged generated output. Timed at `a5502da133f` against
 golden87 with its JIT off, `on` runs 1.022 of the warm time (jit88: 1.060);
 nbody 0.748, spectral_norm 0.792, unpack_sequence 1.380, richards 1.157.
-G0c's eight review batches are merged at `3cf8fc95568` (not yet pushed):
-278 of 351 uops declared, each generated difference listed. Running: G0a5
-(the uops the batches cannot declare, and the vocabulary desk) and G3a's
-runtime phase (pins and the switch routine for compiled frame transfers).
-Next: G0c9, the batches' pending declarations, then G0d, the cutover to
-declarations only.
+Merged since, at `1adf6360360` (not yet pushed): G0c's eight review
+batches, G0a5 and G0c9, 320 of 351 uops declared with each generated
+difference listed; G0d3, the leaf translator reading rows; and G3a's
+runtime phase and generator-boundary clauses. Running: G0d1, G0d2 and
+G0d4, the cutover to declarations only, and G3a's remaining declarations;
+then G3a's compiled frame transfers. G0d1 found a crash in golden86 and
+golden87, fixed on G0d1's branch (`cbf27b04cb2`): once `y = s + t` is
+specialised as an in-place str add, the process aborts if `y` holds an
+inline number before the add.
 
 **Jit88, qualified 2026-11-23** at `ea4d023c2b4`
 ([record](issues/register-semantics59/jit88.md)): the baseline method JIT

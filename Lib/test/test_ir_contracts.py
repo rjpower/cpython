@@ -1775,14 +1775,41 @@ class VerifierTests(unittest.TestCase):
         # An arm that no macro of the product decides holds no code
         source = """
             op(_OP, (x -- x)) effects() exits(next) {
-            #ifdef Py_DEBUG
+            #ifdef Py_TRACE_REFS
                 %s
             #endif
             }
         """
         self.verify(source % "assert(oparg >= 0);")
         self.refuses(source % "int y = oparg;",
-                     r"`#ifdef Py_DEBUG` is decided by no macro of the GIL product")
+                     r"`#ifdef Py_TRACE_REFS` is decided by no macro of the GIL product")
+        # Every build is configured --with-shapes: Py_SHAPES selects its arm
+        # (_STORE_ATTR_INSTANCE_VALUE)
+        source = """
+            op(_OP, (x: borrowed object --)) effects(%s) exits(next) {
+            #ifdef Py_SHAPES
+                spam_write(PyValue_AsKnownObjectBorrow(x));
+            #else
+                int z = SPAM_FT_ONLY(2);
+            #endif
+            }
+        """
+        self.verify(source % "writes")
+        self.refuses(source % "", r"`spam_write` may writes")
+        # Py_DEBUG differs between the supported builds: both arms are
+        # paths, and they join (_YIELD_VALUE)
+        source = """
+            op(_OP, (x: consumed --)) effects(releases) exits(next) {
+            #ifdef Py_DEBUG
+                int y = oparg;
+                %s
+            #else
+                PyValue_CLOSE(x);
+            #endif
+            }
+        """
+        self.verify(source % "PyValue_CLOSE(x);")
+        self.refuses(source % "", r"`x` is owned on one path and not on another where they join")
         self.refuses("""
             op(_OP, (x -- x)) effects() exits(next) {
             #if ENABLE_SPECIALIZATION

@@ -1119,32 +1119,47 @@ ERROR_LABELS = ("error", "exception_unwind")
 
 
 # The macros of the scoped GIL product that select preprocessor arms (F15):
-# Py_GIL_DISABLED is not defined in a build with the GIL, and
-# pycore_code.h defines ENABLE_SPECIALIZATION as 1 in every build.  Any
-# other macro (Py_DEBUG, Py_SHAPES) differs between builds of the product
-BUILD_MACROS: dict[str, str | None] = {"Py_GIL_DISABLED": None, "ENABLE_SPECIALIZATION": "1"}
+# Py_GIL_DISABLED is not defined in a build with the GIL; pycore_code.h
+# defines ENABLE_SPECIALIZATION as 1 in every build; every build of the
+# product is configured --with-shapes, which defines Py_SHAPES as 1.
+BUILD_MACROS: dict[str, str | None] = {"Py_GIL_DISABLED": None, "ENABLE_SPECIALIZATION": "1",
+                                       "Py_SHAPES": "1"}
+# The macros that differ between the product's supported builds: the walk
+# takes both arms as alternative paths and joins them.  Any other macro is
+# decided by no build, and its arms may hold no code.
+ALTERNATIVE_MACROS = frozenset(("Py_DEBUG",))
+
+
+def _directive(directive: str) -> tuple[str, str, bool] | None:
+    """`#ifdef M`, `#ifndef M`, `#if [!]defined(M)` or `#if [!]M`: (M, how
+    it is tested, negated), or None"""
+    text = directive.strip()[1:].strip()
+    m = re.fullmatch(r"(ifdef|ifndef)\s+(\w+)(\s*(/\*.*\*/|//.*))?", text)
+    if m:
+        return m.group(2), "defined", m.group(1) == "ifndef"
+    m = re.fullmatch(r"if\s+(!?)\s*(?:defined\s*\(\s*(\w+)\s*\)|(\w+))(\s*(/\*.*\*/|//.*))?",
+                     text)
+    if m:
+        return m.group(2) or m.group(3), "defined" if m.group(2) else "value", bool(m.group(1))
+    return None
 
 
 def macro_condition(directive: str) -> bool | None:
     """Whether the arm after `#if`, `#ifdef` or `#ifndef` is the GIL
     product's, or None if its macros do not decide it"""
-    text = directive.strip()[1:].strip()
-    m = re.fullmatch(r"(ifdef|ifndef)\s+(\w+)(\s*(/\*.*\*/|//.*))?", text)
-    if m:
-        if m.group(2) not in BUILD_MACROS:
-            return None
-        defined = BUILD_MACROS[m.group(2)] is not None
-        return defined if m.group(1) == "ifdef" else not defined
-    m = re.fullmatch(r"if\s+(!?)\s*(?:defined\s*\(\s*(\w+)\s*\)|(\w+))(\s*(/\*.*\*/|//.*))?",
-                     text)
-    if m:
-        name = m.group(2) or m.group(3)
-        if name not in BUILD_MACROS:
-            return None
-        value = BUILD_MACROS[name]
-        holds = value is not None if m.group(2) else value not in (None, "0")
-        return holds != bool(m.group(1))
-    return None
+    found = _directive(directive)
+    if found is None or found[0] not in BUILD_MACROS:
+        return None
+    name, test, negated = found
+    value = BUILD_MACROS[name]
+    holds = value is not None if test == "defined" else value not in (None, "0")
+    return holds != negated
+
+
+def alternative_arms(directive: str) -> bool:
+    "Whether both arms of the directive are paths of some supported build"
+    found = _directive(directive)
+    return found is not None and found[0] in ALTERNATIVE_MACROS
 
 
 def _macro_ifs(uop: Uop) -> list[MacroIfStmt]:
@@ -1227,15 +1242,17 @@ def _tokens(uop: Uop) -> list[Token]:
 
 
 def check_preprocessor(uop: Uop) -> None:
-    """F15: an arm whose condition the GIL product's macros do not decide
-    may hold no code beyond assertions; `#elif`, which the parser does not
+    """F15: an arm whose condition the GIL product's macros do not decide,
+    nor a macro of alternative builds (Py_DEBUG), may hold no code beyond
+    assertions; `#elif`, which the parser does not
     model, is refused"""
     for t in uop.body.tokens():
         if t.kind == "CMACRO_OTHER" and t.text.strip()[1:].strip().startswith("elif"):
             raise analysis_error(f"{uop.name}: `#elif` is a preprocessor form the walk does "
                                  "not model; nest #if and #else", t)
     for stmt in _macro_ifs(uop):
-        if macro_condition(stmt.condition.text) is not None:
+        if (macro_condition(stmt.condition.text) is not None
+                or alternative_arms(stmt.condition.text)):
             continue
         tokens = [t for arm in (stmt.body, stmt.else_body or []) for s_ in arm
                   for t in s_.tokens() if t.kind != "COMMENT"]
@@ -2169,8 +2186,9 @@ class OwnershipWalk:
         if isinstance(stmt, BlockStmt):
             return self.block(stmt.body, state)
         if isinstance(stmt, MacroIfStmt):
-            # The GIL product's arm (F15); an undecided one holds no code
-            # (check_preprocessor), so both are walked
+            # The GIL product's arm (F15); a Py_DEBUG one is a path of one
+            # supported build, and an undecided one holds no code
+            # (check_preprocessor), so both are walked and joined
             holds = macro_condition(stmt.condition.text)
             if holds is not None:
                 return self.block(stmt.body if holds else stmt.else_body or [], state)

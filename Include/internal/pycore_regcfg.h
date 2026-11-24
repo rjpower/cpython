@@ -152,6 +152,13 @@ typedef struct _PyRegCfg {
     int const_first;
     int nconst;
     PyValueBorrow *const_values;
+    /* Translation (Python/regcfg.c): per block, whether its region permuted
+     * identities (elided), and whether it must keep its SWAPs as words
+     * (legacy); fail_op is the op where allocation or verification failed,
+     * or -1. */
+    uint8_t *elided;
+    uint8_t *legacy;
+    int fail_op;
 } _PyRegCfg;
 
 int _PyRegCfg_PrepareKwargs(_PyRegCfg *cfg, int slot);

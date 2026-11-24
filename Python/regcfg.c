@@ -67,6 +67,8 @@ _PyRegCfg_Free(_PyRegCfg *cfg)
     PyMem_Free(cfg->blocks);
     PyMem_Free(cfg->slot);
     PyMem_Free(cfg->const_values);
+    PyMem_Free(cfg->elided);
+    PyMem_Free(cfg->legacy);
     PyMem_Free(cfg);
 }
 
@@ -480,8 +482,19 @@ struct _PyRegTr {
     int astack;
     int region_op;          // the first op of the current region
     int *def;               // per fresh register, the op that defines it
+    int *natural;           // per fresh register, its stack position there
     int adef;
+    int anatural;
     int maxpos;             // the deepest stack position numbered
+    /* Per parameter CANON(k): whether an identity holds it now, and the op
+     * that last took it in this region (-1: none) */
+    char *held;
+    int *free_since;
+    /* Whether SWAP permutes identities; a region that cannot bind its
+     * parameters so translates again with SWAP as a word (failed). */
+    int elide;
+    int failed;
+    int permuted;           // the region elided a SWAP
 };
 
 int
@@ -490,7 +503,10 @@ _PyRegTr_Fresh(_PyRegTr *t, int *v)
     _PyRegCfg *cfg = t->cfg;
     int k = cfg->nvregs - _PyReg_FRESH0(cfg);
     RETURN_IF_ERROR(grow((void **)&t->def, &t->adef, k + 1, sizeof(int)));
+    RETURN_IF_ERROR(grow((void **)&t->natural, &t->anatural, k + 1,
+                         sizeof(int)));
     t->def[k] = t->nops;
+    t->natural[k] = -1;
     *v = cfg->nvregs++;
     return SUCCESS;
 }
@@ -514,6 +530,13 @@ _PyRegTr_Push(_PyRegTr *t, int id)
 {
     RETURN_IF_ERROR(grow((void **)&t->stack, &t->astack, t->sp + 2,
                          sizeof(int)));
+    _PyRegCfg *cfg = t->cfg;
+    if (id >= _PyReg_FRESH0(cfg)) {
+        int *natural = &t->natural[id - _PyReg_FRESH0(cfg)];
+        if (*natural < 0) {
+            *natural = t->sp;
+        }
+    }
     t->stack[t->sp++] = id;
     t->maxpos = Py_MAX(t->maxpos, t->sp);
     return SUCCESS;
@@ -540,10 +563,92 @@ rename_ops(_PyRegCfg *cfg, _PyRegOp *ops, int from_op, int to_op,
     }
 }
 
-/* Give the block parameter of stack position k the identity there.  Stack
- * positions are last in, first out and the translator renames nothing
- * else, so the parameter of position k is dead since its value was popped,
- * and the fresh identity now at k may take its name. */
+/* The stack position where identity v was defined: where the allocator
+ * puts it, unless a parameter's home or a bump moves it */
+static int
+natural_pos(const _PyRegTr *t, int v)
+{
+    const _PyRegCfg *cfg = t->cfg;
+    if (v < cfg->nlocalsplus) {
+        return -1;
+    }
+    if (v < _PyReg_FRESH0(cfg)) {
+        return v - cfg->nlocalsplus;
+    }
+    return t->natural[v - _PyReg_FRESH0(cfg)];
+}
+
+/* Whether the op that defines v can put it in the home of the parameter of
+ * position k: at its own position always; elsewhere only an op whose one
+ * new output the allocator places freely (a register-style op, a call, or
+ * a window without inputs, whose base follows its output). */
+static int
+placeable(const _PyRegTr *t, int v, int k)
+{
+    const _PyRegCfg *cfg = t->cfg;
+    int f = v - _PyReg_FRESH0(cfg);
+    if (t->natural[f] == k) {
+        return 1;
+    }
+    const _PyRegOp *op = &t->ops[t->def[f]];
+    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
+    if (fmt->flags & _PyIR_WINDOW) {
+        return op->nread == 0 && op->nout == 1;
+    }
+    return op->nout - _PyRegOp_Through(op, fmt) == 1;
+}
+
+/* Whether op i reads the parameter of position k at that position, so
+ * that its output there may take the parameter's home: a handler may write
+ * an output over the input at its own stack position only. */
+static int
+own_input(const _PyRegTr *t, int i, int k)
+{
+    const _PyRegCfg *cfg = t->cfg;
+    const _PyRegOp *op = &t->ops[i];
+    const int *in = _PyReg_IN(cfg, op);
+    for (int q = 0; q < op->nread; q++) {
+        if (in[q] == _PyReg_CANON(cfg, k)) {
+            return op->depth - op->nread + q == k;
+        }
+    }
+    return 0;
+}
+
+/* Track which parameters op holds and takes. */
+static void
+note_op(_PyRegTr *t, const _PyRegOp *op)
+{
+    _PyRegCfg *cfg = t->cfg;
+    const int *in = _PyReg_IN(cfg, op);
+    const int *out = _PyReg_OUT(cfg, op);
+    int index = (int)(op - t->ops);
+    for (int k = op->nread - op->npop; k < op->nread + op->nimplicit; k++) {
+        int v = in[k];
+        if (!_PyReg_IS_CANON(cfg, v)) {
+            continue;
+        }
+        int passed = 0;
+        for (int j = 0; j < op->nout; j++) {
+            passed |= out[j] == v;
+        }
+        if (!passed) {
+            t->held[v - cfg->nlocalsplus] = 0;
+            t->free_since[v - cfg->nlocalsplus] = index;
+        }
+    }
+    for (int j = 0; j < op->nout; j++) {
+        if (_PyReg_IS_CANON(cfg, out[j])) {
+            t->held[out[j] - cfg->nlocalsplus] = 1;
+        }
+    }
+}
+
+/* Give the block parameter of stack position k the identity there: rename
+ * the fresh identity to the parameter from its definition.  That needs the
+ * parameter free from there on.  Under last in, first out it always is;
+ * after SWAP has permuted identities it may not be, and the region then
+ * translates again with its SWAPs as words. */
 static int
 bind_param(_PyRegTr *t, int k)
 {
@@ -553,22 +658,35 @@ bind_param(_PyRegTr *t, int k)
     if (v == canon) {
         return SUCCESS;
     }
-    if (v < _PyReg_FRESH0(cfg)) {
+    if (v < _PyReg_FRESH0(cfg) || k >= IR_MAX_SLOTS) {
+        if (t->elide) {
+            t->failed = 1;
+            return SUCCESS;
+        }
         PyErr_Format(PyExc_SystemError,
                      "register %d at stack position %d", v, k);
         return ERROR;
     }
     int from_op = t->def[v - _PyReg_FRESH0(cfg)];
+    if (t->elide && (t->held[k] || t->free_since[k] > from_op ||
+                     from_op < t->region_op || !placeable(t, v, k) ||
+                     (t->free_since[k] == from_op && !own_input(t, from_op, k))))
+    {
+        t->failed = 1;
+        return SUCCESS;
+    }
     rename_ops(cfg, t->ops, Py_MAX(from_op, t->region_op), t->nops,
                v, canon);
     t->stack[k] = canon;
+    t->held[k] = 1;
     return SUCCESS;
 }
 
 static int
 bind_params_below(_PyRegTr *t, int depth)
 {
-    for (int k = 0; k < depth; k++) {
+    // Code that never runs may name a handler deeper than its stack
+    for (int k = 0; k < Py_MIN(depth, t->sp); k++) {
         RETURN_IF_ERROR(bind_param(t, k));
     }
     return SUCCESS;
@@ -617,8 +735,13 @@ _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
     _PyRegOp *op;
     RETURN_IF_ERROR(new_op(t, src, nuses, ndefs, &op));
     op->opcode = opcode;
-    memcpy(_PyReg_IN(t->cfg, op), uses, nuses * sizeof(int));
-    memcpy(_PyReg_OUT(t->cfg, op), defs, ndefs * sizeof(int));
+    if (nuses > 0) {
+        memcpy(_PyReg_IN(t->cfg, op), uses, nuses * sizeof(int));
+    }
+    if (ndefs > 0) {
+        memcpy(_PyReg_OUT(t->cfg, op), defs, ndefs * sizeof(int));
+    }
+    note_op(t, op);
     if (result != NULL) {
         *result = op;
     }
@@ -646,6 +769,10 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
          * allocation must see their identities before assigning homes. */
         popped = 3;
         pushed = 3;
+    }
+    // Every handler finds its parameters before the op can raise
+    if (instr->except >= 0) {
+        RETURN_IF_ERROR(bind_params_below(t, handler_base(cfg, instr->except)));
     }
     int depth = t->sp;
     assert(popped >= 0 && pushed >= 0 && popped <= depth);
@@ -705,10 +832,32 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
         for (int k = 0; k < nimplicit; k++) {
             in[nread + k] = t->stack[k];
         }
+        // A window reads consecutive homes from its base, and writes its
+        // outputs from there over homes that no other value holds
+        int wbase = window && nread > 0 ? natural_pos(t, in[0]) : -1;
+        if (window && t->elide && nread > 0) {
+            for (int k = 0; k < nread - fmt->ninputs; k++) {
+                if (wbase < 0 || natural_pos(t, in[k]) != wbase + k) {
+                    t->failed = 1;
+                }
+            }
+            for (int k = 0; k < depth - nread; k++) {
+                int p = natural_pos(t, t->stack[k]);
+                if (p >= wbase && p < wbase + Py_MAX(pushed, nread)) {
+                    t->failed = 1;
+                }
+            }
+        }
         op->nread = (int16_t)nread;
         op->npop = (int16_t)popped;
         op->nimplicit = (int16_t)nimplicit;
         memcpy(_PyReg_OUT(cfg, op), out, pushed * sizeof(int));
+        note_op(t, op);
+        for (int j = 0; wbase >= 0 && j < pushed; j++) {
+            if (out[j] >= _PyReg_FRESH0(cfg)) {
+                t->natural[out[j] - _PyReg_FRESH0(cfg)] = wbase + j;
+            }
+        }
         t->sp = base;
         for (int j = 0; j < pushed && err == SUCCESS; j++) {
             err = _PyRegTr_Push(t, out[j]);
@@ -720,18 +869,35 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     return err;
 }
 
+/* SWAP n exchanges the identities at the top and n - 1 below it.  No word
+ * runs; a NOP keeps its origin for the source map and line events. */
+static int
+rule_swap(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (!t->elide) {
+        return _PyRegTr_Legacy(t, src);
+    }
+    int n = src->oparg;
+    if (n < 2 || n > t->sp) {
+        PyErr_Format(PyExc_SystemError, "stack underflow at line %d",
+                     src->loc.lineno);
+        return ERROR;
+    }
+    int top = t->stack[t->sp - 1];
+    t->stack[t->sp - 1] = t->stack[t->sp - n];
+    t->stack[t->sp - n] = top;
+    t->permuted = 1;
+    return _PyRegTr_Emit(t, src, NOP, NULL, 0, NULL, 0, NULL);
+}
+
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
-    [0] = NULL,
+    [SWAP] = rule_swap,
 };
 
 static int
 translate_instr(_PyRegTr *t, const _PyRegOp *instr)
 {
-    // Every handler finds its parameters before the op can raise
-    if (instr->except >= 0) {
-        RETURN_IF_ERROR(bind_params_below(t, handler_base(t->cfg, instr->except)));
-    }
     _PyRegRule rule = rules[instr->opcode & 255];
     if (rule == NULL || instr->opcode > 255) {
         rule = _PyRegTr_Legacy;
@@ -745,12 +911,44 @@ translate(_PyRegCfg *cfg)
     RETURN_IF_ERROR(mark_blocks(cfg));
     resolve_next_locations(cfg);
     _PyRegTr t = {.cfg = cfg};
+    int n = cfg->nblocks;
+    // The stack ops of each block, which a region translated again reads
+    int *range = PyMem_Malloc(Py_MAX(2 * n, 1) * sizeof(int));
+    t.held = PyMem_Calloc(IR_MAX_SLOTS, 1);
+    t.free_since = PyMem_Malloc(IR_MAX_SLOTS * sizeof(int));
+    if (range == NULL || t.held == NULL || t.free_since == NULL) {
+        PyMem_Free(range);
+        PyMem_Free(t.held);
+        PyMem_Free(t.free_since);
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    for (int b = 0; b < n; b++) {
+        range[2 * b] = cfg->blocks[b].start;
+        range[2 * b + 1] = cfg->blocks[b].end;
+    }
     int err = SUCCESS;
-    for (int b = 0; b < cfg->nblocks && err == SUCCESS; b++) {
+    int region_b = 0, again = 0;
+    int r_noperands = 0, r_nvregs = 0, r_maxpos = 0;
+    for (int b = 0; b < n && err == SUCCESS; b++) {
         _PyRegBlock *blk = &cfg->blocks[b];
-        int start = blk->start, end = blk->end;
+        int start = range[2 * b], end = range[2 * b + 1];
         if (!blk->continued) {
+            region_b = b;
             t.region_op = t.nops;
+            r_noperands = cfg->noperands;
+            r_nvregs = cfg->nvregs;
+            r_maxpos = t.maxpos;
+            t.elide = !again && !cfg->legacy[b];
+            t.failed = 0;
+            t.permuted = 0;
+            again = 0;
+            int used = Py_MIN(Py_MAX(t.maxpos, blk->startdepth) + 1,
+                              IR_MAX_SLOTS);
+            for (int k = 0; k < used; k++) {
+                t.held[k] = k < blk->startdepth;
+                t.free_since[k] = -1;
+            }
             t.sp = 0;
             for (int k = 0; err == SUCCESS && k < blk->startdepth; k++) {
                 err = _PyRegTr_Push(&t, _PyReg_CANON(cfg, k));
@@ -771,9 +969,28 @@ translate(_PyRegCfg *cfg)
         {
             err = bind_params_below(&t, t.sp);
         }
+        int region_end = b + 1 == n || !cfg->blocks[b + 1].continued;
+        if (err == SUCCESS && region_end && !t.failed) {
+            for (int r = region_b; r <= b; r++) {
+                cfg->elided[r] = t.elide && t.permuted;
+            }
+        }
+        if (err == SUCCESS && region_end && t.failed) {
+            // Again, with SWAP as a word
+            t.nops = t.region_op;
+            cfg->noperands = r_noperands;
+            cfg->nvregs = r_nvregs;
+            t.maxpos = r_maxpos;
+            again = 1;
+            b = region_b - 1;
+        }
     }
+    PyMem_Free(range);
     PyMem_Free(t.stack);
     PyMem_Free(t.def);
+    PyMem_Free(t.natural);
+    PyMem_Free(t.held);
+    PyMem_Free(t.free_since);
     if (err != SUCCESS) {
         PyMem_Free(t.ops);
         return ERROR;
@@ -1078,6 +1295,14 @@ typedef struct {
     int lenient;            // unreachable code, which never runs
     _PyRegOp **reserved;    // folded loads that hold their slot
     int nreserved;
+    /* The parameters' definitions in the current region: canon_head[k]
+     * is the entry of the first, in op order, of CANON(k); an entry is its
+     * op (canon_op) and the next entry (canon_next).  take[] is per fresh
+     * register the last op that reads it, or -1. */
+    int *canon_head;
+    int *canon_op;
+    int *canon_next;
+    int *take;
 } occupancy;
 
 static inline int
@@ -1150,6 +1375,66 @@ occ_take(occupancy *o, int s, int v, const _PyRegOp *op)
     return SUCCESS;
 }
 
+/* Whether a parameter whose home is slot s is defined after op i and
+ * before op last.  A fresh temporary that lives over such a definition
+ * cannot take the slot: SWAP's renames give parameters homes out of stack
+ * order. */
+static int
+canon_defined(const _PyRegCfg *cfg, const occupancy *o, int s, int i,
+              int last)
+{
+    int k = s - cfg->nlocalsplus;
+    if (k < 0 || k >= cfg->ncanon) {
+        return 0;
+    }
+    for (int e = o->canon_head[k]; e >= 0 && o->canon_op[e] < last;
+         e = o->canon_next[e])
+    {
+        if (o->canon_op[e] > i) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static inline int
+take_of(const _PyRegCfg *cfg, const occupancy *o, int v)
+{
+    return v >= _PyReg_FRESH0(cfg) ? o->take[v - _PyReg_FRESH0(cfg)] : INT_MAX;
+}
+
+/* Whether outputs first .. nout - 1 of op i, from slot dst + first, would
+ * meet a later parameter's home, a held slot or an input */
+static int
+fresh_conflict(_PyRegCfg *cfg, occupancy *o, const _PyRegOp *op, int i,
+               int dst, int first, int strict)
+{
+    int nl = cfg->nlocalsplus;
+    const int *in = _PyReg_IN(cfg, op);
+    const int *out = _PyReg_OUT(cfg, op);
+    for (int j = first; j < op->nout; j++) {
+        int s = dst + j;
+        if (out[j] < nl || _PyReg_IS_CANON(cfg, out[j])) {
+            continue;
+        }
+        if (canon_defined(cfg, o, s, i, take_of(cfg, o, out[j]))) {
+            return 1;
+        }
+        if (!strict) {
+            continue;
+        }
+        if (occ_at(o, s - nl) >= 0) {
+            return 1;
+        }
+        for (int k = 0; k < op->nread; k++) {
+            if (in[k] >= nl && _PyRegCfg_Slot(cfg, in[k]) == s) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 static int
 assign(_PyRegCfg *cfg, occupancy *o, int v, int s, const _PyRegOp *op)
 {
@@ -1162,7 +1447,7 @@ assign(_PyRegCfg *cfg, occupancy *o, int v, int s, const _PyRegOp *op)
 }
 
 static int
-compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op)
+compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
 {
     int nl = cfg->nlocalsplus;
     const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
@@ -1204,8 +1489,15 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op)
                 return slot_error(op, "a local in a window");
             }
         }
+        else if (op->nout > 0 && _PyReg_IS_CANON(cfg, out[0])) {
+            // Its output is a parameter, whose home is fixed
+            base = _PyRegCfg_Slot(cfg, out[0]);
+        }
         else {
             base = nl + top_before;
+            while (fresh_conflict(cfg, o, op, i, base, 0, 1)) {
+                base++;
+            }
         }
         op->base = base;
         for (int j = 0; j < op->nout; j++) {
@@ -1265,6 +1557,12 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op)
                         }
                     }
                     dst = high - through;
+                }
+                if (fresh_conflict(cfg, o, op, i, dst, through, 0)) {
+                    dst = Py_MAX(dst + 1, nl + o->top - through);
+                    while (fresh_conflict(cfg, o, op, i, dst, through, 1)) {
+                        dst++;
+                    }
                 }
             }
             for (int j = through; j < op->nout; j++) {
@@ -1371,12 +1669,79 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
         PyErr_NoMemory();
         return ERROR;
     }
-    occupancy o = {.occ = occ, .cap = cap, .top = 0, .reserved = reserved};
+    int nfresh = cfg->nvregs - _PyReg_FRESH0(cfg);
+    int *take = PyMem_Malloc(Py_MAX(nfresh, 1) * sizeof(int));
+    int *canon_head = PyMem_Malloc(Py_MAX(cfg->ncanon, 1) * sizeof(int));
+    int *canon_op = PyMem_Malloc(Py_MAX(cfg->noperands, 1) * sizeof(int));
+    int *canon_next = PyMem_Malloc(Py_MAX(cfg->noperands, 1) * sizeof(int));
+    if (take == NULL || canon_head == NULL || canon_op == NULL
+        || canon_next == NULL)
+    {
+        PyMem_Free(take);
+        PyMem_Free(canon_head);
+        PyMem_Free(canon_op);
+        PyMem_Free(canon_next);
+        PyMem_Free(reserved);
+        PyMem_Free(occ);
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    for (int f = 0; f < nfresh; f++) {
+        take[f] = -1;
+    }
+    for (int i = 0; i < cfg->nops; i++) {
+        _PyRegOp *op = &cfg->ops[i];
+        if (op->opcode == _PyReg_DEAD) {
+            continue;
+        }
+        const int *in = _PyReg_IN(cfg, op);
+        for (int k = 0; k < op->nread + op->nimplicit; k++) {
+            if (in[k] >= _PyReg_FRESH0(cfg)) {
+                take[in[k] - _PyReg_FRESH0(cfg)] = i;
+            }
+        }
+    }
+    occupancy o = {.occ = occ, .cap = cap, .top = 0, .reserved = reserved,
+                   .take = take, .canon_head = canon_head,
+                   .canon_op = canon_op, .canon_next = canon_next};
     int err = SUCCESS;
     for (int b = 0; b < cfg->nblocks && err == SUCCESS; b++) {
         _PyRegBlock *blk = &cfg->blocks[b];
         o.lenient = !blk->reachable;
         if (!blk->continued) {
+            // The parameters that the region defines, in op order
+            int last = b;
+            while (last + 1 < cfg->nblocks && cfg->blocks[last + 1].continued) {
+                last++;
+            }
+            for (int k = 0; k < cfg->ncanon; k++) {
+                canon_head[k] = -1;
+            }
+            int nentries = 0;
+            for (int i = cfg->blocks[last].end - 1; i >= blk->start; i--) {
+                _PyRegOp *op = &cfg->ops[i];
+                if (op->opcode == _PyReg_DEAD) {
+                    continue;
+                }
+                const int *in = _PyReg_IN(cfg, op);
+                const int *out = _PyReg_OUT(cfg, op);
+                for (int j = 0; j < op->nout; j++) {
+                    int v = out[j];
+                    if (!_PyReg_IS_CANON(cfg, v) || v - nl >= cfg->ncanon) {
+                        continue;
+                    }
+                    int passed = 0;
+                    for (int k = 0; k < op->nread + op->nimplicit; k++) {
+                        passed |= in[k] == v;
+                    }
+                    int h = canon_head[v - nl];
+                    if (!passed && (h < 0 || canon_op[h] != i)) {
+                        canon_op[nentries] = i;
+                        canon_next[nentries] = h;
+                        canon_head[v - nl] = nentries++;
+                    }
+                }
+            }
             for (int s = 0; s < o.cap; s++) {
                 o.occ[s] = -1;
             }
@@ -1397,7 +1762,10 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
             _PyRegOp *op = &cfg->ops[i];
             if (op->opcode != _PyReg_DEAD) {
                 release_folded(cfg, &o, i);
-                err = compact_op(cfg, &o, op);
+                err = compact_op(cfg, &o, op, i);
+                if (err != SUCCESS) {
+                    cfg->fail_op = i;
+                }
             }
             else if (op->flags & _PyReg_LOAD_FOLDED) {
                 err = reserve_folded(cfg, &o, op);
@@ -1406,6 +1774,10 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
     }
     PyMem_Free(reserved);
     PyMem_Free(o.occ);
+    PyMem_Free(take);
+    PyMem_Free(canon_head);
+    PyMem_Free(canon_op);
+    PyMem_Free(canon_next);
     RETURN_IF_ERROR(err);
     // The frame holds the values at every region's entry, where the
     // unwinder puts an exception, and every slot that a word names
@@ -1877,9 +2249,50 @@ run_passes(_PyRegCfg *cfg)
     return SUCCESS;
 }
 
-int
-_PyRegCfg_Build(_PyRegCfg *cfg)
+/* The first op of an elided region whose output at its own stack position
+ * does not share the home of the input it replaces, or -1.  Specialised
+ * handlers leave such a value in place (GET_ITER_VIRTUAL keeps the
+ * iterable as its iterator), which only stack order guaranteed. */
+static int
+in_place_violation(const _PyRegCfg *cfg)
 {
+    int nl = cfg->nlocalsplus;
+    for (int b = 0; b < cfg->nblocks; b++) {
+        const _PyRegBlock *blk = &cfg->blocks[b];
+        if (!cfg->elided[b]) {
+            continue;
+        }
+        for (int i = blk->start; i < blk->end; i++) {
+            const _PyRegOp *op = &cfg->ops[i];
+            if (op->opcode == _PyReg_DEAD || op->dst >= 0
+                || (op->flags & _PyReg_DISCARD))
+            {
+                continue;
+            }
+            const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
+            if ((fmt->flags & _PyIR_WINDOW) || fmt->operands != _PyIR_OPERANDS_NONE) {
+                continue;
+            }
+            const int *in = _PyReg_IN(cfg, op);
+            const int *out = _PyReg_OUT(cfg, op);
+            for (int j = _PyRegOp_Through(op, fmt); j < op->nout; j++) {
+                int q = op->nread - op->npop + j;
+                if (q >= op->nread || out[j] < nl || in[q] < nl) {
+                    continue;
+                }
+                if (_PyRegCfg_Slot(cfg, out[j]) != _PyRegCfg_Slot(cfg, in[q])) {
+                    return i;
+                }
+            }
+        }
+    }
+    return -1;
+}
+
+static int
+build_once(_PyRegCfg *cfg)
+{
+    cfg->fail_op = -1;
     RETURN_IF_ERROR(translate(cfg));
     RETURN_IF_ERROR(run_passes(cfg));
     int err = _PyRegCfg_Compact(cfg);
@@ -1888,9 +2301,97 @@ _PyRegCfg_Build(_PyRegCfg *cfg)
     if (verify_wanted()) {
         RETURN_IF_ERROR(_PyRegCfg_Verify(cfg, "compaction", 1));
     }
+    int bad = in_place_violation(cfg);
+    if (bad >= 0) {
+        cfg->fail_op = bad;
+        PyErr_SetString(PyExc_SystemError,
+                        "register allocation: an in-place output moved");
+        return ERROR;
+    }
     return SUCCESS;
 }
 
+/* The region head of the block that holds op i, if that region was elided,
+ * or -1 */
+static int
+elided_region_of(const _PyRegCfg *cfg, int i)
+{
+    if (i < 0 || i >= cfg->nops) {
+        return -1;
+    }
+    for (int b = 0; b < cfg->nblocks; b++) {
+        if (i >= cfg->blocks[b].start && i < cfg->blocks[b].end) {
+            if (!cfg->elided[b]) {
+                return -1;
+            }
+            while (b > 0 && cfg->blocks[b].continued) {
+                b--;
+            }
+            return b;
+        }
+    }
+    return -1;
+}
+
+/* Allocation is the judge of the homes that renaming gave: a region whose
+ * permuted identities it cannot place translates again with its SWAPs as
+ * words.  After a few rounds every region does. */
+#define BUILD_ROUNDS 4
+
+int
+_PyRegCfg_Build(_PyRegCfg *cfg)
+{
+    int n = cfg->nblocks, nops = cfg->nops;
+    cfg->elided = PyMem_Calloc(Py_MAX(n, 1), 1);
+    cfg->legacy = PyMem_Calloc(Py_MAX(n, 1), 1);
+    _PyRegOp *ops = PyMem_Malloc(Py_MAX(nops, 1) * sizeof(_PyRegOp));
+    _PyRegBlock *blocks = PyMem_Malloc(Py_MAX(n, 1) * sizeof(_PyRegBlock));
+    if (cfg->elided == NULL || cfg->legacy == NULL || ops == NULL
+        || blocks == NULL)
+    {
+        PyMem_Free(ops);
+        PyMem_Free(blocks);
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    memcpy(ops, cfg->ops, nops * sizeof(_PyRegOp));
+    memcpy(blocks, cfg->blocks, n * sizeof(_PyRegBlock));
+    int nvregs = cfg->nvregs, noperands = cfg->noperands;
+    int err = SUCCESS;
+    for (int round = 0;; round++) {
+        err = build_once(cfg);
+        if (err == SUCCESS || !PyErr_ExceptionMatches(PyExc_SystemError)) {
+            break;
+        }
+        int head = elided_region_of(cfg, cfg->fail_op);
+        if (head < 0) {
+            break;
+        }
+        PyErr_Clear();
+        if (round + 1 < BUILD_ROUNDS) {
+            cfg->legacy[head] = 1;
+        }
+        else {
+            memset(cfg->legacy, 1, n);
+        }
+        // Again from the stack ops
+        err = grow((void **)&cfg->ops, &cfg->aops, nops, sizeof(_PyRegOp));
+        if (err != SUCCESS) {
+            break;
+        }
+        memcpy(cfg->ops, ops, nops * sizeof(_PyRegOp));
+        cfg->nops = nops;
+        memcpy(cfg->blocks, blocks, n * sizeof(_PyRegBlock));
+        memset(cfg->elided, 0, n);
+        cfg->nvregs = nvregs;
+        cfg->noperands = noperands;
+        cfg->ncanon = IR_MAX_SLOTS;
+        cfg->ntemps = 0;
+    }
+    PyMem_Free(ops);
+    PyMem_Free(blocks);
+    return err;
+}
 
 /* Constant slots (G6), after the passes and compaction have run */
 

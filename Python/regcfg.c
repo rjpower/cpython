@@ -27,6 +27,7 @@
 #include "pycore_opcode_utils.h"      // IS_SCOPE_EXIT_OPCODE()
 #include "pycore_pystate.h"           // _Py_GetConfig()
 #include "pycore_regcfg.h"
+#include "pycore_rop_metadata.h"      // ROP_HANDLER_Add_Generic
 
 #undef SUCCESS
 #undef ERROR
@@ -1016,8 +1017,29 @@ rule_swap(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Emit(t, src, NOP, NULL, 0, NULL, 0, NULL);
 }
 
+/* BINARY_OP.  Addition is the Add family (Python/register_ops/add.rop): its
+ * register instruction is Add.Generic's, with the family's operands in their
+ * declared order, x and y in, dst out.  The word starts on that arm, which
+ * installs the arm the operands call for.  The other operations are
+ * unported. */
+static int
+rule_binary_op(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (src->oparg != NB_ADD) {
+        return _PyRegTr_Legacy(t, src);
+    }
+    int uses[2];
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 2, uses));
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Add_Generic, uses, 2,
+                                  &dst, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
+    [BINARY_OP] = rule_binary_op,
     [SWAP] = rule_swap,
 };
 
@@ -2773,6 +2795,7 @@ dump(const _PyRegCfg *cfg, const char *after)
         for (int i = blk->start; i < blk->end; i++) {
             const _PyRegOp *op = &cfg->ops[i];
             const char *name = op->opcode == _PyReg_DEAD ? "(dead)"
+                               : op->opcode >= ROP_FIRST_HANDLER ? "(arm)"
                                : _PyOpcode_OpName[op->opcode];
             fprintf(stderr, "  %4d %-24s %3d", op->loc.lineno, name, op->oparg);
             const int *out = _PyReg_OUT(cfg, op);

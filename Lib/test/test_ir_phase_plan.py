@@ -15,7 +15,7 @@ def binary_code():
         return ["surviving scratch owner", left + right]
 
     rows = _testinternalcapi.get_ir(template.__code__)
-    assert [row[0] for row in rows if row[0].startswith("BINARY_OP")] == ["BINARY_OP_ADD"]
+    assert [row[0] for row in rows if row[0].startswith("Add.")] == ["Add.Generic"]
     return template.__code__
 
 

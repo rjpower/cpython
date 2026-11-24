@@ -310,6 +310,12 @@ class ForceArmTests(unittest.TestCase):
             self.assertEqual(ir_dis._all_opname[handler], name)
             self.assertEqual(ir_dis._all_opmap[name], handler)
 
+    def test_ir_dis_output_names_a_forced_arm_word(self):
+        capi.force_arm(self.code, self.offset, "Add.Int")
+        handlers = [i.handler for i in
+                    ir_dis.get_instructions(self.code, adaptive=True)]
+        self.assertIn("Add.Int", handlers)
+
     def test_dis_reads_the_stack_ops_of_a_function_with_an_arm_word(self):
         before = [(i.opname, i.offset) for i in dis.get_instructions(self.code)]
         capi.force_arm(self.code, self.offset, "Add.Int")

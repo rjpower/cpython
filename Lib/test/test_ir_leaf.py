@@ -8,6 +8,7 @@ import random
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 from test import test_generated_cases as generated
 from test import test_tools
@@ -373,36 +374,62 @@ def analyze(source):
             return generated.analyzer.analyze_files([str(path)]).uops
 
 
+SPAM_ROWS = """
+#define SPAM_ROWS(PRIMITIVE, HELPER, MACRO) \\
+    MACRO(SPAM, ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(reads), EXITS())
+"""
+
+# Declarations of the refusals' uops: one that reads a borrowed value and
+# makes a new one, and one that passes its consumed value through; each with
+# the exits of a body that guards and of one that does not
+READS = ("(value: borrowed -- res: inline)", "effects(reads) exits(next)")
+PASSES = ("(value: consumed -- res: moved(value))", "effects(reads) exits(next)")
+PASSES_OBJECT = ("(value: consumed object -- res: moved(value))", "effects(reads) exits(next)")
+GUARDS = "exits(next, miss)"
+
+def guarded(declaration):
+    "The declaration of a uop whose body can also exit by a miss"
+    stack, clauses = declaration
+    return stack, clauses.replace("exits(next)", GUARDS)
+
+
 # Bodies outside the subset, and the construct the checker names
 REFUSALS = {
-    "a for loop": """
+    "a for loop": (guarded(READS), """
         for (int i = 0; i < 3; i++) {
             EXIT_IF(i);
-        }""",
+        }"""),
     "a call of SPAM, which is neither a listed primitive nor a declared helper":
-        "res = PyValue_FromInlineInt(SPAM(value));",
+        (READS, "res = PyValue_FromInlineInt(SPAM(value, 0, 0));"),
     # A row without a model of its own (a HELPER row, V11) or of another build
     "a call of PyValue_TYPE, which is neither a listed primitive nor a declared helper":
-        "res = PyValue_FromInlineInt(PyValue_TYPE(value)->tp_flags);",
+        (READS, "res = PyValue_FromInlineInt(PyValue_TYPE(value)->tp_flags);"),
     "a call of _Py_IsOwnedByCurrentThread, which is neither a listed primitive nor a declared "
-    "helper": "EXIT_IF(_Py_IsOwnedByCurrentThread(value)); res = value; DEAD(value);",
+    "helper": (guarded(PASSES), "EXIT_IF(_Py_IsOwnedByCurrentThread(value)); res = value; DEAD(value);"),
     "untyped memory":
-        "char *p = (char *)PyValue_AsKnownObjectBorrow(value); res = value; DEAD(value);",
-    "field PyTypeObject.tp_as_mapping is not listed": """
+        (PASSES_OBJECT, "char *p = (char *)PyValue_AsKnownObjectBorrow(value); res = value; DEAD(value);"),
+    "field PyTypeObject.tp_as_mapping is not listed": (guarded(PASSES_OBJECT), """
         EXIT_IF(Py_TYPE(PyValue_AsKnownObjectBorrow(value))->tp_as_mapping == NULL);
-        res = value; DEAD(value);""",
-    "the evaluator's tstate": "EXIT_IF(tstate == NULL); res = value; DEAD(value);",
+        res = value; DEAD(value);"""),
+    "the evaluator's tstate": (guarded(PASSES), "EXIT_IF(tstate == NULL); res = value; DEAD(value);"),
     "_Py_EvalBreakerHasEvents's first argument is not tstate":
-        "EXIT_IF(_Py_EvalBreakerHasEvents(frame)); res = value; DEAD(value);",
-    "a value used as a condition": "EXIT_IF(value); res = value; DEAD(value);",
+        (guarded(PASSES), "EXIT_IF(_Py_EvalBreakerHasEvents(frame)); res = value; DEAD(value);"),
+    "a value used as a condition": (guarded(PASSES), "EXIT_IF(value); res = value; DEAD(value);"),
 }
 
 
 class CheckerTests(unittest.TestCase):
+    def setUp(self):
+        # SPAM stands for a function that is no primitive: a declared body
+        # calls only rows
+        rows = mock.patch.dict(ir_contract.rows(), ir_contract.parse_rows(SPAM_ROWS))
+        rows.start()
+        self.addCleanup(rows.stop)
+
     def test_refusals(self):
-        for expected, body in REFUSALS.items():
+        for expected, ((stack, clauses), body) in REFUSALS.items():
             with self.subTest(expected):
-                uop = analyze(f"op(_OP, (value -- res)) {{ {body} }}")["_OP"]
+                uop = analyze(f"op(_OP, {stack}) {clauses} {{ {body} }}")["_OP"]
                 with self.assertRaises(ir_leaf.LeafError) as cm:
                     ir_leaf.translate(uop)
                 self.assertIn(expected, str(cm.exception))
@@ -427,17 +454,20 @@ class CheckerTests(unittest.TestCase):
             self.assertFalse(hasattr(ir_leaf, name))
 
     def test_array_operand(self):
-        uop = analyze("op(_OP, (values[oparg] -- )) { DECREF_INPUTS(); }")["_OP"]
+        uop = analyze("""
+            op(_OP, (values[oparg]: consumed --)) effects(releases) exits(next) {
+                DECREF_INPUTS();
+            }""")["_OP"]
         with self.assertRaisesRegex(ir_leaf.LeafError, r"array input values\[oparg\]"):
             ir_leaf.translate(uop)
 
     def test_annotated_uop_must_be_leaf(self):
         uops = analyze("""
-            leaf op(_OK, (value -- value)) {
+            leaf op(_OK, (value -- value: inline_int)) effects() exits(next, miss) {
                 EXIT_IF(!PyValue_IsInlineInt(value));
             }
-            leaf op(_BAD, (value -- res)) {
-                res = PyValue_FromInlineInt(SPAM(value));
+            leaf op(_BAD, (value: borrowed -- res: inline)) effects(reads) exits(next) {
+                res = PyValue_FromInlineInt(SPAM(value, 0, 0));
             }""")
         records = {}
         for name, uop in uops.items():
@@ -450,7 +480,8 @@ class CheckerTests(unittest.TestCase):
 
     def test_translation(self):
         uop = analyze("""
-            op(_OP, (value -- res, v)) {
+            op(_OP, (value: consumed -- res: inline, v: moved(value) inline_int))
+                effects() exits(next, miss) {
                 EXIT_IF(!PyValue_IsInlineInt(value));
                 res = PyValue_IsNone(value) ? PyValue_False : PyValue_True;
                 v = value;

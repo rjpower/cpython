@@ -9,24 +9,38 @@ from test import test_ir_scalar_storage
 
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
+    import ir_contract
     import ir_error_effects
     import ir_generator
 
 
+# The declared contracts of the fixtures: the input is closed on every
+# path to next (and kept on raise, `taken`, where the body closes it only
+# after its error exits) or closed before any exit (`consumed`)
+FALLIBLE_TAKEN = ("value: taken -- out: owned",
+                  "effects(runs_python, releases) exits(next, raise)")
+FALLIBLE_CONSUMED = ("value: consumed -- out: owned",
+                     "effects(runs_python, releases) exits(next, raise)")
+INFALLIBLE = "value: consumed -- out: owned", "effects(releases) exits(next)"
+# An input that is an object: the body reads its object pointer
+OBJECT_INPUT = ("value: consumed object -- out: owned",
+                "effects(runs_python, releases) exits(next, raise)")
+OBJECT_TAKEN = ("value: taken object -- out: owned",
+                "effects(runs_python, releases) exits(next, raise)")
+
+
 class ScalarResultTests(unittest.TestCase):
-    def program(self, body, **kw):
-        # A conversion to an object needs the input asserted to be one
-        assertion = ("assert(PyValue_IsObject(value)); "
-                     if "AsKnownObject" in body else "")
+    def program(self, body, declaration, **kw):
+        stack, contract = declaration
         return test_ir_scalar_storage.ScalarStorageTests().program(
-            "inst(SAMPLE, (value -- out)) { " + assertion + body + " }", **kw)
+            f"inst(SAMPLE, ({stack})) {contract} {{ {body} }}", **kw)
 
     def test_nullable_native_result_uses_distinct_selected_guard_arms(self):
         contract = self.program("""
             out = _PyValue_Invert(value);
             if (PyValue_IsNull(out)) { ERROR_NO_POP(); }
             PyValue_CLOSE(value);
-        """, scratch_result=True)
+        """, FALLIBLE_TAKEN, scratch_result=True)
         self.assertEqual(len(contract.error_checkpoints), 1)
         error = contract.error_checkpoints[0]
         self.assertEqual(error.actions[-1].kind, "_PyIR_OWNER_STORAGE_GUARD")
@@ -49,17 +63,19 @@ class ScalarResultTests(unittest.TestCase):
             PyValue_CLOSE(value);
             ERROR_IF(PyValue_IsNull(result));
             out = result;
-        """, scratch_result=True)
+        """, FALLIBLE_CONSUMED, scratch_result=True)
         self.assertEqual(len(contract.error_checkpoints), 1)
         self.assertIsNotNone(contract.normal_storage)
+        # A guard that does not test exactly the null result leaves the
+        # owner held on the error exit, which the verifier refuses
         for condition in ("oparg", "PyValue_IsNull(result) && oparg"):
-            with self.subTest(condition=condition):
-                unknown = self.program(f"""
+            with self.subTest(condition=condition), self.assertRaisesRegex(
+                    SyntaxError, "on raise, the new owner `result` is still held"):
+                self.program(f"""
                     PyValue result = _PyValue_Invert(value);
                     PyValue_CLOSE(value);
                     ERROR_IF({condition}); out = result;
-                """, scratch_result=True)
-                self.assertFalse(unknown.error_checkpoints)
+                """, FALLIBLE_CONSUMED, scratch_result=True)
 
     def test_current_identity_requires_the_actual_operation_context(self):
         capability = ir_generator.current_operation_preserves_scratch
@@ -69,7 +85,7 @@ class ScalarResultTests(unittest.TestCase):
                 out = _PyValue_Invert(value);
                 if (PyValue_IsNull(out)) { ERROR_NO_POP(); }
                 PyValue_CLOSE(value);
-            """)
+            """, FALLIBLE_TAKEN)
         instruction, fmt, source = emitted.call_args.args
         self.assertTrue(capability(instruction, fmt, source))
         self.assertFalse(capability(instruction, fmt, None))
@@ -90,7 +106,7 @@ class ScalarResultTests(unittest.TestCase):
                     out = _PyValue_Invert(value);
                     if (PyValue_IsNull(out)) { ERROR_NO_POP(); }
                     PyValue_CLOSE(value);
-                """, scratch_result=True)
+                """, FALLIBLE_TAKEN, scratch_result=True)
                 self.assertFalse(contract.error_checkpoints)
                 self.assertIsNone(contract.normal_storage)
 
@@ -106,62 +122,74 @@ class ScalarResultTests(unittest.TestCase):
                     ir_generator, "emit_handler", frame_exit):
                 self.assertIsNone(self.program(
                     "out = PyValue_FromInlineInt(1); PyValue_CLOSE(value);",
-                    scratch_result=True).normal_storage)
+                    INFALLIBLE, scratch_result=True).normal_storage)
 
     def test_inline_result_has_explicit_canonical_nonnull_contract(self):
         contract = self.program("out = PyValue_FromInlineInt(1); PyValue_CLOSE(value);",
-                                scratch_result=True)
+                                INFALLIBLE, scratch_result=True)
         self.assertIsNotNone(contract.normal_storage)
         results = [a for a in contract.normal_storage.actions
                    if a.kind == "_PyIR_OWNER_STORAGE_RESULT"]
         self.assertEqual([a.flags for a in results], [3])
 
-    def test_a_second_pending_owner_cannot_disappear_on_null_error(self):
-        contract = self.program("""
-            PyValue held = TAKE(value);
-            PyValue first = _PyValue_Invert(held);
-            PyValue second = _PyValue_Invert(held);
-            PyValue_CLOSE(held);
-            ERROR_IF(PyValue_IsNull(second));
-            PyValue_XCLOSE(first);
-            out = second;
-        """, scratch_result=True)
-        self.assertFalse(contract.error_checkpoints)
+    def test_a_second_pending_owner_is_refused_on_null_error(self):
+        # The first result is still held when the second one raises: the
+        # verifier refuses it, where the generator once gave it no checkpoint
+        with self.assertRaisesRegex(
+                SyntaxError, "on raise, the new owner `first` is still held"):
+            self.program("""
+                PyValue held = TAKE(value);
+                PyValue first = _PyValue_Invert(held);
+                PyValue second = _PyValue_Invert(held);
+                PyValue_CLOSE(held);
+                ERROR_IF(PyValue_IsNull(second));
+                PyValue_XCLOSE(first);
+                out = second;
+            """, FALLIBLE_CONSUMED, scratch_result=True)
 
-    def test_borrowed_object_projection_cannot_become_an_owned_value(self):
-        contract = self.program("""
-            out = PyValue_FromObjectSteal(PyValue_AsKnownObjectBorrow(value));
-            PyValue_CLOSE(value);
-            ERROR_IF(oparg);
-        """, scratch_result=True)
-        # An input-boxing error before the bad conversion may still have
-        # an incoming-frame certificate. No result producer may be granted.
-        self.assertFalse(any(a.kind == "_PyIR_OWNER_STORAGE_RESULT"
-                             for cp in contract.error_checkpoints for a in cp.actions))
-        self.assertIsNone(contract.normal_storage)
+    def test_borrowed_object_projection_is_refused_as_an_owned_value(self):
+        # The verifier refuses the steal of a borrowed projection before any
+        # result producer is considered
+        with self.assertRaisesRegex(
+                SyntaxError, r"`PyValue_AsKnownObjectBorrow \( value \)` is assigned "
+                "to an output, but it is no row with a value result"):
+            self.program("""
+                out = PyValue_FromObjectSteal(PyValue_AsKnownObjectBorrow(value));
+                PyValue_CLOSE(value);
+                ERROR_IF(oparg);
+            """, OBJECT_INPUT, scratch_result=True)
 
     def test_owned_object_conversion_needs_its_actual_nonnull_guard(self):
-        for guard in ("", "if (object == NULL) { ERROR_NO_POP(); }"):
-            with self.subTest(guard=guard):
-                contract = self.program(f"""
-                    PyObject *object = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(value));
-                    {guard}
-                    out = PyValue_FromObjectSteal(object);
-                    PyValue_CLOSE(value);
-                """, scratch_result=True)
-                self.assertEqual(contract.normal_storage is not None, bool(guard))
+        guard = "if (object == NULL) { ERROR_NO_POP(); }"
+        body = """
+            PyObject *object = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(value));
+            %s
+            out = PyValue_FromObjectSteal(object);
+            PyValue_CLOSE(value);
+        """
+        contract = self.program(body % guard, OBJECT_TAKEN, scratch_result=True)
+        self.assertIsNotNone(contract.normal_storage)
+        # Without the guard the verifier refuses the possibly NULL result
+        with self.assertRaisesRegex(
+                SyntaxError, "`out` may be NULL from object, and nothing raises on it"):
+            self.program(body % "", OBJECT_TAKEN, scratch_result=True)
 
     def test_object_nonnull_join_intersects_both_actual_predecessors(self):
         guard = "if (object == NULL) { ERROR_NO_POP(); }"
-        for other in ("", guard):
-            with self.subTest(other=other):
-                contract = self.program(f"""
-                    PyObject *object = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(value));
-                    if (oparg) {{ {guard} }} else {{ {other} }}
-                    out = PyValue_FromObjectSteal(object);
-                    PyValue_CLOSE(value);
-                """, scratch_result=True)
-                self.assertEqual(contract.normal_storage is not None, bool(other))
+        body = """
+            PyObject *object = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(value));
+            if (oparg) {{ {guard} }} else {{ {other} }}
+            out = PyValue_FromObjectSteal(object);
+            PyValue_CLOSE(value);
+        """
+        contract = self.program(body.format(guard=guard, other=guard),
+                                OBJECT_TAKEN, scratch_result=True)
+        self.assertIsNotNone(contract.normal_storage)
+        # One unguarded predecessor leaves the result possibly NULL
+        with self.assertRaisesRegex(
+                SyntaxError, "`out` may be NULL from object, and nothing raises on it"):
+            self.program(body.format(guard=guard, other=""),
+                         OBJECT_TAKEN, scratch_result=True)
 
     def test_normal_readability_needs_the_actual_publication_receipt(self):
         original = ir_generator.IRStack.publish_field
@@ -173,30 +201,59 @@ class ScalarResultTests(unittest.TestCase):
         with mock.patch.object(ir_generator.IRStack, "publish_field", uncovered):
             self.assertIsNone(self.program(
                 "out = PyValue_FromInlineInt(1); PyValue_CLOSE(value);",
-                scratch_result=True).normal_storage)
+                INFALLIBLE, scratch_result=True).normal_storage)
 
     def test_null_guard_follows_the_current_alias_not_an_old_name(self):
-        for replacement in ("", "alias = PyValue_None;"):
-            with self.subTest(replacement=replacement):
-                contract = self.program(f"""
-                    PyValue result = _PyValue_Invert(value);
-                    PyValue alias = result;
-                    PyValue_CLOSE(value);
-                    {replacement}
-                    ERROR_IF(PyValue_IsNull(alias));
-                    out = result;
-                """, scratch_result=True)
-                self.assertEqual(bool(contract.error_checkpoints), not replacement)
+        # The assignment to the alias moves the owner into it: the guard
+        # on the alias is the guard on the result
+        contract = self.program("""
+            PyValue result = _PyValue_Invert(value);
+            PyValue alias = result;
+            PyValue_CLOSE(value);
+            ERROR_IF(PyValue_IsNull(alias));
+            out = alias;
+        """, FALLIBLE_CONSUMED, scratch_result=True)
+        self.assertTrue(contract.error_checkpoints)
+        # The old name no longer owns the result, and the alias that holds
+        # it cannot be reassigned
+        with self.assertRaisesRegex(
+                SyntaxError, "moves `result`, which is already consumed or moved"):
+            self.program("""
+                PyValue result = _PyValue_Invert(value);
+                PyValue alias = result;
+                PyValue_CLOSE(value);
+                ERROR_IF(PyValue_IsNull(alias));
+                out = result;
+            """, FALLIBLE_CONSUMED, scratch_result=True)
+        with self.assertRaisesRegex(
+                SyntaxError, "`alias` is assigned while it holds an owner"):
+            self.program("""
+                PyValue result = _PyValue_Invert(value);
+                PyValue alias = result;
+                PyValue_CLOSE(value);
+                alias = PyValue_None;
+                ERROR_IF(PyValue_IsNull(alias));
+                out = result;
+            """, FALLIBLE_CONSUMED, scratch_result=True)
 
     def test_one_uncovered_sibling_revokes_normal_family_readability(self):
-        for extra in ("", "opaque(oparg);"):
-            with self.subTest(extra=extra):
+        # `opaque` stands for a function that may run any code
+        rows = ir_contract.parse_rows("""
+            #define OPAQUE_ROWS(PRIMITIVE, HELPER, MACRO) \\
+                HELPER(opaque, void, (int), ARGS(scalar), NONE, EFFECTS(runs_python))
+        """)
+        for extra, effects in (("", "releases"), ("opaque(oparg);", "runs_python")):
+            with self.subTest(extra=extra), mock.patch.dict(ir_contract.rows(), rows):
                 contract = test_ir_scalar_storage.ScalarStorageTests().program(f"""
                     family(UNARY_INVERT, 0) = {{ UNARY_NOT }};
-                    inst(UNARY_INVERT, (value -- out)) {{
+                    inst(UNARY_INVERT, (value: consumed -- out: owned))
+                        effects(releases) exits(next)
+                    {{
                         out = PyValue_FromInlineInt(1); PyValue_CLOSE(value);
                     }}
-                    inst(UNARY_NOT, (value -- out)) {{
+                    inst(UNARY_NOT, (value: consumed -- out: owned))
+                        effects({effects}) exits(next)
+                    {{
                         out = PyValue_FromInlineInt(1); PyValue_CLOSE(value); {extra}
                     }}
                 """, name="UNARY_INVERT")
@@ -204,10 +261,14 @@ class ScalarResultTests(unittest.TestCase):
 
     def test_stack_only_format_has_no_emitted_family_certificate(self):
         source = """
-            inst(SAMPLE, (value -- out)) {
+            inst(SAMPLE, (value: consumed -- out: owned))
+                effects(releases) exits(next)
+            {
                 out = PyValue_FromInlineInt(1); PyValue_CLOSE(value);
             }
-            pure inst(PUSH_NULL, (-- out)) { out = PyValue_NULL; }
+            pure inst(PUSH_NULL, (-- out: owned null))
+                effects() exits(next)
+            { out = PyValue_NULL; }
         """
         helper = test_ir_scalar_storage.ScalarStorageTests()
         self.assertIsNotNone(helper.program(source, scratch_result=True).normal_storage)

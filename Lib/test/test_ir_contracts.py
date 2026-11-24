@@ -28,7 +28,6 @@ from test import test_tools
 ir_generator = cases.ir_generator
 with test_tools.imports_under_tool("cases_generator"):
     import ir_contract
-    import ir_contract_diff
     import ir_error_effects
     import ir_leaf
     import ir_records
@@ -140,286 +139,6 @@ class SliceTests(unittest.TestCase):
                     inferred.add(exits[ir_records.GUARD_TOKENS[name]])
                 inferred -= TABLE_OVER_DECLARED.get(name, set())
                 self.assertLessEqual(inferred - {"next"}, set(table[name].exits))
-
-    # The reviewed corrections of G0c, each listed with its evidence in the
-    # batch's differences.md and in the commit that made it.  Batch 8:
-    # INSTRUMENTED_JUMP takes PROCESS_ERROR_AT when the event fails, so
-    # _MONITOR_END_ASYNC_FOR may raise.  G0d1: it leaves by the redirect exit
-    # when a callback redirects the frame, which the record cannot say
-    LISTED_DIFFERENCES = [
-        # G0d1: a handler that never runs ends the process (Py_FatalError):
-        # its one exit is abort, for which the record has no transfer
-        'CACHE/_CACHE: declares exits(abort), the record has ',
-        'IR_OPERANDS/_IR_OPERANDS: declares exits(abort), the record has ',
-        'RESERVED/_RESERVED: declares exits(abort), the record has ',
-        'INSTRUMENTED_END_ASYNC_FOR/_MONITOR_END_ASYNC_FOR: declares exits(next, '
-        'raise, redirect), the record has next',
-        # Batch 7: no word executes RETURN_GENERATOR, so its result is NULL
-        # (F19); _GUARD_TOS_IS_NONE tests the identity of the word with
-        # PyValue_None (F20)
-        'RETURN_GENERATOR.record.uops[0].results: inferred 0 entries [], '
-        'declared 1 [{"__type": "Fact", "arg": "null", "kind": "ENCODING", '
-        '"subject": "v0"}]',
-        *(line
-          for handler in ("SEND_VIRTUAL", "SEND_VIRTUAL_XFER_DISCARD",
-                          "SEND_VIRTUAL_XFER_HOME", "SEND_VIRTUAL_XFER_POP_TOP",
-                          "SEND_VIRTUAL_XFER_RETURN", "SEND_VIRTUAL_XFER_STORE_FAST",
-                          "SEND_VIRTUAL_XFER_STORE_LOCAL")
-          for line in (
-              f'{handler}.record.uops[0].guards[0].facts[0].arg: '
-              'inferred "", declared "PyValue_None"',
-              f'{handler}.record.uops[0].guards[0].facts[0].kind: '
-              'inferred "IS_NONE", declared "IDENTITY"')),
-        # G0c9: _TO_BOOL_NONE's guard states the identity of the word with
-        # PyValue_None, as _GUARD_TOS_IS_NONE's does (F20)
-        *(line
-          for handler in ("POP_JUMP_IF_FALSE_NONE", "POP_JUMP_IF_TRUE_NONE",
-                          "TO_BOOL_NONE")
-          for line in (
-              f'{handler}.record.uops[0].guards[0].facts[0].arg: '
-              'inferred "", declared "PyValue_None"',
-              f'{handler}.record.uops[0].guards[0].facts[0].kind: '
-              'inferred "IS_NONE", declared "IDENTITY"')),
-        # G0c9: _GET_ITER's second result is a tagged index or NULL
-        # (_PyEval_GetIter's row, G0a5's representation table)
-        'GET_ITER.record.uops[1].results: inferred 0 entries [], declared 1 '
-        '[{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", '
-        '"subject": "v2"}]',
-        # G0c9: _SEND_ASYNC_GEN's body completes in place (it reaches the end
-        # of the body, `next`); SEND_ASYNC_GEN_XFER_DISCARD's yield is its
-        # fused transfer's, which G0d takes from the declaration
-        'SEND_ASYNC_GEN_XFER_DISCARD/_SEND_ASYNC_GEN: declares exits(branch, next, raise), '
-        'the record has branch, raise, yield',
-        # G3a: a RETURN variant's completion returns (its boundary(...) clause,
-        # completes(RETURN: exits(return, raise))) where the uop branches
-        'SEND_ASYNC_GEN_XFER_RETURN/_SEND_ASYNC_GEN: declares exits(branch, next, raise), '
-        'the record has raise, return, yield',
-        'CLEANUP_THROW_XFER_RETURN/_CLEANUP_THROW: declares exits(branch, raise), '
-        'the record has raise, return',
-        # G3a: SWAP's exchange keeps every home (pass-throughs); the walk
-        # reads the copies as a consume of each input, and each output as
-        # the other input's value, whose count moves to it (ALIAS, from
-        # the declared moved(x) since G0d1).  A record from the
-        # declaration reads Item.exchange.
-        'SWAP/_SWAP: input `bottom` is declared a pass-through, the record has CONSUMED',
-        'SWAP/_SWAP: input `top` is declared a pass-through, the record has CONSUMED',
-        'SWAP/_SWAP: output `bottom` is declared a pass-through, the record has ALIAS',
-        'SWAP/_SWAP: output `top` is declared a pass-through, the record has ALIAS',
-        # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
-        # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
-        'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '
-        '[{"__type": "Fact", "arg": "null", "kind": "ENCODING", "subject": "v1"}]',
-        'LOAD_FAST_CHECK.record.format.runs_code: inferred false, declared true',
-        'LOAD_FAST_CHECK.record.uops[0].effects: inferred 2 entries '
-        '["MAY_RAISE", "READS_HEAP"], declared 6 ["ALLOCATES", "MAY_RAISE", '
-        '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
-        # Batch 4: the raise paths of LOAD_LOCALS and LOAD_DEREF can run
-        # Python (F11); LOAD_GLOBAL_BUILTIN's fact names the local it reads
-        'LOAD_DEREF.record.format.runs_code: inferred false, declared true',
-        'LOAD_DEREF.record.uops[0].effects: inferred 2 entries '
-        '["MAY_RAISE", "READS_HEAP"], declared 6 ["ALLOCATES", "MAY_RAISE", '
-        '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
-        'LOAD_LOCALS.record.format.runs_code: inferred false, declared true',
-        'LOAD_LOCALS.record.uops[0].effects: inferred 2 entries '
-        '["MAY_RAISE", "READS_HEAP"], declared 6 ["ALLOCATES", "MAY_RAISE", '
-        '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
-        'LOAD_GLOBAL_BUILTIN.record.uops[1].guards[0].facts[0].subject: '
-        'inferred "builtins", declared "dict"',
-        # G0d2 (analyzer and effect_sites read the rows): MATERIALIZE_KWARGS,
-        # BUILD_TEMPLATE and BUILD_LIST no longer differ.
-        # A call escapes where its row declares a reentry effect, and the
-        # inference reads an escape as every effect at once: the frame pushes
-        # release the callable (call_push_exact), while the declaration says
-        # which effects they have; the inference of the builders reads the
-        # rows of their calls, which state fewer effects than the uop declares
-        'BUILD_INTERPOLATION.record.uops[0].effects: inferred 3 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE"], declared 6 ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
-        'BUILD_SLICE.record.uops[0].effects: inferred 3 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE"], declared 6 ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
-        'SET_FUNCTION_ATTRIBUTE.record.uops[0].effects: inferred 1 entries ["WRITES_HEAP"], declared 2 ["READS_HEAP", "WRITES_HEAP"]',
-        'CALL_BOUND_METHOD_EXACT_ARGS.record.uops[7].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
-        'CALL_PY_EXACT_ARGS.record.uops[5].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
-        'CALL/_DO_CALL: declares exits(enter, next, raise), the record has enter, raise',
-        'CALL_BOUND_METHOD_GENERAL/_PY_FRAME_GENERAL: declares exits(enter, next, raise), the record has enter, raise',
-        'CALL_EX_NON_PY_GENERAL/_CALL_FUNCTION_EX_NON_PY_GENERAL: declares exits(enter, next, raise), the record has enter, raise',
-        'CALL_EX_PY/_PY_FRAME_EX: declares exits(enter, next, raise), the record has enter, raise',
-        'CALL_FUNCTION_EX/_DO_CALL_FUNCTION_EX: declares exits(enter, next, raise), the record has enter, raise',
-        'CALL_KW/_DO_CALL_KW: declares exits(enter, next, raise), the record has enter, raise',
-        'CALL_KW_BOUND_METHOD/_PY_FRAME_KW: declares exits(enter, next, raise), the record has enter, raise',
-        'CALL_KW_NON_PY/_CALL_KW_NON_PY: declares exits(enter, next, raise), the record has enter, raise',
-        'CALL_KW_PY/_PY_FRAME_KW_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
-        'CALL_PY_GENERAL/_PY_FRAME_GENERAL_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
-        # G0d2: _SEND and _SEND_VIRTUAL are declared, with the cursor by
-        # value under distinct names (`index` in, `next_index` out, F16), as
-        # G0d4's iterator uops are: the inference reads the handlers with
-        # their declarations removed, and takes the renamed cursor for a push
-        # (format and output lines) where the declaration marks the replaced
-        # cursor changed.  SEND_GEN and SEND_ASYNC_GEN share the group's
-        # format.  _SEND may enter a generator or run to the end of its body
-        # (exits next), _SEND_VIRTUAL's fused transfers yield in place of its
-        # next, as SEND_ASYNC_GEN's do
-        'SEND.record.format.dst_offset: inferred 1, declared 2',
-        'SEND.record.outputs[1][1]: inferred -1, declared 1',
-        'SEND.record.outputs[1][2].name: inferred "next_index", declared "unused"',
-        'SEND.record.outputs[1][2].peek: inferred false, declared true',
-        'SEND.record.uops[1].inputs[1].changed: inferred false, declared true',
-        'SEND.record.uops[1].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", "subject": "v3"}]',
-        'SEND_ASYNC_GEN.record.format.dst_offset: inferred 1, declared 2',
-        'SEND_GEN.record.format.dst_offset: inferred 1, declared 2',
-        'SEND_VIRTUAL.record.format.dst_offset: inferred 1, declared 2',
-        'SEND_VIRTUAL.record.outputs[1][1]: inferred -1, declared 1',
-        'SEND_VIRTUAL.record.outputs[1][2].name: inferred "next_index", declared "nos"',
-        'SEND_VIRTUAL.record.outputs[1][2].peek: inferred false, declared true',
-        'SEND_VIRTUAL.record.uops[2].inputs[1].changed: inferred false, declared true',
-        'SEND_VIRTUAL_XFER_DISCARD/_SEND_VIRTUAL: declares exits(branch, next, raise), '
-        'the record has branch, raise, yield',
-        'SEND_VIRTUAL_XFER_RETURN/_SEND_VIRTUAL: declares exits(branch, next, raise), '
-        'the record has raise, return, yield',
-        'SEND_XFER_DISCARD/_SEND: declares exits(branch, enter, next, raise), '
-        'the record has branch, enter, raise, yield',
-        'SEND_XFER_RETURN/_SEND: declares exits(branch, enter, next, raise), '
-        'the record has enter, raise, return, yield',
-        # G0d4: the iterator family's cursor has distinct names (`index` in,
-        # `next_index` out, as the F16 rule asks).  The inference reads the
-        # handlers with their declarations removed, where nothing says that
-        # the output replaces the input in the same stack position (ir_records'
-        # replaced_input reads that from the declared modes), so it takes the
-        # FOR_ITER group for a plain push and a discarded window.  The declared
-        # records keep the group's format and mark the replaced cursor changed
-        # (its entry holds a new value); the leaf records of the uops differ
-        # only in the cursor's encoding fact, which GET_ITER and the cursor
-        # helper establish.
-        'FOR_ITER.record.format.discards: inferred false, declared true',
-        'FOR_ITER.record.format.dst_offset: inferred 1, declared 2',
-        'FOR_ITER.record.format.store_dst: inferred false, declared true',
-        'FOR_ITER.record.layout.move_dst: inferred null, declared 2',
-        'FOR_ITER.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
-        'FOR_ITER.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
-        'FOR_ITER.record.outputs[1][1]: inferred -1, declared 1',
-        'FOR_ITER.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
-        'FOR_ITER.record.outputs[1][2].peek: inferred false, declared true',
-        'FOR_ITER.record.store_mode: inferred null, declared "store"',
-        'FOR_ITER.record.uops[1].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", "subject": "v2"}]',
-        'FOR_ITER_DICT_ITEMS.record.format.discards: inferred false, declared true',
-        'FOR_ITER_DICT_ITEMS.record.format.dst_offset: inferred 1, declared 2',
-        'FOR_ITER_DICT_ITEMS.record.format.store_dst: inferred false, declared true',
-        'FOR_ITER_DICT_ITEMS.record.layout.move_dst: inferred null, declared 2',
-        'FOR_ITER_DICT_ITEMS.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
-        'FOR_ITER_DICT_ITEMS.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
-        'FOR_ITER_DICT_ITEMS.record.store_mode: inferred null, declared "store"',
-        'FOR_ITER_GEN.record.format.discards: inferred false, declared true',
-        'FOR_ITER_GEN.record.format.dst_offset: inferred 1, declared 2',
-        'FOR_ITER_GEN.record.format.store_dst: inferred false, declared true',
-        'FOR_ITER_GEN.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
-        'FOR_ITER_GEN.record.results: inferred 0 entries [], declared 1 [[-1, {"__type": "Operand", "detail": "callee return", "field": "A", "kind": "SLOT", "may_name": [], "position": null}]]',
-        'FOR_ITER_GEN.record.store_mode: inferred null, declared "return"',
-        'FOR_ITER_LIST.record.format.discards: inferred false, declared true',
-        'FOR_ITER_LIST.record.format.dst_offset: inferred 1, declared 2',
-        'FOR_ITER_LIST.record.format.store_dst: inferred false, declared true',
-        'FOR_ITER_LIST.record.layout.move_dst: inferred null, declared 2',
-        'FOR_ITER_LIST.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
-        'FOR_ITER_LIST.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
-        'FOR_ITER_LIST.record.outputs[1][1]: inferred -1, declared 1',
-        'FOR_ITER_LIST.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
-        'FOR_ITER_LIST.record.outputs[1][2].peek: inferred false, declared true',
-        'FOR_ITER_LIST.record.store_mode: inferred null, declared "store"',
-        # G0d2: _ITER_JUMP_LIST's cursor is a tagged index (GET_ITER, for an
-        # exact list); the jump carries it under a new name
-        'FOR_ITER_LIST.record.uops[1].inputs[1].changed: inferred false, declared true',
-        'FOR_ITER_LIST.record.uops[1].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "", "kind": "TAGGED_INDEX", "subject": "v2"}]',
-        'FOR_ITER_RANGE.record.format.discards: inferred false, declared true',
-        'FOR_ITER_RANGE.record.format.dst_offset: inferred 1, declared 2',
-        'FOR_ITER_RANGE.record.format.store_dst: inferred false, declared true',
-        'FOR_ITER_RANGE.record.layout.move_dst: inferred null, declared 2',
-        'FOR_ITER_RANGE.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
-        'FOR_ITER_RANGE.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
-        'FOR_ITER_RANGE.record.store_mode: inferred null, declared "store"',
-        'FOR_ITER_TUPLE.record.format.discards: inferred false, declared true',
-        'FOR_ITER_TUPLE.record.format.dst_offset: inferred 1, declared 2',
-        'FOR_ITER_TUPLE.record.format.store_dst: inferred false, declared true',
-        'FOR_ITER_TUPLE.record.layout.move_dst: inferred null, declared 2',
-        'FOR_ITER_TUPLE.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
-        'FOR_ITER_TUPLE.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
-        'FOR_ITER_TUPLE.record.outputs[1][1]: inferred -1, declared 1',
-        'FOR_ITER_TUPLE.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
-        'FOR_ITER_TUPLE.record.outputs[1][2].peek: inferred false, declared true',
-        'FOR_ITER_TUPLE.record.store_mode: inferred null, declared "store"',
-        'FOR_ITER_TUPLE.record.uops[1].inputs[1].changed: inferred false, declared true',
-        'FOR_ITER_TUPLE.record.uops[1].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "", "kind": "TAGGED_INDEX", "subject": "v2"}]',
-        'FOR_ITER_VIRTUAL.record.format.discards: inferred false, declared true',
-        'FOR_ITER_VIRTUAL.record.format.dst_offset: inferred 1, declared 2',
-        'FOR_ITER_VIRTUAL.record.format.store_dst: inferred false, declared true',
-        'FOR_ITER_VIRTUAL.record.layout.move_dst: inferred null, declared 2',
-        'FOR_ITER_VIRTUAL.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
-        'FOR_ITER_VIRTUAL.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
-        'FOR_ITER_VIRTUAL.record.outputs[1][1]: inferred -1, declared 1',
-        'FOR_ITER_VIRTUAL.record.outputs[1][2].name: inferred "next_index", declared "index"',
-        'FOR_ITER_VIRTUAL.record.store_mode: inferred null, declared "store"',
-        'FOR_ITER_VIRTUAL.record.uops[0].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", "subject": "v2"}]',
-        'FOR_ITER.record.uops[1].inputs[1].changed: inferred false, declared true',
-        'FOR_ITER_LIST.record.uops[2].inputs[1].changed: inferred false, declared true',
-        'FOR_ITER_TUPLE.record.uops[2].inputs[1].changed: inferred false, declared true',
-        'FOR_ITER_VIRTUAL.record.uops[0].inputs[1].changed: inferred false, declared true',
-        'INSTRUMENTED_FOR_ITER.record.format.discards: inferred false, declared true',
-        'INSTRUMENTED_FOR_ITER.record.format.dst_offset: inferred 1, declared 2',
-        'INSTRUMENTED_FOR_ITER.record.format.store_dst: inferred false, declared true',
-        'INSTRUMENTED_FOR_ITER.record.layout.move_dst: inferred null, declared 2',
-        'INSTRUMENTED_FOR_ITER.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
-        'INSTRUMENTED_FOR_ITER.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
-        'INSTRUMENTED_FOR_ITER.record.store_mode: inferred null, declared "store"',
-        # G0d2: INSTRUMENTED_FOR_ITER steps the cursor by value and declares
-        # it, as FOR_ITER does
-        'INSTRUMENTED_FOR_ITER.record.outputs[1][1]: inferred -1, declared 1',
-        'INSTRUMENTED_FOR_ITER.record.outputs[1][2].name: inferred "next_index", declared "index"',
-        'INSTRUMENTED_FOR_ITER.record.uops[0].inputs[1].changed: inferred false, declared true',
-        'INSTRUMENTED_FOR_ITER.record.uops[0].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", "subject": "v2"}]',
-    ]
-
-    # Batch 5 and G0c9: the assume op of `iter: assumed(object) by GET_ITER`
-    # in the leaf IR of the three iterator guards
-    LISTED_LEAF_DIFFERENCES = [
-        ("FOR_ITER_LIST.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
-        # G0d2: the jumps assume the cursor of an exact list or tuple is a
-        # tagged index (`index: assumed(tagged_index) by GET_ITER`): the
-        # declared leaf has one more op, the assume
-        ("FOR_ITER_LIST.record.uops[1].leaf.blocks[0].ops:", "inferred 8 entries"),
-        ("FOR_ITER_TUPLE.record.uops[1].leaf.blocks[0].ops:", "inferred 8 entries"),
-        ("FOR_ITER_TUPLE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
-        ("FOR_ITER_RANGE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
-        # G0d1: a yield is declared (`exits(yield)`); with the declarations
-        # removed the inference no longer reads the generator's state, and
-        # a frame switch that no site names is an entry.  The boundary
-        # variants' lines fall under LISTED_BOUNDARY_FAMILIES (G0d2)
-        ("YIELD_VALUE.record.uops[1].transfers[0].kind:", '"ENTER_FRAME", declared "YIELD"'),
-        ("INSTRUMENTED_YIELD_VALUE.record.uops[2].transfers[0].kind:",
-         '"ENTER_FRAME", declared "YIELD"'),
-    ]
-
-    # G0d2: the generator boundary is checked against the declarations of
-    # the SEND family's uops (send_source_contract), so the inference, which
-    # reads undeclared bodies, finds no boundary in the handlers that cross
-    # one: their records differ as a family, not one by one
-    LISTED_BOUNDARY_FAMILIES = re.compile(
-        r"(CLEANUP_THROW|INSTRUMENTED_YIELD_DELEGATED|INSTRUMENTED_YIELD_VALUE|"
-        r"SEND|SEND_ASYNC_GEN|SEND_GEN|SEND_VIRTUAL|YIELD_DELEGATED|YIELD_VALUE)"
-        r"_XFER_\w+\.record\.")
-
-    def test_declarations_equal_the_inference(self):
-        with cases.handle_stderr():
-            lines = ir_contract_diff.report(str(BYTECODES))
-        # Every reported line is a reviewed difference: an exact line
-        # (LISTED_DIFFERENCES) or a long leaf-IR line named by its prefix and
-        # a substring it must contain (LISTED_LEAF_DIFFERENCES)
-        reported = [line for line in lines[:-1]
-                    if line in self.LISTED_DIFFERENCES
-                    or not self.LISTED_BOUNDARY_FAMILIES.match(line)]
-        exact = [line for line in reported if line in self.LISTED_DIFFERENCES]
-        self.assertCountEqual(exact, self.LISTED_DIFFERENCES)
-        leaf = [line for line in reported if line not in self.LISTED_DIFFERENCES]
-        self.assertCountEqual([line.split(" ")[0] for line in leaf],
-                              [prefix for prefix, _ in self.LISTED_LEAF_DIFFERENCES])
-        needs = dict(self.LISTED_LEAF_DIFFERENCES)
-        for line in leaf:
-            self.assertIn(needs[line.split(" ")[0]], line)
-        self.assertRegex(lines[-1], r"^\d+ handlers compared; \d+ of \d+ uops declared$")
 
     def test_owner_may_be_null(self):
         # OWNER(x) moves x's obligation, or is NULL for a local's view
@@ -549,6 +268,54 @@ class VerifierTests(unittest.TestCase):
                 DECREF_INPUTS();
             }
         """, r"OP: `flies` is not an effect")
+
+    def generate(self, source):
+        "The IR generator's output for source"
+        with open(self.filename, "w") as f:
+            f.write(cases.parser.BEGIN_MARKER + "\n")
+            f.write(textwrap.dedent(source))
+            f.write("\n" + cases.parser.END_MARKER)
+        with cases.handle_stderr():
+            analysis = cases.analyzer.analyze_files([self.filename], cases.SequentialNumbers())
+        out = io.StringIO()
+        ir_generator.generate_ir([self.filename], analysis, out, False)
+        return out.getvalue()
+
+    def test_undeclared_uop_is_an_error(self):
+        # The declarations are the only authority: the generator infers
+        # nothing from a body, so a uop without a contract is refused, in an
+        # instruction, a macro and an IR-only handler alike
+        push = """
+            op(_PUSH, (-- res: owned)) effects() exits(next) {
+                res = PyValue_None;
+            }
+        """
+        pop = """
+            op(_POP, (value: consumed --)) effects(releases) exits(next) {
+                PyValue_CLOSE(value);
+            }
+        """
+        for source, name in (
+                # An inst's body is its uop, _OP
+                ("inst(OP, (value --)) { PyValue_CLOSE(value); }", "_OP"),
+                (push + "op(_BARE, (value --)) { PyValue_CLOSE(value); }\n"
+                 "macro(OP) = _PUSH + _BARE;", "_BARE"),
+                ("ir_only inst(IR_OP, (value --)) { PyValue_CLOSE(value); }", "_IR_OP"),
+                (push + pop + "macro(OP) = _PUSH + _POP;\n"
+                 "ir_only op(_IR_POP, (value --)) { PyValue_CLOSE(value); }\n"
+                 "macro(IR_OP) = _PUSH + _IR_POP;", "_IR_POP")):
+            with self.subTest(uop=name):
+                with self.assertRaisesRegex(
+                        SyntaxError, rf"\b{name} declares no contract: give it "
+                        r"effects\(\.\.\.\) and exits\(\.\.\.\)"):
+                    self.generate(source)
+        # Declared, the same handlers generate
+        output = self.generate(push + pop + "macro(OP) = _PUSH + _POP;\n"
+                               "ir_only op(_IR_POP, (value: consumed --)) "
+                               "effects(releases) exits(next) { PyValue_CLOSE(value); }\n"
+                               "macro(IR_OP) = _PUSH + _IR_POP;")
+        self.assertIn("TARGET(OP)", output)
+        self.assertIn("TARGET(IR_OP)", output)
 
 
     # The exchange (SWAP): pass-through outputs that take each other's inputs
@@ -1298,19 +1065,6 @@ class VerifierTests(unittest.TestCase):
                 SPAM_GUARD(oparg);
             }
         """, r"OP: the miss follows .*, so the word cannot restart")
-
-    def test_declared_and_inferred_records_differ(self):
-        # The review script (outside the generator) reports a declaration
-        # wider than today's inference; the tree's declarations equal it
-        analysis = self.verify("""
-            inst(OP, (value -- value)) effects(reads) exits(next) {
-            }
-        """)
-        with cases.handle_stderr():
-            lines = ir_contract_diff.report(self.filename,
-                                            numbers=cases.SequentialNumbers())
-        self.assertEqual(lines, ['OP.record.uops[0].effects: inferred 0 entries [], declared 1 ["READS_HEAP"]',
-                                 "1 handlers compared; 1 of 1 uops declared"])
 
     # G0a2: Astra's witnesses against 38a1500dbba (astra/g0a-review.md)
 

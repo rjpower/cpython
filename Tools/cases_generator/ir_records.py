@@ -396,16 +396,13 @@ def assigns_to(uop: Uop, name: str) -> bool:
 
 def passes(uop: Uop, item: StackItem) -> bool:
     """Whether output item, named as an input, passes that input's value
-    through: declared without a mode and not exchanged, or for an undeclared
-    uop, an output that the body does not assign.  An exchanged output
+    through: declared without a mode and not exchanged.  An exchanged output
     (SWAP) keeps its home but takes another input's value"""
     if item.name == "unused":
         return True
-    if uop.clauses:
-        import ir_contract
-        output = ir_contract.contract_of(uop).output(item.name)
-        return not output.mode and not output.exchange
-    return not assigns_to(uop, item.name)
+    import ir_contract
+    output = ir_contract.declared_contract(uop).output(item.name)
+    return not output.mode and not output.exchange
 
 
 def ends_handler(uop: Uop) -> bool:
@@ -588,10 +585,10 @@ def uop_transfers(uop: Uop, deopt_target: str) -> tuple[Transfer, ...]:
                 if kind == JUMP and not target and conditional(uop.body.body, token):
                     kind = BRANCH
                 result.append(Transfer(kind, token, target))
-    # A body that switches frames with no site that names the switch
+    # A uop that declares a frame switch with no site that names it
     # (`frame = ...`) continues in the other frame in place of the next
-    # word, by the switch exits the uop declares (ir_contract.body_exits)
-    if (analyzer.assigns_frame(list(uop.body.tokens()))
+    # word, by the switch exits it declares (ir_contract.body_exits)
+    if (uop.properties.switches_frame
             and not any(t.kind in (ENTER_FRAME, RETURN, YIELD) for t in result)):
         declared = declared_exits(uop)
         result.extend(Transfer(kind) for exit, kind in SWITCH_TRANSFERS
@@ -602,20 +599,16 @@ def uop_transfers(uop: Uop, deopt_target: str) -> tuple[Transfer, ...]:
 
 
 def declared_exits(uop: Uop) -> frozenset[str]:
-    """uop's declared exits.  Until the cutover removes the undeclared form,
-    a uop without a contract that switches frames continues in the frame it
-    pushed"""
+    "uop's declared exits"
     import ir_contract
-    contract = ir_contract.contract_of(uop)
-    return contract.exits if contract is not None else frozenset(("enter",))
+    return ir_contract.declared_contract(uop).exits
 
 
 # Guard facts (tiers87, C5).  A guard fails when its condition holds, and
-# establishes the negation for the rest of the handler.  GUARD_PREDICATES
-# derives facts from the condition; a condition that tests only the thread
-# or the interpreter is in CONTEXT_PREDICATES with its reason; a guard on an
-# operand that no fact describes declares its reason at the site, as the
-# second argument of EXIT_IF or DEOPT_IF.  Anything else is an error.
+# establishes the negation for the rest of the handler.  The uop's contract
+# states the facts (ir_contract.record_guard_facts); a guard that states
+# none declares its reason at the site, as the second argument of EXIT_IF or
+# DEOPT_IF.
 
 @dataclass(frozen=True)
 class Fact:
@@ -663,18 +656,6 @@ def join_encodings(facts) -> tuple[Fact, ...]:
         elif f.subject in kinds:
             result.append(Fact("ENCODING", f.subject, "|".join(sorted(kinds.pop(f.subject)))))
     return tuple(result)
-
-# Predicates of the thread or interpreter, which hold no fact of an operand
-CONTEXT_PREDICATES = {
-    "IS_PEP523_HOOKED": "a PEP 523 frame evaluator may replace the call",
-    "_PyThreadState_HasStackSpace": "the data stack must hold the callee's frame",
-    "py_recursion_remaining": "the Python recursion limit",
-    "_Py_ReachedRecursionLimit": "the C recursion limit",
-    "LOCK_OBJECT": "a free-threaded build's critical section",
-    "_Py_IsOwnedByCurrentThread": "a free-threaded build's object ownership",
-    "gil_disabled": "the free-threaded build",
-}
-
 
 def _strip(tokens: list) -> list:
     "tokens without a pair of parentheses around them all"
@@ -732,276 +713,6 @@ def _uncast(tokens: list) -> list:
     return tokens
 
 
-class Subjects:
-    """What the names of a uop body stand for: its inputs are values, and
-    a local assigned once from a known derivation of one stands for it"""
-
-    def __init__(self, uop: Uop, inputs: tuple[UopInput, ...]):
-        self.names = {i.name: f"v{i.value}" for i in inputs}
-        tokens = [t.text for t in uop.body.tokens() if t.kind != "COMMENT"]
-        for i, t in enumerate(tokens):
-            if t != "=" or i == 0 or tokens[i - 1] in self.names:
-                continue
-            end = tokens.index(";", i) if ";" in tokens[i:] else len(tokens)
-            subject = self.resolve(tokens[i + 1:end])
-            if subject is not None:
-                self.names.setdefault(tokens[i - 1], subject)
-
-    def resolve(self, tokens: list) -> str | None:
-        tokens = _uncast(tokens)
-        if len(tokens) == 1:
-            return self.names.get(tokens[0])
-        for name in ("PyValue_AsKnownObjectBorrow", "FT_ATOMIC_LOAD_PTR_ACQUIRE"):
-            args = _call(tokens, name)
-            if args is not None and len(args) == 1:
-                return self.resolve(args[0])
-        args = _call(tokens, "Py_TYPE", "PyValue_TYPE")
-        if args is not None and len(args) == 1:
-            inner = self.resolve(args[0])
-            return f"type({inner})" if inner is not None else None
-        args = _call(tokens, "_PyMethodDef_Convention")
-        if args is not None and len(args) == 1:
-            # The calling convention of a PyMethodDef along a path
-            inner = self.resolve(args[0])
-            return f"{inner}.convention" if inner is not None else None
-        if _call(tokens, "GLOBALS") == []:
-            return "globals"
-        if _call(tokens, "BUILTINS") == []:
-            return "builtins"
-        if len(tokens) >= 3 and tokens[-2] in ("->", "."):
-            inner = self.resolve(tokens[:-2])
-            return f"{inner}.{tokens[-1]}" if inner is not None else None
-        return None
-
-    def of(self, tokens: list) -> str:
-        "The subject of an expression, or its text"
-        subject = self.resolve(tokens)
-        if subject is not None:
-            return subject
-        text = ""
-        for t in _uncast(tokens):
-            text += " " + t if text[-1:].isalnum() and t[:1].isalnum() else t
-        return text
-
-
-_TYPE_CHECK = re.compile(r"(Py\w+?)_(CheckExact|Check)")
-# Check macros that are Py_IS_TYPE: they test the exact type
-# (Include/cpython/funcobject.h, Include/cpython/classobject.h)
-_EXACT_CHECKS = frozenset({"PyFunction_Check", "PyMethod_Check"})
-
-
-def predicate_facts(p: list, subjects: Subjects) -> list[Fact] | None:
-    "The facts that predicate p, which holds, establishes, or None"
-    p = _strip(p)
-    encodings = {"PyValue_IsInlineInt": "inline_int", "PyValue_IsInlineFloat": "inline_float",
-                 "PyValue_IsObject": "object"}
-    for name, word in encodings.items():
-        args = _call(p, name)
-        if args is not None and len(args) == 1:
-            return [encoding(subjects.of(args[0]), word)]
-    simple = {"PyValue_IsNone": "IS_NONE",
-              "_PyObject_IsUniquelyReferenced": "UNIQUE",
-              "PyUnicode_IS_COMPACT_ASCII": "ASCII"}
-    for name, kind in simple.items():
-        args = _call(p, name)
-        if args is not None and len(args) == 1:
-            return [Fact(kind, subjects.of(args[0]))]
-    args = _call(p, "PyValue_FloatOperandValues")
-    if args is not None:
-        return [encoding(subjects.of(args[0]), "inline"), encoding(subjects.of(args[1]), "inline")]
-    args = _call(p, "PyValue_LongCheckExact")
-    if args is not None:
-        return [Fact("EXACT_TYPE", subjects.of(args[0]), "PyLong_Type")]
-    args = _call(p, "PyValue_BoolCheck")
-    if args is not None:
-        return [Fact("EXACT_TYPE", subjects.of(args[0]), "PyBool_Type")]
-    args = _call(p, "Py_IS_TYPE")
-    if args is not None:
-        return [Fact("EXACT_TYPE", subjects.of(args[0]), " ".join(args[1]).lstrip("& "))]
-    args = _call(p, "_PyValue_NamesObject")
-    if args is not None:
-        return [Fact("IDENTITY", subjects.of(args[0]), " ".join(_uncast(args[1])).lstrip("& "))]
-    if len(p) >= 3 and _TYPE_CHECK.fullmatch(p[0]) and _call(p, p[0]) is not None:
-        args = _call(p, p[0])
-        m = _TYPE_CHECK.fullmatch(p[0])
-        exact = m.group(2) == "CheckExact" or p[0] in _EXACT_CHECKS
-        kind = "EXACT_TYPE" if exact else "SUBTYPE"
-        return [Fact(kind, subjects.of(args[0]), m.group(1) + "_Type")]
-    args = _call(p, "PyType_HasFeature")
-    if args is not None:
-        return [Fact("TYPE_FLAG", subjects.of(args[0]), " ".join(args[1]))]
-    args = _call(p, "_PyType_IteratesByIndex")
-    if args is not None:
-        return [Fact("TYPE_FLAG", subjects.of(args[0]), "iterates by index")]
-    args = _call(p, "FT_ATOMIC_LOAD_UINT8")
-    if (args is not None and len(args[0]) > 2 and args[0][-2:] == ["->", "valid"]
-            and _call(args[0][:-2], "_PyObject_InlineValues") is not None):
-        return [Fact("INLINE_VALUES_VALID",
-                     subjects.of(_call(args[0][:-2], "_PyObject_InlineValues")[0]))]
-    if p[:1] == ["call_state"] and p[1:] == ["&", "CALL_SELF_PRESENT"]:
-        return [Fact("SELF", "call_state", "present")]
-    if len(p) >= 3 and p[-2] == "->" and p[-1].startswith("tp_"):
-        return [Fact("TYPE_SLOT", subjects.of(p[:-2]), f"{p[-1]} != NULL")]
-    for op, negated in (("!=", "=="), ("==", "!="), ("<=", ">"), ("<", ">="),
-                        (">=", "<"), (">", "<=")):
-        parts = _split(p, negated)
-        if len(parts) == 2:
-            return comparison_facts(parts[0], op, parts[1], subjects)
-    return None
-
-
-def _value(tokens: list) -> list:
-    "An expression read through an atomic load, without the load"
-    tokens = _uncast(tokens)
-    args = _call(tokens, "FT_ATOMIC_LOAD_UINT32_RELAXED", "FT_ATOMIC_LOAD_UINT_RELAXED",
-                 "FT_ATOMIC_LOAD_SSIZE_RELAXED", "FT_ATOMIC_LOAD_INT8_RELAXED",
-                 "FT_ATOMIC_LOAD_PTR_RELAXED")
-    return _uncast(args[0]) if args is not None and len(args) == 1 else tokens
-
-
-def comparison_facts(lhs: list, op: str, rhs: list,
-                     subjects: Subjects) -> list[Fact] | None:
-    """The facts of `lhs op' rhs` holding, where op is the failure's
-    comparison: `lhs != rhs` failing establishes lhs == rhs"""
-    left, right = _value(lhs), _value(rhs)
-    text = " ".join(_strip(rhs))
-    if op == "!=":
-        if left[-2:] == ["->", "tp_version_tag"]:
-            owner = subjects.of(left[:-2])
-            if owner.startswith("type(") and owner.endswith(")"):
-                return [Fact("TYPE_VERSION", owner[5:-1], text)]
-            return [Fact("CLASS_VERSION", owner, text)]
-        if left[-2:] == ["->", "dk_version"]:
-            # A frame path's keys: the fact is the path's (paths(...) in
-            # ir_contract.py)
-            owner = subjects.of(left[:-2])
-            if owner in ("globals.ma_keys", "builtins.ma_keys"):
-                owner = owner.split(".")[0]
-            return [Fact("KEYS_VERSION", owner, text)]
-        if left[-2:] == ["->", "func_version"]:
-            return [Fact("FUNC_VERSION", subjects.of(left[:-2]), text)]
-        if left[-2:] == ["->", "co_argcount"]:
-            return [Fact("ARGCOUNT", subjects.of(left[:-2]), text)]
-        if left[-2:] in (["->", "vectorcall"], ["->", "tp_vectorcall"]):
-            return [Fact("VECTORCALL", subjects.of(left[:-2]), text)]
-        if len(left) > 2 and left[-2] == "->" and re.match(r"(tp|mp|sq|nb)_", left[-1]):
-            # A slot of a type, through its slot tables: Py_TYPE(o)->tp_as_mapping->mp_subscript
-            owner = left[:-2]
-            while len(owner) > 2 and owner[-2] == "->" and owner[-1].startswith("tp_as_"):
-                owner = owner[:-2]
-            return [Fact("TYPE_SLOT", subjects.of(owner), f"{left[-1]} == {text}")]
-        args = _call(left, "_PyObject_Shape")
-        if args is not None:
-            return [Fact("SHAPE", subjects.of(args[0]), text)]
-        args = _call(left, "Py_TYPE", "PyValue_TYPE")
-        if args is not None:
-            return [Fact("EXACT_TYPE", subjects.of(args[0]), text.lstrip("& "))]
-        if left[-2:] == ["->", "dk_kind"]:
-            return [Fact("KEYS_KIND", subjects.of(left[:-2]), text)]
-        if left[-2:] == ["->", "me_key"]:
-            return [Fact("ENTRY_KEY", subjects.of(left[:-2]), text)]
-        args = _call(left, "PyTuple_GET_SIZE", "PyList_GET_SIZE")
-        if args is not None:
-            return [Fact("LENGTH", subjects.of(args[0]), text)]
-        if left[:1] == ["total_args"] and len(left) == 1:
-            return [Fact("OPERAND_COUNT", "word", text)]
-        owner = subjects.resolve(left)
-        if owner is not None and owner.endswith(".convention"):
-            return [Fact("CONVENTION", owner.removesuffix(".convention"), text)]
-        if len(left) == 1 and right[:1] == ["&"] or _uncast(rhs)[:1] == ["&"]:
-            return [Fact("IDENTITY", subjects.of(left), " ".join(_uncast(rhs)).lstrip("& "))]
-        if right == ["NULL"]:
-            return [encoding(subjects.of(left), "null")]
-    if op == "==":
-        if right == ["NULL"]:
-            return [encoding(subjects.of(left), "nonnull")]
-        if right == ["0"] and left[-2:] == ["->", "tp_version_tag"]:
-            owner = subjects.of(left[:-2])
-            if owner.startswith("type(") and owner.endswith(")"):
-                return [Fact("TYPE_VERSION", owner[5:-1])]
-        if right in (["0"], ["0.0"]):
-            return [Fact("NON_ZERO", subjects.of(left))]
-        args = _call(left, "Py_TYPE")
-        if args is not None:
-            return [Fact("NOT_TYPE", subjects.of(args[0]), text.lstrip("& "))]
-        if left[-2:] == ["->", "dk_kind"]:
-            return [Fact("KEYS_KIND", subjects.of(left[:-2]), f"not {text}")]
-    if op == "<" and right == ["0"]:
-        return [Fact("NON_NEGATIVE", subjects.of(left))]
-    if op == "<=":
-        args = _call(left, "PyUnicode_GET_LENGTH", "Py_ARRAY_LENGTH")
-        if args is not None:
-            return [Fact("IN_BOUNDS", subjects.of(rhs), subjects.of(args[0]))]
-    if op == ">=":
-        # left indexes what the right measures: entries of keys, or a length
-        right_value = _value(rhs)
-        if right_value[-2:] == ["->", "dk_nentries"]:
-            right_value = right_value[:-2]
-        return [Fact("IN_BOUNDS", subjects.of(left), subjects.of(right_value))]
-    return None
-
-
-def failure_facts(cond: list, subjects: Subjects) -> list[Fact] | None:
-    """The facts that a guard establishes when its condition cond is false,
-    or None if the table does not describe it"""
-    cond = _strip(cond)
-    facts: list[Fact] = []
-    for part in _split(cond, "||"):
-        part = _strip(part)
-        if part[:1] == ["!"] and len(_split(part, "&&")) == 1:
-            found = predicate_facts(part[1:], subjects)
-        else:
-            found = failure_term_facts(part, subjects)
-        if found is None:
-            return None
-        facts += found
-    return facts
-
-
-def failure_term_facts(term: list, subjects: Subjects) -> list[Fact] | None:
-    "The facts of a failure term that is not a negation being false"
-    conj = _split(term, "&&")
-    if len(conj) > 1:
-        # x is none of several types: that it is one of them
-        found = [failure_term_facts(_strip(c), subjects) if _strip(c)[:1] != ["!"]
-                 else predicate_facts(_strip(c)[1:], subjects) for c in conj]
-        for kind in ("EXACT_TYPE", "CONVENTION"):
-            if (all(f is not None and len(f) == 1 and f[0].kind == kind for f in found)
-                    and len({f[0].subject for f in found}) == 1):
-                args = [f[0].arg for f in found]
-                # A convention is a set of members, as the declaration sorts it
-                return [Fact(kind, found[0][0].subject,
-                             " | ".join(sorted(args) if kind == "CONVENTION" else args))]
-        return None
-    # A positive type test failing: x is not of the type
-    if term and _TYPE_CHECK.fullmatch(term[0]) and _call(term, term[0]) is not None:
-        m = _TYPE_CHECK.fullmatch(term[0])
-        exact = m.group(2) == "CheckExact" or term[0] in _EXACT_CHECKS
-        return [Fact("NOT_TYPE" if exact else "NOT_SUBTYPE",
-                     subjects.of(_call(term, term[0])[0]), m.group(1) + "_Type")]
-    args = _call(term, "PyValue_IsNull")
-    if args is not None:
-        return [encoding(subjects.of(args[0]), "nonnull")]
-    args = _call(term, "_PyObject_GetManagedDict")
-    if args is not None:
-        return [Fact("NO_MANAGED_DICT", subjects.of(args[0]))]
-    if term == ["call_state", "&", "CALL_SELF_PRESENT"]:
-        return [Fact("SELF", "call_state", "absent")]
-    for op in ("!=", "==", "<=", ">=", "<", ">"):
-        parts = _split(term, op)
-        if len(parts) == 2:
-            return comparison_facts(parts[0], op, parts[1], subjects)
-    return None
-
-
-def context_reason(cond: list) -> str | None:
-    "The reason of a condition on the thread or interpreter only"
-    for token in cond:
-        if token in CONTEXT_PREDICATES:
-            return CONTEXT_PREDICATES[token]
-    return None
-
-
 def guard_condition(uop: Uop, site: Token) -> tuple[list, str]:
     """The failure condition of a guard site, as token texts, and the reason
     that the site declares, or ""; for EXIT_IF(true) inside `if (c)`, c"""
@@ -1050,78 +761,10 @@ def _nested_if(stmt: Stmt, site: Token) -> bool:
     return False
 
 
-# The guard markers and the facts that each establishes of its arguments
-MARKER_FACTS = {
-    "IR_GUARD_INLINE_INT": lambda a, s: [encoding(s.of(a[0]), "inline_int")],
-    "IR_GUARD_ELEMENT_TYPE": lambda a, s: [Fact("EXACT_TYPE", s.of(a[0]), " ".join(a[1]))],
-    "IR_GUARD_ELEMENT_INDEX": lambda a, s: [Fact("IN_BOUNDS", s.of(a[1]), s.of(a[0]))],
-    "IR_GUARD_SHAPE_READ": lambda a, s: [Fact("TYPE_VERSION", s.of(a[0]), " ".join(a[1])),
-                                         Fact("SHAPE", s.of(a[0]), " ".join(a[2]))],
-}
-
-
-def guard_facts(uop: Uop, site: Token, subjects: Subjects) -> tuple[tuple[Fact, ...], str]:
-    "The facts of a guard site and its reason; neither if nothing describes it"
-    if site.text in MARKER_FACTS:
-        tokens = [t.text for t in uop.body.tokens() if t.kind != "COMMENT"]
-        i = [t for t in uop.body.tokens() if t.kind != "COMMENT"].index(site)
-        args = _call(tokens[i:_close(tokens, i + 1) + 1], site.text)
-        return join_encodings(MARKER_FACTS[site.text](args, subjects)), ""
-    cond, reason = guard_condition(uop, site)
-    if reason:
-        return (), reason
-    context = context_reason(cond)
-    if context is not None:
-        return (), context
-    facts = failure_facts(cond, subjects)
-    if facts is None:
-        return (), ""       # check_record() refuses it
-    assert all(f.kind in FACT_KINDS for f in facts)
-    return join_encodings(facts), ""
-
-
-# The facts of a uop's results: every assignment to an output makes a
-# value of one kind
-BOOL_RESULT = re.compile(r"(.* \? )?PyValue_(True|False)( : PyValue_(True|False))?")
-INLINE_INT_RESULTS = frozenset(("PyValue_FromInlineInt", "_PyValue_FromIntScaled"))
-INT_RESULTS = INLINE_INT_RESULTS | {
-    "PyValue_FromInt64", "_PyValue_BoxInt64", "_PyValue_MultiplyInt64",
-    "_PyValue_LshiftInt64"}
-FLOAT_RESULTS = frozenset(("PyValue_FromDouble", "PyValue_FromDoubleNotNaN"))
-
-
-def result_facts(uop: Uop, outputs: tuple[UopOutput, ...]) -> tuple[Fact, ...]:
-    "The facts that hold of the new outputs of uop"
-    tokens = [t.text for t in uop.body.tokens() if t.kind != "COMMENT"]
-    facts = []
-    for out in outputs:
-        if out.ownership not in (OWNED, INLINE):
-            continue
-        sources = []
-        for i, t in enumerate(tokens):
-            if t == "=" and i and tokens[i - 1] == out.name:
-                end = tokens.index(";", i)
-                sources.append(tokens[i + 1:end])
-        if not sources:
-            continue
-        subject = f"v{out.value}"
-        callees = {src[0] if len(src) > 1 and src[1] == "(" else "" for src in sources}
-        if all(BOOL_RESULT.fullmatch(" ".join(src)) for src in sources):
-            facts.append(Fact("EXACT_TYPE", subject, "PyBool_Type"))
-        elif callees <= INLINE_INT_RESULTS:
-            facts += [encoding(subject, "inline_int"), Fact("EXACT_TYPE", subject, "PyLong_Type")]
-        elif callees <= INT_RESULTS:
-            facts.append(Fact("EXACT_TYPE", subject, "PyLong_Type"))
-        elif callees <= FLOAT_RESULTS:
-            facts.append(Fact("EXACT_TYPE", subject, "PyFloat_Type"))
-    return tuple(facts)
-
-
 # Effects (tiers87, C6): a set of flags per uop; a pure uop has none.
 # MAY_RUN_PYTHON implies every other flag.  Compiled code publishes
 # instr_ptr before a uop with MAY_RAISE, MAY_RELEASE or MAY_RUN_PYTHON.
-# The flags are inferred from the analysis and the call tables below; no
-# uop declares any.
+# Each uop's contract declares them (ir_contract.Contract.record_effects).
 READS_HEAP = "READS_HEAP"
 WRITES_HEAP = "WRITES_HEAP"         # changes an existing object or the frame;
                                     # reference counts do not count
@@ -1133,136 +776,14 @@ EFFECTS = (READS_HEAP, WRITES_HEAP, ALLOCATES, MAY_RAISE, MAY_RELEASE, MAY_RUN_P
 # A uop with one of these may run Python: its own or a finalizer
 RUNS_PYTHON = frozenset((MAY_RELEASE, MAY_RUN_PYTHON))
 
-# The names of calls that may allocate, after PURE_CALLS
-CONSTRUCTOR = re.compile(r"New(?!Ref)|Alloc|^PyValue_From|_PyFrame_Push|_Py_Make")
-# Allocating calls that CONSTRUCTOR does not name, with what else they do
-ALLOCATORS = {
-    **dict.fromkeys(("_PyValue_BoxInt64", "_PyValue_MultiplyInt64",
-                     "_PyValue_LshiftInt64", "_PyValue_BoxArray", "call_push_exact",
-                     "_PyTuple_FromValueStealOnSuccess",
-                     "_PyList_FromValueStealOnSuccess", "PyFloat_FromDouble",
-                     "PyLong_FromLong", "PyLong_FromSsize_t"),
-                    frozenset((ALLOCATES,))),
-    **dict.fromkeys(("PyUnicode_Concat", "_PyUnicode_JoinArray"),
-                    frozenset((ALLOCATES, READS_HEAP))),
-    "_PyList_AppendTakeRef": frozenset((ALLOCATES, READS_HEAP, WRITES_HEAP)),
-}
-
-# The identifiers that look like a release (RELEASE_LIKE), each known to
-# release a reference whose __del__ may run Python, or not to.  Any other
-# such identifier is an error, so that a new release helper cannot pass as
-# one that runs nothing.
+# The identifiers that look like a release, which the transfer checks of
+# ir_generator.py treat as the end of a value
 RELEASE_LIKE = re.compile(r"CLOSE|DECREF|CLEAR|SETREF|RETIRE|Close|Clear|"
                           r"Dealloc|_READER|FINISH_VALUE")
-RELEASES = {
-    "IR_DEFER_CLOSE",
-    "IR_CLOSE_INPUTS",
-    "PyValue_CLOSE", "PyValue_XCLOSE", "PyValue_CLEAR", "_PyValue_CloseStack",
-    "_PyValue_CLOSE_POINTER", "_PyValue_XCLOSE_POINTER", "DECREF_INPUTS",
-    "Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF", "Py_XSETREF",
-    # The value and attribute transactions release the inputs they retire
-    "IR_RETIRE_PUBLISHED", "IR_RETIRE_PUBLISHED_RESULT",
-    "IR_RETIRE_PUBLISHED_PAIR",
-    "_PyCell_SetValue",                     # stores, then releases the old value
-    "IR_FINISH_VALUE_OPERATION", "IR_ABORT_VALUE_READER",
-    "IR_TRY_DICT_FIRST_PROBE",
-    "IR_COMPLETE_VALUE_READER", "IR_COMPLETE_ATTR_READER",
-    "IR_BINARY_READER",
-    "_PyFrame_ClearTemporaries", "_PyEval_FrameClearAndPop",
-    "_PyEval_FrameClearAndPopWithResult", "_PyEval_FrameClearAndPopGeneralWithResult",
-    "_PyEval_RetireThreadFrameWithResult",
-    "_PyErr_Clear",
-}
-NOT_RELEASES = {
-    # A release whose destructor, that of an exact type, runs no Python
-    "PyValue_CLOSE_SPECIALIZED", "_Py_DECREF_SPECIALIZED",
-    "_PyLong_ExactDealloc", "_PyFloat_ExactDealloc",
-    "_PyFloat_OrLongExactDealloc", "_PyUnicode_ExactDealloc",
-    "_PyFrame_AssertTemporariesClear",      # a debug check
-    "_PyGC_CLEAR_ARRAY",                    # expands to nothing
-    "LOAD_FAST_AND_CLEAR",                  # an opcode
-    # Semantic reason constants passed to the actual release boundary.
-    "_PyIR_RETIRE_NONE", "_PyIR_RETIRE_NORMAL_RETURN",
-    "_PyIR_RETIRE_ERROR_UNWIND", "_PyIR_RETIRE_HEAP_CLEAR",
-    "_PyIR_RETIRE_STAGED_FAILURE",
-}
-
-
-
-# Non-escaping calls that only compute on their arguments' bits
-PURE_CALLS = re.compile(
-    r"__builtin_\w+_overflow|Py_ARITHMETIC_RIGHT_SHIFT|assert|Py_UNREACHABLE|"
-    r"_?PyValue_(Is\w*|Inline\w*|BothInlineInt|IntScaled|FromIntScaled|FromInlineInt|"
-    r"TagIndex|UntagIndex|IncrementTaggedIndexNoOverflow|FloatOperand\w*|NumberAsDouble|"
-    r"Borrow|Wrap|Unwrap|True|False|None|AsKnownObjectBorrow|FromObjectBorrow|"
-    r"FromObjectSteal|FromNonNumberSteal|AsKnownObjectSteal|AsPyObjectNew|DUP|XDUP|"
-    r"DupImmortal|PointerBorrow|CheckHome|RecheckHome|RecheckWindow|CheckTemp|"
-    r"FromDoubleNotNaN)|Py_INCREF|Py_NewRef|_Py_NewRef|_Py_ID|_Py_STR|_Py_SINGLETON|"
-    r"Py_ARRAY_LENGTH|_PyIR_AdoptTemp|GETLOCAL|Py_FatalError|PyValue_RefcountOnObject|"
-    r"_PyFrame_AssertTemporariesClear|_PyManagedDictPointer_IsValues|doesnt_escape|"
-    r"(advance|restart)_backoff_counter|_Py_GatherStats_GetIter|native_vector_capture|"
-    r"_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY|_PyObject_ValueSlot|_PyValueGuarded_Load|"
-    r"_PyValue_CodeConstant|_PyValue_BoundLocal|_PyValue_CellLocal|_PyValue_CommonConstant|_PyValue_PublishedItem|"
-    r"_PyValue_NamesObject|_PyBinaryOp_ExtendDescr")
-
-# Non-escaping calls that read the heap and change nothing
-READER_CALLS = re.compile(
-    r"Py_TYPE|PyValue_TYPE|Py_SIZE|Py_REFCNT|\w+_GET_SIZE|\w+_GET_ITEM|\w+_GET_VALUE|"
-    r"\w+_GET_LENGTH|_Py\w*_ITEMS|\w+Check(Exact)?|Py_IS_TYPE|Py_Is\w+|_Py_Is\w+|"
-    r"FT_ATOMIC_LOAD\w*|\w+_GET_\w+|_PyFrame_(Get\w+|IsIncomplete|Slots|InstrOffset)|"
-    r"_PyLong_\w+|PyLong_AsLong|PyFloat_AS_DOUBLE|PyUnicode_READ_CHAR|PyUnicode_1BYTE_DATA|"
-    r"PyUnicode_IS_COMPACT_ASCII|_PyObject_(InlineValues|Shape|ManagedDictPointer|"
-    r"GetManagedDict|IsUniquelyReferenced|GC_IS_\w+|GC_MAY_BE_TRACKED)|_PyCode_\w+|"
-    r"_?PyType_(HasFeature|IteratesByIndex|VALUE_SLOT|FastSubclass)|PyType_FastSubclass|"
-    r"_PyMethodDef_Convention|"
-    r"_PyErr_Occurred|_PyErr_ExceptionMatches|_PyInterpreterState_GET|_PyThreadState_HasStackSpace|"
-    r"_Py_EvalBreakerHasEvents|"
-    r"PyExceptionInstance_Class|PyException_Get\w+|_PyCell_GetValue|"
-    r"_PyFb_\w+|_PyDataStack_Slots|_PyGen_GetGeneratorFromFrame|_PyClassMethod_GetFunc|"
-    r"backoff_counter_triggers|_PyEval_GeneratorReturnTarget|_PyUnicode_Equal|gen_may_claim|"
-    r"PyCFunction_GET_\w+|PyFunction_GET_\w+|_Py_ReachedRecursionLimit|PyUnicode_GET_LENGTH|"
-    r"_PyShape_\w+|_PyDictValues_ShapeAfterAdd|_PyIR_\w+|IS_PEP523_HOOKED|"
-    r"GETITEM|FRAME_CO_\w+|GLOBALS|BUILTINS|LOCALS|DK_\w+|_Py_atomic_load_\w+|"
-    r"_PyForIter_StopIsExhaustion|coro_awaitable_can_transfer|PyCell_GetRef|"
-    r"_Py_TryIncrefCompare\w*")
-
-# Non-escaping calls that change existing objects or the thread state
-WRITER_CALLS = re.compile(
-    r"FT_ATOMIC_STORE\w*|_PyDictValues_(AddToInsertionOrder|SetShape)|_PyFunction_SetVersion|"
-    r"_Py_LeaveRecursiveCall\w*|gen_prologue|gen_try_set_executing|gen_claim|PyCell_SwapTakeRef|"
-    r"PyList_SET_ITEM|_PyFrame_(Initialize|MoveArgs|SetReturnValue)|_PyObject_GC_TRACK|"
-    r"PyObject_GC_UnTrack|_Py_atomic_compare_exchange_\w+|_Py_(un)?set_eval_breaker_bit|"
-    r"_PyThreadState_PopCValueSteal|_PyStolenTuple_Free")
-
-# The macros of the DSL that the analysis does not count as escaping calls;
-# frame slots and the call window are operands, not heap
-MACRO_EFFECTS = {
-    **dict.fromkeys(("IR_ACTIVATION", "IR_BEGIN_CALL_EFFECTS", "IR_CALL_ARG",
-                     "IR_CALL_FIRST", "IR_D", "IR_FUSED_DISTANCE", "IR_FUSED_IF_FALSE",
-                     "IR_GUARD_INLINE_INT", "IR_HANDLER",
-                     "IR_IS_LOCAL", "IR_METADATA_PASSTHROUGH", "IR_REPORT_EDGE",
-                     "IR_SKIP_RESUME", "IR_SLOT", "IR_TAKE_INPUT", "IR_WRITE_OUTPUT"),
-                    frozenset()),
-    **dict.fromkeys(("IR_DUP_CANONICAL_ELEMENT", "IR_DUP_SHAPE_READ",
-                     "IR_GUARD_ELEMENT_INDEX", "IR_GUARD_ELEMENT_TYPE",
-                     "IR_GUARD_SHAPE_READ", "IR_METHOD_POLY_LOOKUP",
-                     "IR_UNPACK_ITEMS"),
-                    frozenset((READS_HEAP,))),
-    "IR_BUILD_TUPLE": frozenset((ALLOCATES,)),
-    "IR_DEFER_CLOSE": frozenset((MAY_RELEASE,)),
-    # Marks RETURN_GENERATOR, whose handler never runs: the generator is
-    # made when the frame is entered
-    "IR_GENERATOR_MARKER": frozenset(),
-    # Fires the monitoring event, whose callback is Python
-    "INSTRUMENTED_JUMP": frozenset((MAY_RUN_PYTHON,)),
-}
-
 # The macros that read the site's poly rows, which only the specializer
 # fills (OperationRecord.reads_poly_table)
 POLY_TABLE_READERS = frozenset(("IR_METHOD_POLY_LOOKUP",))
 
-# A `*` after one of these dereferences a pointer
-DEREF_AFTER = frozenset(("(", "=", ",", ";", "{", "return"))
 ASSIGNS = frozenset(("=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>="))
 
 
@@ -1287,98 +808,15 @@ def _lvalue_is_heap(tokens: list, i: int) -> bool:
 
 def effect_sites(uop: Uop) -> list[tuple[Token, str | None]]:
     """The tokens of the body of uop that have an effect, in order, with it:
-    None for a call that the tables do not know.  A uop with a declared
-    contract has the sites of its rows (ir_contract.py)."""
+    the sites of its contract's rows (ir_contract.py)"""
     import ir_contract
-    if uop.clauses:
-        return ir_contract.record_effect_sites(uop)
-    p = uop.properties
-    tokens = [t for t in uop.body.tokens() if t.kind != "COMMENT"]
-    texts = [t.text for t in tokens]
-    escaping = {e.call.text for e in p.escaping_calls.values()}
-    sites = []
-    i = 0
-    while i < len(texts):
-        tkn, text = tokens[i], texts[i]
-        call = tkn.kind == "IDENTIFIER" and i + 1 < len(texts) and texts[i + 1] == "("
-        if call and text == "assert":
-            i = _close(texts, i + 1) + 1
-            continue
-        i += 1
-        if text in ASSIGNS and _lvalue_is_heap(texts, i - 1):
-            sites.append((tkn, WRITES_HEAP))
-        elif text in ("++", "--") and "->" in texts[max(i - 4, 0):i + 3]:
-            sites.append((tkn, WRITES_HEAP))
-        elif text == "->" or text == "*" and i > 1 and texts[i - 2] in DEREF_AFTER:
-            sites.append((tkn, READS_HEAP))
-        if not call:
-            continue
-        if text in TRANSFER_TOKENS and TRANSFER_TOKENS[text] == RAISE:
-            sites.append((tkn, MAY_RAISE))
-        if text in IR_MARKER_EFFECTS and "escapes" in IR_MARKER_EFFECTS[text]:
-            sites.append((tkn, MAY_RUN_PYTHON))
-        elif text in RELEASES:
-            # The last reference's finalizer may run Python, whether or not
-            # the analysis counts the release as escaping
-            sites.append((tkn, MAY_RELEASE))
-            if text == "_PyCell_SetValue":
-                sites.append((tkn, WRITES_HEAP))
-        elif text in NOT_RELEASES:
-            # A release whose deallocator runs no Python frees memory
-            sites.append((tkn, WRITES_HEAP))
-        elif p.escapes and text in escaping:
-            sites.append((tkn, MAY_RUN_PYTHON))
-        # A call that escapes only on the way to an error exit is a raise
-        elif PURE_CALLS.fullmatch(text) or text in escaping:
-            continue
-        elif text in ALLOCATORS:
-            sites += [(tkn, e) for e in ALLOCATORS[text]]
-        elif CONSTRUCTOR.search(text):
-            sites.append((tkn, ALLOCATES))
-        elif text in MACRO_EFFECTS:
-            sites += [(tkn, e) for e in MACRO_EFFECTS[text]]
-        elif WRITER_CALLS.fullmatch(text):
-            sites += [(tkn, READS_HEAP), (tkn, WRITES_HEAP)]
-        elif READER_CALLS.fullmatch(text):
-            sites.append((tkn, READS_HEAP))
-        elif text in ir_contract.rows():
-            # A row declares the call; its effects are the row's (G0d1
-            # deletes the tables above, and with them this inference)
-            sites += [(tkn, e) for effect in sorted(ir_contract.rows()[text].effects)
-                      for e in sorted(ir_contract.RECORD_EFFECT[effect])]
-        elif not text.isupper() or RELEASE_LIKE.search(text):
-            # Not a statement macro (STAT_INC, TAKE, ...): it may do anything
-            sites.append((tkn, None))
-    return sites
-
-
-def uop_effects(uop: Uop) -> frozenset[str]:
-    "Effects of uop that no one token has: it may switch frames or poll"
-    p = uop.properties
-    effects = set()
-    if not p.infallible:
-        effects.add(MAY_RAISE)
-    if p.switches_frame or p.returns or p.eval_breaker:
-        effects.add(MAY_RUN_PYTHON)
-    return frozenset(effects)
+    return ir_contract.record_effect_sites(uop)
 
 
 def uop_record_effects(uop: Uop) -> frozenset[str]:
-    """The effects of uop's record: its declared effects if it declares a
-    contract (ir_contract.py), else the inferred ones"""
-    if uop.clauses:
-        import ir_contract
-        return ir_contract.contract_of(uop).record_effects()
-    return infer_effects(uop)
-
-
-def infer_effects(uop: Uop) -> frozenset[str]:
-    "The effects that uop may have, inferred from its body"
-    effects = set(uop_effects(uop)) | {
-        e if e is not None else MAY_RUN_PYTHON for _, e in effect_sites(uop)}
-    if MAY_RUN_PYTHON in effects:
-        effects.update(EFFECTS)
-    return frozenset(effects)
+    "The effects of uop's record: its contract's (ir_contract.py)"
+    import ir_contract
+    return ir_contract.declared_contract(uop).record_effects()
 
 
 # The effects that a guard must precede: a failed guard re-runs the handler
@@ -1406,6 +844,7 @@ def guard_order(parts: list[Uop], uops: tuple[UopRecord, ...]) -> list[tuple[str
     """The guards of a handler that follow a change: pairs of the uop of
     the change and the uop of the guard.  parts are the handler's uops,
     uops their records."""
+    import ir_contract
     violations = []
     changed = None
     for part, record in zip(parts, uops):
@@ -1413,12 +852,13 @@ def guard_order(parts: list[Uop], uops: tuple[UopRecord, ...]) -> list[tuple[str
         position = {id(t): i for i, t in enumerate(order)}
         changes = [position[id(t)] for t, e in effect_sites(part)
                    if e is None or e in CHANGES]
-        if uop_effects(part) & CHANGES:
+        contract = ir_contract.declared_contract(part)
+        if contract.effects & {"switches_frame", "polls"} or "return" in contract.exits:
             # A frame switch is at its token; a return or a poll, which no
             # token says, is assumed at the start
-            p = part.properties
             switch = (frame_switch_site(order)
-                      if not (p.returns or p.eval_breaker) else None)
+                      if not ("return" in contract.exits or "polls" in contract.effects)
+                      else None)
             changes.append(0 if switch is None else switch)
         first = min(changes, default=None)
         for guard in record.guards:

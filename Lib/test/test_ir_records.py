@@ -59,7 +59,7 @@ class HandlerRecordTests(unittest.TestCase):
     def test_pure_uops_change_nothing(self):
         for name, uop in uops.items():
             if "pure" in uop.annotations:
-                effects = ir_records.infer_effects(uop)
+                effects = ir_records.uop_record_effects(uop)
                 self.assertFalse(effects & {WRITES_HEAP, MAY_RUN_PYTHON}, name)
 
     def test_exchanged_outputs_are_no_pass_throughs(self):
@@ -86,7 +86,7 @@ class HandlerRecordTests(unittest.TestCase):
                 ("_STORE_ATTR_SLOT", {READS_HEAP, WRITES_HEAP, MAY_RELEASE}),
                 ("_LIST_APPEND", set(EFFECTS))):
             with self.subTest(uop=name):
-                self.assertEqual(ir_records.infer_effects(uops[name]), effects)
+                self.assertEqual(ir_records.uop_record_effects(uops[name]), effects)
 
     def test_result_facts(self):
         def results(handler, uop):
@@ -114,11 +114,16 @@ class HandlerRecordTests(unittest.TestCase):
             [found] = [u for u in records[handler].uops if u.name == uop]
             return {str(f) for g in found.guards for f in g.facts}
 
-        # A specific version, and a version without naming it
+        # A specific version
         self.assertIn("TYPE_VERSION(v0, type_version)",
                       facts("LOAD_ATTR_METHOD_WITH_VALUES", "_GUARD_TYPE_VERSION"))
-        self.assertIn("TYPE_VERSION(v0)",
-                      facts("LOAD_ATTR_METHOD_POLY", "_GUARD_TYPE_HAS_VERSION"))
+        # A version without naming it is no fact that a row establishes:
+        # the declared guard gives its reason instead
+        [guard] = [u for u in records["LOAD_ATTR_METHOD_POLY"].uops
+                   if u.name == "_GUARD_TYPE_HAS_VERSION"]
+        self.assertIn("the type has no version", [g.reason for g in guard.guards])
+        self.assertNotIn("TYPE_VERSION(v0)",
+                         facts("LOAD_ATTR_METHOD_POLY", "_GUARD_TYPE_HAS_VERSION"))
 
     def test_poly_table_readers(self):
         # The poly execution variants and the handlers that call a
@@ -127,7 +132,7 @@ class HandlerRecordTests(unittest.TestCase):
             {name for name, record in records.items() if record.reads_poly_table},
             {"LOAD_ATTR_SHAPE_POLY", "LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP",
              "LOAD_ATTR_METHOD_POLY"})
-        self.assertIn(READS_HEAP, ir_records.infer_effects(uops["_LOAD_ATTR_METHOD_POLY"]))
+        self.assertIn(READS_HEAP, ir_records.uop_record_effects(uops["_LOAD_ATTR_METHOD_POLY"]))
 
     def test_feedback_operands_are_schema_fields(self):
         for record in records.values():
@@ -193,6 +198,14 @@ class HandlerRecordTests(unittest.TestCase):
             self.assertEqual(kinds[-1], ir_records.ENTER_FRAME)
 
 
+# The stand-in of the base handler OP: a function that reads its argument
+# and makes a new value
+GENERATOR_ROWS = """
+#define GENERATOR_ROWS(PRIMITIVE, HELPER, MACRO) \\
+    MACRO(SPAM_VALUE, ARGS(scalar), VALUE(owned), EFFECTS(reads), EXITS())
+"""
+
+
 class GeneratorTests(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
@@ -200,16 +213,18 @@ class GeneratorTests(unittest.TestCase):
         self.source = Path(directory.name) / "records.c"
         # SPAM_FLAG and its kin are stand-ins whose rows declare no reentry
         rows = mock.patch.dict(cases.ir_contract.rows(),
-                               cases.ir_contract.parse_rows(cases.TEST_ROWS))
+                               cases.ir_contract.parse_rows(cases.TEST_ROWS) |
+                               cases.ir_contract.parse_rows(GENERATOR_ROWS))
         rows.start()
         self.addCleanup(rows.stop)
 
     def generate(self, source):
         "The handlers of source, whose OP has the specialised form OP_INT"
         source += """
-        inst(OP, (value -- res)) {
-            assert(PyValue_IsObject(value));
-            res = SPAM(PyValue_AsKnownObjectBorrow(value));
+        inst(OP, (value: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
+            res = SPAM_VALUE(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
         }
         family(OP, 0) = { OP_INT };
@@ -225,10 +240,10 @@ class GeneratorTests(unittest.TestCase):
 
     def test_reason_prints_the_same_c(self):
         source = """
-        op(_GUARD, (value -- value)) {
+        op(_GUARD, (value -- value: inline_int)) effects() exits(next, miss) {
             EXIT_IF(!PyValue_IsInlineInt(value)%s);
         }
-        op(_USE, (value -- res)) {
+        op(_USE, (value: consumed -- res: moved(value))) effects() exits(next) {
             res = value;
             DEAD(value);
         }
@@ -238,12 +253,14 @@ class GeneratorTests(unittest.TestCase):
                          self.generate(source % ', "a reason"'))
 
     def test_unknown_guard_is_an_error(self):
-        with self.assertRaisesRegex(SyntaxError, "establishes no fact"):
+        # The verifier refuses the guard before ir_records.check_record can
+        # find that it establishes no fact
+        with self.assertRaisesRegex(SyntaxError, "is no combination of TEST rows"):
             self.generate("""
-            op(_GUARD, (value -- value)) {
+            op(_GUARD, (value -- value)) effects() exits(next, miss) {
                 EXIT_IF(SPAM_FLAG(value));
             }
-            op(_USE, (value -- res)) {
+            op(_USE, (value: consumed -- res: moved(value))) effects() exits(next) {
                 res = value;
                 DEAD(value);
             }
@@ -251,10 +268,13 @@ class GeneratorTests(unittest.TestCase):
             """)
 
     def test_pure_uop_must_not_write(self):
-        with self.assertRaisesRegex(SyntaxError, "annotated pure but may WRITES_HEAP"):
+        # A declared uop's effects are its record's, so the contract refuses
+        # a pure uop that declares a write before check_record sees one
+        with self.assertRaisesRegex(SyntaxError, "annotated pure but declares writes"):
             self.generate("""
-            pure inst(OP_INT, (value -- res)) {
-                assert(PyValue_IsObject(value));
+            pure inst(OP_INT, (value: consumed object -- res: moved(value)))
+                effects(reads, writes) exits(next)
+            {
                 PyObject *o = PyValue_AsKnownObjectBorrow(value);
                 o->ob_flags = 1;
                 res = value;
@@ -265,15 +285,14 @@ class GeneratorTests(unittest.TestCase):
     def test_guard_after_change_is_an_error(self):
         with self.assertRaisesRegex(SyntaxError, "guards that follow a change"):
             self.generate("""
-            op(_WRITE, (value -- value)) {
-                assert(PyValue_IsObject(value));
+            op(_WRITE, (value: object -- value)) effects(reads, writes) exits(next) {
                 PyObject *o = PyValue_AsKnownObjectBorrow(value);
                 o->ob_flags = 1;
             }
-            op(_GUARD, (value -- value)) {
+            op(_GUARD, (value -- value: inline_int)) effects() exits(next, miss) {
                 EXIT_IF(!PyValue_IsInlineInt(value));
             }
-            op(_USE, (value -- res)) {
+            op(_USE, (value: consumed -- res: moved(value))) effects() exits(next) {
                 res = value;
                 DEAD(value);
             }
@@ -281,10 +300,14 @@ class GeneratorTests(unittest.TestCase):
             """)
 
     def test_goto_into_the_evaluator_is_an_error(self):
-        with self.assertRaisesRegex(SyntaxError, "a uop may goto only an error label"):
+        # The walk models a goto to an error label only, so it refuses this
+        # one before uop_transfers can name the label
+        with self.assertRaisesRegex(SyntaxError, "`goto` is a form the walk does not model"):
             self.generate("""
-            inst(OP_INT, (value -- res)) {
-                if (SPAM_FLAG(value)) {
+            inst(OP_INT, (value: consumed -- res: moved(value)))
+                effects() exits(next)
+            {
+                if (SPAM_FLAG()) {
                     goto start_frame;
                 }
                 res = value;
@@ -295,8 +318,10 @@ class GeneratorTests(unittest.TestCase):
     def test_evaluator_local_is_an_error(self):
         with self.assertRaisesRegex(SyntaxError, "only the evaluator has"):
             self.generate("""
-            inst(OP_INT, (value -- res)) {
-                SPAM_INT(lastopcode);
+            inst(OP_INT, (value: consumed -- res: moved(value)))
+                effects() exits(next)
+            {
+                SPAM_KEEP(lastopcode);
                 res = value;
                 DEAD(value);
             }

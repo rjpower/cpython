@@ -119,6 +119,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_IsInstance), int
               "_PyValue_IsInstance: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_IsTrue), int (*)(PyValueBorrow)),
               "_PyValue_IsTrue: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_IsTrueSlow), int (*)(PyValueBorrow)),
+              "_PyValue_IsTrueSlow: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_LshiftInt64), PyValue (*)(int64_t, int64_t)),
               "_PyValue_LshiftInt64: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_Negative), PyValue (*)(PyValueBorrow)),
@@ -151,6 +153,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_AsKnownObjectBorr
               "_PyValue_AsKnownObjectBorrowPointer: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyValueGuarded_Load((_PyValueGuarded){0})), PyValueBorrow),
               "_PyValueGuarded_Load: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyValueGuarded_LoadObject), PyValueBorrow (*)(_PyValueGuarded)),
+              "_PyValueGuarded_LoadObject: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_CodeConstant((PyValueBorrow){0})), PyValueBorrow),
               "_PyValue_CodeConstant: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_BoundLocal((PyValueBorrow){0})), PyValueBorrow),
@@ -289,6 +293,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyTemplate_Build), PyObj
               "_PyTemplate_Build: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyClassMethod_GetFunc), PyObject * (*)(PyObject *)),
               "_PyClassMethod_GetFunc: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyGetSet_ValueRead), PyValue (*)(PyObject *, PyValueBorrow)),
+              "_PyGetSet_ValueRead: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyType_IteratesByIndex), int (*)(PyTypeObject *)),
               "_PyType_IteratesByIndex: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyUnicode_Equal), int (*)(PyObject *, PyObject *)),
@@ -353,6 +359,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&PyDict_New), PyObject * (
               "PyDict_New: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyDict_PopValue), int (*)(PyObject *, PyValueBorrow, PyValue *)),
               "PyDict_PopValue: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyDictIterItem_Next), int (*)(PyObject *, PyValue *)),
+              "_PyDictIterItem_Next: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyDict_SetValue), int (*)(PyObject *, PyValueBorrow, PyValueBorrow)),
               "PyDict_SetValue: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyDict_Update), int (*)(PyObject *, PyObject *)),
@@ -481,6 +489,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&call_push_exact), _PyInte
               "call_push_exact: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&call_vector), PyValue (*)(PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, PyValue)),
               "call_vector: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&call_new_generator), PyValue (*)(PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, int)),
+              "call_new_generator: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_GetANext), PyObject * (*)(PyObject *)),
               "_PyEval_GetANext: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_GetAwaitable), PyObject * (*)(PyValueBorrow, int)),
@@ -501,6 +511,12 @@ static_assert(__builtin_types_compatible_p(__typeof__(&gen_may_claim), bool (*)(
               "gen_may_claim: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&gen_try_set_executing), bool (*)(PyGenObject *)),
               "gen_try_set_executing: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyGen_NewCall), PyGenObject * (*)(PyThreadState *, PyValue, PyObject *, PyCodeObject *, _PyInterpreterFrame *)),
+              "_PyGen_NewCall: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&gen_prologue), int (*)(PyThreadState *, PyGenObject *, PyCodeObject *)),
+              "gen_prologue: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyGen_DiscardCall), void (*)(PyGenObject *)),
+              "_PyGen_DiscardCall: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_FormatExcCheckArg), void (*)(PyThreadState *, PyObject *, const char *, PyObject *)),
               "_PyEval_FormatExcCheckArg: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_FormatExcUnbound), void (*)(PyThreadState *, PyCodeObject *, int)),
@@ -8605,6 +8621,7 @@ ir_run_GET_ITER_PY_GENERATOR(
                 gen->gi_iframe.base[0] = iterable;
                 _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
                 if (gen_prologue(tstate, gen, (PyCodeObject *)func->func_code) < 0) {
+                    _PyGen_DiscardCall(gen);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 iter = PyValue_FromObjectSteal((PyObject *)gen);
@@ -10318,7 +10335,7 @@ ir_run_LOAD_ATTR_CLASSMETHOD(
             {
                 _PyValueGuarded class_value = fb->class_value;
                 assert(oparg & 1);
-                PyValueBorrow descriptor = _PyValueGuarded_Load(class_value);
+                PyValueBorrow descriptor = _PyValueGuarded_LoadObject(class_value);
                 assert(PyValue_IsObject(descriptor));
                 PyObject *cm = PyValue_AsKnownObjectBorrow(descriptor);
                 if (!Py_IS_TYPE(cm, &PyClassMethod_Type)) {
@@ -10550,7 +10567,7 @@ ir_run_LOAD_ATTR_GETSET(
             // _LOAD_ATTR_GETSET
             {
                 _PyValueGuarded class_value = fb->class_value;
-                PyValueBorrow descriptor = _PyValueGuarded_Load(class_value);
+                PyValueBorrow descriptor = _PyValueGuarded_LoadObject(class_value);
                 assert(PyValue_IsObject(descriptor));
                 PyObject *getset = PyValue_AsKnownObjectBorrow(descriptor);
                 assert(Py_IS_TYPE(getset, &PyGetSetDescr_Type));
@@ -23549,6 +23566,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 gen->gi_iframe.base[0] = iterable;
                 _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
                 if (gen_prologue(tstate, gen, (PyCodeObject *)func->func_code) < 0) {
+                    _PyGen_DiscardCall(gen);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 iter = PyValue_FromObjectSteal((PyObject *)gen);
@@ -24891,7 +24909,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 _PyValueGuarded class_value = fb->class_value;
                 assert(oparg & 1);
-                PyValueBorrow descriptor = _PyValueGuarded_Load(class_value);
+                PyValueBorrow descriptor = _PyValueGuarded_LoadObject(class_value);
                 assert(PyValue_IsObject(descriptor));
                 PyObject *cm = PyValue_AsKnownObjectBorrow(descriptor);
                 if (!Py_IS_TYPE(cm, &PyClassMethod_Type)) {
@@ -25111,7 +25129,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _LOAD_ATTR_GETSET
             {
                 _PyValueGuarded class_value = fb->class_value;
-                PyValueBorrow descriptor = _PyValueGuarded_Load(class_value);
+                PyValueBorrow descriptor = _PyValueGuarded_LoadObject(class_value);
                 assert(PyValue_IsObject(descriptor));
                 PyObject *getset = PyValue_AsKnownObjectBorrow(descriptor);
                 assert(Py_IS_TYPE(getset, &PyGetSetDescr_Type));

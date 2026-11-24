@@ -1184,7 +1184,7 @@ class Translator:
     def translate(self) -> LeafBody:
         import ir_contract
         uop = self.uop
-        contract = ir_contract.contract_of(uop)
+        contract = ir_contract.declared_contract(uop)
         inputs, outputs = [], []
         for item in uop.stack.inputs:
             if item.name == "unused":
@@ -1193,7 +1193,7 @@ class Translator:
                 raise LeafError(f"array input {item.name}[{item.size}]")
             inputs.append(item.name)
             self.env[item.name] = self.emit1("arg", VALUE, (), item.name)
-            declared = contract.input(item.name) if contract is not None else None
+            declared = contract.input(item.name)
             if declared is not None and declared.assumed:
                 self.assume(self.env[item.name][0], declared.assumed)
         for item in uop.stack.outputs:

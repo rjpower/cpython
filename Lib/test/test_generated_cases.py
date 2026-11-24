@@ -323,6 +323,13 @@ class TestIRCases(unittest.TestCase):
         os.remove(self.temp_input_filename)
         super().tearDown()
 
+    def add_rows(self, text: str) -> None:
+        """Rows for this test's stand-in callees, in TEST_ROWS's form: a
+        declared uop calls only rows"""
+        rows = mock.patch.dict(ir_contract.rows(), ir_contract.parse_rows(text))
+        rows.start()
+        self.addCleanup(rows.stop)
+
     def analyze(self, input: str):
         with open(self.temp_input_filename, "w") as temp_input:
             temp_input.write(parser.BEGIN_MARKER)
@@ -565,10 +572,15 @@ class TestIRCases(unittest.TestCase):
 
     def test_inline_input_read_as_object_needs_an_assert(self):
         # No handler boxes an inline value (handlers81, H3): a uop that reads
-        # an input as an object, outside a guard, asserts that it is one
+        # an input as an object, outside a guard, declares the `object` fact
+        # of it (an assert does not establish it)
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            HELPER(spam_call, PyObject *, (PyObject *), \\
+                   ARGS(object), VALUE_OR_NULL(owned), EFFECTS(reads, allocates, raises))
+        """)
         body = """
-        inst(OP, (value -- result)) {
-            %s
+        inst(OP, (value: consumed%s -- result: owned)) effects(reads, allocates, raises, releases)
+                exits(next, raise) {
             PyObject *object = PyValue_AsKnownObjectBorrow(value);
             PyObject *found = spam_call(object);
             DECREF_INPUTS();
@@ -576,9 +588,9 @@ class TestIRCases(unittest.TestCase):
             result = PyValue_FromObjectSteal(found);
         }
         """
-        with self.assertRaisesRegex(SyntaxError, "may be an inline value"):
+        with self.assertRaisesRegex(SyntaxError, "requires object of it"):
             self.ir_output(body % "")
-        output = self.ir_output(body % "assert(PyValue_IsObject(value));")
+        output = self.ir_output(body % " object")
         handler = self.handler(output, "OP")
         self.assertNotIn("value_temps", handler)
         self.assertNotIn("_PyValueTemps", handler)
@@ -777,7 +789,9 @@ class TestIRCases(unittest.TestCase):
 
     def test_terminal_observer_ownership_and_composition(self):
         source = """
-        inst(OP, (value -- res)) {
+        inst(OP, (value: consumed -- res: moved(value)))
+            effects(runs_python) exits(next, branch, raise)
+        {
             PyValue held = TAKE(value);
             res = held;
             IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
@@ -788,41 +802,46 @@ class TestIRCases(unittest.TestCase):
         self.assertNotIn("value_boxes[", output)
         self.assertNotIn("value_owners", output)
         changes = (
-            ("res = held;", "PyValue_CLOSE(held);", "not defined"),
-            ("PyValue held = TAKE(value);\n            res = held;",
-             "res = PyValue_None;", "still live"),
+            ("res = held;", "PyValue_CLOSE(held);", "`res` is not written before IR_OBSERVE_COMMITTED_BRANCH"),
             ("res = held;", "PyValue extra = PyValue_DUP(held); res = held;",
-             "untransferred C owners"),
+             "the new owner `extra` is still held"),
             ("res = held;", "PyValue alias = held; PyValue_CLOSE(held); res = alias;",
-             "used after transfer"),
+             "which is already consumed or moved"),
             ("res = held;", "if (flag) { PyValue_CLOSE(held); } res = held;",
-             "ambiguous terminal C ownership"),
+             "owned on one path and not on another"),
             ("res = held;", "steal(held); res = held;",
-             "unproved terminal C owner transport"),
+             "calls steal, which pycore_ir_components.h does not declare"),
             ("res = held;", "int ir_observer_next = 0; res = held;",
              "reserved local"),
             ("PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);",
              "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN); PyValue_CLOSE(res);",
-             "follows terminal observer"),
+             "follows IR_OBSERVE_COMMITTED_BRANCH, which never returns"),
             ("PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);",
              "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN); "
              "IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), "
-             "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);", "follows terminal observer"),
+             "PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);", "follows IR_OBSERVE_COMMITTED_BRANCH, which never returns"),
         )
         for old, new, message in changes:
             with self.subTest(message=message):
                 self.assertIn(old, source)
                 with self.assertRaisesRegex(SyntaxError, message):
                     self.ir_output(source.replace(old, new, 1))
+        # An owner still held at the observer: `res` is declared owned, not
+        # moved from the input, so that the assignment alone is not refused
+        with self.assertRaisesRegex(SyntaxError, "the new owner `held` is still held"):
+            self.ir_output(source.replace("res: moved(value)", "res: owned")
+                           .replace("res = held;", "res = PyValue_None;", 1))
         with self.assertRaisesRegex(SyntaxError, "finish the composed handler"):
             self.ir_output(source.replace("inst(OP,", "op(_OP,") + """
-            op(_AFTER, (--)) { do_work(); }
+            op(_AFTER, (--)) effects() exits(next) { assert(1); }
             macro(OP) = _OP + _AFTER;
         """)
 
     def test_terminal_observer_defined_null_edge(self):
         source = """
-        inst(OP, (value -- res)) {
+        inst(OP, (value: consumed -- res: moved(value) nullable))
+            effects(runs_python, releases) exits(next, branch, raise)
+        {
             PyValue held = TAKE(value);
             if (flag) {
                 res = held;
@@ -849,15 +868,19 @@ class TestIRCases(unittest.TestCase):
             analysis.instructions['OP'], formats['OP']),
             ('_PyIR_OBSERVER_FORMAT_NULL_FIRST', '_PyIR_OBSERVER_FORMAT_VALUE'))
         self.ir_output(source)
-        with self.assertRaisesRegex(SyntaxError, "after transfer|not held|duplicate deferred"):
+        with self.assertRaisesRegex(SyntaxError, "already consumed or moved"):
             self.ir_output(source.replace("IR_DEFER_CLOSE(held);",
                 "IR_DEFER_CLOSE(held); IR_DEFER_CLOSE(held);"))
-        with self.assertRaisesRegex(SyntaxError, "not held"):
+        with self.assertRaisesRegex(SyntaxError, "names no owner"):
             self.ir_output(source.replace("IR_DEFER_CLOSE(held);",
                                           "IR_DEFER_CLOSE(unknown);"))
-        for suffix in ('held = PyValue_None;', 'PyValue_CLOSE(held);', 'read(held);'):
+        for suffix, message in (
+            ('held = PyValue_None;', "after transfer"),
+            ('PyValue_CLOSE(held);', "already consumed or moved"),
+            ('PyValue_IsNull(held);', "after transfer"),
+        ):
             with self.subTest(suffix=suffix):
-                with self.assertRaisesRegex(SyntaxError, "after transfer"):
+                with self.assertRaisesRegex(SyntaxError, message):
                     self.ir_output(source.replace('IR_DEFER_CLOSE(held);',
                         'IR_DEFER_CLOSE(held); ' + suffix))
         with self.assertRaisesRegex(SyntaxError, 'deferred owner exits'):
@@ -866,7 +889,7 @@ class TestIRCases(unittest.TestCase):
 
     def test_terminal_observer_explicit_owner_edge(self):
         jump = """
-        inst(OP, (--)) {
+        inst(OP, (--)) effects(runs_python) exits(next, branch, raise) {
             IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
                 PY_MONITORING_EVENT_JUMP, _PyIR_EDGE_TAKEN);
         }
@@ -883,7 +906,9 @@ class TestIRCases(unittest.TestCase):
                 with self.assertRaisesRegex(SyntaxError, message):
                     self.ir_output(jump.replace(old, new))
         iterator = """
-        inst(OP, (iter, index_or_null --)) {
+        inst(OP, (iter: consumed, index_or_null: closed --))
+            effects(runs_python) exits(next, branch, raise)
+        {
             PyValue held = TAKE(iter);
             (void)index_or_null;
             DEAD(index_or_null);
@@ -1165,9 +1190,12 @@ class TestIRCases(unittest.TestCase):
         }""", "<unchanged await fallback>").block()
         self.assertEqual(fallback, [ir_generator._statement_text(stmt) for stmt in expected.body])
 
-    def test_owning_alias_result_meets_all_normal_arms(self):
+    def test_alias_output_meets_no_fresh_owner(self):
+        # An output declared moved(x) is x itself on every path. A result
+        # that takes the input on one arm and holds a new owner on another
+        # is owned, so its dst may name a local.
         source = """
-        inst(OP, (value -- result)) {
+        inst(OP, (value: consumed -- result: %s)) effects(runs_python) exits(next, raise) {
             if (coro_awaitable_can_transfer(value)) {
                 result = TAKE(value);
             }
@@ -1179,59 +1207,22 @@ class TestIRCases(unittest.TestCase):
             }
         }
         """
-        analysis = self.analyze(source)
-        instruction = analysis.instructions["OP"]
-        formats = ir_generator.compute_formats(analysis)
-        self.assertTrue(formats["OP"].store_dst)
-        self.assertFalse(formats["OP"].no_fold)
-        self.assertEqual(instruction.parts[0].aliased_outputs, ("result",))
-        effect = ir_generator.analyze_error_effects(instruction)
-        self.assertEqual(effect.homes, ir_generator.HomeEffect.UNKNOWN)
-        self.assertTrue(effect.callback)
-        self.assertTrue(effect.may_fail)
-        owning = ir_generator.owning_output_source(instruction)
-        self.assertEqual(owning.owning_outputs, frozenset({"result"}))
-        output = io.StringIO()
-        out = CWriter(output, 0, False)
-        ir_generator.generate_handler("OP", instruction, formats["OP"],
-            ir_generator.IREmitter(out, analysis, formats), out)
-        self.assertIn("IR_STORE_DST(ir_word, A, result);", output.getvalue())
-        mutations = (
-            ("result = PyValue_FromObjectSteal(pointer);", "result = PyValue_NULL;"),
-            ("result = PyValue_FromObjectSteal(pointer);", "result = value;"),
-            ("ERROR_IF(pointer == NULL);", "assert(true);"),
-            ("result = TAKE(value);", "value = PyValue_NULL; result = TAKE(value);"),
-            ("result = TAKE(value);", "result = TAKE(value); PyValue alias = result;"),
-            ("result = TAKE(value);", "result = TAKE(value); opaque(&result);"),
-            ("result = TAKE(value);", "result = TAKE(value); PyValue_CLOSE(result);"),
-            ("result = TAKE(value);", "result = TAKE(value); result = PyValue_FromInlineInt(1);"),
-            ("result = TAKE(value);", "PyValue held = TAKE(value); result = PyValue_FromInlineInt(1);"),
-            ("result = TAKE(value);", "PyValue held = PyValue_FromInlineInt(1); result = TAKE(value);"),
-            ("result = TAKE(value);", "DECREF_INPUTS(); result = TAKE(value);"),
-            ("result = TAKE(value);", "INPUTS_DEAD(); result = TAKE(value);"),
-            ("result = TAKE(value);", "PyValue held = PyValue_FromInlineInt(1); ERROR_IF(oparg); PyValue_CLOSE(held); result = TAKE(value);"),
-        )
-        for old, new in mutations:
-            with self.subTest(mutation=new):
-                changed = self.analyze(source.replace(old, new))
-                self.assertIsNone(ir_generator.owning_output_source(changed.instructions["OP"]))
-                fmt = ir_generator.compute_formats(changed)["OP"]
-                if changed.instructions["OP"].parts[0].aliased_outputs:
-                    self.assertFalse(fmt.store_dst)
-                    self.assertTrue(fmt.no_fold)
-        # The source projection alone cannot excuse a missing actual owner
-        # acquisition at the generated join.
-        from unittest import mock
-        original = ir_generator.IREmitter.apply_value_transport
-        def revoke(emitter, storage, *args, **kwargs):
-            original(emitter, storage, *args, **kwargs)
-            emitter.owning_take_output = None
-        with mock.patch.object(ir_generator.IREmitter, "apply_value_transport", revoke):
+        def generate(declaration):
+            analysis = self.analyze(source % declaration)
+            instruction = analysis.instructions["OP"]
+            formats = ir_generator.compute_formats(analysis)
             output = io.StringIO()
             out = CWriter(output, 0, False)
-            with self.assertRaisesRegex(ir_generator.StackError, "final owning-result receipt"):
-                ir_generator.generate_handler("OP", instruction, formats["OP"],
-                    ir_generator.IREmitter(out, analysis, formats), out)
+            ir_generator.generate_handler("OP", instruction, formats["OP"],
+                ir_generator.IREmitter(out, analysis, formats), out)
+            return instruction, formats["OP"], output.getvalue()
+        with self.assertRaisesRegex(SyntaxError, "declared moved\\(value\\).*no input's value"):
+            generate("moved(value)")
+        instruction, fmt, handler = generate("owned")
+        self.assertEqual(instruction.parts[0].aliased_outputs, ())
+        self.assertTrue(fmt.store_dst)
+        self.assertFalse(fmt.no_fold)
+        self.assertIn("IR_STORE_DST(ir_word, A, result);", handler)
 
     def test_generator_entry_recipient_uses_actual_terminal(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -1453,8 +1444,14 @@ class TestIRCases(unittest.TestCase):
         # Inputs that are only used as objects are read through their fields
         # and may be borrowed locals.  (The result of a call that runs no
         # code would be followed as derived from the objects, S7.)
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            HELPER(spam_call, PyObject *, (PyObject *, PyObject *), \\
+                   ARGS(object, object), VALUE_OR_NULL(owned), EFFECTS(reads, allocates, raises))
+        """)
         input = """
-        inst(OP, (left, right -- res)) {
+        inst(OP, (left: consumed object, right: consumed object -- res: owned))
+            effects(reads, allocates, raises, releases) exits(next, raise)
+        {
             assert(PyValue_IsObject(left));
             assert(PyValue_IsObject(right));
             PyObject *l = PyValue_AsKnownObjectBorrow(left);
@@ -1519,30 +1516,50 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(fmt.borrow_mask, 0b11)
 
     def test_borrow_mask(self):
+        # SPAM reads the object (a view of the input), SPAM_KEEP keeps its
+        # argument as the result
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            HELPER(SPAM, PyValue, (PyObject *), \\
+                   ARGS(object), VALUE(owned), EFFECTS(reads)) \\
+            HELPER(SPAM_RAW, PyValue, (bool), \\
+                   ARGS(scalar), VALUE(owned), EFFECTS()) \\
+            HELPER(SPAM_KEEP, PyValue, (PyValue), \\
+                   ARGS(consumed), VALUE(moved(0)), EFFECTS())
+        """)
         input = """
-        inst(OP_PASS, (value -- value, res)) {
+        inst(OP_PASS, (value: object -- value, res: owned))
+            effects(reads) exits(next)
+        {
             assert(PyValue_IsObject(value));
             res = SPAM(PyValue_AsKnownObjectBorrow(value));
         }
-        inst(OP_OBJ, (value -- res)) {
+        inst(OP_OBJ, (value: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
             assert(PyValue_IsObject(value));
             res = SPAM(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
         }
-        inst(OP_FAMILY, (value -- res)) {
+        inst(OP_FAMILY, (value: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
             assert(PyValue_IsObject(value));
             res = SPAM(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
         }
-        inst(OP_FAMILY_RAW, (value -- res)) {
+        inst(OP_FAMILY_RAW, (value: consumed -- res: owned))
+            effects(releases) exits(next)
+        {
             res = SPAM_RAW(PyValue_IsNone(value));
             PyValue_CLOSE(value);
         }
         family(OP_FAMILY, 0) = { OP_FAMILY_RAW };
-        inst(OP_KEEP, (value -- res)) {
+        inst(OP_KEEP, (value: consumed -- res: moved(value)))
+            effects() exits(next)
+        {
             res = SPAM_KEEP(value);
         }
-        inst(OP_STORE, (value --)) {
+        inst(OP_STORE, (value: consumed --)) effects() exits(next) {
             GETLOCAL(oparg) = value;
             DEAD(value);
         }
@@ -1570,21 +1587,35 @@ class TestIRCases(unittest.TestCase):
         # up the slot: a temporary's value, or NULL for a local.  A release
         # of the view is the owner's; TAKE() gives the value a count of its
         # own, the owner's or a DUP of a local.
+        # SPAM reads the object; SPAM_OWNED consumes a reference and returns
+        # another
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            PRIMITIVE(SPAM, bool, (PyObject *), \\
+                      ARGS(object), SCALAR, EFFECTS(reads)) \\
+            HELPER(SPAM_OWNED, PyObject *, (PyObject *), \\
+                   ARGS(consumed object), VALUE_OR_NULL(owned), EFFECTS(allocates, raises))
+        """)
         input = """
-        inst(OP_CLOSE, (value --)) {
+        inst(OP_CLOSE, (value: consumed object --)) effects(reads, releases) exits(next) {
             assert(PyValue_IsObject(value));
             SPAM(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
         }
-        inst(OP_HELD, (value -- res)) {
+        inst(OP_HELD, (value: consumed -- res: moved(value))) effects() exits(next) {
             res = TAKE(value);
         }
-        inst(OP_STEAL, (value -- res)) {
+        inst(OP_STEAL, (value: consumed object -- res: owned))
+            effects(allocates, raises) exits(next, raise)
+        {
             assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectSteal(value);
-            res = PyValue_FromObjectSteal(SPAM(o));
+            PyObject *n = SPAM_OWNED(o);
+            ERROR_IF(n == NULL);
+            res = PyValue_FromObjectSteal(n);
         }
-        inst(OP_ALIAS, (value -- res)) {
+        inst(OP_ALIAS, (value: consumed object -- res: moved(value) encoding(null|object)))
+            effects(reads, releases) exits(next)
+        {
             assert(PyValue_IsObject(value));
             if (SPAM(PyValue_AsKnownObjectBorrow(value))) {
                 res = TAKE(value);
@@ -1625,7 +1656,7 @@ class TestIRCases(unittest.TestCase):
         # A view has no count, so no slot or home may hold it: an output that
         # a handler stores is assigned TAKE() of it
         input = """
-        inst(OP, (value -- res)) {
+        inst(OP, (value: consumed -- res: moved(value))) effects() exits(next) {
             res = value;
             DEAD(value);
         }
@@ -1638,11 +1669,11 @@ class TestIRCases(unittest.TestCase):
         # The frame gives up the slot once, where the first of the input's
         # views dies or is taken; a TAKE after that reads the same owner
         input = """
-        op(_FIRST, (value -- copy)) {
+        op(_FIRST, (value: consumed -- copy: moved(value))) effects() exits(next) {
             copy = value;
             DEAD(value);
         }
-        op(_SECOND, (copy -- res)) {
+        op(_SECOND, (copy: consumed -- res: moved(copy))) effects() exits(next) {
             res = TAKE(copy);
         }
         macro(OP) = _FIRST + _SECOND;
@@ -1658,17 +1689,21 @@ class TestIRCases(unittest.TestCase):
 
     def test_taken_view_form_follows_nullable_and_pointer_facts(self):
         # A taken input tests for NULL only when the instruction declares it
-        # nullable, and tests for an inline value only when no assert or
-        # guard shows that it is an object
+        # nullable, and tests for an inline value only when the instruction
+        # does not declare the input an object (assumed(object): an assert
+        # in the body is no evidence)
         input = """
-        inst(OP_NULLABLE, (value:nullable -- res)) {
+        inst(OP_NULLABLE, (value: consumed nullable -- res: moved(value) nullable))
+            effects() exits(next)
+        {
             res = TAKE(value);
         }
-        inst(OP_REQUIRED, (value -- res)) {
+        inst(OP_REQUIRED, (value: consumed -- res: moved(value))) effects() exits(next) {
             res = TAKE(value);
         }
-        inst(OP_OBJECT, (value -- res)) {
-            assert(PyValue_IsObject(value));
+        inst(OP_OBJECT, (value: consumed assumed(object) by SPAM -- res: moved(value)))
+            effects() exits(next)
+        {
             res = TAKE(value);
         }
     """
@@ -1680,6 +1715,9 @@ class TestIRCases(unittest.TestCase):
     def test_no_addressable_locals(self):
         # The lint: no uop or label body takes the address of a local it
         # declares or of a stack item that is not an array
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            PRIMITIVE(spam_call, int, (void *), ARGS(scalar), SCALAR, EFFECTS())
+        """)
         bad = [
             ("&held", "PyValue held = PyValue_NULL; spam_call(&held);"),
             ("&scope", "_PyNativeScope scope; spam_call(&scope.result);"),
@@ -1698,14 +1736,16 @@ class TestIRCases(unittest.TestCase):
             # A local array decays to its address
             ("small\\[\\] \\(a local array", "PyValue small[2]; spam_call(small);"),
             # The locals that the generator declares around a body
-            ("&ir_displaced", "spam_call(&ir_displaced);"),
+            # (ir_displaced is a local of a ceval_macros.h macro, not of the
+            # handler the generator writes)
+            ("&ir_rest", "spam_call(&ir_rest);"),
             ("&call_state", "spam_call(&call_state);"),
             ("&ir_own_B", "spam_call(&ir_own_B);"),
         ]
         for site, body in bad:
             with self.subTest(site=site):
                 input = f"""
-        inst(OP, (value -- )) {{
+        inst(OP, (value: closed --)) effects(reads) exits(next) {{
             {body}
             DEAD(value);
         }}
@@ -1725,7 +1765,7 @@ class TestIRCases(unittest.TestCase):
         for body in good:
             with self.subTest(body=body):
                 input = f"""
-        inst(OP, (value -- )) {{
+        inst(OP, (value: closed --)) effects(reads) exits(next) {{
             {body}
             DEAD(value);
         }}
@@ -1736,8 +1776,20 @@ class TestIRCases(unittest.TestCase):
         # R-a, R-b: the helpers of a value operation take the handler's
         # values, its frame and instruction, and slot numbers from the word;
         # there is no operation record
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            HELPER(spam_call, PyValue, (PyValueBorrow, PyValueBorrow), \\
+                   ARGS(borrowed, borrowed), VALUE(owned null_iff(0)), EFFECTS(runs_python)) \\
+            MACRO(IR_RESTORE_VALUE_INPUTS, ARGS(lvalue, lvalue), NONE, EFFECTS(), EXITS()) \\
+            HELPER(value_operation_close3, void, (PyValue, PyValue, PyValue), \\
+                   ARGS(consumed, consumed, consumed), NONE, EFFECTS(releases)) \\
+            MACRO(IR_ABORT_VALUE_READER, ARGS(), NONE, EFFECTS(), EXITS(abort)) \\
+            MACRO(IR_COMPLETE_VALUE_READER, ARGS(lvalue, consumed, consumed), NONE, \\
+                  EFFECTS(runs_python, releases), EXITS())
+        """)
         input = """
-        inst(OP, (left, right -- res)) {
+        inst(OP, (left: consumed, right: consumed -- res: owned))
+            effects(runs_python, releases) exits(next, abort)
+        {
             PyValue held_left = TAKE(left);
             PyValue held_right = TAKE(right);
             INPUTS_DEAD();
@@ -1771,8 +1823,12 @@ class TestIRCases(unittest.TestCase):
         # OWNER() gives the owner itself, NULL for a local, which only
         # IR_RETIRE_PUBLISHED may read, with no call that can run code
         # between them
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(IR_RETIRE_PUBLISHED, ARGS(consumed), NONE, EFFECTS(), EXITS()) \\
+            HELPER(spam_call, int, (), ARGS(), SCALAR, EFFECTS(runs_python))
+        """)
         input = """
-        inst(OP, (value -- )) {
+        inst(OP, (value: consumed --)) effects() exits(next) {
             PyValue held = OWNER(value);
             IR_RETIRE_PUBLISHED(held);
         }
@@ -1787,7 +1843,7 @@ class TestIRCases(unittest.TestCase):
         self.assertNotIn("retire_published_values", output)
         self.assertNotIn("&held", output)
         gap = """
-        inst(OP, (value -- )) {
+        inst(OP, (value: consumed --)) effects(runs_python) exits(next) {
             PyValue held = OWNER(value);
             spam_call();
             IR_RETIRE_PUBLISHED(held);
@@ -1798,7 +1854,7 @@ class TestIRCases(unittest.TestCase):
                                     "IR_RETIRE_PUBLISHED"):
             self.ir_output(gap)
         stray = """
-        inst(OP, (value -- )) {
+        inst(OP, (value: consumed --)) effects(reads, releases) exits(next) {
             PyValue held = OWNER(value);
             SPAM(held);
             IR_RETIRE_PUBLISHED(held);
@@ -1811,55 +1867,66 @@ class TestIRCases(unittest.TestCase):
         # S7: a call that can run code can rebind a local and release the
         # value that its view, or the object of the view, reads.  Neither is
         # read after the call unless the body took the view before it.
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            HELPER(spam_call, int, (PyObject *), \\
+                   ARGS(scalar), SCALAR, EFFECTS(runs_python, raises)) \\
+            HELPER(SPAM, PyValue, (PyObject *), \\
+                   ARGS(scalar), VALUE(owned), EFFECTS(reads)) \\
+            HELPER(SPAM_PAIR, PyValue, (Py_ssize_t, PyObject *), \\
+                   ARGS(scalar, scalar), VALUE(owned), EFFECTS(reads))
+        """)
+        # SPAM_PAIR reads its arguments, as SPAM does
+        readers = mock.patch.object(ir_generator, "OBJECT_READERS",
+                                    ir_generator.OBJECT_READERS | {"SPAM_PAIR"})
+        readers.start()
+        self.addCleanup(readers.stop)
+        # The error exit closes the result, which the body has assigned
+        # before it tests the call's status
+        raised = "if (err) { PyValue_CLOSE(res); ERROR_NO_POP(); }"
         for body in ("int err = spam_call(PyValue_AsKnownObjectBorrow(value));\n"
-                     "res = TAKE(value);\n"
-                     "ERROR_IF(err);",
+                     "res = TAKE(value);\n" + raised,
                      "PyObject *o = PyValue_AsKnownObjectBorrow(value);\n"
-                     "int err = spam_call();\n"
+                     "int err = spam_call(NULL);\n"
                      "res = SPAM(o);\n"
-                     "PyValue_CLOSE(value);\n"
-                     "ERROR_IF(err);",
+                     "PyValue_CLOSE(value);\n" + raised,
                      # A cast of the object is followed too
                      "PyTupleObject *t = (PyTupleObject *)"
                      "PyValue_AsKnownObjectBorrow(value);\n"
-                     "int err = spam_call();\n"
+                     "int err = spam_call(NULL);\n"
                      "res = SPAM(t);\n"
-                     "PyValue_CLOSE(value);\n"
-                     "ERROR_IF(err);",
+                     "PyValue_CLOSE(value);\n" + raised,
                      # So are pointers derived from the object: its type,
                      # and an address inside it
                      "PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(value));\n"
-                     "int err = spam_call();\n"
+                     "int err = spam_call(NULL);\n"
                      "res = SPAM(tp->tp_name);\n"
-                     "PyValue_CLOSE(value);\n"
-                     "ERROR_IF(err);",
+                     "PyValue_CLOSE(value);\n" + raised,
                      "PyObject **t = (PyObject **)"
                      "((char *)PyValue_AsKnownObjectBorrow(value) + 8);\n"
-                     "int err = spam_call();\n"
+                     "int err = spam_call(NULL);\n"
                      "res = SPAM(*t);\n"
-                     "PyValue_CLOSE(value);\n"
-                     "ERROR_IF(err);",
+                     "PyValue_CLOSE(value);\n" + raised,
                      # through an assignment, or a type that may be a pointer
                      "PyTypeObject *tp;\n"
                      "tp = Py_TYPE(PyValue_AsKnownObjectBorrow(value));\n"
-                     "int err = spam_call();\n"
+                     "int err = spam_call(NULL);\n"
                      "res = SPAM(tp->tp_name);\n"
-                     "PyValue_CLOSE(value);\n"
-                     "ERROR_IF(err);",
+                     "PyValue_CLOSE(value);\n" + raised,
                      "getattrofunc f = "
                      "Py_TYPE(PyValue_AsKnownObjectBorrow(value))->tp_getattro;\n"
-                     "int err = spam_call();\n"
+                     "int err = spam_call(NULL);\n"
                      "res = SPAM(f);\n"
-                     "PyValue_CLOSE(value);\n"
-                     "ERROR_IF(err);",
+                     "PyValue_CLOSE(value);\n" + raised,
                      # C does not order the operands of an expression: the
                      # view may be read after the call
-                     "res = SPAM(spam_call(), PyValue_AsKnownObjectBorrow(value));\n"
-                     "PyValue_CLOSE(value);"):
+                     "res = SPAM_PAIR(spam_call(NULL), PyValue_AsKnownObjectBorrow(value));\n"
+                     "PyValue_CLOSE(value);\n"
+                     "if (oparg) { PyValue_CLOSE(res); ERROR_NO_POP(); }"):
             with self.subTest(body=body):
                 with self.assertRaisesRegex(SyntaxError, r"\(S7\)"):
                     self.ir_output(f"""
-                    inst(OP, (value -- res)) {{
+                    inst(OP, (value: consumed object -- res: {"moved(value)" if "TAKE" in body else "owned"}))
+                    effects(reads, runs_python, raises, releases) exits(next, raise) {{
                         assert(PyValue_IsObject(value));
                         {body}
                     }}
@@ -1867,16 +1934,20 @@ class TestIRCases(unittest.TestCase):
         # A release after the call reads the owner, and a TAKE before the
         # call keeps the object alive
         output = self.handler(self.ir_output("""
-        inst(OP, (value -- res)) {
+        inst(OP, (value: consumed object -- res: owned))
+            effects(reads, runs_python, raises, releases) exits(next, raise)
+        {
             assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             PyValue held = TAKE(value);
             int err = spam_call(o);
             res = SPAM(o);
             PyValue_CLOSE(held);
-            ERROR_IF(err);
+            if (err) { PyValue_CLOSE(res); ERROR_NO_POP(); }
         }
-        inst(OP_RELEASE, (value -- res)) {
+        inst(OP_RELEASE, (value: consumed object -- res: owned))
+            effects(reads, runs_python, raises, releases) exits(next, raise)
+        {
             assert(PyValue_IsObject(value));
             int err = spam_call(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
@@ -1888,33 +1959,38 @@ class TestIRCases(unittest.TestCase):
                         output.index("spam_call("))
         # The designator and the arguments of the call are read before it
         # runs, and a number read from the object does not dangle
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            SLOT(binaryfunc, PyObject *, (PyObject *, PyObject *), \\
+                 ARGS(object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \\
+            FIELD(PyTypeObject, tp_as_number, PyNumberMethods *, ON(type), \\
+                  PATH(number_methods), EFFECTS(reads)) \\
+            FIELD(PyNumberMethods, nb_add, binaryfunc, ON(number_methods), \\
+                  SLOT(binaryfunc), EFFECTS(reads))
+        """)
         input = """
-        inst(OP, (value -- res)) {
+        inst(OP, (value: consumed object -- res: owned))
+            effects(reads, runs_python, raises, releases) exits(next)
+        {
             assert(PyValue_IsObject(value));
             res = SPAM(spam_call(PyValue_AsKnownObjectBorrow(value)));
             PyValue_CLOSE(value);
         }
-        inst(OP_POINTER, (value -- res)) {
+        inst(OP_POINTER, (value: consumed object -- res: owned))
+            effects(reads, runs_python, raises, releases) exits(next, raise)
+        {
             assert(PyValue_IsObject(value));
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             binaryfunc action = Py_TYPE(o)->tp_as_number->nb_add;
             Py_ssize_t n = Py_TYPE(o)->tp_basicsize;
-            PyObject *r = (*action)(o, o);
-            SPAM(n, r);
+            PyObject *r = action(o, o);
             PyValue_CLOSE(value);
-            res = PyValue_None;
-        }
-        inst(OP_FIELD, (value -- res)) {
-            assert(PyValue_IsObject(value));
-            PyObject *o = PyValue_AsKnownObjectBorrow(value);
-            PyObject *r = Py_TYPE(o)->tp_as_number->action(o, o);
-            SPAM(r);
-            PyValue_CLOSE(value);
-            res = PyValue_None;
+            ERROR_IF(r == NULL);
+            (void)n;
+            res = PyValue_FromObjectSteal(r);
         }
     """
         formats = self.formats(input)
-        for name in ("OP", "OP_POINTER", "OP_FIELD"):
+        for name in ("OP", "OP_POINTER"):
             with self.subTest(name=name):
                 self.assertEqual(formats[name].borrow_mask, 1)
         self.assertIn("res = SPAM(spam_call(_PyValue_AsKnownObjectBorrowPointer(value)));",
@@ -1924,33 +2000,46 @@ class TestIRCases(unittest.TestCase):
         # A view and its copy read one owner: a take or release of one of
         # them spends it and kills both, so a second would count it twice
         double = """
-        op(_COPY, (value -- value, copy)) {
+        op(_COPY, (value -- value, copy: borrowed)) effects() exits(next) {
             copy = value;
         }
-        op(_USE, (value, copy -- %s)) {
+        op(_USE, (value: borrowed, copy: consumed -- %s)) effects(releases) exits(next) {
             res = TAKE(copy);
             %s
         }
         macro(OP) = _COPY + _USE;
     """
-        for second in ("PyValue_CLOSE(value);", "PyValue_CLOSE(copy);",
-                       "res2 = TAKE(value);"):
+        # The contract refuses the second spend before the generator's
+        # check: the view is declared borrowed, which no release or take
+        # of it may spend, and the copy is spent by the first take
+        for second, message in (
+            ("PyValue_CLOSE(value);", "consumes `value`, declared borrowed"),
+            ("PyValue_CLOSE(copy);", "consumes `copy`, which is already consumed or moved"),
+            ("res2 = TAKE(value);", "consumes `value`, declared borrowed"),
+        ):
             with self.subTest(second=second):
-                outputs = "res, res2" if "res2" in second else "res"
-                with self.assertRaisesRegex(SyntaxError,
-                                            "taken or released already|"
-                                            "read after the body took or "
-                                            "released"):
+                outputs = ("res: moved(copy), res2: moved(value)" if "res2" in second
+                           else "res: moved(copy)")
+                with self.assertRaisesRegex(SyntaxError, message):
                     self.ir_output(double % (outputs, second))
-        # DECREF_INPUTS releases no input that a take killed
-        output = self.handler(self.ir_output(double % ("res", "DECREF_INPUTS();")),
-                              "OP")
+        # DECREF_INPUTS releases no input that a take killed (the contract
+        # asks for DEAD() of it first, and of the view as well if it is not
+        # consumed)
+        output = self.handler(self.ir_output(
+            double.replace("value: borrowed, copy", "value: consumed, copy")
+            % ("res: moved(copy)", "DEAD(copy);\n            DECREF_INPUTS();")), "OP")
         self.assertNotIn("XCLOSE(ir_own_B)", output)
         self.assertEqual(output.count("ir_own_B"),
                          output.count("ir_own_B = IR_DETACH") + 3)
         # Exclusive branches spend it once each
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            HELPER(SPAM, PyValue, (PyObject *), \\
+                   ARGS(object), VALUE(owned), EFFECTS(reads))
+        """)
         output = self.handler(self.ir_output("""
-        inst(OP, (value -- res)) {
+        inst(OP, (value: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
             assert(PyValue_IsObject(value));
             if (SPAM_FLAG()) {
                 res = TAKE(value);
@@ -1966,16 +2055,18 @@ class TestIRCases(unittest.TestCase):
         # The take kills every view and copy of the input: one is not read
         # after it, and none needs DEAD()
         copy = """
-        op(_COPY, (value -- value, copy)) {
+        op(_COPY, (value -- value, copy: borrowed)) effects() exits(next) {
             copy = value;
         }
-        op(_USE, (value, copy -- res)) {
+        op(_USE, (value: closed, copy: consumed -- res: moved(copy)))
+            effects() exits(next)
+        {
             res = TAKE(copy);
             %s
         }
         macro(OP) = _COPY + _USE;
     """
-        for read in ("int x = PyValue_IsNone(value);\nSPAM(x);",
+        for read in ("int x = PyValue_IsNone(value);\n(void)x;",
                      "if (PyValue_IsNone(value)) {\nSPAM_FLAG();\n}"):
             with self.subTest(read=read):
                 with self.assertRaisesRegex(SyntaxError,
@@ -1991,36 +2082,59 @@ class TestIRCases(unittest.TestCase):
         # A deopt or exit goes to an instruction that reads the inputs from
         # their slots, which a take cleared, and DISPATCH_SAME_OPARG runs
         # the handler again
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            HELPER(SPAM, PyValue, (PyObject *), \\
+                   ARGS(object), VALUE(owned), EFFECTS(reads)) \\
+            PRIMITIVE(SPAM_FLAG, bool, (), \\
+                      ARGS(), CONTEXT("a flag the handler tests"), EFFECTS())
+        """)
+        # The contract refuses it before the generator does: its message is
+        # that the deopt follows a take
         with self.assertRaisesRegex(SyntaxError,
-                                    "DEOPT_IF after the handler took"):
+                                    "the deopt follows TAKE consuming `value`, "
+                                    "so the word cannot restart"):
             self.ir_output("""
-            inst(OP, (value -- res)) {
+            inst(OP, (value: consumed object -- res: owned))
+                effects(reads, releases) exits(next)
+            {
                 assert(PyValue_IsObject(value));
                 res = SPAM(PyValue_AsKnownObjectBorrow(value));
                 PyValue_CLOSE(value);
             }
-            inst(OP_SPECIALIZED, (value -- res)) {
+            inst(OP_SPECIALIZED, (value: consumed -- res: owned))
+                effects() exits(next, deopt)
+            {
                 res = TAKE(value);
                 DEOPT_IF(SPAM_FLAG());
             }
             family(OP, 0) = { OP_SPECIALIZED };
         """)
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            HELPER(SPAM_KEEP, void, (PyValue), \\
+                   ARGS(consumed), NONE, EFFECTS(releases))
+        """)
         for consume in ("PyValue held = TAKE(value);\nSPAM_KEEP(held);",
-                        "DEAD(value);"):
+                        "taken = value;\nDEAD(value);"):
             with self.subTest(consume=consume):
                 with self.assertRaisesRegex(SyntaxError,
                                             "DISPATCH_SAME_OPARG after the "
                                             "handler took"):
                     self.ir_output(f"""
-                    op(_SPECIALIZE_OP, (value -- value)) {{
+                    op(_SPECIALIZE_OP, (value: consumed -- taken: moved(value)))
+                        effects(releases) exits(next, jump)
+                    {{
                         if (SPAM_FLAG()) {{
                             {consume}
                             DISPATCH_SAME_OPARG();
                         }}
+                        taken = value;
+                        DEAD(value);
                     }}
-                    op(_OP, (value -- res)) {{
-                        res = SPAM(PyValue_AsKnownObjectBorrow(value));
-                        PyValue_CLOSE(value);
+                    op(_OP, (taken: consumed object -- res: owned))
+                        effects(reads, releases) exits(next)
+                    {{
+                        res = SPAM(PyValue_AsKnownObjectBorrow(taken));
+                        PyValue_CLOSE(taken);
                     }}
                     macro(OP) = _SPECIALIZE_OP + _OP;
                 """)
@@ -2029,11 +2143,17 @@ class TestIRCases(unittest.TestCase):
         # An error exit between OWNER() and its retire leaks the owner, and
         # one after a TAKE() into an output leaks the count: the generator
         # stores no output on an error exit
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(IR_RETIRE_PUBLISHED, ARGS(consumed), NONE, EFFECTS(), EXITS())
+        """)
+        # The contract refuses both leaks before the generator does (the
+        # generator's own messages: "ERROR_NO_POP between OWNER() and
+        # IR_RETIRE_PUBLISHED would leak 'held'" and "ERROR_IF while output
+        # 'res' holds a TAKE() result")
         with self.assertRaisesRegex(SyntaxError,
-                                    "ERROR_NO_POP between OWNER\\(\\) and "
-                                    "IR_RETIRE_PUBLISHED would leak 'held'"):
+                                    "on raise, the new owner `held` is still held"):
             self.ir_output("""
-            inst(OP, (value -- )) {
+            inst(OP, (value: consumed --)) effects(raises) exits(next, raise) {
                 PyValue held = OWNER(value);
                 if (SPAM_FLAG()) {
                     ERROR_NO_POP();
@@ -2042,17 +2162,18 @@ class TestIRCases(unittest.TestCase):
             }
         """)
         with self.assertRaisesRegex(SyntaxError,
-                                    "ERROR_IF while output 'res' holds a "
-                                    "TAKE\\(\\) result"):
+                                    "on raise, the new owner `res` is still held"):
             self.ir_output("""
-            inst(OP, (value -- res)) {
+            inst(OP, (value: consumed -- res: moved(value))) effects(raises) exits(next, raise) {
                 res = TAKE(value);
                 ERROR_IF(SPAM_FLAG());
             }
         """)
         # A taken local that the error path closes is the DSL's to release
         output = self.handler(self.ir_output("""
-        inst(OP, (value -- res)) {
+        inst(OP, (value: consumed -- res: moved(value)))
+            effects(releases, raises) exits(next, raise)
+        {
             PyValue held = TAKE(value);
             if (SPAM_FLAG()) {
                 PyValue_CLOSE(held);
@@ -2067,22 +2188,29 @@ class TestIRCases(unittest.TestCase):
                         output.index("PROCESS_ERROR_AT(RAISE, 0, this_instr);"))
 
     def test_owner_and_take_forms_refused(self):
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(IR_RETIRE_PUBLISHED, ARGS(consumed), NONE, EFFECTS(), EXITS()) \\
+            HELPER(SPAM_VALUE, PyValue, (), ARGS(), VALUE(owned), EFFECTS())
+        """)
         cases = {
             "OWNER\\(\\) is the initializer of a PyValue variable": """
                 PyValue held;
                 held = OWNER(value);
                 IR_RETIRE_PUBLISHED(held);
             """,
-            "OWNER\\(\\) gave 'held', which no IR_RETIRE_PUBLISHED": """
+            # (the generator's: "OWNER() gave 'held', which no
+            # IR_RETIRE_PUBLISHED ...")
+            "on next, the new owner `held` is still held": """
                 PyValue held = OWNER(value);
             """,
-            "TAKE\\(\\) takes a variable": """
+            # (the generator's: "TAKE() takes a variable")
+            "TAKE moves `SPAM_VALUE \\( \\)`, which holds no obligation": """
                 PyValue held = TAKE(SPAM_VALUE());
                 PyValue_CLOSE(held);
-                DEAD(value);
+                PyValue_CLOSE(value);
             """,
             "TAKE\\(x\\): not a stack variable": """
-                PyValue x = PyValue_None;
+                PyValue x = SPAM_VALUE();
                 PyValue held = TAKE(x);
                 PyValue_CLOSE(held);
                 PyValue_CLOSE(value);
@@ -2092,7 +2220,7 @@ class TestIRCases(unittest.TestCase):
             with self.subTest(message=message):
                 with self.assertRaisesRegex(SyntaxError, message):
                     self.ir_output(f"""
-                    inst(OP, (value -- )) {{
+                    inst(OP, (value: consumed --)) effects(releases) exits(next) {{
                         {body}
                     }}
                 """)
@@ -2101,12 +2229,19 @@ class TestIRCases(unittest.TestCase):
         # The emitter's own refusals of a view retired as an owner, or
         # copied to a variable that is not on the stack, are backstops:
         # S3 (inplace_input_use) refuses both first
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(IR_RETIRE_PUBLISHED, ARGS(consumed), NONE, EFFECTS(), EXITS()) \\
+            PRIMITIVE(SPAM, bool, (PyObject *), \\
+                      ARGS(object), SCALAR, EFFECTS(reads))
+        """)
         with self.assertRaisesRegex(SyntaxError, "inplace_input_use"):
             self.ir_output("""
-            op(_COPY, (value -- value, copy)) {
+            op(_COPY, (value -- value, copy: borrowed)) effects() exits(next) {
                 copy = value;
             }
-            op(_USE, (value, copy -- )) {
+            op(_USE, (value: closed object, copy: consumed --))
+                effects(reads) exits(next)
+            {
                 assert(PyValue_IsObject(value));
                 SPAM(PyValue_AsKnownObjectBorrow(value));
                 DEAD(value);
@@ -2114,8 +2249,14 @@ class TestIRCases(unittest.TestCase):
             }
             macro(OP) = _COPY + _USE;
         """)
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            HELPER(SPAM, PyValue, (PyObject *), \\
+                   ARGS(object), VALUE(owned), EFFECTS(reads))
+        """)
         self.assertEqual(self.formats("""
-        inst(OP, (value -- res)) {
+        inst(OP, (value: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
             PyValue x;
             x = value;
             res = SPAM(PyValue_AsKnownObjectBorrow(x));
@@ -2127,10 +2268,14 @@ class TestIRCases(unittest.TestCase):
         # `out = TAKE(in);` and `held = TAKE(in); out = held;` give the
         # output the input's value
         analysis = self.analyze("""
-        op(_DIRECT, (value -- res)) {
+        op(_DIRECT, (value: consumed -- res: moved(value)))
+            effects() exits(next)
+        {
             res = TAKE(value);
         }
-        op(_HELD, (value -- res)) {
+        op(_HELD, (value: consumed -- res: moved(value)))
+            effects() exits(next)
+        {
             PyValue held = TAKE(value);
             res = held;
         }
@@ -2139,9 +2284,13 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(analysis.uops["_HELD"].aliased_outputs, ("res",))
         # A specialised close of a view releases its owner, which is NULL
         # for a local
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM, ARGS(object), VALUE(owned), EFFECTS(), EXITS())
+        """)
         output = self.handler(self.ir_output("""
-        inst(OP, (value -- res)) {
-            assert(PyValue_IsObject(value));
+        inst(OP, (value: consumed object exact(PyLong_Type) -- res: owned))
+            effects(writes) exits(next)
+        {
             res = SPAM(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
         }
@@ -2151,30 +2300,43 @@ class TestIRCases(unittest.TestCase):
 
     def test_inplace_inputs_fail_closed(self):
         # The generator refuses what it cannot follow: a value that borrows
-        # a local in place on one path and not on another
+        # a local in place on one path and not on another.  The contract's
+        # verifier refuses the first form before the generator's own check
+        # of a cleared input: the taken value is owned on one path and not
+        # on another where they join.
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM, ARGS(object), VALUE(owned), EFFECTS(reads), EXITS())
+        """)
         input = """
-        op(_MAYBE_HELD, (value -- value)) {
+        op(_MAYBE_HELD, (value: consumed -- res: moved(value)))
+            effects() exits(next)
+        {
             if (SPAM_FLAG()) {
-                held = TAKE(value);
+                PyValue held = TAKE(value);
             }
         }
-        op(_USE, (value -- res)) {
-            assert(PyValue_IsObject(value));
+        op(_USE, (value: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
             res = SPAM(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
         }
         macro(OP) = _MAYBE_HELD + _USE;
     """
         with self.assertRaisesRegex(SyntaxError,
-                                    "'value' is cleared on some paths"):
+                                    "is owned on one path and not on another "
+                                    "where they join"):
             self.ir_output(input)
         # A variable is a view or an owner (S8): it has one C type
         roles = """
-        op(_HELD, (value -- value)) {
-            value = TAKE(value);
+        op(_HELD, (value: consumed -- res: moved(value)))
+            effects() exits(next)
+        {
+            res = TAKE(value);
         }
-        op(_USE, (value -- res)) {
-            assert(PyValue_IsObject(value));
+        op(_USE, (value: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
             res = SPAM(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
         }
@@ -2188,44 +2350,58 @@ class TestIRCases(unittest.TestCase):
         # into stack variables, and its object only into assignments.  An
         # input copied elsewhere, or whose object reaches a function that
         # takes it over or releases it, is kept: no local reaches its field.
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM, ARGS(object), VALUE(owned), EFFECTS(reads), EXITS()) \\
+            MACRO(SPAM_TakeRef, ARGS(object, consumed object), STATUS(NONZERO), \\
+                  EFFECTS(reads, writes), EXITS())
+        """)
         input = """
-        inst(OP_COPY_CLOSE, (value -- res)) {
+        inst(OP_COPY_CLOSE, (value: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
             PyValue a;
             a = value;
             DEAD(value);
-            res = PyValue_FromObjectSteal(SPAM(PyValue_AsKnownObjectBorrow(a)));
+            PyObject *made = SPAM(PyValue_AsKnownObjectBorrow(a));
+            res = PyValue_FromObjectSteal(made);
             PyValue_CLOSE(a);
         }
-        inst(OP_COPY_STORE, (value -- res)) {
+        inst(OP_COPY_STORE, (value: consumed -- res: moved(value)))
+            effects() exits(next)
+        {
             PyValue v2 = PyValue_None;
             v2 = value;
             DEAD(value);
             res = v2;
         }
-        inst(OP_OBJECT_STEAL, (value -- res)) {
-            assert(PyValue_IsObject(value));
+        inst(OP_OBJECT_STEAL, (value: consumed object -- res: moved(value)))
+            effects() exits(next)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
-            DEAD(value);
             res = PyValue_FromObjectSteal(o);
+            DEAD(value);
         }
-        inst(OP_OBJECT_COPY_RELEASE, (value --)) {
-            assert(PyValue_IsObject(value));
+        inst(OP_OBJECT_COPY_RELEASE, (value: consumed object --))
+            effects(releases) exits(next)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             PyObject *p;
             p = o;
-            DEAD(value);
             Py_DECREF(p);
+            DEAD(value);
         }
-        inst(OP_OBJECT_NESTED_STEAL, (value -- res)) {
-            assert(PyValue_IsObject(value));
+        inst(OP_OBJECT_NESTED_STEAL, (value: consumed object -- res: moved(value)))
+            effects() exits(next)
+        {
             res = PyValue_FromObjectSteal(PyValue_AsKnownObjectBorrow(value));
             DEAD(value);
         }
-        inst(OP_OBJECT_TARGET, (value, item --)) {
-            assert(PyValue_IsObject(value));
-            assert(PyValue_IsObject(item));
+        inst(OP_OBJECT_TARGET, (value: consumed object, item: consumed object --))
+            effects(reads, writes, releases, raises) exits(next, raise)
+        {
+            PyObject *stolen = PyValue_AsKnownObjectSteal(item);
             int err = SPAM_TakeRef((PyObject *)PyValue_AsKnownObjectBorrow(value),
-                                   PyValue_AsKnownObjectSteal(item));
+                                   stolen);
             PyValue_CLOSE(value);
             ERROR_IF(err);
         }
@@ -2248,15 +2424,20 @@ class TestIRCases(unittest.TestCase):
         # A handler takes the inputs that it consumes: the slot of a
         # temporary becomes NULL, and a local keeps its value.  No handler
         # has a stack pointer to keep.
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM, ARGS(object, object), NONE, EFFECTS(reads), EXITS())
+        """)
         input = """
-        inst(STORE, (owner, value --)) {
-            assert(PyValue_IsObject(owner));
-            assert(PyValue_IsObject(value));
+        inst(STORE, (owner: consumed object, value: consumed object --))
+            effects(reads, releases) exits(next)
+        {
             SPAM(PyValue_AsKnownObjectBorrow(owner),
                  PyValue_AsKnownObjectBorrow(value));
             DECREF_INPUTS();
         }
-        inst(BRANCH, (unused/1, cond --)) {
+        inst(BRANCH, (unused/1, cond: consumed exact(PyBool_Type) --))
+            effects() exits(next, branch) feedback(read(counter))
+        {
             _PyFbHeader *feedback = FB_COUNTER();
             int flag = PyValue_IsFalse(cond);
             DEAD(cond);
@@ -2289,30 +2470,39 @@ class TestIRCases(unittest.TestCase):
         # Which results a folded STORE_FAST may send to a local, and how
         # the handler then finds the stack pointer: dst may name a local, so
         # from the top slot in a free field, or by counting.
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM, ARGS(object, object), VALUE(owned), EFFECTS(reads), EXITS()) \\
+            MACRO(SPAM_ONE, ARGS(object), VALUE(owned), EFFECTS(reads), EXITS()) \\
+            MACRO(SPAM_NONE, ARGS(), VALUE(owned), EFFECTS(), EXITS())
+        """)
         input = """
-        inst(OP, (left, right -- res)) {
-            assert(PyValue_IsObject(left));
-            assert(PyValue_IsObject(right));
+        inst(OP, (left: consumed object, right: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
             res = SPAM(PyValue_AsKnownObjectBorrow(left),
                        PyValue_AsKnownObjectBorrow(right));
             DECREF_INPUTS();
         }
-        inst(ATTR, (owner -- attr, null[oparg & 1])) {
-            assert(PyValue_IsObject(owner));
-            attr = SPAM(PyValue_AsKnownObjectBorrow(owner));
+        inst(ATTR, (owner: consumed object -- attr: owned, null[oparg & 1]: owned nullable))
+            effects(reads, releases) exits(next)
+        {
+            attr = SPAM_ONE(PyValue_AsKnownObjectBorrow(owner));
             DECREF_INPUTS();
             if (oparg & 1) {
                 null[0] = PyValue_NULL;
             }
         }
-        no_fold inst(ALIAS, (value -- res)) {
-            assert(PyValue_IsObject(value));
-            res = SPAM(PyValue_AsKnownObjectBorrow(value));
+        no_fold inst(ALIAS, (value: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
+            res = SPAM_ONE(PyValue_AsKnownObjectBorrow(value));
             DECREF_INPUTS();
         }
-        inst(PAIR, (-- a, b)) {
-            a = SPAM();
-            b = SPAM();
+        inst(PAIR, (-- a: owned, b: owned))
+            effects() exits(next)
+        {
+            a = SPAM_NONE();
+            b = SPAM_NONE();
         }
     """
         formats = self.formats(input)
@@ -2335,7 +2525,9 @@ class TestIRCases(unittest.TestCase):
 
     def test_scalar_conditional_array_has_no_empty_home(self):
         source = """
-        inst(ATTR, (owner -- attr, null[oparg & 1])) {
+        inst(ATTR, (owner: consumed -- attr: owned, null[oparg & 1]: owned nullable))
+            effects(releases) exits(next)
+        {
             attr = PyValue_DUP(owner);
             PyValue_CLOSE(owner);
             if (oparg & 1) {
@@ -2354,12 +2546,18 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("IR_STORE_DST(ir_word, A, attr)", handler)
 
     def test_unused_outputs_pass_through(self):
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM, ARGS(object), VALUE(owned), EFFECTS(reads), EXITS())
+        """)
         input = """
-        op(_GUARD, (nos, unused -- nos, unused)) {
+        op(_GUARD, (nos, unused -- nos: object, unused))
+            effects() exits(next, miss)
+        {
             EXIT_IF(!PyValue_IsObject(nos));
         }
-        op(_USE, (left, right -- left, res)) {
-            assert(PyValue_IsObject(right));
+        op(_USE, (left, right: consumed object -- left, res: owned))
+            effects(reads, releases) exits(next)
+        {
             res = SPAM(PyValue_AsKnownObjectBorrow(right));
             PyValue_CLOSE(right);
         }
@@ -2374,8 +2572,13 @@ class TestIRCases(unittest.TestCase):
         # An array input selects the window style: A names dst and B the
         # deepest input, from which the handler addresses its window; the
         # count comes before any feedback index.
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM, ARGS(scalar, scalar, scalar), VALUE(owned), EFFECTS(reads), EXITS())
+        """)
         input = """
-        inst(OP, (callable, args[oparg] -- res)) {
+        inst(OP, (callable: closed, args[oparg]: closed -- res: owned))
+            effects(reads) exits(next)
+        {
             res = SPAM(callable, args, oparg);
             INPUTS_DEAD();
         }
@@ -2423,27 +2626,45 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(fmt.dst_offset, 0)
 
     def test_window_selection(self):
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM, ARGS(scalar), VALUE(owned), EFFECTS(reads), EXITS()) \\
+            MACRO(SPAM_THREE, ARGS(scalar, scalar, scalar), VALUE(owned), EFFECTS(reads), EXITS()) \\
+            MACRO(SPAM_FOUR, ARGS(scalar, scalar, scalar, scalar), VALUE(owned), \\
+                  EFFECTS(reads), EXITS()) \\
+            MACRO(SPAM_STATUS, ARGS(scalar, scalar, scalar), NONE, EFFECTS(reads), EXITS())
+        """)
         input = """
-        inst(OP_FOUR, (a, b, c -- res)) {
-            res = SPAM(a, b, c);
+        inst(OP_FOUR, (a: closed, b: closed, c: closed -- res: owned))
+            effects(reads) exits(next)
+        {
+            res = SPAM_THREE(a, b, c);
             INPUTS_DEAD();
         }
-        inst(OP_FIVE, (a, b, c, d -- res)) {
-            res = SPAM(a, b, c, d);
+        inst(OP_FIVE, (a: closed, b: closed, c: closed, d: closed -- res: owned))
+            effects(reads) exits(next)
+        {
+            res = SPAM_FOUR(a, b, c, d);
             INPUTS_DEAD();
         }
-        inst(OP_THREE, (a, b, c --)) {
-            SPAM(a, b, c);
+        inst(OP_THREE, (a: closed, b: closed, c: closed --))
+            effects(reads) exits(next)
+        {
+            SPAM_STATUS(a, b, c);
             INPUTS_DEAD();
         }
-        window inst(OP_ANNOTATED, (value -- res)) {
+        window inst(OP_ANNOTATED, (value: closed -- res: owned))
+            effects(reads) exits(next)
+        {
             res = SPAM(value);
             INPUTS_DEAD();
         }
-        window inst(OP_SWITCH, (value -- res)) {
-            frame = SPAM(value);
+        window inst(OP_SWITCH, (value: consumed -- res: owned nullable))
+            effects(switches_frame) exits(enter)
+        {
+            _PyInterpreterFrame *temp = PyValue_Unwrap(value);
+            DEAD(value);
             res = PyValue_NULL;
-            INPUTS_DEAD();
+            frame = tstate->current_frame = temp;
         }
     """
         formats = self.formats(input)
@@ -2457,23 +2678,30 @@ class TestIRCases(unittest.TestCase):
         self.assertTrue(formats["OP_SWITCH"].window)
 
     def test_asserted_input_has_no_object_local(self):
-        # An input that the body converts to an object is asserted to be one:
-        # the conversions read it directly, with no object local and no box,
-        # and the owned input closes as a pointer.
+        # An input that the body converts to an object is declared to be
+        # one: the conversions read it directly, with no object local and no
+        # box, and the owned input closes as a pointer.
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM, ARGS(object), NONE, EFFECTS(reads), EXITS()) \\
+            MACRO(SPAM_OWN, ARGS(consumed object), VALUE(owned), EFFECTS(), EXITS())
+        """)
         input = """
-        inst(OP, (v -- res)) {
-            assert(PyValue_IsObject(v));
+        inst(OP, (v: consumed object -- res: moved(v)))
+            effects(reads) exits(next)
+        {
             PyObject *v_o = PyValue_AsKnownObjectBorrow(v);
             PyValue kept = TAKE(v);
             SPAM(v_o);
             res = kept;
         }
-        window inst(OP_OWNED, (v -- res)) {
-            assert(PyValue_IsObject(v));
+        window inst(OP_OWNED, (v: consumed object -- res: owned))
+            effects(reads) exits(next)
+        {
             if (PyValue_IsNone(v)) {
                 SPAM(PyValue_AsKnownObjectBorrow(v));
             }
-            res = PyValue_FromObjectSteal(PyValue_AsKnownObjectSteal(v));
+            PyObject *stolen = PyValue_AsKnownObjectSteal(v);
+            res = SPAM_OWN(stolen);
         }
     """
         output = self.ir_output(input)
@@ -2487,10 +2715,12 @@ class TestIRCases(unittest.TestCase):
         owned = self.handler(output, "OP_OWNED")
         self.assertIn("SPAM(_PyValue_AsKnownObjectBorrowPointer(v));", owned)
         self.assertIn("_PyValue_AsPyObjectStealPointer(v)", owned)
-        # A conversion without the assert is refused
-        with self.assertRaisesRegex(SyntaxError, "may be an inline value"):
+        # A conversion of an input that does not declare `object` is refused
+        with self.assertRaisesRegex(SyntaxError, "requires object of it"):
             self.ir_output("""
-            inst(OP, (v --)) {
+            inst(OP, (v: consumed --))
+                effects(reads, releases) exits(next)
+            {
                 SPAM(PyValue_AsKnownObjectBorrow(v));
                 DECREF_INPUTS();
             }
@@ -2500,27 +2730,35 @@ class TestIRCases(unittest.TestCase):
         # S3: the object of a view has no count, so it reaches only a field
         # access, a comparison, a copy or an argument of a function on the
         # checked list; any other use keeps the input out of borrow_mask
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM_KEEP, ARGS(object), VALUE(owned), EFFECTS(reads), EXITS()) \\
+            MACRO(SPAM_STRUCT, ARGS(), SCALAR, EFFECTS(), EXITS())
+        """)
         input = """
-        inst(OP_READ, (value -- res)) {
-            assert(PyValue_IsObject(value));
+        inst(OP_READ, (value: consumed object -- res: owned exact(PyBool_Type)))
+            effects(reads, releases) exits(next)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             res = Py_TYPE(o)->tp_flags & 1 ? PyValue_True : PyValue_False;
             PyValue_CLOSE(value);
         }
-        inst(OP_FIELD, (value -- res)) {
-            assert(PyValue_IsObject(value));
+        inst(OP_FIELD, (value: consumed object -- res: owned exact(PyBool_Type)))
+            effects(reads, releases) exits(next)
+        {
             res = ((PyTupleObject *)PyValue_AsKnownObjectBorrow(value))->ob_item[0] == NULL
                 ? PyValue_True : PyValue_False;
             PyValue_CLOSE(value);
         }
-        inst(OP_KEEP, (value -- res)) {
-            assert(PyValue_IsObject(value));
+        inst(OP_KEEP, (value: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             res = SPAM_KEEP(o);
             PyValue_CLOSE(value);
         }
-        inst(OP_STORE, (value -- )) {
-            assert(PyValue_IsObject(value));
+        inst(OP_STORE, (value: consumed object -- ))
+            effects(reads, writes, releases) exits(next)
+        {
             SPAM_STRUCT()->field = PyValue_AsKnownObjectBorrow(value);
             PyValue_CLOSE(value);
         }
@@ -2535,37 +2773,48 @@ class TestIRCases(unittest.TestCase):
         # S3 follows a copy only into a plain local, and an address derived
         # from the object as the object; a store through a pointer, a
         # chained assignment and an address passed on are not reads
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM_KEEP, ARGS(object), VALUE(owned), EFFECTS(reads), EXITS()) \\
+            MACRO(SPAM_SLOT, ARGS(), SCALAR, EFFECTS(), EXITS()) \\
+            MACRO(SPAM_BASE, ARGS(), SCALAR, EFFECTS(), EXITS()) \\
+            MACRO(SPAM, ARGS(scalar, scalar), VALUE(owned), EFFECTS(reads), EXITS())
+        """)
         input = """
-        inst(OP_DEREF_STORE, (value -- )) {
-            assert(PyValue_IsObject(value));
+        inst(OP_DEREF_STORE, (value: consumed object -- ))
+            effects(reads, writes, releases) exits(next)
+        {
             PyObject **p = SPAM_SLOT();
             *p = PyValue_AsKnownObjectBorrow(value);
             PyValue_CLOSE(value);
         }
-        inst(OP_COPY_STORE, (value -- )) {
-            assert(PyValue_IsObject(value));
+        inst(OP_COPY_STORE, (value: consumed object -- ))
+            effects(reads, writes, releases) exits(next)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             PyObject **p = SPAM_SLOT();
             *p = o;
             PyValue_CLOSE(value);
         }
-        inst(OP_CHAINED, (value -- res)) {
-            assert(PyValue_IsObject(value));
+        inst(OP_CHAINED, (value: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
             PyObject *a;
             PyObject *b;
             a = b = PyValue_AsKnownObjectBorrow(value);
             res = SPAM_KEEP(a);
             PyValue_CLOSE(value);
         }
-        inst(OP_ARITHMETIC, (value -- res)) {
-            assert(PyValue_IsObject(value));
+        inst(OP_ARITHMETIC, (value: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             PyObject *k = o + 0;
             res = SPAM_KEEP(k);
             PyValue_CLOSE(value);
         }
-        inst(OP_FIELD_ADDRESS, (value -- res)) {
-            assert(PyValue_IsObject(value));
+        inst(OP_FIELD_ADDRESS, (value: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
             char *addr = (char *)PyValue_AsKnownObjectBorrow(value) + 8;
             Py_ssize_t index = addr - (char *)SPAM_BASE();
             res = SPAM(*(PyObject **)addr, index);
@@ -2609,10 +2858,13 @@ class TestIRCases(unittest.TestCase):
         # The outputs of an instruction that switches frames land in the
         # other frame, where the fields name no slots.
         input = """
-        inst(OP, (value -- res)) {
-            frame = SPAM(value);
+        inst(OP, (value: consumed -- res: owned nullable))
+            effects(switches_frame) exits(enter)
+        {
+            _PyInterpreterFrame *temp = PyValue_Unwrap(value);
+            DEAD(value);
             res = PyValue_NULL;
-            INPUTS_DEAD();
+            frame = tstate->current_frame = temp;
         }
     """
         with self.assertRaisesRegex(SyntaxError, "OP switches frames"):
@@ -2622,20 +2874,30 @@ class TestIRCases(unittest.TestCase):
         # A family shares one format. A name index takes the free field of
         # the word, and cache effects read the entry.  The sites that get no
         # entry share entry 0 and run the same handlers.
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM, ARGS(object, scalar), VALUE(owned), EFFECTS(reads), EXITS()) \\
+            MACRO(ADVANCE_ADAPTIVE_COUNTER, ARGS(scalar), NONE, EFFECTS(writes), EXITS(), \\
+                  FEEDBACK(write(counter)))
+        """)
         input = """
-        specializing op(_SPECIALIZE_OP, (owner -- owner)) {
+        specializing op(_SPECIALIZE_OP, (owner -- owner))
+            effects(writes) exits(next) feedback(write(counter))
+        {
             _PyFbHeader *feedback = FB_COUNTER();
             ADVANCE_ADAPTIVE_COUNTER(feedback);
         }
-        op(_OP, (owner -- res)) {
+        op(_OP, (owner: consumed object -- res: owned))
+            effects(reads, releases) exits(next)
+        {
             assert(PyValue_IsObject(owner));
             PyObject *o = PyValue_AsKnownObjectBorrow(owner);
             res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
             DECREF_INPUTS();
         }
         macro(OP) = _SPECIALIZE_OP + _OP;
-        op(_GUARD, (type_version/2, owner -- owner)) {
-            assert(PyValue_IsObject(owner));
+        op(_GUARD, (type_version/2, owner: object -- owner: type_version(type_version)))
+            effects(reads) exits(next, miss)
+        {
             EXIT_IF(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_version_tag != type_version);
         }
         macro(OP_SPECIALIZED) = unused/1 + _GUARD + _OP;
@@ -2701,7 +2963,11 @@ class TestIRCases(unittest.TestCase):
             {
                 owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
-                assert(PyValue_IsObject(owner));
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&IR_SLOT(IR_B(ir_word))))) {
+                    UPDATE_MISS_STATS(OP);
+                    assert(_PyOpcode_Deopt[opcode] == (OP));
+                    JUMP_TO_PREDICTED(OP);
+                }
                 if (Py_TYPE(_PyValue_AsKnownObjectBorrowPointer(owner))->tp_version_tag != type_version) {
                     UPDATE_MISS_STATS(OP);
                     assert(_PyOpcode_Deopt[opcode] == (OP));
@@ -2732,8 +2998,15 @@ class TestIRCases(unittest.TestCase):
     def test_oparg_in_entry(self):
         # Two inputs, a destination and an entry fill the word, so the oparg
         # lives in the entry.
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM, ARGS(scalar, scalar, scalar), VALUE(owned), EFFECTS(reads), EXITS()) \\
+            MACRO(ADVANCE_ADAPTIVE_COUNTER, ARGS(scalar), NONE, EFFECTS(writes), EXITS(), \\
+                  FEEDBACK(write(counter)))
+        """)
         input = """
-        inst(OP, (unused/1, left, right -- res)) {
+        inst(OP, (unused/1, left: closed, right: closed -- res: owned))
+            effects(reads, writes) exits(next) feedback(write(counter))
+        {
             _PyFbHeader *feedback = FB_COUNTER();
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
@@ -2779,15 +3052,22 @@ class TestIRCases(unittest.TestCase):
     def test_jump(self):
         # A jump keeps the absolute word index of its target in CD, and
         # FOR_ITER the distance to its exit in D.
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM, ARGS(scalar), VALUE_OR_NULL(owned), EFFECTS(reads), EXITS())
+        """)
         input = """
-        inst(OP, (cond --)) {
+        inst(OP, (cond: consumed exact(PyBool_Type) --))
+            effects() exits(next, branch)
+        {
             int flag = PyValue_IsFalse(cond);
             DEAD(cond);
             if (flag) {
                 JUMPTO(oparg);
             }
         }
-        inst(FOR_ITER, (iter -- iter, next)) {
+        inst(FOR_ITER, (iter -- iter, next: owned nullable))
+            effects(reads) exits(next, branch)
+        {
             next = SPAM(iter);
             if (PyValue_IsNull(next)) {
                 JUMPBY(oparg + 1);
@@ -2812,7 +3092,9 @@ class TestIRCases(unittest.TestCase):
         # A handler without stack effect, oparg or entry that dispatches
         # again runs another handler on the same word: it is transparent.
         input = """
-        ir_only inst(IR_PASS, ( -- )) {
+        ir_only inst(IR_PASS, ( -- ))
+            effects() exits(jump)
+        {
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
@@ -2838,17 +3120,30 @@ class TestIRCases(unittest.TestCase):
         # IR-only handlers follow the opcodes in name order. An instrumented
         # twin shares the format of its instruction, and since the twin calls
         # a monitoring callback, that format runs code (runs_code()).
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM, ARGS(), NONE, EFFECTS(reads), EXITS())
+        """)
         input = """
-        inst(LOAD, ( -- value)) {
-            value = PyValue_DUP(GETLOCAL(oparg));
+        inst(LOAD, ( -- value: owned))
+            effects() exits(next)
+        {
+            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+            value = PyValue_DUP(local);
         }
-        inst(INSTRUMENTED_LOAD, ( -- value)) {
-            value = PyValue_DUP(GETLOCAL(oparg));
+        inst(INSTRUMENTED_LOAD, ( -- value: owned))
+            effects(runs_python) exits(next)
+        {
+            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+            value = PyValue_DUP(local);
         }
-        ir_only inst(IR_BACON, ( -- )) {
+        ir_only inst(IR_BACON, ( -- ))
+            effects(reads) exits(next)
+        {
             SPAM();
         }
-        ir_only inst(IR_PASS, ( -- )) {
+        ir_only inst(IR_PASS, ( -- ))
+            effects() exits(jump)
+        {
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
@@ -2880,7 +3175,8 @@ class TestIRCases(unittest.TestCase):
                 ".writes = { 1, _PyIR_EXT_FIXED }, "
                 ".through = { 0, _PyIR_EXT_FIXED }, .shadow = LOAD, "
                 ".twin = INSTRUMENTED_LOAD, .events = 0 }")
-        instrumented = (load.replace(".effects = 0", ".effects = _PyIR_RUNS_PYTHON")
+        instrumented = (load.replace(".effects = 0",
+                                     ".effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON")
                             .replace("shadow = LOAD", "shadow = INSTRUMENTED_LOAD"))
         for expected in [
             "#define IR_BACON                                       256",
@@ -2910,22 +3206,25 @@ class TestIRCases(unittest.TestCase):
 
     def test_normal_transfer_source_proofs(self):
         cases = (
-            ("LOAD_CONST", "-- value",
+            ("LOAD_CONST", "-- value: owned", "effects(reads) exits(next)",
              "PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE("
              "FRAME_CO_CONSTS, oparg)); value = PyValue_DUP(constant);",
              "FRESH", "PyValue_DUP", "PyValue_XDUP"),
-            ("LOAD_FAST_AND_CLEAR", "-- value",
+            ("LOAD_FAST_AND_CLEAR", "-- value: moved(home)", "effects() exits(next)",
              "value = GETLOCAL(oparg); GETLOCAL(oparg) = PyValue_NULL;",
              "LOCAL_MOVE", "GETLOCAL(oparg) = PyValue_NULL;", ""),
-            ("POP_TOP", "value --", "PyValue_XCLOSE(value);",
+            ("POP_TOP", "value: consumed --", "effects(releases) exits(next)",
+             "PyValue_XCLOSE(value);",
              "RETIRE", "PyValue_XCLOSE", "PyValue_DUP"),
-            ("COPY", "bottom, unused[oparg-1] -- bottom, unused[oparg-1], top",
+            ("COPY", "bottom, unused[oparg-1] -- bottom, unused[oparg-1], top: owned",
+             "effects() exits(next)",
              "top = PyValue_DUP(bottom);", "COPY", "PyValue_DUP(bottom)", "bottom"),
         )
-        for name, effect, body, kind, old, new in cases:
+        for name, effect, clauses, body, kind, old, new in cases:
             with self.subTest(handler=name):
                 def kind_for(body):
-                    analysis = self.analyze(f"\ninst({name}, ({effect})) {{ {body} }}\n")
+                    analysis = self.analyze(
+                        f"\ninst({name}, ({effect})) {clauses} {{ {body} }}\n")
                     inst = analysis.instructions[name]
                     fmt = ir_generator.compute_formats(analysis)[name]
                     return ir_generator.normal_transfer_kind(inst, fmt)
@@ -2947,11 +3246,13 @@ class TestIRCases(unittest.TestCase):
                                   "bottom: moved(top), unused[oparg-2], top: moved(bottom)",
                                   "effects() exits(next)"),
                          "_PyIR_TRANSFER_SWAP")
-        self.assertEqual(kind_for("bottom, unused[oparg-2], top -- bottom, unused[oparg-2], top"),
+        self.assertEqual(kind_for("bottom, unused[oparg-2], top -- bottom, unused[oparg-2], top",
+                                  "effects() exits(next)"),
                          "_PyIR_TRANSFER_UNKNOWN")
 
     def test_transparent_leaf_still_has_a_consumer_recipe(self):
-        source = "\nir_only inst(IR_JUMP, (--)) { JUMPTO(oparg); }\n"
+        source = ("\nir_only inst(IR_JUMP, (--)) effects() exits(next, jump)"
+                  " { JUMPTO(oparg); }\n")
         analysis = self.analyze(source)
         fmt = ir_generator.compute_formats(analysis)
         contract = ir_generator.handler_contracts(analysis, fmt)["IR_JUMP"]
@@ -2960,7 +3261,8 @@ class TestIRCases(unittest.TestCase):
 
     def test_normal_transfer_requires_matching_io(self):
         # The same body with a different window cannot acquire COPY geometry.
-        source = "\ninst(COPY, (bottom -- bottom, top)) { top = PyValue_DUP(bottom); }\n"
+        source = ("\ninst(COPY, (bottom -- bottom, top: owned)) effects() exits(next)"
+                  " { top = PyValue_DUP(bottom); }\n")
         analysis = self.analyze(source)
         inst = analysis.instructions["COPY"]
         fmt = ir_generator.compute_formats(analysis)["COPY"]
@@ -3021,23 +3323,33 @@ class TestIRCases(unittest.TestCase):
                 self.assertFalse(ir_generator.abrupt_suspend_contract(inst, formats["YIELD_VALUE"]))
             finally:
                 producer.body.body = original
-        # The twin's observer ingress must also be covered; a missing
-        # sibling revokes the canonical family's permission.
+        # The twin's observer ingress must also be covered.  A statement
+        # that the verifier of the observer's declaration refuses (an
+        # `opaque(frame)` call is no row) never reaches this proof, so the
+        # statements are ones that the verifier accepts.  The generator's
+        # boundary then refuses the handler whose observer source is not the
+        # checked one.
         twin = analysis.instructions["INSTRUMENTED_YIELD_VALUE"]
         observer = twin.parts[0]
-        extra = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
         # This observer uop is also used by delegated suspension, whose
         # metadata cursor has a stricter source contract. Mutate only the
         # ordinary twin whose family permission is under test.
-        body = replace(observer.body, body=observer.body.body +
-                       extra.instructions["OP"].parts[0].body.body)
-        twin.parts[0] = replace(observer, body=body)
-        try:
-            changed = ir_generator.handler_contracts(analysis, formats)
-            for name in names:
-                self.assertFalse(changed[name].abrupt_prefix)
-        finally:
-            twin.parts[0] = observer
+        for changed in ("{ gen_frame->return_slot = 0; }",
+                        "{ frame->base[0] = PyValue_NULL; }",
+                        "{ frame->instr_ptr = this_instr; }"):
+            with self.subTest(observer=changed):
+                extra = self.analyze("\ninst(OP, (--)) " + changed + "\n")
+                body = replace(observer.body, body=observer.body.body +
+                               extra.instructions["OP"].parts[0].body.body)
+                twin.parts[0] = replace(observer, body=body)
+                try:
+                    self.assertFalse(ir_generator.abrupt_suspend_contract(
+                        twin, formats["INSTRUMENTED_YIELD_VALUE"]))
+                    with self.assertRaisesRegex(SyntaxError,
+                                                "needs checked yield transport"):
+                        ir_generator.handler_contracts(analysis, formats)
+                finally:
+                    twin.parts[0] = observer
 
     def test_normal_vacate_observer_frame_footprint(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
@@ -3052,7 +3364,8 @@ class TestIRCases(unittest.TestCase):
         # The capability explains the helper/frame use, not an opcode name.
         call = ("_Py_call_instrumentation_2args(tstate, "
                 "PY_MONITORING_EVENT_CALL, frame, this_instr, left, right);")
-        declaration = "\ninst(OP, (left, right --)) "
+        declaration = ("\ninst(OP, (left: consumed, right: consumed --)) "
+                       "effects(runs_python) exits(next, raise) ")
         analysis = self.analyze(declaration + "{ " + call + " DECREF_INPUTS(); }\n")
         inst = analysis.instructions["OP"]
         fmt = ir_generator.compute_formats(analysis)["OP"]
@@ -3213,7 +3526,9 @@ class TestIRCases(unittest.TestCase):
 
     def test_input_drain_lowers_through_actual_storage(self):
         output = self.ir_output("""
-            inst(OP, (items[oparg] --)) {
+            inst(OP, (items[oparg]: consumed --))
+                effects(writes, releases) exits(next)
+            {
                 IR_CLOSE_INPUTS(items);
             }
         """)
@@ -3333,8 +3648,9 @@ class TestIRCases(unittest.TestCase):
             INPUTS_DEAD();
             result = PyValue_FromObjectSteal(object);
         }"""
-        def check(changed, inputs="values[oparg]", outputs="result"):
-            analysis = self.analyze(f"\ninst(OP, ({inputs} -- {outputs})) {changed}\n")
+        def check(changed, inputs="values[oparg]: taken", outputs="result: owned"):
+            analysis = self.analyze(f"\ninst(OP, ({inputs} -- {outputs})) "
+                                    f"effects(allocates, raises) exits(next, raise) {changed}\n")
             inst = analysis.instructions["OP"]
             part = inst.parts[0]
             self.assertTrue(ir_generator.home_operation_contract(part))
@@ -3356,16 +3672,17 @@ class TestIRCases(unittest.TestCase):
                 body.replace("result =", "if (flag) result =")):
             with self.subTest(changed=changed), self.assertRaises(SyntaxError):
                 check(changed)
-        for inputs, outputs in (("values[oparg*2]", "result"),
-                                ("extra, values[oparg]", "result"),
-                                ("values[oparg]", "result[1]")):
+        for inputs, outputs in (("values[oparg*2]: taken", "result: owned"),
+                                ("extra: borrowed, values[oparg]: taken", "result: owned"),
+                                ("values[oparg]: taken", "result[1]: owned")):
             with self.subTest(inputs=inputs, outputs=outputs), self.assertRaises(SyntaxError):
                 check(body, inputs, outputs)
         inst = check(body)
         fmt = ir_generator.compute_formats(self.analyze(
-            "\ninst(OP, (values[oparg] -- result)) " + body + "\n"))["OP"]
+            "\ninst(OP, (values[oparg]: taken -- result: owned)) "
+            "effects(allocates, raises) exits(next, raise) " + body + "\n"))["OP"]
         self.assertTrue(ir_generator.normal_vacate_capability(inst, fmt))
-        extra = self.analyze("\ninst(EXTRA, (--)) { opaque(); }\n")
+        extra = self.analyze("\ninst(EXTRA, (--)) effects() exits(next) { opaque(); }\n")
         inst.parts.append(extra.instructions["EXTRA"].parts[0])
         self.assertFalse(ir_generator.normal_vacate_capability(inst, fmt))
 
@@ -3373,7 +3690,9 @@ class TestIRCases(unittest.TestCase):
         for marker, helper in (("IR_BUILD_TUPLE", "_PyTuple_FromValueStealOnSuccess"),
                                ("IR_BUILD_LIST", "_PyList_FromValueStealOnSuccess")):
             source = f"""
-                inst(OP, (values[oparg] -- result)) {{
+                inst(OP, (values[oparg]: taken -- result: owned))
+                    effects(allocates, raises) exits(next, raise)
+                {{
                     PyObject *object = {marker}(values);
                     if (object == NULL) {{ ERROR_NO_POP(); }}
                     INPUTS_DEAD();
@@ -3401,7 +3720,9 @@ class TestIRCases(unittest.TestCase):
 
     def test_home_operations_lower_through_actual_storage(self):
         output = self.ir_output("""
-            window inst(OP, (-- out[2])) {
+            window inst(OP, (-- out[2]: owned))
+                effects() exits(next)
+            {
                 IR_WRITE_OUTPUT(out, 0, PyValue_NULL);
                 IR_WRITE_OUTPUT(out, 1, PyValue_NULL);
             }
@@ -3410,9 +3731,13 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("_PyFrame_WriteHome(frame, &out[1], PyValue_NULL)", output)
         self.assertNotIn("IR_WRITE_OUTPUT", output)
         output = self.ir_output("""
-            inst(OP, (values[oparg*2] -- map)) {
+            inst(OP, (values[oparg*2]: consumed -- map: owned))
+                effects(reads, writes, allocates, raises, releases, runs_python)
+                exits(next, raise)
+            {
                 PyObject *object = IR_BUILD_MAP(values);
                 DEAD(values);
+                ERROR_IF(object == NULL);
                 map = PyValue_FromObjectSteal(object);
             }
         """)
@@ -3421,7 +3746,9 @@ class TestIRCases(unittest.TestCase):
 
     def test_home_loop_operations_lower_through_actual_storage(self):
         output = self.ir_output("""
-            window inst(OP, (-- out[oparg])) {
+            window inst(OP, (-- out[oparg]: inline))
+                effects() exits(next)
+            {
                 for (int i = 0; i < oparg; i++) {
                     IR_WRITE_OUTPUT(out, i, PyValue_NULL);
                 }
@@ -3429,7 +3756,9 @@ class TestIRCases(unittest.TestCase):
         """)
         self.assertIn("_PyFrame_WriteHome(frame, &out[i], PyValue_NULL)", output)
         output = self.ir_output("""
-            inst(OP, (values[oparg] -- result)) {
+            inst(OP, (values[oparg]: consumed inline -- result: inline))
+                effects(reads, writes, releases) exits(next)
+            {
                 for (int i = 0; i < oparg; i++) {
                     PyValue value = IR_TAKE_INPUT(values, i);
                     PyValue_CLOSE(value);
@@ -3558,7 +3887,7 @@ class TestIRCases(unittest.TestCase):
 
     def test_structured_branch_common_vacate_is_an_actual_both_edge_recipe(self):
         source = """
-        inst(OP, (value --)) {
+        inst(OP, (value: consumed --)) effects(releases) exits(next, branch) {
             PyValue_XCLOSE(value);
             if (oparg) { JUMPTO(oparg); }
         }
@@ -3570,10 +3899,16 @@ class TestIRCases(unittest.TestCase):
             ir_generator.OwnershipEvent("_PyIR_OWNER_NORMAL_CLEAR_INPUTS"),))
         # A raw frame operation before the common point has no footprint
         # contract, even when the declared input/output counts stay identical.
-        changed = self.analyze(source.replace("PyValue_XCLOSE(value);",
-                                             "opaque(frame); PyValue_XCLOSE(value);"))
-        fmt = ir_generator.compute_formats(changed)
-        self.assertEqual(ir_generator.handler_contracts(changed, fmt)["OP"].ownership_events, ())
+        # (`opaque(frame)` is no row: the verifier refuses it before the
+        # recipe is asked, so the raw operations here are stores.)
+        for raw in ("frame->return_slot = 0;", "frame->base[0] = PyValue_NULL;"):
+            with self.subTest(raw=raw):
+                changed = self.analyze(
+                    source.replace("PyValue_XCLOSE(value);", raw + " PyValue_XCLOSE(value);")
+                          .replace("effects(releases)", "effects(reads, writes, releases)"))
+                fmt = ir_generator.compute_formats(changed)
+                self.assertEqual(
+                    ir_generator.handler_contracts(changed, fmt)["OP"].ownership_events, ())
         actual = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         real = analyzer.analyze_files([str(actual)])
         formats = ir_generator.compute_formats(real)
@@ -3678,21 +4013,35 @@ class TestIRCases(unittest.TestCase):
         # The PyValue_FromObject*() constructors make an exact int or
         # float inline, so their results get the generic DUP, not the
         # _POINTER forms, although a later uop asserts an object
-        for ctor in ("PyValue_FromObjectSteal(SPAM())",
-                     "PyValue_DUP(PyValue_FromObjectBorrow(SPAM()))",
-                     "PyValue_FromObjectBorrow(SPAM())"):
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM_OWNED, ARGS(), VALUE(owned), EFFECTS(), EXITS()) \\
+            MACRO(SPAM_BORROWED, ARGS(), SCALAR, EFFECTS(), EXITS()) \\
+            MACRO(SPAM_USE, ARGS(object), NONE, EFFECTS(reads), EXITS())
+        """)
+        # The stolen object is an owner that the declared row hands out, so
+        # it is bound to a local before the constructor takes it
+        for ctor, mode in (("PyObject *o = SPAM_OWNED(); res = PyValue_FromObjectSteal(o);",
+                            "owned"),
+                           ("res = PyValue_DUP(PyValue_FromObjectBorrow(SPAM_BORROWED()));",
+                            "owned"),
+                           ("res = PyValue_FromObjectBorrow(SPAM_BORROWED());", "borrowed")):
             with self.subTest(ctor=ctor):
                 output = self.ir_output(f"""
-                op(_MAKE, (-- res)) {{
-                    res = {ctor};
+                op(_MAKE, (-- res: {mode}))
+                    effects(reads) exits(next)
+                {{
+                    {ctor}
                 }}
-                op(_COPY, (value -- value, copy)) {{
+                op(_COPY, (value -- value, copy: owned))
+                    effects() exits(next)
+                {{
                     copy = PyValue_DUP(value);
                 }}
-                op(_USE, (value, copy --)) {{
-                    assert(PyValue_IsObject(value));
+                op(_USE, (value: consumed object, copy: consumed --))
+                    effects(reads, releases) exits(next)
+                {{
                     PyObject *o = PyValue_AsKnownObjectBorrow(value);
-                    EGGS(o);
+                    SPAM_USE(o);
                     DECREF_INPUTS();
                 }}
                 macro(OP) = _MAKE + _COPY + _USE;
@@ -3733,12 +4082,17 @@ class TestIRCases(unittest.TestCase):
     def test_feedback_layout_required(self):
         # A family with an entry must have its type in FEEDBACK_LAYOUTS
         input = """
-        specializing op(_SPECIALIZE_SPAM, (owner -- owner)) {
+        specializing op(_SPECIALIZE_SPAM, (owner -- owner))
+            effects(writes) exits(next)
+            feedback(read(entry), write(entry))
+        {
             _PyFbHeader *feedback = FB_COUNTER();
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
         }
-        op(_SPAM, (owner -- res)) {
-            res = owner;
+        op(_SPAM, (owner: consumed -- res: moved(owner)))
+            effects() exits(next)
+        {
+            res = TAKE(owner);
         }
         macro(SPAM) = _SPECIALIZE_SPAM + _SPAM;
     """
@@ -3789,27 +4143,44 @@ class TestIRCases(unittest.TestCase):
         # as a constant, after the other IR-only handlers.  Its
         # specialisations deoptimise to the handler of the operation that
         # their entry records.
+        self.add_rows("""#define T(PRIMITIVE, HELPER, MACRO) \\
+            MACRO(SPAM_BINARY, ARGS(borrowed, borrowed, scalar), VALUE_OR_NULL(owned), \\
+                  EFFECTS(runs_python, raises), EXITS()) \\
+            MACRO(HAM_VALUE, ARGS(borrowed, borrowed), VALUE(owned), EFFECTS(), EXITS())
+        """)
         input = """
         family(BINARY_OP, 1) = { BINARY_OP_ADD_INT };
-        specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs)) {
+        specializing op(_SPECIALIZE_BINARY_OP, (lhs, rhs -- lhs, rhs))
+            effects(writes) exits(next)
+            feedback(read(entry), write(entry))
+        {
             _PyFbHeader *feedback = FB_COUNTER();
-            ADVANCE_ADAPTIVE_COUNTER(feedback);
+            _PyFb_AdvanceCounter(feedback);
         }
-        op(_BINARY_OP, (lhs, rhs -- res)) {
-            res = SPAM(lhs, rhs, oparg);
-            INPUTS_DEAD();
+        op(_BINARY_OP, (lhs: consumed, rhs: consumed -- res: owned))
+            effects(runs_python) exits(next, raise)
+        {
+            res = SPAM_BINARY(lhs, rhs, oparg);
+            DECREF_INPUTS();
+            ERROR_IF(PyValue_IsNull(res));
         }
         macro(BINARY_OP) = _SPECIALIZE_BINARY_OP + _BINARY_OP;
-        op(_GUARD_INT, (left, right -- left, right)) {
+        op(_GUARD_INT, (left, right -- left, right))
+            effects() exits(next, deopt)
+        {
             DEOPT_IF(!EGGS(left, right), "eggs");
         }
-        op(_ADD_INT, (left, right -- res)) {
-            res = HAM(left, right);
-            INPUTS_DEAD();
+        op(_ADD_INT, (left: consumed, right: consumed -- res: owned))
+            effects(releases) exits(next)
+        {
+            res = HAM_VALUE(left, right);
+            DECREF_INPUTS();
         }
         macro(BINARY_OP_ADD_INT) = unused/1 + _GUARD_INT + _ADD_INT;
-        ir_only inst(IR_BACON, ( -- )) {
-            SPAM();
+        ir_only inst(IR_BACON, ( -- ))
+            effects() exits(next)
+        {
+            SPAM_FLAG();
         }
     """
         analysis = self.analyze(input)
@@ -3876,23 +4247,25 @@ class TestShapeReadMetadata(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.temp_input_filename = str(Path(directory.name) / "source.c")
 
+    # The declarations of the two uops, as Python/bytecodes.c has them.  The
+    # verifier of a declaration checks a uop's body before the generator's
+    # shape-read rules run, so an edit that the rules are to refuse has its
+    # declaration changed to what the edited body does (`redeclared`); one
+    # that the verifier refuses is checked against the real declaration.
+    GUARD_DECLARATION = (
+        "                (type_version/2, shape/0, owner: object\n"
+        "                 -- owner: shape(shape) type_version(type_version)))\n"
+        "            effects(reads) exits(next, miss)\n")
+    LOAD_DECLARATION = (
+        "leaf op(_LOAD_ATTR_SHAPE, (offset/1, owner: consumed -- attr: owned))\n"
+        "            effects(reads, releases) exits(next)\n")
+
+    def redeclared(self, source, old, new):
+        self.assertIn(old, source)
+        return source.replace(old, new, 1)
+
     def shape_read_handler(self, source, name):
-        # These cases test the generator's shape-read rules, which run after
-        # the declared contract's verifier; the declarations of
-        # _LOAD_ATTR_SHAPE and _GUARD_SHAPE_READ would refuse most edits
-        # first, so the edits run on them undeclared
-        undeclared = (
-            ("leaf op(_LOAD_ATTR_SHAPE, (offset/1, owner: consumed -- attr: owned))\n"
-             "            effects(reads, releases) exits(next)\n        {",
-             "leaf op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr)) {"),
-            ("leaf op(_GUARD_SHAPE_READ,\n"
-             "                (type_version/2, shape/0, owner: object\n"
-             "                 -- owner: shape(shape) type_version(type_version)))\n"
-             "            effects(reads) exits(next, miss)\n        {",
-             "leaf op(_GUARD_SHAPE_READ, (type_version/2, shape/0, owner -- owner)) {"),
-        )
-        for declared, bare in undeclared:
-            source = source.replace(declared, bare, 1)
+        "The handler name that source generates, and its effects"
         Path(self.temp_input_filename).write_text(source)
         analysis = analyzer.analyze_files([self.temp_input_filename])
         formats = ir_generator.compute_formats(analysis)
@@ -3942,28 +4315,62 @@ class TestShapeReadMetadata(unittest.TestCase):
     def test_shape_read_rejects_a_missing_or_changed_guard(self):
         source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
         guard = "IR_GUARD_SHAPE_READ(PyValue_AsKnownObjectBorrow(owner), type_version, shape);"
-        for changed in ("(void)owner;", guard.replace("type_version, shape", "shape, type_version"),
-                        guard + " offset++;", guard + " PyValue_CLOSE(owner);"):
+        declared = self.GUARD_DECLARATION
+        swapped = guard.replace("type_version, shape", "shape, type_version")
+        # The verifier of the declaration refuses these first: the guard that
+        # is gone leaves no miss exit and none of its facts, the swapped
+        # arguments establish other facts, and a guard that releases its input
+        # is no guard
+        for changed, error in (
+                ("(void)owner;", "declares exits\\(miss, next\\), but the body takes next"),
+                (swapped, "`owner` is declared shape\\(shape\\), type_version\\(type_version\\), "
+                          "which nothing establishes"),
+                (guard + " PyValue_CLOSE(owner);", "`PyValue_CLOSE` may releases")):
+            with self.subTest(verifier=changed):
+                with self.assertRaisesRegex(SyntaxError, error):
+                    self.shape_read_handler(source.replace(guard, changed, 1),
+                                            "LOAD_ATTR_SHAPE_POLY")
+        # Declared as the edited body is, the generator's rules refuse them
+        no_guard = declared.replace(
+            "owner: shape(shape) type_version(type_version)))", "owner))").replace(
+            "exits(next, miss)", "exits(next)")
+        swapped_facts = declared.replace("shape(shape) type_version(type_version)",
+                                         "shape(type_version) type_version(shape)")
+        for changed, declaration in (
+                ("(void)owner;", no_guard),
+                (swapped, swapped_facts),
+                (guard + " offset++;", declared)):
             with self.subTest(changed=changed):
-                # A guard that releases its input is no guard, and reads
-                # the owner as an object without an assert
+                edited = self.redeclared(source, declared, declaration).replace(
+                    guard, changed, 1)
                 with self.assertRaisesRegex(
                         SyntaxError, "shape (guard|read)|may be an inline value"):
-                    self.shape_read_handler(source.replace(guard, changed, 1), "LOAD_ATTR_SHAPE_POLY")
+                    self.shape_read_handler(edited, "LOAD_ATTR_SHAPE_POLY")
 
     def test_shape_read_binding_expires_before_an_intervening_effect(self):
         source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
         read = "attr = IR_DUP_SHAPE_READ(owner, offset);"
-        for prefix, error in (
-                ("offset++;", "shape read has no current guarded offset"),
-                ("PyValue_CLOSE(owner);", "view 'owner' is read after a call"),
-                ("unknown_effect();", "view 'owner' is read after a call"),
-                ("frame->return_slot = 0;", "shape read has no current guarded offset"),
-                ("if (flag) { offset++; }", "shape read has no current guarded offset"),
-                ("for (int i=0; i<0; i++) { offset++; }", "shape read has no current guarded offset")):
+        # The prefix is a call that a row declares (`unknown_effect()` is no
+        # row), and the declaration says what the edited body does
+        plain = ("reads, releases", "next")
+        for prefix, (effects, exits), error in (
+                ("offset++;", plain, "shape read has no current guarded offset"),
+                ("PyValue_CLOSE(owner);", plain, "view 'owner' is read after a call"),
+                ("_PyEval_FormatExcUnbound(tstate, NULL, 0);", ("runs_python", "next"),
+                 "view 'owner' is read after a call"),
+                ("frame->return_slot = 0;", ("reads, writes, releases", "next"),
+                 "shape read has no current guarded offset"),
+                ("if (flag) { offset++; }", plain,
+                 "shape read has no current guarded offset"),
+                ("for (int i=0; i<0; i++) { offset++; }", plain,
+                 "shape read has no current guarded offset")):
             with self.subTest(prefix=prefix):
+                edited = self.redeclared(
+                    source, self.LOAD_DECLARATION,
+                    self.LOAD_DECLARATION.replace("reads, releases", effects)
+                    .replace("exits(next)", f"exits({exits})"))
                 with self.assertRaisesRegex(SyntaxError, error):
-                    self.shape_read_handler(source.replace(read, prefix + " " + read, 1),
+                    self.shape_read_handler(edited.replace(read, prefix + " " + read, 1),
                                             "LOAD_ATTR_SHAPE_POLY")
 
     def test_polymorphic_shape_requires_the_actual_read_action(self):
@@ -3978,8 +4385,8 @@ class TestShapeReadMetadata(unittest.TestCase):
         for name in ("shape_read_offset", "_PyObject_ShapeReadDup", "ir_shape_offset",
                      "ir_selected_offset"):
             for declaration in (f"int {name};", f"#define {name} opaque\n"):
-                prefix = ("op(_SHADOW_SHAPE_HELPER, (owner -- owner)) {\n" +
-                          declaration + "\n}\n")
+                prefix = ("op(_SHADOW_SHAPE_HELPER, (owner: object -- owner))\n"
+                          "    effects() exits(next)\n{\n" + declaration + "\n}\n")
                 changed = source.replace("        macro(LOAD_ATTR_SHAPE) =",
                                          prefix + "        macro(LOAD_ATTR_SHAPE) =", 1)
                 changed = changed.replace("            _GUARD_SHAPE_READ +",

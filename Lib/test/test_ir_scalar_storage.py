@@ -33,7 +33,9 @@ class SourceNumbers(ir_numbers.NumberTable):
 
 class ScalarStorageTests(unittest.TestCase):
     def contract(self, body):
-        return self.program(f"inst(SAMPLE, (value --)) {{ {body} }}")
+        return self.program(
+            "inst(SAMPLE, (value: consumed --)) effects(releases, raises) "
+            f"exits(next, raise) {{ {body} }}")
 
     def program(self, program, *, scratch_result=False, name="SAMPLE"):
         with tempfile.TemporaryDirectory() as directory:
@@ -61,21 +63,30 @@ class ScalarStorageTests(unittest.TestCase):
                 self.assertEqual(checkpoints[0].node, len(actions))
                 self.assertEqual(actions[1].flags, 1)
 
-    def test_owner_left_only_in_native_local_denies_checkpoint(self):
-        contract = self.contract("""
-            PyValue held = TAKE(value);
-            ERROR_IF(oparg);
-            PyValue_CLOSE(held);
-        """)
-        self.assertFalse(contract.error_checkpoints)
+    # The verifier refuses a body that leaves an owner held, or closes one
+    # twice, before the generator's own receipts can see it: the declared
+    # uop is rejected where it was once merely given no checkpoint.
+
+    def test_owner_left_only_in_native_local_is_refused(self):
+        with self.assertRaisesRegex(
+                SyntaxError, "on raise, the new owner `held` is still held"):
+            self.contract("""
+                PyValue held = TAKE(value);
+                ERROR_IF(oparg);
+                PyValue_CLOSE(held);
+            """)
 
     def test_error_flush_rehomes_the_actual_native_token(self):
         program = """
-            op(_FIRST, (value -- saved)) {
+            op(_FIRST, (value: consumed -- saved: owned))
+                effects(releases) exits(next)
+            {
                 saved = PyValue_XDUP(value);
                 PyValue_CLOSE(value);
             }
-            op(_SECOND, (pending -- pending)) { ERROR_IF(oparg); }
+            op(_SECOND, (pending -- pending))
+                effects(raises) exits(next, raise)
+            { ERROR_IF(oparg); }
             macro(SAMPLE) = _FIRST + _SECOND;
         """
         # A fixed scratch recipient is an actual home on every route. The
@@ -102,32 +113,35 @@ class ScalarStorageTests(unittest.TestCase):
                 self.assertEqual(actions[-1].kind, "_PyIR_OWNER_STORAGE_JOIN")
                 self.assertTrue(any(event.kind == "_PyIR_OWNER_STORAGE_COPY" for event in actions))
 
-    def test_conditional_retirement_does_not_close_other_path(self):
-        contract = self.contract("""
-            PyValue held = TAKE(value);
-            if (oparg) { PyValue_CLOSE(held); }
-            ERROR_IF(oparg);
-        """)
-        self.assertFalse(contract.error_checkpoints)
+    def test_conditional_retirement_is_refused(self):
+        with self.assertRaisesRegex(
+                SyntaxError, "`held` is owned on one path and not on another"):
+            self.contract("""
+                PyValue held = TAKE(value);
+                if (oparg) { PyValue_CLOSE(held); }
+                ERROR_IF(oparg);
+            """)
 
     def test_missing_release_receipt_cannot_hide_native_owner(self):
         with mock.patch.object(ir_generator.IRStack, "retire_value", lambda *args: None):
             self.assertFalse(self.contract(
                 "DECREF_INPUTS(); ERROR_IF(oparg);").error_checkpoints)
 
-    def test_retired_native_alias_cannot_be_duplicated_or_closed_again(self):
+    def test_retired_native_alias_close_is_refused(self):
         for use in ("PyValue duplicate = PyValue_XDUP(alias); PyValue_CLOSE(duplicate);",
                     "PyValue_CLOSE(alias);"):
             with self.subTest(use=use):
-                contract = self.contract(f"""
-                    PyValue held = PyValue_XDUP(value);
-                    PyValue_CLOSE(value);
-                    PyValue alias = held;
-                    PyValue_CLOSE(held);
-                    {use}
-                    ERROR_IF(oparg);
-                """)
-                self.assertFalse(contract.error_checkpoints)
+                with self.assertRaisesRegex(
+                        SyntaxError, "PyValue_CLOSE consumes `held`, which is "
+                        "already consumed or moved"):
+                    self.contract(f"""
+                        PyValue held = PyValue_XDUP(value);
+                        PyValue_CLOSE(value);
+                        PyValue alias = held;
+                        PyValue_CLOSE(held);
+                        {use}
+                        ERROR_IF(oparg);
+                    """)
 
     def test_shared_transport_summary_rejects_aliases_and_unknown_calls(self):
         for expression, expected in (

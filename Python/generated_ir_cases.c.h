@@ -3239,13 +3239,13 @@ ir_run_BUILD_MAP(
             PyValue map;
             values = &window[0];
             PyObject *map_o = _Py_BuildMap_ValueSteal(frame, values, oparg);
-            int failed = map_o == NULL;
-            map = failed ? PyValue_NULL : PyValue_FromObjectSteal(map_o);
-            IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
-            IR_SET_TEMP(window[0], map);
-            if (failed) {
+            if (map_o == NULL) {
+                IR_CLEAR_SLOTS(&window[0], oparg*2);
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
+            map = PyValue_FromObjectSteal(map_o);
+            IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
+            IR_SET_TEMP(window[0], map);
             IR_MOVE_TO_DST(ir_word, A, window[0]);
             PyValue_XCLOSE(ir_old);
             DISPATCH();

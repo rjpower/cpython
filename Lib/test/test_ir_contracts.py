@@ -1233,6 +1233,24 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % "PyValue_IsFalse(exc_value)",
                      r"DEAD\(`exc_value`\) drops an owned value")
 
+    def test_an_object_pointer_tested_for_null(self):
+        # _BUILD_MAP: a row's VALUE_OR_NULL result as a PyObject *, which
+        # `x == NULL` decides as PyValue_IsNull(x) does for a value
+        source = """
+            op(_OP, (values[oparg*2]: consumed -- map: owned))
+                effects(reads, writes, allocates, raises, releases, runs_python)
+                exits(next, raise)
+            {
+                PyObject *map_o = IR_BUILD_MAP(values);
+                DEAD(values);
+                ERROR_IF(%s);
+                map = PyValue_FromObjectSteal(map_o);
+            }
+        """
+        self.verify(source % "map_o == NULL")
+        self.refuses(source % "map_o != NULL", r"on raise, the new owner `map_o` is still held")
+        self.refuses(source % "oparg == 0", r"on raise, the new owner `map_o` is still held")
+
     def test_identities_of_static_objects(self):
         # F21, _GUARD_LOAD_SUPER_ATTR_METHOD: a CONSTANT row names a static
         # object by address; a comparison with it establishes is(K)

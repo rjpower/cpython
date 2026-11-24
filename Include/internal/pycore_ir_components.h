@@ -240,7 +240,7 @@
         ARGS(object), VALUE(borrowed), EFFECTS()) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PyValue_FromObjectSteal, PyValue, (PyObject *), \
-        ARGS(object), VALUE(owned), EFFECTS()) \
+        ARGS(consumed object), VALUE(owned), EFFECTS()) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PyValue_GenCheck, bool, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(reads)) \
@@ -1336,7 +1336,7 @@
     MACRO(IR_BUILD_STRING, ARGS(taken), VALUE_OR_NULL(owned), \
           EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
           EXITS()) \
-    MACRO(IR_BUILD_MAP, ARGS(taken), VALUE_OR_NULL(owned), \
+    MACRO(IR_BUILD_MAP, ARGS(consumed), VALUE_OR_NULL(owned), \
           EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
           EXITS()) \
     /* _PyObject_LookupSpecialMethod: 1 found, 0 missing (the uop raises), \

@@ -2364,6 +2364,11 @@ class OwnershipWalk:
             if tuple(cond) == when:
                 self.set_null(state, name, holds == null_if)
         null = _call(cond, "PyValue_IsNull")
+        # The same test of an object pointer, `x == NULL` or `x != NULL`
+        # (BUILD_MAP's map_o): a row's VALUE_OR_NULL result as a PyObject *
+        if null is None and len(cond) == 3 and cond[1] in ("==", "!=") and \
+                cond[2] == "NULL" and re.fullmatch(r"[A-Za-z_]\w*", cond[0]):
+            null, holds = [[cond[0]]], holds == (cond[1] == "==")
         if null is not None and len(null) == 1:
             name = " ".join(null[0])
             for owner, status in state.owners.items():

@@ -2653,13 +2653,13 @@ dummy_func(
             set = PyValue_FromObjectSteal(set_o);
         }
 
-        outlined inline_ok inst(BUILD_MAP, (values[oparg*2] -- map)) {
+        outlined inline_ok inst(BUILD_MAP, (values[oparg*2]: consumed -- map: owned))
+            effects(reads, writes, allocates, raises, releases, runs_python) exits(next, raise)
+        {
             PyObject *map_o = IR_BUILD_MAP(values);
             DEAD(values);
-            int failed = map_o == NULL;
-            map = failed ? PyValue_NULL : PyValue_FromObjectSteal(map_o);
-            SYNC_SP();
-            ERROR_IF(failed);
+            ERROR_IF(map_o == NULL);
+            map = PyValue_FromObjectSteal(map_o);
         }
 
         outlined inst(SETUP_ANNOTATIONS, (--))

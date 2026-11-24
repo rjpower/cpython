@@ -1541,6 +1541,20 @@ class VerifierTests(unittest.TestCase):
                          "                    PyValue_CLOSE(completed);"),
                      r"completed")
 
+    def test_a_raise_on_a_field_follows_its_outcome(self):
+        # _GET_ITER: the raise tests the field that the outcome decides
+        source = """
+            op(_OP, (iterable: consumed -- iter: owned)) effects(runs_python) exits(next, raise) {
+                _PyValuePair got = _PyEval_GetIter(iterable, oparg);
+                DEAD(iterable);
+                ERROR_IF(%s);
+                iter = got.first;
+            }
+        """
+        self.verify(source % "PyValue_IsNull(got.first)")
+        self.refuses(source % "!PyValue_IsNull(got.first)",
+                     r"raises where `got` reports an outcome that sets no exception")
+
     def test_a_descriptor_field_holds_the_protocol(self):
         # _BINARY_OP_EXTEND: the action of the feedback's descriptor, a FIELD
         # along a path from the cache operand

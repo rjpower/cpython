@@ -2134,10 +2134,12 @@ class OwnershipWalk:
             self.effects(toks, state)
             cond = [t.text for t in toks]
             then, other = state.copy(), state.copy()
+            # Feasibility first: refine states what the branch tests
+            dead = [self.infeasible(then, cond, True), self.infeasible(other, cond, False)]
             for st, holds in ((then, True), (other, False)):
                 self.refine(st, cond, holds)
-            ends = [None if self.infeasible(then, cond, True) else self.stmt(stmt.body, then)]
-            if self.infeasible(other, cond, False):
+            ends = [None if dead[0] else self.stmt(stmt.body, then)]
+            if dead[1]:
                 ends.append(None)
             else:
                 ends.append(self.stmt(stmt.else_body, other) if stmt.else_body else other)
@@ -2520,9 +2522,10 @@ class OwnershipWalk:
             self.calls(toks, state)
             self.effects(toks, state)
             raised = state.copy()
+            dead = bool(args[0]) and self.infeasible(raised, args[0], True)
             if args[0]:
                 self.refine(raised, args[0], True)
-            if not (args[0] and self.infeasible(raised, args[0], True)):
+            if not dead:
                 if raised.no_exception:
                     self.fail(toks[0], f"raises where `{raised.no_exception}` reports an "
                               "outcome that sets no exception, and nothing since may raise")

@@ -1407,6 +1407,84 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % ("runs_python", "spam_lookup"),
                      r"`spam_lookup` is no FIELD that declares the SLOT it holds")
 
+    # F6: correlated status-and-value results (CASES)
+
+    def test_cases_results(self):
+        row = self.table["_PyValue_GetOptionalItem"]
+        self.assertEqual(row.result.shape, "CASES")
+        error, missing, found = row.result.cases
+        self.assertEqual((error.raised, dict(error.values)["value"].mode), (True, "null"))
+        self.assertEqual((missing.raised, dict(missing.values)["value"].mode), (False, "null"))
+        self.assertEqual(dict(found.values)["value"].mode, "owned")
+        for text, message in [
+                ("CASES(status<0 value(null) raised)", "two or more outcomes"),
+                ("CASES(status<0 value(null), status>0)", "each stating every field"),
+                ("CASES(status<5 value(null), status>0 value(owned))", "compares an integer"),
+                ("CASES(status<0 value(shiny), status>0 value(owned))", "owned, borrowed"),
+                ("CASES(status==-1 value(null), status>0 value(owned))",
+                 "an exact status field")]:
+            with self.subTest(text), self.assertRaisesRegex(ValueError, message):
+                ir_contract._parse_result(text)
+
+    def test_the_walk_follows_each_outcome(self):
+        # _LOAD_FROM_DICT_OR_GLOBALS: an error, a missing key, or an owned value
+        source = """
+            op(_OP, (d: borrowed object -- v: owned)) effects(runs_python) exits(next, raise) {
+                PyObject *o = PyValue_AsKnownObjectBorrow(d);
+                _PyStatusValue found = value_load_from_dict(tstate, o, o);
+                %s
+            }
+        """
+        self.verify(source % """
+                ERROR_IF(found.status < 0);
+                if (found.status == 0) {
+                    v = PyValue_None;
+                }
+                else {
+                    v = found.value;
+                }""")
+        # Without the error test, the error's NULL reaches the output
+        self.refuses(source % """
+                if (found.status == 0) {
+                    v = PyValue_None;
+                }
+                else {
+                    v = found.value;
+                }""", r"`v` may be NULL")
+        # The found value is an owner
+        self.refuses(source % """
+                ERROR_IF(found.status < 0);
+                v = PyValue_None;""", r"on next, the new owner `found.value` is still held")
+        # A missing key sets no exception
+        self.refuses(source % """
+                ERROR_IF(found.status <= 0);
+                v = found.value;""",
+                     r"raises where `found` reports an outcome that sets no exception")
+        # V5: the field gives the owned value
+        self.refuses(source.replace("v: owned", "v: owned inline_int") % """
+                ERROR_IF(found.status <= 0, holding(d));
+                v = found.value;""", r"declared .*inline_int")
+
+    def test_copies_of_fields_keep_their_outcome(self):
+        # _INSTRUMENTED_FOR_ITER and _SEND: the status and value copied to
+        # locals, PySendResult's exact statuses
+        source = """
+            op(_OP, (it: borrowed object -- v: owned)) effects(runs_python) exits(next, raise) {
+                _PyStatusValue sent = _PyValue_Send(PyValue_AsKnownObjectBorrow(it), it);
+                PyValue item = sent.value;
+                int what = (PySendResult)sent.status;
+                if (what == PYGEN_ERROR) {
+                    ERROR_NO_POP();
+                }
+                %s
+            }
+        """
+        self.verify(source % "v = item;")
+        self.refuses(source % "if (what == PYGEN_RETURN) { PyValue_CLOSE(item); }\nv = item;",
+                     r"moves `item`, which is already consumed or moved")
+        self.verify(source % "if (what == PYGEN_RETURN) { PyValue_CLOSE(item); "
+                    "v = PyValue_None; }\nelse { v = item; }")
+
     # F15: the GIL product's preprocessor path
 
     def test_build_arms(self):

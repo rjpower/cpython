@@ -42,7 +42,11 @@
  * VALUE_OR_NULL(mode facts) (NULL means raised), STATUS(ZERO | NEGATIVE |
  * NONZERO) (the failure value of an int status: raised, and the `out`
  * arguments unwritten), GUARD(facts per argument) (a row with a miss or
- * deopt exit: the facts on its normal return), HOME (a frame home:
+ * deopt exit: the facts on its normal return), CASES(case, ...) (a struct of
+ * a status and values: per outcome, the signs of its integer fields
+ * (status<0, status==1, ...), each value field's ownership and nullness
+ * (value(owned), value(null), second(inline nullable)) and `raised` if an
+ * exception is set; the walk follows each outcome from the call), HOME (a frame home:
  * GETLOCAL) and HOME(base) (the base of the homes: IR_SLOTS).
  * EFFECTS: reads writes allocates raises releases runs_python polls
  * switches_frame.  A `releases` may run a finalizer, which may run Python
@@ -272,12 +276,14 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_GetAttr, PyValue, (PyValueBorrow, PyObject *), \
         ARGS(borrowed, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* pycore_value_ops.h: status 1 an unbound method, 0 the attribute, -1 an error; the value owned unless NULL (G0a4: a CASES result) */ \
     HELPER(_PyValue_GetMethod, _PyStatusValue, (PyValueBorrow, PyObject *), \
-        ARGS(borrowed, object), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+        ARGS(borrowed, object), \
+        CASES(status==-1 value(null) raised, status==0 value(owned), status==1 value(owned)), EFFECTS(runs_python)) \
+    /* pycore_value_ops.h: 1 with the item, 0 for a missing key (no exception), -1 on another error (G0a4: a CASES result) */ \
     HELPER(_PyValue_GetOptionalItem, _PyStatusValue, (PyValueBorrow, PyValueBorrow), \
-        ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed), \
+        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_Invert, PyValue, (PyValueBorrow), \
         ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
@@ -310,9 +316,10 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_RichCompare, PyValue, (PyValueBorrow, PyValueBorrow, int), \
         ARGS(borrowed, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* pycore_value_ops.h: 1 with the yielded item, 0 with the return value, -1 on error (G0a4: a CASES result) */ \
     HELPER(_PyValue_Send, _PyStatusValue, (PyObject *, PyValueBorrow), \
-        ARGS(object, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object, borrowed), \
+        CASES(status==-1 value(null) raised, status==0 value(owned), status==1 value(owned)), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_SequenceCheck, int, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(reads)) \
@@ -551,9 +558,10 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyShape_TransitionMissing, bool, (PyTypeObject *, uint8_t, Py_ssize_t), \
         ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* pycore_value_ops.h: status 1 an unbound method, 0 the attribute, -1 an error (G0a4: a CASES result) */ \
     HELPER(_PySuper_LookupValue, _PyStatusValue, (PyTypeObject *, PyValueBorrow, PyObject *, int), \
-        ARGS(scalar, borrowed, object, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(scalar, borrowed, object, scalar), \
+        CASES(status==-1 value(null) raised, status==0 value(owned), status==1 value(owned)), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyTemplate_Build, PyObject *, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
@@ -600,9 +608,10 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(value_import_level, int, (PyValue), \
         ARGS(consumed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* ceval.c: as _PyValue_GetOptionalItem, -1 if the lazy import fails (G0a4: a CASES result) */ \
     HELPER(value_load_from_dict, _PyStatusValue, (PyThreadState *, PyObject *, PyObject *), \
-        ARGS(tstate, object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(tstate, object, object), \
+        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(value_load_global, PyValue, (PyObject *, PyObject *, PyObject *), \
         ARGS(object, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
@@ -930,12 +939,14 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyForIter_StopIsExhaustion, int, (PyThreadState *, _PyInterpreterFrame *), \
         ARGS(tstate, frame), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* ceval.c: {1, item} owned, {0, NULL} at the end with no exception, {-1, NULL} with one (G0a4: a CASES result) */ \
     HELPER(_PyForIter_VirtualIteratorNext, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValue, PyValue *), \
-        ARGS(tstate, frame, consumed, scalar), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+        ARGS(tstate, frame, consumed, scalar), \
+        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
+    /* ceval.c: as _PyForIter_VirtualIteratorNext (G0a4: a CASES result) */ \
     HELPER(_PyForIter_VirtualIteratorNextInline, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValue, PyValue *), \
-        ARGS(tstate, frame, consumed, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(tstate, frame, consumed, scalar), \
+        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyGen_GetGeneratorFromFrame, PyGenObject *, (_PyInterpreterFrame *), \
         ARGS(frame), SCALAR, EFFECTS(reads)) \
@@ -1107,9 +1118,10 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_GetAIter, PyValue, (PyThreadState *, PyValue), \
         ARGS(tstate, consumed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* ceval.c: {iterable, tagged index 0}, {iterator, NULL}, or {NULL, NULL} with an exception set (G0a4: a CASES result) */ \
     HELPER(_PyEval_GetIter, _PyValuePair, (PyValue, int), \
-        ARGS(consumed, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(consumed, scalar), \
+        CASES(first(null) second(null) raised, first(owned) second(inline nullable)), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_ImportFromValue, PyValue, (PyThreadState *, PyValueBorrow, PyObject *), \
         ARGS(tstate, borrowed, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \

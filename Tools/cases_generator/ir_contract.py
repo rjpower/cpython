@@ -254,7 +254,7 @@ COMPONENTS_HEADER = ROOT / "Include/internal/pycore_ir_components.h"
 ROW_KINDS = ("PRIMITIVE", "HELPER", "ROUTINE", "MACRO", "INTRINSIC", "DESTRUCTOR", "FIELD",
              "CONSTANT", "SLOT")
 RESULT_SHAPES = ("NONE", "SCALAR", "VIEW", "PATH", "MEASURE", "TEST", "CONTEXT",
-                 "VALUE", "VALUE_OR_NULL", "STATUS", "GUARD", "HOME", "SLOT")
+                 "VALUE", "VALUE_OR_NULL", "STATUS", "GUARD", "HOME", "SLOT", "CASES")
 # The failure value of a STATUS result: the int compares to 0 so
 STATUS_FAILURES = ("ZERO", "NEGATIVE", "NONZERO")
 BUILDS = ("gil", "free_threaded", "all")
@@ -270,6 +270,77 @@ class Arg:
     # `consumed object` of a `PyObject *` parameter: a stolen object
     # pointer; mode and representation are separate words
     object: bool = False
+
+
+# The signs of an integer field of a CASES result
+SIGNS = frozenset(("neg", "zero", "pos"))
+SIGN_TESTS = {"<": {"neg"}, "<=": {"neg", "zero"}, "==": {"zero"}, "!=": {"neg", "pos"},
+              ">": {"pos"}, ">=": {"zero", "pos"}}
+
+
+@dataclass(frozen=True)
+class Spec:
+    "A value field of a CASES result in one case: its mode or null, and facts"
+    mode: str                   # owned, borrowed, inline, or null
+    facts: frozenset[VFact] = frozenset()
+    nullable: bool = False
+
+
+@dataclass(frozen=True)
+class Case:
+    """One outcome of a CASES result: the signs of its integer fields, each
+    value field's ownership and nullness, and whether an exception is set"""
+    signs: tuple[tuple[str, frozenset[str]], ...]
+    values: tuple[tuple[str, Spec], ...]
+    raised: bool = False
+    # Integer fields whose negative and positive signs are exactly -1 and 1
+    exact: frozenset[str] = frozenset()
+
+
+def _parse_case(text: str) -> Case:
+    signs, values, raised, exact = [], [], False, set()
+    for w in _split_words(text):
+        if w == "raised":
+            raised = True
+            continue
+        m = re.fullmatch(r"(\w+)(<|<=|==|!=|>|>=)(-?\d)", w)
+        if m:
+            field, op, value = m.groups()
+            if value == "0":
+                found = frozenset(SIGN_TESTS[op])
+            elif op == "==" and value in ("-1", "1"):
+                found = frozenset({"neg" if value == "-1" else "pos"})
+                exact.add(field)
+            else:
+                raise ValueError(f"`{w}`: a case compares an integer field with 0, or "
+                                 "states it == -1 or == 1")
+            signs.append((field, found))
+            continue
+        m = re.fullmatch(r"(\w+)\((.*)\)", w)
+        if m is None:
+            raise ValueError(f"`{w}` is no field of a case: f<0 (a sign), f(mode facts) "
+                             "or f(null), or `raised`")
+        words = m.group(2).split()
+        if not words or words[0] not in ("owned", "borrowed", "inline", "null"):
+            raise ValueError(f"`{w}`: a value field is owned, borrowed, inline or null")
+        nullable = "nullable" in words[1:]
+        facts = frozenset(parse_fact(x, None) for x in words[1:] if x != "nullable")
+        if words[0] == "null" and (facts or nullable):
+            raise ValueError(f"`{w}`: a null field has no facts")
+        values.append((m.group(1), Spec(words[0], facts, nullable)))
+    return Case(tuple(signs), tuple(values), raised, frozenset(exact))
+
+
+def _split_words(text: str) -> list[str]:
+    "text split at spaces outside parentheses"
+    words, depth, start = [], 0, 0
+    for i, c in enumerate(text + " "):
+        depth += {"(": 1, ")": -1}.get(c, 0)
+        if c == " " and depth == 0:
+            if text[start:i].strip():
+                words.append(text[start:i].strip())
+            start = i + 1
+    return words
 
 
 @dataclass(frozen=True)
@@ -288,6 +359,8 @@ class Result:
     # VALUE: the facts it has from a producer (F7), also in facts; the
     # generator asserts them after each call
     assumed: tuple[Assumption, ...] = ()
+    # CASES: the outcomes of a struct result, which its fields correlate
+    cases: tuple[Case, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -370,6 +443,20 @@ def _parse_result(text: str) -> Result:
         return Result("HOME", measure="base")
     if (inner := _inner(text, "PATH")) is not None:
         return Result("PATH", measure=inner.strip())
+    if (inner := _inner(text, "CASES")) is not None:
+        # A struct of a status and values (F6): per outcome, the signs of
+        # its integer fields, each value's ownership and nullness, and
+        # whether an exception is set
+        cases = tuple(_parse_case(c) for c in _split_text(inner))
+        fields = [{f for f, _ in c.signs} | {f for f, _ in c.values} for c in cases]
+        if len(cases) < 2 or any(f != fields[0] for f in fields):
+            raise ValueError("CASES(case, case, ...): two or more outcomes, each stating "
+                             "every field")
+        exact = {f for c in cases for f in c.exact}
+        if any(f in exact and sign & {"neg", "pos"} and f not in c.exact
+               for c in cases for f, sign in c.signs):
+            raise ValueError("an exact status field is == -1, == 0 or == 1 in every case")
+        return Result("CASES", cases=cases)
     if (inner := _inner(text, "SLOT")) is not None:
         # A FIELD that holds a pointer of the protocol that SLOT row names
         # (F6): a local assigned from it calls that row
@@ -921,10 +1008,44 @@ def _macro_ifs(uop: Uop) -> list[MacroIfStmt]:
     return found
 
 
+def correlated_types(table: dict[str, Row] | None = None) -> frozenset[str]:
+    "The C struct types that rows return as CASES results"
+    table = rows() if table is None else table
+    return frozenset(r.ret for r in table.values() if r.result.shape == "CASES")
+
+
+def struct_locals(tokens: list[Token], types: frozenset[str]) -> frozenset[str]:
+    "The locals declared `T x` with T a CASES result's struct type"
+    texts = [t.text for t in tokens]
+    return frozenset(texts[i + 1] for i, t in enumerate(texts[:-2])
+                     if t in types and re.fullmatch(r"[A-Za-z_]\w*", texts[i + 1]))
+
+
+def fold_fields(tokens: list[Token], structs: frozenset[str]) -> list[Token]:
+    """tokens with each field of a struct local, `x . f`, as one name
+    `x.f`: the walk tracks a CASES result's fields as names (F6)"""
+    if not structs:
+        return tokens
+    out: list[Token] = []
+    i = 0
+    while i < len(tokens):
+        t = tokens[i]
+        if (t.text in structs and i + 2 < len(tokens) and tokens[i + 1].text == "."
+                and (not out or out[-1].text not in (".", "->"))):
+            out.append(Token(t.filename, t.kind, f"{t.text}.{tokens[i + 2].text}",
+                             t.begin, tokens[i + 2].end))
+            i += 3
+            continue
+        out.append(t)
+        i += 1
+    return out
+
+
 def _tokens(uop: Uop) -> list[Token]:
     """The body's tokens on the GIL product's preprocessor path: an arm
     that the build's macros exclude is not code (F15).  An arm they do not
-    decide stays, and verify_uop refuses it where it is code"""
+    decide stays, and verify_uop refuses it where it is code.  A CASES
+    result's fields are single names (fold_fields)"""
     excluded: set[int] = set()
     for stmt in _macro_ifs(uop):
         excluded.add(id(stmt.condition))
@@ -932,7 +1053,8 @@ def _tokens(uop: Uop) -> list[Token]:
         if holds is not None:
             for other in (stmt.else_body or []) if holds else stmt.body:
                 excluded |= {id(t) for t in other.tokens()}
-    return [t for t in uop.body.tokens() if t.kind != "COMMENT" and id(t) not in excluded]
+    tokens = [t for t in uop.body.tokens() if t.kind != "COMMENT" and id(t) not in excluded]
+    return fold_fields(tokens, struct_locals(tokens, correlated_types()))
 
 
 def check_preprocessor(uop: Uop) -> None:
@@ -1545,12 +1667,27 @@ class _State:
     # A local assigned `c ? NULL : v` or `c ? v : NULL`: the condition, as
     # tokens, and whether the local is NULL where it holds (F3)
     null_when: dict[str, tuple[tuple[str, ...], bool]] = field(default_factory=dict)
+    # The integer fields of CASES results, and the locals copied from them:
+    # the signs each may have on this path (F6)
+    signs: dict[str, frozenset[str]] = field(default_factory=dict)
+    # The fields that compare exactly with -1 and 1
+    exact: set[str] = field(default_factory=set)
+    # The value fields of CASES results and the locals moved from them,
+    # whose NULL tests decide the path
+    decided: set[str] = field(default_factory=set)
+    # A CASES result just bound, whose outcomes the rest of the block walks
+    # one by one: (local, result)
+    split: tuple[str, "Result"] | None = None
+    # The CASES result whose outcome on this path sets no exception, until
+    # a call that may raise
+    no_exception: str = ""
 
     def copy(self) -> "_State":
         return _State(dict(self.owners), dict(self.facts), dict(self.pending),
                       dict(self.sources), dict(self.rehomed), dict(self.arrays),
                       dict(self.status), self.restartable, self.why, dict(self.bindings),
-                      dict(self.origins), dict(self.null_when))
+                      dict(self.origins), dict(self.null_when), dict(self.signs),
+                      set(self.exact), set(self.decided), self.split, self.no_exception)
 
     def end_restart(self, why: str) -> None:
         if self.restartable:
@@ -1575,6 +1712,11 @@ class _State:
         self.sources[name] = source
 
 
+# The values an exact status field compares with: PySendResult's
+EXACT_VALUES = {"-1": "neg", "1": "pos", "0": "zero", "PYGEN_ERROR": "neg",
+                "PYGEN_RETURN": "zero", "PYGEN_NEXT": "pos"}
+
+
 class OwnershipWalk:
     """Walks a declared uop's statements, tracking each obligation (the
     inputs, and every local that a new owner or a move puts one in), the
@@ -1596,6 +1738,7 @@ class OwnershipWalk:
         self.site_effects: dict[int, list[str]] = {}
         for site in effect_sites(uop, table):
             self.site_effects.setdefault(id(site.token), []).append(site.effect)
+        self.structs = struct_locals(_tokens(uop), correlated_types(table))
 
     def run(self) -> "OwnershipWalk":
         # An assumed fact holds at entry, and then lives as any fact (F7)
@@ -1712,11 +1855,80 @@ class OwnershipWalk:
 
     def block(self, stmts: list[Stmt], state: _State) -> _State | None:
         "the state after stmts, or None if they always leave"
-        for stmt in stmts:
+        for i, stmt in enumerate(stmts):
             state = self.stmt(stmt, state)
             if state is None:
                 return None
+            if state.split is not None:
+                # A CASES result: the rest of the block once per outcome,
+                # with its fields as that outcome states them (F6)
+                name, result = state.split
+                state.split = None
+                exact = frozenset().union(*(c.exact for c in result.cases))
+                return self.join([self.block(stmts[i + 1:],
+                                             self.outcome(state, name, c, exact))
+                                  for c in result.cases])
         return state
+
+    def outcome(self, state: _State, name: str, case: Case,
+                exact: frozenset[str]) -> _State:
+        """state in one outcome of the CASES result that name holds; exact
+        are its fields that are -1, 0 or 1"""
+        st = state.copy()
+        for f, signs in case.signs:
+            st.signs[f"{name}.{f}"] = signs
+            if f in exact:
+                st.exact.add(f"{name}.{f}")
+        for f, spec in case.values:
+            field_ = f"{name}.{f}"
+            st.decided.add(field_)
+            st.origins[field_] = ""
+            if spec.mode == "null":
+                st.owners[field_] = NULL
+                st.assign(field_, {NULL_FACT}, None, name)
+                continue
+            if spec.mode == "owned":
+                st.owners[field_] = HELD
+                self.new.add(field_)
+            facts = spec.facts | ({INLINE} if spec.mode == "inline" else set())
+            if spec.nullable:
+                st.assign(field_, frozenset(), facts | {NONNULL}, name)
+            else:
+                st.assign(field_, facts | {NONNULL}, None, name)
+        st.no_exception = "" if case.raised else name
+        return st
+
+    def infeasible(self, state: _State, cond: list[str], holds: bool) -> bool:
+        """Whether a condition on a CASES result's fields cannot be `holds`
+        on this path; else the path learns it (F6)"""
+        cond = _strip(cond)
+        while cond[:1] == ["!"]:
+            cond, holds = _strip(cond[1:]), not holds
+        null = _call(cond, "PyValue_IsNull")
+        if null is not None and len(null) == 1 and len(null[0]) == 1 \
+                and null[0][0] in state.decided:
+            facts = state.facts.get(null[0][0], frozenset())
+            return (NULL_FACT in facts and not holds) or (NONNULL in facts and holds)
+        name = cond[0] if cond else ""
+        if name not in state.signs:
+            return False
+        rest = cond[1:]
+        if not rest:
+            found, holds = SIGN_TESTS["!="], holds
+        elif len(rest) == 2 and rest[0] in SIGN_TESTS and rest[1] == "0":
+            found = SIGN_TESTS[rest[0]]
+        elif (len(rest) in (2, 3) and rest[0] in ("==", "!=") and name in state.exact
+              and "".join(rest[1:]) in EXACT_VALUES):
+            found = {EXACT_VALUES["".join(rest[1:])]}
+            if rest[0] == "!=":
+                holds = not holds
+        else:
+            return False
+        signs = state.signs[name] & (found if holds else SIGNS - found)
+        if not signs:
+            return True
+        state.signs[name] = frozenset(signs)
+        return False
 
     def stmt(self, stmt: Stmt, state: _State) -> _State | None:
         if isinstance(stmt, BlockStmt):
@@ -1730,21 +1942,25 @@ class OwnershipWalk:
             return self.join([self.block(stmt.body, state.copy()),
                               self.block(stmt.else_body or [], state.copy())])
         if isinstance(stmt, IfStmt):
-            toks = [t for t in stmt.condition if t.kind != "COMMENT"]
+            toks = fold_fields([t for t in stmt.condition if t.kind != "COMMENT"],
+                               self.structs)
             self.calls(toks, state)
             self.effects(toks, state)
             cond = [t.text for t in toks]
             then, other = state.copy(), state.copy()
             for st, holds in ((then, True), (other, False)):
                 self.refine(st, cond, holds)
-            ends = [self.stmt(stmt.body, then)]
-            ends.append(self.stmt(stmt.else_body, other) if stmt.else_body else other)
+            ends = [None if self.infeasible(then, cond, True) else self.stmt(stmt.body, then)]
+            if self.infeasible(other, cond, False):
+                ends.append(None)
+            else:
+                ends.append(self.stmt(stmt.else_body, other) if stmt.else_body else other)
             return self.join(ends)
         if isinstance(stmt, (ForStmt, WhileStmt)):
             # The body may run any number of times: walk it once and join
             return self.join([self.stmt(stmt.body, state.copy()), state])
         assert isinstance(stmt, SimpleStmt)
-        return self.simple(stmt.contents, state)
+        return self.simple(fold_fields(stmt.contents, self.structs), state)
 
     def join(self, ends: list[_State | None]) -> _State | None:
         """where paths meet: the same obligations; the facts that all of them
@@ -1793,6 +2009,13 @@ class OwnershipWalk:
                               f"{self.array_state(other.arrays.get(name, UNWRITTEN))} on "
                               "another where they join")
             first.status.update(other.status)
+            for name in set(first.signs) | set(other.signs):
+                first.signs[name] = (first.signs.get(name, SIGNS)
+                                     | other.signs.get(name, SIGNS))
+            first.exact &= other.exact
+            first.decided &= other.decided
+            if first.no_exception != other.no_exception:
+                first.no_exception = ""
             for name in set(first.bindings) | set(other.bindings):
                 if first.bindings.get(name, "") != other.bindings.get(name, ""):
                     first.bindings[name] = None
@@ -1892,6 +2115,9 @@ class OwnershipWalk:
                     self.reenter(state, f"`{t.text}` at line {t.line}, which may {effect},")
                 if effect != "reads" and effect != "raises":
                     state.end_restart(f"`{t.text}`, which may {effect}")
+                if effect in ("raises", "runs_python") and t.text not in DSL_CONSTRUCTS:
+                    # A call that may set an exception (a raise site sets none)
+                    state.no_exception = ""
 
     def guard_results(self, tokens: list[Token], state: _State) -> None:
         """The GUARD rows called among tokens: on their normal return, after
@@ -2062,7 +2288,7 @@ class OwnershipWalk:
             args = _split(texts[2:_close(texts, 1)], ",")
             self.calls(toks, state)
             self.check_exit(GUARDS[head], state, toks[0])
-            if args[0] == ["true"]:
+            if args[0] == ["true"] or self.infeasible(state, args[0], False):
                 return None
             self.refine(state, args[0], False)
             return state
@@ -2079,8 +2305,14 @@ class OwnershipWalk:
             raised = state.copy()
             if args[0]:
                 self.refine(raised, args[0], True)
-            self.check_exit("raise", raised, toks[0], holding)
+            if not (args[0] and self.infeasible(raised, args[0], True)):
+                if raised.no_exception:
+                    self.fail(toks[0], f"raises where `{raised.no_exception}` reports an "
+                              "outcome that sets no exception, and nothing since may raise")
+                self.check_exit("raise", raised, toks[0], holding)
             if head == "ERROR_NO_POP" or args[0] == ["true"]:
+                return None
+            if self.infeasible(state, args[0], False):
                 return None
             self.refine(state, args[0], False)
             return state
@@ -2088,6 +2320,9 @@ class OwnershipWalk:
             return None
         if head == "goto" and texts[1:2] and texts[1] in ERROR_LABELS:
             # The raise exit at this site, with its checkpoint here
+            if state.no_exception:
+                self.fail(toks[0], f"raises where `{state.no_exception}` reports an "
+                          "outcome that sets no exception, and nothing since may raise")
             self.check_exit("raise", state, toks[0])
             return None
         if head == "return" and len(texts) == 3 and re.fullmatch(r"\w+", texts[1]):
@@ -2270,6 +2505,25 @@ class OwnershipWalk:
         out = self.contract.output(lhs)
         state.null_when.pop(lhs, None)
         state.origins[lhs] = ""
+        state.signs.pop(lhs, None)
+        state.exact.discard(lhs)
+        state.decided.discard(lhs)
+        value = _uncast(rhs)
+        if len(value) == 1 and value[0] in state.signs:
+            # A copy of an integer field of a CASES result: its signs here
+            state.signs[lhs] = state.signs[value[0]]
+            if value[0] in state.exact:
+                state.exact.add(lhs)
+        if len(value) == 1 and value[0] in state.decided:
+            state.decided.add(lhs)
+        if len(value) == 1 and state.owners.get(value[0]) == NULL \
+                and value[0] not in self.declared:
+            # A NULL moves no obligation
+            state.owners[lhs] = NULL
+            state.assign(lhs, state.facts.get(value[0], frozenset()), None, value[0])
+            if out is not None:
+                state.end_restart(f"the assignment of the output `{lhs}`")
+            return
         self.bind_value(toks, lhs, rhs, state, out)
         if out is not None and not out.array:
             self.check_identity(toks, out, rhs, state)
@@ -2385,6 +2639,11 @@ class OwnershipWalk:
             state.origins[lhs] = (owner if owner in self.declared
                                   else state.origins.get(owner, ""))
             state.end_restart(f"the move of `{owner}` by {row.name}")
+            return
+        if result.shape == "CASES":
+            # Its outcomes are walked one by one from the next statement
+            state.split = (lhs, result)
+            state.assign(lhs, frozenset(), None, row.name)
             return
         if result.shape in ("VALUE_OR_NULL", "STATUS"):
             # The owners this row takes are decided by its result's local
@@ -2546,6 +2805,18 @@ def _value_results(uop: Uop, where: Token, rhs: list[str], table: dict[str, Row]
         return [(implied(result.facts), result.mode, call[0].name)]
     if len(rhs) == 1 and rhs[0] in inputs:
         return [(implied(inputs[rhs[0]].facts), "moved", rhs[0])]
+    if len(rhs) == 1 and rhs[0].count(".") == 1:
+        # A value field of a CASES result: what each outcome that is not
+        # NULL gives (F6)
+        local, f = rhs[0].split(".")
+        for at, value in _assignments(uop, local):
+            call = _call_of(value, table)
+            if call is not None and call[0].result.shape == "CASES":
+                specs = [spec for c in call[0].result.cases for name, spec in c.values
+                         if name == f and spec.mode != "null"]
+                if specs:
+                    return [(implied(spec.facts | {NONNULL}), spec.mode, call[0].name)
+                            for spec in specs]
     row = table.get(rhs[0]) if len(rhs) == 1 else None
     if row is not None and row.kind == "CONSTANT":
         identity = set() if NULL_FACT in row.result.facts else {VFact("is", row.name)}

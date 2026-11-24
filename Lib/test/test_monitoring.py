@@ -2951,6 +2951,87 @@ class TestInstrumentedOwnership(MonitoringTestBase, unittest.TestCase):
         del generator
         self.assertIsNone(refs[0]())
 
+    def test_end_of_async_for_after_its_branch_event(self):
+        # INSTRUMENTED_END_ASYNC_FOR: the BRANCH_RIGHT event from the SEND,
+        # then the exception that exception_unwind left in a temporary.  A
+        # callback may run, fail, or try to jump (a redirect, which leaves the
+        # word before the exception is read); the loop ends with the
+        # exception released either way
+        import asyncio, weakref
+        class Iterator:
+            def __init__(self):
+                self.count = 0
+            def __aiter__(self):
+                return self
+            async def __anext__(self):
+                if self.count == 2:
+                    raise StopAsyncIteration
+                self.count += 1
+                return self.count
+        async def loop():
+            out = []
+            async for x in Iterator():
+                out.append(x)
+            out.append("after")
+            return out
+        jumps = []
+        def jump(code, src, dst):
+            frame = sys._getframe(1)
+            try:
+                frame.f_lineno = loop.__code__.co_firstlineno + 4
+            except ValueError as e:
+                jumps.append(e)
+        self.watch(loop, E.BRANCH_RIGHT, lambda code, src, dst: None)
+        self.assertEqual(asyncio.run(loop()), [1, 2, "after"])
+        # Today the register plan refuses this jump; if it is taken, the
+        # word leaves for the line, and the function still completes
+        self.watch(loop, E.BRANCH_RIGHT, jump)
+        result = asyncio.run(loop())
+        if jumps:
+            self.assertEqual(result, [1, 2, "after"])
+        else:
+            self.assertEqual(result[-1], "after")
+
+    def test_end_of_send_after_a_redirect(self):
+        # INSTRUMENTED_END_SEND: the BRANCH_LEFT event that ends an `async
+        # for`'s send loop.  A callback that moves the frame makes the word
+        # leave for the line it chose (its redirect exit) and release the
+        # sent value; today the register plan refuses every such jump (the
+        # loop's temporaries), and the loop runs on
+        import asyncio
+        class Iterator:
+            def __init__(self):
+                self.count = 0
+            def __aiter__(self):
+                return self
+            async def __anext__(self):
+                await asyncio.sleep(0)
+                if self.count == 2:
+                    raise StopAsyncIteration
+                self.count += 1
+                return self.count
+        async def loop():
+            out = []
+            async for x in Iterator():
+                out.append(x)
+            out.append("after")
+            return out
+        events, refused = [], []
+        def jump(code, src, dst):
+            events.append((src, dst))
+            frame = sys._getframe(1)
+            try:
+                frame.f_lineno = loop.__code__.co_firstlineno + 3
+            except ValueError as e:
+                refused.append(e)
+        self.watch(loop, E.BRANCH_LEFT, jump)
+        result = asyncio.run(loop())
+        self.assertTrue(events)
+        if len(refused) == len(events):
+            self.assertEqual(result, [1, 2, "after"])
+        else:
+            self.assertEqual(result[-1], "after")
+
     def test_keyword_dict_is_new_for_each_call(self):
         def collect(**kw):
             return kw

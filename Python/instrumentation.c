@@ -1823,7 +1823,7 @@ _PyIR_ObserveCommittedBranch(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return (_PyIRObserverResult){0, next};
 }
 
-Py_NO_INLINE _PyInstr *
+Py_NO_INLINE _PyIRObserverResult
 _Py_call_instrumentation_jump(
     _PyInstr *instr, PyThreadState *tstate, int event,
     _PyInterpreterFrame *frame, _PyInstr *src, _PyInstr *dest)
@@ -1841,16 +1841,16 @@ _Py_call_instrumentation_jump(
         ObserverRedirectState before = observer_redirect_state(frame);
         int err = call_instrumentation_vector(instr, tstate, event, frame, src, 3, args);
         if (err) {
-            return NULL;
+            return (_PyIRObserverResult){-1, NULL};
         }
         if (observer_redirected(frame, before)) {
-            return frame->instr_ptr;
+            return (_PyIRObserverResult){1, frame->instr_ptr};
         }
     }
     if (!code->_co_monitoring->source_line_tools ||
         !code->_co_monitoring->active_monitors.tools[PY_MONITORING_EVENT_LINE])
     {
-        return dest;
+        return (_PyIRObserverResult){0, dest};
     }
     int source_line = PyCode_Addr2Line(code, _PyCode_WordOffset(code, instr_offset(frame, src)));
     bool source_advanced = false;
@@ -1861,18 +1861,18 @@ _Py_call_instrumentation_jump(
         instr_offset(frame, src), dest_offset(frame, dest), source_edge,
         dest, false, &source_line, &source_advanced, &source_epoch);
     if (source_result < 0) {
-        return NULL;
+        return (_PyIRObserverResult){-1, NULL};
     }
     if (source_result > 0) {
-        return frame->instr_ptr;
+        return (_PyIRObserverResult){1, frame->instr_ptr};
     }
     if (source_advanced &&
         code->_co_monitoring->active_monitors.tools[PY_MONITORING_EVENT_LINE] &&
         record_line_landing(frame, dest, source_line, source_epoch) < 0)
     {
-        return NULL;
+        return (_PyIRObserverResult){-1, NULL};
     }
-    return dest;
+    return (_PyIRObserverResult){0, dest};
 }
 
 static void

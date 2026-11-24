@@ -25,6 +25,7 @@ import dataclasses
 from dataclasses import dataclass, field
 import re
 
+import analyzer
 from analyzer import IR_MARKER_EFFECTS, Instruction, Uop, analysis_error
 from generators_common import ROOT
 from lexer import Token
@@ -64,8 +65,12 @@ COVERS = {
 # The effects at whose sites heap facts die (1.1)
 KILLS = frozenset(("writes", "releases", "runs_python", "polls", "switches_frame"))
 
+# `redirect`: a monitoring callback moved the frame to another word (a
+# debugger's f_lineno jump, which retires the temporaries it does not keep);
+# the word leaves for frame->instr_ptr without the rest of its handler.  On
+# the uop's other exits no callback redirected the frame.
 EXITS = ("next", "branch", "jump", "miss", "deopt", "raise", "enter", "return",
-         "yield", "exit")
+         "yield", "exit", "redirect")
 
 # Feedback access (design 1.6, section 6): what a row or a uop reads and
 # writes of its site's feedback, transitively.  `entry` is every field of
@@ -91,20 +96,22 @@ ARG_MODES = ("borrowed", "consumed", "taken", "scalar", "object", "tstate", "fra
 # the length of input x, `is(K)` the identity of a CONSTANT row's value,
 # `encoding(E1|E2|null)` a union of encodings (the representation table).
 FACT_KIND = {
-    "nonnull": "NOT_NULL", "inline": "NUMBER", "inline_int": "INLINE_INT",
-    "inline_float": "INLINE_FLOAT", "object": "OBJECT", "exact": "EXACT_TYPE",
+    "exact": "EXACT_TYPE",
     "type_version": "TYPE_VERSION", "has_values": "INLINE_VALUES_VALID",
     "shape": "SHAPE", "keys_version": "KEYS_VERSION", "length": "LENGTH",
-    "null": "IS_NULL", "in_bounds": "IN_BOUNDS", "nonnegative": "NON_NEGATIVE",
+    "in_bounds": "IN_BOUNDS", "nonnegative": "NON_NEGATIVE",
     "nonzero": "NON_ZERO", "is": "IDENTITY", "subtype": "SUBTYPE",
     "not_subtype": "NOT_SUBTYPE", "not_exact": "NOT_TYPE", "type_flag": "TYPE_FLAG",
     "type_slot": "TYPE_SLOT", "class_version": "CLASS_VERSION",
     "func_version": "FUNC_VERSION", "argcount": "ARGCOUNT", "vectorcall": "VECTORCALL",
     "convention": "CONVENTION", "ascii": "ASCII", "no_managed_dict": "NO_MANAGED_DICT",
     "unique": "UNIQUE", "self": "SELF", "tagged_index": "TAGGED_INDEX",
-    "encoding": "ENCODING",
+    # Every representation word is one record kind, ENCODING, with the set
+    # of kinds of word that it allows (VFact.record)
+    **{word: "ENCODING" for word in ("nonnull", "null", "inline", "inline_int",
+                                    "inline_float", "object", "encoding")},
 }
-VOCABULARY_OF_KIND = {v: k for k, v in FACT_KIND.items()}
+VOCABULARY_OF_KIND = {v: k for k, v in FACT_KIND.items() if v != "ENCODING"}
 FACTS_WITH_ARGUMENT = frozenset(("exact", "type_version", "shape", "keys_version", "length",
                                  "in_bounds", "is", "subtype", "not_subtype", "not_exact",
                                  "type_flag", "type_slot", "self", "encoding"))
@@ -155,7 +162,9 @@ class VFact:
 
     def record(self, subject: str) -> Fact:
         arg = self.arg
-        if self.kind in ("exact", "convention"):
+        if FACT_KIND[self.kind] == "ENCODING":
+            arg = "|".join(sorted(word_kinds({self})))
+        elif self.kind in ("exact", "convention"):
             arg = " | ".join(arg.split("|"))
         elif self.kind == "type_slot":
             arg = " == ".join(arg.split(","))
@@ -400,10 +409,16 @@ SIGN_TESTS = {"<": {"neg"}, "<=": {"neg", "zero"}, "==": {"zero"}, "!=": {"neg",
 
 @dataclass(frozen=True)
 class Spec:
-    "A value field of a CASES result in one case: its mode or null, and facts"
+    """A value field of a CASES result in one case: its mode or null, its
+    facts, and the kinds of word it may be (the facts' set, nonnull unless
+    the case spells `nullable` or a union with null)"""
     mode: str                   # owned, borrowed, inline, or null
     facts: frozenset[VFact] = frozenset()
-    nullable: bool = False
+    kinds: frozenset[str] = frozenset({"null"})
+
+    @property
+    def nullable(self) -> bool:
+        return "null" in self.kinds
 
 
 @dataclass(frozen=True)
@@ -447,7 +462,12 @@ def _parse_case(text: str) -> Case:
         facts = frozenset(parse_fact(x, None) for x in words[1:] if x != "nullable")
         if words[0] == "null" and (facts or nullable):
             raise ValueError(f"`{w}`: a null field has no facts")
-        values.append((m.group(1), Spec(words[0], facts, nullable)))
+        # `nullable` spells the field without its default, nonnull; a
+        # union with null (encoding(tagged_index|null)) is nullable as well
+        union = any(f.kind == "encoding" and "null" in _members(f) for f in facts)
+        kinds = (frozenset({"null"}) if words[0] == "null" else
+                 word_kinds(facts if nullable or union else facts | {NONNULL}))
+        values.append((m.group(1), Spec(words[0], facts, kinds)))
     return Case(tuple(signs), tuple(values), raised, frozenset(exact))
 
 
@@ -1703,7 +1723,7 @@ def effect_sites(uop: Uop, table: dict[str, Row] | None = None) -> list[Site]:
     p = uop.properties
     if p.eval_breaker:
         sites.append(Site(uop.body.open, "polls", "the uop polls the eval breaker"))
-    if (p.switches_frame or p.returns) and not any(
+    if analyzer.assigns_frame(list(uop.body.tokens())) and not any(
             s.effect == "switches_frame" for s in sites):
         # A uop whose frame switch no row names switches at its start; one
         # that a row names (IR_ENTER_GENERATOR) switches there, after the
@@ -2677,13 +2697,13 @@ class OwnershipWalk:
             # An inline value owes nothing: it is no object
             facts = spec.facts | ({VFact(EXCLUDES, "object")} if spec.mode == "inline"
                                   else set())
-            if any(f.kind == "encoding" and "null" in _members(f) for f in spec.facts):
-                # A union with null says what the field is on either path
-                st.assign(field_, facts, None, name)
-            elif spec.nullable:
-                st.assign(field_, frozenset(), facts | {NONNULL}, name)
-            else:
+            if not spec.nullable:
                 st.assign(field_, facts | {NONNULL}, None, name)
+            else:
+                # The facts of a value that may be NULL hold once it is not;
+                # a union with null holds on either path
+                st.assign(field_, facts if "null" in word_kinds(spec.facts) else frozenset(),
+                          facts | {NONNULL}, name)
         st.no_exception = "" if case.raised else name
         return st
 
@@ -2706,6 +2726,12 @@ class OwnershipWalk:
                 and null[0][0] in state.decided:
             facts = state.facts.get(null[0][0], frozenset())
             return (NULL_FACT in facts and not holds) or (NONNULL in facts and holds)
+        # A pointer field compared with NULL, `pair.match == NULL`
+        if len(cond) > 2 and cond[-2] in ("==", "!=") and cond[-1] == "NULL" \
+                and "".join(cond[:-2]) in state.decided:
+            facts = state.facts.get("".join(cond[:-2]), frozenset())
+            is_null = holds if cond[-2] == "==" else not holds
+            return (NULL_FACT in facts and not is_null) or (NONNULL in facts and is_null)
         name = cond[0] if cond else ""
         if name not in state.signs:
             return False
@@ -3200,6 +3226,13 @@ class OwnershipWalk:
         if self.contract.state_item(head) is not None and texts[1:2] in (["|="], ["&="], ["="]):
             self.write_state(toks, texts, state)
             return state
+        if head in self.table and self.table[head].exits == {"redirect"}:
+            # DISPATCH_REDIRECT: the word leaves for the word an observer
+            # chose; what the word holds is released first, as on raise
+            self.calls(toks, state)
+            self.effects(toks, state)
+            self.check_exit("redirect", state, toks[0])
+            return None
         if head in self.table and ends_path(self.table[head]):
             # A terminal marker leaves on its row's exits, after its
             # arguments' modes have taken what they say; it never returns.
@@ -3557,7 +3590,9 @@ class OwnershipWalk:
             # VALUE(moved(k)): argument k itself, whose obligation the row
             # took (calls); it is the local's now
             arg = args[result.moved] if len(args) > result.moved else []
-            source = self.views_at(state).resolve(arg)
+            # A view, or a CASES field (`pair.rest`), whose facts the
+            # outcome states
+            source = self.views_at(state).resolve(arg) or "".join(arg)
             owner = self.owner_of(arg, state)
             if owner is None:
                 self.fail(toks[0], f"{row.name} moves `{' '.join(arg)}`, which holds no "
@@ -3792,11 +3827,16 @@ def check_results(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
                                          f"{source} gives an {mode} value", where)
 
 
-def body_exits(uop: Uop, table: dict[str, Row], implicit_guards: int) -> set[str]:
+SWITCH_EXITS = frozenset(("enter", "return", "yield"))
+
+
+def body_exits(uop: Uop, table: dict[str, Row], implicit_guards: int,
+               declared: frozenset[str] = frozenset()) -> set[str]:
     """The exits that uop's body takes: its sites' (the DSL's, its rows',
-    `goto` an error label, `return` from the evaluator), and those of its
-    properties: `returns` pops the frame and `switches_frame` continues in
-    another, each in place of `next` (the record's transfers)"""
+    `goto` an error label, `return` from the evaluator).  A body that
+    switches frames with no site that names the switch (`frame = ...`)
+    continues in the other frame in place of `next`, by the switch exits the
+    uop declares: the body cannot say which, and nothing infers it"""
     exits = set()
     tokens = _tokens(uop)
     for i, tkn in enumerate(tokens):
@@ -3821,22 +3861,26 @@ def body_exits(uop: Uop, table: dict[str, Row], implicit_guards: int) -> set[str
                           ir_records.conditional(uop.body.body, tkn) else exit)
     if implicit_guards:
         exits.add("miss")
-    p = uop.properties
-    if p.returns:
-        if "return" not in exits:
-            exits.add("return")
-    elif p.switches_frame:
-        if not exits & {"enter", "return", "yield"}:
-            exits.add("yield" if ir_records.suspends_frame(uop) else "enter")
-    elif not p.always_exits:
+    if analyzer.assigns_frame(list(uop.body.tokens())):
+        if not exits & SWITCH_EXITS:
+            exits |= declared & SWITCH_EXITS
+    elif not uop.properties.always_exits:
         exits.add("next")
     return exits
 
 
 def check_exits(uop: Uop, contract: Contract, table: dict[str, Row],
                 implicit_guards: int) -> None:
-    "V7: the declared exits are the body's"
-    actual = body_exits(uop, table, implicit_guards)
+    """V7: the declared exits are the body's; VT1: a uop declares
+    switches_frame exactly when it declares enter, return or yield"""
+    switches = "switches_frame" in contract.effects
+    if switches != bool(contract.exits & SWITCH_EXITS):
+        raise analysis_error(
+            f"{uop.name}: " + (f"declares switches_frame, but none of the exits "
+                               f"{', '.join(sorted(SWITCH_EXITS))}" if switches else
+                               f"declares exits({', '.join(sorted(contract.exits & SWITCH_EXITS))}), "
+                               "but not the effect switches_frame"), uop.body.open)
+    actual = body_exits(uop, table, implicit_guards, contract.exits)
     if actual != set(contract.exits):
         raise analysis_error(f"{uop.name}: declares exits({', '.join(sorted(contract.exits))}), "
                              f"but the body takes {', '.join(sorted(actual))}", uop.body.open)
@@ -4085,13 +4129,16 @@ REGION_KINDS = ("inline", "split", "shared")
 
 
 def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
-                   leaf: dict[str, bool] | None = None) -> None:
+                   leaf: dict[str, bool] | None = None,
+                   temporaries: bool = False) -> None:
     """In a handler whose uops all declare contracts: each fact that a uop
     requires of an input is live where it runs (V8), with heap facts dying
     at every KILLS effect and an unestablished `object` met by the
     generator's implicit guard; no guard follows a uop after which the word
     cannot restart (V6).  A declared region kind fits the uops (V10).
-    leaf maps uop names to whether the generator made them leaf."""
+    leaf maps uop names to whether the generator made them leaf.
+    temporaries: the word's format holds every input in a temporary of its
+    window, never in a local home."""
     table = rows() if table is None else table
     parts = [p for p in inst.parts if isinstance(p, Uop)]
     if inst.region is not None:
@@ -4114,7 +4161,21 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
     fresh = iter(range(1, 1 << 20))
     restartable, why = True, ""
     # The values that reach the handler, and the first site since its entry
-    # that may have replaced any of them in its home (F7's binding)
+    # that may have replaced any of them in its home (F7's binding).  A local
+    # home may be written by any reentry (a finalizer through
+    # FrameLocalsProxy).  A temporary only by a debugger's f_lineno jump
+    # (frame_lineno_set_impl), and every successful jump redirects:
+    # - from a callback of this frame's PY_RESUME, JUMP, BRANCH*, LINE or
+    #   PY_YIELD event, whose uops leave by their redirect exit (or by
+    #   branch, committed), so no uop of the word runs after it;
+    # - from a descendant (sys._debugger_entry, an observer's ancestor
+    #   frame), only while this frame's word is a CALL or CALL_KW whose
+    #   Python child is not external: the word left its handler through
+    #   `enter`, and the return goes to the redirect's target
+    #   (pending_redirect, IR_STORE_RETURN), not to the rest of the word.
+    # So on the next path no reentry or close replaces a temporary: the
+    # values made in the handler, and with `temporaries` its inputs, keep
+    # their facts, but for heap facts, which effects kill.
     entry: set[int] = set()
     replaced = ""
 
@@ -4186,10 +4247,11 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
                     raise analysis_error(
                         f"{inst.name}: {part.name} assumes {said} of `{item.name}`, a value "
                         "made in this handler, whose facts must show it", inst.where)
-                if replaced:
+                since = "" if temporaries else replaced
+                if since:
                     raise analysis_error(
                         f"{inst.name}: {part.name} assumes {said} of `{item.name}`, which "
-                        f"may have been replaced since the handler's entry, at {replaced}",
+                        f"may have been replaced since the handler's entry, at {since}",
                         inst.where)
                 facts[value] = implied(facts[value] | {a.fact for a in item.assumed})
             missing = implied(item.facts) - facts.get(value, frozenset())
@@ -4217,18 +4279,19 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
             # the implicit guards it actually emits
             verify_uop(part, len(implicit), table)
         # After the uop: its kills.  Heap facts die at a KILLS effect; at a
-        # reentry every value left in a home (the stack below the uop and
-        # its pass-throughs) may have been replaced there, so all of its
-        # facts die.  Then the facts the uop declares on its outputs, which
+        # reentry every value that reached the handler and may be left in a
+        # local home (the stack below the uop and its pass-throughs) may have
+        # been replaced there, so all of its facts die; a temporary keeps
+        # them (above).  Then the facts the uop declares on its outputs, which
         # V9 holds to the facts live at its exit.
         # Effects confined to other exits are on no path to next
         effects = contract.next_effects()
         if effects & KILLS:
             facts = {v: without_heap_facts(f) for v, f in facts.items()}
-        if effects & REENTRY and known:
+        if effects & REENTRY and known and not temporaries:
             homes = set(stack) | {bound[i.name] for i in contract.inputs if not i.mode
                                   and contract.output(i.name) is not None}
-            for v in homes:
+            for v in homes & entry:
                 facts[v] = frozenset()
         if effects & REENTRY and not replaced:
             replaced = f"{part.name}, which may reenter"
@@ -4249,7 +4312,8 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
             if step == "close":
                 # A close may run a finalizer, which can replace any home's
                 # value (design.md 3.2)
-                facts = {v: frozenset() for v in facts}
+                facts = {v: frozenset() if v in entry and not temporaries
+                         else without_heap_facts(f) for v, f in facts.items()}
                 replaced = replaced or f"the skeleton's close of `{name}` after {part.name}"
                 if restartable and contract.input(name) is not None:
                     restartable = False
@@ -4312,9 +4376,9 @@ def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...],
         # A local's fact is recorded on the local, as the inference did
         live = walk.exit.facts.get(name, frozenset()) if walk.exit else frozenset()
         root, dot, rest = name.partition(".")
-        return [Fact(FACT_KIND[f.kind], values.get(root, root) + dot + rest,
-                     values.get(f.arg, f.arg) if f.kind == "in_bounds" else f.record("").arg)
-                for f in facts if f in live]
+        subject = values.get(root, root) + dot + rest
+        return [Fact(FACT_KIND[f.kind], subject, values.get(f.arg, f.arg)) if f.kind == "in_bounds"
+                else f.record(subject) for f in facts if f in live]
 
     row = table.get(site.text)
     if row is not None and row.result.shape == "GUARD":
@@ -4328,7 +4392,7 @@ def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...],
             facts = _bind_facts(facts, args, views)
             if name is not None and facts:
                 result += recorded(name, sorted(facts))
-        return tuple(result), ""
+        return ir_records.join_encodings(result), ""
     cond, reason = guard_condition(uop, site)
     found = condition_facts(cond, views, table, holds=False)
     if found is None:
@@ -4338,7 +4402,7 @@ def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...],
     result = []
     for name, facts in stated.items():
         result += recorded(name, facts)
-    return tuple(result), reason or found[1]
+    return ir_records.join_encodings(result), reason or found[1]
 
 
 def _stated_facts(cond: list[str], views: Views, table: dict[str, Row],
@@ -4376,8 +4440,9 @@ def _stated_facts(cond: list[str], views: Views, table: dict[str, Row],
             sides = set(true | false)
             have = found[0].get(name, frozenset())
             if any(f.kind == EXCLUDES for f in false):
-                # A `rest` side, where the test failed, states what remains
-                # in the plain words the record has today (records: G0d)
+                # A `rest` side, where the test failed, states what remains:
+                # the value's plain words, which the record joins in one
+                # ENCODING
                 sides = set(true) if true <= have else {
                     f for f in have if f.kind in SPELLINGS}
             for f in sorted(sides):
@@ -4431,4 +4496,4 @@ def record_results(uop: Uop, outputs) -> tuple[Fact, ...]:
         out = by_name.get(item.name)
         if out is not None and item.mode in ("owned", "inline"):
             result += [f.record(f"v{out.value}") for f in sorted(item.facts)]
-    return tuple(result)
+    return ir_records.join_encodings(result)

@@ -251,6 +251,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_ExceptionMatches),
               "_PyErr_ExceptionMatches: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_GetRaisedException), PyObject * (*)(PyThreadState *)),
               "_PyErr_GetRaisedException: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_StackItemTakeValue), PyObject * (*)(_PyErr_StackItem *)),
+              "_PyErr_StackItemTakeValue: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_Occurred), PyObject * (*)(PyThreadState *)),
               "_PyErr_Occurred: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_SetRaisedException), void (*)(PyThreadState *, PyObject *)),
@@ -502,7 +504,7 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_Py_call_instrumentation_
               "_Py_call_instrumentation_exc2: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_call_instrumentation_instruction), int (*)(PyThreadState *, _PyInterpreterFrame *, _PyInstr *)),
               "_Py_call_instrumentation_instruction: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(&_Py_call_instrumentation_jump), _PyInstr * (*)(_PyInstr *, PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, _PyInstr *)),
+static_assert(__builtin_types_compatible_p(__typeof__(&_Py_call_instrumentation_jump), _PyIRObserverResult (*)(_PyInstr *, PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, _PyInstr *)),
               "_Py_call_instrumentation_jump: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_call_instrumentation_line), int (*)(PyThreadState *, _PyInterpreterFrame *, _PyInstr *, _PyInstr *)),
               "_Py_call_instrumentation_line: its C type differs from pycore_ir_components.h");
@@ -5993,18 +5995,16 @@ ir_run_CHECK_EG_MATCH(
             }
             PyObject *match_type = PyValue_AsKnownObjectBorrow(held_type);
             _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
-            PyObject *match_o = matched.match;
-            PyObject *rest_o = matched.rest;
             PyValue_CLOSE(held_type);
             PyValue_CLOSE(held_exc);
-            if (match_o == NULL) {
+            if (matched.match == NULL) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
-            if (!Py_IsNone(match_o)) {
-                PyErr_SetHandledException(match_o);
+            if (!Py_IsNone(matched.match)) {
+                PyErr_SetHandledException(matched.match);
             }
-            exc_rest = PyValue_FromObjectSteal(rest_o);
-            exc_match = PyValue_FromObjectSteal(match_o);
+            exc_rest = PyValue_FromObjectSteal(matched.rest);
+            exc_match = PyValue_FromObjectSteal(matched.match);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), exc_rest);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), exc_match);
             DISPATCH();
@@ -7716,7 +7716,7 @@ ir_run_END_ASYNC_FOR(
             PyValue exc_st;
             exc_st = window[1];
             awaitable_st = window[0];
-            JUMPBY(0);
+            assert(PyValue_IsObject(exc_st));
             (void)oparg;
             assert(PyValue_IsObject(exc_st));
             PyObject *exc = _PyValue_AsKnownObjectBorrowPointer(exc_st);
@@ -7739,6 +7739,7 @@ ir_run_END_ASYNC_FOR(
                 monitor_reraise(tstate, frame, this_instr);
                 PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
             }
+            JUMPBY(0);
             DISPATCH();
         }
 
@@ -7841,6 +7842,8 @@ ir_run_FORMAT_SIMPLE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(FORMAT_SIMPLE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
             PyValueBorrow value;
             PyValue res;
             PyValue ir_own_B = PyValue_NULL;
@@ -7870,8 +7873,9 @@ ir_run_FORMAT_SIMPLE(
                 ir_own_B = IR_DETACH(ir_word, B, value);
                 res = IR_TAKEN_REQUIRED(value, ir_own_B);
             }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
+            IR_STORE_DST(ir_word, A, res);
             PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
 
@@ -8983,7 +8987,7 @@ ir_run_INSTRUMENTED_END_ASYNC_FOR(
             {
                 exc_st = window[1];
                 awaitable_st = window[0];
-                JUMPBY(0);
+                assert(PyValue_IsObject(exc_st));
                 (void)oparg;
                 assert(PyValue_IsObject(exc_st));
                 PyObject *exc = _PyValue_AsKnownObjectBorrowPointer(exc_st);
@@ -9006,6 +9010,7 @@ ir_run_INSTRUMENTED_END_ASYNC_FOR(
                     monitor_reraise(tstate, frame, this_instr);
                     PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
                 }
+                JUMPBY(0);
             }
             DISPATCH();
         }
@@ -9054,15 +9059,20 @@ ir_run_INSTRUMENTED_END_SEND(
                 }
             }
             if (!tstate->tracing) {
-                _PyIRWord *dest = _Py_call_instrumentation_jump(
+                _PyIRObserverResult jump = _Py_call_instrumentation_jump(
                     this_instr, tstate, PY_MONITORING_EVENT_BRANCH_LEFT, frame,
                     this_instr, next_instr);
-                if (dest == NULL) {
+                if (jump.status < 0) {
                     PyValue_CLOSE(held);
                     _PyValue_XCLOSE_POINTER(ir_own_B);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                next_instr = dest;
+                if (jump.status > 0) {
+                    PyValue_CLOSE(held);
+                    _PyValue_XCLOSE_POINTER(ir_own_B);
+                    DISPATCH_REDIRECT();
+                }
+                next_instr = jump.next;
             }
             val = held;
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), val);
@@ -9607,7 +9617,7 @@ ir_run_INSTRUMENTED_RESUME(
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         next_instr = this_instr;
-                        DISPATCH();
+                        DISPATCH_SAME_OPARG();
                     }
                 }
             }
@@ -9629,7 +9639,7 @@ ir_run_INSTRUMENTED_RESUME(
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 if (frame->instr_ptr != this_instr) {
-                    next_instr = frame->instr_ptr;
+                    DISPATCH_REDIRECT();
                 }
             }
             DISPATCH();
@@ -14094,8 +14104,9 @@ ir_run_PUSH_EXC_INFO(
             PyValue new_exc;
             exc = window[0];
             _PyErr_StackItem *exc_info = tstate->exc_info;
-            if (exc_info->exc_value != NULL) {
-                prev_exc = PyValue_FromObjectSteal(exc_info->exc_value);
+            PyObject *prev_o = _PyErr_StackItemTakeValue(exc_info);
+            if (prev_o != NULL) {
+                prev_exc = PyValue_FromObjectSteal(prev_o);
             }
             else {
                 prev_exc = PyValue_None;
@@ -14250,7 +14261,7 @@ ir_run_RESUME(
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         next_instr = this_instr;
-                        DISPATCH();
+                        DISPATCH_SAME_OPARG();
                     }
                 }
             }
@@ -14298,7 +14309,7 @@ ir_run_RESUME_JIT(
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         next_instr = this_instr;
-                        DISPATCH();
+                        DISPATCH_SAME_OPARG();
                     }
                 }
             }
@@ -23731,7 +23742,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 exc_st = window[1];
                 awaitable_st = window[0];
-                JUMPBY(0);
+                assert(PyValue_IsObject(exc_st));
                 (void)oparg;
                 assert(PyValue_IsObject(exc_st));
                 PyObject *exc = _PyValue_AsKnownObjectBorrowPointer(exc_st);
@@ -23754,6 +23765,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                     monitor_reraise(tstate, frame, this_instr);
                     PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
                 }
+                JUMPBY(0);
             }
             DISPATCH();
         }
@@ -23801,15 +23813,20 @@ static const _PyIRForm ir_handler_forms[512] = {
                 }
             }
             if (!tstate->tracing) {
-                _PyIRWord *dest = _Py_call_instrumentation_jump(
+                _PyIRObserverResult jump = _Py_call_instrumentation_jump(
                     this_instr, tstate, PY_MONITORING_EVENT_BRANCH_LEFT, frame,
                     this_instr, next_instr);
-                if (dest == NULL) {
+                if (jump.status < 0) {
                     PyValue_CLOSE(held);
                     _PyValue_XCLOSE_POINTER(ir_own_B);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                next_instr = dest;
+                if (jump.status > 0) {
+                    PyValue_CLOSE(held);
+                    _PyValue_XCLOSE_POINTER(ir_own_B);
+                    DISPATCH_REDIRECT();
+                }
+                next_instr = jump.next;
             }
             val = held;
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), val);
@@ -24315,7 +24332,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         next_instr = this_instr;
-                        DISPATCH();
+                        DISPATCH_SAME_OPARG();
                     }
                 }
             }
@@ -24337,7 +24354,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 if (frame->instr_ptr != this_instr) {
-                    next_instr = frame->instr_ptr;
+                    DISPATCH_REDIRECT();
                 }
             }
             DISPATCH();
@@ -27675,7 +27692,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         next_instr = this_instr;
-                        DISPATCH();
+                        DISPATCH_SAME_OPARG();
                     }
                 }
             }
@@ -27719,7 +27736,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         next_instr = this_instr;
-                        DISPATCH();
+                        DISPATCH_SAME_OPARG();
                     }
                 }
             }

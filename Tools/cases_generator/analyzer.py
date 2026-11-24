@@ -47,10 +47,10 @@ class Properties:
     # must not fold a store into them. Uop.aliased_outputs covers the
     # outputs that the body assigns from an input.
     no_fold: bool = False
-    # Assigns `frame`: what follows runs in another frame.
+    # Declares the effect switches_frame: what follows runs in another frame.
     switches_frame: bool = False
-    # Annotated `returns`: pops its frame, and pushes its outputs to the
-    # caller's.
+    # Declares the exit `return`: pops its frame, and pushes its outputs to
+    # the caller's.
     returns: bool = False
 
     def dump(self, indent: str) -> None:
@@ -707,6 +707,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyDictValues_SetShape",
     "_PyDictValues_ShapeAfterAdd",
     "_PyErr_Occurred",
+    "_PyErr_StackItemTakeValue",
     "_PyFb_Entry",
     "_PyFb_Header",
     "_PyFb_HasEntry",
@@ -932,8 +933,9 @@ EXITS = {
 
 
 def always_exits(op: parser.CodeDef) -> bool:
+    # The body only: the header's exits(return) is a declaration, not a site
     depth = 0
-    tkn_iter = iter(op.tokens)
+    tkn_iter = op.block.tokens()
     for tkn in tkn_iter:
         if tkn.kind == "LBRACE":
             depth += 1
@@ -1024,6 +1026,12 @@ def stmt_escapes(stmt: Stmt) -> bool:
     else:
         assert False, "Unexpected statement type"
 
+def declared_aliases(stack: StackEffect) -> tuple[str, ...]:
+    "The outputs that a declared uop moves from an input: `moved(x)`"
+    inputs = {f"moved({i.name})" for i in stack.inputs}
+    return tuple(o.name for o in stack.outputs if inputs & set(o.contract))
+
+
 def find_aliased_outputs(op: parser.InstDef) -> tuple[str, ...]:
     """The outputs that a statement `out = in;` or `out = TAKE(in);` makes
     alias an input: TAKE gives the input's value a count of its own, so the
@@ -1051,9 +1059,11 @@ def find_aliased_outputs(op: parser.InstDef) -> tuple[str, ...]:
     return tuple(found)
 
 
-def switches_frame(op: parser.CodeDef) -> bool:
-    """Whether op assigns `frame`, directly or through DISPATCH_INLINED."""
-    tokens = [t for t in op.tokens if t.kind != "COMMENT"]
+def assigns_frame(tokens: list[lexer.Token]) -> bool:
+    """Whether a body assigns `frame`, directly or through DISPATCH_INLINED
+    or a marker that switches.  A check only: a uop that does must declare
+    switches_frame (ir_contract.py), which is the authority"""
+    tokens = [t for t in tokens if t.kind != "COMMENT"]
     for i, tkn in enumerate(tokens):
         if tkn.kind != "IDENTIFIER":
             continue
@@ -1099,7 +1109,16 @@ def compute_properties(op: parser.CodeDef) -> Properties:
     inline_ok = False if isinstance(op, parser.LabelDef) else "inline_ok" in op.annotations
     window = False if isinstance(op, parser.LabelDef) else "window" in op.annotations
     no_fold = False if isinstance(op, parser.LabelDef) else "no_fold" in op.annotations
-    returns = False if isinstance(op, parser.LabelDef) else "returns" in op.annotations
+    # Frame switches and returns are declared: the switches_frame effect and
+    # the return exit.  A uop without a contract still has the body's scan
+    # until the cutover removes the undeclared form
+    clauses = {} if isinstance(op, parser.LabelDef) else op.clauses
+    if clauses:
+        switches = any(w.split("(")[0] == "switches_frame"
+                       for w in clauses.get("effects", ()))
+    else:
+        switches = assigns_frame(op.tokens)
+    returns = "return" in clauses.get("exits", ())
     outlined = False if isinstance(op, parser.LabelDef) else "outlined" in op.annotations
     return Properties(
         escaping_calls=escaping_calls,
@@ -1136,7 +1155,7 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         window=window,
         outlined=outlined,
         no_fold=no_fold,
-        switches_frame=switches_frame(op),
+        switches_frame=switches,
         returns=returns,
     )
 
@@ -1224,7 +1243,8 @@ def make_uop(
         properties=compute_properties(op),
         object_inputs=object_inputs,
         asserted_objects=asserted_objects,
-        aliased_outputs=find_aliased_outputs(op),
+        aliased_outputs=(declared_aliases(stack) if op.clauses
+                         else find_aliased_outputs(op)),
         clauses=op.clauses,
     )
 

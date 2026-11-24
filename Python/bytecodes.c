@@ -183,8 +183,10 @@ dummy_func(
             }
         }
 
+        // After instrumenting the code it runs its word again, now with its
+        // instrumented handler: a jump to the word
         tier1 op(_MAYBE_INSTRUMENT, (--))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, jump, raise)
         {
             #ifdef Py_GIL_DISABLED
             // For thread-safety, we need to check instrumentation version
@@ -203,7 +205,7 @@ dummy_func(
                         ERROR_NO_POP();
                     }
                     next_instr = this_instr;
-                    DISPATCH();
+                    DISPATCH_SAME_OPARG();
                 }
             }
         }
@@ -238,7 +240,7 @@ dummy_func(
             _JIT_EVENT;
 
         op(_MONITOR_RESUME, (--))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, raise, redirect)
         {
             int err = _Py_call_instrumentation(
                     tstate, oparg == 0 ? PY_MONITORING_EVENT_PY_START : PY_MONITORING_EVENT_PY_RESUME, frame, this_instr);
@@ -246,7 +248,7 @@ dummy_func(
             ERROR_IF(err);
             if (frame->instr_ptr != this_instr) {
                 /* Instrumentation has jumped */
-                next_instr = frame->instr_ptr;
+                DISPATCH_REDIRECT();
             }
         }
 
@@ -471,7 +473,7 @@ dummy_func(
         tier1 inst(INSTRUMENTED_END_SEND,
                 (receiver: consumed assumed(object) by compiler_send_loop,
                  index_or_null: closed, value: consumed -- val: moved(value)))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, raise, redirect)
         {
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
             // Taken before the monitoring call, which can run code
@@ -490,14 +492,20 @@ dummy_func(
             // The end of an `async for`'s send loop is its left branch. The
             // tools of other sends are none, and the call returns at once.
             if (!tstate->tracing) {
-                _PyIRWord *dest = _Py_call_instrumentation_jump(
+                _PyIRObserverResult jump = _Py_call_instrumentation_jump(
                     this_instr, tstate, PY_MONITORING_EVENT_BRANCH_LEFT, frame,
                     this_instr, next_instr);
-                if (dest == NULL) {
+                if (jump.status < 0) {
                     PyValue_CLOSE(held);
                     ERROR_NO_POP();
                 }
-                next_instr = dest;
+                if (jump.status > 0) {
+                    // An observer moved the frame: the word leaves for its
+                    // choice, and the sent value is no longer the word's
+                    PyValue_CLOSE(held);
+                    DISPATCH_REDIRECT();
+                }
+                next_instr = jump.next;
             }
             val = held;
         }
@@ -1749,7 +1757,7 @@ dummy_func(
 
         // The result remains C-owned through child retirement. Completion
         // publishes it to the caller or consumes it as a loop/send outcome.
-        returns op(_RETURN_VALUE, (retval: consumed --))
+        op(_RETURN_VALUE, (retval: consumed --))
             effects(switches_frame) exits(return, raise)
         {
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
@@ -1770,7 +1778,7 @@ dummy_func(
             IR_RETURN_TO_CALLER(temp, generator_return);
         }
 
-        ir_only returns op(_RETURN_VALUE_EMPTY, (retval: consumed --))
+        ir_only op(_RETURN_VALUE_EMPTY, (retval: consumed --))
             effects(switches_frame) exits(return, raise)
         {
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
@@ -2069,7 +2077,7 @@ dummy_func(
             _YIELD_VALUE;
 
         tier1 op(_YIELD_VALUE_EVENT, (val -- val))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, raise, redirect)
         {
             int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_YIELD,
@@ -2080,8 +2088,7 @@ dummy_func(
             }
             if (frame->instr_ptr != this_instr) {
                 RELOAD_STACK();
-                next_instr = frame->instr_ptr;
-                DISPATCH();
+                DISPATCH_REDIRECT();
             }
         }
 
@@ -2134,8 +2141,14 @@ dummy_func(
             goto exception_unwind;
         }
 
-        tier1 window op(_END_ASYNC_FOR, (awaitable_st, exc_st -- )) {
-            JUMPBY(0); // Pretend jump as we need source offset for monitoring
+        // exc_st is the exception that exception_unwind pushed into a
+        // temporary; INSTRUMENTED_JUMP's callbacks in _MONITOR_END_ASYNC_FOR
+        // can replace a temporary only by redirecting the frame, and a
+        // redirect leaves the word
+        tier1 window op(_END_ASYNC_FOR,
+                (awaitable_st: taken, exc_st: taken assumed(object) by exception_unwind -- ))
+            effects(runs_python) exits(next, jump, raise)
+        {
             (void)oparg;
             // An exception being handled is an instance of BaseException
             assert(PyValue_IsObject(exc_st));
@@ -2151,10 +2164,14 @@ dummy_func(
                 monitor_reraise(tstate, frame, this_instr);
                 goto exception_unwind;
             }
+            // Pretend jump as we need source offset for monitoring; after
+            // the raise, so that the word's successor is set only on the
+            // path that completes
+            JUMPBY(0);
         }
 
         tier1 op(_MONITOR_END_ASYNC_FOR, ( -- ))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, raise, redirect)
         {
             assert(_PyIR_BaseOpcode(_PyIR_RealHandler(frame, JUMP_TARGET(oparg))) == SEND);
             INSTRUMENTED_JUMP(JUMP_TARGET(oparg), this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);
@@ -3979,18 +3996,16 @@ dummy_func(
             PyObject *match_type = PyValue_AsKnownObjectBorrow(held_type);
 
             _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
-            PyObject *match_o = matched.match;
-            PyObject *rest_o = matched.rest;
             PyValue_CLOSE(held_type);
             PyValue_CLOSE(held_exc);
             // A null match is an error, including a failed match (res < 0)
-            ERROR_IF(match_o == NULL);
+            ERROR_IF(matched.match == NULL);
 
-            if (!Py_IsNone(match_o)) {
-                PyErr_SetHandledException(match_o);
+            if (!Py_IsNone(matched.match)) {
+                PyErr_SetHandledException(matched.match);
             }
-            exc_rest = PyValue_FromObjectSteal(rest_o);
-            exc_match = PyValue_FromObjectSteal(match_o);
+            exc_rest = PyValue_FromObjectSteal(matched.rest);
+            exc_match = PyValue_FromObjectSteal(matched.match);
         }
 
         outlined inst(CHECK_EXC_MATCH,
@@ -4105,7 +4120,12 @@ dummy_func(
             COPY, TO_BOOL, POP_JUMP_IF_TRUE,
         ];
 
-        leaf replaced op(_POP_JUMP_IF_FALSE, (cond -- )) {
+        // cond is an exact bool, which owes nothing (True and False are
+        // immortal): every handler makes it with a _TO_BOOL, _IS_NONE or
+        // _GUARD_TOS_BOOL before this uop
+        leaf replaced op(_POP_JUMP_IF_FALSE, (cond: consumed exact(PyBool_Type) -- ))
+            effects() exits(next, branch)
+        {
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsFalse(cond);
             DEAD(cond);
@@ -4115,7 +4135,12 @@ dummy_func(
             }
         }
 
-        leaf replaced op(_POP_JUMP_IF_TRUE, (cond -- )) {
+        // cond is an exact bool, which owes nothing (True and False are
+        // immortal): every handler makes it with a _TO_BOOL, _IS_NONE or
+        // _GUARD_TOS_BOOL before this uop
+        leaf replaced op(_POP_JUMP_IF_TRUE, (cond: consumed exact(PyBool_Type) -- ))
+            effects() exits(next, branch)
+        {
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsTrue(cond);
             DEAD(cond);
@@ -4896,8 +4921,9 @@ dummy_func(
         {
 
             _PyErr_StackItem *exc_info = tstate->exc_info;
-            if (exc_info->exc_value != NULL) {
-                prev_exc = PyValue_FromObjectSteal(exc_info->exc_value);
+            PyObject *prev_o = _PyErr_StackItemTakeValue(exc_info);
+            if (prev_o != NULL) {
+                prev_exc = PyValue_FromObjectSteal(prev_o);
             }
             else {
                 prev_exc = PyValue_None;

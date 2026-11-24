@@ -166,6 +166,40 @@ class StubTests(unittest.TestCase):
                          ("F_Copy", "shared", "_PyIR_Rop_Stub_F_Copy"))
 
 
+ENVIRONMENT = """\
+family F(dst:Dst, x:Src) exits(next, miss);
+extern helper probe(t:Thread, f:Frame, s:Site, h:Head) -> Bool
+  effects(reads)
+  c probe_c as bool
+  evidence(review: "r", contract: "c");
+arm F.Probe shared effects() feedback() exits(next, miss)
+{
+  entry():
+    guard probe(thread, frame, site, next_head) else miss;
+    exit next();
+}
+"""
+
+
+class EnvironmentTests(unittest.TestCase):
+    def test_table_covers_implicit_names_the_checker_knows(self):
+        import rop_catalog
+        self.assertLessEqual(set(rop_catalog.ENVIRONMENT_C), set(rop_catalog.ENVIRONMENT))
+
+    def test_each_name_has_the_same_c_expression_in_every_product(self):
+        import io
+        program = rop_check.check([rop_syntax.parse(ENVIRONMENT, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        self.assertEqual(p.left_out, {})
+        for write in (rop_generator.write_cases, rop_generator.write_forms,
+                      rop_generator.write_stubs):
+            out = io.StringIO()
+            write(out, p, [])
+            self.assertIn("probe_c(tstate, frame, this_instr, next_instr)", out.getvalue(),
+                          write.__name__)
+
+
 class GeneratedAddIntTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

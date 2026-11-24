@@ -290,6 +290,11 @@ instr_oparg(_PyInstr *instr)
         // the operands without the self slot and the names
         return _PyIR_CallSlotOperands(word) - _PyIR_CallHasSelf(word);
     }
+    if (IR_HANDLER(word) >= IR_NUM_OLD_HANDLERS && format->shadow == LOAD_ATTR) {
+        // An arm of GetAttr or GetMethod holds the name; the stack op's oparg
+        // is the name with the method flag below it (GetMethod has two outputs)
+        return (oparg << 1) | (format->roles[1] == _PyIR_ROLE_DST);
+    }
     return oparg;
 }
 

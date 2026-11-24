@@ -549,7 +549,11 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 
 #define _PyGC_CLEAR_ARRAY(ARR) ((void)0)
 
-#define IS_PEP523_HOOKED(tstate) (tstate->interp->eval_frame != NULL)
+static inline bool
+IS_PEP523_HOOKED(PyThreadState *tstate)
+{
+    return tstate->interp->eval_frame != NULL;
+}
 
 /* Whether the thread has an event for _Py_HandlePending(): one load and test
  * of its eval breaker, the periodic checks' fast path. */

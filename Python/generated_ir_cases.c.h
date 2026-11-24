@@ -406,6 +406,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_ProcessError), _P
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_EnterRecursivePy), int (*)(PyThreadState *)),
               "_Py_EnterRecursivePy: its C type differs from pycore_ir_components.h");
 static_assert((CALL_SELF_PRESENT) != 0, "call_state: CALL_SELF_PRESENT is no bit");
+static_assert(__builtin_types_compatible_p(__typeof__(&IS_PEP523_HOOKED), bool (*)(PyThreadState *)),
+              "IS_PEP523_HOOKED: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyFunction_GET_CODE), PyObject * (*)(PyObject *)),
               "PyFunction_GET_CODE: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyFunction_New), PyObject * (*)(PyObject *, PyObject *)),

@@ -5050,10 +5050,11 @@ dummy_func(
         // The child takes its callable and arguments from the operands
         // (a temporary moves, a local is counted) at the arena top, and
         // the bound method's operand is released.
-        pure op(_INIT_CALL_PY_EXACT_ARGS,
+        op(_INIT_CALL_PY_EXACT_ARGS,
                 (callable: consumed, self_or_null: consumed, args[oparg]: closed
                  -- new_frame: owned))
-            effects(allocates) exits(next) state(call_state -- call_state)
+            effects(reads, writes, allocates, releases) exits(next)
+            state(call_state -- call_state)
         {
             STAT_INC(CALL, hit);
             _PyInterpreterFrame *pushed_frame = call_push_exact(

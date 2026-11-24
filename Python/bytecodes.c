@@ -1860,6 +1860,16 @@ dummy_func(
             SEND_ASYNC_GEN,
         };
 
+        /* The generator-boundary variants SEND*_XFER_<consumer>, which
+         * fuse the send with the word that consumes its result: the last
+         * uop's fall-through is the delegated yield, and its completion
+         * (its branch) runs the consumer's arm of the completion routine
+         * (Python/ceval_routines.h), which returns from this frame for
+         * RETURN and continues at the send's exit for the others. */
+        boundary(SEND) at(last) yields(delegated) completes(
+            RETURN: exits(return, raise),
+            STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));
+
         specializing op(_SPECIALIZE_SEND,
                 (receiver: assumed(object) by compiler_send_loop, unused, unused
                  -- receiver, unused, unused))
@@ -1940,6 +1950,13 @@ dummy_func(
             _CHECK_PEP_523 +
             _SEND_GEN_FRAME +
             _PUSH_FRAME;
+
+        /* SEND_GEN enters the generator's frame: the delegated yield and
+         * the consumer's arm run when that frame yields or returns to this
+         * word (Python/ceval_routines.h), not in this word's uops */
+        boundary(SEND_GEN) at(enter) yields(delegated) completes(
+            RETURN: exits(return, raise),
+            STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));
 
         op(_GUARD_TOS_IS_NONE, (val -- val: is(PyValue_None)))
             effects() exits(next, miss)
@@ -2065,6 +2082,11 @@ dummy_func(
             _MAKE_HEAP_SAFE +
             _YIELD_VALUE;
 
+        /* The variants *_XFER_<consumer> of the yields: the consumer that
+         * resumes the generator (a SEND, or the store of the sent value)
+         * runs fused with the resume.  They add no exit. */
+        boundary(YIELD_VALUE) at(last) resumes(SEND, STORE_LOCAL);
+
         tier1 op(_YIELD_VALUE_EVENT, (val -- val))
             effects(runs_python) exits(next, raise)
         {
@@ -2087,6 +2109,8 @@ dummy_func(
             _MAKE_HEAP_SAFE +
             _YIELD_VALUE;
 
+        boundary(INSTRUMENTED_YIELD_VALUE) at(last) resumes(SEND, STORE_LOCAL);
+
         ir_only no_fold op(_YIELD_DELEGATED,
             (receiver, unused_cursor, retval -- receiver, unused_cursor, value)) {
             IR_METADATA_PASSTHROUGH(1);
@@ -2096,8 +2120,12 @@ dummy_func(
 
         macro(YIELD_DELEGATED) = _YIELD_DELEGATED;
 
+        boundary(YIELD_DELEGATED) at(last) resumes(SEND, STORE_LOCAL);
+
         macro(INSTRUMENTED_YIELD_DELEGATED) =
             _YIELD_VALUE_EVENT + _YIELD_DELEGATED;
+
+        boundary(INSTRUMENTED_YIELD_DELEGATED) at(last) resumes(SEND, STORE_LOCAL);
 
         outlined inst(POP_EXCEPT, (exc_value: consumed assumed(object) by _PUSH_EXC_INFO -- ))
             effects(reads, releases) exits(next)
@@ -2183,6 +2211,12 @@ dummy_func(
             // the instruction after this one continues there.
             IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, IR_EXIT);
         }
+
+        /* As SEND's variants, for a throw into the delegated generator
+         * that ended it: no delegated yield */
+        boundary(CLEANUP_THROW) at(last) completes(
+            RETURN: exits(return, raise),
+            STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));
 
         pure inst(LOAD_COMMON_CONSTANT, ( -- value: owned))
             effects(reads) exits(next)

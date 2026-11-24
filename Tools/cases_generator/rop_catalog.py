@@ -155,6 +155,29 @@ class Effect(enum.Enum):
 READ_ONLY_EFFECTS = frozenset({Effect.reads})
 
 
+class MonitoringEvent(enum.Enum):
+    """The sys.monitoring events that a family's observed wrapper can fire,
+    by the names of PY_MONITORING_EVENT_*.  LINE and INSTRUCTION are not a
+    family's: every word has them."""
+    PY_START = "PY_START"
+    PY_RESUME = "PY_RESUME"
+    PY_RETURN = "PY_RETURN"
+    PY_YIELD = "PY_YIELD"
+    CALL = "CALL"
+    JUMP = "JUMP"
+    BRANCH = "BRANCH"
+    BRANCH_LEFT = "BRANCH_LEFT"
+    BRANCH_RIGHT = "BRANCH_RIGHT"
+    STOP_ITERATION = "STOP_ITERATION"
+    RAISE = "RAISE"
+    EXCEPTION_HANDLED = "EXCEPTION_HANDLED"
+    PY_UNWIND = "PY_UNWIND"
+    PY_THROW = "PY_THROW"
+    RERAISE = "RERAISE"
+    C_RETURN = "C_RETURN"
+    C_RAISE = "C_RAISE"
+
+
 class Region(enum.Enum):
     inline = "inline"
     shared = "shared"

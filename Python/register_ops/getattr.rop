@@ -3,7 +3,7 @@
 // release of the receiver.
 
 family GetAttr(dst:Dst, obj:Src, name:Name, fb:Fb<Attr>)
-  exits(next, miss, again, enter, raise, redirect);
+  exits(next, miss, again, enter, raise, redirect) ops(LOAD_ATTR);
 
 point GetAttr.Done(current, next_head, clear) keep() spent(obj) defs(dst) held();
 

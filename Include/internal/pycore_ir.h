@@ -521,6 +521,8 @@ typedef struct _PyIRFormat {
     uint8_t error_routes;   // _PyIR_ERROR_*; conditional native error routes
     uint8_t operands;       // _PyIR_OPERANDS_*: the words of the format have
                             // operand words after the head (a call)
+    uint8_t fixed_words;    // the operand words after the head that a
+                            // register instruction's encoding has (an arm)
     _PyIRExtent reads;      // the stack inputs, from the deepest
     _PyIRExtent writes;     // the stack outputs, from the same slot
     _PyIRExtent through;    // the deepest inputs that the handler leaves
@@ -788,7 +790,7 @@ _PyCode_WordOffset(PyCodeObject *co, int word)
  * co_code, or of the first instruction after it if it has no word of its own
  * (a load that folded into its consumer); the number of words past the end.
  * The inverse of _PyCode_WordOffset(). */
-extern int _PyCode_OffsetWord(PyCodeObject *co, int offset);
+PyAPI_FUNC(int) _PyCode_OffsetWord(PyCodeObject *co, int offset);
 
 /* Lower the stack bytecode of co: build its IR, or return NULL with an
  * exception set. */
@@ -1005,8 +1007,10 @@ _PyIR_CallWordLength(_PyIRWord word)
 static inline int
 _PyIR_WordLength(_PyIRWord word)
 {
-    if (!_PyIR_HandlerHasOperands(IR_HANDLER(word))) {
-        return 1;
+    int handler = IR_HANDLER(word);
+    if (!_PyIR_HandlerHasOperands(handler)) {
+        // A register instruction arm may have fixed operand words
+        return 1 + _PyIR_Formats[handler].fixed_words;
     }
     return _PyIR_CallWordLength(word);
 }

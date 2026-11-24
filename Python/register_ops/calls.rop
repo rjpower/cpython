@@ -14,83 +14,83 @@ enum PollKind(BACKEDGE, CALL_END, RESUME_POLL, JIT_EVENT);
 // P4: positional calls, init cleanup, return
 
 family Call(dst:Dst, fn:Src, self:Maybe<Src>, args:Args, fb:Fb<Call>)
-  exits(next, enter, raise, redirect, miss, again);
+  exits(next, enter, raise, redirect, miss, again) ops(CALL);
 
 family InitResult(value:Src)
-  exits(next, raise);
+  exits(next, raise) ops(EXIT_INIT_CHECK);
 
 family Return(value:Src)
-  exits(return, exit, raise, redirect);
+  exits(return, exit, raise, redirect) ops(RETURN_VALUE, INTERPRETER_EXIT);
 
 // 2A: keyword and expanded calls
 
 family CallKw(dst:Dst, fn:Src, self:Maybe<Src>, args:Args, names:Src, fb:Fb<Call>)
-  exits(next, enter, raise, redirect, miss, again);
+  exits(next, enter, raise, redirect, miss, again) ops(CALL_KW);
 
 family CallEx(dst:Dst, fn:Src, star:Src, kwargs:Maybe<Src>, fb:Fb<Call>)
-  exits(next, enter, raise, redirect, miss, again);
+  exits(next, enter, raise, redirect, miss, again) ops(CALL_FUNCTION_EX);
 
 family MaterializeKwargs(local:Local)
-  exits(next, raise);
+  exits(next, raise) ops(MATERIALIZE_KWARGS);
 
 // 2B: iteration
 
 family IterOpen(pair:IterPair, source:Src, mode:Enum<IterMode>, fb:Fb<Iter>)
-  exits(next, raise, miss, again);
+  exits(next, raise, miss, again) ops(GET_ITER);
 
 // `body` is the loop's backward target (far), `done` its exit (near);
 // `second` receives the value of a dict-items pair delivery
 family ForIter(item:Dst, pair:IterPair, body:FarHead, done:NearHead, fb:Fb<Iter>,
                second:Maybe<Dst>)
-  exits(next, branch, jump, enter, raise, redirect, miss, again);
+  exits(next, branch, jump, enter, raise, redirect, miss, again) ops(FOR_ITER);
 
 // 2C: async iteration, await, send, yield
 
 family AsyncIter(dst:Dst, source:Src, mode:Enum<AsyncIterMode>)
-  exits(next, raise);
+  exits(next, raise) ops(GET_AITER, GET_ANEXT);
 
 family Awaitable(dst:Dst, source:Src, origin:Enum<AwaitOrigin>)
-  exits(next, raise);
+  exits(next, raise) ops(GET_AWAITABLE);
 
 // A folded consumer can also return or yield
 family Send(yielded:Dst, completed:Dst, pair:IterPair, sent:Src, done:NearHead,
             fb:Fb<Send>)
-  exits(next, branch, enter, return, yield, raise, redirect, miss, again);
+  exits(next, branch, enter, return, yield, raise, redirect, miss, again) ops(SEND);
 
 family Yield(value:Src, resume:Dst, route:NearHead, mode:Enum<YieldMode>)
-  exits(yield, raise, redirect);
+  exits(yield, raise, redirect) ops(YIELD_VALUE);
 
 // 2D: exceptions
 
 family Raise(exc:Maybe<Src>, cause:Maybe<Src>)
-  exits(raise);
+  exits(raise) ops(RAISE_VARARGS);
 
 family Reraise(exc:Src, lasti:Maybe<Src>)
-  exits(raise);
+  exits(raise) ops(RERAISE);
 
 family ExceptState(mode:Enum<ExceptMode>, dst:Maybe<Dst>, exc:Src)
-  exits(next);
+  exits(next) ops(PUSH_EXC_INFO, POP_EXCEPT);
 
 family ExceptMatch(dst:Dst, rest:Maybe<Dst>, exc:Src, pattern:Src,
                    mode:Enum<MatchMode>)
-  exits(next, raise);
+  exits(next, raise) ops(CHECK_EXC_MATCH, CHECK_EG_MATCH);
 
 // 2E: throw completion, async-for termination, exceptional context exit
 
 family CleanupThrow(exc:Src, pair:IterPair, completed:Dst, done:NearHead, route:NearHead)
-  exits(branch, return, raise, redirect);
+  exits(branch, return, raise, redirect) ops(CLEANUP_THROW);
 
 // `send` is the original Send head, the origin its branch observer reports
 family EndAsyncFor(exc:Src, target:NearHead, send:NearHead)
-  exits(next, jump, raise, redirect);
+  exits(next, jump, raise, redirect) ops(END_ASYNC_FOR);
 
 family WithExit(dst:Dst, exit_fn:Src, self:Maybe<Src>, exc:Src, context:Src)
-  exits(next, raise);
+  exits(next, raise) ops(WITH_EXCEPT_START);
 
 // 2F: resume and polls
 
 family Resume(kind:Enum<ResumeKind>)
-  exits(next, jump, raise, redirect, exit);
+  exits(next, jump, raise, redirect, exit) ops(RESUME);
 
 family Poll(kind:Enum<PollKind>)
   exits(next, raise, redirect, exit);

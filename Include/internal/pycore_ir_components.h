@@ -626,9 +626,18 @@
         ARGS(object, object), SCALAR, EFFECTS(reads)) \
     /* seeded from ir_leaf.ERASED */ \
     INTRINSIC(_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY, ARGS(), NONE, BUILD(gil)) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
-    MACRO(_Py_DECREF_SPECIALIZED, \
-        ARGS(scalar, scalar), SCALAR, EFFECTS(writes), EXITS()) \
+    /* Include/internal/pycore_object.h: a static inline function (GIL \
+     * build).  Drops one count of op unless it is immortal and calls \
+     * destruct(op) when the count reaches zero.  Consumes op; no failure \
+     * path.  Callbacks: only destruct, whose own row decides the effect \
+     * (a DESTRUCTOR row is `writes`, any other `releases`), as for \
+     * PyValue_CLOSE_SPECIALIZED.  The reftracer hook \
+     * (_PyReftracerTrack) is a debugging facility whose tracer is a C \
+     * callback outside the language semantics.  Was a MACRO row; the C is \
+     * a function, so it is a PRIMITIVE.  It has no ir_leaf model and no \
+     * lowering: G0d reclassifies it or models it (V11) */ \
+    PRIMITIVE(_Py_DECREF_SPECIALIZED, void, (PyObject *, destructor), \
+        ARGS(consumed object, destructor), NONE, EFFECTS()) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(_Py_ID, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
@@ -668,9 +677,19 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(value_subscript, PyValue, (PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ceval.c: PyUnicode_Append(&left, right) in a frame of its \
+     * own.  It consumes left on every return (extends it in place when \
+     * its count allows, else replaces it with a new str and releases it, \
+     * and releases it on error) and borrows right; it returns the new str \
+     * owned, or NULL with an exception set.  Callees: PyUnicode_Append -> \
+     * unicode_resize / PyUnicode_New and a copy: allocation and a realloc \
+     * that may move the object, and the release of left, a str, whose \
+     * deallocator runs no Python; no slot of either operand is called.  \
+     * `releases` is declared for the deallocator of left, and runs_python \
+     * kept as the seed had it: nothing here calls Python, so it is \
+     * over-declared and sound */ \
     HELPER(value_unicode_append, PyObject *, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(consumed object, object), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(with_exit_call, PyValue, (PyValueBorrow, PyValueBorrow, PyObject *, PyObject *, PyObject *), \
         ARGS(borrowed, borrowed, object, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \

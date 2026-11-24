@@ -1127,7 +1127,11 @@ dummy_func(
         // This is a subtle one. We write NULL to the local that dst
         // names, the target of the STORE_FAST folded into the word, and
         // leave the result for IR_STORE_RESULT to store.
-        op(_BINARY_OP_INPLACE_ADD_UNICODE, (left, right -- res)) {
+        op(_BINARY_OP_INPLACE_ADD_UNICODE,
+                (left: consumed exact(PyUnicode_Type), right: consumed exact(PyUnicode_Type)
+                 -- res: owned))
+            effects(reads, writes, allocates, raises, releases, runs_python) exits(next, miss, raise)
+        {
             PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
             assert(PyUnicode_CheckExact(left_o));
             assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(right)));

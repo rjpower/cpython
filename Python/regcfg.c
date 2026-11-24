@@ -27,6 +27,7 @@
 #include "pycore_opcode_utils.h"      // IS_SCOPE_EXIT_OPCODE()
 #include "pycore_pystate.h"           // _Py_GetConfig()
 #include "pycore_regcfg.h"
+#include "pycore_rop_metadata.h"       // ROP_HANDLER_GetAttr_Generic
 
 #undef SUCCESS
 #undef ERROR
@@ -793,8 +794,8 @@ _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
  * nread identities, the popped ones on top, and for a raise every identity
  * below; a register-style op's outputs below its dst pass their inputs
  * through, and a window's are its stack positions from its base. */
-int
-_PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
+static int
+legacy_as(_PyRegTr *t, const _PyRegOp *instr, int emitted)
 {
     _PyRegCfg *cfg = t->cfg;
     const _PyIRFormat *fmt = _PyRegCfg_FormatOf(instr->opcode, instr->oparg);
@@ -870,6 +871,7 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     _PyRegOp *op;
     if (err == SUCCESS) {
         err = new_op(t, instr, nread + nimplicit + nrec, pushed, &op);
+        op->opcode = emitted;
     }
     if (err == SUCCESS && nrec) {
         err = _PyRegCfg_AddOperands(cfg, nrec, &op->recipe);
@@ -926,6 +928,33 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     return err;
 }
 
+int
+_PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
+{
+    return legacy_as(t, instr, instr->opcode);
+}
+
+/* The rule of a stack op that a register family replaces one for one: the
+ * legacy rule's uses, defs, window and exceptional edges, emitted under the
+ * family's handler.  The stack op still fixes the counts and the window. */
+int
+_PyRegTr_LegacyAs(_PyRegTr *t, const _PyRegOp *instr, int handler)
+{
+    return legacy_as(t, instr, handler);
+}
+
+/* LOAD_ATTR is the GetAttr family, or GetMethod when oparg's low bit asks
+ * for a method: the callable and self are a window, as the old handler's
+ * results were, so the CALL that follows finds them in its homes.  Every
+ * site starts under the family's Generic arm, which adapts it. */
+__attribute__((unused)) static int
+rule_load_attr(_PyRegTr *t, const _PyRegOp *src)
+{
+    int handler = (src->oparg & 1) ? ROP_HANDLER_GetMethod_Generic
+                                   : ROP_HANDLER_GetAttr_Generic;
+    return _PyRegTr_LegacyAs(t, src, handler);
+}
+
 /* SWAP n exchanges the identities at the top and n - 1 below it.  No word
  * runs; a NOP keeps its origin for the source map and line events. */
 static int
@@ -950,6 +979,8 @@ rule_swap(_PyRegTr *t, const _PyRegOp *src)
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
     [SWAP] = rule_swap,
+    /* [LOAD_ATTR] = rule_load_attr: registered once the handler tables
+     * describe arm words (rir90 P0) */
 };
 
 static int

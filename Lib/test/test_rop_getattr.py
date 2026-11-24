@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from test import test_tools
+from test.support import import_helper
 
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
@@ -111,3 +112,25 @@ class GeneratedCTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TranslatorRuleTests(unittest.TestCase):
+    """LOAD_ATTR's rule (Python/regcfg.c rule_load_attr) selects the family's
+    Generic arm; the words show it once the rule is registered."""
+
+    def test_load_attr_words_are_the_family_generics(self):
+        capi = import_helper.import_module("_testinternalcapi")
+        namespace = {}
+        exec("def attr(o):\n    return o.x\n"
+             "def method(o):\n    return o.m()\n", namespace)
+        names = {}
+        for name in ("attr", "method"):
+            code = namespace[name].__code__
+            names[name] = [row[0] for row in capi.get_ir(code, False)]
+        if "GetAttr.Generic" not in names["attr"]:
+            self.skipTest("the rule is not registered until the handler tables "
+                          "describe arm words")
+        self.assertIn("GetMethod.Generic", names["method"])
+        # The callable and self land in the CALL's window: no move between
+        self.assertNotIn("MOVE", names["method"])
+        self.assertNotIn("SWAP", names["method"])

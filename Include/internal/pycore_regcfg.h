@@ -251,6 +251,9 @@ int _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
                   _PyRegOp **op);
 /* The rule of an unported stack op: its old handler op */
 int _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *src);
+/* The same uses, defs, window and edges, under the handler of the register
+ * family that replaces the stack op */
+int _PyRegTr_LegacyAs(_PyRegTr *t, const _PyRegOp *src, int handler);
 
 /* Give the inline scalar or immortal constants that ops read in place,
  * through register fields and call operands alike, a hidden slot each (G6),

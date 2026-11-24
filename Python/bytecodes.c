@@ -2231,7 +2231,7 @@ dummy_func(
                 monitor_reraise(tstate, frame, this_instr);
                 goto exception_unwind;
             }
-            PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);
+            PyValue completed = _PyStopIteration_GetValue(exc_value);
             // IR_EXIT: the exit named by the word. co_code has no operand, and
             // the instruction after this one continues there.
             IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, IR_EXIT);

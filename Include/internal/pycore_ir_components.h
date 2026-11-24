@@ -1099,6 +1099,12 @@
      * PyValue_FromObjectSteal's moved(0)) */ \
     HELPER(_PyErr_StackItemTakeValue, PyObject *, (_PyErr_StackItem *), \
         ARGS(scalar), VALUE_OR_NULL(owned), EFFECTS(reads, writes)) \
+    /* exceptions.c: a new owner of a StopIteration's value, None for \
+     * PyValue_NULL (the member getter's reading; StopIteration.__new__ \
+     * without __init__ leaves it NULL).  One load of the field and a \
+     * count; no failure, no callback.  Its argument is a StopIteration */ \
+    HELPER(_PyStopIteration_GetValue, PyValue, (PyObject *), \
+        ARGS(object), VALUE(owned), EFFECTS(reads)) \
     /* pycore_pyerrors.h: reads tstate->current_exception; no callee, no \
      * callback */ \
     HELPER(_PyErr_Occurred, PyObject *, (PyThreadState *), \

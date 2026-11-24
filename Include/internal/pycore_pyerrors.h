@@ -133,6 +133,11 @@ static inline PyObject* _PyErr_StackItemTakeValue(_PyErr_StackItem *exc_state)
     return value;
 }
 
+/* A new owner of a StopIteration's value.  PyValue_NULL is None, as the
+   member getter reads it: StopIteration.__new__ without __init__ leaves the
+   field NULL (Objects/exceptions.c). */
+extern PyValue _PyStopIteration_GetValue(PyObject *exc);
+
 extern PyObject* _PyErr_StackItemToExcInfoTuple(
     _PyErr_StackItem *err_info);
 

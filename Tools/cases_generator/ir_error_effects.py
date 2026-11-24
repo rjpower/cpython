@@ -118,6 +118,8 @@ HELPERS = {
     "DECREF_INPUTS": native_helper((), Kind.VOID, callback=True, canonical_clear=True),
     "INPUTS_DEAD": native_helper((), Kind.VOID),
     "GETLOCAL": native_helper((Kind.SCALAR,), Kind.VALUE),
+    # A new owner of a StopIteration's value, None for NULL (pycore_pyerrors.h)
+    "_PyStopIteration_GetValue": native_helper((Kind.OBJECT,), Kind.VALUE),
     # The identities that state what the compiler shows of a word
     **{name: native_helper((Kind.VALUE,), Kind.VALUE)
        for name in ("_PyValue_CodeConstant", "_PyValue_BoundLocal", "_PyValue_CellLocal")},

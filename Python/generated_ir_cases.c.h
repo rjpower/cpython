@@ -253,6 +253,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_GetRaisedException
               "_PyErr_GetRaisedException: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_StackItemTakeValue), PyObject * (*)(_PyErr_StackItem *)),
               "_PyErr_StackItemTakeValue: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyStopIteration_GetValue), PyValue (*)(PyObject *)),
+              "_PyStopIteration_GetValue: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_Occurred), PyObject * (*)(PyThreadState *)),
               "_PyErr_Occurred: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_SetRaisedException), void (*)(PyThreadState *, PyObject *)),
@@ -6069,7 +6071,6 @@ ir_run_CLEANUP_THROW(
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue exc_value_st;
-            PyValue value;
             exc_value_st = window[3];
             assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
@@ -6080,7 +6081,7 @@ ir_run_CLEANUP_THROW(
                 monitor_reraise(tstate, frame, this_instr);
                 PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
             }
-            PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);{
+            PyValue completed = _PyStopIteration_GetValue(exc_value);{
                 _PyIRStepResult ir_step_result = _PyEval_CompleteSendThrow(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), _PyFrame_InstrAt(frame, oparg), completed);
                 next_instr = ir_step_result.next;
                 if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
@@ -6108,7 +6109,6 @@ ir_run_CLEANUP_THROW_XFER_DISCARD(
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue exc_value_st;
-            PyValue value;
             exc_value_st = window[3];
             assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
@@ -6119,7 +6119,7 @@ ir_run_CLEANUP_THROW_XFER_DISCARD(
                 monitor_reraise(tstate, frame, this_instr);
                 PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
             }
-            PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);{
+            PyValue completed = _PyStopIteration_GetValue(exc_value);{
                 PyValue ir_completed = completed;
                 assert(_PyValue_IsHome(ir_completed));
                 IR_GEN_COMPLETE(ir_completed);
@@ -21970,7 +21970,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue exc_value_st;
-            PyValue value;
             exc_value_st = window[3];
             assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
@@ -21981,7 +21980,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 monitor_reraise(tstate, frame, this_instr);
                 PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
             }
-            PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);{
+            PyValue completed = _PyStopIteration_GetValue(exc_value);{
                 _PyIRStepResult ir_step_result = _PyEval_CompleteSendThrow(tstate, frame, this_instr, IR_B(ir_word), IR_A(ir_word), _PyFrame_InstrAt(frame, oparg), completed);
                 next_instr = ir_step_result.next;
                 if (ir_step_result.status < 0) { PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); }
@@ -22005,7 +22004,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue exc_value_st;
-            PyValue value;
             exc_value_st = window[3];
             assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
@@ -22016,7 +22014,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 monitor_reraise(tstate, frame, this_instr);
                 PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
             }
-            PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);{
+            PyValue completed = _PyStopIteration_GetValue(exc_value);{
                 PyValue ir_completed = completed;
                 assert(_PyValue_IsHome(ir_completed));
                 IR_GEN_COMPLETE(ir_completed);

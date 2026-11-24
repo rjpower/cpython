@@ -657,6 +657,7 @@ NON_ESCAPING_FUNCTIONS = (
     "PyFunction_GET_GLOBALS",
     "_PyClassMethod_GetFunc",
     "_PyValueGuarded_Load",
+    "_PyStopIteration_GetValue",
     "_PyValue_CodeConstant",
     "_PyValue_BoundLocal",
     "_PyValue_CellLocal",

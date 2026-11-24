@@ -848,6 +848,16 @@ StopIteration_init(PyObject *op, PyObject *args, PyObject *kwds)
     return 0;
 }
 
+PyValue
+_PyStopIteration_GetValue(PyObject *exc)
+{
+    PyValue value = PyStopIterationObject_CAST(exc)->value;
+    if (PyValue_IsNull(value)) {
+        return PyValue_None;
+    }
+    return PyValue_DUP(value);
+}
+
 static int
 StopIteration_clear(PyObject *op)
 {

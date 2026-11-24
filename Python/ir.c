@@ -25,7 +25,7 @@
 #include "pycore_opcode_metadata.h" // _PyOpcode_Deopt
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
-#include "pycore_rop_metadata.h"    // _PyRop_SelectReturn()
+#include "pycore_rop_metadata.h"    // _PyRop_SelectReturn(), ROP_HANDLER_*
 #include "pycore_value.h"
 
 static_assert(sizeof(_PyCodeExec) % sizeof(_PyIRWord) == 0,
@@ -45,7 +45,7 @@ static_assert(FB_COUNTER < 16 && FB_CALL < 16, "a kind has 4 bits in co_fbinit")
 
 
 /* _Py_InitCleanup (Python/specialize.c) runs with self in slot 0 and the
- * result of __init__ in slot 1: EXIT_INIT_CHECK checks slot 1, and the
+ * result of __init__ in slot 1: InitResult.Check checks slot 1, and the
  * Return arm of a thread frame returns slot 0. The explicit continuation names the first
  * real word. Both slots are temporaries, so the words carry no slot-class
  * flag, and the header precedes the words, as in every executing copy, for
@@ -58,7 +58,7 @@ _PyIRStaticExec _PyIR_InitCleanup = {
         .nfixed = 0,
     },
     .words = {
-        IR_WORD(EXIT_INIT_CHECK, 1, 0, 0, 0),
+        IR_WORD(ROP_HANDLER_InitResult_Check, 1, 0, 0, 0),
         IR_WORD(_PyRop_SelectReturn(ROP_SELECT_THREAD_FRAME, ROP_SELECT_LIVE_SCRATCH),
                 0, 0, 0, 0),
     },

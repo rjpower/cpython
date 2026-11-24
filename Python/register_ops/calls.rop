@@ -120,7 +120,7 @@ extern helper no_weakrefs(fn:B) -> Bool
   c _PyRop_NoWeakrefs as bool
   evidence(
     review: "P4. ceval.c: im_weakreflist is NULL (_CHECK_CALL_BOUND_METHOD_EXACT_ARGS):"
-            "releasing the method then runs no callback before the push.",
+            "releasing the method then runs no callback before the frame is filled.",
     contract: "One read; no memory, no failure.");
 
 extern helper exact_positional_bound(f:Frame, fn:B, a:Args) -> Bool

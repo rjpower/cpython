@@ -1,11 +1,12 @@
 """Calls and returns through the register instructions Call and Return.
 
-Each test forces an arm on a word that the assembler made
-(_testinternalcapi.rop_set_arm): the operands of the stack op's word are the
+Each test forces an arm on the word of a stack op
+(_testinternalcapi.force_arm): the operands of the stack op's word are the
 family's, so the arm runs on them as the translator will select it.  The
 family's definitions are Python/register_ops/calls.rop.
 """
 
+import dis
 import gc
 import sys
 import unittest
@@ -20,14 +21,11 @@ def word_names(code):
     return [row[0].split("+")[0] for row in _testinternalcapi.get_ir(code, True)]
 
 
-def force(function, prefixes, arm, which=0):
-    """Run arm on the which-th word of function whose stack op starts with
-    one of prefixes; the function must have run"""
-    code = function.__code__
-    found = [i for i, name in enumerate(word_names(code))
-             if name.startswith(prefixes)]
-    _testinternalcapi.rop_set_arm(code, found[which], arm)
-    return found[which]
+def force(function, opname, arm, which=0):
+    """Run arm on the word of the which-th stack op opname of function"""
+    offsets = [i.offset for i in dis.get_instructions(function)
+               if i.opname == opname]
+    _testinternalcapi.force_arm(function.__code__, offsets[which], arm)
 
 
 def warm(function, *args):
@@ -45,9 +43,6 @@ class Tracker:
         Tracker.deaths.append(self.name)
 
 
-RETURNS = ("RETURN_VALUE",)
-
-
 @cpython_only
 class ReturnTests(unittest.TestCase):
     def setUp(self):
@@ -58,7 +53,7 @@ class ReturnTests(unittest.TestCase):
             z = [x, y]
             return z[0] + z[1]
         warm(f, 1, 2)
-        force(f, RETURNS, "Return.Ordinary")
+        force(f, "RETURN_VALUE", "Return.Ordinary")
         self.assertEqual(f(1, 2), 3)
         self.assertEqual(f("a", "b"), "ab")
 
@@ -67,7 +62,7 @@ class ReturnTests(unittest.TestCase):
             y = x
             return y
         warm(f, 1)
-        force(f, RETURNS, "Return.Ordinary")
+        force(f, "RETURN_VALUE", "Return.Ordinary")
         value = object()
         before = sys.getrefcount(value)
         self.assertIs(f(value), value)
@@ -78,7 +73,7 @@ class ReturnTests(unittest.TestCase):
             return x * 2
         warm(f, 1)
         self.assertIn("RETURN_VALUE_EMPTY", word_names(f.__code__))
-        force(f, ("RETURN_VALUE_EMPTY",), "Return.Empty")
+        force(f, "RETURN_VALUE", "Return.Empty")
         self.assertEqual(f(21), 42)
 
     def test_finalizer_of_the_dying_frame(self):
@@ -93,7 +88,7 @@ class ReturnTests(unittest.TestCase):
             return 7
         warm(f)
         seen.clear()
-        force(f, RETURNS, "Return.Ordinary")
+        force(f, "RETURN_VALUE", "Return.Ordinary")
         self.assertEqual(f(), 7)
         self.assertEqual(len(seen), 1)
 
@@ -106,7 +101,7 @@ class ReturnTests(unittest.TestCase):
             x = g(1)
             return x
         warm(f)
-        force(g, RETURNS, "Return.Ordinary")
+        force(g, "RETURN_VALUE", "Return.Ordinary")
         Tracker.deaths.clear()
         self.assertEqual(f(), 2)
         self.assertEqual(Tracker.deaths, ["old"])
@@ -116,7 +111,7 @@ class ReturnTests(unittest.TestCase):
             yield n
             return n * 2
         list(gen(1))
-        force(gen, RETURNS, "Return.Generator")
+        force(gen, "RETURN_VALUE", "Return.Generator")
         g = gen(3)
         self.assertEqual(next(g), 3)
         with self.assertRaises(StopIteration) as cm:
@@ -143,7 +138,7 @@ class ReturnTests(unittest.TestCase):
             return b
         warm(f, 1)
         frames.clear()
-        force(f, RETURNS, "Return.Ordinary")
+        force(f, "RETURN_VALUE", "Return.Ordinary")
         self.assertEqual(f(1), 2)
         frame_locals = frames[0].f_locals
         self.assertEqual((frame_locals["a"], frame_locals["b"]), (1, 2))
@@ -162,7 +157,7 @@ class CallExactTests(unittest.TestCase):
             return g(x, 1)
         warm(f, 1)
         self.assertIn("CALL_PY_EXACT_ARGS", word_names(f.__code__))
-        force(f, ("CALL_PY_EXACT_ARGS", "CALL_BOUND_METHOD_EXACT_ARGS"), "Call.Exact")
+        force(f, "CALL", "Call.Exact")
         self.assertEqual(f(10), 9)
         self.assertEqual(f(3), 2)
 
@@ -175,7 +170,7 @@ class CallExactTests(unittest.TestCase):
             return c.m(5)
         c = C()
         warm(f, c)
-        force(f, ("CALL_PY_EXACT_ARGS", "CALL_BOUND_METHOD_EXACT_ARGS"), "Call.Exact")
+        force(f, "CALL", "Call.Exact")
         self.assertEqual(f(c), (c, 5))
 
     def test_arguments_move_and_locals_stay(self):
@@ -186,7 +181,7 @@ class CallExactTests(unittest.TestCase):
             y = [x]
             return g(y, [x])
         warm(f, 1)
-        force(f, ("CALL_PY_EXACT_ARGS", "CALL_BOUND_METHOD_EXACT_ARGS"), "Call.Exact")
+        force(f, "CALL", "Call.Exact")
         value = object()
         before = sys.getrefcount(value)
         self.assertEqual(f(value), [value])
@@ -200,7 +195,7 @@ class CallExactTests(unittest.TestCase):
             h = h(x)
             return h
         warm(f, g, 2)
-        force(f, ("CALL_PY_EXACT_ARGS", "CALL_BOUND_METHOD_EXACT_ARGS"), "Call.Exact")
+        force(f, "CALL", "Call.Exact")
         self.assertEqual(f(g, 2), 6)
 
     def test_displaced_destination_finalizer(self):
@@ -212,7 +207,7 @@ class CallExactTests(unittest.TestCase):
             x = g()
             return x
         warm(f)
-        force(f, ("CALL_PY_EXACT_ARGS", "CALL_BOUND_METHOD_EXACT_ARGS"), "Call.Exact")
+        force(f, "CALL", "Call.Exact", which=1)
         Tracker.deaths.clear()
         self.assertEqual(f(), 1)
         self.assertEqual(Tracker.deaths, ["displaced"])
@@ -224,7 +219,7 @@ class CallExactTests(unittest.TestCase):
         def f(x):
             return g(x)
         warm(f, 1)
-        force(f, ("CALL_PY_EXACT_ARGS", "CALL_BOUND_METHOD_EXACT_ARGS"), "Call.Exact")
+        force(f, "CALL", "Call.Exact")
         try:
             f(0)
         except ZeroDivisionError as exc:
@@ -245,9 +240,277 @@ class CallExactTests(unittest.TestCase):
         def f(x):
             return g(x)
         warm(f, 1)
-        force(f, ("CALL_PY_EXACT_ARGS", "CALL_BOUND_METHOD_EXACT_ARGS"), "Call.Exact")
-        force(g, RETURNS, "Return.Ordinary")
+        force(f, "CALL", "Call.Exact")
+        force(g, "RETURN_VALUE", "Return.Ordinary")
         self.assertEqual(f(4), 5)
+
+
+@cpython_only
+class CallBoundExactTests(unittest.TestCase):
+    def test_bound_method(self):
+        class C:
+            def m(self, a):
+                return (self, a)
+
+        def f(m):
+            return m(5)
+        c = C()
+        warm(f, c.m)
+        force(f, "CALL", "Call.BoundExact")
+        before = sys.getrefcount(c)
+        self.assertEqual(f(c.m), (c, 5))
+        self.assertEqual(sys.getrefcount(c), before)
+
+    def test_misses_to_generic(self):
+        class C:
+            def m(self, a):
+                return a + 1
+
+        def g(a):
+            return a * 2
+
+        def f(m):
+            return m(5)
+        c = C()
+        warm(f, c.m)
+        force(f, "CALL", "Call.BoundExact")
+        self.assertEqual(f(g), 10)
+        self.assertEqual(f(lambda a: -a), -5)
+        self.assertEqual(f(c.m), 6)
+
+    def test_weakly_referenced_method_misses(self):
+        class C:
+            def m(self, a):
+                return a
+
+        def f(m):
+            return m(1)
+        c = C()
+        warm(f, c.m)
+        force(f, "CALL", "Call.BoundExact")
+        m = c.m
+        r = weakref.ref(m)
+        self.assertEqual(f(m), 1)
+        self.assertIs(r(), m)
+
+
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+
+@cpython_only
+class CallInitTests(unittest.TestCase):
+    def test_adapts_to_init(self):
+        def f(a, b):
+            return Point(a, b)
+        warm(f, 1, 2)
+        force(f, "CALL", "Call.Generic")
+        warm(f, 1, 2)
+        self.assertIn("Call.Init", word_names(f.__code__))
+        p = f(3, 4)
+        self.assertEqual((p.x, p.y), (3, 4))
+        value = object()
+        before = sys.getrefcount(value)
+        p = f(value, 0)
+        self.assertIs(p.x, value)
+        del p
+        self.assertEqual(sys.getrefcount(value), before)
+
+    def test_init_returns_not_none(self):
+        class Bad:
+            def __init__(self):
+                return 1
+
+        def f():
+            return Bad()
+        force(f, "CALL", "Call.Generic")
+        for _ in range(3):
+            with self.assertRaisesRegex(TypeError, "should return None, not 'int'"):
+                f()
+        warm(lambda: self.assertRaises(TypeError, f))
+        self.assertIn("Call.Init", word_names(f.__code__))
+        with self.assertRaisesRegex(TypeError, "should return None, not 'int'"):
+            f()
+
+    def test_init_raises(self):
+        class Raises:
+            def __init__(self, fail):
+                if fail:
+                    raise ValueError("no")
+
+        def f(fail):
+            return Raises(fail)
+        force(f, "CALL", "Call.Generic")
+        warm(f, False)
+        self.assertIn("Call.Init", word_names(f.__code__))
+        with self.assertRaisesRegex(ValueError, "no"):
+            f(True)
+        self.assertIsInstance(f(False), Raises)
+
+    def test_class_changes(self):
+        class C:
+            def __init__(self, a):
+                self.a = a
+
+        def f(a):
+            return C(a)
+        force(f, "CALL", "Call.Generic")
+        warm(f, 1)
+        C.__init__ = lambda self, a: setattr(self, "a", -a)
+        self.assertEqual(f(2).a, -2)
+
+
+@cpython_only
+class CallGenericTests(unittest.TestCase):
+    def setUp(self):
+        Tracker.deaths.clear()
+
+    def test_native(self):
+        def f(x):
+            return len(x)
+        force(f, "CALL", "Call.Generic")
+        value = [1, 2, 3]
+        before = sys.getrefcount(value)
+        self.assertEqual(f(value), 3)
+        self.assertEqual(sys.getrefcount(value), before)
+
+    def test_native_temporaries_are_released(self):
+        def f(x):
+            return isinstance([x], list)
+        force(f, "CALL", "Call.Generic")
+        value = object()
+        before = sys.getrefcount(value)
+        self.assertTrue(f(value))
+        self.assertEqual(sys.getrefcount(value), before)
+
+    def test_native_raises(self):
+        def f(x):
+            return int([x][0])
+        force(f, "CALL", "Call.Generic", which=0)
+        with self.assertRaises(ValueError):
+            f("x")
+        value = "not a number"
+        before = sys.getrefcount(value)
+        with self.assertRaises(ValueError):
+            f(value)
+        self.assertEqual(sys.getrefcount(value), before)
+
+    def test_destination_is_an_operand(self):
+        def f(x):
+            x = str(x)
+            return x
+        force(f, "CALL", "Call.Generic")
+        self.assertEqual(f(12), "12")
+
+    def test_general_binding(self):
+        def g(a, b=2, *rest, c=3, **kw):
+            return (a, b, rest, c, kw)
+
+        def f(x):
+            return g(x)
+
+        def h(x):
+            return g(x, 1, 2, 3)
+        force(f, "CALL", "Call.Generic")
+        force(h, "CALL", "Call.Generic")
+        self.assertEqual(f(1), (1, 2, (), 3, {}))
+        self.assertEqual(h(1), (1, 1, (2, 3), 3, {}))
+
+    def test_binding_error(self):
+        def g(a):
+            return a
+
+        def f():
+            return g()
+        force(f, "CALL", "Call.Generic")
+        with self.assertRaises(TypeError):
+            f()
+
+    def test_generator_function(self):
+        def gen(n):
+            yield n
+            yield n + 1
+
+        def f(n):
+            return gen(n)
+        force(f, "CALL", "Call.Generic")
+        self.assertEqual(list(f(3)), [3, 4])
+
+    def test_bound_method_with_self(self):
+        class C:
+            def m(self, a, b=1):
+                return a + b
+
+        def f(c):
+            return c.m(5)
+        c = C()
+        force(f, "CALL", "Call.Generic")
+        self.assertEqual(f(c), 6)
+
+    def test_displaced_destination(self):
+        def f():
+            x = Tracker("displaced")
+            x = abs(-1)
+            return x
+        force(f, "CALL", "Call.Generic", which=1)
+        self.assertEqual(f(), 1)
+        self.assertEqual(Tracker.deaths, ["displaced"])
+
+    def test_adapts_to_exact(self):
+        def g(a, b):
+            return a + b
+
+        def f(x):
+            return g(x, 1)
+        force(f, "CALL", "Call.Generic")
+        warm(f, 1)
+        self.assertIn("Call.Exact", word_names(f.__code__))
+        self.assertEqual(f(2), 3)
+
+    def test_adapts_to_bound_exact(self):
+        class C:
+            def m(self, a):
+                return a
+
+        def f(m):
+            return m(4)
+        force(f, "CALL", "Call.Generic")
+        warm(f, C().m)
+        self.assertIn("Call.BoundExact", word_names(f.__code__))
+        self.assertEqual(f(C().m), 4)
+
+    def test_native_stays_generic(self):
+        def f(x):
+            return len(x)
+        force(f, "CALL", "Call.Generic")
+        warm(f, "ab")
+        self.assertIn("Call.Generic", word_names(f.__code__))
+
+    def test_exact_misses_after_redefinition(self):
+        def g(a):
+            return a
+
+        def f(x):
+            return g(x)
+        force(f, "CALL", "Call.Generic")
+        warm(f, 1)
+        self.assertIn("Call.Exact", word_names(f.__code__))
+        g.__code__ = (lambda a: -a).__code__
+        self.assertEqual(f(1), -1)
+
+    def test_recursion_limit(self):
+        def r(n):
+            return r(n - 1) if n else 0
+        force(r, "CALL", "Call.Generic")
+        self.assertEqual(r(50), 0)
+        with self.assertRaises(RecursionError):
+            r(10 ** 6)
+        force(r, "CALL", "Call.Exact")
+        self.assertEqual(r(50), 0)
+        with self.assertRaises(RecursionError):
+            r(10 ** 6)
 
 
 if __name__ == "__main__":

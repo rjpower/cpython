@@ -1511,25 +1511,15 @@ dummy_func(
             _BINARY_OP_SUBSCR_INIT_CALL +
             _PUSH_FRAME;
 
-        inline_ok inst(LIST_APPEND, (list, unused[oparg-1], v -- list, unused[oparg-1])) {
+        inline_ok inst(LIST_APPEND,
+                (list: object, unused[oparg-1], v: consumed -- list, unused[oparg-1]))
+            effects(runs_python) exits(next, raise)
+        {
             PyValue item = TAKE(v);
             PyListObject *list_o = (PyListObject *)PyValue_AsKnownObjectBorrow(list);
-            int err = 0;
-#ifdef Py_GIL_DISABLED
-            err = _PyList_AppendTakeValue(list_o, item);
-#else
             // The store is in line while the list has room; growth is the
             // function's.
-            Py_ssize_t size = Py_SIZE(list_o);
-            if (list_o->allocated > size) {
-                list_o->ob_item[size] = item;
-                _PyValue_CheckHome(item);
-                Py_SET_SIZE(list_o, size + 1);
-            }
-            else {
-                err = _PyList_AppendTakeValue(list_o, item);
-            }
-#endif
+            int err = _PyList_AppendTakeValueInline(list_o, item);
             ERROR_IF(err < 0);
         }
 
@@ -2097,13 +2087,18 @@ dummy_func(
         macro(INSTRUMENTED_YIELD_DELEGATED) =
             _YIELD_VALUE_EVENT + _YIELD_DELEGATED;
 
-        outlined inst(POP_EXCEPT, (exc_value -- )) {
-            // PUSH_EXC_INFO saved an exception instance or None: always an object
-            assert(PyValue_IsObject(exc_value));
+        outlined inst(POP_EXCEPT, (exc_value: consumed assumed(object) by _PUSH_EXC_INFO -- ))
+            effects(reads, releases) exits(next)
+        {
             _PyErr_StackItem *exc_info = tstate->exc_info;
-            Py_XSETREF(exc_info->exc_value,
-                   PyValue_IsNone(exc_value)
-                    ? NULL : PyValue_AsKnownObjectSteal(exc_value));
+            if (PyValue_IsNone(exc_value)) {
+                DEAD(exc_value);    // immortal: it owes no count
+                Py_XSETREF(exc_info->exc_value, NULL);
+            }
+            else {
+                PyObject *exc = PyValue_AsKnownObjectSteal(exc_value);
+                Py_XSETREF(exc_info->exc_value, exc);
+            }
         }
 
         outlined tier1 inst(RERAISE, (values[oparg], exc_st -- values[oparg])) {
@@ -2627,7 +2622,11 @@ dummy_func(
             str = PyValue_FromObjectSteal(str_o);
         }
 
-        outlined inst(BUILD_INTERPOLATION, (value, str, format[oparg & 1] -- interpolation)) {
+        outlined inst(BUILD_INTERPOLATION,
+                (value: consumed, str: consumed object, format[oparg & 1]: consumed
+                 -- interpolation: owned))
+            effects(runs_python, releases) exits(next, raise)
+        {
             assert(PyValue_IsObject(str));
             PyObject *str_o = PyValue_AsKnownObjectBorrow(str);
             int conversion = oparg >> 2;
@@ -2640,13 +2639,7 @@ dummy_func(
             }
             // The value may be a number: the interpolation holds its box
             PyObject *interpolation_o = _PyInterpolation_BuildValue(value, str_o, conversion, format_o);
-            // The handler clears the slots of the array before it closes
-            // the element, so the element moves to a C variable first
-            PyValue format_ref = (oparg & 1) ? format[0] : PyValue_NULL;
-            DEAD(format);
-            PyValue_XCLOSE(format_ref);
-            PyValue_CLOSE(str);
-            PyValue_CLOSE(value);
+            DECREF_INPUTS();
             ERROR_IF(interpolation_o == NULL);
             interpolation = PyValue_FromObjectSteal(interpolation_o);
         }
@@ -2774,13 +2767,13 @@ dummy_func(
             set = PyValue_FromObjectSteal(set_o);
         }
 
-        outlined inline_ok inst(BUILD_MAP, (values[oparg*2] -- map)) {
+        outlined inline_ok inst(BUILD_MAP, (values[oparg*2]: consumed -- map: owned))
+            effects(reads, writes, allocates, raises, releases, runs_python) exits(next, raise)
+        {
             PyObject *map_o = IR_BUILD_MAP(values);
             DEAD(values);
-            int failed = map_o == NULL;
-            map = failed ? PyValue_NULL : PyValue_FromObjectSteal(map_o);
-            SYNC_SP();
-            ERROR_IF(failed);
+            ERROR_IF(map_o == NULL);
+            map = PyValue_FromObjectSteal(map_o);
         }
 
         outlined inst(SETUP_ANNOTATIONS, (--))
@@ -2989,7 +2982,7 @@ dummy_func(
 
             assert(!(oparg & 1));
             EXIT_IF(global_super != (PyObject *)&PySuper_Type);
-            EXIT_IF(!PyType_Check(class), "the class is not a type");
+            EXIT_IF(!PyType_Check(class));
             STAT_INC(LOAD_SUPER_ATTR, hit);
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             _PyStatusValue found = _PySuper_LookupValue((PyTypeObject *)class, self_st, name, 0);
@@ -3003,14 +2996,14 @@ dummy_func(
             _GUARD_LOAD_SUPER_ATTR_METHOD +
             _LOAD_SUPER_ATTR_METHOD;
 
-        op(_GUARD_LOAD_SUPER_ATTR_METHOD, (global_super_st: object, class_st: object, unused -- global_super_st: is(PySuper_Type), class_st, unused))
+        op(_GUARD_LOAD_SUPER_ATTR_METHOD, (global_super_st: object, class_st: object, unused -- global_super_st: is(PySuper_Type), class_st: subtype(PyType_Type), unused))
             effects(reads) exits(next, miss)
         {
             PyObject *global_super = PyValue_AsKnownObjectBorrow(global_super_st);
             PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
             assert(oparg & 1);
             EXIT_IF(global_super != (PyObject *)&PySuper_Type);
-            EXIT_IF(!PyType_Check(class), "the class is not a type");
+            EXIT_IF(!PyType_Check(class));
         }
 
         op(_LOAD_SUPER_ATTR_METHOD, (global_super_st, class_st, self_st -- attr, self_or_null)) {
@@ -3201,14 +3194,17 @@ dummy_func(
             EXIT_IF(!PyModule_CheckExact(PyValue_AsKnownObjectBorrow(owner)));
         }
 
-        leaf op(_LOAD_ATTR_MODULE, (dict_version/2, index/1, owner -- attr)) {
+        leaf op(_LOAD_ATTR_MODULE, (dict_version/2, index/1, owner: consumed object -- attr: owned))
+            effects(reads, releases) exits(next, miss)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             PyDictObject *dict = (PyDictObject *)((PyModuleObject *)owner_o)->md_dict;
             assert(dict != NULL);
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
             EXIT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != dict_version);
             assert(keys->dk_kind == DICT_KEYS_UNICODE);
-            EXIT_IF(index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries));
+            EXIT_IF(index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries),
+                    "the module's keys have no entry at the index");
             PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(keys) + index;
             PyValueBorrow found = PyValue_Borrow(ep->me_value);
             EXIT_IF(PyValue_IsNull(found));
@@ -3308,12 +3304,12 @@ dummy_func(
             unused/5 +
             _NULL_SLOT_CONDITIONAL;
 
-        op(_CHECK_ATTR_CLASS, (class_version/2, owner: object -- owner))
+        op(_CHECK_ATTR_CLASS, (class_version/2, owner: object -- owner: subtype(PyType_Type)))
             effects(reads) exits(next, miss)
         {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
 
-            EXIT_IF(!PyType_Check(owner_o), "the owner is not a type");
+            EXIT_IF(!PyType_Check(owner_o));
             assert(class_version != 0);
             EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version,
                     "the class's own version differs from the cached one");
@@ -3342,7 +3338,7 @@ dummy_func(
             _LOAD_ATTR_CLASS +
             _NULL_SLOT_CONDITIONAL;
 
-        op(_GUARD_BUILTIN_METACLASS, (owner: object -- owner: object))
+        op(_GUARD_BUILTIN_METACLASS, (owner: object -- owner: exact(PyType_Type)))
             effects(reads) exits(next, miss)
         {
             #ifdef Py_GIL_DISABLED
@@ -3352,7 +3348,7 @@ dummy_func(
             #endif
             EXIT_IF(gil_disabled, "the free-threaded build never specializes this");
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            EXIT_IF(Py_TYPE(owner_o) != &PyType_Type, "the owner's metaclass is not type");
+            EXIT_IF(Py_TYPE(owner_o) != &PyType_Type);
         }
 
         ir_only op(_LOAD_ATTR_CLASSMETHOD, (class_value/4, owner -- attr, self)) {
@@ -5107,13 +5103,13 @@ dummy_func(
 
         op(_CHECK_FUNCTION_VERSION,
                 (func_version/2, callable: object, unused, unused[oparg]
-                 -- callable: exact(PyFunction_Type), unused, unused[oparg]))
+                 -- callable: exact(PyFunction_Type) func_version(func_version), unused, unused[oparg]))
             effects(reads) exits(next, miss)
         {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyFunction_Check(callable_o));
             PyFunctionObject *func = (PyFunctionObject *)callable_o;
-            EXIT_IF(func->func_version != func_version, "the function version differs from the cache's");
+            EXIT_IF(func->func_version != func_version);
         }
 
         macro(CALL_PY_GENERAL) =
@@ -5125,7 +5121,12 @@ dummy_func(
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
-        op(_CHECK_METHOD_VERSION, (func_version/2, callable, null, unused[oparg] -- callable, null, unused[oparg])) {
+        op(_CHECK_METHOD_VERSION,
+                (func_version/2, callable: object, null, unused[oparg]
+                 -- callable: exact(PyMethod_Type), null, unused[oparg]))
+            effects(reads) exits(next, miss) state(call_state -- call_state: self(absent))
+            paths(callable.im_func: exact(PyFunction_Type) func_version(func_version))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
 
             EXIT_IF(Py_TYPE(callable_o) != &PyMethod_Type);
@@ -5187,7 +5188,12 @@ dummy_func(
             _CALL_NON_PY_GENERAL +
             _CHECK_PERIODIC_AT_END;
 
-        op(_CHECK_CALL_BOUND_METHOD_EXACT_ARGS, (callable, null, unused[oparg] -- callable, null, unused[oparg])) {
+        op(_CHECK_CALL_BOUND_METHOD_EXACT_ARGS,
+                (callable: object, null, unused[oparg]
+                 -- callable: exact(PyMethod_Type), null, unused[oparg]))
+            effects(reads) exits(next, miss) state(call_state -- call_state: self(absent))
+            paths(callable.im_weakreflist: null)
+        {
             EXIT_IF(call_state & CALL_SELF_PRESENT);
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(Py_TYPE(callable_o) != &PyMethod_Type);
@@ -5216,12 +5222,17 @@ dummy_func(
             DEOPT_IF(IS_PEP523_HOOKED(tstate));
         }
 
-        op(_CHECK_FUNCTION_EXACT_ARGS, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
+        op(_CHECK_FUNCTION_EXACT_ARGS,
+                (callable: exact(PyFunction_Type), self_or_null, unused[oparg]
+                 -- callable, self_or_null, unused[oparg]))
+            effects(reads) exits(next, miss) state(call_state -- call_state)
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             assert(PyFunction_Check(callable_o));
             PyFunctionObject *func = (PyFunctionObject *)callable_o;
             PyCodeObject *code = (PyCodeObject *)func->func_code;
-            EXIT_IF(code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0));
+            EXIT_IF(code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0),
+                    "the function takes another number of arguments");
         }
 
         op(_CHECK_STACK_SPACE,
@@ -5424,12 +5435,12 @@ dummy_func(
 
         op(_CHECK_OBJECT,
                 (type_version/2, callable: object, self_or_null, unused[oparg]
-                 -- callable, self_or_null, unused[oparg]))
+                 -- callable: subtype(PyType_Type), self_or_null, unused[oparg]))
             effects(reads) exits(next, miss) state(call_state -- call_state: self(absent))
         {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(call_state & CALL_SELF_PRESENT);
-            EXIT_IF(!PyType_Check(callable_o), "the callable is not a type");
+            EXIT_IF(!PyType_Check(callable_o));
             PyTypeObject *tp = (PyTypeObject *)callable_o;
             EXIT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(tp->tp_version_tag) != type_version,
                     "the type version differs from the cache's");
@@ -5502,7 +5513,11 @@ dummy_func(
             DEAD(should_be_none);
         }
 
-        op(_GUARD_CALLABLE_BUILTIN_CLASS, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
+        op(_GUARD_CALLABLE_BUILTIN_CLASS,
+                (callable: object, unused, unused[oparg]
+                 -- callable: subtype(PyType_Type), unused, unused[oparg]))
+            effects(reads) exits(next, miss) paths(callable.tp_vectorcall: nonnull)
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyType_Check(callable_o));
             PyTypeObject *tp = (PyTypeObject *)callable_o;
@@ -5535,16 +5550,22 @@ dummy_func(
             _CALL_BUILTIN_CLASS +
             _CHECK_PERIODIC_AT_END;
 
-        op(_GUARD_CALLABLE_BUILTIN_O, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
+        op(_GUARD_CALLABLE_BUILTIN_O,
+                (callable: object, self_or_null, args[oparg]
+                 -- callable: exact(PyCFunction_Type), self_or_null, args[oparg]))
+            effects(reads) exits(next, miss) state(call_state -- call_state)
+            paths(callable.m_ml: convention(_Py_CALL_O))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyCFunction_CheckExact(callable_o));
-            EXIT_IF((PyCFunction_GET_FLAGS(callable_o) &
-                     _Py_METH_CALL_FLAGS) != METH_O);
+            _PyCallConvention conv =
+                _PyMethodDef_Convention(((PyCFunctionObject *)callable_o)->m_ml);
+            EXIT_IF(conv != _Py_CALL_O);
             int total_args = oparg;
             if (call_state & CALL_SELF_PRESENT) {
                 total_args++;
             }
-            EXIT_IF(total_args != 1);
+            EXIT_IF(total_args != 1, "the call has another number of arguments");
         }
 
         op(_CALL_BUILTIN_O,
@@ -5576,17 +5597,25 @@ dummy_func(
             _CALL_BUILTIN_O +
             _CHECK_PERIODIC_AT_END;
 
-        op(_GUARD_CALLABLE_BUILTIN_FAST, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
+        op(_GUARD_CALLABLE_BUILTIN_FAST,
+                (callable: object, unused, unused[oparg]
+                 -- callable: exact(PyCFunction_Type), unused, unused[oparg]))
+            effects(reads) exits(next, miss)
+            paths(callable.m_ml: convention(_Py_CALL_FASTCALL|_Py_CALL_VALUE|_Py_CALL_VALUE_NOARGS|_Py_CALL_VALUE_O))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyCFunction_CheckExact(callable_o));
-            int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
+            _PyCallConvention conv =
+                _PyMethodDef_Convention(((PyCFunctionObject *)callable_o)->m_ml);
             /* A METH_VALUE function (alone or with METH_NOARGS or METH_O)
                reaches the same value vectorcall, as METH_FASTCALL does.
                With METH_KEYWORDS it takes the _WITH_KEYWORDS handler. */
-            EXIT_IF(flags != METH_FASTCALL
-                    && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE);
+            EXIT_IF(conv != _Py_CALL_FASTCALL && conv != _Py_CALL_VALUE
+                    && conv != _Py_CALL_VALUE_NOARGS && conv != _Py_CALL_VALUE_O);
             int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
-            EXIT_IF((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 1 : 0),
+            EXIT_IF(conv == _Py_CALL_VALUE_NOARGS && n != 0,
+                    "the arguments do not fit the value form's fixed arity");
+            EXIT_IF(conv == _Py_CALL_VALUE_O && n != 1,
                     "the arguments do not fit the value form's fixed arity");
         }
 
@@ -5614,12 +5643,17 @@ dummy_func(
             _CALL_BUILTIN_FAST +
             _CHECK_PERIODIC_AT_END;
 
-        op(_GUARD_CALLABLE_BUILTIN_FAST_WITH_KEYWORDS, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
+        op(_GUARD_CALLABLE_BUILTIN_FAST_WITH_KEYWORDS,
+                (callable: object, unused, unused[oparg]
+                 -- callable: exact(PyCFunction_Type), unused, unused[oparg]))
+            effects(reads) exits(next, miss)
+            paths(callable.m_ml: convention(_Py_CALL_FASTCALL_KEYWORDS|_Py_CALL_VALUE_KEYWORDS))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyCFunction_CheckExact(callable_o));
-            int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
-            EXIT_IF(flags != (METH_FASTCALL | METH_KEYWORDS)
-                    && flags != (METH_VALUE | METH_KEYWORDS));
+            _PyCallConvention conv =
+                _PyMethodDef_Convention(((PyCFunctionObject *)callable_o)->m_ml);
+            EXIT_IF(conv != _Py_CALL_FASTCALL_KEYWORDS && conv != _Py_CALL_VALUE_KEYWORDS);
         }
 
         inline_ok op(_CALL_BUILTIN_FAST_WITH_KEYWORDS,
@@ -5759,19 +5793,25 @@ dummy_func(
             none = PyValue_None;
         }
 
-        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_O, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
+        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_O,
+                (callable: object, self_or_null, args[oparg]
+                 -- callable: exact(PyMethodDescr_Type), self_or_null, args[oparg]))
+            effects(reads) exits(next, miss) state(call_state -- call_state)
+            paths(callable.d_method: convention(_Py_CALL_O))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-            EXIT_IF(!Py_IS_TYPE(method, &PyMethodDescr_Type));
-            EXIT_IF((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
-                    METH_O);
+            EXIT_IF(Py_TYPE(callable_o) != &PyMethodDescr_Type);
+            _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+            EXIT_IF(conv != _Py_CALL_O);
             int total_args = oparg;
             if (call_state & CALL_SELF_PRESENT) {
                 total_args++;
             }
-            EXIT_IF(total_args != 2);
+            EXIT_IF(total_args != 2, "the call has another number of arguments");
             PyValue self = IR_CALL_ARG(0);
-            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
+            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type,
+                    "the receiver is not of the descriptor's class");
         }
 
         op(_CALL_METHOD_DESCRIPTOR_O,
@@ -5809,17 +5849,22 @@ dummy_func(
             _CALL_METHOD_DESCRIPTOR_O +
             _CHECK_PERIODIC_AT_END;
 
-        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
+        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS,
+                (callable: object, self_or_null, args[oparg]
+                 -- callable: exact(PyMethodDescr_Type), self_or_null, args[oparg]))
+            effects(reads) exits(next, miss)
+            paths(callable.d_method: convention(_Py_CALL_FASTCALL_KEYWORDS|_Py_CALL_VALUE_KEYWORDS))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-            EXIT_IF(!Py_IS_TYPE(method, &PyMethodDescr_Type));
-            int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
-            EXIT_IF(flags != (METH_FASTCALL | METH_KEYWORDS)
-                    && flags != (METH_VALUE | METH_KEYWORDS));
+            EXIT_IF(Py_TYPE(callable_o) != &PyMethodDescr_Type);
+            _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+            EXIT_IF(conv != _Py_CALL_FASTCALL_KEYWORDS && conv != _Py_CALL_VALUE_KEYWORDS);
             int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
             EXIT_IF(n == 0, "the call has no receiver");
             PyValue self = IR_CALL_ARG(0);
-            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
+            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type,
+                    "the receiver is not of the descriptor's class");
         }
 
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS,
@@ -5845,19 +5890,25 @@ dummy_func(
             _CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS +
             _CHECK_PERIODIC_AT_END;
 
-        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_NOARGS, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
+        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_NOARGS,
+                (callable: object, self_or_null, args[oparg]
+                 -- callable: exact(PyMethodDescr_Type), self_or_null, args[oparg]))
+            effects(reads) exits(next, miss) state(call_state -- call_state)
+            paths(callable.d_method: convention(_Py_CALL_NOARGS))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-            EXIT_IF(!Py_IS_TYPE(method, &PyMethodDescr_Type));
-            EXIT_IF((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
-                    METH_NOARGS);
+            EXIT_IF(Py_TYPE(callable_o) != &PyMethodDescr_Type);
+            _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+            EXIT_IF(conv != _Py_CALL_NOARGS);
             int total_args = oparg;
             if (call_state & CALL_SELF_PRESENT) {
                 total_args++;
             }
-            EXIT_IF(total_args != 1);
+            EXIT_IF(total_args != 1, "the call has another number of arguments");
             PyValue self = IR_CALL_ARG(0);
-            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
+            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type,
+                    "the receiver is not of the descriptor's class");
         }
 
         op(_CALL_METHOD_DESCRIPTOR_NOARGS,
@@ -5889,20 +5940,28 @@ dummy_func(
             _CALL_METHOD_DESCRIPTOR_NOARGS +
             _CHECK_PERIODIC_AT_END;
 
-        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
+        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST,
+                (callable: object, self_or_null, args[oparg]
+                 -- callable: exact(PyMethodDescr_Type), self_or_null, args[oparg]))
+            effects(reads) exits(next, miss)
+            paths(callable.d_method: convention(_Py_CALL_FASTCALL|_Py_CALL_VALUE|_Py_CALL_VALUE_NOARGS|_Py_CALL_VALUE_O))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
             /* Builtin METH_FASTCALL methods, without keywords */
-            EXIT_IF(!Py_IS_TYPE(method, &PyMethodDescr_Type));
-            int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
-            EXIT_IF(flags != METH_FASTCALL
-                    && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE);
+            EXIT_IF(Py_TYPE(callable_o) != &PyMethodDescr_Type);
+            _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+            EXIT_IF(conv != _Py_CALL_FASTCALL && conv != _Py_CALL_VALUE
+                    && conv != _Py_CALL_VALUE_NOARGS && conv != _Py_CALL_VALUE_O);
             int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
             EXIT_IF(n == 0, "the call has no receiver");
-            EXIT_IF((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 2 : 1),
+            EXIT_IF(conv == _Py_CALL_VALUE_NOARGS && n != 1,
+                    "the arguments do not fit the value form's fixed arity");
+            EXIT_IF(conv == _Py_CALL_VALUE_O && n != 2,
                     "the arguments do not fit the value form's fixed arity");
             PyValue self = IR_CALL_ARG(0);
-            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
+            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type,
+                    "the receiver is not of the descriptor's class");
         }
 
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST,
@@ -5977,13 +6036,13 @@ dummy_func(
 
         op(_CHECK_FUNCTION_VERSION_KW,
                 (func_version/2, callable: object, unused, unused[oparg], unused
-                 -- callable: exact(PyFunction_Type), unused, unused[oparg], unused))
+                 -- callable: exact(PyFunction_Type) func_version(func_version), unused, unused[oparg], unused))
             effects(reads) exits(next, miss)
         {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyFunction_Check(callable_o));
             PyFunctionObject *func = (PyFunctionObject *)callable_o;
-            EXIT_IF(func->func_version != func_version, "the function version differs from the cache's");
+            EXIT_IF(func->func_version != func_version);
         }
 
         macro(CALL_KW_PY) =
@@ -5995,7 +6054,12 @@ dummy_func(
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
-        op(_CHECK_METHOD_VERSION_KW, (func_version/2, callable, null, unused[oparg], unused -- callable, null, unused[oparg], unused)) {
+        op(_CHECK_METHOD_VERSION_KW,
+                (func_version/2, callable: object, null, unused[oparg], unused
+                 -- callable: exact(PyMethod_Type), null, unused[oparg], unused))
+            effects(reads) exits(next, miss) state(call_state -- call_state: self(absent))
+            paths(callable.im_func: exact(PyFunction_Type) func_version(func_version))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
 
             EXIT_IF(Py_TYPE(callable_o) != &PyMethod_Type);
@@ -6458,7 +6522,9 @@ dummy_func(
             }
         }
 
-        inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond -- res)) {
+        inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
+            effects(runs_python) exits(next, branch, raise)
+        {
             // Taken before the truth test, which can run code
             PyValue held = TAKE(cond);
             int truth = _PyValue_IsTrue(held);
@@ -6477,7 +6543,9 @@ dummy_func(
             }
         }
 
-        inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond -- res)) {
+        inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
+            effects(runs_python) exits(next, branch, raise)
+        {
             // Taken before the truth test, which can run code
             PyValue held = TAKE(cond);
             int truth = _PyValue_IsTrue(held);

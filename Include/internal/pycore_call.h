@@ -21,6 +21,32 @@ extern "C" {
     (METH_VARARGS | METH_FASTCALL | METH_NOARGS | METH_O | \
      METH_KEYWORDS | METH_METHOD | METH_VALUE)
 
+/* The C calling convention of a PyMethodDef: its flags masked by
+   _Py_METH_CALL_FLAGS.  The members are every combination that
+   _PyCFunction_NewValue and PyDescr_NewMethod accept; any other is
+   refused there as "bad call flags".  The handlers' guards test the
+   members (the FIELD row PyMethodDef.convention). */
+typedef enum {
+    _Py_CALL_VARARGS = METH_VARARGS,
+    _Py_CALL_VARARGS_KEYWORDS = METH_VARARGS | METH_KEYWORDS,
+    _Py_CALL_FASTCALL = METH_FASTCALL,
+    _Py_CALL_FASTCALL_KEYWORDS = METH_FASTCALL | METH_KEYWORDS,
+    _Py_CALL_METHOD_FASTCALL_KEYWORDS = METH_METHOD | METH_FASTCALL | METH_KEYWORDS,
+    _Py_CALL_NOARGS = METH_NOARGS,
+    _Py_CALL_O = METH_O,
+    _Py_CALL_VALUE = METH_VALUE,
+    _Py_CALL_VALUE_KEYWORDS = METH_VALUE | METH_KEYWORDS,
+    _Py_CALL_VALUE_METHOD_KEYWORDS = METH_VALUE | METH_METHOD | METH_KEYWORDS,
+    _Py_CALL_VALUE_NOARGS = METH_VALUE | METH_NOARGS,
+    _Py_CALL_VALUE_O = METH_VALUE | METH_O,
+} _PyCallConvention;
+
+static inline _PyCallConvention
+_PyMethodDef_Convention(const PyMethodDef *ml)
+{
+    return (_PyCallConvention)(ml->ml_flags & _Py_METH_CALL_FLAGS);
+}
+
 /* Suggested size (number of positional arguments) for arrays of PyObject*
    allocated on a C stack to avoid allocating memory on the heap memory. Such
    array is used to pass positional arguments to call functions of the

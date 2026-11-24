@@ -88,7 +88,8 @@ ARG_MODES = ("borrowed", "consumed", "taken", "scalar", "object", "tstate", "fra
 # Facts: the vocabulary's words and the record's Fact kinds.  A fact with an
 # argument is written `kind(arg)`; `exact(T1|T2)` is a union of exact types,
 # `type_slot(slot,fn)` a type slot's value, `in_bounds(x)` an index within
-# the length of input x, `is(K)` the identity of a CONSTANT row's value.
+# the length of input x, `is(K)` the identity of a CONSTANT row's value,
+# `encoding(E1|E2|null)` a union of encodings (the representation table).
 FACT_KIND = {
     "nonnull": "NOT_NULL", "inline": "NUMBER", "inline_int": "INLINE_INT",
     "inline_float": "INLINE_FLOAT", "object": "OBJECT", "exact": "EXACT_TYPE",
@@ -99,22 +100,23 @@ FACT_KIND = {
     "not_subtype": "NOT_SUBTYPE", "not_exact": "NOT_TYPE", "type_flag": "TYPE_FLAG",
     "type_slot": "TYPE_SLOT", "class_version": "CLASS_VERSION",
     "func_version": "FUNC_VERSION", "argcount": "ARGCOUNT", "vectorcall": "VECTORCALL",
-    "call_flags": "CALL_FLAGS", "ascii": "ASCII", "no_managed_dict": "NO_MANAGED_DICT",
-    "unique": "UNIQUE", "self": "SELF",
+    "convention": "CONVENTION", "ascii": "ASCII", "no_managed_dict": "NO_MANAGED_DICT",
+    "unique": "UNIQUE", "self": "SELF", "tagged_index": "TAGGED_INDEX",
+    "encoding": "ENCODING",
 }
 VOCABULARY_OF_KIND = {v: k for k, v in FACT_KIND.items()}
 FACTS_WITH_ARGUMENT = frozenset(("exact", "type_version", "shape", "keys_version", "length",
                                  "in_bounds", "is", "subtype", "not_subtype", "not_exact",
-                                 "type_flag", "type_slot", "self"))
+                                 "type_flag", "type_slot", "self", "encoding"))
 # The call-shape kinds take a value where the guard names one
 FACTS_WITH_OPTIONAL_ARGUMENT = frozenset(("class_version", "func_version", "argcount",
-                                          "vectorcall", "call_flags"))
+                                          "vectorcall", "convention"))
 # Properties of mutable heap state: they die at every KILLS site (1.1).
 # not_exact(T) is one: a mutable class's membership can change
 HEAP_FACTS = frozenset(("type_version", "has_values", "shape", "keys_version", "length",
                         "in_bounds", "subtype", "not_subtype", "not_exact", "type_flag",
                         "type_slot", "class_version", "func_version", "argcount",
-                        "vectorcall", "call_flags", "no_managed_dict"))
+                        "vectorcall", "convention", "no_managed_dict"))
 # Facts of one site (refcount 1): they die at any count change of the
 # value, any publication and any reentry, within the uop, and are never
 # exported (F1)
@@ -124,7 +126,22 @@ SITE_FACTS = frozenset(("unique",))
 # heap kills and reentry do not (item 2 of G0a4, V8's implicit operands)
 STATE_FACTS = frozenset(("self",))
 STATE_ARGS = {"self": ("present", "absent")}
-NUMBER_TYPES = ("PyLong_Type", "PyFloat_Type")
+# The representation table (design 1.1; the table of words in
+# pycore_value.h): each encoding of a value that is not NULL and not an
+# object, the TEST row that decides it, and the exact type of its values.
+# A tagged index (a FOR_ITER cursor, a saved lasti) is no Python value and
+# has no type.  A type without an encoding here is an object whenever it is
+# exact; the static constants (PyValue_None, PyValue_True) are objects.
+ENCODINGS = {
+    "inline_int": ("PyValue_IsInlineInt", "PyLong_Type"),
+    "inline_float": ("PyValue_IsInlineFloat", "PyFloat_Type"),
+    "tagged_index": ("PyValue_IsTaggedIndex", None),
+}
+# The members of an `encoding(...)` union: the encodings, an object, NULL
+WORD_KINDS = (*ENCODINGS, "object", "null")
+TYPE_ENCODINGS = {t: frozenset(e for e, (_, ty) in ENCODINGS.items() if ty == t)
+                  for t in sorted({ty for _, ty in ENCODINGS.values() if ty})}
+NUMBER_TYPES = tuple(TYPE_ENCODINGS)
 
 
 @dataclass(frozen=True, order=True)
@@ -138,7 +155,7 @@ class VFact:
 
     def record(self, subject: str) -> Fact:
         arg = self.arg
-        if self.kind == "exact":
+        if self.kind in ("exact", "convention"):
             arg = " | ".join(arg.split("|"))
         elif self.kind == "type_slot":
             arg = " == ".join(arg.split(","))
@@ -151,25 +168,110 @@ OBJECT = VFact("object")
 INLINE = VFact("inline")
 
 
+# The representation lattice.  What a value's word may be is one set of
+# kinds of word (WORD_KINDS); every representation fact is a spelling of a
+# set in it, and word_kinds() intersects them.  An ordinary value is never a
+# tagged index: a value may be one only where a declaration or a row says
+# so (a cursor), by naming tagged_index.
+ALL_WORDS = frozenset(WORD_KINDS)
+ORDINARY_WORDS = ALL_WORDS - {"tagged_index"}
+INLINE_WORDS = frozenset(e for e, (_, ty) in ENCODINGS.items() if ty)
+SPELLINGS = {"null": frozenset({"null"}), "object": frozenset({"object"}),
+             "inline": INLINE_WORDS, **{e: frozenset({e}) for e in ENCODINGS}}
+# The facts that only an object has
+OBJECT_KINDS = frozenset(("type_version", "has_values", "shape", "keys_version", "length",
+                          "subtype", "type_flag", "type_slot", "class_version",
+                          "func_version", "ascii", "no_managed_dict", "unique"))
+# excludes(S): the value's set, whatever it is, minus S: a TEST row's
+# `rest` side (the false side of PyValue_IsObject is the value's kinds of
+# word but object).  It stays with the value's facts, so that it applies
+# to the set the value has; it is no vocabulary word and is not exported
+EXCLUDES = "excludes"
+REPRESENTATION = frozenset((*SPELLINGS, "nonnull", "encoding", EXCLUDES))
+
+
+def _members(fact: VFact) -> frozenset[str]:
+    return frozenset(fact.arg.split("|")) if fact.arg else frozenset()
+
+
+def word_kinds(facts, universe: frozenset[str] | None = None) -> frozenset[str]:
+    """The kinds of word a value with facts may be: the intersection of the
+    sets that its facts spell, within all kinds if one names tagged_index
+    and the ordinary ones if none does"""
+    if universe is None:
+        explicit = any("tagged_index" in (_members(f) if f.kind == "encoding" else {f.kind})
+                       for f in facts)
+        universe = ALL_WORDS if explicit else ORDINARY_WORDS
+    found = set(universe)
+    for f in facts:
+        if f.kind in SPELLINGS:
+            found &= SPELLINGS[f.kind]
+        elif f.kind == "encoding":
+            found &= _members(f)
+        elif f.kind == EXCLUDES:
+            found -= _members(f)
+        elif f.kind == "exact":
+            # exact(T): T's encodings (the representation table), or an object
+            found &= {"object"}.union(*(TYPE_ENCODINGS.get(t, ())
+                                        for t in f.arg.split("|")))
+        elif f.kind in OBJECT_KINDS:
+            found &= {"object"}
+        else:
+            # Any other fact (nonnull, is(K), in_bounds(x)...) is of a value
+            found.discard("null")
+    return frozenset(found)
+
+
+def spelled(kinds: frozenset[str]) -> set[VFact]:
+    "the plain spellings of a set of kinds of word: each one that contains it"
+    found = set()
+    if "null" not in kinds:
+        found.add(NONNULL)
+    elif kinds == {"null"}:
+        found.add(NULL_FACT)
+    if kinds and "null" not in kinds:
+        found |= {VFact(name) for name, s in SPELLINGS.items() if kinds <= s}
+    return found
+
+
 def implied(facts) -> frozenset[VFact]:
-    "facts and every fact that they imply (design.md 1.1)"
-    result = set(facts)
-    for f in list(result):
-        if f.kind == "inline_int":
-            result |= {INLINE, VFact("exact", "PyLong_Type")}
-        elif f.kind == "inline_float":
-            result |= {INLINE, VFact("exact", "PyFloat_Type")}
-        elif f.kind == "exact" and not set(f.arg.split("|")) & set(NUMBER_TYPES):
-            result.add(OBJECT)
-        elif f.kind in ("type_version", "has_values", "keys_version", "length", "subtype",
-                        "type_flag", "type_slot", "class_version", "func_version",
-                        "ascii", "no_managed_dict", "unique"):
-            result.add(OBJECT)
-        elif f.kind == "shape":
-            result |= {VFact("has_values"), OBJECT}
-    if result and NULL_FACT not in result:
-        result.add(NONNULL)
+    """facts and every fact that they imply (design.md 1.1), with their
+    representation in its one form: the kinds of word they allow, spelled
+    by the plain words that contain it and by encoding(...) where those do
+    not say it exactly"""
+    facts = set(facts)
+    if any(f.kind == "shape" for f in facts):
+        facts.add(VFact("has_values"))
+    conventions = [f for f in facts if f.kind == "convention" and f.arg]
+    if len(conventions) > 1:
+        members = frozenset.intersection(*(frozenset(f.arg.split("|")) for f in conventions))
+        facts -= set(conventions)
+        facts.add(VFact("convention", "|".join(sorted(members))))
+    kinds = word_kinds(facts)
+    for e, (_, ty) in ENCODINGS.items():
+        if kinds == {e} and ty:
+            facts.add(VFact("exact", ty))
+    result = {f for f in facts if f.kind not in REPRESENTATION or f.kind == EXCLUDES}
+    result |= spelled(kinds)
+    if word_kinds(result) != kinds or ("tagged_index" in kinds and kinds != {"tagged_index"}):
+        result.add(VFact("encoding", "|".join(sorted(kinds))))
     return frozenset(result)
+
+
+def satisfied(fact: VFact, facts) -> bool:
+    "whether facts show fact; a representation fact, by a set within its own"
+    if fact.kind not in REPRESENTATION:
+        return fact in facts
+    have = word_kinds(facts)
+    return have <= word_kinds({fact}, ALL_WORDS if "tagged_index" in have else ORDINARY_WORDS)
+
+
+def _type_encodings(facts) -> frozenset[str] | None:
+    "The encodings that a value's exact types allow, if it has an exact type"
+    types = _exact_types(facts)
+    if types is None:
+        return None
+    return frozenset().union(*(TYPE_ENCODINGS.get(t, frozenset()) for t in types))
 
 
 def without_heap_facts(facts: frozenset[VFact]) -> frozenset[VFact]:
@@ -187,10 +289,22 @@ def parse_fact(word: str, where: Token | None) -> VFact:
                    f"({', '.join(sorted(FACT_KIND))})")
         raise analysis_error(message, where) if where else ValueError(message)
     kind, arg = m.group(1), m.group(2) or ""
-    shape = {"exact": r"\w+(\|\w+)*", "type_slot": r"\w+,\w+"}.get(kind, r"\w+")
+    shape = {"exact": r"\w+(\|\w+)*", "encoding": r"\w+(\|\w+)*",
+             "convention": r"\w+(\|\w+)*", "type_slot": r"\w+,\w+"}.get(kind, r"\w+")
     if arg and not re.fullmatch(shape, arg):
         message = f"`{word}`: the argument of `{kind}` is {shape}"
         raise analysis_error(message, where) if where else ValueError(message)
+    if kind == "encoding" and not set(arg.split("|")) <= set(WORD_KINDS):
+        message = (f"`{word}`: {', '.join(sorted(set(arg.split('|')) - set(WORD_KINDS)))} "
+                   f"is no kind of word ({', '.join(WORD_KINDS)})")
+        raise analysis_error(message, where) if where else ValueError(message)
+    if kind == "convention" and arg:
+        unknown = set(arg.split("|")) - call_conventions()
+        if unknown:
+            message = (f"`{word}`: {', '.join(sorted(unknown))} is no member of "
+                       "_PyCallConvention (pycore_call.h)")
+            raise analysis_error(message, where) if where else ValueError(message)
+        arg = "|".join(sorted(set(arg.split("|"))))
     if kind in FACTS_WITH_OPTIONAL_ARGUMENT:
         pass
     elif (kind in FACTS_WITH_ARGUMENT) != bool(arg):
@@ -361,6 +475,9 @@ class Result:
     moved: int = -1                         # VALUE(moved(k)): argument k's value and
                                             # obligation
     failure: str = ""                       # STATUS: ZERO, NEGATIVE or NONZERO
+    # STATUS(failure, facts...): per argument, the facts that hold of it
+    # where the status reports success, as a TEST's true side (desk C)
+    success: tuple[frozenset[VFact], ...] = ()
     # VALUE: the facts it has from a producer (F7), also in facts; the
     # generator asserts them after each call
     assumed: tuple[Assumption, ...] = ()
@@ -398,9 +515,22 @@ class Row:
     # and the macro of the handler's word that initializes the item
     bits: tuple[tuple[str, frozenset, frozenset], ...] = ()
     init: str = ""
+    # EXITS(branch(committed)): the exits a row takes after the generator
+    # has stored the uop's outputs (IR_OBSERVE_COMMITTED_BRANCH), on which
+    # they are published as on next
+    committed: frozenset[str] = frozenset()
+    # EXITS(jump(successor)): the exits a row names by assigning the next
+    # word (JUMPTO is `next_instr = ...`): not an exit at the call; the body
+    # continues, and that path's successor is published at the body's end
+    # as next is
+    successor: frozenset[str] = frozenset()
     # CONSTANT: how the constant is held, VALUE (a PyValue, ret PyValue) or
     # OBJECT (a static object named by its address, ret its C type)
     representation: str = ""
+    # CONSTANT OBJECT of a type: INSTANCES(K1, ...), the VALUE CONSTANT rows
+    # that are every instance of the type, so an exact value of it is one
+    # of them and owes no count (G0a5 desk D)
+    instances: tuple[str, ...] = ()
 
     def new_owner(self) -> bool:
         "whether a call returns a value that its caller must release"
@@ -476,9 +606,12 @@ def _parse_result(text: str) -> Result:
             raise ValueError("SLOT(protocol) names one SLOT row")
         return Result("SLOT", measure=inner.strip())
     if (inner := _inner(text, "STATUS")) is not None:
-        if inner.strip() not in STATUS_FAILURES:
-            raise ValueError(f"STATUS({' | '.join(STATUS_FAILURES)})")
-        return Result("STATUS", failure=inner.strip())
+        failure, *entries = _split_text(inner)
+        if failure.strip() not in STATUS_FAILURES:
+            raise ValueError(f"STATUS({' | '.join(STATUS_FAILURES)}[, facts of each argument "
+                             "on success])")
+        success = tuple(frozenset(parse_fact(w, None) for w in e.split()) for e in entries)
+        return Result("STATUS", failure=failure.strip(), success=success)
     if (inner := _inner(text, "MEASURE")) is not None:
         return Result("MEASURE", measure=inner.strip())
     if (inner := _inner(text, "CONTEXT")) is not None:
@@ -499,8 +632,14 @@ def _parse_result(text: str) -> Result:
                     bar = i
                     break
             true, false = entry[:bar], entry[bar + 1:]
-            tests.append((frozenset(parse_fact(w, None) for w in true.split()),
-                          frozenset(parse_fact(w, None) for w in false.split())))
+            yes = frozenset(parse_fact(w, None) for w in true.split())
+            if false.split() == ["rest"]:
+                # A partition: where the test fails, the value is what it
+                # was but for the kinds of word the true side spells
+                no = frozenset({VFact(EXCLUDES, "|".join(sorted(word_kinds(yes, ALL_WORDS))))})
+            else:
+                no = frozenset(parse_fact(w, None) for w in false.split())
+            tests.append((yes, no))
         return Result("TEST", tests=tuple(tests))
     for shape in ("VALUE_OR_NULL", "VALUE"):
         if (inner := _inner(text, shape)) is not None:
@@ -527,6 +666,30 @@ def _parse_result(text: str) -> Result:
             return Result(shape, words[0], frozenset(facts), null_iff=null_iff,
                           assumed=assumed)
     raise ValueError(f"{text!r} is not a result shape ({', '.join(RESULT_SHAPES)})")
+
+
+def _parse_exits(text: str) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+    """EXITS(...): the exit names; those marked `(committed)`, taken after
+    the uop's outputs are stored; and those marked `(successor)`, which the
+    row assigns as the next word without leaving"""
+    inner = _inner(text, "EXITS")
+    if inner is None:
+        raise ValueError(f"expected EXITS(...), got {text.strip()!r}")
+    names: set[str] = set()
+    marked: dict[str, set[str]] = {"committed": set(), "successor": set()}
+    for n in (n.strip() for n in inner.replace("|", ",").split(",") if n.strip()):
+        m = re.fullmatch(r"(\w+)\((committed|successor)\)", n)
+        if m:
+            if m.group(1) in ("next", "miss", "deopt"):
+                raise ValueError(f"EXITS: {m.group(1)} cannot be {m.group(2)}: next "
+                                 "publishes the outputs, and a guard exit restarts the word")
+            marked[m.group(2)].add(m.group(1))
+            n = m.group(1)
+        names.add(n)
+    unknown = names - set(EXITS)
+    if unknown:
+        raise ValueError(f"EXITS: {sorted(unknown)} not in {EXITS}")
+    return frozenset(names), frozenset(marked["committed"]), frozenset(marked["successor"])
 
 
 def _parse_names(text: str, head: str, allowed: tuple[str, ...]) -> frozenset[str]:
@@ -633,6 +796,13 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
         # A static immortal value (V8's roots): its facts are the value's.
         # Or a static object, named by its address: `is(K)` compares a
         # value's object with it
+        if len(fields) == 3 and fields[1].strip().startswith("OBJECT("):
+            # A type every instance of which is a CONSTANT row's value
+            instances = _inner(fields[2], "INSTANCES")
+            if instances is None or not instances.strip():
+                raise ValueError("CONSTANT(type, OBJECT(PyTypeObject), INSTANCES(K, ...))")
+            return dataclasses.replace(_parse_row(kind, fields[:2]), instances=tuple(
+                n.strip() for n in instances.split(",")))
         if len(fields) != 2:
             raise ValueError("CONSTANT(name, VALUE(inline facts) | OBJECT(type))")
         if fields[1].strip().startswith("OBJECT("):
@@ -661,10 +831,11 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
             raise ValueError("MACRO(name, ARGS(...), result, EFFECTS(...), EXITS(...)"
                              "[, FEEDBACK(...)])")
         name, args, result, effects, exits = fields[:5]
+        exits, committed, successor = _parse_exits(exits)
         return Row(kind, name, args=_parse_args(_inner(args, "ARGS")),
                    result=_parse_result(result),
                    effects=_parse_names(effects, "EFFECTS", EFFECTS),
-                   exits=_parse_names(exits, "EXITS", EXITS),
+                   exits=exits, committed=committed, successor=successor,
                    **_row_options(fields, 5, kind))
     fixed = 7 if kind == "ROUTINE" else 6
     if len(fields) < fixed:
@@ -679,8 +850,8 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
               tuple(p.strip() for p in _split_text(params[1:-1]) if p.strip()),
               _parse_args(_inner(args, "ARGS")), _parse_result(result),
               _parse_names(effects, "EFFECTS", EFFECTS),
-              exits=(_parse_names(fields[6], "EXITS", EXITS) if kind == "ROUTINE"
-                     else frozenset()),
+              **(dict(zip(("exits", "committed", "successor"), _parse_exits(fields[6])))
+                 if kind == "ROUTINE" else {}),
               **_row_options(fields, fixed, kind))
     fixed = [p for p in row.params if p != "..."]
     if len(row.args) != len(fixed):
@@ -770,6 +941,14 @@ def check_columns(table: dict[str, Row]) -> None:
         return table[name]
 
     for row in table.values():
+        if len(row.result.success) > len(row.args):
+            fail(row, "STATUS states facts of more arguments than ARGS has")
+        for name in row.instances:
+            # Each instance is a VALUE CONSTANT of exactly this type
+            instance = named(row, "INSTANCES", name)
+            if not (is_value_constant(instance)
+                    and VFact("exact", row.name) in instance.result.facts):
+                fail(row, f"INSTANCES({name}): not a VALUE CONSTANT of exact({row.name})")
         if row.conjoins:
             # Fusion must not change failure or short-circuit behaviour: both
             # tests are total (no precondition beyond a borrowed value), have
@@ -874,9 +1053,12 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
         elif row.kind == "FIELD":
             accessor = next((a for a, prefix in FIELD_ACCESSORS.items()
                              if row.field.startswith(prefix + ".")), None)
+            reader = next((r for r, f in FIELD_READERS.items() if f == row.field), None)
             if accessor is not None:
                 field = row.field.split(".", 1)[1]
                 check(f"{accessor}(({row.struct} *)0, {field})", row.ret, row.name)
+            elif reader is not None:
+                check(f"{reader}(({row.struct} *)0)", row.ret, row.name)
             else:
                 check(f"(({row.struct} *)0)->{row.field}", row.ret, row.name)
         elif row.kind == "PRIMITIVE":
@@ -933,12 +1115,18 @@ class Item:
     mode: str                   # "" for a pass-through
     source: str = ""            # moved(x): x
     facts: frozenset[VFact] = frozenset()
-    nullable: bool = False
+    # The kinds of word its value may be (the representation lattice): its
+    # facts', not NULL unless it is declared `nullable` or a union with null
+    words: frozenset[str] = ORDINARY_WORDS - {"null"}
     array: bool = False
     size: str = ""              # an array's size, as declared
     # The facts its value has at the handler's entry from a producer (F7);
     # not requirements, and not in facts
     assumed: tuple[Assumption, ...] = ()
+
+    @property
+    def nullable(self) -> bool:
+        return "null" in self.words
 
 
 @dataclass(frozen=True)
@@ -957,6 +1145,13 @@ class Contract:
     # paths(path: facts): the facts the guards establish of a frame path,
     # GLOBALS() or BUILTINS(), whose subject is the path's name
     paths: tuple[tuple[str, frozenset], ...] = ()
+    # effects(runs_python(branch|raise)): the effects that occur only on the
+    # exits named, at calls that leave by them; they are on no path to next
+    confined: tuple[tuple[str, frozenset[str]], ...] = ()
+
+    def next_effects(self) -> frozenset[str]:
+        "the effects that may occur on a path to next, which kill its facts"
+        return self.effects - {e for e, _ in self.confined}
 
     def state_item(self, name: str) -> tuple[str, frozenset, frozenset] | None:
         return next((i for i in self.state if i[0] == name), None)
@@ -1010,7 +1205,11 @@ def _item(stack_item, modes: tuple[str, ...], where: Token) -> Item:
         raise analysis_error(f"`{name}` declares no mode ({', '.join(modes)})", where)
     if mode and through:
         raise analysis_error(f"`{name}` passes through, so it takes no mode", where)
-    return Item(name, mode, source, frozenset(facts), nullable,
+    # `nullable` spells the item without its default, nonnull
+    kinds = word_kinds(set(facts) | (set() if nullable else {NONNULL}))
+    if any(f.kind == "encoding" and "null" in f.arg.split("|") for f in facts):
+        kinds = word_kinds(facts)       # encoding(tagged_index|null)
+    return Item(name, mode, source, frozenset(facts), kinds,
                 stack_item.is_array(), stack_item.size, assumed)
 
 
@@ -1018,13 +1217,15 @@ _CONTRACTS: dict[int, tuple[Uop, Contract | None]] = {}
 
 
 def _clause_text(texts: list[str]) -> str:
-    return re.sub(r"\s*([():|])\s*", r"\1", " ".join(texts)).replace(":", ": ")
+    # A space after `)` separates two facts: `exact(T) func_version(v)`
+    text = re.sub(r"\s*([(:|])\s*", r"\1", " ".join(texts))
+    return re.sub(r"\s*\)", ")", text).replace(":", ": ")
 
 
 def _named_facts(uop: Uop, part: str, where: Token) -> tuple[str, frozenset]:
     name, _, words = part.partition(":")
-    name = name.strip()
-    if not re.fullmatch(r"\w+", name):
+    name = re.sub(r"\s*\.\s*", ".", name.strip())
+    if not re.fullmatch(r"\w+(\.\w+)*", name):
         raise analysis_error(f"{uop.name}: `{part.strip()}` is no `item: facts`", where)
     return name, frozenset(parse_fact(w, where) for w in _split_words(words))
 
@@ -1058,6 +1259,10 @@ def parse_state(uop: Uop, texts: list[str] | None, where: Token
     return tuple(items)
 
 
+# The kinds of path from an input that name their fields: an input's
+# object, a pointer field of it, and a PyMethodDef reached from one
+INPUT_PATHS = frozenset(("object", "pointer", "method_def"))
+
 # The frame paths whose facts a uop may declare: the PATH rows without
 # arguments (from the frame, which the activation does not replace)
 def parse_paths(uop: Uop, texts: list[str] | None, where: Token
@@ -1069,16 +1274,56 @@ def parse_paths(uop: Uop, texts: list[str] | None, where: Token
     frame_paths = {r.result.measure for r in rows().values()
                    if r.result.shape == "PATH" and not r.args}
     items = []
+    inputs = {i.name for i in uop.stack.inputs if i.name != "unused"}
+    fields = {r.field: r for r in rows().values()
+              if r.kind == "FIELD" and r.result.shape == "PATH"}
     for part in _split_text(_clause_text(texts)):
         name, facts = _named_facts(uop, part, where)
-        if name not in frame_paths:
+        root, *steps = name.split(".")
+        if steps:
+            # A path from an input through declared FIELD rows that hold
+            # pointers: callable.im_func, owner.md_dict.ma_keys
+            if root not in inputs:
+                raise analysis_error(f"{uop.name}: paths({name}) starts at `{root}`, "
+                                     "which is no input", where)
+            for step in steps:
+                if step not in fields:
+                    raise analysis_error(f"{uop.name}: paths({name}) steps through "
+                                         f"`{step}`, which no FIELD row declares as a "
+                                         "pointer (PATH)", where)
+        elif name not in frame_paths:
             raise analysis_error(f"{uop.name}: paths({name}) names no frame path "
                                  f"({', '.join(sorted(frame_paths))})", where)
-        for f in facts:
-            if f.kind not in HEAP_FACTS:
-                raise analysis_error(f"{uop.name}: {f} of the path {name} is no heap fact", where)
+        else:
+            for f in facts:
+                if f.kind not in HEAP_FACTS:
+                    raise analysis_error(f"{uop.name}: {f} of the path {name} is no heap "
+                                         "fact", where)
         items.append((name, facts))
     return tuple(items)
+
+
+def _parse_effects(name: str, words: list[str], where: Token
+                   ) -> tuple[frozenset[str], tuple[tuple[str, frozenset[str]], ...]]:
+    """effects(...): the effect names, and those confined to exits, as in
+    `runs_python(branch|raise)`: the effect occurs only at calls that leave
+    by those exits, never on a path to next"""
+    effects, confined = set(), []
+    for w in words:
+        m = re.fullmatch(r"(\w+)\(([\w|]+)\)", w)
+        if m is None:
+            effects.add(w)
+            continue
+        on = frozenset(m.group(2).split("|"))
+        unknown = on - set(EXITS)
+        if unknown or "next" in on:
+            raise analysis_error(
+                f"{name}: {m.group(1)}({m.group(2)}) confines an effect to "
+                + (f"{', '.join(sorted(unknown))}, which is no exit" if unknown else
+                   "next, where every unconfined effect already lies"), where)
+        effects.add(m.group(1))
+        confined.append((m.group(1), on))
+    return frozenset(effects), tuple(sorted(confined, key=lambda c: c[0]))
 
 
 def contract_of(uop: Uop) -> Contract | None:
@@ -1092,8 +1337,13 @@ def contract_of(uop: Uop) -> Contract | None:
             if clause not in uop.clauses:
                 raise analysis_error(f"{uop.name} declares a contract without {clause}()",
                                      where)
-        effects = frozenset(uop.clauses["effects"])
+        effects, confined = _parse_effects(uop.name, uop.clauses["effects"], where)
         exits = frozenset(uop.clauses["exits"])
+        for e, on in confined:
+            if not on <= exits:
+                raise analysis_error(f"{uop.name}: {e} is confined to "
+                                     f"{', '.join(sorted(on - exits))}, which the uop does "
+                                     "not declare as exits", where)
         for names, allowed, what in ((effects, EFFECTS, "effect"), (exits, EXITS, "exit")):
             for n in sorted(names - set(allowed)):
                 raise analysis_error(
@@ -1111,7 +1361,8 @@ def contract_of(uop: Uop) -> Contract | None:
         feedback = parse_feedback(uop.clauses.get("feedback", ()), where)
         state = parse_state(uop, uop.clauses.get("state"), where)
         paths = parse_paths(uop, uop.clauses.get("paths"), where)
-        contract = Contract(inputs, outputs, effects, exits, feedback, state, paths)
+        contract = Contract(inputs, outputs, effects, exits, feedback, state, paths,
+                            confined)
     # The uop is kept with its contract, so that its id is not reused
     _CONTRACTS[id(uop)] = (uop, contract)
     return contract
@@ -1205,6 +1456,22 @@ def struct_locals(tokens: list[Token], types: frozenset[str]) -> frozenset[str]:
 # and component_checks holds a FIELD row of `tp_value.f` to the accessor's
 # type rather than the storage's.
 FIELD_ACCESSORS = {"_PyType_VALUE_SLOT": "tp_value"}
+# Readers of a field that the struct does not store (item 2 of G0a5):
+# `_PyMethodDef_Convention(m)` reads `m->convention`, the masked flags.
+# component_checks holds the FIELD row to the reader's type
+FIELD_READERS = {"_PyMethodDef_Convention": "convention"}
+
+
+def call_conventions() -> frozenset[str]:
+    "The members of _PyCallConvention (Include/internal/pycore_call.h)"
+    if not _CONVENTIONS:
+        text = (ROOT / "Include/internal/pycore_call.h").read_text()
+        body = re.search(r"typedef enum \{(.*?)\} _PyCallConvention;", text, re.S)
+        _CONVENTIONS.update(re.findall(r"^\s*(_Py_CALL_\w+)\s*=", body.group(1), re.M))
+    return frozenset(_CONVENTIONS)
+
+
+_CONVENTIONS: set[str] = set()
 
 
 def fold_fields(tokens: list[Token], structs: frozenset[str]) -> list[Token]:
@@ -1212,12 +1479,22 @@ def fold_fields(tokens: list[Token], structs: frozenset[str]) -> list[Token]:
     `x.f`: the walk tracks a CASES result's fields as names (F6).  A typed
     accessor of a field, `_PyType_VALUE_SLOT(t, f)`, becomes the read
     `(t)->tp_value.f` (FIELD_ACCESSORS)"""
-    if not structs and not any(t.text in FIELD_ACCESSORS for t in tokens):
+    if not structs and not any(t.text in FIELD_ACCESSORS or t.text in FIELD_READERS
+                               for t in tokens):
         return tokens
     out: list[Token] = []
     i = 0
     while i < len(tokens):
         t = tokens[i]
+        if t.text in FIELD_READERS and i + 1 < len(tokens) and tokens[i + 1].text == "(":
+            def synth(text: str, at: Token) -> Token:
+                return Token(at.filename, at.kind, text, at.begin, at.end)
+            end = _close([x.text for x in tokens], i + 1)
+            out += [synth("(", tokens[i + 1]), *fold_fields(tokens[i + 2:end], structs),
+                    synth(")", tokens[end]), synth("->", t),
+                    synth(FIELD_READERS[t.text], t)]
+            i = end + 1
+            continue
         if t.text in FIELD_ACCESSORS and i + 1 < len(tokens) and tokens[i + 1].text == "(":
             texts = [x.text for x in tokens]
             end = _close(texts, i + 1)
@@ -1394,7 +1671,11 @@ def effect_sites(uop: Uop, table: dict[str, Row] | None = None) -> list[Site]:
     p = uop.properties
     if p.eval_breaker:
         sites.append(Site(uop.body.open, "polls", "the uop polls the eval breaker"))
-    if p.switches_frame or p.returns:
+    if (p.switches_frame or p.returns) and not any(
+            s.effect == "switches_frame" for s in sites):
+        # A uop whose frame switch no row names switches at its start; one
+        # that a row names (IR_ENTER_GENERATOR) switches there, after the
+        # guards before it
         sites.append(Site(uop.body.open, "switches_frame", "the uop switches frames"))
     return sites
 
@@ -1415,13 +1696,37 @@ def covered(effect: str, declared: frozenset[str]) -> bool:
     return effect in declared or any(effect in COVERS.get(d, ()) for d in declared)
 
 
+def ends_path(row: Row) -> bool:
+    """whether a call of row never returns to the body: a terminal marker,
+    or a row whose exits are committed and none is next"""
+    return ("terminal" in IR_MARKER_EFFECTS.get(row.name, ())
+            or bool(row.committed) and "next" not in row.exits)
+
+
 def check_effects(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
-    "V2: the body's effects lie within the declared ones"
+    """V2: the body's effects lie within the declared ones; one declared
+    only on some exits occurs at a call that leaves by them"""
+    confined = dict(contract.confined)
+    free = contract.next_effects()
     for site in effect_sites(uop, table):
         if not covered(site.effect, contract.effects):
             raise analysis_error(
                 f"{uop.name}: `{site.token.text}` may {site.effect} ({site.why}), which "
                 f"effects({', '.join(sorted(contract.effects))}) does not declare",
+                site.token)
+        if covered(site.effect, free):
+            continue
+        on = frozenset().union(*(x for e, x in confined.items()
+                                 if covered(site.effect, frozenset((e,)))))
+        row = table.get(site.token.text)
+        leaves = (frozenset({"raise"}) if site.token.text in RAISES
+                  else row.exits if row is not None and ends_path(row) else None)
+        if leaves is None or not leaves <= on:
+            raise analysis_error(
+                f"{uop.name}: `{site.token.text}` may {site.effect} ({site.why}), which "
+                f"the uop declares only on {', '.join(sorted(on))}, but "
+                + ("it does not leave the uop" if leaves is None else
+                   f"it may leave by {', '.join(sorted(leaves - on))}"),
                 site.token)
     if "pure" in uop.annotations:
         bad = contract.effects - {"reads", "allocates", "raises"}
@@ -1536,6 +1841,9 @@ class Views:
         # A cache operand roots paths too (a feedback descriptor's fields)
         self.caches = {c.name for c in uop.caches if c.name != "unused"}
         self.paths: dict[str, tuple[str, str]] = {}
+        # Locals bound once to a MEASURE field read, `conv = m->convention`:
+        # the read, which a comparison of the local states facts of
+        self.measures: dict[str, list[str]] = {}
         self.locals: set[str] = set()
         # Locals whose binding at a use the walk could not follow (they were
         # bound differently on paths that join): they stand for nothing
@@ -1556,6 +1864,10 @@ class Views:
             if path is not None:
                 self.paths.setdefault(texts[i - 1], path)
                 continue
+            read = self.field(texts[i + 1:end])
+            if read is not None and read[0].result.shape == "MEASURE":
+                self.measures[texts[i - 1]] = texts[i + 1:end]
+                continue
             inner = self.resolve(texts[i + 1:end], locals_=False)
             if inner is not None:
                 self.names.setdefault(texts[i - 1], inner)
@@ -1568,6 +1880,11 @@ class Views:
                 return None
             if tokens[0] in self.names:
                 return self.names[tokens[0]]
+            path = self.paths.get(tokens[0])
+            if path is not None and path[1] in INPUT_PATHS:
+                # A pointer along a path from an input: the path itself
+                # (callable.im_func), whose facts paths(...) declares
+                return path[0]
             return tokens[0] if locals_ and tokens[0] in self.locals else None
         call = _call_of(tokens, self.table)
         if call is not None and call[0].result.shape == "VIEW" and len(call[1]) == 1:
@@ -1582,9 +1899,12 @@ class Views:
             return None if tokens[0] in self.unknown else self.paths.get(tokens[0])
         if len(tokens) >= 3 and tokens[-2] == "->":
             # A field that holds a pointer along a further path
-            # (globals->ma_keys)
+            # (globals->ma_keys); from an input, the path names each field
+            # it steps through (callable.im_func, owner.md_dict.ma_keys)
             found = self.field(tokens)
             if found is not None and found[0].result.shape == "PATH":
+                if found[2]:
+                    return f"{found[1]}.{tokens[-1]}", found[0].result.measure
                 return found[1], found[0].result.measure
             return None
         call = _call_of(tokens, self.table)
@@ -1599,18 +1919,25 @@ class Views:
                 return name, call[0].result.measure
         return None
 
-    def field(self, tokens: list[str]) -> tuple[Row, str] | None:
+    def field(self, tokens: list[str]) -> tuple[Row, str, bool] | None:
         """the FIELD row of a read `p->field` through a pointer p along a
-        path from an input, and that input"""
+        path from an input, that input (or the path from it), and whether
+        the read steps along an input path (item 1 of G0a5): p is the
+        object of an input, or a pointer along such a path"""
         tokens = _unwrap(tokens, self.table)
+        if len(tokens) == 1 and tokens[0] in self.measures and tokens[0] not in self.unknown:
+            return self.field(self.measures[tokens[0]])
         if len(tokens) < 3 or tokens[-2] != "->":
             return None
         path = self.path(tokens[:-2])
         if path is None:
-            return None
+            base = self.resolve(tokens[:-2], locals_=False)
+            if base is None:
+                return None
+            path = (base, "object")
         row = next((r for r in self.table.values() if r.kind == "FIELD"
                     and r.field == tokens[-1] and path[1] in r.on.split("|")), None)
-        return (row, path[0]) if row is not None else None
+        return (row, path[0], path[1] in INPUT_PATHS) if row is not None else None
 
 
 _SLOTS: dict[tuple[int, int], tuple[Uop, dict, dict[str, Row], list]] = {}
@@ -1707,6 +2034,18 @@ def _intersection(found: list[Facts]) -> Facts:
         if all(t is not None for t in types) and not any(f.kind == "exact" for f in common):
             union = frozenset.union(*types)
             common = implied(common | {VFact("exact", "|".join(sorted(union)))})
+        # A calling convention joins by the union of the members, as the
+        # exact type does: `conv != A && conv != B` failing is A or B
+        members = [[f.arg for f in implied(f[n]) if f.kind == "convention" and f.arg]
+                   for f in found]
+        if all(members) and not any(f.kind == "convention" for f in common):
+            union = {m for ms in members for a in ms for m in a.split("|")}
+            common = implied(common | {VFact("convention", "|".join(sorted(union)))})
+        # The kinds of word join by their union: NULL on one path and a
+        # tagged index on another is encoding(null|tagged_index)
+        union = frozenset.union(*(word_kinds(f[n]) for f in found))
+        if word_kinds(common) != union:
+            common = implied(common | {VFact("encoding", "|".join(sorted(union)))})
         result[n] = common
     return result
 
@@ -1789,10 +2128,14 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
     if call is not None and call[0].result.shape == "TEST":
         row, args = call
         facts: dict[str, frozenset[VFact]] = {}
-        for arg, (true, false) in zip(args, row.result.tests):
+        for spec, arg, (true, false) in zip(row.args, args, row.result.tests):
             found = true if holds else false
             if not found:
                 continue
+            if any(f.kind == EXCLUDES for f in found):
+                # The rest of what the argument may be, which the row
+                # requires of it
+                found = found | spec.facts
             name = views.resolve(arg)
             if name is None:
                 return None
@@ -1811,6 +2154,16 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
     else:
         return None
     other = _unwrap(sides[1], table)
+    typed = _call_of(_unwrap(sides[0], table), table)
+    if other[:1] == ["&"] and len(other) == 2 and re.fullmatch(r"\w+_Type", other[1]) \
+            and typed is not None and typed[0].result.shape == "PATH" \
+            and typed[0].result.measure == "type" and len(typed[1]) == 1:
+        # `Py_TYPE(x) != &T`: x's type is exactly T where it is equal
+        name = views.resolve(typed[1][0])
+        if name is None:
+            return None
+        return ({name: implied({VFact("exact", other[1])})} if (op == "==") == holds
+                else {}), ""
     if other[:1] == ["&"] and len(other) == 2 and table.get(other[1]) is not None \
             and table[other[1]].representation == "OBJECT":
         # `x == &K`: x's object is the static object K, is(K)
@@ -1819,6 +2172,12 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
             return None
         return ({name: implied({VFact("is", other[1])})} if (op == "==") == holds
                 else {}), ""
+    if _strip(sides[1]) == ["NULL"]:
+        # A pointer along a path from an input, `m->im_weakreflist != NULL`
+        path = views.path(sides[0])
+        if path is not None and path[1] in INPUT_PATHS:
+            null = (op == "==") == holds
+            return {path[0]: frozenset({NULL_FACT if null else NONNULL})}, ""
     field = views.field(sides[0])
     call = _call_of(_unwrap(sides[0], table), table)
     if field is not None and field[0].result.shape == "MEASURE":
@@ -1869,6 +2228,66 @@ def check_guard_conditions(uop: Uop, table: dict[str, Row]) -> None:
                     "may only read", tkn)
 
 
+# The spellings of a calling convention that a guard may not test: the
+# flags and their mask, which the reader and its members replace
+RAW_CALL_FLAGS = frozenset(("ml_flags", "_Py_METH_CALL_FLAGS", "PyCFunction_GET_FLAGS"))
+
+
+def check_convention_guards(uop: Uop, table: dict[str, Row]) -> None:
+    """Item 2 of G0a5: a guard tests a calling convention in one of two
+    fixed forms, on a local bound to the reader (`conv =
+    _PyMethodDef_Convention(m)`): `conv != M1 && ... && conv != Mk`, whose
+    failure is convention(M1|...|Mk), or an arity check `conv == M && ...`
+    whose other terms do not name it.  No `||`, no mask, no other
+    variable, and no member outside _PyCallConvention"""
+    views = Views(uop, table)
+    convs = {n for n, read in views.measures.items()
+             if (f := views.field(read)) is not None and f[0].result.measure == "convention"}
+    members = call_conventions()
+    for tkn, _ in body_calls(uop):
+        if tkn.text not in GUARDS:
+            continue
+        cond, _ = guard_condition(uop, tkn)
+        named = convs & set(cond)
+        if RAW_CALL_FLAGS & set(cond) or FIELD_READERS.keys() & set(cond):
+            raise analysis_error(
+                f"{uop.name}: the guard tests the call flags directly; bind "
+                "`_PyMethodDef_Convention(...)` to a local and compare it with "
+                "_PyCallConvention's members", tkn)
+        if not named:
+            continue
+        cond = _strip(cond)
+        if len(_split(cond, "||")) > 1:
+            raise analysis_error(
+                f"{uop.name}: the guard joins convention tests with `||`; write "
+                "`conv != M1 && ... && conv != Mk`", tkn)
+        terms = [_strip(t) for t in _split(cond, "&&")]
+        tests = []
+        for term in terms:
+            if not convs & set(term):
+                tests.append(None)
+                continue
+            if (len(term) != 3 or term[0] not in convs or term[1] not in ("!=", "==")
+                    or term[2] not in members):
+                raise analysis_error(
+                    f"{uop.name}: `{' '.join(term)}` is no comparison of a convention "
+                    "local with a member of _PyCallConvention (no mask, no other "
+                    "variable)", tkn)
+            tests.append(term)
+        if len(named) > 1:
+            raise analysis_error(
+                f"{uop.name}: the guard tests more than one convention local", tkn)
+        if all(t is not None and t[1] == "!=" for t in tests):
+            continue        # the convention guard
+        if sum(t is not None for t in tests) == 1 and next(
+                t for t in tests if t is not None)[1] == "==":
+            continue        # an arity check of one member
+        raise analysis_error(
+            f"{uop.name}: the guard mixes convention tests; write the convention "
+            "guard `conv != M1 && ... && conv != Mk`, or an arity check "
+            "`conv == M && ...` of one member", tkn)
+
+
 # ---------------------------------------------------------------------------
 # Ownership, facts and restartability on each exit (V4, V5, V6 inside a uop)
 
@@ -1881,6 +2300,12 @@ UNWRITTEN, WRITTEN, PARTIAL, PENDING = "unwritten", "written", "partly written",
 # the caller's if it fails.  TAKEN alone until the row's result is bound to
 # a local, then TAKEN + the local, until a test of the local decides it
 TAKEN = "taken:"
+
+
+# The calls on an input that kill it in the generator's storage
+# (generators_common.Emitter.value_kill)
+SKELETON_KILLS = frozenset({"PyValue_CLOSE", "PyValue_XCLOSE", "PyValue_CLOSE_SPECIALIZED",
+                            "PyValue_AsKnownObjectSteal"})
 
 
 def obligated(status: str | None) -> bool:
@@ -1896,6 +2321,11 @@ UNMODELLED_HEADS = ("return", "goto", "break", "continue", "switch", "do")
 # home, a pass-through or a borrowed input, may be replaced there: its
 # facts no longer describe the home (design 1.3, 3.2)
 REENTRY = frozenset(("releases", "runs_python", "polls", "switches_frame"))
+
+
+def _input_path(name: str, inputs) -> bool:
+    "whether name is a path from an input, `callable.im_func`"
+    return "." in name and name.split(".", 1)[0] in inputs
 
 
 @dataclass
@@ -1941,20 +2371,35 @@ class _State:
     # The CASES result whose outcome on this path sets no exception, until
     # a call that may raise
     no_exception: str = ""
+    # The row that assigned the next word on this path (JUMPTO): the word
+    # may then only continue to its end
+    successor: str = ""
+    # Locals holding a STATUS result whose row states facts of its
+    # arguments on success: the names and the facts (desk C)
+    status_facts: dict[str, tuple[tuple[str, frozenset], ...]] = field(default_factory=dict)
+    # The inputs that the generator's storage has killed (DEAD, INPUTS_DEAD,
+    # the close and steal forms): DECREF_INPUTS closes every other input
+    dead: set[str] = field(default_factory=set)
 
     def copy(self) -> "_State":
         return _State(dict(self.owners), dict(self.facts), dict(self.pending),
                       dict(self.sources), dict(self.rehomed), dict(self.arrays),
                       dict(self.status), self.restartable, self.why, dict(self.bindings),
                       dict(self.origins), dict(self.null_when), dict(self.signs),
-                      set(self.exact), set(self.decided), self.split, self.no_exception)
+                      set(self.exact), set(self.decided), self.split, self.no_exception,
+                      self.successor, dead=set(self.dead),
+                      status_facts=dict(self.status_facts))
 
     def end_restart(self, why: str) -> None:
         if self.restartable:
             self.restartable, self.why = False, why
 
-    def kill_heap_facts(self) -> None:
-        self.facts = {n: without_heap_facts(f) for n, f in self.facts.items()}
+    def kill_heap_facts(self, inputs) -> None:
+        # Every fact of a path from an input is of the heap: a write may
+        # change the field it steps through (item 1 of G0a5).  A CASES
+        # result's fields (`found.value`) are locals, not paths
+        self.facts = {n: without_heap_facts(f) for n, f in self.facts.items()
+                      if not _input_path(n, inputs)}
         self.pending = {n: without_heap_facts(f) for n, f in self.pending.items()}
 
     def add_facts(self, name: str, facts) -> None:
@@ -1994,6 +2439,9 @@ class OwnershipWalk:
         self.views = Views(uop, table)
         self.declared = {i.name: i for i in contract.inputs if i.name != "unused"}
         self.new: set[str] = set()
+        # An owned output's last assignment of an input's value: the site and
+        # the refusal if every path to next moves that input (check_outputs)
+        self.moves: dict[str, tuple[Token, str]] = {}
         self.exit: _State | None = None
         self.site_effects: dict[int, list[str]] = {}
         for site in effect_sites(uop, table):
@@ -2018,7 +2466,7 @@ class OwnershipWalk:
             for name, item in self.declared.items():
                 if (item.mode == "closed" and self.kills
                         and INLINE not in end.facts.get(name, frozenset())):
-                    end.kill_heap_facts()
+                    end.kill_heap_facts(self.declared)
                     self.reenter(end, f"the skeleton's close of `{name}` after the uop, "
                                  "which may release,")
             self.exit = end
@@ -2029,15 +2477,33 @@ class OwnershipWalk:
         left in a home that a reentry site may have rewritten"""
         if self.exit is None or name in self.exit.rehomed:
             return frozenset()
-        return without_site_facts(self.exit.facts.get(name, frozenset()))
+        return frozenset(f for f in without_site_facts(self.exit.facts.get(name, frozenset()))
+                         if f.kind != EXCLUDES)
 
     # -- exits
 
     def fail(self, where: Token, message: str):
         raise analysis_error(f"{self.uop.name}: {message}", where)
 
+    def check_committed(self, row: Row, state: _State, where: Token) -> None:
+        """A row whose exits are committed runs after the generator stores
+        the uop's outputs: every output is written before it"""
+        for out in self.contract.outputs:
+            if not out.mode or out.name == "unused":
+                continue
+            written = (state.arrays.get(out.name) == WRITTEN if out.array
+                       else out.name in state.facts or out.name in state.owners)
+            if not written:
+                self.fail(where, f"`{out.name}` is not written before {row.name}, whose "
+                          f"exits ({', '.join(sorted(row.committed))}) are committed: "
+                          "the outputs are stored before it")
+
     def check_exit(self, exit: str, state: _State, where: Token,
-                   holding: frozenset[str] = frozenset()) -> None:
+                   holding: frozenset[str] = frozenset(), committed: bool = False) -> None:
+        if state.successor and exit != "next":
+            self.fail(where, f"on {exit}, {state.successor} has assigned the next word: "
+                      "after it the word may only continue to its end, where the "
+                      "outputs are published as on next")
         if exit in ("miss", "deopt"):
             if not state.restartable:
                 self.fail(where, f"the {exit} follows {state.why}, so the word cannot "
@@ -2050,9 +2516,10 @@ class OwnershipWalk:
                              if local else "the row succeeds, and its result is not kept"))
             item = self.declared.get(name)
             if item is None:
-                # A new owner: published on next if it is an output; released,
-                # or NULL, on every other exit
-                if status == HELD and not (exit == "next" and self.contract.output(name)):
+                # A new owner: published on next, or on a committed exit, if
+                # it is an output; released, or NULL, on every other exit
+                if status == HELD and not ((exit == "next" or committed)
+                                           and self.contract.output(name)):
                     self.fail(where, f"on {exit}, the new owner `{name}` is still held")
                 continue
             gone = status != HELD
@@ -2076,6 +2543,8 @@ class OwnershipWalk:
                 self.fail(where, f"on raise, `{name}` is released, but it is declared "
                           "taken (kept on raise)")
         for name, written in state.arrays.items():
+            if committed:
+                continue    # check_committed: written, and stored
             if exit == "next" and written != WRITTEN:
                 self.fail(where, f"on next, the output array `{name}` is "
                           f"{self.array_state(written)}, but it is published whole")
@@ -2083,7 +2552,9 @@ class OwnershipWalk:
                 self.fail(where, f"on {exit}, the output array `{name}` is "
                           f"{self.array_state(written)}: its values would leak or be "
                           "published by a word that did not complete")
-        if exit == "next":
+        if exit == "next" or committed:
+            # One publication: next, a committed exit (the generator stores
+            # the outputs before it), and a successor's path at the body's end
             self.check_outputs(state, where)
 
     @staticmethod
@@ -2101,6 +2572,10 @@ class OwnershipWalk:
                 continue
             live = state.facts.get(out.name, frozenset())
             source = state.sources.get(out.name)
+            origin = state.origins.get(out.name)
+            if (out.mode in ("owned", "inline") and origin and origin in self.declared
+                    and out.name in self.moves):
+                self.fail(*self.moves[out.name])
             if out.source == HOME_SOURCE and state.origins.get(out.name) != HOME_SOURCE:
                 self.fail(where, f"on next, `{out.name}` is declared moved(home), but the "
                           "home it is loaded from still holds it on some path: overwrite "
@@ -2111,7 +2586,8 @@ class OwnershipWalk:
                     self.fail(where, f"`{out.name}` may be NULL from {source}, and nothing "
                               "raises on it on every path to next")
                 self.fail(where, f"on next, `{out.name}` is not assigned on every path")
-            missing = implied(out.facts) - live
+            missing = {f for f in implied(out.facts) - live
+                       if not satisfied(f, live)}
             if missing:
                 self.fail(where, f"on next, `{out.name}` is declared "
                           f"{', '.join(sorted(map(str, missing)))}, which does not hold on "
@@ -2124,6 +2600,15 @@ class OwnershipWalk:
         for i, stmt in enumerate(stmts):
             state = self.stmt(stmt, state)
             if state is None:
+                ender = next((t.text for t in stmt.tokens() if t.text in self.table
+                              and ends_path(self.table[t.text])), None) \
+                    if isinstance(stmt, SimpleStmt) else None
+                if ender is not None and i + 1 < len(stmts):
+                    # Nothing after a row that never returns runs: a guard
+                    # there (after IR_ENTER_GENERATOR's frame switch) would
+                    # never be checked
+                    self.fail(next(iter(stmts[i + 1].tokens())), f"this statement follows "
+                              f"{ender}, which never returns, so it never runs")
                 return None
             if state.split is not None:
                 # A CASES result: the rest of the block once per outcome,
@@ -2156,8 +2641,13 @@ class OwnershipWalk:
             if spec.mode == "owned":
                 st.owners[field_] = HELD
                 self.new.add(field_)
-            facts = spec.facts | ({INLINE} if spec.mode == "inline" else set())
-            if spec.nullable:
+            # An inline value owes nothing: it is no object
+            facts = spec.facts | ({VFact(EXCLUDES, "object")} if spec.mode == "inline"
+                                  else set())
+            if any(f.kind == "encoding" and "null" in _members(f) for f in spec.facts):
+                # A union with null says what the field is on either path
+                st.assign(field_, facts, None, name)
+            elif spec.nullable:
                 st.assign(field_, frozenset(), facts | {NONNULL}, name)
             else:
                 st.assign(field_, facts | {NONNULL}, None, name)
@@ -2260,8 +2750,10 @@ class OwnershipWalk:
 
     def owes_nothing(self, facts: frozenset) -> bool:
         "whether a value with facts is inline or a CONSTANT row's (V8's roots)"
-        return INLINE in facts or any(
-            f.kind == "is" and is_value_constant(self.table.get(f.arg)) for f in facts)
+        # A word that is neither an object nor NULL: an inline number, a
+        # tagged index
+        return not word_kinds(facts) & {"object", "null"} or any(f.kind == "is" and is_value_constant(self.table.get(f.arg)) for f in facts) \
+            or owes_nothing_by_type(facts, self.table)
 
     def join(self, ends: list[_State | None]) -> _State | None:
         """where paths meet: the same obligations; the facts that all of them
@@ -2273,8 +2765,10 @@ class OwnershipWalk:
         for other in live[1:]:
             for name in set(first.owners) | set(other.owners):
                 a, b = first.owners.get(name, GONE), other.owners.get(name, GONE)
-                if {a, b} == {HELD, NULL}:
-                    # A new owner, NULL on one path: held, and maybe NULL
+                if {a, b} == {HELD, NULL} or (HELD in (a, b) and NULL_FACT in (
+                        other if a == HELD else first).facts.get(name, frozenset())):
+                    # A new owner, NULL on one path (a NULL local, or a
+                    # PyValue_NULL assigned): held, and maybe NULL
                     a = HELD
                 elif HELD in (a, b) and self.owes_nothing(
                         (other if a == HELD else first).facts.get(name, frozenset())):
@@ -2306,6 +2800,7 @@ class OwnershipWalk:
                                            else None)
             first.facts = _intersection([first.facts, other.facts])
             first.pending = pending
+            first.dead &= other.dead
             first.sources.update(other.sources)
             for name, why in other.rehomed.items():
                 first.rehomed.setdefault(name, why)
@@ -2323,6 +2818,8 @@ class OwnershipWalk:
             first.decided &= other.decided
             if first.no_exception != other.no_exception:
                 first.no_exception = ""
+            # A successor assigned on any path may be the next word
+            first.successor = first.successor or other.successor
             for name in set(first.bindings) | set(other.bindings):
                 if first.bindings.get(name, "") != other.bindings.get(name, ""):
                     first.bindings[name] = None
@@ -2364,6 +2861,19 @@ class OwnershipWalk:
             if tuple(cond) == when:
                 self.set_null(state, name, holds == null_if)
         null = _call(cond, "PyValue_IsNull")
+        # The same test of an object pointer, `x == NULL` or `x != NULL`
+        # (BUILD_MAP's map_o): a row's VALUE_OR_NULL result as a PyObject *
+        if null is None and len(cond) == 3 and cond[1] in ("==", "!=") and \
+                cond[2] == "NULL" and re.fullmatch(r"[A-Za-z_]\w*", cond[0]):
+            null, holds = [[cond[0]]], holds == (cond[1] == "==")
+        # `x` or `!x` as a condition, of such a pointer: not NULL where it
+        # holds.  Only a new owner or a row's result that decides what the
+        # row took; a status local is refine_status's
+        if null is None and len(cond) == 1 and re.fullmatch(r"[A-Za-z_]\w*", cond[0]) \
+                and cond[0] not in state.status and (
+                    (state.owners.get(cond[0]) == HELD and cond[0] in self.new)
+                    or TAKEN + cond[0] in state.owners.values()):
+            null, holds = [[cond[0]]], not holds
         if null is not None and len(null) == 1:
             name = " ".join(null[0])
             for owner, status in state.owners.items():
@@ -2410,6 +2920,9 @@ class OwnershipWalk:
         for owner, status in state.owners.items():
             if status == TAKEN + name:
                 state.owners[owner] = HELD if failed else GONE
+        if not failed:
+            for arg, facts in state.status_facts.get(name, ()):
+                state.add_facts(arg, facts)
 
     def effects(self, tokens: list[Token], state: _State) -> None:
         """the effects of the sites among tokens: heap facts die, homes may be
@@ -2417,7 +2930,7 @@ class OwnershipWalk:
         for t in tokens:
             for effect in self.site_effects.get(id(t), ()):
                 if effect in KILLS and self.kills:
-                    state.kill_heap_facts()
+                    state.kill_heap_facts(self.declared)
                 if effect in REENTRY and self.kills:
                     self.reenter(state, f"`{t.text}` at line {t.line}, which may {effect},")
                 if effect != "reads" and effect != "raises":
@@ -2469,7 +2982,8 @@ class OwnershipWalk:
         the old one freed), so its facts die now, and those of the locals
         that copy it"""
         # A site fact (unique) dies at any reentry, and a home load
-        state.facts = {n: without_site_facts(f) for n, f in state.facts.items()}
+        state.facts = {n: without_site_facts(f) for n, f in state.facts.items()
+                       if not _input_path(n, self.declared)}
         self.kill_home_loads(state)
         for name, item in self.declared.items():
             if item.mode in UNOWNED:
@@ -2486,6 +3000,12 @@ class OwnershipWalk:
         nested call passes what its own row says)"""
         tokens = _unwrap(arg, self.table)
         if len(tokens) != 1:
+            # A borrowed view written in the argument passes what a local
+            # assigned from it would; a consuming view takes on its own
+            call = _call_of(tokens, self.table)
+            if (call is not None and call[0].result.shape == "VIEW" and len(call[1]) == 1
+                    and call[0].args[0].mode != "consumed"):
+                return self.owner_of(call[1][0], state)
             return None
         if tokens[0] in state.owners:
             return tokens[0]
@@ -2508,6 +3028,9 @@ class OwnershipWalk:
         """the calls among tokens: their argument requirements (V8 inside the
         body) and the obligations they consume"""
         for tkn, args in _calls_in(tokens):
+            if (tkn.text in SKELETON_KILLS and len(args) == 1
+                    and len(args[0]) == 1 and args[0][0] in self.declared):
+                state.dead.add(args[0][0])
             row = self.table.get(tkn.text)
             if row is None:
                 continue
@@ -2563,7 +3086,9 @@ class OwnershipWalk:
                         state.arrays[array] = (PENDING if row.result.shape == "STATUS"
                                                else WRITTEN)
                         state.end_restart(f"the publication of `{array}` by {row.name}")
-            for exit in sorted(row.exits - {"next", "miss", "deopt"}):
+            if row.committed:
+                self.check_committed(row, state, tkn)
+            for exit in sorted(row.exits - {"next", "miss", "deopt"} - row.successor):
                 # A row's other exits leave the word from inside it, after
                 # it has taken what its arguments' modes say: on its raise,
                 # a `taken` argument is still the caller's (design 1.2)
@@ -2572,7 +3097,9 @@ class OwnershipWalk:
                     at = state.copy()
                     for owner in taken:
                         at.owners[owner] = HELD
-                self.check_exit(exit, at, tkn)
+                self.check_exit(exit, at, tkn, committed=exit in row.committed)
+            if row.successor:
+                state.successor = row.name
             if taken and row.result.shape in ("VALUE_OR_NULL", "STATUS"):
                 # Gone if the result reports success: the assignment binds
                 # the result's local, whose test decides (refine)
@@ -2587,7 +3114,9 @@ class OwnershipWalk:
         item = self.declared.get(name)
         if item is not None and item.mode == "closed":
             return
-        if state.owners.get(name) == HELD and INLINE not in state.facts.get(name, frozenset()):
+        # A static immortal value, is(PyValue_None), owes no count either
+        if state.owners.get(name) == HELD and not self.owes_nothing(
+                state.facts.get(name, frozenset())):
             self.fail(where, f"DEAD(`{name}`) drops an owned value: release it, move it "
                       "first, or declare it inline")
         if name in state.owners:
@@ -2638,9 +3167,11 @@ class OwnershipWalk:
         if self.contract.state_item(head) is not None and texts[1:2] in (["|="], ["&="], ["="]):
             self.write_state(toks, texts, state)
             return state
-        if head in self.table and "terminal" in IR_MARKER_EFFECTS.get(head, ()):
+        if head in self.table and ends_path(self.table[head]):
             # A terminal marker leaves on its row's exits, after its
-            # arguments' modes have taken what they say; it never returns
+            # arguments' modes have taken what they say; it never returns.
+            # So does a row whose exits are committed and none is next
+            # (IR_OBSERVE_COMMITTED_BRANCH dispatches the word it observes)
             self.calls(toks, state)
             self.effects(toks, state)
             return None
@@ -2662,10 +3193,12 @@ class OwnershipWalk:
             name = self.views_at(state).resolve(texts[2:_close(texts, 1)])
             if name is not None:
                 self.discharge(name, state, toks[0])
+                state.dead.add(name)
             return state
         if head == "INPUTS_DEAD":
             for name in self.declared:
                 self.discharge(name, state, toks[0])
+                state.dead.add(name)
             return state
         if head == "DECREF_INPUTS":
             # The emitters close the inputs that are still held
@@ -2673,6 +3206,11 @@ class OwnershipWalk:
                 if state.owners[name] == HELD and item.mode in UNOWNED:
                     self.fail(toks[0], f"DECREF_INPUTS releases `{name}`, declared "
                               f"{item.mode or 'a pass-through'}")
+                if (state.owners[name] == GONE and name not in state.dead
+                        and item.mode not in UNOWNED):
+                    # The generator closes it again: a second release
+                    self.fail(toks[0], f"DECREF_INPUTS releases `{name}`, which is "
+                              f"already consumed or moved: mark it DEAD(`{name}`) first")
                 state.owners[name] = GONE
             self.effects(toks, state)
             state.end_restart("DECREF_INPUTS")
@@ -2824,6 +3362,12 @@ class OwnershipWalk:
         if i >= 2 and texts[i - 2] in ("->", ".") or not re.fullmatch(r"\w+", lhs):
             return      # a store through a pointer: V2's `writes`
         item = self.declared.get(lhs)
+        if item is not None and item.mode in UNOWNED:
+            # The home keeps the input's word: a new value there is owned
+            # by no one, and a pass-through output would publish it as the
+            # caller's value
+            self.fail(toks[0], f"assigns `{lhs}`, an input declared "
+                      f"{item.mode or 'a pass-through'}")
         if obligated(state.owners.get(lhs)) and (item is None or item.mode
                                                   in ("consumed", "taken")):
             self.fail(toks[0], f"`{lhs}` is assigned while it holds an owner, which "
@@ -2892,8 +3436,11 @@ class OwnershipWalk:
                          "is no input's value" if origin == "" else
                          "differs by path"))
         if out.mode in ("owned", "inline") and origin:
-            self.fail(toks[0], f"{what}, but is assigned `{' '.join(rhs)}`, which is the "
-                      f"input `{origin}`'s value: declare moved({origin})")
+            # Decided on next (check_outputs): a move joined with a new owner
+            # is owned; only a move on every path must say moved(x)
+            self.moves[out.name] = (toks[0], f"{what}, but is assigned `{' '.join(rhs)}`, "
+                                    f"which is the input `{origin}`'s value: declare "
+                                    f"moved({origin})")
 
     def bind_value(self, toks: list[Token], lhs: str, rhs: list[str], state: _State,
                    out: Item | None) -> None:
@@ -3012,6 +3559,10 @@ class OwnershipWalk:
             # Its `out` arguments are written on success only: the status
             # local decides which (refine)
             state.status[lhs] = result.failure
+            views = self.views_at(state)
+            state.status_facts[lhs] = tuple(
+                (name, facts) for arg, facts in zip(args, result.success)
+                if facts and (name := views.resolve(arg)) is not None)
             for name, st in state.arrays.items():
                 if st == PENDING:
                     state.arrays[name] = f"{PENDING}{lhs}"
@@ -3196,7 +3747,8 @@ def check_results(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
             for gives, mode, source in _value_results(uop, where, rhs, table, inputs):
                 if NULL_FACT in gives:
                     continue        # NULL: the walk holds it to nullable
-                missing = sorted(map(str, implied(out.facts) - gives - {NONNULL}))
+                missing = sorted(str(f) for f in implied(out.facts) - gives - {NONNULL}
+                                 if not satisfied(f, gives))
                 if missing:
                     raise analysis_error(
                         f"{uop.name}: `{out.name}` is declared {', '.join(missing)}, but "
@@ -3227,7 +3779,13 @@ def body_exits(uop: Uop, table: dict[str, Row], implicit_guards: int) -> set[str
         elif tkn.text == "DISPATCH_SAME_OPARG":
             exits.add("jump")
         elif tkn.text in table:
-            exits |= table[tkn.text].exits
+            row = table[tkn.text]
+            exits |= row.exits - row.successor
+            for exit in row.successor:
+                # A successor assigned on some paths only: the word has two
+                # successors, a branch (the record's BRANCH)
+                exits.add("branch" if exit == "jump" and
+                          ir_records.conditional(uop.body.body, tkn) else exit)
     if implicit_guards:
         exits.add("miss")
     p = uop.properties
@@ -3315,12 +3873,16 @@ def check_state_facts(uop: Uop, contract: Contract, walk: OwnershipWalk) -> None
     if walk.exit is not None:
         frame_paths = {r.result.measure for r in walk.table.values()
                        if r.result.shape == "PATH" and not r.args}
-        for name in sorted(frame_paths - {n for n, _ in contract.paths}):
+        inputs = {i.name for i in uop.stack.inputs}
+        input_paths = {n for n in walk.exit.facts
+                       if "." in n and n.split(".", 1)[0] in inputs}
+        for name in sorted((frame_paths | input_paths) - {n for n, _ in contract.paths}):
             live = walk.exported(name) - {NONNULL}
             if live:
+                kind = "path" if name in input_paths else "frame path"
                 raise analysis_error(
                     f"{uop.name}: the guards establish {', '.join(sorted(map(str, live)))} "
-                    f"of the frame path `{name}`, which paths(...) does not declare",
+                    f"of the {kind} `{name}`, which paths(...) does not declare",
                     uop.body.open)
 
 
@@ -3339,6 +3901,14 @@ def check_state_reads(uop: Uop, contract: Contract | None, table: dict[str, Row]
         if contract is None or contract.state_item(t.text) is None:
             raise analysis_error(f"{uop.name}: reads `{t.text}`, a handler's state, which "
                                  "no state(...) clause declares", t)
+
+
+def owes_nothing_by_type(facts, table: dict[str, Row]) -> bool:
+    """whether facts show an exact type whose every instance is a static
+    immortal CONSTANT (its row's INSTANCES): bool and NoneType"""
+    types = _exact_types(implied(facts))
+    return bool(types) and all(
+        table.get(t) is not None and table[t].instances for t in types)
 
 
 def is_value_constant(row: Row | None) -> bool:
@@ -3461,6 +4031,7 @@ def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None 
     check_feedback(uop, contract, table)
     check_feedback_pointers(uop, table)
     check_guard_conditions(uop, table)
+    check_convention_guards(uop, table)
     check_identities(uop, contract, table)
     for tkn, _ in body_calls(uop):
         if tkn.text in GUARDS:
@@ -3617,16 +4188,18 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
         # its pass-throughs) may have been replaced there, so all of its
         # facts die.  Then the facts the uop declares on its outputs, which
         # V9 holds to the facts live at its exit.
-        if contract.effects & KILLS:
+        # Effects confined to other exits are on no path to next
+        effects = contract.next_effects()
+        if effects & KILLS:
             facts = {v: without_heap_facts(f) for v, f in facts.items()}
-        if contract.effects & REENTRY and known:
+        if effects & REENTRY and known:
             homes = set(stack) | {bound[i.name] for i in contract.inputs if not i.mode
                                   and contract.output(i.name) is not None}
             for v in homes:
                 facts[v] = frozenset()
-        if contract.effects & REENTRY and not replaced:
+        if effects & REENTRY and not replaced:
             replaced = f"{part.name}, which may reenter"
-        changes = contract.effects - {"reads", "raises"}
+        changes = effects - {"reads", "raises"}
         if restartable and changes:
             restartable, why = False, f"{part.name}, which may {', '.join(sorted(changes))}"
         if restartable and any(o.mode in ("owned", "inline") for o in contract.outputs):
@@ -3705,7 +4278,8 @@ def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...],
     def recorded(name: str, facts) -> list[Fact]:
         # A local's fact is recorded on the local, as the inference did
         live = walk.exit.facts.get(name, frozenset()) if walk.exit else frozenset()
-        return [Fact(FACT_KIND[f.kind], values.get(name, name),
+        root, dot, rest = name.partition(".")
+        return [Fact(FACT_KIND[f.kind], values.get(root, root) + dot + rest,
                      values.get(f.arg, f.arg) if f.kind == "in_bounds" else f.record("").arg)
                 for f in facts if f in live]
 
@@ -3749,6 +4323,15 @@ def _stated_facts(cond: list[str], views: Views, table: dict[str, Row],
             row = table.get(f.arg) if f.kind == "is" else None
             if row is not None and row.representation == "OBJECT" and "&" in cond:
                 result.setdefault(name, []).append(f)
+            # The NULL test of a pointer along an input path
+            if "." in name and f in (NULL_FACT, NONNULL) and "NULL" in cond \
+                    and f not in result.get(name, []):
+                result.setdefault(name, []).append(f)
+            # A comparison of a type with a static type's address,
+            # `Py_TYPE(x) != &T`
+            if f.kind == "exact" and f"{f.arg}" in cond and "&" in cond and \
+                    {"Py_TYPE", "PyValue_TYPE"} & set(cond) and f not in result.get(name, []):
+                result.setdefault(name, []).append(f)
     for tkn_text, args in _calls_in_texts(cond):
         row = table.get(tkn_text)
         if row is None:
@@ -3757,7 +4340,14 @@ def _stated_facts(cond: list[str], views: Views, table: dict[str, Row],
             name = views.resolve(arg)
             if name is None:
                 continue
-            for f in sorted(true | false):
+            sides = set(true | false)
+            have = found[0].get(name, frozenset())
+            if any(f.kind == EXCLUDES for f in false):
+                # A `rest` side, where the test failed, states what remains
+                # in the plain words the record has today (records: G0d)
+                sides = set(true) if true <= have else {
+                    f for f in have if f.kind in SPELLINGS}
+            for f in sorted(sides):
                 if f in found[0].get(name, ()) and f not in result.get(name, []):
                     result.setdefault(name, []).append(f)
         if row.result.shape == "MEASURE":
@@ -3765,6 +4355,14 @@ def _stated_facts(cond: list[str], views: Views, table: dict[str, Row],
             for f in sorted(found[0].get(name, ())):
                 if f.kind == row.result.measure and f not in result.get(name, []):
                     result.setdefault(name, []).append(f)
+    # Comparisons of a local bound to a MEASURE read, `conv != M`
+    for local in sorted(set(cond) & set(views.measures)):
+        read = views.field([local])
+        if read is None:
+            continue
+        for f in sorted(found[0].get(read[1], ())):
+            if f.kind == read[0].result.measure and f not in result.get(read[1], []):
+                result.setdefault(read[1], []).append(f)
     # Reads of FIELD rows, `p->field`
     for i, t in enumerate(cond):
         if t != "->" or i + 1 >= len(cond):

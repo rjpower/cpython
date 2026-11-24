@@ -111,6 +111,13 @@
     /* Evidence (G0c8): Include/object.h:391 `PyAPI_DATA(PyTypeObject) PySuper_Type`: a static \
      * type object, compared by address (LOAD_SUPER_ATTR's guard). */ \
     CONSTANT(PySuper_Type, OBJECT(PyTypeObject)) \
+    /* Types every instance of which is one of the static immortal values \
+     * above, so an exact value of one owes no count (G0a5 desk D): \
+     * bool_new and every bool result return Py_True or Py_False, and bool \
+     * is final (no Py_TPFLAGS_BASETYPE, boolobject.c); NoneType's tp_new \
+     * returns Py_None and NoneType is final (object.c) */ \
+    CONSTANT(PyBool_Type, OBJECT(PyTypeObject), INSTANCES(PyValue_True, PyValue_False)) \
+    CONSTANT(_PyNone_Type, OBJECT(PyTypeObject), INSTANCES(PyValue_None)) \
     /* Tag tests: bits in, no memory.  PyValue_IsNull is bits == 0: NULL \
      * exactly when it holds */ \
     PRIMITIVE(PyValue_IsNull, bool, (PyValueBorrow), \
@@ -118,7 +125,7 @@
     /* Reviewed G0c2. pycore_value.h: bits >= Py_INT_BASE, a compare of the   \
      * word; no memory read, no failure, no callback.                         */ \
     PRIMITIVE(PyValue_IsInlineInt, bool, (PyValueBorrow), \
-              ARGS(borrowed), TEST(inline_int), EFFECTS()) \
+              ARGS(borrowed), TEST(inline_int | rest), EFFECTS()) \
     /* PyValue_IsObject (Include/internal/pycore_pyvalue.h): bits > 2, \
      * bits < Py_PTR_LIMIT and bit 1 clear; a comparison of the word, no \
      * memory, no callee.  True: a pointer-space word naming an object.  \
@@ -132,7 +139,7 @@
      * argument slot, which is not NULL.  The row's tokens are corrected \
      * by G0a5 (a partition of the encodings), not here */ \
     PRIMITIVE(PyValue_IsObject, int, (PyValueBorrow), \
-              ARGS(borrowed nonnull), TEST(object | inline), EFFECTS()) \
+              ARGS(borrowed nonnull), TEST(object | rest), EFFECTS()) \
     /* Each tag test below is a comparison of the word's bits against the \
      * region bounds of pycore_value.h (the cited predicate); none reads \
      * memory.  A test with no fact of the vocabulary to declare declares \
@@ -156,13 +163,13 @@
      * `inline`, and the false arm gives neither `object` nor `nonnull`: a \
      * body that needs `object` tests PyValue_IsObject */ \
     PRIMITIVE(PyValue_IsInline, bool, (PyValueBorrow), \
-              ARGS(borrowed), TEST(inline), EFFECTS()) \
+              ARGS(borrowed), TEST(inline | rest), EFFECTS()) \
     /* Reviewed G0c2. pycore_value.h: one subtract and compare of the         \
      * word's bits; no memory, no failure, no callback.                       */ \
     PRIMITIVE(PyValue_IsInlineFloat, bool, (PyValueBorrow), \
-              ARGS(borrowed), TEST(inline_float), EFFECTS()) \
+              ARGS(borrowed), TEST(inline_float | rest), EFFECTS()) \
     PRIMITIVE(PyValue_IsTaggedIndex, bool, (PyValueBorrow), \
-              ARGS(borrowed), TEST(), EFFECTS()) \
+              ARGS(borrowed), TEST(tagged_index | rest), EFFECTS()) \
     /* (a & b) >= Py_INT_BASE: exactly IsInlineInt(a) and IsInlineInt(b) \
      * (the comment above its definition in pycore_value.h: the AND has the \
      * top Py_INT_SHIFT bits set only if both words do) */ \
@@ -271,7 +278,7 @@
      * bounds guards of the callers (_ITER_JUMP_LIST/TUPLE).  Callees, \
      * failure paths and callbacks: none */ \
     PRIMITIVE(PyValue_TagIndex, PyValue, (intptr_t), \
-              ARGS(scalar), VALUE(inline), EFFECTS()) \
+              ARGS(scalar), VALUE(inline tagged_index), EFFECTS()) \
     /* PyValue_UntagIndex (pycore_value.h): a shift of the word's bits, no \
      * memory, no failure.  It asserts PyValue_IsTaggedIndex(r) (a \
      * precondition of the caller's contract that this branch's \
@@ -279,7 +286,7 @@
     PRIMITIVE(PyValue_UntagIndex, intptr_t, (PyValueBorrow), \
               ARGS(borrowed), SCALAR, EFFECTS()) \
     PRIMITIVE(PyValue_IncrementTaggedIndexNoOverflow, PyValue, (PyValue), \
-              ARGS(consumed), VALUE(inline), EFFECTS()) \
+              ARGS(consumed), VALUE(inline tagged_index), EFFECTS()) \
     /* PyValue_FromInt64 (pycore_value.h): _PyValue_FromIntScaled when the \
      * int fits inline, else _PyValue_BoxInt64, which gives NULL only when \
      * its allocation fails */ \
@@ -866,7 +873,7 @@
      * Py_TPFLAGS_TYPE_SUBCLASS), reads of ob_type and tp_flags; no \
      * callee, no failure, no callback */ \
     HELPER(PyType_Check, int, (PyObject *), \
-        ARGS(object), SCALAR, EFFECTS(reads)) \
+        ARGS(object), TEST(subtype(PyType_Type)), EFFECTS(reads)) \
     /* Evidence (G0c batch 6): Objects/typeobject.c PyType_GenericAlloc -> \
      * _PyType_AllocNoTrack: allocates a zeroed object of type (inline \
      * values too) and tracks it if the type is GC. NULL with MemoryError \
@@ -1466,6 +1473,10 @@
      * so the exact set is writes, allocates, raises, releases; runs_python \
      * covers it.  Callbacks: only that finalizer */ \
     HELPER(_PyList_AppendTakeValue, int, (PyListObject *, PyValue), \
+        ARGS(scalar, consumed), SCALAR, EFFECTS(runs_python)) \
+    /* pycore_list.h: _PyList_AppendTakeValue with the store in line while \
+     * the list has room (G0a5 item 3) */ \
+    HELPER(_PyList_AppendTakeValueInline, int, (PyListObject *, PyValue), \
         ARGS(scalar, consumed), SCALAR, EFFECTS(runs_python)) \
     /* Objects/listobject.c _PyList_Extend -> _list_extend: an exact \
      * list or tuple is copied, anything else is iterated (__iter__, \
@@ -2287,7 +2298,7 @@
      * batch (_END_ASYNC_FOR), advances nothing and only names the source \
      * word for sys.monitoring, so that handler continues at next. */ \
     MACRO(JUMPBY, \
-        ARGS(scalar), NONE, EFFECTS(), EXITS(jump)) \
+        ARGS(scalar), NONE, EFFECTS(), EXITS(jump(successor))) \
     /* Reviewed (G0c batch 1).  JUMPTO(T) is `next_instr = JUMP_TARGET(T)` \
      * (Python/ceval_macros.h): an assignment to the evaluator's successor \
      * local, which the dispatch reads at the end of the handler; the \
@@ -2295,7 +2306,7 @@
      * No memory, no failure.  The `jump` exit names the successor it \
      * sets; a C macro that assigns a local cannot be a function */ \
     MACRO(JUMPTO, \
-        ARGS(scalar), NONE, EFFECTS(), EXITS(jump)) \
+        ARGS(scalar), NONE, EFFECTS(), EXITS(jump(successor))) \
     /* Evidence (G0c8): ceval_macros.h:368: IR_CHECK_BLOCK (an assert) and the address \
      * frame->ir_words + T.  No load of the target word; the `jump` is taken by JUMPTO. */ \
     MACRO(JUMP_TARGET, \
@@ -2375,7 +2386,7 @@
      * the exception set; the argument is borrowed.  The seed's runs_python \
      * was over-declared and is narrowed                                    */ \
     HELPER(_PyEval_CheckExceptStarTypeValidValue, int, (PyThreadState *, PyValueBorrow), \
-        ARGS(tstate, borrowed), SCALAR, EFFECTS(reads, allocates, raises)) \
+        ARGS(tstate, borrowed), STATUS(NEGATIVE, , object), EFFECTS(reads, allocates, raises)) \
     /* Reviewed G0c2 (Python/ceval.c): a number is not an exception class     \
      * (TypeError); otherwise _PyEval_CheckExceptTypeValid walks a type or    \
      * a tuple of types with PyExceptionClass_Check (reads) and sets          \
@@ -2384,7 +2395,7 @@
      * no slot and no Python, so it is narrower than the seed's               \
      * runs_python: reads, allocates, raises.                                 */ \
     HELPER(_PyEval_CheckExceptTypeValidValue, int, (PyThreadState *, PyValueBorrow), \
-        ARGS(tstate, borrowed), SCALAR, EFFECTS(reads, allocates, raises)) \
+        ARGS(tstate, borrowed), STATUS(NEGATIVE, , object), EFFECTS(reads, allocates, raises)) \
     /* Evidence (G0c batch 6): Python/ceval.c: _PyEval_CreateInitFrame: \
      * init (the function) and self (the new instance) are consumed on \
      * every return (its comment; create_init_frame_window and \
@@ -2425,7 +2436,7 @@
      * token is corrected by G0a5).  Callbacks: yes */ \
     HELPER(_PyEval_GetIter, _PyValuePair, (PyValue, int), \
         ARGS(consumed, scalar), \
-        CASES(first(null) second(null) raised, first(owned object) second(inline nullable)), EFFECTS(runs_python)) \
+        CASES(first(null) second(null) raised, first(owned object) second(inline encoding(tagged_index|null))), EFFECTS(runs_python)) \
     /* Python/ceval.c: _PyValue_GetOptionalAttr (getattr: runs Python); \
      * on a miss _eval_import_from_miss reads __name__ and __spec__ (and \
      * its origin) by getattr, formats the message (allocates) and sets \
@@ -2545,8 +2556,30 @@
     MACRO(BUILTINS, ARGS(), PATH(builtins), EFFECTS(reads), EXITS()) \
     /* A frame path's dict keys (pycore_dict.h), and their version: a \
      * fact of the path, `paths(globals: keys_version(v))` (G0a4) */ \
-    FIELD(PyDictObject, ma_keys, PyDictKeysObject *, ON(globals | builtins), \
+    FIELD(PyDictObject, ma_keys, PyDictKeysObject *, ON(globals | builtins | object), \
           PATH(dict_keys), EFFECTS(reads)) \
+    /* Fields along a path from an input (G0a5 item 1): the path names \
+     * each field it steps through, `paths(callable.im_func: ...)`, and \
+     * its facts die as heap facts.  PATH(object) holds an object, \
+     * PATH(pointer) a pointer whose only fact is its NULL test */ \
+    FIELD(PyMethodObject, im_func, PyObject *, ON(object), PATH(object), EFFECTS(reads)) \
+    FIELD(PyMethodObject, im_weakreflist, PyObject *, ON(object), PATH(pointer), \
+          EFFECTS(reads)) \
+    FIELD(PyFunctionObject, func_version, uint32_t, ON(object), MEASURE(func_version), \
+          EFFECTS(reads)) \
+    FIELD(PyTypeObject, tp_vectorcall, vectorcallfunc, ON(object), PATH(pointer), \
+          EFFECTS(reads)) \
+    FIELD(PyModuleObject, md_dict, PyObject *, ON(object), PATH(object), EFFECTS(reads)) \
+    /* A builtin function's and a method descriptor's PyMethodDef, and its \
+     * calling convention, which _PyMethodDef_Convention reads: a fact of \
+     * the path, `paths(callable.d_method: convention(_Py_CALL_O))` (G0a5 \
+     * item 2) */ \
+    FIELD(PyCFunctionObject, m_ml, PyMethodDef *, ON(object), PATH(method_def), \
+          EFFECTS(reads)) \
+    FIELD(PyMethodDescrObject, d_method, PyMethodDef *, ON(object), PATH(method_def), \
+          EFFECTS(reads)) \
+    FIELD(PyMethodDef, convention, _PyCallConvention, ON(method_def), MEASURE(convention), \
+          EFFECTS(reads)) \
     FIELD(PyDictKeysObject, dk_version, uint32_t, ON(dict_keys), \
           MEASURE(keys_version), EFFECTS(reads)) \
     /* Evidence (G0c8): ceval_macros.h:375: `_PyFrame_GetCode(frame)->co_consts`, a load \
@@ -2789,7 +2822,7 @@
      * (G0a5: committed exit); the EXITS tokens are G0a5's. */ \
     MACRO(IR_OBSERVE_COMMITTED_BRANCH, ARGS(scalar, scalar, scalar, scalar), \
           NONE, EFFECTS(reads, writes, raises, runs_python), \
-          EXITS(branch, raise)) \
+          EXITS(branch(committed), raise(committed))) \
     /* IR_MARKER_EFFECTS: escapes, error, terminal; TRANSFER_TOKENS (BRANCH, \
      * RAISE).  Arguments are the kind, the completion value and the \
      * oparg.  The completion helper (_PyEval_CompleteForIter, \

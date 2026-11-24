@@ -432,13 +432,8 @@ class Parser(PLexer):
                 clauses[tkn.text] = names
                 continue
             while name := self.word():
-                text = name.text
-                if self.expect(lx.LPAREN):
-                    # `read(counter)`
-                    arg = self.require(lx.IDENTIFIER).text
-                    self.require(lx.RPAREN)
-                    text = f"{text}({arg})"
-                names.append(text)
+                # `read(counter)`, `runs_python(branch|raise)`
+                names.append(name.text + self.contract_argument())
                 if not self.expect(lx.COMMA):
                     break
             self.require(lx.RPAREN)

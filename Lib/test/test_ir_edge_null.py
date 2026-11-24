@@ -86,12 +86,14 @@ inst(JUMP_IF_FALSE_OR_POP, (cond -- res)) {
             observed_begin = text.index("inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP,")
             observed_end = text.index("inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP,", observed_begin)
             observed = text[observed_begin:observed_end]
+            # The observed twin declares `res: moved(cond) nullable`, so its
+            # declaration refuses a changed store before any record is made
             changed.write_text(text[:observed_begin] + observed.replace(
                 "res = PyValue_NULL;", "res = PyValue_None;") + text[observed_end:])
-            altered = analyzer.analyze_files([str(changed)])
-            rows = ir_generator.handler_contracts(altered, ir_generator.compute_formats(altered))
-            for name in (names[0], names[2]):
-                self.assertFalse(rows[name].ownership_events[0].flags & 4)
+            with self.assertRaisesRegex(SyntaxError, r"`res` is declared moved\(cond\), "
+                                        r"but is assigned `PyValue_None`"):
+                altered = analyzer.analyze_files([str(changed)])
+                ir_generator.handler_contracts(altered, ir_generator.compute_formats(altered))
 
             for mutation in (
                 "PyValue *alias = &res;",

@@ -7,6 +7,7 @@ against the rows of Include/internal/pycore_ir_components.h.  The pilot
 declares BINARY_OP's add arms and generic form, UNPACK_SEQUENCE and
 LOAD_ATTR_INSTANCE_VALUE."""
 
+import dataclasses
 import io
 import os
 from pathlib import Path
@@ -195,18 +196,11 @@ class SliceTests(unittest.TestCase):
         '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
         'LOAD_GLOBAL_BUILTIN.record.uops[1].guards[0].facts[0].subject: '
         'inferred "builtins", declared "dict"',
-        # Batch 6: PyFunction_Check compares the exact type (funcobject.h);
-        # _INIT_CALL_PY_EXACT_ARGS pushes a frame, which writes the heap and
+        # Batch 6: _INIT_CALL_PY_EXACT_ARGS pushes a frame, which writes the heap and
         # releases the callable; SET_FUNCTION_ATTRIBUTE runs no code; the call
         # uops complete in place (exits next, G0d removes the inference)
-        'CALL_BOUND_METHOD_EXACT_ARGS.record.uops[3].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
         'CALL_BOUND_METHOD_EXACT_ARGS.record.uops[7].effects: inferred 1 entries ["ALLOCATES"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
-        'CALL_EX_PY.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
-        'CALL_KW_PY.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
-        'CALL_PY_EXACT_ARGS.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
         'CALL_PY_EXACT_ARGS.record.uops[5].effects: inferred 1 entries ["ALLOCATES"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
-        'CALL_PY_GENERAL.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
-        'CALL_PY_GENERATOR.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
         'SET_FUNCTION_ATTRIBUTE.record.format.runs_code: inferred true, declared false',
         'SET_FUNCTION_ATTRIBUTE.record.uops[0].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 2 ["READS_HEAP", "WRITES_HEAP"]',
         'CALL/_DO_CALL: declares exits(enter, next, raise), the record has enter, raise',
@@ -1252,7 +1246,7 @@ class VerifierTests(unittest.TestCase):
                      "not_exact(PyList_Type)", "exact(PyGen_Type|PyCoro_Type)",
                      "type_flag(Py_TPFLAGS_HEAPTYPE)", "type_slot(tp_iter,PyObject_SelfIter)",
                      "class_version", "func_version(K)", "argcount", "vectorcall",
-                     "call_flags", "ascii", "no_managed_dict", "unique", "null"):
+                     "convention(_Py_CALL_NOARGS|_Py_CALL_O)", "ascii", "no_managed_dict", "unique", "null"):
             self.assertEqual(str(ir_contract.parse_fact(word, None)), word)
         for word, message in (("in_bounds", "needs an argument"),
                               ("exact(PyGen_Type|)", "the argument of `exact`"),
@@ -1324,6 +1318,563 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"is\(PyValue_NULL\): NULL is no identity; it is `null`")
 
+    def test_a_static_immortal_value_owes_no_count(self):
+        # _POP_EXCEPT: None is a CONSTANT row's value, which DEAD may drop
+        source = """
+            op(_OP, (exc_value: consumed object --)) effects(reads, releases) exits(next) {
+                _PyErr_StackItem *exc_info = tstate->exc_info;
+                if (%s) {
+                    DEAD(exc_value);
+                    Py_XSETREF(exc_info->exc_value, NULL);
+                }
+                else {
+                    PyObject *exc = PyValue_AsKnownObjectSteal(exc_value);
+                    Py_XSETREF(exc_info->exc_value, exc);
+                }
+            }
+        """
+        self.verify(source % "PyValue_IsNone(exc_value)")
+        self.refuses(source % "!PyValue_IsNone(exc_value)",
+                     r"DEAD\(`exc_value`\) drops an owned value")
+        # A test of the kind of word names no value
+        self.refuses(source % "PyValue_IsObject(exc_value)",
+                     r"DEAD\(`exc_value`\) drops an owned value")
+
+    def test_a_status_states_facts_of_an_argument_on_success(self):
+        # CHECK_EXC_MATCH: _PyEval_CheckExceptTypeValidValue succeeds only
+        # for an object, STATUS(NEGATIVE, , object), so the value is an
+        # object where the status says success, as a TEST's true side
+        source = """
+            inst(OP, (left: object, right: consumed -- left, b: inline exact(PyBool_Type)))
+                effects(runs_python) exits(next, raise)
+            {
+                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
+                PyValue held_right = TAKE(right);
+                int err = %s(tstate, held_right);
+                %s
+                if (err < 0) {
+                    PyValue_CLOSE(held_right);
+                    ERROR_NO_POP();
+                }
+                %s
+                int res = PyErr_GivenExceptionMatches(left_o, right_o);
+                PyValue_CLOSE(held_right);
+                b = res ? PyValue_True : PyValue_False;
+            }
+        """
+        borrow = "PyObject *right_o = PyValue_AsKnownObjectBorrow(held_right);"
+        check = "_PyEval_CheckExceptTypeValidValue"
+        self.assertEqual(self.table[check].result.success,
+                         (frozenset(), frozenset({ir_contract.OBJECT})))
+        self.verify(source % (check, "", borrow))
+        # Not where the status may report failure
+        self.refuses(source % (check, borrow, ""), r"requires object of it")
+        # A status that states nothing of its arguments shows nothing
+        self.table["SPAM_CHECK"] = dataclasses.replace(
+            self.table[check], name="SPAM_CHECK",
+            result=dataclasses.replace(self.table[check].result, success=()))
+        self.refuses(source % ("SPAM_CHECK", "", borrow), r"requires object of it")
+
+    def test_an_exact_value_of_a_closed_type_owes_no_count(self):
+        # _POP_JUMP_IF_TRUE: every bool is True or False, static immortal
+        # values (PyBool_Type's INSTANCES), so DEAD of an exact bool releases
+        # nothing.  An exact int is an object like any other
+        source = """
+            op(_OP, (cond: consumed assumed(exact(%s)) by _TO_BOOL --))
+                effects() exits(next, branch)
+            {
+                assert(PyValue_BoolCheck(cond));
+                int flag = PyValue_IsTrue(cond);
+                DEAD(cond);
+                IR_REPORT_EDGE(flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+            }
+        """
+        self.verify(source % "PyBool_Type")
+        self.verify(source % "_PyNone_Type")
+        self.refuses(source % "PyLong_Type", r"DEAD\(`cond`\) drops an owned value")
+        self.refuses(source % "PyBool_Type|PyLong_Type",
+                     r"DEAD\(`cond`\) drops an owned value")
+        # The instances are data, held to the CONSTANT rows
+        self.assertEqual(self.table["PyBool_Type"].instances,
+                         ("PyValue_True", "PyValue_False"))
+        with self.assertRaisesRegex(SyntaxError, r"INSTANCES\(PyValue_None\): not a VALUE "
+                                    r"CONSTANT of exact\(PyBool_Type\)"):
+            ir_contract.check_columns(ir_contract.rows() | ir_contract.parse_rows(
+                "#define SPAM_ROWS(PRIMITIVE, HELPER, MACRO) \\\n"
+                "    CONSTANT(PyBool_Type, OBJECT(PyTypeObject), INSTANCES(PyValue_None))\n"))
+
+    def test_an_object_pointer_tested_for_null(self):
+        # _BUILD_MAP: a row's VALUE_OR_NULL result as a PyObject *, which
+        # `x == NULL` decides as PyValue_IsNull(x) does for a value
+        source = """
+            op(_OP, (values[oparg*2]: consumed -- map: owned))
+                effects(reads, writes, allocates, raises, releases, runs_python)
+                exits(next, raise)
+            {
+                PyObject *map_o = IR_BUILD_MAP(values);
+                DEAD(values);
+                ERROR_IF(%s);
+                map = PyValue_FromObjectSteal(map_o);
+            }
+        """
+        self.verify(source % "map_o == NULL")
+        self.refuses(source % "map_o != NULL", r"on raise, the new owner `map_o` is still held")
+        self.refuses(source % "oparg == 0", r"on raise, the new owner `map_o` is still held")
+        self.verify(source % "!map_o")
+        self.refuses(source % "map_o", r"on raise, the new owner `map_o` is still held")
+        # _BUILD_TUPLE: a row that takes its values only if it succeeds
+        source = """
+            op(_OP, (values[oparg]: taken -- tup: owned)) effects(allocates, raises)
+                exits(next, raise)
+            {
+                PyObject *tup_o = IR_BUILD_TUPLE(values);
+                if (%s) {
+                    ERROR_NO_POP();
+                }
+                INPUTS_DEAD();
+                tup = PyValue_FromObjectSteal(tup_o);
+            }
+        """
+        self.verify(source % "tup_o == NULL")
+        self.verify(source % "!tup_o")
+        self.refuses(source % "tup_o", r"on raise, `values` is released, but it is "
+                                        r"declared taken")
+
+    def test_a_move_joined_with_a_new_owner(self):
+        # _FORMAT_SIMPLE: res is value itself on one path and a new owner on
+        # the other; their join is owned, and the move discharges value
+        source = """
+            op(_OP, (value: consumed object -- res: %s)) effects(runs_python)
+                exits(next, raise)
+            {
+                if (%s) {
+                    PyObject *res_o = _PyValue_Format(value, PyValue_NULL);
+                    PyValue_CLOSE(value);
+                    ERROR_IF(res_o == NULL);
+                    res = PyValue_FromObjectSteal(res_o);
+                }
+                else {
+                    res = TAKE(value);
+                }
+            }
+        """
+        unicode = "!PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value))"
+        self.verify(source % ("owned", unicode))
+        # moved(value) only where every path moves
+        self.refuses(source % ("moved(value)", unicode),
+                     r"`res` is declared moved\(value\), but is assigned "
+                     r"`PyValue_FromObjectSteal")
+        # Where every path moves, it must say so
+        self.refuses("""
+            op(_OP, (value: consumed object -- res: owned)) effects() exits(next) {
+                if (oparg) {
+                    res = TAKE(value);
+                }
+                else {
+                    res = TAKE(value);
+                }
+            }
+        """, r"`res` is declared owned, but is assigned `TAKE \( value \)`, which is the "
+             r"input `value`'s value: declare moved\(value\)")
+
+    def test_a_committed_exit_publishes_the_outputs(self):
+        # _INSTRUMENTED_JUMP_IF_FALSE_OR_POP: the observer is taken after the
+        # generator stores the outputs, so each must be written before it;
+        # it dispatches, so the walk ends there
+        source = """
+            op(_OP, (cond: consumed -- res: moved(cond)%s))
+                effects(runs_python) exits(next, branch, raise)
+            {
+                PyValue held = TAKE(cond);
+                int truth = _PyValue_IsTrue(held);
+                if (truth < 0) {
+                    PyValue_CLOSE(held);
+                    ERROR_NO_POP();
+                }
+                if (!truth) {
+                    res = held;
+                    IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), 0, 0);
+                }
+                else {
+                    %s
+                    IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, 0, 0);
+                }
+            }
+        """
+        popped = "IR_DEFER_CLOSE(held);\n res = PyValue_NULL;"
+        self.verify(source % (" nullable", popped))
+        # NULL on one exit: the output says so
+        self.refuses(source % ("", popped),
+                     r"`res` may be NULL from PyValue_NULL, and nothing raises on it")
+        # An output the generator would store before it is written
+        self.refuses(source % (" nullable", "IR_DEFER_CLOSE(held);"),
+                     r"`res` is not written before IR_OBSERVE_COMMITTED_BRANCH, whose "
+                     r"exits \(branch, raise\) are committed")
+        self.refuses("""
+            op(_OP, (cond: consumed -- res: moved(cond)))
+                effects(runs_python) exits(branch, raise)
+            {
+                PyValue held = TAKE(cond);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, 0, 0);
+                res = held;
+            }
+        """, r"`res` is not written before IR_OBSERVE_COMMITTED_BRANCH")
+        # The generator's replacer and the declaration name the same row;
+        # the generator selecting it by declaration is a follow-up (G0d)
+        self.assertEqual({r.name for r in self.table.values() if r.committed},
+                         {"IR_OBSERVE_COMMITTED_BRANCH"})
+        # next publishes, and a guard exit restarts the word: neither is
+        # committed, nor a successor
+        for mark in ("committed", "successor"):
+            for exit in ("next", "miss"):
+                with self.subTest(mark=mark, exit=exit):
+                    with self.assertRaisesRegex(SyntaxError, f"{exit} cannot be {mark}"):
+                        ir_contract.parse_rows(
+                            "#define X(PRIMITIVE, HELPER, MACRO) MACRO(SPAM, ARGS(scalar), "
+                            f"NONE, EFFECTS(), EXITS({exit}({mark})))")
+
+    def test_a_successor_is_published_at_the_end(self):
+        # _POP_JUMP_IF_FALSE_NONE_OR_PLAIN + POP_TOP: JUMPTO assigns the
+        # next word; the uop continues, and POP_TOP runs on both paths, so v
+        # is published at the body's end as on next
+        source = """
+            op(_OP, (value: consumed -- v: moved(value))) effects() exits(next, branch) {
+                int flag = PyValue_IsNone(value);
+                IR_REPORT_EDGE(flag);
+                %s
+            }
+            op(_POP, (value: consumed --)) effects(releases) exits(next) {
+                PyValue_CLOSE(value);
+            }
+            macro(OP) = _OP + _POP;
+        """
+        self.verify(source % """
+                v = value;
+                DEAD(value);
+                if (flag) {
+                    JUMPTO(oparg);
+                }""")
+        # Unconditional, it is a jump
+        self.refuses(source % "v = value; DEAD(value); JUMPTO(oparg);",
+                     r"declares exits\(branch, next\), but the body takes jump, next")
+        # Written only off the jump path
+        self.refuses(source % """
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    v = value;
+                    DEAD(value);
+                }""", r"`(v|value)` is owned on one path and not on another where they join")
+        # A word that has assigned its successor does not raise
+        self.refuses("""
+            op(_OP, (value: consumed -- v: moved(value)))
+                effects(raises) exits(next, branch, raise)
+            {
+                v = value;
+                DEAD(value);
+                if (oparg) {
+                    JUMPTO(oparg);
+                }
+                ERROR_IF(oparg > 3);
+            }
+        """, r"on raise, JUMPTO has assigned the next word")
+
+    def test_effects_confined_to_exits(self):
+        # _ITER_JUMP_RANGE + _ITER_NEXT_RANGE: the jump runs Python only in
+        # IR_COMPLETE_STEP, which leaves by branch or raise, so the facts
+        # the next uop needs survive the jump on the path to next
+        source = """
+            op(_CHECK, (iter, null_or_index -- iter: object, null_or_index))
+                effects() exits(next, miss)
+            {
+                EXIT_IF(!PyValue_IsObject(iter));
+            }
+            op(_JUMP, (iter: object, null_or_index -- iter, null_or_index))
+                effects(%s) exits(next, branch, raise)
+            {
+                _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
+                if (r->len <= 0) {
+                    PyValue completed = PyValue_None;
+                    IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
+                }
+            }
+            op(_NEXT, (iter: object, null_or_index -- iter, null_or_index, next: owned))
+                effects(reads, writes, allocates, raises) exits(next, raise)
+            {
+                _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
+                long value = r->start;
+                r->start = value + r->step;
+                r->len--;
+                next = PyValue_FromInt64(value);
+                ERROR_IF(PyValue_IsNull(next));
+            }
+            macro(OP) = _CHECK + _JUMP + _NEXT;
+        """
+        self.verify(source % "reads, runs_python(branch|raise)")
+        self.refuses(source % "runs_python",
+                     r"_NEXT requires nonnull, object of `iter`, which nothing before it "
+                     r"establishes or which an effect since killed")
+        # A site on the path to next
+        self.refuses(source % "reads(branch|raise), runs_python(branch|raise)",
+                     r"`->` may reads \(a load through a pointer\), which the uop "
+                     r"declares only on branch, raise, but it does not leave the uop")
+        # A call that may leave by an exit the confinement leaves out
+        self.refuses(source % "reads, runs_python(branch)",
+                     r"`IR_COMPLETE_STEP` may \w+ .*declares only on branch, "
+                     r"but it may leave by raise")
+        self.refuses(source % "reads, runs_python(branch|enter)",
+                     r"runs_python is confined to enter, which the uop does not declare")
+        self.refuses(source % "reads, runs_python(next|raise)",
+                     r"confines an effect to next")
+        self.refuses(source % "reads, runs_python(branch|nowhere)",
+                     r"confines an effect to nowhere, which is no exit")
+
+    def test_the_representation_table(self):
+        # _TO_BOOL_INT: an exact int whose one encoding tested false is an
+        # object
+        source = """
+            op(_OP, (value: consumed exact(%s) -- res: owned exact(PyBool_Type), v: moved(value)))
+                effects(reads) exits(next)
+            {
+                bool zero;
+                if (%s(value)) {
+                    zero = 0;
+                }
+                else {
+                    zero = _PyLong_IsZero((PyLongObject *)PyValue_AsKnownObjectBorrow(value));
+                }
+                res = zero ? PyValue_False : PyValue_True;
+                v = value;
+                DEAD(value);
+            }
+        """
+        self.verify(source % ("PyLong_Type", "PyValue_IsInlineInt"))
+        # The false test of an encoding the type lacks says nothing
+        self.refuses(source % ("PyLong_Type", "PyValue_IsInlineFloat"),
+                     r"passes `value` to PyValue_AsKnownObjectBorrow, which requires "
+                     r".*object")
+        # Two types, two encodings: one tested false leaves the other
+        self.refuses(source % ("PyLong_Type|PyFloat_Type", "PyValue_IsInlineInt"),
+                     r"passes `value` to PyValue_AsKnownObjectBorrow, which requires "
+                     r".*object")
+        # exact(T) and inline: T's one encoding
+        self.verify("""
+            op(_OP, (value: exact(PyLong_Type) -- value)) effects() exits(next, miss) {
+                EXIT_IF(!PyValue_IsInline(value));
+                int64_t n = PyValue_InlineInt64(value);
+            }
+        """.replace("value)) effects()", "value: inline_int)) effects()"))
+        # The table against the tag definitions: each encoding's TEST row
+        # tests it, and pycore_value.h's table of words has one region of
+        # each beside the pointer space
+        for encoding, (test, _) in ir_contract.ENCODINGS.items():
+            with self.subTest(encoding=encoding):
+                # A partition: true, the encoding; false, the rest
+                row = self.table[test]
+                self.assertEqual(row.result.tests, ((
+                    frozenset({ir_contract.VFact(encoding)}),
+                    frozenset({ir_contract.VFact(ir_contract.EXCLUDES, encoding)})),))
+        header = Path(__file__).parents[2] / "Include/internal/pycore_value.h"
+        words = re.findall(r"^\s+0x[0-9A-F]{4}(?:-0x[0-9A-F]{4})?\s+\S.*?\s{2,}(\w.*)$",
+                           header.read_text(), re.M)
+        regions = {"index": "tagged_index", "inline float": "inline_float",
+                   "inline int51": "inline_int"}
+        found = {regions[w.split(" (")[0].split(",")[0]] for w in words
+                 if w.split(" (")[0].split(",")[0] in regions}
+        self.assertEqual(found, set(ir_contract.ENCODINGS))
+
+    def test_is_object_is_a_partition(self):
+        # PyValue_IsObject: true, an object; false, the value's kinds of
+        # word but object.  _UNPACK_SEQUENCE drops a number on the false arm
+        self.verify("""
+            op(_OP, (seq: consumed -- unused[oparg], top[0]: owned))
+                effects(runs_python) exits(next, raise)
+            {
+                if (!PyValue_IsObject(seq)) {
+                    _PyErr_Format(tstate, PyExc_TypeError, "cannot unpack", PyValue_TYPE(seq)->tp_name);
+                    DEAD(seq);
+                    ERROR_IF(true);
+                }
+                PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
+                int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
+                ERROR_IF(res == 0);
+            }
+        """)
+        # A cursor is a tagged index where it is no object: not a number
+        source = """
+            op(_OP, (iter: %s -- iter)) effects() exits(next) {
+                if (!PyValue_IsObject(iter)) {
+                    int64_t n = PyValue_InlineInt64(iter);
+                }
+            }
+        """
+        self.verify(source % "exact(PyLong_Type)")
+        self.refuses(source % "encoding(object|tagged_index)",
+                     r"passes `iter` to PyValue_InlineInt64, which requires")
+
+    def test_a_union_of_encodings_with_null(self):
+        # _GET_ITER's index_or_null: a tagged index, or NULL
+        source = """
+            op(_OP, (-- index_or_null: owned %s)) effects() exits(next) {
+                if (oparg) {
+                    index_or_null = PyValue_TagIndex(0);
+                }
+                else {
+                    index_or_null = %s;
+                }
+            }
+        """
+        self.verify(source % ("encoding(tagged_index|null)", "PyValue_NULL"))
+        self.verify(source % ("encoding(tagged_index|null)", "PyValue_TagIndex(1)"))
+        self.refuses(source % ("tagged_index", "PyValue_NULL"),
+                     r"`index_or_null` may be NULL from PyValue_NULL")
+        self.refuses(source % ("encoding(tagged_index|null)", "PyValue_FromDoubleNotNaN(1.0)"),
+                     r"`index_or_null` is declared encoding\(null\|tagged_index\)|"
+                     r"`index_or_null` is declared encoding\(tagged_index\|null\)")
+        self.refuses(source % ("encoding(tagged_index|spam)", "PyValue_NULL"),
+                     r"spam is no kind of word")
+
+    def test_a_frame_switch_is_at_its_token(self):
+        # _SEND_GEN_FRAME: the guards before IR_ENTER_GENERATOR restart the
+        # word; the switch is where the row that names it is called
+        self.verify("""
+            op(_OP, (receiver: object, null: nullable, v: taken -- receiver, null, gen_frame: owned))
+                effects(runs_python, switches_frame) exits(miss, enter, raise)
+            {
+                PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
+                EXIT_IF(Py_TYPE(gen) != &PyGen_Type, "not a generator");
+                IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
+            }
+        """)
+        # Nothing follows the switch: a guard there is refused, not skipped
+        source = """
+            op(_OP, (callable: taken, self_or_null: taken, args[oparg]: taken -- new_frame: owned))
+                effects(runs_python, switches_frame) exits(miss, next, raise, enter)
+            {
+                %s
+                IR_INVOKE_CALL();
+                %s
+            }
+        """
+        guard = 'EXIT_IF(oparg > 3, "too many arguments");'
+        self.verify(source % (guard, ""))
+        self.refuses(source % ("", guard),
+                     r"this statement follows IR_INVOKE_CALL, which never returns")
+
+    def test_facts_of_an_inputs_field(self):
+        # _CHECK_METHOD_VERSION: facts of callable.im_func, a path from an
+        # input through declared FIELD rows
+        source = """
+            op(_OP, (func_version/2, callable: object, null, unused[oparg]
+                     -- callable: exact(PyMethod_Type), null, unused[oparg]))
+                effects(%s) exits(next, miss)
+                %s
+            {
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                EXIT_IF(Py_TYPE(callable_o) != &PyMethod_Type);
+                PyObject *func = ((PyMethodObject *)callable_o)->im_func;
+                EXIT_IF(!PyFunction_Check(func));
+                EXIT_IF(((PyFunctionObject *)func)->func_version != func_version);
+                %s
+            }
+        """
+        path = "paths(callable.im_func: exact(PyFunction_Type) func_version(func_version))"
+        self.verify(source % ("reads", path, ""))
+        # Established and not declared
+        self.refuses(source % ("reads", "", ""),
+                     r"the guards establish .*func_version.* of the path `callable.im_func`, "
+                     r"which paths\(...\) does not declare")
+        # A write may change a field on the path: its facts die
+        self.refuses(source % ("reads, writes", path, "spam_write(callable_o);"),
+                     r"`callable.im_func` is declared .*which nothing establishes")
+        # A path steps through declared fields only
+        self.refuses(source % ("reads", "paths(callable.im_spam: null)", ""),
+                     r"steps through `im_spam`, which no FIELD row declares")
+        self.refuses(source % ("reads", "paths(spam.im_func: null)", ""),
+                     r"starts at `spam`, which is no input")
+        # The NULL test of a pointer field along the path
+        self.verify("""
+            op(_OP, (callable: object -- callable: exact(PyMethod_Type)))
+                effects(reads) exits(next, miss) paths(callable.im_weakreflist: null)
+            {
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                EXIT_IF(Py_TYPE(callable_o) != &PyMethod_Type);
+                EXIT_IF(((PyMethodObject *)callable_o)->im_weakreflist != NULL);
+            }
+        """)
+
+    def test_calling_conventions(self):
+        # _GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST: a guard tests a local
+        # bound to the reader against _PyCallConvention's members, and the
+        # members it tests are a fact of the path callable.d_method
+        members = "_Py_CALL_FASTCALL|_Py_CALL_VALUE|_Py_CALL_VALUE_NOARGS|_Py_CALL_VALUE_O"
+        source = """
+            op(_OP, (callable: object, self_or_null, args[oparg]
+                     -- callable: exact(PyMethodDescr_Type), self_or_null, args[oparg]))
+                effects(reads) exits(next, miss)
+                %s
+            {
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
+                EXIT_IF(Py_TYPE(callable_o) != &PyMethodDescr_Type);
+                _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+                %s
+                int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
+                EXIT_IF(conv == _Py_CALL_VALUE_O && n != 2,
+                        "the arguments do not fit the value form's fixed arity");
+            }
+        """
+        guard = ("EXIT_IF(conv != _Py_CALL_FASTCALL && conv != _Py_CALL_VALUE\n"
+                 "        && conv != _Py_CALL_VALUE_NOARGS && conv != _Py_CALL_VALUE_O);")
+        self.verify(source % (f"paths(callable.d_method: convention({members}))", guard))
+        # The members are a set: their order in the declaration is free
+        self.verify(source % ("paths(callable.d_method: convention(_Py_CALL_VALUE_O|"
+                              "_Py_CALL_VALUE_NOARGS|_Py_CALL_VALUE|_Py_CALL_FASTCALL))",
+                              guard))
+        one = "EXIT_IF(conv != _Py_CALL_O);"
+        self.verify(source % ("paths(callable.d_method: convention(_Py_CALL_O))", one))
+        # A declared union that differs from the members tested
+        self.refuses(source % ("paths(callable.d_method: convention(_Py_CALL_FASTCALL))",
+                               guard),
+                     r"`callable.d_method` is declared convention\(_Py_CALL_FASTCALL\), "
+                     "which nothing establishes")
+        self.refuses(source % ("paths(callable.d_method: convention(_Py_CALL_O|"
+                               "_Py_CALL_NOARGS))", one),
+                     r"`callable.d_method` is declared convention\(_Py_CALL_NOARGS\|"
+                     r"_Py_CALL_O\), which nothing establishes")
+        # Established and not declared
+        self.refuses(source % ("", one),
+                     r"the guards establish convention\(_Py_CALL_O\) of the path "
+                     r"`callable.d_method`, which paths\(...\) does not declare")
+        # A member outside the enum
+        self.refuses(source % ("paths(callable.d_method: convention(_Py_CALL_SPAM))", one),
+                     r"_Py_CALL_SPAM is no member of _PyCallConvention")
+        # The forms the guard may not take: `||`, a mask, another variable or
+        # value, the reader inline, and the flags themselves
+        path = "paths(callable.d_method: convention(_Py_CALL_O))"
+        for body, message in [
+            ("EXIT_IF(conv == _Py_CALL_NOARGS || conv == _Py_CALL_VALUE);",
+             r"joins convention tests with `\|\|`"),
+            ("EXIT_IF((conv & METH_O) == 0);",
+             r"is no comparison of a convention local with a member"),
+            ("EXIT_IF(conv != METH_O);",
+             r"`conv != METH_O` is no comparison of a convention local with a member"),
+            ("int other = oparg;\nEXIT_IF(conv != other);",
+             r"`conv != other` is no comparison of a convention local with a member"),
+            ("EXIT_IF(_PyMethodDef_Convention(method->d_method) != _Py_CALL_O);",
+             r"tests the call flags directly"),
+            ("EXIT_IF((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) != METH_O);",
+             r"tests the call flags directly"),
+            ("EXIT_IF(conv != _Py_CALL_O && conv == _Py_CALL_NOARGS);",
+             r"mixes convention tests"),
+        ]:
+            with self.subTest(body=body):
+                self.refuses(source % (path, body), message)
+
     def test_identities_of_static_objects(self):
         # F21, _GUARD_LOAD_SUPER_ATTR_METHOD: a CONSTANT row names a static
         # object by address; a comparison with it establishes is(K)
@@ -1388,6 +1939,42 @@ class VerifierTests(unittest.TestCase):
         self.verify(source % ("consumed", "PyValue_AsKnownObjectSteal"))
         self.refuses(source % ("borrowed", "PyValue_AsKnownObjectBorrow"),
                      r"SPAM_STEAL consumes `x`, declared borrowed, which it does not own")
+
+    def test_decref_inputs_after_a_consumption(self):
+        # DECREF_INPUTS closes every input the generator has not killed, so
+        # an input a row consumed is closed twice unless it is marked DEAD
+        double = r"DECREF_INPUTS releases `value`, which is already consumed or moved"
+        source = """
+            op(_OP, (value: consumed%s -- res: moved(value))) effects(releases) exits(next) {
+                PyValue r = %s;
+                %sDECREF_INPUTS();
+                res = r;
+            }
+        """
+        self.refuses(source % ("", "TAKE(value)", ""), double)
+        self.verify(source % ("", "TAKE(value)", "DEAD(value);\n"))
+        # A borrowed view written in the argument passes the input's count
+        source = source.replace("moved(value)", "owned")
+        self.refuses(source % (" object", "SPAM_STEAL(PyValue_AsKnownObjectBorrow(value))",
+                               ""), double)
+        self.verify(source % (" object", "SPAM_STEAL(PyValue_AsKnownObjectBorrow(value))",
+                              "DEAD(value);\n"))
+
+    def test_an_unowned_input_is_not_assigned(self):
+        # A pass-through, borrowed or closed input names its home, whose
+        # word stays the caller's: a new value written there is owned by
+        # no one (F16: `null_or_index = window[1]` in _FOR_ITER)
+        source = """
+            op(_OP, (x%s -- %s)) effects() exits(next) {
+                %s = PyValue_None;
+            }
+        """
+        self.refuses(source % ("", "x", "x"),
+                     r"assigns `x`, an input declared a pass-through")
+        self.refuses(source % (": borrowed", "", "x"),
+                     r"assigns `x`, an input declared borrowed")
+        # A copy in a local of its own may change
+        self.verify(source % ("", "x", "PyValue y = x;\n                y"))
 
     # F7: assumed(fact) by <producer>
 
@@ -1641,7 +2228,9 @@ class VerifierTests(unittest.TestCase):
     def test_value_slots_and_index_steps(self):
         # _FOR_ITER_VIRTUAL: an iternext value slot read through
         # _PyType_VALUE_SLOT, and an index step through _tp_iteritem, whose
-        # _PyValueIndexPair is a CASES result
+        # _PyValueIndexPair is a CASES result.  The uop's store of the next
+        # index into its pass-through input is left out: an unowned input is
+        # not assigned (F16; G0d1 gives the output a name of its own)
         source = """
             op(_OP, (iter: object, null_or_index -- iter, null_or_index, next: owned))
                 effects(reads, runs_python) exits(next, miss, raise, branch)
@@ -1670,7 +2259,6 @@ class VerifierTests(unittest.TestCase):
                         PyValue completed = PyValue_None;
                         IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
                     }
-                    null_or_index = PyValue_TagIndex(index);
                     next = next_index.value;
                 }
             }
@@ -1981,7 +2569,8 @@ class VerifierTests(unittest.TestCase):
             }
         """).uops["_OP"])
         self.assertEqual(contract.outputs[0], ir_contract.Item(
-            "value", "owned", ir_contract.HOME_SOURCE, nullable=True))
+            "value", "owned", ir_contract.HOME_SOURCE, words=ir_contract.ORDINARY_WORDS))
+        self.assertTrue(contract.outputs[0].nullable)
 
     # F18: a frame home is not the heap
 
@@ -2279,7 +2868,7 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual(ir_contract.implied({null}), {null})
         # A word that is NULL where a guard passes declares it
         source = """
-            op(_GUARD, (x -- x: %s)) effects() exits(next, deopt) {
+            op(_GUARD, (x: nullable -- x: %s)) effects() exits(next, deopt) {
                 DEOPT_IF(!PyValue_IsNull(x));
             }
         """

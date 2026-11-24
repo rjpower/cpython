@@ -1249,48 +1249,48 @@ PyDescr_NewMethod(PyTypeObject *type, PyMethodDef *method)
     /* Figure out correct vectorcall function to use */
     vectorcallfunc vectorcall;
     _Py_vectorcallvaluefunc value_vectorcall = NULL;
-    switch (method->ml_flags & _Py_METH_CALL_FLAGS)
+    switch (_PyMethodDef_Convention(method))
     {
-        case METH_VARARGS:
+        case _Py_CALL_VARARGS:
             value_vectorcall = method_value_vectorcall_descr_VARARGS;
             vectorcall = _PyValue_VectorcallThunk;
             break;
-        case METH_VARARGS | METH_KEYWORDS:
+        case _Py_CALL_VARARGS_KEYWORDS:
             value_vectorcall = method_value_vectorcall_descr_VARARGS_KEYWORDS;
             vectorcall = _PyValue_VectorcallThunk;
             break;
-        case METH_FASTCALL:
+        case _Py_CALL_FASTCALL:
             vectorcall = method_vectorcall_FASTCALL;
             break;
-        case METH_FASTCALL | METH_KEYWORDS:
+        case _Py_CALL_FASTCALL_KEYWORDS:
             vectorcall = method_vectorcall_FASTCALL_KEYWORDS;
             break;
-        case METH_NOARGS:
+        case _Py_CALL_NOARGS:
             vectorcall = method_vectorcall_NOARGS;
             break;
-        case METH_O:
+        case _Py_CALL_O:
             vectorcall = method_vectorcall_O;
             break;
-        case METH_METHOD | METH_FASTCALL | METH_KEYWORDS:
+        case _Py_CALL_METHOD_FASTCALL_KEYWORDS:
             vectorcall = method_vectorcall_FASTCALL_KEYWORDS_METHOD;
             break;
-        case METH_VALUE:
+        case _Py_CALL_VALUE:
             value_vectorcall = method_value_vectorcall_descr;
             vectorcall = _PyValue_VectorcallThunk;
             break;
-        case METH_VALUE | METH_KEYWORDS:
+        case _Py_CALL_VALUE_KEYWORDS:
             value_vectorcall = method_value_vectorcall_descr_KEYWORDS;
             vectorcall = _PyValue_VectorcallThunk;
             break;
-        case METH_VALUE | METH_METHOD | METH_KEYWORDS:
+        case _Py_CALL_VALUE_METHOD_KEYWORDS:
             value_vectorcall = method_value_vectorcall_descr_METHOD;
             vectorcall = _PyValue_VectorcallThunk;
             break;
-        case METH_VALUE | METH_NOARGS:
+        case _Py_CALL_VALUE_NOARGS:
             value_vectorcall = method_value_vectorcall_descr_NOARGS;
             vectorcall = _PyValue_VectorcallThunk;
             break;
-        case METH_VALUE | METH_O:
+        case _Py_CALL_VALUE_O:
             value_vectorcall = method_value_vectorcall_descr_O;
             vectorcall = _PyValue_VectorcallThunk;
             break;

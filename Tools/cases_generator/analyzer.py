@@ -412,8 +412,11 @@ def analyze_stack(
     op: parser.InstDef | parser.Pseudo, replace_op_arg_1: str | None = None
 ) -> StackEffect:
     for output in op.outputs:
-        if output.nullable:
-            raise analysis_error("nullable is an input read annotation", output.first_token)
+        # On a declared output, nullable is the contract's: the value may be
+        # NULL on next (an _OR_POP's popped result)
+        if output.nullable and not output.contract:
+            raise analysis_error("nullable is an input read annotation, or a declared "
+                                 "output's", output.first_token)
     inputs: list[StackItem] = [
         convert_stack_item(i, replace_op_arg_1)
         for i in op.inputs
@@ -618,6 +621,7 @@ NON_ESCAPING_FUNCTIONS = (
     "native_vector_capture",
     "_PyShape_FindTransition",
     "PyCFunction_GET_FLAGS",
+    "_PyMethodDef_Convention",
     "PyCFunction_GET_FUNCTION",
     "PyCell_GetRef",
     "PyCell_New",
@@ -1152,11 +1156,14 @@ def find_object_inputs(
 
     An input that op asserts to be an object, with
     `assert(PyValue_IsObject(name))`, can never hold an inline value by
-    construction of the bytecode, so it needs no test.
+    construction of the bytecode, so it needs no test.  So can one whose
+    contract declares `assumed(object) by <producer>`: the generator
+    asserts each assumption in every execution form (ir_contract.py, F7).
     """
     scalars = {item.name for item in stack.inputs if not item.is_array()}
     found: list[str] = []
-    asserted: list[str] = []
+    asserted: list[str] = [item.name for item in stack.inputs
+                           if item.name in scalars and "assumed(object)" in item.contract]
     tokens = list(op.block.tokens())
     i = 0
     while i < len(tokens):
@@ -1176,7 +1183,7 @@ def find_object_inputs(
             texts = [t.text for t in tokens[start:i + 1]]
             if (len(texts) == 7
                     and texts[2] in ("PyValue_IsObject", "PyValue_IsObjectOrNull")
-                    and texts[4] in scalars):
+                    and texts[4] in scalars and texts[4] not in asserted):
                 asserted.append(texts[4])
         elif tkn.text in VALUE_TO_OBJECT and i + 3 < len(tokens):
             arg, close = tokens[i + 2], tokens[i + 3]

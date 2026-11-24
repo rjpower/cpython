@@ -70,17 +70,19 @@ class FoldedInputTransferTests(unittest.TestCase):
         self.assertTrue({"LIST_APPEND", "SET_ADD", "MAP_ADD"} <= covered)
 
         text = source.read_text()
-        marker = "inst(LIST_APPEND, (list, unused[oparg-1], v -- list, unused[oparg-1]))"
+        marker = ("inst(LIST_APPEND,\n"
+                  "                (list: object, unused[oparg-1], v: consumed -- list, unused[oparg-1]))")
+        body = "{\n            PyValue item = TAKE(v);"
         self.assertIn(marker, text)
+        self.assertIn(body, text)
         with tempfile.TemporaryDirectory() as directory:
             changed = Path(directory) / "bytecodes.c"
             changed.write_text(text.replace(marker,
-                marker.replace(", v --", ", v[1] --"), 1))
+                marker.replace(", v: consumed --", ", v[1]: consumed --"), 1))
             changed_analysis = analyzer.analyze_files([str(changed)])
             with self.assertRaisesRegex(SyntaxError, "trailing scalar inputs"):
                 ir_generator.compute_formats(changed_analysis)
-            changed.write_text(text.replace(marker + " {",
-                                            marker + " {\n(void)frame;", 1))
+            changed.write_text(text.replace(body, "{\n(void)frame;" + body[1:], 1))
             changed_analysis = analyzer.analyze_files([str(changed)])
             changed_formats = ir_generator.compute_formats(changed_analysis)
             changed_contracts = ir_generator.handler_contracts(

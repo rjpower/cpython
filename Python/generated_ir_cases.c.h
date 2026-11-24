@@ -8251,7 +8251,7 @@ ir_run_FOR_ITER_TUPLE(
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
                 uintptr_t i = PyValue_UntagIndex(null_or_index);
                 assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
-                next = PyValue_DUP(PyTuple_GET_VALUE(tuple_o, i));
+                next = PyValue_XDUP(PyTuple_GET_VALUE(tuple_o, i));
                 null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             IR_SET_TEMP(window[1], null_or_index);
@@ -8284,7 +8284,6 @@ ir_run_FOR_ITER_VIRTUAL(
             PyValue next;
             null_or_index = window[1];
             iter = window[0];
-            assert(PyValue_IsObject(iter));
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
             if (PyValue_IsNull(null_or_index)) {
@@ -23290,7 +23289,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
                 uintptr_t i = PyValue_UntagIndex(null_or_index);
                 assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
-                next = PyValue_DUP(PyTuple_GET_VALUE(tuple_o, i));
+                next = PyValue_XDUP(PyTuple_GET_VALUE(tuple_o, i));
                 null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             IR_SET_TEMP(window[1], null_or_index);
@@ -23319,7 +23318,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue next;
             null_or_index = window[1];
             iter = window[0];
-            assert(PyValue_IsObject(iter));
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
             if (PyValue_IsNull(null_or_index)) {

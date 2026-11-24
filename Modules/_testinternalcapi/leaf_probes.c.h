@@ -1328,7 +1328,7 @@ leaf_probe__ITER_NEXT_TUPLE(_PyInterpreterFrame *frame, PyValue *stack_pointer, 
     iter = stack_pointer[-2];
     PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
     uintptr_t i = PyValue_UntagIndex(null_or_index);
-    next = PyValue_DUP(PyTuple_GET_VALUE(tuple_o, i));
+    next = PyValue_XDUP(PyTuple_GET_VALUE(tuple_o, i));
     null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
     stack_pointer[-1] = null_or_index;
     stack_pointer[0] = next;

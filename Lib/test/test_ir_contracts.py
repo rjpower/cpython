@@ -11,6 +11,7 @@ import io
 import os
 from pathlib import Path
 import re
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -2228,6 +2229,122 @@ def column_rows(text=COLUMN_ROWS):
     table = ir_contract.rows() | ir_contract.parse_rows(text)
     ir_contract.check_columns(table)
     return table
+
+
+class IteratorRowTests(unittest.TestCase):
+    """The iterator rows (G0c batch 5) in the interpreter: the ownership,
+    failure and reentry claims that _FOR_ITER, _FOR_ITER_VIRTUAL and
+    _GET_ITER rely on.  Each loop runs often enough to be specialized"""
+
+    ROUNDS = 40
+
+    def test_a_returned_value_is_closed_once(self):
+        # _PyForIter_VirtualIteratorNextInline gives {0, value} with an
+        # owned value when an iterator returns one; IR_COMPLETE_STEP closes it
+        finalized = []
+
+        class Value:
+            def __del__(self):
+                finalized.append(1)
+
+        def source():
+            yield 1
+            return Value()
+
+        def run():
+            for _ in source():
+                pass
+
+        for _ in range(self.ROUNDS):
+            run()
+        self.assertEqual(len(finalized), self.ROUNDS)
+
+    def test_an_uniterable_is_closed_on_failure(self):
+        # _PyEval_GetIter consumes the iterable on its failure path
+        finalized = []
+
+        class Plain:
+            def __del__(self):
+                finalized.append(1)
+
+        def run():
+            for _ in Plain():
+                pass
+
+        for _ in range(self.ROUNDS):
+            with self.assertRaises(TypeError):
+                run()
+        self.assertEqual(len(finalized), self.ROUNDS)
+
+    def test_exhaustion_reports_the_stop_iteration_to_monitoring(self):
+        # _PyForIter_StopIsExhaustion runs the RAISE callbacks (runs_python)
+        # and clears the exception
+        class Counter:
+            def __init__(self):
+                self.n = 0
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                self.n += 1
+                if self.n > 3:
+                    raise StopIteration
+                return self.n
+
+        events = []
+        tool = sys.monitoring.PROFILER_ID
+
+        def run():
+            return [x for x in Counter()]
+
+        for _ in range(self.ROUNDS):
+            run()
+        sys.monitoring.use_tool_id(tool, "test_ir_contracts")
+        self.addCleanup(sys.monitoring.free_tool_id, tool)
+        sys.monitoring.register_callback(
+            tool, sys.monitoring.events.RAISE,
+            lambda code, offset, exc: events.append(type(exc)))
+        sys.monitoring.set_events(tool, sys.monitoring.events.RAISE)
+        self.addCleanup(sys.monitoring.set_events, tool, 0)
+        self.assertEqual(run(), [1, 2, 3])
+        self.assertIn(StopIteration, events)
+        self.assertIsNone(sys.exception())
+
+    def test_an_error_other_than_stop_iteration_propagates(self):
+        class Fails:
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                raise ZeroDivisionError
+
+        def run():
+            for _ in Fails():
+                pass
+
+        for _ in range(self.ROUNDS):
+            with self.assertRaises(ZeroDivisionError):
+                run()
+
+    def test_the_cursor_follows_the_sequence(self):
+        # _ITER_NEXT_LIST and _ITER_NEXT_TUPLE advance their cursor in place;
+        # the list is read at each step, so growth is seen
+        def over_list(items):
+            seen = []
+            for x in items:
+                seen.append(x)
+                if len(items) < 6:
+                    items.append(len(items))
+            return seen
+
+        def over_tuple(items):
+            return [x for x in items]
+
+        for _ in range(self.ROUNDS):
+            self.assertEqual(over_list([0, 1]), [0, 1, 2, 3, 4, 5])
+            self.assertEqual(over_tuple((7, 8, 9)), [7, 8, 9])
+            self.assertEqual(over_tuple(()), [])
 
 
 class ColumnTests(unittest.TestCase):

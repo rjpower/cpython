@@ -4301,9 +4301,7 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        replaced op(_FOR_ITER, (iter, null_or_index -- iter, null_or_index, next: owned))
-            effects(runs_python) exits(next, branch, raise)
-        {
+        replaced op(_FOR_ITER, (iter, null_or_index -- iter, null_or_index, next)) {
             _PyStatusValue step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(iter), &window[1]);
             null_or_index = window[1];
             PyValue item = step.value;
@@ -4324,11 +4322,7 @@ dummy_func(
         // index-protocol iterator; a NULL cursor steps an object-protocol
         // iterator through its C value slot, and a type without the slot
         // exits.
-        replaced op(_FOR_ITER_VIRTUAL,
-                (iter: assumed(object) by GET_ITER, null_or_index
-                 -- iter, null_or_index, next: owned))
-            effects(runs_python) exits(next, branch, raise, miss)
-        {
+        replaced op(_FOR_ITER_VIRTUAL, (iter, null_or_index -- iter, null_or_index, next)) {
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             if (PyValue_IsNull(null_or_index)) {
@@ -4445,9 +4439,7 @@ dummy_func(
 #endif
         }
 
-        leaf replaced op(_ITER_NEXT_LIST, (iter: object, null_or_index -- iter, null_or_index, next: owned))
-            effects(reads) exits(next)
-        {
+        leaf replaced op(_ITER_NEXT_LIST, (iter, null_or_index -- iter, null_or_index, next)) {
             PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
             assert(PyList_CheckExact(list_o));
             next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
@@ -4483,14 +4475,12 @@ dummy_func(
             }
         }
 
-        leaf op(_ITER_NEXT_TUPLE, (iter: object, null_or_index -- iter, null_or_index, next: owned))
-            effects(reads) exits(next)
-        {
+        leaf op(_ITER_NEXT_TUPLE, (iter, null_or_index -- iter, null_or_index, next)) {
             PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
             assert(Py_TYPE(tuple_o) == &PyTuple_Type);
             uintptr_t i = PyValue_UntagIndex(null_or_index);
             assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
-            next = PyValue_DUP(PyTuple_GET_VALUE(tuple_o, i));
+            next = PyValue_XDUP(PyTuple_GET_VALUE(tuple_o, i));
             null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
         }
 

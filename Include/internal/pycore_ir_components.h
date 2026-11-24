@@ -171,13 +171,23 @@
               ARGS(borrowed inline_float), SCALAR, EFFECTS()) \
     PRIMITIVE(PyValue_FromDoubleNotNaN, PyValue, (double), \
               ARGS(scalar), VALUE(inline inline_float), EFFECTS()) \
-    /* Tagged indices (pycore_value.h): arithmetic on the word */ \
+    /* Tagged indices (pycore_value.h): arithmetic on the word.  Reviewed \
+     * G0c5.  PyValue_TagIndex builds the word Py_INDEX_BASE | (i & limit) \
+     * (asserts -1 <= i < 2**47); it calls nothing, touches no memory, and \
+     * the result is an inline word (no count, never NULL).  \
+     * PyValue_IncrementTaggedIndexNoOverflow adds 1 to the bits of its \
+     * argument, a tagged index, which owns no count; the result is the \
+     * word advanced (a new value, not a pass-through of the old one: the \
+     * seeded `consumed` states that, and a `scalar` mode would be equally \
+     * true of an inline word).  Its precondition (0 <= index < 2**47 - 1) is asserted in C and kept by the \
+     * bounds guards of the callers (_ITER_JUMP_LIST/TUPLE).  Callees, \
+     * failure paths and callbacks: none */ \
     PRIMITIVE(PyValue_TagIndex, PyValue, (intptr_t), \
               ARGS(scalar), VALUE(inline), EFFECTS()) \
     PRIMITIVE(PyValue_UntagIndex, intptr_t, (PyValueBorrow), \
               ARGS(borrowed), SCALAR, EFFECTS()) \
     PRIMITIVE(PyValue_IncrementTaggedIndexNoOverflow, PyValue, (PyValue), \
-              ARGS(scalar), VALUE(inline), EFFECTS()) \
+              ARGS(consumed), VALUE(inline), EFFECTS()) \
     /* PyValue_FromInt64 (pycore_value.h): _PyValue_FromIntScaled when the \
      * int fits inline, else _PyValue_BoxInt64, which gives NULL only when \
      * its allocation fails */ \
@@ -601,7 +611,11 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyTemplate_Build, PyObject *, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c5.  pycore_typeobject.h: type->_tp_iteritem != NULL && \
+     * type->tp_iter != _PyType_SlotIter, two loads of the type and an \
+     * address compare.  Callees: none.  It cannot fail and runs no \
+     * callback; the result tells whether the iterator indexes its \
+     * sequence (an _tp_iteritem cursor) or steps by iternext */ \
     HELPER(_PyType_IteratesByIndex, int, (PyTypeObject *), \
         ARGS(scalar), SCALAR, EFFECTS(reads)) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
@@ -680,7 +694,12 @@
               ARGS(object), TEST(exact(PyFunction_Type)), EFFECTS(reads)) \
     /* An element of a list or tuple: a borrow rooted by the container \
      * (pycore_list.h, pycore_tuple.h).  A tuple under construction holds \
-     * NULL, so no fact is declared of it */ \
+     * NULL, so no fact is declared of it.  Reviewed G0c5 for \
+     * PyList_GET_VALUE: a load of ob_item[index] (a read), no bounds check \
+     * (the caller bounds the index: _ITER_JUMP_LIST), no callees, cannot \
+     * fail, no callback.  A list built by PyList_New(n) holds NULL until \
+     * filled; _ITER_NEXT_LIST reads only the items of a published list, \
+     * whose items are set (the same trust as for a tuple) */ \
     PRIMITIVE(PyList_GET_VALUE, PyValueBorrow, (PyObject *, Py_ssize_t), \
               ARGS(object, scalar), SCALAR, EFFECTS(reads)) \
     PRIMITIVE(PyTuple_GET_VALUE, PyValueBorrow, (PyObject *, Py_ssize_t), \
@@ -991,14 +1010,46 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_GetAwaitable, PyObject *, (PyValueBorrow, int), \
         ARGS(borrowed, scalar), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c5 (ceval.c).  Called with an error set.  Callees: \
+     * _PyErr_ExceptionMatches (a read; PyErr_GivenExceptionMatches walks \
+     * the exception's MRO, which a metaclass __subclasscheck__ cannot \
+     * affect for a class check, so no Python), then for a StopIteration \
+     * _PyEval_MonitorRaise (sys.monitoring RAISE callbacks: arbitrary \
+     * Python, which may write the frame's homes) and _PyErr_Clear (drops \
+     * the exception object: a finalizer may run).  Returns 1 with the \
+     * exception cleared, 0 with it still set.  The seed's `reads` left out \
+     * both of the last two: it is runs_python.  It never leaves a new \
+     * exception of its own (do_monitor_exc, called by \
+     * _PyEval_MonitorRaise, handles the callbacks' errors; its result is \
+     * not read here) */ \
     HELPER(_PyForIter_StopIsExhaustion, int, (PyThreadState *, _PyInterpreterFrame *), \
-        ARGS(tstate, frame), SCALAR, EFFECTS(reads)) \
+        ARGS(tstate, frame), SCALAR, EFFECTS(runs_python)) \
     /* ceval.c: {1, item} owned, {0, NULL} at the end with no exception, {-1, NULL} with one (G0a4: a CASES result) */ \
     HELPER(_PyForIter_VirtualIteratorNext, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *), \
         ARGS(tstate, frame, borrowed, scalar), \
         CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
-    /* ceval.c: as _PyForIter_VirtualIteratorNext (G0a4: a CASES result) */ \
+    /* Reviewed G0c5 (ceval.c; _PyForIter_VirtualIteratorNext is its \
+     * out-of-line wrapper).  FOR_ITER's step of the iterator `iter` \
+     * (borrowed) with its cursor at *index_ptr.  A tagged cursor: \
+     * Py_TYPE(iter)->_tp_iteritem (the SLOT _Py_iteritemfunc: reads, \
+     * allocates and raises, no Python) is called with the untagged index; \
+     * an item advances *index_ptr (the only store: through the pointer, \
+     * to the caller's window cell, a tagged index) and gives {1, item}; at \
+     * the end {0, NULL} with no exception; on failure {-1, NULL} with an \
+     * exception set and the cursor unchanged.  Any other cursor: the \
+     * iternext value slot (the SLOT _Py_iternextvaluefunc: arbitrary \
+     * Python, a generator's frame or a heap type's __next__) or \
+     * _PyValue_IterStep, which adapts a tp_iternext (arbitrary Python). \
+     * An item: {1, item} owned.  A PYGEN_RETURN step is passed through as \
+     * {0, v}: v is the owned return value of the iterator, or NULL.  \
+     * PYGEN_ERROR: a StopIteration is the exhaustion, cleared by \
+     * _PyForIter_StopIsExhaustion (monitoring callbacks, runs_python) \
+     * and gives {0, NULL}; any other exception gives {-1, NULL}.  So the \
+     * seed's `status==0 value(null)` was an under-declaration: status 0 \
+     * can carry an owned value (the callers pass it to IR_COMPLETE_STEP, \
+     * which consumes it).  Borrowed `iter` is never released; the index \
+     * pointer is not an ownership argument (the cursor is an inline \
+     * word).  Callbacks: yes (runs_python covers the rest) */ \
     HELPER(_PyForIter_VirtualIteratorNextInline, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *), \
         ARGS(tstate, frame, borrowed, scalar), \
         CASES(status==-1 value(null) raised, status==0 value(owned nullable), status==1 value(owned)), EFFECTS(runs_python)) \
@@ -1173,7 +1224,19 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_GetAIter, PyValue, (PyThreadState *, PyValue), \
         ARGS(tstate, consumed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* ceval.c: {iterable, tagged index 0}, {iterator, NULL}, or {NULL, NULL} with an exception set (G0a4: a CASES result) */ \
+    /* Reviewed G0c5 (ceval.c).  Consumes `iterable` on every path: the \
+     * by-index and self-iterator cases return it as `first`; the \
+     * coroutine-in-yield-from case raises TypeError and closes it; the \
+     * general case calls _PyValue_GetIter (PyObject_GetIter: tp_iter, \
+     * arbitrary Python through a heap type's __iter__, or the sequence \
+     * protocol; TypeError when not iterable) and then PyValue_CLOSE of \
+     * the iterable (a finalizer may run).  Results: {iterable, tagged \
+     * index 0}, {iterable or iterator, NULL}, or {NULL, NULL} with an \
+     * exception set (the iterable closed).  `first` is an object when \
+     * not NULL: an inline number's type has neither _tp_iteritem nor \
+     * PyObject_SelfIter, so it only reaches _PyValue_GetIter, which \
+     * raises.  An owner of `iterable`'s obligation moves to `first`; \
+     * `second` is an inline word.  Callbacks: yes */ \
     HELPER(_PyEval_GetIter, _PyValuePair, (PyValue, int), \
         ARGS(consumed, scalar), \
         CASES(first(null) second(null) raised, first(owned object) second(inline nullable)), EFFECTS(runs_python)) \
@@ -1369,7 +1432,16 @@
      * RAISE).  Arguments are the kind, the completion value and the \
      * oparg.  The completion helper (_PyEval_CompleteForIter, \
      * _PyEval_CompleteSend) owns the value on every exit, so the value is \
-     * consumed (G0a4) */ \
+     * consumed (G0a4).  Reviewed G0c5: complete_step_impl (ceval.c) \
+     * reads the window homes and, on a FOR_ITER completion, retires them \
+     * (window[0] and window[1] are cleared and closed: the iterator and \
+     * its cursor), publishes nothing else, and returns the step's next \
+     * word (the exit).  Callbacks: _PyIR_ObserveStep runs the PRE and POST \
+     * sys.monitoring callbacks (arbitrary Python) and the XCLOSEs run \
+     * finalizers; an error from a callback leaves the exception set (the \
+     * raise exit).  The value is closed on every path (consumed).  The \
+     * effects hold on the branch and raise exits; on the uop's `next` \
+     * path the macro is not reached */ \
     MACRO(IR_COMPLETE_STEP, ARGS(scalar, consumed, scalar), NONE, \
           EFFECTS(reads, writes, raises, runs_python), EXITS(branch, raise)) \
     /* Errors: IR_MARKER_EFFECTS escapes, error, terminal, frame; \

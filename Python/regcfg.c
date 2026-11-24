@@ -486,6 +486,7 @@ struct _PyRegTr {
     int adef;
     int anatural;
     int maxpos;             // the deepest stack position numbered
+    int touched;            // ... in any translation, kept or not
     /* Per parameter CANON(k): whether an identity holds it now, and the op
      * that last took it in this region (-1: none) */
     char *held;
@@ -539,6 +540,7 @@ _PyRegTr_Push(_PyRegTr *t, int id)
     }
     t->stack[t->sp++] = id;
     t->maxpos = Py_MAX(t->maxpos, t->sp);
+    t->touched = Py_MAX(t->touched, t->sp);
     return SUCCESS;
 }
 
@@ -923,6 +925,9 @@ translate(_PyRegCfg *cfg)
         PyErr_NoMemory();
         return ERROR;
     }
+    for (int k = 0; k < IR_MAX_SLOTS; k++) {
+        t.free_since[k] = -1;
+    }
     for (int b = 0; b < n; b++) {
         range[2 * b] = cfg->blocks[b].start;
         range[2 * b + 1] = cfg->blocks[b].end;
@@ -943,7 +948,7 @@ translate(_PyRegCfg *cfg)
             t.failed = 0;
             t.permuted = 0;
             again = 0;
-            int used = Py_MIN(Py_MAX(t.maxpos, blk->startdepth) + 1,
+            int used = Py_MIN(Py_MAX(t.touched, blk->startdepth) + 1,
                               IR_MAX_SLOTS);
             for (int k = 0; k < used; k++) {
                 t.held[k] = k < blk->startdepth;

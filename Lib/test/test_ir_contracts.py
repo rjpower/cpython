@@ -2480,6 +2480,24 @@ class VerifierTests(unittest.TestCase):
         self.verify(source % ("tagged_index", "inline tagged_index"))
         self.refuses(source % ("", "inline"), r"next_index. is declared inline, but index gives an moved value")
 
+    def test_a_reassigned_input_gives_each_value(self):
+        # A consumed input's declared facts describe its entry value. After
+        # the body assigns it another input, an output copied from it is
+        # that value too, so an owner cannot leave as an inline output
+        source = """
+            op(_OP, (index: consumed %s, other: consumed %s -- next_index: inline)) effects() exits(next) {
+                DEAD(index);
+                index = other;
+                DEAD(other);
+                next_index = index;
+            }
+        """
+        self.verify(source % ("tagged_index", "tagged_index"))
+        self.refuses(source % ("tagged_index", ""),
+                     r"next_index. is declared inline, but other gives an moved value")
+        self.refuses(source % ("assumed(tagged_index) by GET_ITER", ""),
+                     r"next_index. is declared inline, but other gives an moved value")
+
     def test_a_redirect_is_its_own_exit(self):
         # _MONITOR_RESUME, _YIELD_VALUE_EVENT: after a callback moved the
         # frame, the word leaves for the word it chose (DISPATCH_REDIRECT),

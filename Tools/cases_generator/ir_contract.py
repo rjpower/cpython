@@ -4083,7 +4083,14 @@ def _value_results(uop: Uop, where: Token, rhs: list[str], table: dict[str, Row]
         # An assumed fact holds at entry (F7), as in the walk; a value that
         # is never an object owns nothing, so it moves as an inline one
         facts = implied(item.facts | {a.fact for a in item.assumed})
-        return [(facts, "inline" if "object" not in word_kinds(facts) else "moved", rhs[0])]
+        entry = [(facts, "inline" if "object" not in word_kinds(facts) else "moved", rhs[0])]
+        if rhs[0] in seen:
+            return entry
+        # The declaration describes the entry value only: a value the body
+        # assigns to the input later is an alternative of its own
+        return entry + [r for at, value in _assignments(uop, rhs[0])
+                        for r in _value_results(uop, at, value, table, inputs,
+                                                seen | {rhs[0]})]
     if len(rhs) == 1 and rhs[0].count(".") == 1:
         # A value field of a CASES result: what each outcome that is not
         # NULL gives (F6)

@@ -12296,9 +12296,6 @@ ir_run_LOAD_SMALL_INT_INLINE(
             PyValue value;
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyValue_FromInlineInt(oparg);
-            if (PyValue_IsNull(value)) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -26491,9 +26488,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue value;
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyValue_FromInlineInt(oparg);
-            if (PyValue_IsNull(value)) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
             DISPATCH();

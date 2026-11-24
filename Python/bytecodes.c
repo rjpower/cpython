@@ -335,12 +335,13 @@ dummy_func(
             value = PyValue_FromInlineInt(oparg);
         }
 
+        // An inline int holds no memory: PyValue_FromInlineInt encodes the
+        // word and cannot fail, so there is no raise exit (G0c9)
         leaf inst(LOAD_SMALL_INT_INLINE, (-- value: owned exact(PyLong_Type) inline_int))
-            effects(raises) exits(next, raise)
+            effects() exits(next)
         {
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyValue_FromInlineInt(oparg);
-            ERROR_IF(PyValue_IsNull(value));
         }
 
         macro(STORE_FAST) = _SWAP_FAST + POP_TOP;

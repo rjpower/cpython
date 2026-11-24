@@ -21,6 +21,7 @@ inference.
 """
 
 import copy
+import dataclasses
 from dataclasses import dataclass, field
 import re
 
@@ -214,6 +215,9 @@ BUILD = "gil"
 class Arg:
     mode: str
     facts: frozenset[VFact] = frozenset()
+    # `consumed object` of a `PyObject *` parameter: a stolen object
+    # pointer; mode and representation are separate words
+    object: bool = False
 
 
 @dataclass(frozen=True)
@@ -480,7 +484,16 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
     fixed = [p for p in row.params if p != "..."]
     if len(row.args) != len(fixed):
         raise ValueError(f"{len(row.args)} ARGS for {len(fixed)} parameters")
-    return row
+    # A value mode with `object` on a `PyObject *` parameter is the
+    # representation: `consumed object` steals an object pointer.  On a
+    # PyValue parameter `object` stays the fact the value must have
+    args = []
+    for arg, param in zip(row.args, fixed):
+        if (arg.mode in ("consumed", "taken") and OBJECT in arg.facts
+                and re.sub(r"\s+", "", param) == "PyObject*"):
+            arg = Arg(arg.mode, arg.facts - {OBJECT}, object=True)
+        args.append(arg)
+    return dataclasses.replace(row, args=tuple(args + list(row.args[len(fixed):])))
 
 
 def parse_rows(text: str, source: str = "pycore_ir_components.h") -> dict[str, Row]:

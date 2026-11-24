@@ -172,6 +172,8 @@ EXTRA_ROWS = """
     MACRO(SPAM_NEEDS_UNIQUE, ARGS(borrowed unique), NONE, EFFECTS(writes), EXITS()) \
     MACRO(SPAM_GEN_OR_CORO, ARGS(borrowed), TEST(exact(PyGen_Type|PyCoro_Type)), \
           EFFECTS(), EXITS()) \
+    HELPER(SPAM_STEAL, PyValue, (PyObject *), ARGS(consumed object), VALUE(owned), \
+           EFFECTS()) \
     MACRO(SPAM_GUARD_INT, ARGS(borrowed), GUARD(inline_int), EFFECTS(), EXITS(miss)) \
     MACRO(SPAM_GUARD_INDEX, ARGS(borrowed, borrowed, scalar), GUARD(in_bounds(1)), \
           EFFECTS(reads), EXITS(deopt))
@@ -1213,6 +1215,25 @@ class VerifierTests(unittest.TestCase):
             {"x": frozenset({ir_contract.parse_fact("exact(PyTuple_Type)", None)})}])
         self.assertIn(ir_contract.parse_fact("exact(PyList_Type|PyTuple_Type)", None),
                       facts["x"])
+
+    # A stolen object pointer
+
+    def test_consumed_object_steals_a_pointer(self):
+        steal = self.table["SPAM_STEAL"].args[0]
+        self.assertEqual((steal.mode, steal.object, steal.facts), ("consumed", True, frozenset()))
+        # On a PyValue parameter `object` stays the value's fact
+        view = self.table["PyValue_AsKnownObjectSteal"].args[0]
+        self.assertEqual((view.mode, view.object), ("consumed", False))
+        self.assertIn(ir_contract.OBJECT, view.facts)
+        source = """
+            op(_OP, (x: %s object -- r: owned)) effects() exits(next) {
+                PyObject *o = %s(x);
+                r = SPAM_STEAL(o);
+            }
+        """
+        self.verify(source % ("consumed", "PyValue_AsKnownObjectSteal"))
+        self.refuses(source % ("borrowed", "PyValue_AsKnownObjectBorrow"),
+                     r"SPAM_STEAL consumes `x`, declared borrowed, which it does not own")
 
     # F2: a row's guard and the facts on its return
 

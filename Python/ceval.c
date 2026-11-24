@@ -998,6 +998,35 @@ _Py_BuildMap_ValueSteal(
     return res;
 }
 
+PyObject *
+_Py_BuildSet_ValueSteal(
+    _PyInterpreterFrame *frame,
+    PyValue *arguments,
+    int total_args)
+{
+    /* As _Py_BuildMap_ValueSteal: a window of temporaries that own their
+     * values.  Each value is taken from its home and moves into the set,
+     * or is closed once an add has failed (or the set was not made); every
+     * home is empty on return. */
+    _PyValue_RecheckWindow(arguments, total_args);
+    PyObject *set = PySet_New(NULL);
+    int err = set == NULL;
+    for (int i = 0; i < total_args; i++) {
+        PyValue value = _PyFrame_TakeHome(frame, &arguments[i]);
+        if (err == 0) {
+            err = _PySet_AddValueTakeRef((PySetObject *)set, value);
+        }
+        else {
+            PyValue_CLOSE(value);
+        }
+    }
+    if (err) {
+        Py_XDECREF(set);
+        return NULL;
+    }
+    return set;
+}
+
 /* Out of line: the vectorcall's argument array is a local, which would be
  * the handler's (spec 3.5, R-c).  super(class, self), or super() when nargs
  * is 0. */

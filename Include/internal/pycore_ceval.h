@@ -558,6 +558,12 @@ _Py_BuildMap_ValueSteal(
     PyValue *arguments,
     int half_args);
 
+PyAPI_FUNC(PyObject *)
+_Py_BuildSet_ValueSteal(
+    struct _PyInterpreterFrame *frame,
+    PyValue *arguments,
+    int total_args);
+
 
 // Like PyMapping_GetOptionalItem, but returns the PyObject* instead of taking
 // it as an out parameter. This helps MSVC's escape analysis when used with

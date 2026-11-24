@@ -2798,6 +2798,16 @@
     MACRO(IR_BUILD_MAP, ARGS(consumed), VALUE_OR_NULL(owned), \
           EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
           EXITS()) \
+    /* Evidence (Python/ceval.c _Py_BuildSet_ValueSteal): PySet_New, then \
+     * each value taken from its home (_PyFrame_TakeHome) and stolen by \
+     * _PySet_AddValueTakeRef, or closed once an add has failed or the set \
+     * was not made: the values are consumed on every path.  Failure: NULL \
+     * with an exception set (MemoryError, unhashable, or an element's \
+     * __hash__/__eq__, which may run Python); the half-built set is \
+     * released */ \
+    MACRO(IR_BUILD_SET, ARGS(consumed), VALUE_OR_NULL(owned), \
+          EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
+          EXITS()) \
     /* _PyObject_LookupSpecialMethod: 1 found, 0 missing (the uop raises), \
      * negative on error; writes the two output homes.  "escapes" in \
      * IR_HELPER_EFFECTS (a descriptor's __get__ may run Python).  The \

@@ -3313,31 +3313,9 @@ ir_run_BUILD_SET(
             PyValue *values;
             PyValue set;
             values = &window[0];
-            PyObject *set_o = PySet_New(NULL);
+            PyObject *set_o = _Py_BuildSet_ValueSteal(frame, values, oparg);
             if (set_o == NULL) {
-                PyValue tmp;
-                for (int _i = oparg; --_i >= 0;) {
-                    tmp = values[_i];
-                    values[_i] = PyValue_NULL;
-                    PyValue_CLOSE(tmp);
-                }
                 IR_CLEAR_SLOTS(&window[0], oparg);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            int err = 0;
-            for (Py_ssize_t i = 0; i < oparg; i++) {
-                PyValue value = _PyFrame_TakeHome(frame, &values[i]);
-                if (err == 0) {
-                    err = _PySet_AddValueTakeRef((PySetObject *)set_o,
-                        value);
-                }
-                else {
-                    PyValue_CLOSE(value);
-                }
-            }
-            if (err) {
-                IR_CLEAR_SLOTS(&window[0], oparg);
-                Py_DECREF(set_o);
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             set = PyValue_FromObjectSteal(set_o);

@@ -2791,31 +2791,12 @@ dummy_func(
 
         outlined macro(SET_UPDATE) = _SET_UPDATE + POP_TOP;
 
-        outlined inst(BUILD_SET, (values[oparg] -- set)) {
-            PyObject *set_o = PySet_New(NULL);
-            if (set_o == NULL) {
-                DECREF_INPUTS();
-                ERROR_IF(true);
-            }
-
-            int err = 0;
-            for (Py_ssize_t i = 0; i < oparg; i++) {
-                PyValue value = IR_TAKE_INPUT(values, i);
-                if (err == 0) {
-                    err = _PySet_AddValueTakeRef((PySetObject *)set_o,
-                                                 value);
-                }
-                else {
-                    PyValue_CLOSE(value);
-                }
-            }
+        outlined inst(BUILD_SET, (values[oparg]: consumed -- set: owned))
+            effects(reads, writes, allocates, raises, releases, runs_python) exits(next, raise)
+        {
+            PyObject *set_o = IR_BUILD_SET(values);
             DEAD(values);
-            if (err) {
-                Py_DECREF(set_o);
-                ERROR_IF(true);
-            }
-
-            INPUTS_DEAD();
+            ERROR_IF(set_o == NULL);
             set = PyValue_FromObjectSteal(set_o);
         }
 

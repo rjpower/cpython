@@ -3607,6 +3607,7 @@ class IREmitter(Emitter):
         self._replacers["IR_CLOSE_INPUTS"] = self.close_input_homes
         self._replacers["IR_BUILD_STRING"] = self.home_helper
         self._replacers["IR_BUILD_MAP"] = self.home_helper
+        self._replacers["IR_BUILD_SET"] = self.home_helper
         self._replacers["IR_BUILD_TUPLE"] = self.home_helper
         self._replacers["IR_BUILD_LIST"] = self.home_helper
         self._replacers["IR_LOOKUP_SPECIAL"] = self.home_helper
@@ -3745,8 +3746,9 @@ class IREmitter(Emitter):
             expression = (f"_PyObject_LookupSpecialMethod(frame, {args[0][0].text}, "
                           f"&{local.name}[0], &{local.name}[1])")
         else:
-            helper = ("_Py_BuildString_ValueSteal" if tkn.text == "IR_BUILD_STRING"
-                      else "_Py_BuildMap_ValueSteal")
+            helper = {"IR_BUILD_STRING": "_Py_BuildString_ValueSteal",
+                      "IR_BUILD_MAP": "_Py_BuildMap_ValueSteal",
+                      "IR_BUILD_SET": "_Py_BuildSet_ValueSteal"}[tkn.text]
             expression = f"{helper}(frame, {local.name}, oparg)"
         self.out.emit_at(expression, tkn)
         self.out.last_token = end
@@ -6546,7 +6548,8 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
                     raise analysis_error("home drain needs its sole owning array and unconditional handoff", token)
                 index = 0
                 covered.add(id(args[0][0]))
-            elif token.text in {"IR_BUILD_STRING", "IR_BUILD_MAP", *STEAL_SUCCESS_HOME_HELPERS}:
+            elif token.text in {"IR_BUILD_STRING", "IR_BUILD_MAP", "IR_BUILD_SET",
+                                *STEAL_SUCCESS_HOME_HELPERS}:
                 array = name(args[0]) if len(args) == 1 else None
                 item = inputs.get(array)
                 extent = "oparg*2" if token.text == "IR_BUILD_MAP" else "oparg"

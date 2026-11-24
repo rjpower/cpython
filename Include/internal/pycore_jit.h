@@ -154,6 +154,21 @@ _PyJit_CompiledHandler(_PyIRWord w)
         ? _PyIR_HandlerBase[handler] : handler;
 }
 
+#ifdef _PY_JIT_SUPPORTED
+/* The plan by which a unit compiles word w (Python/jit.c, emit_unit()): its
+ * compiled handler's, or none in a unit at the recompile cap. */
+PyAPI_FUNC(const _PyIRStubPlan *) _PyJit_PlanOf(_PyIRWord w, int capped);
+#endif
+
+/* The handler whose template, stub or form word w compiles under plan: the
+ * plan's arm, which is the handler itself or its family's baseline(...)
+ * arm, or the compiled handler when the word is not planned */
+static inline int
+_PyJit_ArmOf(const _PyIRStubPlan *plan, _PyIRWord w)
+{
+    return plan->region == _PyIR_PLAN_NONE ? _PyJit_CompiledHandler(w) : plan->arm;
+}
+
 /* Read -X jit and PYTHON_JIT into interp->ceval.jit.  An unknown value is
  * an error; a mode other than off on a process whose code memory cannot be
  * reserved leaves the JIT off. */

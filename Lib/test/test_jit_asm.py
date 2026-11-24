@@ -232,6 +232,8 @@ def _branch_program():
         emit(("jcc", cond, 0), f"{{disp32}} j{CONDS[cond]} .L0")
     emit(("jmp", 0), "{disp32} jmp .L0")
     emit(("jmp", 2), "{disp32} jmp .L2")
+    emit(("call", 0), "call .L0")
+    emit(("call", 3), "call .L3")
     emit(("bind", 2), ".L2:")
     for reg in range(16):
         emit(("lea_label", reg, 0), f"lea {REGS64[reg]}, [rip + .L0]")
@@ -759,7 +761,9 @@ class SwitchRoutineTests(unittest.TestCase):
         self.assertIs(info["invalid"], False)
         self.assertIs(info["recorded"], True if ASSERTIONS else None)
         self.assertEqual(info["switches"], 1)
-        self.assertEqual(_testinternalcapi.jit_stats()["switches"], before + 1)
+        if not sys._jit.is_enabled():
+            # Compiled code, this test's included, switches too
+            self.assertEqual(_testinternalcapi.jit_stats()["switches"], before + 1)
 
     def test_any_unit_switches_into_another(self):
         # The routine of one code's unit enters another code's unit
@@ -785,7 +789,9 @@ class SwitchRoutineTests(unittest.TestCase):
                 self.assertIs(same, True)
                 if index is not None:
                     self.assertEqual(word, index)
-        self.assertEqual(_testinternalcapi.jit_stats()["switches"], before)
+        if not sys._jit.is_enabled():
+            # Compiled code, this test's included, switches too
+            self.assertEqual(_testinternalcapi.jit_stats()["switches"], before)
 
     def test_a_stale_unit_is_recompiled(self):
         g, gen = self.compiled()

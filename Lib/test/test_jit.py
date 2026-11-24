@@ -758,10 +758,9 @@ class TestPins(unittest.TestCase):
         # its frame is gone the pin holds the code.  From C, f runs in a
         # loop of its own, whose exit (or jit_run()) releases the pin before
         # the call returns.  Called directly, the code lives on until the
-        # next pin, unless jit_run() ran f (under always) and released it.
+        # next pin, in every mode: compiled code switches from the caller
+        # into f and back within one native activation.
         def expected(options):
-            if options == ("jit=always",):
-                return "returning dead\nreturning dead \n\n"
             return "returning dead\nreturning alive\ndead\n"
         self.check_modes("""
             def make():
@@ -1153,6 +1152,11 @@ def report(name, before):
     # What the JIT did meanwhile: driver turns and switches, for the record
     turns, switches = stats()
     print(f"jit {name} turns={turns - before[0]} switches={switches - before[1]}")
+def settle():
+    # The activation's pin keeps the code that compiled code departed last
+    # until the next departure (g3/design.md section 2), which may be later
+    # than the interpreter's release: pinning this frame's code releases it
+    t.jit_pin_departing()
 """
 
 
@@ -1163,7 +1167,22 @@ class TestFrameTransfers(JitTestCase):
     JIT off, on and always, apart from its 'jit' lines, which record the
     driver turns and switches each part took, and its 'active' lines, which
     hold sys._jit.is_active() inside callees and must be True under
-    always."""
+    always.  A frame switch between compiled frames is a tail transfer
+    through the switch routine, so a part that calls compiled code counts
+    switches and only the driver turns of the few leaves: an interpreter
+    fallback fails assert_switched()."""
+
+    def assert_switched(self, out, name, switches, turns=16):
+        """The part name of out switched at least switches times in at most
+        turns driver turns: the few leaves (a thread's or C's entry, a
+        warm-up event, a recompile), where each switch was a turn before."""
+        for line in out.splitlines():
+            if line.startswith(f"jit {name} "):
+                fields = dict(f.split("=") for f in line.split()[2:])
+                self.assertGreaterEqual(int(fields["switches"]), switches, line)
+                self.assertLessEqual(int(fields["turns"]), turns, line)
+                return
+        self.fail(f"no 'jit {name}' line in {out}")
 
     def check_transfers(self, source):
         source = TRANSFER_PRELUDE + textwrap.dedent(source)
@@ -1182,7 +1201,7 @@ class TestFrameTransfers(JitTestCase):
         return outs
 
     def test_recursion(self):
-        self.check_transfers("""
+        outs = self.check_transfers("""
             def fib(n):
                 return n if n < 2 else fib(n - 1) + fib(n - 2)
             def even(n):
@@ -1200,6 +1219,8 @@ class TestFrameTransfers(JitTestCase):
             report("recursion", before)
             print("active", active(10))
         """)
+        # fib(18) alone makes 8,360 calls and as many returns
+        self.assert_switched(outs["always"], "recursion", 2 * 8360)
 
     def test_recursion_limit(self):
         # Counted, not measured on the C stack: the same depth everywhere
@@ -1226,7 +1247,7 @@ class TestFrameTransfers(JitTestCase):
     def test_deep_recursion_in_a_small_c_stack(self):
         # 20,000 Python frames in a thread with 256 KiB of C stack: compiled
         # calls must not grow the C stack per Python call
-        self.check_transfers("""
+        outs = self.check_transfers("""
             import threading
             def down(n):
                 return 0 if n == 0 else 1 + down(n - 1)
@@ -1234,13 +1255,16 @@ class TestFrameTransfers(JitTestCase):
             result = []
             def body():
                 sys.setrecursionlimit(25000)
+                before = stats()
                 result.append(down(20000))
+                report("deep", before)
             threading.stack_size(256 * 1024)
             thread = threading.Thread(target=body)
             thread.start()
             thread.join()
             print(result)
         """)
+        self.assert_switched(outs["always"], "deep", 2 * 20000)
 
     def test_mixed_tiers(self):
         # Every other level is cold: one code is monitored, which retires
@@ -1305,6 +1329,7 @@ class TestFrameTransfers(JitTestCase):
                 keep = weakref.ref(ns["f"].__code__, died("one"))
                 ns["f"]()
                 ns.clear()
+            settle()
             print(log[-1], len(log))
             log.clear()
 
@@ -1321,6 +1346,7 @@ class TestFrameTransfers(JitTestCase):
                 f(h)
                 del f, h
             gc.collect()
+            settle()
             print(sorted(set(name for name, _ in log)))
             log.clear()
 
@@ -1338,6 +1364,7 @@ class TestFrameTransfers(JitTestCase):
                 del r
                 print(ns["r"](0), end=" ") if i == 0 else ns["r"](0)
             print()
+            settle()
             print(log[-1], len(log))
             log.clear()
 
@@ -1355,6 +1382,7 @@ class TestFrameTransfers(JitTestCase):
                      {"Dropper": Dropper, "ns": ns}, ns)
                 keep = weakref.ref(ns["f"].__code__, died("four"))
                 ns["f"]()
+            settle()
             print(log[-2:], len(log))
             log.clear()
 
@@ -1385,6 +1413,7 @@ class TestFrameTransfers(JitTestCase):
                     ns["f"](False)
                 keep = weakref.ref(ns["f"].__code__, died("six"))
                 ns["f"](True)
+            settle()
             print(log[-1], len(log))
             log.clear()
 
@@ -1567,6 +1596,183 @@ class TestFrameTransfers(JitTestCase):
                     print(type(e).__name__)
             sys.setrecursionlimit(1000)
         """)
+
+    def test_plans_per_word(self):
+        # Every compiled frame is entered at word 0: RESUME's words compile
+        # to the inline RESUME_CHECK template, and the calls and returns
+        # that switch are the forms' calls (G3a plans no transfer stub)
+        outs = self.check_transfers("""
+            def callee(x):
+                return x + 1
+            def caller(n):
+                return callee(n) + callee(n + 1)
+            for i in range(3):
+                caller(i)
+            before = stats()
+            print(caller(5))
+            report("plans", before)
+            for f in (callee, caller):
+                unit = t.jit_unit(f.__code__)
+                if unit is not None:
+                    for i, plan in sorted(unit["plans"].items()):
+                        print("jit plan", f.__name__, i, *plan)
+        """)
+        plans = [line.split()[2:] for line in outs["always"].splitlines()
+                 if line.startswith("jit plan ")]
+        resumes = [p for p in plans if p[2].startswith("RESUME")]
+        self.assertEqual({tuple(p[0:1]) + tuple(p[3:]) for p in resumes},
+                         {("callee", "inline", "template", "RESUME_CHECK"),
+                          ("caller", "inline", "template", "RESUME_CHECK")}, plans)
+        self.assertEqual([p[1] for p in resumes], ["0", "0"], plans)
+        transfers = [p for p in plans if p[2].startswith(("CALL_PY", "RETURN"))]
+        self.assertTrue(any(p[2].startswith("CALL_PY") for p in transfers), plans)
+        for p in transfers:
+            self.assertEqual(p[4], "form", p)
+        self.assert_switched(outs["always"], "plans", 4)
+
+    def test_monitoring_turned_on_in_compiled_callees(self):
+        # Events turned on inside a compiled callee, a callee that
+        # instruments its caller, and monitoring off again: the events and
+        # results equal the interpreter's, and the codes compile again
+        outs = self.check_transfers("""
+            M = sys.monitoring
+            E = M.events
+            events = []
+            def leaf(n):
+                return n + 1
+            def mid(n):
+                return leaf(n) + 1
+            def top(n):
+                return mid(n) + 1
+            def turn_on(n):
+                if n == 0:
+                    M.use_tool_id(2, "test")
+                    for ev in (E.PY_START, E.PY_RETURN):
+                        M.register_callback(2, ev, lambda code, *a, ev=ev:
+                            events.append((ev, code.co_name)) if code.co_name != "<lambda>" else None)
+                    M.register_callback(2, E.CALL, lambda code, off, f, arg0:
+                        events.append(("call", code.co_name, getattr(f, "__name__", "?")))
+                        if code.co_name in ("top", "mid", "turn_on") else None)
+                    M.set_events(2, E.PY_START | E.PY_RETURN | E.CALL)
+                    return 0
+                return turn_on(n - 1) + top(n)
+            for i in range(5):
+                top(i)
+            print(turn_on(3))
+            print(top(1))
+            print(events)
+            M.set_events(2, 0)
+            M.free_tool_id(2)
+            events.clear()
+
+            # A callee instruments its caller, which goes on in the
+            # evaluator from the return
+            lines = []
+            def instrumenting(code):
+                M.set_local_events(3, code, E.LINE)
+                return 1
+            def instrumented(n):
+                x = instrumenting(instrumented.__code__) + n
+                y = x * 2
+                return y
+            for i in range(5):
+                M.use_tool_id(3, "test")
+                M.register_callback(3, E.LINE, lambda code, line:
+                    lines.append(line - code.co_firstlineno))
+                print(instrumented(i), lines)
+                lines.clear()
+                M.set_local_events(3, instrumented.__code__, 0)
+                M.free_tool_id(3)
+
+            # Monitoring off: the codes run compiled again
+            for i in range(5):
+                top(i)
+            before = stats()
+            print(top(10))
+            report("off", before)
+            unit = t.jit_unit(top.__code__)
+            print("jit valid", unit is not None and unit["invalid"] == 0)
+        """)
+        self.assertIn("jit valid True", outs["always"])
+        self.assert_switched(outs["always"], "off", 4)
+
+    def test_settrace_three_frames_deep(self):
+        # sys.settrace set in a compiled frame three frames deep: the
+        # events of the frames that go on, compared with the interpreter's
+        self.check_transfers("""
+            events = []
+            def tracer(frame, event, arg):
+                if frame.f_code.co_name in ("a", "b", "c", "d"):
+                    events.append((event, frame.f_code.co_name,
+                                   frame.f_lineno - frame.f_code.co_firstlineno))
+                return tracer
+            def d(n):
+                return n * 2
+            def c(on):
+                if on:
+                    sys.settrace(tracer)
+                x = d(1)
+                return x
+            def b(on):
+                y = c(on)
+                return y + d(2)
+            def a(on):
+                z = b(on)
+                return z + d(3)
+            for i in range(10):
+                a(False)
+            print(a(True))
+            sys.settrace(None)
+            for e in events:
+                print(*e)
+            events.clear()
+            print(a(False), events)
+        """)
+
+    def test_delegated_yield_publication(self):
+        # (c) of the generator-boundary variants: a value that f's
+        # SEND_VIRTUAL_XFER word yields on, delegated, goes into the
+        # consumer's loop variable, which held the last reference to a
+        # suspended delegating generator: its close() runs compiled code
+        # while the yield publishes.  The async variants yield to a C
+        # send(), so their consumer has no home to publish into.
+        outs = self.check_transfers("""
+            log = []
+            def g(x):
+                return x * 2
+            def susp():
+                try:
+                    yield 0
+                finally:
+                    log.append(("closed", [g(i) for i in range(3)]))
+            DROP = "    if drop:\\n        ns.clear()\\n"
+            cases = [
+                ("SEND_VIRTUAL_XFER_RETURN",
+                 "def f(it, drop):\\n" + DROP + "    return (yield from it)\\n"),
+                ("SEND_VIRTUAL_XFER_POP_TOP",
+                 "def f(it, drop):\\n" + DROP + "    yield from it\\n    return 1\\n"),
+            ]
+            def consume(f):
+                x = f(susp(), False)
+                next(x)
+                seen = []
+                for x in f([1, 2, 3], False):
+                    seen.append(x)
+                return seen
+            for name, source in cases:
+                ns = {}
+                exec(source, {"ns": ns}, ns)
+                for k in range(40):
+                    list(ns["f"]([1, 2], False))
+                words = {r[0] for r in t.get_ir(ns["f"].__code__, True)}
+                print("jit words", name, name in words)
+                for k in range(3):
+                    print(name, consume(ns["f"]), log)
+                    log.clear()
+        """)
+        for line in outs["always"].splitlines():
+            if line.startswith("jit words"):
+                self.assertTrue(line.endswith("True"), line)
 
     def test_stale_and_retired_callers(self):
         self.check_transfers("""
@@ -1790,6 +1996,23 @@ class TestUnwind(unittest.TestCase):
         in_unit, python = map(int, out.split())
         self.assertGreaterEqual(in_unit, 11)    # build(10) down to build(0)
         self.assertGreaterEqual(python, 10)
+
+    def test_backtrace_in_one_activation(self):
+        """Direct recursion ten compiled frames deep runs in one native
+        activation: backtrace() finds one return address in the units."""
+        out = run("""
+            import _testinternalcapi as t
+            def build(n):
+                if n == 0:
+                    return t.gnu_backtrace_unwind()
+                return build(n - 1)
+            build(10)
+            stack = build(10)
+            ranges = t.jit_unit(build.__code__)["ranges"]
+            print(sum(any(start <= a < start + size for start, size in ranges)
+                      for a in stack))
+        """, "jit=always")
+        self.assertEqual(int(out), 1)
 
     def test_units_come_and_go(self):
         """Every unit's frame is deregistered when its code is freed

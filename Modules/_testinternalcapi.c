@@ -32,6 +32,7 @@
 #include "pycore_ir_outcomes.h"    // _PyIR_NormalPhysicalTransfer()
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
 #include "pycore_jit.h"           // _PyJitUnit
+#include "pycore_jit_lower.h"     // _PyJit_Templates
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_list.h"          // _PyList_SetItemTakeValue()
 #include "pycore_object.h"        // _PyObject_IsFreed()
@@ -4938,10 +4939,55 @@ check_ir_retirement(PyObject *self, PyObject *args, PyObject *kwargs)
     return PyLong_FromLong(status);
 }
 
+#ifdef _PY_JIT_SUPPORTED
+/* The name of handler h */
+static const char *
+handler_name(int h)
+{
+    return h < IR_FIRST_ONLY_HANDLER
+        ? _PyOpcode_OpName[h] : _PyIR_OnlyNames[h - IR_FIRST_ONLY_HANDLER];
+}
+
+/* How the newest unit compiled each head word, as emit_unit() decides:
+ * {index: (handler, how, arm)}, how being "stub" (a SHARED plan's call),
+ * "template" or "form" */
+static PyObject *
+unit_plans(PyCodeObject *code, _PyJitUnit *unit)
+{
+    static const char *const regions[] = {"none", "inline", "shared"};
+    /* The newest unit was compiled at the cap if no compile is left */
+    int capped = code->_co_exec->jit_compiles >= _PyJIT_MAX_COMPILES;
+    PyObject *plans = PyDict_New();
+    if (plans == NULL) {
+        return NULL;
+    }
+    for (uint32_t i = 0; i < unit->nwords; i += _PyIR_WordLength(unit->words[i])) {
+        _PyIRWord w = unit->words[i];
+        const _PyIRStubPlan *plan = _PyJit_PlanOf(w, capped);
+        int arm = _PyJit_ArmOf(plan, w);
+        const char *how = plan->region == _PyIR_PLAN_SHARED ? "stub"
+            : _PyJit_Templates[arm] != NULL ? "template" : "form";
+        PyObject *item = Py_BuildValue("(ssss)", handler_name(IR_HANDLER(w)),
+                                       regions[plan->region], how, handler_name(arm));
+        PyObject *key = PyLong_FromUnsignedLong(i);
+        if (item == NULL || key == NULL || PyDict_SetItem(plans, key, item) < 0) {
+            Py_XDECREF(item);
+            Py_XDECREF(key);
+            Py_DECREF(plans);
+            return NULL;
+        }
+        Py_DECREF(item);
+        Py_DECREF(key);
+    }
+    return plans;
+}
+#endif
+
 /* The baseline JIT's unit of a code object: None if it has none, else a
  * dict of its words, its code bytes and pages, whether it is valid, the
  * code's compiles, the length of its chain of units, the ranges of their
- * code and the newest unit's unwind info. */
+ * code, the newest unit's unwind info and how it compiled each head word
+ * ("plans", unit_plans()). */
 static PyObject *
 jit_unit(PyObject *self, PyObject *code_object)
 {
@@ -4984,7 +5030,12 @@ jit_unit(PyObject *self, PyObject *code_object)
         }
         Py_DECREF(range);
     }
-    PyObject *result = Py_BuildValue("{sIsisisnsnsisIsisNsnsy#}",
+    PyObject *plans = unit_plans(code, unit);
+    if (plans == NULL) {
+        Py_DECREF(ranges);
+        return NULL;
+    }
+    PyObject *result = Py_BuildValue("{sIsisisnsnsisIsisNsnsy#sN}",
         "nwords", unit->nwords,
         "heads", heads,
         "guarded", guarded,
@@ -4996,7 +5047,8 @@ jit_unit(PyObject *self, PyObject *code_object)
         "ranges", ranges,
         "switch", (Py_ssize_t)((const uint8_t *)unit->switch_routine - unit->code.start),
         "eh_frame", (const char *)unit->unwind.eh_frame,
-        (Py_ssize_t)(unit->code.size - frame_offset));
+        (Py_ssize_t)(unit->code.size - frame_offset),
+        "plans", plans);
     return result;
 #else
     (void)code;

@@ -534,10 +534,7 @@ jit_template_run(PyObject *module, PyObject *args)
     if (use_template) {
         /* The plan's arm, as emit_unit() compiles it: a RESUME word runs
          * its family's baseline(RESUME_CHECK) template */
-        int handler = _PyJit_CompiledHandler(w);
-        const _PyIRStubPlan *plan = &_PyIR_StubPlans[handler];
-        int arm = plan->region == _PyIR_PLAN_NONE ? handler : plan->arm;
-        _PyJitTemplate template = _PyJit_Templates[arm];
+        _PyJitTemplate template = _PyJit_Templates[_PyJit_ArmOf(_PyJit_PlanOf(w, 0), w)];
         _PyJitCode unit;
         if (template == NULL || build_unit(frame, index, template, &unit, NULL) < 0) {
             tstate->current_frame = previous;

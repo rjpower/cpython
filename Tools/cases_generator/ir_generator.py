@@ -8579,7 +8579,9 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
         "LOAD_CONST": "{ PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); value = PyValue_DUP(constant); }",
         "LOAD_CONST_INLINE_INT": "{ PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); value = PyValue_DUP(constant); assert(PyValue_IsInlineInt(value)); }",
         "LOAD_CONST_INLINE_FLOAT": "{ PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); value = PyValue_DUP(constant); assert(PyValue_IsInlineFloat(value)); }",
-        "LOAD_COMMON_CONSTANT": "{ assert(oparg < NUM_COMMON_CONSTANTS); value = PyValue_DUP(tstate->interp->common_consts[oparg]); }",
+        "LOAD_COMMON_CONSTANT": ("{ assert(oparg < NUM_COMMON_CONSTANTS); PyValueBorrow constant = "
+                                 "_PyValue_CommonConstant(tstate->interp->common_consts[oparg]); "
+                                 "value = PyValue_DUP(constant); }"),
         "LOAD_SMALL_INT": "{ assert(oparg < _PY_NSMALLPOSINTS); value = PyValue_FromInlineInt(oparg); }",
         "LOAD_SMALL_INT_INLINE": "{ assert(oparg < _PY_NSMALLPOSINTS); value = PyValue_FromInlineInt(oparg); }",
     }

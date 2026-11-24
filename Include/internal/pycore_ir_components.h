@@ -710,6 +710,11 @@
     PRIMITIVE(_PyValue_CellLocal, PyValueBorrow, (PyValueBorrow), \
               ARGS(borrowed), VALUE(borrowed assumed(exact(PyCell_Type)) by compiler), \
               EFFECTS()) \
+    /* An entry of the interpreter's common constants: pylifecycle.c's \
+     * pycore_init_builtins fills each with an object (common_objs) before \
+     * any code runs; pystate.c clears them at finalization only */ \
+    PRIMITIVE(_PyValue_CommonConstant, PyValueBorrow, (PyValueBorrow), \
+              ARGS(borrowed), VALUE(borrowed assumed(nonnull) by interpreter), EFFECTS()) \
     /* Reviewed G0c2 (pycore_value.h): for a pointer-space word returns its   \
      * pointer, taking over its count if the value owns one, else a new       \
      * reference (Py_NewRef) to the immortal or borrowed object; a            \

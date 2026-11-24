@@ -1187,7 +1187,7 @@ PURE_CALLS = re.compile(
     r"_PyFrame_AssertTemporariesClear|_PyManagedDictPointer_IsValues|doesnt_escape|"
     r"(advance|restart)_backoff_counter|_Py_GatherStats_GetIter|native_vector_capture|"
     r"_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY|_PyObject_ValueSlot|_PyValueGuarded_Load|"
-    r"_PyValue_CodeConstant|_PyValue_BoundLocal|_PyValue_CellLocal|"
+    r"_PyValue_CodeConstant|_PyValue_BoundLocal|_PyValue_CellLocal|_PyValue_CommonConstant|"
     r"_PyValue_NamesObject|_PyBinaryOp_ExtendDescr")
 
 # Non-escaping calls that read the heap and change nothing

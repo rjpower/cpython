@@ -35,6 +35,7 @@ int _PyJitLower__PyValueGuarded_Load(_PyJitWordCx *cx, const uint8_t *ops, const
 int _PyJitLower__PyValue_CodeConstant(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyValue_BoundLocal(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyValue_CellLocal(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower__PyValue_CommonConstant(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_Py_TYPE(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_PyList_CheckExact(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_PyTuple_CheckExact(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
@@ -103,6 +104,7 @@ const _PyJitLoweringInfo _PyJit_Lowerings[] = {
     {"_PyValue_CodeConstant", _PyJitLower__PyValue_CodeConstant, 1, 1, 0, 0, "gg", 0},
     {"_PyValue_BoundLocal", _PyJitLower__PyValue_BoundLocal, 1, 1, 0, 0, "gg", 0},
     {"_PyValue_CellLocal", _PyJitLower__PyValue_CellLocal, 1, 1, 0, 0, "gg", 0},
+    {"_PyValue_CommonConstant", _PyJitLower__PyValue_CommonConstant, 1, 1, 0, 0, "gg", 0},
     {"Py_TYPE", _PyJitLower_Py_TYPE, 1, 1, 0, 0, "gg", 0},
     {"PyList_CheckExact", _PyJitLower_PyList_CheckExact, 0, 1, 1, 0, "gg", 1},
     {"PyTuple_CheckExact", _PyJitLower_PyTuple_CheckExact, 0, 1, 1, 0, "gg", 1},

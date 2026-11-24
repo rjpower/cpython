@@ -138,6 +138,7 @@ CASES = {
     "_PyValue_CodeConstant": [(w,) for w in ANY_WORDS],
     "_PyValue_BoundLocal": [(w,) for w in ANY_WORDS],
     "_PyValue_CellLocal": [(w,) for w in ANY_WORDS],
+    "_PyValue_CommonConstant": [(w,) for w in ANY_WORDS],
     "GETLOCAL": [(0,)],
 }
 # The dict keys: its me_value read goes through DK_UNICODE_ENTRIES

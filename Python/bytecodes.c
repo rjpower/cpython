@@ -2248,7 +2248,8 @@ dummy_func(
         {
             // Keep in sync with _common_constants in opcode.py
             assert(oparg < NUM_COMMON_CONSTANTS);
-            value = PyValue_DUP(tstate->interp->common_consts[oparg]);
+            PyValueBorrow constant = _PyValue_CommonConstant(tstate->interp->common_consts[oparg]);
+            value = PyValue_DUP(constant);
         }
 
         outlined inst(LOAD_BUILD_CLASS, ( -- bc: owned))

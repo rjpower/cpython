@@ -155,6 +155,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_BoundLocal((PyVal
               "_PyValue_BoundLocal: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_CellLocal((PyValueBorrow){0})), PyValueBorrow),
               "_PyValue_CellLocal: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_CommonConstant((PyValueBorrow){0})), PyValueBorrow),
+              "_PyValue_CommonConstant: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_AsKnownObjectSteal), PyObject * (*)(PyValue)),
               "PyValue_AsKnownObjectSteal: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_TYPE), PyTypeObject * (*)(PyValueBorrow)),
@@ -11712,7 +11714,9 @@ ir_run_LOAD_COMMON_CONSTANT(
             (void)oparg;
             PyValue value;
             assert(oparg < NUM_COMMON_CONSTANTS);
-            value = PyValue_DUP(tstate->interp->common_consts[oparg]);
+            PyValueBorrow constant = _PyValue_CommonConstant(tstate->interp->common_consts[oparg]);
+            assert(!PyValue_IsNull(constant));
+            value = PyValue_DUP(constant);
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -26154,7 +26158,9 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)oparg;
             PyValue value;
             assert(oparg < NUM_COMMON_CONSTANTS);
-            value = PyValue_DUP(tstate->interp->common_consts[oparg]);
+            PyValueBorrow constant = _PyValue_CommonConstant(tstate->interp->common_consts[oparg]);
+            assert(!PyValue_IsNull(constant));
+            value = PyValue_DUP(constant);
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
             DISPATCH();

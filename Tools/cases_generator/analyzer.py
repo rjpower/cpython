@@ -661,6 +661,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyValue_CodeConstant",
     "_PyValue_BoundLocal",
     "_PyValue_CellLocal",
+    "_PyValue_CommonConstant",
     "_PyValue_NamesObject",
     "_Py_EvalBreakerHasEvents",
     "PyList_GET_ITEM",

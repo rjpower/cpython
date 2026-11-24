@@ -598,6 +598,12 @@ LOWERING(_PyValue_CellLocal)                    // [dst, w]
     return _PyJitCond_NONE;
 }
 
+LOWERING(_PyValue_CommonConstant)               // [dst, w]
+{
+    move(cx, REG(0), REG(1));
+    return _PyJitCond_NONE;
+}
+
 LOWERING(_Py_EvalBreakerHasEvents)              // []
 {
     _PyJitAsm_TestMI(A, AT(_PyJit_TSTATE, offsetof(PyThreadState, eval_breaker)),

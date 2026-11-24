@@ -122,7 +122,8 @@ HELPERS = {
     "_PyStopIteration_GetValue": native_helper((Kind.OBJECT,), Kind.VALUE),
     # The identities that state what the compiler shows of a word
     **{name: native_helper((Kind.VALUE,), Kind.VALUE)
-       for name in ("_PyValue_CodeConstant", "_PyValue_BoundLocal", "_PyValue_CellLocal")},
+       for name in ("_PyValue_CodeConstant", "_PyValue_BoundLocal", "_PyValue_CellLocal",
+                    "_PyValue_CommonConstant")},
     "PyTuple_GET_VALUE": native_helper((Kind.TUPLE, Kind.SCALAR), Kind.VALUE),
     "_PyTuple_GET_VALUE": native_helper((Kind.TUPLE, Kind.SCALAR), Kind.VALUE),
     "_PyEval_GetANext": native_helper((Kind.OBJECT,), Kind.OBJECT, True, True,

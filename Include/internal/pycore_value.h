@@ -63,6 +63,16 @@ _PyValue_CellLocal(PyValueBorrow value)
 }
 #define _PyValue_CellLocal(V0) (_PyValue_CellLocal)(PyValue_Borrow(V0))
 
+/* An entry of the interpreter's common constants (LOAD_COMMON_CONSTANT):
+   pylifecycle.c fills every entry with an object before any code runs, and
+   pystate.c clears them only when the interpreter is finalized. */
+static inline PyValueBorrow
+_PyValue_CommonConstant(PyValueBorrow value)
+{
+    return value;
+}
+#define _PyValue_CommonConstant(V0) (_PyValue_CommonConstant)(PyValue_Borrow(V0))
+
 /* The box argument (pyjit/design/proposals/value-api-g.md, section 1.1).
  * In stats builds every box primitive takes a _PyBoxAt: the site class
  * (BOX_SITE_*), the kind (BOX_KIND_*) and the owner, the code that the box

@@ -524,6 +524,8 @@ PRIMITIVES = {p.name: p for p in (
        doc="a local the compiler shows bound; the identity on its bits"),
     _p("_PyValue_CellLocal", [V], [V], VALUE_H, lambda cx, w: w,
        doc="the home of a cell or free variable; the identity on its bits"),
+    _p("_PyValue_CommonConstant", [V], [V], VALUE_H, lambda cx, w: w,
+       doc="an interpreter's common constant; the identity on its bits"),
     # The frame, an implicit operand
     _p("GLOBALS", [], [P], MACROS_H, _frame_field("f_globals", P), READS, frame=True),
     _p("BUILTINS", [], [P], MACROS_H, _frame_field("f_builtins", P), READS, frame=True),

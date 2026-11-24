@@ -6072,7 +6072,6 @@ ir_run_CLEANUP_THROW(
             PyValue value;
             exc_value_st = window[3];
             assert(PyValue_IsObject(exc_value_st));
-            assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
@@ -6111,7 +6110,6 @@ ir_run_CLEANUP_THROW_XFER_DISCARD(
             PyValue exc_value_st;
             PyValue value;
             exc_value_st = window[3];
-            assert(PyValue_IsObject(exc_value_st));
             assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
@@ -7601,7 +7599,6 @@ ir_run_DICT_MERGE(
                 dict = window[3];
                 callable = window[0];
                 assert(PyValue_IsObject(dict));
-                assert(PyValue_IsObject(dict));
                 if (!PyValue_IsObject(update)) {
                     _PyErr_Format(tstate, PyExc_TypeError,
                               "Value after ** must be a mapping, not %N",
@@ -7655,7 +7652,6 @@ ir_run_DICT_UPDATE(
             {
                 update = window[1 + (oparg - 1)];
                 dict = window[0];
-                assert(PyValue_IsObject(dict));
                 assert(PyValue_IsObject(dict));
                 if (!PyValue_IsObject(update)) {
                     _PyErr_Format(tstate, PyExc_TypeError,
@@ -8129,7 +8125,6 @@ ir_run_FOR_ITER_LIST(
                 null_or_index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyList_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
@@ -8280,7 +8275,6 @@ ir_run_FOR_ITER_TUPLE(
             {
                 null_or_index = window[1];
                 iter = window[0];
-                assert(PyValue_IsObject(iter));
                 assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyTuple_CheckExact(iter_o)) {
@@ -8440,7 +8434,6 @@ ir_run_GET_ANEXT(
             PyValue aiter;
             PyValue awaitable;
             aiter = IR_SLOT(IR_B(ir_word));
-            assert(PyValue_IsObject(aiter));
             assert(PyValue_IsObject(aiter));
             PyObject *awaitable_o = _PyEval_GetANext(_PyValue_AsKnownObjectBorrowPointer(aiter));
             if (awaitable_o == NULL) {
@@ -9041,7 +9034,6 @@ ir_run_INSTRUMENTED_END_SEND(
             value = IR_VIEW(IR_D(ir_word));
             index_or_null = IR_VIEW(IR_C(ir_word));
             receiver = IR_VIEW(IR_B(ir_word));
-            assert(PyValue_IsObject(receiver));
             assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = _PyValue_AsKnownObjectBorrowPointer(receiver);
             ir_own_D = IR_DETACH(ir_word, D, value);
@@ -10077,7 +10069,6 @@ ir_run_LIST_EXTEND(
             {
                 iterable_st = window[1 + (oparg-1)];
                 list_st = window[0];
-                assert(PyValue_IsObject(list_st));
                 assert(PyValue_IsObject(list_st));
                 if (!PyValue_IsObject(iterable_st)) {
                     _PyErr_Format(tstate, PyExc_TypeError,
@@ -12682,7 +12673,6 @@ ir_run_MAKE_FUNCTION(
             {
                 codeobj_st = IR_VIEW(IR_B(ir_word));
                 assert(PyValue_IsObject(codeobj_st));
-                assert(PyValue_IsObject(codeobj_st));
                 PyObject *codeobj = _PyValue_AsKnownObjectBorrowPointer(codeobj_st);
                 PyFunctionObject *func_obj = (PyFunctionObject *)
                 PyFunction_New(codeobj, GLOBALS());
@@ -12782,7 +12772,6 @@ ir_run_MATCH_CLASS(
                 names = window[2];
                 type = window[1];
                 subject = window[0];
-                assert(PyValue_IsObject(names));
                 assert(PyValue_IsObject(names));
                 assert(PyTuple_CheckExact(_PyValue_AsKnownObjectBorrowPointer(names)));
                 PyObject *attrs_o = _PyEval_MatchClass(tstate,
@@ -15271,7 +15260,6 @@ ir_run_SET_UPDATE(
             {
                 iterable = window[1 + (oparg-1)];
                 set = window[0];
-                assert(PyValue_IsObject(set));
                 assert(PyValue_IsObject(set));
                 if (!PyValue_IsObject(iterable)) {
                     _PyErr_Format(tstate, PyExc_TypeError,
@@ -21958,7 +21946,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue value;
             exc_value_st = window[3];
             assert(PyValue_IsObject(exc_value_st));
-            assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
@@ -21993,7 +21980,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue exc_value_st;
             PyValue value;
             exc_value_st = window[3];
-            assert(PyValue_IsObject(exc_value_st));
             assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
@@ -23193,7 +23179,6 @@ static const _PyIRForm ir_handler_forms[512] = {
                 null_or_index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyList_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
@@ -23336,7 +23321,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 null_or_index = window[1];
                 iter = window[0];
-                assert(PyValue_IsObject(iter));
                 assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyTuple_CheckExact(iter_o)) {
@@ -23796,7 +23780,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             value = IR_VIEW(IR_D(ir_word));
             index_or_null = IR_VIEW(IR_C(ir_word));
             receiver = IR_VIEW(IR_B(ir_word));
-            assert(PyValue_IsObject(receiver));
             assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = _PyValue_AsKnownObjectBorrowPointer(receiver);
             ir_own_D = IR_DETACH(ir_word, D, value);

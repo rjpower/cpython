@@ -473,9 +473,6 @@ dummy_func(
                  index_or_null: closed, value: consumed -- val: moved(value)))
             effects(runs_python) exits(next, raise)
         {
-            // The generator's own check wants the test in the body, beside the
-            // assertion that the assumption generates
-            assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
             // Taken before the monitoring call, which can run code
             PyValue held = TAKE(value);
@@ -1836,7 +1833,6 @@ dummy_func(
             effects(runs_python) exits(next, raise)
         {
             // GET_AITER accepted it: it has __anext__
-            assert(PyValue_IsObject(aiter));
             PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(aiter));
             if (awaitable_o == NULL) {
                 ERROR_NO_POP();
@@ -2174,7 +2170,6 @@ dummy_func(
             effects(runs_python) exits(branch, raise)
         {
             // An exception being handled is an instance of BaseException
-            assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
@@ -2708,7 +2703,6 @@ dummy_func(
                 (list_st: assumed(object) by BUILD_LIST, unused[oparg-1], iterable_st: taken -- list_st, unused[oparg-1], i: moved(iterable_st) object))
             effects(runs_python) exits(next, raise)
         {
-            assert(PyValue_IsObject(list_st));
             // A number is not iterable
             if (!PyValue_IsObject(iterable_st)) {
                 _PyErr_Format(tstate, PyExc_TypeError,
@@ -2744,7 +2738,6 @@ dummy_func(
                 (set: assumed(object) by BUILD_SET, unused[oparg-1], iterable: taken -- set, unused[oparg-1], i: moved(iterable) object))
             effects(runs_python) exits(next, raise)
         {
-            assert(PyValue_IsObject(set));
             // A number is not iterable
             if (!PyValue_IsObject(iterable)) {
                 _PyErr_Format(tstate, PyExc_TypeError,
@@ -2838,7 +2831,6 @@ dummy_func(
                 (dict: assumed(object) by BUILD_MAP, unused[oparg - 1], update: taken -- dict, unused[oparg - 1], upd: moved(update) object))
             effects(runs_python) exits(next, raise)
         {
-            assert(PyValue_IsObject(dict));
             // A number is not a mapping
             if (!PyValue_IsObject(update)) {
                 _PyErr_Format(tstate, PyExc_TypeError,
@@ -2879,7 +2871,6 @@ dummy_func(
                  -- callable, unused, unused, dict, unused[oparg - 1], u: moved(update) object))
             effects(runs_python) exits(next, raise)
         {
-            assert(PyValue_IsObject(dict));
             // A number is not a mapping
             if (!PyValue_IsObject(update)) {
                 _PyErr_Format(tstate, PyExc_TypeError,
@@ -4326,7 +4317,6 @@ dummy_func(
         {
             // Pop TOS and TOS1. Set TOS to a tuple of attributes on success, or
             // None on failure.
-            assert(PyValue_IsObject(names));
             assert(PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)));
             // The class pattern may name a number: MatchClass rejects it
             PyObject *attrs_o = _PyEval_MatchClass(tstate,
@@ -4636,7 +4626,6 @@ dummy_func(
             effects(reads) exits(next, miss)
         {
             // GET_ITER always leaves an object, never an inline value.
-            assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(!PyList_CheckExact(iter_o));
             assert(PyValue_IsTaggedIndex(null_or_index));
@@ -4682,7 +4671,6 @@ dummy_func(
                  -- iter: exact(PyTuple_Type), null_or_index))
             effects(reads) exits(next, miss)
         {
-            assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(!PyTuple_CheckExact(iter_o));
             assert(PyValue_IsTaggedIndex(null_or_index));
@@ -6319,7 +6307,6 @@ dummy_func(
             effects(runs_python) exits(next, raise)
         {
             // The compiler loads the code object from a constant
-            assert(PyValue_IsObject(codeobj_st));
             PyObject *codeobj = PyValue_AsKnownObjectBorrow(codeobj_st);
 
             PyFunctionObject *func_obj = (PyFunctionObject *)

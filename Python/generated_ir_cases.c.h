@@ -245,6 +245,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_ExceptionMatches),
               "_PyErr_ExceptionMatches: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_GetRaisedException), PyObject * (*)(PyThreadState *)),
               "_PyErr_GetRaisedException: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_StackItemTakeValue), PyObject * (*)(_PyErr_StackItem *)),
+              "_PyErr_StackItemTakeValue: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_Occurred), PyObject * (*)(PyThreadState *)),
               "_PyErr_Occurred: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_SetRaisedException), void (*)(PyThreadState *, PyObject *)),
@@ -14108,8 +14110,9 @@ ir_run_PUSH_EXC_INFO(
             PyValue new_exc;
             exc = window[0];
             _PyErr_StackItem *exc_info = tstate->exc_info;
-            if (exc_info->exc_value != NULL) {
-                prev_exc = PyValue_FromObjectSteal(exc_info->exc_value);
+            PyObject *prev_o = _PyErr_StackItemTakeValue(exc_info);
+            if (prev_o != NULL) {
+                prev_exc = PyValue_FromObjectSteal(prev_o);
             }
             else {
                 prev_exc = PyValue_None;

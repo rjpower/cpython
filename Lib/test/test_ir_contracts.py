@@ -147,6 +147,13 @@ class SliceTests(unittest.TestCase):
     # _MONITOR_END_ASYNC_FOR may raise.  G0d1: it leaves by the redirect exit
     # when a callback redirects the frame, which the record cannot say
     LISTED_DIFFERENCES = [
+        # G0d1: _PUSH_EXC_INFO moves the handled exception out with
+        # _PyErr_StackItemTakeValue, whose row reads and writes; the
+        # inference has no entry for it and assumes any call
+        'PUSH_EXC_INFO.record.format.runs_code: inferred true, declared false',
+        'PUSH_EXC_INFO.record.uops[0].effects: inferred 6 entries '
+        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
+        '"READS_HEAP", "WRITES_HEAP"], declared 2 ["READS_HEAP", "WRITES_HEAP"]',
         'MATERIALIZE_KWARGS.record.format.runs_code: inferred true, declared false',
         'MATERIALIZE_KWARGS.record.uops[0].effects: inferred 6 entries '
         '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
@@ -1956,6 +1963,22 @@ class VerifierTests(unittest.TestCase):
         self.verify(source % ("consumed", "PyValue_AsKnownObjectSteal"))
         self.refuses(source % ("borrowed", "PyValue_AsKnownObjectBorrow"),
                      r"SPAM_STEAL consumes `x`, declared borrowed, which it does not own")
+
+    def test_from_object_steal_moves_its_argument(self):
+        # VALUE(moved(0)): the result is the argument's reference, so the
+        # argument must hold an obligation, as _PyValue_Str's new reference
+        # does; a pointer that a SCALAR row gives holds none
+        source = """
+            op(_OP, (x: borrowed -- r: owned)) effects(runs_python) exits(next, raise) {
+                PyObject *o = %s;
+                ERROR_IF(o == NULL);
+                r = PyValue_FromObjectSteal(o);
+            }
+        """
+        self.verify(source % "_PyValue_Str(x)")
+        self.refuses(source % "_PyErr_Occurred(tstate)",
+                     r"`_PyErr_Occurred \( tstate \)` is assigned to an output, but it is no "
+                     r"row with a value result")
 
     def test_decref_inputs_after_a_consumption(self):
         # DECREF_INPUTS closes every input the generator has not killed, so

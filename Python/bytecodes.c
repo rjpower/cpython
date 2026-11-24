@@ -4840,8 +4840,9 @@ dummy_func(
         {
 
             _PyErr_StackItem *exc_info = tstate->exc_info;
-            if (exc_info->exc_value != NULL) {
-                prev_exc = PyValue_FromObjectSteal(exc_info->exc_value);
+            PyObject *prev_o = _PyErr_StackItemTakeValue(exc_info);
+            if (prev_o != NULL) {
+                prev_exc = PyValue_FromObjectSteal(prev_o);
             }
             else {
                 prev_exc = PyValue_None;

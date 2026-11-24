@@ -707,6 +707,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyDictValues_SetShape",
     "_PyDictValues_ShapeAfterAdd",
     "_PyErr_Occurred",
+    "_PyErr_StackItemTakeValue",
     "_PyFb_Entry",
     "_PyFb_Header",
     "_PyFb_HasEntry",

@@ -408,14 +408,14 @@
      * or float becomes an inline number and the object's reference is \
      * dropped, else the word is the pointer).  It steals the reference on \
      * every path and cannot fail.  The result is the argument's reference \
-     * (or an inline number whose discharge is a no-op), which is a move; \
-     * VALUE(moved(0)) needs a model of moves out of heap fields and is \
-     * deferred to G0d.  Callbacks: none for the identity path.  The drop of \
+     * (or an inline number whose discharge is a no-op), which is a move: \
+     * VALUE(moved(0)), so the argument must hold an obligation (G0d1). \
+     * Callbacks: none for the identity path.  The drop of \
      * a boxed number's count is a deallocation by _PyLong_ExactDealloc or \
      * _PyFloat_ExactDealloc only when the box was unreferenced, which does \
      * not run Python */ \
     HELPER(PyValue_FromObjectSteal, PyValue, (PyObject *), \
-        ARGS(consumed object), VALUE(owned), EFFECTS()) \
+        ARGS(consumed object), VALUE(moved(0)), EFFECTS()) \
     /* Evidence (G0c8): pycore_value.h VALUE_CHECK_FUNC(Gen): PyValue_IsPointerSpace(value) \
      * && PyGen_Check(object), i.e. PyObject_TypeCheck(op, &PyGen_Type): Py_IS_TYPE, else \
      * PyType_IsSubtype, which walks tp_mro (a read; no callback, no allocation, no \
@@ -474,7 +474,7 @@
      * argument is borrowed.  A NULL word prints as "<NULL>", so the \
      * argument is not required to be nonnull */ \
     HELPER(_PyValue_ASCII, PyObject *, (PyValueBorrow), \
-        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Reviewed (G0c batch 1).  _PyValue_CheckHome (pycore_value.h) is \
      * `((void)0)` unless Py_DEBUG; under Py_DEBUG it reads the word and \
      * its object's identity (_PyValue_IsHome) and, on a violation, \
@@ -505,7 +505,7 @@
      * arguments borrowed on every path.  Result: a new reference (an exact \
      * str argument comes back as Py_NewRef of itself) */ \
     HELPER(_PyValue_Format, PyObject *, (PyValueBorrow, PyValueBorrow), \
-        ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Objects/object.c: _PyObject_CheckAttributeName (TypeError for a \
      * non-str name), then call_getattro on the value's type: \
      * tp_getattro, which is any __getattribute__ or __getattr__ (runs \
@@ -604,7 +604,7 @@
      * Returns a new str reference or NULL with an exception set; the \
      * argument is borrowed */ \
     HELPER(_PyValue_Repr, PyObject *, (PyValueBorrow), \
-        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Reviewed G0c2 (Objects/object.c). NULL operands raise                  \
      * BadInternalCall; richcompare_exit decides fast identity and exact      \
      * cases; richcompare_protocol calls tp_richcompare of either operand     \
@@ -631,7 +631,7 @@
      * reference to an exact tuple, or NULL with an exception set; the \
      * argument is borrowed. */ \
     HELPER(_PyValue_SequenceTuple, PyObject *, (PyValueBorrow), \
-        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Objects/object.c: SystemError if the value is NULL with an \
      * exception set, _PyObject_CheckAttributeName, interning of the \
      * name, then the type's setattro (any __setattr__, descriptor \
@@ -661,7 +661,7 @@
      * "<NULL>".  Returns a new str reference or NULL with an exception \
      * set; the argument is borrowed */ \
     HELPER(_PyValue_Str, PyObject *, (PyValueBorrow), \
-        ARGS(borrowed), SCALAR, EFFECTS(runs_python))
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python))
 
 /* Objects */
 #define _PyIR_COMPONENTS_OBJECTS(PRIMITIVE, HELPER, MACRO) \
@@ -1046,6 +1046,13 @@
      * and calls nothing, so writes, not runs_python (the seed's) */ \
     HELPER(_PyErr_GetRaisedException, PyObject *, (PyThreadState *), \
         ARGS(tstate), SCALAR, EFFECTS(reads, writes)) \
+    /* pycore_pyerrors.h: moves the handled exception's reference out of \
+     * the stack item (the field becomes NULL) and returns it, or NULL when \
+     * none is handled.  No callee, no failure, no callback (G0d1: \
+     * _PUSH_EXC_INFO's move out of a heap field, for \
+     * PyValue_FromObjectSteal's moved(0)) */ \
+    HELPER(_PyErr_StackItemTakeValue, PyObject *, (_PyErr_StackItem *), \
+        ARGS(scalar), VALUE_OR_NULL(owned), EFFECTS(reads, writes)) \
     /* pycore_pyerrors.h: reads tstate->current_exception; no callee, no \
      * callback */ \
     HELPER(_PyErr_Occurred, PyObject *, (PyThreadState *), \
@@ -1077,7 +1084,7 @@
      * Failure: NULL with an exception set; the arguments are borrowed.  \
      * Narrowed from the seed's runs_python to allocates, raises */ \
     HELPER(_PyInterpolation_BuildValue, PyObject *, (PyValueBorrow, PyObject *, int, PyObject *), \
-        ARGS(borrowed, object, scalar, object), SCALAR, EFFECTS(allocates, raises)) \
+        ARGS(borrowed, object, scalar, object), VALUE_OR_NULL(owned), EFFECTS(allocates, raises)) \
     /* free-threaded builds only (pycore_gc.h): reads the object's GC \
      * bits.  Not a component in the build with the GIL \
      * (BUILD(free_threaded)) */ \
@@ -1120,7 +1127,7 @@
      * a new reference to a Template (the caller boxes it with \
      * PyValue_FromObjectSteal) */ \
     HELPER(_PyTemplate_Build, PyObject *, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(allocates, raises)) \
+        ARGS(object, object), VALUE_OR_NULL(owned), EFFECTS(allocates, raises)) \
     /* Reviewed G0c5.  pycore_typeobject.h: type->_tp_iteritem != NULL && \
      * type->tp_iter != _PyType_SlotIter, two loads of the type and an \
      * address compare.  Callees: none.  It cannot fail and runs no \
@@ -1524,7 +1531,7 @@
      * borrowed throughout.  Callbacks: none (the allocation only schedules \
      * a collection through the eval breaker).  Result: a new reference */ \
     HELPER(_PySlice_FromValues, PyObject *, (PyValueBorrow, PyValueBorrow, PyValueBorrow), \
-        ARGS(borrowed, borrowed, borrowed), SCALAR, EFFECTS(allocates, raises)) \
+        ARGS(borrowed, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(allocates, raises)) \
     /* pycore_tuple.h: PyTuple_GET_VALUE(tuple, index) and \
      * PyValue_AsKnownObjectBorrow of it: a load of the item; the caller \
      * guarantees an object (code metadata, asserted); no callee beyond \
@@ -1552,7 +1559,7 @@
     PRIMITIVE(_PyBinaryOp_ExtendDescr, _PyBinaryOpSpecializationDescr *, (PyObject *), \
               ARGS(scalar), PATH(binary_op_descr), EFFECTS()) \
     SLOT(binaryopactionfunc, PyObject *, (PyObject *, PyObject *), \
-         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+         ARGS(object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     FIELD(_PyBinaryOpSpecializationDescr, action, binaryopactionfunc, \
           ON(binary_op_descr), SLOT(binaryopactionfunc), EFFECTS(reads)) \
     /* The counter of an entry header (Python/ceval_macros.h): a test of \
@@ -1789,7 +1796,7 @@
      * an exact function (not declared: the row's result is the raw \
      * pointer). */ \
     HELPER(PyFunction_New, PyObject *, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Evidence (Python/ceval.c _PyEval_FrameClearAndPopGeneralWithResult; \
      * G0c batch 6).  The frame is already unlinked (tstate->current_frame \
      * is its caller) and the result is held in C, not NULL.  Callees: \
@@ -1980,7 +1987,7 @@
      * Failure: NULL with an exception set; success: a new reference to \
      * the awaitable. */ \
     HELPER(_PyEval_GetANext, PyObject *, (PyObject *), \
-        ARGS(object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Python/ceval.c.  Borrows its operand.  Callees: PyErr_Format and \
      * _PyEval_FormatAwaitableError (reads the type, may run Python \
      * through _PyEval_SpecialMethodCanSuggest's lookups), \
@@ -2500,7 +2507,7 @@
      * subject, type and kwargs are borrowed on every path. Callbacks:        \
      * arbitrary Python.                                                      */ \
     HELPER(_PyEval_MatchClass, PyObject *, (PyThreadState *, PyValueBorrow, PyValueBorrow, Py_ssize_t, PyObject *), \
-        ARGS(tstate, borrowed, borrowed, scalar, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(tstate, borrowed, borrowed, scalar, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Reviewed G0c2 (Python/ceval.c). Looks up map.get with                  \
      * _PyValue_GetMethod, makes a set and a dummy object, then for each      \
      * key a set test and add (key __hash__/__eq__) and a dict read or a      \
@@ -2509,7 +2516,7 @@
      * exception set (a duplicate key sets ValueError). map and keys are      \
      * borrowed on every path.                                                */ \
     HELPER(_PyEval_MatchKeys, PyObject *, (PyThreadState *, PyObject *, PyObject *), \
-        ARGS(tstate, object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(tstate, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Python/ceval.c: type_has_special_method twice: _PyType_LookupRef \
      * (the type cache; on a miss find_name_in_mro compares dict keys, \
      * which can run a user __eq__) then Py_TYPE(r)->tp_descr_get and \

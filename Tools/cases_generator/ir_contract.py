@@ -69,8 +69,10 @@ KILLS = frozenset(("writes", "releases", "runs_python", "polls", "switches_frame
 # debugger's f_lineno jump, which retires the temporaries it does not keep);
 # the word leaves for frame->instr_ptr without the rest of its handler.  On
 # the uop's other exits no callback redirected the frame.
+# abort: the process ends (Py_FatalError), the only exit of a handler that
+# never runs: a cache, RESERVED, the stack-only opcodes, operand words
 EXITS = ("next", "branch", "jump", "miss", "deopt", "raise", "enter", "return",
-         "yield", "exit", "redirect")
+         "yield", "exit", "redirect", "abort")
 # The exits after which no compiled code of the word's frame state runs: the
 # error route and the evaluator's exit.  A redirect continues the frame at
 # another word, so its effects are kept.
@@ -548,6 +550,10 @@ class Row:
     # space
     view_close: str = ""
     pointer_form: str = ""
+    # IDENTITY(): a two-argument TEST that holds exactly when its arguments
+    # are one word (one object, or one inline value), so where it holds
+    # each has the other's facts but those of one site (PyValue_Is)
+    identity: bool = False
     # STATE: per bit, (bit, facts where it is set, facts where it is clear),
     # and the macro of the handler's word that initializes the item
     bits: tuple[tuple[str, frozenset, frozenset], ...] = ()
@@ -697,6 +703,12 @@ def _parse_result(text: str) -> Result:
         if (inner := _inner(text, shape)) is not None:
             words = inner.split()
             moved = re.fullmatch(r"moved\((\d+)\)", words[0]) if words else None
+            if moved and shape == "VALUE_OR_NULL":
+                # Argument k's obligation, or NULL where it holds none (a
+                # local's view: OWNER), whatever argument k's value is
+                if words[1:]:
+                    raise ValueError(f"VALUE_OR_NULL(moved(k)) takes no facts: {text}")
+                return Result(shape, "moved", moved=int(moved.group(1)))
             if moved and shape == "VALUE":
                 # Argument k itself: its value, its identity and its
                 # obligation (a move, as an output's moved(x))
@@ -779,7 +791,7 @@ def feedback_covered(access: tuple[str, str], declared) -> bool:
 # The optional columns after a row's fixed ones, by row kind
 OPTIONAL_COLUMNS = {
     "PRIMITIVE": ("FEEDBACK", "CONJOINS", "NONNULL_FORM", "SLOW", "TAKES_VIEW", "VIEW_CLOSE",
-                  "POINTER_FORM", "HOMES", "OBSERVER"),
+                  "POINTER_FORM", "HOMES", "OBSERVER", "IDENTITY"),
     "HELPER": ("FEEDBACK", "SLOW", "TAKES_VIEW", "HOMES", "OBSERVER"),
     "ROUTINE": ("FEEDBACK",),
     "MACRO": ("FEEDBACK", "TAKES_VIEW", "HOMES", "OBSERVER"),
@@ -801,9 +813,9 @@ def _row_options(fields: list[str], fixed: int, kind: str) -> dict:
         inner = _inner(text, head)
         if head == "FEEDBACK":
             found[head] = parse_feedback(_split_text(inner))
-        elif head == "TAKES_VIEW":
+        elif head in ("TAKES_VIEW", "IDENTITY"):
             if inner.strip():
-                raise ValueError("TAKES_VIEW() is a flag")
+                raise ValueError(f"{head}() is a flag")
             found[head] = True
         elif not re.fullmatch(r"\w+", inner.strip()):
             raise ValueError(f"{head}(name) names one row")
@@ -817,7 +829,8 @@ def _row_options(fields: list[str], fixed: int, kind: str) -> dict:
             "view_close": found.get("VIEW_CLOSE", ""),
             "pointer_form": found.get("POINTER_FORM", ""),
             "homes": found.get("HOMES", ""),
-            "observer": found.get("OBSERVER", "")}
+            "observer": found.get("OBSERVER", ""),
+            "identity": found.get("IDENTITY", False)}
 
 
 def _parse_row(kind: str, fields: list[str]) -> Row:
@@ -1018,6 +1031,10 @@ def check_columns(table: dict[str, Row]) -> None:
             if not (is_value_constant(instance)
                     and VFact("exact", row.name) in instance.result.facts):
                 fail(row, f"INSTANCES({name}): not a VALUE CONSTANT of exact({row.name})")
+        if row.identity and (row.result.shape != "TEST" or len(row.args) != 2
+                             or any(a.mode != "borrowed" or a.facts for a in row.args)
+                             or row.effects):
+            fail(row, "IDENTITY(): a TEST of two borrowed values, without effects")
         if row.conjoins:
             # Fusion must not change failure or short-circuit behaviour: both
             # tests are total (no precondition beyond a borrowed value), have
@@ -1884,7 +1901,8 @@ def ends_path(row: Row) -> bool:
     """whether a call of row never returns to the body: a terminal marker,
     or a row whose exits are committed and none is next"""
     return ("terminal" in IR_MARKER_EFFECTS.get(row.name, ())
-            or bool(row.committed) and "next" not in row.exits)
+            or bool(row.committed) and "next" not in row.exits
+            or row.exits == {"abort"})
 
 
 def check_effects(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
@@ -2481,6 +2499,9 @@ HELD, GONE, NULL = "held", "gone", "null"
 # (element stores), or written if the status local named after PENDING
 # says success
 UNWRITTEN, WRITTEN, PARTIAL, PENDING = "unwritten", "written", "partly written", "pending:"
+# An array whose declared size is 0 on this path (`oparg & 1` tested false):
+# nothing to write, publish or release
+EMPTY = "empty"
 # An owner that a row takes (ARGS `taken`): gone if the row succeeds, still
 # the caller's if it fails.  TAKEN alone until the row's result is bound to
 # a local, then TAKEN + the local, until a test of the local decides it
@@ -2676,7 +2697,7 @@ class OwnershipWalk:
         for out in self.contract.outputs:
             if not out.mode or out.name == "unused":
                 continue
-            written = (state.arrays.get(out.name) == WRITTEN if out.array
+            written = (state.arrays.get(out.name) in (WRITTEN, EMPTY) if out.array
                        else out.name in state.facts or out.name in state.owners)
             if not written:
                 self.fail(where, f"`{out.name}` is not written before {row.name}, whose "
@@ -2730,6 +2751,8 @@ class OwnershipWalk:
         for name, written in state.arrays.items():
             if committed:
                 continue    # check_committed: written, and stored
+            if written == EMPTY:
+                continue
             if exit == "next" and written != WRITTEN:
                 self.fail(where, f"on next, the output array `{name}` is "
                           f"{self.array_state(written)}, but it is published whole")
@@ -3007,6 +3030,12 @@ class OwnershipWalk:
             for name, why in other.rehomed.items():
                 first.rehomed.setdefault(name, why)
             for name in first.arrays:
+                # An empty array joins as the other path's: the size test
+                # decided each path's array
+                if first.arrays[name] == EMPTY:
+                    first.arrays[name] = other.arrays.get(name, UNWRITTEN)
+                elif other.arrays.get(name) == EMPTY:
+                    continue
                 if first.arrays[name] != other.arrays.get(name):
                     self.fail(self.uop.body.open, f"the output array `{name}` is "
                               f"{self.array_state(first.arrays[name])} on one path and "
@@ -3048,17 +3077,44 @@ class OwnershipWalk:
                 views.names[name] = bound
         return views
 
+    def refine_identity(self, state: _State, cond: list[str], holds: bool) -> None:
+        """Where an IDENTITY() test holds, its two named arguments are one
+        word: each has the other's facts, but those of one site"""
+        cond = _strip(cond)
+        while cond[:1] == ["!"]:
+            cond, holds = _strip(cond[1:]), not holds
+        call = _call_of(_unwrap(cond, self.table), self.table)
+        if not holds or call is None or not call[0].identity:
+            return
+        views = self.views_at(state)
+        names = [views.resolve(a) for a in call[1]]
+        if None in names:
+            return
+        a, b = names
+        facts_a = without_site_facts(state.facts.get(a, frozenset()))
+        facts_b = without_site_facts(state.facts.get(b, frozenset()))
+        state.add_facts(a, facts_b)
+        state.add_facts(b, facts_a)
+
     def refine(self, state: _State, cond: list[str], holds: bool) -> None:
         self.refine_status(state, cond, holds)
         found = condition_facts(cond, self.views_at(state), self.table, holds)
         if found:
             for name, facts in found[0].items():
                 state.add_facts(name, facts)
+        self.refine_identity(state, cond, holds)
         # `PyValue_IsNull(x)`: a new owner that is NULL owes nothing; the
         # owners that the row which made x takes are the caller's again
         cond = _strip(cond)
         while cond[:1] == ["!"]:
             cond, holds = _strip(cond[1:]), not holds
+        if not holds:
+            # The test of an output array's declared size (`oparg & 1`)
+            # fails: the array has no element, so it is wholly written
+            for out in self.contract.outputs:
+                if (out.array and out.name in state.arrays
+                        and "".join(cond) == re.sub(r"[\s()]", "", out.size)):
+                    state.arrays[out.name] = EMPTY
         for name, (when, null_if) in list(state.null_when.items()):
             if tuple(cond) == when:
                 self.set_null(state, name, holds == null_if)
@@ -3214,6 +3270,34 @@ class OwnershipWalk:
         name = self.views_at(state).resolve(tokens, locals_=False)
         return name if name in self.declared else None
 
+    def expression_facts(self, arg: list[str], state: _State) -> frozenset:
+        """The facts of an argument that names no value: a field of a CASES
+        result this path decided, an element of a declared array (its
+        declaration), a literal NULL, a row's call (its result); nothing
+        for any other expression"""
+        tokens = _unwrap(_uncast(arg), self.table)
+        if len(tokens) == 1 and tokens[0] in state.decided:
+            return state.facts.get(tokens[0], frozenset())
+        if tokens in (["NULL"], ["PyValue_NULL"]):
+            return frozenset({NULL_FACT})
+        if len(tokens) == 4 and tokens[1] == "[" and tokens[3] == "]":
+            item = self.contract.input(tokens[0]) or self.contract.output(tokens[0])
+            if item is not None and item.array:
+                return implied(item.facts | {a.fact for a in item.assumed}
+                               | (frozenset() if item.nullable else {NONNULL}))
+        return argument_facts(arg, self.table)
+
+    def passes_no_owner(self, arg: list[str], name: str | None, state: _State) -> bool:
+        """Whether an argument that names no owner may still be consumed: a
+        row's new owner, passed as it is made, NULL, or a value that owes
+        no count (owes_nothing)"""
+        call = _call_of(_uncast(_unwrap(arg, self.table)), self.table)
+        if call is not None and call[0].new_owner():
+            return True
+        shown = implied(state.facts.get(name, frozenset()) if name is not None
+                        else self.expression_facts(arg, state))
+        return NULL_FACT in shown or bool(shown) and self.owes_nothing(shown)
+
     def take(self, name: str, state: _State, where: Token, what: str) -> None:
         "an owner's obligation leaves it (a consumption or a move)"
         item = self.declared.get(name)
@@ -3256,8 +3340,12 @@ class OwnershipWalk:
                                       f"exact({destructor.frees}), which it is not shown "
                                       "to be")
                 name = views.resolve(arg)
-                if name is not None and spec.facts:
-                    missing = implied(spec.facts) - state.facts.get(name, frozenset())
+                if spec.facts:
+                    # What the argument is shown to be: a named value's
+                    # facts, or what the expression shows
+                    missing = implied(spec.facts) - (
+                        state.facts.get(name, frozenset()) if name is not None
+                        else self.expression_facts(arg, state))
                     if missing:
                         self.fail(tkn, f"passes `{' '.join(arg)}` to {row.name}, which "
                                   f"requires {', '.join(sorted(map(str, missing)))} of it")
@@ -3267,6 +3355,10 @@ class OwnershipWalk:
                     state.facts[name] = without_site_facts(state.facts[name])
                 if spec.mode in ("consumed", "taken"):
                     owner = self.owner_of(arg, state)
+                    if owner is None and not self.passes_no_owner(arg, name, state):
+                        self.fail(tkn, f"{row.name} "
+                                  f"{'consumes' if spec.mode == 'consumed' else 'takes'} "
+                                  f"`{' '.join(arg)}`, which names no owner")
                     if owner is not None:
                         self.take(owner, state, tkn, f"{row.name} "
                                   f"{'consumes' if spec.mode == 'consumed' else 'takes'}")
@@ -3566,6 +3658,11 @@ class OwnershipWalk:
             for name, origin in list(state.origins.items()):
                 if key is not None and origin == _home_origin(key):
                     state.origins[name] = HOME_SOURCE
+                    if name not in state.owners and name not in self.declared:
+                        # A home move (`tmp = GETLOCAL(i); GETLOCAL(i) = v;`):
+                        # the home's old obligation is the local's now
+                        state.owners[name] = HELD
+                        self.new.add(name)
             self.kill_home_loads(state)
             return
         if i >= 2 and texts[i - 2] in ("->", ".") or not re.fullmatch(r"\w+", lhs):
@@ -3742,8 +3839,14 @@ class OwnershipWalk:
                           "obligation")
             state.owners[lhs] = HELD
             self.new.add(lhs)
-            state.assign(lhs, state.facts.get(source, frozenset()),
-                         state.pending.get(source), owner)
+            if result.shape == "VALUE_OR_NULL":
+                # NULL or the argument's value: its facts once a test
+                # shows it is not NULL
+                state.assign(lhs, frozenset(),
+                             state.facts.get(source, frozenset()) | {NONNULL}, owner)
+            else:
+                state.assign(lhs, state.facts.get(source, frozenset()),
+                             state.pending.get(source), owner)
             state.origins[lhs] = (owner if owner in self.declared
                                   else state.origins.get(owner, ""))
             state.end_restart(f"the move of `{owner}` by {row.name}")
@@ -3817,6 +3920,9 @@ class OwnershipWalk:
         array = _element_base(texts, i)
         if array not in state.arrays:
             return
+        if state.arrays[array] == EMPTY:
+            self.fail(toks[0], f"stores into `{array}`, which has no element here: its "
+                      "size test failed")
         declared = self.contract.output(array)
         value = _uncast(rhs)
         if len(value) == 1 and value[0] in state.owners:
@@ -3829,6 +3935,9 @@ class OwnershipWalk:
                               f"`{array}`: no owner moves")
             else:
                 self.take(value[0], state, toks[0], "moves")
+        elif value == ["PyValue_NULL"]:
+            # No value and no obligation: only a nullable array takes it
+            facts = frozenset({NULL_FACT})
         else:
             call = _call_of(value, self.table)
             row = call[0] if call is not None else None
@@ -4158,6 +4267,20 @@ def check_identities(uop: Uop, contract: Contract, table: dict[str, Row]) -> Non
 
 
 _VERIFIED: set[int] = set()
+
+
+def argument_facts(arg: list[str], table: dict[str, Row]) -> frozenset:
+    """The facts of an argument that is a row's call: its result's facts,
+    with nonnull for a VALUE that is never NULL; none for anything else"""
+    call = _call_of(_uncast(arg), table)
+    if call is None:
+        return frozenset()
+    result = call[0].result
+    if result.shape == "VALUE" and result.null_iff < 0:
+        return implied(result.facts | {NONNULL})
+    if result.shape in ("VALUE", "VALUE_OR_NULL"):
+        return implied(result.facts) - {NONNULL}
+    return frozenset()
 
 
 def assumed_result_of(texts: list[str], table: dict[str, Row]) -> tuple[str, Row] | None:

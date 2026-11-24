@@ -35,6 +35,53 @@ _PyValueGuarded_Load(_PyValueGuarded guarded)
     return value;
 }
 
+/* Identities that name what the compiler shows of a word, so that a handler
+   states it where it reads the word (its row's `assumed(...) by compiler`,
+   which every execution form asserts): an item of the code object's
+   constants, which is never NULL; a local that LOAD_FAST reads, which the
+   compiler shows bound (LOAD_FAST_CHECK reads the others); and the home of a
+   cell or free variable, which MAKE_CELL or COPY_FREE_VARS fills with its
+   cell before any instruction reads it. */
+static inline PyValueBorrow
+_PyValue_CodeConstant(PyValueBorrow value)
+{
+    return value;
+}
+#define _PyValue_CodeConstant(V0) (_PyValue_CodeConstant)(PyValue_Borrow(V0))
+
+static inline PyValueBorrow
+_PyValue_BoundLocal(PyValueBorrow value)
+{
+    return value;
+}
+#define _PyValue_BoundLocal(V0) (_PyValue_BoundLocal)(PyValue_Borrow(V0))
+
+static inline PyValueBorrow
+_PyValue_CellLocal(PyValueBorrow value)
+{
+    return value;
+}
+#define _PyValue_CellLocal(V0) (_PyValue_CellLocal)(PyValue_Borrow(V0))
+
+/* An entry of the interpreter's common constants (LOAD_COMMON_CONSTANT):
+   pylifecycle.c fills every entry with an object before any code runs, and
+   pystate.c clears them only when the interpreter is finalized. */
+static inline PyValueBorrow
+_PyValue_CommonConstant(PyValueBorrow value)
+{
+    return value;
+}
+#define _PyValue_CommonConstant(V0) (_PyValue_CommonConstant)(PyValue_Borrow(V0))
+
+/* An item within the length of a published list or tuple (_ITER_NEXT_LIST,
+   _ITER_NEXT_TUPLE): only a container under construction holds NULL. */
+static inline PyValueBorrow
+_PyValue_PublishedItem(PyValueBorrow value)
+{
+    return value;
+}
+#define _PyValue_PublishedItem(V0) (_PyValue_PublishedItem)(PyValue_Borrow(V0))
+
 /* The box argument (pyjit/design/proposals/value-api-g.md, section 1.1).
  * In stats builds every box primitive takes a _PyBoxAt: the site class
  * (BOX_SITE_*), the kind (BOX_KIND_*) and the owner, the code that the box

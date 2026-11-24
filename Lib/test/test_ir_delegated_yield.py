@@ -4,11 +4,13 @@ from test.support import ir_dis as opcode
 import sys
 from pathlib import Path
 import tempfile
+import textwrap
 import types
 import unittest
 
 import _opcode
 import _testinternalcapi
+from test.support import script_helper
 from test.test_ir_call_roles import routes
 
 
@@ -23,6 +25,51 @@ def ordinary_name(name):
 
 
 class DelegatedYieldTests(unittest.TestCase):
+    def test_throw_completed_by_a_stop_iteration_without_a_value(self):
+        # A subiterator's throw() ends the delegation with a StopIteration
+        # whose value field is NULL (made by __new__ without __init__, or
+        # after `del e.value`): the delegation's result is None, as the
+        # member reads it (it used to be a NULL count, a crash).  Under the
+        # JIT off and always (the word compiled)
+        source = textwrap.dedent("""
+            def stop_new():
+                return StopIteration.__new__(StopIteration)
+            def stop_deleted():
+                e = StopIteration(5)
+                del e.value
+                return e
+            def stop_five():
+                return StopIteration(5)
+            def stop_empty():
+                return StopIteration()
+            class Sub:
+                def __init__(self, make):
+                    self.make = make
+                def __iter__(self):
+                    return self
+                def __next__(self):
+                    return 1
+                def throw(self, *args):
+                    raise self.make()
+            def outer(make):
+                return (yield from Sub(make))
+            for _ in range(3):
+                for make in (stop_new, stop_deleted, stop_five, stop_empty):
+                    g = outer(make)
+                    next(g)
+                    try:
+                        g.throw(ValueError)
+                    except StopIteration as e:
+                        print(e.value)
+        """)
+        modes = ["off"]
+        if sys._jit.is_available():
+            modes.append("always")
+        for mode in modes:
+            with self.subTest(jit=mode):
+                result = script_helper.assert_python_ok("-X", f"jit={mode}", "-c", source)
+                self.assertEqual(result.out.decode().split(), ["None", "None", "5", "None"] * 3)
+
     def test_real_generator_and_coroutine_forms_use_explicit_receiver(self):
         def outer(receiver):
             return (yield from receiver)

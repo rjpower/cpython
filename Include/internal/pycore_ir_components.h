@@ -201,7 +201,7 @@
     /* Reviewed G0c2. pycore_value.h: compares the words' bits, ignoring      \
      * bit 0 of a pointer; no memory, no failure, no callback.                */ \
     PRIMITIVE(PyValue_Is, bool, (PyValueBorrow, PyValueBorrow), \
-              ARGS(borrowed, borrowed), TEST(,), EFFECTS()) \
+              ARGS(borrowed, borrowed), TEST(,), EFFECTS(), IDENTITY()) \
     /* Evidence (G0c batch 6): Include/internal/pycore_value.h: compares \
      * the word, tag bit cleared, with the address of op. No call, no \
      * failure, no callback. Its true result is the identity of the value's \
@@ -418,7 +418,7 @@
      * that is not an exact int or float (asserted); the value owns the       \
      * argument's count. Never NULL (asserted), no callback.                  */ \
     HELPER(PyValue_FromNonNumberSteal, PyValue, (PyObject *), \
-        ARGS(object), VALUE(owned), EFFECTS()) \
+        ARGS(consumed object), VALUE(owned), EFFECTS()) \
     /* pycore_value.h: the canonical borrowed value of an object: for an \
      * exact int or float, _PyObject_ValueIdentity reads its payload \
      * (immutable), otherwise the pointer.  No count, no allocation, no \
@@ -480,8 +480,10 @@
     /* Evidence (G0d3): OWNER(x) is a generator replacer like TAKE \
      * (IREmitter.take_view): the owner of x's input, PyValue_NULL for a \
      * local, which only IR_RETIRE_PUBLISHED may read; for a value that is \
-     * not a view, x itself.  No callback, no failure; not a C function */ \
-    MACRO(OWNER, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS(), TAKES_VIEW()) \
+     * not a view, x itself.  No callback, no failure; not a C function. \
+     * G0d1: a local's view has no owner, so OWNER is NULL there whatever x \
+     * is (G0d2's report): x's obligation or NULL, VALUE_OR_NULL(moved(0)) */ \
+    MACRO(OWNER, ARGS(consumed), VALUE_OR_NULL(moved(0)), EFFECTS(), EXITS(), TAKES_VIEW()) \
     /* Evidence (G0c batch 6): Include/internal/pycore_interpframe.h: \
      * copies the bits of a view into an owner: no count changes. The \
      * caller must have cleared the slot that held the count (its comment). \
@@ -713,6 +715,36 @@
      * generator asserts it after each call (F7) */ \
     PRIMITIVE(_PyValueGuarded_Load, PyValueBorrow, (_PyValueGuarded), \
               ARGS(scalar), VALUE(borrowed assumed(nonnull) by specializer), EFFECTS()) \
+    /* Identities on a word that state what the compiler shows of it \
+     * (pycore_value.h); the generator asserts it after each call (F7). \
+     * An item of a code object's co_consts: the compiler stores objects \
+     * only (compile.c's constant cache), so it is never PyValue_NULL */ \
+    PRIMITIVE(_PyValue_CodeConstant, PyValueBorrow, (PyValueBorrow), \
+              ARGS(borrowed), VALUE(borrowed assumed(nonnull) by compiler), EFFECTS()) \
+    /* A local that LOAD_FAST reads: the compiler emits LOAD_FAST only \
+     * where flowgraph.c's analysis shows the local bound on every path, \
+     * and LOAD_FAST_CHECK elsewhere */ \
+    PRIMITIVE(_PyValue_BoundLocal, PyValueBorrow, (PyValueBorrow), \
+              ARGS(borrowed), VALUE(borrowed assumed(nonnull) by compiler), EFFECTS()) \
+    /* The home of a cell or free variable: MAKE_CELL (a cell variable) and \
+     * COPY_FREE_VARS (a free variable, from the closure's cells), which the \
+     * compiler emits at the start of the code, fill it with its cell, and \
+     * no instruction stores anything else there */ \
+    PRIMITIVE(_PyValue_CellLocal, PyValueBorrow, (PyValueBorrow), \
+              ARGS(borrowed), VALUE(borrowed assumed(exact(PyCell_Type)) by compiler), \
+              EFFECTS()) \
+    /* An entry of the interpreter's common constants: pylifecycle.c's \
+     * pycore_init_builtins fills each with an object (common_objs) before \
+     * any code runs; pystate.c clears them at finalization only */ \
+    PRIMITIVE(_PyValue_CommonConstant, PyValueBorrow, (PyValueBorrow), \
+              ARGS(borrowed), VALUE(borrowed assumed(nonnull) by interpreter), EFFECTS()) \
+    /* G0d1: an item within the length of a published list or tuple. \
+     * Only a container under construction (PyList_New(n), PyTuple_New(n)) \
+     * holds NULL, and code reads only published ones: listobject.c and \
+     * tupleobject.c store an object into every slot before the container \
+     * escapes, and a list's length bounds its set items */ \
+    PRIMITIVE(_PyValue_PublishedItem, PyValueBorrow, (PyValueBorrow), \
+              ARGS(borrowed), VALUE(borrowed assumed(nonnull) by container), EFFECTS()) \
     /* Reviewed G0c2 (pycore_value.h): for a pointer-space word returns its   \
      * pointer, taking over its count if the value owns one, else a new       \
      * reference (Py_NewRef) to the immortal or borrowed object; a            \
@@ -884,9 +916,10 @@
      * closes it (the input's home still holds a count, so it is not the \
      * last), then _PyObject_GC_TRACK.  Returns a new cell or NULL with \
      * an exception.  The input is borrowed.  runs_python over-declares \
-     * (allocates and raises is the contract); G1 may narrow it */ \
+     * (allocates and raises is the contract); G1 may narrow it.  G0d1: \
+     * VALUE_OR_NULL(owned), the new cell (SCALAR hid it) */ \
     HELPER(PyCell_NewValue, PyObject *, (PyValueBorrow), \
-        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Evidence (G0c batch 6): Python/errors.c PyErr_Format -> \
      * _PyErr_FormatV: formats the message (PyUnicode_FromFormatV, an \
      * allocation) and sets the exception with _PyErr_SetObject; always \
@@ -922,7 +955,7 @@
      * critical section (free-threaded only).  A new reference or NULL \
      * with no exception set.  No callee that runs Python. */ \
     HELPER(PyException_GetTraceback, PyObject *, (PyObject *), \
-        ARGS(object), SCALAR, EFFECTS(reads)) \
+        ARGS(object), VALUE_OR_NULL(owned), EFFECTS(reads)) \
     /* pycore_lazyimportobject.h (a static inline function): \
      * Py_IS_TYPE(op, &PyLazyImport_Type), a read of ob_type; no callee, \
      * no failure */ \
@@ -966,7 +999,7 @@
      * the other (a new reference). It copies characters and calls no         \
      * Python and releases nothing. The seed lacked `raises`.                 */ \
     HELPER(PyUnicode_Concat, PyObject *, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(reads, allocates, raises)) \
+        ARGS(object, object), VALUE_OR_NULL(owned), EFFECTS(reads, allocates, raises)) \
     /* Reviewed G0c2 (Include/cpython/unicodeobject.h): a read of the str's   \
      * length field (asserts PyUnicode_Check). No failure, no callback.       \
      * Inline, not an out-of-line HELPER: G0d kind.                           */ \
@@ -987,20 +1020,19 @@
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* Include/object.h: drops a count, and on zero calls the \
      * deallocator, which can run a finalizer, weakref callbacks and \
-     * __del__ (releases).  A C macro over public API: not converted */ \
+     * __del__ (releases).  A C macro over public API: not converted.  \
+     * G0d1: it consumes its argument's owner (SCALAR said it took none) */ \
     MACRO(Py_DECREF, \
-        ARGS(scalar), SCALAR, EFFECTS(releases), EXITS()) \
+        ARGS(consumed object), NONE, EFFECTS(releases), EXITS()) \
     /* Reviewed (G0c batch 1).  Py_FatalError(msg) is a C macro of \
      * Include/cpython/pyerrors.h: `_Py_FatalErrorFunc(__func__, msg)`, a \
      * _Py_NO_RETURN function (Python/pylifecycle.c) that prints the \
      * message and the traceback of every thread, then aborts the \
      * process.  It cannot become a function (it names __func__).  It \
-     * never returns; the row's EXITS() is the conservative reading (the \
-     * uops that call it declare `next`, which is over-declared and \
-     * sound); a declared `exit` would need CACHE and RESERVED (batch 8) \
-     * to say so too */ \
+     * never returns: its one exit is abort (G0d1), the declared exit of \
+     * the handlers that never run */ \
     MACRO(Py_FatalError, \
-        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS(abort)) \
     /* Include/refcount.h, a static inline function: an immortality test \
      * and an increment; no call, no failure, no callback.  Free-threaded \
      * it is atomic, outside the scoped product. */ \
@@ -1025,9 +1057,14 @@
     /* Include/refcount.h: `_Py_NewRef(_PyObject_CAST(obj))`, an increment \
      * (a count change is no effect, 1.3) returning obj: the result is a \
      * new reference the caller owes.  No call (immortal check inline), no \
-     * failure. */ \
+     * failure.  G0d1: VALUE(owned), the new reference (SCALAR hid it) */ \
     MACRO(Py_NewRef, \
-        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+        ARGS(scalar), VALUE(owned), EFFECTS(), EXITS()) \
+    /* Include/refcount.h: `_Py_XNewRef(_PyObject_CAST(obj))`, Py_NewRef \
+     * with a NULL test: a new reference the caller owes, NULL exactly \
+     * where obj is.  No call, no failure (G0d1: _RAISE_VARARGS's owners) */ \
+    MACRO(Py_XNewRef, \
+        ARGS(borrowed), VALUE(owned null_iff(0)), EFFECTS(), EXITS()) \
     /* Include/object.h: ob_size = size, a store through the object.  \
      * The seed said runs_python; the store runs nothing, so writes */ \
     MACRO(Py_SET_SIZE, \
@@ -1036,9 +1073,10 @@
     MACRO(Py_SIZE, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
     /* Include/object.h: as Py_DECREF, with a NULL test.  A C macro \
-     * over public API: not converted */ \
+     * over public API: not converted.  G0d1: it consumes its argument's \
+     * owner, which may be NULL */ \
     MACRO(Py_XDECREF, \
-        ARGS(scalar), SCALAR, EFFECTS(releases), EXITS()) \
+        ARGS(consumed), NONE, EFFECTS(releases), EXITS()) \
     /* Evidence (G0c batch 6): Include/refcount.h: a count increment of op \
      * if it is not NULL (and not immortal); no call, no failure, no \
      * callback. A count change is an ownership event, not an effect (the \
@@ -1054,6 +1092,12 @@
      * uop caller is _POP_EXCEPT (G0a5) */ \
     MACRO(Py_XSETREF, \
         ARGS(lvalue, consumed object), NONE, EFFECTS(releases), EXITS()) \
+    /* Include/refcount.h: Py_CLEAR(op) sets the lvalue op to NULL, then \
+     * Py_DECREFs its old value if it was not NULL.  The old value's \
+     * finalizer may run Python (releases).  No failure; callbacks: the old \
+     * value's deallocator.  _POP_EXCEPT clears the handled exception */ \
+    MACRO(Py_CLEAR, \
+        ARGS(lvalue), NONE, EFFECTS(releases), EXITS()) \
     /* Evidence (G0c8): ceval_macros.h:255-257: in the GIL build the macro is empty (no \
      * statement); in the free-threaded build it reports the thread's quiescent state to \
      * the QSBR reclaimer, which this scoped GIL product never builds. */ \
@@ -1117,7 +1161,7 @@
      * thread's field becomes NULL).  It reads and writes the thread state \
      * and calls nothing, so writes, not runs_python (the seed's) */ \
     HELPER(_PyErr_GetRaisedException, PyObject *, (PyThreadState *), \
-        ARGS(tstate), SCALAR, EFFECTS(reads, writes)) \
+        ARGS(tstate), VALUE_OR_NULL(owned), EFFECTS(reads, writes)) \
     /* pycore_pyerrors.h: moves the handled exception's reference out of \
      * the stack item (the field becomes NULL) and returns it, or NULL when \
      * none is handled.  No callee, no failure, no callback (G0d1: \
@@ -1125,6 +1169,12 @@
      * PyValue_FromObjectSteal's moved(0)) */ \
     HELPER(_PyErr_StackItemTakeValue, PyObject *, (_PyErr_StackItem *), \
         ARGS(scalar), VALUE_OR_NULL(owned), EFFECTS(reads, writes)) \
+    /* exceptions.c: a new owner of a StopIteration's value, None for \
+     * PyValue_NULL (the member getter's reading; StopIteration.__new__ \
+     * without __init__ leaves it NULL).  One load of the field and a \
+     * count; no failure, no callback.  Its argument is a StopIteration */ \
+    HELPER(_PyStopIteration_GetValue, PyValue, (PyObject *), \
+        ARGS(object), VALUE(owned), EFFECTS(reads)) \
     /* pycore_pyerrors.h: reads tstate->current_exception; no callee, no \
      * callback */ \
     HELPER(_PyErr_Occurred, PyObject *, (PyThreadState *), \
@@ -1302,7 +1352,9 @@
      * .object; another error leaves .object NULL).  The caller owns \
      * .object and releases it (X form).  Both arguments are borrowed */ */ \
     HELPER(value_dict_merge_uniq, _PyStatusObject, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object, object), \
+        CASES(status<0 object(owned nullable) raised, status>=0 object(null)), \
+        EFFECTS(runs_python)) \
     /* Reviewed G0c2 (Python/ceval.c). Wraps _PyEval_ExceptionGroupMatch      \
      * (exception_group_match: isinstance checks, split()/derive of the       \
      * group: arbitrary Python). Returns {match, rest} as new references,     \
@@ -1356,7 +1408,7 @@
      * kept as the seed had it: nothing here calls Python, so it is \
      * over-declared and sound */ \
     HELPER(value_unicode_append, PyObject *, (PyObject *, PyObject *), \
-        ARGS(consumed object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(consumed object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Python/ceval.c: builds a four-slot window of borrowed words and \
      * calls _PyValue_Vectorcall(exit_func, ...), which runs any callable \
      * (an inline exit_func is rejected with TypeError).  All five \
@@ -1492,7 +1544,7 @@
      * the eval breaker, which a later poll runs.  Failure: NULL with \
      * MemoryError set; success: a new reference.  No callback. */ \
     HELPER(PyDict_New, PyObject *, (), \
-        ARGS(), SCALAR, EFFECTS(allocates, raises)) \
+        ARGS(), VALUE_OR_NULL(owned exact(PyDict_Type)), EFFECTS(allocates, raises)) \
     /* Objects/dictobject.c: pop_check_dict (TypeError for a frozendict, \
      * SystemError for a non-dict: -1) then _PyDict_PopValue -> \
      * pop_lock_held: _PyValue_Hash of the key (the key's __hash__ runs \
@@ -1584,7 +1636,7 @@
      * items (no Python). Returns a new list or NULL with an exception set;   \
      * both arguments are borrowed.                                           */ \
     HELPER(_PyList_SliceSubscript, PyObject *, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Objects/setobject.c _PySet_AddValueTakeRef: hashes the \
      * key (unhashable: set_unhashable_type, PyValue_XCLOSE(key), -1), then \
      * set_add_entry_takeref, which compares keys (__eq__) and resizes.  The \
@@ -2722,9 +2774,10 @@
     /* Evidence (G0c8): pycore_ir.h:147: `(int)(W & IR_HANDLER_MASK)`, bits of the word. */ \
     MACRO(IR_HANDLER, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* Reviewed G0c2 (ceval_macros.h): the frame's home slot addressed by     \
-     * an operand field; a read of the frame's slot array (reads), no         \
-     * failure, no callback.                                                  */ \
-    MACRO(IR_SLOT, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+     * an operand field; no failure, no callback.  G0d1: ceval_macros.h's     \
+     * `IR_SLOT(F)` is `IR_SLOTS()[(F)]`, the expansion of GETLOCAL, so it is \
+     * a HOME as GETLOCAL is: a frame home, not the heap (no reads)           */ \
+    MACRO(IR_SLOT, ARGS(scalar), HOME, EFFECTS(), EXITS()) \
     /* Evidence (G0c8): the generator's expansion (ir_generator.py:2871): the operand word k of \
      * a call, read in place, never owned or closed (a view).  A read of the executing \
      * copy's words. */ \

@@ -106,12 +106,18 @@ SIGNATURES = {
     "PyValue_FromObjectSteal": _signature((Kind.OBJECT,), Kind.VALUE,
         owned=True, canonical=True, nonnull=True),
     "PyValue_FromNonNumberSteal": _signature((Kind.OBJECT,), Kind.VALUE,
-        owned=True, canonical=True, nonnull=True, steals=(0,)),
+        owned=True, canonical=True, nonnull=True),
     **{name: _signature((Kind.VALUE,), Kind.VALUE, True, owned=True)
        for name in ("_PyValue_Negative", "_PyValue_Positive", "_PyValue_Invert")},
     "PyValue_CLOSE": _signature((Kind.VALUE,), Kind.VOID),
     "PyValue_XCLOSE": _signature((Kind.VALUE,), Kind.VOID),
     "GETLOCAL": _signature((Kind.SCALAR,), Kind.VALUE),
+    # A new owner of a StopIteration's value, None for NULL (exceptions.c)
+    "_PyStopIteration_GetValue": _signature((Kind.OBJECT,), Kind.VALUE, owned=True),
+    # The identities that state what the compiler or runtime shows of a word
+    **{name: _signature((Kind.VALUE,), Kind.VALUE)
+       for name in ("_PyValue_CodeConstant", "_PyValue_BoundLocal", "_PyValue_CellLocal",
+                    "_PyValue_CommonConstant", "_PyValue_PublishedItem")},
     "PyTuple_GET_VALUE": _signature((Kind.TUPLE, Kind.SCALAR), Kind.VALUE),
     "_PyEval_GetANext": _signature((Kind.OBJECT,), Kind.OBJECT, True, owned=True),
     "check_periodics": _signature((Kind.TSTATE,), Kind.SCALAR, True),
@@ -123,6 +129,7 @@ SIGNATURES = {
     "monitor_reraise": _signature((Kind.TSTATE, Kind.FRAME, Kind.INSTR), Kind.VOID),
     "PyErr_GivenExceptionMatches": _signature((Kind.OBJECT, Kind.OBJECT), Kind.SCALAR),
     "Py_NewRef": _signature((Kind.OBJECT,), Kind.OBJECT, owned=True),
+    "Py_XNewRef": _signature((Kind.OBJECT,), Kind.OBJECT, owned=True),
     "_PyErr_SetRaisedException": _signature((Kind.TSTATE, Kind.OBJECT), Kind.VOID),
     # The macro has its own checked argument/terminal grammar below. Its
     # generated helper also owns the encoded input window and recipient.
@@ -703,8 +710,9 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
             declaration, kind = 2, Kind.OBJECT
         elif observer_wrapper and texts[:2] == ["PyCodeObject", "*"]:
             declaration, kind = 2, Kind.CODE
-        elif texts[:1] in (["PyValue"], ["int"], ["uintptr_t"]):
-            declaration, kind = 1, Kind.VALUE if texts[0] == "PyValue" else Kind.SCALAR
+        elif texts[:1] in (["PyValue"], ["PyValueBorrow"], ["int"], ["uintptr_t"]):
+            declaration, kind = 1, (Kind.VALUE if texts[0] in ("PyValue", "PyValueBorrow")
+                                    else Kind.SCALAR)
         if declaration:
             if (len(tokens) < declaration + 3 or tokens[declaration].kind != "IDENTIFIER"
                     or texts[declaration] in variables or texts[declaration] in reserved

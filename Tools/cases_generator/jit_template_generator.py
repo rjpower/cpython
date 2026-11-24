@@ -79,6 +79,11 @@ LOWERINGS = {
     "PyValue_AsKnownObjectBorrow": Lowering(),
     "_PyValue_AsKnownObjectBorrowPointer": Lowering(),
     "_PyValueGuarded_Load": Lowering(),
+    "_PyValue_CodeConstant": Lowering(),
+    "_PyValue_BoundLocal": Lowering(),
+    "_PyValue_CellLocal": Lowering(),
+    "_PyValue_CommonConstant": Lowering(),
+    "_PyValue_PublishedItem": Lowering(),
     # Objects and types
     "Py_TYPE": Lowering(),
     "PyList_CheckExact": Lowering(1),

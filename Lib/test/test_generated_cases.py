@@ -2883,8 +2883,9 @@ class TestIRCases(unittest.TestCase):
     def test_normal_transfer_source_proofs(self):
         cases = (
             ("LOAD_CONST", "-- value",
-             "value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));",
-             "FRESH", "PyValue_XDUP", "PyValue_Borrow"),
+             "PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE("
+             "FRAME_CO_CONSTS, oparg)); value = PyValue_DUP(constant);",
+             "FRESH", "PyValue_DUP", "PyValue_XDUP"),
             ("LOAD_FAST_AND_CLEAR", "-- value",
              "value = GETLOCAL(oparg); GETLOCAL(oparg) = PyValue_NULL;",
              "LOCAL_MOVE", "GETLOCAL(oparg) = PyValue_NULL;", ""),

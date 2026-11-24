@@ -62,6 +62,14 @@ class HandlerRecordTests(unittest.TestCase):
                 effects = ir_records.infer_effects(uop)
                 self.assertFalse(effects & {WRITES_HEAP, MAY_RUN_PYTHON}, name)
 
+    def test_exchanged_outputs_are_no_pass_throughs(self):
+        # SWAP's outputs keep their homes but take each other's values
+        # (moved(top), moved(bottom)): they are no pass-throughs, so the
+        # template moves them (an empty jit_template_SWAP was the bug)
+        uop = uops["_SWAP"]
+        passes = {item.name: ir_records.passes(uop, item) for item in uop.stack.outputs}
+        self.assertEqual(passes, {"bottom": False, "unused": True, "top": False})
+
     def test_effects(self):
         for name, effects in (
                 ("_BINARY_OP_ADD_INT", {ALLOCATES, MAY_RAISE}),

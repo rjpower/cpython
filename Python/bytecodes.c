@@ -279,16 +279,19 @@ dummy_func(
         leaf pure inst(LOAD_FAST, (-- value: owned))
             effects() exits(next)
         {
-            assert(!PyValue_IsNull(GETLOCAL(oparg)));
-            value = PyValue_DUP(GETLOCAL(oparg));
+            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+            value = PyValue_DUP(local);
         }
 
         // A temporary owns its value (pyjit/design/pyvalue.md D4): the load
         // takes a count of a mortal object. A load that a fold absorbs
         // reads the local in place instead (Python/regcfg_passes.c).
-        leaf pure inst (LOAD_FAST_BORROW, (-- value)) {
-            assert(!PyValue_IsNull(GETLOCAL(oparg)));
-            value = PyValue_DUP(GETLOCAL(oparg));
+        // The compiler emits it, as LOAD_FAST, only for a bound local
+        leaf pure inst(LOAD_FAST_BORROW, (-- value: owned))
+            effects() exits(next)
+        {
+            PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+            value = PyValue_DUP(local);
         }
 
         leaf inst(LOAD_FAST_AND_CLEAR, (-- value: moved(home)))
@@ -305,15 +308,19 @@ dummy_func(
             LOAD_CONST_INLINE_FLOAT,
         };
 
-        leaf pure inst(LOAD_CONST, (-- value)) {
-            value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+        leaf pure inst(LOAD_CONST, (-- value: owned))
+            effects(reads) exits(next)
+        {
+            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            value = PyValue_DUP(constant);
         }
 
         // The constant is an inline int.
         inst(LOAD_CONST_INLINE_INT, (-- value: owned))
             effects(reads) exits(next)
         {
-            value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            value = PyValue_DUP(constant);
             assert(PyValue_IsInlineInt(value));
         }
 
@@ -322,7 +329,8 @@ dummy_func(
         inst(LOAD_CONST_INLINE_FLOAT, (-- value: owned))
             effects(reads) exits(next)
         {
-            value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            value = PyValue_DUP(constant);
             assert(PyValue_IsInlineFloat(value));
         }
 
@@ -1173,9 +1181,12 @@ dummy_func(
             assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(right)));
 
             assert(IR_IS_LOCAL(IR_DST));
-            PyValue *target_local = &IR_SLOT(IR_DST);
             assert(PyUnicode_CheckExact(left_o));
-            EXIT_IF(PyValue_AsKnownObjectBorrow(*target_local) != left_o,
+            // The local may hold any word (an inline number, None, NULL):
+            // compare the words, not an object read from it.  `held` is a
+            // copy; the local keeps its owner until it is cleared below
+            PyValue held = IR_SLOT(IR_DST);
+            EXIT_IF(!PyValue_Is(held, left),
                     "the next word stores the result to the left operand's local");
             STAT_INC(BINARY_OP, hit);
             /* Handle `left = left + right` or `left += right` for str.
@@ -1199,13 +1210,14 @@ dummy_func(
              */
             PyValue_CLOSE_SPECIALIZED(left, _PyUnicode_ExactDealloc);
             DEAD(left);
-            // The local still holds the string
+            // The local still holds the string; its owner moves to `held`,
+            // which the guard showed is left's string
             assert(Py_REFCNT(left_o) >= 1);
-            PyObject *temp = PyValue_AsKnownObjectSteal(*target_local);
+            IR_SLOT(IR_DST) = PyValue_NULL;
+            PyObject *temp = PyValue_AsKnownObjectSteal(held);
             PyObject *right_o = PyValue_AsKnownObjectSteal(right);
             temp = value_unicode_append(temp, right_o);
             _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
-            *target_local = PyValue_NULL;
             ERROR_IF(temp == NULL);
             res = PyValue_FromNonNumberSteal(temp);
         }
@@ -1662,7 +1674,9 @@ dummy_func(
 
         outlined macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + POP_TOP;
 
-        outlined inst(CALL_INTRINSIC_2, (value2_st:nullable, value1_st -- res)) {
+        outlined inst(CALL_INTRINSIC_2, (value2_st: consumed nullable, value1_st: consumed -- res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             assert(oparg <= MAX_INTRINSIC_2);
             // Taken before the calls, which can run code
             PyValue held2 = TAKE(value2_st);
@@ -1679,10 +1693,8 @@ dummy_func(
                 PyObject *target = PyValue_ObjectOrNull(held1);
                 assert(target != NULL && PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
                 PyValueBorrow owner = PyTuple_GET_VALUE(target, 0);
-                PyValueBorrow attr_name = PyTuple_GET_VALUE(target, 1);
-                assert(PyValue_IsObject(attr_name));
-                int err = _PyValue_SetAttr(owner, PyValue_AsKnownObjectBorrow(attr_name),
-                                           held2);
+                PyObject *attr_name = _PyTuple_GET_OBJECT(target, 1);
+                int err = _PyValue_SetAttr(owner, attr_name, held2);
                 res = err < 0 ? PyValue_NULL : PyValue_None;
             }
             else {
@@ -1704,25 +1716,26 @@ dummy_func(
             PyObject *cause = NULL;
             if (oparg > 0) {
                 // A number is not an exception
-                if (!PyValue_IsObject(args[0])) {
+                exc = PyValue_ObjectOrNull(args[0]);
+                if (exc == NULL) {
                     _PyErr_SetString(tstate, PyExc_TypeError,
                                      "exceptions must derive from BaseException");
                     ERROR_IF(true, holding(args));
                 }
-                exc = PyValue_AsKnownObjectBorrow(args[0]);
             }
             // A number is not a cause: do_raise reports it after the
             // exception is made
-            bool cause_is_number = oparg == 2 && !PyValue_IsObject(args[1]);
-            if (oparg == 2 && !cause_is_number) {
-                cause = PyValue_AsKnownObjectBorrow(args[1]);
+            bool cause_is_number = false;
+            if (oparg == 2) {
+                cause = PyValue_ObjectOrNull(args[1]);
+                cause_is_number = cause == NULL;
             }
-            /* do_raise consumes independent object owners; homes remain
-             * canonical until their semantic input ownership is detached. */
-            Py_XINCREF(exc);
-            Py_XINCREF(cause);
+            /* do_raise consumes independent object owners, made before
+             * the inputs are released */
+            PyObject *exc_owner = Py_XNewRef(exc);
+            PyObject *cause_owner = Py_XNewRef(cause);
             DECREF_INPUTS();
-            int err = do_raise(tstate, exc, cause, cause_is_number);
+            int err = do_raise(tstate, exc_owner, cause_owner, cause_is_number);
             if (err) {
                 assert(oparg == 0);
                 monitor_reraise(tstate, frame, this_instr);
@@ -2147,7 +2160,7 @@ dummy_func(
             _PyErr_StackItem *exc_info = tstate->exc_info;
             if (PyValue_IsNone(exc_value)) {
                 DEAD(exc_value);    // immortal: it owes no count
-                Py_XSETREF(exc_info->exc_value, NULL);
+                Py_CLEAR(exc_info->exc_value);
             }
             else {
                 PyObject *exc = PyValue_AsKnownObjectSteal(exc_value);
@@ -2230,7 +2243,7 @@ dummy_func(
                 monitor_reraise(tstate, frame, this_instr);
                 goto exception_unwind;
             }
-            PyValue completed = PyValue_DUP(((PyStopIterationObject *)exc_value)->value);
+            PyValue completed = _PyStopIteration_GetValue(exc_value);
             // IR_EXIT: the exit named by the word. co_code has no operand, and
             // the instruction after this one continues there.
             IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, IR_EXIT);
@@ -2247,7 +2260,8 @@ dummy_func(
         {
             // Keep in sync with _common_constants in opcode.py
             assert(oparg < NUM_COMMON_CONSTANTS);
-            value = PyValue_DUP(tstate->interp->common_consts[oparg]);
+            PyValueBorrow constant = _PyValue_CommonConstant(tstate->interp->common_consts[oparg]);
+            value = PyValue_DUP(constant);
         }
 
         outlined inst(LOAD_BUILD_CLASS, ( -- bc: owned))
@@ -2603,7 +2617,8 @@ dummy_func(
         outlined inst(DELETE_DEREF, (--))
             effects(runs_python) exits(next, raise)
         {
-            PyObject *cell = PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            PyObject *cell = PyValue_AsKnownObjectBorrow(cell_v);
             // Can't use ERROR_IF here.
             // Fortunately we don't need its superpower.
             PyValue old = _PyCell_SwapValue((PyCellObject *)cell, PyValue_NULL);
@@ -2636,7 +2651,8 @@ dummy_func(
             }
             PyValue selected;
             if (found.status == 0) {
-                PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+                PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+                PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
                 selected = _PyCell_GetValue(cell);
                 if (PyValue_IsNull(selected)) {
                     _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
@@ -2654,7 +2670,8 @@ dummy_func(
         inst(LOAD_DEREF, ( -- value: owned))
             effects(runs_python) exits(next, raise)
         {
-            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
             value = _PyCell_GetValue(cell);
             if (PyValue_IsNull(value)) {
                 _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
@@ -2665,7 +2682,8 @@ dummy_func(
         inst(STORE_DEREF, (v: consumed --))
             effects(writes, releases) exits(next)
         {
-            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
             PyValue owned = v;
             DEAD(v);
             _PyCell_SetValue(cell, owned);
@@ -2695,7 +2713,7 @@ dummy_func(
         }
 
         outlined inst(BUILD_INTERPOLATION,
-                (value: consumed, str: consumed object, format[oparg & 1]: consumed
+                (value: consumed, str: consumed object, format[oparg & 1]: consumed object
                  -- interpolation: owned))
             effects(runs_python, releases) exits(next, raise)
         {
@@ -2885,7 +2903,7 @@ dummy_func(
                         _PyErr_Format(tstate, PyExc_TypeError,
                                         "'%T' object is not a mapping",
                                         update_o);
-                        Py_DECREF(exc);
+                        Py_XDECREF(exc);
                     }
                     else {
                         _PyErr_ChainExceptions1(exc);
@@ -3120,31 +3138,35 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        inline_ok op(_LOAD_ATTR, (owner -- attr, self_or_null[oparg&1])) {
+        inline_ok op(_LOAD_ATTR,
+                (owner: consumed -- attr: owned, self_or_null[oparg&1]: owned nullable))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
-            PyValue found_attr;
-            PyValue found_self = PyValue_NULL;
             if (oparg & 1) {
                 // A count of its own before the call, which can run code
                 // that rebinds the local that owner views
                 PyValue receiver = PyValue_DUP(owner);
                 _PyStatusValue found = _PyValue_GetMethod(receiver, name);
-                found_attr = found.value;
+                DECREF_INPUTS();
+                if (found.status < 0) {
+                    PyValue_CLOSE(receiver);
+                    ERROR_IF(true);
+                }
+                attr = found.value;
                 if (found.status > 0) {
-                    found_self = receiver;
+                    self_or_null[0] = receiver;
                 }
                 else {
                     PyValue_CLOSE(receiver);
+                    self_or_null[0] = PyValue_NULL;
                 }
             }
             else {
-                found_attr = _PyValue_GetAttr(owner, name);
-            }
-            DECREF_INPUTS();
-            ERROR_IF(PyValue_IsNull(found_attr));
-            attr = found_attr;
-            if (oparg & 1) {
-                self_or_null[0] = found_self;
+                PyValue found_attr = _PyValue_GetAttr(owner, name);
+                DECREF_INPUTS();
+                ERROR_IF(PyValue_IsNull(found_attr));
+                attr = found_attr;
             }
         }
 
@@ -4724,7 +4746,9 @@ dummy_func(
         {
             PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
             assert(PyList_CheckExact(list_o));
-            next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
+            PyValueBorrow item = _PyValue_PublishedItem(
+                PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
+            next = PyValue_DUP(item);
             next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
             DEAD(index);
         }
@@ -4765,7 +4789,8 @@ dummy_func(
             assert(Py_TYPE(tuple_o) == &PyTuple_Type);
             uintptr_t i = PyValue_UntagIndex(index);
             assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
-            next = PyValue_DUP(PyTuple_GET_VALUE(tuple_o, i));
+            PyValueBorrow item = _PyValue_PublishedItem(PyTuple_GET_VALUE(tuple_o, i));
+            next = PyValue_DUP(item);
             next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
             DEAD(index);
         }
@@ -4900,7 +4925,7 @@ dummy_func(
                We call FOURTH(type(TOP), TOP, GetTraceback(TOP)).
                Then we push the __exit__ return value.
             */
-            PyObject *exc, *tb;
+            PyObject *exc;
 
             // The exit function is any attribute value, a scalar included;
             // the call raises upstream's TypeError for one.
@@ -4908,13 +4933,12 @@ dummy_func(
 
             assert(val_o && PyExceptionInstance_Check(val_o));
             exc = PyExceptionInstance_Class(val_o);
-            PyObject *original_tb = tb = PyException_GetTraceback(val_o);
-            if (tb == NULL) {
-                tb = Py_None;
-            }
+            // A new reference or NULL; the call is passed None for NULL
+            PyObject *original_tb = PyException_GetTraceback(val_o);
             assert(PyValue_IsTaggedIndex(lasti));
             (void)lasti; // Shut up compiler warning if asserts are off
-            res = with_exit_call(exit_func, exit_self, exc, val_o, tb);
+            res = with_exit_call(exit_func, exit_self, exc, val_o,
+                                 original_tb == NULL ? Py_None : original_tb);
             Py_XDECREF(original_tb);
             ERROR_IF(PyValue_IsNull(res));
         }
@@ -6727,14 +6751,14 @@ dummy_func(
         }
 
         tier1 inst(CACHE, (--))
-            effects() exits(next)
+            effects() exits(abort)
         {
             assert(0 && "Executing a cache.");
             Py_FatalError("Executing a cache.");
         }
 
         tier1 inst(RESERVED, (--))
-            effects() exits(next)
+            effects() exits(abort)
         {
             assert(0 && "Executing RESERVED instruction.");
             Py_FatalError("Executing RESERVED instruction.");
@@ -6746,7 +6770,7 @@ dummy_func(
          * drops NOT_TAKEN and splits the superinstructions.  The stack
          * effects are the compiler's. */
         tier1 inst(EXTENDED_ARG, ( -- ))
-            effects() exits(next)
+            effects() exits(abort)
         {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
@@ -6754,31 +6778,39 @@ dummy_func(
         }
 
         tier1 inst(NOT_TAKEN, ( -- ))
-            effects() exits(next)
+            effects() exits(abort)
         {
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        tier1 inst(LOAD_FAST_LOAD_FAST, ( -- value1, value2)) {
+        tier1 inst(LOAD_FAST_LOAD_FAST, ( -- value1: owned, value2: owned))
+            effects() exits(abort)
+        {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        tier1 inst(LOAD_FAST_BORROW_LOAD_FAST_BORROW, ( -- value1, value2)) {
+        tier1 inst(LOAD_FAST_BORROW_LOAD_FAST_BORROW, ( -- value1: owned, value2: owned))
+            effects() exits(abort)
+        {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        tier1 inst(STORE_FAST_LOAD_FAST, (value1 -- value2)) {
+        tier1 inst(STORE_FAST_LOAD_FAST, (value1: consumed -- value2: owned))
+            effects() exits(abort)
+        {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        tier1 inst(STORE_FAST_STORE_FAST, (value2, value1 --)) {
+        tier1 inst(STORE_FAST_STORE_FAST, (value2: consumed, value1: consumed --))
+            effects() exits(abort)
+        {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
@@ -6798,7 +6830,9 @@ dummy_func(
         // The words after a call head that name its operands, four slots
         // each (_PyIR_WordLength()).  The head consumes them, so no
         // dispatch reaches one.
-        ir_only no_save_ip inst(IR_OPERANDS, ( -- )) {
+        ir_only no_save_ip inst(IR_OPERANDS, ( -- ))
+            effects() exits(abort)
+        {
             assert(0 && "Executing operand words.");
             Py_FatalError("Executing operand words.");
         }

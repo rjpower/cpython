@@ -6,7 +6,9 @@ at the same site."""
 
 import gc
 import sys
+import textwrap
 import unittest
+from test.support import script_helper
 
 
 WARM = 200
@@ -112,6 +114,30 @@ class ArithmeticRows(unittest.TestCase):
 
         warmed(loop, 10)
         self.assertEqual(loop(1000), "ab" * 1000)
+
+    def test_str_concatenation_target_holds_any_word(self):
+        # _BINARY_OP_INPLACE_ADD_UNICODE's guard reads the local that the
+        # next word stores to, which may hold any word: an inline int or
+        # float, None, or an object.  It compares the words (it used to read
+        # an object from it, a fatal error for a number).  Under the JIT off
+        # and always (the word compiled)
+        source = textwrap.dedent("""
+            def f(s, t, k, other):
+                y = s if k else other
+                y = s + t
+                return y
+            for _ in range(500):
+                f("a", "b", True, None)
+            for other in (1, 1.5, None, object(), 2**70):
+                print(f("a", "b", False, other))
+        """)
+        modes = ["off"]
+        if sys._jit.is_available():
+            modes.append("always")
+        for mode in modes:
+            with self.subTest(jit=mode):
+                result = script_helper.assert_python_ok("-X", f"jit={mode}", "-c", source)
+                self.assertEqual(result.out.decode().split(), ["ab"] * 5)
 
     def test_str_subscripts_by_inline_index(self):
         def at(s, i):

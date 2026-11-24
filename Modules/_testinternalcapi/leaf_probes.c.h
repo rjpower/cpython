@@ -1280,7 +1280,9 @@ leaf_probe__ITER_NEXT_LIST(_PyInterpreterFrame *frame, PyValue *stack_pointer, i
     index = stack_pointer[-1];
     iter = stack_pointer[-2];
     PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
-    next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
+    PyValueBorrow item = _PyValue_PublishedItem(
+        PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
+    next = PyValue_DUP(item);
     next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
     stack_pointer[-1] = next_index;
     stack_pointer[0] = next;
@@ -1328,7 +1330,8 @@ leaf_probe__ITER_NEXT_TUPLE(_PyInterpreterFrame *frame, PyValue *stack_pointer, 
     iter = stack_pointer[-2];
     PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
     uintptr_t i = PyValue_UntagIndex(index);
-    next = PyValue_DUP(PyTuple_GET_VALUE(tuple_o, i));
+    PyValueBorrow item = _PyValue_PublishedItem(PyTuple_GET_VALUE(tuple_o, i));
+    next = PyValue_DUP(item);
     next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
     stack_pointer[-1] = next_index;
     stack_pointer[0] = next;
@@ -1610,7 +1613,8 @@ leaf_probe__LOAD_CONST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int o
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
     PyValue value;
-    value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+    PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+    value = PyValue_DUP(constant);
     stack_pointer[0] = value;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -1625,7 +1629,8 @@ leaf_probe__LOAD_CONST_INLINE_FLOAT(_PyInterpreterFrame *frame, PyValue *stack_p
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
     PyValue value;
-    value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+    PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+    value = PyValue_DUP(constant);
     stack_pointer[0] = value;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -1640,7 +1645,8 @@ leaf_probe__LOAD_CONST_INLINE_INT(_PyInterpreterFrame *frame, PyValue *stack_poi
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
     PyValue value;
-    value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+    PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+    value = PyValue_DUP(constant);
     stack_pointer[0] = value;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -1655,7 +1661,8 @@ leaf_probe__LOAD_FAST(_PyInterpreterFrame *frame, PyValue *stack_pointer, int op
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
     PyValue value;
-    value = PyValue_DUP(GETLOCAL(oparg));
+    PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+    value = PyValue_DUP(local);
     stack_pointer[0] = value;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -1686,7 +1693,8 @@ leaf_probe__LOAD_FAST_BORROW(_PyInterpreterFrame *frame, PyValue *stack_pointer,
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
     PyValue value;
-    value = PyValue_DUP(GETLOCAL(oparg));
+    PyValueBorrow local = _PyValue_BoundLocal(GETLOCAL(oparg));
+    value = PyValue_DUP(local);
     stack_pointer[0] = value;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);

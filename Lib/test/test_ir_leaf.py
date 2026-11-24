@@ -135,6 +135,11 @@ CASES = {
                            for o in OBJECTS if type(o) in (dict, types.ModuleType)],
     "_PyLong_IsZero": [(a,) for a in objects_of(int)],
     "_PyValueGuarded_Load": [(w,) for w in ANY_WORDS],
+    "_PyValue_CodeConstant": [(w,) for w in ANY_WORDS],
+    "_PyValue_BoundLocal": [(w,) for w in ANY_WORDS],
+    "_PyValue_CellLocal": [(w,) for w in ANY_WORDS],
+    "_PyValue_CommonConstant": [(w,) for w in ANY_WORDS],
+    "_PyValue_PublishedItem": [(w,) for w in ANY_WORDS],
     "GETLOCAL": [(0,)],
 }
 # The dict keys: its me_value read goes through DK_UNICODE_ENTRIES

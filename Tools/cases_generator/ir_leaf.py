@@ -538,6 +538,17 @@ PRIMITIVES = {p.name: p for p in (
        _long_is_zero, READS),
     _p("_PyValueGuarded_Load", [V], [V], VALUE_H, lambda cx, w: w,
        doc="a feedback word, a guarded borrow; the identity on its bits"),
+    _p("_PyValue_CodeConstant", [V], [V], VALUE_H, lambda cx, w: w,
+       doc="an item of the code's constants; the identity on its bits"),
+    _p("_PyValue_BoundLocal", [V], [V], VALUE_H, lambda cx, w: w,
+       doc="a local the compiler shows bound; the identity on its bits"),
+    _p("_PyValue_CellLocal", [V], [V], VALUE_H, lambda cx, w: w,
+       doc="the home of a cell or free variable; the identity on its bits"),
+    _p("_PyValue_CommonConstant", [V], [V], VALUE_H, lambda cx, w: w,
+       doc="an interpreter's common constant; the identity on its bits"),
+    # The frame, an implicit operand
+    _p("_PyValue_PublishedItem", [V], [V], VALUE_H, lambda cx, w: w,
+       doc="an item of a published list or tuple; the identity on its bits"),
     # The frame, an implicit operand
     _p("GLOBALS", [], [P], MACROS_H, _frame_field("f_globals", P), READS, frame=True),
     _p("BUILTINS", [], [P], MACROS_H, _frame_field("f_builtins", P), READS, frame=True),
@@ -575,7 +586,9 @@ def intrinsic(name: str):
         return None
     if row.kind == "INTRINSIC" and row.builds & {ir_contract.BUILD, "all"}:
         return row
-    if row.kind == "MACRO" and row.takes_view and row.result.moved >= 0:
+    if (row.kind == "MACRO" and row.takes_view and row.result.moved >= 0
+            and row.result.shape == "VALUE"):
+        # A value transport (TAKE); OWNER may be NULL whatever its argument is
         return row
     return None
 

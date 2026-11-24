@@ -146,6 +146,11 @@ static PyObject *lp__PyValueGuarded_Load(PyObject *const *args)
 {
     RET_VAL(_PyValueGuarded_Load((_PyValueGuarded){ .bits = (uintptr_t)WORD(0) }));
 }
+static PyObject *lp__PyValue_CodeConstant(PyObject *const *args) { RET_VAL(_PyValue_CodeConstant(VAL(0))); }
+static PyObject *lp__PyValue_BoundLocal(PyObject *const *args) { RET_VAL(_PyValue_BoundLocal(VAL(0))); }
+static PyObject *lp__PyValue_CellLocal(PyObject *const *args) { RET_VAL(_PyValue_CellLocal(VAL(0))); }
+static PyObject *lp__PyValue_CommonConstant(PyObject *const *args) { RET_VAL(_PyValue_CommonConstant(VAL(0))); }
+static PyObject *lp__PyValue_PublishedItem(PyObject *const *args) { RET_VAL(_PyValue_PublishedItem(VAL(0))); }
 
 static PyObject *
 lp__PyDictValues_AddToInsertionOrder(PyObject *const *args)
@@ -233,6 +238,9 @@ static const struct {
     P(_PyValueSlot_Exchange, 2), P(_PyValueSlot_ExchangeFilled, 2), P(_PyValueSlot_Fill, 2),
     P(DK_UNICODE_ENTRIES, 1), P(_PyDictValues_AddToInsertionOrder, 2),
     P(_PyDictValues_SetShape, 2), P(_PyLong_IsZero, 1), P(_PyValueGuarded_Load, 1),
+    P(_PyValue_CodeConstant, 1), P(_PyValue_BoundLocal, 1), P(_PyValue_CellLocal, 1),
+    P(_PyValue_CommonConstant, 1),
+    P(_PyValue_PublishedItem, 1),
     P(GLOBALS, 0), P(BUILTINS, 0), P(FRAME_CO_CONSTS, 0), P(GETLOCAL, 1), P(IR_SLOTS, 0),
     P(_Py_EvalBreakerHasEvents, 0),
     P(PyValue_DUP, 1), P(PyValue_XDUP, 1), P(PyValue_CLOSE, 1),

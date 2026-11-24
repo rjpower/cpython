@@ -147,6 +147,11 @@ class SliceTests(unittest.TestCase):
     # _MONITOR_END_ASYNC_FOR may raise.  G0d1: it leaves by the redirect exit
     # when a callback redirects the frame, which the record cannot say
     LISTED_DIFFERENCES = [
+        # G0d1: a handler that never runs ends the process (Py_FatalError):
+        # its one exit is abort, for which the record has no transfer
+        'CACHE/_CACHE: declares exits(abort), the record has ',
+        'IR_OPERANDS/_IR_OPERANDS: declares exits(abort), the record has ',
+        'RESERVED/_RESERVED: declares exits(abort), the record has ',
         'INSTRUMENTED_END_ASYNC_FOR/_MONITOR_END_ASYNC_FOR: declares exits(next, '
         'raise, redirect), the record has next',
         # Batch 7: no word executes RETURN_GENERATOR, so its result is NULL
@@ -368,6 +373,22 @@ class SliceTests(unittest.TestCase):
         for line in leaf:
             self.assertIn(needs[line.split(" ")[0]], line)
         self.assertRegex(lines[-1], r"^\d+ handlers compared; \d+ of \d+ uops declared$")
+
+    def test_owner_may_be_null(self):
+        # OWNER(x) moves x's obligation, or is NULL for a local's view
+        # whatever x is: no value transport, unlike TAKE (null_iff(0))
+        table = ir_contract.rows()
+        owner, take = table["OWNER"].result, table["TAKE"].result
+        self.assertEqual((owner.shape, owner.mode, owner.moved), ("VALUE_OR_NULL", "moved", 0))
+        self.assertEqual((take.shape, take.moved, take.null_iff), ("VALUE", 0, 0))
+        self.assertIsNone(ir_leaf.intrinsic("OWNER"))
+        self.assertIsNotNone(ir_leaf.intrinsic("TAKE"))
+
+    def test_a_steal_is_declared(self):
+        # PyValue_FromNonNumberSteal steals its object (the in-place add's
+        # `temp`, now that the walk admits it)
+        table = ir_contract.rows()
+        self.assertEqual(table["PyValue_FromNonNumberSteal"].args[0].mode, "consumed")
 
     def test_component_checks_are_generated(self):
         checks = "\n".join(ir_contract.component_checks())
@@ -1338,7 +1359,8 @@ class VerifierTests(unittest.TestCase):
             op(_BAD_ARRAY, (-- values[1]: owned inline_int)) effects() exits(next) {
                 values[0] = PyValue_NULL;
             }
-        """, r"_BAD_ARRAY: stores `PyValue_NULL` into the owned array `values`")
+        """, r"_BAD_ARRAY: stores `PyValue_NULL`, which may be NULL, into `values`, "
+             r"whose elements are not nullable")
         source = """
             op(_ARRAY, (a: consumed %s -- values[1]: owned inline_int)) effects() exits(next) {
                 values[0] = a;
@@ -1398,6 +1420,193 @@ class VerifierTests(unittest.TestCase):
                 EXIT_IF(PyValue_IsObject(v));
             }
         """, r"_BAD_NULL: passes `v` to PyValue_IsObject, which requires nonnull of it")
+
+    def test_a_nested_row_call_is_checked_by_its_result(self):
+        # An argument that is a row's call is what the row's result says:
+        # PyTuple_GET_VALUE's SCALAR result is not shown to be nonnull, and
+        # _PyValue_CodeConstant's assumed result is, once bound (F7)
+        self.refuses("""
+            op(_OP, (-- value: owned)) effects(reads) exits(next) {
+                value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            }
+        """, r"_OP: passes `PyTuple_GET_VALUE \( FRAME_CO_CONSTS , oparg \)` to "
+             r"PyValue_DUP, which requires nonnull of it")
+        self.refuses("""
+            op(_OP, (-- value: owned)) effects() exits(next) {
+                value = PyValue_DUP(GETLOCAL(oparg));
+            }
+        """, r"_OP: passes `GETLOCAL \( oparg \)` to PyValue_DUP, which requires "
+             r"nonnull of it")
+        self.verify("""
+            op(_OP, (-- value: owned)) effects(reads) exits(next) {
+                PyValueBorrow constant = _PyValue_CodeConstant(
+                    PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+                value = PyValue_DUP(constant);
+            }
+        """)
+        self.verify("""
+            op(_OP, (-- value: owned)) effects(reads) exits(next) {
+                value = PyValue_DUP(PyValue_FromObjectBorrow(Py_None));
+            }
+        """)
+
+    def test_an_unnamed_argument_is_checked_by_what_it_shows(self):
+        # Every argument with required facts is checked, named or not: a
+        # decided CASES field, a declared array element, a NULL literal and
+        # any other expression (which shows nothing).  Before, each of these
+        # passed unchecked
+        self.refuses("""
+            op(_OP, (-- v: owned)) effects() exits(next) {
+                v = PyValue_DUP(PyValue_NULL);
+            }
+        """, r"_OP: passes `PyValue_NULL` to PyValue_DUP, which requires nonnull of it")
+        self.refuses("""
+            op(_OP, (-- v: owned)) effects(reads) exits(next) {
+                PyValue *target = &IR_SLOT(IR_DST);
+                v = PyValue_DUP(*target);
+            }
+        """, r"_OP: passes `\* target` to PyValue_DUP, which requires nonnull of it")
+        array = """
+            op(_OP, (values[oparg]: borrowed%s -- v: owned)) effects() exits(next) {
+                v = PyValue_DUP(values[0]);
+            }
+        """
+        self.verify(array % "")
+        self.refuses(array % " nullable", r"_OP: passes `values \[ 0 \]` to "
+                     r"PyValue_DUP, which requires nonnull of it")
+        field = """
+            op(_OP, (d: borrowed object -- v: owned)) effects(runs_python) exits(next, raise) {
+                PyObject *o = PyValue_AsKnownObjectBorrow(d);
+                _PyStatusValue found = value_load_from_dict(tstate, o, o);
+                %s
+                ERROR_IF(found.status < 0);
+                if (found.status == 0) {
+                    v = PyValue_None;
+                }
+                else {
+                    %s
+                    v = found.value;
+                }
+            }
+        """
+        dup = "PyValue_CLOSE(PyValue_DUP(found.value));"
+        self.verify(field % ("", dup))
+        self.refuses(field % (dup, ""), r"_OP: passes `found\.value` to PyValue_DUP, "
+                     r"which requires nonnull of it")
+
+    def test_a_consumed_argument_names_an_owner(self):
+        # A consumed or taken argument passes an obligation: a name that
+        # holds one, a row's new owner as it is made, or a value that owes
+        # no count.  A borrow names none
+        self.refuses("""
+            op(_OP, (--)) effects(releases) exits(next) {
+                PyValueBorrow b = _PyValue_BoundLocal(GETLOCAL(oparg));
+                PyValue_CLOSE(b);
+            }
+        """, r"_OP: PyValue_CLOSE consumes `b`, which names no owner")
+        # An object pointer that a row returns without a count
+        self.refuses("""
+            op(_OP, (v: borrowed object --)) effects(reads, releases) exits(next) {
+                PyObject *cls = PyExceptionInstance_Class(PyValue_AsKnownObjectBorrow(v));
+                Py_XDECREF(cls);
+            }
+        """, r"_OP: Py_XDECREF consumes `cls`, which names no owner")
+        # A home load whose home still holds it
+        self.refuses("""
+            op(_OP, (--)) effects(releases) exits(next) {
+                PyValue tmp = GETLOCAL(oparg);
+                PyValue_XCLOSE(tmp);
+            }
+        """, r"_OP: PyValue_XCLOSE consumes `tmp`, which names no owner")
+        # An object owner is consumed once
+        self.refuses("""
+            op(_OP, (v: borrowed object --)) effects(reads, releases) exits(next) {
+                PyObject *tb = PyException_GetTraceback(PyValue_AsKnownObjectBorrow(v));
+                Py_XDECREF(tb);
+                Py_XDECREF(tb);
+            }
+        """, r"_OP: Py_XDECREF consumes `tb`, which is already consumed or moved")
+
+    @support.subTests("body", [
+        # _DELETE_FAST and _MAKE_CELL: a home move
+        ("""PyValue tmp = GETLOCAL(oparg);
+           GETLOCAL(oparg) = PyValue_NULL;
+           PyValue_XCLOSE(tmp);""", "next"),
+        # _BINARY_OP_INPLACE_ADD_UNICODE: the same through IR_SLOT
+        ("""PyValue held = IR_SLOT(IR_DST);
+           IR_SLOT(IR_DST) = PyValue_NULL;
+           PyValue_XCLOSE(held);""", "next"),
+        # _END_ASYNC_FOR and _CLEANUP_THROW: Py_NewRef's new owner, passed
+        ("""_PyErr_SetRaisedException(tstate, Py_NewRef(PyValue_AsKnownObjectBorrow(v)));""", "next"),
+        # _RAISE_VARARGS: Py_XNewRef's owners, NULL where the object is
+        ("""PyObject *o = PyValue_ObjectOrNull(v);
+           PyObject *owner = Py_XNewRef(o);
+           Py_XDECREF(owner);""", "next"),
+        # _MAKE_CELL: PyCell_NewValue's new cell
+        ("""PyObject *cell = PyCell_NewValue(v);
+           ERROR_IF(cell == NULL);
+           PyValue c = PyValue_FromObjectSteal(cell);
+           PyValue_CLOSE(c);""", "next, raise"),
+        # _DICT_UPDATE: the raised exception's owner
+        ("""PyObject *exc = _PyErr_GetRaisedException(tstate);
+           if (oparg) { Py_XDECREF(exc); }
+           else { _PyErr_ChainExceptions1(exc); }""", "next"),
+        # _WITH_EXCEPT_START: a new reference or NULL
+        ("""PyObject *tb = PyException_GetTraceback(PyValue_AsKnownObjectBorrow(v));
+           Py_XDECREF(tb);""", "next"),
+        # _DELETE_DEREF and _INSERT_NULL: NULL owes nothing
+        ("""PyValue_XCLOSE(PyValue_NULL);""", "next"),
+    ])
+    def test_consumed_arguments_that_name_owners(self, body):
+        body, exits = body
+        self.verify("""
+            op(_OP, (v: borrowed object --)) effects(runs_python) exits(%s) {
+                %s
+            }
+        """ % (exits, body))
+
+    def test_an_array_sized_by_a_test_is_empty_where_it_fails(self):
+        # _LOAD_ATTR: self_or_null[oparg&1] has no element where `oparg & 1`
+        # is false; there it is neither written nor owed
+        source = """
+            op(_OP, (owner: borrowed -- attr: owned, self_or_null[oparg&1]: owned nullable))
+                effects() exits(next)
+            {
+                if (oparg & 1) {
+                    self_or_null[0] = PyValue_NULL;
+                    %s
+                }
+                else {
+                    %s
+                }
+                attr = PyValue_None;
+            }
+        """
+        self.verify(source % ("", ""))
+        self.refuses(source % ("", "self_or_null[0] = PyValue_NULL;"),
+                     r"stores into `self_or_null`, which has no element here")
+        # Written on the true side only where the test holds
+        self.refuses(source.replace("self_or_null[0] = PyValue_NULL;", "") % ("", ""),
+                     r"the output array `self_or_null` is unwritten")
+
+    def test_an_identity_test_shares_facts(self):
+        # PyValue_Is is declared IDENTITY(): where it holds, its arguments
+        # are one word, so a copy of a home that is `left` has left's facts
+        # (_BINARY_OP_INPLACE_ADD_UNICODE's target local)
+        source = """
+            op(_OP, (left: exact(PyUnicode_Type) -- left)) effects(reads) exits(next, miss) {
+                PyValue held = IR_SLOT(IR_DST);
+                %s
+                PyObject *o = PyValue_AsKnownObjectBorrow(held);
+            }
+        """
+        self.verify(source % "EXIT_IF(!PyValue_Is(held, left));")
+        self.refuses(source % "",
+                     r"passes `held` to PyValue_AsKnownObjectBorrow, which requires "
+                     r"nonnull, object of it")
+        # Where the test fails, nothing is learned
+        self.refuses(source % "EXIT_IF(PyValue_Is(held, left));",
+                     r"passes `held` to PyValue_AsKnownObjectBorrow")
 
     def test_null_iff_names_a_value_argument(self):
         for k in ("1", "0"):
@@ -1643,7 +1852,7 @@ class VerifierTests(unittest.TestCase):
                 _PyErr_StackItem *exc_info = tstate->exc_info;
                 if (%s) {
                     DEAD(exc_value);
-                    Py_XSETREF(exc_info->exc_value, NULL);
+                    Py_CLEAR(exc_info->exc_value);
                 }
                 else {
                     PyObject *exc = PyValue_AsKnownObjectSteal(exc_value);
@@ -2431,6 +2640,24 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % "next, raise",
                      r"declares exits\(next, raise\), but the body takes next, raise, redirect")
 
+    def test_a_handler_that_never_runs_declares_abort(self):
+        # CACHE, RESERVED, the stack-only opcodes, IR_OPERANDS: the body
+        # ends the process (Py_FatalError), so abort is its one exit, and
+        # its outputs are never made
+        source = """
+            op(_OP, (value1: consumed -- value2: owned)) effects() exits(%s) {
+                Py_FatalError("Executing a stack-only instruction.");
+            }
+        """
+        self.verify(source % "abort")
+        self.refuses(source % "next",
+                     r"declares exits\(next\), but the body takes abort")
+        self.refuses("""
+            op(_OP, (--)) effects() exits(abort) {
+                int x = 0;
+            }
+        """, r"declares exits\(abort\), but the body takes next")
+
     def test_an_assumption_on_a_temporary_survives_a_reentry(self):
         # INSTRUMENTED_END_ASYNC_FOR: a temporary is replaced only by a
         # debugger's f_lineno jump, which redirects the frame: from an event
@@ -3047,10 +3274,11 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % "GETLOCAL(oparg + 1) = value;",
                      r"on next, `trash` is declared moved\(home\), but the home it is "
                      r"loaded from still holds it")
+        # The home is overwritten on one path only: there `tmp` takes its
+        # obligation (a home move), and the paths disagree
         self.refuses(source % "if (oparg) { GETLOCAL(oparg) = value; } else { "
                               "GETLOCAL(oparg + 1) = value; }",
-                     r"`trash` is declared moved\(home\), but is assigned `tmp`, which "
-                     r"differs by path")
+                     r"`tmp` is owned on one path and not on another where they join")
         # Only a home's value
         self.refuses("""
             op(_OP, (-- value: moved(home))) effects() exits(next) {

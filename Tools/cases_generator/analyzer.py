@@ -356,6 +356,24 @@ class Family:
 
 
 @dataclass
+class Boundary:
+    """The declared generator-boundary variants of an instruction, or of
+    each member of the family it heads (parsing.Boundary): where the
+    variants depart; the consumers that a completion may run, each with
+    its variant's declared exits; a delegated yield, which every variant
+    takes; the consumers a resume may run"""
+    source: str
+    # Where the variants depart: "last", in the last uop (a native send),
+    # or "enter", through the generator frame that the last uop enters,
+    # which yields or returns to the word later
+    at: str
+    yields: str                             # "NONE" or "DELEGATED"
+    completes: dict[str, tuple[str, ...]]
+    resumes: tuple[str, ...]
+    where: lexer.Token
+
+
+@dataclass
 class Analysis:
     instructions: dict[str, Instruction]
     uops: dict[str, Uop]
@@ -370,6 +388,8 @@ class Analysis:
     ir_only: dict[str, Instruction]
     # The pinned numbers that opmap and the IR handlers come from
     numbers: ir_numbers.NumberTable
+    # The declared generator-boundary clauses, by source
+    boundaries: dict[str, Boundary] = field(default_factory=dict)
 
 
 def analysis_error(message: str, tkn: lexer.Token) -> SyntaxError:
@@ -1315,6 +1335,36 @@ def add_family(
     families[family.name] = family
 
 
+def add_boundary(
+    pboundary: parser.Boundary,
+    instructions: dict[str, Instruction],
+    boundaries: dict[str, Boundary],
+) -> None:
+    where = pboundary.first_token
+    if pboundary.source not in instructions:
+        raise analysis_error(f"boundary({pboundary.source}): no such instruction", where)
+    if pboundary.source in boundaries:
+        raise analysis_error(f"A second boundary({pboundary.source})", where)
+    if pboundary.at not in ("last", "enter"):
+        raise analysis_error(f"boundary({pboundary.source}) needs at(last) "
+                             "or at(enter)", where)
+    if pboundary.yields not in (None, "delegated"):
+        raise analysis_error(f"boundary({pboundary.source}): yields({pboundary.yields}) "
+                             "is not a yield; the one kind is `delegated`", where)
+    completes: dict[str, tuple[str, ...]] = {}
+    for consumers, exits in pboundary.completes:
+        for consumer in consumers:
+            if consumer in completes:
+                raise analysis_error(f"boundary({pboundary.source}) completes "
+                                     f"{consumer} twice", where)
+            completes[consumer] = tuple(exits)
+    if len(set(pboundary.resumes)) != len(pboundary.resumes):
+        raise analysis_error(f"boundary({pboundary.source}) resumes a consumer twice", where)
+    boundaries[pboundary.source] = Boundary(
+        pboundary.source, pboundary.at, "DELEGATED" if pboundary.yields else "NONE",
+        completes, tuple(pboundary.resumes), where)
+
+
 def add_pseudo(
     pseudo: parser.Pseudo,
     instructions: dict[str, Instruction],
@@ -1451,6 +1501,7 @@ def analyze_forest(
     instructions: dict[str, Instruction] = {}
     uops: dict[str, Uop] = {}
     families: dict[str, Family] = {}
+    boundaries: dict[str, Boundary] = {}
     pseudos: dict[str, PseudoInstruction] = {}
     labels: dict[str, Label] = {}
     for node in forest:
@@ -1465,6 +1516,8 @@ def analyze_forest(
                 pass
             case parser.Family():
                 pass
+            case parser.Boundary():
+                pass
             case parser.Pseudo():
                 pass
             case parser.LabelDef():
@@ -1478,6 +1531,8 @@ def analyze_forest(
         match node:
             case parser.Family():
                 add_family(node, instructions, families)
+            case parser.Boundary():
+                add_boundary(node, instructions, boundaries)
             case parser.Pseudo():
                 add_pseudo(node, instructions, pseudos)
             case parser.LabelDef():
@@ -1514,7 +1569,7 @@ def analyze_forest(
         instructions, families, pseudos, numbers or ir_numbers.load_table())
     return Analysis(
         instructions, uops, families, pseudos, labels, opmap, first_arg,
-        min_instrumented, ir_only, numbers or ir_numbers.load_table()
+        min_instrumented, ir_only, numbers or ir_numbers.load_table(), boundaries
     )
 
 

@@ -111,7 +111,116 @@ macro binary_at_origin(op:Enum<Numeric>, a:Anchors)
     exit err(e);
 }
 
+// Float rows (the admitted pair is two inline floats, or an inline float and
+// an inline int)
+
+extern helper float_operands(a:B, b:B) -> Bool
+  effects()
+  c _PyRop_FloatOperands as bool
+  evidence(
+    review: "Reviewed P2. pycore_value.h PyValue_FloatOperandsCheck.",
+    contract: "A comparison of the two words: no memory, no failure, no callback.");
+
+// The sum of an admitted pair: a double, boxed only when it is NaN
+extern helper add_floats(a:B, b:B)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, raises)
+  ensures(ok.exact<float>(z))
+  c _PyRop_AddFloats as value_or_null
+  evidence(
+    review: "Reviewed P2. pycore_rop_rows.h: PyValue_FloatOperandValues, then"
+            "PyValue_FromDouble, which allocates only for NaN.",
+    contract: "The pair is admitted (asserted). NULL with MemoryError only if the"
+              "NaN box fails. No finalizer, no Python.");
+
+// Text rows
+
+extern primitive both_exact_str(a:B, b:B) -> Bool
+  effects()
+  test(exact<str>(a), exact<str>(b))
+  c _PyRop_BothExactStr as bool
+  evidence(
+    review: "Reviewed P2. pycore_rop_rows.h: both words are objects of exact type str.",
+    contract: "Reads the two type words: no memory, no failure, no callback.",
+    lowering: "none: the arm that uses it is shared and is not compiled inline",
+    test: "test_rop_add");
+
+extern helper concat_text(a:B, b:B)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, raises)
+  requires(exact<str>(a), exact<str>(b))
+  ensures(ok.exact<str>(z))
+  c _PyRop_ConcatText as value_or_null
+  evidence(
+    review: "Reviewed P2. pycore_rop_rows.h: PyUnicode_Concat, then"
+            "PyValue_FromNonNumberSteal.",
+    contract: "Both operands exact str, borrowed. NULL with the exception set if the"
+              "allocation fails or the result is too long. No finalizer, no Python.");
+
+// Extended rows: a descriptor of two exact types and an action, in the entry
+
+extern helper extension_applies(f:Fb<Binary>, a:B, b:B) -> Bool
+  effects(reads)
+  feedback(read(entry.descr))
+  c _PyRop_ExtensionApplies as bool
+  evidence(
+    review: "Reviewed P2. pycore_rop_rows.h: the old _BINARY_OP_EXTEND guards.",
+    contract: "True when both operands are objects of the descriptor's two exact"
+              "types. Reads only. A descriptor is present on an entry that selected"
+              "this arm; none gives false.");
+
+extern helper run_extension(f:Fb<Binary>, a:B, b:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  feedback(read(entry.descr))
+  c _PyRop_RunExtension as value_or_null
+  evidence(
+    review: "Reviewed P2. pycore_rop_rows.h: the descriptor's action on the two"
+            "operand objects, the result as a value.",
+    contract: "The operands are borrowed on every path; the result is owned, or NULL"
+              "with an exception set. The action is a concatenation: it may allocate"
+              "and run a collector's finalizers.");
+
+// Records the descriptor's action once on the anchored operands, as
+// binary_at_origin does for the generic operation.
+macro extension_at_origin(f:Fb<Binary>, a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback(read(entry.descr))
+  borrows(a)
+{
+  entry():
+    call run_extension(f, arg(a, 0), arg(a, 1)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
 // Adaptation policy (addendum section 2)
+// Finds the registered descriptor for two exact types and stores it in the
+// entry: hit when one matches.
+extern helper find_extension(f:Fb<Binary>, a:B, b:B)
+  cases(hit(), absent())
+  effects(reads, writes)
+  feedback(write(entry.descr))
+  c _PyRop_FindAddExtension as bool_cases
+  evidence(
+    review: "Reviewed P2. specialize.c binary_op_extended_specialization for NB_ADD.",
+    contract: "No memory, no Python, no failure. Writes the entry's descriptor, or"
+              "clears it when none matches.");
+
 macro adapt_before_use_add(f:Fb<Binary>, x:Src, y:Src)
   cases(run(), changed(t:Ticket<Binary>))
   effects(reads, writes, allocates)
@@ -132,6 +241,36 @@ macro adapt_before_use_add(f:Fb<Binary>, x:Src, y:Src)
       blocked -> Run();
     }
   Other():
+    branch float_operands(use(x), use(y)) -> ChosenFloat(), TryText();
+  ChosenFloat():
+    let cf:Candidate<Binary> = candidate(Add.Float);
+    call install(site, f, cf) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  TryText():
+    branch both_exact_str(use(x), use(y)) -> ChosenText(), TryExtended();
+  ChosenText():
+    let ct:Candidate<Binary> = candidate(Add.Text);
+    call install(site, f, ct) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  TryExtended():
+    call find_extension(f, use(x), use(y)) {
+      hit -> ChosenExtended();
+      absent -> NoArm();
+    }
+  ChosenExtended():
+    let ce:Candidate<Binary> = candidate(Add.Extended);
+    call install(site, f, ce) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  NoArm():
     let _:Unit = backoff(f);
     exit run();
   Changed(t:Ticket<Binary>):
@@ -168,6 +307,77 @@ arm Add.Int inline
   Finish(z:O):
     publish [dst = z] retire [spent(y), spent(x), old(dst)] at Add.Done;
     exit next();
+}
+
+// Two admitted float or inline numbers: the sum is a float
+arm Add.Float shared
+  effects(writes, allocates, raises, releases)
+  feedback()
+  exits(next, miss, raise)
+  ensures(next.exact<float>(dst))
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard float_operands(l, r) else miss;
+    call add_floats(l, r) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(Add.BoxFailed, e);
+  Finish(z:O):
+    publish [dst = z] retire [spent(y), spent(x), old(dst)] at Add.Done;
+    exit next();
+}
+
+// Two exact strings
+arm Add.Text shared
+  effects(writes, allocates, raises, releases)
+  feedback()
+  exits(next, miss, raise)
+  ensures(next.exact<str>(dst))
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard both_exact_str(l, r) else miss;
+    call concat_text(l, r) {
+      ok -> Finish();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(Add.BoxFailed, e);
+  Finish(z:O):
+    publish [dst = z] retire [spent(y), spent(x), old(dst)] at Add.Done;
+    exit next();
+}
+
+// The operand types of the entry's registered descriptor
+arm Add.Extended shared
+  effects(runs_python, writes, allocates, raises, releases)
+  feedback(read(entry.descr))
+  exits(next, miss, raise, redirect)
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard extension_applies(fb, l, r) else miss;
+    let a:Anchors = anchor_for_call([x, y]);
+    call extension_at_origin(fb, a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(y), spent(x), old(dst)] at Add.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [y, x], e);
+    exit raise(Add.OpFailed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
 }
 
 arm Add.Generic shared

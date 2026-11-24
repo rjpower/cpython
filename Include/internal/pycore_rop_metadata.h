@@ -12,11 +12,11 @@
 /* The arms' handler ids follow the old handlers, in definition order; the
  * observed wrappers of the arms of families that declare events follow them */
 #define ROP_FIRST_HANDLER IR_NUM_OLD_HANDLERS
-#define ROP_NUM_HANDLERS 9
+#define ROP_NUM_HANDLERS 12
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,
               "the arms' handler ids fit the handler field");
 #define ROP_NUM_FAMILIES 68
-#define ROP_NUM_ARMS 9
+#define ROP_NUM_ARMS 12
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS == IR_NUM_HANDLERS,
               "the handler count is the old handlers, the arms and their wrappers");
 
@@ -94,14 +94,17 @@ enum {
 
 /* Handler numbers of the arms */
 #define ROP_HANDLER_Add_Int (ROP_FIRST_HANDLER + 0)
-#define ROP_HANDLER_Add_Generic (ROP_FIRST_HANDLER + 1)
-#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 2)
-#define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 3)
-#define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 4)
-#define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 5)
-#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 6)
-#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 7)
-#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 8)
+#define ROP_HANDLER_Add_Float (ROP_FIRST_HANDLER + 1)
+#define ROP_HANDLER_Add_Text (ROP_FIRST_HANDLER + 2)
+#define ROP_HANDLER_Add_Extended (ROP_FIRST_HANDLER + 3)
+#define ROP_HANDLER_Add_Generic (ROP_FIRST_HANDLER + 4)
+#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 5)
+#define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 6)
+#define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 7)
+#define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 8)
+#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 9)
+#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 10)
+#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 11)
 
 /* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */
 #define ROP_POINT_Add_BoxFailed 1
@@ -232,8 +235,7 @@ static const uint16_t _PyRop_Ops_BuildText[] = {BUILD_STRING, BUILD_INTERPOLATIO
 static const _PyRopOperand _PyRop_Operands_Call[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"fn", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
-    {"self", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 40, IR_F_LOCAL_C},  /* Maybe<Src> */
-    {"args", ROP_FIELD_VECTOR, ROP_ROLE_NONE, 0, 0, 0, 0},  /* Args */
+    {"args", ROP_FIELD_VECTOR, ROP_ROLE_NONE, 0, 12, 40, 0},  /* Args */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 52, 0},  /* Fb<Call> */
 };
 static const uint16_t _PyRop_Ops_Call[] = {CALL};
@@ -248,8 +250,7 @@ static const uint16_t _PyRop_Ops_CallEx[] = {CALL_FUNCTION_EX};
 static const _PyRopOperand _PyRop_Operands_CallKw[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"fn", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
-    {"self", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 40, IR_F_LOCAL_C},  /* Maybe<Src> */
-    {"args", ROP_FIELD_VECTOR, ROP_ROLE_NONE, 0, 0, 0, 0},  /* Args */
+    {"args", ROP_FIELD_VECTOR, ROP_ROLE_NONE, 0, 12, 40, 0},  /* Args */
     {"names", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 52, IR_F_LOCAL_D},  /* Src */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 64, 0},  /* Fb<Call> */
 };
@@ -620,9 +621,9 @@ static const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {
     [ROP_FAMILY_Build] = {"Build", 3, 0, _PyRop_Operands_Build, 4, _PyRop_Ops_Build},
     [ROP_FAMILY_BuildSlice] = {"BuildSlice", 2, 0, _PyRop_Operands_BuildSlice, 1, _PyRop_Ops_BuildSlice},
     [ROP_FAMILY_BuildText] = {"BuildText", 4, 0, _PyRop_Operands_BuildText, 3, _PyRop_Ops_BuildText},
-    [ROP_FAMILY_Call] = {"Call", 5, 0, _PyRop_Operands_Call, 1, _PyRop_Ops_Call},
+    [ROP_FAMILY_Call] = {"Call", 4, 0, _PyRop_Operands_Call, 1, _PyRop_Ops_Call},
     [ROP_FAMILY_CallEx] = {"CallEx", 5, 1, _PyRop_Operands_CallEx, 1, _PyRop_Ops_CallEx},
-    [ROP_FAMILY_CallKw] = {"CallKw", 6, 1, _PyRop_Operands_CallKw, 1, _PyRop_Ops_CallKw},
+    [ROP_FAMILY_CallKw] = {"CallKw", 5, 1, _PyRop_Operands_CallKw, 1, _PyRop_Ops_CallKw},
     [ROP_FAMILY_Cell] = {"Cell", 5, 0, _PyRop_Operands_Cell, 6, _PyRop_Ops_Cell},
     [ROP_FAMILY_CleanupThrow] = {"CleanupThrow", 5, 1, _PyRop_Operands_CleanupThrow, 1, _PyRop_Ops_CleanupThrow},
     [ROP_FAMILY_Compare] = {"Compare", 6, 1, _PyRop_Operands_Compare, 1, _PyRop_Ops_Compare},
@@ -681,6 +682,9 @@ static const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {
 
 static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Add.Int", ROP_HANDLER_Add_Int, ROP_FAMILY_Add, 1},
+    {"Add.Float", ROP_HANDLER_Add_Float, ROP_FAMILY_Add, 1},
+    {"Add.Text", ROP_HANDLER_Add_Text, ROP_FAMILY_Add, 1},
+    {"Add.Extended", ROP_HANDLER_Add_Extended, ROP_FAMILY_Add, 1},
     {"Add.Generic", ROP_HANDLER_Add_Generic, ROP_FAMILY_Add, 1},
     {"GetAttr.Instance", ROP_HANDLER_GetAttr_Instance, ROP_FAMILY_GetAttr, 1},
     {"GetAttr.Generic", ROP_HANDLER_GetAttr_Generic, ROP_FAMILY_GetAttr, 0},

@@ -463,8 +463,11 @@ _PyIR_NullableHomeAs(_PyIRWord word, const _PyIRWord *wp, int arg, int home)
         }
         if (role == _PyIR_ROLE_BASE && _PyIR_ReadsWindowHome(word, arg, home)) {
             int relative = home - (int)fields[f];
+            // A swap moves what it finds, NULL too: resolution moves a
+            // value to a vacant home by one
+            int moves = _PyIR_BaseOpcode(IR_HANDLER(word)) == SWAP;
             if (relative < 0 || relative >= 32 ||
-                !(inputs & (1u << relative)))
+                (!moves && !(inputs & (1u << relative))))
             {
                 return 0;
             }

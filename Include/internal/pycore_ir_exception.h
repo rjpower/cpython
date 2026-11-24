@@ -157,7 +157,7 @@ _PyIR_RecipeValid(const _PyCodeIR *ir, int recipe, int nlocals, int floor)
     }
     const int32_t *r = &ir->recipes[recipe - 1];
     int n = r[0];
-    if (n <= 0 || n > _PyIR_RECIPE_MAX ||
+    if (n <= 0 || n > (int)ir->nslots ||
         (uint32_t)(recipe + 2 * n) > ir->nrecipes)
     {
         return 0;

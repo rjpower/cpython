@@ -57,7 +57,7 @@ extern helper commit<K>(t:Ticket<K>) -> Unit effects(writes) pending;
 extern routine finish(f:Fb<Binary>) cases(done(h:Head), err(e:Err)) effects(reads, raises) pending;
 extern helper fill(n:Size) cases(ok(s:Span<O>), err(e:Err, part:Span<O>)) effects(allocates, raises) pending;
 extern helper drop_all(s:Span<O>) -> Unit effects(releases) pending;
-extern helper new_frame() cases(ok(f:Frame), err(e:Err)) effects(allocates, raises) pending;
+extern helper new_frame() cases(ok(f:NewFrame), err(e:Err)) effects(allocates, raises) pending;
 macro anchor(s:Span<Src>) -> Anchors effects() feedback() pending;
 macro call_at(a:Anchors) cases(ok(z:O), err(e:Err), redirected(r:Route)) effects(runs_python, raises) feedback() borrows(a) pending;
 macro retire_failed(a:Anchors, s:Span<Src>, e:Err) -> Err effects(releases) feedback() spends(s) pending;
@@ -209,7 +209,7 @@ arm F.Generic shared
 }
 family H(x:Src, y:Src, fb:Fb<Binary>) exits(branch, raise, enter) ops(NOP);
 point H.Kept(current, site, pending) keep(x, y) spent() defs() held();
-point H.Child(child, target, clear) keep() spent(y, x) defs() held();
+point H.Back(caller, next_head, clear) keep() spent(y, x) defs() held();
 arm H.Cont split
   effects(reads, raises, releases)
   feedback()
@@ -237,9 +237,9 @@ arm H.Enter split
     }
   Failed(e:Err):
     exit raise(H.Kept, e);
-  Go(f:Frame):
-    publish [] retire [spent(y), spent(x)] at H.Child;
-    exit enter(f, next_head);
+  Go(f:NewFrame):
+    publish [] retire [spent(y), spent(x)] at H.Back;
+    exit enter(f) resume H.Back;
 }
 family Two(p:Dst, q:Dst, x:Src) exits(next) ops(NOP);
 point Two.Done(current, next_head, clear) keep() spent(x) defs(p, q) held();
@@ -279,11 +279,11 @@ VERIFY_CASES = [
      '', [
          (77, 5, 'fill_or_raise', 'ownership: exit err leaves part (made by case err of fill at base.rop:72) unaccounted'),
      ]),
-    ('enter unspecified',
-     '    publish [] retire [spent(y), spent(x)] at H.Child;\n    exit enter(f, next_head);',
-     '    exit enter(frame, next_head);', [
-         (213, 5, 'H.Enter', 'control: exit enter(frame, ...): the current frame is not a child frame'),
-         (213, 5, 'H.Enter', 'control: exit enter: no publish names the owner map at the transfer (a point of frame role child)'),
+    ('enter before spending',
+     '    publish [] retire [spent(y), spent(x)] at H.Back;\n    exit enter(f) resume H.Back;',
+     '    exit enter(f) resume H.Back;', [
+         (213, 5, 'H.Enter', 'points: exit enter resume H.Back: H.Back lists x in spent, but x is intact'),
+         (213, 5, 'H.Enter', 'points: exit enter resume H.Back: H.Back lists y in spent, but y is intact'),
      ]),
     ('completion target',
      '  Done(h:Head):\n    exit branch(h);',
@@ -514,6 +514,158 @@ macro anchored_after_close(a:Anchors) cases(done()) effects(releases, reads) fee
 """
 
 
+# Frame transfers: a call that enters its child and resumes at a point, and
+# a return whose arms are selected statically by the kind of frame
+TRANSFERS = """\
+family K(dst:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss) ops(NOP);
+point K.Returned(caller, next_head, clear) keep() spent(fn, a) defs(dst) held();
+point K.Early(current, next_head, clear) keep(fn, a) spent() defs(dst) held();
+extern primitive admits(v:B) -> Bool effects() pending;
+extern helper push(t:Thread, fn:Src, a:Args) -> NewFrame effects(writes, releases) spends(fn, a) pending;
+arm K.Exact split
+  effects(writes, releases, switches_frame)
+  feedback()
+  exits(enter, miss)
+{
+  entry():
+    guard admits(use(fn)) else miss;
+    let c:NewFrame = push(thread, fn, a);
+    exit enter(c) resume K.Returned;
+}
+family R(value:Src) exits(return, exit, raise) ops(NOP);
+point R.Delivered(caller, resume_head, clear) keep() spent(value) defs() held();
+extern helper pin_departing() -> Unit effects(writes) pending;
+extern primitive caller_of(f:Frame) -> Frame effects(reads) pending;
+extern helper unlink(t:Thread, f:Frame) -> DeadFrame effects(writes) pending;
+extern helper retire_frame(t:Thread, d:DeadFrame) -> Unit effects(releases) pending;
+extern helper deliver(c:Frame, v:O) -> Head effects(writes) pending;
+extern routine gen_return(t:Thread, v:O) -> Unit effects(writes, releases, switches_frame) exits(return, exit, raise) pending;
+arm R.Ordinary split select(thread_frame)
+  effects(reads, writes, releases, switches_frame)
+  feedback()
+  exits(return)
+{
+  entry():
+    let _:Unit = pin_departing();
+    let v:O = acquire(value);
+    let caller:Frame = caller_of(frame);
+    let d:DeadFrame = unlink(thread, frame);
+    let _:Unit = retire_frame(thread, d);
+    let h:Head = deliver(caller, v);
+    publish [] retire [] at R.Delivered;
+    exit return(caller, h);
+}
+arm R.Generator split select(generator_frame)
+  effects(writes, releases, switches_frame)
+  feedback()
+  exits(return, exit, raise)
+{
+  entry():
+    let _:Unit = pin_departing();
+    let v:O = acquire(value);
+    tail gen_return(thread, v);
+}
+arm R.External split select(entry_frame)
+  effects()
+  feedback()
+  exits(exit)
+{
+  entry():
+    let v:O = acquire(value);
+    exit exit(v);
+}
+"""
+
+TRANSFER_CASES = [
+    ('resume point role',
+     'point K.Returned(caller, next_head,', 'point K.Returned(current, next_head,', [
+         (14, 5, 'K.Exact', 'resume K.Returned: the point is (current, next_head); a resume point is (caller, next_head)'),
+     ]),
+    ('resume two definitions',
+     'family K(dst:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss) ops(NOP);\n'
+     'point K.Returned(caller, next_head, clear) keep() spent(fn, a) defs(dst)',
+     'family K(dst:Dst, other:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss) ops(NOP);\n'
+     'point K.Returned(caller, next_head, clear) keep() spent(fn, a) defs(dst, other)', [
+         (14, 5, 'K.Exact', "resume K.Returned: the child's value is one definition, not 2"),
+     ]),
+    ('enter without resume',
+     '    exit enter(c) resume K.Returned;', '    exit enter(c);', [
+         (14, 5, 'K.Exact', "an arm's exit enter names its resume point (exit enter(c) resume P), and no other exit does"),
+     ]),
+    ('resume on another exit',
+     '    exit exit(v);', '    exit exit(v) resume K.Returned;', [
+         (56, 5, 'R.External', "an arm's exit enter names its resume point (exit enter(c) resume P), and no other exit does"),
+         (56, 5, 'R.External', 'point K.Returned is not a point of R'),
+     ]),
+    ('select twice in a dimension',
+     'arm R.External split select(entry_frame)',
+     'arm R.External split select(entry_frame, thread_frame)', [
+         (16, 1, 'R', 'selection (entry_frame) is admitted by 0 arms; exactly one admits it'),
+         (49, 1, 'R.External', 'select names two members of dimension frame; one holds'),
+     ]),
+    ('select gap',
+     'arm R.External split select(entry_frame)',
+     'arm R.External split select(generator_frame)', [
+         (16, 1, 'R', 'selection (entry_frame) is admitted by 0 arms; exactly one admits it'),
+         (16, 1, 'R', 'selection (generator_frame) is admitted by 2 arms (R.Generator, R.External); exactly one admits it'),
+     ]),
+    ('tail of a helper',
+     'extern routine gen_return(', 'extern helper gen_return(', [
+         (23, 49, 'gen_return', 'only an arm or a routine declares exits'),
+         (40, 3, 'R.Generator', 'declared exit exit is not reached'),
+         (40, 3, 'R.Generator', 'declared exit raise is not reached'),
+         (40, 3, 'R.Generator', 'declared exit return is not reached'),
+         (47, 5, 'R.Generator', 'tail gen_return: gen_return is not a routine'),
+     ]),
+    ('defined before the child returns',
+     '    let c:NewFrame = push(thread, fn, a);\n',
+     '    let o:O = dup(use(fn));\n'
+     '    publish [dst = o] retire [old(dst)] at K.Early;\n'
+     '    let c:NewFrame = push(thread, fn, a);\n', [
+         (16, 5, 'K.Exact', 'points: exit enter resume K.Returned: dst is defined by publish at K.Early at t.rop:14 before the child returns; the return defines it'),
+     ]),
+    ('spent source missing',
+     ') -> NewFrame effects(writes, releases) spends(fn, a) pending;',
+     ') -> NewFrame effects(writes, releases) spends(fn) pending;', [
+         (14, 5, 'K.Exact', 'points: exit enter resume K.Returned: K.Returned lists a in spent, but a is intact'),
+     ]),
+    ('return unpinned',
+     '    let _:Unit = pin_departing();\n    let v:O = acquire(value);\n    let caller',
+     '    let v:O = acquire(value);\n    let caller', [
+         (36, 5, 'R.Ordinary', 'control: exit return releases the departing frame, whose code is not pinned on this path: call pin_departing() first'),
+     ]),
+    ('tail unpinned',
+     '    let _:Unit = pin_departing();\n    let v:O = acquire(value);\n    tail',
+     '    let v:O = acquire(value);\n    tail', [
+         (46, 5, 'R.Generator', 'control: tail gen_return releases the departing frame, whose code is not pinned on this path: call pin_departing() first'),
+     ]),
+    ('tail leaves an owner',
+     '    tail gen_return(thread, v);',
+     '    let w:O = dup(use(value));\n    tail gen_return(thread, v);', [
+         (48, 5, 'R.Generator', 'ownership: tail gen_return leaves w (made by dup(use(value)) at t.rop:47) unaccounted'),
+     ]),
+]
+
+
+def transfer_diagnostics(src: str) -> list[tuple[int, int, str, str]]:
+    program = rop_check.check([rop_syntax.parse(src, "t.rop")])
+    found = program.diagnostics + rop_verify.verify(program)
+    return [(d.span.line, d.span.column, d.definition, d.message) for d in found]
+
+
+class TransferTests(unittest.TestCase):
+    def test_transfers_are_clean(self):
+        self.assertEqual(transfer_diagnostics(TRANSFERS), [])
+
+    def test_transfer_fixtures(self):
+        for name, old, new, expected in TRANSFER_CASES:
+            with self.subTest(name):
+                self.assertIn(old, TRANSFERS)
+                found = transfer_diagnostics(TRANSFERS.replace(old, new, 1))
+                self.assertTrue(expected)
+                self.assertEqual(sorted(found), sorted(expected))
+
+
 class VerifyTests(unittest.TestCase):
     def test_anchored_borrow(self):
         found = verify_source(ANCHORED)
@@ -561,11 +713,12 @@ def rop_files() -> list[Path]:
     return sorted(ROP_DIR.glob("*.rop"))
 
 
-def at(filename: str, text: str, column: int | None = None) -> str:
-    """filename:line, and :column if given, of the first line of the
-    checked-in definition file that contains text"""
+def at(filename: str, text: str, column: int | None = None, last: bool = False) -> str:
+    """filename:line, and :column if given, of the first line (the last, if
+    last) of the checked-in definition file that contains text"""
     lines = (ROP_DIR / filename).read_text().splitlines()
-    line = next(i for i, source in enumerate(lines, 1) if text in source)
+    found = [i for i, source in enumerate(lines, 1) if text in source]
+    line = found[-1] if last else found[0]
     return f"{filename}:{line}" if column is None else f"{filename}:{line}:{column}"
 
 
@@ -583,8 +736,11 @@ class PilotTests(unittest.TestCase):
         # the lines of the checked-in files, found by their text, so that
         # edits elsewhere in the pilot leave the expectations intact.
         box = at("add.rop", "call box_i64(full)", 5)
-        raise_ = at("add.rop", "exit raise(Add.OpFailed, saved);", 5)
-        retire = at("add.rop", "let saved:Err = retire_failed_call(")
+        # Add.Extended and Add.Generic end alike; the mutations edit the
+        # last block, Add.Generic's
+        raise_ = at("add.rop", "exit raise(Add.OpFailed, saved);", 5, last=True)
+        retire = at("add.rop", "let saved:Err = retire_failed_call(", last=True)
+        raise_ext = at("add.rop", "exit raise(Add.OpFailed, saved);", 5)
         dup = at("getattr.rop", "let result:O = dup(unwrap(item));")
         guard = at("getattr.rop", "guard present(item) else miss;")
         raise_attr = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5)
@@ -612,7 +768,11 @@ class PilotTests(unittest.TestCase):
             ("core.rop", "  spends(s)\n", "",
              # Without its spends(s), the macro leaves the sources the point
              # declares spent
-             [f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
+             [f"{raise_ext}: Add.Extended: points: raise at Add.OpFailed: Add.OpFailed "
+              "lists x in spent, but x is intact",
+              f"{raise_ext}: Add.Extended: points: raise at Add.OpFailed: Add.OpFailed "
+              "lists y in spent, but y is intact",
+              f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
               "lists x in spent, but x is intact",
               f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
               "lists y in spent, but y is intact",
@@ -628,7 +788,9 @@ class PilotTests(unittest.TestCase):
                     text = path.read_text()
                     if path.name == filename:
                         self.assertIn(old, text)
-                        text = text.replace(old, new, 1)
+                        # The last occurrence: Add.Generic's block
+                        head, _, tail = text.rpartition(old)
+                        text = head + new + tail if "exit raise" in old else text.replace(old, new, 1)
                     files.append(rop_syntax.parse(text, path.name))
                 program = rop_check.check(files)
                 found = [str(d) for d in program.diagnostics + rop_verify.verify(program)]

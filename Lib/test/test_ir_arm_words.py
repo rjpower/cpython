@@ -165,8 +165,10 @@ class ForceArmTests(unittest.TestCase):
 
     def test_names_every_arm(self):
         handlers = capi.arm_handlers()
-        self.assertEqual(handlers["Add.Int"], handlers["Add.Generic"] - 1)
-        self.assertIn("GetAttr.Instance", handlers)
+        self.assertEqual(len(set(handlers.values())), len(handlers))
+        self.assertGreaterEqual(min(handlers.values()), _opcode.IR_NUM_OLD_HANDLERS)
+        for name in ("Add.Int", "Add.Generic", "GetAttr.Instance"):
+            self.assertIn(name, handlers)
 
     def test_the_contract_export_has_a_row_for_each_arm(self):
         contract = _opcode.get_ir_contract()

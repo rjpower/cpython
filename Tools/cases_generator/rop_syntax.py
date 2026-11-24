@@ -17,7 +17,7 @@ import lexer
 from lexer import Token
 from rop_catalog import (AccessMode, BuiltinType, DebtKind, Effect, ExcRole, Fact,
                          FrameRole,
-                         Handle, MonitoringEvent, PcRole, Region, RowKind, Scalar, Schema,
+                         Handle, MonitoringEvent, PcRole, Region, RowKind, Scalar, Schema, Select,
                          SchemaCtor, Wrap)
 from rop_model import (Access, Advance, Arm, Binding, Block, BoolLit, Branch, Call,
                        CallTerm, Cases, CaseDecl, CBinding, Contract, Debt, Decl,
@@ -26,7 +26,7 @@ from rop_model import (Access, Advance, Arm, Binding, Block, BoolLit, Branch, Ca
                        Goto, Graph, Guard, HandleType, Let, Macro, Name, Nat,
                        Param, PairType, Point, Publish, Result, Returns, RopError,
                        ScalarType, SchemaType, SchemaVar, SourceFile, SpanLit,
-                       SrcSpan, Stmt, Target, Term, Type, WrapType)
+                       SrcSpan, Stmt, Tail, Target, Term, Type, WrapType)
 
 ID = "ID"
 NUM = "NUM"
@@ -301,9 +301,13 @@ class Parser:
         name = self.qname()
         self.where = name.text
         region, _ = self.enum_word(Region, "a region")
+        select: tuple[Select, ...] = ()
+        if self.accept("select"):
+            self.expect("(")
+            select = self.comma_list(")", lambda: self.enum_word(Select, "a selection")[0])
         contract = self.contract(exits=True)
         graph = self.graph()
-        return Arm(name.text, region, contract, graph, start.span)
+        return Arm(name.text, region, contract, graph, start.span, select)
 
     def macro(self) -> Macro:
         start = self.take()
@@ -608,10 +612,19 @@ class Parser:
             self.take()
             kind = self.ident("an exit")
             args = self.args()
+            resume = None
+            if self.accept("resume"):
+                resume = self.qname().text
             self.expect(";")
-            return Exit(kind.text, args, tok.span)
+            return Exit(kind.text, args, tok.span, resume)
+        if word == "tail":
+            self.take()
+            callee = self.qname()
+            args = self.args()
+            self.expect(";")
+            return Tail(callee.text, args, tok.span)
         raise self.error("expected a statement or a terminator (goto, branch, call, "
-                         f"each, advance, exit), found '{tok.text or 'end of file'}'")
+                         f"each, advance, exit, tail), found '{tok.text or 'end of file'}'")
 
     def edge(self) -> Edge:
         case = self.ident("a case name")

@@ -2288,28 +2288,88 @@ error_clear_slots(_PyInterpreterFrame *frame, int first)
     }
 }
 
-/* Apply the ingress recipe of an exceptional edge: take every source, put
- * each in its home, then release what the homes held.  The moves may
- * permute, so all are taken before any is put. */
+/* Whether a pair of recipe other than a done one has source s */
+static int
+recipe_pending_source(const int32_t *recipe, const uint64_t *done, int s)
+{
+    for (int q = 0; q < recipe[0]; q++) {
+        if (!((done[q >> 6] >> (q & 63)) & 1) && recipe[1 + 2 * q] == s) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Apply the ingress recipe of an exceptional edge: put each source in its
+ * home as if all moved at once, then release what the homes held.  A home
+ * that no pending pair still reads takes its value by a swap, which leaves
+ * what the home held at the source; what is left forms cycles, each turned
+ * through one value.  The sources that are no home end with the values the
+ * homes held. */
 static void
 error_apply_recipe(_PyInterpreterFrame *frame, int index)
 {
     const int32_t *recipe = _PyIR_Recipe(_PyCode_IR(_PyFrame_GetCode(frame)),
                                          index);
     int n = recipe[0];
-    assert(n > 0 && n <= _PyIR_RECIPE_MAX);
-    PyValue moved[_PyIR_RECIPE_MAX];
-    for (int q = 0; q < n; q++) {
-        moved[q] = _PyFrame_TakeHome(frame, &frame->base[recipe[1 + 2 * q]]);
+    assert(n > 0 && n <= IR_MAX_SLOTS);
+    uint64_t done[IR_MAX_SLOTS / 64 + 1] = {0};
+#define RECIPE_DONE(Q) (done[(Q) >> 6] |= (uint64_t)1 << ((Q) & 63))
+#define RECIPE_IS_DONE(Q) ((done[(Q) >> 6] >> ((Q) & 63)) & 1)
+    int progress = 1;
+    while (progress) {
+        progress = 0;
+        for (int q = 0; q < n; q++) {
+            int s = recipe[1 + 2 * q], h = recipe[2 + 2 * q];
+            if (RECIPE_IS_DONE(q) || recipe_pending_source(recipe, done, h)) {
+                continue;
+            }
+            PyValue value = _PyFrame_TakeHome(frame, &frame->base[s]);
+            PyValue held = _PyFrame_TakeHome(frame, &frame->base[h]);
+            _PyFrame_WriteHome(frame, &frame->base[h], value);
+            _PyFrame_WriteHome(frame, &frame->base[s], held);
+            RECIPE_DONE(q);
+            progress = 1;
+        }
     }
-    PyValue held[_PyIR_RECIPE_MAX];
     for (int q = 0; q < n; q++) {
-        PyValue *home = &frame->base[recipe[2 + 2 * q]];
-        held[q] = _PyFrame_TakeHome(frame, home);
-        _PyFrame_WriteHome(frame, home, moved[q]);
+        if (RECIPE_IS_DONE(q)) {
+            continue;
+        }
+        // Every home of a cycle is a source of it
+        int s = recipe[1 + 2 * q];
+        PyValue first = _PyFrame_TakeHome(frame, &frame->base[s]);
+        int vacant = s;
+        for (;;) {
+            int r = -1;
+            for (int p = 0; p < n && r < 0; p++) {
+                if (!RECIPE_IS_DONE(p) && recipe[2 + 2 * p] == vacant) {
+                    r = p;
+                }
+            }
+            assert(r >= 0);
+            RECIPE_DONE(r);
+            if (r == q) {
+                _PyFrame_WriteHome(frame, &frame->base[vacant], first);
+                break;
+            }
+            int from = recipe[1 + 2 * r];
+            _PyFrame_WriteHome(frame, &frame->base[vacant],
+                               _PyFrame_TakeHome(frame, &frame->base[from]));
+            vacant = from;
+        }
     }
+#undef RECIPE_DONE
+#undef RECIPE_IS_DONE
     for (int q = 0; q < n; q++) {
-        PyValue_XCLOSE(held[q]);
+        int s = recipe[1 + 2 * q];
+        int home = 0;
+        for (int p = 0; p < n; p++) {
+            home |= recipe[2 + 2 * p] == s;
+        }
+        if (!home) {
+            PyValue_XCLOSE(_PyFrame_TakeHome(frame, &frame->base[s]));
+        }
     }
 }
 

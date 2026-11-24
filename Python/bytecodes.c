@@ -1379,7 +1379,9 @@ dummy_func(
             res = PyValue_DUP(PyValue_FromObjectBorrow(res_o));
         }
 
-        op(_GUARD_NOS_TUPLE, (nos, unused -- nos, unused)) {
+        op(_GUARD_NOS_TUPLE, (nos: object, unused -- nos: exact(PyTuple_Type), unused))
+            effects(reads) exits(next, miss)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(nos);
             EXIT_IF(!PyTuple_CheckExact(o));
         }
@@ -2594,7 +2596,11 @@ dummy_func(
             interpolation = PyValue_FromObjectSteal(interpolation_o);
         }
 
-        outlined inst(BUILD_TEMPLATE, (strings, interpolations -- template)) {
+        outlined inst(BUILD_TEMPLATE,
+                (strings: consumed assumed(object) by BUILD_TUPLE,
+                 interpolations: consumed assumed(object) by BUILD_TUPLE -- template: owned))
+            effects(allocates, raises, releases) exits(next, raise)
+        {
             // Both are tuples that the compiler built
             assert(PyValue_IsObject(strings));
             assert(PyValue_IsObject(interpolations));
@@ -2625,7 +2631,10 @@ dummy_func(
             list = PyValue_FromObjectSteal(list_o);
         }
 
-        op(_LIST_EXTEND, (list_st, unused[oparg-1], iterable_st -- list_st, unused[oparg-1], i)) {
+        op(_LIST_EXTEND,
+                (list_st: assumed(object) by BUILD_LIST, unused[oparg-1], iterable_st: taken -- list_st, unused[oparg-1], i: moved(iterable_st) object))
+            effects(runs_python) exits(next, raise)
+        {
             assert(PyValue_IsObject(list_st));
             // A number is not iterable
             if (!PyValue_IsObject(iterable_st)) {
@@ -2658,7 +2667,10 @@ dummy_func(
 
         outlined macro(LIST_EXTEND) = _LIST_EXTEND + POP_TOP;
 
-        op(_SET_UPDATE, (set, unused[oparg-1], iterable -- set, unused[oparg-1], i)) {
+        op(_SET_UPDATE,
+                (set: assumed(object) by BUILD_SET, unused[oparg-1], iterable: taken -- set, unused[oparg-1], i: moved(iterable) object))
+            effects(runs_python) exits(next, raise)
+        {
             assert(PyValue_IsObject(set));
             // A number is not iterable
             if (!PyValue_IsObject(iterable)) {
@@ -2749,7 +2761,10 @@ dummy_func(
             NOP,
         };
 
-        op(_DICT_UPDATE, (dict, unused[oparg - 1], update -- dict, unused[oparg - 1], upd)) {
+        op(_DICT_UPDATE,
+                (dict: assumed(object) by BUILD_MAP, unused[oparg - 1], update: taken -- dict, unused[oparg - 1], upd: moved(update) object))
+            effects(runs_python) exits(next, raise)
+        {
             assert(PyValue_IsObject(dict));
             // A number is not a mapping
             if (!PyValue_IsObject(update)) {
@@ -2786,7 +2801,11 @@ dummy_func(
 
         outlined macro(DICT_UPDATE) = _DICT_UPDATE + POP_TOP;
 
-        op(_DICT_MERGE, (callable, unused, unused, dict, unused[oparg - 1], update -- callable, unused, unused, dict, unused[oparg - 1], u)) {
+        op(_DICT_MERGE,
+                (callable, unused, unused, dict: assumed(object) by BUILD_MAP, unused[oparg - 1], update: taken
+                 -- callable, unused, unused, dict, unused[oparg - 1], u: moved(update) object))
+            effects(runs_python) exits(next, raise)
+        {
             assert(PyValue_IsObject(dict));
             // A number is not a mapping
             if (!PyValue_IsObject(update)) {
@@ -3771,10 +3790,13 @@ dummy_func(
          * and no dispatcher. The guard is the exact type, so a subclass that
          * overrides __contains__ takes the generic handler. Only the fused
          * words have this form. */
-        op(_GUARD_TOS_STR_TUPLE_LIST, (tos -- tos)) {
+        op(_GUARD_TOS_STR_TUPLE_LIST,
+                (tos: object -- tos: exact(PyList_Type | PyTuple_Type | PyUnicode_Type)))
+            effects(reads) exits(next, miss)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(tos);
             EXIT_IF(!PyUnicode_CheckExact(o) && !PyTuple_CheckExact(o)
-                    && !PyList_CheckExact(o));
+                    && !PyList_CheckExact(o), "not an exact str, tuple or list");
         }
 
         op(_CONTAINS_OP_SEQUENCE,

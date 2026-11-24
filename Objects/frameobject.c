@@ -1798,8 +1798,8 @@ register_resume_null_states(PyCodeObject *code, RegisterResumeAnalysis *analysis
         {
             RegisterResumeEdge edge = analysis->edges[e];
             memset(work, 0, stride * sizeof(uint64_t));
-            /* Forget facts on all errors, including source errors. This does
-             * not presume partial-error or inline callback publication. */
+            /* Forget facts on source errors. This does not presume inline
+             * callback publication. Handler edges are below. */
             if (edge.floor < 0 && edge.phase >= 0) {
                 for (int j = 0; j < nt; j++) {
                     _PyIRPhysicalTransfer transfer = _PyIR_NormalPhysicalTransfer(
@@ -1812,6 +1812,40 @@ register_resume_null_states(PyCodeObject *code, RegisterResumeAnalysis *analysis
                         source >= 0 && source < nt)
                     {
                         is_null = (before[source / 64] >> (source % 64)) & 1;
+                    }
+                    if (is_null) {
+                        work[j / 64] |= (uint64_t)1 << (j % 64);
+                    }
+                }
+            }
+            else if (edge.phase < 0) {
+                /* Unwinding applies the recipe, clears every home from the
+                 * floor up and then writes lasti and the exception. Below the
+                 * floor, only homes the failing word leaves alone on success
+                 * keep their facts. */
+                const int32_t *recipe = _PyIR_Recipe(_PyCode_IR(code), edge.recipe);
+                /* The floor holds lasti or the exception, the home above it
+                 * the exception or NULL. */
+                _PyIRExceptionEntry handler = analysis->handlers[pc];
+                int exc_slot = handler.target == edge.to &&
+                    handler.slot - handler.lasti == edge.floor
+                    ? handler.slot : edge.floor + 1;
+                for (int j = 0; j < nt; j++) {
+                    int home = nl + j;
+                    bool is_null;
+                    if (home >= edge.floor) {
+                        is_null = home > exc_slot;
+                    }
+                    else {
+                        bool moved = false;
+                        for (int q = 0; recipe != NULL && q < recipe[0]; q++) {
+                            moved |= recipe[1 + 2 * q] == home || recipe[2 + 2 * q] == home;
+                        }
+                        is_null = !moved &&
+                            _PyIR_NormalPhysicalTransfer(&_PyCode_IRWords(code)[pc], arg, 0,
+                                                         home, nl, nl + nt).kind ==
+                                _PyIR_PHYSICAL_PRESERVE &&
+                            ((before[j / 64] >> (j % 64)) & 1);
                     }
                     if (is_null) {
                         work[j / 64] |= (uint64_t)1 << (j % 64);
@@ -1896,15 +1930,16 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
     uint64_t *work = PyMem_Calloc(stride, sizeof(uint64_t));
     uint64_t *edge = PyMem_Calloc(stride, sizeof(uint64_t));
     uint64_t *mapped = lanes > 1 ? PyMem_Calloc(stride, sizeof(uint64_t)) : NULL;
+    uint64_t *proved_null = lanes > 1 ? PyMem_Calloc(stride, sizeof(uint64_t)) : NULL;
     unsigned char *safe = PyMem_Calloc((size_t)Py_MAX(n, 1), 1);
     unsigned char *null_home = PyMem_Calloc((size_t)Py_MAX(nt, 1), 1);
     if (live == NULL || work == NULL || edge == NULL ||
-        (lanes > 1 && mapped == NULL) || safe == NULL ||
-        null_home == NULL)
+        (lanes > 1 && (mapped == NULL || proved_null == NULL)) ||
+        safe == NULL || null_home == NULL)
     {
         PyMem_Free(live); PyMem_Free(work); PyMem_Free(edge); PyMem_Free(safe);
         PyMem_Free(null_home);
-        PyMem_Free(mapped);
+        PyMem_Free(mapped); PyMem_Free(proved_null);
         PyErr_NoMemory();
         return NULL;
     }
@@ -2105,6 +2140,22 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                         work[j / 64] |= (uint64_t)1 << (j % 64);
                     }
                 }
+                /* A value carried into a word along paths that all leave its
+                 * home NULL is a NULL: a nullable reader such as SEND's index
+                 * hole sees NULL on its entry edge and a value on its loop
+                 * edge. The value lane runs before the NULL lane. */
+                if (lane == REGISTER_REQUIRE_VALUE) {
+                    const uint64_t *nulls = analysis->null_states + (size_t)i * stride;
+                    for (int j = 0; j < nb; j++) {
+                        proved_null[j] = work[j] & nulls[j];
+                        work[j] &= ~nulls[j];
+                    }
+                }
+                else if (lane == REGISTER_REQUIRE_NULL_ONLY) {
+                    for (int j = 0; j < nb; j++) {
+                        work[j] |= proved_null[j];
+                    }
+                }
                 uint64_t *before = lane_live + (size_t)i * stride;
                 if (memcmp(before, work, stride * sizeof(uint64_t))) {
                     memcpy(before, work, stride * sizeof(uint64_t));
@@ -2127,11 +2178,12 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
         }
     }
     PyMem_Free(work); PyMem_Free(edge); PyMem_Free(null_home); PyMem_Free(mapped);
+    PyMem_Free(proved_null);
     return safe;
 error:
     PyMem_Free(live); PyMem_Free(work); PyMem_Free(edge);
     PyMem_Free(null_home); PyMem_Free(safe);
-    PyMem_Free(mapped);
+    PyMem_Free(mapped); PyMem_Free(proved_null);
     analysis->required = NULL;
     return NULL;
 }
@@ -2696,8 +2748,7 @@ register_resume_analyze(_PyInterpreterFrame *frame, bool allow_null, bool path_n
     {
         goto error;
     }
-    if (path_null && (code->co_flags & CO_OPTIMIZED) && !(code->co_flags &
-                      (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) &&
+    if (path_null && (code->co_flags & CO_OPTIMIZED) &&
         register_resume_null_states(code, analysis) < 0)
     {
         goto error;

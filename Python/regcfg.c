@@ -506,6 +506,12 @@ struct _PyRegTr {
     int *mv;
     int nmv;
     int amv;
+    /* Per fresh register, whether it holds a binding that SaveLocal took,
+     * which may be absent; per stack position, whether such a binding was
+     * ever there, so that its parameter may hold one */
+    char *maybe;
+    int amaybe;
+    char *maybe_pos;
 };
 
 int
@@ -516,8 +522,10 @@ _PyRegTr_Fresh(_PyRegTr *t, int *v)
     RETURN_IF_ERROR(grow((void **)&t->def, &t->adef, k + 1, sizeof(int)));
     RETURN_IF_ERROR(grow((void **)&t->natural, &t->anatural, k + 1,
                          sizeof(int)));
+    RETURN_IF_ERROR(grow((void **)&t->maybe, &t->amaybe, k + 1, 1));
     t->def[k] = t->nops;
     t->natural[k] = -1;
+    t->maybe[k] = 0;
     *v = cfg->nvregs++;
     return SUCCESS;
 }
@@ -1037,11 +1045,180 @@ rule_binary_op(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, dst);
 }
 
+/* Whether identity v may hold an absent binding (a Maybe value): one that
+ * SaveLocal took, or a parameter of a position where one has been.  The
+ * positions over-approximate the edges, which is safe: a Restore of a
+ * present value is a Store. */
+static int
+maybe_absent(const _PyRegTr *t, int v)
+{
+    const _PyRegCfg *cfg = t->cfg;
+    if (v >= _PyReg_FRESH0(cfg)) {
+        return t->maybe[v - _PyReg_FRESH0(cfg)];
+    }
+    return _PyReg_IS_CANON(cfg, v) && t->maybe_pos[v - cfg->nlocalsplus];
+}
+
+/* Locals are homes: a read names the local as its source and a store as
+ * its destination (Python/register_ops/values.rop). */
+
+/* LOAD_FAST, LOAD_FAST_BORROW and LOAD_FAST_CHECK: the local's binding
+ * into a fresh temporary.  CopyProp later folds a read into the field of
+ * its one reader where nothing between can change the local. */
+static int
+read_local(_PyRegTr *t, const _PyRegOp *src, int local, int handler)
+{
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &local, 1, &dst, 1, &op));
+    op->oparg = local;
+    return _PyRegTr_Push(t, dst);
+}
+
+/* STORE_FAST: the value into the local, which releases its old binding.
+ * A binding that SaveLocal took may be absent: Restore. */
+static int
+write_local(_PyRegTr *t, const _PyRegOp *src, int local)
+{
+    int value;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, &value));
+    int handler = maybe_absent(t, value) ? ROP_SELECT_LocalWrite_restore
+                                         : ROP_SELECT_LocalWrite_store;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &value, 1, &local, 1, &op));
+    op->oparg = local;
+    op->dst = local;
+    return SUCCESS;
+}
+
+static int
+rule_load_fast(_PyRegTr *t, const _PyRegOp *src)
+{
+    return read_local(t, src, src->oparg, ROP_SELECT_LocalRead_bound);
+}
+
+static int
+rule_load_fast_check(_PyRegTr *t, const _PyRegOp *src)
+{
+    return read_local(t, src, src->oparg, ROP_SELECT_LocalRead_checked);
+}
+
+static int
+rule_load_fast_load_fast(_PyRegTr *t, const _PyRegOp *src)
+{
+    RETURN_IF_ERROR(read_local(t, src, src->oparg >> 4,
+                               ROP_SELECT_LocalRead_bound));
+    return read_local(t, src, src->oparg & 15, ROP_SELECT_LocalRead_bound);
+}
+
+static int
+rule_store_fast(_PyRegTr *t, const _PyRegOp *src)
+{
+    return write_local(t, src, src->oparg);
+}
+
+static int
+rule_store_fast_load_fast(_PyRegTr *t, const _PyRegOp *src)
+{
+    RETURN_IF_ERROR(write_local(t, src, src->oparg >> 4));
+    return read_local(t, src, src->oparg & 15, ROP_SELECT_LocalRead_bound);
+}
+
+static int
+rule_store_fast_store_fast(_PyRegTr *t, const _PyRegOp *src)
+{
+    RETURN_IF_ERROR(write_local(t, src, src->oparg >> 4));
+    return write_local(t, src, src->oparg & 15);
+}
+
+/* LOAD_FAST_AND_CLEAR: the comprehension takes the local's binding, which
+ * may be absent, and leaves the local vacant */
+static int
+rule_load_fast_and_clear(_PyRegTr *t, const _PyRegOp *src)
+{
+    int dst, local = src->oparg;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_SaveLocal_Take,
+                                  &local, 1, &dst, 1, &op));
+    op->oparg = local;
+    t->maybe[dst - _PyReg_FRESH0(t->cfg)] = 1;
+    return _PyRegTr_Push(t, dst);
+}
+
+static int
+rule_delete_fast(_PyRegTr *t, const _PyRegOp *src)
+{
+    int local = src->oparg;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_LocalDelete_Checked,
+                                  NULL, 0, &local, 1, &op));
+    op->oparg = local;
+    op->dst = local;
+    return SUCCESS;
+}
+
+/* LOAD_CONST, LOAD_SMALL_INT and LOAD_COMMON_CONSTANT: the Const arm of
+ * the kind, its index in the oparg.  ConstSlots later gives most constants
+ * hidden homes. */
+static int
+load_const(_PyRegTr *t, const _PyRegOp *src, int handler)
+{
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, NULL, 0, &dst, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+static int
+rule_load_const(_PyRegTr *t, const _PyRegOp *src)
+{
+    return load_const(t, src, ROP_SELECT_Const_pool);
+}
+
+static int
+rule_load_small_int(_PyRegTr *t, const _PyRegOp *src)
+{
+    return load_const(t, src, ROP_SELECT_Const_small);
+}
+
+static int
+rule_load_common_constant(_PyRegTr *t, const _PyRegOp *src)
+{
+    return load_const(t, src, ROP_SELECT_Const_common);
+}
+
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
     [BINARY_OP] = rule_binary_op,
+    [DELETE_FAST] = rule_delete_fast,
+    [LOAD_COMMON_CONSTANT] = rule_load_common_constant,
+    [LOAD_CONST] = rule_load_const,
+    [LOAD_FAST] = rule_load_fast,
+    [LOAD_FAST_AND_CLEAR] = rule_load_fast_and_clear,
+    [LOAD_FAST_BORROW] = rule_load_fast,
+    [LOAD_FAST_BORROW_LOAD_FAST_BORROW] = rule_load_fast_load_fast,
+    [LOAD_FAST_CHECK] = rule_load_fast_check,
+    [LOAD_FAST_LOAD_FAST] = rule_load_fast_load_fast,
+    [LOAD_SMALL_INT] = rule_load_small_int,
+    [STORE_FAST] = rule_store_fast,
+    [STORE_FAST_LOAD_FAST] = rule_store_fast_load_fast,
+    [STORE_FAST_STORE_FAST] = rule_store_fast_store_fast,
     [SWAP] = rule_swap,
 };
+
+/* Every edge leaves from an op or a block's end: a position that holds a
+ * binding that may be absent gives its parameter that type */
+static void
+mark_maybe(_PyRegTr *t)
+{
+    for (int k = 0; k < t->sp && k < IR_MAX_SLOTS; k++) {
+        if (maybe_absent(t, t->stack[k])) {
+            t->maybe_pos[k] = 1;
+        }
+    }
+}
 
 static int
 translate_instr(_PyRegTr *t, const _PyRegOp *instr)
@@ -1050,6 +1227,7 @@ translate_instr(_PyRegTr *t, const _PyRegOp *instr)
     if (rule == NULL || instr->opcode > 255) {
         rule = _PyRegTr_Legacy;
     }
+    mark_maybe(t);
     return rule(t, instr);
 }
 
@@ -1064,10 +1242,14 @@ translate(_PyRegCfg *cfg)
     int *range = PyMem_Malloc(Py_MAX(2 * n, 1) * sizeof(int));
     t.held = PyMem_Calloc(IR_MAX_SLOTS, 1);
     t.free_since = PyMem_Malloc(IR_MAX_SLOTS * sizeof(int));
-    if (range == NULL || t.held == NULL || t.free_since == NULL) {
+    t.maybe_pos = PyMem_Calloc(IR_MAX_SLOTS, 1);
+    if (range == NULL || t.held == NULL || t.free_since == NULL ||
+        t.maybe_pos == NULL)
+    {
         PyMem_Free(range);
         PyMem_Free(t.held);
         PyMem_Free(t.free_since);
+        PyMem_Free(t.maybe_pos);
         PyErr_NoMemory();
         return ERROR;
     }
@@ -1112,6 +1294,7 @@ translate(_PyRegCfg *cfg)
             // the block, under the handler of its last op
             _PyRegOp edge = {.except = -1, .dst = -1, .target = -1,
                              .reader = -1, .depth = -1, .fb = -1};
+            mark_maybe(&t);
             err = bind_edge(&t, t.sp, end > start ? &cfg->ops[end - 1] : &edge);
         }
         blk->end = t.nops;
@@ -1124,6 +1307,8 @@ translate(_PyRegCfg *cfg)
     PyMem_Free(t.free_since);
     PyMem_Free(t.rec);
     PyMem_Free(t.mv);
+    PyMem_Free(t.maybe);
+    PyMem_Free(t.maybe_pos);
     if (err != SUCCESS) {
         PyMem_Free(t.ops);
         return ERROR;

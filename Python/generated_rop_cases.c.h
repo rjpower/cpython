@@ -611,6 +611,201 @@
             ROP_NO_GENERIC(GetMethod);
         }
 
+        TARGET(Const_Pool) {
+            // Const.Pool (inline)
+            int opcode = ROP_HANDLER_Const_Pool;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Const_Pool);
+            PyValue v;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            v = _PyRop_CodeConstant(frame, ((uint32_t)IR_B(ir_word) | ((uint32_t)IR_C(ir_word) << 12)));
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, v);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+        }
+
+        TARGET(Const_Small) {
+            // Const.Small (inline)
+            int opcode = ROP_HANDLER_Const_Small;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Const_Small);
+            PyValue v;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            v = _PyRop_SmallInt(((uint32_t)IR_B(ir_word) | ((uint32_t)IR_C(ir_word) << 12)));
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, v);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+        }
+
+        TARGET(Const_Common) {
+            // Const.Common (inline)
+            int opcode = ROP_HANDLER_Const_Common;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Const_Common);
+            PyValue v;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            v = _PyRop_CommonConstant(((uint32_t)IR_B(ir_word) | ((uint32_t)IR_C(ir_word) << 12)));
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, v);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+        }
+
+        TARGET(LocalRead_Bound) {
+            // LocalRead.Bound (inline)
+            int opcode = ROP_HANDLER_LocalRead_Bound;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_LocalRead_Bound);
+            PyValue *const home_local = &IR_SLOT(IR_B(ir_word));
+            PyValue v;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            v = PyValue_DUP(PyValue_Borrow(*home_local));
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, v);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+        }
+
+        TARGET(LocalRead_Checked) {
+            // LocalRead.Checked (shared)
+            int opcode = ROP_HANDLER_LocalRead_Checked;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_LocalRead_Checked);
+            PyValue *const home_local = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow m;
+            PyValue v;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            m = _PyRop_LocalView(home_local);
+            if (_PyValue_BorrowPresent(m)) {
+                goto rop_LocalRead_Checked_Bound;
+            }
+            goto rop_LocalRead_Checked_Unbound;
+            rop_LocalRead_Checked_Bound:
+            v = PyValue_DUP(m);
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, v);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_LocalRead_Checked_Unbound:
+            _PyRop_UnboundLocal(frame, home_local);
+            PROCESS_ERROR_AT(RAISE, 11, this_instr);
+        }
+
+        TARGET(LocalWrite_Store) {
+            // LocalWrite.Store (inline)
+            int opcode = ROP_HANDLER_LocalWrite_Store;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_LocalWrite_Store);
+            PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+            PyValue v;
+            PyValue old_local;
+            PyValue *const home_local = &IR_SLOT(IR_A(ir_word));
+            v = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
+            old_local = *home_local;
+            _PyFrame_WriteHome(frame, home_local, v);
+            _PyValue_CheckHome(*home_local);
+            PyValue_XCLOSE(old_local);
+            DISPATCH();
+        }
+
+        TARGET(LocalWrite_Restore) {
+            // LocalWrite.Restore (shared)
+            int opcode = ROP_HANDLER_LocalWrite_Restore;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_LocalWrite_Restore);
+            PyValue *const home_local = &IR_SLOT(IR_A(ir_word));
+            PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
+            IR_STUB_ESCAPE();
+            _PyRop_RestoreLocal(home_local, home_value);
+            DISPATCH();
+        }
+
+        TARGET(SaveLocal_Take) {
+            // SaveLocal.Take (shared)
+            int opcode = ROP_HANDLER_SaveLocal_Take;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_SaveLocal_Take);
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue *const home_local = &IR_SLOT(IR_B(ir_word));
+            IR_STUB_ESCAPE();
+            _PyRop_SaveLocal(home_dst, home_local);
+            DISPATCH();
+        }
+
+        TARGET(LocalDelete_Checked) {
+            // LocalDelete.Checked (shared)
+            int opcode = ROP_HANDLER_LocalDelete_Checked;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_LocalDelete_Checked);
+            PyValue *const home_local = &IR_SLOT(IR_A(ir_word));
+            int ret1;
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_DeleteLocal(frame, home_local);
+            if (ret1 < 0) {
+                goto rop_LocalDelete_Checked_Failed;
+            }
+            DISPATCH();
+            rop_LocalDelete_Checked_Failed:
+            PROCESS_ERROR_AT(RAISE, 9, this_instr);
+        }
+
         TARGET(Move_Transfer) {
             // Move.Transfer (shared)
             int opcode = ROP_HANDLER_Move_Transfer;

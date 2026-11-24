@@ -15,6 +15,7 @@
 #include "pycore_opcode_utils.h"
 #include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_regcfg.h"
+#include "pycore_rop_metadata.h"      // ROP_HANDLER_LocalRead_Bound
 #include "pycore_value.h"           // PyValue_FromInlineInt()
 
 #undef SUCCESS
@@ -120,6 +121,10 @@ borrow_field(const _PyRegCfg *cfg, const _PyRegOp *op, int k)
 static int
 written_local(const _PyRegOp *op)
 {
+    // SaveLocal names the local it vacates as its source
+    if (op->opcode == ROP_HANDLER_SaveLocal_Take) {
+        return op->oparg;
+    }
     int role = _PyIR_OpargRole(_PyRegCfg_FormatOf(op->opcode, op->oparg));
     if (role == _PyIR_ROLE_LOCAL_OUT || role == _PyIR_ROLE_LOCAL_CLEAR
         || role == _PyIR_ROLE_LOCAL_MOVE)
@@ -212,7 +217,7 @@ _PyRegPass_CopyProp(_PyRegCfg *cfg)
                 }
             }
             npend = n;
-            if (op->opcode == LOAD_FAST_BORROW
+            if (op->opcode == ROP_HANDLER_LocalRead_Bound
                 && is_fresh(cfg, _PyReg_OUT(cfg, op)[0]))
             {
                 pend[npend].load = op;
@@ -299,11 +304,11 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
         }
         for (int i = blk->start; i < blk->end; i++) {
             _PyRegOp *op = &cfg->ops[i];
-            if (op->opcode != STORE_FAST) {
+            if (op->opcode != ROP_HANDLER_LocalWrite_Store) {
                 continue;
             }
             _PyRegOp *p = store_producer(cfg, region_start, i);
-            if (p == NULL || p->opcode == LOAD_FAST_BORROW
+            if (p == NULL
                 || p->opcode == PUSH_NULL || p->dst >= 0
                 || p->loc.lineno != op->loc.lineno)
             {
@@ -359,7 +364,7 @@ unpack_locals_site(_PyRegCfg *cfg, int start, int end, _PyRegOp *op,
     int first = -1;
     for (int k = 0; k < n; k++) {
         _PyRegOp *s = live_neighbour(cfg, start, end, (int)(prev - cfg->ops), 1);
-        if (s == NULL || s->opcode != STORE_FAST) {
+        if (s == NULL || s->opcode != ROP_HANDLER_LocalWrite_Store) {
             return UNPACK_NOT_STORE_FAST;
         }
         if (s->loc.lineno != op->loc.lineno) {
@@ -777,7 +782,7 @@ static int
 const_of_load(const _PyRegOp *load, PyObject *consts, PyValueBorrow *value,
               uintptr_t *bits)
 {
-    if (load->opcode == LOAD_CONST) {
+    if (load->opcode == ROP_HANDLER_Const_Pool) {
         if (load->oparg >= PyTuple_GET_SIZE(consts)) {
             return 0;
         }
@@ -788,10 +793,10 @@ const_of_load(const _PyRegOp *load, PyObject *consts, PyValueBorrow *value,
         *bits = _PyValue_Identity(*value);
         return 1;
     }
-    if (load->opcode == LOAD_SMALL_INT) {
+    if (load->opcode == ROP_HANDLER_Const_Small) {
         *value = PyValue_Borrow(PyValue_FromInlineInt(load->oparg));
     }
-    else if (load->opcode == LOAD_COMMON_CONSTANT
+    else if (load->opcode == ROP_HANDLER_Const_Common
              && (load->oparg == CONSTANT_NONE || load->oparg == CONSTANT_TRUE
                  || load->oparg == CONSTANT_FALSE
                  || load->oparg == CONSTANT_MINUS_ONE
@@ -864,8 +869,9 @@ find_const_folds(_PyRegCfg *cfg, PyObject *consts, const_fold **folds,
             npend = n;
             PyValueBorrow value;
             uintptr_t bits;
-            if ((op->opcode == LOAD_CONST || op->opcode == LOAD_SMALL_INT
-                 || op->opcode == LOAD_COMMON_CONSTANT)
+            if ((op->opcode == ROP_HANDLER_Const_Pool
+                 || op->opcode == ROP_HANDLER_Const_Small
+                 || op->opcode == ROP_HANDLER_Const_Common)
                 && is_fresh(cfg, _PyReg_OUT(cfg, op)[0])
                 && const_of_load(op, consts, &value, &bits))
             {
@@ -1104,7 +1110,7 @@ kw_names_region(_PyRegCfg *cfg, int start, int end)
         }
         int v = _PyReg_IN(cfg, call)[call->nread - 1];
         _PyRegOp *load = live_neighbour(cfg, start, end, i, -1);
-        if (load == NULL || load->opcode != LOAD_CONST || load->dst >= 0
+        if (load == NULL || load->opcode != ROP_HANDLER_Const_Pool || load->dst >= 0
             || load->nout != 1 || _PyReg_OUT(cfg, load)[0] != v
             || load->except != call->except)
         {

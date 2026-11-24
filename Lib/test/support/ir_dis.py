@@ -111,6 +111,7 @@ _ROLE_IN0 = _opcode.IR_ROLE_IN0
 _LOC_NONE = _opcode.IR_LOC_NONE
 _LOC_A = _opcode.IR_LOC_A
 _LOC_CD = _opcode.IR_LOC_CD
+_LOC_BC = _opcode.IR_LOC_BC
 _LOC_FBARG = _opcode.IR_LOC_FBARG
 _IR_JUMPS = _opcode.IR_JUMPS
 _IR_FORWARD = _opcode.IR_FORWARD
@@ -458,6 +459,8 @@ def _get_jump_target(op, arg, offset):
 def _field(fields, loc):
     if loc == _LOC_CD:
         return fields[2] | fields[3] << 12
+    if loc == _LOC_BC:
+        return fields[1] | fields[2] << 12
     return fields[loc - _LOC_A]
 
 def _fb_unit(field):

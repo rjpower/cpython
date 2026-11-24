@@ -12,6 +12,10 @@ extern "C" {
 #include "pycore_feedback.h"      // _PyFbBinary
 #include "pycore_interpframe.h"   // _PyFrame_TakeHome()
 #include "pycore_value.h"         // PyValue
+#include "pycore_opcode_utils.h"  // NUM_COMMON_CONSTANTS
+#include "pycore_pystate.h"       // _PyInterpreterState_GET()
+#include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
+#include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 
 /* The C bodies of the call-boundary rows of Python/register_ops/core.rop.
  * The generated handlers build the arguments from the word: a `Span<Src>`
@@ -179,6 +183,61 @@ _PyRop_RunExtension(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b)
     }
     return PyValue_FromObjectSteal(res);
 }
+
+/* The rows of the constants and locals (Python/register_ops/values.rop).
+ * A home operand is passed as the address of its home. */
+static inline PyValue
+_PyRop_CodeConstant(_PyInterpreterFrame *frame, uint32_t i)
+{
+    PyValueBorrow c = _PyValue_CodeConstant(
+        PyTuple_GET_VALUE(_PyFrame_GetCode(frame)->co_consts, i));
+    assert(!PyValue_IsNull(c));
+    return PyValue_DUP(c);
+}
+
+static inline PyValue
+_PyRop_SmallInt(uint32_t i)
+{
+    assert(i < _PY_NSMALLPOSINTS);
+    return PyValue_FromInlineInt((int)i);
+}
+
+static inline PyValue
+_PyRop_CommonConstant(uint32_t i)
+{
+    assert(i < NUM_COMMON_CONSTANTS);
+    PyValueBorrow c = _PyValue_CommonConstant(
+        _PyInterpreterState_GET()->common_consts[i]);
+    return PyValue_DUP(c);
+}
+
+static inline PyValueBorrow
+_PyRop_LocalView(PyValue *home)
+{
+    return PyValue_Borrow(*home);
+}
+
+static inline void
+_PyRop_RestoreLocal(PyValue *local, PyValue *value)
+{
+    PyValue old = *local;
+    *local = *value;
+    *value = PyValue_NULL;
+    PyValue_XCLOSE(old);
+}
+
+static inline void
+_PyRop_SaveLocal(PyValue *dst, PyValue *local)
+{
+    PyValue old = *dst;
+    *dst = *local;
+    *local = PyValue_NULL;
+    PyValue_XCLOSE(old);
+}
+
+/* Python/ceval.c: UnboundLocalError for the local in home */
+void _PyRop_UnboundLocal(_PyInterpreterFrame *frame, PyValue *home);
+int _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home);
 
 /* Python/specialize.c: the adaptation rows */
 bool _PyRop_FindAddExtension(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b);

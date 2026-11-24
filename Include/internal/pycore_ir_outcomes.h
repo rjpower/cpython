@@ -676,6 +676,14 @@ _PyIR_BindingRead(const _PyIRWord *wp, int arg, int home)
                 return _PyIR_BINDING_REQUIRES_VALUE;
         }
     }
+    // The checked arms of the local families test the local first
+    if ((IR_HANDLER(word) == ROP_HANDLER_LocalRead_Checked &&
+         (int)IR_B(word) == home) ||
+        (IR_HANDLER(word) == ROP_HANDLER_LocalDelete_Checked &&
+         (int)IR_A(word) == home))
+    {
+        return _PyIR_BINDING_CHECKED_NULL;
+    }
     if (_PyIR_ReadsHome(wp, arg, home)) {
         return _PyIR_BINDING_REQUIRES_VALUE;
     }

@@ -4,11 +4,16 @@
 // Do not edit!
 //
 // 1 templates.  Inline arms that keep the call of their form:
+//   Const.Common: Const.Common: common_constant has no leaf lowering
+//   Const.Pool: Const.Pool: code_constant has no leaf lowering
+//   Const.Small: Const.Small: small_int has no leaf lowering
 //   GetAttr.Instance: GetAttr.Instance: fb is not a leaf value
 //   GetAttr.PolyShape: GetAttr.PolyShape: let o has no leaf type
 //   GetAttr.Shape: GetAttr.Shape: fb is not a leaf value
 //   GetMethod.MethodValues: GetMethod.MethodValues: fb is not a leaf value
 //   GetMethod.PolyMethod: GetMethod.PolyMethod: let o has no leaf type
+//   LocalRead.Bound: LocalRead.Bound: dup has no C body (pending)
+//   LocalWrite.Store: LocalWrite.Store: acquire has no C body (pending)
 
 // The leaf graph of Add.Int:
 //   b0:

@@ -1278,15 +1278,16 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
         }
         fields[r] = (uint32_t)value;
     }
-    if (fmt->imm == _PyIR_LOC_CD) {
+    if (fmt->imm == _PyIR_LOC_CD || fmt->imm == _PyIR_LOC_BC) {
         if (oparg < 0 || oparg > IR_CD_MAX) {
             if (reachable) {
                 return too_large("oparg", oparg);
             }
             oparg = 0;
         }
-        fields[2] = oparg & IR_FIELD_MAX;
-        fields[3] = oparg >> 12;
+        int low = fmt->imm == _PyIR_LOC_CD ? 2 : 1;
+        fields[low] = oparg & IR_FIELD_MAX;
+        fields[low + 1] = oparg >> 12;
     }
     else if (fmt->imm >= _PyIR_LOC_A && fmt->imm <= _PyIR_LOC_D) {
         int r = fmt->imm - _PyIR_LOC_A;

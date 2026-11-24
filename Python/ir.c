@@ -26,6 +26,7 @@
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
 #include "pycore_value.h"
+#include "pycore_rop_metadata.h"     // ROP_HANDLER_LocalWrite_Store
 
 static_assert(sizeof(_PyCodeExec) % sizeof(_PyIRWord) == 0,
               "words must follow the header aligned");
@@ -132,6 +133,15 @@ generator_ordinary(_PyIRWord word)
     return boundary == NULL ? -1 : boundary->ordinary;
 }
 
+/* Whether word is a store of the temporary home into a local: the
+ * LocalWrite.Store arm, which names the local in A and the value in B */
+static int
+stores_home_to_local(_PyIRWord word, int home, int nl)
+{
+    return IR_HANDLER(word) == ROP_HANDLER_LocalWrite_Store &&
+        (int)IR_B(word) == home && (int)IR_A(word) < nl;
+}
+
 static int
 generator_is(_PyIRWord word, int ordinary)
 {
@@ -185,8 +195,8 @@ generator_resume_shape(const _PyIRWord *words, int nwords, int nl, int pc,
     }
     int home = (int)IR_A(words[pc]);
     _PyIRWord next = words[pc + 2];
-    if (generator_is(next, STORE_FAST) && (int)IR_A(next) == home &&
-        (int)IR_B(next) < nl && home >= nl && home != IR_NO_DST)
+    if (stores_home_to_local(next, home, nl) && home >= nl &&
+        home != IR_NO_DST)
     {
         *consumer = pc + 2;
         return _PyIR_GEN_CONSUMER_STORE_LOCAL;
@@ -229,8 +239,7 @@ generator_completed_shape(const _PyIRWord *words, int nwords, int nl, int pc)
     {
         return _PyIR_GEN_CONSUMER_RETURN;
     }
-    if (generator_is(words[target], STORE_FAST) &&
-        (int)IR_A(words[target]) == home && (int)IR_B(words[target]) < nl)
+    if (stores_home_to_local(words[target], home, nl))
     {
         return _PyIR_GEN_CONSUMER_STORE_FAST;
     }
@@ -404,6 +413,8 @@ read_field(_PyIRWord word, int loc)
             return IR_D(word);
         case _PyIR_LOC_CD:
             return IR_CD(word);
+        case _PyIR_LOC_BC:
+            return IR_BC(word);
         default:
             Py_UNREACHABLE();
     }

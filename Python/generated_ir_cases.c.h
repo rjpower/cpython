@@ -414,6 +414,7 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_ProcessError), _P
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_EnterRecursivePy), int (*)(PyThreadState *)),
               "_Py_EnterRecursivePy: its C type differs from pycore_ir_components.h");
 static_assert((CALL_SELF_PRESENT) != 0, "call_state: CALL_SELF_PRESENT is no bit");
+static_assert((CALL_EXPANDED) != 0, "call_state: CALL_EXPANDED is no bit");
 static_assert(__builtin_types_compatible_p(__typeof__(&IS_PEP523_HOOKED), bool (*)(PyThreadState *)),
               "IS_PEP523_HOOKED: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyFunction_GET_CODE), PyObject * (*)(PyObject *)),
@@ -3313,31 +3314,9 @@ ir_run_BUILD_SET(
             PyValue *values;
             PyValue set;
             values = &window[0];
-            PyObject *set_o = PySet_New(NULL);
+            PyObject *set_o = _Py_BuildSet_ValueSteal(frame, values, oparg);
             if (set_o == NULL) {
-                PyValue tmp;
-                for (int _i = oparg; --_i >= 0;) {
-                    tmp = values[_i];
-                    values[_i] = PyValue_NULL;
-                    PyValue_CLOSE(tmp);
-                }
                 IR_CLEAR_SLOTS(&window[0], oparg);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            int err = 0;
-            for (Py_ssize_t i = 0; i < oparg; i++) {
-                PyValue value = _PyFrame_TakeHome(frame, &values[i]);
-                if (err == 0) {
-                    err = _PySet_AddValueTakeRef((PySetObject *)set_o,
-                        value);
-                }
-                else {
-                    PyValue_CLOSE(value);
-                }
-            }
-            if (err) {
-                IR_CLEAR_SLOTS(&window[0], oparg);
-                Py_DECREF(set_o);
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             set = PyValue_FromObjectSteal(set_o);
@@ -3784,53 +3763,49 @@ ir_run_CALL_BOUND_METHOD_EXACT_ARGS(
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _INIT_CALL_BOUND_METHOD_EXACT_ARGS
-            {
-                self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
-                assert(!(call_state & CALL_SELF_PRESENT));
-                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                STAT_INC(CALL, hit);
-                self_or_null = ((PyMethodObject *)callable_o)->im_self;
-                call_state |= CALL_SELF_PRESENT | CALL_EXPANDED;
-                callable = _PyIR_AdoptTemp(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
-            }
-            // _CHECK_FUNCTION_VERSION
+            // _CHECK_METHOD_VERSION
             {
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(callable))) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                if (!PyFunction_Check(callable_o)) {
+                if (Py_TYPE(callable_o) != &PyMethod_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyFunctionObject *func = (PyFunctionObject *)callable_o;
-                if (func->func_version != func_version) {
+                PyObject *func = ((PyMethodObject *)callable_o)->im_func;
+                if (!PyFunction_Check(func)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (((PyFunctionObject *)func)->func_version != func_version) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (call_state & CALL_SELF_PRESENT) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _CHECK_FUNCTION_EXACT_ARGS
+            // _CHECK_METHOD_EXACT_ARGS
             {
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                assert(PyFunction_Check(callable_o));
-                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                PyFunctionObject *func =
+                (PyFunctionObject *)((PyMethodObject *)callable_o)->im_func;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
-                if (code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0)) {
+                if (code->co_argcount != oparg + 1) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _CHECK_STACK_SPACE
+            // _CHECK_METHOD_STACK_SPACE
             {
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                PyFunctionObject *func =
+                (PyFunctionObject *)((PyMethodObject *)callable_o)->im_func;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
                     UPDATE_MISS_STATS(CALL);
@@ -3846,8 +3821,14 @@ ir_run_CALL_BOUND_METHOD_EXACT_ARGS(
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
+            // _INIT_CALL_BOUND_METHOD_EXACT_ARGS
+            {
+                STAT_INC(CALL, hit);
+                call_state |= CALL_EXPANDED;
+            }
             // _INIT_CALL_PY_EXACT_ARGS
             {
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 STAT_INC(CALL, hit);
                 _PyInterpreterFrame *pushed_frame = call_push_exact(
                     tstate, frame, this_instr, ir_word, callable, self_or_null, call_state);
@@ -20081,53 +20062,49 @@ static const _PyIRForm ir_handler_forms[512] = {
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _INIT_CALL_BOUND_METHOD_EXACT_ARGS
-            {
-                self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
-                assert(!(call_state & CALL_SELF_PRESENT));
-                PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                STAT_INC(CALL, hit);
-                self_or_null = ((PyMethodObject *)callable_o)->im_self;
-                call_state |= CALL_SELF_PRESENT | CALL_EXPANDED;
-                callable = _PyIR_AdoptTemp(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
-            }
-            // _CHECK_FUNCTION_VERSION
+            // _CHECK_METHOD_VERSION
             {
                 uint32_t func_version = fb->func_version;
-                if (Py_UNLIKELY(!PyValue_IsPointerSpace(callable))) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                if (!PyFunction_Check(callable_o)) {
+                if (Py_TYPE(callable_o) != &PyMethod_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyFunctionObject *func = (PyFunctionObject *)callable_o;
-                if (func->func_version != func_version) {
+                PyObject *func = ((PyMethodObject *)callable_o)->im_func;
+                if (!PyFunction_Check(func)) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (((PyFunctionObject *)func)->func_version != func_version) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (call_state & CALL_SELF_PRESENT) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _CHECK_FUNCTION_EXACT_ARGS
+            // _CHECK_METHOD_EXACT_ARGS
             {
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                assert(PyFunction_Check(callable_o));
-                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                PyFunctionObject *func =
+                (PyFunctionObject *)((PyMethodObject *)callable_o)->im_func;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
-                if (code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0)) {
+                if (code->co_argcount != oparg + 1) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _CHECK_STACK_SPACE
+            // _CHECK_METHOD_STACK_SPACE
             {
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                PyFunctionObject *func = (PyFunctionObject *)callable_o;
+                PyFunctionObject *func =
+                (PyFunctionObject *)((PyMethodObject *)callable_o)->im_func;
                 PyCodeObject *code = (PyCodeObject *)func->func_code;
                 if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
                     UPDATE_MISS_STATS(CALL);
@@ -20143,8 +20120,14 @@ static const _PyIRForm ir_handler_forms[512] = {
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
+            // _INIT_CALL_BOUND_METHOD_EXACT_ARGS
+            {
+                STAT_INC(CALL, hit);
+                call_state |= CALL_EXPANDED;
+            }
             // _INIT_CALL_PY_EXACT_ARGS
             {
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 STAT_INC(CALL, hit);
                 _PyInterpreterFrame *pushed_frame = call_push_exact(
                     tstate, frame, this_instr, ir_word, callable, self_or_null, call_state);

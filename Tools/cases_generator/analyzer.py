@@ -368,6 +368,10 @@ class Boundary:
     # which yields or returns to the word later
     at: str
     yields: str                             # "NONE" or "DELEGATED"
+    # The completion that the variants' consumers complete: "send", a send
+    # that ended its generator, or "throw", a throw into it that did
+    # (IR_COMPLETE_STEP's _PY_IR_SEND or _PY_IR_SEND_THROW); "" if none
+    completion: str
     completes: dict[str, tuple[str, ...]]
     resumes: tuple[str, ...]
     where: lexer.Token
@@ -593,6 +597,7 @@ IR_HELPER_CALLEES = {
 IR_HELPER_EFFECTS = {
     "IR_BUILD_STRING": frozenset(("escapes",)),
     "IR_BUILD_MAP": frozenset(("escapes",)),
+    "IR_BUILD_SET": frozenset(("escapes",)),
     **{name: frozenset() for name in IR_HELPER_CALLEES},
     "IR_LOOKUP_SPECIAL": frozenset(("escapes",)),
     "IR_WRITE_OUTPUT": frozenset(),
@@ -1351,6 +1356,12 @@ def add_boundary(
     if pboundary.yields not in (None, "delegated"):
         raise analysis_error(f"boundary({pboundary.source}): yields({pboundary.yields}) "
                              "is not a yield; the one kind is `delegated`", where)
+    if bool(pboundary.completes) != (pboundary.completion is not None):
+        raise analysis_error(f"boundary({pboundary.source}): completes(...) and "
+                             "completion(send) or completion(throw) go together", where)
+    if pboundary.completion not in (None, "send", "throw"):
+        raise analysis_error(f"boundary({pboundary.source}): completion"
+                             f"({pboundary.completion}) is not send or throw", where)
     completes: dict[str, tuple[str, ...]] = {}
     for consumers, exits in pboundary.completes:
         for consumer in consumers:
@@ -1362,7 +1373,7 @@ def add_boundary(
         raise analysis_error(f"boundary({pboundary.source}) resumes a consumer twice", where)
     boundaries[pboundary.source] = Boundary(
         pboundary.source, pboundary.at, "DELEGATED" if pboundary.yields else "NONE",
-        completes, tuple(pboundary.resumes), where)
+        pboundary.completion or "", completes, tuple(pboundary.resumes), where)
 
 
 def add_pseudo(

@@ -2845,9 +2845,6 @@ class TestIRCases(unittest.TestCase):
              "RETIRE", "PyValue_XCLOSE", "PyValue_DUP"),
             ("COPY", "bottom, unused[oparg-1] -- bottom, unused[oparg-1], top",
              "top = PyValue_DUP(bottom);", "COPY", "PyValue_DUP(bottom)", "bottom"),
-            ("SWAP", "bottom, unused[oparg-2], top -- bottom, unused[oparg-2], top",
-             "PyValue temp = bottom; bottom = top; top = temp;",
-             "SWAP", "top = temp;", ""),
         )
         for name, effect, body, kind, old, new in cases:
             with self.subTest(handler=name):
@@ -2860,6 +2857,22 @@ class TestIRCases(unittest.TestCase):
                 self.assertIn(old, body)
                 self.assertEqual(kind_for(body.replace(old, new)),
                                  "_PyIR_TRANSFER_UNKNOWN")
+
+    def test_swap_transfer_comes_from_the_exchange(self):
+        # The swap is the declared exchange (ir_contract.check_exchange),
+        # not the body text: undeclared, the same body proves nothing
+        body = "PyValue temp = bottom; bottom = top; top = temp;"
+        def kind_for(effect, clauses=""):
+            analysis = self.analyze(f"\ninst(SWAP, ({effect})) {clauses} {{ {body} }}\n")
+            inst = analysis.instructions["SWAP"]
+            fmt = ir_generator.compute_formats(analysis)["SWAP"]
+            return ir_generator.normal_transfer_kind(inst, fmt)
+        self.assertEqual(kind_for("bottom, unused[oparg-2], top -- "
+                                  "bottom: moved(top), unused[oparg-2], top: moved(bottom)",
+                                  "effects() exits(next)"),
+                         "_PyIR_TRANSFER_SWAP")
+        self.assertEqual(kind_for("bottom, unused[oparg-2], top -- bottom, unused[oparg-2], top"),
+                         "_PyIR_TRANSFER_UNKNOWN")
 
     def test_transparent_leaf_still_has_a_consumer_recipe(self):
         source = "\nir_only inst(IR_JUMP, (--)) { JUMPTO(oparg); }\n"
@@ -3003,7 +3016,7 @@ class TestIRCases(unittest.TestCase):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
         expected = {"BUILD_STRING": "IR_BUILD_STRING", "BUILD_MAP": "IR_BUILD_MAP",
-                    "_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
+                    "BUILD_SET": "IR_BUILD_SET", "_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
         for name, helper in expected.items():
             part = analysis.uops[name]
             self.assertTrue(ir_generator.home_operation_contract(part))
@@ -4027,17 +4040,20 @@ class TestCallMarkers(unittest.TestCase):
                 self.assertNotIn("&call", body)
 
     def test_exact_method_guards_precede_the_push(self):
-        # The bound method's function and receiver are adopted as borrows, so
-        # every guard runs before call_push_exact() counts or moves anything,
-        # and a failed guard falls back to the generic call with the operands
-        # untouched
+        # Every guard, through the method's im_func, runs before the
+        # expansion, which only sets CALL_EXPANDED: the operands stay the
+        # method and NULL, call_push_exact() counts the function and the
+        # receiver, and a failed guard falls back to the generic call with
+        # the operands untouched
         for name in ("CALL_BOUND_METHOD_EXACT_ARGS",):
             with self.subTest(handler=name):
                 body = self.interpreter.split(f"TARGET({name}) {{", 1)[1].split("TARGET(", 1)[0]
                 push = body.index("call_push_exact(")
-                self.assertIn("call_state |= CALL_SELF_PRESENT | CALL_EXPANDED", body[:push])
-                self.assertGreaterEqual(body[:push].count("JUMP_TO_PREDICTED("), 4)
-                self.assertNotIn("JUMP_TO_PREDICTED(", body[push:])
+                expand = body.index("call_state |= CALL_EXPANDED;")
+                self.assertGreaterEqual(body[:expand].count("JUMP_TO_PREDICTED("), 8)
+                self.assertNotIn("JUMP_TO_PREDICTED(", body[expand:])
+                self.assertLess(expand, push)
+                self.assertNotIn("_PyIR_AdoptTemp", body)
                 self.assertNotIn("call_fallback_", body)
 
     def test_handlers_take_no_local_address(self):

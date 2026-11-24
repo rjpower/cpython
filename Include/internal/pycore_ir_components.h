@@ -1783,8 +1783,11 @@
      * an implicit operand of the call's uops, which a uop reads and writes \
      * only through its state(...) clause.  CALL_SELF_PRESENT is set where \
      * the call has a self operand; the generator initializes the local \
-     * from the word with IR_CALL_SELF_STATE (G0a4) */ \
-    STATE(call_state, int, BITS(CALL_SELF_PRESENT: self(present) | self(absent)), \
+     * from the word with IR_CALL_SELF_STATE (G0a4).  CALL_EXPANDED is set \
+     * where the callable operand is a bound method whose function and \
+     * receiver the push takes in its place (G3a) */ \
+    STATE(call_state, int, BITS(CALL_SELF_PRESENT: self(present) | self(absent), \
+                                CALL_EXPANDED: method(expanded) | method(whole)), \
           INIT(IR_CALL_SELF_STATE)) \
     /* Evidence (Python/ceval_macros.h, a static inline function since G0c \
      * batch 6; it was a macro).  One load of interp->eval_frame and a \
@@ -1962,13 +1965,14 @@
      * frame of the exactly-matching Python function \
      * (_PyFrame_PushUnchecked: a write of the data stack and tstate) and \
      * moves the operands into its first slots (call_fill_exact: a \
-     * temporary operand moves out of its home, a local is counted; a bound \
-     * method that the call expanded has its receiver counted and its \
-     * method operand released by call_release_callable, which is a \
+     * temporary operand moves out of its home, a local is counted; for a \
+     * bound method (CALL_EXPANDED) its function and receiver are counted \
+     * and its method operand released by call_release_callable, which is a \
      * release: the guard _CHECK_CALL_BOUND_METHOD_EXACT_ARGS makes the \
      * method have no weakrefs, but the row's contract is the function's). \
-     * callable is a view of the function for an expanded call, else the \
-     * home's value, which moves out; self is the receiver. No failure path \
+     * callable is the callable operand, the function or (CALL_EXPANDED) \
+     * the bound method; self is the self operand, NULL for a bound method; \
+     * a temporary of either moves out of its home. No failure path \
      * (the guards checked space and arity). Callbacks: none in the checked \
      * case; the release of the method operand is `releases`. */ \
     HELPER(call_push_exact, _PyInterpreterFrame *, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, PyValue, int), \
@@ -2796,6 +2800,16 @@
      * Failure: NULL with an exception set (unhashable key, MemoryError, a \
      * key's __hash__/__eq__ may run Python) */ \
     MACRO(IR_BUILD_MAP, ARGS(consumed), VALUE_OR_NULL(owned), \
+          EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
+          EXITS()) \
+    /* Evidence (Python/ceval.c _Py_BuildSet_ValueSteal): PySet_New, then \
+     * each value taken from its home (_PyFrame_TakeHome) and stolen by \
+     * _PySet_AddValueTakeRef, or closed once an add has failed or the set \
+     * was not made: the values are consumed on every path.  Failure: NULL \
+     * with an exception set (MemoryError, unhashable, or an element's \
+     * __hash__/__eq__, which may run Python); the half-built set is \
+     * released */ \
+    MACRO(IR_BUILD_SET, ARGS(consumed), VALUE_OR_NULL(owned), \
           EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
           EXITS()) \
     /* _PyObject_LookupSpecialMethod: 1 found, 0 missing (the uop raises), \

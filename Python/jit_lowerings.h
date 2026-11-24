@@ -44,6 +44,7 @@ int _PyJitLower_PyTuple_GET_SIZE(_PyJitWordCx *cx, const uint8_t *ops, const voi
 int _PyJitLower_PyList_GET_VALUE(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_PyTuple_GET_VALUE(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyList_ITEMS(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower__PyTuple_ITEMS(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyObject_InlineValues(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyObject_Shape(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyObject_ValueSlot(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
@@ -108,6 +109,7 @@ const _PyJitLoweringInfo _PyJit_Lowerings[] = {
     {"PyList_GET_VALUE", _PyJitLower_PyList_GET_VALUE, 1, 2, 1, 0, "gggg", 0},
     {"PyTuple_GET_VALUE", _PyJitLower_PyTuple_GET_VALUE, 1, 2, 0, 0, "ggg", 0},
     {"_PyList_ITEMS", _PyJitLower__PyList_ITEMS, 1, 1, 0, 0, "gg", 0},
+    {"_PyTuple_ITEMS", _PyJitLower__PyTuple_ITEMS, 1, 1, 0, 0, "gg", 0},
     {"_PyObject_InlineValues", _PyJitLower__PyObject_InlineValues, 1, 1, 1, 0, "ggg", 0},
     {"_PyObject_Shape", _PyJitLower__PyObject_Shape, 1, 1, 1, 0, "ggg", 0},
     {"_PyObject_ValueSlot", _PyJitLower__PyObject_ValueSlot, 1, 2, 0, 0, "ggg", 0},

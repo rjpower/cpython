@@ -431,6 +431,30 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
     return lines
 
 
+JIT_LOWER = ROOT / "Python" / "jit_lower.c"
+
+
+def lowerings(source: str | None = None) -> frozenset[str]:
+    """The primitives that Python/jit_lower.c lowers to machine code: its
+    LOWERING(name) and CHECK_EXACT(name, type) definitions.  The set only
+    refuses (V11); it grants nothing."""
+    source = JIT_LOWER.read_text() if source is None else source
+    return frozenset(re.findall(r"^(?:LOWERING|CHECK_EXACT)\((\w+)", source, re.M))
+
+
+def check_primitives(models, lowered: frozenset[str],
+                     table: dict[str, Row] | None = None) -> None:
+    """V11: a PRIMITIVE row that has a model in ir_leaf.py has a machine
+    lowering in jit_lower.c.  A row without a model is one that no leaf uop
+    calls (the leaf translator refuses a call it has no model of); its uops
+    run as their handler's function form."""
+    table = rows() if table is None else table
+    for row in table.values():
+        if row.kind == "PRIMITIVE" and row.name in models and row.name not in lowered:
+            raise ValueError(f"{row.name}: a PRIMITIVE with a model in ir_leaf.py "
+                             "but no lowering in Python/jit_lower.c (V11)")
+
+
 # ---------------------------------------------------------------------------
 # A uop's declared contract
 

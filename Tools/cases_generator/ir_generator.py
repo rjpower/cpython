@@ -6066,6 +6066,7 @@ def build_records(analysis: Analysis,
         ir_contract.verify_handler(inst, leaf={u.name: u.leaf is not None
                                                for u in record.uops})
         records[name] = record
+    ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings())
     return records
 
 

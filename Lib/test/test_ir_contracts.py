@@ -770,6 +770,20 @@ class VerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, r"region\(inline\), but _POP is not leaf"):
             ir_contract.verify_handler(inst, self.table, leaf={"_GUARD": True, "_POP": False})
 
+    def test_modelled_primitive_needs_a_lowering(self):
+        # V11 against the tree: every modelled PRIMITIVE row is lowered
+        ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings())
+        lowered = ir_contract.lowerings("LOWERING(PyValue_IsNull)\n"
+                                        "CHECK_EXACT(PyList_CheckExact, PyList_Type)\n")
+        self.assertEqual(lowered, {"PyValue_IsNull", "PyList_CheckExact"})
+        with self.assertRaisesRegex(ValueError, r"PyValue_IsInlineInt: a PRIMITIVE with a "
+                                                r"model in ir_leaf.py but no lowering"):
+            ir_contract.check_primitives(ir_leaf.PRIMITIVES, lowered)
+        # A row without a model needs none: no leaf uop can call it
+        self.assertNotIn("PyValue_TYPE", ir_leaf.PRIMITIVES)
+        ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings(),
+                                     {"PyValue_TYPE": self.table["PyValue_TYPE"]})
+
     def test_rows_are_checked(self):
         with self.assertRaisesRegex(SyntaxError, r"row spam: 1 ARGS for 2 parameters"):
             ir_contract.parse_rows(

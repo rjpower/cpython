@@ -24,7 +24,7 @@ shared native-call site. Startup is 79.0M instructions for `-I -S -c pass`
 (golden86 37.5M): the cost of first-call lowering, which the user accepts.
 The full suites show known failures only.
 
-**Next: rir90, proposed 2026-11-24**
+**Active: rir90, 2026-11-24**
 ([plan](design/proposals/rir90.md)). The user decided that semantics move
 from the stack uops to a register instruction set designed as V8 would
 design one:
@@ -34,10 +34,25 @@ design one:
   stubs and the tracer's SSA.
 
 Astra's [design](design/proposals/rir90-astra-design.md) and
-[addendum](design/proposals/rir90-astra-addendum.md) back the plan. F0, the
-language's frontend, is running.
+[addendum](design/proposals/rir90-astra-addendum.md) back the plan.
+`pyjit/rir90` at `eef6362c8f6` (pushed) holds the foundation:
+- F0, the language, and F1, its checker;
+- F2, the generated products, with arms taking handler ids after the old
+  handlers;
+- F3, the stack-op translator: one translation with an edge-move resolver
+  (SWAP words in the corpus 49,866 to 34,957);
+- P0: every arm has a row in every per-handler table; a family declares
+  its stack ops and events; a test hook forces an arm onto a word.
 
-**Active: regions89, 2026-11-23**
+The pilot ports three families through explicit translator rules:
+- P2, `Add`;
+- P3, `GetAttr` and `GetMethod`;
+- P4, `Call`, `InitResult` and `Return`.
+
+The module ladder with `always` shows known failures only, plus two
+settrace jump errors from F3 that it is fixing.
+
+**Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation
 contracts (V8-style declarations, verified, replacing inference) and shared
 stubs with typed completion for the baseline JIT, after Astra's review of
@@ -58,17 +73,34 @@ closed. G0d1 fixed a settrace regression: 31 `f_lineno` jumps under
 (release and assert, `always`) and the smoke set at `e0cefcf2df6` show
 known failures only.
 
-Running: G3a's compiled frame transfers, phase D. It adds the execution
-pins, `RESUME_CHECK` as a template, and calls and returns between compiled
-frames through the switch routine in one native activation. Without it,
-fib(18) under `always` takes 16,687 driver turns; with it, 0 turns and
-16,828 switches. The units on the stack uops (G1c, G2, G4 and G6) are held
-for rir90 (below). G0d1 fixed two crashes from plain Python, each
-in golden86 and golden87: a specialised in-place str add (`y = s + t`)
-aborted when `y` held an inline number (`cbf27b04cb2`); and `yield from`
-a subiterator whose `throw()` raises a `StopIteration` made without
-`__init__` read its NULL value (`64daed03258`; upstream has the same
-bug).
+Closed at `e571a8717e6` (pushed) with G3a's compiled frame transfers:
+- execution pins;
+- `RESUME_CHECK` as a template;
+- calls and returns between compiled frames through the switch routine in
+  one native activation (fib(18) under `always`: 16,687 driver turns
+  before, 0 after).
+
+The full suites show known failures, plus an intermittent `test_cprofile`
+failure. That failure is an upstream `_lsprof` bug: an enabled profiler
+finalized by the cyclic GC clears the running thread's `sys.setprofile`
+function. Rir90's PF unit fixes it.
+
+Timing is approximate since 2026-11-24, by the user's choice. Against
+golden87 with its JIT off, the cold / warm geomean is:
+- `always`: 1.070 / 1.048;
+- `on` at warm-up 32: 1.051 / 1.025.
+
+G1a's gated figures were 1.038 / 1.030 and 1.024 / 1.022. The `always` run
+ran with busy neighbouring cores, so the difference needs a gated run before
+any reading (`E59/regions89/bench/g3a-summary.txt`).
+
+G1c, G2, G4 and G6 were held and are replaced by rir90's families. G0d1
+fixed two crashes from plain Python, each in golden86 and golden87:
+- a specialised in-place str add (`y = s + t`) aborted when `y` held an
+  inline number (`cbf27b04cb2`);
+- `yield from` a subiterator whose `throw()` raises a `StopIteration`
+  made without `__init__` read its NULL value (`64daed03258`; upstream has
+  the same bug).
 
 **Jit88, qualified 2026-11-23** at `ea4d023c2b4`
 ([record](issues/register-semantics59/jit88.md)): the baseline method JIT

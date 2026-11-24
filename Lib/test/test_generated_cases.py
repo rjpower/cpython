@@ -2845,9 +2845,6 @@ class TestIRCases(unittest.TestCase):
              "RETIRE", "PyValue_XCLOSE", "PyValue_DUP"),
             ("COPY", "bottom, unused[oparg-1] -- bottom, unused[oparg-1], top",
              "top = PyValue_DUP(bottom);", "COPY", "PyValue_DUP(bottom)", "bottom"),
-            ("SWAP", "bottom, unused[oparg-2], top -- bottom, unused[oparg-2], top",
-             "PyValue temp = bottom; bottom = top; top = temp;",
-             "SWAP", "top = temp;", ""),
         )
         for name, effect, body, kind, old, new in cases:
             with self.subTest(handler=name):
@@ -2860,6 +2857,22 @@ class TestIRCases(unittest.TestCase):
                 self.assertIn(old, body)
                 self.assertEqual(kind_for(body.replace(old, new)),
                                  "_PyIR_TRANSFER_UNKNOWN")
+
+    def test_swap_transfer_comes_from_the_exchange(self):
+        # The swap is the declared exchange (ir_contract.check_exchange),
+        # not the body text: undeclared, the same body proves nothing
+        body = "PyValue temp = bottom; bottom = top; top = temp;"
+        def kind_for(effect, clauses=""):
+            analysis = self.analyze(f"\ninst(SWAP, ({effect})) {clauses} {{ {body} }}\n")
+            inst = analysis.instructions["SWAP"]
+            fmt = ir_generator.compute_formats(analysis)["SWAP"]
+            return ir_generator.normal_transfer_kind(inst, fmt)
+        self.assertEqual(kind_for("bottom, unused[oparg-2], top -- "
+                                  "bottom: moved(top), unused[oparg-2], top: moved(bottom)",
+                                  "effects() exits(next)"),
+                         "_PyIR_TRANSFER_SWAP")
+        self.assertEqual(kind_for("bottom, unused[oparg-2], top -- bottom, unused[oparg-2], top"),
+                         "_PyIR_TRANSFER_UNKNOWN")
 
     def test_transparent_leaf_still_has_a_consumer_recipe(self):
         source = "\nir_only inst(IR_JUMP, (--)) { JUMPTO(oparg); }\n"
@@ -3003,7 +3016,7 @@ class TestIRCases(unittest.TestCase):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
         expected = {"BUILD_STRING": "IR_BUILD_STRING", "BUILD_MAP": "IR_BUILD_MAP",
-                    "_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
+                    "BUILD_SET": "IR_BUILD_SET", "_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
         for name, helper in expected.items():
             part = analysis.uops[name]
             self.assertTrue(ir_generator.home_operation_contract(part))

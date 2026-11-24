@@ -15,7 +15,9 @@ import sys
 import tempfile
 import textwrap
 import unittest
+import weakref
 
+from test import support
 from test.support import import_helper
 
 from test import test_generated_cases as cases
@@ -181,6 +183,18 @@ class SliceTests(unittest.TestCase):
         'LOAD_FAST_CHECK.record.uops[0].effects: inferred 2 entries '
         '["MAY_RAISE", "READS_HEAP"], declared 6 ["ALLOCATES", "MAY_RAISE", '
         '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
+        # Batch 4: the raise paths of LOAD_LOCALS and LOAD_DEREF can run
+        # Python (F11); LOAD_GLOBAL_BUILTIN's fact names the local it reads
+        'LOAD_DEREF.record.format.runs_code: inferred false, declared true',
+        'LOAD_DEREF.record.uops[0].effects: inferred 2 entries '
+        '["MAY_RAISE", "READS_HEAP"], declared 6 ["ALLOCATES", "MAY_RAISE", '
+        '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
+        'LOAD_LOCALS.record.format.runs_code: inferred false, declared true',
+        'LOAD_LOCALS.record.uops[0].effects: inferred 2 entries '
+        '["MAY_RAISE", "READS_HEAP"], declared 6 ["ALLOCATES", "MAY_RAISE", '
+        '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
+        'LOAD_GLOBAL_BUILTIN.record.uops[1].guards[0].facts[0].subject: '
+        'inferred "builtins", declared "dict"',
         # Batch 6: PyFunction_Check compares the exact type (funcobject.h);
         # _INIT_CALL_PY_EXACT_ARGS pushes a frame, which writes the heap and
         # releases the callable; SET_FUNCTION_ATTRIBUTE runs no code; the call
@@ -2714,6 +2728,206 @@ class ContainerRowsRunTest(unittest.TestCase):
                 with self.assertRaises(TypeError):
                     g(5)
         self.check_balanced()
+
+
+WARM = 200      # enough executions for every site to specialize and compile
+
+
+class ObjectRowTests(unittest.TestCase):
+    """The names, globals, cells, imports, super and attribute rows of
+    Include/internal/pycore_ir_components.h (G0c batch 4), and the claims
+    that their uops rely on: what a helper closes, what a failure leaves
+    behind, and what a guard's miss does to the word it restarts"""
+
+    def test_columns_of_the_reviewed_rows(self):
+        table = ir_contract.rows()
+        # The helpers read these arguments and never close them: the uops
+        # close their inputs (DECREF_INPUTS) after the call
+        self.assertEqual(table["value_import_level"].args[0].mode, "borrowed")
+        self.assertEqual(table["super_call"].args[2].mode, "borrowed")
+        # A new reference, or NULL with an exception
+        for name in ("_PyEval_ImportName", "_PyEval_LazyImportName",
+                     "_PyEval_LazyImportFrom", "value_load_global", "_PyEval_LoadName"):
+            with self.subTest(row=name):
+                self.assertEqual(table[name].result.shape, "VALUE_OR_NULL")
+        # An empty cell is NULL with no exception: the caller says what it means
+        self.assertEqual(table["_PyCell_GetValue"].result.shape, "VALUE_OR_NULL")
+        # The cache word is never NULL, and the generator asserts it
+        assumed = table["_PyValueGuarded_Load"].result.assumed
+        self.assertEqual([(a.fact.kind, a.by) for a in assumed], [("nonnull", "specializer")])
+
+    def test_empty_cell_raises_name_error(self):
+        def outer():
+            def inner():
+                return x
+            return inner
+            x = 1
+        inner = outer()
+        for _ in range(WARM):
+            with self.assertRaisesRegex(NameError, "free variable 'x'"):
+                inner()
+
+    def test_delete_of_an_unbound_cell(self):
+        def f():
+            x = 1
+            def g():
+                return x
+            del x
+            del x
+        for _ in range(WARM):
+            with self.assertRaises(UnboundLocalError):
+                f()
+
+    def test_store_and_delete_global_close_their_value_once(self):
+        class Value:
+            pass
+        namespace = {}
+        value = Value()
+        ref = weakref.ref(value)
+        namespace["value"] = value
+        code = compile("global g\ng = value\ndel g\ng = value\n", "<test>", "exec")
+        for _ in range(WARM):
+            exec(code, namespace)
+        del namespace["g"], namespace["value"], value
+        support.gc_collect()
+        self.assertIsNone(ref())
+        with self.assertRaises(NameError):
+            exec(compile("global g\ndel g\n", "<test>", "exec"), namespace)
+        self.assertNotIn("g", namespace)
+
+    def test_global_miss_raises_name_error(self):
+        namespace = {}
+        code = compile("def f():\n    return no_such_name\n", "<test>", "exec")
+        exec(code, namespace)
+        for _ in range(WARM):
+            with self.assertRaisesRegex(NameError, "no_such_name"):
+                namespace["f"]()
+        namespace["no_such_name"] = 1
+        for _ in range(WARM):
+            self.assertEqual(namespace["f"](), 1)
+        del namespace["no_such_name"]
+        with self.assertRaises(NameError):
+            namespace["f"]()
+
+    def test_builtin_is_shadowed_after_specialization(self):
+        namespace = {}
+        exec("def f():\n    return len\n", namespace)
+        for _ in range(WARM):
+            self.assertIs(namespace["f"](), len)
+        namespace["len"] = "shadow"
+        self.assertEqual(namespace["f"](), "shadow")
+        del namespace["len"]
+        self.assertIs(namespace["f"](), len)
+
+    def test_class_namespace_load_in_an_annotation_scope(self):
+        class C:
+            x = 7
+            type A = x
+        for _ in range(WARM):
+            self.assertEqual(C.A.__value__, 7)
+
+    def test_import_level_and_fromlist_are_closed_once(self):
+        namespace = {"__name__": "test.test_ir_contracts", "__package__": "test"}
+        code = compile("from . import support\nfrom os import path\n", "<test>", "exec")
+        for _ in range(WARM):
+            exec(code, namespace)
+        self.assertIs(namespace["support"], support)
+        self.assertIs(namespace["path"], os.path)
+        with self.assertRaises(ImportError):
+            exec(compile("from os import no_such_name\n", "<test>", "exec"), {})
+
+    def test_super_call_leaves_its_receiver_alone(self):
+        class A:
+            def f(self):
+                return 1
+        class B(A):
+            def f(self):
+                return super().f() + 1
+            def g(self):
+                return super().missing
+        b = B()
+        ref = weakref.ref(b)
+        for _ in range(WARM):
+            self.assertEqual(b.f(), 2)
+            with self.assertRaises(AttributeError):
+                b.g()
+        del b
+        support.gc_collect()
+        self.assertIsNone(ref())
+
+    def test_slot_load_deoptimizes_when_the_slot_empties(self):
+        class S:
+            __slots__ = ("x",)
+        s = S()
+        s.x = 1
+        def get(o):
+            return o.x
+        def put(o, v):
+            o.x = v
+        for _ in range(WARM):
+            put(s, 2)
+            self.assertEqual(get(s), 2)
+        del s.x
+        with self.assertRaises(AttributeError):
+            get(s)
+        put(s, 3)
+        self.assertEqual(get(s), 3)
+
+    def test_dict_attribute_with_a_hint(self):
+        class D:
+            pass
+        d = D()
+        for i in range(40):
+            setattr(d, f"a{i}", i)      # a dict with many keys
+        def get(o):
+            return o.a30
+        def put(o, v):
+            o.a30 = v
+        for i in range(WARM):
+            put(d, i)
+            self.assertEqual(get(d), i)
+        del d.a30
+        with self.assertRaises(AttributeError):
+            get(d)
+        d2 = D()
+        d2.a30 = "other"
+        self.assertEqual(get(d2), "other")
+
+    def test_class_attribute_follows_the_class_version(self):
+        class K:
+            v = 1
+        def get(k):
+            return k.v
+        for _ in range(WARM):
+            self.assertEqual(get(K), 1)
+        K.v = 2
+        self.assertEqual(get(K), 2)
+        del K.v
+        with self.assertRaises(AttributeError):
+            get(K)
+
+    def test_property_and_getattribute_frames(self):
+        class P:
+            @property
+            def p(self):
+                return 5
+        class G:
+            def __getattribute__(self, name):
+                return name
+        def get_p(o):
+            return o.p
+        def get_g(o):
+            return o.anything
+        p, g = P(), G()
+        refs = weakref.ref(p), weakref.ref(g)
+        for _ in range(WARM):
+            self.assertEqual(get_p(p), 5)
+            self.assertEqual(get_g(g), "anything")
+        P.p = property(lambda self: 6)
+        self.assertEqual(get_p(p), 6)
+        del p, g
+        support.gc_collect()
+        self.assertEqual([r() for r in refs], [None, None])
 
 
 if __name__ == "__main__":

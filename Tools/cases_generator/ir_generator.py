@@ -6526,6 +6526,19 @@ def normal_observer_frame_footprint(part: Uop) -> bool:
                for at, token in enumerate(tokens))
 
 
+def without_guard_reason(text: list[str]) -> list[str]:
+    """An EXIT_IF or DEOPT_IF statement's tokens without its reason argument."""
+    if text[:2] not in (["EXIT_IF", "("], ["DEOPT_IF", "("]) or text[-2:] != [")", ";"]:
+        return text
+    depth = 0
+    for at, token in enumerate(text[1:-2], 1):
+        depth += token == "("
+        depth -= token == ")"
+        if depth == 1 and token == ",":
+            return text[:at] + text[-2:]
+    return text
+
+
 def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
     """A scalar input moved to an independently reserved returning child."""
     parts = [part for part in inst.parts if isinstance(part, Uop)]
@@ -6610,7 +6623,8 @@ def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
         if (len(extra) != len(begin) + 1 + len(end)
                 or extra[:len(begin)] != begin or extra[-len(end):] != end):
             return None
-    before = statements[:at]
+    # A guard's reason documents its condition and does not change the match
+    before = [without_guard_reason(text) for text in statements[:at]]
     # Parameterize only the captured function value, not arbitrary C effects.
     # Shared guard/publication contracts and these read-only setup statements
     # exclude aliases that could write the parent's otherwise untouched homes.

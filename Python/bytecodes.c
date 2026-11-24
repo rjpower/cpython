@@ -828,9 +828,13 @@ dummy_func(
         // exits, and BINARY_OP raises. The operands are int51, so int64
         // division does not trap; only Py_INT_MIN // -1 leaves the inline
         // range, and PyValue_FromInt64() boxes it.
-        leaf inline_ok pure op(_BINARY_OP_FLOOR_DIVIDE_INT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_FLOOR_DIVIDE_INT,
+                (left: taken inline_int, right: taken inline_int
+                 -- res: owned exact(PyLong_Type), l: moved(left), r: moved(right)))
+            effects(allocates, raises) exits(next, miss, raise)
+        {
             int64_t b = PyValue_InlineInt64(right);
-            EXIT_IF(b == 0);
+            EXIT_IF(b == 0, "the divisor is zero");
             int64_t a = PyValue_InlineInt64(left);
             STAT_INC(BINARY_OP, hit);
             // One division: the quotient is inexact when it does not
@@ -850,9 +854,13 @@ dummy_func(
 
         // The remainder is smaller than the divisor in magnitude, so it is
         // inline.
-        leaf inline_ok pure op(_BINARY_OP_REMAINDER_INT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_REMAINDER_INT,
+                (left: taken inline_int, right: taken inline_int
+                 -- res: owned exact(PyLong_Type) inline_int, l: moved(left), r: moved(right)))
+            effects(raises) exits(next, miss, raise)
+        {
             int64_t b = PyValue_InlineInt64(right);
-            EXIT_IF(b == 0);
+            EXIT_IF(b == 0, "the divisor is zero");
             int64_t a = PyValue_InlineInt64(left);
             STAT_INC(BINARY_OP, hit);
             int64_t remainder = a % b;
@@ -919,9 +927,13 @@ dummy_func(
         // result fits in int64 is made there, and PyValue_FromInt64() boxes
         // it if it leaves the inline range; a longer shift of anything but 0
         // makes a long int.
-        inline_ok pure op(_BINARY_OP_LSHIFT_INT, (left, right -- res, l, r)) {
+        inline_ok pure op(_BINARY_OP_LSHIFT_INT,
+                (left: taken inline_int, right: taken inline_int
+                 -- res: owned exact(PyLong_Type), l: moved(left), r: moved(right)))
+            effects(allocates, raises) exits(next, miss, raise)
+        {
             int64_t b = PyValue_InlineInt64(right);
-            EXIT_IF(b < 0);
+            EXIT_IF(b < 0, "the shift count is negative");
             int64_t a = PyValue_InlineInt64(left);
             STAT_INC(BINARY_OP, hit);
             int64_t shifted = b < 63 ? (int64_t)((uint64_t)a << b) : 0;
@@ -944,9 +956,13 @@ dummy_func(
 
         // Python's >> rounds towards minus infinity, as an arithmetic shift
         // does; shifting an int51 by 63 places or more leaves its sign.
-        inline_ok pure op(_BINARY_OP_RSHIFT_INT, (left, right -- res, l, r)) {
+        inline_ok pure op(_BINARY_OP_RSHIFT_INT,
+                (left: taken inline_int, right: taken inline_int
+                 -- res: owned exact(PyLong_Type) inline_int, l: moved(left), r: moved(right)))
+            effects(raises) exits(next, miss, raise)
+        {
             int64_t b = PyValue_InlineInt64(right);
-            EXIT_IF(b < 0);
+            EXIT_IF(b < 0, "the shift count is negative");
             int64_t a = PyValue_InlineInt64(left);
             STAT_INC(BINARY_OP, hit);
             res = PyValue_FromInlineInt(Py_ARITHMETIC_RIGHT_SHIFT(int64_t, a, b < 63 ? b : 63));
@@ -1050,10 +1066,14 @@ dummy_func(
         }
 
         // Division by zero exits, and BINARY_OP raises.
-        leaf inline_ok pure op(_BINARY_OP_TRUEDIV_FLOAT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_TRUEDIV_FLOAT,
+                (left: taken, right: taken
+                 -- res: owned exact(PyFloat_Type), l: moved(left) inline, r: moved(right) inline))
+            effects(allocates, raises) exits(next, miss, raise)
+        {
             double a, b;
             EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
-            EXIT_IF(b == 0.0);
+            EXIT_IF(b == 0.0, "the divisor is zero");
             STAT_INC(BINARY_OP, hit);
             res = PyValue_FromDouble(a / b);
             if (PyValue_IsNull(res)) {

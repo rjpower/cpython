@@ -299,9 +299,18 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_IsTrue, int, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.INT_RESULTS, ir_records.effect_sites */ \
+    /* Objects/longobject.c: the shift of a nonzero word by a count >= 0 \
+     * through long_lshift_spans().  It gives PyValue_NULL with an exception \
+     * set where the result would have too many digits (OverflowError) or \
+     * the allocation fails (MemoryError), so the result is VALUE_OR_NULL \
+     * and the row raises (the seed declared an infallible VALUE: wrong).  \
+     * Callees: PyErr_SetString, _PyLong_SpanOfWord, long_lshift_spans, \
+     * _PyLong_OutValue: arithmetic on digit buffers and one allocation; no \
+     * object is released and no Python runs.  The result is an exact int, \
+     * boxed or, for a small result, as _PyLong_OutValue makes it */ \
     HELPER(_PyValue_LshiftInt64, PyValue, (int64_t, int64_t), \
-        ARGS(scalar, scalar), VALUE(owned exact(PyLong_Type)), EFFECTS(allocates)) \
+        ARGS(scalar, scalar), VALUE_OR_NULL(owned exact(PyLong_Type)), \
+        EFFECTS(allocates, raises)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_Negative, PyValue, (PyValueBorrow), \
         ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
@@ -533,9 +542,14 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(Py_XINCREF, void, (PyObject *), \
         ARGS(object), NONE, EFFECTS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Include/refcount.h: Py_XSETREF(dst, src) stores src into the lvalue \
+     * dst, then Py_XDECREFs dst's old value.  It takes src's reference \
+     * (consumed; src may be NULL, the X: ARGS has no nullable word, so this is only stated here) and returns nothing.  The old \
+     * value's finalizer may run Python (releases).  Failure paths: none. \
+     * Callbacks: the old value's deallocator.  Root's correction; the only \
+     * uop caller is _POP_EXCEPT (G0a5) */ \
     MACRO(Py_XSETREF, \
-        ARGS(scalar, scalar), SCALAR, EFFECTS(releases), EXITS()) \
+        ARGS(scalar, consumed object), NONE, EFFECTS(releases), EXITS()) \
     /* seeded from ir_leaf.ERASED */ \
     INTRINSIC(QSBR_QUIESCENT_STATE, ARGS(scalar), NONE, BUILD(gil)) \
     /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \

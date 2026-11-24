@@ -8,6 +8,7 @@
 #include "pycore_opcode_utils.h"    // IS_BACKWARDS_JUMP_OPCODE
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
+#include "pycore_rop_metadata.h"    // ROP_FIRST_HANDLER
 #include "pycore_symtable.h"        // _Py_SourceLocation
 #include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_value.h"           // Canonical constant representation
@@ -930,8 +931,9 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
             op->nwords = 0;
             continue;
         }
-        assert(!IS_PSEUDO_INSTR(op->opcode));
-        assert(IS_VALID_OPCODE(op->opcode));
+        // A register instruction arm is its own handler
+        assert(op->opcode >= ROP_FIRST_HANDLER ||
+               (!IS_PSEUDO_INSTR(op->opcode) && IS_VALID_OPCODE(op->opcode)));
         if (op->opcode == NOP || (op->flags & (_PyReg_ELIDED | _PyReg_COMPLETED))) {
             op->handler = NOP;
             op->nwords = 0;

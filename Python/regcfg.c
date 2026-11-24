@@ -27,6 +27,7 @@
 #include "pycore_opcode_utils.h"      // IS_SCOPE_EXIT_OPCODE()
 #include "pycore_pystate.h"           // _Py_GetConfig()
 #include "pycore_regcfg.h"
+#include "pycore_rop_metadata.h"      // ROP_HANDLER_Add_Generic
 
 #undef SUCCESS
 #undef ERROR
@@ -2773,6 +2774,7 @@ dump(const _PyRegCfg *cfg, const char *after)
         for (int i = blk->start; i < blk->end; i++) {
             const _PyRegOp *op = &cfg->ops[i];
             const char *name = op->opcode == _PyReg_DEAD ? "(dead)"
+                               : op->opcode >= ROP_FIRST_HANDLER ? "(arm)"
                                : _PyOpcode_OpName[op->opcode];
             fprintf(stderr, "  %4d %-24s %3d", op->loc.lineno, name, op->oparg);
             const int *out = _PyReg_OUT(cfg, op);

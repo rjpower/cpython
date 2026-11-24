@@ -5004,17 +5004,18 @@ jit_unit(PyObject *self, PyObject *code_object)
 #endif
 }
 
-/* Code objects compiled, compiles, words compiled and frames entered by a
- * switch routine, since startup */
+/* Code objects compiled, compiles, words compiled, frames entered by a
+ * switch routine and the driver's native calls of units, since startup */
 static PyObject *
 jit_stats(PyObject *self, PyObject *Py_UNUSED(args))
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    return Py_BuildValue("{sKsKsKsK}",
+    return Py_BuildValue("{sKsKsKsKsK}",
         "codes", (unsigned long long)interp->ceval.jit_compiled_codes,
         "compiles", (unsigned long long)interp->ceval.jit_compiles,
         "words", (unsigned long long)interp->ceval.jit_compiled_words,
-        "switches", (unsigned long long)interp->ceval.jit_switches);
+        "switches", (unsigned long long)interp->ceval.jit_switches,
+        "turns", (unsigned long long)interp->ceval.jit_turns);
 }
 
 /* The execution pin of the calling activation (_PyJit_PinDeparting()).

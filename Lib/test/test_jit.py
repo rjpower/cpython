@@ -1076,6 +1076,373 @@ class TestCompletionStubs(JitTestCase):
         self.assertEqual(invalid, 0)
 
 
+TRANSFER_PRELUDE = """
+import sys, weakref, _testinternalcapi as t
+def stats():
+    s = t.jit_stats()
+    return s["turns"], s["switches"]
+def report(name, before):
+    # What the JIT did meanwhile: driver turns and switches, for the record
+    turns, switches = stats()
+    print(f"jit {name} turns={turns - before[0]} switches={switches - before[1]}")
+"""
+
+
+@unittest.skipIf(_testinternalcapi is None, "needs _testinternalcapi")
+class TestFrameTransfers(JitTestCase):
+    """Calls, returns, yields and resumes between compiled frames
+    (g3/design.md section 8, Tests).  Each script prints the same with the
+    JIT off, on and always, apart from its 'jit' lines, which record the
+    driver turns and switches each part took, and its 'active' lines, which
+    hold sys._jit.is_active() inside callees and must be True under
+    always."""
+
+    def check_transfers(self, source):
+        source = TRANSFER_PRELUDE + textwrap.dedent(source)
+        strip = lambda out: [l for l in out.splitlines()
+                             if not l.startswith(("jit", "active"))]
+        expected = run(source, "jit=off")
+        outs = {}
+        for mode in ("on", "always"):
+            with self.subTest(mode=mode):
+                got = run(source, f"jit={mode}")
+                self.assertEqual(strip(got), strip(expected))
+                outs[mode] = got
+        for line in outs.get("always", "").splitlines():
+            if line.startswith("active"):
+                self.assertTrue(line.endswith("True"), outs["always"])
+        return outs
+
+    def test_recursion(self):
+        self.check_transfers("""
+            def fib(n):
+                return n if n < 2 else fib(n - 1) + fib(n - 2)
+            def even(n):
+                return True if n == 0 else odd(n - 1)
+            def odd(n):
+                return False if n == 0 else even(n - 1)
+            def kw(n, step=1, *, acc=0):
+                return acc if n <= 0 else kw(n - step, acc=acc + n)
+            def active(n):
+                return sys._jit.is_active() if n == 0 else active(n - 1)
+            for f in (fib, even, kw, active):
+                f(3)
+            before = stats()
+            print(fib(18), even(301), odd(301), kw(100), kw(100, 3))
+            report("recursion", before)
+            print("active", active(10))
+        """)
+
+    def test_recursion_limit(self):
+        # Counted, not measured on the C stack: the same depth everywhere
+        self.check_transfers("""
+            def down(n):
+                return down(n + 1) if n < 10**6 else n
+            depth = []
+            def probe(n):
+                try:
+                    return probe(n + 1)
+                except RecursionError:
+                    depth.append(n)
+                    return n
+            for limit in (200, 1000):
+                sys.setrecursionlimit(limit)
+                try:
+                    down(0)
+                except RecursionError as e:
+                    print(type(e).__name__, e)
+                print(probe(0) - len(depth) * 0)
+            sys.setrecursionlimit(1000)
+        """)
+
+    def test_deep_recursion_in_a_small_c_stack(self):
+        # 20,000 Python frames in a thread with 256 KiB of C stack: compiled
+        # calls must not grow the C stack per Python call
+        self.check_transfers("""
+            import threading
+            def down(n):
+                return 0 if n == 0 else 1 + down(n - 1)
+            down(50)
+            result = []
+            def body():
+                sys.setrecursionlimit(25000)
+                result.append(down(20000))
+            threading.stack_size(256 * 1024)
+            thread = threading.Thread(target=body)
+            thread.start()
+            thread.join()
+            print(result)
+        """)
+
+    def test_mixed_tiers(self):
+        # Every other level is cold: one code is monitored, which retires
+        # its units, so its frames run in the evaluator
+        self.check_transfers("""
+            def hot(n):
+                return 0 if n == 0 else 1 + cold(n - 1)
+            def cold(n):
+                return 0 if n == 0 else 1 + hot(n - 1)
+            def via_c(n):
+                # Python from C inside compiled frames
+                return sum(map(hot, range(n)))
+            for i in range(3):
+                hot(10), via_c(5)
+            sys.monitoring.use_tool_id(3, "test")
+            sys.monitoring.set_local_events(3, cold.__code__, sys.monitoring.events.LINE)
+            sys.monitoring.register_callback(3, sys.monitoring.events.LINE, lambda *a: None)
+            before = stats()
+            print(hot(101), via_c(30))
+            report("mixed", before)
+            sys.monitoring.set_local_events(3, cold.__code__, 0)
+            sys.monitoring.free_tool_id(3)
+            print(hot(101), via_c(30))
+        """)
+
+    def test_capped_callers_and_callees(self):
+        self.check_transfers("""
+            def callee(x):
+                return x + 1
+            def caller(n):
+                total = 0
+                for i in range(n):
+                    total += callee(i)
+                return total
+            for f in (callee, caller):
+                for i in range(8):
+                    t.jit_compile(f.__code__)
+            print(t.jit_unit(caller.__code__)["compiles"] if t.jit_unit(caller.__code__) else 8)
+            print(caller(1000))
+        """)
+
+    def test_code_destruction(self):
+        self.check_transfers("""
+            import gc
+            log = []
+            def g(x):
+                return x * 2
+            def died(name):
+                # The callback runs Python that runs compiled code
+                return lambda ref: log.append((name, [g(i) for i in range(3)]))
+            def fresh(source, name="f", **env):
+                ns = dict(env)
+                exec(source, ns)
+                return ns.pop(name)
+
+            # 1. a function deletes the last references to itself and its
+            #    code, and returns
+            for i in range(40):
+                ns = {"log": log}
+                exec("def f():\\n    del ns['f']\\n    return 1\\n", ns)
+                ns["ns"] = ns
+                keep = weakref.ref(ns["f"].__code__, died("one"))
+                ns["f"]()
+                ns.clear()
+            print(log[-1], len(log))
+            log.clear()
+
+            # 2. a frame object kept by an object whose finalizer the pop
+            #    runs
+            class Holder:
+                def __del__(self):
+                    log.append(("finalizer", g(3)))
+            for i in range(40):
+                f = fresh("def f(h):\\n    h.frame = sys._getframe()\\n    return 2\\n",
+                          sys=sys)
+                h = Holder()
+                keep = weakref.ref(f.__code__, died("two"))
+                f(h)
+                del f, h
+            gc.collect()
+            print(sorted(set(name for name, _ in log)))
+            log.clear()
+
+            # 3. recursion whose last reference goes at depth 5
+            for i in range(20):
+                ns = {}
+                exec("def r(n):\\n"
+                     "    if n == 5:\\n"
+                     "        ns.clear()\\n"
+                     "        return n\\n"
+                     "    return r(n + 1) if n < 5 else n\\n", ns)
+                r = ns["r"]
+                ns["ns"] = ns
+                keep = weakref.ref(r.__code__, died("three"))
+                del r
+                print(ns["r"](0), end=" ") if i == 0 else ns["r"](0)
+            print()
+            print(log[-1], len(log))
+            log.clear()
+
+            # 4. a finalizer in the pop calls compiled functions and drops
+            #    the outer departing code
+            class Dropper:
+                def __init__(self, ns):
+                    self.ns = ns
+                def __del__(self):
+                    log.append(("dropper", [g(i) for i in range(2)]))
+                    self.ns.clear()
+            for i in range(20):
+                ns = {}
+                exec("def f():\\n    d = Dropper(ns)\\n    return 4\\n",
+                     {"Dropper": Dropper, "ns": ns}, ns)
+                keep = weakref.ref(ns["f"].__code__, died("four"))
+                ns["f"]()
+            print(log[-2:], len(log))
+            log.clear()
+
+            # 5. 300 codes made and freed with calls between them
+            total = 0
+            for i in range(300):
+                f = fresh(f"def f(n):\\n    return n + {i} if n < 2 else f(n - 1)\\n")
+                f.__globals__["f"] = f
+                total += f(3) + g(i)
+                del f
+            print(total)
+
+            # 7. code.replace() and __code__ assignment while frames of the
+            #    old code run and return
+            def outer(n):
+                if n == 0:
+                    outer.__code__ = replaced
+                    return "old"
+                return outer(n - 1) + "+old"
+            replaced = outer.__code__.replace(co_consts=tuple(
+                "new" if c == "old" else "+new" if c == "+old" else c
+                for c in outer.__code__.co_consts))
+            original = outer.__code__
+            for i in range(3):
+                outer.__code__ = original
+                print(outer(3), outer(2))
+        """)
+
+    def test_generators(self):
+        self.check_transfers("""
+            log = []
+            def gen(n):
+                for i in range(n):
+                    yield i, sys._jit.is_active()
+            def consume(n):
+                return [v for v, _ in gen(n)], all(a for _, a in gen(n))
+            consume(3)
+            print(consume(10)[0])
+            print("active", consume(10)[1])
+
+            # Destruction during yield publication: the consumer's
+            # destination held the last reference to the generator
+            def chain():
+                for i in range(3):
+                    holder = [iter(gen(2))]
+                    x = next(holder[0])
+                    holder = None
+                    yield x[0]
+            print(list(chain()))
+
+            # close() and destruction of a suspended compiled generator
+            def closing():
+                try:
+                    yield 1
+                    yield 2
+                finally:
+                    log.append("closed")
+            for i in range(3):
+                c = closing()
+                next(c)
+                c.close()
+                d = closing()
+                next(d)
+                del d
+            print(log)
+
+            # A generator function called from a compiled frame whose code
+            # then loses its last reference
+            def maker():
+                ns = {}
+                exec("def h():\\n    yield 7\\n    yield 8\\n", ns)
+                g = ns.pop("h")()
+                return g
+            gens = [maker() for i in range(5)]
+            print([list(g) for g in gens])
+        """)
+
+    def test_unwinding(self):
+        self.check_transfers("""
+            import traceback
+            def thrower(n):
+                if n == 0:
+                    raise KeyError("deep")
+                return thrower(n - 1) + 1
+            def catcher(n, m):
+                if n == m:
+                    try:
+                        return thrower(n)
+                    except KeyError as e:
+                        return ("caught", n, sys._jit.is_active())
+                return catcher(n + 1, m)
+            for i in range(3):
+                catcher(0, 4)
+            r = catcher(0, 6)
+            print(r[:2])
+            print("active", r[2])
+            try:
+                thrower(4)
+            except KeyError:
+                print(traceback.format_exc().replace(__file__ if "__file__" in dir() else "@", "@"))
+
+            # RecursionError in a frame just made current
+            def at_limit(n):
+                return at_limit(n + 1)
+            sys.setrecursionlimit(300)
+            for i in range(3):
+                try:
+                    at_limit(0)
+                except RecursionError as e:
+                    print(type(e).__name__)
+            sys.setrecursionlimit(1000)
+        """)
+
+    def test_stale_and_retired_callers(self):
+        self.check_transfers("""
+            class A:
+                x = 1
+            class B:
+                x = 2
+            def callee(obj, flip):
+                if flip:
+                    # The caller's word specialised for A meets B: its
+                    # unit is marked stale and recompiled at a warm-up
+                    return caller(B(), False)
+                return obj.x
+            def caller(obj, flip):
+                return obj.x + callee(obj, flip)
+            for i in range(50):
+                caller(A(), False)
+            print(caller(A(), True), caller(B(), False), caller(A(), False))
+
+            monitoring = []
+            def retiring():
+                # Instruments the caller's code: its unit retires, and the
+                # rest of it runs in the evaluator
+                if monitoring:
+                    sys.monitoring.set_local_events(
+                        5, victim.__code__, sys.monitoring.events.LINE)
+                return 1
+            def victim(n):
+                total = 0
+                for i in range(n):
+                    total += retiring() if i == n // 2 else i
+                return total
+            victim(10)
+            sys.monitoring.use_tool_id(5, "test")
+            sys.monitoring.register_callback(5, sys.monitoring.events.LINE, lambda *a: None)
+            monitoring.append(True)
+            print(victim(100))
+            monitoring.clear()
+            sys.monitoring.set_local_events(5, victim.__code__, 0)
+            sys.monitoring.free_tool_id(5)
+            print(victim(100))
+        """)
+
+
 def cfi_rows(program, initial):
     """Run a CFI program (x86-64: code alignment 1, data alignment -8) from
     the CIE's initial rule.  Returns [(location, rule)], one per location

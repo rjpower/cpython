@@ -2866,6 +2866,7 @@ jit_run(PyThreadState *tstate, _PyJitUnit *unit, _PyInterpreterFrame *frame,
 #ifndef NDEBUG
         activation->jit_unit = unit;
 #endif
+        tstate->interp->ceval.jit_turns++;
         _PyIRTransfer t = ((jit_entry)unit->code.start)(
             tstate, frame, unit->entries[next - frame->ir_words]);
         impl->jit_frame = outer;

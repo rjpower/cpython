@@ -446,7 +446,11 @@ dummy_func(
                 PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_FALLTHROUGH);
         }
 
-        pure inst(END_SEND, (receiver, index_or_null, value -- val)) {
+        inst(END_SEND,
+                (receiver: consumed, index_or_null: closed, value: consumed
+                 -- val: moved(value)))
+            effects(releases) exits(next)
+        {
             val = TAKE(value);
             (void)index_or_null;
             DEAD(index_or_null);
@@ -1747,7 +1751,10 @@ dummy_func(
             iter = iterator;
         }
 
-        outlined inst(GET_ANEXT, (aiter -- aiter, awaitable)) {
+        outlined inst(GET_ANEXT,
+                (aiter: assumed(object) by GET_AITER -- aiter, awaitable: owned))
+            effects(runs_python) exits(next, raise)
+        {
             // GET_AITER accepted it: it has __anext__
             assert(PyValue_IsObject(aiter));
             PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(aiter));
@@ -1855,7 +1862,9 @@ dummy_func(
             _SEND_GEN_FRAME +
             _PUSH_FRAME;
 
-        op(_GUARD_TOS_IS_NONE, (val -- val)) {
+        op(_GUARD_TOS_IS_NONE, (val -- val: is(PyValue_None)))
+            effects() exits(next, miss)
+        {
             EXIT_IF(!PyValue_IsNone(val));
         }
 
@@ -1927,7 +1936,9 @@ dummy_func(
             _GUARD_3OS_ASYNC_GEN_ASEND +
             _SEND_ASYNC_GEN;
 
-        window op(_YIELD_VALUE, (retval -- value)) {
+        window op(_YIELD_VALUE, (retval: consumed -- value: moved(retval)))
+            effects(reads, writes, switches_frame) exits(yield)
+        {
             // NOTE: It's important that YIELD_VALUE never raises an exception!
             // The compiler treats any exception raised here as a failed close()
             // or throw() call.
@@ -2060,7 +2071,12 @@ dummy_func(
 
         outlined macro(END_ASYNC_FOR) = _END_ASYNC_FOR;
 
-        tier1 inst(CLEANUP_THROW, (sub_iter, null_in, last_sent_val, exc_value_st -- none, null_out, value)) {
+        tier1 inst(CLEANUP_THROW,
+                (sub_iter: taken, null_in: taken nullable, last_sent_val: taken,
+                 exc_value_st: taken assumed(object) by exception_unwind
+                 -- none: owned, null_out: owned, value: owned))
+            effects(runs_python) exits(branch, raise)
+        {
             // An exception being handled is an instance of BaseException
             assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
@@ -4229,16 +4245,20 @@ dummy_func(
         // (as for __getitem__), which PyType_Modified() invalidates.  The
         // iterator is the generator, created at once with the iterable as its
         // argument and no call of the function.
-        inline_ok op(_GUARD_ITER_PY_GENERATOR, (iterable -- iterable)) {
+        inline_ok op(_GUARD_ITER_PY_GENERATOR, (iterable -- iterable: object))
+            effects(reads) exits(next, miss)
+        {
             EXIT_IF(!PyValue_IsObject(iterable));
             PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(iterable));
-            EXIT_IF(!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE));
+            EXIT_IF(!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE),
+                    "only a heap type caches its __iter__ function");
             PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
             PyObject *iter_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.iter);
-            EXIT_IF(iter_o == NULL);
+            EXIT_IF(iter_o == NULL, "the type caches no __iter__ function");
             assert(PyFunction_Check(iter_o));
             EXIT_IF(((PyFunctionObject *)iter_o)->func_version !=
-                    FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.iter_version));
+                    FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.iter_version),
+                    "the cached function changed version");
         }
 
         ir_only op(_GET_ITER_PY_GENERATOR, (iterable -- iter, index_or_null)) {
@@ -4579,7 +4599,12 @@ dummy_func(
             _INSERT_NULL +
             _LOAD_SPECIAL;
 
-        outlined inst(WITH_EXCEPT_START, (exit_func, exit_self, lasti, unused, val -- exit_func, exit_self, lasti, unused, val, res)) {
+        outlined inst(WITH_EXCEPT_START,
+                (exit_func, exit_self: nullable, lasti, unused,
+                 val: assumed(object) by PUSH_EXC_INFO
+                 -- exit_func, exit_self, lasti, unused, val, res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             /* At the top of the stack are 4 values:
                - val: TOP = exc_info()
                - unused: SECOND = previous exception
@@ -5967,7 +5992,9 @@ dummy_func(
         // because a call creates the object (_PyGen_NewCall()) with its frame
         // past this word.  The word stays for the first send's resume point,
         // f_lasti and monitoring.
-        window inst(RETURN_GENERATOR, (-- res)) {
+        window inst(RETURN_GENERATOR, (-- res: inline null))
+            effects() exits(next)
+        {
             IR_GENERATOR_MARKER();
             res = PyValue_NULL;
         }

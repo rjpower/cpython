@@ -3226,6 +3226,13 @@ class OwnershipWalk:
         if self.contract.state_item(head) is not None and texts[1:2] in (["|="], ["&="], ["="]):
             self.write_state(toks, texts, state)
             return state
+        if head in self.table and self.table[head].exits == {"redirect"}:
+            # DISPATCH_REDIRECT: the word leaves for the word an observer
+            # chose; what the word holds is released first, as on raise
+            self.calls(toks, state)
+            self.effects(toks, state)
+            self.check_exit("redirect", state, toks[0])
+            return None
         if head in self.table and ends_path(self.table[head]):
             # A terminal marker leaves on its row's exits, after its
             # arguments' modes have taken what they say; it never returns.
@@ -4156,14 +4163,21 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
     # The values that reach the handler, and the first site since its entry
     # that may have replaced any of them in its home (F7's binding).  A local
     # home may be written by any reentry (a finalizer through
-    # FrameLocalsProxy).  A temporary only by a debugger's f_lineno jump,
-    # which a monitoring callback of this frame makes and which always
-    # redirects the frame: on the next path of a uop that declares the
-    # redirect exit no jump was made, so only a reentry in a uop without the
-    # exit, or the skeleton's close, may have replaced a temporary
-    # (replaced_temporary).
+    # FrameLocalsProxy).  A temporary only by a debugger's f_lineno jump
+    # (frame_lineno_set_impl), and every successful jump redirects:
+    # - from a callback of this frame's PY_RESUME, JUMP, BRANCH*, LINE or
+    #   PY_YIELD event, whose uops leave by their redirect exit (or by
+    #   branch, committed), so no uop of the word runs after it;
+    # - from a descendant (sys._debugger_entry, an observer's ancestor
+    #   frame), only while this frame's word is a CALL or CALL_KW whose
+    #   Python child is not external: the word left its handler through
+    #   `enter`, and the return goes to the redirect's target
+    #   (pending_redirect, IR_STORE_RETURN), not to the rest of the word.
+    # So on the next path no reentry or close replaces a temporary: the
+    # values made in the handler, and with `temporaries` its inputs, keep
+    # their facts, but for heap facts, which effects kill.
     entry: set[int] = set()
-    replaced = replaced_temporary = ""
+    replaced = ""
 
     def pop(item: Item) -> int | None:
         "The value of an input, or None if the stack's depth is unknown"
@@ -4233,7 +4247,7 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
                     raise analysis_error(
                         f"{inst.name}: {part.name} assumes {said} of `{item.name}`, a value "
                         "made in this handler, whose facts must show it", inst.where)
-                since = replaced_temporary if temporaries else replaced
+                since = "" if temporaries else replaced
                 if since:
                     raise analysis_error(
                         f"{inst.name}: {part.name} assumes {said} of `{item.name}`, which "
@@ -4265,23 +4279,22 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
             # the implicit guards it actually emits
             verify_uop(part, len(implicit), table)
         # After the uop: its kills.  Heap facts die at a KILLS effect; at a
-        # reentry every value left in a home (the stack below the uop and
-        # its pass-throughs) may have been replaced there, so all of its
-        # facts die.  Then the facts the uop declares on its outputs, which
+        # reentry every value that reached the handler and may be left in a
+        # local home (the stack below the uop and its pass-throughs) may have
+        # been replaced there, so all of its facts die; a temporary keeps
+        # them (above).  Then the facts the uop declares on its outputs, which
         # V9 holds to the facts live at its exit.
         # Effects confined to other exits are on no path to next
         effects = contract.next_effects()
         if effects & KILLS:
             facts = {v: without_heap_facts(f) for v, f in facts.items()}
-        if effects & REENTRY and known:
+        if effects & REENTRY and known and not temporaries:
             homes = set(stack) | {bound[i.name] for i in contract.inputs if not i.mode
                                   and contract.output(i.name) is not None}
-            for v in homes:
+            for v in homes & entry:
                 facts[v] = frozenset()
         if effects & REENTRY and not replaced:
             replaced = f"{part.name}, which may reenter"
-        if effects & REENTRY and "redirect" not in contract.exits and not replaced_temporary:
-            replaced_temporary = f"{part.name}, which may reenter and declares no redirect exit"
         changes = effects - {"reads", "raises"}
         if restartable and changes:
             restartable, why = False, f"{part.name}, which may {', '.join(sorted(changes))}"
@@ -4299,9 +4312,9 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
             if step == "close":
                 # A close may run a finalizer, which can replace any home's
                 # value (design.md 3.2)
-                facts = {v: frozenset() for v in facts}
+                facts = {v: frozenset() if v in entry and not temporaries
+                         else without_heap_facts(f) for v, f in facts.items()}
                 replaced = replaced or f"the skeleton's close of `{name}` after {part.name}"
-                replaced_temporary = replaced_temporary or replaced
                 if restartable and contract.input(name) is not None:
                     restartable = False
                     why = f"the skeleton's close of `{name}` after {part.name}"

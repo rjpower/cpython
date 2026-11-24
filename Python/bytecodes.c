@@ -473,7 +473,7 @@ dummy_func(
         tier1 inst(INSTRUMENTED_END_SEND,
                 (receiver: consumed assumed(object) by compiler_send_loop,
                  index_or_null: closed, value: consumed -- val: moved(value)))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, raise, redirect)
         {
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
             // Taken before the monitoring call, which can run code
@@ -498,6 +498,12 @@ dummy_func(
                 if (jump.status < 0) {
                     PyValue_CLOSE(held);
                     ERROR_NO_POP();
+                }
+                if (jump.status > 0) {
+                    // An observer moved the frame: the word leaves for its
+                    // choice, and the sent value is no longer the word's
+                    PyValue_CLOSE(held);
+                    DISPATCH_REDIRECT();
                 }
                 next_instr = jump.next;
             }
@@ -4096,7 +4102,12 @@ dummy_func(
             COPY, TO_BOOL, POP_JUMP_IF_TRUE,
         ];
 
-        leaf replaced op(_POP_JUMP_IF_FALSE, (cond -- )) {
+        // cond is an exact bool, which owes nothing (True and False are
+        // immortal): every handler makes it with a _TO_BOOL, _IS_NONE or
+        // _GUARD_TOS_BOOL before this uop
+        leaf replaced op(_POP_JUMP_IF_FALSE, (cond: consumed exact(PyBool_Type) -- ))
+            effects() exits(next, branch)
+        {
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsFalse(cond);
             DEAD(cond);
@@ -4106,7 +4117,12 @@ dummy_func(
             }
         }
 
-        leaf replaced op(_POP_JUMP_IF_TRUE, (cond -- )) {
+        // cond is an exact bool, which owes nothing (True and False are
+        // immortal): every handler makes it with a _TO_BOOL, _IS_NONE or
+        // _GUARD_TOS_BOOL before this uop
+        leaf replaced op(_POP_JUMP_IF_TRUE, (cond: consumed exact(PyBool_Type) -- ))
+            effects() exits(next, branch)
+        {
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsTrue(cond);
             DEAD(cond);

@@ -9061,6 +9061,11 @@ ir_run_INSTRUMENTED_END_SEND(
                     _PyValue_XCLOSE_POINTER(ir_own_B);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
+                if (jump.status > 0) {
+                    PyValue_CLOSE(held);
+                    _PyValue_XCLOSE_POINTER(ir_own_B);
+                    DISPATCH_REDIRECT();
+                }
                 next_instr = jump.next;
             }
             val = held;
@@ -23808,6 +23813,11 @@ static const _PyIRForm ir_handler_forms[512] = {
                     PyValue_CLOSE(held);
                     _PyValue_XCLOSE_POINTER(ir_own_B);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                }
+                if (jump.status > 0) {
+                    PyValue_CLOSE(held);
+                    _PyValue_XCLOSE_POINTER(ir_own_B);
+                    DISPATCH_REDIRECT();
                 }
                 next_instr = jump.next;
             }

@@ -2151,11 +2151,12 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % "next, raise",
                      r"declares exits\(next, raise\), but the body takes next, raise, redirect")
 
-    def test_an_assumption_on_a_temporary_survives_a_declared_redirect(self):
+    def test_an_assumption_on_a_temporary_survives_a_reentry(self):
         # INSTRUMENTED_END_ASYNC_FOR: a temporary is replaced only by a
-        # debugger's f_lineno jump, which redirects the frame; a uop that
-        # declares the redirect exit leaves the word then, so on its next
-        # path the temporary holds what exception_unwind pushed
+        # debugger's f_lineno jump, which redirects the frame: from an event
+        # of this frame, in a uop that leaves by its redirect exit; from a
+        # descendant, only while the word's call has left through `enter`.
+        # On the next path the temporary holds what exception_unwind pushed
         source = """
             op(_EVENT, (--)) effects(runs_python) exits(next, %s) {
                 %s
@@ -2169,17 +2170,14 @@ class VerifierTests(unittest.TestCase):
             macro(OP) = _EVENT + _USE;
         """
         redirects = source % ("redirect", "SPAM_EVENT();")
-        self.verify(redirects, temporaries=True)
-        # An input that may be a local home: any reentry may have replaced it
-        # (a finalizer writes locals through FrameLocalsProxy)
-        self.refuses(redirects, r"`x`, which may have been replaced since the handler's "
-                     r"entry, at _EVENT, which may reenter \(")
-        # A reentry without the redirect exit refuses a temporary too
-        self.refuses(source % ("raise", "Py_ssize_t n = _PyValue_Size(PyValue_None);\n"
-                               "                ERROR_IF(n < 0);"),
-                     r"`x`, which may have been replaced since the handler's entry, at "
-                     r"_EVENT, which may reenter and declares no redirect exit",
-                     temporaries=True)
+        reenters = source % ("raise", "Py_ssize_t n = _PyValue_Size(PyValue_None);\n"
+                             "                ERROR_IF(n < 0);")
+        for text in (redirects, reenters):
+            self.verify(text, temporaries=True)
+            # An input that may be a local home: any reentry may have
+            # replaced it (a finalizer writes locals through FrameLocalsProxy)
+            self.refuses(text, r"`x`, which may have been replaced since the handler's "
+                         r"entry, at _EVENT, which may reenter \(")
         # The real handler verifies with its window, and refuses without it
         inst = analysis.instructions["INSTRUMENTED_END_ASYNC_FOR"]
         ir_contract.verify_handler(inst, temporaries=True)
@@ -2188,6 +2186,34 @@ class VerifierTests(unittest.TestCase):
                                     r"replaced since the handler's entry, at "
                                     r"_MONITOR_END_ASYNC_FOR"):
             ir_contract.verify_handler(inst)
+
+    def test_a_fact_made_in_the_handler_survives_a_reentry(self):
+        # R1, POP_JUMP_IF_FALSE_LIST: the bool _TO_BOOL_LIST makes is a
+        # temporary, whose exact type no reentry (POP_TOP's close) replaces;
+        # a fact of an input that may be in a local home dies there
+        for name in ("POP_JUMP_IF_FALSE_LIST", "POP_JUMP_IF_TRUE_LIST"):
+            with self.subTest(name):
+                ir_contract.verify_handler(analysis.instructions[name])
+        source = """
+            op(_GUARD, (x: object -- x: exact(PyList_Type))) effects(reads) exits(next, miss) {
+                EXIT_IF(!PyList_CheckExact(PyValue_AsKnownObjectBorrow(x)));
+            }
+            op(_MAKE, (x: consumed -- b: owned exact(PyBool_Type))) effects(releases) exits(next) {
+                PyValue_CLOSE(x);
+                b = PyValue_True;
+            }
+            op(_EVENT, (--)) effects(runs_python) exits(next, raise) {
+                Py_ssize_t n = _PyValue_Size(PyValue_None);
+                ERROR_IF(n < 0);
+            }
+            op(_NEED, (v: %s -- v)) effects() exits(next) {
+            }
+            macro(OP) = _GUARD + %s;
+        """
+        self.verify(source % ("exact(PyBool_Type)", "_MAKE + _EVENT + _NEED"))
+        self.refuses(source % ("exact(PyList_Type)", "_EVENT + _NEED"),
+                     r"_NEED requires exact\(PyList_Type\).* of `v`, which nothing before "
+                     r"it establishes or which an effect since killed")
 
     def test_assumed_row_results(self):
         # _LOAD_ATTR_CLASS: the cached descriptor is not NULL by the cache's

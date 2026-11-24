@@ -20,7 +20,8 @@ extern "C" {
 #include "pycore_function.h"    // _PyClassMethod_GetFunc()
 #include "pycore_moduleobject.h" // PyModuleObject
 #include "pycore_ir.h"          // _PyIR_FbBlock()
-#include "pycore_object.h"      // _PyObject_ValueSlot()
+#include "pycore_object.h"
+#include "pycore_value_ops.h"     // _PyValue_GetAttr()      // _PyObject_ValueSlot()
 #include "pycore_rop_metadata.h" // ROP_HANDLER_GetMethod_MethodValues
 
 /* One recipe: the guards of a lookup path with the payload that goes with
@@ -373,4 +374,26 @@ _PyValue_BorrowPresent(PyValueBorrow b)
 #ifdef __cplusplus
 }
 #endif
+/* _PyValue_GetMethod with the receiver made an owner when the callable is
+   an unbound method; *self is NULL when the attribute itself was found. */
+static inline PyValue
+_PyAttr_GetMethod(PyValueBorrow obj, PyObject *name, PyValue *self)
+{
+    _PyStatusValue r = (_PyValue_GetMethod)(obj, name);
+    *self = PyValue_NULL;
+    if (r.status < 0) {
+        return PyValue_NULL;
+    }
+    if (r.status == 1) {
+        *self = PyValue_DUP(obj);
+    }
+    return r.value;
+}
+
+static inline void
+_PyRop_DiscardMaybe(PyValue z)
+{
+    PyValue_XCLOSE(z);
+}
+
 #endif /* !Py_INTERNAL_ATTR_RECIPE_H */

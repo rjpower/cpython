@@ -15,14 +15,14 @@ generated C uses the value API and never `.bits`.
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from rop_catalog import (ENVIRONMENT_C, Schema, SchemaCtor, CONVENTIONS, CReturn, CSource, CTest, DebtKind, Effect, Fact,
+from rop_catalog import (ENVIRONMENT_C, Schema, CONVENTIONS, CReturn, CSource, CTest, DebtKind, Effect, Fact,
                          FieldKind,
                          Handle, Scalar, SchemaCtor, Slot, Wrap)
 from rop_check import GraphInfo, Program
 from rop_model import (Advance, Arm, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
                        HandleType, Let, Name, Nat, Param, Placement, Publish,
-                       ScalarType, SchemaType, SpanLit, Target, Type, WrapType)
+                       ScalarType, SchemaType, SchemaVar, SpanLit, Target, Type, WrapType)
 
 
 class Unsupported(Exception):
@@ -99,7 +99,8 @@ def source_text(source: CSource, ret: str, out: str | None) -> str:
 
 
 # The C entry type of each feedback schema whose arms are lowered
-SCHEMA_C = {Schema.Attr: "_PyFbAttr"}
+SCHEMA_C = {Schema.Binary: "_PyFbBinary", Schema.Attr: "_PyFbAttr",
+            Schema.Global: "_PyFbGlobal", Schema.Call: "_PyFbCall"}
 
 
 def c_type(t: Type) -> str | None:
@@ -538,6 +539,10 @@ class ArmLowerer:
                 out.append(self.srcs(a))
             elif isinstance(t, HandleType) and t.handle is Handle.Anchors:
                 out.append("&" + self.expr_text(a))
+            elif (isinstance(t, SchemaType) and t.ctor is SchemaCtor.Fb
+                  and isinstance(t.schema, SchemaVar)):
+                # A row over every schema reads the entry's common header
+                out.append(f"&{self.expr_text(a)}->h")
             else:
                 out.append(self.expr(a, t))
         return out
@@ -553,12 +558,7 @@ class ArmLowerer:
 
     def expr_text(self, e: Expr) -> str:
         if isinstance(e, Name):
-            if e.name == "site":
-                return "this_instr"
             if e.name in self.placements:
-                p = self.placements[e.name]
-                if p.kind is FieldKind.feedback and e.name not in self.info.types:
-                    return f"((_PyFbHeader *)IR_FB(IR_{self.slot(e.name).name}(ir_word)))"
                 return self.operand_value(e.name)
             if e.name in ENVIRONMENT_C:
                 return ENVIRONMENT_C[e.name]
@@ -584,7 +584,7 @@ class ArmLowerer:
             schema = param.type.schema
             if schema not in SCHEMA_C:
                 raise Unsupported(f"{self.arm.name}: no C entry type for feedback {schema}")
-            return f"(const {SCHEMA_C[schema]} *)IR_FB({self.field(operand)})"
+            return f"(({SCHEMA_C[schema]} *)IR_FB({self.field(operand)}))"
         raise Unsupported(f"{self.arm.name}: operand {operand} used as a value")
 
     def call_expr(self, e: Call) -> str:
@@ -815,8 +815,12 @@ class ArmLowerer:
             self.lower_indexed_call(t, x, args)
             return
         out = None
-        if any(CSource.out in o.payload for o in conv.outcomes):
-            out = self.new_temp(c_type(cases[0].params[0].type), "out")
+        for i, o in enumerate(conv.outcomes):
+            if CSource.out in o.payload:
+                out_type = cases[i].params[o.payload.index(CSource.out)].type
+                out = self.new_temp(c_type(out_type), "out")
+                break
+        if out is not None:
             args.append(f"&{out}")
         # A bool result is tested in place; any other is kept for the tests
         # and the payloads that read it
@@ -870,7 +874,11 @@ class ArmLowerer:
             self.emit("DISPATCH();")
         elif t.kind == "miss":
             self.emit(self.miss())
+        elif t.kind == "redirect":
+            self.emit("IR_REDIRECT();")
         elif t.kind == "again":
+            # The word runs again, under the handler it now names
+            self.emit("next_instr = this_instr;")
             self.emit("DISPATCH_SAME_OPARG();")
         elif t.kind == "raise":
             point = t.args[0]

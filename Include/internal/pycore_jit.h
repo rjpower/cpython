@@ -54,12 +54,15 @@ extern "C" {
  * Python (test RETIRED before the successor); RAISED the word raised, its
  * raise checkpoint in force; BRANCH the word completed at its static
  * target; AGAIN the word is untouched and runs again under its current
- * handler (a specialisation's redispatch). */
+ * handler (a specialisation's redispatch); REDIRECT the word completed and
+ * the frame's control moved while it ran (a debugger's jump): the word's
+ * successor is frame->instr_ptr, not the next word. */
 #define _PyIR_MISS      1
 #define _PyIR_ESCAPED   2
 #define _PyIR_RAISED    4
 #define _PyIR_BRANCH    8
 #define _PyIR_AGAIN     16
+#define _PyIR_REDIRECT  32
 
 /* The plan of a handler (Python/generated_ir_stubs.c.h, by handler): NONE
  * keeps the template or the form's call; INLINE is a template whose misses

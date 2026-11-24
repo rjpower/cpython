@@ -84,10 +84,36 @@ arm GetAttr.Instance inline
 // call-boundary macros.
 macro getattr_at_origin(n:Name, a:Anchors)
   cases(ok(z:O), err(e:Err), redirected(r:Route))
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases)
   feedback()
   borrows(a)
-  pending;
+{
+  entry():
+    call value_getattr(arg(a, 0), n) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+extern helper value_getattr(v:B, n:Name)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyValue_GetAttr as value_or_null
+  evidence(
+    review: "pycore_value_ops.h: _PyValue_GetAttr(v, name) -> tp_getattro or the generic lookup, descriptors, __getattr__.",
+    contract: "The receiver is borrowed; the result owned, or NULL with an exception set. Callbacks: arbitrary Python.");
 
 // Adaptation evidence (specialize.c): the attribute specializer in
 // collecting mode fills the site's entry, records the observation in the
@@ -658,10 +684,46 @@ extern primitive borrow_cached_value(r:Recipe<Attr>) -> B
 // either the receiver (an unbound method) or an absent self
 macro getmethod_at_origin(n:Name, a:Anchors)
   cases(ok(f:O, s:Maybe<O>), err(e:Err), redirected(r:Route))
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases)
   feedback()
   borrows(a)
-  pending;
+{
+  entry():
+    call value_getmethod(arg(a, 0), n) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(callable:O, receiver:Maybe<O>):
+    call redirect_status(frame) {
+      running -> Done(callable, receiver);
+      redirected -> Moved(callable, receiver);
+    }
+  Done(kept:O, self_kept:Maybe<O>):
+    exit ok(kept, self_kept);
+  Moved(r:Route, dropped:O, self_dropped:Maybe<O>):
+    let _:Unit = discard_result(dropped);
+    let _:Unit = discard_maybe_result(self_dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+// The callable, and the receiver as an owner when the callable is an unbound
+// method (absent when the attribute itself was found)
+extern helper value_getmethod(v:B, n:Name)
+  cases(ok(f:O, s:Maybe<O>), err(e:Err))
+  effects(runs_python, raises)
+  c _PyAttr_GetMethod as value_out_or_null
+  evidence(
+    review: "pycore_attr_recipe.h: _PyValue_GetMethod, the receiver duplicated for an unbound method.",
+    contract: "The receiver is borrowed; the callable owned and the self owned or absent, or NULL with an exception set. Callbacks: arbitrary Python.");
+
+extern helper discard_maybe_result(z:Maybe<O>) -> Unit
+  effects(releases)
+  c _PyRop_DiscardMaybe as unit
+  evidence(
+    review: "pycore_attr_recipe.h: PyValue_XCLOSE of an optional owner.",
+    contract: "Takes the owner if there is one. A finalizer may run Python. It does not fail.");
 
 extern helper classify_getmethod(v:B, at:Site, f:Fb<Attr>, n:Name)
   cases(method_values(r:Recipe<Attr>), no_dict(r:Recipe<Attr>), lazy_dict(r:Recipe<Attr>),

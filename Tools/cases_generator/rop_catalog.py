@@ -479,6 +479,11 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("bool_out_hit", CReturn.bool,
           COutcome(CTest.true, _RES, (CSource.out,), False, "hit"),
           COutcome(CTest.false, _RES, (), False, "absent")),
+    # ok(v, w) when the word is not NULL, w written through the last
+    # parameter; err(e) with the exception set
+    _conv("value_out_or_null", CReturn.value,
+          COutcome(CTest.nonnull, _RES, (_RES, CSource.out), False),
+          COutcome(CTest.null, _RES, (_EXC,), True)),
     # k(): the int is the position of the case among the row's cases
     Convention("case_index", CReturn.int_status, False, (), True),
     # A status int: 0 is success, negative raised
@@ -496,6 +501,11 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
           COutcome(CTest.positive, _RES, (CSource.token,), False),
           COutcome(CTest.zero, _RES, (), False),
           COutcome(CTest.negative, _RES, (), False)),
+    # Whether a state bit is set: false the first case, true the second, whose
+    # payload is a proof
+    _conv("redirect_status", CReturn.bool,
+          COutcome(CTest.false, _RES, (), False),
+          COutcome(CTest.true, _RES, (CSource.token,), False)),
     # bool tests as two cases: true first
     _conv("bool_cases", CReturn.bool,
           COutcome(CTest.true, _RES, (), False),

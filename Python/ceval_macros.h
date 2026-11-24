@@ -194,6 +194,17 @@
 /* A planned arm's uop that may reenter Python: the whole-word completion
  * stub's ESCAPED bit (Python/generated_ir_stubs.c.h); nothing elsewhere */
 #define IR_STUB_ESCAPE() ((void)0)
+/* The word's frame had its control moved while it ran (a debugger's jump:
+ * pending_redirect and the continuation in return_pc): commit the jump and
+ * go on there.  The word's results were discarded before. */
+#define IR_REDIRECT() \
+    do { \
+        if (frame->pending_redirect) { \
+            _PyFrame_CompleteRedirect(frame); \
+        } \
+        next_instr = frame->return_pc; \
+        DISPATCH(); \
+    } while (0)
 #define DISPATCH_GOTO() goto *opcode_targets[opcode]
 /* An error leaves the handler for the shared label process_error, which
  * unwinds by the exception table and either dispatches at the handler found

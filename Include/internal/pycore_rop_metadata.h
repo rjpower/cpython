@@ -618,9 +618,9 @@ static const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {
 
 static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Add.Int", ROP_HANDLER_Add_Int, ROP_FAMILY_Add, 1},
-    {"Add.Generic", ROP_HANDLER_Add_Generic, ROP_FAMILY_Add, 0},
+    {"Add.Generic", ROP_HANDLER_Add_Generic, ROP_FAMILY_Add, 1},
     {"GetAttr.Instance", ROP_HANDLER_GetAttr_Instance, ROP_FAMILY_GetAttr, 1},
-    {"GetAttr.Generic", ROP_HANDLER_GetAttr_Generic, ROP_FAMILY_GetAttr, 0},
+    {"GetAttr.Generic", ROP_HANDLER_GetAttr_Generic, ROP_FAMILY_GetAttr, 1},
     {"GetAttr.Shape", ROP_HANDLER_GetAttr_Shape, ROP_FAMILY_GetAttr, 1},
     {"GetAttr.PolyShape", ROP_HANDLER_GetAttr_PolyShape, ROP_FAMILY_GetAttr, 1},
     {"GetAttr.Module", ROP_HANDLER_GetAttr_Module, ROP_FAMILY_GetAttr, 1},
@@ -631,7 +631,7 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"GetAttr.NonDescriptorValues", ROP_HANDLER_GetAttr_NonDescriptorValues, ROP_FAMILY_GetAttr, 1},
     {"GetAttr.NonDescriptorNoDict", ROP_HANDLER_GetAttr_NonDescriptorNoDict, ROP_FAMILY_GetAttr, 1},
     {"GetMethod.MethodValues", ROP_HANDLER_GetMethod_MethodValues, ROP_FAMILY_GetMethod, 1},
-    {"GetMethod.Generic", ROP_HANDLER_GetMethod_Generic, ROP_FAMILY_GetMethod, 0},
+    {"GetMethod.Generic", ROP_HANDLER_GetMethod_Generic, ROP_FAMILY_GetMethod, 1},
     {"GetMethod.PolyMethod", ROP_HANDLER_GetMethod_PolyMethod, ROP_FAMILY_GetMethod, 1},
     {"GetMethod.NoDict", ROP_HANDLER_GetMethod_NoDict, ROP_FAMILY_GetMethod, 1},
     {"GetMethod.LazyDict", ROP_HANDLER_GetMethod_LazyDict, ROP_FAMILY_GetMethod, 1},

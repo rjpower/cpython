@@ -122,3 +122,38 @@ extern helper retire_abandoned(a:Anchors, r:Route) -> Route
   evidence(
     review: "Reviewed P2. pycore_rop_rows.h: closes the anchors' owners.",
     contract: "Closes the anchors' owners only; the route is returned as it came.");
+
+// The values an anchor holds, in the order of the span it was made from.
+extern helper arg(a:Anchors, i:Size) -> B
+  effects(reads)
+  feedback()
+  borrows(a)
+  c _PyRop_AnchorArg as borrow
+  evidence(
+    review: "Reviewed P2. pycore_rop_rows.h: the view recorded by anchor_for_call.",
+    contract: "i is below the span's length. No memory, no Python, no failure. The"
+              "view stays valid while the anchor is live: a local is held by its"
+              "anchor's owner, a temporary by its home.");
+
+// Whether the frame's control moved while a call ran (a debugger's jump of
+// the line of the running word): redirected carries the route to the new
+// continuation.
+extern helper redirect_status(f:Frame)
+  cases(running(), redirected(r:Route))
+  effects(reads)
+  feedback()
+  c _PyRop_RedirectPending as redirect_status
+  evidence(
+    review: "Reviewed P2. frameobject.c f_lineno setter: a jump with a call in"
+            "flight sets pending_redirect and the continuation in return_pc.",
+    contract: "One read of the frame's pending_redirect bit. No memory, no Python,"
+              "no failure.");
+
+// Closes a result that was not committed
+extern helper discard_result(z:O) -> Unit
+  effects(releases)
+  feedback()
+  c _PyRop_DiscardResult as unit
+  evidence(
+    review: "Reviewed P2. pycore_rop_rows.h: PyValue_XCLOSE of the owner.",
+    contract: "Takes the owner. A finalizer may run Python. It does not fail.");

@@ -34,6 +34,7 @@
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
 #include "pycore_jit.h"           // _PyJitUnit
 #include "pycore_jit_lower.h"     // _PyJit_Templates
+#include "pycore_rop_metadata.h"  // _PyRop_Arms
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_list.h"          // _PyList_SetItemTakeValue()
 #include "pycore_object.h"        // _PyObject_IsFreed()

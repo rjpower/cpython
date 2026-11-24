@@ -249,6 +249,17 @@ ENVIRONMENT = {
     "next_head": Handle.Head,
 }
 
+# The C expression of each implicit name in every product.  The prologue of
+# a case, a function form and a stub binds the same names: `this_instr` is
+# the head's address (the stub's `site`), `next_instr` the head after the
+# instruction.  The activation has no C value yet and is not listed.
+ENVIRONMENT_C = {
+    "thread": "tstate",
+    "frame": "frame",
+    "site": "this_instr",
+    "next_head": "next_instr",
+}
+
 # Types of which an owner, error or resource must be accounted for: `_`
 # cannot discard them (rule 2), and F1 tracks them as linear tokens.
 LINEAR_HANDLES = frozenset({Handle.O, Handle.Err, Handle.Claim, Handle.Pin,
@@ -397,6 +408,7 @@ class CReturn(enum.Enum):
     value = "PyValue"            # an owned or inline word
     borrow = "PyValueBorrow"
     pointer = "pointer"          # an object or frame pointer handle
+    handle = "handle"            # the C type of the row's logical handle result
     int_status = "int"
     status_value = "_PyStatusValue"   # {int status; PyValue value;}
 
@@ -422,6 +434,7 @@ class CSource(enum.Enum):
     exception = "exception"          # the pending exception: an Err token
     nonzero = "nonzero"              # the C result compared with 0, as a Bool
     out = "out"                      # the scalar written through the last C parameter
+    token = "token"                  # a proof with no runtime value (a Ticket)
 
 
 @dataclass(frozen=True, slots=True)
@@ -467,6 +480,9 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
           single=True),
     _conv("borrow", CReturn.borrow, COutcome(CTest.always, _RES, (_RES,), False),
           single=True),
+    # The result is the C type of the logical handle (Anchors)
+    _conv("handle", CReturn.handle, COutcome(CTest.always, _RES, (_RES,), False),
+          single=True),
     _conv("pointer", CReturn.pointer, COutcome(CTest.always, _RES, (_RES,), False),
           single=True),
     # ok(v) when the word is not NULL, err(e) with the exception set
@@ -477,6 +493,11 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("pointer_or_null", CReturn.pointer,
           COutcome(CTest.nonnull, _RES, (_RES,), False),
           COutcome(CTest.null, _RES, (), False)),
+    # hit(v)/absent(): the bool says whether the value written through the
+    # last parameter is there; no exception
+    _conv("bool_out_hit", CReturn.bool,
+          COutcome(CTest.true, _RES, (CSource.out,), False, "hit"),
+          COutcome(CTest.false, _RES, (), False, "absent")),
     # A status int: 0 is success, negative raised
     _conv("int_zero_ok", CReturn.int_status,
           COutcome(CTest.zero, _RES, (), False),
@@ -486,6 +507,17 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
           COutcome(CTest.positive, _RES, (), False),
           COutcome(CTest.zero, _RES, (), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
+    # An adaptation status: positive changed (the ticket is a proof, not a
+    # value), zero same, negative blocked; none of them raises
+    _conv("ticket_status", CReturn.int_status,
+          COutcome(CTest.positive, _RES, (CSource.token,), False),
+          COutcome(CTest.zero, _RES, (), False),
+          COutcome(CTest.negative, _RES, (), False)),
+    # Whether a state bit is set: false the first case, true the second, whose
+    # payload is a proof
+    _conv("redirect_status", CReturn.bool,
+          COutcome(CTest.false, _RES, (), False),
+          COutcome(CTest.true, _RES, (CSource.token,), False)),
     # bool tests as two cases: true first
     _conv("bool_cases", CReturn.bool,
           COutcome(CTest.true, _RES, (), False),

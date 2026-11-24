@@ -633,8 +633,16 @@ _PyIR_Stub_BINARY_OP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWor
  * stub, which runs the word after a miss */
 
 /* The stubs of the register instruction arms, defined in generated_rop_stubs.c.h */
+static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 const _PyIRStubPlan _PyIR_StubPlans[512] = {
-    [419] = {_PyIR_PLAN_INLINE, 0, 419, NULL, NULL},  // Add_Int
+    [419] = {_PyIR_PLAN_INLINE, 0, 419, NULL, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Int
+    [420] = {_PyIR_PLAN_SHARED, 1, 420, (const void *)_PyIR_Rop_Stub_Add_Generic, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Generic
+    [421] = {_PyIR_PLAN_INLINE, 0, 421, NULL, NULL},  // GetAttr_Instance
+    [423] = {_PyIR_PLAN_INLINE, 0, 423, NULL, NULL},  // GetAttr_Shape
+    [424] = {_PyIR_PLAN_INLINE, 0, 424, NULL, NULL},  // GetAttr_PolyShape
+    [425] = {_PyIR_PLAN_INLINE, 0, 425, NULL, NULL},  // GetMethod_MethodValues
+    [427] = {_PyIR_PLAN_INLINE, 0, 427, NULL, NULL},  // GetMethod_PolyMethod
     [117] = {_PyIR_PLAN_SHARED, 1, 117, (const void *)_PyIR_Stub_UNPACK_SEQUENCE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE
     [124] = {_PyIR_PLAN_SHARED, 0, 124, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_LIST, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_LIST
     [125] = {_PyIR_PLAN_SHARED, 0, 125, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_TUPLE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_TUPLE

@@ -1447,6 +1447,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_ir_outcomes.h \
 		$(srcdir)/Include/internal/pycore_ir_source.h \
 		$(srcdir)/Include/internal/pycore_rop_metadata.h \
+		$(srcdir)/Include/internal/pycore_rop_rows.h \
 		$(srcdir)/Include/internal/pycore_iterobject.h \
 		$(srcdir)/Include/internal/pycore_jit.h \
 		$(srcdir)/Include/internal/pycore_jit_asm.h \
@@ -1466,6 +1467,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_modsupport.h \
 		$(srcdir)/Include/internal/pycore_moduleobject.h \
 		$(srcdir)/Include/internal/pycore_namespace.h \
+		$(srcdir)/Include/internal/pycore_attr_recipe.h \
 		$(srcdir)/Include/internal/pycore_object.h \
 		$(srcdir)/Include/internal/pycore_object_alloc.h \
 		$(srcdir)/Include/internal/pycore_object_deferred.h \

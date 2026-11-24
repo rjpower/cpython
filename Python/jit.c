@@ -642,6 +642,9 @@ resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *sit
     if (status & _PyIR_RAISED) {
         return (resolved_status){frame, NULL};
     }
+    if (status & _PyIR_REDIRECT) {
+        return (resolved_status){frame, frame->instr_ptr};
+    }
     _PyIRWord *next = (status & _PyIR_AGAIN) ? site : site + _PyIR_WordLength(*site);
     if ((status & _PyIR_ESCAPED) && (unit->invalid & _PyJIT_RETIRED)) {
         return (resolved_status){frame, next};
@@ -679,7 +682,8 @@ emit_status_cold(_PyJitCompiler *c, uint32_t i, _PyJitLabel status, _PyJitLabel 
              * bits are defined. */
             _PyJitLabel general = _PyJitAsm_NewLabel(a);
             _PyJitAsm_TestRI(a, R(RAX),
-                             _PyIR_MISS | _PyIR_RAISED | _PyIR_BRANCH | _PyIR_AGAIN);
+                             _PyIR_MISS | _PyIR_RAISED | _PyIR_BRANCH | _PyIR_AGAIN |
+                             _PyIR_REDIRECT);
             _PyJitAsm_Jcc(a, _PyJitCond_NE, general);
             _PyJitAsm_MovzxRM16(a, R(RCX), WORD_AT(i));
             _PyJitAsm_AluRI(a, _PyJitAlu_CMP, R(RCX), (int32_t)(w & 0xFFFF));
@@ -940,7 +944,7 @@ emit_unit(_PyJitCompiler *c)
         _PyJitAsm_Bind(a, c->labels[i]);
         const _PyIRStubPlan *plan = plan_of(c, c->words[i]);
         int arm = _PyJit_ArmOf(plan, c->words[i]);
-        _PyJitTemplate template = _PyJit_TemplateOf(arm);
+        _PyJitTemplate template = _PyJit_Templates[arm];
         if (plan->region == _PyIR_PLAN_SHARED) {
             emit_stub_word(c, i, plan);
         }

@@ -540,6 +540,21 @@ class CheckTests(unittest.TestCase):
          [(1, 52, "fact object takes no type argument")]),
         ("extern helper h(v:B) -> O effects() ensures(result.exact<frozenset>(result)) "
          "pending;", []),
+        # An optional owner may bind an optional destination, not a plain one
+        ("family F(d:Dst, e:Maybe<Dst>, x:Src) exits(next);\n"
+         "point F.Done(current, next_head, clear) keep() spent(x) defs(d, e) held();\n"
+         "extern helper h(v:B) -> Maybe<O> effects() pending;\n"
+         "arm F.A inline effects(writes, releases) feedback() exits(next)\n"
+         "{ entry(): let m:Maybe<O> = h(use(x));\n"
+         "  publish [e = m] retire [spent(x), old(e)] at F.Done; exit next(); }",
+         []),
+        ("family F(d:Dst, x:Src) exits(next);\n"
+         "point F.Done(current, next_head, clear) keep() spent(x) defs(d) held();\n"
+         "extern helper h(v:B) -> Maybe<O> effects() pending;\n"
+         "arm F.A inline effects(writes, releases) feedback() exits(next)\n"
+         "{ entry(): let m:Maybe<O> = h(use(x));\n"
+         "  publish [d = m] retire [spent(x), old(d)] at F.Done; exit next(); }",
+         [(6, 16, "m is Maybe<O>, expected O")]),
         # Parameter modes: borrows names a linear parameter, spends a source
         # one, and spending releases
         ("extern helper h(a:Anchors, s:Span<Src>, e:Err) -> Err effects(releases) "
@@ -621,10 +636,11 @@ class DefinitionTests(unittest.TestCase):
                          ["Add.Generic", "Add.Int"])
         self.assertIn("GetAttr.Instance", p.arms)
         self.assertIsNotNone(p.macros["adapt_before_use_add"].graph)
+        self.assertIsNotNone(p.macros["binary_at_origin"].graph)
 
     def test_pending_rows(self):
         pending = set(self.program.pending)
-        for name in ("tick", "install", "admitted_instance_slot"):
+        for name in ("getattr_at_origin",):
             self.assertIn(name, pending)
         for x in self.program.externs.values():
             if x.c is not None:

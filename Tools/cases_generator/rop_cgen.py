@@ -15,14 +15,14 @@ generated C uses the value API and never `.bits`.
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from rop_catalog import (CONVENTIONS, CReturn, CSource, CTest, DebtKind, Effect, Fact,
+from rop_catalog import (ENVIRONMENT_C, Schema, CONVENTIONS, CReturn, CSource, CTest, DebtKind, Effect, Fact,
                          FieldKind,
-                         Handle, Scalar, Slot, Wrap)
+                         Handle, Scalar, SchemaCtor, Slot, Wrap)
 from rop_check import GraphInfo, Program
-from rop_model import (Advance, Arm, BoolLit, Branch, Call, CallTerm, Cases,
-                       Each, Exit, Expr, Extern, Goto, Guard, HandleType, Let,
-                       Name, Nat, Placement, Publish, ScalarType, Target, Type,
-                       WrapType)
+from rop_model import (Advance, Arm, BoolLit, Branch, Binding, Block, Call, CallTerm,
+                       Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
+                       HandleType, Let, Name, Nat, Param, Placement, Publish,
+                       ScalarType, SchemaType, SchemaVar, SpanLit, Target, Type, WrapType)
 
 
 class Unsupported(Exception):
@@ -42,10 +42,16 @@ HANDLE_C = {
     Handle.B: "PyValueBorrow",
     Handle.O: "PyValue",
     Handle.Obj: "PyObject *",
+    Handle.Anchors: "_PyRopAnchors",
 }
+
+# Linear tokens that the generated C does not carry as values
+TOKENS = frozenset({Handle.Err, Handle.Route})
 
 # Effects after which Python may have run: a stub reports ESCAPED
 ESCAPING = frozenset({Effect.runs_python, Effect.polls})
+# A call that may release an owner may run a finalizer
+ESCAPING_CALL = ESCAPING | {Effect.releases}
 
 # Names the handler's C scope owns
 RESERVED = frozenset({
@@ -88,18 +94,27 @@ def source_text(source: CSource, ret: str, out: str | None) -> str:
         case CSource.out:
             assert out is not None
             return out
-        case CSource.exception:
+        case CSource.exception | CSource.token:
             return ""
+
+
+# The C entry type of each feedback schema whose arms are lowered
+SCHEMA_C = {Schema.Binary: "_PyFbBinary", Schema.Attr: "_PyFbAttr",
+            Schema.Global: "_PyFbGlobal", Schema.Call: "_PyFbCall"}
 
 
 def c_type(t: Type) -> str | None:
     """The C type of a graph value, None for one that has no C variable"""
+    if isinstance(t, SchemaType) and t.ctor is SchemaCtor.Recipe:
+        return {Schema.Attr: "_PyAttrRecipe"}.get(t.schema)
     if isinstance(t, ScalarType):
         return SCALAR_C.get(t.scalar)
     if isinstance(t, HandleType):
         return HANDLE_C.get(t.handle)
     if isinstance(t, WrapType) and t.wrap is Wrap.Maybe:
         return c_type(t.arg)
+    if isinstance(t, SchemaType) and t.ctor is SchemaCtor.Candidate:
+        return "int"
     return None
 
 
@@ -124,14 +139,133 @@ def intersect(facts: list[dict[str, frozenset]]) -> dict[str, frozenset]:
     return out
 
 
+# Macro expansion.  A call of a macro with a graph is replaced by that graph,
+# its names prefixed and its parameters replaced by the call's arguments;
+# each of its exits becomes a goto to the caller's edge for that case.  The
+# lowering then sees only rows.
+
+@dataclass(frozen=True)
+class FlatGraph:
+    blocks: Mapping[str, Block]
+    types: Mapping[str, Type]
+    order: tuple[str, ...]
+
+
+def rename_expr(e: Expr, names: Mapping[str, Expr]) -> Expr:
+    if isinstance(e, Name):
+        return names.get(e.name, e)
+    if isinstance(e, Call):
+        return Call(e.callee, tuple(rename_expr(a, names) for a in e.args), e.span)
+    if isinstance(e, SpanLit):
+        return SpanLit(tuple(rename_expr(a, names) for a in e.items), e.span)
+    return e
+
+
+def successors(term) -> list[str]:
+    if isinstance(term, Goto):
+        return [term.target.label]
+    if isinstance(term, Branch):
+        return [term.if_true.label, term.if_false.label]
+    if isinstance(term, CallTerm):
+        return [e.target.label for e in term.edges]
+    if isinstance(term, Each):
+        return [term.body, term.exhaust.label]
+    return []
+
+
+def flatten(program: Program, arm: Arm) -> FlatGraph:
+    blocks: dict[str, Block] = {b.label: b for b in arm.graph.blocks}
+    types: dict[str, Type] = dict(program.graphs[arm.name].types)
+    work = list(blocks)
+    instances = 0
+    while work:
+        label = work.pop()
+        block = blocks[label]
+        term = block.term
+        macro = program.macros.get(term.callee) if isinstance(term, CallTerm) else None
+        if macro is None or macro.graph is None:
+            continue
+        instances += 1
+        prefix = f"{macro.name}{instances}_"
+        info = program.graphs[macro.name]
+        own = {b.label for b in macro.graph.blocks}
+        local = {p.name for b in macro.graph.blocks for p in b.params}
+        local |= {st.name for b in macro.graph.blocks for st in b.stmts
+                  if isinstance(st, Let) and st.name != DISCARD}
+        names: dict[str, Expr] = {n: Name(prefix + n) for n in local}
+        binds: list[Let] = []
+        for p, a in zip(macro.params, term.args):
+            if isinstance(a, (Name, SpanLit)):
+                names[p.name] = a
+            else:
+                names[p.name] = Name(prefix + p.name)
+                binds.append(Let(prefix + p.name, p.type, a))
+                types[prefix + p.name] = p.type
+        for n in local:
+            types[prefix + n] = info.types[n]
+        edges = {e.case: e.target for e in term.edges}
+
+        def target(t: Target, extra: tuple[Expr, ...] = ()) -> Target:
+            return Target(prefix + t.label,
+                          extra + tuple(rename_expr(a, names) for a in t.args))
+
+        for mb in macro.graph.blocks:
+            stmts = []
+            for st in mb.stmts:
+                if isinstance(st, Let):
+                    stmts.append(Let(st.name if st.name == DISCARD else prefix + st.name,
+                                     st.type,
+                                     rename_expr(st.value, names)))
+                elif isinstance(st, Guard):
+                    stmts.append(Guard(rename_expr(st.cond, names)))
+                else:
+                    raise Unsupported(f"{macro.name}: a publish in a macro")
+            t = mb.term
+            if isinstance(t, Exit):
+                payload = tuple(rename_expr(a, names) for a in t.args)
+                out = edges[t.kind]
+                new = Goto(Target(out.label, payload + out.args))
+            elif isinstance(t, Goto):
+                new = Goto(target(t.target))
+            elif isinstance(t, Branch):
+                new = Branch(rename_expr(t.cond, names), target(t.if_true),
+                             target(t.if_false))
+            elif isinstance(t, CallTerm):
+                new = CallTerm(t.callee,
+                               tuple(rename_expr(a, names) for a in t.args),
+                               tuple(Edge(e.case, target(e.target)) for e in t.edges))
+            else:
+                raise Unsupported(f"{macro.name}: {type(t).__name__} in a macro")
+            params = tuple(Param(prefix + p.name, p.type) for p in mb.params)
+            first = binds if mb.label == "entry" else []
+            blocks[prefix + mb.label] = Block(prefix + mb.label, params,
+                                              tuple(first + stmts), new)
+            work.append(prefix + mb.label)
+        blocks[label] = Block(label, block.params, block.stmts,
+                              Goto(Target(prefix + "entry", ())))
+    seen: set[str] = set()
+    post: list[str] = []
+
+    def visit(label: str) -> None:
+        if label in seen:
+            return
+        seen.add(label)
+        for nxt in successors(blocks[label].term):
+            visit(nxt)
+        post.append(label)
+
+    visit("entry")
+    return FlatGraph(blocks, types, tuple(reversed(post)))
+
+
 # Facts known on entry to each block, by a forward pass over the blocks in
 # reverse postorder.  A guard grants the facts its row's `test` declares,
 # a case grants its row's `ensures`, and a block parameter keeps what every
 # incoming edge grants.
 
-def arm_facts(program: Program, arm: Arm) -> dict[str, Facts]:
-    info = program.graphs[arm.name]
-    blocks = {b.label: b for b in arm.graph.blocks}
+def arm_facts(program: Program, flat: FlatGraph) -> dict[str, Facts]:
+    info = flat
+    blocks = dict(flat.blocks)
     facts_in: dict[str, Facts] = {}
     incoming: dict[str, list[dict[str, frozenset]]] = {b: [] for b in info.order}
     incoming["entry"] = [{}]
@@ -255,10 +389,10 @@ def pending_blockers(program: Program, arm: Arm) -> list[str]:
     return sorted(found)
 
 
-def home_views(arm: Arm) -> dict[str, str]:
+def home_views(flat: FlatGraph) -> dict[str, str]:
     """The value each `let v = use(x)` binds, by home operand"""
     views: dict[str, str] = {}
-    for b in arm.graph.blocks:
+    for b in flat.blocks.values():
         for s in b.stmts:
             if (isinstance(s, Let) and isinstance(s.value, Call)
                     and s.value.callee == "use"):
@@ -272,6 +406,7 @@ def home_views(arm: Arm) -> dict[str, str]:
 class Lowering:
     """The statements of one arm, with its decoding and labels"""
     arm: str
+    words: int = 0           # operand words after the head, which dispatch skips
     decls: list[str] = field(default_factory=list)
     body: list[str] = field(default_factory=list)
 
@@ -282,7 +417,7 @@ class ArmLowerer:
                  ) -> None:
         self.program = program
         self.arm = arm
-        self.info: GraphInfo = program.graphs[arm.name]
+        self.info: FlatGraph = flatten(program, arm)
         self.family = program.families[arm.family]
         self.enc = program.encodings[arm.family]
         self.placements: dict[str, Placement] = {
@@ -290,7 +425,7 @@ class ArmLowerer:
         self.points = points
         self.generic = generic
         self.prefix = "rop_" + arm.name.replace(".", "_")
-        self.blocks = {b.label: b for b in arm.graph.blocks}
+        self.blocks = dict(self.info.blocks)
         self.lines: list[str] = []
         self.decls: list[str] = []
         self.declared: set[str] = set()
@@ -300,6 +435,7 @@ class ArmLowerer:
         self.facts_in: dict[str, Facts] = {}
         self.targeted: set[str] = set()      # blocks reached by a goto
         self.next_label: str | None = None
+        self.acquired: set[str] = set()      # operands whose owner acquire() took
 
     # Names
 
@@ -327,12 +463,22 @@ class ArmLowerer:
 
     def slot(self, operand: str) -> Slot:
         p = self.placements[operand]
-        if p.kind is not FieldKind.home and p.kind is not FieldKind.feedback:
+        if p.kind not in (FieldKind.home, FieldKind.feedback, FieldKind.name):
             raise Unsupported(f"{self.arm.name}: operand {operand} is a {p.kind.name} field")
         (slot,) = p.slots
-        if slot.word != 0:
+        if slot.word != 0 and p.kind is not FieldKind.feedback:
             raise Unsupported(f"{self.arm.name}: operand {operand} is in an operand word")
         return slot
+
+    def field(self, operand: str) -> str:
+        """The C expression of an operand's field.  The head's fields are
+        IR_A to IR_D; a field of an operand word is read from the word at its
+        place after the head, which the handler has not yet passed over."""
+        slot = self.slot(operand)
+        if slot.word == 0:
+            return f"IR_{slot.name}(ir_word)"
+        return (f"((uint32_t)(this_instr[{slot.word}] >> {slot.offset - 64 * slot.word})"
+                f" & {(1 << slot.width) - 1:#x})")
 
     def home(self, operand: str) -> str:
         """The address of an operand's home, declared on first use"""
@@ -350,7 +496,8 @@ class ArmLowerer:
 
     def type_of(self, e: Expr) -> Type:
         if isinstance(e, Name):
-            return self.info.types[e.name]
+            # An enum member has no entry: it is the C constant of its name
+            return self.info.types.get(e.name)
         if isinstance(e, Nat):
             return ScalarType(Scalar.U64)
         if isinstance(e, BoolLit):
@@ -358,12 +505,47 @@ class ArmLowerer:
         if isinstance(e, Call):
             if e.callee == "use":
                 return HandleType(Handle.B)
-            if e.callee == "dup":
+            if e.callee in ("dup", "acquire"):
                 return HandleType(Handle.O)
+            if e.callee == "candidate":
+                return None
             x = self.program.externs.get(e.callee)
             if x is not None and not isinstance(x.result, Cases):
                 return x.result.type
         raise Unsupported(f"{self.arm.name}: the type of {e}")
+
+    def srcs(self, e: SpanLit) -> str:
+        """The homes and local flags of a span of source operands"""
+        names = []
+        for item in e.items:
+            if not isinstance(item, Name) or item.name not in self.placements:
+                raise Unsupported(f"{self.arm.name}: a span item {item} is not an operand")
+            names.append(item.name)
+        homes = ", ".join(self.home(n) for n in names)
+        flags = ", ".join(f"!!(ir_word & {self.local_flag(n)})" for n in names)
+        return (f"&(_PyRopSrcs){{frame, {len(names)}, {{{flags}}}, {{{homes}}}}}")
+
+    def c_args(self, args, params) -> list[str]:
+        """The C arguments of a row call: a token has no value, an anchor
+        and a span of sources are passed by address"""
+        out = []
+        for a, p in zip(args, params):
+            t = p.type
+            if isinstance(t, HandleType) and t.handle in TOKENS:
+                continue
+            if isinstance(t, SchemaType) and t.ctor is SchemaCtor.Ticket:
+                continue
+            if isinstance(a, SpanLit):
+                out.append(self.srcs(a))
+            elif isinstance(t, HandleType) and t.handle is Handle.Anchors:
+                out.append("&" + self.expr_text(a))
+            elif (isinstance(t, SchemaType) and t.ctor is SchemaCtor.Fb
+                  and isinstance(t.schema, SchemaVar)):
+                # A row over every schema reads the entry's common header
+                out.append(f"&{self.expr_text(a)}->h")
+            else:
+                out.append(self.expr(a, t))
+        return out
 
     def expr(self, e: Expr, want: Type | None = None) -> str:
         text = self.expr_text(e)
@@ -377,7 +559,11 @@ class ArmLowerer:
     def expr_text(self, e: Expr) -> str:
         if isinstance(e, Name):
             if e.name in self.placements:
-                raise Unsupported(f"{self.arm.name}: operand {e.name} used as a value")
+                return self.operand_value(e.name)
+            if e.name in ENVIRONMENT_C:
+                return ENVIRONMENT_C[e.name]
+            if e.name not in self.info.types:
+                return e.name.rsplit(".", 1)[-1]
             return self.local(e.name)
         if isinstance(e, Nat):
             return str(e.value)
@@ -387,6 +573,20 @@ class ArmLowerer:
             return self.call_expr(e)
         raise Unsupported(f"{self.arm.name}: expression {e}")
 
+    def operand_value(self, operand: str) -> str:
+        """A name or feedback operand read as a value: the interned name, or
+        the site's entry (the entry is declared by its own field)"""
+        p = self.placements[operand]
+        if p.kind is FieldKind.name:
+            return f"GETITEM(FRAME_CO_NAMES, {self.field(operand)})"
+        if p.kind is FieldKind.feedback:
+            param = next(x for x in self.family.params if x.name == operand)
+            schema = param.type.schema
+            if schema not in SCHEMA_C:
+                raise Unsupported(f"{self.arm.name}: no C entry type for feedback {schema}")
+            return f"(({SCHEMA_C[schema]} *)IR_FB({self.field(operand)}))"
+        raise Unsupported(f"{self.arm.name}: operand {operand} used as a value")
+
     def call_expr(self, e: Call) -> str:
         if e.callee == "use":
             (arg,) = e.args
@@ -395,23 +595,35 @@ class ArmLowerer:
         if e.callee == "dup":
             (arg,) = e.args
             return f"PyValue_DUP({self.expr_text(arg)})"
+        if e.callee == "acquire":
+            # The owner of a dying source: a local keeps its binding, so the
+            # instruction takes a count of its own; a temporary gives its own
+            (arg,) = e.args
+            assert isinstance(arg, Name)
+            home = self.home(arg.name)
+            self.acquired.add(arg.name)
+            return (f"((ir_word & {self.local_flag(arg.name)}) ? PyValue_DUP(*{home}) "
+                    f": _PyFrame_TakeHome(frame, {home}))")
         if e.callee == "unwrap":
             (arg,) = e.args
             return self.expr_text(arg)
+        if e.callee == "candidate":
+            arm = e.args[0]
+            assert isinstance(arm, Name)
+            return "ROP_HANDLER_" + arm.name.replace(".", "_")
         x = self.program.externs.get(e.callee)
         if x is None or x.c is None:
             raise Unsupported(f"{self.arm.name}: {e.callee} has no C body (pending)")
         conv = CONVENTIONS[x.c.convention]
         if not conv.single:
             raise Unsupported(f"{self.arm.name}: {e.callee} has cases; use a call")
-        args = ", ".join(self.expr(a, p.type) for a, p in zip(e.args, x.params))
-        return f"{x.c.symbol}({args})"
+        return f"{x.c.symbol}({', '.join(self.c_args(e.args, x.params))})"
 
     # Statements
 
     def lower(self) -> Lowering:
-        self.facts_in = arm_facts(self.program, self.arm)
-        self.views = home_views(self.arm)
+        self.facts_in = arm_facts(self.program, self.info)
+        self.views = home_views(self.info)
         order = self.layout()
         for i, label in enumerate(order):
             self.next_label = order[i + 1] if i + 1 < len(order) else None
@@ -424,7 +636,8 @@ class ArmLowerer:
         body = []
         for line in self.lines:
             body.append(line)
-        return Lowering(self.arm.name, self.decls, self.drop_unused_labels(body))
+        return Lowering(self.arm.name, self.enc.words, self.decls,
+                        self.drop_unused_labels(body))
 
     def drop_unused_labels(self, lines: list[str]) -> list[str]:
         text = "\n".join(lines)
@@ -484,9 +697,17 @@ class ArmLowerer:
 
     def lower_let(self, s: Let) -> None:
         t = c_type(s.type)
+        if isinstance(s.value, Call):
+            x = self.program.externs.get(s.value.callee)
+            if x is not None and x.contract.effect_set & ESCAPING_CALL:
+                self.emit("IR_STUB_ESCAPE();")
         text = self.expr(s.value, s.type)
         if t is None:
-            raise Unsupported(f"{self.arm.name}: let {s.name} has no C type")
+            # A Unit or a token: the row runs for its effect
+            if not isinstance(s.value, Call):
+                raise Unsupported(f"{self.arm.name}: let {s.name} has no C type")
+            self.emit(f"{text};")
+            return
         self.declare(self.local(s.name), t)
         self.emit(f"{s.name} = {text};")
 
@@ -507,10 +728,14 @@ class ArmLowerer:
                        key=lambda d: order.index(d.subject))
         olds = [d for d in s.debts if d.kind is DebtKind.old]
         for d in s.debts:
-            if d.kind not in (DebtKind.spent, DebtKind.old):
+            if d.kind not in (DebtKind.spent, DebtKind.old, DebtKind.roots):
                 raise Unsupported(f"{self.arm.name}: debt {d.kind.name} is not lowered yet")
         owners: dict[str, str | None] = {}
         for d in spent:
+            if d.subject in self.acquired:
+                # acquire() already took the owner or a count of its own
+                owners[d.subject] = None
+                continue
             home, flag = self.home(d.subject), self.local_flag(d.subject)
             view = self.views.get(d.subject)
             if view is not None and facts.has(view, Fact.inline_int):
@@ -538,6 +763,8 @@ class ArmLowerer:
                 self.emit(f"PyValue_XCLOSE({owners[d.subject]});")
             elif d.kind is DebtKind.old:
                 self.emit(f"PyValue_XCLOSE(old_{d.subject});")
+            elif d.kind is DebtKind.roots:
+                self.emit(f"_PyRop_CloseAnchors(&{d.subject});")
 
     # Terminators
 
@@ -581,7 +808,7 @@ class ArmLowerer:
         if x is None or x.c is None:
             raise Unsupported(f"{self.arm.name}: {t.callee} has no C body (pending)")
         conv = CONVENTIONS[x.c.convention]
-        args = [self.expr(a, p.type) for a, p in zip(t.args, x.params)]
+        args = self.c_args(t.args, x.params)
         cases = x.result.cases
         edges = {e.case: e for e in t.edges}
         out = None
@@ -592,7 +819,7 @@ class ArmLowerer:
         # and the payloads that read it
         inline = conv.returns is CReturn.bool and len(conv.outcomes) == 2
         ret = f"{x.c.symbol}({', '.join(args)})"
-        if x.contract.effect_set & ESCAPING:
+        if x.contract.effect_set & ESCAPING_CALL:
             self.emit("IR_STUB_ESCAPE();")
         if not inline:
             call = ret
@@ -617,6 +844,12 @@ class ArmLowerer:
             self.emit("DISPATCH();")
         elif t.kind == "miss":
             self.emit(self.miss())
+        elif t.kind == "redirect":
+            self.emit("IR_REDIRECT();")
+        elif t.kind == "again":
+            # The word runs again, under the handler it now names
+            self.emit("next_instr = this_instr;")
+            self.emit("DISPATCH_SAME_OPARG();")
         elif t.kind == "raise":
             point = t.args[0]
             assert isinstance(point, Name)

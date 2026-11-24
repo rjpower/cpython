@@ -112,13 +112,13 @@ _PyIRWord *const this_instr = next_instr;
 (void)this_instr;
 frame->instr_ptr = next_instr;
 IR_HOLD_NEXT();
-next_instr += 1;
+next_instr += {advance};
 INSTRUCTION_STATS({handler});"""
 
 
 def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
     lines = [f"// {arm.name} ({arm.region.name})"]
-    lines += PROLOGUE.format(handler=handler(arm.name)).splitlines()
+    lines += PROLOGUE.format(handler=handler(arm.name), advance=1 + low.words).splitlines()
     lines += low.decls
     lines += low.body
     return [indent + line if line else line for line in lines]
@@ -193,6 +193,8 @@ STUB_PREAMBLE = """\
 #undef PROCESS_ERROR_AT
 #pragma push_macro("IR_STUB_ESCAPE")
 #undef IR_STUB_ESCAPE
+#pragma push_macro("IR_REDIRECT")
+#undef IR_REDIRECT
 #pragma push_macro("PyValue_CLOSE")
 #undef PyValue_CLOSE
 #pragma push_macro("PyValue_XCLOSE")
@@ -209,6 +211,12 @@ STUB_PREAMBLE = """\
         return ir_status | _PyIR_RAISED; \\
     } while (0)
 #define IR_STUB_ESCAPE() (ir_status |= _PyIR_ESCAPED)
+#define IR_REDIRECT() do { \\
+        if (frame->pending_redirect) { \\
+            _PyFrame_CompleteRedirect(frame); \\
+        } \\
+        return ir_status | _PyIR_ESCAPED | _PyIR_REDIRECT; \\
+    } while (0)
 #define PyValue_CLOSE(V) _PyIR_STUB_RELEASE(PyValue_CLOSE, V)
 #define PyValue_XCLOSE(V) _PyIR_STUB_RELEASE(PyValue_XCLOSE, V)
 """
@@ -216,6 +224,7 @@ STUB_PREAMBLE = """\
 STUB_EPILOGUE = """\
 #pragma pop_macro("PyValue_XCLOSE")
 #pragma pop_macro("PyValue_CLOSE")
+#pragma pop_macro("IR_REDIRECT")
 #pragma pop_macro("IR_STUB_ESCAPE")
 #pragma pop_macro("PROCESS_ERROR_AT")
 #pragma pop_macro("JUMP_TO_PREDICTED")
@@ -391,6 +400,16 @@ def template_texts(p: Products) -> tuple[dict[str, list[str]], dict[str, str]]:
     return made, refused
 
 
+def template_arm_names(paths: list[Path] | None = None) -> list[str]:
+    """The C names of the arms that have a template, for the one table of
+    templates that jit_template_generator.py writes"""
+    program = rop_check.load(paths or sorted(ROP_DIR.glob("*.rop")))
+    if program.diagnostics:
+        raise GenerateError("\n".join(str(d) for d in program.diagnostics))
+    made, _ = template_texts(lower_all(program, number_arms(program)))
+    return [c_name(name) for name in made]
+
+
 def write_templates(out: TextIO, p: Products, sources: list[str]) -> None:
     made, refused = template_texts(p)
     write_header(__file__, sources, out)
@@ -400,10 +419,6 @@ def write_templates(out: TextIO, p: Products, sources: list[str]) -> None:
     out.write("\n")
     for lines in made.values():
         out.write("\n".join(lines) + "\n\n")
-    out.write("const _PyJitTemplate _PyJit_RopTemplates[ROP_NUM_HANDLERS] = {\n")
-    for name in made:
-        out.write(f"    [{handler(name)} - ROP_FIRST_HANDLER] = jit_template_{c_name(name)},\n")
-    out.write("};\n")
 
 
 # Metadata

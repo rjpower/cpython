@@ -148,11 +148,9 @@ PyAPI_FUNC(int) _PyJitLower_ComparisonDouble(_PyJitWordCx *cx, const uint8_t *op
    and puts the unit's tests (pycore_jit.h) behind the exits that need them. */
 typedef void (*_PyJitTemplate)(_PyJitWordCx *cx);
 
-/* By handler; NULL for a handler that keeps its form's call */
+/* By handler, the old handlers' and the register arms'; NULL for a handler
+   that keeps its form's call */
 PyAPI_DATA(const _PyJitTemplate) _PyJit_Templates[];
-/* The template of a handler of either table: the old handlers' and the
-   register arms' (Python/generated_rop_templates.c.h) */
-PyAPI_FUNC(_PyJitTemplate) _PyJit_TemplateOf(int handler);
 
 /* Python/ceval.c: the address of the raise exit of a template, which
    machine code calls as _PyIRTransfer f(PyThreadState *, _PyInterpreterFrame *) */

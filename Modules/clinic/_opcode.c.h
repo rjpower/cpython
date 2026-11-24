@@ -759,7 +759,11 @@ PyDoc_STRVAR(_opcode_get_exception_entries__doc__,
 "get_exception_entries($module, code, /)\n"
 "--\n"
 "\n"
-"Return admitted (start, end, target, slot, lasti) exception entries.");
+"Return admitted exception entries.\n"
+"\n"
+"Each is (start, end, target, slot, lasti, recipe).  The recipe is a\n"
+"tuple of the (source, home) slot pairs that the unwinder moves before\n"
+"it enters the handler.");
 
 #define _OPCODE_GET_EXCEPTION_ENTRIES_METHODDEF    \
     {"get_exception_entries", _PyCFunction_CAST(_opcode_get_exception_entries), METH_VALUE|METH_O, _opcode_get_exception_entries__doc__},
@@ -814,4 +818,4 @@ _opcode_get_recovery_entries(PyValueBorrow module, const PyValue *args, Py_ssize
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=6e605283b48d51c8 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=cf115a474e8333c4 input=a9049054013a1b77]*/

@@ -426,7 +426,7 @@ _Instruction.fb.__doc__ = "Unit of the instruction's feedback entry (if any), ot
 _Instruction.length.__doc__ = "Number of words of the instruction: 1, or more for a call with operand words"
 
 _ExceptionTableEntryBase = collections.namedtuple("_ExceptionTableEntryBase",
-    "start end target slot lasti")
+    "start end target slot lasti recipe")
 
 class _ExceptionTableEntry(_ExceptionTableEntryBase):
     pass
@@ -799,7 +799,8 @@ class Formatter:
                 start = entry.start_label
                 end = entry.end_label
                 target = entry.target_label
-                print(f"  L{start} to L{end} -> L{target} [r{entry.slot}]{lasti}", file=file)
+                moves = "".join(f" r{home}<-r{src}" for src, home in entry.recipe)
+                print(f"  L{start} to L{end} -> L{target} [r{entry.slot}]{lasti}{moves}", file=file)
 
 
 class ArgResolver:
@@ -1143,7 +1144,7 @@ def _disassemble_recursive(co, *, file=None, depth=None, show_caches=False, adap
 def _make_labels_map(original_code, exception_entries=(), fbinit=None):
     jump_targets = set(_findlabels(original_code, fbinit))
     labels = set(jump_targets)
-    for start, end, target, _, _ in exception_entries:
+    for start, end, target, *_ in exception_entries:
         labels.add(start)
         labels.add(end)
         labels.add(target)

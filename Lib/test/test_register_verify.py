@@ -492,7 +492,37 @@ extern helper check(f:Fb<Binary>) cases(ok(), err(e:Err)) effects(raises) pendin
 """
 
 
+# A borrow projected from an anchor lives as long as the anchor token
+ANCHORED = VERIFY_BASE + """\
+extern helper arg(a:Anchors, i:Size) -> B effects(reads) feedback() borrows(a) pending;
+macro anchored_across(a:Anchors) cases(done()) effects(writes, reads) feedback() borrows(a)
+{
+  entry():
+    let w:B = arg(a, 0);
+    let _:Unit = scribble();
+    let v:B = peek(w);
+    exit done();
+}
+macro anchored_after_close(a:Anchors) cases(done()) effects(releases, reads) feedback()
+{
+  entry():
+    let w:B = arg(a, 0);
+    let _:Unit = drop_anchors(a);
+    let v:B = peek(w);
+    exit done();
+}
+"""
+
+
 class VerifyTests(unittest.TestCase):
+    def test_anchored_borrow(self):
+        found = verify_source(ANCHORED)
+        self.assertEqual(len(found), 1, found)
+        (line, column, definition, message) = found[0]
+        self.assertEqual(definition, "anchored_after_close")
+        self.assertTrue(message.startswith("borrow: w (anchored borrow by arg(...)"),
+                        message)
+
     def test_base_is_clean(self):
         self.assertEqual(verify_source(VERIFY_BASE), [])
 
@@ -546,7 +576,7 @@ class PilotTests(unittest.TestCase):
     def test_pilot_is_clean(self):
         program = rop_verify.load(rop_files())
         self.assertEqual([str(d) for d in program.diagnostics], [])
-        self.assertEqual(rop_verify.missing_generic(program), ("GetAttr",))
+        self.assertEqual(rop_verify.missing_generic(program), ())
 
     def test_pilot_mutations(self):
         # Changes to the pilot that the checker refuses.  Diagnostics name
@@ -557,6 +587,8 @@ class PilotTests(unittest.TestCase):
         retire = at("add.rop", "let saved:Err = retire_failed_call(")
         dup = at("getattr.rop", "let result:O = dup(unwrap(item));")
         guard = at("getattr.rop", "guard present(item) else miss;")
+        raise_attr = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5)
+        raise_method = at("getattr.rop", "exit raise(GetMethod.Failed, saved);", 5)
         mutations = [
             ("add.rop", "  effects(writes, allocates, raises, releases)\n",
              "  effects(writes, raises, releases)\n",
@@ -583,7 +615,11 @@ class PilotTests(unittest.TestCase):
              [f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
               "lists x in spent, but x is intact",
               f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
-              "lists y in spent, but y is intact"]),
+              "lists y in spent, but y is intact",
+              f"{raise_attr}: GetAttr.Generic: points: raise at GetAttr.Failed: "
+              "GetAttr.Failed lists obj in spent, but obj is intact",
+              f"{raise_method}: GetMethod.Generic: points: raise at GetMethod.Failed: "
+              "GetMethod.Failed lists obj in spent, but obj is intact"]),
         ]
         for filename, old, new, expected in mutations:
             with self.subTest(old):

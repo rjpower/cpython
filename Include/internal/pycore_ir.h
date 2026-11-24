@@ -686,7 +686,17 @@ typedef struct _PyCodeIR {
      * position of each (_PyIRPositions_EncodeEvent()) */
     uint8_t *records;
     uint8_t *positions;
+    /* The ingress recipes of exceptional edges, which an exception entry
+     * and a recovery event name by index + 1 (0: none).  A recipe is a
+     * count n, then n pairs of a source slot and the home of a handler's
+     * parameter: the unwinder takes every source, then puts each in its
+     * home, releasing what the home held. */
+    int32_t *recipes;
+    uint32_t nrecipes;          // int32 entries of recipes
 } _PyCodeIR;
+
+/* The most pairs of a recipe */
+#define _PyIR_RECIPE_MAX 16
 
 /* The compiler proved that reads of the empty **kwargs binding materialize it */
 #define _PyIR_CODE_VIRTUAL_KWARGS 1

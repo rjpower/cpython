@@ -42,13 +42,17 @@ extern int _PyEval_SetTraceValueAllThreads(PyInterpreterState *interp, _Py_value
 
 extern int _PyEval_SetOpcodeTrace(PyFrameObject *f, bool enable);
 
-/* Semantic exception recovery, independent of source attribution. Four ints
- * are returned in rax:rdx on x86-64 SysV without addressable result storage. */
+/* Semantic exception recovery, independent of source attribution: the
+ * handler's word, the slot of the exception, whether lasti is below it, and
+ * the edge's ingress recipe (_PyCodeIR.recipes, index + 1, or 0).  Sixteen
+ * bytes are returned in rax:rdx on x86-64 SysV without addressable result
+ * storage. */
 typedef struct {
-    int handled;
     int exc_slot;
     int handler;
-    int lasti;
+    int recipe;
+    uint8_t handled;
+    uint8_t lasti;
 } _PyExceptionHandler;
 
 /* An activation's entry frame: the frame below its first Python frame */

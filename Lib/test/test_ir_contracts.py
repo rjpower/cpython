@@ -880,8 +880,9 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual(rows["spam"].exits, {"raise", "exit"})
         self.assertEqual(rows["spam"].feedback, {("write", "handler")})
         self.assertEqual(rows["spam"].result.failure, "NEGATIVE")
-        with self.assertRaisesRegex(SyntaxError, r"row spam: HELPER: 6 columns, then an "
-                                                 r"optional FEEDBACK"):
+        with self.assertRaisesRegex(SyntaxError, r"row spam: HELPER: 6 columns, then "
+                                                 r"optionally each of FEEDBACK\(\.\.\.\), "
+                                                 r"SLOW\(\.\.\.\) once; got 'EXITS\(next\)'"):
             ir_contract.parse_rows(
                 "#define X(PRIMITIVE, HELPER, MACRO) "
                 "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(), EXITS(next))")

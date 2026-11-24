@@ -191,6 +191,9 @@
  * hoist too but costs one more instruction per dispatched word: it measured
  * about 1% more instructions on every kernel than this form (29c4c49c650). */
 #define IR_HOLD_NEXT() __asm__("" : "+r"(next_instr))
+/* A planned arm's uop that may reenter Python: the whole-word completion
+ * stub's ESCAPED bit (Python/generated_ir_stubs.c.h); nothing elsewhere */
+#define IR_STUB_ESCAPE() ((void)0)
 #define DISPATCH_GOTO() goto *opcode_targets[opcode]
 /* An error leaves the handler for the shared label process_error, which
  * unwinds by the exception table and either dispatches at the handler found

@@ -689,7 +689,7 @@ class Subjects:
         tokens = _uncast(tokens)
         if len(tokens) == 1:
             return self.names.get(tokens[0])
-        for name in ("PyValue_AsKnownObjectBorrow",):
+        for name in ("PyValue_AsKnownObjectBorrow", "FT_ATOMIC_LOAD_PTR_ACQUIRE"):
             args = _call(tokens, name)
             if args is not None and len(args) == 1:
                 return self.resolve(args[0])
@@ -763,7 +763,7 @@ def predicate_facts(p: list, subjects: Subjects) -> list[Fact] | None:
         return [Fact("INLINE_VALUES_VALID",
                      subjects.of(_call(args[0][:-2], "_PyObject_InlineValues")[0]))]
     if p[:1] == ["call_state"] and p[1:] == ["&", "CALL_SELF_PRESENT"]:
-        return [Fact("SELF", "word", "present")]
+        return [Fact("SELF", "call_state", "present")]
     if len(p) >= 3 and p[-2] == "->" and p[-1].startswith("tp_"):
         return [Fact("TYPE_SLOT", subjects.of(p[:-2]), f"{p[-1]} != NULL")]
     for op, negated in (("!=", "=="), ("==", "!="), ("<=", ">"), ("<", ">="),
@@ -796,7 +796,12 @@ def comparison_facts(lhs: list, op: str, rhs: list,
                 return [Fact("TYPE_VERSION", owner[5:-1], text)]
             return [Fact("CLASS_VERSION", owner, text)]
         if left[-2:] == ["->", "dk_version"]:
-            return [Fact("KEYS_VERSION", subjects.of(left[:-2]), text)]
+            # A frame path's keys: the fact is the path's (paths(...) in
+            # ir_contract.py)
+            owner = subjects.of(left[:-2])
+            if owner in ("globals.ma_keys", "builtins.ma_keys"):
+                owner = owner.split(".")[0]
+            return [Fact("KEYS_VERSION", owner, text)]
         if left[-2:] == ["->", "func_version"]:
             return [Fact("FUNC_VERSION", subjects.of(left[:-2]), text)]
         if left[-2:] == ["->", "co_argcount"]:
@@ -901,7 +906,7 @@ def failure_term_facts(term: list, subjects: Subjects) -> list[Fact] | None:
     if args is not None:
         return [Fact("NO_MANAGED_DICT", subjects.of(args[0]))]
     if term == ["call_state", "&", "CALL_SELF_PRESENT"]:
-        return [Fact("SELF", "word", "absent")]
+        return [Fact("SELF", "call_state", "absent")]
     for op in ("!=", "==", "<=", ">=", "<", ">"):
         parts = _split(term, op)
         if len(parts) == 2:
@@ -968,9 +973,7 @@ def _nested_if(stmt: Stmt, site: Token) -> bool:
 # The guard markers and the facts that each establishes of its arguments
 MARKER_FACTS = {
     "IR_GUARD_INLINE_INT": lambda a, s: [Fact("INLINE_INT", s.of(a[0]))],
-    "IR_GUARD_ELEMENT_TYPE": lambda a, s: [Fact("EXACT_TYPE", s.of(a[0]),
-                                                {"LIST": "PyList_Type", "TUPLE": "PyTuple_Type"}
-                                                .get(" ".join(a[1]), " ".join(a[1])))],
+    "IR_GUARD_ELEMENT_TYPE": lambda a, s: [Fact("EXACT_TYPE", s.of(a[0]), " ".join(a[1]))],
     "IR_GUARD_ELEMENT_INDEX": lambda a, s: [Fact("IN_BOUNDS", s.of(a[1]), s.of(a[0]))],
     "IR_GUARD_SHAPE_READ": lambda a, s: [Fact("TYPE_VERSION", s.of(a[0]), " ".join(a[1])),
                                          Fact("SHAPE", s.of(a[0]), " ".join(a[2]))],
@@ -1119,7 +1122,7 @@ PURE_CALLS = re.compile(
     r"_PyFrame_AssertTemporariesClear|_PyManagedDictPointer_IsValues|doesnt_escape|"
     r"(advance|restart)_backoff_counter|_Py_GatherStats_GetIter|native_vector_capture|"
     r"_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY|_PyObject_ValueSlot|_PyValueGuarded_Load|"
-    r"_PyValue_NamesObject")
+    r"_PyValue_NamesObject|_PyBinaryOp_ExtendDescr")
 
 # Non-escaping calls that read the heap and change nothing
 READER_CALLS = re.compile(

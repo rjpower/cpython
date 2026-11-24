@@ -207,6 +207,8 @@ PyAPI_FUNC(void) _PyJitAsm_AluMI32(_PyJitAsm *a, _PyJitAlu op, _PyJitMem dst, in
 PyAPI_FUNC(void) _PyJitAsm_UnaryM32(_PyJitAsm *a, _PyJitUnary op, _PyJitMem dst);
 
 PyAPI_FUNC(void) _PyJitAsm_TestRR(_PyJitAsm *a, _PyJitReg x, _PyJitReg y);
+/* The low 32 bits: an int result, whose upper half SysV leaves undefined */
+PyAPI_FUNC(void) _PyJitAsm_TestRR32(_PyJitAsm *a, _PyJitReg x, _PyJitReg y);
 PyAPI_FUNC(void) _PyJitAsm_TestMR(_PyJitAsm *a, _PyJitMem x, _PyJitReg y);
 PyAPI_FUNC(void) _PyJitAsm_TestRI(_PyJitAsm *a, _PyJitReg x, int32_t imm);
 PyAPI_FUNC(void) _PyJitAsm_TestMI(_PyJitAsm *a, _PyJitMem x, int32_t imm);

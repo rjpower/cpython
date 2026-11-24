@@ -354,6 +354,14 @@ typedef struct {
     PyTypeObject *rhs_type;
 } _PyBinaryOpSpecializationDescr;
 
+/* The descriptor that BINARY_OP_EXTEND's feedback holds: specialize.c
+   stores an entry of its descriptor table there, and only there. */
+static inline _PyBinaryOpSpecializationDescr *
+_PyBinaryOp_ExtendDescr(PyObject *descr)
+{
+    return (_PyBinaryOpSpecializationDescr *)descr;
+}
+
 /* Comparison bit masks. */
 
 /* Note this evaluates its arguments twice each */

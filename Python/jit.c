@@ -185,6 +185,9 @@ typedef struct {
     _PyJitLabel trap;       // an operand word's entry, a broken invariant
     _PyJitFrameMarks marks;
     _PyJitLabel eh_frame;   // the unwind info, after the code
+    /* The code has no compile left after this one: its unit is never marked
+     * stale, so its code carries no mark */
+    int capped;
 } _PyJitCompiler;
 
 /* A label here */
@@ -374,6 +377,200 @@ emit_continuation(_PyJitCompiler *c, uint32_t i)
     _PyJitAsm_Jmp(a, c->leave);
 }
 
+/* STALE into the unit's invalid byte, RETIRED kept; nothing in a capped
+ * unit.  Clobbers rcx. */
+static void
+emit_mark_stale(_PyJitCompiler *c)
+{
+    if (c->capped) {
+        return;
+    }
+    _PyJitAsm *a = c->a;
+    _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
+    _PyJitAsm_AluRI(a, _PyJitAlu_OR, R(RCX), _PyJIT_STALE);
+    _PyJitAsm_MovMR8(a, AT(RBX, offsetof(_PyJitUnit, invalid)), R(RCX));
+}
+
+/* Leave the unit for word dest of the frame */
+static void
+emit_leave_at(_PyJitCompiler *c, uint32_t dest)
+{
+    _PyJitAsm *a = c->a;
+    _PyJitAsm_Lea(a, R(RDX), WORD_AT(dest));
+    _PyJitAsm_MovRR(a, R(RAX), R(R13));
+    _PyJitAsm_Jmp(a, c->leave);
+}
+
+/* The jump to word dest's block, or the leave when it has none */
+static void
+emit_goto(_PyJitCompiler *c, uint32_t dest)
+{
+    if (dest < c->nwords && c->labels[dest] >= 0) {
+        _PyJitAsm_Jmp(c->a, c->labels[dest]);
+    }
+    else {
+        emit_leave_at(c, dest);
+    }
+}
+
+/* If RETIRED is set, go to leave_dest.  Clobbers rcx. */
+static void
+emit_retired_test(_PyJitCompiler *c, _PyJitLabel leave_dest)
+{
+    _PyJitAsm *a = c->a;
+    _PyJitAsm_MovzxRM8(a, R(RCX), AT(RBX, offsetof(_PyJitUnit, invalid)));
+    _PyJitAsm_TestRI(a, R(RCX), _PyJIT_RETIRED);
+    _PyJitAsm_Jcc(a, _PyJitCond_NE, leave_dest);
+}
+
+/* A call of the completion stub fn on word i: its status in eax */
+static void
+emit_stub_call(_PyJitCompiler *c, uint32_t i, const void *fn)
+{
+    _PyJitAsm *a = c->a;
+    _PyJitAsm_MovRR(a, R(RDI), R(R12));
+    _PyJitAsm_MovRR(a, R(RSI), R(R13));
+    _PyJitAsm_Lea(a, R(RDX), WORD_AT(i));
+    _PyJitAsm_CallAbs(a, fn);
+}
+
+typedef int (*completion_stub)(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+
+/* The plan that word w compiles to.  A unit at the recompile cap is never
+ * marked or recompiled, so it plans nothing: each word keeps its handler
+ * check and runs the live handler's form after the handler changes, as a
+ * planned arm, which is compiled for one handler, cannot. */
+static const _PyIRStubPlan *
+plan_of(_PyJitCompiler *c, _PyIRWord w)
+{
+    static const _PyIRStubPlan none = {_PyIR_PLAN_NONE};
+    return c->capped ? &none : &_PyIR_StubPlans[_PyJit_CompiledHandler(w)];
+}
+
+/* r8 of resolve_status(): the word's handler bits as compiled */
+#define COMPILED_HANDLER_BITS 0xFFFF
+
+/* What resolve_status() decides, in rax:rdx as the unit's transfers are */
+typedef struct {
+    _PyInterpreterFrame *frame;
+    _PyIRWord *next;
+} resolved_status;
+
+/* The cold path of a planned word's nonzero status (g1a/abi.md), shared by
+ * every site: a miss runs the family's generic stub on the word, then the
+ * plan-change test (staleness by execution, rd/design.md section 6: the
+ * unit is marked only if the word's handler is no longer the one compiled;
+ * RETIRED is kept; a unit at the cap has no planned words).  Returns a
+ * frame and the word to leave for (no word: the error route, whose exit
+ * the stub has set), or no frame to go on in the unit at the word
+ * returned: the next word, or the same word again after a redispatch.  A
+ * status with ESCAPED tests RETIRED before its successor.  No planned arm
+ * branches: no status is BRANCH. */
+static resolved_status
+resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site,
+               int status, uint32_t compiled, _PyJitUnit *unit)
+{
+    if (status & _PyIR_MISS) {
+        assert(status == _PyIR_MISS);
+        int handler = _PyJit_CompiledHandler((_PyIRWord)(compiled & COMPILED_HANDLER_BITS));
+        completion_stub generic = (completion_stub)_PyIR_StubPlans[handler].generic;
+        status = generic(tstate, frame, site);
+        assert(!(status & _PyIR_MISS));
+    }
+    /* The word's handler is not the one the unit compiled: a guard miss
+     * or a specialisation found it (MISS, AGAIN), or a generic arm, which
+     * never misses, ran on a word that specialised elsewhere */
+    if ((*site & 0xFFFF) != (compiled & COMPILED_HANDLER_BITS)) {
+        unit->invalid |= _PyJIT_STALE;
+    }
+    if (status & _PyIR_RAISED) {
+        return (resolved_status){frame, NULL};
+    }
+    _PyIRWord *next = (status & _PyIR_AGAIN) ? site : site + _PyIR_WordLength(*site);
+    if ((status & _PyIR_ESCAPED) && (unit->invalid & _PyJIT_RETIRED)) {
+        return (resolved_status){frame, next};
+    }
+    return (resolved_status){NULL, next};
+}
+
+/* The cold path of planned word i, in the cold section: status (or -1),
+ * entered with a stub's nonzero status in eax, or miss (or -1), entered
+ * when the arm's guard failed with the word untouched.  resolve_status()
+ * decides; the unit leaves with its transfer, or goes on at the next word
+ * or the word again. */
+static void
+emit_status_cold(_PyJitCompiler *c, uint32_t i, _PyJitLabel status, _PyJitLabel miss)
+{
+    _PyJitAsm *a = c->a;
+    _PyIRWord w = c->words[i];
+    uint32_t next = i + (uint32_t)_PyIR_WordLength(w);
+    _PyJitLabel resolve = _PyJitAsm_NewLabel(a);
+    if (miss >= 0) {
+        _PyJitAsm_Bind(a, miss);
+        _PyJitAsm_MovImm(a, R(RCX), _PyIR_MISS);
+        if (status >= 0) {
+            _PyJitAsm_Jmp(a, resolve);
+        }
+    }
+    if (status >= 0) {
+        _PyJitAsm_Bind(a, status);
+        if (_PyIR_StubPlans[_PyJit_CompiledHandler(w)].escapes &&
+            next < c->nwords && c->labels[next] >= 0) {
+            /* ESCAPED alone, the status of every completion of an arm that
+             * declares it may run Python (a generic arm): the RETIRED
+             * test and the plan-change test inline, the resolver only for a
+             * retired unit or a changed handler.  Only the status's low
+             * bits are defined. */
+            _PyJitLabel general = _PyJitAsm_NewLabel(a);
+            _PyJitAsm_TestRI(a, R(RAX),
+                             _PyIR_MISS | _PyIR_RAISED | _PyIR_BRANCH | _PyIR_AGAIN);
+            _PyJitAsm_Jcc(a, _PyJitCond_NE, general);
+            _PyJitAsm_MovzxRM16(a, R(RCX), WORD_AT(i));
+            _PyJitAsm_AluRI(a, _PyJitAlu_CMP, R(RCX), (int32_t)(w & 0xFFFF));
+            _PyJitAsm_Jcc(a, _PyJitCond_NE, general);
+            _PyJitAsm_TestMI(a, AT(RBX, offsetof(_PyJitUnit, invalid)), _PyJIT_RETIRED);
+            _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[next]);
+            _PyJitAsm_Bind(a, general);
+        }
+        _PyJitAsm_MovRR(a, R(RCX), R(RAX));
+    }
+    _PyJitAsm_Bind(a, resolve);
+    _PyJitAsm_MovRR(a, R(RDI), R(R12));
+    _PyJitAsm_MovRR(a, R(RSI), R(R13));
+    _PyJitAsm_Lea(a, R(RDX), WORD_AT(i));
+    _PyJitAsm_MovImm(a, R(R8), (int64_t)(w & COMPILED_HANDLER_BITS));
+    _PyJitAsm_MovRR(a, R(R9), R(RBX));
+    _PyJitAsm_CallAbs(a, (const void *)resolve_status);
+    _PyJitAsm_TestRR(a, R(RAX), R(RAX));
+    _PyJitAsm_Jcc(a, _PyJitCond_NE, c->leave);
+    _PyJitAsm_Lea(a, R(RCX), WORD_AT(i));
+    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RDX), R(RCX));
+    _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[i]);
+    emit_goto(c, next);
+}
+
+/* Word i of a shared arm: a call of its stub, one branch on the status, the
+ * fall-through to the next word; the rest is cold.  The arm reads no
+ * feedback that another member writes with another meaning (its family's
+ * generic serves every member's entry), so the site has no handler check. */
+static void
+emit_stub_word(_PyJitCompiler *c, uint32_t i, const _PyIRStubPlan *plan)
+{
+    _PyJitAsm *a = c->a;
+    uint32_t next = i + (uint32_t)_PyIR_WordLength(c->words[i]);
+    _PyJitLabel status = _PyJitAsm_NewLabel(a);
+    emit_stub_call(c, i, plan->stub);
+    _PyJitAsm_TestRR32(a, R(RAX), R(RAX));
+    _PyJitAsm_Jcc(a, _PyJitCond_NE, status);
+    if (!(next < c->nwords && c->labels[next] >= 0)) {
+        emit_leave_at(c, next);
+    }
+    _PyJitSection section = a->current;
+    _PyJitAsm_Section(a, _PyJitSection_COLD);
+    emit_status_cold(c, i, status, -1);
+    _PyJitAsm_Section(a, section);
+}
+
 /* Word i as a call of its handler's function form, with the word's address
  * and bits as immediates, then its continuation.  Specialisation rewrites a
  * word's handler and its feedback entry together, and a handler's guards are
@@ -417,6 +614,8 @@ emit_form_word(_PyJitCompiler *c, uint32_t i)
     _PyJitSection section = a->current;
     _PyJitAsm_Section(a, _PyJitSection_COLD);
     _PyJitAsm_Bind(a, changed);
+    /* An executed plan change: the next warm-up event recompiles */
+    emit_mark_stale(c);
     _PyJitAsm_Lea(a, R(RDX), WORD_AT(i));
     _PyJitAsm_LeaLabel(a, R(RAX), c->live);
     _PyJitAsm_CallR(a, R(RAX));
@@ -468,16 +667,21 @@ has_block(_PyJitCompiler *c, uint32_t dest)
 /* Word i by its handler's inline template (B2): the handler check of a
  * word that specialisation may rewrite, the template, and the exits.  The
  * template's hot path falls through to the next word, whose block follows,
- * or jumps to its static target; its failed guards go to the word as
- * emit_form_word() runs it, in the cold section.  The hot path does not run
- * the form, so it may run Python only through the effects that the handler
- * has besides its deopts. */
+ * or jumps to its static target.  Its failed guards go, in the cold
+ * section, to the family's generic stub when the arm is planned inline
+ * (emit_status_cold()), else to the word as emit_form_word() runs it.  The
+ * hot path does not run the form, so it may run Python only through the
+ * effects that the handler has besides its deopts, and through its
+ * releases: a release that is the template's last code tests RETIRED on
+ * its slow path, after the destructor, and leaves for the next word; any
+ * other release puts the test on the fall-through. */
 static void
 emit_template_word(_PyJitCompiler *c, uint32_t i, _PyJitTemplate template)
 {
     _PyJitAsm *a = c->a;
     _PyIRWord w = c->words[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(w));
+    int planned = plan_of(c, w)->region == _PyIR_PLAN_INLINE;
     int may_run_python = (fmt->effects & (MAY_RUN_PYTHON & ~_PyIR_DEOPTS)) != 0;
     uint32_t next = i + (uint32_t)_PyIR_WordLength(w);
     int target = static_target(c->words, i);
@@ -495,13 +699,22 @@ emit_template_word(_PyJitCompiler *c, uint32_t i, _PyJitTemplate template)
             target_stub = _PyJitAsm_NewLabel(a);
         }
     }
-    if (_PyJit_HandlerMayChange(c->code, (int)i)) {
+    /* A planned arm reads no feedback that another member writes (its
+     * guards test the operands), so it is sound whatever the word's handler
+     * is now: no handler check */
+    if (!planned && _PyJit_HandlerMayChange(c->code, (int)i)) {
         _PyJitAsm_MovzxRM16(a, R(RCX), WORD_AT(i));
         _PyJitAsm_AluRI(a, _PyJitAlu_CMP, R(RCX), (int32_t)(w & 0xFFFF));
         _PyJitAsm_Jcc(a, _PyJitCond_NE, cx.slow);
     }
     template(&cx);
     assert(cx.cold_depth == 0);
+    /* One release, the template's last code: its slow path tests RETIRED */
+    int release_exit = cx.nreleases == 1 &&
+        cx.release_end == a->sections[_PyJitSection_HOT].size;
+    if (cx.nreleases > 0 && !release_exit) {
+        may_run_python = 1;
+    }
     /* The fall-through to the next word, whose block follows */
     _PyJitLabel next_stub = -1;
     if (may_run_python || !has_block(c, next)) {
@@ -528,8 +741,25 @@ emit_template_word(_PyJitCompiler *c, uint32_t i, _PyJitTemplate template)
         }
         emit_template_stub(c, i, (uint32_t)target, target_stub);
     }
-    _PyJitAsm_Bind(a, cx.slow);
-    emit_form_word(c, i);
+    for (int k = 0; k < cx.nreleases && k < _PyJit_MAX_RELEASES; k++) {
+        _PyJitAsm_Bind(a, cx.release_tail[k]);
+        if (!release_exit) {
+            _PyJitAsm_Jmp(a, cx.release_back[k]);
+            continue;
+        }
+        _PyJitLabel leave_next = _PyJitAsm_NewLabel(a);
+        emit_retired_test(c, leave_next);
+        _PyJitAsm_Jmp(a, cx.release_back[k]);
+        _PyJitAsm_Bind(a, leave_next);
+        emit_leave_at(c, next);
+    }
+    if (planned) {
+        emit_status_cold(c, i, -1, cx.slow);
+    }
+    else {
+        _PyJitAsm_Bind(a, cx.slow);
+        emit_form_word(c, i);
+    }
     _PyJitAsm_Section(a, section);
 }
 
@@ -549,8 +779,13 @@ emit_unit(_PyJitCompiler *c)
     emit_frame(c);
     for (uint32_t i = 0; i < c->nwords; i += _PyIR_WordLength(c->words[i])) {
         _PyJitAsm_Bind(a, c->labels[i]);
-        _PyJitTemplate template = _PyJit_Templates[_PyJit_CompiledHandler(c->words[i])];
-        if (template != NULL) {
+        int handler = _PyJit_CompiledHandler(c->words[i]);
+        _PyJitTemplate template = _PyJit_Templates[handler];
+        const _PyIRStubPlan *plan = plan_of(c, c->words[i]);
+        if (plan->region == _PyIR_PLAN_SHARED) {
+            emit_stub_word(c, i, plan);
+        }
+        else if (template != NULL) {
             emit_template_word(c, i, template);
         }
         else {
@@ -615,7 +850,8 @@ compile(PyCodeObject *code, _PyCodeExec *exec)
     _PyJitAsm a;
     _PyJitAsm_Init(&a);
     _PyJitCompiler c = {.a = &a, .code = code, .unit = unit, .words = words, .nwords = nwords,
-                        .labels = labels};
+                        .labels = labels,
+                        .capped = exec->jit_compiles + 1 >= _PyJIT_MAX_COMPILES};
     _PyJitLabel table = emit_unit(&c);
     int placed = _PyJitAsm_Place(&a, &unit->code);
     size_t table_offset = placed < 0 ? 0 : _PyJitAsm_LabelOffset(&a, table);

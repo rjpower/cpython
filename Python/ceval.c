@@ -1260,11 +1260,11 @@ value_load_global(PyObject *globals, PyObject *builtins, PyObject *name)
    (spec 3.5, R-a and R-d). */
 static _PyStatusValue
 _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                               PyValue iter, PyValue *index_ptr);
+                               PyValueBorrow iter, PyValue *index_ptr);
 static inline Py_ALWAYS_INLINE _PyStatusValue
 _PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
                                      _PyInterpreterFrame *frame,
-                                     PyValue iter, PyValue *index_ptr);
+                                     PyValueBorrow iter, PyValue *index_ptr);
 static int _PyForIter_StopIsExhaustion(PyThreadState *tstate,
                                          _PyInterpreterFrame *frame);
 
@@ -2779,6 +2779,10 @@ IR_HOT_ROUTINE(gen_complete, PyValue gen_value);
 #define IR_FUNCTION_FORMS
 #include "generated_ir_cases.c.h"
 #undef IR_FUNCTION_FORMS
+/* The whole-word completion stubs of the planned arms (regions89 G1a),
+ * from the same handler text, with the forms' bindings of the macros they
+ * do not bind themselves */
+#include "generated_ir_stubs.c.h"
 #pragma GCC diagnostic pop
 
 #ifdef _PY_JIT_SUPPORTED
@@ -7530,7 +7534,7 @@ _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *na
 static inline Py_ALWAYS_INLINE _PyStatusValue
 _PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
                                      _PyInterpreterFrame *frame,
-                                     PyValue iter, PyValue *index_ptr)
+                                     PyValueBorrow iter, PyValue *index_ptr)
 {
     _PyStatusValue result = {0, PyValue_NULL};
     PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
@@ -7592,7 +7596,7 @@ _PyForIter_StopIsExhaustion(PyThreadState *tstate, _PyInterpreterFrame *frame)
  * FOR_ITER's own. */
 static Py_NO_INLINE _PyStatusValue
 _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                               PyValue iter, PyValue *index_ptr)
+                               PyValueBorrow iter, PyValue *index_ptr)
 {
     return _PyForIter_VirtualIteratorNextInline(tstate, frame, iter, index_ptr);
 }

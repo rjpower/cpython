@@ -695,6 +695,7 @@ NON_ESCAPING_FUNCTIONS = (
     "Py_TYPE",
     "Py_UNREACHABLE",
     "Py_Unicode_GET_LENGTH",
+    "_PyBinaryOp_ExtendDescr",
     "_PyCode_CODE",
     "_PyCode_GetOriginalOpcode",
     "_PyDataStack_Slots",

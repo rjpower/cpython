@@ -200,6 +200,45 @@ class EnvironmentTests(unittest.TestCase):
                           write.__name__)
 
 
+INDEXED = """\
+family F(dst:Dst, x:Src, fb:Fb<Attr>) exits(next, miss);
+extern helper classify(v:B, f:Fb<Attr>)
+  cases(first(r:Recipe<Attr>), second(), none())
+  effects(reads)
+  c classify_c as case_index
+  evidence(review: "r", contract: "c");
+arm F.Sort shared effects() feedback() exits(next, miss)
+{
+  entry():
+    call classify(use(x), fb) {
+      first -> A();
+      second -> B();
+      none -> C();
+    }
+  A(r:Recipe<Attr>):
+    exit next();
+  B():
+    exit next();
+  C():
+    exit miss();
+}
+"""
+
+
+class IndexedConventionTests(unittest.TestCase):
+    def test_case_index_row_switches_on_the_result(self):
+        program = rop_check.check([rop_syntax.parse(INDEXED, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        self.assertEqual(p.left_out, {})
+        text = "\n".join(p.lowered["F.Sort"].body)
+        self.assertIn("classify_c(", text)
+        self.assertIn("&out1", text)
+        # The case that falls through needs no test
+        self.assertIn("== 1", text)
+        self.assertIn("== 2", text)
+
+
 class GeneratedAddIntTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

@@ -632,6 +632,9 @@ class ArmLowerer:
         args = [self.expr(a, p.type) for a, p in zip(t.args, x.params)]
         cases = x.result.cases
         edges = {e.case: e for e in t.edges}
+        if conv.indexed:
+            self.lower_indexed_call(t, x, args)
+            return
         out = None
         if any(CSource.out in o.payload for o in conv.outcomes):
             out = self.new_temp(c_type(cases[0].params[0].type), "out")
@@ -655,6 +658,29 @@ class ArmLowerer:
         ways.sort(key=lambda w: w[1].label == self.next_label)
         for outcome, target, payload in ways[:-1]:
             self.emit(f"if ({test_text(outcome.test, conv.returns, ret)}) {{")
+            self.jump(target, payload, "    ", force=True)
+            self.emit("}")
+        _, target, payload = ways[-1]
+        self.jump(target, payload)
+
+    def lower_indexed_call(self, t: CallTerm, x: Extern, args: list[str]) -> None:
+        """A row whose C result is the position of its case; a payload value
+        is written through the last parameter"""
+        cases = x.result.cases
+        payload_case = next((c for c in cases if c.params), None)
+        out = None
+        if payload_case is not None:
+            out = self.new_temp(c_type(payload_case.params[0].type), "out")
+            args.append(f"&{out}")
+        if x.contract.effect_set & ESCAPING:
+            self.emit("IR_STUB_ESCAPE();")
+        ret = self.new_temp("int", "ret")
+        self.emit(f"{ret} = {x.c.symbol}({', '.join(args)});")
+        edges = {e.case: e.target for e in t.edges}
+        ways = [(i, edges[c.name], (out,) if c.params else ()) for i, c in enumerate(cases)]
+        ways.sort(key=lambda w: w[1].label == self.next_label)
+        for i, target, payload in ways[:-1]:
+            self.emit(f"if ({ret} == {i}) {{")
             self.jump(target, payload, "    ", force=True)
             self.emit("}")
         _, target, payload = ways[-1]

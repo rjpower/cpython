@@ -89,13 +89,76 @@ macro getattr_at_origin(n:Name, a:Anchors)
   borrows(a)
   pending;
 
-// Adaptation policy (addendum section 2); its graph is written with the
-// adaptation step.
+// Adaptation evidence (specialize.c): the attribute specializer in
+// collecting mode fills the site's entry, records the observation in the
+// site's poly table and answers with the arm family that the receiver
+// stands for.  Arms that are not written nominate "none".
+extern helper classify_getattr(v:B, at:Site, f:Fb<Attr>, n:Name)
+  cases(instance(r:Recipe<Attr>), shape(r:Recipe<Attr>), none())
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry))
+  c _PyAttr_ClassifyGetAttr as case_index
+  evidence(
+    review: "specialize.c attr_classify: runs _Py_Specialize_LoadAttr with its handler choice collected; the case is the choice, the recipe is the entry it wrote.",
+    contract: "Writes the site's entry and poly table and sets no handler. No Python runs: the lookups are NoAlloc.");
+
+extern helper poly_shape_ready(at:Site, f:Fb<Attr>) -> Bool
+  effects(reads)
+  feedback(read(entry))
+  c _PyAttr_PolyShapeReady as bool
+  evidence(
+    review: "specialize.c: fb_shape_read_set, two to four live shape rows of distinct type versions.",
+    contract: "Reads the poly table only.");
+
+// Adaptation policy (addendum section 2): sample when the counter is due,
+// nominate by evidence, and select poly when the site's table is ready.
 macro adapt_before_use_getattr(f:Fb<Attr>, o:Src, n:Name)
   cases(run(), changed(t:Ticket<Attr>))
   effects(reads, writes, allocates)
   feedback(read(entry), write(entry), write(handler))
-  pending;
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_getattr(use(o), site, f, n) {
+      instance -> Instance();
+      shape -> Shape();
+      none -> Other();
+    }
+  Instance(ri:Recipe<Attr>):
+    let ci:Candidate<Attr> = candidate(GetAttr.Instance, ri);
+    call install(f, ci) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Shape(rs:Recipe<Attr>):
+    branch poly_shape_ready(site, f) -> Poly(), Mono(rs);
+  Poly():
+    let cp:Candidate<Attr> = candidate(GetAttr.PolyShape);
+    call install(f, cp) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Mono(rm:Recipe<Attr>):
+    let cm:Candidate<Attr> = candidate(GetAttr.Shape, rm);
+    call install(f, cm) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Attr>):
+    exit changed(t);
+  Run():
+    exit run();
+}
 
 arm GetAttr.Generic shared
   effects(runs_python, raises)
@@ -274,11 +337,62 @@ macro getmethod_at_origin(n:Name, a:Anchors)
   borrows(a)
   pending;
 
+extern helper classify_getmethod(v:B, at:Site, f:Fb<Attr>, n:Name)
+  cases(method_values(r:Recipe<Attr>), none())
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry))
+  c _PyAttr_ClassifyGetMethod as case_index
+  evidence(
+    review: "specialize.c attr_classify: as classify_getattr, for a word with the method bit.",
+    contract: "Writes the site's entry and poly table and sets no handler.");
+
+extern helper poly_method_ready(at:Site, f:Fb<Attr>) -> Bool
+  effects(reads)
+  feedback(read(entry))
+  c _PyAttr_PolyMethodReady as bool
+  evidence(
+    review: "specialize.c: fb_method_poly_set, two to four method rows of distinct type versions.",
+    contract: "Reads the poly table only.");
+
 macro adapt_before_use_getmethod(f:Fb<Attr>, o:Src, n:Name)
   cases(run(), changed(t:Ticket<Attr>))
   effects(reads, writes, allocates)
   feedback(read(entry), write(entry), write(handler))
-  pending;
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_getmethod(use(o), site, f, n) {
+      method_values -> Method();
+      none -> Other();
+    }
+  Method(rr:Recipe<Attr>):
+    branch poly_method_ready(site, f) -> Poly(), Mono(rr);
+  Poly():
+    let cp:Candidate<Attr> = candidate(GetMethod.PolyMethod);
+    call install(f, cp) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Mono(r:Recipe<Attr>):
+    let cm:Candidate<Attr> = candidate(GetMethod.MethodValues, r);
+    call install(f, cm) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Attr>):
+    exit changed(t);
+  Run():
+    exit run();
+}
 
 arm GetMethod.MethodValues inline
   effects(reads, writes, releases)

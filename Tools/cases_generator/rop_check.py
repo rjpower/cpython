@@ -580,6 +580,11 @@ def check_extern(c: Checker, x: Extern) -> None:
     elif conv.single != isinstance(x.result, Returns):
         shape = "-> T" if conv.single else "cases(...)"
         c.report(x.c.span, x.name, f"convention {conv.name} maps onto a {shape} row")
+    elif isinstance(x.result, Cases) and conv.indexed:
+        for case in x.result.cases:
+            if len(case.params) > 1:
+                c.report(case.span, x.name, f"case {case.name} has {len(case.params)} "
+                         f"payload values; {conv.name} gives at most one")
     elif isinstance(x.result, Cases):
         if len(x.result.cases) != len(conv.outcomes):
             c.report(x.c.span, x.name, f"convention {conv.name} has "

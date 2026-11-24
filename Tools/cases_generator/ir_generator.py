@@ -7437,6 +7437,13 @@ STUB_REENTRY = frozenset(("runs_python", "polls"))
 class StubPlan:
     region: str         # inline or shared
     family: str         # whose generic stub runs the word after a miss
+    escapes: bool       # a uop declares runs_python or polls: every
+                        # completion that reaches it reports ESCAPED
+
+
+def arm_escapes(inst: Instruction) -> bool:
+    return any(ir_contract.contract_of(part).effects & STUB_REENTRY
+               for part in inst.parts if isinstance(part, Uop))
 
 
 def stub_function_name(handler: str) -> str:
@@ -7507,7 +7514,7 @@ def stub_plans(analysis: Analysis) -> dict[str, StubPlan]:
             check_stub_arm(arm, arm is head)
         for name, inst in handlers.items():
             if any(inst is arm for arm in arms) and name not in EXECUTION_VARIANTS:
-                plans[name] = StubPlan(inst.region, family.name)
+                plans[name] = StubPlan(inst.region, family.name, arm_escapes(inst))
     return plans
 
 
@@ -7665,15 +7672,16 @@ def generate_ir_stubs(analysis: Analysis, formats: dict[str, IRFormat],
         outfile.write(binary_op_family_stub(field_expr(fmt.fb)))
     for name in reversed(names):
         outfile.write(f'#pragma pop_macro("{name}")\n')
-    outfile.write("\n/* The plan of each handler that has one: its region, its stub "
-                  "(shared),\n * and its family's generic stub, which runs the word "
-                  "after a miss */\n")
+    outfile.write("\n/* The plan of each handler that has one: its region, whether "
+                  "its\n * completions report ESCAPED, its stub (shared), and its "
+                  "family's generic\n * stub, which runs the word after a miss */\n")
     outfile.write(f"const _PyIRStubPlan _PyIR_StubPlans[{ir_numbers.IR_LIMIT}] = {{\n")
     for name in sorted(plans, key=lambda n: ids[n]):
         plan = plans[name]
         stub = (f"(const void *){stub_function_name(name)}"
                 if plan.region == "shared" else "NULL")
-        outfile.write(f"    [{ids[name]}] = {{_PyIR_PLAN_{plan.region.upper()}, {stub}, "
+        outfile.write(f"    [{ids[name]}] = {{_PyIR_PLAN_{plan.region.upper()}, "
+                      f"{int(plan.escapes)}, {stub}, "
                       f"(const void *){stub_function_name(plan.family)}}},  "
                       f"// {name}\n")
     outfile.write("};\n")

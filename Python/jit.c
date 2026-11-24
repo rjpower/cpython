@@ -503,9 +503,10 @@ emit_status_cold(_PyJitCompiler *c, uint32_t i, _PyJitLabel status, _PyJitLabel 
     }
     if (status >= 0) {
         _PyJitAsm_Bind(a, status);
-        if (next < c->nwords && c->labels[next] >= 0) {
-            /* ESCAPED alone, the status of every completion that may have
-             * run Python (a generic arm declares it at entry): the RETIRED
+        if (_PyIR_StubPlans[_PyJit_CompiledHandler(w)].escapes &&
+            next < c->nwords && c->labels[next] >= 0) {
+            /* ESCAPED alone, the status of every completion of an arm that
+             * declares it may run Python (a generic arm): the RETIRED
              * test and the plan-change test inline, the resolver only for a
              * retired unit or a changed handler.  Only the status's low
              * bits are defined. */

@@ -69,6 +69,9 @@ enum {
 
 typedef struct {
     uint8_t region;
+    /* A uop of the arm declares runs_python or polls, so its completions
+     * report ESCAPED: the site's cold path tests RETIRED inline */
+    uint8_t escapes;
     /* int stub(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *site) */
     const void *stub;           // a SHARED arm's
     const void *generic;        // the family's generic, for a miss

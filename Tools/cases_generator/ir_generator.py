@@ -1315,50 +1315,14 @@ def place_fields(slots: list[str], has_fb: bool, imm_kind: str | None,
     return fields, imm, fb
 
 
-def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | None:
-    """The native-step source footprint shared by normal and abrupt edges.
+# What a SEND handler's uops may declare: they run Python and may enter a
+# generator's frame, never poll, and leave by these exits
+SEND_EFFECTS = frozenset(("reads", "writes", "allocates", "raises", "releases",
+                          "runs_python", "switches_frame"))
+SEND_EXITS = frozenset(("next", "branch", "jump", "miss", "deopt", "raise", "enter"))
 
-    The raw frame-bearing adapter has a bounded helper contract: successful
-    VirtualIteratorNext can write only its cursor pointer. The other calls
-    receive value snapshots, not home pointers. Full AST/IO matching keeps
-    this temporary source bridge from accepting additional opaque writes.
-    Normal transport still requires its final flush or child publication;
-    exceptional transport independently requires every error/exit receipt.
-    """
-    if (fmt.group != "SEND" or not fmt.window or fmt.n_inputs != 0
-            or fmt.dst_offset != 2 or
-            any(not isinstance(part, (Uop, Skip)) for part in inst.parts)):
-        return None
-    inputs, outputs = external_io(inst)
-    if (len(inputs) != 3 or len(outputs) not in (2, 3) or
-        any(item.is_array() for item in inputs) or
-        any(entry.item.is_array() for entry in outputs)):
-        return None
-    specialize = """{
-        #if ENABLE_SPECIALIZATION
-        _PyFbHeader *feedback = FB_COUNTER();
-        if (_PyFb_CounterTriggers(feedback)) {
-            next_instr = this_instr;
-            _Py_Specialize_Send(receiver, next_instr);
-            DISPATCH_SAME_OPARG();
-        }
-        OPCODE_DEFERRED_INC(SEND);
-        _PyFb_AdvanceCounter(feedback);
-        #endif  /* ENABLE_SPECIALIZATION */
-    }"""
-    prefixes = [
-        (("receiver", "unused", "unused"), ("receiver", "unused", "unused"), specialize),
-        ((), (), "{ DEOPT_IF(IS_PEP523_HOOKED(tstate)); }"),
-        (("val",), ("val",), "{ EXIT_IF(!PyValue_IsNone(val)); }"),
-        (("nos", "unused"), ("nos", "unused"), "{ EXIT_IF(PyValue_IsNull(nos)); }"),
-        (("iter", "null_or_index", "value"), ("iter", "null_or_index", "value"), """{
-            PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            EXIT_IF(!PyAsyncGenASend_CheckExact(iter_o));
-        }"""),
-    ]
-    candidates = [
-        (("receiver", "null_or_index", "v"),
-         ("receiver", "null_or_index", "retval"), """{
+
+UNDECLARED_SEND_BODY = """{
             assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
@@ -1392,21 +1356,10 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
                 PyValue_CLOSE(v);
                 retval = sent.value;
             }
-        }"""),
-        (("receiver", "null", "v"), ("receiver", "null", "gen_frame"), """{
-            EXIT_IF(!PyValue_IsObject(receiver));
-            PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
-            EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type);
-            EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v),
-                    "a created generator accepts only None");
-            EXIT_IF(!gen_may_claim(gen), "the generator runs or has finished");
-            STAT_INC(SEND, hit);
-            if (!gen_claim(tstate, gen)) {
-                ERROR_NO_POP();
-            }
-            IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
-        }"""),
-        (("iter", "null_or_index", "none"), ("iter", "null_or_index", "next"), """{
+        }"""
+
+
+UNDECLARED_SEND_VIRTUAL_BODY = """{
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             Py_ssize_t index = PyValue_UntagIndex(null_or_index);
@@ -1421,49 +1374,74 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
             DEAD(none);
             next = next_index.value;
             null_or_index = PyValue_TagIndex(index);
-        }"""),
-        (("iter", "null_in", "v"), ("asend", "null_out", "retval"), """{
-            PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            assert(PyAsyncGenASend_CheckExact(iter_o));
-            _PyStatusValue sent = _PyValue_Send(iter_o, v);
-            PySendResult what = (PySendResult)sent.status;
-            if (what == PYGEN_ERROR) { ERROR_NO_POP(); }
-            if (what == PYGEN_RETURN) {
-                PyValue completed = sent.value;
-                IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
-            }
-            PyValue_CLOSE(v);
-            asend = iter;
-            DEAD(iter);
-            null_out = null_in;
-            DEAD(null_in);
-            retval = sent.value;
-        }"""),
-    ]
+        }"""
+# The uops that declare nothing yet: their signatures and audited bodies
+UNDECLARED_SENDS = (
+    (("receiver", "null_or_index", "v"), ("receiver", "null_or_index", "retval"),
+     UNDECLARED_SEND_BODY),
+    (("iter", "null_or_index", "none"), ("iter", "null_or_index", "next"),
+     UNDECLARED_SEND_VIRTUAL_BODY),
+)
+
+
+def is_undeclared_send(part: Uop) -> bool:
+    "Whether part is _SEND or _SEND_VIRTUAL as they stand, with the bodies that were audited"
+    return any(
+        tuple(item.name for item in part.stack.inputs) == incoming
+        and tuple(item.name for item in part.stack.outputs) == outgoing
+        and statement_shape(part.body) == statement_shape(
+            Parser(body, "<SEND yielded transport contract>").block())
+        for incoming, outgoing, body in UNDECLARED_SENDS)
+
+
+def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | None:
+    """The native-step source footprint shared by normal and abrupt edges:
+    the uops of a SEND handler up to the one that sends (the first that is
+    no pass-through), each declared.
+
+    The declarations are the contract (ir_contract.py verifies each body
+    against its own): the effects and exits of every uop lie within
+    SEND_EFFECTS and SEND_EXITS, a guard or specializer before the send
+    passes its three inputs through, and the send is three scalar inputs
+    and two or three outputs.  Normal transport still requires its final
+    flush or child publication; exceptional transport independently
+    requires every error/exit receipt.
+    """
+    if (fmt.group != "SEND" or not fmt.window or fmt.n_inputs != 0
+            or fmt.dst_offset != 2 or
+            any(not isinstance(part, (Uop, Skip)) for part in inst.parts)):
+        return None
+    inputs, outputs = external_io(inst)
+    if (len(inputs) != 3 or len(outputs) not in (2, 3) or
+        any(item.is_array() for item in inputs) or
+        any(entry.item.is_array() for entry in outputs)):
+        return None
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     for index, part in enumerate(parts):
-        for incoming, outgoing, body in candidates:
-            if (tuple(item.name for item in part.stack.inputs) != incoming or
-                tuple(item.name for item in part.stack.outputs) != outgoing or
-                any(item.is_array() for item in (*part.stack.inputs, *part.stack.outputs)) or
-                statement_shape(part.body) != statement_shape(
-                    Parser(body, "<SEND yielded transport contract>").block())):
-                continue
-            # Guard/specializer prefixes may inspect or redispatch unchanged
-            # inputs, but cannot acquire a frame/home-pointer capability.
+        contract = ir_contract.contract_of(part)
+        if contract is None:
+            # The two uops that declare nothing yet, _SEND and _SEND_VIRTUAL:
+            # each assigns the cursor that it passes through (F16), which a
+            # declaration cannot state until the cursor is an input and an
+            # output of its own (G0d1); their bodies stay pinned till then
+            if not is_undeclared_send(part):
+                return None
+        elif contract.effects - SEND_EFFECTS or contract.exits - SEND_EXITS:
+            return None
+        if any(item.is_array() for item in (*part.stack.inputs, *part.stack.outputs)):
+            return None
+        shape = ([item.name for item in part.stack.inputs],
+                 [item.name for item in part.stack.outputs])
+        if len(part.stack.inputs) == 3 and shape[0] != shape[1]:
+            # The send; its handler ends here, or it ends the handler
             if index != len(parts) - 1 and not part.properties.always_exits:
                 return None
-            for prefix in parts[:index]:
-                if not any(
-                    tuple(item.name for item in prefix.stack.inputs) == expected_in and
-                    tuple(item.name for item in prefix.stack.outputs) == expected_out and
-                    not any(item.is_array() for item in
-                            (*prefix.stack.inputs, *prefix.stack.outputs)) and
-                    statement_shape(prefix.body) == statement_shape(
-                        Parser(expected_body, "<SEND guard footprint>").block())
-                    for expected_in, expected_out, expected_body in prefixes):
-                    return None
             return tuple(parts[:index + 1])
+        # A guard or the specializer inspects or redispatches unchanged
+        # inputs, and acquires no frame or home-pointer capability
+        if (contract is None or shape[0] != shape[1]
+                or contract.effects & {"writes", "switches_frame"}):
+            return None
     return None
 
 

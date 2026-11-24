@@ -1921,10 +1921,14 @@ dummy_func(
 
         macro(SEND) = unused/1 + _SPECIALIZE_SEND + _SEND;
 
-        inline_ok op(_SEND_GEN_FRAME, (receiver, null, v -- receiver, null, gen_frame)) {
-            EXIT_IF(!PyValue_IsObject(receiver));
+        inline_ok op(_SEND_GEN_FRAME,
+                (receiver, null: nullable, v: taken -- receiver, null, gen_frame: owned))
+            effects(runs_python, switches_frame) exits(miss, enter, raise)
+        {
+            EXIT_IF(!PyValue_IsObject(receiver), "a number is no generator");
             PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
-            EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type);
+            EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type,
+                    "the receiver is not a generator or a coroutine");
             EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v),
                     "a created generator accepts only None");
             EXIT_IF(!gen_may_claim(gen), "the generator runs or has finished");

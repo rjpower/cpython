@@ -1280,6 +1280,33 @@ class TestIRCases(unittest.TestCase):
             self.assertEqual(switches(mutated.instructions[name]),
                              [ir_records.ENTER_FRAME])
 
+    def test_the_guarded_call_prefix_is_declared(self):
+        # The binding plan relies on the callable's declared facts and on
+        # the prefix's declared guard reasons, not on the guards' bodies
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+
+        def validate(text):
+            Path(self.temp_input_filename).write_text(text)
+            with handle_stderr():
+                analysis = analyzer.analyze_files([self.temp_input_filename])
+            formats = ir_generator.compute_formats(analysis)
+            for name in ("CALL_PY_GENERAL", "CALL_KW_PY"):
+                ir_generator.validate_guarded_python_call(
+                    analysis.instructions[name], formats[name])
+
+        validate(source)
+        version = ("-- callable: exact(PyFunction_Type) func_version(func_version), "
+                   "unused, unused[oparg]))")
+        for old, new in [('"the recursion budget is spent"', '"spam"'),
+                         (version, version.replace(" func_version(func_version)", "")),
+                         ("op(_CHECK_PEP_523, (--))\n            effects(reads)",
+                          "op(_CHECK_PEP_523, (--))\n            effects(reads, writes)")]:
+            with self.subTest(old):
+                self.assertEqual(source.count(old), 1)
+                with self.assertRaisesRegex(SyntaxError, "requires the checked prefix"):
+                    validate(source.replace(old, new))
+
     def test_physical_output_mapping_matches_window_finalization(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()

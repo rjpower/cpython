@@ -36,6 +36,11 @@ WRITES = frozenset((WRITES_HEAP,))
 BOXES = frozenset((ALLOCATES, MAY_RAISE))
 
 
+# The facts an `assume` op may state: those with a C assertion
+# (ir_contract.ASSERTION_FORMS), each of which the templates check
+ASSUMABLE = ("nonnull", "object", "inline", "inline_int", "inline_float", "exact")
+
+
 # ---------------------------------------------------------------------------
 # Types
 
@@ -981,10 +986,10 @@ def capability_expansion(name: str, args: list[str], pointer_test: str | None = 
     if name == "IR_GUARD_INLINE_INT":
         return [("guard", f"!PyValue_IsInlineInt({args[0]})")]
     if name == "IR_GUARD_ELEMENT_TYPE":
-        value, kind = args
-        prefix = {"LIST": "PyList", "TUPLE": "PyTuple"}[kind]
+        value, tp = args
+        prefix = {"PyList_Type": "PyList", "PyTuple_Type": "PyTuple"}[tp]
         test = pointer_test or f"PyValue_IsObject({value})"
-        items = [("gil_disabled_miss",)] if kind == "LIST" else []
+        items = [("gil_disabled_miss",)] if tp == "PyList_Type" else []
         items.append(("guard", f"!{test} || !{prefix}_CheckExact("
                                f"_PyValue_AsKnownObjectBorrowPointer({value}))"))
         return items
@@ -1112,27 +1117,27 @@ class Translator:
 
     # -- the body
 
-    def check_assumptions(self) -> None:
-        """A declared assumption (F7) is asserted in every form; the leaf IR
-        has no assertion, so the templates could not check it"""
+    def assume(self, v: int, assumed, site=None) -> None:
+        """A declared assumption (F7) of a value, `assume(fact)`: the leaf IR
+        states it, and the templates check it in a build with assertions
+        (an `assume` op of the fact's kind and argument, which changes
+        nothing)"""
+        for a in assumed:
+            if a.fact.kind not in ASSUMABLE:
+                raise LeafError(f"assumed {a.fact}, which no template can check", site)
+            self.emit("assume", (), (v,), (a.fact.kind, a.fact.arg), site)
+
+    def assume_result(self, name: str, results, tok) -> None:
+        "the assumption of a row's result, after its call"
         import ir_contract
-        contract = ir_contract.contract_of(self.uop)
-        if contract is None:
-            return
-        for item in contract.inputs:
-            if item.assumed:
-                raise LeafError(f"`{item.name}` is assumed {item.assumed[0].fact}, whose "
-                                "assertion the leaf IR cannot state")
-        table = ir_contract.rows()
-        for tkn, _ in ir_contract.body_calls(self.uop):
-            row = table.get(tkn.text)
-            if row is not None and row.result.assumed:
-                raise LeafError(f"{row.name}'s result is assumed, whose assertion the leaf "
-                                "IR cannot state", tkn)
+        row = ir_contract.rows().get(name)
+        if row is not None and row.result.assumed and results:
+            self.assume(results[0], row.result.assumed, tok)
 
     def translate(self) -> LeafBody:
+        import ir_contract
         uop = self.uop
-        self.check_assumptions()
+        contract = ir_contract.contract_of(uop)
         inputs, outputs = [], []
         for item in uop.stack.inputs:
             if item.name == "unused":
@@ -1141,6 +1146,9 @@ class Translator:
                 raise LeafError(f"array input {item.name}[{item.size}]")
             inputs.append(item.name)
             self.env[item.name] = self.emit1("arg", VALUE, (), item.name)
+            declared = contract.input(item.name) if contract is not None else None
+            if declared is not None and declared.assumed:
+                self.assume(self.env[item.name][0], declared.assumed)
         for item in uop.stack.outputs:
             if item.name == "unused":
                 continue
@@ -1788,6 +1796,7 @@ class Translator:
             self.add_effects(helper.effects)
             self.helper(name)
             results = self.emit("call", helper.results, vals, name, tok)
+            self.assume_result(name, results, tok)
             return (results[0], helper.results[0]) if results else None
         raise LeafError(f"a call of {name}, which is neither a listed primitive nor a "
                         f"declared helper", tok)
@@ -1819,6 +1828,7 @@ class Translator:
         if prim.slow:
             self.helper(prim.slow)
         results = self.emit("prim", prim.results, vals, prim.name, tok)
+        self.assume_result(prim.name, results, tok)
         # Out-parameters: &local, written by the primitive
         for a, r, t in zip(args[n_in:], results[1:], prim.results[1:]):
             if not (a.kind == "unary" and a.value == "&" and a.args[0].kind == "name" and

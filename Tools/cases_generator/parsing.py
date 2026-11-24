@@ -406,7 +406,10 @@ class Parser(PLexer):
 
     # The clauses of a uop's declared contract, between its stack effect and
     # its body (Tools/cases_generator/ir_contract.py)
-    CONTRACT_CLAUSES = ("effects", "exits", "feedback")
+    CONTRACT_CLAUSES = ("effects", "exits", "feedback", "state", "paths")
+    # Clauses whose text ir_contract.py reads: `state(call_state: self(absent)
+    # -- call_state: self(present))`, `paths(globals: keys_version(v))`
+    RAW_CLAUSES = ("state", "paths")
 
     def contract_clauses(self) -> dict[str, list[str]]:
         clauses: dict[str, list[str]] = {}
@@ -417,6 +420,17 @@ class Parser(PLexer):
                 raise self.make_syntax_error(f"A second {tkn.text}() clause")
             self.require(lx.LPAREN)
             names: list[str] = []
+            if tkn.text in self.RAW_CLAUSES:
+                depth = 1
+                while depth:
+                    t = self.next()
+                    if t is None:
+                        raise self.make_syntax_error(f"An unclosed {tkn.text}() clause")
+                    depth += {lx.LPAREN: 1, lx.RPAREN: -1}.get(t.kind, 0)
+                    if depth:
+                        names.append(t.text)
+                clauses[tkn.text] = names
+                continue
             while name := self.word():
                 text = name.text
                 if self.expect(lx.LPAREN):

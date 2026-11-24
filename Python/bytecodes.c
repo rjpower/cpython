@@ -285,7 +285,9 @@ dummy_func(
             value = PyValue_DUP(GETLOCAL(oparg));
         }
 
-        leaf inst(LOAD_FAST_AND_CLEAR, (-- value)) {
+        leaf inst(LOAD_FAST_AND_CLEAR, (-- value: moved(home)))
+            effects() exits(next)
+        {
             value = GETLOCAL(oparg);
             GETLOCAL(oparg) = PyValue_NULL;
         }
@@ -339,7 +341,9 @@ dummy_func(
 
         macro(STORE_FAST) = _SWAP_FAST + POP_TOP;
 
-        leaf op(_SWAP_FAST, (value -- trash)) {
+        leaf op(_SWAP_FAST, (value: consumed -- trash: moved(home)))
+            effects() exits(next)
+        {
             PyValue tmp = GETLOCAL(oparg);  // a move: replaced below
             GETLOCAL(oparg) = value;
             _PyValue_CheckHome(value);
@@ -1129,13 +1133,15 @@ dummy_func(
             PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
             PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
             assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
-            _PyBinaryOpSpecializationDescr *d = (_PyBinaryOpSpecializationDescr*)descr;
+            _PyBinaryOpSpecializationDescr *d = _PyBinaryOp_ExtendDescr(descr);
             assert(d != NULL);
-            EXIT_IF(Py_TYPE(left_o) != d->lhs_type || Py_TYPE(right_o) != d->rhs_type);
+            EXIT_IF(Py_TYPE(left_o) != d->lhs_type || Py_TYPE(right_o) != d->rhs_type,
+                    "the operand types are not the descriptor's");
 
             STAT_INC(BINARY_OP, hit);
 
-            PyObject *res_o = d->action(left_o, right_o);
+            binaryopactionfunc action = d->action;
+            PyObject *res_o = action(left_o, right_o);
             if (res_o == NULL) {
                 ERROR_NO_POP();
             }
@@ -1206,11 +1212,11 @@ dummy_func(
         }
 
         leaf inline_ok op(_GUARD_ELEMENT_LIST, (container, unused -- container, unused)) {
-            IR_GUARD_ELEMENT_TYPE(container, LIST);
+            IR_GUARD_ELEMENT_TYPE(container, PyList_Type);
         }
 
         leaf inline_ok op(_GUARD_ELEMENT_TUPLE, (container, unused -- container, unused)) {
-            IR_GUARD_ELEMENT_TYPE(container, TUPLE);
+            IR_GUARD_ELEMENT_TYPE(container, PyTuple_Type);
         }
 
         macro(BINARY_OP_SUBSCR_LIST_INT) =
@@ -1753,7 +1759,7 @@ dummy_func(
                 IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
             }
             if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
+                _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(receiver), &window[1]);
                 null_or_index = window[1];
                 PyValue item = next.value;
                 int found = next.status;
@@ -1820,7 +1826,8 @@ dummy_func(
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-            _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+            _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+            _PyValueIndexPair next_index = iteritem(iter_o, index);
             index = next_index.index;
             if (PyValue_IsNull(next_index.value)) {
                 if (index < 0) {
@@ -2289,7 +2296,9 @@ dummy_func(
         // names the dict the specialiser saw.  Builtins can be any object,
         // so _LOAD_GLOBAL_BUILTINS still checks the type before it reads
         // the keys.
-        leaf op(_GUARD_GLOBALS_VERSION, (globals_version/1 --)) {
+        leaf op(_GUARD_GLOBALS_VERSION, (globals_version/1 --))
+            effects(reads) exits(next, deopt) paths(globals: keys_version(globals_version))
+        {
             PyDictObject *dict = (PyDictObject *)GLOBALS();
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
             DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version);
@@ -2801,12 +2810,14 @@ dummy_func(
             _GUARD_LOAD_SUPER_ATTR_METHOD +
             _LOAD_SUPER_ATTR_METHOD;
 
-        op(_GUARD_LOAD_SUPER_ATTR_METHOD, (global_super_st, class_st, unused -- global_super_st, class_st, unused)) {
+        op(_GUARD_LOAD_SUPER_ATTR_METHOD, (global_super_st: object, class_st: object, unused -- global_super_st: is(PySuper_Type), class_st, unused))
+            effects(reads) exits(next, miss)
+        {
             PyObject *global_super = PyValue_AsKnownObjectBorrow(global_super_st);
             PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
             assert(oparg & 1);
             EXIT_IF(global_super != (PyObject *)&PySuper_Type);
-            EXIT_IF(!PyType_Check(class));
+            EXIT_IF(!PyType_Check(class), "the class is not a type");
         }
 
         op(_LOAD_SUPER_ATTR_METHOD, (global_super_st, class_st, self_st -- attr, self_or_null)) {
@@ -4191,7 +4202,7 @@ dummy_func(
         }
 
         replaced op(_FOR_ITER, (iter, null_or_index -- iter, null_or_index, next)) {
-            _PyStatusValue step = _PyForIter_VirtualIteratorNextInline(tstate, frame, iter, &window[1]);
+            _PyStatusValue step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(iter), &window[1]);
             null_or_index = window[1];
             PyValue item = step.value;
             int found = step.status;
@@ -4216,7 +4227,7 @@ dummy_func(
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             if (PyValue_IsNull(null_or_index)) {
                 _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(Py_TYPE(iter_o), iternext);
-                EXIT_IF(next_value == NULL);
+                EXIT_IF(next_value == NULL, "the type has no iternext value slot");
                 _PyStatusValue step = next_value(iter_o);
                 if (step.status != PYGEN_NEXT) {
                     // A StopIteration is the exhaustion; any other error
@@ -4231,7 +4242,8 @@ dummy_func(
             }
             else {
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+                _PyValueIndexPair next_index = iteritem(iter_o, index);
                 index = next_index.index;
                 if (PyValue_IsNull(next_index.value)) {
                     if (index < 0) {
@@ -4278,7 +4290,7 @@ dummy_func(
             _FOR_ITER_DICT_ITEMS;
 
         inst(INSTRUMENTED_FOR_ITER, (unused/1, iter, null_or_index -- iter, null_or_index, next)) {
-            _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &window[1]);
+            _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(iter), &window[1]);
             null_or_index = window[1];
             PyValue item = step.value;
             int found = step.status;
@@ -4719,6 +4731,7 @@ dummy_func(
                 (callable, self_or_null, unused[oparg]
                  -- callable, self_or_null, unused[oparg]))
             effects(runs_python) exits(next, raise) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+            state(call_state -- call_state)
         {
             #if ENABLE_SPECIALIZATION
             {
@@ -4976,15 +4989,21 @@ dummy_func(
             _CHECK_FUNCTION_EXACT_ARGS +
             _CALL_PY_GENERATOR;
 
-        op(_GUARD_NOS_NULL, (null, unused -- null, unused)) {
+        op(_GUARD_NOS_NULL, (null, unused -- null, unused))
+            effects() exits(next, miss) state(call_state -- call_state: self(absent))
+        {
             EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
 
-        op(_GUARD_CALL_SELF_PRESENT, (unused, unused -- unused, unused)) {
+        op(_GUARD_CALL_SELF_PRESENT, (unused, unused -- unused, unused))
+            effects() exits(next, miss) state(call_state -- call_state: self(present))
+        {
             EXIT_IF(!(call_state & CALL_SELF_PRESENT));
         }
 
-        op(_GUARD_THIRD_NULL, (null, unused, unused -- null, unused, unused)) {
+        op(_GUARD_THIRD_NULL, (null, unused, unused -- null, unused, unused))
+            effects() exits(next, miss) state(call_state -- call_state: self(absent))
+        {
             EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
 

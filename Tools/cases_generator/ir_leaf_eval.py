@@ -352,6 +352,10 @@ def evaluate(body, cx: Context, inputs: dict[str, int], caches: dict[str, int],
             elif k == "report_edge":
                 edge = 1 + bool(a[0])
                 continue
+            elif k == "assume":
+                # A declared assumption holds: the builds with assertions
+                # check it (F7)
+                continue
             elif k == "out":
                 outputs[op.attr] = a[0]
                 continue

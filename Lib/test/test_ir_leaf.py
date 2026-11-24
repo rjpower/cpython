@@ -17,6 +17,7 @@ capi = import_helper.import_module("_testinternalcapi")
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import ir_leaf
+    import ir_contract
     import ir_leaf_eval
 
 LAYOUT = ir_leaf_eval.Layout.from_c(capi)
@@ -411,6 +412,27 @@ class CheckerTests(unittest.TestCase):
             "  next",
         ])
         self.assertEqual(body.effects, frozenset())
+
+    def test_assumptions(self):
+        # F7: the leaf IR states a declared assumption as an assume op, which
+        # the templates check in a build with assertions
+        source = """
+            op(_OP, (value: borrowed assumed(%s) by _P -- res: inline)) effects() exits(next) {
+                res = PyValue_IsNone(value) ? PyValue_False : PyValue_True;
+            }"""
+        body = ir_leaf.translate(analyze(source % "exact(PyUnicode_Type|PyBytes_Type)")["_OP"])
+        self.assertEqual(body.dump()[:3], [
+            "b0:",
+            "  %0:value = arg value",
+            "  assume exact PyUnicode_Type|PyBytes_Type %0",
+        ])
+        self.assertEqual(body.effects, frozenset())
+        for fact in ("nonnull", "object", "inline_int", "inline_float"):
+            with self.subTest(fact=fact):
+                body = ir_leaf.translate(analyze(source % fact)["_OP"])
+                self.assertIn(f"  assume {fact}  %0", body.dump())
+        # Each fact with a C assertion is one the templates check
+        self.assertEqual(ir_leaf.ASSUMABLE, tuple(ir_contract.ASSERTION_FORMS))
 
 
 BYTECODES = Path(test_tools.basepath) / "Python" / "bytecodes.c"

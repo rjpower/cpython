@@ -42,7 +42,11 @@
  * VALUE_OR_NULL(mode facts) (NULL means raised), STATUS(ZERO | NEGATIVE |
  * NONZERO) (the failure value of an int status: raised, and the `out`
  * arguments unwritten), GUARD(facts per argument) (a row with a miss or
- * deopt exit: the facts on its normal return), HOME (a frame home:
+ * deopt exit: the facts on its normal return), CASES(case, ...) (a struct of
+ * a status and values: per outcome, the signs of its integer fields
+ * (status<0, status==1, ...), each value field's ownership and nullness
+ * (value(owned), value(null), second(inline nullable)) and `raised` if an
+ * exception is set; the walk follows each outcome from the call), HOME (a frame home:
  * GETLOCAL) and HOME(base) (the base of the homes: IR_SLOTS).
  * EFFECTS: reads writes allocates raises releases runs_python polls
  * switches_frame.  A `releases` may run a finalizer, which may run Python
@@ -75,6 +79,9 @@
  *       a static immortal value (V8's roots): PyValue_None, PyValue_True,
  *       PyValue_False and PyValue_NULL, whose fact is `null`, the negation
  *       of nonnull
+ *   CONSTANT(name, OBJECT(type))
+ *       a static object, named by its address and held to its C type:
+ *       `is(name)` of a value is that its object is this one
  *
  * Rows for C functions are trusted declarations: the static checks hold
  * their types, not their effects, to the C definitions (rd/design.md
@@ -95,6 +102,8 @@
     CONSTANT(PyValue_True, VALUE(inline exact(PyBool_Type))) \
     CONSTANT(PyValue_False, VALUE(inline exact(PyBool_Type))) \
     CONSTANT(PyValue_NULL, VALUE(inline null)) \
+    /* Static objects that guards compare by address */ \
+    CONSTANT(PySuper_Type, OBJECT(PyTypeObject)) \
     /* Tag tests: bits in, no memory.  PyValue_IsNull is bits == 0: NULL \
      * exactly when it holds */ \
     PRIMITIVE(PyValue_IsNull, bool, (PyValueBorrow), \
@@ -272,12 +281,14 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_GetAttr, PyValue, (PyValueBorrow, PyObject *), \
         ARGS(borrowed, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* pycore_value_ops.h: status 1 an unbound method, 0 the attribute, -1 an error; the value owned unless NULL (G0a4: a CASES result) */ \
     HELPER(_PyValue_GetMethod, _PyStatusValue, (PyValueBorrow, PyObject *), \
-        ARGS(borrowed, object), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+        ARGS(borrowed, object), \
+        CASES(status==-1 value(null) raised, status==0 value(owned), status==1 value(owned)), EFFECTS(runs_python)) \
+    /* pycore_value_ops.h: 1 with the item, 0 for a missing key (no exception), -1 on another error (G0a4: a CASES result) */ \
     HELPER(_PyValue_GetOptionalItem, _PyStatusValue, (PyValueBorrow, PyValueBorrow), \
-        ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed), \
+        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_Invert, PyValue, (PyValueBorrow), \
         ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
@@ -310,9 +321,10 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_RichCompare, PyValue, (PyValueBorrow, PyValueBorrow, int), \
         ARGS(borrowed, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* pycore_value_ops.h: 1 with the yielded item, 0 with the return value, -1 on error (G0a4: a CASES result) */ \
     HELPER(_PyValue_Send, _PyStatusValue, (PyObject *, PyValueBorrow), \
-        ARGS(object, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object, borrowed), \
+        CASES(status==-1 value(null) raised, status==0 value(owned), status==1 value(owned)), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_SequenceCheck, int, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(reads)) \
@@ -351,6 +363,36 @@
               ARGS(object), PATH(type), EFFECTS(reads)) \
     FIELD(PyTypeObject, tp_version_tag, unsigned int, ON(type), \
           MEASURE(type_version), EFFECTS(reads)) \
+    /* The value slots that uops call (pycore_value_slots.h), read through \
+     * _PyType_VALUE_SLOT as the slot table types them (G0a4).  A contains \
+     * slot returns 1 or 0, or -1 with an exception; any target may run \
+     * Python (a heap type's __contains__) */ \
+    SLOT(_Py_containsvaluefunc, int, (PyObject *, PyValueBorrow), \
+         ARGS(object, borrowed), SCALAR, EFFECTS(runs_python)) \
+    FIELD(PyTypeObject, tp_value.contains, _Py_containsvaluefunc, ON(type), \
+          SLOT(_Py_containsvaluefunc), EFFECTS(reads)) \
+    /* An iternext slot: PYGEN_NEXT with an owned item; PYGEN_RETURN with \
+     * an owned return value, or PyValue_NULL for None (R11), and no \
+     * exception; PYGEN_ERROR with PyValue_NULL and an exception set.  Any \
+     * target may run Python (a generator's frame, a heap type's __next__) */ \
+    SLOT(_Py_iternextvaluefunc, _PyStatusValue, (PyObject *), ARGS(object), \
+         CASES(status==-1 value(null) raised, status==0 value(owned nullable), \
+               status==1 value(owned)), EFFECTS(runs_python)) \
+    FIELD(PyTypeObject, tp_value.iternext, _Py_iternextvaluefunc, ON(type), \
+          SLOT(_Py_iternextvaluefunc), EFFECTS(reads)) \
+    /* An index-protocol step (object.h): the owned item at a nonnegative \
+     * next index; PyValue_NULL at the end with no exception and a \
+     * nonnegative index; PyValue_NULL with a negative index and an \
+     * exception set.  The targets, list_iteritem, _PyTuple_IterValue, \
+     * bytes_iteritem and unicode_iteritem (and subtypes, which inherit \
+     * them), read the sequence and run no Python; unicode_iteritem \
+     * allocates a character and raises when that fails */ \
+    SLOT(_Py_iteritemfunc, _PyValueIndexPair, (PyObject *, Py_ssize_t), \
+         ARGS(object, scalar), \
+         CASES(index<0 value(null) raised, index>=0 value(null), \
+               index>=0 value(owned)), EFFECTS(reads, allocates, raises)) \
+    FIELD(PyTypeObject, _tp_iteritem, _Py_iteritemfunc, ON(type), \
+          SLOT(_Py_iteritemfunc), EFFECTS(reads)) \
     /* An object's inline values (pycore_object.h: at tp_basicsize; the \
      * caller has the type's Py_TPFLAGS_INLINE_VALUES) and their flag */ \
     PRIMITIVE(_PyObject_InlineValues, PyDictValues *, (PyObject *), \
@@ -551,9 +593,10 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyShape_TransitionMissing, bool, (PyTypeObject *, uint8_t, Py_ssize_t), \
         ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* pycore_value_ops.h: status 1 an unbound method, 0 the attribute, -1 an error (G0a4: a CASES result) */ \
     HELPER(_PySuper_LookupValue, _PyStatusValue, (PyTypeObject *, PyValueBorrow, PyObject *, int), \
-        ARGS(scalar, borrowed, object, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(scalar, borrowed, object, scalar), \
+        CASES(status==-1 value(null) raised, status==0 value(owned), status==1 value(owned)), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyTemplate_Build, PyObject *, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
@@ -600,9 +643,10 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(value_import_level, int, (PyValue), \
         ARGS(consumed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* ceval.c: as _PyValue_GetOptionalItem, -1 if the lazy import fails (G0a4: a CASES result) */ \
     HELPER(value_load_from_dict, _PyStatusValue, (PyThreadState *, PyObject *, PyObject *), \
-        ARGS(tstate, object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(tstate, object, object), \
+        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(value_load_global, PyValue, (PyObject *, PyObject *, PyObject *), \
         ARGS(object, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
@@ -741,6 +785,18 @@
     /* The header of the word's feedback entry: an address, which each \
      * generator expands for its form (ir_generator.IR_INSTRUCTION_MACROS) */ \
     MACRO(FB_COUNTER, ARGS(), SCALAR, EFFECTS(), EXITS()) \
+    /* BINARY_OP_EXTEND's descriptor (pycore_code.h): its cache operand, \
+     * typed, a pointer along the path binary_op_descr; the action it \
+     * holds.  The actions (specialize.c, binaryop_extend_descrs) are \
+     * concatenations, repeats and dict | dict, which return a new \
+     * reference or NULL with an exception, and may run Python (a key's \
+     * __eq__ in dict | dict) (G0a4) */ \
+    PRIMITIVE(_PyBinaryOp_ExtendDescr, _PyBinaryOpSpecializationDescr *, (PyObject *), \
+              ARGS(scalar), PATH(binary_op_descr), EFFECTS()) \
+    SLOT(binaryopactionfunc, PyObject *, (PyObject *, PyObject *), \
+         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+    FIELD(_PyBinaryOpSpecializationDescr, action, binaryopactionfunc, \
+          ON(binary_op_descr), SLOT(binaryopactionfunc), EFFECTS(reads)) \
     /* The counter of an entry header (Python/ceval_macros.h): a test of \
      * it, and its advance; NULL has no counter */ \
     PRIMITIVE(_PyFb_CounterTriggers, int, (_PyFbHeader *), \
@@ -846,6 +902,13 @@
 
 /* Calls and frames */
 #define _PyIR_COMPONENTS_CALLS(PRIMITIVE, HELPER, MACRO) \
+    /* A call handler's state, its register local call_state (ceval.c): \
+     * an implicit operand of the call's uops, which a uop reads and writes \
+     * only through its state(...) clause.  CALL_SELF_PRESENT is set where \
+     * the call has a self operand; the generator initializes the local \
+     * from the word with IR_CALL_SELF_STATE (G0a4) */ \
+    STATE(call_state, int, BITS(CALL_SELF_PRESENT: self(present) | self(absent)), \
+          INIT(IR_CALL_SELF_STATE)) \
     /* seeded from a C macro (no static check), ir_records.CONTEXT_PREDICATES, ir_records.effect_sites */ \
     MACRO(IS_PEP523_HOOKED, \
         ARGS(scalar), CONTEXT("a PEP 523 frame evaluator may replace the call"), EFFECTS(reads), EXITS()) \
@@ -930,12 +993,14 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyForIter_StopIsExhaustion, int, (PyThreadState *, _PyInterpreterFrame *), \
         ARGS(tstate, frame), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
-    HELPER(_PyForIter_VirtualIteratorNext, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValue, PyValue *), \
-        ARGS(tstate, frame, consumed, scalar), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
-    HELPER(_PyForIter_VirtualIteratorNextInline, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValue, PyValue *), \
-        ARGS(tstate, frame, consumed, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* ceval.c: {1, item} owned, {0, NULL} at the end with no exception, {-1, NULL} with one (G0a4: a CASES result) */ \
+    HELPER(_PyForIter_VirtualIteratorNext, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *), \
+        ARGS(tstate, frame, borrowed, scalar), \
+        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
+    /* ceval.c: as _PyForIter_VirtualIteratorNext (G0a4: a CASES result) */ \
+    HELPER(_PyForIter_VirtualIteratorNextInline, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *), \
+        ARGS(tstate, frame, borrowed, scalar), \
+        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyGen_GetGeneratorFromFrame, PyGenObject *, (_PyInterpreterFrame *), \
         ARGS(frame), SCALAR, EFFECTS(reads)) \
@@ -1107,9 +1172,10 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_GetAIter, PyValue, (PyThreadState *, PyValue), \
         ARGS(tstate, consumed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* ceval.c: {iterable, tagged index 0}, {iterator, NULL}, or {NULL, NULL} with an exception set (G0a4: a CASES result) */ \
     HELPER(_PyEval_GetIter, _PyValuePair, (PyValue, int), \
-        ARGS(consumed, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(consumed, scalar), \
+        CASES(first(null) second(null) raised, first(owned) second(inline nullable)), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_ImportFromValue, PyValue, (PyThreadState *, PyValueBorrow, PyObject *), \
         ARGS(tstate, borrowed, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
@@ -1169,6 +1235,12 @@
      * close kill (HOME) */ \
     MACRO(GLOBALS, ARGS(), PATH(globals), EFFECTS(reads), EXITS()) \
     MACRO(BUILTINS, ARGS(), PATH(builtins), EFFECTS(reads), EXITS()) \
+    /* A frame path's dict keys (pycore_dict.h), and their version: a \
+     * fact of the path, `paths(globals: keys_version(v))` (G0a4) */ \
+    FIELD(PyDictObject, ma_keys, PyDictKeysObject *, ON(globals | builtins), \
+          PATH(dict_keys), EFFECTS(reads)) \
+    FIELD(PyDictKeysObject, dk_version, uint32_t, ON(dict_keys), \
+          MEASURE(keys_version), EFFECTS(reads)) \
     MACRO(FRAME_CO_CONSTS, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
     MACRO(IR_SLOTS, ARGS(), HOME(base), EFFECTS(), EXITS()) \
     MACRO(GETLOCAL, ARGS(scalar), HOME, EFFECTS(), EXITS()) \
@@ -1287,9 +1359,11 @@
           NONE, EFFECTS(reads, writes, raises, runs_python), \
           EXITS(branch, raise)) \
     /* IR_MARKER_EFFECTS: escapes, error, terminal; TRANSFER_TOKENS (BRANCH, \
-     * RAISE).  Arguments are the kind, whether the step completed and the \
-     * oparg */ \
-    MACRO(IR_COMPLETE_STEP, ARGS(scalar, scalar, scalar), NONE, \
+     * RAISE).  Arguments are the kind, the completion value and the \
+     * oparg.  The completion helper (_PyEval_CompleteForIter, \
+     * _PyEval_CompleteSend) owns the value on every exit, so the value is \
+     * consumed (G0a4) */ \
+    MACRO(IR_COMPLETE_STEP, ARGS(scalar, consumed, scalar), NONE, \
           EFFECTS(reads, writes, raises, runs_python), EXITS(branch, raise)) \
     /* Errors: IR_MARKER_EFFECTS escapes, error, terminal, frame; \
      * TRANSFER_TOKENS (RAISE) only.  PROCESS_ERROR_AT with an EXIT ingress \

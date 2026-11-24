@@ -1370,7 +1370,7 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
                 IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
             }
             if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
+                _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(receiver), &window[1]);
                 null_or_index = window[1];
                 PyValue item = next.value;
                 int found = next.status;
@@ -1410,7 +1410,8 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-            _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+            _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+            _PyValueIndexPair next_index = iteritem(iter_o, index);
             index = next_index.index;
             if (PyValue_IsNull(next_index.value)) {
                 if (index < 0) { ERROR_NO_POP(); }
@@ -3985,9 +3986,11 @@ class IREmitter(Emitter):
             expand(names)
             stack.element_guards[("INT", owner)] = "INT"
         elif tkn.text == "IR_GUARD_ELEMENT_TYPE":
-            value, kind = names
-            if kind not in {"LIST", "TUPLE"}:
-                raise analysis_error("element type must be LIST or TUPLE", tkn)
+            # The type, which the GUARD row's exact(1) names (ir_contract.py)
+            value, tp = names
+            kind = {"PyList_Type": "LIST", "PyTuple_Type": "TUPLE"}.get(tp)
+            if kind is None:
+                raise analysis_error("element type must be PyList_Type or PyTuple_Type", tkn)
             # A slot that is read in place holds an object or an inline value,
             # never NULL: a local that may be unbound is checked before it is
             # read as an operand.  The test reads the slot's top bits.
@@ -7108,10 +7111,19 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
         # a kwargs operand), and what the handler did before the call
         # (call_state, in a register).  The operands are the words after the
         # head.
-        out.emit("int call_state = "
-                 + ("IR_CALL_KWARGS_STATE(ir_word)" if kind == "CALL_EX"
-                    else "IR_CALL_SELF_STATE(ir_word)") + ";\n")
-        out.emit("(void)call_state;\n")
+        # The local is the STATE row's (pycore_ir_components.h), initialized
+        # as the row declares; CALL_FUNCTION_EX's holds its kwargs operand
+        # instead, which no uop's state(...) clause reads
+        state = ir_contract.rows()["call_state"]
+        init = "IR_CALL_KWARGS_STATE" if kind == "CALL_EX" else state.init
+        if kind == "CALL_EX" and any(
+                (c := ir_contract.contract_of(part)) is not None and c.state_item(state.name)
+                for part in inst.parts if isinstance(part, Uop)):
+            raise analysis_error(f"{name}: a uop declares state({state.name}), whose "
+                                 "facts are the STATE row's, but CALL_FUNCTION_EX's "
+                                 f"{state.name} holds its kwargs operand", inst.where)
+        out.emit(f"{state.ret} {state.name} = {init}(ir_word);\n")
+        out.emit(f"(void){state.name};\n")
         if emitter.call_has_feedback:
             out.emit(f"uint32_t call_feedback = {field_expr(fmt.fb)};\n")
             out.emit("(void)call_feedback;\n")

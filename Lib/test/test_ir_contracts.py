@@ -153,6 +153,8 @@ EXTRA_ROWS = """
     HELPER(spam_write, void, (PyObject *), ARGS(object), NONE, EFFECTS(writes)) \\
     INTRINSIC(SPAM_FT_ONLY, ARGS(scalar), SCALAR, BUILD(free_threaded)) \\
     MACRO(SPAM_RAISE, ARGS(scalar), NONE, EFFECTS(raises), EXITS(raise)) \\
+    HELPER(T, PyValue, (PyValue), ARGS(taken), \\
+           VALUE_OR_NULL(owned), EFFECTS(allocates, raises)) \\
     MACRO(SPAM_GUARD, ARGS(scalar), NONE, EFFECTS(), EXITS(miss))
 """
 
@@ -230,7 +232,11 @@ class VerifierTests(unittest.TestCase):
                 PyValue_CLOSE_SPECIALIZED(value, %s);
             }
         """
-        self.verify(source % "_PyLong_ExactDealloc")
+        # A destructor frees only its type
+        self.refuses(source % "_PyLong_ExactDealloc",
+                     r"closes `value` through _PyLong_ExactDealloc, which frees only "
+                     r"exact\(PyLong_Type\), which it is not shown to be")
+        self.verify(source.replace("PyList_Type", "PyLong_Type") % "_PyLong_ExactDealloc")
         # An exact type's deallocator is no exemption: a list's releases its items
         self.refuses(source % "spam_dealloc",
                      r"may releases \(spam_dealloc is no callback_free DESTRUCTOR row\)")
@@ -811,6 +817,209 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual(lines, ['OP.record.uops[0].effects: inferred 0 entries [], declared 1 ["READS_HEAP"]',
                                  "1 handlers compared; 1 of 1 uops declared"])
 
+    # G0a2: Astra's witnesses against 38a1500dbba (astra/g0a-review.md)
+
+    def test_overwritten_obligation(self):
+        self.refuses("""
+            op(_LEAK, (a: consumed, b: consumed --)) effects(releases) exits(next) {
+                PyValue t = a;
+                t = b;
+                PyValue_CLOSE_SPECIALIZED(t, _Py_Dealloc);
+            }
+        """, r"_LEAK: `t` is assigned while it holds an owner, which would leak")
+
+    def test_discarded_owned_result(self):
+        self.refuses("""
+            op(_LEAK_AND_MISS, (v -- v: inline_int)) effects() exits(next, miss) {
+                PyValue_XDUP(v);
+                EXIT_IF(!PyValue_IsInlineInt(v));
+            }
+        """, r"_LEAK_AND_MISS: `PyValue_XDUP \( v \)` discards the owned result of "
+             r"PyValue_XDUP")
+
+    def test_unmodelled_forms_are_refused(self):
+        source = """
+            op(_FORM, (a: consumed, b: consumed -- r: owned)) effects(releases) exits(next) {
+                %s
+            }
+        """
+        self.refuses(source % "PyValue t = oparg ? a : b;",
+                     r"`PyValue t = oparg \? a : b` uses `a` in a form the walk does not "
+                     r"model")
+        self.refuses(source % "goto done;", r"`goto` is a form the walk does not model")
+        self.refuses(source % "r = PyValue_XDUP(PyValue_XDUP(a));",
+                     r"calls PyValue_XDUP, which makes an owner, in a form the walk does "
+                     r"not model")
+
+    def test_taken_argument_is_kept_on_failure(self):
+        # T takes x only if it succeeds: on its NULL, x is still the uop's
+        self.refuses("""
+            op(_BAD, (x: consumed -- r: owned))
+                effects(allocates, raises) exits(next, raise) {
+                r = T(x);
+                ERROR_IF(PyValue_IsNull(r));
+            }
+        """, r"_BAD: on raise, `x` is still owned, but the site declares consumed")
+        # Steal on success: a taken input is kept on raise
+        self.verify("""
+            op(_GOOD, (x: taken -- r: owned))
+                effects(allocates, raises) exits(next, raise) {
+                r = T(x);
+                ERROR_IF(PyValue_IsNull(r));
+            }
+        """)
+        # A consumed input released where T fails
+        self.verify("""
+            op(_GOOD, (x: consumed exact(PyLong_Type) -- r: owned))
+                effects(allocates, raises, writes) exits(next, raise) {
+                r = T(x);
+                if (PyValue_IsNull(r)) {
+                    PyValue_CLOSE_SPECIALIZED(x, _PyLong_ExactDealloc);
+                    ERROR_IF(true);
+                }
+            }
+        """)
+        self.refuses("""
+            op(_UNTESTED, (x: taken -- r: owned))
+                effects(allocates, raises) exits(next) {
+                r = T(x);
+            }
+        """, r"on next, `x` is taken by a row only if `r` reports success, which nothing "
+             r"tests here")
+
+    def test_row_guard_after_a_detachment(self):
+        self.refuses("""
+            op(_MOVE, (x: taken -- y: moved(x))) effects() exits(next) { y = x; }
+            op(_GUARD, (y -- y)) effects() exits(next, miss) { SPAM_GUARD(oparg); }
+            macro(BAD) = _MOVE + _GUARD;
+        """, r"BAD: the guard in _GUARD follows the skeleton's detachment of `x` after "
+             r"_MOVE, so the word cannot restart")
+
+    def test_unknown_depth_keeps_restartability(self):
+        self.refuses("""
+            op(_WRITE, (--)) effects(writes) exits(next) feedback(write(counter)) {
+                _PyFb_AdvanceCounter(FB_COUNTER());
+            }
+            op(_GUARD_ARRAY, (xs[oparg] -- xs[oparg])) effects() exits(next, miss) {
+                EXIT_IF(oparg == 0, "test");
+            }
+            macro(BAD_ARRAY) = _WRITE + _GUARD_ARRAY;
+        """, r"BAD_ARRAY: the guard in _GUARD_ARRAY follows _WRITE, which may writes, so "
+             r"the word cannot restart")
+
+    def test_element_stores_are_checked(self):
+        self.refuses("""
+            op(_BAD_ARRAY, (-- values[1]: owned inline_int)) effects() exits(next) {
+                values[0] = PyValue_NULL;
+            }
+        """, r"_BAD_ARRAY: stores `PyValue_NULL` into the owned array `values`")
+        source = """
+            op(_ARRAY, (a: consumed %s -- values[1]: owned inline_int)) effects() exits(next) {
+                values[0] = a;
+            }
+        """
+        self.verify(source % "inline_int")
+        self.refuses(source % "", r"stores `a` into `values`, declared .*inline_int, which it "
+                                  r"is not shown to be")
+        self.refuses("""
+            op(_BORROWED, (a -- a, values[1]: owned)) effects() exits(next) {
+                values[0] = a;
+            }
+        """, r"stores `a`, declared a pass-through, into the owned array `values`: no "
+             r"owner moves")
+
+    def test_borrowed_outputs_are_checked(self):
+        self.refuses("""
+            op(_BAD_BORROW, (x: borrowed nullable -- y: borrowed inline_int))
+                effects() exits(next) {
+                y = x;
+            }
+        """, r"_BAD_BORROW: `y` may be NULL from x")
+        self.refuses("""
+            op(_BAD_BORROW, (x: borrowed -- y: borrowed inline_int)) effects() exits(next) {
+                y = x;
+            }
+        """, r"on next, `y` is declared .*inline_int, which does not hold")
+
+    def test_a_rebound_view_certifies_the_value_tested(self):
+        source = """
+            op(_WRONG_FACT, (a, b -- %s)) effects() exits(next, miss) {
+                PyValueBorrow v = PyValue_Borrow(a);
+                v = PyValue_Borrow(b);
+                EXIT_IF(!PyValue_IsInlineInt(v));
+            }
+        """
+        self.refuses(source % "a: inline_int, b",
+                     r"_WRONG_FACT: `a` is declared .*inline_int.*, which nothing "
+                     r"establishes")
+        self.verify(source % "a, b: inline_int")
+
+    def test_reentry_kills_home_facts_in_the_body(self):
+        self.refuses("""
+            op(_STALE, (v: inline_int, victim: consumed -- v))
+                effects(releases) exits(next) {
+                PyValue_CLOSE_SPECIALIZED(victim, _Py_Dealloc);
+                int64_t n = _PyValue_IntScaled(v);
+            }
+        """, r"_STALE: passes `v` to _PyValue_IntScaled, which requires .*inline_int")
+
+    def test_is_object_needs_a_value(self):
+        # PyValue_IsObject(NULL) is false: its false branch says inline only
+        # of a value that is not NULL.  (Astra's `v: inline` output parses
+        # as a mode on a pass-through; `nonnull` is the fact it implied)
+        self.refuses("""
+            op(_BAD_NULL, (v: nullable -- v: nonnull)) effects() exits(next, miss) {
+                EXIT_IF(PyValue_IsObject(v));
+            }
+        """, r"_BAD_NULL: passes `v` to PyValue_IsObject, which requires nonnull of it")
+
+    def test_null_iff_names_a_value_argument(self):
+        for k in ("1", "0"):
+            with self.subTest(k=k):
+                text = ("#define X(PRIMITIVE, HELPER, MACRO) "
+                        "PRIMITIVE(spam, PyValue, (int, PyValueBorrow), "
+                        f"ARGS(scalar, borrowed), VALUE(owned null_iff({k})), EFFECTS())")
+                if k == "1":
+                    ir_contract.parse_rows(text)
+                else:
+                    with self.assertRaisesRegex(SyntaxError, r"null_iff\(0\): argument 0 "
+                                                             r"is no value argument"):
+                        ir_contract.parse_rows(text)
+        with self.assertRaisesRegex(SyntaxError, r"null_iff\(2\)"):
+            ir_contract.parse_rows("#define X(PRIMITIVE, HELPER, MACRO) "
+                                   "PRIMITIVE(spam, PyValue, (PyValueBorrow), ARGS(borrowed), "
+                                   "VALUE(owned null_iff(2)), EFFECTS())")
+
+    def test_poly_lookup_reads_feedback(self):
+        self.assertEqual(ir_contract.rows()["IR_METHOD_POLY_LOOKUP"].feedback,
+                         {("read", "entry")})
+
+    def test_feedback_only_through_rows(self):
+        self.refuses("""
+            op(_READ_COUNTER, (--)) effects(reads) exits(next) {
+                _PyFbHeader *f = FB_COUNTER();
+                _Py_BackoffCounter c = f->counter;
+            }
+        """, r"_READ_COUNTER: dereferences the feedback pointer `f`; a body reaches "
+             r"feedback only through rows")
+        self.refuses("""
+            op(_READ_COUNTER, (--)) effects(reads) exits(next) {
+                _Py_BackoffCounter c = FB_COUNTER()->counter;
+            }
+        """, r"dereferences the feedback pointer `FB_COUNTER`")
+        self.refuses("""
+            op(_READ_COUNTER, (--)) effects(reads) exits(next) {
+                _PyFbHeader *f = FB_COUNTER();
+                int x = PyValue_IsNull(f);
+            }
+        """, r"passes a feedback pointer to PyValue_IsNull, which declares no FEEDBACK")
+        self.verify("""
+            op(_READ_COUNTER, (--)) effects(reads) exits(next) feedback(read(counter)) {
+                _PyFbHeader *f = FB_COUNTER();
+                int x = _PyFb_CounterTriggers(f);
+            }
+        """)
+
     def test_intrinsic_outside_its_build(self):
         self.refuses("""
             inst(OP, (value -- value)) effects() exits(next) {
@@ -886,10 +1095,6 @@ class VerifierTests(unittest.TestCase):
                 "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(), EXITS(next))")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 # Rows that use the columns that name another row; TA declares the tree's
 COLUMN_ROWS = """
 #define TEST_COLUMNS(PRIMITIVE, HELPER, MACRO) \\
@@ -930,31 +1135,80 @@ class ColumnTests(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, r"names no row"):
             column_rows(COLUMN_ROWS.replace("SLOW(_PyValue_BoxInt64)", "SLOW(spam)"))
 
+    def refuses(self, changes, message):
+        text = COLUMN_ROWS
+        for old, new in changes:
+            self.assertIn(old, text)
+            text = text.replace(old, new)
+        with self.assertRaisesRegex(SyntaxError, message):
+            column_rows(text)
+
     def test_conjoins_is_checked(self):
-        with self.assertRaisesRegex(SyntaxError, r"PyValue_BothInlineInt: CONJOINS\("
-                                                 r"PyValue_IsNull\): its TEST is"):
-            column_rows(COLUMN_ROWS.replace("CONJOINS(PyValue_IsInlineInt)",
-                                            "CONJOINS(PyValue_IsNull)"))
-        with self.assertRaisesRegex(SyntaxError, r"a two-argument TEST of a one-argument"):
-            column_rows(COLUMN_ROWS.replace("CONJOINS(PyValue_IsInlineInt)",
-                                            "CONJOINS(_PyValue_IntScaled)"))
+        conjoins = "CONJOINS(PyValue_IsInlineInt)"
+        cases = [
+            ([(conjoins, "CONJOINS(PyValue_IsNull)")],
+             r"PyValue_BothInlineInt: CONJOINS\(PyValue_IsNull\): its TEST is"),
+            ([(conjoins, "CONJOINS(_PyValue_IntScaled)")],
+             r"a two-argument TEST of a one-argument"),
+            # The C signature
+            ([("(PyValueBorrow, PyValueBorrow)", "(PyValueBorrow, PyValue)")],
+             r"its C type is PyValue_IsInlineInt's with two arguments"),
+            # Effects or feedback change what fusion may skip
+            ([("TEST(inline_int, inline_int), EFFECTS()", "TEST(inline_int, inline_int), "
+               "EFFECTS(reads)")], r"PyValue_BothInlineInt has effects or feedback"),
+            ([(conjoins, conjoins + ", FEEDBACK(read(counter))")],
+             r"PyValue_BothInlineInt has effects or feedback"),
+            # A precondition: fusion would evaluate the second test unguarded
+            ([("ARGS(borrowed, borrowed)", "ARGS(borrowed nonnull, borrowed nonnull)")],
+             r"PyValue_BothInlineInt is not total"),
+            ([("ARGS(borrowed, borrowed)", "ARGS(consumed, consumed)")],
+             r"is not total|modes differ"),
+        ]
+        for changes, message in cases:
+            with self.subTest(changes=changes):
+                self.refuses(changes, message)
 
     def test_nonnull_form_is_checked(self):
-        with self.assertRaisesRegex(SyntaxError, r"PyValue_DUP: NONNULL_FORM\(PyValue_XDUP\): "
-                                                 r"it requires nonnull of its argument"):
-            column_rows(COLUMN_ROWS.replace("ARGS(borrowed nonnull)", "ARGS(borrowed)"))
-        with self.assertRaisesRegex(SyntaxError, r"its result differs"):
-            column_rows(COLUMN_ROWS.replace("VALUE(owned), EFFECTS(), NONNULL",
-                                            "VALUE(borrowed), EFFECTS(), NONNULL"))
+        cases = [
+            ([("ARGS(borrowed nonnull)", "ARGS(borrowed)")],
+             r"PyValue_DUP: NONNULL_FORM\(PyValue_XDUP\): its argument is PyValue_XDUP's "
+             r"with nonnull added and nothing else"),
+            # Another precondition besides nonnull
+            ([("ARGS(borrowed nonnull)", "ARGS(borrowed nonnull object)")],
+             r"with nonnull added and nothing else"),
+            ([("ARGS(borrowed nonnull)", "ARGS(consumed nonnull)")],
+             r"with nonnull added and nothing else"),
+            ([("VALUE(owned), EFFECTS(), NONNULL", "VALUE(borrowed), EFFECTS(), NONNULL")],
+             r"its result is PyValue_XDUP's, with at least its facts and no null_iff"),
+            ([("VALUE(owned), EFFECTS(), NONNULL", "VALUE(owned null_iff(0)), EFFECTS(), "
+               "NONNULL")], r"no null_iff"),
+            ([("NONNULL_FORM(PyValue_XDUP)", "NONNULL_FORM(PyValue_XDUP), "
+               "FEEDBACK(read(counter))")], r"its feedback is PyValue_XDUP's"),
+            ([("VALUE(owned), EFFECTS(), NONNULL", "VALUE(owned), EFFECTS(reads), NONNULL")],
+             r"its effects within them"),
+        ]
+        for changes, message in cases:
+            with self.subTest(changes=changes):
+                self.refuses(changes, message)
 
     def test_slow_is_checked(self):
-        with self.assertRaisesRegex(SyntaxError, r"PyValue_FromInt64: SLOW\(_PyValue_BoxInt64\): "
-                                                 r"the row declares fewer effects"):
-            column_rows(COLUMN_ROWS.replace("EFFECTS(allocates, raises), \\\n",
-                                            "EFFECTS(allocates), \\\n"))
-        with self.assertRaisesRegex(SyntaxError, r"a HELPER that can fail"):
-            column_rows(COLUMN_ROWS.replace("SLOW(_PyValue_BoxInt64)",
-                                            "SLOW(PyValue_IsNull)"))
+        cases = [
+            ([("EFFECTS(allocates, raises), \\\n", "EFFECTS(allocates), \\\n")],
+             r"PyValue_FromInt64: SLOW\(_PyValue_BoxInt64\): the row declares fewer "
+             r"effects"),
+            ([("SLOW(_PyValue_BoxInt64)", "SLOW(PyValue_IsNull)")],
+             r"a HELPER with a VALUE_OR_NULL result"),
+            # The slow path calls the helper with the row's arguments
+            ([("(int64_t), ARGS(scalar)", "(int32_t), ARGS(scalar)")],
+             r"_PyValue_BoxInt64 takes the row's parameters and gives its result's mode"),
+            ([("VALUE_OR_NULL(owned exact", "VALUE_OR_NULL(borrowed exact")],
+             r"gives its result's mode"),
+            ([("SLOW(_PyValue_BoxInt64)", "SLOW(value_binary_op)")],
+             r"takes the row's parameters"),
+        ]
+        for changes, message in cases:
+            with self.subTest(changes=changes):
+                self.refuses(changes, message)
 
     def test_columns_against_c(self):
         """Each declared column against the C definitions on generated
@@ -995,3 +1249,7 @@ class ColumnTests(unittest.TestCase):
                         w = capi.leaf_primitive(row.name, i)
                         self.assertNotEqual(w, 0)
                         capi.leaf_primitive("PyValue_CLOSE", w)
+
+
+if __name__ == "__main__":
+    unittest.main()

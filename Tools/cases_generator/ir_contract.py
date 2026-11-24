@@ -20,6 +20,7 @@ ir_records.py infers; the migration (G0) seeds every uop and deletes that
 inference.
 """
 
+import copy
 from dataclasses import dataclass, field
 import re
 
@@ -193,7 +194,8 @@ class Row:
     effects: frozenset[str] = frozenset()
     exits: frozenset[str] = frozenset()
     builds: frozenset[str] = frozenset()    # INTRINSIC
-    callback_free: bool = False             # DESTRUCTOR
+    callback_free: bool = False             # DESTRUCTOR, and the type it frees
+    frees: str = ""
     feedback: frozenset[tuple[str, str]] = frozenset()     # (read|write, field)
     struct: str = ""                        # FIELD: the struct, the field,
     field: str = ""                         # and the path of the pointer
@@ -363,9 +365,11 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
                    effects=_parse_names(effects, "EFFECTS", EFFECTS),
                    struct=struct, field=name, on=_inner(on, "ON").strip())
     if kind == "DESTRUCTOR":
-        if len(fields) != 2 or fields[1] not in ("callback_free",):
-            raise ValueError("DESTRUCTOR(name, callback_free)")
-        return Row(kind, fields[0], callback_free=True, effects=frozenset(("writes",)))
+        if (len(fields) != 3 or fields[2] not in ("callback_free",)
+                or not re.fullmatch(r"\w+", fields[1])):
+            raise ValueError("DESTRUCTOR(name, type, callback_free)")
+        return Row(kind, fields[0], callback_free=True, effects=frozenset(("writes",)),
+                   frees=fields[1])
     if kind == "INTRINSIC":
         if len(fields) != 4:
             raise ValueError("INTRINSIC(name, ARGS(...), result, BUILD(...))")
@@ -422,6 +426,10 @@ def parse_rows(text: str, source: str = "pycore_ir_components.h") -> dict[str, R
             continue
         try:
             row = _parse_row(m.group(1), fields)
+            k = row.result.null_iff
+            if k >= 0 and (k >= len(row.args)
+                           or row.args[k].mode not in ("borrowed", "consumed", "taken")):
+                raise ValueError(f"null_iff({k}): argument {k} is no value argument")
         except ValueError as e:
             raise SyntaxError(f"{source}: row {fields[0]}: {e}") from None
         if row.name in rows:
@@ -444,14 +452,23 @@ def check_columns(table: dict[str, Row]) -> None:
 
     for row in table.values():
         if row.conjoins:
+            # Fusion must not change failure or short-circuit behaviour: both
+            # tests are total (no precondition beyond a borrowed value), have
+            # no effect and touch no feedback
             one = named(row, "CONJOINS", row.conjoins)
             if (row.result.shape != "TEST" or len(row.args) != 2
                     or one.result.shape != "TEST" or len(one.args) != 1):
                 fail(row, f"CONJOINS({one.name}): a two-argument TEST of a "
                      "one-argument TEST")
-            if any(a.mode != one.args[0].mode for a in row.args):
-                fail(row, f"CONJOINS({one.name}): its arguments' modes differ from "
-                     f"{one.name}'s")
+            if row.params != (one.params[0],) * 2 or row.ret != one.ret:
+                fail(row, f"CONJOINS({one.name}): its C type is {one.name}'s with two "
+                     "arguments")
+            for r in (row, one):
+                if r.effects or r.feedback:
+                    fail(row, f"CONJOINS({one.name}): {r.name} has effects or feedback")
+                if any(a.mode != "borrowed" or a.facts for a in r.args):
+                    fail(row, f"CONJOINS({one.name}): {r.name} is not total: its "
+                         "arguments are borrowed and require nothing")
             true = one.result.tests[0][0] if one.result.tests else frozenset()
             if any(t != (true, frozenset()) for t in row.result.tests) \
                     or len(row.result.tests) != 2:
@@ -464,25 +481,31 @@ def check_columns(table: dict[str, Row]) -> None:
                     or row.ret != general.ret:
                 fail(row, f"NONNULL_FORM({general.name}): one argument, and the C type "
                      f"of {general.name}")
-            if (row.result.shape, row.result.mode) != (general.result.shape,
-                                                       general.result.mode):
-                fail(row, f"NONNULL_FORM({general.name}): its result differs from "
-                     f"{general.name}'s")
-            if NONNULL not in implied(row.args[0].facts) \
-                    or NONNULL in implied(general.args[0].facts):
-                fail(row, f"NONNULL_FORM({general.name}): it requires nonnull of its "
-                     f"argument, which {general.name} does not")
-            if not row.effects <= general.effects:
-                fail(row, f"NONNULL_FORM({general.name}): effects beyond "
-                     f"{general.name}'s")
+            mine, theirs = row.args[0], general.args[0]
+            if (mine.mode != theirs.mode or NONNULL in theirs.facts
+                    or mine.facts != theirs.facts | {NONNULL}):
+                fail(row, f"NONNULL_FORM({general.name}): its argument is "
+                     f"{general.name}'s with nonnull added and nothing else")
+            mres, gres = row.result, general.result
+            if ((mres.shape, mres.mode, mres.tests, mres.measure)
+                    != (gres.shape, gres.mode, gres.tests, gres.measure)
+                    or not gres.facts <= mres.facts or mres.null_iff >= 0):
+                fail(row, f"NONNULL_FORM({general.name}): its result is "
+                     f"{general.name}'s, with at least its facts and no null_iff")
+            if row.feedback != general.feedback or not row.effects <= general.effects:
+                fail(row, f"NONNULL_FORM({general.name}): its feedback is "
+                     f"{general.name}'s and its effects within them")
         if row.slow:
+            # The slow path calls the helper with the row's arguments, and
+            # the helper's failure is the row's NULL
             helper = named(row, "SLOW", row.slow)
             if row.result.shape != "VALUE_OR_NULL":
                 fail(row, f"SLOW({helper.name}): a VALUE_OR_NULL result")
-            if helper.kind != "HELPER" or helper.result.shape not in ("VALUE_OR_NULL",
-                                                                       "STATUS"):
-                fail(row, f"SLOW({helper.name}): a HELPER that can fail (VALUE_OR_NULL "
-                     "or STATUS)")
+            if helper.kind != "HELPER" or helper.result.shape != "VALUE_OR_NULL":
+                fail(row, f"SLOW({helper.name}): a HELPER with a VALUE_OR_NULL result")
+            if helper.params != row.params or helper.result.mode != row.result.mode:
+                fail(row, f"SLOW({helper.name}): {helper.name} takes the row's "
+                     "parameters and gives its result's mode")
             if not helper.effects <= row.effects:
                 fail(row, f"SLOW({helper.name}): the row declares fewer effects than "
                      f"{helper.name}")
@@ -815,6 +838,49 @@ def check_feedback(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
                     f"which feedback({declared}) does not declare", tkn)
 
 
+# The rows that give the address of the site's feedback
+FEEDBACK_POINTERS = ("FB_COUNTER",)
+
+
+def check_feedback_pointers(uop: Uop, table: dict[str, Row]) -> None:
+    """A body reaches feedback only through rows, so that the clause's union
+    over its callees is complete: a feedback pointer (FB_COUNTER(), or a
+    local holding one) is never dereferenced in the body, and is passed only
+    to rows that declare FEEDBACK"""
+    tokens = _tokens(uop)
+    texts = [t.text for t in tokens]
+    pointers: set[str] = set()
+    for i, t in enumerate(texts):
+        if t == "=" and i > 0:
+            end = texts.index(";", i) if ";" in texts[i:] else len(texts)
+            if any(x in FEEDBACK_POINTERS or x in pointers for x in texts[i + 1:end]):
+                pointers.add(texts[i - 1])
+
+    def fail(tkn: Token, what: str):
+        raise analysis_error(f"{uop.name}: {what}; a body reaches feedback only through "
+                             "rows that declare FEEDBACK", tkn)
+
+    for i, t in enumerate(texts):
+        after = i + 1
+        if t in FEEDBACK_POINTERS and texts[i + 1:i + 2] == ["("]:
+            after = _close(texts, i + 1) + 1
+        elif t not in pointers:
+            continue
+        if texts[after:after + 1] in (["->"], ["["], ["."]):
+            fail(tokens[i], f"dereferences the feedback pointer `{t}`")
+        if (i > 0 and texts[i - 1] == "*"
+                and (i < 2 or not re.fullmatch(r"\w+", texts[i - 2]))):
+            fail(tokens[i], f"dereferences the feedback pointer `{t}`")
+    for tkn, args in body_calls(uop):
+        row = table.get(tkn.text)
+        if tkn.text in FEEDBACK_POINTERS or row is None or row.feedback:
+            continue
+        for arg in args:
+            if any(x in FEEDBACK_POINTERS or x in pointers for x in arg):
+                fail(tkn, f"passes a feedback pointer to {tkn.text}, which declares no "
+                     "FEEDBACK")
+
+
 def feedback_access(uop: Uop) -> frozenset[tuple[str, str]]:
     """What a declared uop reads and writes of its site's feedback: its
     clause, and a read of the field of each cache operand"""
@@ -862,11 +928,20 @@ class Views:
         self.names = {i.name: i.name for i in uop.stack.inputs if i.name != "unused"}
         self.paths: dict[str, tuple[str, str]] = {}
         self.locals: set[str] = set()
+        # Locals whose binding at a use the walk could not follow (they were
+        # bound differently on paths that join): they stand for nothing
+        self.unknown: set[str] = set()
         texts = [t.text for t in _tokens(uop)]
+        assigned = [texts[i - 1] for i, t in enumerate(texts) if t == "=" and i > 0]
+        # A local bound more than once is a view only where the walk follows
+        # its binding (OwnershipWalk.views()); statically it stands for itself
+        rebound = {n for n in assigned if assigned.count(n) > 1}
         for i, t in enumerate(texts):
             if t != "=" or i == 0 or texts[i - 1] in self.names:
                 continue
             self.locals.add(texts[i - 1])
+            if texts[i - 1] in rebound:
+                continue
             end = texts.index(";", i) if ";" in texts[i:] else len(texts)
             path = self.path(texts[i + 1:end])
             if path is not None:
@@ -880,6 +955,8 @@ class Views:
         "the input (or, if locals_, the local) that tokens stand for"
         tokens = _unwrap(tokens, self.table)
         if len(tokens) == 1:
+            if tokens[0] in self.unknown:
+                return None
             if tokens[0] in self.names:
                 return self.names[tokens[0]]
             return tokens[0] if locals_ and tokens[0] in self.locals else None
@@ -892,7 +969,7 @@ class Views:
         "the (input, path) of a pointer along a PATH row from an input"
         tokens = _unwrap(tokens, self.table)
         if len(tokens) == 1:
-            return self.paths.get(tokens[0])
+            return None if tokens[0] in self.unknown else self.paths.get(tokens[0])
         call = _call_of(tokens, self.table)
         if call is not None and call[0].result.shape == "PATH" and call[1]:
             name = self.resolve(call[1][0], locals_=False)
@@ -1044,6 +1121,19 @@ HELD, GONE, NULL = "held", "gone", "null"
 # (element stores), or written if the status local named after PENDING
 # says success
 UNWRITTEN, WRITTEN, PARTIAL, PENDING = "unwritten", "written", "partly written", "pending:"
+# An owner that a row takes (ARGS `taken`): gone if the row succeeds, still
+# the caller's if it fails.  TAKEN alone until the row's result is bound to
+# a local, then TAKEN + the local, until a test of the local decides it
+TAKEN = "taken:"
+
+
+def obligated(status: str | None) -> bool:
+    "whether an owner's status still owes a release: held, or held if a row fails"
+    return status is not None and (status == HELD or status.startswith(TAKEN))
+
+
+# Statement heads whose control flow the walk does not follow
+UNMODELLED_HEADS = ("return", "goto", "break", "continue", "switch", "do")
 # The effects whose sites may run Python.  Python may write the frame's
 # homes (a finalizer through FrameLocalsProxy), so a value that stays in a
 # home, a pass-through or a borrowed input, may be replaced there: its
@@ -1070,11 +1160,14 @@ class _State:
     status: dict[str, str] = field(default_factory=dict)
     restartable: bool = True
     why: str = ""                   # what ended restartability
+    # What each local assigned so far stands for: an input it views, a
+    # (input, path) pointer, "" for itself, None where paths disagree
+    bindings: dict[str, object] = field(default_factory=dict)
 
     def copy(self) -> "_State":
         return _State(dict(self.owners), dict(self.facts), dict(self.pending),
                       dict(self.sources), dict(self.rehomed), dict(self.arrays),
-                      dict(self.status), self.restartable, self.why)
+                      dict(self.status), self.restartable, self.why, dict(self.bindings))
 
     def end_restart(self, why: str) -> None:
         if self.restartable:
@@ -1152,6 +1245,11 @@ class OwnershipWalk:
                 self.fail(where, f"the {exit} follows {state.why}, so the word cannot "
                           "restart (design.md 3.1)")
         for name, status in state.owners.items():
+            if status.startswith(TAKEN):
+                local = status[len(TAKEN):]
+                self.fail(where, f"on {exit}, `{name}` is taken by a row only if "
+                          + (f"`{local}` reports success, which nothing tests here"
+                             if local else "the row succeeds, and its result is not kept"))
             item = self.declared.get(name)
             if item is None:
                 # A new owner: published on next if it is an output; released,
@@ -1201,7 +1299,7 @@ class OwnershipWalk:
         """V5 on the paths to next: each value output is not NULL unless it
         is nullable, and has its declared facts, whatever path reached it"""
         for out in self.contract.outputs:
-            if out.array or out.mode not in ("owned", "inline", "moved"):
+            if out.array or out.mode not in ("owned", "inline", "moved", "borrowed"):
                 continue
             live = state.facts.get(out.name, frozenset())
             source = state.sources.get(out.name)
@@ -1259,7 +1357,8 @@ class OwnershipWalk:
         for other in live[1:]:
             for name in set(first.owners) | set(other.owners):
                 a, b = first.owners.get(name, GONE), other.owners.get(name, GONE)
-                if (a == HELD) != (b == HELD):
+                if obligated(a) != obligated(b) or (
+                        a != b and (a.startswith(TAKEN) or b.startswith(TAKEN))):
                     self.fail(self.uop.body.open, f"`{name}` is owned on one path and "
                               "not on another where they join")
                 first.owners[name] = a
@@ -1283,20 +1382,46 @@ class OwnershipWalk:
                               f"{self.array_state(other.arrays.get(name, UNWRITTEN))} on "
                               "another where they join")
             first.status.update(other.status)
+            for name in set(first.bindings) | set(other.bindings):
+                if first.bindings.get(name, "") != other.bindings.get(name, ""):
+                    first.bindings[name] = None
             if not other.restartable:
                 first.end_restart(other.why)
         return first
 
+    def views_at(self, state: _State) -> Views:
+        "the views where the walk is: each local as last bound on this path"
+        views = copy.copy(self.views)
+        views.names, views.paths = dict(views.names), dict(views.paths)
+        views.unknown = set(views.unknown)
+        for name, bound in state.bindings.items():
+            views.names.pop(name, None)
+            views.paths.pop(name, None)
+            if bound is None:
+                views.unknown.add(name)
+            elif isinstance(bound, tuple):
+                views.paths[name] = bound
+            elif bound:
+                views.names[name] = bound
+        return views
+
     def refine(self, state: _State, cond: list[str], holds: bool) -> None:
         self.refine_status(state, cond, holds)
-        found = condition_facts(cond, self.views, self.table, holds)
+        found = condition_facts(cond, self.views_at(state), self.table, holds)
         if found:
             for name, facts in found[0].items():
                 state.add_facts(name, facts)
-        # `PyValue_IsNull(x)`: a new owner that is NULL owes nothing
+        # `PyValue_IsNull(x)`: a new owner that is NULL owes nothing; the
+        # owners that the row which made x takes are the caller's again
+        cond = _strip(cond)
+        while cond[:1] == ["!"]:
+            cond, holds = _strip(cond[1:]), not holds
         null = _call(cond, "PyValue_IsNull")
         if null is not None and len(null) == 1:
             name = " ".join(null[0])
+            for owner, status in state.owners.items():
+                if status == TAKEN + name:
+                    state.owners[owner] = HELD if holds else GONE
             if state.owners.get(name) == HELD and name in self.new:
                 if holds:
                     state.owners[name] = NULL
@@ -1328,6 +1453,9 @@ class OwnershipWalk:
         for array, written in state.arrays.items():
             if written == f"{PENDING}{name}":
                 state.arrays[array] = UNWRITTEN if failed else WRITTEN
+        for owner, status in state.owners.items():
+            if status == TAKEN + name:
+                state.owners[owner] = HELD if failed else GONE
 
     def effects(self, tokens: list[Token], state: _State) -> None:
         """the effects of the sites among tokens: heap facts die, homes may be
@@ -1337,10 +1465,18 @@ class OwnershipWalk:
                 if effect in KILLS and self.kills:
                     state.kill_heap_facts()
                 if effect in REENTRY and self.kills:
+                    # A value left in a home may be replaced there (and the
+                    # old one freed): its facts die now, and those of the
+                    # locals that copy it
                     for name, item in self.declared.items():
                         if item.mode in ("", "borrowed"):
                             state.rehomed.setdefault(
                                 name, f"`{t.text}` at line {t.line}, which may {effect},")
+                            state.facts[name] = frozenset()
+                            state.pending.pop(name, None)
+                    for name, source in state.sources.items():
+                        if source in state.rehomed and name not in state.owners:
+                            state.facts[name] = frozenset()
                 if effect != "reads" and effect != "raises":
                     state.end_restart(f"`{t.text}`, which may {effect}")
 
@@ -1353,7 +1489,7 @@ class OwnershipWalk:
             return None
         if tokens[0] in state.owners:
             return tokens[0]
-        name = self.views.resolve(tokens, locals_=False)
+        name = self.views_at(state).resolve(tokens, locals_=False)
         return name if name in self.declared else None
 
     def take(self, name: str, state: _State, where: Token, what: str) -> None:
@@ -1378,8 +1514,23 @@ class OwnershipWalk:
             for exit in sorted(row.exits & {"miss", "deopt"}):
                 # A row's guard exit, before the row takes anything
                 self.check_exit(exit, state, tkn)
+            taken = []
+            views = self.views_at(state)
             for arg, spec in zip(args, row.args):
-                name = self.views.resolve(arg)
+                destructor = (self.table.get(" ".join(_unwrap(arg, self.table)))
+                              if spec.mode == "destructor" else None)
+                if destructor is not None and destructor.kind == "DESTRUCTOR":
+                    # It frees only objects of exactly its type
+                    for value, vspec in zip(args, row.args):
+                        if vspec.mode != "consumed":
+                            continue
+                        facts = state.facts.get(views.resolve(value), frozenset())
+                        if INLINE not in facts and VFact("exact", destructor.frees) not in facts:
+                            self.fail(tkn, f"closes `{' '.join(value)}` through "
+                                      f"{destructor.name}, which frees only "
+                                      f"exact({destructor.frees}), which it is not shown "
+                                      "to be")
+                name = views.resolve(arg)
                 if name is not None and spec.facts:
                     missing = implied(spec.facts) - state.facts.get(name, frozenset())
                     if missing:
@@ -1388,10 +1539,20 @@ class OwnershipWalk:
                 if spec.mode in ("consumed", "taken"):
                     owner = self.owner_of(arg, state)
                     if owner is not None:
-                        self.take(owner, state, tkn, f"{row.name} consumes")
+                        self.take(owner, state, tkn, f"{row.name} "
+                                  f"{'consumes' if spec.mode == 'consumed' else 'takes'}")
                         state.end_restart(f"{row.name} consuming `{owner}`")
+                        if spec.mode == "taken":
+                            taken.append(owner)
                 if spec.mode == "out":
                     array = " ".join(_unwrap(arg, self.table))
+                    declared = self.contract.output(array)
+                    if array in state.arrays and implied(declared.facts) - {NONNULL}:
+                        # A row's `out` writes owned, non-NULL values and
+                        # says nothing more of them
+                        self.fail(tkn, f"{row.name} writes `{array}`, declared "
+                                  f"{', '.join(sorted(map(str, declared.facts)))}, which "
+                                  "its row does not show of the elements")
                     if array in state.arrays:
                         # Publication: wholly written, or written if a STATUS
                         # result says so (the assignment names the local)
@@ -1400,8 +1561,19 @@ class OwnershipWalk:
                         state.end_restart(f"the publication of `{array}` by {row.name}")
             for exit in sorted(row.exits - {"next", "miss", "deopt"}):
                 # A row's other exits leave the word from inside it, after
-                # it has taken what its arguments' modes say
-                self.check_exit(exit, state, tkn)
+                # it has taken what its arguments' modes say: on its raise,
+                # a `taken` argument is still the caller's (design 1.2)
+                at = state
+                if exit == "raise" and taken:
+                    at = state.copy()
+                    for owner in taken:
+                        at.owners[owner] = HELD
+                self.check_exit(exit, at, tkn)
+            if taken and row.result.shape in ("VALUE_OR_NULL", "STATUS"):
+                # Gone if the result reports success: the assignment binds
+                # the result's local, whose test decides (refine)
+                for owner in taken:
+                    state.owners[owner] = TAKEN
 
     def discharge(self, name: str, state: _State, where: Token) -> None:
         "DEAD(name): only an inline value, or one already moved, owes nothing"
@@ -1447,7 +1619,7 @@ class OwnershipWalk:
         if head == "DISPATCH_SAME_OPARG":
             return None
         if head == "DEAD":
-            name = self.views.resolve(texts[2:_close(texts, 1)])
+            name = self.views_at(state).resolve(texts[2:_close(texts, 1)])
             if name is not None:
                 self.discharge(name, state, toks[0])
             return state
@@ -1465,11 +1637,75 @@ class OwnershipWalk:
             self.effects(toks, state)
             state.end_restart("DECREF_INPUTS")
             return state
+        self.check_forms(toks, texts, state)
         self.calls(toks, state)
         self.effects(toks, state)
         if "=" in texts:
             self.assignment(toks, texts, texts.index("="), state)
         return state
+
+    def check_forms(self, toks: list[Token], texts: list[str], state: _State,
+                    statement: bool = True) -> None:
+        """Fail closed: the forms the walk models are calls, assignments of a
+        name, a move, a row call or an expression, and element stores into
+        an output array.  A name that carries an obligation or a declared
+        value anywhere else, a row that makes an owner whose result is not
+        bound, and a row that consumes in a nested expression are refused"""
+        what = " ".join(t for t in texts if t != ";")
+        if statement and texts[0] in UNMODELLED_HEADS:
+            self.fail(toks[0], f"`{texts[0]}` is a form the walk does not model")
+        tracked = (set(state.owners) | set(state.arrays)
+                   | {o.name for o in self.contract.outputs if o.name != "unused"})
+        covered = [False] * len(texts)
+        expr = texts[:-1] if texts[-1:] == [";"] else texts
+        rhs: list[str] | None = None
+        if statement and "=" in expr:
+            e = expr.index("=")
+            rhs = _uncast(expr[e + 1:])
+            lhs = expr[:e]
+            for j in range(e + 1):
+                covered[j] = True
+            named = (re.fullmatch(r"\w+", lhs[-1]) is not None
+                     and (len(lhs) < 2 or lhs[-2] not in ("->", ".", "*")))
+            element = lhs[-1] == "]" and _element_base(texts, e) in state.arrays
+            if len(rhs) == 1 and rhs[0] in tracked and (named or element):
+                covered[len(texts) - 1 - texts[::-1].index(rhs[0])] = True
+        for j in range(len(texts) - 3):
+            if texts[j:j + 3] == ["(", "void", ")"] and re.fullmatch(r"\w+", texts[j + 3]):
+                covered[j:j + 4] = [True] * 4
+        spans = [(i, _close(texts, i + 1)) for i, t in enumerate(texts)
+                 if re.fullmatch(r"[A-Za-z_]\w*", t) and texts[i + 1:i + 2] == ["("]]
+        for i, end in spans:
+            covered[i:end + 1] = [True] * (end + 1 - i)
+            row = self.table.get(texts[i])
+            if row is None:
+                continue
+            call = texts[i:end + 1]
+            owning = row.new_owner()
+            consuming = any(a.mode in ("consumed", "taken") for a in row.args)
+            if not (owning or consuming):
+                continue
+            as_rhs = rhs is not None and _strip(rhs) == call
+            whole = statement and rhs is None and _uncast(expr) == call
+            as_arg = False
+            for p, pend in spans:
+                outer = self.table.get(texts[p])
+                if outer is None or not p < i <= pend:
+                    continue
+                inner = texts[p + 2:pend]
+                for arg, spec in zip(_split(inner, ",") if inner else [], outer.args):
+                    if spec.mode in ("consumed", "taken") and _uncast(arg) == call:
+                        as_arg = True
+            if owning and whole:
+                self.fail(toks[0], f"`{what}` discards the owned result of {row.name}")
+            if not (as_rhs or as_arg or (whole and not owning)):
+                self.fail(toks[0], f"`{what}` calls {row.name}, which "
+                          f"{'makes an owner' if owning else 'consumes an argument'}, in a "
+                          "form the walk does not model; bind it: `x = "
+                          f"{row.name}(...);`")
+        for j, t in enumerate(texts):
+            if not covered[j] and t in tracked:
+                self.fail(toks[0], f"`{what}` uses `{t}` in a form the walk does not model")
 
     def assignment(self, toks: list[Token], texts: list[str], i: int, state: _State) -> None:
         lhs = texts[i - 1]
@@ -1479,6 +1715,17 @@ class OwnershipWalk:
             return
         if i >= 2 and texts[i - 2] in ("->", ".") or not re.fullmatch(r"\w+", lhs):
             return      # a store through a pointer: V2's `writes`
+        item = self.declared.get(lhs)
+        if obligated(state.owners.get(lhs)) and (item is None or item.mode
+                                                  in ("consumed", "taken")):
+            self.fail(toks[0], f"`{lhs}` is assigned while it holds an owner, which "
+                      "would leak")
+        if item is None:
+            # What the local stands for from here on (Views)
+            views = self.views_at(state)
+            path = views.path(rhs)
+            state.bindings[lhs] = (path if path is not None
+                                   else views.resolve(rhs, locals_=False) or "")
         out = self.contract.output(lhs)
         if len(rhs) == 1 and (rhs[0] in self.declared or rhs[0] in state.owners):
             # A move, `out = in;` or `PyValue tmp = in;`: the obligation goes
@@ -1488,7 +1735,13 @@ class OwnershipWalk:
                 if out is not None and out.mode == "moved":
                     self.fail(toks[0], f"on next, `{rhs[0]}` is moved, but it is declared "
                               f"{source.mode or 'a pass-through'}")
-                return          # a copy of a borrowed view: no obligation
+                if out is not None and out.mode == "owned":
+                    self.fail(toks[0], f"`{lhs}` is declared owned, but `{rhs[0]}` is "
+                              f"declared {source.mode or 'a pass-through'}: no owner moves")
+                # A copy of a borrowed view: no obligation, the same facts
+                state.assign(lhs, state.facts.get(rhs[0], frozenset()),
+                             state.pending.get(rhs[0]), rhs[0])
+                return
             self.take(rhs[0], state, toks[0], "moves")
             state.owners[lhs] = HELD
             self.new.add(lhs)
@@ -1503,10 +1756,15 @@ class OwnershipWalk:
             return
         row, args = call
         result = row.result
+        if result.shape in ("VALUE_OR_NULL", "STATUS"):
+            # The owners this row takes are decided by its result's local
+            for owner, status in state.owners.items():
+                if status == TAKEN:
+                    state.owners[owner] = TAKEN + lhs
         if result.shape == "VIEW" and any(a.mode in ("consumed", "taken") for a in row.args):
             # A stealing view, `o = PyValue_AsKnownObjectSteal(x)`: the row
             # consumed x, and its obligation is now the local's
-            source = self.views.resolve(args[0]) if args else None
+            source = self.views_at(state).resolve(args[0]) if args else None
             state.owners[lhs] = HELD
             self.new.add(lhs)
             state.assign(lhs, state.facts.get(source, frozenset()), None, row.name)
@@ -1529,7 +1787,7 @@ class OwnershipWalk:
         elif result.null_iff >= 0:
             # NULL exactly where its argument k is
             k = result.null_iff
-            source = self.views.resolve(args[k]) if len(args) > k else None
+            source = self.views_at(state).resolve(args[k]) if len(args) > k else None
             nonnull = NONNULL in state.facts.get(source, frozenset())
             if out is not None and not out.nullable and not nonnull:
                 self.fail(toks[0], f"`{lhs}` may be NULL: {row.name} of "
@@ -1558,11 +1816,37 @@ class OwnershipWalk:
         array = _element_base(texts, i)
         if array not in state.arrays:
             return
-        if len(rhs) == 1 and (rhs[0] in state.owners):
-            item = self.declared.get(rhs[0])
-            if item is None or item.mode not in ("borrowed", ""):
-                self.take(rhs[0], state, toks[0], "moves")
-        size = self.contract.output(array).size
+        declared = self.contract.output(array)
+        value = _uncast(rhs)
+        if len(value) == 1 and value[0] in state.owners:
+            facts = state.facts.get(value[0], frozenset())
+            item = self.declared.get(value[0])
+            if item is not None and item.mode in ("borrowed", ""):
+                if INLINE not in facts:
+                    self.fail(toks[0], f"stores `{value[0]}`, declared "
+                              f"{item.mode or 'a pass-through'}, into the owned array "
+                              f"`{array}`: no owner moves")
+            else:
+                self.take(value[0], state, toks[0], "moves")
+        else:
+            call = _call_of(value, self.table)
+            row = call[0] if call is not None else None
+            if row is None or row.result.shape not in ("VALUE", "VALUE_OR_NULL") \
+                    or not row.new_owner():
+                self.fail(toks[0], f"stores `{' '.join(value)}` into the owned array "
+                          f"`{array}`: an element is an owner moved in or a row's new "
+                          "owner")
+            facts = (implied(row.result.facts | {NONNULL})
+                     if row.result.shape == "VALUE" and row.result.null_iff < 0
+                     else implied(row.result.facts) - {NONNULL})
+        if not declared.nullable and NONNULL not in implied(facts):
+            self.fail(toks[0], f"stores `{' '.join(value)}`, which may be NULL, into "
+                      f"`{array}`, whose elements are not nullable")
+        missing = implied(declared.facts) - implied(facts)
+        if missing:
+            self.fail(toks[0], f"stores `{' '.join(value)}` into `{array}`, declared "
+                      f"{', '.join(sorted(map(str, missing)))}, which it is not shown to be")
+        size = declared.size
         whole = re.fullmatch(r"1|\(?oparg\s*&\s*1\)?", size.strip()) is not None
         state.arrays[array] = WRITTEN if whole else PARTIAL
         state.end_restart(f"the publication of `{array}`")
@@ -1714,6 +1998,7 @@ def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None 
     check_callees(uop, table)
     check_effects(uop, contract, table)
     check_feedback(uop, contract, table)
+    check_feedback_pointers(uop, table)
     check_guard_conditions(uop, table)
     for tkn, _ in body_calls(uop):
         if tkn.text in GUARDS:
@@ -1787,16 +2072,23 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
         facts[v] = frozenset({NONNULL})
         return v
 
+    # Whether the stack's depth is known: past an array of unknown size the
+    # fact walk (V8) stops, and restartability and the uops' own checks go on
+    known = True
     for index, (part, contract) in enumerate(zip(parts, contracts)):
         bound: dict[str, int] = {}
         for item in reversed(contract.inputs):
-            value = pop(item)
+            value = pop(item) if known else None
             if value is None:
-                return      # V8 holds up to here; the rest has no static depth
+                known = False
+                break
             bound[item.name] = value
-        guards = any(t.text in GUARDS for t, _ in body_calls(part))
+        # A guard: EXIT_IF and DEOPT_IF, or a row with a miss or deopt exit
+        guards = any(t.text in GUARDS or (t.text in table and table[t.text].exits
+                                          & {"miss", "deopt"})
+                     for t, _ in body_calls(part))
         implicit = []
-        for item in contract.inputs:
+        for item in contract.inputs if known else ():
             value = bound[item.name]
             missing = implied(item.facts) - facts.get(value, frozenset())
             if missing <= {OBJECT, NONNULL} and OBJECT in missing and part.is_guard() \
@@ -1811,10 +2103,17 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
                     f"{', '.join(sorted(map(str, missing)))} of `{item.name}`, which "
                     "nothing before it establishes or which an effect since killed",
                     inst.where)
+        if not known and part.is_guard() and not part.properties.inline_ok:
+            # Unknown facts: the generator may guard any input that needs
+            # an object
+            implicit = [i.name for i in contract.inputs if OBJECT in implied(i.facts)]
         if (guards or implicit) and not restartable:
             raise analysis_error(f"{inst.name}: the guard in {part.name} follows {why}, "
                                  "so the word cannot restart (design.md 3.1)", inst.where)
-        verify_uop(part, len(implicit), table)
+        if known:
+            # Past an unknown depth the record's builder verifies the uop with
+            # the implicit guards it actually emits
+            verify_uop(part, len(implicit), table)
         # After the uop: its kills.  Heap facts die at a KILLS effect; at a
         # reentry every value left in a home (the stack below the uop and
         # its pass-throughs) may have been replaced there, so all of its
@@ -1822,7 +2121,7 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
         # V9 holds to the facts live at its exit.
         if contract.effects & KILLS:
             facts = {v: without_heap_facts(f) for v, f in facts.items()}
-        if contract.effects & REENTRY:
+        if contract.effects & REENTRY and known:
             homes = set(stack) | {bound[i.name] for i in contract.inputs if not i.mode
                                   and contract.output(i.name) is not None}
             for v in homes:
@@ -1845,6 +2144,8 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
                 # The displaced value's close may run a finalizer, which can
                 # replace any home's value (design.md 3.2)
                 facts = {v: frozenset() for v in facts}
+        if not known:
+            continue
         for item in contract.outputs:
             if not item.mode and item.name in bound:
                 value = bound[item.name]

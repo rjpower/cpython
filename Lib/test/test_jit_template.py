@@ -3,7 +3,9 @@
 (Python/jit_templates.c.h) against its handler's function form on one word
 of a frame."""
 
+import contextlib
 import ctypes
+import dataclasses
 import math
 import random
 import struct
@@ -12,15 +14,20 @@ import unittest
 import weakref
 
 from test import test_tools
+from test import support
 from test.support import import_helper
+from test.support.script_helper import assert_python_ok
 
 capi = import_helper.import_module("_testinternalcapi")
 if not hasattr(capi, "jit_lower"):
     raise unittest.SkipTest("the JIT is not supported on this platform")
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
+    import ir_contract
     import ir_leaf
     import jit_template_generator
+
+RECORDS = jit_template_generator.load_records()[1]
 
 from test.test_ir_leaf import (
     FLOATS, INDEX_WORDS, INLINE_WORDS, NAN, OBJECTS, SEPARATE, TAG, WIDE_INTS,
@@ -178,6 +185,15 @@ class LoweringTests(unittest.TestCase):
                     if cond:
                         self.assertTrue(same(tuple(results), expected[1:]),
                                         (results, expected))
+                if predicate and jit_template_generator.LOWERINGS[name].exits:
+                    # With an exit, the lowering leaves by it where the predicate is false
+                    holds = expected if not nres else expected[0]
+                    cond, results, before, after = run(name, ops, args, rng, "exit")
+                    self.check_registers(name, ops, before, after)
+                    self.assertIs(cond, not holds)
+                    if holds and nres:
+                        self.assertTrue(same(tuple(results), expected[1:]),
+                                        (results, expected))
 
     def test_against_c(self):
         rng = random.Random(88)
@@ -245,15 +261,44 @@ class LoweringTests(unittest.TestCase):
             for value in values:
                 expected = capi.leaf_primitive(name, value)
                 for ops, live in variants(name, rng, 2):
+                    # With an exit for a NULL result, which these never give:
+                    # the lowering never leaves by it
+                    for aux in (None, "exit"):
+                        with self.subTest(primitive=name, value=value, ops=ops, aux=aux):
+                            cond, (w,), before, after = run(name, ops, (value,), rng, aux,
+                                                            args_live=live)
+                            self.check_registers(name, ops, before, after, live)
+                            self.assertIs(cond, None if aux is None else False)
+                            if w >> 48:
+                                self.assertEqual(w, expected)
+                            else:
+                                # A box, as C made: its value
+                                self.assertTrue(same(self.take(w), value))
+                                self.assertTrue(same(expected, value))
+
+    def test_failed_box_leaves_by_the_exit(self):
+        "A box that fails gives NULL, and the lowering with an exit leaves by it"
+        rng = random.Random(91)
+        for name, failing, inline in (("PyValue_FromInt64", (2**60, -2**60, 2**50, -2**50 - 1), 7),
+                                      ("PyValue_FromDouble", (NAN, -NAN), 1.5)):
+            # A boxed float comes from a freelist unless it is empty: hold
+            # more NaNs than it keeps, so that the box allocates
+            held = [NAN * x for x in (2.0,) * 300]
+            for value in failing:
+                for ops, live in variants(name, rng, 2):
                     with self.subTest(primitive=name, value=value, ops=ops):
-                        _, (w,), before, after = run(name, ops, (value,), rng, args_live=live)
+                        cond, (w,), before, after = run(name, ops, (value,), rng, "exit_fail",
+                                                        args_live=live)
                         self.check_registers(name, ops, before, after, live)
-                        if w >> 48:
-                            self.assertEqual(w, expected)
-                        else:
-                            # A box, as C made: its value
-                            self.assertTrue(same(self.take(w), value))
-                            self.assertTrue(same(expected, value))
+                        self.assertIs(cond, True)
+                        self.assertEqual(w, 0)
+            # Inline values need no box
+            for ops, live in variants(name, rng, 2):
+                cond, (w,), before, after = run(name, ops, (inline,), rng, "exit_fail",
+                                                args_live=live)
+                self.assertIs(cond, False)
+                self.assertEqual(w, capi.leaf_primitive(name, inline))
+            del held
 
     def test_counts(self):
         rng = random.Random(90)
@@ -447,9 +492,13 @@ class Plain:
 # releases).  The template and the form run from the same slots.
 INTS = [0, 1, -1, 7, -2**50, 2**50 - 1, 2**25, -2**25 - 3]
 NOT_INTS = ["x", big(1), 2.5, None, []]
+# Operands that fail only the second of two fused guards, or the first, and
+# sums, differences and products past the inline range on both sides
 INT_PAIRS = ([(a, b) for a in INTS[::2] for b in INTS[1::2]] +
              [(a, b) for a in INTS[:3] for b in NOT_INTS[:2]] +
-             [(b, a) for a in INTS[:3] for b in NOT_INTS])
+             [(b, a) for a in INTS[:3] for b in NOT_INTS] +
+             [(2**50 - 1, 1), (-2**50, -1), (2**50 - 1, 2**50 - 1), (-2**50, -2**50),
+              (2**50 - 1, -2**50), (1, 2**50 - 1), (-1, -2**50)])
 # Signs, a zero divisor, the inline extremes and -2**50 // -1, whose quotient
 # leaves the inline range
 DIV_INTS = [0, 1, -1, 7, -7, 2**50 - 1, -2**50, 2**25, -2**25 - 3]
@@ -687,6 +736,70 @@ def slot_of(field_slots, field):
     return field_slots[name] + int(n or 0)
 
 
+class FailedBoxTests(unittest.TestCase):
+    """The failure edge of a box that leaves by the exit (SLOW rows): in
+    compiled code, a failed allocation raises MemoryError at the word, with
+    the inputs still in their homes, and the function works after it"""
+
+    @support.nomemtest
+    def test_box_failure_raises_at_the_word_and_leaves_the_inputs(self):
+        assert_python_ok("-c", """if 1:
+            import gc
+            import _testcapi
+            import _testinternalcapi as capi
+
+            inf = float("inf")
+            nan = float("nan")
+            cases = (
+                # PyValue_FromInt64 in the floor division of two ints
+                ("BINARY_OP_FLOOR_DIVIDE_INT", "a // b", (-2**50, -1), 2**50, (6, 3), 2),
+                # PyValue_FromDouble of a NaN
+                ("BINARY_OP_ADD_FLOAT", "a + b", (inf, -inf), nan, (1.5, 2.5), 4.0),
+            )
+            for handler, expression, args, boxed, safe, safe_result in cases:
+                namespace = {}
+                exec(f"def f(a, b):\\n    return {expression}\\n"
+                     "def g(a, b):\\n    try:\\n        x = f(a, b)\\n"
+                     "    except MemoryError as e:\\n"
+                     "        return ('failed', a, b, e.__traceback__.tb_next.tb_frame.f_code)\\n"
+                     "    return x\\n",
+                     namespace)
+                f, g = namespace["f"], namespace["g"]
+                for _ in range(300):
+                    g(*safe)
+                    g(*args)
+                words = [row[0] for row in capi.get_ir(f.__code__, True)]
+                assert handler in words, words
+                a, b = args
+                failed = 0
+                for skip in range(4):
+                    gc.collect()
+                    gc.disable()
+                    # A boxed float comes from a freelist unless it is empty:
+                    # hold more NaNs than it keeps, so that the box allocates
+                    held = [nan * x for x in (2.0,) * 300]
+                    # skip allocations succeed, then exactly one fails
+                    _testcapi.set_nomemory(skip, skip + 1)
+                    try:
+                        got = g(a, b)
+                    finally:
+                        _testcapi.remove_mem_hooks()
+                        gc.enable()
+                    del held
+                    if isinstance(got, tuple) and got[:1] == ("failed",):
+                        failed += 1
+                        # Raised in f, at its word, with the inputs in their homes
+                        assert got[1] is a and got[2] is b and got[3] is f.__code__, got
+                    else:
+                        assert got == boxed or got != got, got
+                    # The function works after the failure
+                    again = g(a, b)
+                    assert again == boxed or again != again, again
+                    assert g(*safe) == safe_result
+                assert failed, (handler, "no allocation failure reached the box")
+            """, PYTHON_JIT="always")
+
+
 class TemplateTests(unittest.TestCase):
     def compile(self, source, warm):
         namespace = {}
@@ -780,6 +893,267 @@ class TemplateTests(unittest.TestCase):
             for x, y in ((7, 2), (-7, 2), (7, -2), (-2**50, -1)):
                 self.assertFalse(capi.jit_template_run(f, index, {b: x, c: y}, True)[1])
             self.assertTrue(capi.jit_template_run(f, index, {b: 7, c: 0}, True)[1])
+
+
+def graph_of(handler):
+    "The template graph of a handler, simplified as the generator emits it"
+    record = RECORDS[handler]
+    graph = jit_template_generator.Builder(record).build()
+    jit_template_generator.simplify(graph)
+    return graph
+
+
+def prims_of(graph):
+    return [jit_template_generator.prim_name(op) for block in graph.blocks.values()
+            for op in block.ops if op.kind == "prim"]
+
+
+@contextlib.contextmanager
+def declared(name, **changes):
+    """The component row `name` with columns changed, for the generator that
+    reads ir_contract.rows(): a declaration withdrawn or altered"""
+    table = ir_contract.rows()
+    saved = table[name]
+    if "result" in changes:
+        changes["result"] = dataclasses.replace(saved.result, **changes["result"])
+    table[name] = dataclasses.replace(saved, **changes)
+    try:
+        yield
+    finally:
+        table[name] = saved
+
+
+def prim_graph(*steps):
+    """A graph for the passes: one word v, then each step (name, test) as a
+    block that tests v (`test` is the primitive, whose false side leaves by
+    a deopt) or, with test None, ends in the primitive on v.  Returns the
+    graph and its ops by step"""
+    g = jit_template_generator.Graph()
+    TOp = jit_template_generator.TOp
+    block = g.blocks[g.entry]
+    v = g.value(ir_leaf.VALUE)
+    block.ops.append(TOp("view", [v], [], "B"))
+    deopt = g.new_block()
+    deopt.term = ("deopt",)
+    ops = []
+    for name, test in steps:
+        if test:
+            c = g.value("bool")
+            op = TOp("prim", [c], [v], name)
+            block.ops.append(op)
+            nxt = g.new_block()
+            block.term = ("br", c, nxt.id, deopt.id) if test == "continue" else \
+                ("br", c, deopt.id, nxt.id)
+            block = nxt
+        else:
+            op = TOp("prim", [], [v], name)
+            block.ops.append(op)
+        ops.append(op)
+    block.term = ("end", None)
+    return g, ops
+
+
+class TemplateGraphTests(unittest.TestCase):
+    "What the generator reads from the component rows, and the graphs it builds with it"
+
+    def test_tests_for_null(self):
+        found = {name for name in ir_contract.rows() if jit_template_generator.is_null_test(name)}
+        self.assertEqual(found, {"PyValue_IsNull"})
+
+    def test_tests_of_both(self):
+        self.assertEqual(jit_template_generator.both_test("PyValue_IsInlineInt"),
+                         "PyValue_BothInlineInt")
+        found = {name for name in ir_contract.rows()
+                 if jit_template_generator.both_test(name) is not None}
+        self.assertEqual(found, {"PyValue_IsInlineInt"})
+        with declared("PyValue_BothInlineInt", conjoins=""):
+            self.assertIsNone(jit_template_generator.both_test("PyValue_IsInlineInt"))
+
+    def test_what_a_test_shows(self):
+        facts = jit_template_generator.test_facts
+        self.assertEqual(facts("PyValue_IsNull"), (False, True))
+        self.assertEqual(facts("PyValue_IsObject"), (True, False))
+        self.assertEqual(facts("PyValue_IsInlineInt"), (True, False))
+        # No fact is declared of these: they show nothing, though a word
+        # outside pointer space is not NULL
+        self.assertEqual(facts("PyValue_IsPointerSpace"), (False, False))
+        self.assertEqual(facts("PyValue_IsTaggedIndex"), (False, False))
+        # A primitive without a row shows nothing
+        self.assertEqual(facts("no_such_primitive"), (False, False))
+
+    def test_results_that_are_never_null(self):
+        found = {name for name in ir_contract.rows() if jit_template_generator.never_null(name)}
+        scalar = {name for name in found if name in ir_leaf.PRIMITIVES
+                  and all(p not in (ir_leaf.VALUE, "PyObject*")
+                          for p in ir_leaf.PRIMITIVES[name].params)}
+        self.assertLessEqual({"_PyValue_FromIntScaled", "PyValue_FromInlineInt",
+                              "PyValue_TagIndex", "PyValue_DUP"}, found)
+        # The declaration against the C definition on its domain
+        for name in scalar:
+            prim = ir_leaf.PRIMITIVES[name]
+            for args in cases(prim):
+                if prim.pre is None or prim.pre(context(), *args):
+                    self.assertNotEqual(capi.leaf_primitive(name, *args), 0, (name, args))
+        with declared("_PyValue_FromIntScaled", result={"shape": "VALUE_OR_NULL"}):
+            self.assertFalse(jit_template_generator.never_null("_PyValue_FromIntScaled"))
+
+    def test_primitives_for_a_word_that_is_not_null(self):
+        given = {name: jit_template_generator.given_not_null(name) for name in ir_contract.rows()}
+        self.assertEqual({k: v for k, v in given.items() if v},
+                         {"PyValue_XDUP": "PyValue_DUP"})
+
+    def test_results_that_fail_only_in_their_slow_path(self):
+        found = {name for name in ir_contract.rows()
+                 if jit_template_generator.null_only_from_slow(name)}
+        self.assertEqual(found, {"PyValue_FromInt64", "PyValue_FromDouble"})
+
+    def graph_names(self, handler):
+        graph = graph_of(handler)
+        return graph, prims_of(graph)
+
+    def test_without_conjoins_the_guards_stay_two(self):
+        with declared("PyValue_BothInlineInt", conjoins=""):
+            graph, names = self.graph_names("BINARY_OP_ADD_INT")
+        self.assertEqual(names.count("PyValue_IsInlineInt"), 2)
+        self.assertNotIn("PyValue_BothInlineInt", names)
+
+    def test_without_a_nonnull_form_the_test_for_null_stays_in_the_primitive(self):
+        with declared("PyValue_DUP", nonnull_form=""):
+            graph, names = self.graph_names("LOAD_ATTR_INSTANCE_VALUE")
+        self.assertIn("PyValue_XDUP", names)
+        self.assertNotIn("PyValue_DUP", names)
+        # The form is chosen where the word is known not NULL
+        for declare in (False, True):
+            g, (test, dup) = prim_graph(("PyValue_IsNull", "leave"), ("PyValue_XDUP", None))
+            with contextlib.ExitStack() as stack:
+                if declare:
+                    stack.enter_context(declared("PyValue_DUP", nonnull_form=""))
+                jit_template_generator.fold_nulls(g)
+            self.assertEqual(dup.attr, "PyValue_XDUP" if declare else "PyValue_DUP")
+
+    def test_without_slow_the_box_keeps_its_test_and_has_no_exit(self):
+        for handler, name in (("FOR_ITER_RANGE", "PyValue_FromInt64"),
+                              ("BINARY_OP_ADD_FLOAT", "PyValue_FromDouble")):
+            with self.subTest(handler=handler):
+                def box():
+                    graph = graph_of(handler)
+                    return [op for b in graph.blocks.values() for op in b.ops
+                            if jit_template_generator.prim_name(op) == name], graph
+                (op,), graph = box()
+                self.assertIsNotNone(op.exit)
+                with declared(name, slow=""):
+                    (op,), graph = box()
+                self.assertIsNone(op.exit)
+                self.assertIn("PyValue_IsNull", prims_of(graph))
+
+    def test_without_the_declared_test_for_null_nothing_is_dropped(self):
+        # After a test of IsNull that leaves where it holds, a second one is dropped
+        g, (first, second) = prim_graph(("PyValue_IsNull", "leave"), ("PyValue_IsNull", "leave"))
+        jit_template_generator.fold_nulls(g)
+        self.assertEqual(second.kind, "const")
+        with declared("PyValue_IsNull", result={"tests": ((frozenset(), frozenset()),)}):
+            g, (first, second) = prim_graph(("PyValue_IsNull", "leave"),
+                                            ("PyValue_IsNull", "leave"))
+            jit_template_generator.fold_nulls(g)
+            self.assertEqual(second.kind, "prim")
+
+    def test_a_declared_true_side_shows_the_word_not_null(self):
+        g, (first, second) = prim_graph(("PyValue_IsInlineInt", "continue"),
+                                        ("PyValue_IsNull", "leave"))
+        jit_template_generator.fold_nulls(g)
+        self.assertEqual(second.kind, "const")
+        with declared("PyValue_IsInlineInt", result={"tests": ((frozenset(), frozenset()),)}):
+            g, (first, second) = prim_graph(("PyValue_IsInlineInt", "continue"),
+                                            ("PyValue_IsNull", "leave"))
+            jit_template_generator.fold_nulls(g)
+            self.assertEqual(second.kind, "prim")
+
+    def test_add_int_has_one_guard_and_tests_the_box_only(self):
+        graph = graph_of("BINARY_OP_ADD_INT")
+        names = prims_of(graph)
+        self.assertEqual(names.count("PyValue_BothInlineInt"), 1)
+        self.assertNotIn("PyValue_IsInlineInt", names)
+        # The overflow edge keeps its test: the box can be NULL, the inline int cannot
+        self.assertEqual(names.count("PyValue_IsNull"), 1)
+        (block,) = [b for b in graph.blocks.values()
+                    if any(jit_template_generator.prim_name(op) == "PyValue_IsNull"
+                           for op in b.ops)]
+        self.assertTrue(any(op.kind == "call" for op in block.ops))
+
+    def test_attribute_has_one_test_for_null(self):
+        names = prims_of(graph_of("LOAD_ATTR_INSTANCE_VALUE"))
+        self.assertEqual(names.count("PyValue_IsNull"), 1)
+        self.assertNotIn("PyValue_XDUP", names)
+        self.assertIn("PyValue_DUP", names)
+
+    def test_guards_leave_by_their_exit_without_a_bool(self):
+        "A predicate that only guards leaves by the exit: no result, no branch on one"
+        for handler, name in (("BINARY_OP_ADD_FLOAT", "PyValue_FloatOperandValues"),
+                              ("BINARY_OP_SUBSCR_LIST_INT", "PyValue_IsObject"),
+                              ("POP_JUMP_IF_FALSE_BOOL", "PyValue_BoolCheck")):
+            with self.subTest(handler=handler):
+                graph = graph_of(handler)
+                ops = [op for block in graph.blocks.values() for op in block.ops
+                       if op.kind == "prim" and jit_template_generator.prim_name(op) == name]
+                self.assertEqual(len(ops), 1)
+                self.assertIsNotNone(ops[0].exit)
+                self.assertEqual(len(ops[0].results),
+                                 len(ir_leaf.PRIMITIVES[name].results) - 1)
+
+    def cse_loads(self, middle):
+        """A graph that loads a field of one object, runs the ops in middle
+        (TOp makers given the object and a value) and loads it again; the
+        number of loads of the field after CSE"""
+        g = jit_template_generator.Graph()
+        entry = g.blocks[g.entry]
+        obj = g.value(ir_leaf.VALUE)
+        entry.ops.append(jit_template_generator.TOp("view", [obj], [], "B"))
+        first = g.value("i64")
+        entry.ops.append(jit_template_generator.TOp("load", [first], [obj], "_PyRangeIterObject.len"))
+        for make in middle:
+            entry.ops.append(make(g, obj, first))
+        second = g.value("i64")
+        entry.ops.append(jit_template_generator.TOp("load", [second], [obj], "_PyRangeIterObject.len"))
+        entry.ops.append(jit_template_generator.TOp("store", [], [obj, second], "_PyRangeIterObject.len"))
+        entry.term = ("end", None)
+        jit_template_generator.cse(g)
+        return sum(op.kind == "load" for op in entry.ops)
+
+    def test_a_read_is_reused_until_a_write_may_change_it(self):
+        TOp = jit_template_generator.TOp
+        store = lambda field: lambda g, o, v: TOp("store", [], [o, v], field)
+        self.assertEqual(self.cse_loads([]), 1)
+        # Another field, or a count that is not this field's, leaves it
+        self.assertEqual(self.cse_loads([store("_PyRangeIterObject.start")]), 1)
+        self.assertEqual(self.cse_loads([lambda g, o, v: TOp("take", [], [o], None)]), 1)
+        # Its own field, a store through a type, a release and a helper that
+        # runs Python change it
+        self.assertEqual(self.cse_loads([store("_PyRangeIterObject.len")]), 2)
+        self.assertEqual(self.cse_loads([store("i64")]), 2)
+        self.assertEqual(self.cse_loads([lambda g, o, v: TOp("prim", [], [o], "PyValue_CLOSE")]), 2)
+        self.assertEqual(self.cse_loads([lambda g, o, v: TOp("call", [], [], "_Py_HandlePending")]), 2)
+        # Boxing allocates new objects and changes none
+        self.assertEqual(self.cse_loads([lambda g, o, v: TOp("call", [g.value(ir_leaf.VALUE)],
+                                                             [v], "_PyValue_BoxInt64")]), 1)
+
+    def test_range_iterator_reads_its_length_once(self):
+        graph = graph_of("FOR_ITER_RANGE")
+        loads = [op.attr for b in graph.blocks.values() for op in b.ops if op.kind == "load"]
+        self.assertEqual(loads.count("_PyRangeIterObject.len"), 1)
+
+    def test_no_template_repeats_what_the_passes_remove(self):
+        for handler, record in RECORDS.items():
+            if record.form != "EMITTED" or not record.uops or any(u.leaf is None for u in record.uops):
+                continue
+            try:
+                graph = graph_of(handler)
+            except jit_template_generator.Refused:
+                continue
+            with self.subTest(handler=handler):
+                self.assertFalse(jit_template_generator.fold_nulls(graph))
+                self.assertFalse(jit_template_generator.fuse_guards(graph))
+                self.assertFalse(jit_template_generator.thread_tests(graph))
+                self.assertFalse(jit_template_generator.thread_branches(graph))
 
 
 if __name__ == "__main__":

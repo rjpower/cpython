@@ -49,7 +49,9 @@ FRAME = {"GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "GETLOCAL", "IR_SLOTS",
 SLOTS = {"_PyObject_ShapeReadDup", "_PyDictValues_SetShape",
          "_PyDictValues_AddToInsertionOrder", "_PyValueSlot_Exchange",
          "_PyValueSlot_ExchangeFilled", "_PyValueSlot_Fill"}
-APART = COUNTS | FRAME | SLOTS
+# Tested on their own: they leave by a label of their own, with results on both paths
+LEAVES = {"_PyValue_AddCheckedScaled"}
+APART = COUNTS | FRAME | SLOTS | LEAVES
 HIGH = [R8, R9, R10, R11, RSI, RDI]
 
 
@@ -205,6 +207,29 @@ class LoweringTests(unittest.TestCase):
             prim = ir_leaf.PRIMITIVES[name]
             for args in [()] if not prim.params else cases(prim):
                 self.check_against_c(name, args, rng)
+
+    def test_add_checked_scaled(self):
+        """The lowering leaves by its label exactly where the C definition
+        overflows, and writes the C definition's out on both paths"""
+        name = "_PyValue_AddCheckedScaled"
+        nres, nargs, ntemps, nxtemps, kinds, predicate = lowerings()[name]
+        self.assertEqual((nres, nargs, ntemps, kinds), (1, 2, 2, "ggggg"))
+        rng = random.Random(90)
+        for args in cases(ir_leaf.PRIMITIVES[name]):
+            overflowed, out = capi.leaf_primitive(name, *args)
+            assignments_ = assignments(kinds, nres, nargs, rng, count=2)
+            # Both arguments in one register
+            same_arg = list(assignments_[0])
+            same_arg[2] = same_arg[1]
+            for ops in (*assignments_, same_arg):
+                same_args = ops[1] == ops[2]
+                with self.subTest(args=args, ops=ops):
+                    if same_args and args[0] != args[1]:
+                        continue
+                    cond, (got,), before, after = run(name, ops, args, rng, "exit")
+                    self.check_registers(name, ops, before, after)
+                    self.assertIs(cond, overflowed)
+                    self.assertEqual(as_type(got, "i64"), out)
 
     def test_more_objects(self):
         "Objects beyond test_ir_leaf's: types of other sizes, other lengths and key sizes"

@@ -10,6 +10,7 @@
 #include "pycore_long.h"
 #include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_native_scope.h"
+#include "pycore_rop_metadata.h"  // ROP_HANDLER_*
 #include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
@@ -2826,6 +2827,10 @@ IR_HOT_ROUTINE(gen_complete, PyValue gen_value);
  * from the same handler text, with the forms' bindings of the macros they
  * do not bind themselves */
 #include "generated_ir_stubs.c.h"
+/* The forms and stubs of the register instruction arms (Python/register_ops);
+ * the tables above list them */
+#include "generated_rop_forms.c.h"
+#include "generated_rop_stubs.c.h"
 #pragma GCC diagnostic pop
 
 #ifdef _PY_JIT_SUPPORTED
@@ -3031,6 +3036,7 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
     goto *&&LABEL_start_frame;
 
 #include "generated_ir_cases.c.h"
+#include "generated_rop_cases.c.h"
 
     /* A function form returned no word: it raised (ir_execute_forms() has the
      * same contract), and process_error resolves it. */

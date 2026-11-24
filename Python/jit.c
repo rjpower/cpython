@@ -940,7 +940,7 @@ emit_unit(_PyJitCompiler *c)
         _PyJitAsm_Bind(a, c->labels[i]);
         const _PyIRStubPlan *plan = plan_of(c, c->words[i]);
         int arm = _PyJit_ArmOf(plan, c->words[i]);
-        _PyJitTemplate template = _PyJit_Templates[arm];
+        _PyJitTemplate template = _PyJit_TemplateOf(arm);
         if (plan->region == _PyIR_PLAN_SHARED) {
             emit_stub_word(c, i, plan);
         }

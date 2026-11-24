@@ -18,6 +18,7 @@
 #include "pycore_floatobject.h"     // _PyFloat_ExactDealloc()
 #include "pycore_object.h"
 #include "pycore_range.h"           // _PyRangeIterObject
+#include "pycore_rop_metadata.h"   // ROP_FIRST_HANDLER
 #include "pycore_value.h"
 
 #include <stddef.h>                 // offsetof
@@ -73,5 +74,16 @@ _PyJitTemplate_SarLog2(_PyJitWordCx *cx, _PyJitReg dst, size_t size)
 
 #include "jit_lowerings.h"
 #include "jit_templates.c.h"
+/* The templates of the register instruction arms (Python/register_ops) */
+#include "generated_rop_templates.c.h"
+
+_PyJitTemplate
+_PyJit_TemplateOf(int handler)
+{
+    if (handler >= ROP_FIRST_HANDLER) {
+        return _PyJit_RopTemplates[handler - ROP_FIRST_HANDLER];
+    }
+    return _PyJit_Templates[handler];
+}
 
 #endif  // _PY_JIT_SUPPORTED

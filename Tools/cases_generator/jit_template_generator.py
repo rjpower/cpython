@@ -65,6 +65,7 @@ LOWERINGS = {
     # Numbers
     "_PyValue_IntScaled": Lowering(),
     "_PyValue_FromIntScaled": Lowering(1),
+    "_PyValue_AddCheckedScaled": Lowering(2, exits=True),
     "PyValue_InlineInt64": Lowering(),
     "PyValue_FromInlineInt": Lowering(1),
     "PyValue_InlineFloat": Lowering(1),

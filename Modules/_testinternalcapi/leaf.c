@@ -98,6 +98,14 @@ lp_PyValue_FloatOperandValues(PyObject *const *args)
     return Py_BuildValue("(Odd)", Py_True, a, b);
 }
 
+static PyObject *
+lp__PyValue_AddCheckedScaled(PyObject *const *args)
+{
+    int64_t out;
+    bool overflowed = _PyValue_AddCheckedScaled(INT(0), INT(1), &out);
+    return Py_BuildValue("(OL)", overflowed ? Py_True : Py_False, (long long)out);
+}
+
 /* The constructors with a slow path return a new value: an inline word is
    returned as a word, a box as its object (the caller owns it). */
 static PyObject *
@@ -227,7 +235,8 @@ static const struct {
     P(_PyValue_IntScaled, 1), P(_PyValue_FromIntScaled, 1),
     P(PyValue_InlineInt64, 1), P(PyValue_FromInlineInt, 1),
     P(PyValue_InlineFloat, 1), P(PyValue_FromDoubleNotNaN, 1),
-    P(PyValue_FloatOperandValues, 2), P(PyValue_FromInt64, 1),
+    P(PyValue_FloatOperandValues, 2), P(_PyValue_AddCheckedScaled, 2),
+    P(PyValue_FromInt64, 1),
     P(PyValue_FromDouble, 1), P(PyValue_TagIndex, 1), P(PyValue_UntagIndex, 1),
     P(PyValue_IncrementTaggedIndexNoOverflow, 1), P(COMPARISON_BIT, 2),
     P(PyValue_AsKnownObjectBorrow, 1), P(_PyValue_AsKnownObjectBorrowPointer, 1),

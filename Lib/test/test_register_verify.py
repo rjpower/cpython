@@ -531,6 +531,14 @@ def rop_files() -> list[Path]:
     return sorted(ROP_DIR.glob("*.rop"))
 
 
+def at(filename: str, text: str, column: int | None = None) -> str:
+    """filename:line, and :column if given, of the first line of the
+    checked-in definition file that contains text"""
+    lines = (ROP_DIR / filename).read_text().splitlines()
+    line = next(i for i, source in enumerate(lines, 1) if text in source)
+    return f"{filename}:{line}" if column is None else f"{filename}:{line}:{column}"
+
+
 class PilotTests(unittest.TestCase):
     """The checked-in definitions, rows and pending macros taken at their
     declared signatures."""
@@ -540,37 +548,44 @@ class PilotTests(unittest.TestCase):
         self.assertEqual([str(d) for d in program.diagnostics], [])
         self.assertEqual(rop_verify.missing_generic(program), ("GetAttr",))
 
-    # Changes to the pilot that the checker refuses
-    MUTATIONS = [
-        ("add.rop", "  effects(writes, allocates, raises, releases)\n",
-         "  effects(writes, raises, releases)\n",
-         ["add.rop:135:5: Add.Int: effects: call box_i64 may allocates, which "
-          "effects(writes, raises, releases) does not declare"]),
-        ("add.rop", "    exit raise(Add.OpFailed, saved);",
-         "    exit raise(Add.BoxFailed, saved);",
-         ["add.rop:170:5: Add.Generic: points: raise at Add.BoxFailed: Add.BoxFailed "
-          "lists x in keep, but x is spent by call retire_failed_call at add.rop:169",
-          "add.rop:170:5: Add.Generic: points: raise at Add.BoxFailed: Add.BoxFailed "
-          "lists y in keep, but y is spent by call retire_failed_call at add.rop:169"]),
-        ("getattr.rop", "    guard present(item) else miss;\n"
-         "    let result:O = dup(unwrap(item));\n",
-         "    let result:O = dup(unwrap(item));\n"
-         "    guard present(item) else miss;\n",
-         ["getattr.rop:54:24: GetAttr.Instance: facts: unwrap(item) requires "
-          "present(item), which no dominating fact proves",
-          "getattr.rop:55:5: GetAttr.Instance: restart: guard present(item) else miss "
-          "follows dup(unwrap(item)) at getattr.rop:54: the word cannot restart"]),
-        ("core.rop", "  spends(s)\n", "",
-         # Without its spends(s), the macro leaves the sources the point
-         # declares spent
-         ["add.rop:170:5: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
-          "lists x in spent, but x is intact",
-          "add.rop:170:5: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
-          "lists y in spent, but y is intact"]),
-    ]
-
     def test_pilot_mutations(self):
-        for filename, old, new, expected in self.MUTATIONS:
+        # Changes to the pilot that the checker refuses.  Diagnostics name
+        # the lines of the checked-in files, found by their text, so that
+        # edits elsewhere in the pilot leave the expectations intact.
+        box = at("add.rop", "call box_i64(full)", 5)
+        raise_ = at("add.rop", "exit raise(Add.OpFailed, saved);", 5)
+        retire = at("add.rop", "let saved:Err = retire_failed_call(")
+        dup = at("getattr.rop", "let result:O = dup(unwrap(item));")
+        guard = at("getattr.rop", "guard present(item) else miss;")
+        mutations = [
+            ("add.rop", "  effects(writes, allocates, raises, releases)\n",
+             "  effects(writes, raises, releases)\n",
+             [f"{box}: Add.Int: effects: call box_i64 may allocates, which "
+              "effects(writes, raises, releases) does not declare"]),
+            ("add.rop", "    exit raise(Add.OpFailed, saved);",
+             "    exit raise(Add.BoxFailed, saved);",
+             [f"{raise_}: Add.Generic: points: raise at Add.BoxFailed: Add.BoxFailed "
+              f"lists x in keep, but x is spent by call retire_failed_call at {retire}",
+              f"{raise_}: Add.Generic: points: raise at Add.BoxFailed: Add.BoxFailed "
+              f"lists y in keep, but y is spent by call retire_failed_call at {retire}"]),
+            # The swap moves dup's line up to the guard's, and the guard's down
+            ("getattr.rop", "    guard present(item) else miss;\n"
+             "    let result:O = dup(unwrap(item));\n",
+             "    let result:O = dup(unwrap(item));\n"
+             "    guard present(item) else miss;\n",
+             [f"{guard}:24: GetAttr.Instance: facts: unwrap(item) requires "
+              "present(item), which no dominating fact proves",
+              f"{dup}:5: GetAttr.Instance: restart: guard present(item) else miss "
+              f"follows dup(unwrap(item)) at {guard}: the word cannot restart"]),
+            ("core.rop", "  spends(s)\n", "",
+             # Without its spends(s), the macro leaves the sources the point
+             # declares spent
+             [f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
+              "lists x in spent, but x is intact",
+              f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
+              "lists y in spent, but y is intact"]),
+        ]
+        for filename, old, new, expected in mutations:
             with self.subTest(old):
                 files = []
                 for path in rop_files():

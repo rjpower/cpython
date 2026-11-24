@@ -631,7 +631,10 @@ _PyIR_Stub_BINARY_OP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWor
 /* The plan of each handler that has one: its region, whether its
  * completions report ESCAPED, its stub (shared), and its family's generic
  * stub, which runs the word after a miss */
+
+/* The stubs of the register instruction arms, defined in generated_rop_stubs.c.h */
 const _PyIRStubPlan _PyIR_StubPlans[512] = {
+    [419] = {_PyIR_PLAN_INLINE, 0, NULL, NULL},  // Add_Int
     [117] = {_PyIR_PLAN_SHARED, 1, 117, (const void *)_PyIR_Stub_UNPACK_SEQUENCE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE
     [124] = {_PyIR_PLAN_SHARED, 0, 124, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_LIST, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_LIST
     [125] = {_PyIR_PLAN_SHARED, 0, 125, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_TUPLE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_TUPLE

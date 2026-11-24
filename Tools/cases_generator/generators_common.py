@@ -426,7 +426,8 @@ class Emitter:
                                holding: list[Token]) -> None:
         """ERROR_IF(cond, holding(x), ...): the inputs live at the site are
         the ones it names, besides those that a raise leaves untouched
-        (pass-throughs, and a declared uop's borrowed and taken inputs); the
+        (pass-throughs, and a declared uop's borrowed, taken and closed
+        inputs); the
         verifier holds the declaration to the body (ir_contract.py)"""
         import ir_contract
         held = {t.text for t in holding}
@@ -435,7 +436,7 @@ class Emitter:
             if var.name == "unused" or var.item.peek:
                 continue
             item = contract.input(var.name) if contract else None
-            untouched = item is not None and item.mode in ("borrowed", "taken")
+            untouched = item is not None and item.mode in ("borrowed", "taken", "closed")
             live = storage.is_live(var)
             if var.name in held and not live:
                 raise analysis_error(f"holding({var.name}) at this raise site, but "

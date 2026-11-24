@@ -157,7 +157,19 @@ EXTRA_ROWS = """
     MACRO(SPAM_RAISE, ARGS(scalar), NONE, EFFECTS(raises), EXITS(raise)) \\
     HELPER(T, PyValue, (PyValue), ARGS(taken), \\
            VALUE_OR_NULL(owned), EFFECTS(allocates, raises)) \\
-    MACRO(SPAM_GUARD, ARGS(scalar), NONE, EFFECTS(), EXITS(miss))
+    MACRO(SPAM_GUARD, ARGS(scalar), NONE, EFFECTS(), EXITS(miss)) \
+    CONSTANT(PyValue_None, VALUE(inline exact(_PyNone_Type))) \
+    CONSTANT(PyValue_True, VALUE(inline exact(PyBool_Type))) \
+    CONSTANT(PyValue_False, VALUE(inline exact(PyBool_Type))) \
+    CONSTANT(PyValue_NULL, VALUE(inline null)) \
+    MACRO(TAKE, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS()) \
+    HELPER(_PyValue_Size, Py_ssize_t, (PyValueBorrow), ARGS(borrowed), SCALAR, \
+           EFFECTS(runs_python)) \
+    HELPER(PyValue_FromInt64, PyValue, (int64_t), ARGS(scalar), VALUE_OR_NULL(owned), \
+           EFFECTS(allocates, raises)) \
+    MACRO(SPAM_STATUS, ARGS(), SCALAR, EFFECTS(raises), EXITS()) \
+    MACRO(SPAM_NEW, ARGS(), VALUE_OR_NULL(owned), EFFECTS(allocates, raises), EXITS()) \
+    MACRO(SPAM_BORROW, ARGS(), VALUE(borrowed), EFFECTS(reads), EXITS())
 """
 
 
@@ -386,7 +398,7 @@ class VerifierTests(unittest.TestCase):
         """, r"PyValue_CLOSE_SPECIALIZED consumes `value`, which is already consumed or moved")
         # Moved to an output, then released
         self.refuses("""
-            inst(OP, (value: consumed exact(PyLong_Type) -- res: owned)) effects(writes)
+            inst(OP, (value: consumed exact(PyLong_Type) -- res: moved(value))) effects(writes)
                 exits(next)
             {
                 res = value;
@@ -395,7 +407,9 @@ class VerifierTests(unittest.TestCase):
         """, r"PyValue_CLOSE_SPECIALIZED consumes `value`, which is already consumed or moved")
         # Moved twice
         self.refuses("""
-            inst(OP, (value: consumed -- a: owned, b: owned)) effects() exits(next) {
+            inst(OP, (value: consumed -- a: moved(value), b: moved(value))) effects()
+                exits(next)
+            {
                 a = value;
                 b = value;
             }
@@ -845,9 +859,12 @@ class VerifierTests(unittest.TestCase):
                 %s
             }
         """
+        # A conditional's arms are paths: a move on one only is refused at
+        # the join (F3)
         self.refuses(source % "PyValue t = oparg ? a : b;",
-                     r"`PyValue t = oparg \? a : b` uses `a` in a form the walk does not "
-                     r"model")
+                     r"`[ab]` is owned on one path and not on another where they join")
+        self.refuses(source % "PyValue t = oparg ? a : (b ? a : b);",
+                     r"uses `[ab]` in a form the walk does not model")
         self.refuses(source % "goto done;", r"`goto` is a form the walk does not model")
         self.refuses(source % "r = PyValue_XDUP(PyValue_XDUP(a));",
                      r"calls PyValue_XDUP, which makes an owner, in a form the walk does "
@@ -1095,6 +1112,233 @@ class VerifierTests(unittest.TestCase):
             ir_contract.parse_rows(
                 "#define X(PRIMITIVE, HELPER, MACRO) "
                 "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(), EXITS(next))")
+
+    # The seed's vocabulary (g0b/decisions.md): F9, exits the body takes
+
+    def test_error_labels_are_raise_exits(self):
+        # _INSTRUMENTED_LINE: `goto error` is its raise exit at that site
+        source = """
+            op(_LINE, (--)) effects(raises) exits(%s) {
+                int original = SPAM_STATUS();
+                if (original < 0) {
+                    goto error;
+                }
+            }
+        """
+        self.verify(source % "next, raise")
+        self.refuses(source % "next", r"_LINE: declares exits\(next\), but the body takes "
+                                      r"next, raise")
+        # The checkpoint is the site's: what is held there is checked there
+        self.refuses("""
+            op(_OP, (x: consumed --)) effects(raises) exits(raise) {
+                goto exception_unwind;
+            }
+        """, r"on raise, `x` is still owned, but the site declares consumed")
+        # Labels that pop stack items, and any other, stay refused
+        self.refuses(source.replace("goto error", "goto pop_1_error") % "next, raise",
+                     r"`goto` is a form the walk does not model")
+
+    def test_return_leaves_the_evaluator(self):
+        # _INTERPRETER_EXIT: the value goes to the evaluator's caller
+        source = """
+            op(_EXIT, (retval: %s --)) effects() exits(%s) {
+                PyValue result = TAKE(retval);
+                return result;
+            }
+        """
+        self.verify(source % ("consumed", "exit"))
+        self.refuses(source % ("consumed", "next"), r"declares exits\(next\), but the body "
+                                                    r"takes exit")
+        self.refuses(source % ("borrowed", "exit"),
+                     r"TAKE consumes `retval`, declared borrowed, which it does not own")
+        self.refuses("""
+            op(_EXIT, (retval: consumed --)) effects() exits(exit) {
+                PyValue result = TAKE(retval);
+                return;
+            }
+        """, r"`return` is a form the walk does not model")
+
+    def test_frame_properties_give_exits(self):
+        source = """
+            returns op(_RET, (--)) effects(switches_frame) exits(%s) {
+                int x = 0;
+            }
+        """
+        self.verify(source % "return")
+        self.refuses(source % "next, return",
+                     r"declares exits\(next, return\), but the body takes return")
+
+    # F4: inputs the skeleton closes
+
+    def test_closed_inputs_are_closed_by_the_skeleton(self):
+        # _CALL_LEN: the inputs stay in their homes; the skeleton closes
+        # them after the uop, on next and on raise
+        source = """
+            op(_CALL_LEN, (callable: closed, null: closed, arg: closed -- res: owned))
+                effects(runs_python) exits(next, raise)
+            {
+                Py_ssize_t len_i = _PyValue_Size(arg);
+                if (len_i < 0) {
+                    ERROR_NO_POP();
+                }
+                res = PyValue_FromInt64(len_i);
+                if (PyValue_IsNull(res)) {
+                    ERROR_NO_POP();
+                }
+                %s
+            }
+        """
+        self.verify(source % "INPUTS_DEAD();")
+        self.verify(source % "DEAD(arg);")
+        # The body does not release a closed input
+        self.refuses(source.replace("arg: closed", "arg: closed exact(PyLong_Type)")
+                     % "PyValue_CLOSE_SPECIALIZED(arg, _PyLong_ExactDealloc);",
+                     r"PyValue_CLOSE_SPECIALIZED consumes `arg`, declared closed, which it "
+                     r"does not own")
+        # DEAD surrenders a held owner only if it is closed
+        self.refuses("""
+            op(_OP, (x: consumed --)) effects() exits(next) {
+                DEAD(x);
+            }
+        """, r"DEAD\(`x`\) drops an owned value")
+        # and still marks an input already discharged (_CREATE_INIT_FRAME)
+        self.verify("""
+            op(_OP, (x: consumed -- r: moved(x))) effects() exits(next) {
+                r = x;
+                DEAD(x);
+            }
+        """)
+
+    def test_the_skeleton_close_is_a_release(self):
+        # After the uop: a finalizer may replace a pass-through's home
+        self.refuses("""
+            op(_OP, (b, a: closed -- b: inline_int)) effects() exits(next, miss) {
+                EXIT_IF(!PyValue_IsInlineInt(b));
+                DEAD(a);
+            }
+        """, r"`b` is declared .*inline_int, but the skeleton's close of `a` after the uop, "
+             r"which may release, may replace the value in its home")
+        # and the word cannot restart after it
+        self.refuses("""
+            op(_CLOSE, (a: closed --)) effects() exits(next) {
+                DEAD(a);
+            }
+            op(_GUARD, (b -- b: inline_int)) effects() exits(next, miss) {
+                EXIT_IF(!PyValue_IsInlineInt(b));
+            }
+            macro(OP) = _CLOSE + _GUARD;
+        """, r"the guard in _GUARD follows the skeleton's close of `a` after _CLOSE")
+
+    # F5: moves through rows and locals
+
+    def test_moved_results(self):
+        # _MAKE_HEAP_SAFE, and a move through a local (_JUMP_IF_FALSE_OR_POP)
+        self.verify("""
+            op(_MAKE_HEAP_SAFE, (value: consumed -- taken: moved(value))) effects()
+                exits(next)
+            {
+                taken = TAKE(value);
+            }
+            op(_THROUGH, (cond: consumed -- res: moved(cond))) effects() exits(next) {
+                PyValue held = TAKE(cond);
+                res = held;
+            }
+        """)
+        # Only an owner made in the body is declared owned
+        self.refuses("""
+            op(_OP, (value: consumed -- res: owned)) effects() exits(next) {
+                PyValue held = TAKE(value);
+                res = held;
+            }
+        """, r"`res` is declared owned, but is assigned `held`, which is the input `value`'s "
+             r"value: declare moved\(value\)")
+        # and a moved output holds its input's value
+        self.refuses("""
+            op(_OP, (value: consumed, other: consumed -- res: moved(value)))
+                effects() exits(next)
+            {
+                res = TAKE(other);
+                PyValue gone = TAKE(value);
+                res = gone;
+            }
+        """, r"`res` is declared moved\(value\), but is assigned `TAKE \( other \)`, which is "
+             r"`other`'s value")
+        self.refuses("""
+            op(_OP, (value: consumed -- res: moved(value))) effects(allocates, raises)
+                exits(next, raise)
+            {
+                res = SPAM_NEW();
+                ERROR_IF(PyValue_IsNull(res));
+            }
+        """, r"`res` is declared moved\(value\), but is assigned `SPAM_NEW \( \)`, which is "
+             r"no input's value")
+        # A row's moved(k) takes argument k's obligation
+        with self.assertRaisesRegex(SyntaxError, r"row SPAM: moved\(0\): argument 0 is not "
+                                                 r"consumed"):
+            ir_contract.parse_rows("#define X(PRIMITIVE, HELPER, MACRO) "
+                                   "MACRO(SPAM, ARGS(borrowed), VALUE(moved(0)), EFFECTS(), "
+                                   "EXITS())")
+
+    # F3: constants, locals and conditionals
+
+    def test_constants_and_conditionals(self):
+        # _CALL_ISINSTANCE: a conditional between two constants
+        source = """
+            op(_OP, (-- b: inline exact(PyBool_Type))) effects() exits(next) {
+                b = oparg ? PyValue_True : %s;
+            }
+        """
+        self.verify(source % "PyValue_False")
+        self.refuses(source % "PyValue_None",
+                     r"`b` is declared exact\(PyBool_Type\), but PyValue_None gives "
+                     r"exact\(_PyNone_Type\)")
+        # _PUSH_NULL: an output that is NULL on next declares it
+        source = """
+            op(_PUSH_NULL, (-- res: %s)) effects() exits(next) {
+                res = PyValue_NULL;
+            }
+        """
+        self.verify(source % "inline null")
+        self.refuses(source % "inline", r"`res` may be NULL from PyValue_NULL")
+        with self.assertRaisesRegex(SyntaxError, r"row SPAM: a CONSTANT is a static immortal "
+                                                 r"value"):
+            ir_contract.parse_rows("#define X(PRIMITIVE, HELPER, MACRO) "
+                                   "CONSTANT(SPAM, VALUE(owned))")
+
+    def test_a_null_arm_follows_its_condition(self):
+        # _CALL_INTRINSIC_2: NULL exactly where the raise's condition holds
+        source = """
+            op(_OP, (-- res: owned)) effects(raises) exits(next, raise) {
+                int err = SPAM_STATUS();
+                res = err < 0 ? PyValue_NULL : PyValue_None;
+                ERROR_IF(%s);
+            }
+        """
+        self.verify(source % "err < 0")
+        self.refuses(source % "err > 0", r"on raise, the new owner `res` is still held")
+
+    def test_values_through_locals(self):
+        # _CALL_BUILTIN_O: a row's result reaches the output through a local
+        source = """
+            op(_OP, (-- res: owned%s)) effects(allocates, raises, reads) exits(next, raise) {
+                PyValue result = %s;
+                if (PyValue_IsNull(result)) {
+                    ERROR_NO_POP();
+                }
+                res = result;
+            }
+        """
+        self.verify(source % ("", "SPAM_NEW()"))
+        self.refuses(source % (" exact(PyLong_Type)", "SPAM_NEW()"),
+                     r"`res` is declared exact\(PyLong_Type\), but SPAM_NEW gives no fact")
+        self.refuses(source % ("", "SPAM_BORROW()"),
+                     r"`res` is declared owned, but `result` holds no owner \(from "
+                     r"SPAM_BORROW\): no owner moves")
+        self.refuses("""
+            op(_OP, (x: borrowed -- res: owned)) effects() exits(next) {
+                res = x.bits;
+            }
+        """, r"`x \. bits` is assigned to an output, but it is no row with a value result")
 
 
 # Rows that use the columns that name another row; TA declares the tree's

@@ -31,7 +31,8 @@
  * `object` is the fact.
  * result: NONE, SCALAR, VIEW (the object of argument 0), PATH(name) (a
  * pointer along a named path from argument 0: its type, its inline
- * values), MEASURE(kind) of argument 0, TEST(true facts | false facts, ...)
+ * values; from the frame for a row without arguments: its globals and
+ * builtins, which the activation does not replace), MEASURE(kind) of argument 0, TEST(true facts | false facts, ...)
  * per argument, CONTEXT("reason"), VALUE(mode facts [null_iff(k)])
  * (infallible; with null_iff(k) NULL exactly where argument k is),
  * VALUE(moved(k)) (argument k itself, a consumed one, with its
@@ -1156,15 +1157,18 @@
      * activation, and write nothing */ \
     MACRO(IR_ACTIVATION, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
     /* Frame fields of Python/ceval_macros.h: GLOBALS() is frame->f_globals, \
-     * BUILTINS() frame->f_builtins, FRAME_CO_CONSTS the code object's \
+     * BUILTINS() frame->f_builtins (PATH: fixed for the activation; \
+     * pycore_interpframe.h's _PyFrame_Initialize sets them, and \
+     * _PyFrame_CopyHeader copies them with the frame), \
+     * FRAME_CO_CONSTS the code object's \
      * constants, IR_SLOTS() frame->base (an address, fixed for the \
      * activation), GETLOCAL(i) the home IR_SLOTS()[i].  A home is not the \
      * heap (design 1.3, 3.2): GETLOCAL addresses a home, which every use \
      * in bytecodes.c indexes by oparg, and loads and stores through it \
      * are home accesses, which a home write, a reentry and the skeleton's \
      * close kill (HOME) */ \
-    MACRO(GLOBALS, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
-    MACRO(BUILTINS, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
+    MACRO(GLOBALS, ARGS(), PATH(globals), EFFECTS(reads), EXITS()) \
+    MACRO(BUILTINS, ARGS(), PATH(builtins), EFFECTS(reads), EXITS()) \
     MACRO(FRAME_CO_CONSTS, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
     MACRO(IR_SLOTS, ARGS(), HOME(base), EFFECTS(), EXITS()) \
     MACRO(GETLOCAL, ARGS(scalar), HOME, EFFECTS(), EXITS()) \

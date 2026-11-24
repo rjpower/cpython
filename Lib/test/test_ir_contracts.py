@@ -1356,6 +1356,13 @@ class VerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(ir_leaf.LeafError, r"`value` is assumed"):
             ir_leaf.translate(analysis.uops["OP"])
 
+    def test_frame_paths(self):
+        # GLOBALS() and BUILTINS() are pointers along paths from the frame,
+        # fixed for the activation (F1): PATH rows without arguments
+        for name, path in (("GLOBALS", "globals"), ("BUILTINS", "builtins")):
+            row = self.table[name]
+            self.assertEqual((row.args, row.result), ((), ir_contract.Result("PATH", measure=path)))
+
     # F6: calls through a protocol's pointer
 
     def test_slot_rows(self):

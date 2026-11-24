@@ -165,7 +165,13 @@ EXTRA_ROWS = """
            EFFECTS(allocates, raises)) \
     MACRO(SPAM_STATUS, ARGS(), SCALAR, EFFECTS(raises), EXITS()) \
     MACRO(SPAM_NEW, ARGS(), VALUE_OR_NULL(owned), EFFECTS(allocates, raises), EXITS()) \
-    MACRO(SPAM_BORROW, ARGS(), VALUE(borrowed), EFFECTS(reads), EXITS())
+    MACRO(SPAM_BORROW, ARGS(), VALUE(borrowed), EFFECTS(reads), EXITS()) \
+    MACRO(SPAM_IN_BOUNDS, ARGS(borrowed, borrowed), TEST(in_bounds(1) |, |), \
+          EFFECTS(reads), EXITS()) \
+    MACRO(SPAM_UNIQUE, ARGS(borrowed), TEST(unique), EFFECTS(), EXITS()) \
+    MACRO(SPAM_NEEDS_UNIQUE, ARGS(borrowed unique), NONE, EFFECTS(writes), EXITS()) \
+    MACRO(SPAM_GEN_OR_CORO, ARGS(borrowed), TEST(exact(PyGen_Type|PyCoro_Type)), \
+          EFFECTS(), EXITS())
 """
 
 
@@ -1108,6 +1114,102 @@ class VerifierTests(unittest.TestCase):
             ir_contract.parse_rows(
                 "#define X(PRIMITIVE, HELPER, MACRO) "
                 "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(), EXITS(next))")
+
+    # F1: fact kinds, their classes and lifetimes
+
+    def test_fact_kinds(self):
+        for word in ("in_bounds(seq)", "nonnegative", "nonzero", "is(PyValue_None)",
+                     "subtype(PyType_Type)", "not_subtype(PyType_Type)",
+                     "not_exact(PyList_Type)", "exact(PyGen_Type|PyCoro_Type)",
+                     "type_flag(Py_TPFLAGS_HEAPTYPE)", "type_slot(tp_iter,PyObject_SelfIter)",
+                     "class_version", "func_version(K)", "argcount", "vectorcall",
+                     "call_flags", "ascii", "no_managed_dict", "unique", "null"):
+            self.assertEqual(str(ir_contract.parse_fact(word, None)), word)
+        for word, message in (("in_bounds", "needs an argument"),
+                              ("exact(PyGen_Type|)", "the argument of `exact`"),
+                              ("type_slot(tp_iter)", "the argument of `type_slot`"),
+                              ("ascii(x)", "takes no argument")):
+            with self.assertRaisesRegex(ValueError, message):
+                ir_contract.parse_fact(word, None)
+        # Mutable state's facts are heap facts; a value's are not
+        for kind in ("in_bounds", "subtype", "not_exact", "type_flag", "class_version"):
+            self.assertIn(kind, ir_contract.HEAP_FACTS)
+        for kind in ("nonnegative", "nonzero", "is", "ascii", "exact", "null"):
+            self.assertNotIn(kind, ir_contract.HEAP_FACTS)
+        # A union of exact types is a fact of the record as a union
+        union = ir_contract.parse_fact("exact(PyGen_Type|PyCoro_Type)", None)
+        self.assertEqual(union.record("v0").arg, "PyGen_Type | PyCoro_Type")
+
+    def test_in_bounds_names_an_input_and_dies_with_the_heap(self):
+        source = """
+            op(_GUARD, (seq, i -- seq, i: in_bounds(%s))) effects(%s) exits(next, miss) {
+                EXIT_IF(!SPAM_IN_BOUNDS(i, seq));
+                %s
+            }
+        """
+        self.verify(source % ("seq", "reads", ""))
+        self.refuses(source % ("other", "reads", ""),
+                     r"`i` is declared in_bounds\(other\), but `other` is not an input")
+        self.refuses(source % ("seq", "reads, writes", "int z = SPAM_TEST(seq);"),
+                     r"`i` is declared .*in_bounds\(seq\).*, which nothing establishes")
+
+    def test_unique_is_a_fact_of_one_site(self):
+        source = """
+            op(_OP, (x: borrowed --)) effects(writes, runs_python) exits(next) {
+                if (SPAM_UNIQUE(x)) {
+                    %s
+                    SPAM_NEEDS_UNIQUE(x);
+                }
+            }
+        """
+        self.verify(source % "")
+        # It dies at a reentry within the uop
+        self.refuses(source % "Py_ssize_t n = _PyValue_Size(x);",
+                     r"passes `x` to SPAM_NEEDS_UNIQUE, which requires .*unique of it")
+        # and is never exported
+        self.refuses("""
+            op(_OP, (x -- x: unique)) effects() exits(next) {
+                int z = 0;
+            }
+        """, r"`x` is declared unique, a fact of one site, which is never exported")
+
+    def test_identities_name_constants(self):
+        self.verify("""
+            op(_OP, (-- res: inline is(PyValue_None))) effects() exits(next) {
+                res = PyValue_None;
+            }
+        """)
+        self.refuses("""
+            op(_OP, (-- res: inline is(PyValue_True))) effects() exits(next) {
+                res = oparg ? PyValue_True : PyValue_False;
+            }
+        """, r"`res` is declared is\(PyValue_True\), but PyValue_False gives")
+        self.refuses("""
+            op(_OP, (x -- x: is(spam))) effects() exits(next) {
+                int z = 0;
+            }
+        """, r"is\(spam\) names `spam`, which is no CONSTANT row")
+        self.refuses("""
+            op(_OP, (x -- x: is(PyValue_NULL))) effects() exits(next) {
+                int z = 0;
+            }
+        """, r"is\(PyValue_NULL\): NULL is no identity; it is `null`")
+
+    def test_exact_types_join_by_union(self):
+        # A union TEST, and the join of two exact types
+        source = """
+            op(_GUARD, (x -- x: %s)) effects() exits(next, miss) {
+                EXIT_IF(!SPAM_GEN_OR_CORO(x));
+            }
+        """
+        self.verify(source % "exact(PyGen_Type|PyCoro_Type)")
+        self.refuses(source % "exact(PyGen_Type)", r"`x` is declared exact\(PyGen_Type\), "
+                                                   r"which nothing establishes")
+        facts = ir_contract._intersection([
+            {"x": frozenset({ir_contract.parse_fact("exact(PyList_Type)", None)})},
+            {"x": frozenset({ir_contract.parse_fact("exact(PyTuple_Type)", None)})}])
+        self.assertIn(ir_contract.parse_fact("exact(PyList_Type|PyTuple_Type)", None),
+                      facts["x"])
 
     # The seed's vocabulary (g0b/decisions.md): F9, exits the body takes
 

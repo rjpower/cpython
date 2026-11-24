@@ -85,18 +85,39 @@ ARG_MODES = ("borrowed", "consumed", "taken", "scalar", "object", "tstate", "fra
              "out", "destructor")
 
 # Facts: the vocabulary's words and the record's Fact kinds.  A fact with an
-# argument is written `kind(arg)`.
+# argument is written `kind(arg)`; `exact(T1|T2)` is a union of exact types,
+# `type_slot(slot,fn)` a type slot's value, `in_bounds(x)` an index within
+# the length of input x, `is(K)` the identity of a CONSTANT row's value.
 FACT_KIND = {
     "nonnull": "NOT_NULL", "inline": "NUMBER", "inline_int": "INLINE_INT",
     "inline_float": "INLINE_FLOAT", "object": "OBJECT", "exact": "EXACT_TYPE",
     "type_version": "TYPE_VERSION", "has_values": "INLINE_VALUES_VALID",
     "shape": "SHAPE", "keys_version": "KEYS_VERSION", "length": "LENGTH",
-    "null": "IS_NULL",
+    "null": "IS_NULL", "in_bounds": "IN_BOUNDS", "nonnegative": "NON_NEGATIVE",
+    "nonzero": "NON_ZERO", "is": "IDENTITY", "subtype": "SUBTYPE",
+    "not_subtype": "NOT_SUBTYPE", "not_exact": "NOT_TYPE", "type_flag": "TYPE_FLAG",
+    "type_slot": "TYPE_SLOT", "class_version": "CLASS_VERSION",
+    "func_version": "FUNC_VERSION", "argcount": "ARGCOUNT", "vectorcall": "VECTORCALL",
+    "call_flags": "CALL_FLAGS", "ascii": "ASCII", "no_managed_dict": "NO_MANAGED_DICT",
+    "unique": "UNIQUE",
 }
 VOCABULARY_OF_KIND = {v: k for k, v in FACT_KIND.items()}
-FACTS_WITH_ARGUMENT = frozenset(("exact", "type_version", "shape", "keys_version", "length"))
-# Properties of mutable heap state: they die at every KILLS site (1.1)
-HEAP_FACTS = frozenset(("type_version", "has_values", "shape", "keys_version", "length"))
+FACTS_WITH_ARGUMENT = frozenset(("exact", "type_version", "shape", "keys_version", "length",
+                                 "in_bounds", "is", "subtype", "not_subtype", "not_exact",
+                                 "type_flag", "type_slot"))
+# The call-shape kinds take a value where the guard names one
+FACTS_WITH_OPTIONAL_ARGUMENT = frozenset(("class_version", "func_version", "argcount",
+                                          "vectorcall", "call_flags"))
+# Properties of mutable heap state: they die at every KILLS site (1.1).
+# not_exact(T) is one: a mutable class's membership can change
+HEAP_FACTS = frozenset(("type_version", "has_values", "shape", "keys_version", "length",
+                        "in_bounds", "subtype", "not_subtype", "not_exact", "type_flag",
+                        "type_slot", "class_version", "func_version", "argcount",
+                        "vectorcall", "call_flags", "no_managed_dict"))
+# Facts of one site (refcount 1): they die at any count change of the
+# value, any publication and any reentry, within the uop, and are never
+# exported (F1)
+SITE_FACTS = frozenset(("unique",))
 NUMBER_TYPES = ("PyLong_Type", "PyFloat_Type")
 
 
@@ -110,7 +131,12 @@ class VFact:
         return f"{self.kind}({self.arg})" if self.arg else self.kind
 
     def record(self, subject: str) -> Fact:
-        return Fact(FACT_KIND[self.kind], subject, self.arg)
+        arg = self.arg
+        if self.kind == "exact":
+            arg = " | ".join(arg.split("|"))
+        elif self.kind == "type_slot":
+            arg = " == ".join(arg.split(","))
+        return Fact(FACT_KIND[self.kind], subject, arg)
 
 
 NONNULL = VFact("nonnull")
@@ -127,9 +153,11 @@ def implied(facts) -> frozenset[VFact]:
             result |= {INLINE, VFact("exact", "PyLong_Type")}
         elif f.kind == "inline_float":
             result |= {INLINE, VFact("exact", "PyFloat_Type")}
-        elif f.kind == "exact" and f.arg not in NUMBER_TYPES:
+        elif f.kind == "exact" and not set(f.arg.split("|")) & set(NUMBER_TYPES):
             result.add(OBJECT)
-        elif f.kind in ("type_version", "has_values", "keys_version", "length"):
+        elif f.kind in ("type_version", "has_values", "keys_version", "length", "subtype",
+                        "type_flag", "type_slot", "class_version", "func_version",
+                        "ascii", "no_managed_dict", "unique"):
             result.add(OBJECT)
         elif f.kind == "shape":
             result |= {VFact("has_values"), OBJECT}
@@ -142,14 +170,24 @@ def without_heap_facts(facts: frozenset[VFact]) -> frozenset[VFact]:
     return frozenset(f for f in facts if f.kind not in HEAP_FACTS)
 
 
+def without_site_facts(facts: frozenset[VFact]) -> frozenset[VFact]:
+    return frozenset(f for f in facts if f.kind not in SITE_FACTS)
+
+
 def parse_fact(word: str, where: Token | None) -> VFact:
-    m = re.fullmatch(r"(\w+)(?:\((\w+)\))?", word)
+    m = re.fullmatch(r"(\w+)(?:\(([\w|,]+)\))?", word)
     if m is None or m.group(1) not in FACT_KIND:
         message = (f"`{word}` is not a fact of the contract vocabulary "
                    f"({', '.join(sorted(FACT_KIND))})")
         raise analysis_error(message, where) if where else ValueError(message)
     kind, arg = m.group(1), m.group(2) or ""
-    if (kind in FACTS_WITH_ARGUMENT) != bool(arg):
+    shape = {"exact": r"\w+(\|\w+)*", "type_slot": r"\w+,\w+"}.get(kind, r"\w+")
+    if arg and not re.fullmatch(shape, arg):
+        message = f"`{word}`: the argument of `{kind}` is {shape}"
+        raise analysis_error(message, where) if where else ValueError(message)
+    if kind in FACTS_WITH_OPTIONAL_ARGUMENT:
+        pass
+    elif (kind in FACTS_WITH_ARGUMENT) != bool(arg):
         message = (f"the fact `{kind}` "
                    f"{'needs an' if kind in FACTS_WITH_ARGUMENT else 'takes no'} argument")
         raise analysis_error(message, where) if where else ValueError(message)
@@ -280,7 +318,14 @@ def _parse_result(text: str) -> Result:
     if (inner := _inner(text, "TEST")) is not None:
         tests = []
         for entry in _split_text(inner):
-            true, _, false = entry.partition("|")
+            # The sides split at the `|` outside a fact's parentheses
+            depth, bar = 0, len(entry)
+            for i, ch in enumerate(entry):
+                depth += {"(": 1, ")": -1}.get(ch, 0)
+                if ch == "|" and depth == 0:
+                    bar = i
+                    break
+            true, false = entry[:bar], entry[bar + 1:]
             tests.append((frozenset(parse_fact(w, None) for w in true.split()),
                           frozenset(parse_fact(w, None) for w in false.split())))
         return Result("TEST", tests=tuple(tests))
@@ -685,6 +730,15 @@ def contract_of(uop: Uop) -> Contract | None:
             if o.mode == "moved" and not any(i.name == o.source for i in inputs):
                 raise analysis_error(f"{uop.name}: `{o.name}` is moved from `{o.source}`, "
                                      "which is not an input", where)
+            for f in sorted(o.facts):
+                if f.kind in SITE_FACTS:
+                    raise analysis_error(f"{uop.name}: `{o.name}` is declared {f}, a fact of "
+                                         "one site, which is never exported", where)
+        for item in inputs + outputs:
+            for f in sorted(item.facts):
+                if f.kind == "in_bounds" and not any(i.name == f.arg for i in inputs):
+                    raise analysis_error(f"{uop.name}: `{item.name}` is declared {f}, but "
+                                         f"`{f.arg}` is not an input", where)
         feedback = parse_feedback(uop.clauses.get("feedback", ()), where)
         contract = Contract(inputs, outputs, effects, exits, feedback)
     # The uop is kept with its contract, so that its id is not reused
@@ -1045,9 +1099,26 @@ def _union(found: list[Facts]) -> Facts:
     return result
 
 
+def _exact_types(facts: frozenset[VFact]) -> frozenset[str] | None:
+    "The exact types a name may have, if its facts say"
+    found = [frozenset(f.arg.split("|")) for f in facts if f.kind == "exact"]
+    return frozenset.intersection(*found) if found else None
+
+
 def _intersection(found: list[Facts]) -> Facts:
+    """The facts that hold on every alternative.  A conjunction of facts
+    joins by intersection; the exact type joins by the union of the
+    alternatives' types (F1)"""
     names = set.intersection(*(set(f) for f in found)) if found else set()
-    return {n: frozenset.intersection(*(implied(f[n]) for f in found)) for n in names}
+    result = {}
+    for n in names:
+        common = frozenset.intersection(*(implied(f[n]) for f in found))
+        types = [_exact_types(implied(f[n])) for f in found]
+        if all(t is not None for t in types) and not any(f.kind == "exact" for f in common):
+            union = frozenset.union(*types)
+            common = implied(common | {VFact("exact", "|".join(sorted(union)))})
+        result[n] = common
+    return result
 
 
 def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
@@ -1087,6 +1158,17 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
             name = views.resolve(arg)
             if name is None:
                 return None
+            # A row's in_bounds(k) names its argument k: here, its name
+            bound = set()
+            for f in found:
+                if f.kind == "in_bounds" and f.arg.isdigit():
+                    other = (views.resolve(args[int(f.arg)]) if int(f.arg) < len(args)
+                             else None)
+                    if other is None:
+                        return None
+                    f = VFact("in_bounds", other)
+                bound.add(f)
+            found = frozenset(bound)
             facts[name] = implied(facts.get(name, frozenset()) | found)
         return facts, ""
     if call is not None and call[0].result.shape == "CONTEXT":
@@ -1282,7 +1364,7 @@ class OwnershipWalk:
         left in a home that a reentry site may have rewritten"""
         if self.exit is None or name in self.exit.rehomed:
             return frozenset()
-        return self.exit.facts.get(name, frozenset())
+        return without_site_facts(self.exit.facts.get(name, frozenset()))
 
     # -- exits
 
@@ -1550,6 +1632,8 @@ class OwnershipWalk:
         """A reentry site: a value left in a home may be replaced there (and
         the old one freed), so its facts die now, and those of the locals
         that copy it"""
+        # A site fact (unique) dies at any reentry
+        state.facts = {n: without_site_facts(f) for n, f in state.facts.items()}
         for name, item in self.declared.items():
             if item.mode in UNOWNED:
                 state.rehomed.setdefault(name, why)
@@ -1615,6 +1699,10 @@ class OwnershipWalk:
                     if missing:
                         self.fail(tkn, f"passes `{' '.join(arg)}` to {row.name}, which "
                                   f"requires {', '.join(sorted(map(str, missing)))} of it")
+                if name in state.facts and (row.new_owner() or spec.mode in (
+                        "consumed", "taken", "out")):
+                    # A count change of the value: unique dies
+                    state.facts[name] = without_site_facts(state.facts[name])
                 if spec.mode in ("consumed", "taken"):
                     owner = self.owner_of(arg, state)
                     if owner is not None:
@@ -1880,6 +1968,9 @@ class OwnershipWalk:
         self.bind_value(toks, lhs, rhs, state, out)
         if out is not None and not out.array:
             self.check_identity(toks, out, rhs, state)
+        if out is not None and lhs in state.facts:
+            # A publication: unique dies
+            state.facts[lhs] = without_site_facts(state.facts[lhs])
 
     def check_identity(self, toks: list[Token], out: Item, rhs: list[str],
                        state: _State) -> None:
@@ -1931,6 +2022,8 @@ class OwnershipWalk:
             # A static immortal value: its declared facts, no count
             facts = implied(constant.result.facts | (
                 set() if NULL_FACT in constant.result.facts else {NONNULL}))
+            if NULL_FACT not in facts:
+                facts = facts | {VFact("is", constant.name)}
             state.assign(lhs, facts, None, constant.name)
             if out is not None and out.mode == "owned":
                 # An owned output's obligation, as for any inline value
@@ -2143,7 +2236,8 @@ def _value_results(uop: Uop, where: Token, rhs: list[str], table: dict[str, Row]
         return [(implied(inputs[rhs[0]].facts), "moved", rhs[0])]
     row = table.get(rhs[0]) if len(rhs) == 1 else None
     if row is not None and row.kind == "CONSTANT":
-        return [(implied(row.result.facts), "inline", row.name)]
+        identity = set() if NULL_FACT in row.result.facts else {VFact("is", row.name)}
+        return [(implied(row.result.facts | identity), "inline", row.name)]
     if len(rhs) == 1 and re.fullmatch(r"[A-Za-z_]\w*", rhs[0]) and rhs[0] not in seen:
         found = _assignments(uop, rhs[0])
         if found:
@@ -2261,6 +2355,27 @@ def check_guard_facts(uop: Uop, contract: Contract, walk: OwnershipWalk) -> None
                 f"of `{source}`, which `{out.name}` does not declare", uop.body.open)
 
 
+def check_identities(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
+    """is(K) names a CONSTANT row's value, which is not NULL (that is
+    `null`), in the uop's declaration and in the rows it calls"""
+    facts = [(f, uop.body.open) for i in contract.inputs + contract.outputs for f in i.facts]
+    for tkn, _ in body_calls(uop):
+        row = table.get(tkn.text)
+        if row is not None:
+            facts += [(f, tkn) for a in row.args for f in a.facts]
+            facts += [(f, tkn) for f in row.result.facts]
+            facts += [(f, tkn) for t in row.result.tests for side in t for f in side]
+    for f, where in facts:
+        if f.kind != "is":
+            continue
+        constant = table.get(f.arg)
+        if constant is None or constant.kind != "CONSTANT":
+            raise analysis_error(f"{uop.name}: {f} names `{f.arg}`, which is no CONSTANT row",
+                                 where)
+        if NULL_FACT in constant.result.facts:
+            raise analysis_error(f"{uop.name}: {f}: NULL is no identity; it is `null`", where)
+
+
 _VERIFIED: set[int] = set()
 
 
@@ -2275,6 +2390,7 @@ def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None 
     check_feedback(uop, contract, table)
     check_feedback_pointers(uop, table)
     check_guard_conditions(uop, table)
+    check_identities(uop, contract, table)
     for tkn, _ in body_calls(uop):
         if tkn.text in GUARDS:
             site_facts(uop, tkn, table)     # a condition without facts needs a reason

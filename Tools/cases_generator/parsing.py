@@ -440,12 +440,15 @@ class Parser(PLexer):
 
     def item_contract(self) -> list[str]:
         """The words after an item's colon: each an identifier, or an
-        identifier with a parenthesized argument, `exact(PyLong_Type)`"""
+        identifier with a parenthesized argument, `exact(PyLong_Type)`,
+        `exact(PyGen_Type|PyCoro_Type)`, `type_slot(tp_iter,fn)`"""
         words = []
         while tkn := self.word():
             text = tkn.text
             if self.expect(lx.LPAREN):
                 arg = self.require(lx.IDENTIFIER).text
+                while sep := (self.expect(lx.OR) or self.expect(lx.COMMA)):
+                    arg += sep.text + self.require(lx.IDENTIFIER).text
                 self.require(lx.RPAREN)
                 text = f"{text}({arg})"
             words.append(text)

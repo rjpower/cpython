@@ -1,0 +1,227 @@
+"""Generic observation of words whose handler is a register instruction arm.
+
+_testinternalcapi.force_arm() makes the word of a stack op run an arm before
+its translation rule exists.  Line and instruction events, sys.settrace line
+events and f_lineno jumps must report what they report for the ordinary
+word, with PYTHON_JIT off and always.  Each scenario runs in a child process
+twice, with and without the forced arm, and the two outputs must agree.
+"""
+
+import _opcode
+import dis
+import json
+import textwrap
+import unittest
+
+from test.support import import_helper
+from test.support.script_helper import assert_python_ok
+
+capi = import_helper.import_module("_testinternalcapi")
+
+SCRIPT = """
+import dis
+import json
+import sys
+import _testinternalcapi as capi
+
+FORCE = sys.argv[1] == "1"
+MON = sys.monitoring
+
+
+def g(a, b):
+    x = 0
+    x = a + b + 1
+    x = x + 10
+    return x
+
+
+FIRST = g.__code__.co_firstlineno
+
+
+def arm_words(code):
+    return sum(1 for w in capi.get_ir(code, True) if w[0] == "Add.Int")
+
+
+def prepare():
+    # force_arm builds the executing copy and rewrites its BINARY_OP words
+    # before the first call, so compiled code is made from the arm words.
+    if FORCE:
+        for ins in dis.get_instructions(g):
+            if ins.opname == "BINARY_OP":
+                capi.force_arm(g.__code__, ins.offset, "Add.Int")
+        assert arm_words(g.__code__) == 3, capi.get_ir(g.__code__, True)
+
+
+def monitored(event, callback):
+    MON.use_tool_id(3, "arms")
+    MON.register_callback(3, event, callback)
+    MON.set_events(3, event)
+    try:
+        return g(1, 2)
+    finally:
+        MON.set_events(3, 0)
+        MON.free_tool_id(3)
+
+
+def tracing(tracer):
+    sys.settrace(tracer)
+    try:
+        return g(1, 2)
+    finally:
+        sys.settrace(None)
+
+
+results = {}
+prepare()
+results["plain"] = g(1, 2)
+# Compiled code made from the arm words: the unit stays valid for the run
+results["compiled"] = [capi.jit_compile(g.__code__), g(1, 2)]
+
+lines = []
+present = []
+def on_line(code, line):
+    if code is g.__code__:
+        lines.append(line - FIRST)
+        present.append(arm_words(code))
+results["line"] = [monitored(MON.events.LINE, on_line), lines]
+results["line_arms_seen"] = max(present) if FORCE else 0
+
+offsets = []
+def on_instruction(code, offset):
+    if code is g.__code__:
+        offsets.append(offset)
+results["instruction"] = [monitored(MON.events.INSTRUCTION, on_instruction), offsets]
+
+traced = []
+def tracer(frame, event, arg):
+    if frame.f_code is g.__code__:
+        if event == "line":
+            traced.append(frame.f_lineno - FIRST)
+        return tracer
+    return None
+results["settrace"] = [tracing(tracer), traced]
+
+
+def jumper(source, target, times):
+    seen = []
+    def trace(frame, event, arg):
+        if frame.f_code is not g.__code__:
+            return None
+        if event == "line" and frame.f_lineno - FIRST == source and times[0]:
+            times[0] -= 1
+            seen.append(target)
+            frame.f_lineno = FIRST + target
+        elif event == "line":
+            seen.append(frame.f_lineno - FIRST)
+        return trace
+    return [tracing(trace), seen]
+
+# onto the word (the second addition's line) and over the words
+results["jump_onto"] = jumper(2, 3, [1])
+results["jump_over"] = jumper(2, 4, [1])
+# back onto the first addition, once, from the return
+results["jump_back"] = jumper(4, 2, [1])
+# jump with the arm words in place, then run without observation
+results["after"] = g(5, 6)
+print(json.dumps(results))
+"""
+
+
+def run(mode, force):
+    _, out, _ = assert_python_ok("-c", textwrap.dedent(SCRIPT), str(int(force)),
+                                 PYTHON_JIT=mode)
+    return json.loads(out)
+
+
+class ArmWordObservationTests(unittest.TestCase):
+    def check(self, mode):
+        plain = run(mode, False)
+        forced = run(mode, True)
+        arms_seen = forced.pop("line_arms_seen")
+        plain.pop("line_arms_seen")
+        self.assertEqual(forced, plain)
+        # The words that no event rewrites keep their arm under monitoring
+        self.assertGreaterEqual(arms_seen, 1)
+        self.assertEqual(plain["plain"], 14)
+        self.assertEqual(plain["compiled"][1], 14)
+        self.assertEqual(plain["line"][1], [1, 2, 3, 4])
+        self.assertEqual(plain["jump_over"][0], 0)
+
+    def test_jit_off(self):
+        self.check("off")
+
+    def test_jit_always(self):
+        self.check("always")
+
+
+class ForceArmTests(unittest.TestCase):
+    def setUp(self):
+        def f(a, b):
+            return a + b
+        f(1, 2)
+        self.code = f.__code__
+        self.offset = next(i.offset for i in dis.get_instructions(f)
+                           if i.opname == "BINARY_OP")
+
+    def test_names_every_arm(self):
+        handlers = capi.arm_handlers()
+        self.assertEqual(len(set(handlers.values())), len(handlers))
+        self.assertGreaterEqual(min(handlers.values()), _opcode.IR_NUM_OLD_HANDLERS)
+        for name in ("Add.Int", "Add.Generic", "GetAttr.Instance"):
+            self.assertIn(name, handlers)
+
+    def test_the_contract_export_has_a_row_for_each_arm(self):
+        contract = _opcode.get_ir_contract()
+        handlers = capi.arm_handlers()
+        self.assertEqual(len(contract), max(handlers.values()) + 1)
+        row = contract[handlers["Add.Int"]]
+        self.assertEqual(row.base, dis.opmap["BINARY_OP"])
+        self.assertEqual(row.ninputs, 2)
+        self.assertIsNone(row.twin)
+        self.assertTrue(contract[handlers["Add.Generic"]].effects & 0x1)
+
+    def test_word_length_follows_the_arms_derived_operand_words(self):
+        handlers = capi.arm_handlers()
+        contract = _opcode.get_ir_contract()
+        for name, handler in handlers.items():
+            with self.subTest(arm=name):
+                # The head's handler field is the low 9 bits of its word
+                length = _opcode.get_ir_word_length(handler)
+                self.assertEqual(length, 2 if name.startswith("GetMethod.") else 1)
+                self.assertIsNotNone(contract[handler])
+
+    def test_dis_reads_the_stack_ops_of_a_function_with_an_arm_word(self):
+        before = [(i.opname, i.offset) for i in dis.get_instructions(self.code)]
+        capi.force_arm(self.code, self.offset, "Add.Int")
+        self.assertEqual([(i.opname, i.offset) for i in dis.get_instructions(self.code)],
+                         before)
+        self.assertIn("BINARY_OP", dis.Bytecode(self.code).dis())
+
+    def test_forces_the_arm_onto_the_word(self):
+        capi.force_arm(self.code, self.offset, "Add.Int")
+        names = [w[0] for w in capi.get_ir(self.code, True)]
+        self.assertIn("Add.Int", names)
+        self.assertNotIn("Add.Int", [w[0] for w in capi.get_ir(self.code)])
+
+    def test_refuses_a_word_of_another_family(self):
+        with self.assertRaisesRegex(ValueError, "no word at offset 0 stands for"):
+            capi.force_arm(self.code, 0, "Add.Int")
+
+    def test_refuses_a_layout_the_arm_does_not_encode(self):
+        # LOAD_ATTR words keep the feedback entry in C and the name in D;
+        # GetAttr's encoding puts the name in C and the entry in D
+        def f(o):
+            return o.real
+        f(1)
+        offset = next(i.offset for i in dis.get_instructions(f)
+                      if i.opname == "LOAD_ATTR")
+        with self.assertRaisesRegex(ValueError, "operand layout"):
+            capi.force_arm(f.__code__, offset, "GetAttr.Instance")
+
+    def test_refuses_an_unknown_arm(self):
+        with self.assertRaisesRegex(ValueError, "no register instruction arm Add.Nope"):
+            capi.force_arm(self.code, self.offset, "Add.Nope")
+
+
+if __name__ == "__main__":
+    unittest.main()

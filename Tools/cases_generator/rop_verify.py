@@ -324,9 +324,13 @@ def load(paths: Iterable[Path]) -> Program:
 
 
 def generic_arms(program: Program, family: str) -> list[Arm]:
-    """The arms a miss reaches: shared arms that do not themselves miss."""
+    """The arms a miss reaches: shared arms, or split arms (which leave the
+    frame), that do not themselves miss.  A family without a miss has none."""
+    if "miss" not in program.families[family].exits:
+        return []
     return [a for a in program.arms_of(family)
-            if a.region == Region.shared and "miss" not in a.contract.exits]
+            if a.region in (Region.shared, Region.split)
+            and "miss" not in a.contract.exits]
 
 
 def missing_generic(program: Program) -> tuple[str, ...]:

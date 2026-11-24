@@ -28,7 +28,7 @@ def verify_source(src: str, filename: str = "base.rop") -> list[tuple[int, int, 
 VERIFY_BASE = """\
 enum Op(PLUS, MINUS);
 family F(dst:Dst, x:Src, y:Src, fb:Fb<Binary>)
-  exits(next, miss, again, raise, redirect);
+  exits(next, miss, again, raise, redirect) ops(NOP);
 point F.Done(current, next_head, clear) keep() spent(y, x) defs(dst) held();
 point F.Kept(current, site, pending) keep(x, y) spent() defs() held();
 point F.Gone(current, site, pending) keep() spent(y, x) defs() held();
@@ -207,7 +207,7 @@ arm F.Generic shared
     let now:Route = retire_gone(a, route);
     exit redirect(now);
 }
-family H(x:Src, y:Src, fb:Fb<Binary>) exits(branch, raise, enter);
+family H(x:Src, y:Src, fb:Fb<Binary>) exits(branch, raise, enter) ops(NOP);
 point H.Kept(current, site, pending) keep(x, y) spent() defs() held();
 point H.Back(caller, next_head, clear) keep() spent(y, x) defs() held();
 arm H.Cont split
@@ -241,7 +241,7 @@ arm H.Enter split
     publish [] retire [spent(y), spent(x)] at H.Back;
     exit enter(f) resume H.Back;
 }
-family Two(p:Dst, q:Dst, x:Src) exits(next);
+family Two(p:Dst, q:Dst, x:Src) exits(next) ops(NOP);
 point Two.Done(current, next_head, clear) keep() spent(x) defs(p, q) held();
 arm Two.Both inline
   effects(writes, releases)
@@ -470,7 +470,7 @@ VERIFY_CASES = [
 
 # A source acquired from an operand, held by the raise checkpoint
 HELD = """\
-family H(x:Src, fb:Fb<Binary>) exits(next, raise);
+family H(x:Src, fb:Fb<Binary>) exits(next, raise) ops(NOP);
 point H.Held(current, site, pending) keep() spent() defs() held(x);
 point H.Done(current, next_head, clear) keep() spent(x) defs() held();
 extern helper keep_o(o:O) cases(ok(), err(e:Err)) effects(raises, releases) pending;
@@ -492,10 +492,32 @@ extern helper check(f:Fb<Binary>) cases(ok(), err(e:Err)) effects(raises) pendin
 """
 
 
+# A borrow projected from an anchor lives as long as the anchor token
+ANCHORED = VERIFY_BASE + """\
+extern helper arg(a:Anchors, i:Size) -> B effects(reads) feedback() borrows(a) pending;
+macro anchored_across(a:Anchors) cases(done()) effects(writes, reads) feedback() borrows(a)
+{
+  entry():
+    let w:B = arg(a, 0);
+    let _:Unit = scribble();
+    let v:B = peek(w);
+    exit done();
+}
+macro anchored_after_close(a:Anchors) cases(done()) effects(releases, reads) feedback()
+{
+  entry():
+    let w:B = arg(a, 0);
+    let _:Unit = drop_anchors(a);
+    let v:B = peek(w);
+    exit done();
+}
+"""
+
+
 # Frame transfers: a call that enters its child and resumes at a point, and
 # a return whose arms are selected statically by the kind of frame
 TRANSFERS = """\
-family K(dst:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss);
+family K(dst:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss) ops(NOP);
 point K.Returned(caller, next_head, clear) keep() spent(fn, a) defs(dst) held();
 point K.Early(current, next_head, clear) keep(fn, a) spent() defs(dst) held();
 extern primitive admits(v:B) -> Bool effects() pending;
@@ -510,7 +532,7 @@ arm K.Exact split
     let c:NewFrame = push(thread, fn, a);
     exit enter(c) resume K.Returned;
 }
-family R(value:Src) exits(return, exit, raise);
+family R(value:Src) exits(return, exit, raise) ops(NOP);
 point R.Delivered(caller, resume_head, clear) keep() spent(value) defs() held();
 extern helper pin_departing() -> Unit effects(writes) pending;
 extern primitive caller_of(f:Frame) -> Frame effects(reads) pending;
@@ -560,9 +582,9 @@ TRANSFER_CASES = [
          (14, 5, 'K.Exact', 'resume K.Returned: the point is (current, next_head); a resume point is (caller, next_head)'),
      ]),
     ('resume two definitions',
-     'family K(dst:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss);\n'
+     'family K(dst:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss) ops(NOP);\n'
      'point K.Returned(caller, next_head, clear) keep() spent(fn, a) defs(dst)',
-     'family K(dst:Dst, other:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss);\n'
+     'family K(dst:Dst, other:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss) ops(NOP);\n'
      'point K.Returned(caller, next_head, clear) keep() spent(fn, a) defs(dst, other)', [
          (14, 5, 'K.Exact', "resume K.Returned: the child's value is one definition, not 2"),
      ]),
@@ -644,28 +666,6 @@ class TransferTests(unittest.TestCase):
                 self.assertEqual(sorted(found), sorted(expected))
 
 
-# A borrow projected from an anchor lives as long as the anchor token
-ANCHORED = VERIFY_BASE + """\
-extern helper arg(a:Anchors, i:Size) -> B effects(reads) feedback() borrows(a) pending;
-macro anchored_across(a:Anchors) cases(done()) effects(writes, reads) feedback() borrows(a)
-{
-  entry():
-    let w:B = arg(a, 0);
-    let _:Unit = scribble();
-    let v:B = peek(w);
-    exit done();
-}
-macro anchored_after_close(a:Anchors) cases(done()) effects(releases, reads) feedback()
-{
-  entry():
-    let w:B = arg(a, 0);
-    let _:Unit = drop_anchors(a);
-    let v:B = peek(w);
-    exit done();
-}
-"""
-
-
 class VerifyTests(unittest.TestCase):
     def test_anchored_borrow(self):
         found = verify_source(ANCHORED)
@@ -713,11 +713,12 @@ def rop_files() -> list[Path]:
     return sorted(ROP_DIR.glob("*.rop"))
 
 
-def at(filename: str, text: str, column: int | None = None) -> str:
-    """filename:line, and :column if given, of the first line of the
-    checked-in definition file that contains text"""
+def at(filename: str, text: str, column: int | None = None, last: bool = False) -> str:
+    """filename:line, and :column if given, of the first line (the last, if
+    last) of the checked-in definition file that contains text"""
     lines = (ROP_DIR / filename).read_text().splitlines()
-    line = next(i for i, source in enumerate(lines, 1) if text in source)
+    found = [i for i, source in enumerate(lines, 1) if text in source]
+    line = found[-1] if last else found[0]
     return f"{filename}:{line}" if column is None else f"{filename}:{line}:{column}"
 
 
@@ -735,8 +736,11 @@ class PilotTests(unittest.TestCase):
         # the lines of the checked-in files, found by their text, so that
         # edits elsewhere in the pilot leave the expectations intact.
         box = at("add.rop", "call box_i64(full)", 5)
-        raise_ = at("add.rop", "exit raise(Add.OpFailed, saved);", 5)
-        retire = at("add.rop", "let saved:Err = retire_failed_call(")
+        # Add.Extended and Add.Generic end alike; the mutations edit the
+        # last block, Add.Generic's
+        raise_ = at("add.rop", "exit raise(Add.OpFailed, saved);", 5, last=True)
+        retire = at("add.rop", "let saved:Err = retire_failed_call(", last=True)
+        raise_ext = at("add.rop", "exit raise(Add.OpFailed, saved);", 5)
         dup = at("getattr.rop", "let result:O = dup(unwrap(item));")
         guard = at("getattr.rop", "guard present(item) else miss;")
         raise_attr = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5)
@@ -764,7 +768,11 @@ class PilotTests(unittest.TestCase):
             ("core.rop", "  spends(s)\n", "",
              # Without its spends(s), the macro leaves the sources the point
              # declares spent
-             [f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
+             [f"{raise_ext}: Add.Extended: points: raise at Add.OpFailed: Add.OpFailed "
+              "lists x in spent, but x is intact",
+              f"{raise_ext}: Add.Extended: points: raise at Add.OpFailed: Add.OpFailed "
+              "lists y in spent, but y is intact",
+              f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
               "lists x in spent, but x is intact",
               f"{raise_}: Add.Generic: points: raise at Add.OpFailed: Add.OpFailed "
               "lists y in spent, but y is intact",
@@ -780,7 +788,9 @@ class PilotTests(unittest.TestCase):
                     text = path.read_text()
                     if path.name == filename:
                         self.assertIn(old, text)
-                        text = text.replace(old, new, 1)
+                        # The last occurrence: Add.Generic's block
+                        head, _, tail = text.rpartition(old)
+                        text = head + new + tail if "exit raise" in old else text.replace(old, new, 1)
                     files.append(rop_syntax.parse(text, path.name))
                 program = rop_check.check(files)
                 found = [str(d) for d in program.diagnostics + rop_verify.verify(program)]

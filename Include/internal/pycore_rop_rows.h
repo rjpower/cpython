@@ -8,6 +8,8 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_code.h"          // _PyBinaryOp_ExtendDescr()
+#include "pycore_feedback.h"      // _PyFbBinary
 #include "pycore_interpframe.h"   // _PyFrame_TakeHome()
 #include "pycore_value.h"         // PyValue
 
@@ -96,7 +98,69 @@ _PyRop_DiscardResult(PyValue z)
     PyValue_XCLOSE(z);
 }
 
+/* Add: floats, text and the extension descriptor */
+
+static inline bool
+_PyRop_FloatOperands(PyValueBorrow a, PyValueBorrow b)
+{
+    return PyValue_FloatOperandsCheck(a, b);
+}
+
+static inline PyValue
+_PyRop_AddFloats(PyValueBorrow a, PyValueBorrow b)
+{
+    double x, y;
+    bool admitted = PyValue_FloatOperandValues(a, b, &x, &y);
+    assert(admitted);
+    (void)admitted;
+    return PyValue_FromDouble(x + y);
+}
+
+static inline bool
+_PyRop_BothExactStr(PyValueBorrow a, PyValueBorrow b)
+{
+    return PyValue_IsObject(a) && PyValue_IsObject(b) &&
+           PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(a)) &&
+           PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(b));
+}
+
+static inline PyValue
+_PyRop_ConcatText(PyValueBorrow a, PyValueBorrow b)
+{
+    PyObject *res = PyUnicode_Concat(PyValue_AsKnownObjectBorrow(a),
+                                     PyValue_AsKnownObjectBorrow(b));
+    if (res == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromNonNumberSteal(res);
+}
+
+static inline bool
+_PyRop_ExtensionApplies(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b)
+{
+    const _PyBinaryOpSpecializationDescr *d =
+        _PyBinaryOp_ExtendDescr((PyObject *)fb->descr);
+    // The descriptors guard objects: inline operands go to the generic arm
+    return d != NULL && PyValue_IsObject(a) && PyValue_IsObject(b) &&
+           Py_TYPE(PyValue_AsKnownObjectBorrow(a)) == d->lhs_type &&
+           Py_TYPE(PyValue_AsKnownObjectBorrow(b)) == d->rhs_type;
+}
+
+static inline PyValue
+_PyRop_RunExtension(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b)
+{
+    const _PyBinaryOpSpecializationDescr *d =
+        _PyBinaryOp_ExtendDescr((PyObject *)fb->descr);
+    PyObject *res = d->action(PyValue_AsKnownObjectBorrow(a),
+                              PyValue_AsKnownObjectBorrow(b));
+    if (res == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(res);
+}
+
 /* Python/specialize.c: the adaptation rows */
+bool _PyRop_FindAddExtension(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b);
 void _PyRop_Backoff(_PyFbHeader *fb);
 int _PyRop_Install(_PyInstr *site, _PyFbHeader *fb, int handler);
 int _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,

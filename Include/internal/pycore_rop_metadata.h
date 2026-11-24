@@ -6,16 +6,19 @@
 #ifndef Py_INTERNAL_ROP_METADATA_H
 #define Py_INTERNAL_ROP_METADATA_H
 
-#include "opcode_ids.h"        // IR_NUM_HANDLERS
+#include "opcode_ids.h"        // IR_NUM_OLD_HANDLERS
 #include "pycore_ir.h"          // IR_F_LOCAL_A
 
-/* The arms' handler ids follow the old handlers, in definition order */
-#define ROP_FIRST_HANDLER IR_NUM_HANDLERS
-#define ROP_NUM_HANDLERS 18
+/* The arms' handler ids follow the old handlers, in definition order; the
+ * observed wrappers of the arms of families that declare events follow them */
+#define ROP_FIRST_HANDLER IR_NUM_OLD_HANDLERS
+#define ROP_NUM_HANDLERS 21
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,
               "the arms' handler ids fit the handler field");
 #define ROP_NUM_FAMILIES 68
-#define ROP_NUM_ARMS 18
+#define ROP_NUM_ARMS 21
+static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS == IR_NUM_HANDLERS,
+              "the handler count is the old handlers, the arms and their wrappers");
 
 /* Family numbers, in name order */
 enum {
@@ -91,23 +94,26 @@ enum {
 
 /* Handler numbers of the arms */
 #define ROP_HANDLER_Add_Int (ROP_FIRST_HANDLER + 0)
-#define ROP_HANDLER_Add_Generic (ROP_FIRST_HANDLER + 1)
-#define ROP_HANDLER_Call_Exact (ROP_FIRST_HANDLER + 2)
-#define ROP_HANDLER_Call_BoundExact (ROP_FIRST_HANDLER + 3)
-#define ROP_HANDLER_Call_Init (ROP_FIRST_HANDLER + 4)
-#define ROP_HANDLER_Call_Generic (ROP_FIRST_HANDLER + 5)
-#define ROP_HANDLER_InitResult_Check (ROP_FIRST_HANDLER + 6)
-#define ROP_HANDLER_Return_Ordinary (ROP_FIRST_HANDLER + 7)
-#define ROP_HANDLER_Return_Empty (ROP_FIRST_HANDLER + 8)
-#define ROP_HANDLER_Return_Generator (ROP_FIRST_HANDLER + 9)
-#define ROP_HANDLER_Return_External (ROP_FIRST_HANDLER + 10)
-#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 11)
-#define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 12)
-#define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 13)
-#define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 14)
-#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 15)
-#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 16)
-#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 17)
+#define ROP_HANDLER_Add_Float (ROP_FIRST_HANDLER + 1)
+#define ROP_HANDLER_Add_Text (ROP_FIRST_HANDLER + 2)
+#define ROP_HANDLER_Add_Extended (ROP_FIRST_HANDLER + 3)
+#define ROP_HANDLER_Add_Generic (ROP_FIRST_HANDLER + 4)
+#define ROP_HANDLER_Call_Exact (ROP_FIRST_HANDLER + 5)
+#define ROP_HANDLER_Call_BoundExact (ROP_FIRST_HANDLER + 6)
+#define ROP_HANDLER_Call_Init (ROP_FIRST_HANDLER + 7)
+#define ROP_HANDLER_Call_Generic (ROP_FIRST_HANDLER + 8)
+#define ROP_HANDLER_InitResult_Check (ROP_FIRST_HANDLER + 9)
+#define ROP_HANDLER_Return_Ordinary (ROP_FIRST_HANDLER + 10)
+#define ROP_HANDLER_Return_Empty (ROP_FIRST_HANDLER + 11)
+#define ROP_HANDLER_Return_Generator (ROP_FIRST_HANDLER + 12)
+#define ROP_HANDLER_Return_External (ROP_FIRST_HANDLER + 13)
+#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 14)
+#define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 15)
+#define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 16)
+#define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 17)
+#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 18)
+#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 19)
+#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 20)
 
 /* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */
 #define ROP_POINT_Add_BoxFailed 1
@@ -148,6 +154,8 @@ typedef struct {
     uint8_t noperands;
     uint8_t words;           /* operand words after the head, vectors aside */
     const _PyRopOperand *operands;
+    uint8_t nops;            /* the stack ops that lower to the family; the */
+    const uint16_t *ops;     /* first is the base opcode of its arms' words */
 } _PyRopFamily;
 
 typedef struct {
@@ -172,17 +180,20 @@ static const _PyRopOperand _PyRop_Operands_Add[] = {
     {"y", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 40, IR_F_LOCAL_C},  /* Src */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 52, 0},  /* Fb<Binary> */
 };
+static const uint16_t _PyRop_Ops_Add[] = {BINARY_OP};
 static const _PyRopOperand _PyRop_Operands_AddElement[] = {
     {"container", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
     {"kind", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 28, 0},  /* Enum<ElementKind> */
     {"item", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 40, IR_F_LOCAL_C},  /* Src */
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 52, IR_F_LOCAL_D},  /* Maybe<Src> */
 };
+static const uint16_t _PyRop_Ops_AddElement[] = {LIST_APPEND, SET_ADD, MAP_ADD};
 static const _PyRopOperand _PyRop_Operands_AsyncIter[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"source", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"mode", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 40, 0},  /* Enum<AsyncIterMode> */
 };
+static const uint16_t _PyRop_Ops_AsyncIter[] = {GET_AITER, GET_ANEXT};
 static const _PyRopOperand _PyRop_Operands_AttrWrite[] = {
     {"obj", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
     {"name", ROP_FIELD_NAME, ROP_ROLE_NONE, 0, 12, 28, 0},  /* Name */
@@ -190,11 +201,13 @@ static const _PyRopOperand _PyRop_Operands_AttrWrite[] = {
     {"mode", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 52, 0},  /* Enum<WriteMode> */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 64, 0},  /* Fb<Attr> */
 };
+static const uint16_t _PyRop_Ops_AttrWrite[] = {STORE_ATTR};
 static const _PyRopOperand _PyRop_Operands_Awaitable[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"source", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"origin", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 40, 0},  /* Enum<AwaitOrigin> */
 };
+static const uint16_t _PyRop_Ops_Awaitable[] = {GET_AWAITABLE};
 static const _PyRopOperand _PyRop_Operands_Binary[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"x", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
@@ -202,11 +215,13 @@ static const _PyRopOperand _PyRop_Operands_Binary[] = {
     {"op", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 5, 52, 0},  /* Enum<Numeric> */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 64, 0},  /* Fb<Binary> */
 };
+static const uint16_t _PyRop_Ops_Binary[] = {BINARY_OP};
 static const _PyRopOperand _PyRop_Operands_BranchNone[] = {
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
     {"target", ROP_FIELD_TARGET, ROP_ROLE_NONE, 0, 12, 28, 0},  /* NearHead */
     {"sense", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 40, 0},  /* Bool */
 };
+static const uint16_t _PyRop_Ops_BranchNone[] = {POP_JUMP_IF_NONE, POP_JUMP_IF_NOT_NONE};
 static const _PyRopOperand _PyRop_Operands_BranchTruth[] = {
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
     {"target", ROP_FIELD_TARGET, ROP_ROLE_NONE, 0, 12, 28, 0},  /* NearHead */
@@ -214,27 +229,32 @@ static const _PyRopOperand _PyRop_Operands_BranchTruth[] = {
     {"keep", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 52, 0},  /* Enum<KeepMode> */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 64, 0},  /* Fb<Truth> */
 };
+static const uint16_t _PyRop_Ops_BranchTruth[] = {POP_JUMP_IF_TRUE, POP_JUMP_IF_FALSE, JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP};
 static const _PyRopOperand _PyRop_Operands_Build[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"kind", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 28, 0},  /* Enum<BuildKind> */
     {"items", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 0, 0, 0},  /* Span<Src> */
 };
+static const uint16_t _PyRop_Ops_Build[] = {BUILD_TUPLE, BUILD_LIST, BUILD_SET, BUILD_MAP};
 static const _PyRopOperand _PyRop_Operands_BuildSlice[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"parts", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 0, 0, 0},  /* Span<Src> */
 };
+static const uint16_t _PyRop_Ops_BuildSlice[] = {BUILD_SLICE};
 static const _PyRopOperand _PyRop_Operands_BuildText[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"kind", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 28, 0},  /* Enum<TextKind> */
     {"parts", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 0, 0, 0},  /* Span<Src> */
     {"flags", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 8, 40, 0},  /* U8 */
 };
+static const uint16_t _PyRop_Ops_BuildText[] = {BUILD_STRING, BUILD_INTERPOLATION, BUILD_TEMPLATE};
 static const _PyRopOperand _PyRop_Operands_Call[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"fn", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"args", ROP_FIELD_VECTOR, ROP_ROLE_NONE, 0, 12, 40, 0},  /* Args */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 52, 0},  /* Fb<Call> */
 };
+static const uint16_t _PyRop_Ops_Call[] = {CALL};
 static const _PyRopOperand _PyRop_Operands_CallEx[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"fn", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
@@ -242,6 +262,7 @@ static const _PyRopOperand _PyRop_Operands_CallEx[] = {
     {"kwargs", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 52, IR_F_LOCAL_D},  /* Maybe<Src> */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 64, 0},  /* Fb<Call> */
 };
+static const uint16_t _PyRop_Ops_CallEx[] = {CALL_FUNCTION_EX};
 static const _PyRopOperand _PyRop_Operands_CallKw[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"fn", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
@@ -249,6 +270,7 @@ static const _PyRopOperand _PyRop_Operands_CallKw[] = {
     {"names", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 52, IR_F_LOCAL_D},  /* Src */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 64, 0},  /* Fb<Call> */
 };
+static const uint16_t _PyRop_Ops_CallKw[] = {CALL_KW};
 static const _PyRopOperand _PyRop_Operands_Cell[] = {
     {"mode", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 3, 16, 0},  /* Enum<CellMode> */
     {"cell", ROP_FIELD_HOME, ROP_ROLE_CELL, 0, 12, 28, IR_F_LOCAL_B},  /* Cell */
@@ -256,6 +278,7 @@ static const _PyRopOperand _PyRop_Operands_Cell[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 1, 12, 52, IR_F_LOCAL_D},  /* Maybe<Dst> */
     {"frees", ROP_FIELD_VECTOR, ROP_ROLE_FREE, 1, 0, 0, 0},  /* Span<Free> */
 };
+static const uint16_t _PyRop_Ops_Cell[] = {MAKE_CELL, LOAD_DEREF, STORE_DEREF, DELETE_DEREF, COPY_FREE_VARS, LOAD_FROM_DICT_OR_DEREF};
 static const _PyRopOperand _PyRop_Operands_CleanupThrow[] = {
     {"exc", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
     {"pair", ROP_FIELD_HOME, ROP_ROLE_ITERPAIR, 0, 12, 28, IR_F_LOCAL_B},  /* IterPair */
@@ -263,6 +286,7 @@ static const _PyRopOperand _PyRop_Operands_CleanupThrow[] = {
     {"done", ROP_FIELD_TARGET, ROP_ROLE_NONE, 0, 12, 52, 0},  /* NearHead */
     {"route", ROP_FIELD_TARGET, ROP_ROLE_NONE, 0, 12, 64, 0},  /* NearHead */
 };
+static const uint16_t _PyRop_Ops_CleanupThrow[] = {CLEANUP_THROW};
 static const _PyRopOperand _PyRop_Operands_Compare[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"x", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
@@ -271,11 +295,13 @@ static const _PyRopOperand _PyRop_Operands_Compare[] = {
     {"result", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 64, 0},  /* Enum<CompareResult> */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 80, 0},  /* Fb<Compare> */
 };
+static const uint16_t _PyRop_Ops_Compare[] = {COMPARE_OP};
 static const _PyRopOperand _PyRop_Operands_Const[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"kind", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 28, 0},  /* Enum<ConstKind> */
     {"index", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 16, 40, 0},  /* U16 */
 };
+static const uint16_t _PyRop_Ops_Const[] = {LOAD_CONST, LOAD_SMALL_INT, LOAD_COMMON_CONSTANT};
 static const _PyRopOperand _PyRop_Operands_Contains[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"item", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
@@ -283,20 +309,24 @@ static const _PyRopOperand _PyRop_Operands_Contains[] = {
     {"sense", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 52, 0},  /* Bool */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 64, 0},  /* Fb<Contains> */
 };
+static const uint16_t _PyRop_Ops_Contains[] = {CONTAINS_OP};
 static const _PyRopOperand _PyRop_Operands_Convert[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"kind", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 40, 0},  /* Enum<ConvertKind> */
 };
+static const uint16_t _PyRop_Ops_Convert[] = {CONVERT_VALUE};
 static const _PyRopOperand _PyRop_Operands_DelItem[] = {
     {"obj", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
     {"key", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
 };
+static const uint16_t _PyRop_Ops_DelItem[] = {DELETE_SUBSCR};
 static const _PyRopOperand _PyRop_Operands_EndAsyncFor[] = {
     {"exc", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
     {"target", ROP_FIELD_TARGET, ROP_ROLE_NONE, 0, 12, 28, 0},  /* NearHead */
     {"send", ROP_FIELD_TARGET, ROP_ROLE_NONE, 0, 12, 40, 0},  /* NearHead */
 };
+static const uint16_t _PyRop_Ops_EndAsyncFor[] = {END_ASYNC_FOR};
 static const _PyRopOperand _PyRop_Operands_ExceptMatch[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"rest", ROP_FIELD_HOME, ROP_ROLE_DST, 1, 12, 28, IR_F_LOCAL_B},  /* Maybe<Dst> */
@@ -304,11 +334,13 @@ static const _PyRopOperand _PyRop_Operands_ExceptMatch[] = {
     {"pattern", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 52, IR_F_LOCAL_D},  /* Src */
     {"mode", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 64, 0},  /* Enum<MatchMode> */
 };
+static const uint16_t _PyRop_Ops_ExceptMatch[] = {CHECK_EXC_MATCH, CHECK_EG_MATCH};
 static const _PyRopOperand _PyRop_Operands_ExceptState[] = {
     {"mode", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 16, 0},  /* Enum<ExceptMode> */
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 1, 12, 28, IR_F_LOCAL_B},  /* Maybe<Dst> */
     {"exc", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 40, IR_F_LOCAL_C},  /* Src */
 };
+static const uint16_t _PyRop_Ops_ExceptState[] = {PUSH_EXC_INFO, POP_EXCEPT};
 static const _PyRopOperand _PyRop_Operands_ForIter[] = {
     {"item", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"pair", ROP_FIELD_HOME, ROP_ROLE_ITERPAIR, 0, 12, 28, IR_F_LOCAL_B},  /* IterPair */
@@ -317,11 +349,13 @@ static const _PyRopOperand _PyRop_Operands_ForIter[] = {
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 80, 0},  /* Fb<Iter> */
     {"second", ROP_FIELD_HOME, ROP_ROLE_DST, 1, 12, 96, 0},  /* Maybe<Dst> */
 };
+static const uint16_t _PyRop_Ops_ForIter[] = {FOR_ITER};
 static const _PyRopOperand _PyRop_Operands_Format[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"spec", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 40, IR_F_LOCAL_C},  /* Maybe<Src> */
 };
+static const uint16_t _PyRop_Ops_Format[] = {FORMAT_SIMPLE, FORMAT_WITH_SPEC};
 static const _PyRopOperand _PyRop_Operands_Function[] = {
     {"mode", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 16, 0},  /* Enum<FunctionMode> */
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 1, 12, 28, IR_F_LOCAL_B},  /* Maybe<Dst> */
@@ -329,18 +363,21 @@ static const _PyRopOperand _PyRop_Operands_Function[] = {
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 52, IR_F_LOCAL_D},  /* Maybe<Src> */
     {"field", ROP_FIELD_IMM, ROP_ROLE_NONE, 1, 4, 64, 0},  /* Maybe<Enum<FunctionField>> */
 };
+static const uint16_t _PyRop_Ops_Function[] = {MAKE_FUNCTION, SET_FUNCTION_ATTRIBUTE};
 static const _PyRopOperand _PyRop_Operands_GetAttr[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"obj", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"name", ROP_FIELD_NAME, ROP_ROLE_NONE, 0, 12, 40, 0},  /* Name */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 52, 0},  /* Fb<Attr> */
 };
+static const uint16_t _PyRop_Ops_GetAttr[] = {LOAD_ATTR};
 static const _PyRopOperand _PyRop_Operands_GetItem[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"obj", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"key", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 40, IR_F_LOCAL_C},  /* Src */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 52, 0},  /* Fb<Item> */
 };
+static const uint16_t _PyRop_Ops_GetItem[] = {BINARY_OP};
 static const _PyRopOperand _PyRop_Operands_GetMethod[] = {
     {"callable", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"self_dst", ROP_FIELD_HOME, ROP_ROLE_DST, 1, 12, 28, IR_F_LOCAL_B},  /* Maybe<Dst> */
@@ -348,17 +385,20 @@ static const _PyRopOperand _PyRop_Operands_GetMethod[] = {
     {"name", ROP_FIELD_NAME, ROP_ROLE_NONE, 0, 12, 52, 0},  /* Name */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 64, 0},  /* Fb<Attr> */
 };
+static const uint16_t _PyRop_Ops_GetMethod[] = {LOAD_ATTR};
 static const _PyRopOperand _PyRop_Operands_GlobalRead[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"name", ROP_FIELD_NAME, ROP_ROLE_NONE, 0, 12, 28, 0},  /* Name */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 40, 0},  /* Fb<Global> */
 };
+static const uint16_t _PyRop_Ops_GlobalRead[] = {LOAD_GLOBAL};
 static const _PyRopOperand _PyRop_Operands_Identity[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"x", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"y", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 40, IR_F_LOCAL_C},  /* Src */
     {"sense", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 52, 0},  /* Bool */
 };
+static const uint16_t _PyRop_Ops_Identity[] = {IS_OP};
 static const _PyRopOperand _PyRop_Operands_Import[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"mode", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 28, 0},  /* Enum<ImportMode> */
@@ -368,67 +408,82 @@ static const _PyRopOperand _PyRop_Operands_Import[] = {
     {"module", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 80, 0},  /* Maybe<Src> */
     {"flags", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 8, 96, 0},  /* U8 */
 };
+static const uint16_t _PyRop_Ops_Import[] = {IMPORT_NAME, IMPORT_FROM};
 static const _PyRopOperand _PyRop_Operands_InitResult[] = {
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
 };
+static const uint16_t _PyRop_Ops_InitResult[] = {EXIT_INIT_CHECK};
 static const _PyRopOperand _PyRop_Operands_Intrinsic[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"id", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 5, 28, 0},  /* Enum<IntrinsicId> */
     {"args", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 0, 0, 0},  /* Span<Src> */
 };
+static const uint16_t _PyRop_Ops_Intrinsic[] = {CALL_INTRINSIC_1, CALL_INTRINSIC_2};
 static const _PyRopOperand _PyRop_Operands_IterOpen[] = {
     {"pair", ROP_FIELD_HOME, ROP_ROLE_ITERPAIR, 0, 12, 16, IR_F_LOCAL_A},  /* IterPair */
     {"source", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"mode", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 40, 0},  /* Enum<IterMode> */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 52, 0},  /* Fb<Iter> */
 };
+static const uint16_t _PyRop_Ops_IterOpen[] = {GET_ITER};
 static const _PyRopOperand _PyRop_Operands_Jump[] = {
     {"target", ROP_FIELD_TARGET, ROP_ROLE_NONE, 0, 24, 16, 0},  /* FarHead */
     {"poll", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 40, 0},  /* Enum<PollMode> */
 };
+static const uint16_t _PyRop_Ops_Jump[] = {JUMP_BACKWARD, JUMP_FORWARD, JUMP_BACKWARD_NO_INTERRUPT};
 static const _PyRopOperand _PyRop_Operands_Length[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
 };
+static const uint16_t _PyRop_Ops_Length[] = {GET_LEN};
 static const _PyRopOperand _PyRop_Operands_LocalDelete[] = {
     {"local", ROP_FIELD_HOME, ROP_ROLE_LOCAL, 0, 12, 16, IR_F_LOCAL_A},  /* Local */
 };
+static const uint16_t _PyRop_Ops_LocalDelete[] = {DELETE_FAST};
 static const _PyRopOperand _PyRop_Operands_LocalRead[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"local", ROP_FIELD_HOME, ROP_ROLE_LOCAL, 0, 12, 28, IR_F_LOCAL_B},  /* Local */
 };
+static const uint16_t _PyRop_Ops_LocalRead[] = {LOAD_FAST, LOAD_FAST_CHECK, LOAD_FAST_BORROW};
 static const _PyRopOperand _PyRop_Operands_LocalWrite[] = {
     {"local", ROP_FIELD_HOME, ROP_ROLE_LOCAL, 0, 12, 16, IR_F_LOCAL_A},  /* Local */
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
 };
+static const uint16_t _PyRop_Ops_LocalWrite[] = {STORE_FAST};
 static const _PyRopOperand _PyRop_Operands_MaterializeKwargs[] = {
     {"local", ROP_FIELD_HOME, ROP_ROLE_LOCAL, 0, 12, 16, IR_F_LOCAL_A},  /* Local */
 };
+static const uint16_t _PyRop_Ops_MaterializeKwargs[] = {MATERIALIZE_KWARGS};
 static const _PyRopOperand _PyRop_Operands_MergeKeywords[] = {
     {"dict", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
     {"source", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"fn", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 40, IR_F_LOCAL_C},  /* Src */
 };
+static const uint16_t _PyRop_Ops_MergeKeywords[] = {DICT_MERGE};
 static const _PyRopOperand _PyRop_Operands_Move[] = {
     {"dsts", ROP_FIELD_VECTOR, ROP_ROLE_DST, 1, 0, 0, 0},  /* Span<Dst> */
     {"srcs", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 0, 0, 0},  /* Span<Src> */
     {"retire", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 16, 0},  /* Enum<MoveRetire> */
 };
+static const uint16_t _PyRop_Ops_Move[] = {SWAP, COPY};
 static const _PyRopOperand _PyRop_Operands_NamespaceRead[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"scope", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 3, 28, 0},  /* Enum<NamespaceScope> */
     {"name", ROP_FIELD_NAME, ROP_ROLE_NONE, 1, 12, 40, 0},  /* Maybe<Name> */
     {"mapping", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 52, IR_F_LOCAL_D},  /* Maybe<Src> */
 };
+static const uint16_t _PyRop_Ops_NamespaceRead[] = {LOAD_NAME, LOAD_LOCALS, LOAD_BUILD_CLASS, LOAD_FROM_DICT_OR_GLOBALS};
 static const _PyRopOperand _PyRop_Operands_NamespaceWrite[] = {
     {"scope", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 3, 16, 0},  /* Enum<NamespaceScope> */
     {"name", ROP_FIELD_NAME, ROP_ROLE_NONE, 0, 12, 28, 0},  /* Name */
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 40, IR_F_LOCAL_C},  /* Maybe<Src> */
     {"mode", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 52, 0},  /* Enum<WriteMode> */
 };
+static const uint16_t _PyRop_Ops_NamespaceWrite[] = {STORE_NAME, STORE_GLOBAL};
 static const _PyRopOperand _PyRop_Operands_Nop[] = {
     {NULL},
 };
+static const uint16_t _PyRop_Ops_Nop[] = {NOP};
 static const _PyRopOperand _PyRop_Operands_Pattern[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 1, 12, 16, IR_F_LOCAL_A},  /* Maybe<Dst> */
     {"subject", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
@@ -438,27 +493,34 @@ static const _PyRopOperand _PyRop_Operands_Pattern[] = {
     {"count", ROP_FIELD_IMM, ROP_ROLE_NONE, 1, 9, 80, 0},  /* Maybe<U8> */
     {"mismatch", ROP_FIELD_TARGET, ROP_ROLE_NONE, 0, 12, 96, 0},  /* NearHead */
 };
+static const uint16_t _PyRop_Ops_Pattern[] = {MATCH_CLASS, MATCH_KEYS, MATCH_MAPPING, MATCH_SEQUENCE};
 static const _PyRopOperand _PyRop_Operands_Poll[] = {
     {"kind", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 16, 0},  /* Enum<PollKind> */
 };
+static const uint16_t _PyRop_Ops_Poll[] = {0};
 static const _PyRopOperand _PyRop_Operands_Raise[] = {
     {"exc", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 16, IR_F_LOCAL_A},  /* Maybe<Src> */
     {"cause", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 28, IR_F_LOCAL_B},  /* Maybe<Src> */
 };
+static const uint16_t _PyRop_Ops_Raise[] = {RAISE_VARARGS};
 static const _PyRopOperand _PyRop_Operands_Reraise[] = {
     {"exc", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
     {"lasti", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 28, IR_F_LOCAL_B},  /* Maybe<Src> */
 };
+static const uint16_t _PyRop_Ops_Reraise[] = {RERAISE};
 static const _PyRopOperand _PyRop_Operands_Resume[] = {
     {"kind", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 3, 16, 0},  /* Enum<ResumeKind> */
 };
+static const uint16_t _PyRop_Ops_Resume[] = {RESUME};
 static const _PyRopOperand _PyRop_Operands_Return[] = {
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
 };
+static const uint16_t _PyRop_Ops_Return[] = {RETURN_VALUE, INTERPRETER_EXIT};
 static const _PyRopOperand _PyRop_Operands_SaveLocal[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"local", ROP_FIELD_HOME, ROP_ROLE_LOCAL, 0, 12, 28, IR_F_LOCAL_B},  /* Local */
 };
+static const uint16_t _PyRop_Ops_SaveLocal[] = {LOAD_FAST_AND_CLEAR};
 static const _PyRopOperand _PyRop_Operands_Send[] = {
     {"yielded", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"completed", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 28, IR_F_LOCAL_B},  /* Dst */
@@ -467,33 +529,39 @@ static const _PyRopOperand _PyRop_Operands_Send[] = {
     {"done", ROP_FIELD_TARGET, ROP_ROLE_NONE, 0, 12, 64, 0},  /* NearHead */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 80, 0},  /* Fb<Send> */
 };
+static const uint16_t _PyRop_Ops_Send[] = {SEND};
 static const _PyRopOperand _PyRop_Operands_SetItem[] = {
     {"obj", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
     {"key", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 40, IR_F_LOCAL_C},  /* Src */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 52, 0},  /* Fb<Item> */
 };
+static const uint16_t _PyRop_Ops_SetItem[] = {STORE_SUBSCR};
 static const _PyRopOperand _PyRop_Operands_SetupAnnotations[] = {
     {NULL},
 };
+static const uint16_t _PyRop_Ops_SetupAnnotations[] = {SETUP_ANNOTATIONS};
 static const _PyRopOperand _PyRop_Operands_SliceRead[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"obj", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"start", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 40, IR_F_LOCAL_C},  /* Src */
     {"stop", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 52, IR_F_LOCAL_D},  /* Src */
 };
+static const uint16_t _PyRop_Ops_SliceRead[] = {BINARY_SLICE};
 static const _PyRopOperand _PyRop_Operands_SliceWrite[] = {
     {"obj", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
     {"start", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"stop", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 40, IR_F_LOCAL_C},  /* Src */
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 52, IR_F_LOCAL_D},  /* Src */
 };
+static const uint16_t _PyRop_Ops_SliceWrite[] = {STORE_SLICE};
 static const _PyRopOperand _PyRop_Operands_SpecialLookup[] = {
     {"fn", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"self_dst", ROP_FIELD_HOME, ROP_ROLE_DST, 1, 12, 28, IR_F_LOCAL_B},  /* Maybe<Dst> */
     {"obj", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 40, IR_F_LOCAL_C},  /* Src */
     {"which", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 52, 0},  /* Enum<Special> */
 };
+static const uint16_t _PyRop_Ops_SpecialLookup[] = {LOAD_SPECIAL};
 static const _PyRopOperand _PyRop_Operands_SuperLookup[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"self_dst", ROP_FIELD_HOME, ROP_ROLE_DST, 1, 12, 28, IR_F_LOCAL_B},  /* Maybe<Dst> */
@@ -504,6 +572,7 @@ static const _PyRopOperand _PyRop_Operands_SuperLookup[] = {
     {"mode", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 96, 0},  /* Enum<SuperMode> */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 112, 0},  /* Fb<Super> */
 };
+static const uint16_t _PyRop_Ops_SuperLookup[] = {LOAD_SUPER_ATTR};
 static const _PyRopOperand _PyRop_Operands_TestBranch[] = {
     {"x", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
     {"y", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
@@ -512,17 +581,20 @@ static const _PyRopOperand _PyRop_Operands_TestBranch[] = {
     {"sense", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 64, 0},  /* Bool */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 80, 0},  /* Fb<Compare> */
 };
+static const uint16_t _PyRop_Ops_TestBranch[] = {COMPARE_OP, IS_OP, CONTAINS_OP};
 static const _PyRopOperand _PyRop_Operands_Truth[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"invert", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 40, 0},  /* Bool */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 52, 0},  /* Fb<Truth> */
 };
+static const uint16_t _PyRop_Ops_Truth[] = {TO_BOOL};
 static const _PyRopOperand _PyRop_Operands_Unary[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"op", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 40, 0},  /* Enum<UnaryOp> */
 };
+static const uint16_t _PyRop_Ops_Unary[] = {UNARY_NEGATIVE, UNARY_INVERT, UNARY_NOT};
 static const _PyRopOperand _PyRop_Operands_Unpack[] = {
     {"dsts", ROP_FIELD_VECTOR, ROP_ROLE_DST, 1, 0, 0, 0},  /* Span<Dst> */
     {"source", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
@@ -530,11 +602,13 @@ static const _PyRopOperand _PyRop_Operands_Unpack[] = {
     {"after", ROP_FIELD_IMM, ROP_ROLE_NONE, 1, 9, 40, 0},  /* Maybe<U8> */
     {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 52, 0},  /* Fb<Unpack> */
 };
+static const uint16_t _PyRop_Ops_Unpack[] = {UNPACK_SEQUENCE, UNPACK_EX};
 static const _PyRopOperand _PyRop_Operands_UpdateContainer[] = {
     {"container", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
     {"kind", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 28, 0},  /* Enum<UpdateKind> */
     {"source", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 40, IR_F_LOCAL_C},  /* Src */
 };
+static const uint16_t _PyRop_Ops_UpdateContainer[] = {LIST_EXTEND, SET_UPDATE, DICT_UPDATE};
 static const _PyRopOperand _PyRop_Operands_WithExit[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"exit_fn", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
@@ -542,86 +616,91 @@ static const _PyRopOperand _PyRop_Operands_WithExit[] = {
     {"exc", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 52, IR_F_LOCAL_D},  /* Src */
     {"context", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 64, 0},  /* Src */
 };
+static const uint16_t _PyRop_Ops_WithExit[] = {WITH_EXCEPT_START};
 static const _PyRopOperand _PyRop_Operands_Yield[] = {
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
     {"resume", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 28, IR_F_LOCAL_B},  /* Dst */
     {"route", ROP_FIELD_TARGET, ROP_ROLE_NONE, 0, 12, 40, 0},  /* NearHead */
     {"mode", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 52, 0},  /* Enum<YieldMode> */
 };
+static const uint16_t _PyRop_Ops_Yield[] = {YIELD_VALUE};
 
 static const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {
-    [ROP_FAMILY_Add] = {"Add", 4, 0, _PyRop_Operands_Add},
-    [ROP_FAMILY_AddElement] = {"AddElement", 4, 0, _PyRop_Operands_AddElement},
-    [ROP_FAMILY_AsyncIter] = {"AsyncIter", 3, 0, _PyRop_Operands_AsyncIter},
-    [ROP_FAMILY_AttrWrite] = {"AttrWrite", 5, 1, _PyRop_Operands_AttrWrite},
-    [ROP_FAMILY_Awaitable] = {"Awaitable", 3, 0, _PyRop_Operands_Awaitable},
-    [ROP_FAMILY_Binary] = {"Binary", 5, 1, _PyRop_Operands_Binary},
-    [ROP_FAMILY_BranchNone] = {"BranchNone", 3, 0, _PyRop_Operands_BranchNone},
-    [ROP_FAMILY_BranchTruth] = {"BranchTruth", 5, 1, _PyRop_Operands_BranchTruth},
-    [ROP_FAMILY_Build] = {"Build", 3, 0, _PyRop_Operands_Build},
-    [ROP_FAMILY_BuildSlice] = {"BuildSlice", 2, 0, _PyRop_Operands_BuildSlice},
-    [ROP_FAMILY_BuildText] = {"BuildText", 4, 0, _PyRop_Operands_BuildText},
-    [ROP_FAMILY_Call] = {"Call", 4, 0, _PyRop_Operands_Call},
-    [ROP_FAMILY_CallEx] = {"CallEx", 5, 1, _PyRop_Operands_CallEx},
-    [ROP_FAMILY_CallKw] = {"CallKw", 5, 1, _PyRop_Operands_CallKw},
-    [ROP_FAMILY_Cell] = {"Cell", 5, 0, _PyRop_Operands_Cell},
-    [ROP_FAMILY_CleanupThrow] = {"CleanupThrow", 5, 1, _PyRop_Operands_CleanupThrow},
-    [ROP_FAMILY_Compare] = {"Compare", 6, 1, _PyRop_Operands_Compare},
-    [ROP_FAMILY_Const] = {"Const", 3, 0, _PyRop_Operands_Const},
-    [ROP_FAMILY_Contains] = {"Contains", 5, 1, _PyRop_Operands_Contains},
-    [ROP_FAMILY_Convert] = {"Convert", 3, 0, _PyRop_Operands_Convert},
-    [ROP_FAMILY_DelItem] = {"DelItem", 2, 0, _PyRop_Operands_DelItem},
-    [ROP_FAMILY_EndAsyncFor] = {"EndAsyncFor", 3, 0, _PyRop_Operands_EndAsyncFor},
-    [ROP_FAMILY_ExceptMatch] = {"ExceptMatch", 5, 1, _PyRop_Operands_ExceptMatch},
-    [ROP_FAMILY_ExceptState] = {"ExceptState", 3, 0, _PyRop_Operands_ExceptState},
-    [ROP_FAMILY_ForIter] = {"ForIter", 6, 1, _PyRop_Operands_ForIter},
-    [ROP_FAMILY_Format] = {"Format", 3, 0, _PyRop_Operands_Format},
-    [ROP_FAMILY_Function] = {"Function", 5, 1, _PyRop_Operands_Function},
-    [ROP_FAMILY_GetAttr] = {"GetAttr", 4, 0, _PyRop_Operands_GetAttr},
-    [ROP_FAMILY_GetItem] = {"GetItem", 4, 0, _PyRop_Operands_GetItem},
-    [ROP_FAMILY_GetMethod] = {"GetMethod", 5, 1, _PyRop_Operands_GetMethod},
-    [ROP_FAMILY_GlobalRead] = {"GlobalRead", 3, 0, _PyRop_Operands_GlobalRead},
-    [ROP_FAMILY_Identity] = {"Identity", 4, 0, _PyRop_Operands_Identity},
-    [ROP_FAMILY_Import] = {"Import", 7, 1, _PyRop_Operands_Import},
-    [ROP_FAMILY_InitResult] = {"InitResult", 1, 0, _PyRop_Operands_InitResult},
-    [ROP_FAMILY_Intrinsic] = {"Intrinsic", 3, 0, _PyRop_Operands_Intrinsic},
-    [ROP_FAMILY_IterOpen] = {"IterOpen", 4, 0, _PyRop_Operands_IterOpen},
-    [ROP_FAMILY_Jump] = {"Jump", 2, 0, _PyRop_Operands_Jump},
-    [ROP_FAMILY_Length] = {"Length", 2, 0, _PyRop_Operands_Length},
-    [ROP_FAMILY_LocalDelete] = {"LocalDelete", 1, 0, _PyRop_Operands_LocalDelete},
-    [ROP_FAMILY_LocalRead] = {"LocalRead", 2, 0, _PyRop_Operands_LocalRead},
-    [ROP_FAMILY_LocalWrite] = {"LocalWrite", 2, 0, _PyRop_Operands_LocalWrite},
-    [ROP_FAMILY_MaterializeKwargs] = {"MaterializeKwargs", 1, 0, _PyRop_Operands_MaterializeKwargs},
-    [ROP_FAMILY_MergeKeywords] = {"MergeKeywords", 3, 0, _PyRop_Operands_MergeKeywords},
-    [ROP_FAMILY_Move] = {"Move", 3, 0, _PyRop_Operands_Move},
-    [ROP_FAMILY_NamespaceRead] = {"NamespaceRead", 4, 0, _PyRop_Operands_NamespaceRead},
-    [ROP_FAMILY_NamespaceWrite] = {"NamespaceWrite", 4, 0, _PyRop_Operands_NamespaceWrite},
-    [ROP_FAMILY_Nop] = {"Nop", 0, 0, _PyRop_Operands_Nop},
-    [ROP_FAMILY_Pattern] = {"Pattern", 7, 1, _PyRop_Operands_Pattern},
-    [ROP_FAMILY_Poll] = {"Poll", 1, 0, _PyRop_Operands_Poll},
-    [ROP_FAMILY_Raise] = {"Raise", 2, 0, _PyRop_Operands_Raise},
-    [ROP_FAMILY_Reraise] = {"Reraise", 2, 0, _PyRop_Operands_Reraise},
-    [ROP_FAMILY_Resume] = {"Resume", 1, 0, _PyRop_Operands_Resume},
-    [ROP_FAMILY_Return] = {"Return", 1, 0, _PyRop_Operands_Return},
-    [ROP_FAMILY_SaveLocal] = {"SaveLocal", 2, 0, _PyRop_Operands_SaveLocal},
-    [ROP_FAMILY_Send] = {"Send", 6, 1, _PyRop_Operands_Send},
-    [ROP_FAMILY_SetItem] = {"SetItem", 4, 0, _PyRop_Operands_SetItem},
-    [ROP_FAMILY_SetupAnnotations] = {"SetupAnnotations", 0, 0, _PyRop_Operands_SetupAnnotations},
-    [ROP_FAMILY_SliceRead] = {"SliceRead", 4, 0, _PyRop_Operands_SliceRead},
-    [ROP_FAMILY_SliceWrite] = {"SliceWrite", 4, 0, _PyRop_Operands_SliceWrite},
-    [ROP_FAMILY_SpecialLookup] = {"SpecialLookup", 4, 0, _PyRop_Operands_SpecialLookup},
-    [ROP_FAMILY_SuperLookup] = {"SuperLookup", 8, 1, _PyRop_Operands_SuperLookup},
-    [ROP_FAMILY_TestBranch] = {"TestBranch", 6, 1, _PyRop_Operands_TestBranch},
-    [ROP_FAMILY_Truth] = {"Truth", 4, 0, _PyRop_Operands_Truth},
-    [ROP_FAMILY_Unary] = {"Unary", 3, 0, _PyRop_Operands_Unary},
-    [ROP_FAMILY_Unpack] = {"Unpack", 5, 0, _PyRop_Operands_Unpack},
-    [ROP_FAMILY_UpdateContainer] = {"UpdateContainer", 3, 0, _PyRop_Operands_UpdateContainer},
-    [ROP_FAMILY_WithExit] = {"WithExit", 5, 1, _PyRop_Operands_WithExit},
-    [ROP_FAMILY_Yield] = {"Yield", 4, 0, _PyRop_Operands_Yield},
+    [ROP_FAMILY_Add] = {"Add", 4, 0, _PyRop_Operands_Add, 1, _PyRop_Ops_Add},
+    [ROP_FAMILY_AddElement] = {"AddElement", 4, 0, _PyRop_Operands_AddElement, 3, _PyRop_Ops_AddElement},
+    [ROP_FAMILY_AsyncIter] = {"AsyncIter", 3, 0, _PyRop_Operands_AsyncIter, 2, _PyRop_Ops_AsyncIter},
+    [ROP_FAMILY_AttrWrite] = {"AttrWrite", 5, 1, _PyRop_Operands_AttrWrite, 1, _PyRop_Ops_AttrWrite},
+    [ROP_FAMILY_Awaitable] = {"Awaitable", 3, 0, _PyRop_Operands_Awaitable, 1, _PyRop_Ops_Awaitable},
+    [ROP_FAMILY_Binary] = {"Binary", 5, 1, _PyRop_Operands_Binary, 1, _PyRop_Ops_Binary},
+    [ROP_FAMILY_BranchNone] = {"BranchNone", 3, 0, _PyRop_Operands_BranchNone, 2, _PyRop_Ops_BranchNone},
+    [ROP_FAMILY_BranchTruth] = {"BranchTruth", 5, 1, _PyRop_Operands_BranchTruth, 4, _PyRop_Ops_BranchTruth},
+    [ROP_FAMILY_Build] = {"Build", 3, 0, _PyRop_Operands_Build, 4, _PyRop_Ops_Build},
+    [ROP_FAMILY_BuildSlice] = {"BuildSlice", 2, 0, _PyRop_Operands_BuildSlice, 1, _PyRop_Ops_BuildSlice},
+    [ROP_FAMILY_BuildText] = {"BuildText", 4, 0, _PyRop_Operands_BuildText, 3, _PyRop_Ops_BuildText},
+    [ROP_FAMILY_Call] = {"Call", 4, 0, _PyRop_Operands_Call, 1, _PyRop_Ops_Call},
+    [ROP_FAMILY_CallEx] = {"CallEx", 5, 1, _PyRop_Operands_CallEx, 1, _PyRop_Ops_CallEx},
+    [ROP_FAMILY_CallKw] = {"CallKw", 5, 1, _PyRop_Operands_CallKw, 1, _PyRop_Ops_CallKw},
+    [ROP_FAMILY_Cell] = {"Cell", 5, 0, _PyRop_Operands_Cell, 6, _PyRop_Ops_Cell},
+    [ROP_FAMILY_CleanupThrow] = {"CleanupThrow", 5, 1, _PyRop_Operands_CleanupThrow, 1, _PyRop_Ops_CleanupThrow},
+    [ROP_FAMILY_Compare] = {"Compare", 6, 1, _PyRop_Operands_Compare, 1, _PyRop_Ops_Compare},
+    [ROP_FAMILY_Const] = {"Const", 3, 0, _PyRop_Operands_Const, 3, _PyRop_Ops_Const},
+    [ROP_FAMILY_Contains] = {"Contains", 5, 1, _PyRop_Operands_Contains, 1, _PyRop_Ops_Contains},
+    [ROP_FAMILY_Convert] = {"Convert", 3, 0, _PyRop_Operands_Convert, 1, _PyRop_Ops_Convert},
+    [ROP_FAMILY_DelItem] = {"DelItem", 2, 0, _PyRop_Operands_DelItem, 1, _PyRop_Ops_DelItem},
+    [ROP_FAMILY_EndAsyncFor] = {"EndAsyncFor", 3, 0, _PyRop_Operands_EndAsyncFor, 1, _PyRop_Ops_EndAsyncFor},
+    [ROP_FAMILY_ExceptMatch] = {"ExceptMatch", 5, 1, _PyRop_Operands_ExceptMatch, 2, _PyRop_Ops_ExceptMatch},
+    [ROP_FAMILY_ExceptState] = {"ExceptState", 3, 0, _PyRop_Operands_ExceptState, 2, _PyRop_Ops_ExceptState},
+    [ROP_FAMILY_ForIter] = {"ForIter", 6, 1, _PyRop_Operands_ForIter, 1, _PyRop_Ops_ForIter},
+    [ROP_FAMILY_Format] = {"Format", 3, 0, _PyRop_Operands_Format, 2, _PyRop_Ops_Format},
+    [ROP_FAMILY_Function] = {"Function", 5, 1, _PyRop_Operands_Function, 2, _PyRop_Ops_Function},
+    [ROP_FAMILY_GetAttr] = {"GetAttr", 4, 0, _PyRop_Operands_GetAttr, 1, _PyRop_Ops_GetAttr},
+    [ROP_FAMILY_GetItem] = {"GetItem", 4, 0, _PyRop_Operands_GetItem, 1, _PyRop_Ops_GetItem},
+    [ROP_FAMILY_GetMethod] = {"GetMethod", 5, 1, _PyRop_Operands_GetMethod, 1, _PyRop_Ops_GetMethod},
+    [ROP_FAMILY_GlobalRead] = {"GlobalRead", 3, 0, _PyRop_Operands_GlobalRead, 1, _PyRop_Ops_GlobalRead},
+    [ROP_FAMILY_Identity] = {"Identity", 4, 0, _PyRop_Operands_Identity, 1, _PyRop_Ops_Identity},
+    [ROP_FAMILY_Import] = {"Import", 7, 1, _PyRop_Operands_Import, 2, _PyRop_Ops_Import},
+    [ROP_FAMILY_InitResult] = {"InitResult", 1, 0, _PyRop_Operands_InitResult, 1, _PyRop_Ops_InitResult},
+    [ROP_FAMILY_Intrinsic] = {"Intrinsic", 3, 0, _PyRop_Operands_Intrinsic, 2, _PyRop_Ops_Intrinsic},
+    [ROP_FAMILY_IterOpen] = {"IterOpen", 4, 0, _PyRop_Operands_IterOpen, 1, _PyRop_Ops_IterOpen},
+    [ROP_FAMILY_Jump] = {"Jump", 2, 0, _PyRop_Operands_Jump, 3, _PyRop_Ops_Jump},
+    [ROP_FAMILY_Length] = {"Length", 2, 0, _PyRop_Operands_Length, 1, _PyRop_Ops_Length},
+    [ROP_FAMILY_LocalDelete] = {"LocalDelete", 1, 0, _PyRop_Operands_LocalDelete, 1, _PyRop_Ops_LocalDelete},
+    [ROP_FAMILY_LocalRead] = {"LocalRead", 2, 0, _PyRop_Operands_LocalRead, 3, _PyRop_Ops_LocalRead},
+    [ROP_FAMILY_LocalWrite] = {"LocalWrite", 2, 0, _PyRop_Operands_LocalWrite, 1, _PyRop_Ops_LocalWrite},
+    [ROP_FAMILY_MaterializeKwargs] = {"MaterializeKwargs", 1, 0, _PyRop_Operands_MaterializeKwargs, 1, _PyRop_Ops_MaterializeKwargs},
+    [ROP_FAMILY_MergeKeywords] = {"MergeKeywords", 3, 0, _PyRop_Operands_MergeKeywords, 1, _PyRop_Ops_MergeKeywords},
+    [ROP_FAMILY_Move] = {"Move", 3, 0, _PyRop_Operands_Move, 2, _PyRop_Ops_Move},
+    [ROP_FAMILY_NamespaceRead] = {"NamespaceRead", 4, 0, _PyRop_Operands_NamespaceRead, 4, _PyRop_Ops_NamespaceRead},
+    [ROP_FAMILY_NamespaceWrite] = {"NamespaceWrite", 4, 0, _PyRop_Operands_NamespaceWrite, 2, _PyRop_Ops_NamespaceWrite},
+    [ROP_FAMILY_Nop] = {"Nop", 0, 0, _PyRop_Operands_Nop, 1, _PyRop_Ops_Nop},
+    [ROP_FAMILY_Pattern] = {"Pattern", 7, 1, _PyRop_Operands_Pattern, 4, _PyRop_Ops_Pattern},
+    [ROP_FAMILY_Poll] = {"Poll", 1, 0, _PyRop_Operands_Poll, 0, _PyRop_Ops_Poll},
+    [ROP_FAMILY_Raise] = {"Raise", 2, 0, _PyRop_Operands_Raise, 1, _PyRop_Ops_Raise},
+    [ROP_FAMILY_Reraise] = {"Reraise", 2, 0, _PyRop_Operands_Reraise, 1, _PyRop_Ops_Reraise},
+    [ROP_FAMILY_Resume] = {"Resume", 1, 0, _PyRop_Operands_Resume, 1, _PyRop_Ops_Resume},
+    [ROP_FAMILY_Return] = {"Return", 1, 0, _PyRop_Operands_Return, 2, _PyRop_Ops_Return},
+    [ROP_FAMILY_SaveLocal] = {"SaveLocal", 2, 0, _PyRop_Operands_SaveLocal, 1, _PyRop_Ops_SaveLocal},
+    [ROP_FAMILY_Send] = {"Send", 6, 1, _PyRop_Operands_Send, 1, _PyRop_Ops_Send},
+    [ROP_FAMILY_SetItem] = {"SetItem", 4, 0, _PyRop_Operands_SetItem, 1, _PyRop_Ops_SetItem},
+    [ROP_FAMILY_SetupAnnotations] = {"SetupAnnotations", 0, 0, _PyRop_Operands_SetupAnnotations, 1, _PyRop_Ops_SetupAnnotations},
+    [ROP_FAMILY_SliceRead] = {"SliceRead", 4, 0, _PyRop_Operands_SliceRead, 1, _PyRop_Ops_SliceRead},
+    [ROP_FAMILY_SliceWrite] = {"SliceWrite", 4, 0, _PyRop_Operands_SliceWrite, 1, _PyRop_Ops_SliceWrite},
+    [ROP_FAMILY_SpecialLookup] = {"SpecialLookup", 4, 0, _PyRop_Operands_SpecialLookup, 1, _PyRop_Ops_SpecialLookup},
+    [ROP_FAMILY_SuperLookup] = {"SuperLookup", 8, 1, _PyRop_Operands_SuperLookup, 1, _PyRop_Ops_SuperLookup},
+    [ROP_FAMILY_TestBranch] = {"TestBranch", 6, 1, _PyRop_Operands_TestBranch, 3, _PyRop_Ops_TestBranch},
+    [ROP_FAMILY_Truth] = {"Truth", 4, 0, _PyRop_Operands_Truth, 1, _PyRop_Ops_Truth},
+    [ROP_FAMILY_Unary] = {"Unary", 3, 0, _PyRop_Operands_Unary, 3, _PyRop_Ops_Unary},
+    [ROP_FAMILY_Unpack] = {"Unpack", 5, 0, _PyRop_Operands_Unpack, 2, _PyRop_Ops_Unpack},
+    [ROP_FAMILY_UpdateContainer] = {"UpdateContainer", 3, 0, _PyRop_Operands_UpdateContainer, 3, _PyRop_Ops_UpdateContainer},
+    [ROP_FAMILY_WithExit] = {"WithExit", 5, 1, _PyRop_Operands_WithExit, 1, _PyRop_Ops_WithExit},
+    [ROP_FAMILY_Yield] = {"Yield", 4, 0, _PyRop_Operands_Yield, 1, _PyRop_Ops_Yield},
 };
 
 static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Add.Int", ROP_HANDLER_Add_Int, ROP_FAMILY_Add, 1},
+    {"Add.Float", ROP_HANDLER_Add_Float, ROP_FAMILY_Add, 1},
+    {"Add.Text", ROP_HANDLER_Add_Text, ROP_FAMILY_Add, 1},
+    {"Add.Extended", ROP_HANDLER_Add_Extended, ROP_FAMILY_Add, 1},
     {"Add.Generic", ROP_HANDLER_Add_Generic, ROP_FAMILY_Add, 1},
     {"Call.Exact", ROP_HANDLER_Call_Exact, ROP_FAMILY_Call, 1},
     {"Call.BoundExact", ROP_HANDLER_Call_BoundExact, ROP_FAMILY_Call, 1},

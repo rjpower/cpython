@@ -737,6 +737,14 @@ ordinary_handler_for(int handler, int opcode)
         }
         return opcode;
     }
+    if (handler >= IR_NUM_OLD_HANDLERS && fmt->twin != 0 &&
+        opcode >= MIN_INSTRUMENTED_OPCODE && opcode < IR_FIRST_ONLY_HANDLER &&
+        _PyOpcode_Deopt[opcode] == _PyIR_BaseOpcode(handler))
+    {
+        // A register instruction arm of a family that has events: the
+        // instrumented form of its stack op runs the arm's observed wrapper.
+        return fmt->twin;
+    }
     if (handler == RETURN_VALUE_EMPTY || handler == INSTRUMENTED_RETURN_VALUE_EMPTY) {
         if (opcode == RETURN_VALUE) {
             return RETURN_VALUE_EMPTY;

@@ -2272,7 +2272,7 @@ _PyRop_InitResultError(PyValueBorrow value)
 
 static inline bool _PyRop_PythonTarget(PyThreadState *tstate,
                                        _PyInterpreterFrame *frame,
-                                       PyValueBorrow fn, const _PyIRWord *head);
+                                       PyValue *fn, const _PyIRWord *head);
 static _PyInterpreterFrame *_PyRop_PushPython(PyThreadState *tstate,
                                               _PyInterpreterFrame *frame,
                                               PyValue *fn, _PyInstr *head);
@@ -5687,10 +5687,10 @@ call_run_keywords(PyThreadState *tstate, _PyInterpreterFrame *frame,
 
 static inline bool
 _PyRop_PythonTarget(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                    PyValueBorrow fn, const _PyIRWord *head)
+                    PyValue *fn, const _PyIRWord *head)
 {
     PyValue receiver;
-    PyValue callable = call_expand_method(fn, rop_call_self_state(frame, head),
+    PyValue callable = call_expand_method(*fn, rop_call_self_state(frame, head),
                                           &receiver);
     if (!call_is_python_function(tstate, callable)) {
         return false;

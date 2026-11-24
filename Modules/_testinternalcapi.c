@@ -30,7 +30,7 @@
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
 #include "pycore_ir_source.h"     // _PyIR_POSITION_RECORD
 #include "pycore_ir_outcomes.h"    // _PyIR_NormalPhysicalTransfer()
-#include "pycore_rop_metadata.h"    // _PyRop_Arms
+#include "pycore_rop_metadata.h"  // _PyRop_Arms
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
 #include "pycore_jit.h"           // _PyJitUnit
 #include "pycore_jit_lower.h"     // _PyJit_Templates
@@ -1805,28 +1805,6 @@ get_feedback(PyObject *self, PyObject *args)
                          fields[0], fields[1], rows);
 }
 
-/* {arm name: handler number} of the register instruction arms */
-static PyObject *
-rop_arm_handlers(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    PyObject *arms = PyDict_New();
-    if (arms == NULL) {
-        return NULL;
-    }
-    for (int i = 0; i < ROP_NUM_ARMS; i++) {
-        PyObject *handler = PyLong_FromLong(_PyRop_Arms[i].handler);
-        if (handler == NULL ||
-            PyDict_SetItemString(arms, _PyRop_Arms[i].name, handler) < 0)
-        {
-            Py_XDECREF(handler);
-            Py_DECREF(arms);
-            return NULL;
-        }
-        Py_DECREF(handler);
-    }
-    return arms;
-}
-
 /* The register IR of CODE, lowered if the code has not run, as a tuple: the
  * words (bytes), the feedback initialisers (bytes), nfixed, nconst, nslots,
  * the constant values, the exceptions in word units (bytes), the recovery
@@ -1947,41 +1925,102 @@ get_ir(PyObject *self, PyObject *args)
     return result;
 }
 
-/* Run the register instruction arm named name ("Call.Exact") on word index
- * of the code's executing copy, with the word's fields as they are: a test
- * forces an arm before the translator selects it.  Returns the previous
- * handler.  The code must have run, and its unit must not be compiled. */
-static PyObject *
-rop_set_arm(PyObject *self, PyObject *args)
+/* The register instruction arm called name, by its dotted name ("Add.Int") */
+static const _PyRopArm *
+find_arm(const char *name)
 {
-    PyCodeObject *code;
-    int index;
-    const char *name;
-    if (!PyArg_ParseTuple(args, "O!is", &PyCode_Type, &code, &index, &name)) {
-        return NULL;
+    for (int i = 0; i < ROP_NUM_ARMS; i++) {
+        if (strcmp(_PyRop_Arms[i].name, name) == 0) {
+            return &_PyRop_Arms[i];
+        }
     }
-    _PyCodeExec *exec = code->_co_exec;
-    if (exec == NULL) {
-        PyErr_SetString(PyExc_ValueError, "the code has not run");
-        return NULL;
-    }
-    if (index < 0 || (uint32_t)index >= exec->nwords) {
-        PyErr_SetString(PyExc_IndexError, "no such word");
+    PyErr_Format(PyExc_ValueError, "no register instruction arm %s", name);
+    return NULL;
+}
+
+/* arm_handlers() -> {name: handler id} of the register instruction arms. */
+static PyObject *
+arm_handlers(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    PyObject *result = PyDict_New();
+    if (result == NULL) {
         return NULL;
     }
     for (int i = 0; i < ROP_NUM_ARMS; i++) {
-        if (strcmp(_PyRop_Arms[i].name, name) != 0) {
-            continue;
-        }
-        if (!_PyRop_Arms[i].emitted) {
-            PyErr_Format(PyExc_ValueError, "arm %s is not emitted", name);
+        PyObject *id = PyLong_FromLong(_PyRop_Arms[i].handler);
+        if (id == NULL || PyDict_SetItemString(result, _PyRop_Arms[i].name, id) < 0) {
+            Py_XDECREF(id);
+            Py_DECREF(result);
             return NULL;
         }
-        int old = IR_HANDLER(exec->words[index]);
-        _PyIR_SetHandler(&exec->words[index], _PyRop_Arms[i].handler);
-        return PyLong_FromLong(old);
+        Py_DECREF(id);
     }
-    PyErr_Format(PyExc_ValueError, "no arm %s", name);
+    return result;
+}
+
+/* force_arm(code, offset, arm): make the word of the executing copy of code
+ * that stands for the stack op at byte offset `offset` of co_code run the
+ * register instruction arm `arm`, whatever its feedback says.  A test hook
+ * for arms whose translation rules do not exist yet.  It refuses unless the
+ * word's stack op is one of the arm's family's, and the operand layout of
+ * the word (the roles of its fields, its feedback entry, its operand words)
+ * is the one the arm's encoding derives. */
+static PyObject *
+force_arm(PyObject *self, PyObject *args)
+{
+    PyCodeObject *code;
+    int offset;
+    const char *arm_name;
+    if (!PyArg_ParseTuple(args, "O!is", &PyCode_Type, &code, &offset, &arm_name)) {
+        return NULL;
+    }
+    const _PyRopArm *arm = find_arm(arm_name);
+    if (arm == NULL) {
+        return NULL;
+    }
+    const _PyRopFamily *family = &_PyRop_Families[arm->family];
+    _PyCodeExec *exec = _PyCode_GetExec(code);
+    if (exec == NULL) {
+        return NULL;
+    }
+    int i = _PyCode_OffsetWord(code, offset);
+    for (; i < (int)exec->nwords && _PyCode_WordOffset(code, i) == offset;
+         i += _PyIR_WordLength(_PyCode_IRWords(code)[i]))
+    {
+        int generic = _PyCode_InstrHandler(code, i);
+        int base = _PyIR_BaseOpcode(generic);
+        for (int k = 0; k < family->nops; k++) {
+            if (family->ops[k] != base) {
+                continue;
+            }
+            const _PyIRFormat *old = _PyIR_FormatOf(generic);
+            const _PyIRFormat *fmt = _PyIR_FormatOf(arm->handler);
+            if (memcmp(old->roles, fmt->roles, sizeof(fmt->roles)) != 0 ||
+                old->fb != fmt->fb || old->fb_kind != fmt->fb_kind ||
+                old->operands != fmt->operands ||
+                old->fixed_words != fmt->fixed_words)
+            {
+                PyErr_Format(PyExc_ValueError,
+                             "the word at offset %d (%s) has an operand layout "
+                             "that %s does not encode", offset,
+                             _PyOpcode_OpName[base], arm_name);
+                return NULL;
+            }
+            if (IR_HANDLER(exec->words[i]) != generic &&
+                (_PyIR_FormatOf(IR_HANDLER(exec->words[i]))->flags
+                 & _PyIR_TRANSPARENT))
+            {
+                PyErr_SetString(PyExc_ValueError, "the word is instrumented");
+                return NULL;
+            }
+            _PyJit_Retire(exec);
+            _PyIR_SetHandler(&exec->words[i], arm->handler);
+            Py_RETURN_NONE;
+        }
+    }
+    PyErr_Format(PyExc_ValueError,
+                 "no word at offset %d stands for a stack op of family %s",
+                 offset, family->name);
     return NULL;
 }
 
@@ -5329,9 +5368,9 @@ static PyMethodDef module_functions[] = {
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
-    {"rop_set_arm", rop_set_arm, METH_VARARGS, NULL},
     {"get_ir_raw", get_ir_raw, METH_O, NULL},
-    {"rop_arm_handlers", rop_arm_handlers, METH_NOARGS, NULL},
+    {"arm_handlers", arm_handlers, METH_NOARGS, NULL},
+    {"force_arm", force_arm, METH_VARARGS, NULL},
     {"ir_normal_physical_transfer", ir_normal_physical_transfer,
      METH_VARARGS, NULL},
     {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},

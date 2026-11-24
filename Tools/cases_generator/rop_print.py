@@ -147,8 +147,12 @@ def decl_lines(d: Decl) -> list[str]:
     if isinstance(d, EnumDecl):
         return [f"enum {d.name}{_names(d.members)};"]
     if isinstance(d, Family):
-        return [f"family {d.name}{_params(d.params)}",
-                f"  exits{_names(d.exits)};"]
+        tail = f"  exits{_names(d.exits)}"
+        if d.ops:
+            tail += f" ops{_names(d.ops)}"
+        if d.events:
+            tail += f" events{_names(tuple(e.value for e in d.events))}"
+        return [f"family {d.name}{_params(d.params)}", tail + ";"]
     if isinstance(d, Point):
         return [f"point {d.name}({d.frame.value}, {d.pc.value}, {d.exc.value}) "
                 f"keep{_names(d.keep)} spent{_names(d.spent)} defs{_names(d.defs)} "

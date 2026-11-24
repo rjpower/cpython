@@ -626,8 +626,11 @@ static_assert(__builtin_types_compatible_p(__typeof__(PyValue_NULL), PyValue),
               "PyValue_NULL: its C type differs from pycore_ir_components.h");
 }
 
+static _PyIRTransfer ir_run_Add_Extended(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Add_Float(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Add_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Add_Int(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Add_Text(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BINARY_OP_ADD(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BINARY_OP_ADD_FLOAT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BINARY_OP_ADD_INT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -742,7 +745,10 @@ static _PyIRTransfer ir_run_CONTAINS_OP_SET(PyThreadState *tstate, _PyInterprete
 static _PyIRTransfer ir_run_CONVERT_VALUE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_COPY(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_COPY_FREE_VARS(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Call_BoundExact(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Call_Exact(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Call_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Call_Init(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_DELETE_DEREF(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_DELETE_FAST(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_DELETE_SUBSCR(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -808,6 +814,7 @@ static _PyIRTransfer ir_run_IR_JUMP(PyThreadState *tstate, _PyInterpreterFrame *
 static _PyIRTransfer ir_run_IR_OPERANDS(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_IS_OP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_IS_OP_JUMP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_InitResult_Check(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_JUMP_BACKWARD(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_JUMP_BACKWARD_JIT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_JUMP_BACKWARD_NO_INTERRUPT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -17751,26 +17758,26 @@ static const _PyIRForm ir_handler_forms[512] = {
     [417] = ir_run_JUMP_BACKWARD_JIT,
     [418] = ir_run_RESUME_CHECK,
     [419] = ir_run_Add_Int,
-    [420] = ir_run_Add_Generic,
-    [421] = ir_run_Call_Exact,
-    [422] = ir_run_Return_Ordinary,
-    [423] = ir_run_Return_Empty,
-    [424] = ir_run_Return_Generator,
-    [425] = ir_run_Return_External,
-    [426] = ir_run_GetAttr_Instance,
-    [427] = ir_run_UNKNOWN_OPCODE,
-    [428] = ir_run_GetAttr_Shape,
-    [429] = ir_run_GetAttr_PolyShape,
-    [430] = ir_run_GetMethod_MethodValues,
-    [431] = ir_run_UNKNOWN_OPCODE,
-    [432] = ir_run_GetMethod_PolyMethod,
-    [433] = ir_run_UNKNOWN_OPCODE,
+    [420] = ir_run_Add_Float,
+    [421] = ir_run_Add_Text,
+    [422] = ir_run_Add_Extended,
+    [423] = ir_run_Add_Generic,
+    [424] = ir_run_Call_Exact,
+    [425] = ir_run_Call_BoundExact,
+    [426] = ir_run_Call_Init,
+    [427] = ir_run_Call_Generic,
+    [428] = ir_run_InitResult_Check,
+    [429] = ir_run_Return_Ordinary,
+    [430] = ir_run_Return_Empty,
+    [431] = ir_run_Return_Generator,
+    [432] = ir_run_Return_External,
+    [433] = ir_run_GetAttr_Instance,
     [434] = ir_run_UNKNOWN_OPCODE,
-    [435] = ir_run_UNKNOWN_OPCODE,
-    [436] = ir_run_UNKNOWN_OPCODE,
-    [437] = ir_run_UNKNOWN_OPCODE,
+    [435] = ir_run_GetAttr_Shape,
+    [436] = ir_run_GetAttr_PolyShape,
+    [437] = ir_run_GetMethod_MethodValues,
     [438] = ir_run_UNKNOWN_OPCODE,
-    [439] = ir_run_UNKNOWN_OPCODE,
+    [439] = ir_run_GetMethod_PolyMethod,
     [440] = ir_run_UNKNOWN_OPCODE,
     [441] = ir_run_UNKNOWN_OPCODE,
     [442] = ir_run_UNKNOWN_OPCODE,

@@ -4,6 +4,9 @@ Writes the IDs to opcode_ids.h by default.
 """
 
 import argparse
+from collections.abc import Sequence
+
+import ir_numbers
 
 from analyzer import (
     Analysis,
@@ -15,7 +18,8 @@ from generators_common import (
     write_header,
 )
 from cwriter import CWriter
-from ir_generator import num_handlers
+from ir_generator import num_handlers, num_old_handlers
+import rop_generator
 from typing import TextIO
 
 
@@ -23,7 +27,8 @@ DEFAULT_OUTPUT = ROOT / "Include/opcode_ids.h"
 
 
 def generate_opcode_header(
-    filenames: list[str], analysis: Analysis, outfile: TextIO
+    filenames: list[str], analysis: Analysis, outfile: TextIO,
+    arms: Sequence[ir_numbers.ArmEntry] = ()
 ) -> None:
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
@@ -40,7 +45,8 @@ def generate_opcode_header(
         write_define("HAVE_ARGUMENT", analysis.have_arg)
         write_define("MIN_SPECIALIZED_OPCODE", analysis.opmap["RESUME"]+1)
         write_define("MIN_INSTRUMENTED_OPCODE", analysis.min_instrumented)
-        write_define("IR_NUM_HANDLERS", num_handlers(analysis))
+        write_define("IR_NUM_OLD_HANDLERS", num_old_handlers(analysis))
+        write_define("IR_NUM_HANDLERS", num_handlers(analysis, arms))
 
 
 arg_parser = argparse.ArgumentParser(
@@ -62,4 +68,5 @@ if __name__ == "__main__":
         args.input.append(DEFAULT_INPUT)
     data = analyze_files(args.input)
     with open(args.output, "w") as outfile:
-        generate_opcode_header(args.input, data, outfile)
+        generate_opcode_header(args.input, data, outfile,
+                               rop_generator.load_arm_entries())

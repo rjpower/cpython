@@ -27,7 +27,7 @@ from rop_catalog import (CONVENTIONS, ENVIRONMENT, EVIDENCE_KEYS, EVIDENCE_PRIMI
                          LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
                          SELECT_DIMENSIONS, SLOT_ORDER, WIDEST_IMMEDIATE, DebtKind,
                          Effect, ExitKind, FieldKind, FrameRole, Handle, PcRole,
-                         RowKind, Scalar, Schema, SchemaCtor, Select, Slot, Wrap)
+                         Region, RowKind, Scalar, Schema, SchemaCtor, Select, Slot, Wrap)
 from rop_model import (RESULT_CASE, Advance, Arm, Block, BoolLit, Branch, Call,
                        CallTerm, Cases, Contract, Decl, Diagnostic, Each, Encoding,
                        EnumDecl, Placement,
@@ -447,6 +447,13 @@ def check_family(c: Checker, fam: Family) -> None:
                      f"{', '.join(EXIT_NAMES)})")
     if len(set(fam.exits)) != len(fam.exits):
         c.report(fam.span, fam.name, "an exit is listed twice")
+    if not fam.ops and any(a.family == fam.name for a in c.arms.values()):
+        c.report(fam.span, fam.name, "a family with arms names the stack ops that "
+                 "lower to it: ops(NAME, ...)")
+    if len(set(fam.ops)) != len(fam.ops):
+        c.report(fam.span, fam.name, "a stack op is listed twice")
+    if len(set(fam.events)) != len(fam.events):
+        c.report(fam.span, fam.name, "an event is listed twice")
     schemas = feedback_schemas(fam.params)
     if len(schemas) > 1:
         c.report(fam.span, fam.name, "a family has at most one feedback operand")
@@ -643,11 +650,21 @@ def check_arm(c: Checker, a: Arm) -> None:
         if n not in fam.exits:
             c.report(a.contract.span, a.name, f"exit {n} is not an exit of family "
                      f"{fam.name} ({', '.join(fam.exits)})")
+    frame_exits = sorted(set(a.contract.exits) & FRAME_EXITS)
+    if a.region is Region.shared and frame_exits:
+        c.report(a.contract.span, a.name, f"a shared arm completes the word in a stub, "
+                 f"which cannot leave the frame ({', '.join(frame_exits)}): make it "
+                 "split")
     dimensions = [select_dimension(m) for m in a.select]
     for d in sorted({d for d in dimensions if dimensions.count(d) > 1}):
         c.report(a.span, a.name, f"select names two members of dimension {d}; one "
                  "holds")
     check_graph(c, a.name, a.graph, fam.params, fam, None)
+
+
+# Exits that leave the word's frame, which a completion stub's status
+# (g1a/abi.md) cannot report
+FRAME_EXITS = frozenset({"enter", "return", "yield", "exit"})
 
 
 def select_dimension(m: Select) -> str:

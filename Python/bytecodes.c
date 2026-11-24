@@ -1433,19 +1433,24 @@ dummy_func(
             ERROR_IF(PyValue_IsNull(res));
         }
 
-        inline_ok op(_BINARY_OP_SUBSCR_CHECK_FUNC, (container, unused -- container, unused, getitem)) {
+        inline_ok op(_BINARY_OP_SUBSCR_CHECK_FUNC,
+                (container, unused -- container: object, unused, getitem: owned))
+            effects(reads) exits(next, miss)
+        {
             EXIT_IF(!PyValue_IsObject(container));
             PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(container));
-            EXIT_IF(!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE));
+            EXIT_IF(!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE), "the type is not a heap type");
             PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
             PyObject *getitem_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.getitem);
-            EXIT_IF(getitem_o == NULL);
+            EXIT_IF(getitem_o == NULL, "the type caches no __getitem__");
             assert(PyFunction_Check(getitem_o));
             uint32_t cached_version = FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.getitem_version);
-            EXIT_IF(((PyFunctionObject *)getitem_o)->func_version != cached_version);
+            EXIT_IF(((PyFunctionObject *)getitem_o)->func_version != cached_version,
+                    "the cached __getitem__ changed version");
             PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(getitem_o);
             assert(code->co_argcount == 2);
-            EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));
+            EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize),
+                    "the thread has no stack space for the frame");
             getitem = PyValue_DUP(PyValue_FromObjectBorrow(getitem_o));
         }
 

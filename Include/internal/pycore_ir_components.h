@@ -544,7 +544,7 @@
         ARGS(object), NONE, EFFECTS()) \
     /* Include/refcount.h: Py_XSETREF(dst, src) stores src into the lvalue \
      * dst, then Py_XDECREFs dst's old value.  It takes src's reference \
-     * (consumed; src may be NULL, the X: ARGS has no nullable word, so this is only stated here) and returns nothing.  The old \
+     * (consumed; src may be NULL, the X: ARGS has no nullable mark, the walk accepts a literal NULL there because it names no value and refuses a local that may be NULL) and returns nothing.  The old \
      * value's finalizer may run Python (releases).  Failure paths: none. \
      * Callbacks: the old value's deallocator.  Root's correction; the only \
      * uop caller is _POP_EXCEPT (G0a5) */ \

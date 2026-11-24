@@ -247,8 +247,9 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(Py_ARITHMETIC_RIGHT_SHIFT, \
         ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from ir_generator.VIEW_TAKES, ir_records.effect_sites */ \
-    MACRO(TAKE, ARGS(consumed), VALUE(owned), EFFECTS(), EXITS()) \
+    /* seeded from ir_generator.VIEW_TAKES, ir_records.effect_sites; the \
+     * result is argument 0 moved, value and obligation (F5) */ \
+    MACRO(TAKE, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS()) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyIR_AdoptTemp, PyValue, (PyValueBorrow), \
         ARGS(borrowed), VALUE(owned), EFFECTS()) \

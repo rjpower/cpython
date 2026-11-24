@@ -391,7 +391,7 @@ def seed_rows(analysis, table, ctypes, macros, effects_of) -> tuple[list[SeedRow
         if ctype is None and name not in macros:
             if name in ir_generator.VIEW_TAKES:
                 # A move of an owner out of its variable (ir_generator.VIEW_TAKES)
-                text = [f"MACRO({name}, ARGS(consumed), VALUE(owned), "
+                text = [f"MACRO({name}, ARGS(consumed), VALUE(moved(0)), "
                         f"EFFECTS({', '.join(ordered_effects(effects))}), EXITS())"]
                 rows.append(SeedRow(name, "MACRO", text, ["ir_generator.VIEW_TAKES"]
                                     + effect_tables, topic(name)))

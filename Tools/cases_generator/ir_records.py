@@ -328,8 +328,9 @@ def replaced_input(uop: Uop, j: int) -> int | None:
         return None
     import ir_contract
     contract = ir_contract.contract_of(uop)
-    if (contract.output(outputs[j].name).mode != "inline"
-            or contract.input(inputs[j].name).mode != "consumed"
+    output, input_ = contract.output(outputs[j].name), contract.input(inputs[j].name)
+    if (output is None or input_ is None or output.mode != "inline"
+            or input_.mode != "consumed"
             or any(o.name == inputs[j].name for o in outputs)):
         return None
     return j

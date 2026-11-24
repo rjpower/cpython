@@ -85,6 +85,8 @@ from ir_records import (
     guard_facts, uop_record_effects, passed_through, record_through, result_facts,
     site_tokens, uop_transfers, walk_values,
 )
+# The exits of the generator-boundary variants (boundary_departure())
+from ir_records import BRANCH, RAISE, RETURN
 from ir_read_effects import (
     error_nonnull_value, null_value_condition, value_assignment, value_declaration,
     value_nonnull_changes, value_transport_expression,
@@ -207,27 +209,145 @@ EXECUTION_VARIANTS = {
 @dataclass(frozen=True)
 class GeneratorBoundary:
     base: str
+    # Where the variant departs (analyzer.Boundary.at), as its clause states
+    at: str
     yielded: str = "NONE"
     completed: str = "NONE"
     resume: str = "NONE"
+    # The exits that the boundary(...) clause declares for the completion
+    # of the variant (completed is not NONE)
+    exits: tuple[str, ...] = ()
+
+
+# The arms of the generator completion routine (gen_complete,
+# Python/ceval_routines.h), by the consumer that a completing variant
+# fuses, with the exits each arm takes: RETURN returns from the frame in
+# turn, the others continue at the source's exit (its branch target).
+# Each may raise.  A variant's boundary(...) clause declares these exits;
+# the generator checks the clause against the arm (check_boundary_expansion()).
+GENERATOR_COMPLETIONS = {
+    "STORE_LOCAL": ("GEN_COMPLETE_STORE", ("branch", "raise")),
+    "RETURN": ("GEN_COMPLETE_RETURN", ("return", "raise")),
+    "DISCARD": ("GEN_COMPLETE_DISCARD", ("branch", "raise")),
+    "HOME": ("GEN_COMPLETE_HOME", ("branch", "raise")),
+    "STORE_FAST": ("GEN_COMPLETE_STORE_FAST", ("branch", "raise")),
+    "POP_TOP": ("GEN_COMPLETE_POP_TOP", ("branch", "raise")),
+}
+
+# The resume routine's arms, by the consumer that a yield's variant fuses
+GENERATOR_RESUMES = {"SEND": "GEN_RESUME_SEND", "STORE_LOCAL": "GEN_RESUME_STORE"}
 
 
 def generator_boundaries(analysis: Analysis) -> dict[str, GeneratorBoundary]:
-    """Complete source families; private outcome targets do not change IO."""
+    """The generator-boundary variants SOURCE_XFER_CONSUMER, one per consumer
+    that the boundary(...) clause of the source, or of its family's head,
+    declares (Python/bytecodes.c).  A member's own clause replaces its
+    family's and may differ from it only in at(...)."""
     result = {}
     for name, inst in all_instructions(analysis).items():
-        family = inst.family.name if inst.family else name
-        if family in {"SEND", "INSTRUMENTED_SEND"} or name == "CLEANUP_THROW":
-            for consumer in ("RETURN", "STORE_LOCAL", "DISCARD", "HOME",
-                             "STORE_FAST", "POP_TOP"):
-                result[f"{name}_XFER_{consumer}"] = GeneratorBoundary(
-                    name, "NONE" if name == "CLEANUP_THROW" else "DELEGATED", consumer)
-        elif name in {"YIELD_VALUE", "YIELD_DELEGATED",
-                      "INSTRUMENTED_YIELD_VALUE", "INSTRUMENTED_YIELD_DELEGATED"}:
-            for consumer in ("SEND", "STORE_LOCAL"):
-                result[f"{name}_XFER_{consumer}"] = GeneratorBoundary(
-                    name, resume=consumer)
+        clause = analysis.boundaries.get(name)
+        family = (analysis.boundaries.get(inst.family.name)
+                  if inst.family is not None and inst.family.name != name else None)
+        if clause is None:
+            clause = family
+        elif family is not None and (
+                (clause.yields, clause.completes, clause.resumes) !=
+                (family.yields, family.completes, family.resumes)):
+            raise analysis_error(f"boundary({name}) may differ from its family's "
+                                 f"boundary({family.source}) only in at(...)", clause.where)
+        if clause is None:
+            continue
+        if bool(clause.completes) == bool(clause.resumes):
+            raise analysis_error(f"boundary({clause.source}) declares either "
+                                 "completes(...) or resumes(...)", clause.where)
+        if clause.yields != "NONE" and not clause.completes:
+            raise analysis_error(f"boundary({clause.source}): a delegated yield "
+                                 "needs completes(...)", clause.where)
+        for consumer, exits in clause.completes.items():
+            if consumer not in GENERATOR_COMPLETIONS:
+                raise analysis_error(f"boundary({clause.source}): {consumer} has no "
+                                     "arm in the completion routine", clause.where)
+            result[f"{name}_XFER_{consumer}"] = GeneratorBoundary(
+                name, clause.at, clause.yields, consumer, exits=exits)
+        for consumer in clause.resumes:
+            if consumer not in GENERATOR_RESUMES:
+                raise analysis_error(f"boundary({clause.source}): {consumer} has no "
+                                     "arm in the resume routine", clause.where)
+            result[f"{name}_XFER_{consumer}"] = GeneratorBoundary(
+                name, clause.at, resume=consumer)
     return result
+
+
+def boundary_departure(uop: UopRecord, boundary: GeneratorBoundary,
+                       where: Token) -> UopRecord:
+    """The departing (last) uop of a generator-boundary variant, with the
+    exits its boundary(...) clause declares: a delegated yield takes the
+    place of its fall-through, and a completion that returns takes the
+    place of its branch, which runs the consumer.  A variant that departs
+    at(enter) yields and completes in the frame that it enters, and its
+    uop keeps its exits."""
+    transfers = uop.transfers
+    if boundary.at == "enter":
+        if not any(t.kind == ENTER_FRAME for t in transfers):
+            raise analysis_error(f"{uop.name}: at(enter) needs the departing "
+                                 "uop's enter", where)
+        return uop
+    if boundary.yielded == "DELEGATED":
+        if not transfers or transfers[-1] != Transfer(NEXT):
+            raise analysis_error(f"{uop.name}: a delegated yield needs the "
+                                 "departing uop's fall-through", where)
+        transfers = transfers[:-1] + (Transfer(YIELD, None, "delegated"),)
+    if boundary.completed != "NONE":
+        if not any(t.kind == BRANCH for t in transfers):
+            raise analysis_error(f"{uop.name}: a completion needs the departing "
+                                 "uop's branch", where)
+        if "return" in boundary.exits and "branch" not in boundary.exits:
+            transfers = tuple(replace(t, kind=RETURN) if t.kind == BRANCH else t
+                              for t in transfers)
+    return replace(uop, transfers=transfers)
+
+
+# The exit of each transfer kind that a variant's expansion may reach
+BOUNDARY_EXIT_KINDS = {"yield": YIELD, "return": RETURN, "branch": BRANCH,
+                       "raise": RAISE, "enter": ENTER_FRAME}
+
+
+def check_boundary_expansion(name: str, boundary: GeneratorBoundary,
+                             record: OperationRecord, reached: set[str],
+                             where: Token) -> None:
+    """VT1 and VT3 over the expansion of a generator-boundary variant: the
+    exits that its emitted body reaches (reached: IR_GEN_YIELD, the yield
+    effect, IR_GEN_RESUME, and IR_GEN_COMPLETE as "complete"), with the
+    completion arm of its consumer for "complete", are each an exit of
+    its record, and each exit that its boundary(...) clause adds is
+    reached.  Lowering grants nothing.  A variant that departs at(enter)
+    reaches its enter and nothing that the clause adds."""
+    if boundary.at == "enter":
+        if reached != {"enter"}:
+            raise analysis_error(f"{name}: departs at(enter), and its expansion "
+                                 f"reaches {sorted(reached)}", where)
+    exits = set(reached - {"complete"})
+    if "complete" in reached:
+        if boundary.completed == "NONE":
+            raise analysis_error(f"{name}: its expansion completes, and its "
+                                 "boundary(...) clause declares no completes(...)", where)
+        exits.update(GENERATOR_COMPLETIONS[boundary.completed][1])
+        omitted = set(GENERATOR_COMPLETIONS[boundary.completed][1]) - set(boundary.exits)
+        if omitted:
+            raise analysis_error(f"{name}: its expansion reaches {sorted(omitted)}, "
+                                 "which its boundary(...) clause omits", where)
+    kinds = {t.kind for uop in record.uops for t in uop.transfers}
+    for exit in sorted(exits):
+        if BOUNDARY_EXIT_KINDS[exit] not in kinds:
+            raise analysis_error(f"{name}: its expansion reaches `{exit}`, which "
+                                 "its boundary(...) clause omits", where)
+    declared = set(boundary.exits) if boundary.at == "last" else set()
+    if boundary.yielded != "NONE" and boundary.at == "last":
+        declared.add("yield")
+    unreached = declared - exits
+    if unreached:
+        raise analysis_error(f"{name}: its boundary(...) clause declares "
+                             f"{sorted(unreached)}, which its expansion never reaches", where)
 
 
 def generator_word_entry(name: str, analysis: Analysis) -> str:
@@ -270,8 +390,11 @@ def generator_boundary_source_closed(boundary: GeneratorBoundary,
     if boundary.resume != "NONE":
         return (canonical_frame_transfer_input(inst) or abrupt_suspend_contract(inst, fmt)
                 or metadata_only_passthroughs(inst) == frozenset({1}))
-    if boundary.yielded != "NONE":
-        return send_source_contract(inst, fmt) is not None
+    # A native send's source, or a completion's: the structure of the
+    # source, not its clause, decides (check_boundary_expansion() then
+    # holds the clause to what the source reaches)
+    if send_source_contract(inst, fmt) is not None:
+        return True
     # The existing typed completion marker owns its canonical argument and
     # checks the complete four-input retirement window.
     return (fmt.window and fmt.field_of(ROLE_DST) == "A" and
@@ -3398,6 +3521,8 @@ class IREmitter(Emitter):
         self.error_finalized = False
         self.error_local_dst = False
         self.generator_boundary = None
+        # The exits that a generator-boundary variant's body reaches
+        self.boundary_reached: set[str] = set()
         self.send_source_parts = None
         self.error_redispatch_origin = None
         self.error_checkpoint_sites = {}
@@ -4919,7 +5044,6 @@ class IREmitter(Emitter):
         """A statement that kills an input, as DEAD(), a close or a steal,
         gives up its slot"""
         if (self.generator_boundary is not None and
-                self.generator_boundary.yielded == "DELEGATED" and
                 self.send_source_parts is not None and
                 uop is self.send_source_parts[-1] and
                 _statement_text(stmt) == ["PyValue_CLOSE", "(", "v", ")", ";"]):
@@ -4931,6 +5055,7 @@ class IREmitter(Emitter):
             self.emit("IR_GEN_JUMP(GEN_YIELD_INPUT_EFFECT, frame, "
                       "this_instr, sent.value);\n")
             self.emit("}\n")
+            self.boundary_reached.add("yield")
             self.emit("window[2] = PyValue_NULL;\n")
             self.value_kill(next(token for token in stmt.contents if token.text == "v"),
                             storage, False)
@@ -5512,6 +5637,7 @@ class IREmitter(Emitter):
             self.emit("assert(_PyValue_IsHome(ir_completed));\n")
             self.emit("IR_GEN_COMPLETE(ir_completed);\n")
             self.emit("}\n")
+            self.boundary_reached.add("complete")
             self.abrupt_operand_sources.add(id(tkn))
             self.error_terminal_sources.add(id(tkn))
             self.error_finalized = True
@@ -5615,6 +5741,7 @@ class IREmitter(Emitter):
             self.emit("}\n")
             self.emit("--tstate->py_recursion_remaining;\n")
             self.emit("IR_GEN_RESUME(ir_resume_input);\n")
+            self.boundary_reached.add("enter")
         else:
             self.emit("if (_Py_EnterRecursivePy(tstate)) {\n")
             self.emit("PyValue_XCLOSE(ir_resume_input);\n")
@@ -6026,12 +6153,8 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
                               ir_contract.record_results(part, outs) if declared
                               else result_facts(part, outs),
                               "pure" in part.annotations, leaf))
-    if (boundary is not None and boundary.yielded == "DELEGATED"
-            and uops[-1].transfers[-1] == Transfer(NEXT)):
-        # A native send that the inner generator suspended yields its value
-        # where the handler would fall through (generate_handler())
-        last = uops[-1]
-        uops[-1] = replace(last, transfers=last.transfers[:-1] + (Transfer(YIELD, None, "delegated"),))
+    if boundary is not None:
+        uops[-1] = boundary_departure(uops[-1], boundary, inst.where)
     results = []
     for j, (value, external, item, _) in enumerate(walk.outputs):
         if external >= 0 and walk.values[value].external >= 0:
@@ -6814,6 +6937,9 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.declared_roles = roles
     emitter.declared_closes = set(emitter.close_names)
     emit_handler(record, emitter, out, {})
+    if record.generator_boundary is not None:
+        check_boundary_expansion(name, record.generator_boundary, record,
+                                 emitter.boundary_reached, inst.where)
     check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
     ir_leaf.check_leaf(record, [p for p in inst.parts if isinstance(p, Uop)])
 
@@ -6990,6 +7116,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
                             if site.site is not None}
     emitter.uop_index = 0
     emitter.generator_boundary = record.generator_boundary
+    emitter.boundary_reached = set()
     emitter.pending_owner = None
     emitter.close_count = 0
     emitter.shape_read_guards = 0
@@ -7182,8 +7309,10 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
         raise analysis_error("polymorphic shape execution needs one dominating checked read", inst.where)
     out.start_line()
     if (reachable and emitter.generator_boundary is not None
-            and emitter.generator_boundary.yielded == "DELEGATED"):
-        if emitter.send_source_parts is None or not fmt.window or fmt.dst_offset != 2:
+            and emitter.send_source_parts is not None):
+        # The fall-through of a native send is the inner generator's
+        # suspension: the variant yields its value (a delegated yield)
+        if not fmt.window or fmt.dst_offset != 2:
             raise analysis_error("native yielded outcome requires checked source window", inst.where)
         outputs = external_io(inst)[1]
         result = outputs[-1].item.name
@@ -7196,6 +7325,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
         out.emit(f"assert(_PyValue_IsHome({result}));\n")
         out.emit("window[2] = PyValue_NULL;\n")
         out.emit(f"IR_GEN_YIELD({result});\n")
+        emitter.boundary_reached.add("yield")
         stack.home_node = None
         emitter.native_window_out = True
         emitter.ownership_events.append(OwnershipEvent(
@@ -9185,15 +9315,11 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
             if column == "Yielded" and boundary.yielded == "DELEGATED":
                 target = "1"
             elif column == "Completed" and boundary.completed != "NONE":
-                target = ("GEN_THROWING | GEN_COMPLETE_"
-                          if boundary.base == "CLEANUP_THROW" else "GEN_COMPLETE_") + {
-                    "STORE_LOCAL": "STORE", "RETURN": "RETURN",
-                    "DISCARD": "DISCARD", "HOME": "HOME",
-                    "STORE_FAST": "STORE_FAST", "POP_TOP": "POP_TOP"}[boundary.completed]
+                target = ("GEN_THROWING | " if boundary.base == "CLEANUP_THROW" else ""
+                          ) + GENERATOR_COMPLETIONS[boundary.completed][0]
             elif column == "Resume":
                 if boundary.resume != "NONE":
-                    target = "GEN_RESUME_" + {
-                        "SEND": "SEND", "STORE_LOCAL": "STORE"}[boundary.resume]
+                    target = GENERATOR_RESUMES[boundary.resume]
                 elif boundary.yielded == "DELEGATED":
                     target = ("GEN_SEND_INPUT" if boundary.base == "SEND_GEN"
                               else "GEN_SEND_INPUT_HOME")

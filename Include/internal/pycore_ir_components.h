@@ -190,7 +190,121 @@
      * nb_* slot -> any __add__ and friends: runs Python */ \
     HELPER(value_binary_op, PyValue, (int, PyValueBorrow, PyValueBorrow), \
            ARGS(scalar, borrowed, borrowed), VALUE_OR_NULL(owned), \
-           EFFECTS(runs_python))
+           EFFECTS(runs_python)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(PyValue_AsPyObjectNew, \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(PyValue_CLEAR, \
+        ARGS(scalar), SCALAR, EFFECTS(releases), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyValue_FromNonNumberSteal, PyValue, (PyObject *), \
+        ARGS(object), VALUE(owned), EFFECTS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyValue_FromObjectBorrow, PyValueBorrow, (PyObject *), \
+        ARGS(object), VALUE(borrowed), EFFECTS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyValue_FromObjectSteal, PyValue, (PyObject *), \
+        ARGS(object), VALUE(owned), EFFECTS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyValue_GenCheck, bool, (PyValueBorrow), \
+        ARGS(borrowed), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyValue_ObjectOrNull, PyObject *, (PyValueBorrow), \
+        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyValue_Unwrap, void *, (PyValue), \
+        ARGS(consumed), SCALAR, EFFECTS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyValue_Wrap, PyValue, (void *), \
+        ARGS(scalar), VALUE(owned), EFFECTS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(Py_ARITHMETIC_RIGHT_SHIFT, \
+        ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from ir_generator.VIEW_TAKES, ir_records.effect_sites */ \
+    MACRO(TAKE, ARGS(consumed), VALUE(owned), EFFECTS(), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyIR_AdoptTemp, PyValue, (PyValueBorrow), \
+        ARGS(borrowed), VALUE(owned), EFFECTS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyIR_BaseOpcode, int, (int), \
+        ARGS(scalar), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_ASCII, PyObject *, (PyValueBorrow), \
+        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from ir_leaf.ERASED */ \
+    INTRINSIC(_PyValue_CheckHome, ARGS(scalar), NONE, BUILD(gil)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_Contains, int, (PyValueBorrow, PyValueBorrow), \
+        ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_DelItem, int, (PyValueBorrow, PyValueBorrow), \
+        ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_Format, PyObject *, (PyValueBorrow, PyValueBorrow), \
+        ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_GetAttr, PyValue, (PyValueBorrow, PyObject *), \
+        ARGS(borrowed, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_GetMethod, _PyStatusValue, (PyValueBorrow, PyObject *), \
+        ARGS(borrowed, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_GetOptionalItem, _PyStatusValue, (PyValueBorrow, PyValueBorrow), \
+        ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_Invert, PyValue, (PyValueBorrow), \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_IsInstance, int, (PyValueBorrow, PyValueBorrow), \
+        ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_IsTrue, int, (PyValueBorrow), \
+        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.INT_RESULTS, ir_records.effect_sites */ \
+    HELPER(_PyValue_LshiftInt64, PyValue, (int64_t, int64_t), \
+        ARGS(scalar, scalar), VALUE(owned exact(PyLong_Type)), EFFECTS(allocates)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_Negative, PyValue, (PyValueBorrow), \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_PointerBorrow, PyValueBorrow, (PyObject *), \
+        ARGS(object), VALUE(borrowed), EFFECTS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_Positive, PyValue, (PyValueBorrow), \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from ir_leaf.ERASED */ \
+    INTRINSIC(_PyValue_RecheckHome, ARGS(scalar), NONE, BUILD(gil)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(_PyValue_RecheckWindow, \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_Repr, PyObject *, (PyValueBorrow), \
+        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_RichCompare, PyValue, (PyValueBorrow, PyValueBorrow, int), \
+        ARGS(borrowed, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_Send, _PyStatusValue, (PyObject *, PyValueBorrow), \
+        ARGS(object, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_SequenceCheck, int, (PyValueBorrow), \
+        ARGS(borrowed), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_SequenceTuple, PyObject *, (PyValueBorrow), \
+        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_SetAttr, int, (PyValueBorrow, PyObject *, PyValueBorrow), \
+        ARGS(borrowed, object, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_SetItem, int, (PyValueBorrow, PyValueBorrow, PyValueBorrow), \
+        ARGS(borrowed, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_Size, Py_ssize_t, (PyValueBorrow), \
+        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyValue_Str, PyObject *, (PyValueBorrow), \
+        ARGS(borrowed), SCALAR, EFFECTS(runs_python))
 
 /* Objects */
 #define _PyIR_COMPONENTS_OBJECTS(PRIMITIVE, HELPER, MACRO) \
@@ -262,7 +376,221 @@
      * Python, and chains the context (releases).  The row admits any \
      * type, so it declares runs_python */ \
     HELPER(_PyErr_Format, PyObject *, (PyThreadState *, PyObject *, const char *, ...), \
-           ARGS(tstate, object, scalar), NONE, EFFECTS(runs_python))
+           ARGS(tstate, object, scalar), NONE, EFFECTS(runs_python)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(CALL_STAT_INC, \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from a C macro (no static check), ceval_macros.h, ir_records.effect_sites */ \
+    MACRO(PAUSE_ADAPTIVE_COUNTER, \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS(), FEEDBACK(write(counter))) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyCell_NewValue, PyObject *, (PyValueBorrow), \
+        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyErr_Format, PyObject *, (PyObject *, const char *, ...), \
+        ARGS(object, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyErr_GivenExceptionMatches, int, (PyObject *, PyObject *), \
+        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyErr_SetHandledException, void, (PyObject *), \
+        ARGS(object), NONE, EFFECTS(runs_python)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(PyExceptionInstance_Class, \
+        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyException_GetTraceback, PyObject *, (PyObject *), \
+        ARGS(object), SCALAR, EFFECTS(reads)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(PyLazyImport_CheckExact, \
+        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyObject_HasAttrWithError, int, (PyObject *, PyObject *), \
+        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyType_Check, int, (PyObject *), \
+        ARGS(object), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyType_GenericAlloc, PyObject *, (PyTypeObject *, Py_ssize_t), \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyType_HasFeature, int, (PyTypeObject *, long unsigned int), \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(reads)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(PyUnicode_1BYTE_DATA, \
+        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyUnicode_Concat, PyObject *, (PyObject *, PyObject *), \
+        ARGS(object, object), SCALAR, EFFECTS(reads, allocates)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyUnicode_GET_LENGTH, Py_ssize_t, (PyObject *), \
+        ARGS(object), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyUnicode_IS_COMPACT_ASCII, int, (PyObject *), \
+        ARGS(object), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyUnicode_READ_CHAR, Py_UCS4, (PyObject *, Py_ssize_t), \
+        ARGS(object, scalar), SCALAR, EFFECTS(reads)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(Py_ARRAY_LENGTH, \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(Py_DECREF, \
+        ARGS(scalar), SCALAR, EFFECTS(releases), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(Py_FatalError, \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(Py_INCREF, void, (PyObject *), \
+        ARGS(object), NONE, EFFECTS()) \
+    /* seeded from a C macro (no static check), ir_records.predicate_facts, ir_records.effect_sites */ \
+    MACRO(Py_IS_TYPE, \
+        ARGS(scalar, scalar), TEST(exact(a1), ), EFFECTS(reads), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(Py_IsNone, \
+        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(Py_NewRef, \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(Py_SET_SIZE, \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(Py_SIZE, \
+        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(Py_XDECREF, \
+        ARGS(scalar), SCALAR, EFFECTS(releases), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(Py_XINCREF, void, (PyObject *), \
+        ARGS(object), NONE, EFFECTS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(Py_XSETREF, \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(releases), EXITS()) \
+    /* seeded from ir_leaf.ERASED */ \
+    INTRINSIC(QSBR_QUIESCENT_STATE, ARGS(scalar), NONE, BUILD(gil)) \
+    /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
+    MACRO(SYNC_SP, \
+        ARGS(), NONE, EFFECTS(), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyCell_GetValue, PyValue, (PyCellObject *), \
+        ARGS(scalar), VALUE(owned), EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyCell_SetValue, void, (PyCellObject *, PyValue), \
+        ARGS(scalar, consumed), NONE, EFFECTS(writes, releases)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyCell_SwapValue, PyValue, (PyCellObject *, PyValue), \
+        ARGS(scalar, consumed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyCode_GetOriginalOpcode, uint8_t, (_PyCoLineInstrumentationData *, int), \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyCode_InstrHandler, int, (PyCodeObject *, int), \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyErr_ChainExceptions1, void, (PyObject *), \
+        ARGS(object), NONE, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyErr_Clear, void, (PyThreadState *), \
+        ARGS(tstate), NONE, EFFECTS(releases)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyErr_ExceptionMatches, int, (PyThreadState *, PyObject *), \
+        ARGS(tstate, object), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyErr_GetRaisedException, PyObject *, (PyThreadState *), \
+        ARGS(tstate), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyErr_Occurred, PyObject *, (PyThreadState *), \
+        ARGS(tstate), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyErr_SetRaisedException, void, (PyThreadState *, PyObject *), \
+        ARGS(tstate, object), NONE, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyErr_SetString, void, (PyThreadState *, PyObject *, const char *), \
+        ARGS(tstate, object, scalar), NONE, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyInterpolation_BuildValue, PyObject *, (PyValueBorrow, PyObject *, int, PyObject *), \
+        ARGS(borrowed, object, scalar, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from a definition under Py_GIL_DISABLED */ \
+    INTRINSIC(_PyObject_GC_IS_SHARED, ARGS(scalar), SCALAR, BUILD(free_threaded)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyObject_GetManagedDict, PyDictObject *, (PyObject *), \
+        ARGS(object), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyObject_IsUniquelyReferenced, int, (PyObject *), \
+        ARGS(object), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyShape_FindTransition, uint8_t, (PyTypeObject *, uint8_t, Py_ssize_t), \
+        ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyShape_TransitionMissing, bool, (PyTypeObject *, uint8_t, Py_ssize_t), \
+        ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PySuper_LookupValue, _PyStatusValue, (PyTypeObject *, PyValueBorrow, PyObject *, int), \
+        ARGS(scalar, borrowed, object, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyTemplate_Build, PyObject *, (PyObject *, PyObject *), \
+        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyType_IteratesByIndex, int, (PyTypeObject *), \
+        ARGS(scalar), SCALAR, EFFECTS(reads)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(_PyType_VALUE_SLOT, \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyUnicode_Equal, int, (PyObject *, PyObject *), \
+        ARGS(object, object), SCALAR, EFFECTS(reads)) \
+    /* seeded from ir_leaf.ERASED */ \
+    INTRINSIC(_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY, ARGS(), NONE, BUILD(gil)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(_Py_DECREF_SPECIALIZED, \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(writes), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(_Py_ID, \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from a definition under Py_GIL_DISABLED */ \
+    INTRINSIC(_Py_IsOwnedByCurrentThread, ARGS(scalar), SCALAR, BUILD(free_threaded)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(_Py_SINGLETON, \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(_Py_STR, \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(do_raise, int, (PyThreadState *, PyObject *, PyObject *, bool), \
+        ARGS(tstate, object, object, scalar), SCALAR, EFFECTS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(native_call_builtin_o, PyValue, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue *), \
+        ARGS(tstate, frame, scalar, consumed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(super_call, PyValue, (PyValueBorrow, PyValueBorrow, PyValue, int), \
+        ARGS(borrowed, borrowed, consumed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(value_dict_merge_uniq, _PyStatusObject, (PyObject *, PyObject *), \
+        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(value_exception_group_match, _PyObjectPair, (_PyInterpreterFrame *, PyObject *, PyObject *), \
+        ARGS(frame, object, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(value_import_level, int, (PyValue), \
+        ARGS(consumed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(value_load_from_dict, _PyStatusValue, (PyThreadState *, PyObject *, PyObject *), \
+        ARGS(tstate, object, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(value_load_global, PyValue, (PyObject *, PyObject *, PyObject *), \
+        ARGS(object, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(value_subscript, PyValue, (PyValueBorrow, PyValueBorrow), \
+        ARGS(borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(value_unicode_append, PyObject *, (PyObject *, PyObject *), \
+        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(with_exit_call, PyValue, (PyValueBorrow, PyValueBorrow, PyObject *, PyObject *, PyObject *), \
+        ARGS(borrowed, borrowed, object, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from ir_records.NOT_RELEASES */ \
+    DESTRUCTOR(_PyUnicode_ExactDealloc, PyUnicode_Type, callback_free)
 
 /* Containers */
 #define _PyIR_COMPONENTS_CONTAINERS(PRIMITIVE, HELPER, MACRO) \
@@ -320,7 +648,67 @@
               ARGS(object), CONTEXT("a free-threaded build's critical section"), \
               EFFECTS()) \
     PRIMITIVE(UNLOCK_OBJECT, void, (PyObject *), \
-              ARGS(object), NONE, EFFECTS())
+              ARGS(object), NONE, EFFECTS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(GETITEM, \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.predicate_facts, ir_records.effect_sites */ \
+    MACRO(PyAnyDict_CheckExact, \
+        ARGS(scalar), TEST(exact(PyAnyDict_Type)), EFFECTS(reads), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.predicate_facts, ir_records.effect_sites */ \
+    MACRO(PyAnySet_CheckExact, \
+        ARGS(scalar), TEST(exact(PyAnySet_Type)), EFFECTS(reads), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyDict_New, PyObject *, (), \
+        ARGS(), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyDict_PopValue, int, (PyObject *, PyValueBorrow, PyValue *), \
+        ARGS(object, borrowed, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyDict_SetValue, int, (PyObject *, PyValueBorrow, PyValueBorrow), \
+        ARGS(object, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyDict_Update, int, (PyObject *, PyObject *), \
+        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PySet_New, PyObject *, (PyObject *), \
+        ARGS(object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(PySlice_Check, \
+        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyDict_ContainsValue, int, (PyDictObject *, PyValueBorrow), \
+        ARGS(scalar, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyDict_SetValue, int, (PyDictObject *, PyValueBorrow, PyValueBorrow), \
+        ARGS(scalar, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyDict_SetValue_Take2, int, (PyDictObject *, PyValue, PyValue), \
+        ARGS(scalar, consumed, consumed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyList_AppendTakeValue, int, (PyListObject *, PyValue), \
+        ARGS(scalar, consumed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyList_Extend, PyObject *, (PyListObject *, PyObject *), \
+        ARGS(scalar, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyList_SliceSubscript, PyObject *, (PyObject *, PyObject *), \
+        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PySet_AddValueTakeRef, int, (PySetObject *, PyValue), \
+        ARGS(scalar, consumed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PySet_Contains, int, (PySetObject *, PyValueBorrow), \
+        ARGS(scalar, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PySet_Update, int, (PyObject *, PyObject *), \
+        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PySlice_FromValues, PyObject *, (PyValueBorrow, PyValueBorrow, PyValueBorrow), \
+        ARGS(borrowed, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyTuple_GET_OBJECT, PyObject *, (PyObject *, Py_ssize_t), \
+        ARGS(object, scalar), SCALAR, EFFECTS(reads))
 
 /* Specialization: the site's counter and the specializer */
 #define _PyIR_COMPONENTS_SPECIALIZATION(PRIMITIVE, HELPER, MACRO) \
@@ -355,7 +743,61 @@
            EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
     HELPER(_Py_Specialize_UnpackSequence, void, (PyValue, _PyInstr *, int), \
            ARGS(borrowed, scalar, scalar), NONE, EFFECTS(runs_python), \
-           FEEDBACK(read(entry), write(entry), write(handler)))
+           FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
+    MACRO(FB_HEADER_OF, \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
+    MACRO(ORIGINAL_HANDLER, \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyFb_HasEntry, int, (int), \
+        ARGS(scalar), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_Call, void, (PyValue, PyValue, _PyInstr *, int), \
+        ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_CallFunctionEx, void, (PyValue, PyValue, _PyInstr *), \
+        ARGS(borrowed, borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_CallKw, void, (PyValue, PyValue, PyValue, _PyInstr *, int), \
+        ARGS(borrowed, borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_CompareOp, void, (PyValueBorrow, PyValueBorrow, _PyInstr *, int), \
+        ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_ContainsOp, void, (PyValueBorrow, PyValueBorrow, _PyInstr *), \
+        ARGS(borrowed, borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_ForIter, void, (PyValue, PyValue, _PyInstr *, int), \
+        ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_GetIter, void, (PyValue, _PyInstr *), \
+        ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_LoadAttr, void, (PyValueBorrow, _PyInstr *, PyObject *), \
+        ARGS(borrowed, scalar, object), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_LoadGlobal, void, (PyObject *, PyObject *, _PyInstr *, PyObject *), \
+        ARGS(object, object, scalar, object), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_LoadSuperAttr, void, (PyValue, PyValue, _PyInstr *, int), \
+        ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_PopJumpIf, void, (PyValueBorrow, _PyInstr *), \
+        ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_Send, void, (PyValue, _PyInstr *), \
+        ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_StoreAttr, void, (PyValueBorrow, _PyInstr *, PyObject *), \
+        ARGS(borrowed, scalar, object), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_StoreSubscr, void, (PyValueBorrow, PyValueBorrow, _PyInstr *), \
+        ARGS(borrowed, borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    HELPER(_Py_Specialize_ToBool, void, (PyValue, _PyInstr *), \
+        ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler)))
 
 /* The evaluator's labels (bytecodes.c label(...)): the routines behind them */
 #define _PyIR_COMPONENTS_LABELS(PRIMITIVE, HELPER, MACRO) \
@@ -375,6 +817,306 @@
      * with RecursionError set */ \
     HELPER(_Py_EnterRecursivePy, int, (PyThreadState *), \
            ARGS(tstate), STATUS(NONZERO), EFFECTS(writes, allocates, raises))
+
+/* Calls and frames */
+#define _PyIR_COMPONENTS_CALLS(PRIMITIVE, HELPER, MACRO) \
+    /* seeded from a C macro (no static check), ir_records.CONTEXT_PREDICATES, ir_records.effect_sites */ \
+    MACRO(IS_PEP523_HOOKED, \
+        ARGS(scalar), CONTEXT("a PEP 523 frame evaluator may replace the call"), EFFECTS(reads), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.predicate_facts, ir_records.effect_sites */ \
+    MACRO(PyCFunction_CheckExact, \
+        ARGS(scalar), TEST(exact(PyCFunction_Type)), EFFECTS(reads), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(PyCFunction_GET_FLAGS, \
+        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyFunction_GET_CODE, PyObject *, (PyObject *), \
+        ARGS(object), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(PyFunction_New, PyObject *, (PyObject *, PyObject *), \
+        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_FrameClearAndPopGeneralWithResult, PyValue, (PyThreadState *, _PyInterpreterFrame *, PyValue), \
+        ARGS(tstate, frame, consumed), VALUE(owned), EFFECTS(releases)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyFrame_GetCode, PyCodeObject *, (_PyInterpreterFrame *), \
+        ARGS(frame), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyFrame_GetFunction, PyFunctionObject *, (_PyInterpreterFrame *), \
+        ARGS(frame), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyFrame_MaterializeKwargs, int, (_PyInterpreterFrame *), \
+        ARGS(frame), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyFrame_PushUnchecked, _PyInterpreterFrame *, (PyThreadState *, PyValue, _PyInterpreterFrame *), \
+        ARGS(tstate, consumed, frame), SCALAR, EFFECTS(allocates)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyFunction_SetVersion, void, (PyFunctionObject *, uint32_t), \
+        ARGS(scalar, scalar), NONE, EFFECTS(reads, writes)) \
+    /* seeded from the C prototype, ir_records.CONTEXT_PREDICATES, ir_records.effect_sites */ \
+    HELPER(_PyThreadState_HasStackSpace, bool, (PyThreadState *, int), \
+        ARGS(tstate, scalar), CONTEXT("the data stack must hold the callee's frame"), EFFECTS(reads)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(_PyThreadState_UpdateLastProfiledFrame, \
+        ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(runs_python), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_Py_LeaveRecursiveCallPy, void, (PyThreadState *), \
+        ARGS(tstate), NONE, EFFECTS(reads, writes)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_Py_LeaveRecursiveCallTstate, void, (PyThreadState *), \
+        ARGS(tstate), NONE, EFFECTS(reads, writes)) \
+    /* seeded from the C prototype, ir_records.CONTEXT_PREDICATES, ir_records.effect_sites */ \
+    HELPER(_Py_ReachedRecursionLimit, int, (PyThreadState *), \
+        ARGS(tstate), CONTEXT("the C recursion limit"), EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(call_builtin_values, PyValue, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, int), \
+        ARGS(tstate, frame, scalar, scalar, consumed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(call_class_values, PyValue, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, int), \
+        ARGS(tstate, frame, scalar, scalar, consumed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(call_descriptor_values, PyValue, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, int), \
+        ARGS(tstate, frame, scalar, scalar, consumed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(call_push_exact, _PyInterpreterFrame *, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, PyValue, int), \
+        ARGS(tstate, frame, scalar, scalar, consumed, consumed, scalar), SCALAR, EFFECTS(allocates)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(call_vector, PyValue, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, PyValue), \
+        ARGS(tstate, frame, scalar, consumed), VALUE_OR_NULL(owned), EFFECTS(runs_python))
+
+/* Generators, coroutines and iteration */
+#define _PyIR_COMPONENTS_GENERATORS(PRIMITIVE, HELPER, MACRO) \
+    /* seeded from a C macro (no static check), ir_records.predicate_facts, ir_records.effect_sites */ \
+    MACRO(PyAsyncGenASend_CheckExact, \
+        ARGS(scalar), TEST(exact(PyAsyncGenASend_Type)), EFFECTS(reads), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(PyCoro_CheckExact, \
+        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(PyGen_Check, \
+        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_GetANext, PyObject *, (PyObject *), \
+        ARGS(object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_GetAwaitable, PyObject *, (PyValueBorrow, int), \
+        ARGS(borrowed, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyForIter_StopIsExhaustion, int, (PyThreadState *, _PyInterpreterFrame *), \
+        ARGS(tstate, frame), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyForIter_VirtualIteratorNext, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValue, PyValue *), \
+        ARGS(tstate, frame, consumed, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyForIter_VirtualIteratorNextInline, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValue, PyValue *), \
+        ARGS(tstate, frame, consumed, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyGen_GetGeneratorFromFrame, PyGenObject *, (_PyInterpreterFrame *), \
+        ARGS(frame), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(coro_awaitable_can_transfer, bool, (PyValueBorrow), \
+        ARGS(borrowed), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(gen_claim, int, (PyThreadState *, PyGenObject *), \
+        ARGS(tstate, scalar), SCALAR, EFFECTS(reads, writes)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(gen_may_claim, bool, (PyGenObject *), \
+        ARGS(scalar), SCALAR, EFFECTS(reads)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(gen_try_set_executing, bool, (PyGenObject *), \
+        ARGS(scalar), SCALAR, EFFECTS(reads, writes))
+
+/* Errors */
+#define _PyIR_COMPONENTS_ERRORS(PRIMITIVE, HELPER, MACRO) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_FormatExcCheckArg, void, (PyThreadState *, PyObject *, const char *, PyObject *), \
+        ARGS(tstate, object, scalar, object), NONE, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_FormatExcUnbound, void, (PyThreadState *, PyCodeObject *, int), \
+        ARGS(tstate, scalar, scalar), NONE, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_FormatKwargsError, void, (PyThreadState *, PyValueBorrow, PyObject *, PyObject *), \
+        ARGS(tstate, borrowed, object, object), NONE, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(monitor_reraise, void, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *), \
+        ARGS(tstate, frame, scalar), NONE, EFFECTS(runs_python))
+
+/* Monitoring and the eval breaker */
+#define _PyIR_COMPONENTS_MONITORING(PRIMITIVE, HELPER, MACRO) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(DTRACE_FUNCTION_ENTRY, \
+        ARGS(), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(DTRACE_FUNCTION_RETURN, \
+        ARGS(), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(INSTRUMENTED_JUMP, \
+        ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(runs_python), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(LLTRACE_RESUME_FRAME, \
+        ARGS(), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_Py_Instrument, int, (PyCodeObject *, PyInterpreterState *), \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_Py_call_instrumentation, int, (PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *), \
+        ARGS(tstate, scalar, frame, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_Py_call_instrumentation_2args, int, (PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, PyValueBorrow, PyValueBorrow), \
+        ARGS(tstate, scalar, frame, scalar, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_Py_call_instrumentation_arg, int, (PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, PyValueBorrow), \
+        ARGS(tstate, scalar, frame, scalar, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_Py_call_instrumentation_exc2, void, (PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, PyValueBorrow, PyValueBorrow), \
+        ARGS(tstate, scalar, frame, scalar, borrowed, borrowed), NONE, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_Py_call_instrumentation_instruction, int, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *), \
+        ARGS(tstate, frame, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_Py_call_instrumentation_jump, _PyInstr *, (_PyInstr *, PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, _PyInstr *), \
+        ARGS(scalar, tstate, scalar, frame, scalar, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_Py_call_instrumentation_line, int, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, _PyInstr *), \
+        ARGS(tstate, frame, scalar, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(check_periodics, int, (PyThreadState *), \
+        ARGS(tstate), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(check_periodics_at_end, int, (PyThreadState *, _PyInterpreterFrame *), \
+        ARGS(tstate, frame), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(monitor_stop_iteration, int, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValueBorrow), \
+        ARGS(tstate, frame, scalar, borrowed), SCALAR, EFFECTS(runs_python))
+
+/* The evaluator: dispatch, the frame's namespaces, atomics */
+#define _PyIR_COMPONENTS_EVALUATOR(PRIMITIVE, HELPER, MACRO) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(COMPARISON_BIT, \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.TRANSFER_TOKENS, ir_records.effect_sites */ \
+    MACRO(DISPATCH, \
+        ARGS(), NONE, EFFECTS(), EXITS(next)) \
+    /* seeded from a C macro (no static check), ir_records.TRANSFER_TOKENS, ir_records.effect_sites */ \
+    MACRO(DISPATCH_GOTO, \
+        ARGS(), NONE, EFFECTS(), EXITS(jump)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(FT_ATOMIC_LOAD_INT8_RELAXED, \
+        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(FT_ATOMIC_LOAD_PTR, \
+        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from ir_leaf.IDENTITIES */ \
+    INTRINSIC(FT_ATOMIC_LOAD_PTR_ACQUIRE, ARGS(scalar), SCALAR, BUILD(gil)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(FT_ATOMIC_LOAD_PTR_RELAXED, \
+        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from ir_leaf.IDENTITIES */ \
+    INTRINSIC(FT_ATOMIC_LOAD_SSIZE_RELAXED, ARGS(scalar), SCALAR, BUILD(gil)) \
+    /* seeded from ir_leaf.IDENTITIES */ \
+    INTRINSIC(FT_ATOMIC_LOAD_UINT32_RELAXED, ARGS(scalar), SCALAR, BUILD(gil)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(FT_ATOMIC_LOAD_UINT64_RELAXED, \
+        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(FT_ATOMIC_LOAD_UINTPTR_ACQUIRE, \
+        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(FT_ATOMIC_STORE_INT8_RELEASE, \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(reads, writes), EXITS()) \
+    /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
+    MACRO(INSTR_AT_OFFSET, \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
+    MACRO(INSTR_OFFSET_OF, \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.TRANSFER_TOKENS, ir_records.effect_sites */ \
+    MACRO(JUMPBY, \
+        ARGS(scalar), NONE, EFFECTS(), EXITS(jump)) \
+    /* seeded from a C macro (no static check), ir_records.TRANSFER_TOKENS, ir_records.effect_sites */ \
+    MACRO(JUMPTO, \
+        ARGS(scalar), NONE, EFFECTS(), EXITS(jump)) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(JUMP_TARGET, \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(LOAD_IP, \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(LOCALS, \
+        ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
+    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    MACRO(PRE_DISPATCH_GOTO, \
+        ARGS(), SCALAR, EFFECTS(), EXITS()) \
+    /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
+    MACRO(RELOAD_STACK, \
+        ARGS(), NONE, EFFECTS(), EXITS()) \
+    /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
+    MACRO(SAVE_STACK, \
+        ARGS(), NONE, EFFECTS(), EXITS()) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_BinarySlice, PyValue, (PyValueBorrow, PyValueBorrow, PyValueBorrow), \
+        ARGS(borrowed, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_CallIntrinsic1, PyValue, (PyThreadState *, int, PyValueBorrow), \
+        ARGS(tstate, scalar, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_CallIntrinsic2, PyValue, (PyThreadState *, int, PyValueBorrow, PyValueBorrow), \
+        ARGS(tstate, scalar, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_CallMethodDescriptorNoArgs, PyValue, (PyThreadState *, PyCFunction, PyValueBorrow), \
+        ARGS(tstate, scalar, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_CallMethodDescriptorO, PyValue, (PyThreadState *, PyCFunction, PyValueBorrow, PyValueBorrow), \
+        ARGS(tstate, scalar, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_CheckExceptStarTypeValidValue, int, (PyThreadState *, PyValueBorrow), \
+        ARGS(tstate, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_CheckExceptTypeValidValue, int, (PyThreadState *, PyValueBorrow), \
+        ARGS(tstate, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_CreateInitFrame, _PyInterpreterFrame *, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue, _PyInstr *), \
+        ARGS(tstate, frame, scalar, consumed, consumed, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_GetAIter, PyValue, (PyThreadState *, PyValue), \
+        ARGS(tstate, consumed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_GetIter, _PyValuePair, (PyValue, int), \
+        ARGS(consumed, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_ImportFromValue, PyValue, (PyThreadState *, PyValueBorrow, PyObject *), \
+        ARGS(tstate, borrowed, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_ImportName, PyObject *, (PyThreadState *, PyObject *, PyObject *, PyObject *, PyObject *, PyObject *, int), \
+        ARGS(tstate, object, object, object, object, object, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_LazyImportFrom, PyObject *, (PyThreadState *, _PyInterpreterFrame *, PyObject *, PyObject *), \
+        ARGS(tstate, frame, object, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_LazyImportName, PyObject *, (PyThreadState *, PyObject *, PyObject *, PyObject *, PyObject *, PyObject *, int, int), \
+        ARGS(tstate, object, object, object, object, object, scalar, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_LoadName, PyValue, (PyThreadState *, _PyInterpreterFrame *, PyObject *), \
+        ARGS(tstate, frame, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_MatchClass, PyObject *, (PyThreadState *, PyValueBorrow, PyValueBorrow, Py_ssize_t, PyObject *), \
+        ARGS(tstate, borrowed, borrowed, scalar, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_MatchKeys, PyObject *, (PyThreadState *, PyObject *, PyObject *), \
+        ARGS(tstate, object, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_SpecialMethodCanSuggest, int, (PyTypeObject *, int), \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_StoreName, int, (PyThreadState *, PyValueBorrow, PyObject *, PyObject *), \
+        ARGS(tstate, borrowed, object, object), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_PyEval_StoreSlice, int, (PyValueBorrow, PyValueBorrow, PyValueBorrow, PyValueBorrow), \
+        ARGS(borrowed, borrowed, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+    /* seeded from the C prototype, ir_records.effect_sites */ \
+    HELPER(_Py_atomic_load_uintptr_relaxed, uintptr_t, (const uintptr_t *), \
+        ARGS(scalar), SCALAR, EFFECTS(reads))
 
 /* The register IR's transaction macros (IR_*) that the uop bodies call,
  * which the generator expands or ceval_macros.h and pycore_ir.h define.
@@ -435,8 +1177,12 @@
     /* Guards: ir_records.GUARD_TOKENS maps each to EXIT_GUARD (miss); \
      * IR_HELPER_EFFECTS gives IR_GUARD_INLINE_INT, IR_GUARD_ELEMENT_TYPE, \
      * IR_GUARD_ELEMENT_INDEX and IR_DUP_CANONICAL_ELEMENT an empty set.  \
-     * The element index is a variable that the macro declares */ \
-    MACRO(IR_GUARD_INLINE_INT, ARGS(borrowed), NONE, EFFECTS(reads), \
+     * The element index is a variable that the macro declares.  \
+     * IR_GUARD_INLINE_INT expands to !PyValue_IsInlineInt(x) \
+     * (ir_leaf.capability_expansion), a test of the operand's tag bits \
+     * (the PyValue_IsInlineInt row: EFFECTS()), so it reads no heap or \
+     * frame state */ \
+    MACRO(IR_GUARD_INLINE_INT, ARGS(borrowed), NONE, EFFECTS(), \
           EXITS(miss)) \
     MACRO(IR_GUARD_ELEMENT_TYPE, ARGS(borrowed, scalar), NONE, \
           EFFECTS(reads), EXITS(miss)) \
@@ -457,11 +1203,16 @@
      * close_input_homes, write_output_home).  IR_BUILD_TUPLE and \
      * IR_BUILD_LIST call _PyTuple_FromValueStealOnSuccess and its list \
      * twin: they allocate, return NULL on failure (the uop raises) and keep \
-     * the values on failure (taken); IR_HELPER_EFFECTS has an empty set */ \
+     * the values on failure (taken); MACRO_EFFECTS gives the tuple \
+     * ALLOCATES.  Neither reads nor writes in design 1.3's sense: the \
+     * source is the uop's input home array, an operand; the only object \
+     * written is the new one (and the GC list, through \
+     * _PyObject_GC_TRACK); the empty tuple is immortal.  tuple_alloc and \
+     * PyList_New set MemoryError, hence raises */ \
     MACRO(IR_BUILD_TUPLE, ARGS(taken), VALUE_OR_NULL(owned), \
-          EFFECTS(reads, writes, allocates, raises), EXITS()) \
+          EFFECTS(allocates, raises), EXITS()) \
     MACRO(IR_BUILD_LIST, ARGS(taken), VALUE_OR_NULL(owned), \
-          EFFECTS(reads, writes, allocates, raises), EXITS()) \
+          EFFECTS(allocates, raises), EXITS()) \
     /* _Py_BuildString_ValueSteal and _Py_BuildMap_ValueSteal: \
      * IR_HELPER_EFFECTS marks them "escapes" (they hash, compare and \
      * release, which may run Python).  The values are taken, as for the \
@@ -480,9 +1231,11 @@
           EFFECTS(reads, writes, allocates, raises, runs_python), EXITS()) \
     /* _PyFrame_WriteHome / _PyFrame_TakeHome: IR_HELPER_EFFECTS has an empty \
      * set for both.  A value written moves into the home; a value taken \
-     * moves out of it */ \
+     * moves out of it.  IR_WRITE_OUTPUT stores into a home of the uop's \
+     * own output array (_PyFrame_WriteHome is `*home = value`), which \
+     * design 1.3 excludes from writes ("a home other than its outputs") */ \
     MACRO(IR_WRITE_OUTPUT, ARGS(out, scalar, consumed), NONE, \
-          EFFECTS(writes), EXITS()) \
+          EFFECTS(), EXITS()) \
     MACRO(IR_TAKE_INPUT, ARGS(consumed, scalar), VALUE(owned), \
           EFFECTS(reads, writes), EXITS()) \
     /* _PyFrame_CloseHomeRange: "escapes" in IR_HELPER_EFFECTS; the close \
@@ -565,7 +1318,12 @@
     _PyIR_COMPONENTS_VALUES(PRIMITIVE, HELPER, MACRO) \
     _PyIR_COMPONENTS_OBJECTS(PRIMITIVE, HELPER, MACRO) \
     _PyIR_COMPONENTS_CONTAINERS(PRIMITIVE, HELPER, MACRO) \
+    _PyIR_COMPONENTS_CALLS(PRIMITIVE, HELPER, MACRO) \
+    _PyIR_COMPONENTS_GENERATORS(PRIMITIVE, HELPER, MACRO) \
+    _PyIR_COMPONENTS_ERRORS(PRIMITIVE, HELPER, MACRO) \
+    _PyIR_COMPONENTS_MONITORING(PRIMITIVE, HELPER, MACRO) \
     _PyIR_COMPONENTS_SPECIALIZATION(PRIMITIVE, HELPER, MACRO) \
+    _PyIR_COMPONENTS_EVALUATOR(PRIMITIVE, HELPER, MACRO) \
     _PyIR_COMPONENTS_LABELS(PRIMITIVE, HELPER, MACRO) \
     _PyIR_COMPONENTS_TRANSACTIONS(PRIMITIVE, HELPER, MACRO)
 

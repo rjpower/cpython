@@ -1141,31 +1141,80 @@ class ColumnTests(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, r"names no row"):
             column_rows(COLUMN_ROWS.replace("SLOW(_PyValue_BoxInt64)", "SLOW(spam)"))
 
+    def refuses(self, changes, message):
+        text = COLUMN_ROWS
+        for old, new in changes:
+            self.assertIn(old, text)
+            text = text.replace(old, new)
+        with self.assertRaisesRegex(SyntaxError, message):
+            column_rows(text)
+
     def test_conjoins_is_checked(self):
-        with self.assertRaisesRegex(SyntaxError, r"PyValue_BothInlineInt: CONJOINS\("
-                                                 r"PyValue_IsNull\): its TEST is"):
-            column_rows(COLUMN_ROWS.replace("CONJOINS(PyValue_IsInlineInt)",
-                                            "CONJOINS(PyValue_IsNull)"))
-        with self.assertRaisesRegex(SyntaxError, r"a two-argument TEST of a one-argument"):
-            column_rows(COLUMN_ROWS.replace("CONJOINS(PyValue_IsInlineInt)",
-                                            "CONJOINS(_PyValue_IntScaled)"))
+        conjoins = "CONJOINS(PyValue_IsInlineInt)"
+        cases = [
+            ([(conjoins, "CONJOINS(PyValue_IsNull)")],
+             r"PyValue_BothInlineInt: CONJOINS\(PyValue_IsNull\): its TEST is"),
+            ([(conjoins, "CONJOINS(_PyValue_IntScaled)")],
+             r"a two-argument TEST of a one-argument"),
+            # The C signature
+            ([("(PyValueBorrow, PyValueBorrow)", "(PyValueBorrow, PyValue)")],
+             r"its C type is PyValue_IsInlineInt's with two arguments"),
+            # Effects or feedback change what fusion may skip
+            ([("TEST(inline_int, inline_int), EFFECTS()", "TEST(inline_int, inline_int), "
+               "EFFECTS(reads)")], r"PyValue_BothInlineInt has effects or feedback"),
+            ([(conjoins, conjoins + ", FEEDBACK(read(counter))")],
+             r"PyValue_BothInlineInt has effects or feedback"),
+            # A precondition: fusion would evaluate the second test unguarded
+            ([("ARGS(borrowed, borrowed)", "ARGS(borrowed nonnull, borrowed nonnull)")],
+             r"PyValue_BothInlineInt is not total"),
+            ([("ARGS(borrowed, borrowed)", "ARGS(consumed, consumed)")],
+             r"is not total|modes differ"),
+        ]
+        for changes, message in cases:
+            with self.subTest(changes=changes):
+                self.refuses(changes, message)
 
     def test_nonnull_form_is_checked(self):
-        with self.assertRaisesRegex(SyntaxError, r"PyValue_DUP: NONNULL_FORM\(PyValue_XDUP\): "
-                                                 r"it requires nonnull of its argument"):
-            column_rows(COLUMN_ROWS.replace("ARGS(borrowed nonnull)", "ARGS(borrowed)"))
-        with self.assertRaisesRegex(SyntaxError, r"its result differs"):
-            column_rows(COLUMN_ROWS.replace("VALUE(owned), EFFECTS(), NONNULL",
-                                            "VALUE(borrowed), EFFECTS(), NONNULL"))
+        cases = [
+            ([("ARGS(borrowed nonnull)", "ARGS(borrowed)")],
+             r"PyValue_DUP: NONNULL_FORM\(PyValue_XDUP\): its argument is PyValue_XDUP's "
+             r"with nonnull added and nothing else"),
+            # Another precondition besides nonnull
+            ([("ARGS(borrowed nonnull)", "ARGS(borrowed nonnull object)")],
+             r"with nonnull added and nothing else"),
+            ([("ARGS(borrowed nonnull)", "ARGS(consumed nonnull)")],
+             r"with nonnull added and nothing else"),
+            ([("VALUE(owned), EFFECTS(), NONNULL", "VALUE(borrowed), EFFECTS(), NONNULL")],
+             r"its result is PyValue_XDUP's, with at least its facts and no null_iff"),
+            ([("VALUE(owned), EFFECTS(), NONNULL", "VALUE(owned null_iff(0)), EFFECTS(), "
+               "NONNULL")], r"no null_iff"),
+            ([("NONNULL_FORM(PyValue_XDUP)", "NONNULL_FORM(PyValue_XDUP), "
+               "FEEDBACK(read(counter))")], r"its feedback is PyValue_XDUP's"),
+            ([("VALUE(owned), EFFECTS(), NONNULL", "VALUE(owned), EFFECTS(reads), NONNULL")],
+             r"its effects within them"),
+        ]
+        for changes, message in cases:
+            with self.subTest(changes=changes):
+                self.refuses(changes, message)
 
     def test_slow_is_checked(self):
-        with self.assertRaisesRegex(SyntaxError, r"PyValue_FromInt64: SLOW\(_PyValue_BoxInt64\): "
-                                                 r"the row declares fewer effects"):
-            column_rows(COLUMN_ROWS.replace("EFFECTS(allocates, raises), \\\n",
-                                            "EFFECTS(allocates), \\\n"))
-        with self.assertRaisesRegex(SyntaxError, r"a HELPER that can fail"):
-            column_rows(COLUMN_ROWS.replace("SLOW(_PyValue_BoxInt64)",
-                                            "SLOW(PyValue_IsNull)"))
+        cases = [
+            ([("EFFECTS(allocates, raises), \\\n", "EFFECTS(allocates), \\\n")],
+             r"PyValue_FromInt64: SLOW\(_PyValue_BoxInt64\): the row declares fewer "
+             r"effects"),
+            ([("SLOW(_PyValue_BoxInt64)", "SLOW(PyValue_IsNull)")],
+             r"a HELPER with a VALUE_OR_NULL result"),
+            # The slow path calls the helper with the row's arguments
+            ([("(int64_t), ARGS(scalar)", "(int32_t), ARGS(scalar)")],
+             r"_PyValue_BoxInt64 takes the row's parameters and gives its result's mode"),
+            ([("VALUE_OR_NULL(owned exact", "VALUE_OR_NULL(borrowed exact")],
+             r"gives its result's mode"),
+            ([("SLOW(_PyValue_BoxInt64)", "SLOW(value_binary_op)")],
+             r"takes the row's parameters"),
+        ]
+        for changes, message in cases:
+            with self.subTest(changes=changes):
+                self.refuses(changes, message)
 
     def test_columns_against_c(self):
         """Each declared column against the C definitions on generated

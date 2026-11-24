@@ -452,14 +452,23 @@ def check_columns(table: dict[str, Row]) -> None:
 
     for row in table.values():
         if row.conjoins:
+            # Fusion must not change failure or short-circuit behaviour: both
+            # tests are total (no precondition beyond a borrowed value), have
+            # no effect and touch no feedback
             one = named(row, "CONJOINS", row.conjoins)
             if (row.result.shape != "TEST" or len(row.args) != 2
                     or one.result.shape != "TEST" or len(one.args) != 1):
                 fail(row, f"CONJOINS({one.name}): a two-argument TEST of a "
                      "one-argument TEST")
-            if any(a.mode != one.args[0].mode for a in row.args):
-                fail(row, f"CONJOINS({one.name}): its arguments' modes differ from "
-                     f"{one.name}'s")
+            if row.params != (one.params[0],) * 2 or row.ret != one.ret:
+                fail(row, f"CONJOINS({one.name}): its C type is {one.name}'s with two "
+                     "arguments")
+            for r in (row, one):
+                if r.effects or r.feedback:
+                    fail(row, f"CONJOINS({one.name}): {r.name} has effects or feedback")
+                if any(a.mode != "borrowed" or a.facts for a in r.args):
+                    fail(row, f"CONJOINS({one.name}): {r.name} is not total: its "
+                         "arguments are borrowed and require nothing")
             true = one.result.tests[0][0] if one.result.tests else frozenset()
             if any(t != (true, frozenset()) for t in row.result.tests) \
                     or len(row.result.tests) != 2:
@@ -472,25 +481,31 @@ def check_columns(table: dict[str, Row]) -> None:
                     or row.ret != general.ret:
                 fail(row, f"NONNULL_FORM({general.name}): one argument, and the C type "
                      f"of {general.name}")
-            if (row.result.shape, row.result.mode) != (general.result.shape,
-                                                       general.result.mode):
-                fail(row, f"NONNULL_FORM({general.name}): its result differs from "
-                     f"{general.name}'s")
-            if NONNULL not in implied(row.args[0].facts) \
-                    or NONNULL in implied(general.args[0].facts):
-                fail(row, f"NONNULL_FORM({general.name}): it requires nonnull of its "
-                     f"argument, which {general.name} does not")
-            if not row.effects <= general.effects:
-                fail(row, f"NONNULL_FORM({general.name}): effects beyond "
-                     f"{general.name}'s")
+            mine, theirs = row.args[0], general.args[0]
+            if (mine.mode != theirs.mode or NONNULL in theirs.facts
+                    or mine.facts != theirs.facts | {NONNULL}):
+                fail(row, f"NONNULL_FORM({general.name}): its argument is "
+                     f"{general.name}'s with nonnull added and nothing else")
+            mres, gres = row.result, general.result
+            if ((mres.shape, mres.mode, mres.tests, mres.measure)
+                    != (gres.shape, gres.mode, gres.tests, gres.measure)
+                    or not gres.facts <= mres.facts or mres.null_iff >= 0):
+                fail(row, f"NONNULL_FORM({general.name}): its result is "
+                     f"{general.name}'s, with at least its facts and no null_iff")
+            if row.feedback != general.feedback or not row.effects <= general.effects:
+                fail(row, f"NONNULL_FORM({general.name}): its feedback is "
+                     f"{general.name}'s and its effects within them")
         if row.slow:
+            # The slow path calls the helper with the row's arguments, and
+            # the helper's failure is the row's NULL
             helper = named(row, "SLOW", row.slow)
             if row.result.shape != "VALUE_OR_NULL":
                 fail(row, f"SLOW({helper.name}): a VALUE_OR_NULL result")
-            if helper.kind != "HELPER" or helper.result.shape not in ("VALUE_OR_NULL",
-                                                                       "STATUS"):
-                fail(row, f"SLOW({helper.name}): a HELPER that can fail (VALUE_OR_NULL "
-                     "or STATUS)")
+            if helper.kind != "HELPER" or helper.result.shape != "VALUE_OR_NULL":
+                fail(row, f"SLOW({helper.name}): a HELPER with a VALUE_OR_NULL result")
+            if helper.params != row.params or helper.result.mode != row.result.mode:
+                fail(row, f"SLOW({helper.name}): {helper.name} takes the row's "
+                     "parameters and gives its result's mode")
             if not helper.effects <= row.effects:
                 fail(row, f"SLOW({helper.name}): the row declares fewer effects than "
                      f"{helper.name}")

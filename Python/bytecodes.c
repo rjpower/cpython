@@ -214,10 +214,29 @@ dummy_func(
         // nothing to do (IR_SKIP_RESUME); it runs only after the words that
         // make cells and copy free variables, at a generator's first start,
         // and when the eval breaker or instrumentation needs it.
-        macro(RESUME) =
+        // The family's generic arm: compiled code runs it as a stub after
+        // RESUME_CHECK's miss
+        macro(RESUME) region(shared) =
             unused/1 +
             _MAYBE_INSTRUMENT +
             _CHECK_PERIODIC_IF_NOT_YIELD_FROM;
+
+        // The baseline JIT's check at a frame's entry (g3/design.md section
+        // 1): a RESUME has nothing to do while no event is pending and the
+        // code is instrumented as the interpreter is.  Otherwise it misses,
+        // and the generic RESUME polls or instruments.
+        leaf ir_only op(_RESUME_CHECK, (--))
+            effects(reads) exits(next, miss)
+        {
+            EXIT_IF(_Py_EvalBreaker(tstate) != FRAME_CODE_INSTRUMENTATION_VERSION(),
+                    "an event is pending, or the code's instrumentation is out of date");
+        }
+
+        // The arm that the baseline compiles for RESUME's words; the
+        // interpreter never writes it (it skips RESUME, IR_SKIP_RESUME())
+        macro(RESUME_CHECK) region(inline) =
+            unused/1 +
+            _RESUME_CHECK;
 
         // Under -X jit=on and always the lowering gives every RESUME and
         // JUMP_BACKWARD the form that ends in _JIT_EVENT
@@ -236,8 +255,9 @@ dummy_func(
             IR_JIT_EVENT();
         }
 
-        family(RESUME, 1) = {
+        family(RESUME, 1) baseline(RESUME_CHECK) = {
             RESUME_JIT,
+            RESUME_CHECK,
         };
 
         macro(RESUME_JIT) =

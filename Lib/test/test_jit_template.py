@@ -44,7 +44,8 @@ FIXED = [RBX, R12, R13, R14, R15]
 COUNTS = {"PyValue_DUP", "PyValue_XDUP", "PyValue_CLOSE", "PyValue_XCLOSE",
           "PyValue_CLOSE_SPECIALIZED", "PyValue_FromInt64", "PyValue_FromDouble"}
 # Tested on their own: they read the frame of the test's caller, or write
-FRAME = {"GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "GETLOCAL", "IR_SLOTS"}
+FRAME = {"GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "GETLOCAL", "IR_SLOTS",
+         "FRAME_CODE_INSTRUMENTATION_VERSION"}
 SLOTS = {"_PyObject_ShapeReadDup", "_PyDictValues_SetShape",
          "_PyDictValues_AddToInsertionOrder", "_PyValueSlot_Exchange",
          "_PyValueSlot_ExchangeFilled", "_PyValueSlot_Fill"}
@@ -380,7 +381,7 @@ class LoweringTests(unittest.TestCase):
         "The frame primitives read the frame of run(): its globals, constants and slots"
         rng = random.Random(92)
         for name, cases_ in (("GLOBALS", [()]), ("BUILTINS", [()]), ("FRAME_CO_CONSTS", [()]),
-                             ("IR_SLOTS", [()]),
+                             ("IR_SLOTS", [()]), ("FRAME_CODE_INSTRUMENTATION_VERSION", [()]),
                              # run()'s parameters are its first slots
                              ("GETLOCAL", [(i,) for i in range(7)])):
             nres, nargs, _, _, kinds, _ = lowerings()[name]
@@ -628,6 +629,12 @@ TRUTHS = ANY + [[1], -5, big(0), Plain(), "", Shape()]
 BINARY = "def f(a, b):\n    x = 1\n    x = a {op} b\n    return x"
 TEMPS = "def f(a, b):\n    return (a {op} b) {op} (b {op} a)"
 TEMPLATE_CASES = [
+    # RESUME's words compile to RESUME_CHECK's template, whose miss runs
+    # the RESUME form; a frame with cells reaches its RESUME after the
+    # words that make them
+    ("def f(a, b):\n    return a", (1, 2), "RESUME", "", [()]),
+    ("def f(a, b):\n    def g():\n        return a\n    return g", (1, 2), "RESUME", "",
+     [()]),
     *[(BINARY.format(op=op), (6, 3), handler, "ABC",
        [(Plain(), a, b) for a, b in INT_PAIRS])
       for op, handler in (("+", "BINARY_OP_ADD_INT"), ("-", "BINARY_OP_SUBTRACT_INT"),
@@ -891,6 +898,23 @@ class TemplateTests(unittest.TestCase):
                     fast += not self.check_same(word, slots, objects)[1]
             with self.subTest(source=source, handler=handler):
                 self.assertGreater(fast, 0, "no case stayed on the template's code")
+
+    def test_resume_check_misses_when_instrumentation_changes(self):
+        "RESUME_CHECK's template stays on its code until monitoring changes the version"
+        f = self.compile("def f(a, b):\n    return a", (1, 2))
+        index = word_of(f, "RESUME")[0]
+        self.assertFalse(capi.jit_template_run(f, index, {}, True)[1])
+        sys.monitoring.use_tool_id(4, "test_jit_template")
+        try:
+            sys.monitoring.set_events(4, sys.monitoring.events.PY_START)
+            # The code's version is behind the interpreter's: the miss runs
+            # the RESUME form, which instruments the code
+            next_, slow, exc, _ = capi.jit_template_run(f, index, {}, True)
+            self.assertTrue(slow)
+            self.assertIsNone(exc)
+        finally:
+            sys.monitoring.set_events(4, 0)
+            sys.monitoring.free_tool_id(4)
 
     def test_temporaries(self):
         "TEMPS puts the inputs of its last word in temporaries"

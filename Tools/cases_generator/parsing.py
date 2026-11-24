@@ -318,6 +318,9 @@ class Family(Node):
     name: str
     size: str  # Variable giving the cache size in code units
     members: list[str]
+    # `baseline(ARM)`: the member that the baseline JIT compiles for the
+    # family's words that no feedback specialises
+    baseline: str = ""
 
 
 @dataclass
@@ -669,13 +672,20 @@ class Parser(PLexer):
                                     "Expected identifier or number"
                                 )
                     if self.expect(lx.RPAREN):
+                        baseline = ""
+                        if (clause := self.peek()) and clause.text == "baseline":
+                            self.next()
+                            self.require(lx.LPAREN)
+                            baseline = self.require(lx.IDENTIFIER).text
+                            self.require(lx.RPAREN)
                         if self.expect(lx.EQUALS):
                             if not self.expect(lx.LBRACE):
                                 raise self.make_syntax_error("Expected {")
                             if members := self.members():
                                 if self.expect(lx.RBRACE) and self.expect(lx.SEMI):
                                     return Family(
-                                        tkn.text, size.text if size else "", members
+                                        tkn.text, size.text if size else "", members,
+                                        baseline,
                                     )
         return None
 

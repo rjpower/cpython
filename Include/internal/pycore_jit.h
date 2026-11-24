@@ -75,6 +75,10 @@ typedef struct {
     /* A uop of the arm declares runs_python or polls, so its completions
      * report ESCAPED: the site's cold path tests RETIRED inline */
     uint8_t escapes;
+    /* The handler whose template or stub a word of this plan compiles:
+     * the handler itself, or its family's baseline(...) arm (RESUME's
+     * words compile to RESUME_CHECK) */
+    uint16_t arm;
     /* int stub(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *site) */
     const void *stub;           // a SHARED arm's
     const void *generic;        // the family's generic, for a miss

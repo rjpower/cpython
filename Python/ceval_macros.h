@@ -588,6 +588,30 @@ _Py_EvalBreakerHasEvents(PyThreadState *tstate)
     return (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & _PY_EVAL_EVENTS_MASK) != 0;
 }
 
+/* The thread's eval breaker: its event bits and the global instrumentation
+ * version, by a relaxed load as _Py_EvalBreakerHasEvents() reads it.  The
+ * entry check of a frame (_RESUME_CHECK) compares it with the frame's
+ * code's version: equal when no event is pending and the code is
+ * instrumented as the interpreter is. */
+static inline uintptr_t
+_Py_EvalBreaker(PyThreadState *tstate)
+{
+    return _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker);
+}
+
+/* The instrumentation version of the code that frame runs, by an acquire
+ * load.  It has no event bits, so the eval breaker equals it only when no
+ * event is pending. */
+static inline uintptr_t
+_PyFrame_CodeInstrumentationVersion(_PyInterpreterFrame *frame)
+{
+    uintptr_t version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(
+        _PyFrame_GetCode(frame)->_co_instrumentation_version);
+    assert((version & _PY_EVAL_EVENTS_MASK) == 0);
+    return version;
+}
+#define FRAME_CODE_INSTRUMENTATION_VERSION() _PyFrame_CodeInstrumentationVersion(frame)
+
 static inline int
 check_periodics(PyThreadState *tstate) {
     _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();

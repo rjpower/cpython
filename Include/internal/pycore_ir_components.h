@@ -1759,6 +1759,12 @@
      * (ir_leaf.py) and a lowering (jit_lower.c), so it stays a PRIMITIVE. */ \
     PRIMITIVE(_Py_EvalBreakerHasEvents, bool, (PyThreadState *), \
               ARGS(tstate), CONTEXT("the thread's eval breaker"), EFFECTS(reads)) \
+    /* ceval_macros.h: the thread's eval breaker word, a relaxed load (a plain \
+     * load on x86-64, as jit_lower.c lowers it).  No callee; it neither runs \
+     * code nor raises.  _RESUME_CHECK compares it with \
+     * FRAME_CODE_INSTRUMENTATION_VERSION().  A leaf model and a lowering. */ \
+    PRIMITIVE(_Py_EvalBreaker, uintptr_t, (PyThreadState *), \
+              ARGS(tstate), SCALAR, EFFECTS(reads)) \
     /* _Py_HandlePending (Python/ceval_gil.c): stop-the-world, signal \
      * handlers and pending calls (Python code), the collector (finalizers); \
      * -1 with an exception set */ \
@@ -2806,6 +2812,11 @@
      * are home accesses, which a home write, a reentry and the skeleton's \
      * close kill (HOME) */ \
     MACRO(GLOBALS, ARGS(), PATH(globals), EFFECTS(reads), EXITS()) \
+    /* ceval_macros.h: the instrumentation version of the frame's code, an \
+     * acquire load (a plain load on x86-64, as jit_lower.c lowers it; x86-64 \
+     * loads are acquire), which asserts that it has no event bits.  It \
+     * reads the code, which instrumentation writes. */ \
+    MACRO(FRAME_CODE_INSTRUMENTATION_VERSION, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
     MACRO(BUILTINS, ARGS(), PATH(builtins), EFFECTS(reads), EXITS()) \
     /* A frame path's dict keys (pycore_dict.h), and their version: a \
      * fact of the path, `paths(globals: keys_version(v))` (G0a4) */ \

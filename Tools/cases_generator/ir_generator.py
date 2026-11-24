@@ -87,6 +87,8 @@ from ir_records import (
 )
 # The exits of the generator-boundary variants (boundary_departure())
 from ir_records import BRANCH, RAISE, RETURN
+# The jumps that a stub binds (check_stub_arm())
+from ir_records import JUMP, TRANSFER_TOKENS
 from ir_read_effects import (
     error_nonnull_value, null_value_condition, value_assignment, value_declaration,
     value_nonnull_changes, value_transport_expression,
@@ -432,8 +434,13 @@ def generator_boundary_source_closed(boundary: GeneratorBoundary,
 def redispatch_cohorts(analysis: Analysis, formats: dict[str, "IRFormat"]):
     """Intersect only bodies selectable with the same physical entry."""
     boundaries = generator_boundaries(analysis)
+    # A family's baseline(...) arm is compiled code's, never a word's
+    # handler: no word redispatches to it
+    baselines = {family.baseline for family in analysis.families.values()}
     groups = {}
     for name in handler_instructions(analysis):
+        if name in baselines:
+            continue
         boundary = boundaries.get(name)
         shape = None if boundary is None else (
             boundary.yielded, boundary.completed, boundary.resume)
@@ -7589,6 +7596,7 @@ def event_twin_function(name: str, event: str, base: str) -> str:
 # result site yet (G1b) and no transfers (G3, G4).  `jump` is the
 # specializing uop's redispatch (DISPATCH_SAME_OPARG), status AGAIN.
 STUB_EXITS = frozenset(("next", "miss", "deopt", "raise", "jump"))
+STUB_JUMPS = frozenset(("DISPATCH_SAME_OPARG",))
 STUB_REGIONS = ("inline", "shared")
 # The effects after which a path may have reentered Python whatever it
 # released: the uop's entry sets ESCAPED
@@ -7601,6 +7609,8 @@ class StubPlan:
     family: str         # whose generic stub runs the word after a miss
     escapes: bool       # a uop declares runs_python or polls: every
                         # completion that reaches it reports ESCAPED
+    arm: str            # the handler whose template or stub the word
+                        # compiles: itself, or its family's baseline(...)
 
 
 def arm_escapes(inst: Instruction) -> bool:
@@ -7647,10 +7657,16 @@ def check_stub_arm(arm: Instruction, generic: bool) -> None:
             raise analysis_error(f"{arm.name}: {part.name} declares the exits "
                                  f"{', '.join(sorted(extra))}, which no stub plan has "
                                  "before G1b", arm.where)
-        if "jump" in contract.exits and "specializing" not in part.annotations:
-            raise analysis_error(f"{arm.name}: {part.name} declares `jump`, which a "
-                                 "stub has only as a specializing uop's redispatch",
-                                 arm.where)
+        # A stub binds a jump to its own word, DISPATCH_SAME_OPARG(), to
+        # AGAIN (a specializer's redispatch, _MAYBE_INSTRUMENT's rerun);
+        # no other jump
+        jumps = {t.text for t in part.body.tokens()
+                 if JUMP in TRANSFER_TOKENS.get(t.text, ())}
+        if "jump" in contract.exits and jumps - STUB_JUMPS:
+            raise analysis_error(f"{arm.name}: {part.name} jumps by "
+                                 f"{', '.join(sorted(jumps - STUB_JUMPS))}, which a stub "
+                                 "cannot bind: its one jump is to its own word "
+                                 "(DISPATCH_SAME_OPARG(), AGAIN)", arm.where)
         if generic and contract.exits & {"miss", "deopt"}:
             raise analysis_error(f"{arm.name} is its family's generic arm, but "
                                  f"{part.name} can miss", arm.where)
@@ -7668,12 +7684,27 @@ def stub_plans(analysis: Analysis) -> dict[str, StubPlan]:
         if head.region != "shared":
             raise analysis_error(f"{family.name}: a family's generic arm is "
                                  "region(shared)", head.where)
-        arms = [head] + [m for m in family.members if m.region is not None]
+        # The IR-only members too, which the opcode tables leave out
+        arms = [head] + [m for m in insts.values()
+                         if m.family is family and m is not head and m.region is not None]
         for arm in arms:
             check_stub_arm(arm, arm is head)
+        baseline = None
+        if family.baseline:
+            baseline = insts[family.baseline]
+            if baseline.region is None:
+                raise analysis_error(f"{family.name}: its baseline({baseline.name}) "
+                                     "declares no region", baseline.where)
         for name, inst in handlers.items():
-            if any(inst is arm for arm in arms) and name not in EXECUTION_VARIANTS:
-                plans[name] = StubPlan(inst.region, family.name, arm_escapes(inst))
+            if not any(inst is arm for arm in arms) or name in EXECUTION_VARIANTS:
+                continue
+            # The head's words compile to the baseline's arm, and miss to the
+            # head's stub
+            if inst is head and baseline is not None:
+                plans[name] = StubPlan(baseline.region, family.name,
+                                       arm_escapes(baseline), baseline.name)
+            else:
+                plans[name] = StubPlan(inst.region, family.name, arm_escapes(inst), name)
     return plans
 
 
@@ -7839,10 +7870,10 @@ def generate_ir_stubs(analysis: Analysis, formats: dict[str, IRFormat],
     outfile.write(f"const _PyIRStubPlan _PyIR_StubPlans[{ir_numbers.IR_LIMIT}] = {{\n")
     for name in sorted(plans, key=lambda n: ids[n]):
         plan = plans[name]
-        stub = (f"(const void *){stub_function_name(name)}"
+        stub = (f"(const void *){stub_function_name(plan.arm)}"
                 if plan.region == "shared" else "NULL")
         outfile.write(f"    [{ids[name]}] = {{_PyIR_PLAN_{plan.region.upper()}, "
-                      f"{int(plan.escapes)}, {stub}, "
+                      f"{int(plan.escapes)}, {ids[plan.arm]}, {stub}, "
                       f"(const void *){stub_function_name(plan.family)}}},  "
                       f"// {name}\n")
     outfile.write("};\n")
@@ -7873,7 +7904,9 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         if generator_word_entry(name, analysis) != name:
             continue
         plan = plans.get(name)
-        stub = plan is not None and plan.region == "shared" and stubs is not None
+        # The shared arms' stubs, and each family's generic (its head's)
+        stub = (plan is not None and stubs is not None
+                and (plan.region == "shared" or name == plan.family))
         if name in binary_ops:
             operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
             out.emit(f"TARGET({name}) {{\n")
@@ -9033,6 +9066,9 @@ def handler_contracts(analysis: Analysis,
     insts = {**handler_instructions(analysis),
              **{name: analysis.instructions[name] for name in STACK_ONLY
                 if name in analysis.instructions}}
+    # A family's baseline(...) arm runs in compiled code only, never on a
+    # word, so instrumentation never replaces it: it has no twin
+    baselines = {family.baseline for family in analysis.families.values()}
     for name, inst in insts.items():
         fmt = formats[name]
         record = build_record(name, inst, fmt, analysis, formats)
@@ -9042,7 +9078,7 @@ def handler_contracts(analysis: Analysis,
             reads=extent(list(record.inputs), inst),
             writes=extent([item for _, _, item, _ in record.outputs], inst),
             through=extent(record_through(record), inst),
-            twin=twin_of(name, fmt, ids),
+            twin=None if name in baselines else twin_of(name, fmt, ids),
             result_phase=(publication.phase if publication is not None
                           else RESULT_PHASE_NONE),
             output_kind=handler_output_kind(inst, fmt),

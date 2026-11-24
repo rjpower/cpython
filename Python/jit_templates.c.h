@@ -2,7 +2,7 @@
 // from the leaf IR of Python/bytecodes.c.
 // Do not edit!
 //
-// 76 templates.  The handlers whose uops are all leaf but that
+// 77 templates.  The handlers whose uops are all leaf but that
 // keep the call of their form:
 //   LOAD_ATTR_SHAPE_POLY: reads the site's table of cases
 //   LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP: reads the site's table of cases
@@ -2552,6 +2552,23 @@ jit_template_POP_TOP(_PyJitWordCx *cx)
 }
 
 static void
+jit_template_RESUME_CHECK(_PyJitWordCx *cx)
+{
+    _PyJitAsm *a = cx->a;
+    _PyIRWord ir_word = cx->word;
+    (void)ir_word;
+    _PyJitLabel L0 = _PyJitAsm_NewLabel(a);
+    _PyJitLabel L3 = _PyJitAsm_NewLabel(a);
+    _PyJitAsm_Bind(a, L0);
+    _PyJitLower__Py_EvalBreaker(cx, (const uint8_t[]){_PyJitReg_RAX}, NULL);
+    _PyJitLower_FRAME_CODE_INSTRUMENTATION_VERSION(cx, (const uint8_t[]){_PyJitReg_RCX}, NULL);
+    _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_RAX, _PyJitReg_RCX);
+    int c4 = _PyJitCond_NE;
+    _PyJitAsm_Jcc(a, c4, cx->slow);
+    _PyJitAsm_Bind(a, L3);
+}
+
+static void
 jit_template_STORE_ATTR_SHAPE(_PyJitWordCx *cx)
 {
     _PyJitAsm *a = cx->a;
@@ -3059,4 +3076,5 @@ const _PyJitTemplate _PyJit_Templates[512] = {
     [306] = jit_template_COMPARE_OP_JUMP_FLOAT,
     [307] = jit_template_COMPARE_OP_JUMP_INT,
     [319] = jit_template_LOAD_ATTR_SHAPE_LOCAL_TEMP,
+    [418] = jit_template_RESUME_CHECK,
 };

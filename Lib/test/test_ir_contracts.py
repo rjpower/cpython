@@ -1493,6 +1493,42 @@ class VerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, r"region\(inline\), but _POP is not leaf"):
             ir_contract.verify_handler(inst, self.table, leaf={"_GUARD": True, "_POP": False})
 
+    def test_a_stub_binds_only_a_jump_to_its_own_word(self):
+        # A stub binds DISPATCH_SAME_OPARG() to AGAIN (a specializer's
+        # redispatch, RESUME's _MAYBE_INSTRUMENT); it has no other jump
+        source = """
+            op(_OP, (--)) effects() exits(next, jump) {
+                if (oparg) {
+                    next_instr = this_instr;
+                    %s;
+                }
+            }
+            macro(OP) region(shared) = _OP;
+        """
+        result = self.verify(source % "DISPATCH_SAME_OPARG()")
+        ir_generator.check_stub_arm(result.instructions["OP"], True)
+        result = self.verify(source % "DISPATCH_GOTO()")
+        with self.assertRaisesRegex(SyntaxError, r"OP: _OP jumps by DISPATCH_GOTO, which a "
+                                                 r"stub cannot bind"):
+            ir_generator.check_stub_arm(result.instructions["OP"], True)
+
+    def test_a_baseline_is_a_member(self):
+        source = """
+            inst(OP, (--)) effects() exits(next) {
+            }
+            inst(OP_A, (--)) effects() exits(next) {
+            }
+            inst(OP_B, (--)) effects() exits(next) {
+            }
+            family(OP, 0) baseline(%s) = { OP_A, OP_B };
+        """
+        self.assertEqual(self.verify(source % "OP_B").families["OP"].baseline, "OP_B")
+        self.refuses(source % "OP_C", r"family\(OP\): its baseline\(OP_C\) is not a member")
+        # RESUME's words compile to RESUME_CHECK
+        self.assertEqual(analysis.families["RESUME"].baseline, "RESUME_CHECK")
+        plan = ir_generator.stub_plans(analysis)["RESUME"]
+        self.assertEqual((plan.region, plan.arm, plan.family), ("inline", "RESUME_CHECK", "RESUME"))
+
     def test_modelled_primitive_needs_a_lowering(self):
         # V11 against the tree: every modelled PRIMITIVE row is lowered
         ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings())

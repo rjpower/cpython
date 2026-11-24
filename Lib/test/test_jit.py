@@ -811,6 +811,43 @@ class TestCompletionStubs(JitTestCase):
     slots and counts, and a finalizer that a release runs sees its events
     from the next word on."""
 
+    def test_resume_check_arm_and_generic(self):
+        # RESUME's words compile to RESUME_CHECK's template.  A pending
+        # signal, or monitoring turned on between calls, misses to the
+        # generic RESUME stub, which polls or instruments (and retires the
+        # unit).  A frame with cells reaches its RESUME inside the unit,
+        # after the words that make the cells.
+        self.check_same("""
+            import signal, sys
+            hits = []
+            signal.signal(signal.SIGUSR1, lambda *a: hits.append("signal"))
+            def cells(a):
+                def g():
+                    return a
+                return g() + 1
+            def plain(a):
+                return a + 1
+            def calls(n):
+                return [cells(i) + plain(i) for i in range(n)]
+            for i in range(20):
+                calls(3)
+            print(calls(5))
+            # Pending at the next check: an entry's RESUME_CHECK misses and
+            # the generic polls, which runs the handler
+            signal.raise_signal(signal.SIGUSR1)
+            print(calls(2), hits)
+            seen = []
+            sys.monitoring.use_tool_id(3, "test")
+            sys.monitoring.register_callback(
+                3, sys.monitoring.events.PY_START,
+                lambda code, offset: seen.append(code.co_name))
+            sys.monitoring.set_events(3, sys.monitoring.events.PY_START)
+            print(calls(2), seen)
+            sys.monitoring.set_events(3, 0)
+            sys.monitoring.free_tool_id(3)
+            print(calls(2))
+        """)
+
     def test_unpack_arms_and_generic(self):
         # Lists, tuples, other iterables, length failures and non-iterables
         # at one site: the list and tuple arms, their misses to the generic

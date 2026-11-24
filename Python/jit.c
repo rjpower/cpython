@@ -800,11 +800,13 @@ has_block(_PyJitCompiler *c, uint32_t dest)
  * its slow path, after the destructor, and leaves for the next word; any
  * other release puts the test on the fall-through. */
 static void
-emit_template_word(_PyJitCompiler *c, uint32_t i, _PyJitTemplate template)
+emit_template_word(_PyJitCompiler *c, uint32_t i, int arm, _PyJitTemplate template)
 {
     _PyJitAsm *a = c->a;
     _PyIRWord w = c->words[i];
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(w));
+    /* The effects are the arm's, whose template runs: RESUME_CHECK's for a
+     * RESUME_JIT word, which itself may run Python */
+    const _PyIRFormat *fmt = _PyIR_FormatOf(arm);
     int planned = plan_of(c, w)->region == _PyIR_PLAN_INLINE;
     int may_run_python = (fmt->effects & (MAY_RUN_PYTHON & ~_PyIR_DEOPTS)) != 0;
     uint32_t next = i + (uint32_t)_PyIR_WordLength(w);
@@ -904,14 +906,18 @@ emit_unit(_PyJitCompiler *c)
     emit_frame(c);
     for (uint32_t i = 0; i < c->nwords; i += _PyIR_WordLength(c->words[i])) {
         _PyJitAsm_Bind(a, c->labels[i]);
-        int handler = _PyJit_CompiledHandler(c->words[i]);
-        _PyJitTemplate template = _PyJit_Templates[handler];
         const _PyIRStubPlan *plan = plan_of(c, c->words[i]);
+        /* A planned word compiles its plan's arm: the handler itself, or
+         * its family's baseline(...) arm.  An unplanned word, and every word
+         * of a capped unit, its own handler's template or form. */
+        int arm = plan->region == _PyIR_PLAN_NONE
+            ? _PyJit_CompiledHandler(c->words[i]) : plan->arm;
+        _PyJitTemplate template = _PyJit_Templates[arm];
         if (plan->region == _PyIR_PLAN_SHARED) {
             emit_stub_word(c, i, plan);
         }
         else if (template != NULL) {
-            emit_template_word(c, i, template);
+            emit_template_word(c, i, arm, template);
         }
         else {
             emit_form_word(c, i);

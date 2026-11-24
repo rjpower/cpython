@@ -403,6 +403,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyFb_AdvanceCounter), vo
               "_PyFb_AdvanceCounter: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_Py_EvalBreakerHasEvents((PyThreadState *){0})), bool),
               "_Py_EvalBreakerHasEvents: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_Py_EvalBreaker((PyThreadState *){0})), uintptr_t),
+              "_Py_EvalBreaker: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_HandlePending), int (*)(PyThreadState *)),
               "_Py_HandlePending: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_Specialize_BinaryOp), void (*)(PyValueBorrow, PyValueBorrow, _PyInstr *, int, PyValue *)),
@@ -886,6 +888,7 @@ static _PyIRTransfer ir_run_RAISE_VARARGS(PyThreadState *tstate, _PyInterpreterF
 static _PyIRTransfer ir_run_RERAISE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RESERVED(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RESUME(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_RESUME_CHECK(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RESUME_JIT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RETURN_GENERATOR(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_RETURN_VALUE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -14284,6 +14287,7 @@ ir_run_RESUME(
             (void)oparg;
             // _MAYBE_INSTRUMENT
             {
+                IR_STUB_ESCAPE();
                 #ifdef Py_GIL_DISABLED
 
                 int check_instrumentation = 1;
@@ -14305,12 +14309,33 @@ ir_run_RESUME(
             }
             // _CHECK_PERIODIC_IF_NOT_YIELD_FROM
             {
+                IR_STUB_ESCAPE();
                 if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
                     int err = check_periodics(tstate);
                     if (err != 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                 }
+            }
+            DISPATCH();
+        }
+
+        
+static Py_NO_INLINE _PyIRTransfer
+ir_run_RESUME_CHECK(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+            int opcode = RESUME_CHECK;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(RESUME_CHECK);
+            if (_Py_EvalBreaker(tstate) != FRAME_CODE_INSTRUMENTATION_VERSION()) {
+                UPDATE_MISS_STATS(RESUME);
+                JUMP_TO_PREDICTED(RESUME);
             }
             DISPATCH();
         }
@@ -17712,7 +17737,7 @@ static const _PyIRForm ir_handler_forms[512] = {
     [415] = ir_run_POP_JUMP_IF_FALSE_SLOT,
     [416] = ir_run_RESUME_JIT,
     [417] = ir_run_JUMP_BACKWARD_JIT,
-    [418] = ir_run_UNKNOWN_OPCODE,
+    [418] = ir_run_RESUME_CHECK,
     [419] = ir_run_UNKNOWN_OPCODE,
     [420] = ir_run_UNKNOWN_OPCODE,
     [421] = ir_run_UNKNOWN_OPCODE,
@@ -27754,6 +27779,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)oparg;
             // _MAYBE_INSTRUMENT
             {
+                IR_STUB_ESCAPE();
                 #ifdef Py_GIL_DISABLED
 
                 int check_instrumentation = 1;
@@ -27775,12 +27801,29 @@ static const _PyIRForm ir_handler_forms[512] = {
             }
             // _CHECK_PERIODIC_IF_NOT_YIELD_FROM
             {
+                IR_STUB_ESCAPE();
                 if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
                     int err = check_periodics(tstate);
                     if (err != 0) {
                         PROCESS_ERROR_AT(RAISE, 0, this_instr);
                     }
                 }
+            }
+            DISPATCH();
+        }
+
+        TARGET(RESUME_CHECK) {
+            int opcode = RESUME_CHECK;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(RESUME_CHECK);
+            if (_Py_EvalBreaker(tstate) != FRAME_CODE_INSTRUMENTATION_VERSION()) {
+                UPDATE_MISS_STATS(RESUME);
+                JUMP_TO_PREDICTED(RESUME);
             }
             DISPATCH();
         }

@@ -113,10 +113,12 @@ LOWERINGS = {
     "GLOBALS": Lowering(),
     "BUILTINS": Lowering(),
     "FRAME_CO_CONSTS": Lowering(),
+    "FRAME_CODE_INSTRUMENTATION_VERSION": Lowering(),
     "GETLOCAL": Lowering(),
     "IR_SLOTS": Lowering(),
     # The thread
     "_Py_EvalBreakerHasEvents": Lowering(),
+    "_Py_EvalBreaker": Lowering(),
     # Counts
     "PyValue_DUP": Lowering(1, calls=True),
     "PyValue_XDUP": Lowering(1, calls=True),

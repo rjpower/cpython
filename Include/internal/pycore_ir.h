@@ -695,9 +695,6 @@ typedef struct _PyCodeIR {
     uint32_t nrecipes;          // int32 entries of recipes
 } _PyCodeIR;
 
-/* The most pairs of a recipe */
-#define _PyIR_RECIPE_MAX 16
-
 /* The compiler proved that reads of the empty **kwargs binding materialize it */
 #define _PyIR_CODE_VIRTUAL_KWARGS 1
 

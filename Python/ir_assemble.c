@@ -136,20 +136,36 @@ assemble_recipe(struct assembler *a, _PyRegCfg *cfg, const _PyRegOp *op,
     *index = 0;
     const int *src = &cfg->operands[op->in + op->nread + op->nimplicit
                                     - op->nrecipe];
-    int32_t entry[1 + 2 * _PyIR_RECIPE_MAX];
+    if (op->nrecipe == 0) {
+        return SUCCESS;
+    }
+    int32_t *entry = PyMem_Malloc((1 + 2 * (size_t)op->nrecipe) * sizeof(int32_t));
+    if (entry == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
     int n = 0;
     for (int q = 0; q < op->nrecipe; q++) {
-        int from = _PyRegCfg_Slot(cfg, src[q]);
-        int home = _PyRegCfg_Slot(
-            cfg, _PyReg_CANON(cfg, cfg->operands[op->recipe + q]));
+        int from, home;
+        if (op->flags & _PyReg_SLOT_RECIPE) {
+            // A word of resolution names slots
+            from = cfg->operands[op->recipe + 2 * q];
+            home = cfg->operands[op->recipe + 2 * q + 1];
+        }
+        else {
+            from = _PyRegCfg_Slot(cfg, src[q]);
+            home = _PyRegCfg_Slot(
+                cfg, _PyReg_CANON(cfg, cfg->operands[op->recipe + q]));
+        }
         if (from != home) {
             entry[1 + 2 * n] = from;
             entry[2 + 2 * n] = home;
             n++;
         }
     }
+    int res = SUCCESS;
     if (n == 0) {
-        return SUCCESS;
+        goto done;
     }
     entry[0] = n;
     size_t size = (size_t)(1 + 2 * n) * sizeof(int32_t);
@@ -158,12 +174,14 @@ assemble_recipe(struct assembler *a, _PyRegCfg *cfg, const _PyRegOp *op,
     for (size_t at = 0; at < count; at += 1 + 2 * (size_t)table[at]) {
         if (table[at] == n && memcmp(&table[at], entry, size) == 0) {
             *index = (int)at + 1;
-            return SUCCESS;
+            goto done;
         }
     }
-    RETURN_IF_ERROR(buffer_write(&a->a_recipes, entry, size));
-    *index = (int)count + 1;
-    return SUCCESS;
+    res = buffer_write(&a->a_recipes, entry, size);
+    *index = res == SUCCESS ? (int)count + 1 : 0;
+done:
+    PyMem_Free(entry);
+    return res;
 }
 
 static int

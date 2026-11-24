@@ -485,6 +485,12 @@ _PyJitAsm_TestRR(_PyJitAsm *a, _PyJitReg x, _PyJitReg y)
 }
 
 void
+_PyJitAsm_TestRR32(_PyJitAsm *a, _PyJitReg x, _PyJitReg y)
+{
+    emit_rr(a, 0, 0, 0x85, y, x, 0);
+}
+
+void
 _PyJitAsm_TestMR(_PyJitAsm *a, _PyJitMem x, _PyJitReg y)
 {
     emit_rm(a, 0, 1, 0x85, y, x, 0);

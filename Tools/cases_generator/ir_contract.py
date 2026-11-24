@@ -770,15 +770,6 @@ def contract_of(uop: Uop) -> Contract | None:
             if o.mode == "moved" and not any(i.name == o.source for i in inputs):
                 raise analysis_error(f"{uop.name}: `{o.name}` is moved from `{o.source}`, "
                                      "which is not an input", where)
-            for f in sorted(o.facts):
-                if f.kind in SITE_FACTS:
-                    raise analysis_error(f"{uop.name}: `{o.name}` is declared {f}, a fact of "
-                                         "one site, which is never exported", where)
-        for item in inputs + outputs:
-            for f in sorted(item.facts):
-                if f.kind == "in_bounds" and not any(i.name == f.arg for i in inputs):
-                    raise analysis_error(f"{uop.name}: `{item.name}` is declared {f}, but "
-                                         f"`{f.arg}` is not an input", where)
         feedback = parse_feedback(uop.clauses.get("feedback", ()), where)
         contract = Contract(inputs, outputs, effects, exits, feedback)
     # The uop is kept with its contract, so that its id is not reused
@@ -2552,12 +2543,29 @@ def check_identities(uop: Uop, contract: Contract, table: dict[str, Row]) -> Non
 _VERIFIED: set[int] = set()
 
 
+def check_fact_subjects(uop: Uop, contract: Contract) -> None:
+    """A declared fact's subjects: in_bounds(x) names an input; a fact of
+    one site (unique) is never declared on an output, which exports it"""
+    where = uop.body.open
+    for o in contract.outputs:
+        for f in sorted(o.facts):
+            if f.kind in SITE_FACTS:
+                raise analysis_error(f"{uop.name}: `{o.name}` is declared {f}, a fact of "
+                                     "one site, which is never exported", where)
+    for item in contract.inputs + contract.outputs:
+        for f in sorted(item.facts):
+            if f.kind == "in_bounds" and contract.input(f.arg) is None:
+                raise analysis_error(f"{uop.name}: `{item.name}` is declared {f}, but "
+                                     f"`{f.arg}` is not an input", where)
+
+
 def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None = None) -> None:
     "Check a declared uop's body against its contract (V1-V5, V7, V9; V6 inside it)"
     table = rows() if table is None else table
     contract = contract_of(uop)
     if contract is None or (id(uop), implicit_guards) in _VERIFIED:
         return
+    check_fact_subjects(uop, contract)
     check_preprocessor(uop)
     check_callees(uop, table)
     check_effects(uop, contract, table)

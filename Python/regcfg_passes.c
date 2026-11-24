@@ -77,7 +77,7 @@ swap_rename_region(_PyRegCfg *cfg, int start, int end)
 {
     for (int i = end - 1; i >= start; i--) {
         _PyRegOp *swap = &cfg->ops[i];
-        if (swap->opcode != SWAP) {
+        if (swap->opcode != SWAP || (swap->flags & _PyReg_MOVES)) {
             continue;
         }
         int n = swap->nout;
@@ -578,6 +578,8 @@ remove_with_line(_PyRegCfg *cfg, int start, int end, _PyRegOp *prod,
         pop->loc = first->loc;
         pop->flags = (pop->flags & ~_PyReg_SOURCE_ORIGIN) |
                      (first->flags & _PyReg_SOURCE_ORIGIN);
+        // Its recipe's values stay its implicit inputs
+        pop->in += pop->nread;
         pop->nread = pop->npop = 0;
     }
 }
@@ -679,6 +681,8 @@ discard_region(_PyRegCfg *cfg, int start, int end)
         prod->flags |= _PyReg_DISCARD;
         pop->opcode = NOP;
         pop->oparg = 0;
+        // Its recipe's values stay its implicit inputs
+        pop->in += pop->nread;
         pop->nread = pop->npop = pop->nout = 0;
     }
     return SUCCESS;
@@ -986,6 +990,12 @@ shift_slots(_PyRegCfg *cfg, int first_free, int k)
         }
         if (op->dst >= first_free) {
             op->dst += k;
+        }
+        int *stage = &cfg->operands[op->stage];
+        for (int j = 0; j < 2 * op->nstage; j++) {
+            if (stage[j] >= first_free) {
+                stage[j] += k;
+            }
         }
         if (op->opcode == _PyReg_DEAD) {
             continue;
@@ -1312,6 +1322,9 @@ call_null_step(_PyRegCfg *cfg, _PyRegOp *op, uint64_t *state, uint8_t *outputs)
             int k = j < op->nread ? j : 0;
             value = call_null_get(cfg, state, in[k]);
         }
+        else if (op->flags & _PyReg_MOVES) {
+            value = call_null_get(cfg, state, in[j]);
+        }
         else if (op->opcode == SWAP) {
             int k = j == 0 ? op->nread - 1 : j == op->nout - 1 ? 0 : j;
             value = call_null_get(cfg, state, in[k]);
@@ -1322,6 +1335,10 @@ call_null_step(_PyRegCfg *cfg, _PyRegOp *op, uint64_t *state, uint8_t *outputs)
         outputs[j] = (uint8_t)value;
     }
     for (int k = op->nread - op->npop; k < op->nread; k++) {
+        call_null_set(cfg, state, in[k], 0);
+    }
+    // A move takes its sources
+    for (int k = 0; (op->flags & _PyReg_MOVES) && k < op->nout; k++) {
         call_null_set(cfg, state, in[k], 0);
     }
     for (int j = 0; j < op->nout; j++) {

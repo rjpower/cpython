@@ -2623,7 +2623,9 @@ dummy_func(
             }
         }
 
-        outlined inst(BUILD_STRING, (pieces[oparg] -- str)) {
+        outlined inst(BUILD_STRING, (pieces[oparg]: consumed -- str: owned))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *str_o = IR_BUILD_STRING(pieces);
             DEAD(pieces);
             ERROR_IF(str_o == NULL);
@@ -2669,7 +2671,9 @@ dummy_func(
             template = PyValue_FromObjectSteal(template_o);
         }
 
-        inst(BUILD_TUPLE, (values[oparg] -- tup)) {
+        inst(BUILD_TUPLE, (values[oparg]: taken -- tup: owned))
+            effects(allocates, raises) exits(next, raise)
+        {
             PyObject *tup_o = IR_BUILD_TUPLE(values);
             if (tup_o == NULL) {
                 ERROR_NO_POP();
@@ -2678,7 +2682,9 @@ dummy_func(
             tup = PyValue_FromObjectSteal(tup_o);
         }
 
-        inst(BUILD_LIST, (values[oparg] -- list)) {
+        inst(BUILD_LIST, (values[oparg]: taken -- list: owned))
+            effects(allocates, raises) exits(next, raise)
+        {
             PyObject *list_o = IR_BUILD_LIST(values);
             if (list_o == NULL) {
                 ERROR_NO_POP();
@@ -6354,11 +6360,15 @@ dummy_func(
             result = PyValue_FromObjectSteal(result_o);
         }
 
-        outlined inline_ok inst(FORMAT_SIMPLE, (value -- res)) {
+        outlined inline_ok inst(FORMAT_SIMPLE, (value: consumed -- res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             /* If value is a unicode object, then we know the result
              * of format(value) is value itself. An inline int or float
-             * formats as it prints: format(x, "") is str(x). */
-            if (PyValue_IsInline(value)) {
+             * formats as it prints: format(x, "") is str(x). A language
+             * value is an object or inline, so the test is the same as
+             * the inline test and states `object` on the other path. */
+            if (!PyValue_IsObject(value)) {
                 PyObject *res_o = _PyValue_Str(value);
                 PyValue_CLOSE(value);
                 ERROR_IF(res_o == NULL);

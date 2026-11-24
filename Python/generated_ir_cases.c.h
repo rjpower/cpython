@@ -7848,7 +7848,7 @@ ir_run_FORMAT_SIMPLE(
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             value = IR_VIEW(IR_B(ir_word));
-            if (PyValue_IsInline(value)) {
+            if (!PyValue_IsObject(value)) {
                 PyObject *res_o = _PyValue_Str(value);
                 ir_own_B = IR_DETACH(ir_word, B, value);
                 (void)(ir_own_B);

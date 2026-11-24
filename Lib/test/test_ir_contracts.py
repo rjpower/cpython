@@ -186,6 +186,16 @@ class SliceTests(unittest.TestCase):
               'inferred "", declared "PyValue_None"',
               f'{handler}.record.uops[0].guards[0].facts[0].kind: '
               'inferred "IS_NONE", declared "IDENTITY"')),
+        # G0c9: BUILD_LIST is IR_BUILD_LIST (_PyList_FromValueStealOnSuccess),
+        # an allocation that runs no Python, as BUILD_TUPLE's twin row says
+        'BUILD_LIST.record.format.runs_code: inferred true, declared false',
+        'BUILD_LIST.record.uops[0].effects: inferred 6 entries '
+        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
+        '"READS_HEAP", "WRITES_HEAP"], declared 2 ["ALLOCATES", "MAY_RAISE"]',
+        # G0c9: FORMAT_SIMPLE's str arm passes the input's reference on and
+        # its other arms make a new one; the result is owned on every path,
+        # which the record's ALIAS (the input's home) does not say
+        'FORMAT_SIMPLE/_FORMAT_SIMPLE: output `res` is declared owned, the record has ALIAS',
         # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
         # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
         'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '

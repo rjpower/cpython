@@ -128,12 +128,10 @@ class SliceTests(unittest.TestCase):
                 self.assertLessEqual(inferred - {"next"}, set(table[name].exits))
 
     def test_declarations_equal_the_inference(self):
-        parts = {(name, part.name): part
-                 for name, inst in ir_generator.handler_instructions(analysis).items()
-                 for part in inst.parts if isinstance(part, cases.analyzer.Uop)}
-        lines = ir_contract_diff.differences(records, parts)
+        with cases.handle_stderr():
+            lines = ir_contract_diff.report(str(BYTECODES))
         self.assertEqual(lines[:-1], [])
-        self.assertRegex(lines[-1], r"^\d+ declared uops compared$")
+        self.assertRegex(lines[-1], r"^\d+ handlers compared; \d+ of \d+ uops declared$")
 
     def test_component_checks_are_generated(self):
         checks = "\n".join(ir_contract.component_checks())
@@ -835,11 +833,11 @@ class VerifierTests(unittest.TestCase):
             inst(OP, (value -- value)) effects(reads) exits(next) {
             }
         """)
-        records = ir_generator.build_records(analysis, ir_generator.compute_formats(analysis))
-        parts = {("OP", u.name): u for u in analysis.uops.values()}
-        self.assertEqual(ir_contract_diff.differences(records, parts),
-                         ["OP/_OP: effects: declared ['READS_HEAP'], inferred []",
-                          "1 declared uops compared"])
+        with cases.handle_stderr():
+            lines = ir_contract_diff.report(self.filename,
+                                            numbers=cases.SequentialNumbers())
+        self.assertEqual(lines, ['OP.record.uops[0].effects: inferred 0 entries [], declared 1 ["READS_HEAP"]',
+                                 "1 handlers compared; 1 of 1 uops declared"])
 
     # G0a2: Astra's witnesses against 38a1500dbba (astra/g0a-review.md)
 

@@ -11,11 +11,11 @@
 
 /* The arms' handler ids follow the old handlers, in definition order */
 #define ROP_FIRST_HANDLER IR_NUM_HANDLERS
-#define ROP_NUM_HANDLERS 9
+#define ROP_NUM_HANDLERS 19
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,
               "the arms' handler ids fit the handler field");
 #define ROP_NUM_FAMILIES 68
-#define ROP_NUM_ARMS 9
+#define ROP_NUM_ARMS 19
 
 /* Family numbers, in name order */
 enum {
@@ -96,9 +96,19 @@ enum {
 #define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 3)
 #define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 4)
 #define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 5)
-#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 6)
-#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 7)
-#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 8)
+#define ROP_HANDLER_GetAttr_Module (ROP_FIRST_HANDLER + 6)
+#define ROP_HANDLER_GetAttr_Hint (ROP_FIRST_HANDLER + 7)
+#define ROP_HANDLER_GetAttr_ValueSlot (ROP_FIRST_HANDLER + 8)
+#define ROP_HANDLER_GetAttr_PointerSlot (ROP_FIRST_HANDLER + 9)
+#define ROP_HANDLER_GetAttr_Class (ROP_FIRST_HANDLER + 10)
+#define ROP_HANDLER_GetAttr_NonDescriptorValues (ROP_FIRST_HANDLER + 11)
+#define ROP_HANDLER_GetAttr_NonDescriptorNoDict (ROP_FIRST_HANDLER + 12)
+#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 13)
+#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 14)
+#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 15)
+#define ROP_HANDLER_GetMethod_NoDict (ROP_FIRST_HANDLER + 16)
+#define ROP_HANDLER_GetMethod_LazyDict (ROP_FIRST_HANDLER + 17)
+#define ROP_HANDLER_GetMethod_ClassMethod (ROP_FIRST_HANDLER + 18)
 
 /* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */
 #define ROP_POINT_Add_BoxFailed 1
@@ -613,9 +623,19 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"GetAttr.Generic", ROP_HANDLER_GetAttr_Generic, ROP_FAMILY_GetAttr, 0},
     {"GetAttr.Shape", ROP_HANDLER_GetAttr_Shape, ROP_FAMILY_GetAttr, 1},
     {"GetAttr.PolyShape", ROP_HANDLER_GetAttr_PolyShape, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.Module", ROP_HANDLER_GetAttr_Module, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.Hint", ROP_HANDLER_GetAttr_Hint, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.ValueSlot", ROP_HANDLER_GetAttr_ValueSlot, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.PointerSlot", ROP_HANDLER_GetAttr_PointerSlot, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.Class", ROP_HANDLER_GetAttr_Class, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.NonDescriptorValues", ROP_HANDLER_GetAttr_NonDescriptorValues, ROP_FAMILY_GetAttr, 1},
+    {"GetAttr.NonDescriptorNoDict", ROP_HANDLER_GetAttr_NonDescriptorNoDict, ROP_FAMILY_GetAttr, 1},
     {"GetMethod.MethodValues", ROP_HANDLER_GetMethod_MethodValues, ROP_FAMILY_GetMethod, 1},
     {"GetMethod.Generic", ROP_HANDLER_GetMethod_Generic, ROP_FAMILY_GetMethod, 0},
     {"GetMethod.PolyMethod", ROP_HANDLER_GetMethod_PolyMethod, ROP_FAMILY_GetMethod, 1},
+    {"GetMethod.NoDict", ROP_HANDLER_GetMethod_NoDict, ROP_FAMILY_GetMethod, 1},
+    {"GetMethod.LazyDict", ROP_HANDLER_GetMethod_LazyDict, ROP_FAMILY_GetMethod, 1},
+    {"GetMethod.ClassMethod", ROP_HANDLER_GetMethod_ClassMethod, ROP_FAMILY_GetMethod, 1},
 };
 
 static const _PyRopPoint _PyRop_Points[7] = {

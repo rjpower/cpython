@@ -94,7 +94,10 @@ macro getattr_at_origin(n:Name, a:Anchors)
 // site's poly table and answers with the arm family that the receiver
 // stands for.  Arms that are not written nominate "none".
 extern helper classify_getattr(v:B, at:Site, f:Fb<Attr>, n:Name)
-  cases(instance(r:Recipe<Attr>), shape(r:Recipe<Attr>), none())
+  cases(instance(r:Recipe<Attr>), shape(r:Recipe<Attr>), module(r:Recipe<Attr>),
+        hint(r:Recipe<Attr>), value_slot(r:Recipe<Attr>), pointer_slot(r:Recipe<Attr>),
+        class_(r:Recipe<Attr>), nondescriptor_values(r:Recipe<Attr>),
+        nondescriptor_no_dict(r:Recipe<Attr>), none())
   effects(reads, writes, allocates)
   feedback(read(entry), write(entry))
   c _PyAttr_ClassifyGetAttr as case_index
@@ -126,6 +129,13 @@ macro adapt_before_use_getattr(f:Fb<Attr>, o:Src, n:Name)
     call classify_getattr(use(o), site, f, n) {
       instance -> Instance();
       shape -> Shape();
+      module -> LModule();
+      hint -> LHint();
+      value_slot -> LValueSlot();
+      pointer_slot -> LPointerSlot();
+      class_ -> LClass();
+      nondescriptor_values -> LNonDescriptorValues();
+      nondescriptor_no_dict -> LNonDescriptorNoDict();
       none -> Other();
     }
   Instance(ri:Recipe<Attr>):
@@ -147,6 +157,55 @@ macro adapt_before_use_getattr(f:Fb<Attr>, o:Src, n:Name)
   Mono(rm:Recipe<Attr>):
     let cm:Candidate<Attr> = candidate(GetAttr.Shape, rm);
     call install(f, cm) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LModule(rModule:Recipe<Attr>):
+    let cLModule:Candidate<Attr> = candidate(GetAttr.Module, rModule);
+    call install(f, cLModule) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LHint(rHint:Recipe<Attr>):
+    let cLHint:Candidate<Attr> = candidate(GetAttr.Hint, rHint);
+    call install(f, cLHint) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LValueSlot(rValueSlot:Recipe<Attr>):
+    let cLValueSlot:Candidate<Attr> = candidate(GetAttr.ValueSlot, rValueSlot);
+    call install(f, cLValueSlot) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LPointerSlot(rPointerSlot:Recipe<Attr>):
+    let cLPointerSlot:Candidate<Attr> = candidate(GetAttr.PointerSlot, rPointerSlot);
+    call install(f, cLPointerSlot) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LClass(rClass:Recipe<Attr>):
+    let cLClass:Candidate<Attr> = candidate(GetAttr.Class, rClass);
+    call install(f, cLClass) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LNonDescriptorValues(rNonDescriptorValues:Recipe<Attr>):
+    let cLNonDescriptorValues:Candidate<Attr> = candidate(GetAttr.NonDescriptorValues, rNonDescriptorValues);
+    call install(f, cLNonDescriptorValues) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LNonDescriptorNoDict(rNonDescriptorNoDict:Recipe<Attr>):
+    let cLNonDescriptorNoDict:Candidate<Attr> = candidate(GetAttr.NonDescriptorNoDict, rNonDescriptorNoDict);
+    call install(f, cLNonDescriptorNoDict) {
       changed -> Changed();
       same -> Run();
       blocked -> Run();
@@ -261,7 +320,7 @@ arm GetAttr.Shape inline
 // Two to four compatible recipes of one site: the row of the owner's type
 arm GetAttr.PolyShape inline
   effects(reads, writes, releases)
-  feedback(read(entry.kind), read(entry.rows))
+  feedback(read(entry))
   exits(next, miss)
 {
   entry():
@@ -274,6 +333,273 @@ arm GetAttr.PolyShape inline
     }
   Read(r:Recipe<Attr>):
     let result:O = dup(borrow_shape_slot(o, r));
+    publish [dst = result] retire [spent(obj), old(dst)] at GetAttr.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+// Further lookup paths.  Each arm reads the recipe its site's entry holds
+// and guards every correlated fact before it duplicates the result.
+
+extern helper admitted_recipe(f:Fb<Attr>, n:Name)
+  cases(hit(r:Recipe<Attr>), absent())
+  effects(reads)
+  feedback(read(entry.kind), read(entry.type_version), read(entry.keys_version),
+           read(entry.index), read(entry.descr))
+  c _PyAttr_AdmittedRecipe as bool_out_hit
+  evidence(
+    review: "pycore_attr_recipe.h: the entry is the recipe when it holds a type, class or keys version.",
+    contract: "Reads the entry only; no callee, no failure.");
+
+extern primitive is_module(o:Obj) -> Bool
+  effects(reads)
+  test(exact<module>(o))
+  c _PyAttr_IsModule as bool
+  evidence(
+    review: "pycore_attr_recipe.h: PyModule_CheckExact.",
+    contract: "One load of the type.",
+    lowering: "jit_lower.c LOWERING(PyModule_CheckExact) after Py_TYPE: not wired for this row yet",
+    test: "test_rop_getattr row tests");
+
+// The module dictionary's entry when its keys have the recipe's version
+extern primitive module_entry(o:Obj, r:Recipe<Attr>) -> Maybe<B>
+  effects(reads)
+  requires(exact<module>(o))
+  c _PyAttr_ModuleEntry as borrow
+  evidence(
+    review: "pycore_attr_recipe.h: keys version, entry count and value of the module's dictionary.",
+    contract: "Reads the dictionary and its keys; NULL is absent.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_getattr row tests");
+
+// The managed dictionary's entry at the recipe's hint when its key is the name
+extern primitive hinted_entry(o:Obj, n:Name, r:Recipe<Attr>) -> Maybe<B>
+  effects(reads)
+  requires(type_version(o, r))
+  c _PyAttr_HintedEntry as borrow
+  evidence(
+    review: "pycore_attr_recipe.h: the managed dict's combined keys at the hint, key identity.",
+    contract: "Reads the dictionary; NULL is absent.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_getattr row tests");
+
+// A member slot of the owner (a value slot): vacant is absent
+extern primitive borrow_member_slot(o:Obj, r:Recipe<Attr>) -> Maybe<B>
+  effects(reads)
+  requires(type_version(o, r))
+  c _PyAttr_BorrowValueSlot as borrow
+  evidence(
+    review: "pycore_attr_recipe.h: the word at the recipe's offset in the owner.",
+    contract: "A read; NULL is a vacant slot.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_getattr row tests");
+
+extern primitive borrow_pointer_slot(o:Obj, r:Recipe<Attr>) -> Maybe<B>
+  effects(reads)
+  requires(type_version(o, r))
+  c _PyAttr_BorrowPointerSlot as borrow
+  evidence(
+    review: "pycore_attr_recipe.h: a PyObject * field of the owner as an object word.",
+    contract: "A read; a NULL field is absent.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_getattr row tests");
+
+extern primitive class_current(o:Obj, r:Recipe<Attr>) -> Bool
+  effects(reads)
+  c _PyAttr_ClassCurrent as bool
+  evidence(
+    review: "pycore_attr_recipe.h: the owner is a class of the recipe's version, under the recipe's metaclass version when it has one.",
+    contract: "Loads of two version tags.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_getattr row tests");
+
+extern primitive builtin_metaclass(o:Obj) -> Bool
+  effects(reads)
+  c _PyAttr_BuiltinMetaclass as bool
+  evidence(
+    review: "pycore_attr_recipe.h: the owner's type is exactly type; false on a free-threaded build.",
+    contract: "One load of the type.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_getattr row tests");
+
+extern primitive lazy_dict_absent(o:Obj, r:Recipe<Attr>) -> Bool
+  effects(reads)
+  requires(type_version(o, r))
+  c _PyAttr_LazyDictAbsent as bool
+  evidence(
+    review: "pycore_attr_recipe.h: the dictionary slot at the recipe's offset holds NULL.",
+    contract: "One acquire load.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_getattr row tests");
+
+extern primitive classmethod_function(r:Recipe<Attr>) -> Maybe<B>
+  effects(reads)
+  c _PyAttr_ClassMethodFunction as borrow
+  evidence(
+    review: "pycore_attr_recipe.h: the classmethod object's wrapped Python function.",
+    contract: "Reads the classmethod; absent unless it wraps a Python function.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_getattr row tests");
+
+arm GetAttr.Module inline
+  effects(reads, writes, releases)
+  feedback(read(entry))
+  exits(next, miss)
+{
+  entry():
+    call admitted_recipe(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard is_module(o) else miss;
+    let item:Maybe<B> = module_entry(o, r);
+    guard present(item) else miss;
+    let result:O = dup(unwrap(item));
+    publish [dst = result] retire [spent(obj), old(dst)] at GetAttr.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+arm GetAttr.Hint inline
+  effects(reads, writes, releases)
+  feedback(read(entry))
+  exits(next, miss)
+{
+  entry():
+    call admitted_recipe(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    let item:Maybe<B> = hinted_entry(o, name, r);
+    guard present(item) else miss;
+    let result:O = dup(unwrap(item));
+    publish [dst = result] retire [spent(obj), old(dst)] at GetAttr.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+arm GetAttr.ValueSlot inline
+  effects(reads, writes, releases)
+  feedback(read(entry))
+  exits(next, miss)
+{
+  entry():
+    call admitted_recipe(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    let item:Maybe<B> = borrow_member_slot(o, r);
+    guard present(item) else miss;
+    let result:O = dup(unwrap(item));
+    publish [dst = result] retire [spent(obj), old(dst)] at GetAttr.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+arm GetAttr.PointerSlot inline
+  effects(reads, writes, releases)
+  feedback(read(entry))
+  exits(next, miss)
+{
+  entry():
+    call admitted_recipe(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    let item:Maybe<B> = borrow_pointer_slot(o, r);
+    guard present(item) else miss;
+    let result:O = dup(unwrap(item));
+    publish [dst = result] retire [spent(obj), old(dst)] at GetAttr.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+arm GetAttr.Class inline
+  effects(reads, writes, releases)
+  feedback(read(entry))
+  exits(next, miss)
+{
+  entry():
+    call admitted_recipe(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard class_current(o, r) else miss;
+    let result:O = dup(borrow_cached_value(r));
+    publish [dst = result] retire [spent(obj), old(dst)] at GetAttr.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+// A class value that is not a descriptor, under an unshadowed layout
+arm GetAttr.NonDescriptorValues inline
+  effects(reads, writes, releases)
+  feedback(read(entry))
+  exits(next, miss)
+{
+  entry():
+    call admitted_recipe(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    guard valid_inline_values(o) else miss;
+    let result:O = dup(borrow_cached_value(r));
+    publish [dst = result] retire [spent(obj), old(dst)] at GetAttr.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+arm GetAttr.NonDescriptorNoDict inline
+  effects(reads, writes, releases)
+  feedback(read(entry))
+  exits(next, miss)
+{
+  entry():
+    call admitted_recipe(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    let result:O = dup(borrow_cached_value(r));
     publish [dst = result] retire [spent(obj), old(dst)] at GetAttr.Done;
     exit next();
   Miss():
@@ -319,7 +645,7 @@ extern helper poly_method(fr:Frame, f:Fb<Attr>, o:Obj)
     review: "pycore_attr_recipe.h: the row of the owner's type version in the site's poly table.",
     contract: "Reads the poly table; no callee. The hit carries the version it matched.");
 
-extern primitive borrow_method(r:Recipe<Attr>) -> B
+extern primitive borrow_cached_value(r:Recipe<Attr>) -> B
   effects(reads)
   c _PyAttr_BorrowMethod as borrow
   evidence(
@@ -338,7 +664,8 @@ macro getmethod_at_origin(n:Name, a:Anchors)
   pending;
 
 extern helper classify_getmethod(v:B, at:Site, f:Fb<Attr>, n:Name)
-  cases(method_values(r:Recipe<Attr>), none())
+  cases(method_values(r:Recipe<Attr>), no_dict(r:Recipe<Attr>), lazy_dict(r:Recipe<Attr>),
+        classmethod(r:Recipe<Attr>), none())
   effects(reads, writes, allocates)
   feedback(read(entry), write(entry))
   c _PyAttr_ClassifyGetMethod as case_index
@@ -367,6 +694,9 @@ macro adapt_before_use_getmethod(f:Fb<Attr>, o:Src, n:Name)
   Sample():
     call classify_getmethod(use(o), site, f, n) {
       method_values -> Method();
+      no_dict -> NoDictCheck();
+      lazy_dict -> LLazyDict();
+      classmethod -> LClassMethod();
       none -> Other();
     }
   Method(rr:Recipe<Attr>):
@@ -381,6 +711,29 @@ macro adapt_before_use_getmethod(f:Fb<Attr>, o:Src, n:Name)
   Mono(r:Recipe<Attr>):
     let cm:Candidate<Attr> = candidate(GetMethod.MethodValues, r);
     call install(f, cm) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  NoDictCheck(rn:Recipe<Attr>):
+    branch poly_method_ready(site, f) -> Poly(), LNoDict(rn);
+  LNoDict(rNoDict:Recipe<Attr>):
+    let cLNoDict:Candidate<Attr> = candidate(GetMethod.NoDict, rNoDict);
+    call install(f, cLNoDict) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LLazyDict(rLazyDict:Recipe<Attr>):
+    let cLLazyDict:Candidate<Attr> = candidate(GetMethod.LazyDict, rLazyDict);
+    call install(f, cLLazyDict) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  LClassMethod(rClassMethod:Recipe<Attr>):
+    let cLClassMethod:Candidate<Attr> = candidate(GetMethod.ClassMethod, rClassMethod);
+    call install(f, cLClassMethod) {
       changed -> Changed();
       same -> Run();
       blocked -> Run();
@@ -410,7 +763,7 @@ arm GetMethod.MethodValues inline
     let o:Obj = as_object(v);
     guard instance_version(o, r) else miss;
     guard valid_inline_values(o) else miss;
-    let method:O = dup(borrow_method(r));
+    let method:O = dup(borrow_cached_value(r));
     let receiver:O = acquire(obj);
     publish [callable = method, self_dst = receiver]
       retire [spent(obj), old(callable), old(self_dst)] at GetMethod.Done;
@@ -467,7 +820,85 @@ arm GetMethod.PolyMethod inline
     }
   Check(r:Recipe<Attr>):
     guard receiver_valid(o, r) else miss;
-    let method:O = dup(borrow_method(r));
+    let method:O = dup(borrow_cached_value(r));
+    let receiver:O = acquire(obj);
+    publish [callable = method, self_dst = receiver]
+      retire [spent(obj), old(callable), old(self_dst)] at GetMethod.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+arm GetMethod.NoDict inline
+  effects(reads, writes, releases)
+  feedback(read(entry))
+  exits(next, miss)
+{
+  entry():
+    call admitted_recipe(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    let method:O = dup(borrow_cached_value(r));
+    let receiver:O = acquire(obj);
+    publish [callable = method, self_dst = receiver]
+      retire [spent(obj), old(callable), old(self_dst)] at GetMethod.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+// A receiver with a dictionary slot that has no dictionary yet
+arm GetMethod.LazyDict inline
+  effects(reads, writes, releases)
+  feedback(read(entry))
+  exits(next, miss)
+{
+  entry():
+    call admitted_recipe(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    guard lazy_dict_absent(o, r) else miss;
+    let method:O = dup(borrow_cached_value(r));
+    let receiver:O = acquire(obj);
+    publish [callable = method, self_dst = receiver]
+      retire [spent(obj), old(callable), old(self_dst)] at GetMethod.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+// A class receiver: the wrapped function of a classmethod, with the class as self
+arm GetMethod.ClassMethod inline
+  effects(reads, writes, releases)
+  feedback(read(entry))
+  exits(next, miss)
+{
+  entry():
+    call admitted_recipe(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard builtin_metaclass(o) else miss;
+    guard class_current(o, r) else miss;
+    let target:Maybe<B> = classmethod_function(r);
+    guard present(target) else miss;
+    let method:O = dup(unwrap(target));
     let receiver:O = acquire(obj);
     publish [callable = method, self_dst = receiver]
       retire [spent(obj), old(callable), old(self_dst)] at GetMethod.Done;

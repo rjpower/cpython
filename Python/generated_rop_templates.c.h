@@ -4,10 +4,20 @@
 // Do not edit!
 //
 // 1 templates.  Inline arms that keep the call of their form:
+//   GetAttr.Class: GetAttr.Class: fb is not a leaf value
+//   GetAttr.Hint: GetAttr.Hint: fb is not a leaf value
 //   GetAttr.Instance: GetAttr.Instance: fb is not a leaf value
+//   GetAttr.Module: GetAttr.Module: fb is not a leaf value
+//   GetAttr.NonDescriptorNoDict: GetAttr.NonDescriptorNoDict: fb is not a leaf value
+//   GetAttr.NonDescriptorValues: GetAttr.NonDescriptorValues: fb is not a leaf value
+//   GetAttr.PointerSlot: GetAttr.PointerSlot: fb is not a leaf value
 //   GetAttr.PolyShape: GetAttr.PolyShape: let o has no leaf type
 //   GetAttr.Shape: GetAttr.Shape: fb is not a leaf value
+//   GetAttr.ValueSlot: GetAttr.ValueSlot: fb is not a leaf value
+//   GetMethod.ClassMethod: GetMethod.ClassMethod: fb is not a leaf value
+//   GetMethod.LazyDict: GetMethod.LazyDict: fb is not a leaf value
 //   GetMethod.MethodValues: GetMethod.MethodValues: fb is not a leaf value
+//   GetMethod.NoDict: GetMethod.NoDict: fb is not a leaf value
 //   GetMethod.PolyMethod: GetMethod.PolyMethod: let o has no leaf type
 
 // The leaf graph of Add.Int:

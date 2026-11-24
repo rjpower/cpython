@@ -767,10 +767,20 @@ static _PyIRTransfer ir_run_GET_ITER_PY_GENERATOR(PyThreadState *tstate, _PyInte
 static _PyIRTransfer ir_run_GET_ITER_SELF(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GET_ITER_VIRTUAL(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GET_LEN(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetAttr_Class(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetAttr_Hint(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GetAttr_Instance(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetAttr_Module(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetAttr_NonDescriptorNoDict(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetAttr_NonDescriptorValues(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetAttr_PointerSlot(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GetAttr_PolyShape(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GetAttr_Shape(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetAttr_ValueSlot(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetMethod_ClassMethod(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetMethod_LazyDict(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GetMethod_MethodValues(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetMethod_NoDict(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GetMethod_PolyMethod(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_IMPORT_FROM(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_IMPORT_NAME(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -17750,19 +17760,19 @@ static const _PyIRForm ir_handler_forms[512] = {
     [422] = ir_run_UNKNOWN_OPCODE,
     [423] = ir_run_GetAttr_Shape,
     [424] = ir_run_GetAttr_PolyShape,
-    [425] = ir_run_GetMethod_MethodValues,
-    [426] = ir_run_UNKNOWN_OPCODE,
-    [427] = ir_run_GetMethod_PolyMethod,
-    [428] = ir_run_UNKNOWN_OPCODE,
-    [429] = ir_run_UNKNOWN_OPCODE,
-    [430] = ir_run_UNKNOWN_OPCODE,
-    [431] = ir_run_UNKNOWN_OPCODE,
-    [432] = ir_run_UNKNOWN_OPCODE,
+    [425] = ir_run_GetAttr_Module,
+    [426] = ir_run_GetAttr_Hint,
+    [427] = ir_run_GetAttr_ValueSlot,
+    [428] = ir_run_GetAttr_PointerSlot,
+    [429] = ir_run_GetAttr_Class,
+    [430] = ir_run_GetAttr_NonDescriptorValues,
+    [431] = ir_run_GetAttr_NonDescriptorNoDict,
+    [432] = ir_run_GetMethod_MethodValues,
     [433] = ir_run_UNKNOWN_OPCODE,
-    [434] = ir_run_UNKNOWN_OPCODE,
-    [435] = ir_run_UNKNOWN_OPCODE,
-    [436] = ir_run_UNKNOWN_OPCODE,
-    [437] = ir_run_UNKNOWN_OPCODE,
+    [434] = ir_run_GetMethod_PolyMethod,
+    [435] = ir_run_GetMethod_NoDict,
+    [436] = ir_run_GetMethod_LazyDict,
+    [437] = ir_run_GetMethod_ClassMethod,
     [438] = ir_run_UNKNOWN_OPCODE,
     [439] = ir_run_UNKNOWN_OPCODE,
     [440] = ir_run_UNKNOWN_OPCODE,

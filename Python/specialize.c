@@ -451,6 +451,12 @@ fb_row_of(_PyFbHeader *h, int opcode)
                 case LOAD_ATTR_METHOD_NO_DICT:
                 case LOAD_ATTR_METHOD_LAZY_DICT:
                 case ROP_HANDLER_GetMethod_MethodValues:
+                case ROP_HANDLER_GetMethod_NoDict:
+                case ROP_HANDLER_GetMethod_LazyDict:
+                case ROP_HANDLER_GetMethod_ClassMethod:
+                case ROP_HANDLER_GetAttr_Class:
+                case ROP_HANDLER_GetAttr_NonDescriptorValues:
+                case ROP_HANDLER_GetAttr_NonDescriptorNoDict:
                     row.payload.class_value = ((_PyFbAttr *)h)->class_value;
                     break;
                 case STORE_ATTR_SHAPE_ADD:
@@ -681,7 +687,8 @@ fb_method_poly_set(_PyInstr *instr, _PyFbHeader *h)
     for (; count < FB_POLY_SIZE && poly->handler[count] != 0; count++) {
         if ((poly->handler[count] != LOAD_ATTR_METHOD_WITH_VALUES &&
              poly->handler[count] != LOAD_ATTR_METHOD_NO_DICT &&
-             poly->handler[count] != ROP_HANDLER_GetMethod_MethodValues) ||
+             poly->handler[count] != ROP_HANDLER_GetMethod_MethodValues &&
+             poly->handler[count] != ROP_HANDLER_GetMethod_NoDict) ||
             poly->type_version[count] == 0)
         {
             return 0;
@@ -1719,24 +1726,47 @@ success:
     return;
 }
 
-/* The case that a nominated LOAD_ATTR handler stands for, as an index into
- * the cases of classify_getattr (instance, shape) or classify_getmethod
- * (method_values); the last case of each row is "none".  Nominations of
- * arms that are not written yet are "none": the site stays generic. */
-static int
-attr_case_of(int handler, bool method)
+/* Each LOAD_ATTR handler the specializer can nominate, the arm of the
+ * register families that replaces it and the position of that arm among the
+ * cases of classify_getattr (GetAttr words) or classify_getmethod (GetMethod
+ * words); -1 where the family has no such arm.  The last case of each row is
+ * "none".  A nomination of a handler without an arm (a property, an
+ * overridden __getattribute__, a getset) is "none": the site stays generic. */
+typedef struct {
+    int handler;
+    int arm;
+    int getattr_case;
+    int getmethod_case;
+} attr_arm;
+
+static const attr_arm attr_arms[] = {
+    {LOAD_ATTR_INSTANCE_VALUE, ROP_HANDLER_GetAttr_Instance, 0, -1},
+    {LOAD_ATTR_SHAPE, ROP_HANDLER_GetAttr_Shape, 1, -1},
+    {LOAD_ATTR_SHAPE_LOCAL_TEMP, ROP_HANDLER_GetAttr_Shape, 1, -1},
+    {LOAD_ATTR_MODULE, ROP_HANDLER_GetAttr_Module, 2, -1},
+    {LOAD_ATTR_WITH_HINT, ROP_HANDLER_GetAttr_Hint, 3, -1},
+    {LOAD_ATTR_SLOT, ROP_HANDLER_GetAttr_ValueSlot, 4, -1},
+    {LOAD_ATTR_SLOT_POINTER, ROP_HANDLER_GetAttr_PointerSlot, 5, -1},
+    {LOAD_ATTR_CLASS, ROP_HANDLER_GetAttr_Class, 6, -1},
+    {LOAD_ATTR_CLASS_WITH_METACLASS_CHECK, ROP_HANDLER_GetAttr_Class, 6, -1},
+    {LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES, ROP_HANDLER_GetAttr_NonDescriptorValues, 7, -1},
+    {LOAD_ATTR_NONDESCRIPTOR_NO_DICT, ROP_HANDLER_GetAttr_NonDescriptorNoDict, 8, -1},
+    {LOAD_ATTR_METHOD_WITH_VALUES, ROP_HANDLER_GetMethod_MethodValues, -1, 0},
+    {LOAD_ATTR_METHOD_NO_DICT, ROP_HANDLER_GetMethod_NoDict, -1, 1},
+    {LOAD_ATTR_METHOD_LAZY_DICT, ROP_HANDLER_GetMethod_LazyDict, -1, 2},
+    {LOAD_ATTR_CLASSMETHOD, ROP_HANDLER_GetMethod_ClassMethod, -1, 3},
+};
+
+static const attr_arm *
+attr_arm_of(int handler, bool method)
 {
-    switch (handler) {
-        case LOAD_ATTR_INSTANCE_VALUE:
-            return method ? -1 : 0;
-        case LOAD_ATTR_SHAPE:
-        case LOAD_ATTR_SHAPE_LOCAL_TEMP:
-            return method ? -1 : 1;
-        case LOAD_ATTR_METHOD_WITH_VALUES:
-            return method ? 0 : -1;
-        default:
-            return -1;
+    for (size_t i = 0; i < Py_ARRAY_LENGTH(attr_arms); i++) {
+        const attr_arm *a = &attr_arms[i];
+        if (a->handler == handler && (method ? a->getmethod_case : a->getattr_case) >= 0) {
+            return a;
+        }
     }
+    return NULL;
 }
 
 static int
@@ -1748,27 +1778,29 @@ attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
     attr_collect = &nominated;
     (_Py_Specialize_LoadAttr)(owner, site, name);
     attr_collect = NULL;
-    int kind = attr_case_of(nominated.handler, method);
-    int none = method ? 1 : 2;
-    if (kind < 0) {
+    int none = method ? 4 : 9;
+    const attr_arm *chosen = attr_arm_of(nominated.handler, method);
+    if (chosen == NULL) {
         return none;
     }
-    _PyFbHeader *h = (_PyFbHeader *)fb;
-    int arm = ROP_HANDLER_GetAttr_Instance;
-    switch (nominated.handler) {
-        case LOAD_ATTR_SHAPE:
-        case LOAD_ATTR_SHAPE_LOCAL_TEMP:
-            arm = ROP_HANDLER_GetAttr_Shape;
+    // The first poly observation saves what the entry described before
+    fb_record(site, (_PyFbHeader *)fb, chosen->arm);
+    int kind = method ? chosen->getmethod_case : chosen->getattr_case;
+    bool admitted;
+    switch (chosen->arm) {
+        case ROP_HANDLER_GetAttr_Instance:
+            admitted = _PyAttr_AdmittedInstanceSlot(fb, name, recipe);
             break;
-        case LOAD_ATTR_METHOD_WITH_VALUES:
-            arm = ROP_HANDLER_GetMethod_MethodValues;
+        case ROP_HANDLER_GetAttr_Shape:
+            admitted = _PyAttr_AdmittedShape(fb, name, recipe);
+            break;
+        case ROP_HANDLER_GetMethod_MethodValues:
+            admitted = _PyAttr_AdmittedMethod(fb, name, recipe);
+            break;
+        default:
+            admitted = _PyAttr_AdmittedRecipe(fb, name, recipe);
             break;
     }
-    // The first poly observation saves what the entry described before
-    fb_record(site, h, arm);
-    bool admitted = method ? _PyAttr_AdmittedMethod(fb, name, recipe)
-        : arm == ROP_HANDLER_GetAttr_Shape ? _PyAttr_AdmittedShape(fb, name, recipe)
-        : _PyAttr_AdmittedInstanceSlot(fb, name, recipe);
     return admitted ? kind : none;
 }
 

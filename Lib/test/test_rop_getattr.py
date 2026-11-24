@@ -15,8 +15,9 @@ with test_tools.imports_under_tool("cases_generator"):
 
 ROOT = Path(test_tools.basepath)
 SPECIALIZED = {
-    "GetAttr": ["Instance", "Shape", "PolyShape"],
-    "GetMethod": ["MethodValues", "PolyMethod"],
+    "GetAttr": ["Instance", "Shape", "PolyShape", "Module", "Hint", "ValueSlot",
+                "PointerSlot", "Class", "NonDescriptorValues", "NonDescriptorNoDict"],
+    "GetMethod": ["MethodValues", "PolyMethod", "NoDict", "LazyDict", "ClassMethod"],
 }
 
 

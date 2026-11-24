@@ -358,6 +358,36 @@
               ARGS(object), PATH(type), EFFECTS(reads)) \
     FIELD(PyTypeObject, tp_version_tag, unsigned int, ON(type), \
           MEASURE(type_version), EFFECTS(reads)) \
+    /* The value slots that uops call (pycore_value_slots.h), read through \
+     * _PyType_VALUE_SLOT as the slot table types them (G0a4).  A contains \
+     * slot returns 1 or 0, or -1 with an exception; any target may run \
+     * Python (a heap type's __contains__) */ \
+    SLOT(_Py_containsvaluefunc, int, (PyObject *, PyValueBorrow), \
+         ARGS(object, borrowed), SCALAR, EFFECTS(runs_python)) \
+    FIELD(PyTypeObject, tp_value.contains, _Py_containsvaluefunc, ON(type), \
+          SLOT(_Py_containsvaluefunc), EFFECTS(reads)) \
+    /* An iternext slot: PYGEN_NEXT with an owned item; PYGEN_RETURN with \
+     * an owned return value, or PyValue_NULL for None (R11), and no \
+     * exception; PYGEN_ERROR with PyValue_NULL and an exception set.  Any \
+     * target may run Python (a generator's frame, a heap type's __next__) */ \
+    SLOT(_Py_iternextvaluefunc, _PyStatusValue, (PyObject *), ARGS(object), \
+         CASES(status==-1 value(null) raised, status==0 value(owned nullable), \
+               status==1 value(owned)), EFFECTS(runs_python)) \
+    FIELD(PyTypeObject, tp_value.iternext, _Py_iternextvaluefunc, ON(type), \
+          SLOT(_Py_iternextvaluefunc), EFFECTS(reads)) \
+    /* An index-protocol step (object.h): the owned item at a nonnegative \
+     * next index; PyValue_NULL at the end with no exception and a \
+     * nonnegative index; PyValue_NULL with a negative index and an \
+     * exception set.  The targets, list_iteritem, _PyTuple_IterValue, \
+     * bytes_iteritem and unicode_iteritem (and subtypes, which inherit \
+     * them), read the sequence and run no Python; unicode_iteritem \
+     * allocates a character and raises when that fails */ \
+    SLOT(_Py_iteritemfunc, _PyValueIndexPair, (PyObject *, Py_ssize_t), \
+         ARGS(object, scalar), \
+         CASES(index<0 value(null) raised, index>=0 value(null), \
+               index>=0 value(owned)), EFFECTS(reads, allocates, raises)) \
+    FIELD(PyTypeObject, _tp_iteritem, _Py_iteritemfunc, ON(type), \
+          SLOT(_Py_iteritemfunc), EFFECTS(reads)) \
     /* An object's inline values (pycore_object.h: at tp_basicsize; the \
      * caller has the type's Py_TPFLAGS_INLINE_VALUES) and their flag */ \
     PRIMITIVE(_PyObject_InlineValues, PyDictValues *, (PyObject *), \
@@ -750,6 +780,18 @@
     /* The header of the word's feedback entry: an address, which each \
      * generator expands for its form (ir_generator.IR_INSTRUCTION_MACROS) */ \
     MACRO(FB_COUNTER, ARGS(), SCALAR, EFFECTS(), EXITS()) \
+    /* BINARY_OP_EXTEND's descriptor (pycore_code.h): its cache operand, \
+     * typed, a pointer along the path binary_op_descr; the action it \
+     * holds.  The actions (specialize.c, binaryop_extend_descrs) are \
+     * concatenations, repeats and dict | dict, which return a new \
+     * reference or NULL with an exception, and may run Python (a key's \
+     * __eq__ in dict | dict) (G0a4) */ \
+    PRIMITIVE(_PyBinaryOp_ExtendDescr, _PyBinaryOpSpecializationDescr *, (PyObject *), \
+              ARGS(scalar), PATH(binary_op_descr), EFFECTS()) \
+    SLOT(binaryopactionfunc, PyObject *, (PyObject *, PyObject *), \
+         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+    FIELD(_PyBinaryOpSpecializationDescr, action, binaryopactionfunc, \
+          ON(binary_op_descr), SLOT(binaryopactionfunc), EFFECTS(reads)) \
     /* The counter of an entry header (Python/ceval_macros.h): a test of \
      * it, and its advance; NULL has no counter */ \
     PRIMITIVE(_PyFb_CounterTriggers, int, (_PyFbHeader *), \
@@ -940,12 +982,12 @@
     HELPER(_PyForIter_StopIsExhaustion, int, (PyThreadState *, _PyInterpreterFrame *), \
         ARGS(tstate, frame), SCALAR, EFFECTS(reads)) \
     /* ceval.c: {1, item} owned, {0, NULL} at the end with no exception, {-1, NULL} with one (G0a4: a CASES result) */ \
-    HELPER(_PyForIter_VirtualIteratorNext, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValue, PyValue *), \
-        ARGS(tstate, frame, consumed, scalar), \
+    HELPER(_PyForIter_VirtualIteratorNext, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *), \
+        ARGS(tstate, frame, borrowed, scalar), \
         CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
     /* ceval.c: as _PyForIter_VirtualIteratorNext (G0a4: a CASES result) */ \
-    HELPER(_PyForIter_VirtualIteratorNextInline, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValue, PyValue *), \
-        ARGS(tstate, frame, consumed, scalar), \
+    HELPER(_PyForIter_VirtualIteratorNextInline, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *), \
+        ARGS(tstate, frame, borrowed, scalar), \
         CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyGen_GetGeneratorFromFrame, PyGenObject *, (_PyInterpreterFrame *), \
@@ -1299,9 +1341,11 @@
           NONE, EFFECTS(reads, writes, raises, runs_python), \
           EXITS(branch, raise)) \
     /* IR_MARKER_EFFECTS: escapes, error, terminal; TRANSFER_TOKENS (BRANCH, \
-     * RAISE).  Arguments are the kind, whether the step completed and the \
-     * oparg */ \
-    MACRO(IR_COMPLETE_STEP, ARGS(scalar, scalar, scalar), NONE, \
+     * RAISE).  Arguments are the kind, the completion value and the \
+     * oparg.  The completion helper (_PyEval_CompleteForIter, \
+     * _PyEval_CompleteSend) owns the value on every exit, so the value is \
+     * consumed (G0a4) */ \
+    MACRO(IR_COMPLETE_STEP, ARGS(scalar, consumed, scalar), NONE, \
           EFFECTS(reads, writes, raises, runs_python), EXITS(branch, raise)) \
     /* Errors: IR_MARKER_EFFECTS escapes, error, terminal, frame; \
      * TRANSFER_TOKENS (RAISE) only.  PROCESS_ERROR_AT with an EXIT ingress \

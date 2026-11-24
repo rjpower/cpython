@@ -1369,7 +1369,7 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
                 IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
             }
             if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
+                _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(receiver), &window[1]);
                 null_or_index = window[1];
                 PyValue item = next.value;
                 int found = next.status;
@@ -1409,7 +1409,8 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-            _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+            _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+            _PyValueIndexPair next_index = iteritem(iter_o, index);
             index = next_index.index;
             if (PyValue_IsNull(next_index.value)) {
                 if (index < 0) { ERROR_NO_POP(); }

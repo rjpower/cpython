@@ -1129,13 +1129,15 @@ dummy_func(
             PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
             PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
             assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
-            _PyBinaryOpSpecializationDescr *d = (_PyBinaryOpSpecializationDescr*)descr;
+            _PyBinaryOpSpecializationDescr *d = _PyBinaryOp_ExtendDescr(descr);
             assert(d != NULL);
-            EXIT_IF(Py_TYPE(left_o) != d->lhs_type || Py_TYPE(right_o) != d->rhs_type);
+            EXIT_IF(Py_TYPE(left_o) != d->lhs_type || Py_TYPE(right_o) != d->rhs_type,
+                    "the operand types are not the descriptor's");
 
             STAT_INC(BINARY_OP, hit);
 
-            PyObject *res_o = d->action(left_o, right_o);
+            binaryopactionfunc action = d->action;
+            PyObject *res_o = action(left_o, right_o);
             if (res_o == NULL) {
                 ERROR_NO_POP();
             }
@@ -1753,7 +1755,7 @@ dummy_func(
                 IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
             }
             if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
+                _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(receiver), &window[1]);
                 null_or_index = window[1];
                 PyValue item = next.value;
                 int found = next.status;
@@ -1820,7 +1822,8 @@ dummy_func(
             assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-            _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+            _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+            _PyValueIndexPair next_index = iteritem(iter_o, index);
             index = next_index.index;
             if (PyValue_IsNull(next_index.value)) {
                 if (index < 0) {
@@ -4191,7 +4194,7 @@ dummy_func(
         }
 
         replaced op(_FOR_ITER, (iter, null_or_index -- iter, null_or_index, next)) {
-            _PyStatusValue step = _PyForIter_VirtualIteratorNextInline(tstate, frame, iter, &window[1]);
+            _PyStatusValue step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(iter), &window[1]);
             null_or_index = window[1];
             PyValue item = step.value;
             int found = step.status;
@@ -4216,7 +4219,7 @@ dummy_func(
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             if (PyValue_IsNull(null_or_index)) {
                 _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(Py_TYPE(iter_o), iternext);
-                EXIT_IF(next_value == NULL);
+                EXIT_IF(next_value == NULL, "the type has no iternext value slot");
                 _PyStatusValue step = next_value(iter_o);
                 if (step.status != PYGEN_NEXT) {
                     // A StopIteration is the exhaustion; any other error
@@ -4231,7 +4234,8 @@ dummy_func(
             }
             else {
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+                _PyValueIndexPair next_index = iteritem(iter_o, index);
                 index = next_index.index;
                 if (PyValue_IsNull(next_index.value)) {
                     if (index < 0) {
@@ -4278,7 +4282,7 @@ dummy_func(
             _FOR_ITER_DICT_ITEMS;
 
         inst(INSTRUMENTED_FOR_ITER, (unused/1, iter, null_or_index -- iter, null_or_index, next)) {
-            _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &window[1]);
+            _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(iter), &window[1]);
             null_or_index = window[1];
             PyValue item = step.value;
             int found = step.status;

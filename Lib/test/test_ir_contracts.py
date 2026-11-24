@@ -1485,6 +1485,85 @@ class VerifierTests(unittest.TestCase):
         self.verify(source % "if (what == PYGEN_RETURN) { PyValue_CLOSE(item); "
                     "v = PyValue_None; }\nelse { v = item; }")
 
+    def test_value_slots_and_index_steps(self):
+        # _FOR_ITER_VIRTUAL: an iternext value slot read through
+        # _PyType_VALUE_SLOT, and an index step through _tp_iteritem, whose
+        # _PyValueIndexPair is a CASES result
+        source = """
+            op(_OP, (iter: object, null_or_index -- iter, null_or_index, next: owned))
+                effects(reads, runs_python) exits(next, miss, raise, branch)
+            {
+                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                if (PyValue_IsNull(null_or_index)) {
+                    _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(Py_TYPE(iter_o), iternext);
+                    EXIT_IF(next_value == NULL, "the type has no iternext value slot");
+                    _PyStatusValue step = next_value(iter_o);
+                    if (step.status != PYGEN_NEXT) {
+                        if (step.status == PYGEN_ERROR && !_PyForIter_StopIsExhaustion(tstate, frame)) {
+                            ERROR_NO_POP();
+                        }
+                        PyValue completed = PyValue_IsNull(step.value) ? PyValue_None : step.value;
+                        IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
+                    }
+                    next = step.value;
+                }
+                else {
+                    Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+                    _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+                    _PyValueIndexPair next_index = iteritem(iter_o, index);
+                    index = next_index.index;
+                    if (PyValue_IsNull(next_index.value)) {
+                        %s
+                        PyValue completed = PyValue_None;
+                        IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
+                    }
+                    null_or_index = PyValue_TagIndex(index);
+                    next = next_index.value;
+                }
+            }
+        """
+        self.verify(source % "if (index < 0) { ERROR_NO_POP(); }")
+        # The end of the sequence sets no exception
+        self.refuses(source % "ERROR_NO_POP();",
+                     r"raises where `next_index` reports an outcome that sets no exception")
+        # The accessor reads the field it names: a contains slot's call
+        # gives no CASES result
+        self.refuses((source % "if (index < 0) { ERROR_NO_POP(); }").replace(
+                         "_PyType_VALUE_SLOT(Py_TYPE(iter_o), iternext)",
+                         "_PyType_VALUE_SLOT(Py_TYPE(iter_o), contains)"),
+                     r"`step.value` is assigned to an output, but it is no row")
+        # The completion value is consumed by IR_COMPLETE_STEP
+        self.refuses((source % "if (index < 0) { ERROR_NO_POP(); }").replace(
+                         "IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);\n"
+                         "                    }\n                    next = step.value;",
+                         "IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);\n"
+                         "                    }\n                    next = step.value;\n"
+                         "                    PyValue_CLOSE(completed);"),
+                     r"completed")
+
+    def test_a_descriptor_field_holds_the_protocol(self):
+        # _BINARY_OP_EXTEND: the action of the feedback's descriptor, a FIELD
+        # along a path from the cache operand
+        source = """
+            op(_OP, (descr/4, left: borrowed object, right: borrowed object -- res: owned))
+                effects(reads, runs_python) exits(next, raise)
+            {
+                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
+                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+                _PyBinaryOpSpecializationDescr *d = %s;
+                binaryopactionfunc action = d->action;
+                PyObject *res_o = action(left_o, right_o);
+                if (res_o == NULL) {
+                    ERROR_NO_POP();
+                }
+                res = PyValue_FromObjectSteal(res_o);
+            }
+        """
+        self.verify(source % "_PyBinaryOp_ExtendDescr(descr)")
+        self.refuses(source % "(_PyBinaryOpSpecializationDescr *)descr",
+                     r"`action` is called, but `d -> action` is no FIELD that declares "
+                     r"the SLOT it holds")
+
     # F15: the GIL product's preprocessor path
 
     def test_build_arms(self):

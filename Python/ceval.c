@@ -1260,11 +1260,11 @@ value_load_global(PyObject *globals, PyObject *builtins, PyObject *name)
    (spec 3.5, R-a and R-d). */
 static _PyStatusValue
 _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                               PyValue iter, PyValue *index_ptr);
+                               PyValueBorrow iter, PyValue *index_ptr);
 static inline Py_ALWAYS_INLINE _PyStatusValue
 _PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
                                      _PyInterpreterFrame *frame,
-                                     PyValue iter, PyValue *index_ptr);
+                                     PyValueBorrow iter, PyValue *index_ptr);
 static int _PyForIter_StopIsExhaustion(PyThreadState *tstate,
                                          _PyInterpreterFrame *frame);
 
@@ -7530,7 +7530,7 @@ _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *na
 static inline Py_ALWAYS_INLINE _PyStatusValue
 _PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
                                      _PyInterpreterFrame *frame,
-                                     PyValue iter, PyValue *index_ptr)
+                                     PyValueBorrow iter, PyValue *index_ptr)
 {
     _PyStatusValue result = {0, PyValue_NULL};
     PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
@@ -7592,7 +7592,7 @@ _PyForIter_StopIsExhaustion(PyThreadState *tstate, _PyInterpreterFrame *frame)
  * FOR_ITER's own. */
 static Py_NO_INLINE _PyStatusValue
 _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                               PyValue iter, PyValue *index_ptr)
+                               PyValueBorrow iter, PyValue *index_ptr)
 {
     return _PyForIter_VirtualIteratorNextInline(tstate, frame, iter, index_ptr);
 }

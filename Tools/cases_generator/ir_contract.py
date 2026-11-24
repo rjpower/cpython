@@ -25,7 +25,7 @@ import dataclasses
 from dataclasses import dataclass, field
 import re
 
-from analyzer import Instruction, Uop, analysis_error
+from analyzer import IR_MARKER_EFFECTS, Instruction, Uop, analysis_error
 from generators_common import ROOT
 from lexer import Token
 from parser import BlockStmt, ForStmt, IfStmt, MacroIfStmt, SimpleStmt, Stmt, WhileStmt
@@ -814,7 +814,13 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
         elif row.kind == "DESTRUCTOR":
             check(f"&{row.name}", "void (*)(PyObject *)", row.name)
         elif row.kind == "FIELD":
-            check(f"(({row.struct} *)0)->{row.field}", row.ret, row.name)
+            accessor = next((a for a, prefix in FIELD_ACCESSORS.items()
+                             if row.field.startswith(prefix + ".")), None)
+            if accessor is not None:
+                field = row.field.split(".", 1)[1]
+                check(f"{accessor}(({row.struct} *)0, {field})", row.ret, row.name)
+            else:
+                check(f"(({row.struct} *)0)->{row.field}", row.ret, row.name)
         elif row.kind == "PRIMITIVE":
             call = ", ".join(f"({p}){{0}}" for p in row.params)
             check(f"{row.name}({call})", row.ret, row.name)
@@ -1021,15 +1027,39 @@ def struct_locals(tokens: list[Token], types: frozenset[str]) -> frozenset[str]:
                      if t in types and re.fullmatch(r"[A-Za-z_]\w*", texts[i + 1]))
 
 
+# Typed accessors of untyped struct fields (F6): `_PyType_VALUE_SLOT(t, f)`
+# reads `t->tp_value.f`, stored as an untyped _Py_valuefunc, as the type
+# that the slot table gives f.  The walk reads the accessor as the field,
+# and component_checks holds a FIELD row of `tp_value.f` to the accessor's
+# type rather than the storage's.
+FIELD_ACCESSORS = {"_PyType_VALUE_SLOT": "tp_value"}
+
+
 def fold_fields(tokens: list[Token], structs: frozenset[str]) -> list[Token]:
     """tokens with each field of a struct local, `x . f`, as one name
-    `x.f`: the walk tracks a CASES result's fields as names (F6)"""
-    if not structs:
+    `x.f`: the walk tracks a CASES result's fields as names (F6).  A typed
+    accessor of a field, `_PyType_VALUE_SLOT(t, f)`, becomes the read
+    `(t)->tp_value.f` (FIELD_ACCESSORS)"""
+    if not structs and not any(t.text in FIELD_ACCESSORS for t in tokens):
         return tokens
     out: list[Token] = []
     i = 0
     while i < len(tokens):
         t = tokens[i]
+        if t.text in FIELD_ACCESSORS and i + 1 < len(tokens) and tokens[i + 1].text == "(":
+            texts = [x.text for x in tokens]
+            end = _close(texts, i + 1)
+            comma = len(_split(texts[i + 2:end], ",")[0]) + i + 2
+            if end == comma + 2:
+                def synth(text: str, at: Token) -> Token:
+                    return Token(at.filename, at.kind, text, at.begin, at.end)
+                field = tokens[comma + 1]
+                out += [synth("(", tokens[i + 1]),
+                        *fold_fields(tokens[i + 2:comma], structs),
+                        synth(")", tokens[end]), synth("->", t),
+                        synth(f"{FIELD_ACCESSORS[t.text]}.{field.text}", field)]
+                i = end + 1
+                continue
         if (t.text in structs and i + 2 < len(tokens) and tokens[i + 1].text == "."
                 and (not out or out[-1].text not in (".", "->"))):
             out.append(Token(t.filename, t.kind, f"{t.text}.{tokens[i + 2].text}",
@@ -1329,6 +1359,8 @@ class Views:
     def __init__(self, uop: Uop, table: dict[str, Row]):
         self.table = table
         self.names = {i.name: i.name for i in uop.stack.inputs if i.name != "unused"}
+        # A cache operand roots paths too (a feedback descriptor's fields)
+        self.caches = {c.name for c in uop.caches if c.name != "unused"}
         self.paths: dict[str, tuple[str, str]] = {}
         self.locals: set[str] = set()
         # Locals whose binding at a use the walk could not follow (they were
@@ -1369,13 +1401,16 @@ class Views:
         return None
 
     def path(self, tokens: list[str]) -> tuple[str, str] | None:
-        "the (input, path) of a pointer along a PATH row from an input"
+        """the (input, path) of a pointer along a PATH row from an input or
+        a cache operand"""
         tokens = _unwrap(tokens, self.table)
         if len(tokens) == 1:
             return None if tokens[0] in self.unknown else self.paths.get(tokens[0])
         call = _call_of(tokens, self.table)
         if call is not None and call[0].result.shape == "PATH" and call[1]:
-            name = self.resolve(call[1][0], locals_=False)
+            arg = _unwrap(call[1][0], self.table)
+            name = (arg[0] if len(arg) == 1 and arg[0] in self.caches
+                    else self.resolve(call[1][0], locals_=False))
             if name is not None:
                 return name, call[0].result.measure
         return None
@@ -1902,6 +1937,14 @@ class OwnershipWalk:
         """Whether a condition on a CASES result's fields cannot be `holds`
         on this path; else the path learns it (F6)"""
         cond = _strip(cond)
+        # A conjunction that holds, or a disjunction that fails, holds each
+        # of its terms so: infeasible if one of them is
+        for op, whole in (("&&", True), ("||", False)):
+            terms = _split(cond, op)
+            if len(terms) > 1:
+                if holds != whole:
+                    return False
+                return any([self.infeasible(state, t, holds) for t in terms])
         while cond[:1] == ["!"]:
             cond, holds = _strip(cond[1:]), not holds
         null = _call(cond, "PyValue_IsNull")
@@ -1962,6 +2005,12 @@ class OwnershipWalk:
         assert isinstance(stmt, SimpleStmt)
         return self.simple(fold_fields(stmt.contents, self.structs), state)
 
+    def owes_nothing(self, facts: frozenset) -> bool:
+        "whether a value with facts is inline or a CONSTANT row's (V8's roots)"
+        return INLINE in facts or any(
+            f.kind == "is" and f.arg in self.table and self.table[f.arg].kind == "CONSTANT"
+            for f in facts)
+
     def join(self, ends: list[_State | None]) -> _State | None:
         """where paths meet: the same obligations; the facts that all of them
         have; the homes that any of them may have rewritten"""
@@ -1974,6 +2023,12 @@ class OwnershipWalk:
                 a, b = first.owners.get(name, GONE), other.owners.get(name, GONE)
                 if {a, b} == {HELD, NULL}:
                     # A new owner, NULL on one path: held, and maybe NULL
+                    a = HELD
+                elif HELD in (a, b) and self.owes_nothing(
+                        (other if a == HELD else first).facts.get(name, frozenset())):
+                    # A new owner, an inline or static immortal value on one
+                    # path (None for a NULL completion): held, since closing
+                    # such a value releases nothing
                     a = HELD
                 elif obligated(a) != obligated(b) or (
                         a != b and (a.startswith(TAKEN) or b.startswith(TAKEN))):
@@ -2318,6 +2373,12 @@ class OwnershipWalk:
             return state
         if head == "DISPATCH_SAME_OPARG":
             return None
+        if head in self.table and "terminal" in IR_MARKER_EFFECTS.get(head, ()):
+            # A terminal marker leaves on its row's exits, after its
+            # arguments' modes have taken what they say; it never returns
+            self.calls(toks, state)
+            self.effects(toks, state)
+            return None
         if head == "goto" and texts[1:2] and texts[1] in ERROR_LABELS:
             # The raise exit at this site, with its checkpoint here
             if state.no_exception:
@@ -2370,13 +2431,19 @@ class OwnershipWalk:
         """`x = cond ? a : b;`: each arm on its own path, refined by the
         condition, then joined (F3): its facts are those of both arms, its
         obligation the same on both, and where one arm is NULL the local
-        is NULL exactly where the condition says so (refine)"""
+        is NULL exactly where the condition says so (refine).  An arm that
+        a CASES outcome rules out is not walked (F6)"""
         self.calls(toks[:q], state)
         self.effects(toks[:q], state)
         cond = _strip(texts[e + 1:q])
         ends, nulls = [], []
-        for (lo, hi), holds in (((q + 1, c), True), ((c + 1, end), False)):
+        arms = (((q + 1, c), True), ((c + 1, end), False))
+        feasible = [not self.infeasible(state.copy(), cond, holds) for _, holds in arms]
+        for ((lo, hi), holds), keep in zip(arms, feasible):
+            if not keep and any(feasible):
+                continue
             path = state.copy()
+            self.infeasible(path, cond, holds)
             self.refine(path, cond, holds)
             self.calls(toks[lo:hi], path)
             self.effects(toks[lo:hi], path)
@@ -2384,7 +2451,7 @@ class OwnershipWalk:
             nulls.append(NULL_FACT in path.facts.get(texts[e - 1], frozenset()))
             ends.append(path)
         joined = self.join(ends)
-        if nulls[0] != nulls[1]:
+        if len(nulls) == 2 and nulls[0] != nulls[1]:
             # As refine reads a condition: without its negations
             null_if = nulls[0]
             while cond[:1] == ["!"]:

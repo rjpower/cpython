@@ -151,6 +151,18 @@ static_assert(__builtin_types_compatible_p(__typeof__(Py_TYPE((PyObject *){0})),
               "Py_TYPE: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(((PyTypeObject *)0)->tp_version_tag), unsigned int),
               "PyTypeObject.tp_version_tag: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_Py_containsvaluefunc), int (*)(PyObject *, PyValueBorrow)),
+              "_Py_containsvaluefunc: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyType_VALUE_SLOT((PyTypeObject *)0, contains)), _Py_containsvaluefunc),
+              "PyTypeObject.tp_value.contains: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_Py_iternextvaluefunc), _PyStatusValue (*)(PyObject *)),
+              "_Py_iternextvaluefunc: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyType_VALUE_SLOT((PyTypeObject *)0, iternext)), _Py_iternextvaluefunc),
+              "PyTypeObject.tp_value.iternext: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_Py_iteritemfunc), _PyValueIndexPair (*)(PyObject *, Py_ssize_t)),
+              "_Py_iteritemfunc: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(((PyTypeObject *)0)->_tp_iteritem), _Py_iteritemfunc),
+              "PyTypeObject._tp_iteritem: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyObject_InlineValues((PyObject *){0})), PyDictValues *),
               "_PyObject_InlineValues: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(((PyDictValues *)0)->valid), uint8_t),
@@ -337,6 +349,12 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PySlice_FromValues), PyO
               "_PySlice_FromValues: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyTuple_GET_OBJECT), PyObject * (*)(PyObject *, Py_ssize_t)),
               "_PyTuple_GET_OBJECT: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyBinaryOp_ExtendDescr((PyObject *){0})), _PyBinaryOpSpecializationDescr *),
+              "_PyBinaryOp_ExtendDescr: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(binaryopactionfunc), PyObject * (*)(PyObject *, PyObject *)),
+              "binaryopactionfunc: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(((_PyBinaryOpSpecializationDescr *)0)->action), binaryopactionfunc),
+              "_PyBinaryOpSpecializationDescr.action: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyFb_CounterTriggers((_PyFbHeader *){0})), int),
               "_PyFb_CounterTriggers: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyFb_AdvanceCounter((_PyFbHeader *){0})), void),
@@ -425,9 +443,9 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_GetAwaitable), Py
               "_PyEval_GetAwaitable: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyForIter_StopIsExhaustion), int (*)(PyThreadState *, _PyInterpreterFrame *)),
               "_PyForIter_StopIsExhaustion: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(&_PyForIter_VirtualIteratorNext), _PyStatusValue (*)(PyThreadState *, _PyInterpreterFrame *, PyValue, PyValue *)),
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyForIter_VirtualIteratorNext), _PyStatusValue (*)(PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *)),
               "_PyForIter_VirtualIteratorNext: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(&_PyForIter_VirtualIteratorNextInline), _PyStatusValue (*)(PyThreadState *, _PyInterpreterFrame *, PyValue, PyValue *)),
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyForIter_VirtualIteratorNextInline), _PyStatusValue (*)(PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *)),
               "_PyForIter_VirtualIteratorNextInline: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyGen_GetGeneratorFromFrame), PyGenObject * (*)(_PyInterpreterFrame *)),
               "_PyGen_GetGeneratorFromFrame: its C type differs from pycore_ir_components.h");
@@ -1265,14 +1283,15 @@ ir_run_BINARY_OP_EXTEND(
                 PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
                 PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
-                _PyBinaryOpSpecializationDescr *d = (_PyBinaryOpSpecializationDescr*)descr;
+                _PyBinaryOpSpecializationDescr *d = _PyBinaryOp_ExtendDescr(descr);
                 assert(d != NULL);
                 if (Py_TYPE(left_o) != d->lhs_type || Py_TYPE(right_o) != d->rhs_type) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
                 STAT_INC(BINARY_OP, hit);
-                PyObject *res_o = d->action(left_o, right_o);
+                binaryopactionfunc action = d->action;
+                PyObject *res_o = action(left_o, right_o);
                 if (res_o == NULL) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -7869,7 +7888,7 @@ ir_run_FOR_ITER(
             }
             // _FOR_ITER
             {
-                _PyStatusValue step = _PyForIter_VirtualIteratorNextInline(tstate, frame, iter, &window[1]);
+                _PyStatusValue step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(iter), &window[1]);
                 null_or_index = window[1];
                 PyValue item = step.value;
                 int found = step.status;
@@ -8279,7 +8298,8 @@ ir_run_FOR_ITER_VIRTUAL(
             }
             else {
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+                _PyValueIndexPair next_index = iteritem(iter_o, index);
                 index = next_index.index;
                 if (PyValue_IsNull(next_index.value)) {
                     if (index < 0) {
@@ -14434,7 +14454,7 @@ ir_run_SEND(
                     }
                 }
                 if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                    _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
+                    _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(receiver), &window[1]);
                     null_or_index = window[1];
                     PyValue item = next.value;
                     int found = next.status;
@@ -14822,7 +14842,8 @@ ir_run_SEND_VIRTUAL(
                 assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+                _PyValueIndexPair next_index = iteritem(iter_o, index);
                 index = next_index.index;
                 if (PyValue_IsNull(next_index.value)) {
                     if (index < 0) {
@@ -14892,7 +14913,8 @@ ir_run_SEND_VIRTUAL_XFER_DISCARD(
                 assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+                _PyValueIndexPair next_index = iteritem(iter_o, index);
                 index = next_index.index;
                 if (PyValue_IsNull(next_index.value)) {
                     if (index < 0) {
@@ -14984,7 +15006,7 @@ ir_run_SEND_XFER_DISCARD(
                     }
                 }
                 if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                    _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
+                    _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(receiver), &window[1]);
                     null_or_index = window[1];
                     PyValue item = next.value;
                     int found = next.status;
@@ -18047,14 +18069,15 @@ static const _PyIRForm ir_handler_forms[512] = {
                 PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
                 PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
-                _PyBinaryOpSpecializationDescr *d = (_PyBinaryOpSpecializationDescr*)descr;
+                _PyBinaryOpSpecializationDescr *d = _PyBinaryOp_ExtendDescr(descr);
                 assert(d != NULL);
                 if (Py_TYPE(left_o) != d->lhs_type || Py_TYPE(right_o) != d->rhs_type) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
                 STAT_INC(BINARY_OP, hit);
-                PyObject *res_o = d->action(left_o, right_o);
+                binaryopactionfunc action = d->action;
+                PyObject *res_o = action(left_o, right_o);
                 if (res_o == NULL) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -23303,7 +23326,8 @@ static const _PyIRForm ir_handler_forms[512] = {
             }
             else {
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+                _PyValueIndexPair next_index = iteritem(iter_o, index);
                 index = next_index.index;
                 if (PyValue_IsNull(next_index.value)) {
                     if (index < 0) {
@@ -28088,7 +28112,8 @@ static const _PyIRForm ir_handler_forms[512] = {
                 assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+                _PyValueIndexPair next_index = iteritem(iter_o, index);
                 index = next_index.index;
                 if (PyValue_IsNull(next_index.value)) {
                     if (index < 0) {
@@ -28154,7 +28179,8 @@ static const _PyIRForm ir_handler_forms[512] = {
                 assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-                _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
+                _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+                _PyValueIndexPair next_index = iteritem(iter_o, index);
                 index = next_index.index;
                 if (PyValue_IsNull(next_index.value)) {
                     if (index < 0) {
@@ -28242,7 +28268,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                     }
                 }
                 if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                    _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &window[1]);
+                    _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(receiver), &window[1]);
                     null_or_index = window[1];
                     PyValue item = next.value;
                     int found = next.status;

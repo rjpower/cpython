@@ -728,7 +728,7 @@ class PilotTests(unittest.TestCase):
     def test_pilot_is_clean(self):
         program = rop_verify.load(rop_files())
         self.assertEqual([str(d) for d in program.diagnostics], [])
-        self.assertEqual(rop_verify.missing_generic(program), ("GetAttr",))
+        self.assertEqual(rop_verify.missing_generic(program), ("Call", "GetAttr"))
 
     def test_pilot_mutations(self):
         # Changes to the pilot that the checker refuses.  Diagnostics name

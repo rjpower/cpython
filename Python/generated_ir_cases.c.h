@@ -500,7 +500,7 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_Py_call_instrumentation_
               "_Py_call_instrumentation_exc2: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_call_instrumentation_instruction), int (*)(PyThreadState *, _PyInterpreterFrame *, _PyInstr *)),
               "_Py_call_instrumentation_instruction: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(&_Py_call_instrumentation_jump), _PyInstr * (*)(_PyInstr *, PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, _PyInstr *)),
+static_assert(__builtin_types_compatible_p(__typeof__(&_Py_call_instrumentation_jump), _PyIRObserverResult (*)(_PyInstr *, PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, _PyInstr *)),
               "_Py_call_instrumentation_jump: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_call_instrumentation_line), int (*)(PyThreadState *, _PyInterpreterFrame *, _PyInstr *, _PyInstr *)),
               "_Py_call_instrumentation_line: its C type differs from pycore_ir_components.h");
@@ -7718,7 +7718,7 @@ ir_run_END_ASYNC_FOR(
             PyValue exc_st;
             exc_st = window[1];
             awaitable_st = window[0];
-            JUMPBY(0);
+            assert(PyValue_IsObject(exc_st));
             (void)oparg;
             assert(PyValue_IsObject(exc_st));
             PyObject *exc = _PyValue_AsKnownObjectBorrowPointer(exc_st);
@@ -7741,6 +7741,7 @@ ir_run_END_ASYNC_FOR(
                 monitor_reraise(tstate, frame, this_instr);
                 PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
             }
+            JUMPBY(0);
             DISPATCH();
         }
 
@@ -8988,7 +8989,7 @@ ir_run_INSTRUMENTED_END_ASYNC_FOR(
             {
                 exc_st = window[1];
                 awaitable_st = window[0];
-                JUMPBY(0);
+                assert(PyValue_IsObject(exc_st));
                 (void)oparg;
                 assert(PyValue_IsObject(exc_st));
                 PyObject *exc = _PyValue_AsKnownObjectBorrowPointer(exc_st);
@@ -9011,6 +9012,7 @@ ir_run_INSTRUMENTED_END_ASYNC_FOR(
                     monitor_reraise(tstate, frame, this_instr);
                     PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
                 }
+                JUMPBY(0);
             }
             DISPATCH();
         }
@@ -9060,15 +9062,15 @@ ir_run_INSTRUMENTED_END_SEND(
                 }
             }
             if (!tstate->tracing) {
-                _PyIRWord *dest = _Py_call_instrumentation_jump(
+                _PyIRObserverResult jump = _Py_call_instrumentation_jump(
                     this_instr, tstate, PY_MONITORING_EVENT_BRANCH_LEFT, frame,
                     this_instr, next_instr);
-                if (dest == NULL) {
+                if (jump.status < 0) {
                     PyValue_CLOSE(held);
                     _PyValue_XCLOSE_POINTER(ir_own_B);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                next_instr = dest;
+                next_instr = jump.next;
             }
             val = held;
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), val);
@@ -9613,7 +9615,7 @@ ir_run_INSTRUMENTED_RESUME(
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         next_instr = this_instr;
-                        DISPATCH();
+                        DISPATCH_SAME_OPARG();
                     }
                 }
             }
@@ -14262,7 +14264,7 @@ ir_run_RESUME(
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         next_instr = this_instr;
-                        DISPATCH();
+                        DISPATCH_SAME_OPARG();
                     }
                 }
             }
@@ -14310,7 +14312,7 @@ ir_run_RESUME_JIT(
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         next_instr = this_instr;
-                        DISPATCH();
+                        DISPATCH_SAME_OPARG();
                     }
                 }
             }
@@ -23747,7 +23749,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 exc_st = window[1];
                 awaitable_st = window[0];
-                JUMPBY(0);
+                assert(PyValue_IsObject(exc_st));
                 (void)oparg;
                 assert(PyValue_IsObject(exc_st));
                 PyObject *exc = _PyValue_AsKnownObjectBorrowPointer(exc_st);
@@ -23770,6 +23772,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                     monitor_reraise(tstate, frame, this_instr);
                     PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
                 }
+                JUMPBY(0);
             }
             DISPATCH();
         }
@@ -23818,15 +23821,15 @@ static const _PyIRForm ir_handler_forms[512] = {
                 }
             }
             if (!tstate->tracing) {
-                _PyIRWord *dest = _Py_call_instrumentation_jump(
+                _PyIRObserverResult jump = _Py_call_instrumentation_jump(
                     this_instr, tstate, PY_MONITORING_EVENT_BRANCH_LEFT, frame,
                     this_instr, next_instr);
-                if (dest == NULL) {
+                if (jump.status < 0) {
                     PyValue_CLOSE(held);
                     _PyValue_XCLOSE_POINTER(ir_own_B);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                next_instr = dest;
+                next_instr = jump.next;
             }
             val = held;
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), val);
@@ -24332,7 +24335,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         next_instr = this_instr;
-                        DISPATCH();
+                        DISPATCH_SAME_OPARG();
                     }
                 }
             }
@@ -27695,7 +27698,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         next_instr = this_instr;
-                        DISPATCH();
+                        DISPATCH_SAME_OPARG();
                     }
                 }
             }
@@ -27739,7 +27742,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                             PROCESS_ERROR_AT(RAISE, 0, this_instr);
                         }
                         next_instr = this_instr;
-                        DISPATCH();
+                        DISPATCH_SAME_OPARG();
                     }
                 }
             }

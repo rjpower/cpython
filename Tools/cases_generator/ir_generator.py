@@ -6082,8 +6082,10 @@ def build_records(analysis: Analysis,
             record = replace(record, form=f"SHARED_BODY({generator_word_entry(name, analysis)})")
         check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
         ir_leaf.check_leaf(record, [p for p in inst.parts if isinstance(p, Uop)])
+        fmt = formats[name]
         ir_contract.verify_handler(inst, leaf={u.name: u.leaf is not None
-                                               for u in record.uops})
+                                               for u in record.uops},
+                                   temporaries=fmt.window and not fmt.n_inputs)
         records[name] = record
     ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings())
     return records
@@ -6686,7 +6688,6 @@ def async_exit_transport(inst: Instruction, fmt: IRFormat) -> bool:
             or producer.stack.outputs):
         return False
     expected = """{
-        JUMPBY(0);
         (void)oparg;
         assert(PyValue_IsObject(exc_st));
         PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
@@ -6700,6 +6701,7 @@ def async_exit_transport(inst: Instruction, fmt: IRFormat) -> bool:
             monitor_reraise(tstate, frame, this_instr);
             goto exception_unwind;
         }
+        JUMPBY(0);
     }"""
     if statement_shape(producer.body) != statement_shape(
             Parser(expected, "<async exit transport>").block()):
@@ -8391,7 +8393,7 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
                     int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
                     if (err) { ERROR_NO_POP(); }
                     next_instr = this_instr;
-                    DISPATCH();
+                    DISPATCH_SAME_OPARG();
                 }
             }
         }"""

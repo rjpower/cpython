@@ -143,7 +143,8 @@ class SliceTests(unittest.TestCase):
     # batch's differences.md and in the commit that made it.  Batch 8:
     # MATERIALIZE_KWARGS is PyDict_New and one store, which run no Python;
     # INSTRUMENTED_JUMP takes PROCESS_ERROR_AT when the event fails, so
-    # _MONITOR_END_ASYNC_FOR may raise
+    # _MONITOR_END_ASYNC_FOR may raise.  G0d1: it leaves by the redirect exit
+    # when a callback redirects the frame, which the record cannot say
     LISTED_DIFFERENCES = [
         'MATERIALIZE_KWARGS.record.format.runs_code: inferred true, declared false',
         'MATERIALIZE_KWARGS.record.uops[0].effects: inferred 6 entries '
@@ -151,7 +152,7 @@ class SliceTests(unittest.TestCase):
         '"READS_HEAP", "WRITES_HEAP"], declared 3 ["ALLOCATES", "MAY_RAISE", '
         '"WRITES_HEAP"]',
         'INSTRUMENTED_END_ASYNC_FOR/_MONITOR_END_ASYNC_FOR: declares exits(next, '
-        'raise), the record has next',
+        'raise, redirect), the record has next',
         # Batch 3: _PyTemplate_Build is a GC allocation and runs no Python
         'BUILD_TEMPLATE.record.uops[0].effects: inferred 6 entries '
         '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
@@ -263,6 +264,7 @@ EXTRA_ROWS = """
     HELPER(spam_write, void, (PyObject *), ARGS(object), NONE, EFFECTS(writes)) \\
     INTRINSIC(SPAM_FT_ONLY, ARGS(scalar), SCALAR, BUILD(free_threaded)) \\
     MACRO(SPAM_RAISE, ARGS(scalar), NONE, EFFECTS(raises), EXITS(raise)) \\
+    MACRO(SPAM_EVENT, ARGS(), NONE, EFFECTS(runs_python), EXITS(redirect)) \\
     HELPER(T, PyValue, (PyValue), ARGS(taken), \\
            VALUE_OR_NULL(owned), EFFECTS(allocates, raises)) \\
     MACRO(SPAM_GUARD, ARGS(scalar), NONE, EFFECTS(), EXITS(miss)) \
@@ -307,7 +309,7 @@ class VerifierTests(unittest.TestCase):
         self.addCleanup(os.remove, self.filename)
         self.table = ir_contract.rows() | ir_contract.parse_rows(EXTRA_ROWS)
 
-    def verify(self, source):
+    def verify(self, source, temporaries=False):
         with open(self.filename, "w") as f:
             f.write(cases.parser.BEGIN_MARKER)
             f.write(textwrap.dedent(source))
@@ -319,12 +321,12 @@ class VerifierTests(unittest.TestCase):
         # The handler rules for macros; an inst's inputs come from outside
         for inst in result.instructions.values():
             if len([p for p in inst.parts if isinstance(p, cases.analyzer.Uop)]) > 1:
-                ir_contract.verify_handler(inst, self.table)
+                ir_contract.verify_handler(inst, self.table, temporaries=temporaries)
         return result
 
-    def refuses(self, source, message):
+    def refuses(self, source, message, temporaries=False):
         with self.assertRaisesRegex(SyntaxError, message):
-            self.verify(source)
+            self.verify(source, temporaries)
 
     # The notation
 
@@ -2032,6 +2034,44 @@ class VerifierTests(unittest.TestCase):
                 spam_dealloc(PyValue_AsKnownObjectBorrow(x));
             }
         """, r"passes `x` to PyValue_AsKnownObjectBorrow, which requires .*object of it")
+
+    def test_an_assumption_on_a_temporary_survives_a_declared_redirect(self):
+        # INSTRUMENTED_END_ASYNC_FOR: a temporary is replaced only by a
+        # debugger's f_lineno jump, which redirects the frame; a uop that
+        # declares the redirect exit leaves the word then, so on its next
+        # path the temporary holds what exception_unwind pushed
+        source = """
+            op(_EVENT, (--)) effects(runs_python) exits(next, %s) {
+                %s
+            }
+            op(_USE, (x: taken assumed(object) by exception_unwind --))
+                effects(releases) exits(next)
+            {
+                spam_dealloc(PyValue_AsKnownObjectBorrow(x));
+                PyValue_CLOSE(x);
+            }
+            macro(OP) = _EVENT + _USE;
+        """
+        redirects = source % ("redirect", "SPAM_EVENT();")
+        self.verify(redirects, temporaries=True)
+        # An input that may be a local home: any reentry may have replaced it
+        # (a finalizer writes locals through FrameLocalsProxy)
+        self.refuses(redirects, r"`x`, which may have been replaced since the handler's "
+                     r"entry, at _EVENT, which may reenter \(")
+        # A reentry without the redirect exit refuses a temporary too
+        self.refuses(source % ("raise", "Py_ssize_t n = _PyValue_Size(PyValue_None);\n"
+                               "                ERROR_IF(n < 0);"),
+                     r"`x`, which may have been replaced since the handler's entry, at "
+                     r"_EVENT, which may reenter and declares no redirect exit",
+                     temporaries=True)
+        # The real handler verifies with its window, and refuses without it
+        inst = analysis.instructions["INSTRUMENTED_END_ASYNC_FOR"]
+        ir_contract.verify_handler(inst, temporaries=True)
+        with self.assertRaisesRegex(SyntaxError, r"_END_ASYNC_FOR assumes object by "
+                                    r"exception_unwind of `exc_st`, which may have been "
+                                    r"replaced since the handler's entry, at "
+                                    r"_MONITOR_END_ASYNC_FOR"):
+            ir_contract.verify_handler(inst)
 
     def test_assumed_row_results(self):
         # _LOAD_ATTR_CLASS: the cached descriptor is not NULL by the cache's

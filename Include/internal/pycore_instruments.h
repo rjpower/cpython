@@ -5,6 +5,7 @@
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_ir_observer.h"   // _PyIRObserverResult
 #include "pycore_structs.h"       // _PyInstr
 #include "pycore_typedefs.h"      // _PyInterpreterFrame
 
@@ -50,7 +51,10 @@ PyAPI_FUNC(int) _Py_COLD_FUNCTION
 _Py_call_instrumentation_instruction(
     PyThreadState *tstate, _PyInterpreterFrame* frame, _PyInstr *instr);
 
-PyAPI_FUNC(_PyInstr *) _Py_COLD_FUNCTION
+/* The jump or branch event and the line events of its edge: status -1 with
+ * an exception set, 0 to go on at dest, or 1 when a callback redirected the
+ * frame to `next`, frame->instr_ptr (which may be dest or the current word) */
+PyAPI_FUNC(_PyIRObserverResult) _Py_COLD_FUNCTION
 _Py_call_instrumentation_jump(
     _PyInstr *instr, PyThreadState *tstate, int event,
     _PyInterpreterFrame *frame, _PyInstr *src, _PyInstr *dest);

@@ -2134,12 +2134,16 @@
     /* Evidence (G0c8): ceval_macros.h:514, the jump's event.  While tracing it only sets \
      * next_instr to the destination.  Otherwise _Py_call_instrumentation_jump \
      * runs the tools' callbacks and the line events of the edge (Python \
-     * code: runs_python, and a callback can redirect frame->instr_ptr); NULL \
-     * is an error, which the macro takes to PROCESS_ERROR_AT(RAISE) itself, \
-     * with the instruction pointer set to the instruction after instr_ptr: \
-     * the word's raise exit.  It owns no values */ \
+     * code: runs_python); status -1 is an error, which the macro takes to \
+     * PROCESS_ERROR_AT(RAISE) itself, with the instruction pointer set to the \
+     * instruction after instr_ptr: the word's raise exit.  Status 1 is a \
+     * callback's redirect of the frame (frame_lineno_set_impl, \
+     * Objects/frameobject.c: the debugger's jump retires the temporaries the \
+     * new word does not keep, and every successful jump redirects, the same \
+     * word through f_lineno_generation); the macro dispatches the new word at \
+     * once, the word's redirect exit.  It owns no values */ \
     MACRO(INSTRUMENTED_JUMP, \
-        ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(runs_python), EXITS(raise)) \
+        ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(runs_python), EXITS(raise, redirect)) \
     /* Evidence (G0c8): ceval_macros.h:245: empty outside Py_DEBUG; in a debug build it \
      * calls maybe_lltrace_resume_frame and stores frame->lltrace (a frame field). */ \
     MACRO(LLTRACE_RESUME_FRAME, \
@@ -2186,10 +2190,12 @@
         ARGS(tstate, frame, scalar), SCALAR, EFFECTS(runs_python)) \
     /* Evidence (G0c8): instrumentation.c:1827: the jump or branch event \
      * (call_instrumentation_vector: callbacks run Python), then the line events of the \
-     * source edge (source_edge_events).  Returns the word to run: dest, frame->instr_ptr \
-     * when an observer redirected the frame, or NULL with an exception set.  The result \
-     * is a pointer, so it stays SCALAR; the caller tests NULL. */ \
-    HELPER(_Py_call_instrumentation_jump, _PyInstr *, (_PyInstr *, PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, _PyInstr *), \
+     * source edge (source_edge_events).  Returns a status and the word to run: {0, dest}; \
+     * {1, frame->instr_ptr} when an observer redirected the frame (observer_redirected, \
+     * which sees the generation of a jump to the same word); {-1, NULL} with an \
+     * exception set.  The result holds no value, so it is SCALAR; the caller tests the \
+     * status. */ \
+    HELPER(_Py_call_instrumentation_jump, _PyIRObserverResult, (_PyInstr *, PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, _PyInstr *), \
         ARGS(scalar, tstate, scalar, frame, scalar, scalar), SCALAR, EFFECTS(runs_python)) \
     /* Evidence (G0c8): instrumentation.c:1920: finds the line event for this word and \
      * calls the tools' callbacks (Python); returns the original opcode of the word, or \

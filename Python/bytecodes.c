@@ -183,8 +183,10 @@ dummy_func(
             }
         }
 
+        // After instrumenting the code it runs its word again, now with its
+        // instrumented handler: a jump to the word
         tier1 op(_MAYBE_INSTRUMENT, (--))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, jump, raise)
         {
             #ifdef Py_GIL_DISABLED
             // For thread-safety, we need to check instrumentation version
@@ -203,7 +205,7 @@ dummy_func(
                         ERROR_NO_POP();
                     }
                     next_instr = this_instr;
-                    DISPATCH();
+                    DISPATCH_SAME_OPARG();
                 }
             }
         }
@@ -492,14 +494,14 @@ dummy_func(
             // The end of an `async for`'s send loop is its left branch. The
             // tools of other sends are none, and the call returns at once.
             if (!tstate->tracing) {
-                _PyIRWord *dest = _Py_call_instrumentation_jump(
+                _PyIRObserverResult jump = _Py_call_instrumentation_jump(
                     this_instr, tstate, PY_MONITORING_EVENT_BRANCH_LEFT, frame,
                     this_instr, next_instr);
-                if (dest == NULL) {
+                if (jump.status < 0) {
                     PyValue_CLOSE(held);
                     ERROR_NO_POP();
                 }
-                next_instr = dest;
+                next_instr = jump.next;
             }
             val = held;
         }
@@ -2116,8 +2118,14 @@ dummy_func(
             goto exception_unwind;
         }
 
-        tier1 window op(_END_ASYNC_FOR, (awaitable_st, exc_st -- )) {
-            JUMPBY(0); // Pretend jump as we need source offset for monitoring
+        // exc_st is the exception that exception_unwind pushed into a
+        // temporary; INSTRUMENTED_JUMP's callbacks in _MONITOR_END_ASYNC_FOR
+        // can replace a temporary only by redirecting the frame, and a
+        // redirect leaves the word
+        tier1 window op(_END_ASYNC_FOR,
+                (awaitable_st: taken, exc_st: taken assumed(object) by exception_unwind -- ))
+            effects(runs_python) exits(next, jump, raise)
+        {
             (void)oparg;
             // An exception being handled is an instance of BaseException
             assert(PyValue_IsObject(exc_st));
@@ -2133,10 +2141,14 @@ dummy_func(
                 monitor_reraise(tstate, frame, this_instr);
                 goto exception_unwind;
             }
+            // Pretend jump as we need source offset for monitoring; after
+            // the raise, so that the word's successor is set only on the
+            // path that completes
+            JUMPBY(0);
         }
 
         tier1 op(_MONITOR_END_ASYNC_FOR, ( -- ))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, raise, redirect)
         {
             assert(_PyIR_BaseOpcode(_PyIR_RealHandler(frame, JUMP_TARGET(oparg))) == SEND);
             INSTRUMENTED_JUMP(JUMP_TARGET(oparg), this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);

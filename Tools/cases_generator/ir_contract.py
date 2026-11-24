@@ -64,8 +64,12 @@ COVERS = {
 # The effects at whose sites heap facts die (1.1)
 KILLS = frozenset(("writes", "releases", "runs_python", "polls", "switches_frame"))
 
+# `redirect`: a monitoring callback moved the frame to another word (a
+# debugger's f_lineno jump, which retires the temporaries it does not keep);
+# the word leaves for frame->instr_ptr without the rest of its handler.  On
+# the uop's other exits no callback redirected the frame.
 EXITS = ("next", "branch", "jump", "miss", "deopt", "raise", "enter", "return",
-         "yield", "exit")
+         "yield", "exit", "redirect")
 
 # Feedback access (design 1.6, section 6): what a row or a uop reads and
 # writes of its site's feedback, transitively.  `entry` is every field of
@@ -4052,13 +4056,16 @@ REGION_KINDS = ("inline", "split", "shared")
 
 
 def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
-                   leaf: dict[str, bool] | None = None) -> None:
+                   leaf: dict[str, bool] | None = None,
+                   temporaries: bool = False) -> None:
     """In a handler whose uops all declare contracts: each fact that a uop
     requires of an input is live where it runs (V8), with heap facts dying
     at every KILLS effect and an unestablished `object` met by the
     generator's implicit guard; no guard follows a uop after which the word
     cannot restart (V6).  A declared region kind fits the uops (V10).
-    leaf maps uop names to whether the generator made them leaf."""
+    leaf maps uop names to whether the generator made them leaf.
+    temporaries: the word's format holds every input in a temporary of its
+    window, never in a local home."""
     table = rows() if table is None else table
     parts = [p for p in inst.parts if isinstance(p, Uop)]
     if inst.region is not None:
@@ -4081,9 +4088,16 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
     fresh = iter(range(1, 1 << 20))
     restartable, why = True, ""
     # The values that reach the handler, and the first site since its entry
-    # that may have replaced any of them in its home (F7's binding)
+    # that may have replaced any of them in its home (F7's binding).  A local
+    # home may be written by any reentry (a finalizer through
+    # FrameLocalsProxy).  A temporary only by a debugger's f_lineno jump,
+    # which a monitoring callback of this frame makes and which always
+    # redirects the frame: on the next path of a uop that declares the
+    # redirect exit no jump was made, so only a reentry in a uop without the
+    # exit, or the skeleton's close, may have replaced a temporary
+    # (replaced_temporary).
     entry: set[int] = set()
-    replaced = ""
+    replaced = replaced_temporary = ""
 
     def pop(item: Item) -> int | None:
         "The value of an input, or None if the stack's depth is unknown"
@@ -4153,10 +4167,11 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
                     raise analysis_error(
                         f"{inst.name}: {part.name} assumes {said} of `{item.name}`, a value "
                         "made in this handler, whose facts must show it", inst.where)
-                if replaced:
+                since = replaced_temporary if temporaries else replaced
+                if since:
                     raise analysis_error(
                         f"{inst.name}: {part.name} assumes {said} of `{item.name}`, which "
-                        f"may have been replaced since the handler's entry, at {replaced}",
+                        f"may have been replaced since the handler's entry, at {since}",
                         inst.where)
                 facts[value] = implied(facts[value] | {a.fact for a in item.assumed})
             missing = implied(item.facts) - facts.get(value, frozenset())
@@ -4199,6 +4214,8 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
                 facts[v] = frozenset()
         if effects & REENTRY and not replaced:
             replaced = f"{part.name}, which may reenter"
+        if effects & REENTRY and "redirect" not in contract.exits and not replaced_temporary:
+            replaced_temporary = f"{part.name}, which may reenter and declares no redirect exit"
         changes = effects - {"reads", "raises"}
         if restartable and changes:
             restartable, why = False, f"{part.name}, which may {', '.join(sorted(changes))}"
@@ -4218,6 +4235,7 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
                 # value (design.md 3.2)
                 facts = {v: frozenset() for v in facts}
                 replaced = replaced or f"the skeleton's close of `{name}` after {part.name}"
+                replaced_temporary = replaced_temporary or replaced
                 if restartable and contract.input(name) is not None:
                     restartable = False
                     why = f"the skeleton's close of `{name}` after {part.name}"

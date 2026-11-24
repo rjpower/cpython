@@ -11,11 +11,11 @@
 
 /* The arms' handler ids follow the old handlers, in definition order */
 #define ROP_FIRST_HANDLER IR_NUM_HANDLERS
-#define ROP_NUM_HANDLERS 3
+#define ROP_NUM_HANDLERS 6
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,
               "the arms' handler ids fit the handler field");
 #define ROP_NUM_FAMILIES 68
-#define ROP_NUM_ARMS 3
+#define ROP_NUM_ARMS 6
 
 /* Family numbers, in name order */
 enum {
@@ -91,8 +91,11 @@ enum {
 
 /* Handler numbers of the arms */
 #define ROP_HANDLER_Add_Int (ROP_FIRST_HANDLER + 0)
-#define ROP_HANDLER_Add_Generic (ROP_FIRST_HANDLER + 1)
-#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 2)
+#define ROP_HANDLER_Add_Float (ROP_FIRST_HANDLER + 1)
+#define ROP_HANDLER_Add_Text (ROP_FIRST_HANDLER + 2)
+#define ROP_HANDLER_Add_Extended (ROP_FIRST_HANDLER + 3)
+#define ROP_HANDLER_Add_Generic (ROP_FIRST_HANDLER + 4)
+#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 5)
 
 /* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */
 #define ROP_POINT_Add_BoxFailed 1
@@ -599,6 +602,9 @@ static const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {
 
 static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Add.Int", ROP_HANDLER_Add_Int, ROP_FAMILY_Add, 1},
+    {"Add.Float", ROP_HANDLER_Add_Float, ROP_FAMILY_Add, 1},
+    {"Add.Text", ROP_HANDLER_Add_Text, ROP_FAMILY_Add, 1},
+    {"Add.Extended", ROP_HANDLER_Add_Extended, ROP_FAMILY_Add, 1},
     {"Add.Generic", ROP_HANDLER_Add_Generic, ROP_FAMILY_Add, 1},
     {"GetAttr.Instance", ROP_HANDLER_GetAttr_Instance, ROP_FAMILY_GetAttr, 0},
 };

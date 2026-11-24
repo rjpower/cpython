@@ -635,9 +635,18 @@ _PyIR_Stub_BINARY_OP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWor
 /* The stubs of the register instruction arms, defined in generated_rop_stubs.c.h */
 static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Add_Float(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Add_Text(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Add_Extended(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 const _PyIRStubPlan _PyIR_StubPlans[512] = {
     [419] = {_PyIR_PLAN_INLINE, 0, 419, NULL, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Int
-    [420] = {_PyIR_PLAN_SHARED, 1, 420, (const void *)_PyIR_Rop_Stub_Add_Generic, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Generic
+    [420] = {_PyIR_PLAN_SHARED, 0, 420, (const void *)_PyIR_Rop_Stub_Add_Float, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Float
+    [421] = {_PyIR_PLAN_SHARED, 0, 421, (const void *)_PyIR_Rop_Stub_Add_Text, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Text
+    [422] = {_PyIR_PLAN_SHARED, 1, 422, (const void *)_PyIR_Rop_Stub_Add_Extended, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Extended
+    [423] = {_PyIR_PLAN_SHARED, 1, 423, (const void *)_PyIR_Rop_Stub_Add_Generic, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Generic
     [117] = {_PyIR_PLAN_SHARED, 1, 117, (const void *)_PyIR_Stub_UNPACK_SEQUENCE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE
     [124] = {_PyIR_PLAN_SHARED, 0, 124, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_LIST, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_LIST
     [125] = {_PyIR_PLAN_SHARED, 0, 125, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_TUPLE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_TUPLE

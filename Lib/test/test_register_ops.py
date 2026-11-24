@@ -596,7 +596,7 @@ class DefinitionTests(unittest.TestCase):
     def test_pilot(self):
         p = self.program
         self.assertEqual(sorted(a.name for a in p.arms_of("Add")),
-                         ["Add.Generic", "Add.Int"])
+                         ["Add.Extended", "Add.Float", "Add.Generic", "Add.Int", "Add.Text"])
         self.assertIn("GetAttr.Instance", p.arms)
         self.assertIsNotNone(p.macros["adapt_before_use_add"].graph)
         self.assertIsNotNone(p.macros["binary_at_origin"].graph)

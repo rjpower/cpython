@@ -16,6 +16,7 @@ if not hasattr(capi, "jit_template_run"):
 from test.test_jit_template import slot_of, word_of
 
 FORM, TEMPLATE, STUB = 0, 1, 2
+_PyIR_MISS = 1
 _PyIR_AGAIN = 16
 
 SOURCES = {
@@ -62,7 +63,12 @@ def run(kind, lhs, rhs, mode, handler):
     word asked to run again."""
     f, index, fields = compiled(kind)
     result, counts = probe(f, index, fields, lhs, rhs, mode, handler)
+    if mode == STUB and result[0] & _PyIR_MISS:
+        # The compiled site's cold path: the family's generic stub
+        result, counts = probe(f, index, fields, lhs, rhs, STUB, arms()["Add.Generic"])
     again = result[0] == (_PyIR_AGAIN if mode == STUB else index)
+    if mode == STUB and result[0] & _PyIR_AGAIN:
+        again = True
     if again:
         result, counts = probe(f, index, fields, lhs, rhs, FORM, -1)
     return result, result[3][slot_of(fields, "D" if False else "A")], counts, again
@@ -98,6 +104,8 @@ PAIRS = [
 def same(x, y):
     if isinstance(x, Bump) and isinstance(y, Bump):
         return x.n == y.n
+    if isinstance(x, float) and isinstance(y, float) and x != x and y != y:
+        return True
     return type(x) is type(y) and (x == y or x is y)
 
 
@@ -178,6 +186,75 @@ class IntTests(unittest.TestCase):
                         agree(self, kind, lhs, rhs, mode, add_int)
 
 
+FLOAT_PAIRS = [(1.5, 2.5), (1.5, 2), (2, 1.5), (-0.0, 0.0), (1e308, 1e308),
+               (float("inf"), float("-inf")), (3, 4), ("a", "b"), (1.5, "a"), (2**60, 1.5)]
+TEXT_PAIRS = [("a", "b"), ("", "x"), ("é", "ñ"), ("x" * 1000, "y"), (3, 4), ("a", 1),
+              (type("S", (str,), {})("a"), "b")]
+
+
+class ArmTests(unittest.TestCase):
+    """Add.Float and Add.Text, by the form and the stub: a pair that the arm
+    does not admit misses to the generic arm"""
+
+    def check(self, arm, pairs):
+        handler = arms()[arm]
+        for kind in SOURCES:
+            for lhs, rhs in pairs:
+                for mode in (FORM, STUB):
+                    with self.subTest(arm=arm, kind=kind, lhs=lhs, rhs=rhs, mode=mode):
+                        agree(self, kind, lhs, rhs, mode, handler)
+
+    def test_float(self):
+        self.check("Add.Float", FLOAT_PAIRS)
+
+    def test_text(self):
+        self.check("Add.Text", TEXT_PAIRS)
+
+
+def adapted(kind, lhs, rhs, arm):
+    """A function whose word has been adapted to arm by running the generic
+    arm on lhs and rhs, and its word's index and fields"""
+    f, index, fields = compiled(kind)
+    generic = arms()["Add.Generic"]
+    for _ in range(4000):
+        probe(f, index, fields, lhs, rhs, FORM, generic)
+        if handler_of(f, index) == arms()[arm]:
+            return f, index, fields
+        generic = -1 if handler_of(f, index) != arms()["Add.Generic"] else generic
+    raise AssertionError(f"the word never selected {arm}")
+
+
+class ExtendedTests(unittest.TestCase):
+    CASES = [([1], [2]), ((1,), (2,)), (b"x", b"y"), ([], []), ((), ())]
+
+    def test_adaptation_picks_each_arm(self):
+        for arm, lhs, rhs in [("Add.Float", 1.5, 2.5), ("Add.Float", 1.5, 2),
+                              ("Add.Text", "a", "b"), ("Add.Extended", [1], [2]),
+                              ("Add.Extended", (1,), (2,)), ("Add.Extended", b"x", b"y"),
+                              ("Add.Int", 3, 4)]:
+            with self.subTest(arm=arm, lhs=lhs):
+                adapted("locals", lhs, rhs, arm)
+
+    def test_extension_arm_and_its_miss(self):
+        for lhs, rhs in self.CASES:
+            for kind in SOURCES:
+                for mode in (FORM, STUB):
+                    with self.subTest(kind=kind, lhs=lhs, mode=mode):
+                        f, index, fields = adapted(kind, lhs, rhs, "Add.Extended")
+                        (_, _, exc, slots), counts = probe(f, index, fields, lhs, rhs, mode, -1)
+                        self.assertIsNone(exc)
+                        out = slots[slot_of(fields, "A")]
+                        self.assertEqual(out, lhs + rhs)
+                        self.assertIs(type(out), type(lhs))
+                        # Other operand types leave the arm for the generic one
+                        f, index, fields = adapted(kind, lhs, rhs, "Add.Extended")
+                        (_, _, exc, _), counts = probe(f, index, fields, lhs, 5, mode, -1)
+                        if mode == STUB:
+                            (_, _, exc, _), counts = probe(
+                                f, index, fields, lhs, 5, mode, arms()["Add.Generic"])
+                        self.assertIsInstance(exc, TypeError)
+
+
 class AdaptationTests(unittest.TestCase):
     def test_generic_installs_int_through_a_ticket(self):
         generic = arms()["Add.Generic"]
@@ -198,11 +275,11 @@ class AdaptationTests(unittest.TestCase):
         generic = arms()["Add.Generic"]
         f, index, fields = compiled("locals")
         for i in range(2000):
-            slots = {slot_of(fields, "B"): "a", slot_of(fields, "C"): "b"}
+            slots = {slot_of(fields, "B"): Bump(1), slot_of(fields, "C"): 2}
             nxt, _, exc, out = capi.jit_template_run(f, index, slots, FORM, generic)
             self.assertIsNone(exc)
             self.assertEqual(nxt, index + 1)
-            self.assertEqual(out[slot_of(fields, "A")], "ab")
+            self.assertEqual(out[slot_of(fields, "A")].n, 3)
 
 
 if __name__ == "__main__":

@@ -1078,7 +1078,9 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(formats["GET_AWAITABLE"].borrow_mask, 1)
         self.assertTrue(formats["GET_AWAITABLE"].store_dst)
         self.assertFalse(formats["GET_AWAITABLE"].no_fold)
-        self.assertEqual(instruction.parts[0].aliased_outputs, ("iter",))
+        # Declared `iter: owned`: the transferred reference is the output's
+        # own, so it aliases no input
+        self.assertEqual(instruction.parts[0].aliased_outputs, ())
         predicate = "coro_awaitable_can_transfer"
         self.assertIn(predicate, analyzer.NON_ESCAPING_FUNCTIONS)
         self.assertNotIn(predicate, analyzer.IR_MARKER_EFFECTS)
@@ -1257,29 +1259,55 @@ class TestIRCases(unittest.TestCase):
         guard_instruction = ir_generator.replace(instruction, parts=[guard])
         self.assertIsNone(ir_generator.analyze_error_effects(guard_instruction))
 
-    def test_suspension_effect_requires_a_state_write(self):
-        def suspends(inst):
-            return any(ir_records.suspends_frame(part) for part in inst.parts
-                       if isinstance(part, analyzer.Uop))
+    def test_a_suspension_is_declared(self):
+        # The frame switch of a body that names none (`frame = ...`) takes
+        # the switch exits its uop declares; the generator state the body
+        # writes decides nothing
+        def switches(inst):
+            return [t.kind for part in inst.parts if isinstance(part, analyzer.Uop)
+                    for t in ir_records.uop_transfers(part, "")
+                    if t.kind in (ir_records.ENTER_FRAME, ir_records.YIELD)]
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
         Path(self.temp_input_filename).write_text(source)
         analysis = analyzer.analyze_files([self.temp_input_filename])
-        for name in ("SEND", "SEND_GEN"):
-            self.assertIn("FRAME_CREATED", ir_generator.uop_tokens(
-                analysis.instructions[name]))
-            self.assertFalse(suspends(analysis.instructions[name]))
         for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
-            self.assertTrue(suspends(analysis.instructions[name]))
-        source = source.replace(
-            "FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);",
-            "assert(gen->gi_frame_state == FRAME_SUSPENDED + oparg);")
-        source = source.replace("gen->gi_frame_state = FRAME_CREATED;",
-                                "assert(gen->gi_frame_state == FRAME_CREATED);")
+            self.assertEqual(switches(analysis.instructions[name]), [ir_records.YIELD])
+        declared = "effects(reads, writes, switches_frame) exits(yield)"
+        self.assertEqual(source.count(declared), 1)
+        source = source.replace(declared, "effects(reads, writes, switches_frame) exits(enter)")
         Path(self.temp_input_filename).write_text(source)
         mutated = analyzer.analyze_files([self.temp_input_filename])
         for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
-            self.assertFalse(suspends(mutated.instructions[name]))
+            self.assertEqual(switches(mutated.instructions[name]),
+                             [ir_records.ENTER_FRAME])
+
+    def test_the_guarded_call_prefix_is_declared(self):
+        # The binding plan relies on the callable's declared facts and on
+        # the prefix's declared guard reasons, not on the guards' bodies
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+
+        def validate(text):
+            Path(self.temp_input_filename).write_text(text)
+            with handle_stderr():
+                analysis = analyzer.analyze_files([self.temp_input_filename])
+            formats = ir_generator.compute_formats(analysis)
+            for name in ("CALL_PY_GENERAL", "CALL_KW_PY"):
+                ir_generator.validate_guarded_python_call(
+                    analysis.instructions[name], formats[name])
+
+        validate(source)
+        version = ("-- callable: exact(PyFunction_Type) func_version(func_version), "
+                   "unused, unused[oparg]))")
+        for old, new in [('"the recursion budget is spent"', '"spam"'),
+                         (version, version.replace(" func_version(func_version)", "")),
+                         ("op(_CHECK_PEP_523, (--))\n            effects(reads)",
+                          "op(_CHECK_PEP_523, (--))\n            effects(reads, writes)")]:
+            with self.subTest(old):
+                self.assertEqual(source.count(old), 1)
+                with self.assertRaisesRegex(SyntaxError, "requires the checked prefix"):
+                    validate(source.replace(old, new))
 
     def test_physical_output_mapping_matches_window_finalization(self):
         source = (Path(__file__).resolve().parents[2] /

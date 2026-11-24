@@ -97,6 +97,9 @@ LOWERINGS = {
     "_PyObject_Shape": Lowering(1),
     "_PyObject_ValueSlot": Lowering(),
     "_PyObject_ShapeReadDup": Lowering(1, calls=True),
+    "_PyValueSlot_Exchange": Lowering(1),
+    "_PyValueSlot_ExchangeFilled": Lowering(1),
+    "_PyValueSlot_Fill": Lowering(),
     "DK_UNICODE_ENTRIES": Lowering(2),
     "_PyDictValues_AddToInsertionOrder": Lowering(2),
     "_PyDictValues_SetShape": Lowering(),
@@ -277,7 +280,6 @@ EFFECT_OPS = {"detach", "slot_store", "store", "take"}
 COUNT_PRIMS = {"PyValue_DUP", "PyValue_XDUP", "PyValue_CLOSE", "PyValue_XCLOSE",
                "PyValue_CLOSE_SPECIALIZED"}
 CLOSES = {"PyValue_CLOSE", "PyValue_XCLOSE", "PyValue_CLOSE_SPECIALIZED"}
-INLINE_FACTS = {"INLINE_INT", "INLINE_FLOAT", "NUMBER"}
 
 
 def temp_test(operand) -> str | None:
@@ -425,7 +427,8 @@ class Builder:
         # its close is nothing
         for guard in u.guards:
             for fact in guard.facts:
-                if fact.kind in INLINE_FACTS and fact.subject[1:].isdigit():
+                if (fact.kind == "ENCODING" and fact.subject[1:].isdigit()
+                        and set(fact.arg.split("|")) <= ir_contract.INLINE_WORDS):
                     v = self.env.get(int(fact.subject[1:]))
                     if v is not None:
                         self.inline.add(v)
@@ -573,6 +576,14 @@ class Builder:
                 return gb
             if name != "COMPARISON_BIT" and name not in LOWERINGS:
                 raise Refused(f"no lowering of {name}")
+            # A local's input that a primitive consumes needs a count of its
+            # own, as one that a store moves elsewhere does
+            prim_row = row(name)
+            for arg, row_arg in zip(args, prim_row.args if prim_row else ()):
+                if row_arg.mode == "consumed" and arg in self.views:
+                    operand = self.views[arg]
+                    if operand.may_name != TEMP_ONLY:
+                        self.add(gb, "take", [], [arg], None, local_test(operand))
         if k == "store" and args[1] in self.views:
             operand = self.views[args[1]]
             if operand.may_name != TEMP_ONLY:

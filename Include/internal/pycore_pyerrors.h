@@ -124,6 +124,15 @@ static inline void _PyErr_ClearExcState(_PyErr_StackItem *exc_state)
     Py_CLEAR(exc_state->exc_value);
 }
 
+/* Move the handled exception's reference out of exc_state: the caller owns
+   the result (NULL if none is handled) and the field is NULL. */
+static inline PyObject* _PyErr_StackItemTakeValue(_PyErr_StackItem *exc_state)
+{
+    PyObject *value = exc_state->exc_value;
+    exc_state->exc_value = NULL;
+    return value;
+}
+
 extern PyObject* _PyErr_StackItemToExcInfoTuple(
     _PyErr_StackItem *err_info);
 

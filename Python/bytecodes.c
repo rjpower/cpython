@@ -183,8 +183,10 @@ dummy_func(
             }
         }
 
+        // After instrumenting the code it runs its word again, now with its
+        // instrumented handler: a jump to the word
         tier1 op(_MAYBE_INSTRUMENT, (--))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, jump, raise)
         {
             #ifdef Py_GIL_DISABLED
             // For thread-safety, we need to check instrumentation version
@@ -203,7 +205,7 @@ dummy_func(
                         ERROR_NO_POP();
                     }
                     next_instr = this_instr;
-                    DISPATCH();
+                    DISPATCH_SAME_OPARG();
                 }
             }
         }
@@ -238,7 +240,7 @@ dummy_func(
             _JIT_EVENT;
 
         op(_MONITOR_RESUME, (--))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, raise, redirect)
         {
             int err = _Py_call_instrumentation(
                     tstate, oparg == 0 ? PY_MONITORING_EVENT_PY_START : PY_MONITORING_EVENT_PY_RESUME, frame, this_instr);
@@ -246,7 +248,7 @@ dummy_func(
             ERROR_IF(err);
             if (frame->instr_ptr != this_instr) {
                 /* Instrumentation has jumped */
-                next_instr = frame->instr_ptr;
+                DISPATCH_REDIRECT();
             }
         }
 
@@ -471,7 +473,7 @@ dummy_func(
         tier1 inst(INSTRUMENTED_END_SEND,
                 (receiver: consumed assumed(object) by compiler_send_loop,
                  index_or_null: closed, value: consumed -- val: moved(value)))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, raise, redirect)
         {
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
             // Taken before the monitoring call, which can run code
@@ -490,14 +492,20 @@ dummy_func(
             // The end of an `async for`'s send loop is its left branch. The
             // tools of other sends are none, and the call returns at once.
             if (!tstate->tracing) {
-                _PyIRWord *dest = _Py_call_instrumentation_jump(
+                _PyIRObserverResult jump = _Py_call_instrumentation_jump(
                     this_instr, tstate, PY_MONITORING_EVENT_BRANCH_LEFT, frame,
                     this_instr, next_instr);
-                if (dest == NULL) {
+                if (jump.status < 0) {
                     PyValue_CLOSE(held);
                     ERROR_NO_POP();
                 }
-                next_instr = dest;
+                if (jump.status > 0) {
+                    // An observer moved the frame: the word leaves for its
+                    // choice, and the sent value is no longer the word's
+                    PyValue_CLOSE(held);
+                    DISPATCH_REDIRECT();
+                }
+                next_instr = jump.next;
             }
             val = held;
         }
@@ -1576,7 +1584,11 @@ dummy_func(
             _GUARD_TOS_INT + _GUARD_NOS_LIST + unused/1 + _STORE_SUBSCR_LIST_INT + POP_TOP + POP_TOP;
 
         // The index and stored value stay in canonical representation.
-        leaf inline_ok op(_STORE_SUBSCR_LIST_INT, (value, list_st, sub_st -- ls, ss)) {
+        leaf inline_ok op(_STORE_SUBSCR_LIST_INT,
+                (value: consumed, list_st: taken exact(PyList_Type), sub_st: taken inline_int
+                 -- ls: moved(list_st) exact(PyList_Type), ss: moved(sub_st) inline_int))
+            effects(reads, writes, releases) exits(next, deopt)
+        {
             PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
             assert(PyList_CheckExact(list));
 
@@ -1589,18 +1601,17 @@ dummy_func(
             }
             if (index < 0 || index >= len) {
                 UNLOCK_OBJECT(list);
-                DEOPT_IF(true);
+                DEOPT_IF(true, "the index is out of range");
             }
             STAT_INC(STORE_SUBSCR, hit);
 
-            // a move: replaced below
-            PyValue old_value = _PyList_ITEMS(list)[index];
-            _PyList_ITEMS(list)[index] = TAKE(value);
-            assert(!PyValue_IsNull(old_value));
+            // A list's items are never NULL, and the index is in range
+            PyValue item = TAKE(value);
+            PyValue old_value = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index, item);
             UNLOCK_OBJECT(list);  // unlock before decrefs!
-            INPUTS_DEAD();
             ls = list_st;
             ss = sub_st;
+            INPUTS_DEAD();
             PyValue_CLOSE(old_value);
         }
 
@@ -1746,7 +1757,7 @@ dummy_func(
 
         // The result remains C-owned through child retirement. Completion
         // publishes it to the caller or consumes it as a loop/send outcome.
-        returns op(_RETURN_VALUE, (retval: consumed --))
+        op(_RETURN_VALUE, (retval: consumed --))
             effects(switches_frame) exits(return, raise)
         {
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
@@ -1767,7 +1778,7 @@ dummy_func(
             IR_RETURN_TO_CALLER(temp, generator_return);
         }
 
-        ir_only returns op(_RETURN_VALUE_EMPTY, (retval: consumed --))
+        ir_only op(_RETURN_VALUE_EMPTY, (retval: consumed --))
             effects(switches_frame) exits(return, raise)
         {
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
@@ -2088,7 +2099,7 @@ dummy_func(
         boundary(YIELD_VALUE) at(last) resumes(SEND, STORE_LOCAL);
 
         tier1 op(_YIELD_VALUE_EVENT, (val -- val))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, raise, redirect)
         {
             int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_YIELD,
@@ -2099,8 +2110,7 @@ dummy_func(
             }
             if (frame->instr_ptr != this_instr) {
                 RELOAD_STACK();
-                next_instr = frame->instr_ptr;
-                DISPATCH();
+                DISPATCH_REDIRECT();
             }
         }
 
@@ -2159,8 +2169,14 @@ dummy_func(
             goto exception_unwind;
         }
 
-        tier1 window op(_END_ASYNC_FOR, (awaitable_st, exc_st -- )) {
-            JUMPBY(0); // Pretend jump as we need source offset for monitoring
+        // exc_st is the exception that exception_unwind pushed into a
+        // temporary; INSTRUMENTED_JUMP's callbacks in _MONITOR_END_ASYNC_FOR
+        // can replace a temporary only by redirecting the frame, and a
+        // redirect leaves the word
+        tier1 window op(_END_ASYNC_FOR,
+                (awaitable_st: taken, exc_st: taken assumed(object) by exception_unwind -- ))
+            effects(runs_python) exits(next, jump, raise)
+        {
             (void)oparg;
             // An exception being handled is an instance of BaseException
             assert(PyValue_IsObject(exc_st));
@@ -2176,10 +2192,14 @@ dummy_func(
                 monitor_reraise(tstate, frame, this_instr);
                 goto exception_unwind;
             }
+            // Pretend jump as we need source offset for monitoring; after
+            // the raise, so that the word's successor is set only on the
+            // path that completes
+            JUMPBY(0);
         }
 
         tier1 op(_MONITOR_END_ASYNC_FOR, ( -- ))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, raise, redirect)
         {
             assert(_PyIR_BaseOpcode(_PyIR_RealHandler(frame, JUMP_TARGET(oparg))) == SEND);
             INSTRUMENTED_JUMP(JUMP_TARGET(oparg), this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);
@@ -3475,17 +3495,19 @@ dummy_func(
             }
         }
 
-        inline_ok op(_STORE_ATTR_INSTANCE_VALUE, (offset/1, value, owner --)) {
+        inline_ok op(_STORE_ATTR_INSTANCE_VALUE,
+                (offset/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases) exits(next, miss)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
 
             assert(_PyObject_GetManagedDict(owner_o) == NULL);
             PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-            PyValue old_value = *value_ptr;  // a move: replaced below
 #ifdef Py_SHAPES
             /* This store does not grow the type's shapes.  An addition whose
              * transition is missing goes to STORE_ATTR, which creates it, so
              * that the instance keeps a shape. */
-            if (PyValue_IsNull(old_value)) {
+            if (PyValue_IsNull(*value_ptr)) {
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 if (_PyShape_TransitionMissing(Py_TYPE(owner_o), values->shape,
                                                value_ptr - values->values)) {
@@ -3495,7 +3517,8 @@ dummy_func(
             }
 #endif
             STAT_INC(STORE_ATTR, hit);
-            *value_ptr = TAKE(value);
+            PyValue item = TAKE(value);
+            PyValue old_value = _PyValueSlot_Exchange(value_ptr, item);
             if (PyValue_IsNull(old_value)) {
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 Py_ssize_t index = value_ptr - values->values;
@@ -3523,12 +3546,15 @@ dummy_func(
             _GUARD_DORV_NO_DICT +
             _STORE_ATTR_INSTANCE_VALUE;
 
-        leaf inline_ok op(_STORE_ATTR_SHAPE, (offset/1, value, owner --)) {
+        leaf inline_ok op(_STORE_ATTR_SHAPE,
+                (offset/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases) exits(next)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-            PyValue old_value = *value_ptr;  // a move: replaced below
-            assert(!PyValue_IsNull(old_value));
-            *value_ptr = TAKE(value);
+            PyValue item = TAKE(value);
+            // The shape guard shows the slot filled
+            PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
             STAT_INC(STORE_ATTR, hit);
             PyValue_XCLOSE(owner);
             PyValue_CLOSE(old_value);
@@ -3540,11 +3566,15 @@ dummy_func(
             _GUARD_SHAPE +
             _STORE_ATTR_SHAPE;
 
-        leaf inline_ok op(_STORE_ATTR_SHAPE_ADD, (shape_to/0, offset/1, value, owner --)) {
+        leaf inline_ok op(_STORE_ATTR_SHAPE_ADD,
+                (shape_to/0, offset/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases) exits(next)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-            assert(PyValue_IsNull(*value_ptr));
-            *value_ptr = TAKE(value);
+            PyValue item = TAKE(value);
+            // The shape guard shows the attribute absent: the slot holds NULL
+            _PyValueSlot_Fill(value_ptr, item);
             PyDictValues *values = _PyObject_InlineValues(owner_o);
             _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
             _PyDictValues_SetShape(values, (uint8_t)shape_to);
@@ -3558,7 +3588,10 @@ dummy_func(
             _GUARD_SHAPE +
             _STORE_ATTR_SHAPE_ADD;
 
-        inline_ok op(_STORE_ATTR_WITH_HINT, (hint/1, value, owner --)) {
+        inline_ok op(_STORE_ATTR_WITH_HINT,
+                (hint/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases, runs_python) exits(next, deopt, raise)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
             PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
@@ -3583,8 +3616,7 @@ dummy_func(
             // values, apart from its keys.
             PyValue *value_ptr = dict->ma_values == NULL ?
                 &ep->me_value : &dict->ma_values->values[hint];
-            PyValue old_value = *value_ptr;  // a move: replaced below
-            if (PyValue_IsNull(old_value)) {
+            if (PyValue_IsNull(*value_ptr)) {
                 UNLOCK_OBJECT(dict);
                 DEOPT_IF(true, "the hinted entry holds no value");
             }
@@ -3598,7 +3630,8 @@ dummy_func(
                 ERROR_IF(err < 0);
             }
             else {
-                *value_ptr = TAKE(value);
+                PyValue item = TAKE(value);
+                PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
                 UNLOCK_OBJECT(dict);
                 PyValue_XCLOSE(owner);
                 PyValue_XCLOSE(old_value);
@@ -3611,14 +3644,16 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             _STORE_ATTR_WITH_HINT;
 
-        leaf op(_STORE_ATTR_SLOT, (index/1, value, owner --)) {
+        leaf op(_STORE_ATTR_SLOT, (index/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases) exits(next, deopt)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
 
             DEOPT_IF(!LOCK_OBJECT(owner_o));
             PyValue *addr = _PyObject_ValueSlot(owner_o, index);
             STAT_INC(STORE_ATTR, hit);
-            PyValue old_value = *addr;  // a move: replaced below
-            *addr = TAKE(value);
+            PyValue item = TAKE(value);
+            PyValue old_value = _PyValueSlot_Exchange(addr, item);
             UNLOCK_OBJECT(owner_o);
             PyValue_XCLOSE(owner);
             PyValue_XCLOSE(old_value);
@@ -3976,18 +4011,16 @@ dummy_func(
             PyObject *match_type = PyValue_AsKnownObjectBorrow(held_type);
 
             _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
-            PyObject *match_o = matched.match;
-            PyObject *rest_o = matched.rest;
             PyValue_CLOSE(held_type);
             PyValue_CLOSE(held_exc);
             // A null match is an error, including a failed match (res < 0)
-            ERROR_IF(match_o == NULL);
+            ERROR_IF(matched.match == NULL);
 
-            if (!Py_IsNone(match_o)) {
-                PyErr_SetHandledException(match_o);
+            if (!Py_IsNone(matched.match)) {
+                PyErr_SetHandledException(matched.match);
             }
-            exc_rest = PyValue_FromObjectSteal(rest_o);
-            exc_match = PyValue_FromObjectSteal(match_o);
+            exc_rest = PyValue_FromObjectSteal(matched.rest);
+            exc_match = PyValue_FromObjectSteal(matched.match);
         }
 
         outlined inst(CHECK_EXC_MATCH,
@@ -4102,7 +4135,12 @@ dummy_func(
             COPY, TO_BOOL, POP_JUMP_IF_TRUE,
         ];
 
-        leaf replaced op(_POP_JUMP_IF_FALSE, (cond -- )) {
+        // cond is an exact bool, which owes nothing (True and False are
+        // immortal): every handler makes it with a _TO_BOOL, _IS_NONE or
+        // _GUARD_TOS_BOOL before this uop
+        leaf replaced op(_POP_JUMP_IF_FALSE, (cond: consumed exact(PyBool_Type) -- ))
+            effects() exits(next, branch)
+        {
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsFalse(cond);
             DEAD(cond);
@@ -4112,7 +4150,12 @@ dummy_func(
             }
         }
 
-        leaf replaced op(_POP_JUMP_IF_TRUE, (cond -- )) {
+        // cond is an exact bool, which owes nothing (True and False are
+        // immortal): every handler makes it with a _TO_BOOL, _IS_NONE or
+        // _GUARD_TOS_BOOL before this uop
+        leaf replaced op(_POP_JUMP_IF_TRUE, (cond: consumed exact(PyBool_Type) -- ))
+            effects() exits(next, branch)
+        {
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsTrue(cond);
             DEAD(cond);
@@ -4531,9 +4574,11 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        replaced op(_FOR_ITER, (iter, null_or_index -- iter, null_or_index, next)) {
-            _PyStatusValue step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(iter), &window[1]);
-            null_or_index = window[1];
+        replaced op(_FOR_ITER, (iter, index: consumed -- iter, next_index: inline encoding(tagged_index|null), next: owned))
+            effects(runs_python) exits(next, branch, raise)
+        {
+            PyValue cursor = TAKE(index);
+            _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(iter), cursor);
             PyValue item = step.value;
             int found = step.status;
             if (found <= 0) {
@@ -4543,6 +4588,7 @@ dummy_func(
                 PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
                 IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
+            next_index = step.cursor;
             next = item;
         }
 
@@ -4552,12 +4598,17 @@ dummy_func(
         // index-protocol iterator; a NULL cursor steps an object-protocol
         // iterator through its C value slot, and a type without the slot
         // exits.
-        replaced op(_FOR_ITER_VIRTUAL, (iter, null_or_index -- iter, null_or_index, next)) {
-            assert(PyValue_IsObject(iter));
+        replaced op(_FOR_ITER_VIRTUAL,
+                (iter: assumed(object) by GET_ITER, index: consumed
+                 -- iter, next_index: inline encoding(tagged_index|null), next: owned))
+            effects(runs_python) exits(next, branch, raise, miss)
+        {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            if (PyValue_IsNull(null_or_index)) {
+            if (PyValue_IsNull(index)) {
                 _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(Py_TYPE(iter_o), iternext);
                 EXIT_IF(next_value == NULL, "the type has no iternext value slot");
+                PyValue spent = TAKE(index);
+                _PyValue_DropCursor(spent);
                 _PyStatusValue step = next_value(iter_o);
                 if (step.status != PYGEN_NEXT) {
                     // A StopIteration is the exhaustion; any other error
@@ -4568,22 +4619,24 @@ dummy_func(
                     PyValue completed = PyValue_IsNull(step.value) ? PyValue_None : step.value;
                     IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
                 }
+                next_index = PyValue_NULL;
                 next = step.value;
             }
             else {
-                Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+                Py_ssize_t position = PyValue_UntagIndex(index);
+                PyValue spent = TAKE(index);
+                _PyValue_DropCursor(spent);
                 _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
-                _PyValueIndexPair next_index = iteritem(iter_o, index);
-                index = next_index.index;
-                if (PyValue_IsNull(next_index.value)) {
-                    if (index < 0) {
+                _PyValueIndexPair item = iteritem(iter_o, position);
+                if (PyValue_IsNull(item.value)) {
+                    if (item.index < 0) {
                         ERROR_NO_POP();
                     }
                     PyValue completed = PyValue_None;
                     IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
                 }
-                null_or_index = PyValue_TagIndex(index);
-                next = next_index.value;
+                next_index = PyValue_TagIndex(item.index);
+                next = item.value;
             }
         }
 
@@ -4668,11 +4721,15 @@ dummy_func(
 #endif
         }
 
-        leaf replaced op(_ITER_NEXT_LIST, (iter, null_or_index -- iter, null_or_index, next)) {
+        leaf replaced op(_ITER_NEXT_LIST,
+                (iter: object, index: consumed -- iter, next_index: inline, next: owned))
+            effects(reads) exits(next)
+        {
             PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
             assert(PyList_CheckExact(list_o));
-            next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
-            null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
+            next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
+            next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
+            DEAD(index);
         }
 
         macro(FOR_ITER_LIST) =
@@ -4703,13 +4760,17 @@ dummy_func(
             }
         }
 
-        leaf op(_ITER_NEXT_TUPLE, (iter, null_or_index -- iter, null_or_index, next)) {
+        leaf op(_ITER_NEXT_TUPLE,
+                (iter: object, index: consumed -- iter, next_index: inline, next: owned))
+            effects(reads) exits(next)
+        {
             PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
             assert(Py_TYPE(tuple_o) == &PyTuple_Type);
-            uintptr_t i = PyValue_UntagIndex(null_or_index);
+            uintptr_t i = PyValue_UntagIndex(index);
             assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
-            next = PyValue_XDUP(PyTuple_GET_VALUE(tuple_o, i));
-            null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
+            next = PyValue_DUP(PyTuple_GET_VALUE(tuple_o, i));
+            next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
+            DEAD(index);
         }
 
         macro(FOR_ITER_TUPLE) =
@@ -4893,8 +4954,9 @@ dummy_func(
         {
 
             _PyErr_StackItem *exc_info = tstate->exc_info;
-            if (exc_info->exc_value != NULL) {
-                prev_exc = PyValue_FromObjectSteal(exc_info->exc_value);
+            PyObject *prev_o = _PyErr_StackItemTakeValue(exc_info);
+            if (prev_o != NULL) {
+                prev_exc = PyValue_FromObjectSteal(prev_o);
             }
             else {
                 prev_exc = PyValue_None;

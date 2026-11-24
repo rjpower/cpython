@@ -1290,10 +1290,10 @@ value_load_global(PyObject *globals, PyObject *builtins, PyObject *name)
 static _PyStatusValue
 _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                PyValueBorrow iter, PyValue *index_ptr);
-static inline Py_ALWAYS_INLINE _PyStatusValue
+static inline Py_ALWAYS_INLINE _PyForIterStep
 _PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
                                      _PyInterpreterFrame *frame,
-                                     PyValueBorrow iter, PyValue *index_ptr);
+                                     PyValueBorrow iter, PyValue cursor);
 static int _PyForIter_StopIsExhaustion(PyThreadState *tstate,
                                          _PyInterpreterFrame *frame);
 
@@ -7585,15 +7585,16 @@ _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *na
 }
 
 /* FOR_ITER's step: the item and 1, the completion value and 0, or the
- * error and -1; a StopIteration is the completion. */
-static inline Py_ALWAYS_INLINE _PyStatusValue
+ * error and -1; a StopIteration is the completion.  The cursor goes in and
+ * comes out, advanced by an item of an index-protocol iterator. */
+static inline Py_ALWAYS_INLINE _PyForIterStep
 _PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
                                      _PyInterpreterFrame *frame,
-                                     PyValueBorrow iter, PyValue *index_ptr)
+                                     PyValueBorrow iter, PyValue cursor)
 {
-    _PyStatusValue result = {0, PyValue_NULL};
+    _PyForIterStep result = {0, PyValue_NULL, cursor};
     PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-    PyValueBorrow index = PyValue_Borrow(*index_ptr);
+    PyValueBorrow index = PyValue_Borrow(cursor);
     if (PyValue_IsTaggedIndex(index)) {
         intptr_t i = PyValue_UntagIndex(index);
         assert(i >= 0);
@@ -7604,7 +7605,7 @@ _PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
             result.status = i < 0 ? -1 : 0;
             return result;
         }
-        *index_ptr = PyValue_TagIndex(i);
+        result.cursor = PyValue_TagIndex(i);
         result.status = 1;
         return result;
     }
@@ -7624,7 +7625,9 @@ _PyForIter_VirtualIteratorNextInline(PyThreadState *tstate,
      * StopIteration once and keeps the returned owner without fabricating
      * a separate RAISE. Both are the caller's status and value as they are. */
     if (step.status != PYGEN_ERROR) {
-        return step;
+        result.status = step.status;
+        result.value = step.value;
+        return result;
     }
     if (_PyForIter_StopIsExhaustion(tstate, frame)) {
         return result;
@@ -7653,7 +7656,9 @@ static Py_NO_INLINE _PyStatusValue
 _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                PyValueBorrow iter, PyValue *index_ptr)
 {
-    return _PyForIter_VirtualIteratorNextInline(tstate, frame, iter, index_ptr);
+    _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(tstate, frame, iter, *index_ptr);
+    *index_ptr = step.cursor;
+    return (_PyStatusValue){step.status, step.value};
 }
 
 /* Check if a 'cls' provides the given special method. */

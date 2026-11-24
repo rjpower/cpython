@@ -236,7 +236,6 @@ annotations = {
     "leaf",
     "window",
     "no_fold",
-    "returns",
     "ir_only",
     "outlined",
 }

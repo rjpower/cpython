@@ -1276,13 +1276,13 @@ leaf_probe__ITER_NEXT_LIST(_PyInterpreterFrame *frame, PyValue *stack_pointer, i
 {
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, null_or_index, next;
-    null_or_index = stack_pointer[-1];
+    PyValue iter, index, next_index, next;
+    index = stack_pointer[-1];
     iter = stack_pointer[-2];
     PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
-    next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
-    null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
-    stack_pointer[-1] = null_or_index;
+    next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
+    next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
+    stack_pointer[-1] = next_index;
     stack_pointer[0] = next;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -1323,14 +1323,14 @@ leaf_probe__ITER_NEXT_TUPLE(_PyInterpreterFrame *frame, PyValue *stack_pointer, 
 {
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, null_or_index, next;
-    null_or_index = stack_pointer[-1];
+    PyValue iter, index, next_index, next;
+    index = stack_pointer[-1];
     iter = stack_pointer[-2];
     PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
-    uintptr_t i = PyValue_UntagIndex(null_or_index);
-    next = PyValue_XDUP(PyTuple_GET_VALUE(tuple_o, i));
-    null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
-    stack_pointer[-1] = null_or_index;
+    uintptr_t i = PyValue_UntagIndex(index);
+    next = PyValue_DUP(PyTuple_GET_VALUE(tuple_o, i));
+    next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
+    stack_pointer[-1] = next_index;
     stack_pointer[0] = next;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -2025,8 +2025,8 @@ leaf_probe__STORE_ATTR_SHAPE(_PyInterpreterFrame *frame, PyValue *stack_pointer,
     value = stack_pointer[-2];
     PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
     PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-    PyValue old_value = *value_ptr;
-    *value_ptr =      value ;
+    PyValue item =      value ;
+    PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
     STAT_INC(STORE_ATTR, hit);
     stack_pointer += -2;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -2049,7 +2049,8 @@ leaf_probe__STORE_ATTR_SHAPE_ADD(_PyInterpreterFrame *frame, PyValue *stack_poin
     value = stack_pointer[-2];
     PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
     PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-    *value_ptr =      value ;
+    PyValue item =      value ;
+    _PyValueSlot_Fill(value_ptr, item);
     PyDictValues *values = _PyObject_InlineValues(owner_o);
     _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
     _PyDictValues_SetShape(values, (uint8_t)shape_to);
@@ -2077,8 +2078,8 @@ leaf_probe__STORE_ATTR_SLOT(_PyInterpreterFrame *frame, PyValue *stack_pointer, 
     }
     PyValue *addr = _PyObject_ValueSlot(owner_o, index);
     STAT_INC(STORE_ATTR, hit);
-    PyValue old_value = *addr;
-    *addr =      value ;
+    PyValue item =      value ;
+    PyValue old_value = _PyValueSlot_Exchange(addr, item);
     UNLOCK_OBJECT(owner_o);
     stack_pointer += -2;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -2114,8 +2115,8 @@ leaf_probe__STORE_SUBSCR_LIST_INT(_PyInterpreterFrame *frame, PyValue *stack_poi
         }
     }
     STAT_INC(STORE_SUBSCR, hit);
-    PyValue old_value = _PyList_ITEMS(list)[index];
-    _PyList_ITEMS(list)[index] =      value ;
+    PyValue item =      value ;
+    PyValue old_value = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index, item);
     UNLOCK_OBJECT(list);
     ls = list_st;
     ss = sub_st;

@@ -79,9 +79,9 @@ import ir_numbers
 from ir_records import (
     ASSIGNMENTS, CONST, DEOPT, ENTER_FRAME, EXIT_GUARD, FEEDBACK, GUARD_TOKENS, NEXT,
     IMMEDIATE, LOCAL, MAY_RAISE, OPERANDS, POLY_TABLE_READERS, RELEASE_LIKE,
-    RUNS_PYTHON, SITE_TOKENS, SLOT, TARGET, TEMP, WINDOW, YIELD, CallShape, Fact,
+    RUNS_PYTHON, SITE_TOKENS, SLOT, TARGET, TEMP, WINDOW, YIELD, CallShape,
     FeedbackOperand, FeedbackSchema, Guard, Operand, OperationRecord, Subjects,
-    Transfer, UopRecord, assigns_to, changes, check_record, feedback_schema,
+    Transfer, UopRecord, assigns_to, changes, check_record, encoding, feedback_schema,
     guard_facts, uop_record_effects, passed_through, record_through, result_facts,
     site_tokens, uop_transfers, walk_values,
 )
@@ -1641,7 +1641,7 @@ def metadata_only_passthroughs(inst: Instruction) -> frozenset[int]:
             tstate, PY_MONITORING_EVENT_PY_YIELD, frame, this_instr, val);
         if (err) { RELOAD_STACK(); ERROR_NO_POP(); }
         if (frame->instr_ptr != this_instr) {
-            RELOAD_STACK(); next_instr = frame->instr_ptr; DISPATCH();
+            RELOAD_STACK(); DISPATCH_REDIRECT();
         }
     }"""
     if (len(markers) != 1 or len(inputs) != 3 or len(outputs) != 3
@@ -2041,7 +2041,8 @@ def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tup
                 nulls.discard(texts[0])
         if not markers:
             exits = texts and texts[0] in {
-                "ERROR_NO_POP", "IR_COMPLETE_STEP", "IR_RETURN_TO_CALLER", "DISPATCH"}
+                "ERROR_NO_POP", "IR_COMPLETE_STEP", "IR_RETURN_TO_CALLER", "DISPATCH",
+                "DISPATCH_REDIRECT"}
             if exits and deferred:
                 raise analysis_error("deferred owner exits before terminal observer", tokens[0])
             return not exits
@@ -3575,6 +3576,8 @@ class IREmitter(Emitter):
         self.current_uop: UopRecord | None = None
         self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
         self._replacers["DISPATCH_SAME_OPARG"] = self.dispatch_same_oparg
+        # DISPATCH_REDIRECT is DISPATCH() at the word the callback chose
+        self._replacers["DISPATCH_REDIRECT"] = self.dispatch
         self._replacers["IR_DST"] = self.ir_dst
         self._replacers["IR_DST_SLOT"] = self.ir_dst_slot
         self._replacers["IR_BASE"] = self.ir_base
@@ -6127,7 +6130,7 @@ def implicit_object_guards(walk, index: int, uop: Uop, known: set[int]) -> list[
     for item in inputs:
         if item.name in uop.object_inputs and item.value not in known:
             result.append(Guard(EXIT_GUARD, None, item.name,
-                                facts=(Fact("OBJECT", f"v{item.value}"),)))
+                                facts=(encoding(f"v{item.value}", "object"),)))
             known.add(item.value)
     return result
 
@@ -6237,8 +6240,10 @@ def build_records(analysis: Analysis,
             record = replace(record, form=f"SHARED_BODY({generator_word_entry(name, analysis)})")
         check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
         ir_leaf.check_leaf(record, [p for p in inst.parts if isinstance(p, Uop)])
+        fmt = formats[name]
         ir_contract.verify_handler(inst, leaf={u.name: u.leaf is not None
-                                               for u in record.uops})
+                                               for u in record.uops},
+                                   temporaries=fmt.window and not fmt.n_inputs)
         records[name] = record
     ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings())
     return records
@@ -6298,7 +6303,20 @@ def validate_dict_first_probe(inst: Instruction, fmt: IRFormat) -> None:
                              "dictionary reader prefix and scalar format", inst.where)
 
 
+# What IR_INVOKE_GUARDED_PYTHON_CALL's cached binding plan relies on (its
+# row's evidence): the callable is the function of the plan's version, no
+# PEP 523 evaluator replaces the call, and the recursion budget holds a
+# frame.  The prefix declares each, the first as its pass-through's facts
+# and the others as its guards' reasons (IS_PEP523_HOOKED's CONTEXT).
+GUARDED_CALL_FACTS = frozenset((ir_contract.VFact("exact", "PyFunction_Type"),
+                                ir_contract.VFact("func_version", "func_version")))
+GUARDED_CALL_REASONS = frozenset(("a PEP 523 frame evaluator may replace the call",
+                                  "the recursion budget is spent"))
+
+
 def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
+    """The guarded Python call's handler: its composition and operands, and a
+    prefix whose declarations establish what the binding plan relies on"""
     parts = [p for p in inst.parts if isinstance(p, Uop)]
     markers = [(p, t) for p in parts for t in p.body.tokens()
                if t.text == "IR_INVOKE_GUARDED_PYTHON_CALL"]
@@ -6329,13 +6347,16 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
         guard_shapes[1][0].append(("unused", True, ""))
         guard_shapes[1][1].append(("unused", True, ""))
         invoke_shape[0].append(("kwnames", False, ""))
-    def statements(part):
-        return [" ".join(t.text for t in stmt.tokens())
-                for stmt in part.body.body]
-    checks = [statements(p) for p in prefix]
-    # These guards' semantics are a shared contract with this optimization.
-    # The source primitives establish the PEP 523, version/provider and
-    # recursion facts; their shape and nonescaping prefix are checked here.
+    contracts = [ir_contract.contract_of(p) for p in prefix]
+    facts: set = set()
+    reasons = set()
+    for part, contract in zip(prefix, contracts):
+        if contract is None:
+            break
+        facts.update(*(o.facts for o in contract.outputs if o.name == "callable"))
+        for site in site_tokens(part):
+            if site.text in GUARD_TOKENS:
+                reasons.add(ir_contract.record_guard_facts(part, site, ())[1])
     if (inst.name not in ("CALL_PY_GENERAL", "CALL_KW_PY") or
             not fmt.window or not fmt.store_dst
             or fmt.field_of(ROLE_BASE) is None or fmt.field_of(ROLE_DST) is None
@@ -6347,23 +6368,16 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
             or [(shape(p.stack.inputs), shape(p.stack.outputs))
                 for p in prefix] != guard_shapes
             or (shape(invoke.stack.inputs), shape(invoke.stack.outputs)) != invoke_shape
-            or " ".join(t.text for t in invoke.body.tokens()) !=
-               "{ IR_INVOKE_GUARDED_PYTHON_CALL ( ) ; }"
-            or any(not p.is_guard() or p.properties.escapes or p.properties.eval_breaker
-                   or p.properties.switches_frame or p.properties.error_with_pop
-                   or p.properties.error_without_pop or p.properties.sync_sp
-                   or changes(p, "callable", False) for p in prefix)
-            or [len(check) for check in checks] != [1, 4, 1]
-            or checks[0][0] != "DEOPT_IF ( IS_PEP523_HOOKED ( tstate ) ) ;"
-            or "PyValue_AsKnownObjectBorrow ( callable )" not in checks[1][0]
-            or not checks[1][0].startswith("PyObject * callable_o = ")
-            or not checks[1][2].startswith("PyFunctionObject * func = ")
-            or "callable_o" not in checks[1][2]
-            or checks[1][1] != "EXIT_IF ( ! PyFunction_Check ( callable_o ) ) ;"
-            or checks[1][3] != "EXIT_IF ( func -> func_version != func_version ) ;"
-            or checks[2][0] != "DEOPT_IF ( tstate -> py_recursion_remaining <= 1 , "
-                               "\"the recursion budget is spent\" ) ;"):
-
+            or [t.text for t, _ in ir_contract.body_calls(invoke)]
+               != ["IR_INVOKE_GUARDED_PYTHON_CALL"]
+            # The prefix is declared guards that read, and the callable
+            # passes through it unchanged
+            or None in contracts
+            or any(not c.effects <= {"reads"} or not c.exits <= {"next", "miss", "deopt"}
+                   or any(o.name == "callable" and o.mode for o in c.outputs)
+                   for c in contracts)
+            or not GUARDED_CALL_FACTS <= ir_contract.implied(facts)
+            or not GUARDED_CALL_REASONS <= reasons):
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
 
 
@@ -6453,7 +6467,7 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
                 raise analysis_error("home loop index shadows its extent or array", stmt.for_)
             body = list(stmt.body.tokens())
             if any(t.text in {"break", "continue", "goto", "return", "DISPATCH",
-                              "DISPATCH_INLINED", "JUMPTO", "JUMPBY", "ERROR_IF",
+                              "DISPATCH_REDIRECT", "DISPATCH_INLINED", "JUMPTO", "JUMPBY", "ERROR_IF",
                               "ERROR_NO_POP", "EXIT_IF", "DEOPT_IF", "Py_UNREACHABLE"}
                    or t.kind.startswith("CMACRO") or
                    (t.kind == "IDENTIFIER" and t.text.isupper() and
@@ -6842,7 +6856,6 @@ def async_exit_transport(inst: Instruction, fmt: IRFormat) -> bool:
             or producer.stack.outputs):
         return False
     expected = """{
-        JUMPBY(0);
         (void)oparg;
         assert(PyValue_IsObject(exc_st));
         PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
@@ -6856,6 +6869,7 @@ def async_exit_transport(inst: Instruction, fmt: IRFormat) -> bool:
             monitor_reraise(tstate, frame, this_instr);
             goto exception_unwind;
         }
+        JUMPBY(0);
     }"""
     if statement_shape(producer.body) != statement_shape(
             Parser(expected, "<async exit transport>").block()):
@@ -6892,7 +6906,7 @@ def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
                         for t in uop_token_list(inst))
             and not any(t.text.startswith(("_PyFrame_", "_PyHomeBitmap_"))
                         for t in uop_token_list(inst))
-            and not any(t.text in {"slots", "window", "DISPATCH",
+            and not any(t.text in {"slots", "window", "DISPATCH", "DISPATCH_REDIRECT",
                                   "DISPATCH_INLINED", "IR_COMPLETE_STEP"}
                         for t in uop_token_list(inst))
             and all(not any(t.text == "frame" or t.text in NORMAL_FRAME_OBSERVERS
@@ -8434,8 +8448,7 @@ def abrupt_suspend_contract(inst: Instruction, fmt: IRFormat) -> bool:
             }
             if (frame->instr_ptr != this_instr) {
                 RELOAD_STACK();
-                next_instr = frame->instr_ptr;
-                DISPATCH();
+                DISPATCH_REDIRECT();
             }
         }"""))
     if len(parts) != len(expected):
@@ -8556,7 +8569,7 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
                     int err = _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
                     if (err) { ERROR_NO_POP(); }
                     next_instr = this_instr;
-                    DISPATCH();
+                    DISPATCH_SAME_OPARG();
                 }
             }
         }"""

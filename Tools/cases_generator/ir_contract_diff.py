@@ -44,7 +44,8 @@ OUTPUT_OWNERSHIP = {"": ir_records.THROUGH, "owned": ir_records.OWNED,
 TRANSFER_EXIT = {ir_records.NEXT: "next", ir_records.BRANCH: "branch",
                  ir_records.JUMP: "jump", ir_records.RAISE: "raise",
                  ir_records.ENTER_FRAME: "enter", ir_records.RETURN: "return",
-                 ir_records.YIELD: "yield", ir_records.EXIT: "exit"}
+                 ir_records.YIELD: "yield", ir_records.EXIT: "exit",
+                 ir_records.REDIRECT: "redirect"}
 GUARD_EXIT = {ir_records.EXIT_GUARD: "miss", ir_records.DEOPT_GUARD: "deopt"}
 # The fields that hold a conjunction of facts
 CONJUNCTIONS = {ir_records.Guard: ("facts",), ir_records.UopRecord: ("results",)}

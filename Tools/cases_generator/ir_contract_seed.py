@@ -103,12 +103,16 @@ def uop_facts(analysis, records) -> dict[str, dict]:
                 for f in facts:
                     m = re.fullmatch(r"(\w+)\((.*?)(?:, (.*))?\)", f)
                     subject = values.get(m.group(2), m.group(2))
-                    entry["guards"].setdefault(subject, set()).add((m.group(1), m.group(3) or ""))
+                    # An argument that is a record value (in_bounds(v0)) is
+                    # written as the item that holds it, as the vocabulary does
+                    arg = values.get(m.group(3) or "", m.group(3) or "")
+                    entry["guards"].setdefault(subject, set()).add((m.group(1), arg))
             entry["implicit"].add(implicit)
             for f in u["results"]:
                 m = re.fullmatch(r"(\w+)\((.*?)(?:, (.*))?\)", f)
                 subject = values.get(m.group(2), m.group(2))
-                entry["results"].setdefault(subject, set()).add((m.group(1), m.group(3) or ""))
+                arg = values.get(m.group(3) or "", m.group(3) or "")
+                entry["results"].setdefault(subject, set()).add((m.group(1), arg))
     return found
 
 

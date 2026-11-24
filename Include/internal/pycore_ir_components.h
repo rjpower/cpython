@@ -1133,8 +1133,12 @@
     /* Guards: ir_records.GUARD_TOKENS maps each to EXIT_GUARD (miss); \
      * IR_HELPER_EFFECTS gives IR_GUARD_INLINE_INT, IR_GUARD_ELEMENT_TYPE, \
      * IR_GUARD_ELEMENT_INDEX and IR_DUP_CANONICAL_ELEMENT an empty set.  \
-     * The element index is a variable that the macro declares */ \
-    MACRO(IR_GUARD_INLINE_INT, ARGS(borrowed), NONE, EFFECTS(reads), \
+     * The element index is a variable that the macro declares.  \
+     * IR_GUARD_INLINE_INT expands to !PyValue_IsInlineInt(x) \
+     * (ir_leaf.capability_expansion), a test of the operand's tag bits \
+     * (the PyValue_IsInlineInt row: EFFECTS()), so it reads no heap or \
+     * frame state */ \
+    MACRO(IR_GUARD_INLINE_INT, ARGS(borrowed), NONE, EFFECTS(), \
           EXITS(miss)) \
     MACRO(IR_GUARD_ELEMENT_TYPE, ARGS(borrowed, scalar), NONE, \
           EFFECTS(reads), EXITS(miss)) \
@@ -1155,11 +1159,16 @@
      * close_input_homes, write_output_home).  IR_BUILD_TUPLE and \
      * IR_BUILD_LIST call _PyTuple_FromValueStealOnSuccess and its list \
      * twin: they allocate, return NULL on failure (the uop raises) and keep \
-     * the values on failure (taken); IR_HELPER_EFFECTS has an empty set */ \
+     * the values on failure (taken); MACRO_EFFECTS gives the tuple \
+     * ALLOCATES.  Neither reads nor writes in design 1.3's sense: the \
+     * source is the uop's input home array, an operand; the only object \
+     * written is the new one (and the GC list, through \
+     * _PyObject_GC_TRACK); the empty tuple is immortal.  tuple_alloc and \
+     * PyList_New set MemoryError, hence raises */ \
     MACRO(IR_BUILD_TUPLE, ARGS(taken), VALUE_OR_NULL(owned), \
-          EFFECTS(reads, writes, allocates, raises), EXITS()) \
+          EFFECTS(allocates, raises), EXITS()) \
     MACRO(IR_BUILD_LIST, ARGS(taken), VALUE_OR_NULL(owned), \
-          EFFECTS(reads, writes, allocates, raises), EXITS()) \
+          EFFECTS(allocates, raises), EXITS()) \
     /* _Py_BuildString_ValueSteal and _Py_BuildMap_ValueSteal: \
      * IR_HELPER_EFFECTS marks them "escapes" (they hash, compare and \
      * release, which may run Python).  The values are taken, as for the \
@@ -1178,9 +1187,11 @@
           EFFECTS(reads, writes, allocates, raises, runs_python), EXITS()) \
     /* _PyFrame_WriteHome / _PyFrame_TakeHome: IR_HELPER_EFFECTS has an empty \
      * set for both.  A value written moves into the home; a value taken \
-     * moves out of it */ \
+     * moves out of it.  IR_WRITE_OUTPUT stores into a home of the uop's \
+     * own output array (_PyFrame_WriteHome is `*home = value`), which \
+     * design 1.3 excludes from writes ("a home other than its outputs") */ \
     MACRO(IR_WRITE_OUTPUT, ARGS(out, scalar, consumed), NONE, \
-          EFFECTS(writes), EXITS()) \
+          EFFECTS(), EXITS()) \
     MACRO(IR_TAKE_INPUT, ARGS(consumed, scalar), VALUE(owned), \
           EFFECTS(reads, writes), EXITS()) \
     /* _PyFrame_CloseHomeRange: "escapes" in IR_HELPER_EFFECTS; the close \

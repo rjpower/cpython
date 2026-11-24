@@ -1095,7 +1095,7 @@
      * stack pointer). It reads and writes nothing, and the seed's reads \
      * and writes were over-declared. */ \
     HELPER(_Py_LeaveRecursiveCallTstate, void, (PyThreadState *), \
-        ARGS(tstate), NONE, EFFECTS(reads, writes)) \
+        ARGS(tstate), NONE, EFFECTS()) \
     /* Evidence (G0c batch 6): Include/internal/pycore_ceval.h: compares \
      * the machine stack pointer with tstate's c_stack_soft_limit. No call, \
      * no failure (the error is raised later by _Py_CheckRecursiveCall, \
@@ -1700,12 +1700,13 @@
      * the temporaries (call_publish; a finalizer may run) and returns {0, \
      * NULL}, or returns {-1, NULL} with an exception set and the unmoved \
      * operands left in their homes for the unwinder. The macro then \
-     * dispatches the child (enter) or the next word, or raises. The next \
-     * word's dispatch is the macro's own end (call_finished), not an exit \
-     * of a following uop, so the row lists enter and raise. */ \
+     * dispatches the child (enter) or the next word (next: a native or \
+     * generator call completed in place, with CALL_PERIODIC's check done \
+     * inside call_run), or raises. The seed listed enter and raise, the \
+     * transfer table's entries, and omitted the in-place completion. */ \
     MACRO(IR_INVOKE_CALL, ARGS(), NONE, \
           EFFECTS(reads, writes, allocates, raises, releases, runs_python, \
-                  switches_frame), EXITS(enter, raise)) \
+                  switches_frame), EXITS(next, enter, raise)) \
     /* Evidence (G0c batch 6): As IR_INVOKE_CALL, preceded by \
      * call_bind_positional with the cached binding plan (the guards \
      * checked PEP 523, the function version and the recursion budget); a \
@@ -1713,7 +1714,7 @@
      * Effects and exits are IR_INVOKE_CALL's. */ \
     MACRO(IR_INVOKE_GUARDED_PYTHON_CALL, ARGS(), NONE, \
           EFFECTS(reads, writes, allocates, raises, releases, runs_python, \
-                  switches_frame), EXITS(enter, raise))
+                  switches_frame), EXITS(next, enter, raise))
 
 #define _PyIR_COMPONENTS(PRIMITIVE, HELPER, MACRO) \
     _PyIR_COMPONENTS_VALUES(PRIMITIVE, HELPER, MACRO) \

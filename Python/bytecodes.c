@@ -4880,7 +4880,7 @@ dummy_func(
         // When calling Python, inline the call using DISPATCH_INLINED().
         inline_ok op(_DO_CALL,
                 (callable: taken, self_or_null: taken, args[oparg]: taken -- res: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
@@ -4898,7 +4898,7 @@ dummy_func(
         inline_ok op(_PY_FRAME_GENERAL,
                 (callable: taken, self_or_null: taken, args[oparg]: taken
                  -- new_frame: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
@@ -4906,7 +4906,7 @@ dummy_func(
         inline_ok op(_PY_FRAME_GENERAL_GUARDED,
                 (callable: taken, self_or_null: taken, args[oparg]: taken
                  -- new_frame: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_GUARDED_PYTHON_CALL();
         }
@@ -5758,25 +5758,25 @@ dummy_func(
         }
 
         inline_ok op(_DO_CALL_KW,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken
+                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
                  -- res: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
 
         inline_ok op(_PY_FRAME_KW,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken
+                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
                  -- new_frame: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
 
         inline_ok op(_PY_FRAME_KW_GUARDED,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken
+                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
                  -- new_frame: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_GUARDED_PYTHON_CALL();
         }
@@ -5876,9 +5876,9 @@ dummy_func(
 
 
         inline_ok op(_CALL_KW_NON_PY,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken
+                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
                  -- res: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
@@ -5904,7 +5904,7 @@ dummy_func(
         inline_ok op(_DO_CALL_FUNCTION_EX,
                 (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
                  -- result: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
@@ -5948,7 +5948,7 @@ dummy_func(
         inline_ok op(_PY_FRAME_EX,
                 (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
                  -- ex_frame: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
@@ -5978,7 +5978,7 @@ dummy_func(
         inline_ok op(_CALL_FUNCTION_EX_NON_PY_GENERAL,
                 (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
                  -- result: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }

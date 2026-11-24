@@ -243,8 +243,18 @@ def arm_flags(arm: ir_numbers.ArmEntry) -> str:
     return " | ".join(parts)
 
 
-def arm_row(analysis: Analysis, arm: ir_numbers.ArmEntry) -> str:
-    """The _PyIRFormat row of an arm, or of its observed wrapper"""
+def arm_owner_program(fmt: ir_numbers.ArmFormat) -> tuple[OwnershipEvent, ...]:
+    """An arm's owner program: the leaf of its derived transfer, as an old
+    handler with a checked leaf contract has (none for UNKNOWN)"""
+    if fmt.transfer == "_PyIR_TRANSFER_UNKNOWN":
+        return ()
+    return (OwnershipEvent("_PyIR_OWNER_LEAF", src=fmt.transfer),)
+
+
+def arm_row(analysis: Analysis, arm: ir_numbers.ArmEntry,
+            program: tuple[int, int] = (0, 0)) -> str:
+    """The _PyIRFormat row of an arm, or of its observed wrapper; program
+    is its owner program's (start, length) in the owner table"""
     fmt = arm.format
     assert fmt is not None
     own = arm_id(analysis, arm)
@@ -271,8 +281,8 @@ def arm_row(analysis: Analysis, arm: ir_numbers.ArmEntry) -> str:
         f".borrow_mask = {fmt.borrow_mask:#x}, .fb_kind = {fb_kind}, "
         f".fb_size = {fb_size}, .result_phase = _PyIR_RESULT_PHASE_NONE, "
         f".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
-        f".transfer_kind = _PyIR_TRANSFER_UNKNOWN, .owner_program = 0, "
-        f".owner_events = 0, .word_flags = 0, .error_routes = 0, "
+        f".transfer_kind = {fmt.transfer}, .owner_program = {program[0]}, "
+        f".owner_events = {program[1]}, .word_flags = 0, .error_routes = 0, "
         f".operands = {fmt.operands}, {fixed}"
         f".observer_outcome = {{ _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }}, "
         f".reads = {{ {fmt.ninputs}, _PyIR_EXT_FIXED }}, "
@@ -314,6 +324,12 @@ def generate_ir_metadata(
                 raise ValueError("ownership event table is too large")
             programs[key] = len(ownership), len(normal)
             ownership.extend(program)
+    for arm in arms:
+        assert arm.format is not None
+        key = arm_owner_program(arm.format), (), None
+        if key not in programs:
+            programs[key] = len(ownership), len(key[0])
+            ownership.extend(key[0])
     insts = handler_instructions(analysis)
     ids = handler_ids(analysis)
     fact_ids, bases, flags = handler_facts(analysis, formats)
@@ -443,7 +459,9 @@ def generate_ir_metadata(
                                                rows[name].normal_storage])
             out.emit(f"[{name}] = {init},\n")
         for arm in arms:
-            out.emit(f"[{arm_id(analysis, arm)}] = {arm_row(analysis, arm)},  "
+            assert arm.format is not None
+            program = programs[arm_owner_program(arm.format), (), None]
+            out.emit(f"[{arm_id(analysis, arm)}] = {arm_row(analysis, arm, program)},  "
                      f"/* {arm.dotted} */\n")
         out.emit("};\n")
         out.emit("#endif\n\n")

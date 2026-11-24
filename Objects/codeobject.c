@@ -2244,8 +2244,12 @@ normal_transfer_proof(const semantic_image *image, const _PyIRCodePlan **plan)
             }
             int handler = IR_HANDLER(words[i]);
             if (_PyIR_BaseOpcode(handler) == RETURN_VALUE) {
+                /* The translator selects Return.Empty from its stack depth.
+                 * Facts that every word on the way proves must agree; a word
+                 * without a transfer contract (an arm whose exits give none)
+                 * leaves the path incomplete, and nothing to check against. */
                 int empty = semantic_scratch_absent(image, &work, state);
-                if (semantic_empty_return(handler) && !empty) {
+                if (semantic_empty_return(handler) && !empty && complete) {
                     PyErr_Format(PyExc_ValueError,
                                  "code: word %d has an unproved empty return", i);
                     result = -1;

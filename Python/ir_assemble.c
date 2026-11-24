@@ -146,9 +146,17 @@ assemble_recipe(struct assembler *a, _PyRegCfg *cfg, const _PyRegOp *op,
     }
     int n = 0;
     for (int q = 0; q < op->nrecipe; q++) {
-        int from = _PyRegCfg_Slot(cfg, src[q]);
-        int home = _PyRegCfg_Slot(
-            cfg, _PyReg_CANON(cfg, cfg->operands[op->recipe + q]));
+        int from, home;
+        if (op->flags & _PyReg_SLOT_RECIPE) {
+            // A word of resolution names slots
+            from = cfg->operands[op->recipe + 2 * q];
+            home = cfg->operands[op->recipe + 2 * q + 1];
+        }
+        else {
+            from = _PyRegCfg_Slot(cfg, src[q]);
+            home = _PyRegCfg_Slot(
+                cfg, _PyReg_CANON(cfg, cfg->operands[op->recipe + q]));
+        }
         if (from != home) {
             entry[1 + 2 * n] = from;
             entry[2 + 2 * n] = home;

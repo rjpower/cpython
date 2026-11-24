@@ -418,7 +418,7 @@
      * that is not an exact int or float (asserted); the value owns the       \
      * argument's count. Never NULL (asserted), no callback.                  */ \
     HELPER(PyValue_FromNonNumberSteal, PyValue, (PyObject *), \
-        ARGS(object), VALUE(owned), EFFECTS()) \
+        ARGS(consumed object), VALUE(owned), EFFECTS()) \
     /* pycore_value.h: the canonical borrowed value of an object: for an \
      * exact int or float, _PyObject_ValueIdentity reads its payload \
      * (immutable), otherwise the pointer.  No count, no allocation, no \
@@ -997,7 +997,7 @@
      * the other (a new reference). It copies characters and calls no         \
      * Python and releases nothing. The seed lacked `raises`.                 */ \
     HELPER(PyUnicode_Concat, PyObject *, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(reads, allocates, raises)) \
+        ARGS(object, object), VALUE_OR_NULL(owned), EFFECTS(reads, allocates, raises)) \
     /* Reviewed G0c2 (Include/cpython/unicodeobject.h): a read of the str's   \
      * length field (asserts PyUnicode_Check). No failure, no callback.       \
      * Inline, not an out-of-line HELPER: G0d kind.                           */ \
@@ -1406,7 +1406,7 @@
      * kept as the seed had it: nothing here calls Python, so it is \
      * over-declared and sound */ \
     HELPER(value_unicode_append, PyObject *, (PyObject *, PyObject *), \
-        ARGS(consumed object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(consumed object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Python/ceval.c: builds a four-slot window of borrowed words and \
      * calls _PyValue_Vectorcall(exit_func, ...), which runs any callable \
      * (an inline exit_func is rejected with TypeError).  All five \
@@ -1634,7 +1634,7 @@
      * items (no Python). Returns a new list or NULL with an exception set;   \
      * both arguments are borrowed.                                           */ \
     HELPER(_PyList_SliceSubscript, PyObject *, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Objects/setobject.c _PySet_AddValueTakeRef: hashes the \
      * key (unhashable: set_unhashable_type, PyValue_XCLOSE(key), -1), then \
      * set_add_entry_takeref, which compares keys (__eq__) and resizes.  The \

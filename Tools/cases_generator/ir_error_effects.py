@@ -106,7 +106,7 @@ SIGNATURES = {
     "PyValue_FromObjectSteal": _signature((Kind.OBJECT,), Kind.VALUE,
         owned=True, canonical=True, nonnull=True),
     "PyValue_FromNonNumberSteal": _signature((Kind.OBJECT,), Kind.VALUE,
-        owned=True, canonical=True, nonnull=True, steals=(0,)),
+        owned=True, canonical=True, nonnull=True),
     **{name: _signature((Kind.VALUE,), Kind.VALUE, True, owned=True)
        for name in ("_PyValue_Negative", "_PyValue_Positive", "_PyValue_Invert")},
     "PyValue_CLOSE": _signature((Kind.VALUE,), Kind.VOID),

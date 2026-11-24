@@ -374,6 +374,11 @@ class SliceTests(unittest.TestCase):
             self.assertIn(needs[line.split(" ")[0]], line)
         self.assertRegex(lines[-1], r"^\d+ handlers compared; \d+ of \d+ uops declared$")
 
+    def test_a_steal_is_declared(self):
+        # PyValue_FromNonNumberSteal steals its object (the in-place add's
+        # `temp`, now that the walk admits it)
+        self.assertEqual(table["PyValue_FromNonNumberSteal"].args[0].mode, "consumed")
+
     def test_component_checks_are_generated(self):
         checks = "\n".join(ir_contract.component_checks())
         table = ir_contract.rows()

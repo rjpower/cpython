@@ -22,6 +22,216 @@ family InitResult(value:Src)
 family Return(value:Src)
   exits(return, exit, raise, redirect);
 
+// The caller goes on here when the child returns: the child's value is dst
+point Call.Returned(caller, next_head, clear) keep() spent(fn, args) defs(dst) held();
+// The value has gone to the caller's return slot
+point Return.Delivered(caller, resume_head, clear) keep() spent(value) defs() held();
+
+// Admission of a call that enters its callee's frame
+
+extern helper default_eval_frame(t:Thread) -> Bool
+  effects(reads)
+  c _PyRop_DefaultEvalFrame as bool
+  evidence(
+    review: "P4. ceval.c: !IS_PEP523_HOOKED(tstate), the guard of _CHECK_PEP_523.",
+    contract: "Reads the interpreter's eval_frame hook; no memory, no failure.");
+
+extern helper function_version(fn:B, f:Fb<Call>) -> Bool
+  effects(reads)
+  feedback(read(entry.func_version))
+  test(exact<function>(fn))
+  c _PyRop_FunctionVersion as bool
+  evidence(
+    review: "P4. ceval.c: fn is an object, exactly a function, whose func_version"
+            "is the site's (_CHECK_FUNCTION_VERSION).",
+    contract: "Reads the word, the type and func_version; no memory, no failure.");
+
+extern helper exact_positional(f:Frame, fn:B, a:Args) -> Bool
+  effects(reads)
+  requires(exact<function>(fn))
+  c _PyRop_ExactPositional as bool
+  evidence(
+    review: "P4. ceval.c: co_argcount equals the arguments of the call, counting a"
+            "self that is present at run time (_CHECK_FUNCTION_EXACT_ARGS).",
+    contract: "Reads the code and the self operand's home; no memory, no failure.");
+
+extern helper frame_space(t:Thread, fn:B) -> Bool
+  effects(reads)
+  requires(exact<function>(fn))
+  c _PyRop_FrameSpace as bool
+  evidence(
+    review: "P4. ceval.c: _PyThreadState_HasStackSpace for co_framesize"
+            "(_CHECK_STACK_SPACE).",
+    contract: "Reads the arena bounds; no memory, no failure.");
+
+extern helper recursion_budget(t:Thread) -> Bool
+  effects(reads)
+  c _PyRop_RecursionBudget as bool
+  evidence(
+    review: "P4. ceval.c: py_recursion_remaining > 1 (_CHECK_RECURSION_REMAINING).",
+    contract: "Reads the thread's budget; no memory, no failure.");
+
+// The child frame of an exact call: the function and the arguments move
+// to it (a temporary moves, a local is counted), at the arena top, whose
+// space frame_space checked
+extern helper push_exact(t:Thread, f:Frame, fn:Src, a:Args) -> NewFrame
+  effects(reads, writes, releases)
+  spends(fn, a)
+  requires(exact<function>(fn))
+  c _PyRop_PushExact as pointer
+  evidence(
+    review: "P4. ceval.c: call_push_exact without expansion; the operand homes of"
+            "temporaries are cleared.",
+    contract: "Infallible: the guards checked the space and the argument count. No"
+              "callback: moves and counts only (releases is the spend of the operands).");
+
+// Return
+
+// Compiled code may still run in the departing frame's code: the pin keeps
+// it alive until the next pin (G3a)
+extern helper pin_departing() -> Unit
+  effects(releases)
+  c IR_PIN_DEPARTING as unit
+  evidence(
+    review: "G3a. ceval.c and ceval_macros.h: nothing in the evaluator, which runs in"
+            "no unit; _PyJit_PinDeparting in the forms.",
+    contract: "Stores the new pin before releasing the old one, whose release can"
+              "free a unit's code.");
+
+extern helper previous_frame(f:Frame) -> Frame
+  effects(reads)
+  c _PyRop_PreviousFrame as pointer
+  evidence(
+    review: "P4. ceval.c: frame->previous.",
+    contract: "A read; no failure.");
+
+// The frame leaves the recursion budget and the thread's frame chain
+extern helper depart(t:Thread, f:Frame) -> DeadFrame
+  effects(writes)
+  c _PyRop_Depart as pointer
+  evidence(
+    review: "P4. ceval.c: DTRACE_FUNCTION_RETURN, _Py_LeaveRecursiveCallPy, then"
+            "current_frame = previous (GH-99729: unlink before clearing).",
+    contract: "Writes the thread state; no failure, no callback.");
+
+extern helper retire_frame(t:Thread, d:DeadFrame) -> Unit
+  effects(releases)
+  c _PyRop_RetireFrame as unit
+  evidence(
+    review: "P4. ceval.c: _PyEval_FrameClearAndPopGeneralWithResult without a result.",
+    contract: "Closes every owner of the frame in turn, then pops it; a finalizer may"
+              "run Python, which sees a consistent frame.");
+
+// The frame's scratch is vacant: only the locals can own values
+extern helper retire_frame_empty(t:Thread, d:DeadFrame) -> Unit
+  effects(releases)
+  c _PyRop_RetireFrameEmpty as unit
+  evidence(
+    review: "P4. ceval.c: _PyEval_RetireThreadFrameWithResult without a result.",
+    contract: "As retire_frame, over the fixed slots only.");
+
+// The value goes to the caller's return slot; the head where the caller
+// goes on, which a pending redirect may have moved
+extern helper deliver(c:Frame, v:O) -> Head
+  effects(writes, releases)
+  c _PyRop_Deliver as pointer
+  evidence(
+    review: "P4. ceval.c: _PyFrame_SetReturnValue, then the caller's return_pc.",
+    contract: "The slot's old value is released after the write, as STORE_FAST"
+              "does; a redirect completes first (_PyFrame_SetReturnValueRare).");
+
+// A generator frame's return: the generator's consumer completes, which
+// may raise (StopIteration) or leave the activation
+extern routine generator_return(c:Frame, v:O, d:DeadFrame) -> Unit
+  effects(writes, releases, switches_frame)
+  exits(return, exit, raise, redirect)
+  c ROP_GEN_RETURN as tail
+  evidence(
+    review: "P4. ceval.c and ceval_routines.h: IR_GEN_RETURN(v, d, 0) with frame the"
+            "resumer, as RETURN_VALUE does.",
+    contract: "ir_gen_return: clears the generator frame and completes its consumer.");
+
+// The evaluator's entry frame: the value leaves the activation
+extern helper leave_activation(t:Thread, f:Frame) -> Unit
+  effects(writes)
+  c _PyRop_LeaveActivation as unit
+  evidence(
+    review: "P4. ceval.c: INTERPRETER_EXIT's current_frame = frame->previous.",
+    contract: "Writes the thread state; no failure, no callback.");
+
+// Arms
+
+arm Call.Exact split
+  effects(reads, writes, releases, switches_frame)
+  feedback(read(entry.func_version))
+  exits(enter, miss)
+{
+  entry():
+    guard default_eval_frame(thread) else miss;
+    guard function_version(use(fn), fb) else miss;
+    guard exact_positional(frame, use(fn), args) else miss;
+    guard frame_space(thread, use(fn)) else miss;
+    guard recursion_budget(thread) else miss;
+    let c:NewFrame = push_exact(thread, frame, fn, args);
+    exit enter(c) resume Call.Returned;
+}
+
+arm Return.Ordinary split select(thread_frame, live_scratch)
+  effects(reads, writes, releases, switches_frame)
+  feedback()
+  exits(return)
+{
+  entry():
+    let _:Unit = pin_departing();
+    let r:O = acquire(value);
+    let caller:Frame = previous_frame(frame);
+    let dying:DeadFrame = depart(thread, frame);
+    let _:Unit = retire_frame(thread, dying);
+    let h:Head = deliver(caller, r);
+    publish [] retire [] at Return.Delivered;
+    exit return(caller, h);
+}
+
+arm Return.Empty split select(thread_frame, vacant_scratch)
+  effects(reads, writes, releases, switches_frame)
+  feedback()
+  exits(return)
+{
+  entry():
+    let _:Unit = pin_departing();
+    let r:O = acquire(value);
+    let caller:Frame = previous_frame(frame);
+    let dying:DeadFrame = depart(thread, frame);
+    let _:Unit = retire_frame_empty(thread, dying);
+    let h:Head = deliver(caller, r);
+    publish [] retire [] at Return.Delivered;
+    exit return(caller, h);
+}
+
+arm Return.Generator split select(generator_frame)
+  effects(reads, writes, releases, switches_frame)
+  feedback()
+  exits(return, exit, raise, redirect)
+{
+  entry():
+    let _:Unit = pin_departing();
+    let r:O = acquire(value);
+    let caller:Frame = previous_frame(frame);
+    let dying:DeadFrame = depart(thread, frame);
+    tail generator_return(caller, r, dying);
+}
+
+arm Return.External split select(entry_frame)
+  effects(writes)
+  feedback()
+  exits(exit)
+{
+  entry():
+    let r:O = acquire(value);
+    let _:Unit = leave_activation(thread, frame);
+    exit exit(r);
+}
+
 // 2A: keyword and expanded calls
 
 family CallKw(dst:Dst, fn:Src, args:Args, names:Src, fb:Fb<Call>)

@@ -38,7 +38,7 @@ class ArmEntry:
     this generator list it: its handler id is num_handlers + index"""
     name: str                 # the C name: Add_Int
     index: int                # among all arms, in definition order
-    region: str               # "inline" or "shared"
+    region: str               # the plan: "inline", "shared" or "none" (split)
     escapes: bool
     stub: str | None          # the stub function of a shared arm
     generic: str | None       # the stub function of its family's generic arm

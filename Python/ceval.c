@@ -2028,6 +2028,124 @@ call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return pushed;
 }
 
+/* The C rows of the Call and Return families (Python/register_ops/calls.rop).
+ * An Args operand is the instruction's head, whose word and operand words
+ * give the count, the self role and the homes; a Src operand is its home. */
+
+static inline bool
+_PyRop_DefaultEvalFrame(PyThreadState *tstate)
+{
+    return !IS_PEP523_HOOKED(tstate);
+}
+
+static inline bool
+_PyRop_FunctionVersion(PyValueBorrow fn, const _PyFbCall *fb)
+{
+    if (!PyValue_IsObject(fn)) {
+        return false;
+    }
+    PyObject *object = PyValue_AsKnownObjectBorrow(fn);
+    return PyFunction_Check(object) &&
+        ((PyFunctionObject *)object)->func_version == fb->func_version;
+}
+
+/* The call_state of the call at head: whether its self is present at run
+ * time (IR_CALL_SELF_STATE) */
+static inline int
+rop_call_self_state(_PyInterpreterFrame *frame, const _PyIRWord *head)
+{
+    if (head[0] & IR_F_NO_SELF) {
+        return 0;
+    }
+    PyValue self = _PyFrame_Slots(frame)[_PyIR_CallOperand(head, 0)];
+    return PyValue_IsNull(self) ? 0 : CALL_SELF_PRESENT;
+}
+
+/* The number of arguments the callee receives: the operands, less a self
+ * that is NULL at run time */
+static inline int
+rop_call_argcount(_PyInterpreterFrame *frame, const _PyIRWord *head)
+{
+    _PyIRWord word = head[0];
+    int n = (int)IR_C(word);
+    if (!(word & IR_F_NO_SELF) && !rop_call_self_state(frame, head)) {
+        n--;
+    }
+    return n;
+}
+
+static inline bool
+_PyRop_ExactPositional(_PyInterpreterFrame *frame, PyValueBorrow fn,
+                       const _PyIRWord *head)
+{
+    PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(fn);
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    return code->co_argcount == rop_call_argcount(frame, head);
+}
+
+static inline bool
+_PyRop_FrameSpace(PyThreadState *tstate, PyValueBorrow fn)
+{
+    PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(fn);
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    return _PyThreadState_HasStackSpace(tstate, code->co_framesize);
+}
+
+static inline bool
+_PyRop_RecursionBudget(PyThreadState *tstate)
+{
+    return tstate->py_recursion_remaining > 1;
+}
+
+static inline _PyInterpreterFrame *
+_PyRop_PushExact(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 PyValue *fn, const _PyIRWord *head)
+{
+    _PyIRWord word = head[0];
+    assert(fn == &_PyFrame_Slots(frame)[IR_B(word)]);
+    return call_push_exact(tstate, frame, head, word, *fn, PyValue_NULL,
+                           rop_call_self_state(frame, head));
+}
+
+static inline _PyInterpreterFrame *
+_PyRop_PreviousFrame(_PyInterpreterFrame *frame)
+{
+    return frame->previous;
+}
+
+static inline _PyInterpreterFrame *
+_PyRop_Depart(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
+    assert(tstate->current_frame == frame);
+    DTRACE_FUNCTION_RETURN();
+    _Py_LeaveRecursiveCallPy(tstate);
+    // GH-99729: the frame is unlinked before it is cleared
+    tstate->current_frame = frame->previous;
+    return frame;
+}
+
+static void _PyRop_RetireFrame(PyThreadState *tstate, _PyInterpreterFrame *dying);
+static inline void _PyRop_RetireFrameEmpty(PyThreadState *tstate,
+                                           _PyInterpreterFrame *dying);
+
+static inline _PyInstr *
+_PyRop_Deliver(_PyInterpreterFrame *caller, PyValue v)
+{
+    assert(_PyValue_IsHome(v));
+    (void)_PyFrame_SetReturnValue(caller, v);
+    return caller->return_pc;
+}
+
+static inline void
+_PyRop_LeaveActivation(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
+    assert(_PyFrame_IsIncomplete(frame));
+    assert(!_PyErr_Occurred(tstate));
+    tstate->current_frame = frame->previous;
+}
+
 /* The prologue of the code of a generator, coroutine or async generator that
  * _PyGen_NewCall() made and whose arguments are bound, which the first send
  * does not run: a cell for each cell variable (an argument moves into its
@@ -4102,6 +4220,39 @@ frame_clear_and_pop(PyThreadState *tstate, _PyInterpreterFrame *frame,
         return clear_thread_frame(tstate, frame, result);
     }
     return clear_gen_frame(tstate, frame, result);
+}
+
+/* Retire the unlinked frame of a return; the caller holds the result
+ * (_PyEval_FrameClearAndPopGeneralWithResult) */
+static Py_NO_INLINE void
+_PyRop_RetireFrame(PyThreadState *tstate, _PyInterpreterFrame *dying)
+{
+    if (dying->owner != FRAME_OWNED_BY_THREAD) {
+        (void)frame_clear_and_pop(tstate, dying, PyValue_NULL);
+        return;
+    }
+    _PyThreadState_UpdateLastProfiledFrame(tstate, dying, tstate->current_frame);
+    (void)retire_thread_frame(tstate, dying, PyValue_NULL, _PyFrame_NumSlots(dying));
+}
+
+/* The same for a frame whose scratch is vacant, so that only its locals can
+ * own values (_PyEval_RetireThreadFrameWithResult) */
+static inline void
+_PyRop_RetireFrameEmpty(PyThreadState *tstate, _PyInterpreterFrame *dying)
+{
+    assert(dying->owner == FRAME_OWNED_BY_THREAD);
+    assert(tstate->current_frame != dying);
+    assert((PyObject **)dying == tstate->datastack_limit);
+    if (Py_UNLIKELY(dying->frame_obj != NULL
+                    || tstate->last_profiled_frame == dying)) {
+        _PyRop_RetireFrame(tstate, dying);
+        return;
+    }
+    _PyFrame_ClearSlots(dying, (int)_PyFrame_Exec(dying)->nfixed);
+    assert(dying->f_funcobj != NULL);
+    Py_DECREF(dying->f_funcobj);
+    Py_DECREF(dying->f_executable);
+    _PyThreadState_PopFrame(tstate, dying);
 }
 
 PyValue

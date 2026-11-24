@@ -11,11 +11,11 @@
 
 /* The arms' handler ids follow the old handlers, in definition order */
 #define ROP_FIRST_HANDLER IR_NUM_HANDLERS
-#define ROP_NUM_HANDLERS 3
+#define ROP_NUM_HANDLERS 8
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,
               "the arms' handler ids fit the handler field");
 #define ROP_NUM_FAMILIES 68
-#define ROP_NUM_ARMS 3
+#define ROP_NUM_ARMS 8
 
 /* Family numbers, in name order */
 enum {
@@ -92,13 +92,20 @@ enum {
 /* Handler numbers of the arms */
 #define ROP_HANDLER_Add_Int (ROP_FIRST_HANDLER + 0)
 #define ROP_HANDLER_Add_Generic (ROP_FIRST_HANDLER + 1)
-#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 2)
+#define ROP_HANDLER_Call_Exact (ROP_FIRST_HANDLER + 2)
+#define ROP_HANDLER_Return_Ordinary (ROP_FIRST_HANDLER + 3)
+#define ROP_HANDLER_Return_Empty (ROP_FIRST_HANDLER + 4)
+#define ROP_HANDLER_Return_Generator (ROP_FIRST_HANDLER + 5)
+#define ROP_HANDLER_Return_External (ROP_FIRST_HANDLER + 6)
+#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 7)
 
 /* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */
 #define ROP_POINT_Add_BoxFailed 1
 #define ROP_POINT_Add_Done 2
 #define ROP_POINT_Add_OpFailed 3
-#define ROP_POINT_GetAttr_Done 4
+#define ROP_POINT_Call_Returned 4
+#define ROP_POINT_GetAttr_Done 5
+#define ROP_POINT_Return_Delivered 6
 
 /* How a family's operands sit in its words (Program.encodings): the field
  * kind, the role of a home, the bit offset in the 64-bit-per-word image of
@@ -598,14 +605,33 @@ static const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {
 static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Add.Int", ROP_HANDLER_Add_Int, ROP_FAMILY_Add, 1},
     {"Add.Generic", ROP_HANDLER_Add_Generic, ROP_FAMILY_Add, 0},
+    {"Call.Exact", ROP_HANDLER_Call_Exact, ROP_FAMILY_Call, 0},
+    {"Return.Ordinary", ROP_HANDLER_Return_Ordinary, ROP_FAMILY_Return, 0},
+    {"Return.Empty", ROP_HANDLER_Return_Empty, ROP_FAMILY_Return, 0},
+    {"Return.Generator", ROP_HANDLER_Return_Generator, ROP_FAMILY_Return, 0},
+    {"Return.External", ROP_HANDLER_Return_External, ROP_FAMILY_Return, 0},
     {"GetAttr.Instance", ROP_HANDLER_GetAttr_Instance, ROP_FAMILY_GetAttr, 0},
 };
 
-static const _PyRopPoint _PyRop_Points[4] = {
+static const _PyRopPoint _PyRop_Points[6] = {
     {"Add.BoxFailed", ROP_FAMILY_Add, 1, 0, 0, 1, (1 << 1) | (1 << 2), 0, 0, 0},
     {"Add.Done", ROP_FAMILY_Add, 2, 0, 1, 0, 0, (1 << 2) | (1 << 1), (1 << 0), 0},
     {"Add.OpFailed", ROP_FAMILY_Add, 3, 0, 0, 1, 0, (1 << 2) | (1 << 1), 0, 0},
-    {"GetAttr.Done", ROP_FAMILY_GetAttr, 4, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
+    {"Call.Returned", ROP_FAMILY_Call, 4, 1, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
+    {"GetAttr.Done", ROP_FAMILY_GetAttr, 5, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
+    {"Return.Delivered", ROP_FAMILY_Return, 6, 1, 3, 0, 0, (1 << 0), 0, 0},
 };
+
+/* Static selection (rop_catalog.Select): the members of each dimension */
+enum { ROP_SELECT_THREAD_FRAME, ROP_SELECT_GENERATOR_FRAME, ROP_SELECT_ENTRY_FRAME };  /* frame */
+enum { ROP_SELECT_VACANT_SCRATCH, ROP_SELECT_LIVE_SCRATCH };  /* scratch */
+
+/* The arm of Return that holds for (frame, scratch) */
+#define _PyRop_SelectReturn(frame, scratch) ( \
+    ((frame) == ROP_SELECT_THREAD_FRAME && (scratch) == ROP_SELECT_LIVE_SCRATCH) ? ROP_HANDLER_Return_Ordinary : \
+    ((frame) == ROP_SELECT_THREAD_FRAME && (scratch) == ROP_SELECT_VACANT_SCRATCH) ? ROP_HANDLER_Return_Empty : \
+    ((frame) == ROP_SELECT_GENERATOR_FRAME) ? ROP_HANDLER_Return_Generator : \
+    ((frame) == ROP_SELECT_ENTRY_FRAME) ? ROP_HANDLER_Return_External : \
+    -1)
 
 #endif

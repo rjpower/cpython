@@ -29,8 +29,8 @@ import rop_check
 import rop_leaf
 from generators_common import root_relative_path, write_header
 from rop_cgen import ESCAPING, Lowering, Unsupported, lower_arm, pending_blockers
-from rop_catalog import FieldKind, Handle
-from rop_check import Program
+from rop_catalog import SELECT_DIMENSIONS, FieldKind, Handle
+from rop_check import Program, select_dimension
 from rop_model import Arm, HandleType, Param, WrapType
 from rop_print import type_text
 
@@ -253,9 +253,9 @@ def arm_entries(p: Products) -> list[ir_numbers.ArmEntry]:
     entries = []
     for name in p.lowered:
         arm = p.program.arms[name]
-        region = arm.region.name
-        if region not in ("inline", "shared"):
-            continue
+        # A split arm has no stub and no template: compiled code calls its
+        # function form, the plan of an unplanned handler
+        region = "none" if arm.region.name == "split" else arm.region.name
         generic = p.generic.get(arm.family)
         entries.append(ir_numbers.ArmEntry(
             c_name(name), p.numbers[name], region, declares_escape(arm),
@@ -433,7 +433,34 @@ typedef struct {
             f'{list(type(pt.pc)).index(pt.pc)}, {list(type(pt.exc)).index(pt.exc)}, '
             f'{operand_mask(pt.keep, operands)}, {operand_mask(pt.spent, operands)}, '
             f'{operand_mask(pt.defs, operands)}, {operand_mask(pt.held, operands)}}},\n')
-    out.write("};\n\n#endif\n")
+    out.write("};\n\n")
+    write_selectors(out, prog)
+    out.write("#endif\n")
+
+
+def write_selectors(out: TextIO, prog: Program) -> None:
+    """The static selection of the families whose arms name `select(...)`:
+    one member of each catalog dimension, as an enum, and per family a
+    constant expression from the members that hold to the arm's handler,
+    which a static word array can use"""
+    out.write("/* Static selection (rop_catalog.Select): the members of each dimension */\n")
+    for dim, members in SELECT_DIMENSIONS.items():
+        names = ", ".join(f"ROP_SELECT_{m.value.upper()}" for m in members)
+        out.write(f"enum {{ {names} }};  /* {dim} */\n")
+    for fam in sorted(prog.families):
+        arms = [a for a in prog.arms_of(fam) if a.select]
+        if not arms:
+            continue
+        dims = sorted({select_dimension(m) for a in arms for m in a.select})
+        params = ", ".join(dims)
+        out.write(f"\n/* The arm of {fam} that holds for ({params}) */\n")
+        out.write(f"#define _PyRop_Select{fam}({params}) ( \\\n")
+        for a in arms:
+            tests = " && ".join(f"({select_dimension(m)}) == ROP_SELECT_{m.value.upper()}"
+                                for m in a.select)
+            out.write(f"    ({tests}) ? {handler(a.name)} : \\\n")
+        out.write("    -1)\n")
+    out.write("\n")
 
 
 # Entry point

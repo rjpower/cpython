@@ -5,7 +5,12 @@
 //
 // Arms left out, and what blocks each:
 //   Add.Generic: pending: anchor_for_call, backoff, binary_at_origin, install, retire_abandoned, retire_failed_call, tick
+//   Call.Exact: Call.Exact: operand fb used as a value
 //   GetAttr.Instance: pending: admitted_instance_slot, borrow_value_slot, instance_version, present, valid_inline_values
+//   Return.Empty: Return.Empty: let _ has no C type
+//   Return.External: Return.External: acquire has no C body (pending)
+//   Return.Generator: Return.Generator: let _ has no C type
+//   Return.Ordinary: Return.Ordinary: let _ has no C type
 
 /* A family with no generic arm cannot miss: no word selects its arms yet. */
 #ifndef ROP_NO_GENERIC

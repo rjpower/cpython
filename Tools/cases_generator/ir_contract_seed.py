@@ -576,6 +576,7 @@ class Clauses:
     exits: list[str] = field(default_factory=list)
     feedback: list[str] = field(default_factory=list)
     state: list[str] = field(default_factory=list)      # state(...) items
+    paths: list[str] = field(default_factory=list)      # paths(...) items
 
 
 class Gap(Exception):
@@ -678,8 +679,15 @@ def seed_clauses(uop, facts: dict, table, overrides: dict) -> Clauses:
             else:
                 raise Gap(f"a fact of the state `{row.name}`: {kind}({arg})")
         c.state.append(f"{row.name} -- {row.name}" + (f": {' '.join(stated)}" if stated else ""))
+    # Facts of a frame path (a PATH row without arguments: globals,
+    # builtins), whose subject in the record is the path's name (G0a4)
+    frame_paths = {r.result.measure for r in table.values()
+                   if r.result.shape == "PATH" and not r.args}
+    for subject in sorted(set(facts["guards"]) & frame_paths):
+        found = vocab(facts["guards"][subject], f"a fact of the frame path `{subject}`")
+        c.paths.append(f"{subject}: {' '.join(words(found))}")
     for subject, found in facts["guards"].items():
-        if subject in table and table[subject].kind == "STATE":
+        if subject in table and table[subject].kind == "STATE" or subject in frame_paths:
             continue
         if subject not in names and subject not in ins:
             raise Gap(f"guard facts of `{subject}`: "
@@ -774,6 +782,8 @@ def render_uop(text: str, name: str, c: Clauses) -> str:
         clauses.append(f"feedback({', '.join(c.feedback)})")
     if c.state:
         clauses.append(f"state({', '.join(c.state)})")
+    if c.paths:
+        clauses.append(f"paths({', '.join(c.paths)})")
     tail = text[close + 1:brace].strip()
     if tail:
         raise ValueError(f"{name}: text between its header and body: {tail!r}")

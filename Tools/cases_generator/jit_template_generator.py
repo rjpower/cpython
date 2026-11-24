@@ -65,6 +65,7 @@ LOWERINGS = {
     # Numbers
     "_PyValue_IntScaled": Lowering(),
     "_PyValue_FromIntScaled": Lowering(1),
+    "_PyValue_AddCheckedScaled": Lowering(2, exits=True),
     "PyValue_InlineInt64": Lowering(),
     "PyValue_FromInlineInt": Lowering(1),
     "PyValue_InlineFloat": Lowering(1),
@@ -113,10 +114,12 @@ LOWERINGS = {
     "GLOBALS": Lowering(),
     "BUILTINS": Lowering(),
     "FRAME_CO_CONSTS": Lowering(),
+    "FRAME_CODE_INSTRUMENTATION_VERSION": Lowering(),
     "GETLOCAL": Lowering(),
     "IR_SLOTS": Lowering(),
     # The thread
     "_Py_EvalBreakerHasEvents": Lowering(),
+    "_Py_EvalBreaker": Lowering(),
     # Counts
     "PyValue_DUP": Lowering(1, calls=True),
     "PyValue_XDUP": Lowering(1, calls=True),
@@ -2340,9 +2343,15 @@ def write_templates(out, analysis, records) -> None:
     out.write("\n")
     for body in bodies:
         out.write("\n".join(body) + "\n\n")
+    # The register instruction arms' templates (generated_rop_templates.c.h)
+    # take the ids that follow the old handlers
+    import rop_generator
+    arm_templates = rop_generator.template_arm_names()
     out.write(f"const _PyJitTemplate _PyJit_Templates[{ir_numbers.IR_LIMIT}] = {{\n")
     for name, i in sorted(made.items(), key=lambda x: x[1]):
         out.write(f"    [{i}] = jit_template_{name},\n")
+    for name in arm_templates:
+        out.write(f"    [ROP_HANDLER_{name}] = jit_template_{name},\n")
     out.write("};\n")
 
 

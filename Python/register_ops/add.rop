@@ -44,13 +44,21 @@ extern primitive from_int_scaled(s:Scaled51) -> O
 // The scaled sum: fits(s) when a + b does not overflow 64 bits; else
 // overflow(w) with w the unscaled sum of the two int51s, which fits in 64
 // bits and lies outside the int51 range.  The case carries the value its
-// fact is about, so the fact stays unary.  Declared ahead of its C body and
-// lowering (F2).
+// fact is about, so the fact stays unary.
 extern primitive add_checked_scaled(a:Scaled51, b:Scaled51)
   cases(fits(s:Scaled51), overflow(w:I64))
   effects()
   ensures(overflow.outside_i51(w))
-  pending;
+  c _PyValue_AddCheckedScaled as bool_out
+  evidence(
+    review: "F2. pycore_value.h: __builtin_add_overflow on the scaled words; the"
+            "overflow case arithmetic-shifts each word back by Py_INT_SHIFT and adds.",
+    contract: "Pure: no memory, no failure. false: *out is the scaled sum. true: *out"
+              "is the exact sum of the two int51 values, which lies outside int51.",
+    lowering: "jit_lower.c LOWERING(_PyValue_AddCheckedScaled): the add and a branch"
+              "on overflow; the cold path leaves with the exact sum",
+    test: "test_ir_leaf CASES[_PyValue_AddCheckedScaled] and test_jit_template"
+          "test_add_checked_scaled, at the int51 boundaries");
 
 extern helper box_i64(v:I64)
   cases(ok(z:O), err(e:Err))
@@ -75,13 +83,33 @@ extern helper value_binary_op(op:Enum<Numeric>, a:B, b:B)
     contract: "Both operands borrowed on every path; the result owned, or NULL with"
               "an exception set. Callbacks: arbitrary Python.");
 
-// Records the origin and control stamp, calls value_binary_op once and
-// checks the frame on return; a redirect discharges any uncommitted result.
+// Calls value_binary_op once on the anchored operands.  A redirect that
+// won while Python ran discharges the result that was not committed and
+// hands the route back.
 macro binary_at_origin(op:Enum<Numeric>, a:Anchors)
   cases(ok(z:O), err(e:Err), redirected(r:Route))
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases)
   feedback()
-  pending;
+  borrows(a)
+{
+  entry():
+    call value_binary_op(op, arg(a, 0), arg(a, 1)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
 
 // Adaptation policy (addendum section 2)
 macro adapt_before_use_add(f:Fb<Binary>, x:Src, y:Src)
@@ -98,7 +126,7 @@ macro adapt_before_use_add(f:Fb<Binary>, x:Src, y:Src)
     branch both_inline_int(use(x), use(y)) -> Chosen(), Other();
   Chosen():
     let c:Candidate<Binary> = candidate(Add.Int);
-    call install(f, c) {
+    call install(site, f, c) {
       changed -> Changed();
       same -> Run();
       blocked -> Run();

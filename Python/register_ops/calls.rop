@@ -13,7 +13,7 @@ enum PollKind(BACKEDGE, CALL_END, RESUME_POLL, JIT_EVENT);
 
 // P4: positional calls, init cleanup, return
 
-family Call(dst:Dst, fn:Src, self:Maybe<Src>, args:Args, fb:Fb<Call>)
+family Call(dst:Dst, fn:Src, args:Args, fb:Fb<Call>)
   exits(next, enter, raise, redirect, miss, again);
 
 family InitResult(value:Src)
@@ -24,7 +24,7 @@ family Return(value:Src)
 
 // 2A: keyword and expanded calls
 
-family CallKw(dst:Dst, fn:Src, self:Maybe<Src>, args:Args, names:Src, fb:Fb<Call>)
+family CallKw(dst:Dst, fn:Src, args:Args, names:Src, fb:Fb<Call>)
   exits(next, enter, raise, redirect, miss, again);
 
 family CallEx(dst:Dst, fn:Src, star:Src, kwargs:Maybe<Src>, fb:Fb<Call>)

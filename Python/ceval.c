@@ -1,6 +1,7 @@
 /* Execute compiled code */
 
 #include "ceval.h"
+#include "pycore_attr_recipe.h"   // _PyAttr_AdmittedInstanceSlot()
 #include "pycore_descrobject.h"   // _PyGetSet_ValueRead()
 #include "pycore_dict.h"          // PyDict_GetValue()
 #include "pycore_function.h"      // FUNC_VERSION_FIRST_VALID
@@ -10,6 +11,8 @@
 #include "pycore_long.h"
 #include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_native_scope.h"
+#include "pycore_rop_metadata.h"  // ROP_HANDLER_*
+#include "pycore_rop_rows.h"      // _PyRop_AnchorForCall()
 #include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
@@ -2702,6 +2705,8 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #undef IR_JIT_RESUME
 #pragma push_macro("IR_STORE_RETURN")
 #undef IR_STORE_RETURN
+#pragma push_macro("IR_PIN_DEPARTING")
+#undef IR_PIN_DEPARTING
 #define DISPATCH() return (_PyIRTransfer){frame, next_instr}
 #define DISPATCH_SAME_OPARG() return (_PyIRTransfer){frame, next_instr}
 #define DISPATCH_GOTO() \
@@ -2785,6 +2790,9 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * frame's _PyFrame_JIT_RESUME flag. */
 #define IR_JIT_EVENT() ((void)0)
 #define IR_JIT_RESUME() ((void)0)
+/* The pin's release status is not needed: every pinned arm runs Python, so
+ * the form's continuation tests RETIRED when the word stays in its frame */
+#define IR_PIN_DEPARTING() ((void)_PyJit_PinDeparting(tstate, frame))
 #define IR_STORE_RETURN(V) \
     do { \
         assert(_PyValue_IsHome(V)); \
@@ -2909,6 +2917,10 @@ IR_HOT_ROUTINE(gen_complete, PyValue gen_value);
  * from the same handler text, with the forms' bindings of the macros they
  * do not bind themselves */
 #include "generated_ir_stubs.c.h"
+/* The forms and stubs of the register instruction arms (Python/register_ops);
+ * the tables above list them */
+#include "generated_rop_forms.c.h"
+#include "generated_rop_stubs.c.h"
 #pragma GCC diagnostic pop
 
 #ifdef _PY_JIT_SUPPORTED
@@ -2959,66 +2971,50 @@ typedef _PyIRTransfer (*jit_entry)(PyThreadState *tstate,
 
 /* The baseline JIT's driver, which the evaluator calls when frame, at the
  * word next, is to go on in unit (IR_JIT_EVENT(), IR_JIT_RESUME() in
- * Python/ceval_macros.h).  A unit leaves at every frame switch and at any
- * transfer that it cannot continue natively; the driver runs the unit of
- * the frame that the transfer names, if it has one, and returns the first
- * transfer that has none, or that has raised, for the evaluator to run.
- * The C stack stays one unit deep. */
+ * Python/ceval_macros.h).  Its native call runs frames by switching between
+ * units (the switch routine) until a transfer has no unit to go on in, has
+ * raised, or leaves the last entered frame for a word that its unit does not
+ * run; the driver goes on only in that last case, while the frame's newest
+ * unit is not retired.  The switch routine names the last entered frame in
+ * jit_frame; a leave in another frame is one that the routine declined
+ * (g3/design.md section 1, "jit_run after G3a").  The C stack stays one unit
+ * deep. */
 static Py_NO_INLINE _PyIRTransfer
 jit_run(PyThreadState *tstate, _PyJitUnit *unit, _PyInterpreterFrame *frame,
         _PyInstr *next)
 {
     _PyThreadStateImpl *impl = (_PyThreadStateImpl *)tstate;
     _PyInterpreterFrame *outer = impl->jit_frame;
+    _PyEvalActivation *activation = IR_ACTIVATION();
     for (;;) {
         /* The unit addresses the words from frame->ir_words */
         assert(frame->ir_words == unit->words);
         assert(next >= frame->ir_words && next < frame->ir_words + unit->nwords);
-        /* A form that pops the frame can drop the last reference to its
-         * code, which frees the exec and its units while the unit runs:
-         * the driver keeps the code until the unit has left. */
-        PyCodeObject *code = (PyCodeObject *)Py_NewRef(_PyFrame_GetCode(frame));
-        /* A frame entered or resumed at its RESUME_JIT skips it when it
-         * would do nothing, as IR_SKIP_RESUME() skips a RESUME: its event
-         * is not due, as the code has a unit. */
-        if (IR_HANDLER(*next) == RESUME_JIT &&
-            _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) ==
-                FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(code->_co_instrumentation_version)) {
-            next++;
-        }
         frame->jit_flags |= _PyFrame_JIT_RESUME;
         impl->jit_frame = frame;
-        _PyEvalActivation *activation = IR_ACTIVATION();
 #ifndef NDEBUG
         activation->jit_unit = unit;
 #endif
         tstate->interp->ceval.jit_turns++;
         _PyIRTransfer t = ((jit_entry)unit->code.start)(
             tstate, frame, unit->entries[next - frame->ir_words]);
+        _PyInterpreterFrame *entered = impl->jit_frame;
         impl->jit_frame = outer;
 #ifndef NDEBUG
+        /* Before the release, which may free the unit just left */
         activation->jit_unit = NULL;
 #endif
-        Py_DECREF(code);
-        /* No unit runs: the code that it departed from last may go */
+        /* No unit runs: the code that a unit departed from last may go */
         Py_CLEAR(activation->jit_pin);
-        if (t.next == NULL) {
+        if (t.next == NULL || t.frame != entered) {
             return t;
         }
-        if (t.frame == frame) {
-            /* Not a warm-up event: a unit leaves for a word that it does
-             * not run natively, as after a specialisation, and the newest
-             * unit runs on as it is while it is only stale */
-            unit = _PyFrame_Exec(frame)->jit_unit;
-            if (unit->invalid & _PyJIT_RETIRED) {
-                return t;
-            }
-        }
-        else {
-            unit = jit_unit_of(tstate, t.frame);
-            if (unit == NULL) {
-                return t;
-            }
+        /* Not a warm-up event: a unit leaves for a word that it does not run
+         * natively, as after a specialisation, and the newest unit runs on
+         * as it is while it is only stale */
+        unit = _PyFrame_Exec(t.frame)->jit_unit;
+        if (unit->invalid & _PyJIT_RETIRED) {
+            return t;
         }
         frame = t.frame;
         next = t.next;
@@ -3093,6 +3089,7 @@ ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfla
 #pragma pop_macro("IR_JIT_EVENT")
 #pragma pop_macro("IR_JIT_RESUME")
 #pragma pop_macro("IR_STORE_RETURN")
+#pragma pop_macro("IR_PIN_DEPARTING")
 
 /* The evaluator: every handler and label of the interpreter in one
  * function, which dispatches by computed goto (Python/ceval_macros.h).  Its
@@ -3129,6 +3126,7 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
     goto *&&LABEL_start_frame;
 
 #include "generated_ir_cases.c.h"
+#include "generated_rop_cases.c.h"
 
     /* A function form returned no word: it raised (ir_execute_forms() has the
      * same contract), and process_error resolves it. */

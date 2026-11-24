@@ -397,6 +397,23 @@ _PyValue_FromIntScaled(int64_t s)
     return (PyValue){ ((uint64_t)s >> Py_INT_SHIFT) | Py_INT_BASE };
 }
 
+/* The sum of two scaled int51 words.  Returns false with the scaled sum in
+ * *out when it fits 64 bits.  Returns true with the unscaled sum of the two
+ * int51s in *out when it does not: that sum fits 64 bits and lies outside
+ * the int51 range, so it is the operand of a boxing helper. */
+static inline bool
+_PyValue_AddCheckedScaled(int64_t a, int64_t b, int64_t *out)
+{
+    int64_t sum;
+    if (__builtin_add_overflow(a, b, &sum)) {
+        *out = Py_ARITHMETIC_RIGHT_SHIFT(int64_t, a, Py_INT_SHIFT)
+               + Py_ARITHMETIC_RIGHT_SHIFT(int64_t, b, Py_INT_SHIFT);
+        return true;
+    }
+    *out = sum;
+    return false;
+}
+
 static inline int64_t
 PyValue_InlineInt64(PyValueBorrow r)
 {

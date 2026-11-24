@@ -44,11 +44,14 @@ FIXED = [RBX, R12, R13, R14, R15]
 COUNTS = {"PyValue_DUP", "PyValue_XDUP", "PyValue_CLOSE", "PyValue_XCLOSE",
           "PyValue_CLOSE_SPECIALIZED", "PyValue_FromInt64", "PyValue_FromDouble"}
 # Tested on their own: they read the frame of the test's caller, or write
-FRAME = {"GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "GETLOCAL", "IR_SLOTS"}
+FRAME = {"GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "GETLOCAL", "IR_SLOTS",
+         "FRAME_CODE_INSTRUMENTATION_VERSION"}
 SLOTS = {"_PyObject_ShapeReadDup", "_PyDictValues_SetShape",
          "_PyDictValues_AddToInsertionOrder", "_PyValueSlot_Exchange",
          "_PyValueSlot_ExchangeFilled", "_PyValueSlot_Fill"}
-APART = COUNTS | FRAME | SLOTS
+# Tested on their own: they leave by a label of their own, with results on both paths
+LEAVES = {"_PyValue_AddCheckedScaled"}
+APART = COUNTS | FRAME | SLOTS | LEAVES
 HIGH = [R8, R9, R10, R11, RSI, RDI]
 
 
@@ -204,6 +207,29 @@ class LoweringTests(unittest.TestCase):
             prim = ir_leaf.PRIMITIVES[name]
             for args in [()] if not prim.params else cases(prim):
                 self.check_against_c(name, args, rng)
+
+    def test_add_checked_scaled(self):
+        """The lowering leaves by its label exactly where the C definition
+        overflows, and writes the C definition's out on both paths"""
+        name = "_PyValue_AddCheckedScaled"
+        nres, nargs, ntemps, nxtemps, kinds, predicate = lowerings()[name]
+        self.assertEqual((nres, nargs, ntemps, kinds), (1, 2, 2, "ggggg"))
+        rng = random.Random(90)
+        for args in cases(ir_leaf.PRIMITIVES[name]):
+            overflowed, out = capi.leaf_primitive(name, *args)
+            assignments_ = assignments(kinds, nres, nargs, rng, count=2)
+            # Both arguments in one register
+            same_arg = list(assignments_[0])
+            same_arg[2] = same_arg[1]
+            for ops in (*assignments_, same_arg):
+                same_args = ops[1] == ops[2]
+                with self.subTest(args=args, ops=ops):
+                    if same_args and args[0] != args[1]:
+                        continue
+                    cond, (got,), before, after = run(name, ops, args, rng, "exit")
+                    self.check_registers(name, ops, before, after)
+                    self.assertIs(cond, overflowed)
+                    self.assertEqual(as_type(got, "i64"), out)
 
     def test_more_objects(self):
         "Objects beyond test_ir_leaf's: types of other sizes, other lengths and key sizes"
@@ -380,7 +406,7 @@ class LoweringTests(unittest.TestCase):
         "The frame primitives read the frame of run(): its globals, constants and slots"
         rng = random.Random(92)
         for name, cases_ in (("GLOBALS", [()]), ("BUILTINS", [()]), ("FRAME_CO_CONSTS", [()]),
-                             ("IR_SLOTS", [()]),
+                             ("IR_SLOTS", [()]), ("FRAME_CODE_INSTRUMENTATION_VERSION", [()]),
                              # run()'s parameters are its first slots
                              ("GETLOCAL", [(i,) for i in range(7)])):
             nres, nargs, _, _, kinds, _ = lowerings()[name]
@@ -628,6 +654,12 @@ TRUTHS = ANY + [[1], -5, big(0), Plain(), "", Shape()]
 BINARY = "def f(a, b):\n    x = 1\n    x = a {op} b\n    return x"
 TEMPS = "def f(a, b):\n    return (a {op} b) {op} (b {op} a)"
 TEMPLATE_CASES = [
+    # RESUME's words compile to RESUME_CHECK's template, whose miss runs
+    # the RESUME form; a frame with cells reaches its RESUME after the
+    # words that make them
+    ("def f(a, b):\n    return a", (1, 2), "RESUME", "", [()]),
+    ("def f(a, b):\n    def g():\n        return a\n    return g", (1, 2), "RESUME", "",
+     [()]),
     *[(BINARY.format(op=op), (6, 3), handler, "ABC",
        [(Plain(), a, b) for a, b in INT_PAIRS])
       for op, handler in (("+", "BINARY_OP_ADD_INT"), ("-", "BINARY_OP_SUBTRACT_INT"),
@@ -717,8 +749,9 @@ TEMPLATE_CASES = [
     ("import math\ndef f(a, b):\n    x = 1\n    x = math.pi\n    return x", (1, 2),
      "LOAD_ATTR_MODULE", "AB",
      [(old, m) for old in (Plain(), None) for m in (math, sys, Shape(), 4)]),
-    # A window of two temporaries
-    ("def f(a, b):\n    a[b], b = b, a\n    return a", ([1, 2], 1), "SWAP", ("A", "A+1"),
+    # A window of two temporaries.  The translator renames most SWAPs away;
+    # a chained comparison still exchanges its two operands in place.
+    ("def f(a, b):\n    return a < b < 3", (1, 2), "SWAP", ("A", "A+1"),
      [(x, y) for x in ANY[::2] for y in (Plain(), 7)]),
     ("def f(a, b):\n    x = 1\n    x = a < b < 3\n    return x", (1, 2), "POP_TOP", "A",
      [(x,) for x in ANY + [Plain()]]),
@@ -891,6 +924,23 @@ class TemplateTests(unittest.TestCase):
                     fast += not self.check_same(word, slots, objects)[1]
             with self.subTest(source=source, handler=handler):
                 self.assertGreater(fast, 0, "no case stayed on the template's code")
+
+    def test_resume_check_misses_when_instrumentation_changes(self):
+        "RESUME_CHECK's template stays on its code until monitoring changes the version"
+        f = self.compile("def f(a, b):\n    return a", (1, 2))
+        index = word_of(f, "RESUME")[0]
+        self.assertFalse(capi.jit_template_run(f, index, {}, True)[1])
+        sys.monitoring.use_tool_id(4, "test_jit_template")
+        try:
+            sys.monitoring.set_events(4, sys.monitoring.events.PY_START)
+            # The code's version is behind the interpreter's: the miss runs
+            # the RESUME form, which instruments the code
+            next_, slow, exc, _ = capi.jit_template_run(f, index, {}, True)
+            self.assertTrue(slow)
+            self.assertIsNone(exc)
+        finally:
+            sys.monitoring.set_events(4, 0)
+            sys.monitoring.free_tool_id(4)
 
     def test_temporaries(self):
         "TEMPS puts the inputs of its last word in temporaries"

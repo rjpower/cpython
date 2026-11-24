@@ -98,6 +98,14 @@ lp_PyValue_FloatOperandValues(PyObject *const *args)
     return Py_BuildValue("(Odd)", Py_True, a, b);
 }
 
+static PyObject *
+lp__PyValue_AddCheckedScaled(PyObject *const *args)
+{
+    int64_t out;
+    bool overflowed = _PyValue_AddCheckedScaled(INT(0), INT(1), &out);
+    return Py_BuildValue("(OL)", overflowed ? Py_True : Py_False, (long long)out);
+}
+
 /* The constructors with a slow path return a new value: an inline word is
    returned as a word, a box as its object (the caller owns it). */
 static PyObject *
@@ -180,6 +188,8 @@ static PyObject *lp_FRAME_CO_CONSTS(PyObject *const *args) { _PyInterpreterFrame
 static PyObject *lp_IR_SLOTS(PyObject *const *args) { _PyInterpreterFrame *frame = caller_frame(); RET_WORD(IR_SLOTS()); }
 static PyObject *lp_GETLOCAL(PyObject *const *args) { _PyInterpreterFrame *frame = caller_frame(); RET_VAL(GETLOCAL((int)INT(0))); }
 static PyObject *lp__Py_EvalBreakerHasEvents(PyObject *const *args) { RET_BOOL(_Py_EvalBreakerHasEvents(_PyThreadState_GET())); }
+static PyObject *lp__Py_EvalBreaker(PyObject *const *args) { RET_WORD(_Py_EvalBreaker(_PyThreadState_GET())); }
+static PyObject *lp_FRAME_CODE_INSTRUMENTATION_VERSION(PyObject *const *args) { _PyInterpreterFrame *frame = caller_frame(); RET_WORD(FRAME_CODE_INSTRUMENTATION_VERSION()); }
 
 /* The ownership primitives change the count of the object they are given;
    the caller balances it. */
@@ -225,7 +235,8 @@ static const struct {
     P(_PyValue_IntScaled, 1), P(_PyValue_FromIntScaled, 1),
     P(PyValue_InlineInt64, 1), P(PyValue_FromInlineInt, 1),
     P(PyValue_InlineFloat, 1), P(PyValue_FromDoubleNotNaN, 1),
-    P(PyValue_FloatOperandValues, 2), P(PyValue_FromInt64, 1),
+    P(PyValue_FloatOperandValues, 2), P(_PyValue_AddCheckedScaled, 2),
+    P(PyValue_FromInt64, 1),
     P(PyValue_FromDouble, 1), P(PyValue_TagIndex, 1), P(PyValue_UntagIndex, 1),
     P(PyValue_IncrementTaggedIndexNoOverflow, 1), P(COMPARISON_BIT, 2),
     P(PyValue_AsKnownObjectBorrow, 1), P(_PyValue_AsKnownObjectBorrowPointer, 1),
@@ -242,7 +253,8 @@ static const struct {
     P(_PyValue_CommonConstant, 1),
     P(_PyValue_PublishedItem, 1),
     P(GLOBALS, 0), P(BUILTINS, 0), P(FRAME_CO_CONSTS, 0), P(GETLOCAL, 1), P(IR_SLOTS, 0),
-    P(_Py_EvalBreakerHasEvents, 0),
+    P(_Py_EvalBreakerHasEvents, 0), P(_Py_EvalBreaker, 0),
+    P(FRAME_CODE_INSTRUMENTATION_VERSION, 0),
     P(PyValue_DUP, 1), P(PyValue_XDUP, 1), P(PyValue_CLOSE, 1),
     P(PyValue_XCLOSE, 1), P(PyValue_CLOSE_SPECIALIZED, 2),
 #undef P
@@ -364,6 +376,7 @@ leaf_layout(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(ignored))
     OFF(_PyInterpreterFrame, f_globals); OFF(_PyInterpreterFrame, f_builtins);
     OFF(_PyInterpreterFrame, f_executable); OFF(_PyInterpreterFrame, base);
     OFF(PyCodeObject, co_consts); OFF(PyThreadState, eval_breaker);
+    OFF(PyCodeObject, _co_instrumentation_version);
 #define SIZE(T) if (add_int(size, #T, (long long)sizeof(T)) < 0) goto error
     SIZE(PyValue); SIZE(PyDictUnicodeEntry);
 #define SYM(NAME) if (add_word(sym, #NAME, (uint64_t)(uintptr_t)&NAME) < 0) goto error

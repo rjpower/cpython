@@ -2024,6 +2024,19 @@ leaf_probe__PUSH_TAGGED_ZERO(_PyInterpreterFrame *frame, PyValue *stack_pointer,
 }
 
 static int
+leaf_probe__RESUME_CHECK(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
+    const uint64_t *caches, struct leaf_probe_result *result)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    (void)frame; (void)tstate; (void)oparg; (void)caches;
+    if (_Py_EvalBreaker(tstate) != FRAME_CODE_INSTRUMENTATION_VERSION()) {
+        return LEAF_PROBE_EXIT;
+    }
+    result->stack_pointer = stack_pointer;
+    return LEAF_PROBE_NEXT;
+}
+
+static int
 leaf_probe__STORE_ATTR_SHAPE(_PyInterpreterFrame *frame, PyValue *stack_pointer, int oparg,
     const uint64_t *caches, struct leaf_probe_result *result)
 {
@@ -2360,6 +2373,7 @@ static const struct leaf_probe LEAF_PROBES[] = {
     {"_POP_TOP_NUMBER", leaf_probe__POP_TOP_NUMBER, 1},
     {"_PUSH_NULL", leaf_probe__PUSH_NULL, 0},
     {"_PUSH_TAGGED_ZERO", leaf_probe__PUSH_TAGGED_ZERO, 0},
+    {"_RESUME_CHECK", leaf_probe__RESUME_CHECK, 0},
     {"_STORE_ATTR_SHAPE", leaf_probe__STORE_ATTR_SHAPE, 2},
     {"_STORE_ATTR_SHAPE_ADD", leaf_probe__STORE_ATTR_SHAPE_ADD, 2},
     {"_STORE_ATTR_SLOT", leaf_probe__STORE_ATTR_SLOT, 2},

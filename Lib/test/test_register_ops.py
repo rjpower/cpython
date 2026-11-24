@@ -134,7 +134,7 @@ class ParseTests(unittest.TestCase):
          "releases, runs_python, polls, switches_frame)"),
         ("arm F.A inline effects() feedback() exits() { entry(): x = 1; }", 1, 56,
          "expected a statement or a terminator (goto, branch, call, each, advance, "
-         "exit), found 'x'"),
+         "exit, tail), found 'x'"),
         ("macro m() -> Unit effects() feedback() exits() pending;", 1, 40,
          "a macro's exits are its cases: no 'exits' clause"),
         ("point F.P(current, here, clear) keep() spent() defs() held();", 1, 20,
@@ -228,6 +228,10 @@ CHECK_CASES = [
          (10, 18, 'Enum<Opp>: no enum Opp is declared'),
          (29, 21, 'op: argument o is Enum<Opp>; PLUS is Enum<Op>'),
          (52, 21, 'op: argument o is Enum<Opp>; MINUS is Enum<Op>'),
+     ]),
+    ('macro publish', '  Run():\n    exit run();',
+     '  Run():\n    publish [] retire [] at F.Done;\n    exit run();', [
+         (21, 5, 'a macro does not publish; it returns a case and its arm publishes'),
      ]),
     ('callee', 'box(scale(l))',
      'box(scael(l))', [
@@ -518,6 +522,31 @@ class CheckTests(unittest.TestCase):
          [(1, 52, "fact object takes no type argument")]),
         ("extern helper h(v:B) -> O effects() ensures(result.exact<frozenset>(result)) "
          "pending;", []),
+        # An optional owner may bind an optional destination, not a plain one
+        ("family F(d:Dst, e:Maybe<Dst>, x:Src) exits(next);\n"
+         "point F.Done(current, next_head, clear) keep() spent(x) defs(d, e) held();\n"
+         "extern helper h(v:B) -> Maybe<O> effects() pending;\n"
+         "arm F.A inline effects(writes, releases) feedback() exits(next)\n"
+         "{ entry(): let m:Maybe<O> = h(use(x));\n"
+         "  publish [e = m] retire [spent(x), old(e)] at F.Done; exit next(); }",
+         []),
+        ("family F(d:Dst, x:Src) exits(next);\n"
+         "point F.Done(current, next_head, clear) keep() spent(x) defs(d) held();\n"
+         "extern helper h(v:B) -> Maybe<O> effects() pending;\n"
+         "arm F.A inline effects(writes, releases) feedback() exits(next)\n"
+         "{ entry(): let m:Maybe<O> = h(use(x));\n"
+         "  publish [d = m] retire [spent(x), old(d)] at F.Done; exit next(); }",
+         [(6, 16, "m is Maybe<O>, expected O")]),
+        # Parameter modes: borrows names a linear parameter, spends a source
+        # one, and spending releases
+        ("extern helper h(a:Anchors, s:Span<Src>, e:Err) -> Err effects(releases) "
+         "borrows(a) spends(s) pending;", []),
+        ("extern helper h(v:B, s:Src) -> Unit effects(releases) borrows(v) spends(v) "
+         "pending;",
+         [(1, 37, "borrows(v): v is not a linear parameter"),
+          (1, 37, "spends(v): v is not a source parameter")]),
+        ("macro m(s:Span<Src>) -> Unit effects() feedback() spends(s) pending;",
+         [(1, 30, "spends(s): spending a source releases its owner; declare releases")]),
     ]
 
     def test_targets_and_typed_facts(self):
@@ -560,6 +589,9 @@ class CheckTests(unittest.TestCase):
          [("t", "A"), ("u", "B+C"), ("s", "D")]),
         ("family F(a:Src, b:Src, c:Src, d:Src, u:FarHead) exits(next);", 1,
          [("a", "A"), ("b", "B"), ("c", "C"), ("d", "D"), ("u", "P0+P1")]),
+        # An argument descriptor's count takes a field; its homes follow
+        ("family F(d:Dst, fn:Src, a:Args, f:Fb<Call>) exits(next);", 0,
+         [("d", "A"), ("fn", "B"), ("a", "C"), ("f", "D")]),
     ]
 
     def test_derived_encoding(self):
@@ -589,10 +621,11 @@ class DefinitionTests(unittest.TestCase):
                          ["Add.Generic", "Add.Int"])
         self.assertIn("GetAttr.Instance", p.arms)
         self.assertIsNotNone(p.macros["adapt_before_use_add"].graph)
+        self.assertIsNotNone(p.macros["binary_at_origin"].graph)
 
     def test_pending_rows(self):
         pending = set(self.program.pending)
-        for name in ("add_checked_scaled", "tick", "install", "admitted_instance_slot"):
+        for name in ("getattr_at_origin",):
             self.assertIn(name, pending)
         for x in self.program.externs.values():
             if x.c is not None:

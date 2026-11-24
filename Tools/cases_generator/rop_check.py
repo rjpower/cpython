@@ -13,6 +13,7 @@ macros, and exits 1 on any diagnostic.
 """
 
 import argparse
+import itertools
 import math
 import sys
 from collections.abc import Iterable, Mapping
@@ -24,9 +25,9 @@ from rop_catalog import (CONVENTIONS, ENVIRONMENT, EVIDENCE_KEYS, EVIDENCE_PRIMI
                          EVIDENCE_REQUIRED, FEEDBACK_ROOTS, INDEX_BITS, LINEAR_HANDLES,
                          TARGET_BITS,
                          LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
-                         SLOT_ORDER, WIDEST_IMMEDIATE, DebtKind, Effect, ExitKind,
-                         FieldKind, Handle, RowKind, Scalar, Schema, SchemaCtor, Slot,
-                         Wrap)
+                         SELECT_DIMENSIONS, SLOT_ORDER, WIDEST_IMMEDIATE, DebtKind,
+                         Effect, ExitKind, FieldKind, FrameRole, Handle, PcRole,
+                         RowKind, Scalar, Schema, SchemaCtor, Select, Slot, Wrap)
 from rop_model import (RESULT_CASE, Advance, Arm, Block, BoolLit, Branch, Call,
                        CallTerm, Cases, Contract, Decl, Diagnostic, Each, Encoding,
                        EnumDecl, Placement,
@@ -34,7 +35,7 @@ from rop_model import (RESULT_CASE, Advance, Arm, Block, BoolLit, Branch, Call,
                        Guard, HandleType, Let, Macro, Name, Nat, PairType, Param,
                        Point, Publish, Result, Returns, RopError, ScalarType,
                        SchemaRef, SchemaType, SchemaVar, SourceFile, SpanLit, SrcSpan,
-                       Target, Term, Type, WrapType, DISCARD, ENTRY, NOWHERE)
+                       Tail, Target, Term, Type, WrapType, DISCARD, ENTRY, NOWHERE)
 from rop_print import expr_text, type_text
 import rop_header
 import rop_syntax
@@ -64,7 +65,8 @@ EXIT_PAYLOAD: dict[ExitKind, tuple[Type | None, ...]] = {
     ExitKind.miss: (),
     ExitKind.again: (None,),
     ExitKind.raise_: (T(Handle.Point), T(Handle.Err)),
-    ExitKind.enter: (T(Handle.Frame), T(Handle.Head)),
+    # The new frame; `resume P` names the caller's point at the return
+    ExitKind.enter: (T(Handle.NewFrame),),
     ExitKind.return_: (T(Handle.Frame), T(Handle.Head)),
     ExitKind.yield_: (T(Handle.Route),),
     ExitKind.exit: (O,),
@@ -143,9 +145,24 @@ class Program:
 # Helpers
 
 def is_linear(t: Type) -> bool:
+    """Whether a value of type t carries an obligation: a linear handle or
+    ticket, or a Maybe, Span or Pair of one.  An InOut is a home, not an
+    owner: `move` takes the owner out of it."""
     if isinstance(t, HandleType):
         return t.handle in LINEAR_HANDLES
+    if isinstance(t, WrapType):
+        return t.wrap != Wrap.InOut and is_linear(t.arg)
+    if isinstance(t, PairType):
+        return is_linear(t.first) or is_linear(t.second)
     return isinstance(t, SchemaType) and t.ctor in LINEAR_SCHEMA_CTORS
+
+
+def is_source(t: Type) -> bool:
+    """Whether t names source homes: a source operand type, or a Maybe or
+    Span of one."""
+    if isinstance(t, WrapType) and t.wrap in (Wrap.Maybe, Wrap.Span):
+        return is_source(t.arg)
+    return isinstance(t, HandleType) and t.handle in SOURCE_HANDLES
 
 
 def substitute(t: Type, binding: Mapping[str, Schema]) -> Type:
@@ -232,6 +249,10 @@ def field_kind(t: Type) -> FieldKind | None:
     return None
 
 
+def is_args(t: Type) -> bool:
+    return isinstance(t, HandleType) and t.handle == Handle.Args
+
+
 def operand_bits(t: Type, kind: FieldKind, enums: Mapping[str, EnumDecl]) -> int:
     if kind == FieldKind.imm:
         bits = imm_bits(t, enums)
@@ -248,7 +269,8 @@ def pack(family: str, params: Iterable[Param], enums: Mapping[str, EnumDecl]
     """The packing rule.  Operands take the fixed fields A, B, C, D, then
     the operand words' P0..P7, in declaration order; an immediate wider
     than the next field takes it and the one after, if both are in the same
-    word.  Vectors take no fixed field and follow in the payload, in order.
+    word.  A span takes no fixed field; an argument descriptor (Args) takes
+    one for its count.  The homes of both follow in the payload, in order.
     Returns the encoding and the operands that cannot be packed, with the
     reason."""
     placements: list[Placement] = []
@@ -260,7 +282,7 @@ def pack(family: str, params: Iterable[Param], enums: Mapping[str, EnumDecl]
             problems.append((p, f"operand {p.name}:{type_text(p.type)} has no field "
                              "kind"))
             continue
-        if kind == FieldKind.vector:
+        if kind == FieldKind.vector and not is_args(p.type):
             placements.append(Placement(p.name, kind, 0, ()))
             continue
         bits = operand_bits(p.type, kind, enums)
@@ -326,6 +348,8 @@ def check(files: Iterable[SourceFile]) -> Program:
         check_macro(c, m)
     for a in c.arms.values():
         check_arm(c, a)
+    for fam in c.families.values():
+        check_selection(c, fam)
     check_macro_recursion(c)
     return Program(c.files, dict(c.enums), dict(c.families), dict(c.points),
                    dict(c.arms), dict(c.macros), dict(c.externs), dict(c.graphs),
@@ -488,6 +512,18 @@ def check_contract(c: Checker, contract: Contract, definition: str,
                             for f in SCHEMA_FIELDS[s]})
             c.report(a.span, definition, f"{a.mode.value}({a.field}): the schema has no "
                      f"field {rest} (fields: {', '.join(known)})")
+    types = {p.name: p.type for p in params}
+    for n in contract.borrows:
+        if n not in types or not is_linear(types[n]):
+            c.report(contract.span, definition, f"borrows({n}): {n} is not a linear "
+                     "parameter")
+    for n in contract.spends:
+        if n not in types or not is_source(types[n]):
+            c.report(contract.span, definition, f"spends({n}): {n} is not a source "
+                     "parameter")
+    if contract.spends and Effect.releases not in contract.effect_set:
+        c.report(contract.span, definition, f"spends({', '.join(contract.spends)}): "
+                 "spending a source releases its owner; declare releases")
     if contract.exits and not exits_allowed:
         c.report(contract.span, definition, "only an arm or a routine declares exits")
     for n in contract.exits:
@@ -602,7 +638,36 @@ def check_arm(c: Checker, a: Arm) -> None:
         if n not in fam.exits:
             c.report(a.contract.span, a.name, f"exit {n} is not an exit of family "
                      f"{fam.name} ({', '.join(fam.exits)})")
+    dimensions = [select_dimension(m) for m in a.select]
+    for d in sorted({d for d in dimensions if dimensions.count(d) > 1}):
+        c.report(a.span, a.name, f"select names two members of dimension {d}; one "
+                 "holds")
     check_graph(c, a.name, a.graph, fam.params, fam, None)
+
+
+def select_dimension(m: Select) -> str:
+    return next(d for d, members in SELECT_DIMENSIONS.items() if m in members)
+
+
+def check_selection(c: Checker, fam: Family) -> None:
+    """Arms chosen by static evidence: every combination of the dimensions
+    the family's arms name is admitted by exactly one arm."""
+    arms = [a for a in c.arms.values() if a.name.split(".")[0] == fam.name]
+    if not any(a.select for a in arms):
+        return
+    if "miss" in fam.exits:
+        c.report(fam.span, fam.name, "a family whose arms are selected statically "
+                 "has no miss")
+    named = sorted({select_dimension(m) for a in arms for m in a.select})
+    for combo in itertools.product(*(SELECT_DIMENSIONS[d] for d in named)):
+        admitting = [a.name for a in arms
+                     if all(m in combo for m in a.select)]
+        if len(admitting) != 1:
+            which = ", ".join(m.value for m in combo)
+            c.report(fam.span, fam.name, f"selection ({which}) is admitted by "
+                     f"{len(admitting)} arms" + (f" ({', '.join(admitting)})"
+                                                  if admitting else "") +
+                     "; exactly one admits it")
 
 
 # Graphs
@@ -832,6 +897,11 @@ def check_block(c: Checker, scope: Scope, b: Block) -> None:
 
 
 def check_publish(c: Checker, scope: Scope, s: Publish, block: str, i: int) -> None:
+    if scope.macro is not None:
+        # A point belongs to a family: arms publish, macros return cases
+        c.report(s.span, scope.definition, "a macro does not publish; it returns a "
+                 "case and its arm publishes")
+        return
     seen: set[str] = set()
     for bind in s.bindings:
         t = operand_type(scope, bind.target)
@@ -841,13 +911,22 @@ def check_publish(c: Checker, scope: Scope, s: Publish, block: str, i: int) -> N
         if t is None or not is_dst(t):
             c.report(bind.span, scope.definition, f"publish [{bind.target} = ...]: "
                      f"{bind.target} is not a destination operand")
-        expect(c, scope, bind.value, O, block, i, outer=False)
+        # An optional destination takes an owner, or an optional owner whose
+        # absence leaves the home empty
+        have = type_of(c, scope, bind.value, O, block, i, False)
+        optional = WrapType(Wrap.Maybe, O)
+        if have is not None and have != O and not (t == WrapType(Wrap.Maybe, DST)
+                                                    and have == optional):
+            c.report(bind.value.span, scope.definition,
+                     f"{expr_text(bind.value)} is {type_text(have)}, "
+                     f"expected {type_text(O)}")
     for d in s.debts:
         want = {DebtKind.spent: SRC, DebtKind.old: DST,
                 DebtKind.roots: T(Handle.Anchors), DebtKind.owned: O}[d.kind]
         if d.kind in (DebtKind.spent, DebtKind.old):
             t = operand_type(scope, d.subject)
-            ok = t is not None and (t == want or t == WrapType(Wrap.Maybe, want))
+            ok = t is not None and (t == want or t == WrapType(Wrap.Maybe, want)
+                                    or (d.kind == DebtKind.spent and is_args(t)))
             if not ok:
                 c.report(d.span, scope.definition, f"{d.kind.value}({d.subject}): "
                          f"{d.subject} is not a {type_text(want)} operand")
@@ -916,8 +995,31 @@ def check_term(c: Checker, scope: Scope, b: Block, i: int) -> None:
         if t.body in scope.blocks and not dominates(scope.idom, t.body, b.label):
             c.report(t.span, scope.definition, f"advance {t.body} from block {b.label}, "
                      f"which is outside the body of {t.body}")
+    elif isinstance(t, Tail):
+        check_tail(c, scope, t, b.label, i)
     else:
         check_exit(c, scope, t, b.label, i)
+
+
+def check_tail(c: Checker, scope: Scope, t: Tail, block: str, i: int) -> None:
+    """`tail r(args)`: a routine finishes the word and leaves by its own
+    exits, which must be the arm's."""
+    where = f"tail {t.callee}"
+    if scope.family is None:
+        c.report(t.span, scope.definition, f"{where}: only an arm ends in a tail")
+        return
+    x = c.externs.get(t.callee)
+    if x is None or x.kind != RowKind.routine:
+        c.report(t.span, scope.definition, f"{where}: {t.callee} is not a routine")
+        return
+    if not (isinstance(x.result, Returns) and x.result.type == UNIT):
+        c.report(t.span, scope.definition, f"{where}: a tail routine returns Unit")
+    for n in x.contract.exits:
+        if n not in scope.exits:
+            c.report(t.span, scope.definition, f"{where} leaves by exit {n}, which "
+                     f"{scope.definition} does not declare")
+        scope.used_exits.add(n)
+    check_args(c, scope, t.callee, x.params, t.args, t.span, block, i)
 
 
 def check_status_call(c: Checker, scope: Scope, t: CallTerm, block: str, i: int) -> None:
@@ -988,6 +1090,12 @@ def check_exit(c: Checker, scope: Scope, t: Exit, block: str, i: int) -> None:
                  f"{what} of {scope.definition} ({', '.join(sorted(scope.exits))})")
         return
     scope.used_exits.add(t.kind)
+    if (t.resume is not None) != (t.kind == ExitKind.enter.value and
+                                  scope.family is not None):
+        c.report(t.span, scope.definition, "an arm's exit enter names its resume point "
+                 "(exit enter(c) resume P), and no other exit does")
+    if t.resume is not None and scope.family is not None:
+        check_resume(c, scope, t)
     if scope.family is None:
         assert scope.macro is not None
         want = tuple(p.type for p in result_cases(scope.macro.result)[t.kind])
@@ -1011,6 +1119,23 @@ def check_exit(c: Checker, scope: Scope, t: Exit, block: str, i: int) -> None:
         if need is None:
             continue
         expect(c, scope, arg, need, block, i, outer=False)
+
+
+def check_resume(c: Checker, scope: Scope, t: Exit) -> None:
+    """The point where the caller resumes when the child returns: the child's
+    value becomes its one definition."""
+    assert t.resume is not None and scope.family is not None
+    check_point_ref(c, scope, t.resume, t.span, "", 0)
+    p = c.points.get(t.resume)
+    if p is None or p.family != scope.family.name:
+        return
+    if p.frame != FrameRole.caller or p.pc != PcRole.next_head:
+        c.report(t.span, scope.definition, f"resume {p.name}: the point is "
+                 f"({p.frame.value}, {p.pc.value}); a resume point is (caller, "
+                 "next_head)")
+    if len(p.defs) > 1:
+        c.report(t.span, scope.definition, f"resume {p.name}: the child's value is "
+                 f"one definition, not {len(p.defs)}")
 
 
 # Expressions

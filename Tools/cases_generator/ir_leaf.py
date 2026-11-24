@@ -172,6 +172,7 @@ FIELDS = {f"{f.struct}.{f.name}": f for f in (
     Field("_PyInterpreterFrame", "base", "PyValue*"),
     Field("PyCodeObject", "co_consts", "PyObject*"),
     Field("PyThreadState", "eval_breaker", "u64"),
+    Field("PyCodeObject", "_co_instrumentation_version", "u64"),
 )}
 # Element sizes that pointer arithmetic needs
 SIZES = ("PyValue", "PyDictUnicodeEntry")
@@ -271,6 +272,16 @@ def _from_int64(cx, i):
     if _fits_inline(cx, i):
         return _from_inline_int(cx, i)
     return cx.call("_PyValue_BoxInt64", i)
+
+
+def _add_checked_scaled(cx, a, b):
+    """The scaled sum of two int51s, or on 64-bit overflow their exact sum.
+    Both results are written, so the overflow case has a payload."""
+    exact = a + b
+    if -(1 << 63) <= exact < (1 << 63):
+        return False, exact
+    shift = cx.k("Py_INT_SHIFT")
+    return True, (a >> shift) + (b >> shift)
 
 
 def _from_double(cx, d):
@@ -383,6 +394,11 @@ def _getlocal(cx, i):
     return cx.load(base + i * cx.size("PyValue"), VALUE)
 
 
+def _frame_code_instrumentation_version(cx):
+    code = cx.load(cx.frame + cx.off("_PyInterpreterFrame.f_executable"), "PyCodeObject*")
+    return cx.load(code + cx.off("PyCodeObject._co_instrumentation_version"), "u64")
+
+
 def _frame_co_consts(cx):
     code = cx.load(cx.frame + cx.off("_PyInterpreterFrame.f_executable"), "PyCodeObject*")
     return cx.load(code + cx.off("PyCodeObject.co_consts"), "PyObject*")
@@ -466,6 +482,10 @@ PRIMITIVES = {p.name: p for p in (
     _p("PyValue_FloatOperandValues", [V, V], [B, "f64", "f64"], VALUE_H,
        _float_operand_values,
        doc="the bool result and the two out-parameters, written only if true"),
+    _p("_PyValue_AddCheckedScaled", ["i64", "i64"], [B, "i64"], VALUE_H,
+       _add_checked_scaled,
+       pre=lambda cx, a, b: all(x % (1 << cx.k("Py_INT_SHIFT")) == 0 for x in (a, b)),
+       doc="overflowed, and the scaled sum or, on overflow, the exact int51 sum"),
     _p("PyValue_FromInt64", ["i64"], [V], VALUE_H, _from_int64, BOXES,
        slow="_PyValue_BoxInt64"),
     _p("PyValue_FromDouble", ["f64"], [V], VALUE_H, _from_double, BOXES,
@@ -563,6 +583,12 @@ PRIMITIVES = {p.name: p for p in (
        lambda cx: (cx.load(cx.tstate + cx.off("PyThreadState.eval_breaker"), "u64")
                    & cx.k("_PY_EVAL_EVENTS_MASK")) != 0,
        READS, thread=True, doc="an event for _Py_HandlePending(): the periodic check"),
+    _p("_Py_EvalBreaker", [], ["u64"], MACROS_H,
+       lambda cx: cx.load(cx.tstate + cx.off("PyThreadState.eval_breaker"), "u64"),
+       READS, thread=True, doc="the eval breaker: event bits and instrumentation version"),
+    _p("FRAME_CODE_INSTRUMENTATION_VERSION", [], ["u64"], MACROS_H,
+       _frame_code_instrumentation_version, READS, frame=True,
+       doc="the instrumentation version of the frame's code"),
     # Ownership: counts are not heap writes (CR)
     _p("PyValue_DUP", [V], [V], VALUE_H, _dup, pre=lambda cx, w: w != 0),
     _p("PyValue_XDUP", [V], [V], VALUE_H, _dup),

@@ -13,7 +13,7 @@ from typing import Union
 
 from rop_catalog import (AccessMode, BuiltinType, DebtKind, Effect, ExcRole, Fact,
                          FieldKind,
-                         FrameRole, Handle, PcRole, Region, RowKind, Scalar, Schema,
+                         FrameRole, Handle, PcRole, Region, RowKind, Scalar, Schema, Select,
                          SchemaCtor, Slot, Wrap)
 
 
@@ -221,6 +221,11 @@ class Contract:
     exits: tuple[str, ...] = ()
     requires: tuple[FactUse, ...] = ()
     ensures: tuple[EdgeFact, ...] = ()
+    # Parameter modes of a row or macro: a linear parameter is taken by the
+    # callee unless `borrows` lists it; a source parameter is read and left
+    # intact unless `spends` lists it, and then it is spent on every case.
+    borrows: tuple[str, ...] = ()
+    spends: tuple[str, ...] = ()
     span: SrcSpan = _span()
 
     @property
@@ -336,13 +341,24 @@ class Advance:
 
 @dataclass(frozen=True, slots=True)
 class Exit:
-    """An arm exit constructor, or a macro's case."""
+    """An arm exit constructor, or a macro's case.  `resume` names the
+    continuation point of an `enter`: where and with what the caller goes on
+    when the child returns."""
     kind: str
+    args: tuple[Expr, ...]
+    span: SrcSpan = _span()
+    resume: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Tail:
+    """`tail r(args);`: the word leaves through routine r's own exits."""
+    callee: str
     args: tuple[Expr, ...]
     span: SrcSpan = _span()
 
 
-Term = Union[Goto, Branch, CallTerm, Each, Advance, Exit]
+Term = Union[Goto, Branch, CallTerm, Each, Advance, Exit, Tail]
 
 
 @dataclass(frozen=True, slots=True)
@@ -428,6 +444,9 @@ class Arm:
     contract: Contract
     graph: Graph
     span: SrcSpan = _span()
+    # The static evidence that selects the arm (`select(...)`), for a family
+    # whose arms never miss
+    select: tuple[Select, ...] = ()
 
     @property
     def family(self) -> str:

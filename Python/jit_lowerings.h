@@ -19,6 +19,7 @@ int _PyJitLower_PyValue_BoolCheck(_PyJitWordCx *cx, const uint8_t *ops, const vo
 int _PyJitLower_PyValue_LongCheckExact(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyValue_IntScaled(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__PyValue_FromIntScaled(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower__PyValue_AddCheckedScaled(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_PyValue_InlineInt64(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_PyValue_FromInlineInt(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_PyValue_InlineFloat(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
@@ -64,9 +65,11 @@ int _PyJitLower__PyLong_IsZero(_PyJitWordCx *cx, const uint8_t *ops, const void 
 int _PyJitLower_GLOBALS(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_BUILTINS(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_FRAME_CO_CONSTS(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower_FRAME_CODE_INSTRUMENTATION_VERSION(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_GETLOCAL(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_IR_SLOTS(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower__Py_EvalBreakerHasEvents(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
+int _PyJitLower__Py_EvalBreaker(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_PyValue_DUP(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_PyValue_XDUP(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
 int _PyJitLower_PyValue_CLOSE(_PyJitWordCx *cx, const uint8_t *ops, const void *aux);
@@ -92,6 +95,7 @@ const _PyJitLoweringInfo _PyJit_Lowerings[] = {
     {"PyValue_LongCheckExact", _PyJitLower_PyValue_LongCheckExact, 0, 1, 2, 0, "ggg", 1},
     {"_PyValue_IntScaled", _PyJitLower__PyValue_IntScaled, 1, 1, 0, 0, "gg", 0},
     {"_PyValue_FromIntScaled", _PyJitLower__PyValue_FromIntScaled, 1, 1, 1, 0, "ggg", 0},
+    {"_PyValue_AddCheckedScaled", _PyJitLower__PyValue_AddCheckedScaled, 1, 2, 2, 0, "ggggg", 1},
     {"PyValue_InlineInt64", _PyJitLower_PyValue_InlineInt64, 1, 1, 0, 0, "gg", 0},
     {"PyValue_FromInlineInt", _PyJitLower_PyValue_FromInlineInt, 1, 1, 1, 0, "ggg", 0},
     {"PyValue_InlineFloat", _PyJitLower_PyValue_InlineFloat, 1, 1, 1, 0, "xgg", 0},
@@ -137,9 +141,11 @@ const _PyJitLoweringInfo _PyJit_Lowerings[] = {
     {"GLOBALS", _PyJitLower_GLOBALS, 1, 0, 0, 0, "g", 0},
     {"BUILTINS", _PyJitLower_BUILTINS, 1, 0, 0, 0, "g", 0},
     {"FRAME_CO_CONSTS", _PyJitLower_FRAME_CO_CONSTS, 1, 0, 0, 0, "g", 0},
+    {"FRAME_CODE_INSTRUMENTATION_VERSION", _PyJitLower_FRAME_CODE_INSTRUMENTATION_VERSION, 1, 0, 0, 0, "g", 0},
     {"GETLOCAL", _PyJitLower_GETLOCAL, 1, 1, 0, 0, "gg", 0},
     {"IR_SLOTS", _PyJitLower_IR_SLOTS, 1, 0, 0, 0, "g", 0},
     {"_Py_EvalBreakerHasEvents", _PyJitLower__Py_EvalBreakerHasEvents, 0, 0, 0, 0, "", 1},
+    {"_Py_EvalBreaker", _PyJitLower__Py_EvalBreaker, 1, 0, 0, 0, "g", 0},
     {"PyValue_DUP", _PyJitLower_PyValue_DUP, 1, 1, 1, 0, "ggg", 0},
     {"PyValue_XDUP", _PyJitLower_PyValue_XDUP, 1, 1, 1, 0, "ggg", 0},
     {"PyValue_CLOSE", _PyJitLower_PyValue_CLOSE, 0, 1, 1, 0, "gg", 0},

@@ -217,6 +217,25 @@ class ExitKind(enum.Enum):
     redirect = "redirect"
 
 
+# The static evidence that selects an arm of a family without a miss
+# (`select(...)`): the translator, or a static word array, knows it when it
+# emits the word.  Each dimension has exactly one member that holds; an arm
+# names at most one member per dimension, and omitting a dimension admits
+# every member of it.
+class Select(enum.Enum):
+    thread_frame = "thread_frame"          # the code runs in a thread frame
+    generator_frame = "generator_frame"    # in a generator-owned frame
+    entry_frame = "entry_frame"            # the evaluator's entry frame
+    vacant_scratch = "vacant_scratch"      # every temporary but the operand is vacant
+    live_scratch = "live_scratch"          # some other temporary may hold a value
+
+
+SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
+    "frame": (Select.thread_frame, Select.generator_frame, Select.entry_frame),
+    "scratch": (Select.vacant_scratch, Select.live_scratch),
+}
+
+
 # The environment every graph may read: the declared execution context
 ENVIRONMENT = {
     "thread": Handle.Thread,
@@ -224,6 +243,17 @@ ENVIRONMENT = {
     "frame": Handle.Frame,
     "site": Handle.Site,
     "next_head": Handle.Head,
+}
+
+# The C expression of each implicit name in every product.  The prologue of
+# a case, a function form and a stub binds the same names: `this_instr` is
+# the head's address (the stub's `site`), `next_instr` the head after the
+# instruction.  The activation has no C value yet and is not listed.
+ENVIRONMENT_C = {
+    "thread": "tstate",
+    "frame": "frame",
+    "site": "this_instr",
+    "next_head": "next_instr",
 }
 
 # Types of which an owner, error or resource must be accounted for: `_`
@@ -374,6 +404,7 @@ class CReturn(enum.Enum):
     value = "PyValue"            # an owned or inline word
     borrow = "PyValueBorrow"
     pointer = "pointer"          # an object or frame pointer handle
+    handle = "handle"            # the C type of the row's logical handle result
     int_status = "int"
     status_value = "_PyStatusValue"   # {int status; PyValue value;}
 
@@ -398,6 +429,8 @@ class CSource(enum.Enum):
     value = "value"                  # a status_value's value field
     exception = "exception"          # the pending exception: an Err token
     nonzero = "nonzero"              # the C result compared with 0, as a Bool
+    out = "out"                      # the scalar written through the last C parameter
+    token = "token"                  # a proof with no runtime value (a Ticket)
 
 
 @dataclass(frozen=True, slots=True)
@@ -409,6 +442,9 @@ class COutcome:
     subject: CSource
     payload: tuple[CSource, ...]
     raised: bool
+    # The logical case this outcome selects, when the convention fixes it by
+    # name; None leaves it to the row's case order
+    case: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -440,16 +476,32 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
           single=True),
     _conv("borrow", CReturn.borrow, COutcome(CTest.always, _RES, (_RES,), False),
           single=True),
+    # The result is the C type of the logical handle (Anchors)
+    _conv("handle", CReturn.handle, COutcome(CTest.always, _RES, (_RES,), False),
+          single=True),
     _conv("pointer", CReturn.pointer, COutcome(CTest.always, _RES, (_RES,), False),
           single=True),
     # ok(v) when the word is not NULL, err(e) with the exception set
     _conv("value_or_null", CReturn.value,
           COutcome(CTest.nonnull, _RES, (_RES,), False),
           COutcome(CTest.null, _RES, (_EXC,), True)),
+    # Always raises: void, with the exception set
+    _conv("raised", CReturn.void, COutcome(CTest.always, _RES, (_EXC,), True)),
+    # A pointer, or NULL with the exception set
+    _conv("pointer_or_raised", CReturn.pointer,
+          COutcome(CTest.nonnull, _RES, (_RES,), False),
+          COutcome(CTest.null, _RES, (_EXC,), True)),
+    # A routine's binding: a macro that leaves the word itself (`tail`)
+    _conv("tail", CReturn.void, COutcome(CTest.always, _RES, (), False), single=True),
     # hit(p)/absent(): a pointer or NULL, no exception
     _conv("pointer_or_null", CReturn.pointer,
           COutcome(CTest.nonnull, _RES, (_RES,), False),
           COutcome(CTest.null, _RES, (), False)),
+    # hit(v)/absent(): the bool says whether the value written through the
+    # last parameter is there; no exception
+    _conv("bool_out_hit", CReturn.bool,
+          COutcome(CTest.true, _RES, (CSource.out,), False, "hit"),
+          COutcome(CTest.false, _RES, (), False, "absent")),
     # A status int: 0 is success, negative raised
     _conv("int_zero_ok", CReturn.int_status,
           COutcome(CTest.zero, _RES, (), False),
@@ -459,10 +511,27 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
           COutcome(CTest.positive, _RES, (), False),
           COutcome(CTest.zero, _RES, (), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
+    # An adaptation status: positive changed (the ticket is a proof, not a
+    # value), zero same, negative blocked; none of them raises
+    _conv("ticket_status", CReturn.int_status,
+          COutcome(CTest.positive, _RES, (CSource.token,), False),
+          COutcome(CTest.zero, _RES, (), False),
+          COutcome(CTest.negative, _RES, (), False)),
+    # Whether a state bit is set: false the first case, true the second, whose
+    # payload is a proof
+    _conv("redirect_status", CReturn.bool,
+          COutcome(CTest.false, _RES, (), False),
+          COutcome(CTest.true, _RES, (CSource.token,), False)),
     # bool tests as two cases: true first
     _conv("bool_cases", CReturn.bool,
           COutcome(CTest.true, _RES, (), False),
           COutcome(CTest.false, _RES, (), False)),
+    # A checked scalar operation: the bool says whether it overflowed, and the
+    # scalar written through the last parameter is the result (false, the
+    # `fits` case) or the wide result (true, the `overflow` case)
+    _conv("bool_out", CReturn.bool,
+          COutcome(CTest.false, _RES, (CSource.out,), False, "fits"),
+          COutcome(CTest.true, _RES, (CSource.out,), False, "overflow")),
     # _PyStatusValue: status 0 the value, 1 the second kind, -1 raised
     _conv("status_value", CReturn.status_value,
           COutcome(CTest.zero, _RES, (_VAL,), False),

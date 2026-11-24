@@ -194,6 +194,17 @@
 /* A planned arm's uop that may reenter Python: the whole-word completion
  * stub's ESCAPED bit (Python/generated_ir_stubs.c.h); nothing elsewhere */
 #define IR_STUB_ESCAPE() ((void)0)
+/* The word's frame had its control moved while it ran (a debugger's jump:
+ * pending_redirect and the continuation in return_pc): commit the jump and
+ * go on there.  The word's results were discarded before. */
+#define IR_REDIRECT() \
+    do { \
+        if (frame->pending_redirect) { \
+            _PyFrame_CompleteRedirect(frame); \
+        } \
+        next_instr = frame->return_pc; \
+        DISPATCH(); \
+    } while (0)
 #define DISPATCH_GOTO() goto *opcode_targets[opcode]
 /* An error leaves the handler for the shared label process_error, which
  * unwinds by the exception table and either dispatches at the handler found
@@ -481,6 +492,18 @@ _PyFb_AdvanceCounter(_PyFbHeader *fb)
     fb->counter = advance_backoff_counter(fb->counter);
 }
 
+/* The `tick` row (Python/register_ops/core.rop): quiet when the counter has
+ * not triggered, which advances it. */
+static inline bool
+_PyFb_TickQuiet(_PyFbHeader *fb)
+{
+    if (_PyFb_CounterTriggers(fb)) {
+        return false;
+    }
+    _PyFb_AdvanceCounter(fb);
+    return true;
+}
+
 /* Keep the site's counter from triggering while an instrumented twin runs the
  * word, so that the specializer does not overwrite the instrumentation.  A
  * function, not a macro, so its row (pycore_ir_components.h) is type checked;
@@ -587,6 +610,30 @@ _Py_EvalBreakerHasEvents(PyThreadState *tstate)
 {
     return (_Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) & _PY_EVAL_EVENTS_MASK) != 0;
 }
+
+/* The thread's eval breaker: its event bits and the global instrumentation
+ * version, by a relaxed load as _Py_EvalBreakerHasEvents() reads it.  The
+ * entry check of a frame (_RESUME_CHECK) compares it with the frame's
+ * code's version: equal when no event is pending and the code is
+ * instrumented as the interpreter is. */
+static inline uintptr_t
+_Py_EvalBreaker(PyThreadState *tstate)
+{
+    return _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker);
+}
+
+/* The instrumentation version of the code that frame runs, by an acquire
+ * load.  It has no event bits, so the eval breaker equals it only when no
+ * event is pending. */
+static inline uintptr_t
+_PyFrame_CodeInstrumentationVersion(_PyInterpreterFrame *frame)
+{
+    uintptr_t version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(
+        _PyFrame_GetCode(frame)->_co_instrumentation_version);
+    assert((version & _PY_EVAL_EVENTS_MASK) == 0);
+    return version;
+}
+#define FRAME_CODE_INSTRUMENTATION_VERSION() _PyFrame_CodeInstrumentationVersion(frame)
 
 static inline int
 check_periodics(PyThreadState *tstate) {
@@ -1184,6 +1231,11 @@ method_poly_lookup(const _PyIRWord *words, const _PyFbHeader *h, PyObject *owner
 #define IR_JIT_EVENT() ((void)0)
 #define IR_JIT_RESUME() ((void)0)
 #endif
+
+/* The execution pin (g3/design.md section 2) that a departing arm takes
+ * after its last guard.  The evaluator runs in no unit: nothing to keep
+ * alive.  The function forms and the stubs bind it to _PyJit_PinDeparting(). */
+#define IR_PIN_DEPARTING() ((void)0)
 
 /* The oparg and feedback entry of another instruction of the frame. */
 #define _PyIR_Oparg(FRAME, INSTR) \

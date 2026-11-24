@@ -82,11 +82,6 @@ family TestBranch(x:Src, y:Src, test:Enum<BranchTest>, target:NearHead, sense:Bo
                   fb:Fb<Compare>)
   exits(next, branch, raise, miss, again);
 
-// P3: method lookup
-
-family GetMethod(callable:Dst, self_dst:Maybe<Dst>, obj:Src, name:Name, fb:Fb<Attr>)
-  exits(next, raise, redirect, miss, again);
-
 // 1D: attribute writes, super and special-method resolution
 
 family AttrWrite(obj:Src, name:Name, value:Maybe<Src>, mode:Enum<WriteMode>,

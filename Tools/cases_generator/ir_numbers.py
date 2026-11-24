@@ -32,6 +32,18 @@ class NumberError(Exception):
     pass
 
 
+@dataclass(frozen=True)
+class ArmEntry:
+    """A register instruction arm (Python/register_ops) as the tables of
+    this generator list it: its handler id is num_handlers + index"""
+    name: str                 # the C name: Add_Int
+    index: int                # among all arms, in definition order
+    region: str               # "inline" or "shared"
+    escapes: bool
+    stub: str | None          # the stub function of a shared arm
+    generic: str | None       # the stub function of its family's generic arm
+
+
 @dataclass
 class NumberTable:
     numbers: dict[str, int] = field(default_factory=dict)

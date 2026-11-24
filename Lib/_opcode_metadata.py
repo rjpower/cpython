@@ -530,6 +530,7 @@ _ir_opmap = frozendict(
     POP_JUMP_IF_FALSE_SLOT=415,
     RESUME_JIT=416,
     JUMP_BACKWARD_JIT=417,
+    RESUME_CHECK=418,
 )
 
 HAVE_ARGUMENT = 41

@@ -571,6 +571,7 @@ class Clauses:
     effects: list[str] = field(default_factory=list)
     exits: list[str] = field(default_factory=list)
     feedback: list[str] = field(default_factory=list)
+    state: list[str] = field(default_factory=list)      # state(...) items
 
 
 class Gap(Exception):
@@ -655,7 +656,26 @@ def seed_clauses(uop, facts: dict, table, overrides: dict) -> Clauses:
     # than a value: the vocabulary has no place for it
     names = {o.name for o in uop.stack.outputs} | {
         o for o in (_alias_source(uop, x.name) for x in uop.stack.outputs) if o}
+    # A handler's state (STATE rows: call_state): a uop that reads it, or
+    # whose guards establish its facts (SELF(call_state, absent)), declares
+    # it in state(item -- item: facts), the facts at its next exit
+    for row in table.values():
+        if row.kind != "STATE":
+            continue
+        found = facts["guards"].get(row.name, set())
+        if not found and row.name not in [t.text for t in ir_contract._tokens(uop)]:
+            continue
+        stated = []
+        for kind, arg in sorted(found):
+            if kind not in ir_contract.FACT_KIND.values() and kind.lower() in ir_contract.STATE_FACTS \
+                    and arg in ir_contract.STATE_ARGS[kind.lower()]:
+                stated.append(f"{kind.lower()}({arg})")
+            else:
+                raise Gap(f"a fact of the state `{row.name}`: {kind}({arg})")
+        c.state.append(f"{row.name} -- {row.name}" + (f": {' '.join(stated)}" if stated else ""))
     for subject, found in facts["guards"].items():
+        if subject in table and table[subject].kind == "STATE":
+            continue
         if subject not in names and subject not in ins:
             raise Gap(f"guard facts of `{subject}`: "
                       f"{', '.join(f'{k}({a})' for k, a in sorted(found))}")
@@ -747,6 +767,8 @@ def render_uop(text: str, name: str, c: Clauses) -> str:
     clauses = [f"effects({', '.join(c.effects)})", f"exits({', '.join(c.exits)})"]
     if c.feedback:
         clauses.append(f"feedback({', '.join(c.feedback)})")
+    if c.state:
+        clauses.append(f"state({', '.join(c.state)})")
     tail = text[close + 1:brace].strip()
     if tail:
         raise ValueError(f"{name}: text between its header and body: {tail!r}")

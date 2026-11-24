@@ -245,6 +245,19 @@ CHECK_CASES = [
      '  Run():\n    publish [] retire [] at F.Done;\n    exit run();', [
          (21, 5, 'a macro does not publish; it returns a case and its arm publishes'),
      ]),
+    ('shared leaves frame', 'feedback(read(entry.kind)) exits(next, again)',
+     'feedback(read(entry.kind)) exits(next, again, return)', [
+         (40, 16, 'exit return is not an exit of family F (next, miss, again, raise)'),
+         (40, 16, 'a shared arm completes the word in a stub, which cannot leave the '
+                  'frame (return): make it split'),
+         (40, 16, 'declared exit return is not reached'),
+     ]),
+    ('observer', 'arm F.A inline',
+     'arm F.Observed inline', [
+         (23, 1, "an observed wrapper needs its family's events: F declares no "
+                 "events(...)"),
+         (23, 23, 'an observed wrapper adapts nothing (miss)'),
+     ]),
     ('callee', 'box(scale(l))',
      'box(scael(l))', [
          (30, 14, 'no row, macro or primitive scael'),
@@ -601,9 +614,10 @@ class CheckTests(unittest.TestCase):
          [("d", "A"), ("x", "B"), ("y", "C"), ("f", "D")]),
         ("family F(d:Dst, k:Bool, i:U16) exits(next);", 0,
          [("d", "A"), ("k", "B"), ("i", "C+D")]),
+        # A span's count takes a field, like an argument descriptor's
         ("family F(d:Dst, s:Span<Src>, a:Src, b:Src, c:Src, n:Name, i:U16) exits(next);", 1,
-         [("d", "A"), ("s", ""), ("a", "B"), ("b", "C"), ("c", "D"), ("n", "P0"),
-          ("i", "P1")]),
+         [("d", "A"), ("s", "B"), ("a", "C"), ("b", "D"), ("c", "P0"), ("n", "P1"),
+          ("i", "P2")]),
         ("family F(t:NearHead, m:Maybe<U8>, a:Src, b:Src, w:U32) exits(next);", 1,
          [("t", "A"), ("m", "B"), ("a", "C"), ("b", "D"), ("w", "P0+P1")]),
         # A near target takes one field, a far one two of the same word

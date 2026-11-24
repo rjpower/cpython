@@ -261,6 +261,16 @@ current_frame(void)
     return _PyThreadState_GET()->current_frame;
 }
 
+/* The stack op that the word's handler stands for, whether it is an old
+ * handler, an IR-only one or a register instruction arm: the index for the
+ * tables that are sized for stack ops (_PyOpcode_Deopt, _PyOpcode_Caches,
+ * the statistics) */
+static inline int
+instr_base_opcode(_PyInstr *instr)
+{
+    return _PyIR_BaseOpcode(IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr)));
+}
+
 /* The opcode of the handler; for an IR-only handler, the instruction that
  * it stands for, as BINARY_OP for BINARY_OP_ADD. */
 static inline int
@@ -752,12 +762,12 @@ specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
         return;
     }
     if (!set_opcode(instr, handler)) {
-        STAT_INC(_PyOpcode_Deopt[specialized_opcode], failure);
-        SPECIALIZATION_FAIL(_PyOpcode_Deopt[specialized_opcode],
+        STAT_INC(_PyIR_BaseOpcode(specialized_opcode), failure);
+        SPECIALIZATION_FAIL(_PyIR_BaseOpcode(specialized_opcode),
                             SPEC_FAIL_OTHER);
         return;
     }
-    STAT_INC(_PyOpcode_Deopt[specialized_opcode], success);
+    STAT_INC(_PyIR_BaseOpcode(specialized_opcode), success);
     _PyFbHeader *h = instr_fb(instr);
     if (h == NULL) {
         // RESUME specialises without an entry
@@ -784,13 +794,13 @@ unspecialize(_PyInstr *instr)
         // The row reports the failure; the macro backs off
         return;
     }
-    STAT_INC(_PyOpcode_Deopt[instr_opcode(instr)], failure);
+    STAT_INC(instr_base_opcode(instr), failure);
     // For BINARY_OP, the handler of the operation
     _PyInterpreterFrame *frame = current_frame();
     int generic = _PyCode_GenericHandler(_PyFrame_GetCode(frame),
                                          _PyFrame_InstrOffset(frame, instr));
     if (!set_opcode(instr, generic)) {
-        SPECIALIZATION_FAIL(_PyOpcode_Deopt[instr_opcode(instr)], SPEC_FAIL_OTHER);
+        SPECIALIZATION_FAIL(instr_base_opcode(instr), SPEC_FAIL_OTHER);
         return;
     }
     _PyFbHeader *h = instr_fb(instr);
@@ -2895,6 +2905,89 @@ _Py_Specialize_Call(PyValue callable_st, PyValue self_or_null_st, _PyInstr *inst
     }
 }
 
+/* The evidence row of Call (classify_call, Python/register_ops/calls.rop):
+ * the arm that a call of fn at site stands for, as the index of its case
+ * (exact, bound_exact, init, other), with the site's entry filled for that
+ * arm.  The decisions are specialize_py_call's and specialize_class_call's;
+ * every other callable is "other", which runs in Call.Generic. */
+enum { CALL_CASE_EXACT, CALL_CASE_BOUND_EXACT, CALL_CASE_INIT, CALL_CASE_OTHER };
+
+static bool
+call_classify_function(_PyFbCall *fb, PyFunctionObject *func, int nargs)
+{
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()) ||
+        func->vectorcall != _PyFunction_Vectorcall ||
+        function_signature(code) != SIMPLE_SIGNATURE ||
+        code->co_argcount != nargs || code_creates_generator(code) ||
+        !prepare_function_exec(code))
+    {
+        return false;
+    }
+    int version = _PyFunction_GetVersionForCurrentState(func);
+    if (!_PyFunction_IsVersionValid(version)) {
+        return false;
+    }
+    fb->func_version = version;
+    return true;
+}
+
+static bool
+call_classify_class(_PyFbCall *fb, PyTypeObject *tp)
+{
+    if ((tp->tp_flags & Py_TPFLAGS_IMMUTABLETYPE) ||
+        Py_TYPE(tp) != &PyType_Type || tp->tp_new != PyBaseObject_Type.tp_new) {
+        return false;
+    }
+    unsigned int tp_version = 0;
+    PyObject *init = get_init_for_simple_managed_python_class(tp, &tp_version);
+    bool cached = tp_version != 0 && init != NULL &&
+        _PyType_CacheInitForSpecialization((PyHeapTypeObject *)tp, init, tp_version);
+    Py_XDECREF(init);
+    if (cached) {
+        fb->type_version = tp_version;
+    }
+    return cached;
+}
+
+int
+_PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
+                    const _PyIRWord *head)
+{
+    assert(site == head);
+    (void)site;
+    if (is_shared_entry(&fb->h) || !PyValue_IsObject(fn)) {
+        return CALL_CASE_OTHER;
+    }
+    memset(&fb->h + 1, 0, sizeof(_PyFbCall) - sizeof(_PyFbHeader));
+    _PyIRWord word = head[0];
+    // The arguments the callee receives, a self that is present among them
+    int self_slot = (word & IR_F_NO_SELF) == 0;
+    int self_present = self_slot && !PyValue_IsNull(
+        _PyFrame_Slots(current_frame())[_PyIR_CallOperand(head, 0)]);
+    int nargs = (int)IR_C(word) - (self_slot && !self_present);
+    PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
+    fb->callable_type_version = fb_type_version(Py_TYPE(callable));
+    if (PyFunction_Check(callable)) {
+        return call_classify_function(fb, (PyFunctionObject *)callable, nargs)
+            ? CALL_CASE_EXACT : CALL_CASE_OTHER;
+    }
+    if (self_present) {
+        return CALL_CASE_OTHER;
+    }
+    if (PyMethod_Check(callable)) {
+        PyObject *func = ((PyMethodObject *)callable)->im_func;
+        return PyFunction_Check(func) &&
+            call_classify_function(fb, (PyFunctionObject *)func, nargs + 1)
+            ? CALL_CASE_BOUND_EXACT : CALL_CASE_OTHER;
+    }
+    if (PyType_Check(callable)) {
+        return call_classify_class(fb, (PyTypeObject *)callable)
+            ? CALL_CASE_INIT : CALL_CASE_OTHER;
+    }
+    return CALL_CASE_OTHER;
+}
+
 Py_NO_INLINE void
 _Py_Specialize_CallKw(PyValue callable_st, PyValue self_or_null,
                      PyValue kwnames, _PyInstr *instr, int nargs)
@@ -2945,7 +3038,6 @@ binary_op_fail_kind(int oparg, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
     PyTypeObject *lhs_type = PyValue_TYPE(lhs_st);
     PyTypeObject *rhs_type = PyValue_TYPE(rhs_st);
     switch (oparg) {
-        case NB_ADD:
         case NB_INPLACE_ADD:
             if (lhs_type != rhs_type) {
                 return SPEC_FAIL_BINARY_OP_ADD_DIFFERENT_TYPES;
@@ -3278,7 +3370,7 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
     bool floats = producers && PyValue_FloatOperandsCheck(lhs_st, rhs_st);
 
     switch (oparg) {
-        case NB_ADD:
+        /* NB_ADD is the Add family's (add.rop adapt_before_use_add) */
         case NB_INPLACE_ADD:
             if (inline_ints) {
                 specialize(instr, BINARY_OP_ADD_INT);
@@ -3973,7 +4065,7 @@ Py_NO_INLINE void
         POP_JUMP_IF_TRUE_NONE, POP_JUMP_IF_TRUE_STR,
         POP_JUMP_IF_TRUE_ALWAYS_TRUE, POP_JUMP_IF_TRUE_SLOT,
     };
-    int opcode = _PyOpcode_Deopt[instr_opcode(instr)];
+    int opcode = instr_base_opcode(instr);
     assert(opcode == POP_JUMP_IF_FALSE || opcode == POP_JUMP_IF_TRUE);
     specialize_truth(value_o, instr,
                      opcode == POP_JUMP_IF_FALSE ? if_false : if_true);

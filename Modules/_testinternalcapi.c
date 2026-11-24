@@ -35,6 +35,7 @@
 #include "pycore_jit.h"           // _PyJitUnit
 #include "pycore_jit_lower.h"     // _PyJit_Templates
 #include "pycore_rop_metadata.h"  // _PyRop_Arms
+#include "pycore_rop_rows.h"      // _PyFrame_ApplyRecipe()
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_list.h"          // _PyList_SetItemTakeValue()
 #include "pycore_object.h"        // _PyObject_IsFreed()
@@ -1943,6 +1944,59 @@ get_ir(PyObject *self, PyObject *args)
     return result;
 }
 
+/* Apply the ingress recipe PAIRS, a sequence of (source, home) slots, to
+ * the frame of GEN, a generator that has not started: the unwinder's path
+ * for a parallel move, which tests compare with the Move instruction's. */
+static PyObject *
+apply_recipe(PyObject *self, PyObject *args)
+{
+    PyObject *gen, *pairs;
+    if (!PyArg_ParseTuple(args, "O!O", &PyGen_Type, &gen, &pairs)) {
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = &((PyGenObject *)gen)->gi_iframe;
+    if (frame->owner != FRAME_OWNED_BY_GENERATOR
+            || ((PyGenObject *)gen)->gi_frame_state != FRAME_CREATED) {
+        PyErr_SetString(PyExc_ValueError, "the generator has started");
+        return NULL;
+    }
+    Py_ssize_t n = PySequence_Size(pairs);
+    if (n < 0) {
+        return NULL;
+    }
+    int nslots = _PyFrame_NumSlots(frame);
+    int32_t *recipe = PyMem_Calloc(1 + 2 * n, sizeof(int32_t));
+    if (n == 0 || n > nslots || recipe == NULL) {
+        if (recipe == NULL) {
+            PyErr_NoMemory();
+        }
+        else {
+            PyErr_SetString(PyExc_ValueError, "bad number of pairs");
+        }
+        PyMem_Free(recipe);
+        return NULL;
+    }
+    recipe[0] = (int32_t)n;
+    for (Py_ssize_t q = 0; q < n; q++) {
+        int s, h;
+        PyObject *pair = PySequence_GetItem(pairs, q);
+        int ok = pair != NULL && PyArg_ParseTuple(pair, "ii", &s, &h);
+        Py_XDECREF(pair);
+        if (!ok || s < 0 || h < 0 || s >= nslots || h >= nslots) {
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(PyExc_ValueError, "slot out of range");
+            }
+            PyMem_Free(recipe);
+            return NULL;
+        }
+        recipe[1 + 2 * q] = s;
+        recipe[2 + 2 * q] = h;
+    }
+    _PyFrame_ApplyRecipe(frame, recipe);
+    PyMem_Free(recipe);
+    Py_RETURN_NONE;
+}
+
 /* The register instruction arm called name, by its dotted name ("Add.Int") */
 static const _PyRopArm *
 find_arm(const char *name)
@@ -2038,6 +2092,77 @@ force_arm(PyObject *self, PyObject *args)
     }
     PyErr_Format(PyExc_ValueError,
                  "no word at offset %d stands for a stack op of family %s",
+                 offset, family->name);
+    return NULL;
+}
+
+/* plant_arm_words(code, offset, arm, payload): put the arm's head over the
+ * word at `offset` and the integers of `payload` (as many as the arm has fixed
+ * operand words) over the words after it, which must lie in code that never
+ * runs.  No translation rule emits an arm with operand words yet; this makes
+ * such a word for the walkers over a code object's words.  It checks the
+ * family, not the operand layout. */
+static PyObject *
+plant_arm_words(PyObject *self, PyObject *args)
+{
+    PyCodeObject *code;
+    int offset;
+    const char *arm_name;
+    PyObject *payload;
+    if (!PyArg_ParseTuple(args, "O!isO!", &PyCode_Type, &code, &offset,
+                          &arm_name, &PyTuple_Type, &payload)) {
+        return NULL;
+    }
+    const _PyRopArm *arm = find_arm(arm_name);
+    if (arm == NULL) {
+        return NULL;
+    }
+    const _PyRopFamily *family = &_PyRop_Families[arm->family];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(arm->handler);
+    if (PyTuple_Size(payload) != fmt->fixed_words) {
+        PyErr_Format(PyExc_ValueError, "%s has %d operand words", arm_name,
+                     (int)fmt->fixed_words);
+        return NULL;
+    }
+    _PyCodeExec *exec = _PyCode_GetExec(code);
+    if (exec == NULL) {
+        return NULL;
+    }
+    int i = _PyCode_OffsetWord(code, offset);
+    if (i + fmt->fixed_words >= (int)exec->nwords ||
+        _PyCode_WordOffset(code, i) != offset)
+    {
+        PyErr_SetString(PyExc_ValueError, "no room for the operand words");
+        return NULL;
+    }
+    int base = _PyIR_BaseOpcode(_PyCode_InstrHandler(code, i));
+    for (int k = 0; k < family->nops; k++) {
+        if (family->ops[k] != base) {
+            continue;
+        }
+        /* The lowered words too: instrumentation restores a word to its
+         * canonical handler, which must be the arm to keep its operand words. */
+        _PyIRWord *canonical = (_PyIRWord *)_PyCode_IRWords(code);
+        _PyJit_Retire(exec);
+        _PyIR_SetHandler(&exec->words[i], arm->handler);
+        _PyIR_SetHandler(&canonical[i], arm->handler);
+        for (int w = 0; w < fmt->fixed_words; w++) {
+            PyObject *item = PyTuple_GetItemRef(payload, w);
+            if (item == NULL) {
+                return NULL;
+            }
+            unsigned long long value = PyLong_AsUnsignedLongLong(item);
+            Py_DECREF(item);
+            if (value == (unsigned long long)-1 && PyErr_Occurred()) {
+                return NULL;
+            }
+            exec->words[i + 1 + w] = (_PyIRWord)value;
+            canonical[i + 1 + w] = (_PyIRWord)value;
+        }
+        Py_RETURN_NONE;
+    }
+    PyErr_Format(PyExc_ValueError,
+                 "the word at offset %d is not a stack op of family %s",
                  offset, family->name);
     return NULL;
 }
@@ -5386,9 +5511,11 @@ static PyMethodDef module_functions[] = {
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
+    {"apply_recipe", apply_recipe, METH_VARARGS, NULL},
     {"get_ir_raw", get_ir_raw, METH_O, NULL},
     {"arm_handlers", arm_handlers, METH_NOARGS, NULL},
     {"force_arm", force_arm, METH_VARARGS, NULL},
+    {"plant_arm_words", plant_arm_words, METH_VARARGS, NULL},
     {"ir_normal_physical_transfer", ir_normal_physical_transfer,
      METH_VARARGS, NULL},
     {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},

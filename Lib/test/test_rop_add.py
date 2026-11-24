@@ -1,5 +1,5 @@
 """The Add family (Python/register_ops/add.rop) by its arms, run on words of
-BINARY_OP's function (the translator selects them later): the form, the
+BINARY_OP's function: the form, the
 template and the completion stub of each arm, from the same slots."""
 
 import struct
@@ -35,8 +35,9 @@ def compiled(kind):
     namespace = {}
     exec(SOURCES[kind], namespace)
     f = namespace["f"]
-    f(1, 2)
-    index, _ = word_of(f, "BINARY_OP_ADD")
+    # Lists take no arm, so the word stays on Add.Generic
+    f([1], [2])
+    index, _ = word_of(f, "Add.Generic")
     return f, index, dict(zip("ABCD", capi.get_ir(f.__code__, True)[index][1:]))
 
 
@@ -110,7 +111,7 @@ def same(x, y):
 
 
 def agree(test, kind, lhs, rhs, mode, handler):
-    """The arm and the old BINARY_OP_ADD handler leave the same state from
+    """The arm and Add.Generic leave the same state from
     the same slots: next word, exception, every slot and the counts"""
     (nxt, _, exc, slots), out, counts, _ = run(kind, lhs, rhs, mode, handler)
     (rnxt, _, rexc, rslots), rout, rcounts, _ = run(kind, lhs, rhs, FORM, -1)

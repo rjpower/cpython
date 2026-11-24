@@ -15,7 +15,11 @@ from generators_common import (
     write_header,
 )
 from cwriter import CWriter
-from ir_generator import IR_BASE_ONLY, first_ir_only_handler, handler_ids
+from collections.abc import Sequence
+
+import ir_numbers
+from ir_generator import (IR_BASE_ONLY, first_ir_only_handler, handler_ids,
+                          num_old_handlers)
 from typing import TextIO
 
 
@@ -70,25 +74,35 @@ def generate_opmap(analysis: Analysis, out: CWriter) -> None:
     out.emit(")\n\n")
 
 
-def generate_ir_opmap(analysis: Analysis, out: CWriter) -> None:
-    "The handlers of the register IR that are not opcodes, by name"
+def generate_ir_opmap(analysis: Analysis, out: CWriter,
+                      arms: Sequence[ir_numbers.ArmEntry] = ()) -> None:
+    """The handlers of the register IR that are not opcodes, by name: the
+    old ones, then the register instruction arms by their dotted names"""
     out.emit("_ir_opmap = frozendict(\n")
     ids = handler_ids(analysis)
     for name, handler in sorted(ids.items(), key=lambda item: item[1]):
         if handler >= first_ir_only_handler(analysis) or name in IR_BASE_ONLY:
             out.emit(f"{name}={handler},\n")
-    out.emit(")\n\n")
+    if not arms:
+        out.emit(")\n\n")
+        return
+    first = num_old_handlers(analysis)
+    out.emit(") | frozendict({\n")
+    for arm in arms:
+        out.emit(f'"{arm.dotted}": {first + arm.index},\n')
+    out.emit("})\n\n")
 
 
 def generate_py_metadata(
-    filenames: list[str], analysis: Analysis, outfile: TextIO
+    filenames: list[str], analysis: Analysis, outfile: TextIO,
+    arms: Sequence[ir_numbers.ArmEntry] = ()
 ) -> None:
     write_header(__file__, filenames, outfile, "#")
     out = CWriter(outfile, 0, False)
     generate_specializations(analysis, out)
     generate_specialized_opmap(analysis, out)
     generate_opmap(analysis, out)
-    generate_ir_opmap(analysis, out)
+    generate_ir_opmap(analysis, out, arms)
     out.emit(f"HAVE_ARGUMENT = {analysis.have_arg}\n")
     out.emit(f"MIN_INSTRUMENTED_OPCODE = {analysis.min_instrumented}\n")
 
@@ -112,4 +126,6 @@ if __name__ == "__main__":
         args.input.append(DEFAULT_INPUT)
     data = analyze_files(args.input)
     with open(args.output, "w") as outfile:
-        generate_py_metadata(args.input, data, outfile)
+        import rop_generator
+        generate_py_metadata(args.input, data, outfile,
+                             rop_generator.load_arm_entries())

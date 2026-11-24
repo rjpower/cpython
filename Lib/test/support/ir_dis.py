@@ -74,6 +74,7 @@ CACHE = opmap["CACHE"]
 # and the IR's own.
 _all_opname = ['<%r>' % (op,) for op in range(_opcode.IR_NUM_HANDLERS)]
 _all_opmap = {}
+# ... and the register instruction arms, named Family.Arm
 for _names in (opmap, _specialized_opmap, _ir_opmap):
     for name, op in _names.items():
         _all_opname[op] = name

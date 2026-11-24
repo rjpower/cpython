@@ -25,6 +25,7 @@
 #include "pycore_opcode_metadata.h" // _PyOpcode_Deopt
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
+#include "pycore_rop_metadata.h"    // _PyRop_SelectReturn(), ROP_HANDLER_*
 #include "pycore_value.h"
 
 static_assert(sizeof(_PyCodeExec) % sizeof(_PyIRWord) == 0,
@@ -44,8 +45,8 @@ static_assert(FB_COUNTER < 16 && FB_CALL < 16, "a kind has 4 bits in co_fbinit")
 
 
 /* _Py_InitCleanup (Python/specialize.c) runs with self in slot 0 and the
- * result of __init__ in slot 1: EXIT_INIT_CHECK checks slot 1, and
- * RETURN_VALUE returns slot 0. The explicit continuation names the first
+ * result of __init__ in slot 1: InitResult.Check checks slot 1, and the
+ * Return arm of a thread frame returns slot 0. The explicit continuation names the first
  * real word. Both slots are temporaries, so the words carry no slot-class
  * flag, and the header precedes the words, as in every executing copy, for
  * IR_IS_LOCAL(). */
@@ -57,8 +58,9 @@ _PyIRStaticExec _PyIR_InitCleanup = {
         .nfixed = 0,
     },
     .words = {
-        IR_WORD(EXIT_INIT_CHECK, 1, 0, 0, 0),
-        IR_WORD(RETURN_VALUE, 0, 0, 0, 0),
+        IR_WORD(ROP_HANDLER_InitResult_Check, 1, 0, 0, 0),
+        IR_WORD(_PyRop_SelectReturn(ROP_SELECT_THREAD_FRAME, ROP_SELECT_LIVE_SCRATCH),
+                0, 0, 0, 0),
     },
 };
 
@@ -224,7 +226,8 @@ generator_completed_shape(const _PyIRWord *words, int nwords, int nl, int pc)
         return _PyIR_GEN_CONSUMER_STORE_LOCAL;
     }
     if ((generator_is(words[target], RETURN_VALUE) ||
-         generator_is(words[target], RETURN_VALUE_EMPTY)) &&
+         generator_is(words[target], RETURN_VALUE_EMPTY) ||
+         _PyIR_BaseOpcode(IR_HANDLER(words[target])) == RETURN_VALUE) &&
         (int)IR_A(words[target]) == home)
     {
         return _PyIR_GEN_CONSUMER_RETURN;
@@ -339,7 +342,7 @@ _PyIR_CheckGeneratorBoundary(const _PyIRWord *words, int nwords, int nl,
         /* END_SEND has both normal SEND and CLEANUP_THROW ingress. Select
          * them together; a compatible window on one edge cannot certify a
          * different edge's value or make a partial public cycle complete. */
-        for (int i = 0; i < nwords; i++) {
+        for (int i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
             const _PyIROwnershipEvent *event = generator_completion(words[i]);
             if (event == NULL || generator_exit(words[i], i) != target) {
                 continue;
@@ -375,6 +378,7 @@ _PyIR_EventOpcode(int handler)
 int
 _PyIR_BaseOpcode(int handler)
 {
+    assert(handler >= 0 && handler < IR_NUM_HANDLERS);
     if (handler == IR_JUMP) {
         return JUMP_FORWARD;
     }
@@ -386,6 +390,8 @@ _PyIR_BaseOpcode(int handler)
         handler = _PyIR_Formats[handler].shadow;
         assert(handler < IR_FIRST_ONLY_HANDLER);
     }
+    // _PyOpcode_Deopt is sized for the stack ops: a handler id is no index
+    assert(handler < (int)Py_ARRAY_LENGTH(_PyOpcode_Deopt));
     return _PyOpcode_Deopt[handler];
 }
 
@@ -424,7 +430,7 @@ _PyIR_FieldOparg(_PyIRWord word)
         return 0;
     }
     assert(fmt->imm != _PyIR_LOC_FBARG);
-    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+    if (_PyIR_CALL_SHAPED(fmt->operands)) {
         // The oparg of the stack instruction: the number of arguments
         return fmt->operands == _PyIR_OPERANDS_EX
             ? 0 : _PyIR_CallSlotOperands(word) - _PyIR_CallHasSelf(word);
@@ -458,7 +464,7 @@ _PyCode_InstrFoldedInputs(PyCodeObject *co, int i)
         return 0;
     }
     int n = 0;
-    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+    if (_PyIR_CALL_SHAPED(fmt->operands)) {
         for (int k = 0; k < _PyIR_CallSlotOperands(word); k++) {
             n += _PyIR_CallOperand(&words[i], k) < _PyCode_IRFixed(co);
         }
@@ -518,7 +524,7 @@ _PyCode_InstrDepthBefore(PyCodeObject *co, int i, int *floor)
     int lowest = INT_MAX;
     int highest = -1;
     *floor = 0;
-    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+    if (_PyIR_CALL_SHAPED(fmt->operands)) {
         // The callable is the deepest input, and the extent of the call
         // covers the rest, whether or not a local was folded into it
         int callable = (int)IR_B(word);
@@ -591,7 +597,7 @@ _PyCode_InstrHoles(PyCodeObject *co, int i, int holes[4])
     _PyIRWord word = words[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     int n = 0;
-    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+    if (_PyIR_CALL_SHAPED(fmt->operands)) {
         int extent = _PyIR_Extent(fmt->reads, _PyCode_InstrOparg(co, i));
         for (int k = 0; k < _PyIR_CallSlotOperands(word) && n < 4; k++) {
             if (_PyIR_CallOperand(&words[i], k) < _PyCode_IRFixed(co)) {
@@ -741,10 +747,12 @@ ordinary_handler_for(int handler, int opcode)
     }
     if (handler >= IR_NUM_OLD_HANDLERS && fmt->twin != 0 &&
         opcode >= MIN_INSTRUMENTED_OPCODE && opcode < IR_FIRST_ONLY_HANDLER &&
-        _PyOpcode_Deopt[opcode] == _PyIR_BaseOpcode(handler))
+        _PyIR_HandlerBase[opcode] == _PyIR_HandlerBase[handler])
     {
         // A register instruction arm of a family that has events: the
-        // instrumented form of its stack op runs the arm's observed wrapper.
+        // instrumented form of its stack op runs the arm's observed
+        // wrapper.  The handlers' base, not the deopt table, takes an
+        // instrumented opcode to its stack op.
         return fmt->twin;
     }
     if (handler == RETURN_VALUE_EMPTY || handler == INSTRUMENTED_RETURN_VALUE_EMPTY) {
@@ -885,20 +893,19 @@ make_exec(PyCodeObject *co, const _PyCodeIR *ir)
      * which handlers test in the word instead of loading nfixed. */
     const _PyIRWord *source = ir->words;
     uint32_t discard = ir->nfixed - 1;
-    for (Py_ssize_t i = 0; i < nwords; ) {
-        int length = _PyIR_WordLength(source[i]);
-        int fixed = !_PyIR_HandlerHasOperands(IR_HANDLER(source[i])) && length > 1;
-        for (Py_ssize_t j = i; j < i + length && j < nwords; j++) {
-            if (fixed && j > i) {
-                // An arm's operand words hold 16-bit fields, not slots
-                words[j] = source[j];
-                continue;
+    for (Py_ssize_t i = 0; i < nwords; i++) {
+        assert(!(source[i] & IR_F_LOCAL_MASK));
+        words[i] = exec_discard_slot(source[i], discard);
+        words[i] |= _PyIR_ExecLocalFlags(words[i], exec->nfixed);
+        /* An arm's fixed operand words are payload: no handler field,
+         * no slot flags. */
+        int fixed = _PyIR_WordLength(source[i]) - 1;
+        if (!_PyIR_HandlerHasOperands(IR_HANDLER(source[i]))) {
+            for (int k = 0; k < fixed; k++) {
+                words[i + 1 + k] = source[i + 1 + k];
             }
-            assert(!(source[j] & IR_F_LOCAL_MASK));
-            words[j] = exec_discard_slot(source[j], discard);
-            words[j] |= _PyIR_ExecLocalFlags(words[j], exec->nfixed);
+            i += fixed;
         }
-        i += length;
     }
     /* A call is a head and its operand words, whose fields name its operands */
     for (Py_ssize_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {

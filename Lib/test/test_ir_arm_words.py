@@ -10,10 +10,13 @@ twice, with and without the forced arm, and the two outputs must agree.
 import _opcode
 import dis
 import json
+import types
 import textwrap
 import unittest
 
-from test.support import import_helper
+from pathlib import Path
+from test import test_tools
+from test.support import import_helper, ir_dis
 from test.support.script_helper import assert_python_ok
 
 capi = import_helper.import_module("_testinternalcapi")
@@ -127,6 +130,97 @@ print(json.dumps(results))
 """
 
 
+# An arm with a fixed operand word, planted in a branch that never runs, over
+# the word of the second load of a chain of three on one line, which no
+# source edge names.  argv[1] is the word's low 16 bits: "decoy" is
+# the handler of RETURN_VALUE, which a walker that reads the word as an
+# instruction would misread or rewrite, and "marker" is the inert IR_OPERANDS
+# handler that the operand words of calls carry.
+OPERAND_SCRIPT = """
+import dis
+import json
+import struct
+import sys
+import _testinternalcapi as capi
+
+MON = sys.monitoring
+from _opcode_metadata import _ir_opmap
+
+LOW = {"decoy": dis.opmap["RETURN_VALUE"], "marker": _ir_opmap["IR_OPERANDS"]}
+PAYLOAD = 0xDEAD_BEEF_0000_0000 | LOW[sys.argv[1]]
+
+
+def gen(flag, o):
+    x = 0
+    if flag:
+        o.real.real.real
+    yield x
+    yield x + 1
+
+
+code = gen.__code__
+offset = [i.offset for i in dis.get_instructions(gen) if i.opname == "LOAD_ATTR"][0]
+capi.plant_arm_words(code, offset, "GetMethod.Generic", (PAYLOAD,))
+head = next(i for i, w in enumerate(capi.get_ir(code, True))
+            if w[0] == "GetMethod.Generic")
+
+
+def operand_word():
+    exec_words = capi.get_ir_raw(code)[11]
+    return struct.unpack_from("<Q", exec_words, 8 * (head + 1))[0]
+
+
+def run():
+    return list(gen(False, 1))
+
+
+PHASES = ["plain", "compiled", "line", "instruction", "settrace", "after"]
+results = {}
+checked = []
+
+
+def check(name, value):
+    results[name] = value
+    checked.append(operand_word() == PAYLOAD)
+
+
+check("plain", run())
+check("compiled", [capi.jit_compile(code), run()])
+
+lines = []
+MON.use_tool_id(3, "arms")
+
+
+def monitored(event, callback):
+    MON.register_callback(3, event, callback)
+    MON.set_events(3, event)
+    try:
+        return run()
+    finally:
+        MON.set_events(3, 0)
+
+
+check("line", monitored(MON.events.LINE, lambda c, n: lines.append(n)))
+check("instruction", monitored(MON.events.INSTRUCTION, lambda c, n: lines.append(n)))
+MON.free_tool_id(3)
+
+
+def tracer(frame, event, arg):
+    return tracer
+
+
+sys.settrace(tracer)
+try:
+    check("settrace", run())
+finally:
+    sys.settrace(None)
+
+check("after", run())
+results["unchanged"] = dict(zip(PHASES, checked))
+print(json.dumps(results))
+"""
+
+
 def run(mode, force):
     _, out, _ = assert_python_ok("-c", textwrap.dedent(SCRIPT), str(int(force)),
                                  PYTHON_JIT=mode)
@@ -173,7 +267,9 @@ class ForceArmTests(unittest.TestCase):
     def test_the_contract_export_has_a_row_for_each_arm(self):
         contract = _opcode.get_ir_contract()
         handlers = capi.arm_handlers()
-        self.assertEqual(len(contract), max(handlers.values()) + 1)
+        # An arm of a family with events has an observed twin after the arms
+        twins = {contract[h].twin for h in handlers.values()} - {None}
+        self.assertEqual(len(contract), max(twins.union(handlers.values())) + 1)
         row = contract[handlers["Add.Int"]]
         self.assertEqual(row.base, dis.opmap["BINARY_OP"])
         self.assertEqual(row.ninputs, 2)
@@ -189,6 +285,46 @@ class ForceArmTests(unittest.TestCase):
                 length = _opcode.get_ir_word_length(handler)
                 self.assertEqual(length, 2 if name.startswith("GetMethod.") else 1)
                 self.assertIsNotNone(contract[handler])
+
+    def test_every_arm_stands_for_a_stack_op_of_its_family(self):
+        # Tables sized for stack ops (_PyOpcode_Deopt, _PyOpcode_Caches, the
+        # statistics) are indexed through the base opcode, never the handler
+        # The base is the first stack op of the family's ops(...) clause
+        test_tools.skip_if_missing("cases_generator")
+        with test_tools.imports_under_tool("cases_generator"):
+            import rop_check
+        root = Path(__file__).resolve().parents[2]
+        program = rop_check.load(
+            sorted((root / "Python" / "register_ops").glob("*.rop")))
+        contract = _opcode.get_ir_contract()
+        for name, handler in capi.arm_handlers().items():
+            with self.subTest(arm=name):
+                family = program.families[program.arms[name].family]
+                self.assertEqual(contract[handler].base,
+                                 dis.opmap[family.ops[0]])
+                self.assertEqual(contract[handler].shadow, contract[handler].base)
+
+    def test_the_old_specializer_leaves_a_forced_arm_to_its_miss_route(self):
+        # Adaptation of an arm word goes through the family's adaptation
+        # macro, not through specialize.c, whose tables the arm's handler id
+        # would index out of bounds.  Warming the function hits the generic
+        # word's counter and must leave the forced arm in place.
+        capi.force_arm(self.code, self.offset, "Add.Int")
+        f = types.FunctionType(self.code, {})
+        for _ in range(200):
+            self.assertEqual(f(1, 2), 3)
+        self.assertIn("Add.Int", [w[0] for w in capi.get_ir(self.code, True)])
+
+    def test_the_disassembler_names_every_arm_word(self):
+        for name, handler in capi.arm_handlers().items():
+            self.assertEqual(ir_dis._all_opname[handler], name)
+            self.assertEqual(ir_dis._all_opmap[name], handler)
+
+    def test_ir_dis_output_names_a_forced_arm_word(self):
+        capi.force_arm(self.code, self.offset, "Add.Int")
+        handlers = [i.handler for i in
+                    ir_dis.get_instructions(self.code, adaptive=True)]
+        self.assertIn("Add.Int", handlers)
 
     def test_dis_reads_the_stack_ops_of_a_function_with_an_arm_word(self):
         before = [(i.opname, i.offset) for i in dis.get_instructions(self.code)]
@@ -221,6 +357,38 @@ class ForceArmTests(unittest.TestCase):
     def test_refuses_an_unknown_arm(self):
         with self.assertRaisesRegex(ValueError, "no register instruction arm Add.Nope"):
             capi.force_arm(self.code, self.offset, "Add.Nope")
+
+
+class OperandWordTests(unittest.TestCase):
+    def run_script(self, mode, low):
+        _, out, _ = assert_python_ok("-c", textwrap.dedent(OPERAND_SCRIPT), low,
+                                     PYTHON_JIT=mode)
+        results = json.loads(out)
+        for name in ("plain", "line", "instruction", "settrace", "after"):
+            self.assertEqual(results[name], [0, 1], name)
+        self.assertEqual(results["compiled"][1], [0, 1])
+        return results["unchanged"]
+
+    def check(self, mode):
+        for low in ("decoy", "marker"):
+            with self.subTest(low=low):
+                unchanged = self.run_script(mode, low)
+                self.assertEqual(unchanged, dict.fromkeys(unchanged, True))
+                self.assertEqual(len(unchanged), 6)
+
+    def test_jit_off(self):
+        self.check("off")
+
+    def test_jit_always(self):
+        self.check("always")
+
+    def test_planting_checks_the_word_count_and_the_family(self):
+        def f(o):
+            return o.real
+        with self.assertRaisesRegex(ValueError, "has 1 operand words"):
+            capi.plant_arm_words(f.__code__, 0, "GetMethod.Generic", ())
+        with self.assertRaisesRegex(ValueError, "not a stack op of family"):
+            capi.plant_arm_words(f.__code__, 0, "GetMethod.Generic", (0,))
 
 
 if __name__ == "__main__":

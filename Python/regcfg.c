@@ -28,6 +28,7 @@
 #include "pycore_pystate.h"           // _Py_GetConfig()
 #include "pycore_regcfg.h"
 #include "pycore_rop_metadata.h"       // ROP_HANDLER_GetAttr_Generic
+#include "pycore_rop_metadata.h"      // ROP_HANDLER_Add_Generic, ROP_HANDLER_Call_Generic
 
 #undef SUCCESS
 #undef ERROR
@@ -925,7 +926,7 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     // Register style: the outputs below dst pass their inputs through
     int through = 0;
     if (!window) {
-        through = fmt->operands != _PyIR_OPERANDS_NONE ? 0
+        through = _PyIR_CALL_SHAPED(fmt->operands) ? 0
                 : fmt->dst == _PyIR_NO_DST ? pushed : popped + fmt->dst;
         if (through < 0 || through > pushed) {
             PyErr_Format(PyExc_SystemError, "bad format for opcode %d",
@@ -1049,8 +1050,82 @@ rule_load_attr(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, defs[1]);
 }
 
+/* BINARY_OP.  Addition is the Add family (Python/register_ops/add.rop): its
+ * register instruction is Add.Generic's, with the family's operands in their
+ * declared order, x and y in, dst out.  The word starts on that arm, which
+ * installs the arm the operands call for.  The other operations are
+ * unported. */
+static int
+rule_binary_op(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (src->oparg != NB_ADD) {
+        return _PyRegTr_Legacy(t, src);
+    }
+    int uses[2];
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 2, uses));
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Add_Generic, uses, 2,
+                                  &dst, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* The rules below emit an op before it takes its operands off the stack:
+ * if the op raises, its handler finds the stack as it was when the op
+ * began, operands included, and the op's depth is that stack's. */
+static int
+stack_underflow(const _PyRegOp *src)
+{
+    PyErr_Format(PyExc_SystemError, "stack underflow at line %d",
+                 src->loc.lineno);
+    return ERROR;
+}
+
+/* CALL is the Call family (Python/register_ops/calls.rop): fn, then the
+ * arguments, self first, in; dst out.  The word starts on Call.Generic,
+ * which installs the arm the call calls for. */
+static int
+rule_call(_PyRegTr *t, const _PyRegOp *src)
+{
+    int nuses = 2 + src->oparg;
+    if (nuses > t->sp) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Call_Generic,
+                                  &t->stack[t->sp - nuses], nuses, &dst, 1,
+                                  NULL));
+    t->sp -= nuses;
+    return _PyRegTr_Push(t, dst);
+}
+
+/* RETURN_VALUE is the Return family: value in.  The frame it leaves and
+ * whether a scratch slot may still own a value select the arm: a return
+ * that finds only its value on the stack leaves none, since each op
+ * retires the inputs it takes and the unwinder the stack above a
+ * handler's depth. */
+static int
+rule_return_value(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int handler = _PyRop_SelectReturn(
+        t->cfg->generator ? ROP_SELECT_GENERATOR_FRAME
+                          : ROP_SELECT_THREAD_FRAME,
+        t->sp == 1 ? ROP_SELECT_VACANT_SCRATCH : ROP_SELECT_LIVE_SCRATCH);
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - 1], 1,
+                                  NULL, 0, NULL));
+    t->sp--;
+    return SUCCESS;
+}
+
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
+    [BINARY_OP] = rule_binary_op,
+    [CALL] = rule_call,
+    [RETURN_VALUE] = rule_return_value,
     [SWAP] = rule_swap,
     [LOAD_ATTR] = rule_load_attr,
 };
@@ -1389,7 +1464,7 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
         return;
     }
     slots->base = top - op->npop;
-    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+    if (_PyIR_CALL_SHAPED(fmt->operands)) {
         // The callable is the deepest input, and the rest are operand words
         slots->in[0] = _PyRegCfg_Slot(cfg, in[0]);
         if (op->flags & _PyReg_DISCARD) {
@@ -2633,7 +2708,7 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                     }
                 }
             }
-            else if (fmt->operands != _PyIR_OPERANDS_NONE) {
+            else if (_PyIR_CALL_SHAPED(fmt->operands)) {
                 for (int k = 0; k < op->nread; k++) {
                     if (in[k] < nl && !_PyRegOp_CallBorrows(op, k)) {
                         err = verify_error(after, op, "a local in an input "
@@ -2814,6 +2889,7 @@ dump(const _PyRegCfg *cfg, const char *after)
         for (int i = blk->start; i < blk->end; i++) {
             const _PyRegOp *op = &cfg->ops[i];
             const char *name = op->opcode == _PyReg_DEAD ? "(dead)"
+                               : op->opcode >= ROP_FIRST_HANDLER ? "(arm)"
                                : _PyOpcode_OpName[op->opcode];
             fprintf(stderr, "  %4d %-24s %3d", op->loc.lineno, name, op->oparg);
             const int *out = _PyReg_OUT(cfg, op);
@@ -2919,7 +2995,6 @@ static const struct {
     const char *name;
     pass_fn fn;
 } passes[] = {
-    {"swap renaming", _PyRegPass_SwapRename},
     {"copy propagation", _PyRegPass_CopyProp},
     {"store elimination", _PyRegPass_StoreElim},
     {"unpack to locals", _PyRegPass_UnpackLocals},
@@ -2966,65 +3041,19 @@ _PyRegCfg_Build(_PyRegCfg *cfg)
 
 /* Resolution.  Allocation leaves moves where homes disagree: the staging
  * moves before an op and the parallel moves (_PyReg_MOVES) that bind a
- * region's parameters at an edge.  Each becomes a sequence of SWAP words.
- * A move's target is vacant (NULL) or the source of another move of the
- * set, so a SWAP into a vacant target moves the value and leaves its source
- * NULL, and a cycle resolves by swapping and following the displaced value:
- * no value ever has two owners, and none is left behind.  Every word keeps
- * its op's handler, with the recipe that finds the handler's values where
- * the words before it put them (_PyReg_SLOT_RECIPE). */
+ * region's parameters at an edge.  Each set becomes one Move.Transfer
+ * word (Python/register_ops/values.rop), whose run is the parallel move
+ * that the unwinder's recipes use too (_PyFrame_ParallelMove()).  A
+ * move's target is vacant (NULL) or the source of another move of the
+ * set, so no value ever has two owners, and none is left behind.  The word
+ * keeps its op's handler, with the recipe that finds the handler's values
+ * where they are before it (_PyReg_SLOT_RECIPE). */
 
 typedef struct {
     int *src;           // pending moves, slot to slot
     int *dst;
     int n;
-    int *swaps;         // pairs of slots, in order
-    int nswaps;
 } move_set;
-
-static void
-sequence_moves(move_set *m)
-{
-    m->nswaps = 0;
-    while (m->n > 0) {
-        int j = -1;
-        for (int a = 0; a < m->n && j < 0; a++) {
-            int free = 1;
-            for (int b = 0; b < m->n; b++) {
-                free &= b == a || m->src[b] != m->dst[a];
-            }
-            if (free) {
-                j = a;
-            }
-        }
-        int cycle = j < 0;
-        if (cycle) {
-            j = 0;
-        }
-        int from = m->src[j], to = m->dst[j];
-        m->swaps[2 * m->nswaps] = from;
-        m->swaps[2 * m->nswaps + 1] = to;
-        m->nswaps++;
-        m->n--;
-        m->src[j] = m->src[m->n];
-        m->dst[j] = m->dst[m->n];
-        if (!cycle) {
-            continue;
-        }
-        // The value that was at to is now at from
-        for (int b = 0; b < m->n; b++) {
-            if (m->src[b] == to) {
-                m->src[b] = from;
-                if (m->dst[b] == from) {
-                    m->n--;
-                    m->src[b] = m->src[m->n];
-                    m->dst[b] = m->dst[m->n];
-                }
-                break;
-            }
-        }
-    }
-}
 
 /* The parallel moves of op as slot pairs in m, and its recipe: the slot
  * before the moves of each value that the handler finds elsewhere than its
@@ -3100,7 +3129,7 @@ resolve_moves(_PyRegCfg *cfg)
             continue;
         }
         int n = ((op->flags & _PyReg_MOVES) ? op->nout : 0) + op->nstage;
-        extra += n;
+        extra += n > 0;
         max = Py_MAX(max, n + op->nrecipe);
     }
     if (extra == 0) {
@@ -3115,7 +3144,7 @@ resolve_moves(_PyRegCfg *cfg)
         PyErr_NoMemory();
         goto done;
     }
-    move_set m = {.src = buf, .dst = buf + max, .swaps = buf + 2 * max};
+    move_set m = {.src = buf, .dst = buf + max};
     int *from = buf + 4 * max, *home = buf + 5 * max;
     int nops = 0;
     for (int i = 0; i < cfg->nops; i++) {
@@ -3131,20 +3160,19 @@ resolve_moves(_PyRegCfg *cfg)
         if (collect_moves(cfg, op, &m, from, &home[0], &nrec) < 0) {
             goto done;
         }
-        sequence_moves(&m);
-        for (int w = 0; w < m.nswaps; w++) {
-            int a = m.swaps[2 * w], b = m.swaps[2 * w + 1];
-            // The recipe before this word
-            int *pairs = NULL;
+        if (m.n > 0) {
+            // The recipe before the word: where the handler's values are
             int npairs = 0;
             for (int q = 0; q < nrec; q++) {
                 npairs += from[q] != home[q];
             }
-            int at = 0;
-            if (npairs && _PyRegCfg_AddOperands(cfg, 2 * npairs, &at) < 0) {
+            int at = 0, elems;
+            if ((npairs && _PyRegCfg_AddOperands(cfg, 2 * npairs, &at) < 0) ||
+                _PyRegCfg_AddOperands(cfg, 2 + 2 * m.n, &elems) < 0)
+            {
                 goto done;
             }
-            pairs = &cfg->operands[at];
+            int *pairs = &cfg->operands[at];
             for (int q = 0, p = 0; q < nrec; q++) {
                 if (from[q] != home[q]) {
                     pairs[2 * p] = from[q];
@@ -3152,22 +3180,26 @@ resolve_moves(_PyRegCfg *cfg)
                     p++;
                 }
             }
-            _PyRegOp *swap = &ops[nops++];
-            *swap = *op;
-            swap->opcode = SWAP;
-            swap->oparg = Py_ABS(b - a) + 1;
-            swap->base = Py_MIN(a, b);
-            swap->nread = swap->npop = swap->nimplicit = swap->nout = 0;
-            swap->nstage = 0;
-            swap->dst = swap->target = -1;
-            swap->reader = -1;
-            swap->fuse = swap->completion = swap->kwnames = 0;
-            swap->flags = _PyReg_SLOT_RECIPE;
-            swap->nrecipe = npairs;
-            swap->recipe = at;
-            for (int q = 0; q < nrec; q++) {
-                from[q] = from[q] == a ? b : from[q] == b ? a : from[q];
+            // Its counts, then the destinations, then the sources
+            int *e = &cfg->operands[elems];
+            e[0] = e[1] = m.n;
+            for (int q = 0; q < m.n; q++) {
+                e[2 + q] = m.dst[q];
+                e[2 + m.n + q] = m.src[q];
             }
+            _PyRegOp *move = &ops[nops++];
+            *move = *op;
+            move->opcode = ROP_SELECT_Move_transfer;
+            move->oparg = 0;
+            move->in = elems;
+            move->nread = move->npop = move->nimplicit = move->nout = 0;
+            move->nstage = 0;
+            move->dst = move->target = -1;
+            move->reader = -1;
+            move->fuse = move->completion = move->kwnames = 0;
+            move->flags = _PyReg_SLOT_RECIPE | _PyReg_MOVE_SLOTS;
+            move->nrecipe = npairs;
+            move->recipe = at;
         }
         index[i] = nops;
         if (moves) {

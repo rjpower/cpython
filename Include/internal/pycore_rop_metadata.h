@@ -12,11 +12,11 @@
 /* The arms' handler ids follow the old handlers, in definition order; the
  * observed wrappers of the arms of families that declare events follow them */
 #define ROP_FIRST_HANDLER IR_NUM_OLD_HANDLERS
-#define ROP_NUM_HANDLERS 23
+#define ROP_NUM_HANDLERS 45
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,
               "the arms' handler ids fit the handler field");
 #define ROP_NUM_FAMILIES 68
-#define ROP_NUM_ARMS 23
+#define ROP_NUM_ARMS 37
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS == IR_NUM_HANDLERS,
               "the handler count is the old handlers, the arms and their wrappers");
 
@@ -98,33 +98,73 @@ enum {
 #define ROP_HANDLER_Add_Text (ROP_FIRST_HANDLER + 2)
 #define ROP_HANDLER_Add_Extended (ROP_FIRST_HANDLER + 3)
 #define ROP_HANDLER_Add_Generic (ROP_FIRST_HANDLER + 4)
-#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 5)
-#define ROP_HANDLER_GetAttr_GetSet (ROP_FIRST_HANDLER + 6)
-#define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 7)
-#define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 8)
-#define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 9)
-#define ROP_HANDLER_GetAttr_Module (ROP_FIRST_HANDLER + 10)
-#define ROP_HANDLER_GetAttr_Hint (ROP_FIRST_HANDLER + 11)
-#define ROP_HANDLER_GetAttr_ValueSlot (ROP_FIRST_HANDLER + 12)
-#define ROP_HANDLER_GetAttr_PointerSlot (ROP_FIRST_HANDLER + 13)
-#define ROP_HANDLER_GetAttr_Class (ROP_FIRST_HANDLER + 14)
-#define ROP_HANDLER_GetAttr_NonDescriptorValues (ROP_FIRST_HANDLER + 15)
-#define ROP_HANDLER_GetAttr_NonDescriptorNoDict (ROP_FIRST_HANDLER + 16)
-#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 17)
-#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 18)
-#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 19)
-#define ROP_HANDLER_GetMethod_NoDict (ROP_FIRST_HANDLER + 20)
-#define ROP_HANDLER_GetMethod_LazyDict (ROP_FIRST_HANDLER + 21)
-#define ROP_HANDLER_GetMethod_ClassMethod (ROP_FIRST_HANDLER + 22)
+#define ROP_HANDLER_Call_Exact (ROP_FIRST_HANDLER + 5)
+#define ROP_HANDLER_Call_BoundExact (ROP_FIRST_HANDLER + 6)
+#define ROP_HANDLER_Call_Init (ROP_FIRST_HANDLER + 7)
+#define ROP_HANDLER_Call_Generic (ROP_FIRST_HANDLER + 8)
+#define ROP_HANDLER_InitResult_Check (ROP_FIRST_HANDLER + 9)
+#define ROP_HANDLER_Call_Observed (ROP_FIRST_HANDLER + 10)
+#define ROP_HANDLER_Return_Ordinary (ROP_FIRST_HANDLER + 11)
+#define ROP_HANDLER_Return_Empty (ROP_FIRST_HANDLER + 12)
+#define ROP_HANDLER_Return_Generator (ROP_FIRST_HANDLER + 13)
+#define ROP_HANDLER_Return_Observed (ROP_FIRST_HANDLER + 14)
+#define ROP_HANDLER_Return_External (ROP_FIRST_HANDLER + 15)
+#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 16)
+#define ROP_HANDLER_GetAttr_GetSet (ROP_FIRST_HANDLER + 17)
+#define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 18)
+#define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 19)
+#define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 20)
+#define ROP_HANDLER_GetAttr_Module (ROP_FIRST_HANDLER + 21)
+#define ROP_HANDLER_GetAttr_Hint (ROP_FIRST_HANDLER + 22)
+#define ROP_HANDLER_GetAttr_ValueSlot (ROP_FIRST_HANDLER + 23)
+#define ROP_HANDLER_GetAttr_PointerSlot (ROP_FIRST_HANDLER + 24)
+#define ROP_HANDLER_GetAttr_Class (ROP_FIRST_HANDLER + 25)
+#define ROP_HANDLER_GetAttr_NonDescriptorValues (ROP_FIRST_HANDLER + 26)
+#define ROP_HANDLER_GetAttr_NonDescriptorNoDict (ROP_FIRST_HANDLER + 27)
+#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 28)
+#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 29)
+#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 30)
+#define ROP_HANDLER_GetMethod_NoDict (ROP_FIRST_HANDLER + 31)
+#define ROP_HANDLER_GetMethod_LazyDict (ROP_FIRST_HANDLER + 32)
+#define ROP_HANDLER_GetMethod_ClassMethod (ROP_FIRST_HANDLER + 33)
+#define ROP_HANDLER_Move_Transfer (ROP_FIRST_HANDLER + 34)
+#define ROP_HANDLER_Move_Retire (ROP_FIRST_HANDLER + 35)
+#define ROP_HANDLER_Move_Copy (ROP_FIRST_HANDLER + 36)
+#define ROP_HANDLER_Call_Exact_Observed (ROP_FIRST_HANDLER + 37)
+#define ROP_HANDLER_Call_BoundExact_Observed (ROP_FIRST_HANDLER + 38)
+#define ROP_HANDLER_Call_Init_Observed (ROP_FIRST_HANDLER + 39)
+#define ROP_HANDLER_Call_Generic_Observed (ROP_FIRST_HANDLER + 40)
+#define ROP_HANDLER_Return_Ordinary_Observed (ROP_FIRST_HANDLER + 41)
+#define ROP_HANDLER_Return_Empty_Observed (ROP_FIRST_HANDLER + 42)
+#define ROP_HANDLER_Return_Generator_Observed (ROP_FIRST_HANDLER + 43)
+#define ROP_HANDLER_Return_External_Observed (ROP_FIRST_HANDLER + 44)
+
+/* The arm of a statically selected family that each selection admits
+ * (its `select`): ROP_SELECT_<Family>_<member>... */
+#define ROP_SELECT_Return_thread_frame_live_scratch ROP_HANDLER_Return_Ordinary
+#define ROP_SELECT_Return_thread_frame_vacant_scratch ROP_HANDLER_Return_Empty
+#define ROP_SELECT_Return_generator_frame ROP_HANDLER_Return_Generator
+#define ROP_SELECT_Return_entry_frame ROP_HANDLER_Return_External
+#define ROP_SELECT_Move_transfer ROP_HANDLER_Move_Transfer
+#define ROP_SELECT_Move_retire ROP_HANDLER_Move_Retire
+#define ROP_SELECT_Move_copy ROP_HANDLER_Move_Copy
 
 /* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */
 #define ROP_POINT_Add_BoxFailed 1
 #define ROP_POINT_Add_Done 2
 #define ROP_POINT_Add_OpFailed 3
-#define ROP_POINT_GetAttr_Done 4
-#define ROP_POINT_GetAttr_Failed 5
-#define ROP_POINT_GetMethod_Done 6
-#define ROP_POINT_GetMethod_Failed 7
+#define ROP_POINT_Call_Done 4
+#define ROP_POINT_Call_Failed 5
+#define ROP_POINT_Call_PollFailed 6
+#define ROP_POINT_Call_Returned 7
+#define ROP_POINT_GetAttr_Done 8
+#define ROP_POINT_GetAttr_Failed 9
+#define ROP_POINT_GetMethod_Done 10
+#define ROP_POINT_GetMethod_Failed 11
+#define ROP_POINT_InitResult_Done 12
+#define ROP_POINT_InitResult_Wrong 13
+#define ROP_POINT_Return_Delivered 14
+#define ROP_POINT_Return_EventFailed 15
 
 /* How a family's operands sit in its words (Program.encodings): the field
  * kind, the role of a home, the bit offset in the 64-bit-per-word image of
@@ -228,19 +268,19 @@ static const uint16_t _PyRop_Ops_BranchTruth[] = {POP_JUMP_IF_TRUE, POP_JUMP_IF_
 static const _PyRopOperand _PyRop_Operands_Build[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"kind", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 28, 0},  /* Enum<BuildKind> */
-    {"items", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 0, 0, 0},  /* Span<Src> */
+    {"items", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 12, 40, 0},  /* Span<Src> */
 };
 static const uint16_t _PyRop_Ops_Build[] = {BUILD_TUPLE, BUILD_LIST, BUILD_SET, BUILD_MAP};
 static const _PyRopOperand _PyRop_Operands_BuildSlice[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
-    {"parts", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 0, 0, 0},  /* Span<Src> */
+    {"parts", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 12, 28, 0},  /* Span<Src> */
 };
 static const uint16_t _PyRop_Ops_BuildSlice[] = {BUILD_SLICE};
 static const _PyRopOperand _PyRop_Operands_BuildText[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"kind", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 2, 28, 0},  /* Enum<TextKind> */
-    {"parts", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 0, 0, 0},  /* Span<Src> */
-    {"flags", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 8, 40, 0},  /* U8 */
+    {"parts", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 12, 40, 0},  /* Span<Src> */
+    {"flags", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 8, 52, 0},  /* U8 */
 };
 static const uint16_t _PyRop_Ops_BuildText[] = {BUILD_STRING, BUILD_INTERPOLATION, BUILD_TEMPLATE};
 static const _PyRopOperand _PyRop_Operands_Call[] = {
@@ -271,7 +311,7 @@ static const _PyRopOperand _PyRop_Operands_Cell[] = {
     {"cell", ROP_FIELD_HOME, ROP_ROLE_CELL, 0, 12, 28, IR_F_LOCAL_B},  /* Cell */
     {"value", ROP_FIELD_HOME, ROP_ROLE_SRC, 1, 12, 40, IR_F_LOCAL_C},  /* Maybe<Src> */
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 1, 12, 52, IR_F_LOCAL_D},  /* Maybe<Dst> */
-    {"frees", ROP_FIELD_VECTOR, ROP_ROLE_FREE, 1, 0, 0, 0},  /* Span<Free> */
+    {"frees", ROP_FIELD_VECTOR, ROP_ROLE_FREE, 1, 12, 64, 0},  /* Span<Free> */
 };
 static const uint16_t _PyRop_Ops_Cell[] = {MAKE_CELL, LOAD_DEREF, STORE_DEREF, DELETE_DEREF, COPY_FREE_VARS, LOAD_FROM_DICT_OR_DEREF};
 static const _PyRopOperand _PyRop_Operands_CleanupThrow[] = {
@@ -411,7 +451,7 @@ static const uint16_t _PyRop_Ops_InitResult[] = {EXIT_INIT_CHECK};
 static const _PyRopOperand _PyRop_Operands_Intrinsic[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"id", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 5, 28, 0},  /* Enum<IntrinsicId> */
-    {"args", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 0, 0, 0},  /* Span<Src> */
+    {"args", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 12, 40, 0},  /* Span<Src> */
 };
 static const uint16_t _PyRop_Ops_Intrinsic[] = {CALL_INTRINSIC_1, CALL_INTRINSIC_2};
 static const _PyRopOperand _PyRop_Operands_IterOpen[] = {
@@ -456,11 +496,10 @@ static const _PyRopOperand _PyRop_Operands_MergeKeywords[] = {
 };
 static const uint16_t _PyRop_Ops_MergeKeywords[] = {DICT_MERGE};
 static const _PyRopOperand _PyRop_Operands_Move[] = {
-    {"dsts", ROP_FIELD_VECTOR, ROP_ROLE_DST, 1, 0, 0, 0},  /* Span<Dst> */
-    {"srcs", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 0, 0, 0},  /* Span<Src> */
-    {"retire", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 16, 0},  /* Enum<MoveRetire> */
+    {"dsts", ROP_FIELD_VECTOR, ROP_ROLE_DST, 1, 12, 16, 0},  /* Span<Dst> */
+    {"srcs", ROP_FIELD_VECTOR, ROP_ROLE_SRC, 1, 12, 28, 0},  /* Span<Src> */
 };
-static const uint16_t _PyRop_Ops_Move[] = {SWAP, COPY};
+static const uint16_t _PyRop_Ops_Move[] = {SWAP, COPY, POP_TOP};
 static const _PyRopOperand _PyRop_Operands_NamespaceRead[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"scope", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 3, 28, 0},  /* Enum<NamespaceScope> */
@@ -591,11 +630,11 @@ static const _PyRopOperand _PyRop_Operands_Unary[] = {
 };
 static const uint16_t _PyRop_Ops_Unary[] = {UNARY_NEGATIVE, UNARY_INVERT, UNARY_NOT};
 static const _PyRopOperand _PyRop_Operands_Unpack[] = {
-    {"dsts", ROP_FIELD_VECTOR, ROP_ROLE_DST, 1, 0, 0, 0},  /* Span<Dst> */
-    {"source", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 16, IR_F_LOCAL_A},  /* Src */
-    {"before", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 8, 28, 0},  /* U8 */
-    {"after", ROP_FIELD_IMM, ROP_ROLE_NONE, 1, 9, 40, 0},  /* Maybe<U8> */
-    {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 52, 0},  /* Fb<Unpack> */
+    {"dsts", ROP_FIELD_VECTOR, ROP_ROLE_DST, 1, 12, 16, 0},  /* Span<Dst> */
+    {"source", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
+    {"before", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 8, 40, 0},  /* U8 */
+    {"after", ROP_FIELD_IMM, ROP_ROLE_NONE, 1, 9, 52, 0},  /* Maybe<U8> */
+    {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 64, 0},  /* Fb<Unpack> */
 };
 static const uint16_t _PyRop_Ops_Unpack[] = {UNPACK_SEQUENCE, UNPACK_EX};
 static const _PyRopOperand _PyRop_Operands_UpdateContainer[] = {
@@ -635,7 +674,7 @@ static const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {
     [ROP_FAMILY_Call] = {"Call", 4, 0, _PyRop_Operands_Call, 1, _PyRop_Ops_Call},
     [ROP_FAMILY_CallEx] = {"CallEx", 5, 1, _PyRop_Operands_CallEx, 1, _PyRop_Ops_CallEx},
     [ROP_FAMILY_CallKw] = {"CallKw", 5, 1, _PyRop_Operands_CallKw, 1, _PyRop_Ops_CallKw},
-    [ROP_FAMILY_Cell] = {"Cell", 5, 0, _PyRop_Operands_Cell, 6, _PyRop_Ops_Cell},
+    [ROP_FAMILY_Cell] = {"Cell", 5, 1, _PyRop_Operands_Cell, 6, _PyRop_Ops_Cell},
     [ROP_FAMILY_CleanupThrow] = {"CleanupThrow", 5, 1, _PyRop_Operands_CleanupThrow, 1, _PyRop_Ops_CleanupThrow},
     [ROP_FAMILY_Compare] = {"Compare", 6, 1, _PyRop_Operands_Compare, 1, _PyRop_Ops_Compare},
     [ROP_FAMILY_Const] = {"Const", 3, 0, _PyRop_Operands_Const, 3, _PyRop_Ops_Const},
@@ -664,7 +703,7 @@ static const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {
     [ROP_FAMILY_LocalWrite] = {"LocalWrite", 2, 0, _PyRop_Operands_LocalWrite, 1, _PyRop_Ops_LocalWrite},
     [ROP_FAMILY_MaterializeKwargs] = {"MaterializeKwargs", 1, 0, _PyRop_Operands_MaterializeKwargs, 1, _PyRop_Ops_MaterializeKwargs},
     [ROP_FAMILY_MergeKeywords] = {"MergeKeywords", 3, 0, _PyRop_Operands_MergeKeywords, 1, _PyRop_Ops_MergeKeywords},
-    [ROP_FAMILY_Move] = {"Move", 3, 0, _PyRop_Operands_Move, 2, _PyRop_Ops_Move},
+    [ROP_FAMILY_Move] = {"Move", 2, 0, _PyRop_Operands_Move, 3, _PyRop_Ops_Move},
     [ROP_FAMILY_NamespaceRead] = {"NamespaceRead", 4, 0, _PyRop_Operands_NamespaceRead, 4, _PyRop_Ops_NamespaceRead},
     [ROP_FAMILY_NamespaceWrite] = {"NamespaceWrite", 4, 0, _PyRop_Operands_NamespaceWrite, 2, _PyRop_Ops_NamespaceWrite},
     [ROP_FAMILY_Nop] = {"Nop", 0, 0, _PyRop_Operands_Nop, 1, _PyRop_Ops_Nop},
@@ -685,7 +724,7 @@ static const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {
     [ROP_FAMILY_TestBranch] = {"TestBranch", 6, 1, _PyRop_Operands_TestBranch, 3, _PyRop_Ops_TestBranch},
     [ROP_FAMILY_Truth] = {"Truth", 4, 0, _PyRop_Operands_Truth, 1, _PyRop_Ops_Truth},
     [ROP_FAMILY_Unary] = {"Unary", 3, 0, _PyRop_Operands_Unary, 3, _PyRop_Ops_Unary},
-    [ROP_FAMILY_Unpack] = {"Unpack", 5, 0, _PyRop_Operands_Unpack, 2, _PyRop_Ops_Unpack},
+    [ROP_FAMILY_Unpack] = {"Unpack", 5, 1, _PyRop_Operands_Unpack, 2, _PyRop_Ops_Unpack},
     [ROP_FAMILY_UpdateContainer] = {"UpdateContainer", 3, 0, _PyRop_Operands_UpdateContainer, 3, _PyRop_Ops_UpdateContainer},
     [ROP_FAMILY_WithExit] = {"WithExit", 5, 1, _PyRop_Operands_WithExit, 1, _PyRop_Ops_WithExit},
     [ROP_FAMILY_Yield] = {"Yield", 4, 0, _PyRop_Operands_Yield, 1, _PyRop_Ops_Yield},
@@ -697,6 +736,17 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Add.Text", ROP_HANDLER_Add_Text, ROP_FAMILY_Add, 1},
     {"Add.Extended", ROP_HANDLER_Add_Extended, ROP_FAMILY_Add, 1},
     {"Add.Generic", ROP_HANDLER_Add_Generic, ROP_FAMILY_Add, 1},
+    {"Call.Exact", ROP_HANDLER_Call_Exact, ROP_FAMILY_Call, 1},
+    {"Call.BoundExact", ROP_HANDLER_Call_BoundExact, ROP_FAMILY_Call, 1},
+    {"Call.Init", ROP_HANDLER_Call_Init, ROP_FAMILY_Call, 1},
+    {"Call.Generic", ROP_HANDLER_Call_Generic, ROP_FAMILY_Call, 1},
+    {"InitResult.Check", ROP_HANDLER_InitResult_Check, ROP_FAMILY_InitResult, 1},
+    {"Call.Observed", ROP_HANDLER_Call_Observed, ROP_FAMILY_Call, 1},
+    {"Return.Ordinary", ROP_HANDLER_Return_Ordinary, ROP_FAMILY_Return, 1},
+    {"Return.Empty", ROP_HANDLER_Return_Empty, ROP_FAMILY_Return, 1},
+    {"Return.Generator", ROP_HANDLER_Return_Generator, ROP_FAMILY_Return, 1},
+    {"Return.Observed", ROP_HANDLER_Return_Observed, ROP_FAMILY_Return, 1},
+    {"Return.External", ROP_HANDLER_Return_External, ROP_FAMILY_Return, 1},
     {"GetAttr.Instance", ROP_HANDLER_GetAttr_Instance, ROP_FAMILY_GetAttr, 1},
     {"GetAttr.GetSet", ROP_HANDLER_GetAttr_GetSet, ROP_FAMILY_GetAttr, 1},
     {"GetAttr.Generic", ROP_HANDLER_GetAttr_Generic, ROP_FAMILY_GetAttr, 1},
@@ -715,16 +765,47 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"GetMethod.NoDict", ROP_HANDLER_GetMethod_NoDict, ROP_FAMILY_GetMethod, 1},
     {"GetMethod.LazyDict", ROP_HANDLER_GetMethod_LazyDict, ROP_FAMILY_GetMethod, 1},
     {"GetMethod.ClassMethod", ROP_HANDLER_GetMethod_ClassMethod, ROP_FAMILY_GetMethod, 1},
+    {"Move.Transfer", ROP_HANDLER_Move_Transfer, ROP_FAMILY_Move, 1},
+    {"Move.Retire", ROP_HANDLER_Move_Retire, ROP_FAMILY_Move, 1},
+    {"Move.Copy", ROP_HANDLER_Move_Copy, ROP_FAMILY_Move, 1},
 };
 
-static const _PyRopPoint _PyRop_Points[7] = {
+static const _PyRopPoint _PyRop_Points[15] = {
     {"Add.BoxFailed", ROP_FAMILY_Add, 1, 0, 0, 1, (1 << 1) | (1 << 2), 0, 0, 0},
     {"Add.Done", ROP_FAMILY_Add, 2, 0, 1, 0, 0, (1 << 2) | (1 << 1), (1 << 0), 0},
     {"Add.OpFailed", ROP_FAMILY_Add, 3, 0, 0, 1, 0, (1 << 2) | (1 << 1), 0, 0},
-    {"GetAttr.Done", ROP_FAMILY_GetAttr, 4, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
-    {"GetAttr.Failed", ROP_FAMILY_GetAttr, 5, 0, 0, 1, 0, (1 << 1), 0, 0},
-    {"GetMethod.Done", ROP_FAMILY_GetMethod, 6, 0, 1, 0, 0, (1 << 2), (1 << 0) | (1 << 1), 0},
-    {"GetMethod.Failed", ROP_FAMILY_GetMethod, 7, 0, 0, 1, 0, (1 << 2), 0, 0},
+    {"Call.Done", ROP_FAMILY_Call, 4, 0, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
+    {"Call.Failed", ROP_FAMILY_Call, 5, 0, 0, 1, 0, (1 << 1) | (1 << 2), 0, 0},
+    {"Call.PollFailed", ROP_FAMILY_Call, 6, 0, 0, 1, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
+    {"Call.Returned", ROP_FAMILY_Call, 7, 1, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
+    {"GetAttr.Done", ROP_FAMILY_GetAttr, 8, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
+    {"GetAttr.Failed", ROP_FAMILY_GetAttr, 9, 0, 0, 1, 0, (1 << 1), 0, 0},
+    {"GetMethod.Done", ROP_FAMILY_GetMethod, 10, 0, 1, 0, 0, (1 << 2), (1 << 0) | (1 << 1), 0},
+    {"GetMethod.Failed", ROP_FAMILY_GetMethod, 11, 0, 0, 1, 0, (1 << 2), 0, 0},
+    {"InitResult.Done", ROP_FAMILY_InitResult, 12, 0, 1, 0, 0, (1 << 0), 0, 0},
+    {"InitResult.Wrong", ROP_FAMILY_InitResult, 13, 0, 0, 1, (1 << 0), 0, 0, 0},
+    {"Return.Delivered", ROP_FAMILY_Return, 14, 1, 3, 0, 0, (1 << 0), 0, 0},
+    {"Return.EventFailed", ROP_FAMILY_Return, 15, 0, 0, 1, 0, (1 << 0), 0, 0},
 };
+
+/* Static selection (rop_catalog.Select): the members of each dimension */
+enum { ROP_SELECT_THREAD_FRAME, ROP_SELECT_GENERATOR_FRAME, ROP_SELECT_ENTRY_FRAME };  /* frame */
+enum { ROP_SELECT_VACANT_SCRATCH, ROP_SELECT_LIVE_SCRATCH };  /* scratch */
+enum { ROP_SELECT_TRANSFER, ROP_SELECT_RETIRE, ROP_SELECT_COPY };  /* move */
+
+/* The arm of Move that holds for (move) */
+#define _PyRop_SelectMove(move) ( \
+    ((move) == ROP_SELECT_TRANSFER) ? ROP_HANDLER_Move_Transfer : \
+    ((move) == ROP_SELECT_RETIRE) ? ROP_HANDLER_Move_Retire : \
+    ((move) == ROP_SELECT_COPY) ? ROP_HANDLER_Move_Copy : \
+    -1)
+
+/* The arm of Return that holds for (frame, scratch) */
+#define _PyRop_SelectReturn(frame, scratch) ( \
+    ((frame) == ROP_SELECT_THREAD_FRAME && (scratch) == ROP_SELECT_LIVE_SCRATCH) ? ROP_HANDLER_Return_Ordinary : \
+    ((frame) == ROP_SELECT_THREAD_FRAME && (scratch) == ROP_SELECT_VACANT_SCRATCH) ? ROP_HANDLER_Return_Empty : \
+    ((frame) == ROP_SELECT_GENERATOR_FRAME) ? ROP_HANDLER_Return_Generator : \
+    ((frame) == ROP_SELECT_ENTRY_FRAME) ? ROP_HANDLER_Return_External : \
+    -1)
 
 #endif

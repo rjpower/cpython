@@ -659,30 +659,55 @@ static int _PyIR_Rop_Stub_GetMethod_Generic(PyThreadState *, _PyInterpreterFrame
 static int _PyIR_Rop_Stub_GetMethod_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_GetMethod_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_GetMethod_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Move_Transfer(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Move_Retire(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Move_Copy(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 const _PyIRStubPlan _PyIR_StubPlans[512] = {
     [419] = {_PyIR_PLAN_INLINE, 0, 419, NULL, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Int
     [420] = {_PyIR_PLAN_SHARED, 0, 420, (const void *)_PyIR_Rop_Stub_Add_Float, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Float
     [421] = {_PyIR_PLAN_SHARED, 0, 421, (const void *)_PyIR_Rop_Stub_Add_Text, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Text
     [422] = {_PyIR_PLAN_SHARED, 1, 422, (const void *)_PyIR_Rop_Stub_Add_Extended, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Extended
     [423] = {_PyIR_PLAN_SHARED, 1, 423, (const void *)_PyIR_Rop_Stub_Add_Generic, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Generic
-    [424] = {_PyIR_PLAN_INLINE, 0, 424, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Instance
-    [425] = {_PyIR_PLAN_INLINE, 1, 425, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_GetSet
-    [426] = {_PyIR_PLAN_SHARED, 1, 426, (const void *)_PyIR_Rop_Stub_GetAttr_Generic, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Generic
-    [427] = {_PyIR_PLAN_INLINE, 0, 427, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Shape
-    [428] = {_PyIR_PLAN_INLINE, 0, 428, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_PolyShape
-    [429] = {_PyIR_PLAN_INLINE, 0, 429, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Module
-    [430] = {_PyIR_PLAN_INLINE, 0, 430, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Hint
-    [431] = {_PyIR_PLAN_INLINE, 0, 431, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_ValueSlot
-    [432] = {_PyIR_PLAN_INLINE, 0, 432, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_PointerSlot
-    [433] = {_PyIR_PLAN_INLINE, 0, 433, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Class
-    [434] = {_PyIR_PLAN_INLINE, 0, 434, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_NonDescriptorValues
-    [435] = {_PyIR_PLAN_INLINE, 0, 435, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_NonDescriptorNoDict
-    [436] = {_PyIR_PLAN_INLINE, 0, 436, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_MethodValues
-    [437] = {_PyIR_PLAN_SHARED, 1, 437, (const void *)_PyIR_Rop_Stub_GetMethod_Generic, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_Generic
-    [438] = {_PyIR_PLAN_INLINE, 0, 438, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_PolyMethod
-    [439] = {_PyIR_PLAN_INLINE, 0, 439, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_NoDict
-    [440] = {_PyIR_PLAN_INLINE, 0, 440, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_LazyDict
-    [441] = {_PyIR_PLAN_INLINE, 0, 441, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_ClassMethod
+    [424] = {_PyIR_PLAN_NONE, 0, 424, NULL, NULL},  // Call_Exact
+    [425] = {_PyIR_PLAN_NONE, 0, 425, NULL, NULL},  // Call_BoundExact
+    [426] = {_PyIR_PLAN_NONE, 0, 426, NULL, NULL},  // Call_Init
+    [427] = {_PyIR_PLAN_NONE, 1, 427, NULL, NULL},  // Call_Generic
+    [428] = {_PyIR_PLAN_NONE, 0, 428, NULL, NULL},  // InitResult_Check
+    [429] = {_PyIR_PLAN_NONE, 1, 429, NULL, NULL},  // Call_Observed
+    [430] = {_PyIR_PLAN_NONE, 0, 430, NULL, NULL},  // Return_Ordinary
+    [431] = {_PyIR_PLAN_NONE, 0, 431, NULL, NULL},  // Return_Empty
+    [432] = {_PyIR_PLAN_NONE, 0, 432, NULL, NULL},  // Return_Generator
+    [433] = {_PyIR_PLAN_NONE, 1, 433, NULL, NULL},  // Return_Observed
+    [434] = {_PyIR_PLAN_NONE, 0, 434, NULL, NULL},  // Return_External
+    [435] = {_PyIR_PLAN_INLINE, 0, 435, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Instance
+    [436] = {_PyIR_PLAN_INLINE, 1, 436, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_GetSet
+    [437] = {_PyIR_PLAN_SHARED, 1, 437, (const void *)_PyIR_Rop_Stub_GetAttr_Generic, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Generic
+    [438] = {_PyIR_PLAN_INLINE, 0, 438, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Shape
+    [439] = {_PyIR_PLAN_INLINE, 0, 439, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_PolyShape
+    [440] = {_PyIR_PLAN_INLINE, 0, 440, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Module
+    [441] = {_PyIR_PLAN_INLINE, 0, 441, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Hint
+    [442] = {_PyIR_PLAN_INLINE, 0, 442, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_ValueSlot
+    [443] = {_PyIR_PLAN_INLINE, 0, 443, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_PointerSlot
+    [444] = {_PyIR_PLAN_INLINE, 0, 444, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_Class
+    [445] = {_PyIR_PLAN_INLINE, 0, 445, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_NonDescriptorValues
+    [446] = {_PyIR_PLAN_INLINE, 0, 446, NULL, (const void *)_PyIR_Rop_Stub_GetAttr_Generic},  // GetAttr_NonDescriptorNoDict
+    [447] = {_PyIR_PLAN_INLINE, 0, 447, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_MethodValues
+    [448] = {_PyIR_PLAN_SHARED, 1, 448, (const void *)_PyIR_Rop_Stub_GetMethod_Generic, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_Generic
+    [449] = {_PyIR_PLAN_INLINE, 0, 449, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_PolyMethod
+    [450] = {_PyIR_PLAN_INLINE, 0, 450, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_NoDict
+    [451] = {_PyIR_PLAN_INLINE, 0, 451, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_LazyDict
+    [452] = {_PyIR_PLAN_INLINE, 0, 452, NULL, (const void *)_PyIR_Rop_Stub_GetMethod_Generic},  // GetMethod_ClassMethod
+    [453] = {_PyIR_PLAN_SHARED, 0, 453, (const void *)_PyIR_Rop_Stub_Move_Transfer, NULL},  // Move_Transfer
+    [454] = {_PyIR_PLAN_SHARED, 1, 454, (const void *)_PyIR_Rop_Stub_Move_Retire, NULL},  // Move_Retire
+    [455] = {_PyIR_PLAN_SHARED, 0, 455, (const void *)_PyIR_Rop_Stub_Move_Copy, NULL},  // Move_Copy
+    [456] = {_PyIR_PLAN_NONE, 1, 456, NULL, NULL},  // Call_Observed
+    [457] = {_PyIR_PLAN_NONE, 1, 457, NULL, NULL},  // Call_Observed
+    [458] = {_PyIR_PLAN_NONE, 1, 458, NULL, NULL},  // Call_Observed
+    [459] = {_PyIR_PLAN_NONE, 1, 459, NULL, NULL},  // Call_Observed
+    [460] = {_PyIR_PLAN_NONE, 1, 460, NULL, NULL},  // Return_Observed
+    [461] = {_PyIR_PLAN_NONE, 1, 461, NULL, NULL},  // Return_Observed
+    [462] = {_PyIR_PLAN_NONE, 1, 462, NULL, NULL},  // Return_Observed
+    [463] = {_PyIR_PLAN_NONE, 1, 463, NULL, NULL},  // Return_Observed
     [117] = {_PyIR_PLAN_SHARED, 1, 117, (const void *)_PyIR_Stub_UNPACK_SEQUENCE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE
     [124] = {_PyIR_PLAN_SHARED, 0, 124, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_LIST, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_LIST
     [125] = {_PyIR_PLAN_SHARED, 0, 125, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_TUPLE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_TUPLE

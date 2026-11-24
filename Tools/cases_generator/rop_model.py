@@ -416,11 +416,13 @@ class Placement:
 
 @dataclass(frozen=True, slots=True)
 class Encoding:
-    """A family's derived encoding: placements in operand order, and the
-    number of operand words after the head (vectors aside)."""
+    """A family's derived encoding: placements in operand order, the
+    number of operand words after the head (vectors aside), and the head
+    fields that a family with spans fills with their first elements."""
     family: str
     placements: tuple[Placement, ...]
     words: int
+    elements: tuple[Slot, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

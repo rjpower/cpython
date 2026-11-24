@@ -1235,6 +1235,58 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % ("borrowed", "PyValue_AsKnownObjectBorrow"),
                      r"SPAM_STEAL consumes `x`, declared borrowed, which it does not own")
 
+    # F15: the GIL product's preprocessor path
+
+    def test_build_arms(self):
+        # _ITER_CHECK_LIST: a free-threaded intrinsic in the free-threaded arm
+        source = """
+            op(_OP, (x -- x)) effects() exits(next) {
+            %s
+                int y = SPAM_FT_ONLY(1);
+            %s
+            }
+        """
+        self.verify(source % ("#ifdef Py_GIL_DISABLED", "#endif"))
+        self.verify(source % ("#if !defined(Py_GIL_DISABLED)\n#else", "#endif"))
+        self.refuses(source % ("#ifndef Py_GIL_DISABLED", "#endif"),
+                     r"calls SPAM_FT_ONLY, an INTRINSIC of the free_threaded build")
+        # Nested, with #else: only the selected arm is code
+        source = """
+            op(_OP, (x: borrowed object --)) effects(%s) exits(next) {
+            #ifdef Py_GIL_DISABLED
+                int y = SPAM_FT_ONLY(1);
+            #else
+            #if ENABLE_SPECIALIZATION
+                spam_write(PyValue_AsKnownObjectBorrow(x));
+            #else
+                int z = SPAM_FT_ONLY(2);
+            #endif
+            #endif
+            }
+        """
+        self.verify(source % "writes")
+        self.refuses(source % "", r"`spam_write` may writes")
+        # An arm that no macro of the product decides holds no code
+        source = """
+            op(_OP, (x -- x)) effects() exits(next) {
+            #ifdef Py_DEBUG
+                %s
+            #endif
+            }
+        """
+        self.verify(source % "assert(oparg >= 0);")
+        self.refuses(source % "int y = oparg;",
+                     r"`#ifdef Py_DEBUG` is decided by no macro of the GIL product")
+        self.refuses("""
+            op(_OP, (x -- x)) effects() exits(next) {
+            #if ENABLE_SPECIALIZATION
+                int y = 0;
+            #elif Py_DEBUG
+                int y = 1;
+            #endif
+            }
+        """, r"`#elif` is a preprocessor form the walk does not model")
+
     # F2: a row's guard and the facts on its return
 
     def test_guard_rows_establish_facts(self):

@@ -790,8 +790,80 @@ RAISES = ("ERROR_IF", "ERROR_NO_POP")
 ERROR_LABELS = ("error", "exception_unwind")
 
 
+# The macros of the scoped GIL product that select preprocessor arms (F15):
+# Py_GIL_DISABLED is not defined in a build with the GIL, and
+# pycore_code.h defines ENABLE_SPECIALIZATION as 1 in every build.  Any
+# other macro (Py_DEBUG, Py_SHAPES) differs between builds of the product
+BUILD_MACROS: dict[str, str | None] = {"Py_GIL_DISABLED": None, "ENABLE_SPECIALIZATION": "1"}
+
+
+def macro_condition(directive: str) -> bool | None:
+    """Whether the arm after `#if`, `#ifdef` or `#ifndef` is the GIL
+    product's, or None if its macros do not decide it"""
+    text = directive.strip()[1:].strip()
+    m = re.fullmatch(r"(ifdef|ifndef)\s+(\w+)(\s*(/\*.*\*/|//.*))?", text)
+    if m:
+        if m.group(2) not in BUILD_MACROS:
+            return None
+        defined = BUILD_MACROS[m.group(2)] is not None
+        return defined if m.group(1) == "ifdef" else not defined
+    m = re.fullmatch(r"if\s+(!?)\s*(?:defined\s*\(\s*(\w+)\s*\)|(\w+))(\s*(/\*.*\*/|//.*))?",
+                     text)
+    if m:
+        name = m.group(2) or m.group(3)
+        if name not in BUILD_MACROS:
+            return None
+        value = BUILD_MACROS[name]
+        holds = value is not None if m.group(2) else value not in (None, "0")
+        return holds != bool(m.group(1))
+    return None
+
+
+def _macro_ifs(uop: Uop) -> list[MacroIfStmt]:
+    found: list[MacroIfStmt] = []
+    uop.body.accept(lambda stmt: found.append(stmt) if isinstance(stmt, MacroIfStmt) else None)
+    return found
+
+
 def _tokens(uop: Uop) -> list[Token]:
-    return [t for t in uop.body.tokens() if t.kind != "COMMENT"]
+    """The body's tokens on the GIL product's preprocessor path: an arm
+    that the build's macros exclude is not code (F15).  An arm they do not
+    decide stays, and verify_uop refuses it where it is code"""
+    excluded: set[int] = set()
+    for stmt in _macro_ifs(uop):
+        excluded.add(id(stmt.condition))
+        holds = macro_condition(stmt.condition.text)
+        if holds is not None:
+            for other in (stmt.else_body or []) if holds else stmt.body:
+                excluded |= {id(t) for t in other.tokens()}
+    return [t for t in uop.body.tokens() if t.kind != "COMMENT" and id(t) not in excluded]
+
+
+def check_preprocessor(uop: Uop) -> None:
+    """F15: an arm whose condition the GIL product's macros do not decide
+    may hold no code beyond assertions; `#elif`, which the parser does not
+    model, is refused"""
+    for t in uop.body.tokens():
+        if t.kind == "CMACRO_OTHER" and t.text.strip()[1:].strip().startswith("elif"):
+            raise analysis_error(f"{uop.name}: `#elif` is a preprocessor form the walk does "
+                                 "not model; nest #if and #else", t)
+    for stmt in _macro_ifs(uop):
+        if macro_condition(stmt.condition.text) is not None:
+            continue
+        tokens = [t for arm in (stmt.body, stmt.else_body or []) for s_ in arm
+                  for t in s_.tokens() if t.kind != "COMMENT"]
+        texts = [t.text for t in tokens]
+        i = 0
+        while i < len(tokens):
+            if texts[i] == "assert" and texts[i + 1:i + 2] == ["("]:
+                i = _close(texts, i + 1) + 1
+                continue
+            if texts[i] != ";":
+                raise analysis_error(
+                    f"{uop.name}: `{stmt.condition.text.strip()}` is decided by no macro of "
+                    f"the GIL product ({', '.join(sorted(BUILD_MACROS))}), and its arm "
+                    "holds code", tokens[i])
+            i += 1
 
 
 def _calls_in(tokens: list[Token]) -> list[tuple[Token, list[list[str]]]]:
@@ -1496,6 +1568,11 @@ class OwnershipWalk:
         if isinstance(stmt, BlockStmt):
             return self.block(stmt.body, state)
         if isinstance(stmt, MacroIfStmt):
+            # The GIL product's arm (F15); an undecided one holds no code
+            # (check_preprocessor), so both are walked
+            holds = macro_condition(stmt.condition.text)
+            if holds is not None:
+                return self.block(stmt.body if holds else stmt.else_body or [], state)
             return self.join([self.block(stmt.body, state.copy()),
                               self.block(stmt.else_body or [], state.copy())])
         if isinstance(stmt, IfStmt):
@@ -2434,6 +2511,7 @@ def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None 
     contract = contract_of(uop)
     if contract is None or (id(uop), implicit_guards) in _VERIFIED:
         return
+    check_preprocessor(uop)
     check_callees(uop, table)
     check_effects(uop, contract, table)
     check_feedback(uop, contract, table)

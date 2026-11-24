@@ -68,13 +68,15 @@ most four or five units run at once.
 |---|---|---|---|
 | F0 | The language frontend: grammar, parser, type/effect/schema catalogs, graph data model, structural checks, diagnostics. `Add` and `GetAttr` parse and pass. | Opus | The data model is frozen for F1-F3. |
 | F1 | The checker: ownership tokens, publish, checkpoints, guard-before-action, facts and effects against rows, edge totality. | Opus | Negative fixtures are refused. |
-| F2 | The products: interpreter C, function forms, leaf graphs for templates, stubs, metadata. Generated code uses the value API only (closes backlog 792's generated class). | Opus | `Add.Int`'s generated C matches or beats today's: 15 statements against 20, 1 type test against 2. |
+| F2 | The products: interpreter C, function forms, leaf graphs for templates, stubs, metadata. Generated code uses the value API only (closes backlog 792's generated class). | Sonnet | `Add.Int`'s generated C matches or beats today's: 15 statements against 20, 1 type test against 2. |
 | F3 | The translator: a stack of value identities in `regcfg.c`, block parameters, home allocation, parallel moves after allocation, exceptional-edge recipes. | Opus | Comprehension and unpack examples execute 0 `Move`s. |
-| P1-P5 | Pilot families (P1 bindings and moves, P2 `Add`, P3 `GetAttr`/`GetMethod` with poly, P4 `Call`/`Return` on G3a's switch, P5 truth and branches), each with its old definitions deleted. | Sonnet, with Opus integrators | Every product runs through its real ABI. |
+| P1-P5 | Pilot families (P1 bindings and moves, P2 `Add`, P3 `GetAttr`/`GetMethod` with poly, P4 `Call`/`Return` on G3a's switch, P5 truth and branches), each with its old definitions deleted. | Sonnet; P4 Opus | Every product runs through its real ABI. |
 | Freeze | One adversarial review of the verifier and one end-to-end review of products and ABI. The pilot's arms are expanded to SSA and run in a test evaluator against the C path. | Opus | The language is frozen. |
-| W1 | Batches 1A-1I: numeric, value tests, items, attribute writes, displays, namespaces, text, patterns, functions, intrinsics. `Wide` runs as its own Opus unit. | Sonnet | Each complete family lands with its old definition deleted. |
-| W2 | Batches 2A-2F: keyword and expanded calls, iteration, async/await/send/yield, exceptions, throw completion and async-for, resume and polls. | Sonnet; Opus reviews transfers | As W1. |
-| D | Delete the stack-semantic generator: stack binding, exchange and `replaces`, windows, body pins, the release regex, stack-only handlers. Keep the public decoder and opcode schema. | Opus and Sonnet | No old provider remains. |
+| W1 | Batches 1A-1I: numeric, value tests, items, attribute writes, displays, namespaces, text, patterns, functions, intrinsics. `Wide` runs as its own unit. | Sonnet | Each complete family lands with its old definition deleted. |
+| W2 | Batches 2A-2F: keyword and expanded calls, iteration, async/await/send/yield, exceptions, throw completion and async-for, resume and polls. | Sonnet; one Opus review of the transfer batches | As W1. |
+| D | Delete the stack-semantic generator: stack binding, exchange and `replaces`, windows, body pins, the release regex, stack-only handlers. Keep the public decoder and opcode schema. | Sonnet | No old provider remains. |
+
+Opus is kept to design-critical units and is never fanned out: F0, F1 and F3, P4, and the reviews. At most two Opus units run at once. Everything else runs on Sonnet at medium effort.
 
 Astra estimates 60-130 agent-hours, or 19-35 working hours of elapsed time
 at its staffing. At four or five concurrent units, expect two to four

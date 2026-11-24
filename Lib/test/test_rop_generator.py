@@ -166,6 +166,20 @@ class StubTests(unittest.TestCase):
         self.assertEqual((entry.name, entry.region, entry.stub),
                          ("F_Copy", "shared", "_PyIR_Rop_Stub_F_Copy"))
 
+    def test_publish_takes_inputs_then_reads_old_values_then_writes_then_closes(self):
+        # A publish home may be a spent input's home (dst and x name the same
+        # slot): the home is emptied first, so the old value read after it is
+        # empty and the input is released once, after the output is written
+        program = rop_check.check([rop_syntax.parse(SHARED, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        text = "\n".join(p.lowered["F.Copy"].body)
+        order = [text.index(mark) for mark in (
+            "own_x = _PyFrame_TakeHome(", "old_dst = *", "_PyFrame_WriteHome(frame, home_dst",
+            "PyValue_XCLOSE(own_x)", "PyValue_XCLOSE(old_dst)")]
+        self.assertEqual(order, sorted(order))
+        self.assertEqual(text.count("PyValue_XCLOSE(own_x)"), 1)
+
 
 WRAPPED = """\
 extern primitive is_int(v:B) -> Bool

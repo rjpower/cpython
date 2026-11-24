@@ -3156,80 +3156,15 @@ dummy_func(
 
             attr = found.value;
         }
-
-        family(LOAD_ATTR, INLINE_CACHE_ENTRIES_LOAD_ATTR) = {
-            LOAD_ATTR_INSTANCE_VALUE,
-            LOAD_ATTR_MODULE,
-            LOAD_ATTR_WITH_HINT,
-            LOAD_ATTR_SLOT,
-            LOAD_ATTR_CLASS,
-            LOAD_ATTR_CLASS_WITH_METACLASS_CHECK,
-            LOAD_ATTR_CLASSMETHOD,
-            LOAD_ATTR_PROPERTY,
-            LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN,
-            LOAD_ATTR_METHOD_WITH_VALUES,
-            LOAD_ATTR_METHOD_NO_DICT,
-            LOAD_ATTR_METHOD_LAZY_DICT,
-            LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES,
-            LOAD_ATTR_NONDESCRIPTOR_NO_DICT,
-            LOAD_ATTR_SHAPE,
-            LOAD_ATTR_GETSET,
-            LOAD_ATTR_SLOT_POINTER,
-            LOAD_ATTR_METHOD_POLY,
-        };
-
-        specializing op(_SPECIALIZE_LOAD_ATTR, (owner -- owner))
-            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        /* A stack op only: rule_load_attr (Python/regcfg.c) lowers it to
+         * GetAttr or GetMethod (Python/register_ops/getattr.rop). */
+        tier1 inst(LOAD_ATTR,
+                (unused/9, owner: consumed -- attr: owned, self_or_null[oparg&1]: owned nullable))
+            effects() exits(abort)
         {
-            #if ENABLE_SPECIALIZATION
-            _PyFbHeader *feedback = FB_COUNTER();
-            if (_PyFb_CounterTriggers(feedback)) {
-                PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-                next_instr = this_instr;
-                _Py_Specialize_LoadAttr(owner, next_instr, name);
-                DISPATCH_SAME_OPARG();
-            }
-            OPCODE_DEFERRED_INC(LOAD_ATTR);
-            _PyFb_AdvanceCounter(feedback);
-            #endif  /* ENABLE_SPECIALIZATION */
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
-
-        inline_ok op(_LOAD_ATTR,
-                (owner: consumed -- attr: owned, self_or_null[oparg&1]: owned nullable))
-            effects(runs_python) exits(next, raise)
-        {
-            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
-            if (oparg & 1) {
-                // A count of its own before the call, which can run code
-                // that rebinds the local that owner views
-                PyValue receiver = PyValue_DUP(owner);
-                _PyStatusValue found = _PyValue_GetMethod(receiver, name);
-                DECREF_INPUTS();
-                if (found.status < 0) {
-                    PyValue_CLOSE(receiver);
-                    ERROR_IF(true);
-                }
-                attr = found.value;
-                if (found.status > 0) {
-                    self_or_null[0] = receiver;
-                }
-                else {
-                    PyValue_CLOSE(receiver);
-                    self_or_null[0] = PyValue_NULL;
-                }
-            }
-            else {
-                PyValue found_attr = _PyValue_GetAttr(owner, name);
-                DECREF_INPUTS();
-                ERROR_IF(PyValue_IsNull(found_attr));
-                attr = found_attr;
-            }
-        }
-
-        macro(LOAD_ATTR) =
-            unused/1 + _SPECIALIZE_LOAD_ATTR +
-            unused/8 +
-            _LOAD_ATTR;
 
         leaf op(_GUARD_TYPE_VERSION,
                 (type_version/2, owner: object -- owner: type_version(type_version)))
@@ -3262,25 +3197,7 @@ dummy_func(
             EXIT_IF(!FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(owner_o)->valid));
         }
 
-        leaf op(_LOAD_ATTR_INSTANCE_VALUE, (offset/1, owner: consumed has_values -- attr: owned))
-            effects(reads, releases) exits(next, deopt)
-        {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-            PyValueBorrow found = PyValue_Borrow(*value_ptr);
-            DEOPT_IF(PyValue_IsNull(found));
-            attr = PyValue_XDUP(found);
-            STAT_INC(LOAD_ATTR, hit);
-            DECREF_INPUTS();
-        }
 
-        macro(LOAD_ATTR_INSTANCE_VALUE) region(inline) =
-            unused/1 + // Skip over the entry distance
-            _GUARD_TYPE_VERSION +
-            _CHECK_MANAGED_OBJECT_HAS_VALUES +
-            _LOAD_ATTR_INSTANCE_VALUE +
-            unused/5 +
-            _NULL_SLOT_CONDITIONAL;
 
         /* The shape handlers (Py_SHAPES, see pycore_dict.h).  They follow a
          * type version guard, which proves that the owner has inline values
@@ -3303,20 +3220,7 @@ dummy_func(
             IR_GUARD_SHAPE_READ(PyValue_AsKnownObjectBorrow(owner), type_version, shape);
         }
 
-        leaf op(_LOAD_ATTR_SHAPE, (offset/1, owner: consumed -- attr: owned))
-            effects(reads, releases) exits(next)
-        {
-            attr = IR_DUP_SHAPE_READ(owner, offset);
-            STAT_INC(LOAD_ATTR, hit);
-            DECREF_INPUTS();
-        }
 
-        macro(LOAD_ATTR_SHAPE) =
-            unused/1 +
-            _GUARD_SHAPE_READ +
-            _LOAD_ATTR_SHAPE +
-            unused/5 +
-            _NULL_SLOT_CONDITIONAL;
 
         leaf op(_GUARD_MODULE_EXACT, (owner: object -- owner: exact(PyModule_Type)))
             effects(reads) exits(next, miss)
@@ -3324,119 +3228,13 @@ dummy_func(
             EXIT_IF(!PyModule_CheckExact(PyValue_AsKnownObjectBorrow(owner)));
         }
 
-        leaf op(_LOAD_ATTR_MODULE, (dict_version/2, index/1, owner: consumed object -- attr: owned))
-            effects(reads, releases) exits(next, miss)
-        {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            PyDictObject *dict = (PyDictObject *)((PyModuleObject *)owner_o)->md_dict;
-            assert(dict != NULL);
-            PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
-            EXIT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != dict_version);
-            assert(keys->dk_kind == DICT_KEYS_UNICODE);
-            EXIT_IF(index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries),
-                    "the module's keys have no entry at the index");
-            PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(keys) + index;
-            PyValueBorrow found = PyValue_Borrow(ep->me_value);
-            EXIT_IF(PyValue_IsNull(found));
-            attr = PyValue_XDUP(found);
-            STAT_INC(LOAD_ATTR, hit);
-            DECREF_INPUTS();
-        }
 
-        macro(LOAD_ATTR_MODULE) =
-            unused/1 +
-            _GUARD_MODULE_EXACT +
-            _LOAD_ATTR_MODULE +
-            unused/5 +
-            _NULL_SLOT_CONDITIONAL;
 
-        op(_LOAD_ATTR_WITH_HINT, (hint/1, owner: consumed object -- attr: owned))
-            effects(reads, releases) exits(next, miss)
-        {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
-            PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
-            EXIT_IF(dict == NULL, "the owner has no dict");
-            PyDictKeysObject *dk = FT_ATOMIC_LOAD_PTR(dict->ma_keys);
-            assert(PyDict_CheckExact((PyObject *)dict));
-#ifdef Py_GIL_DISABLED
-            EXIT_IF(!_Py_IsOwnedByCurrentThread((PyObject *)dict) && !_PyObject_GC_IS_SHARED(dict),
-                    "the dict is owned by another thread");
-#endif
-            PyValue found;
-            if (hint >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(dk->dk_nentries)) {
-                EXIT_IF(true, "the hint is past the entries of the keys");
-            }
 
-            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
-            if (dk->dk_kind != DICT_KEYS_UNICODE) {
-                EXIT_IF(true, "the keys are not all str");
-            }
-            PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(dk) + hint;
-            if (FT_ATOMIC_LOAD_PTR_RELAXED(ep->me_key) != name) {
-                EXIT_IF(true, "the hinted entry names another key");
-            }
-            found = ep->me_value;
-            if (PyValue_IsNull(found)) {
-                EXIT_IF(true);
-            }
-            STAT_INC(LOAD_ATTR, hit);
-            attr = PyValue_XDUP(found);
-            DECREF_INPUTS();
-        }
 
-        macro(LOAD_ATTR_WITH_HINT) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            _LOAD_ATTR_WITH_HINT +
-            unused/5 +
-            _NULL_SLOT_CONDITIONAL;
 
-        leaf op(_LOAD_ATTR_SLOT, (index/1, owner: consumed object -- attr: owned))
-            effects(reads, releases) exits(next, miss)
-        {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
 
-            PyValueBorrow value = PyValue_Borrow(*_PyObject_ValueSlot(owner_o, index));
-            EXIT_IF(PyValue_IsNull(value));
-            _PyValue_RecheckHome(value);
-            attr = PyValue_DUP(value);
-            STAT_INC(LOAD_ATTR, hit);
-            DECREF_INPUTS();
-        }
 
-        macro(LOAD_ATTR_SLOT) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            _LOAD_ATTR_SLOT +  // NOTE: This action may also deopt
-            unused/5 +
-            _NULL_SLOT_CONDITIONAL;
-
-        /* A PyObject * field of the owner, read where LOAD_ATTR_SLOT reads a
-         * value: a _Py_T_OBJECT member, or the type pointer that __class__
-         * returns. The field holds an object address, never an inline value
-         * or an immortal's tag, so the read makes the canonical value of it
-         * (PyValue_FromObjectBorrow). A NULL field deoptimizes: the generic
-         * path answers None for the member (or raises). */
-        // Contract (G0d1): a read of the owner's field (reads); a NULL field misses;
-        // DECREF_INPUTS releases the owner.
-        ir_only op(_LOAD_ATTR_SLOT_POINTER, (index/1, owner: consumed object -- attr: owned))
-            effects(reads, releases) exits(next, miss)
-        {
-            PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            PyObject *field = *(PyObject **)((char *)owner_o + index);
-            EXIT_IF(field == NULL, "the field is NULL");
-            attr = PyValue_DUP(PyValue_FromObjectBorrow(field));
-            STAT_INC(LOAD_ATTR, hit);
-            DECREF_INPUTS();
-        }
-
-        macro(LOAD_ATTR_SLOT_POINTER) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            _LOAD_ATTR_SLOT_POINTER +
-            unused/5 +
-            _NULL_SLOT_CONDITIONAL;
 
         op(_CHECK_ATTR_CLASS, (class_version/2, owner: object -- owner: subtype(PyType_Type)))
             effects(reads) exits(next, miss)
@@ -3449,28 +3247,8 @@ dummy_func(
                     "the class's own version differs from the cached one");
         }
 
-        op(_LOAD_ATTR_CLASS, (class_value/4, owner: consumed -- attr: owned))
-            effects(releases) exits(next)
-        {
-            STAT_INC(LOAD_ATTR, hit);
-            PyValueBorrow found = _PyValueGuarded_Load(class_value);
-            attr = PyValue_DUP(found);
-            DECREF_INPUTS();
-        }
 
-        macro(LOAD_ATTR_CLASS) =
-            unused/1 +
-            _CHECK_ATTR_CLASS +
-            unused/2 +
-            _LOAD_ATTR_CLASS +
-            _NULL_SLOT_CONDITIONAL;
 
-        macro(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            _CHECK_ATTR_CLASS +
-            _LOAD_ATTR_CLASS +
-            _NULL_SLOT_CONDITIONAL;
 
         op(_GUARD_BUILTIN_METACLASS, (owner: object -- owner: exact(PyType_Type)))
             effects(reads) exits(next, miss)
@@ -3485,86 +3263,11 @@ dummy_func(
             EXIT_IF(Py_TYPE(owner_o) != &PyType_Type);
         }
 
-        // Contract (G0d1): reads the classmethod's callable (_PyClassMethod_GetFunc:
-        // reads); two guards miss; the owner moves to self (TAKE).  The entry holds
-        // the classmethod object (_PyValueGuarded_LoadObject).
-        ir_only op(_LOAD_ATTR_CLASSMETHOD,
-                (class_value/4, owner: consumed -- attr: owned, self: moved(owner)))
-            effects(reads) exits(next, miss)
-        {
-            assert(oparg & 1);
-            PyValueBorrow descriptor = _PyValueGuarded_LoadObject(class_value);
-            PyObject *cm = PyValue_AsKnownObjectBorrow(descriptor);
-            EXIT_IF(!Py_IS_TYPE(cm, &PyClassMethod_Type));
-            // __init__ can replace the wrapped callable without invalidating
-            // the class version. Capture it before explicit argument evaluation.
-            PyObject *target = _PyClassMethod_GetFunc(cm);
-            EXIT_IF(target == NULL || !Py_IS_TYPE(target, &PyFunction_Type),
-                    "the classmethod wraps no Python function");
-            attr = PyValue_DUP(PyValue_FromObjectBorrow(target));
-            self = TAKE(owner);
-            STAT_INC(LOAD_ATTR, hit);
-        }
 
-        macro(LOAD_ATTR_CLASSMETHOD) =
-            unused/1 +
-            _GUARD_BUILTIN_METACLASS +
-            _CHECK_ATTR_CLASS +
-            unused/2 +
-            _LOAD_ATTR_CLASSMETHOD;
 
-        op(_LOAD_ATTR_PROPERTY_FRAME, (func_version/2, fget/4, owner: consumed -- new_frame: owned))
-            effects(reads, writes, allocates) exits(next, miss)
-        {
-            assert((oparg & 1) == 0);
-            assert(Py_IS_TYPE(fget, &PyFunction_Type));
-            PyFunctionObject *f = (PyFunctionObject *)fget;
-            EXIT_IF(f->func_version != func_version, "the property getter's version changed");
-            PyCodeObject *code = (PyCodeObject *)f->func_code;
-            EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize),
-                    "the thread's stack has no room for the frame");
-            STAT_INC(LOAD_ATTR, hit);
-            _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyValue_DUP(PyValue_FromObjectBorrow(fget)), frame);
-            pushed_frame->base[0] = TAKE(owner);
-            new_frame = PyValue_Wrap(pushed_frame);
-        }
 
-        macro(LOAD_ATTR_PROPERTY) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            _CHECK_PEP_523 +
-            _LOAD_ATTR_PROPERTY_FRAME +
-            _SAVE_RETURN_SLOT +
-            _PUSH_FRAME;
 
-        op(_LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN_FRAME, (func_version/2, getattribute/4, owner: consumed -- new_frame: owned))
-            effects(reads, writes, allocates) exits(next, miss)
-        {
-            assert((oparg & 1) == 0);
-            assert(Py_IS_TYPE(getattribute, &PyFunction_Type));
-            PyFunctionObject *f = (PyFunctionObject *)getattribute;
-            assert(func_version != 0);
-            EXIT_IF(f->func_version != func_version, "the __getattribute__ function's version changed");
-            PyCodeObject *code = (PyCodeObject *)f->func_code;
-            assert(code->co_argcount == 2);
-            EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize),
-                    "the thread's stack has no room for the frame");
-            STAT_INC(LOAD_ATTR, hit);
-            PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
-            _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(
-                tstate, PyValue_DUP(PyValue_FromObjectBorrow(f)), frame);
-            pushed_frame->base[0] = TAKE(owner);
-            pushed_frame->base[1] = PyValue_DUP(PyValue_FromObjectBorrow(name));
-            new_frame = PyValue_Wrap(pushed_frame);
-        }
 
-        macro(LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            _CHECK_PEP_523 +
-            _LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN_FRAME +
-            _SAVE_RETURN_SLOT +
-            _PUSH_FRAME;
 
         op(_GUARD_DORV_NO_DICT, (owner: object -- owner))
             effects(reads) exits(next, miss)
@@ -5104,50 +4807,9 @@ dummy_func(
             DEAD(exc);
         }
 
-        leaf op(_LOAD_ATTR_METHOD_WITH_VALUES,
-                (class_value/4, owner: consumed -- attr: owned, self: moved(owner)))
-            effects() exits(next)
-        {
-            assert(oparg & 1);
-            /* Cached method object */
-            STAT_INC(LOAD_ATTR, hit);
-            PyValueBorrow method = _PyValueGuarded_Load(class_value);
-            assert(PyValue_IsObject(method));
-            assert(_PyType_HasFeature(
-                Py_TYPE(PyValue_AsKnownObjectBorrow(method)),
-                Py_TPFLAGS_METHOD_DESCRIPTOR));
-            attr = PyValue_DUP(method);
-            self = TAKE(owner);
-        }
 
-        macro(LOAD_ATTR_METHOD_WITH_VALUES) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            _CHECK_MANAGED_OBJECT_HAS_VALUES +
-            unused/2 +
-            _LOAD_ATTR_METHOD_WITH_VALUES;
 
-        leaf op(_LOAD_ATTR_METHOD_NO_DICT,
-                (class_value/4, owner: consumed -- attr: owned, self: moved(owner)))
-            effects() exits(next)
-        {
-            assert(oparg & 1);
-            assert(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_dictoffset == 0);
-            STAT_INC(LOAD_ATTR, hit);
-            PyValueBorrow method = _PyValueGuarded_Load(class_value);
-            assert(PyValue_IsObject(method));
-            assert(_PyType_HasFeature(
-                Py_TYPE(PyValue_AsKnownObjectBorrow(method)),
-                Py_TPFLAGS_METHOD_DESCRIPTOR));
-            attr = PyValue_DUP(method);
-            self = TAKE(owner);
-        }
 
-        macro(LOAD_ATTR_METHOD_NO_DICT) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            unused/2 +
-            _LOAD_ATTR_METHOD_NO_DICT;
 
         /* A type without a version has no row in a poly table. */
         // Contract (G0d1): a read of the type's version tag; no row establishes an
@@ -5159,96 +4821,13 @@ dummy_func(
                     "the type has no version");
         }
 
-        /* A method load whose site saw several receiver types: the site's
-         * poly rows (up to FB_POLY_SIZE, each a LOAD_ATTR_METHOD_WITH_VALUES
-         * or _NO_DICT observation) replace the one cached type version.  The
-         * row of the receiver's type holds the method; a receiver of any other
-         * type deoptimizes and the specializer adds its row. */
-        // Contract (G0d1): IR_METHOD_POLY_LOOKUP reads the site's entry
-        // (FEEDBACK(read(entry))); a miss exits; the owner moves to self_or_null[0]
-        // (oparg & 1, asserted).
-        ir_only op(_LOAD_ATTR_METHOD_POLY,
-                (owner: consumed object -- attr: owned, self_or_null[oparg&1]: owned))
-            effects(reads) exits(next, miss) feedback(read(entry))
-        {
-            assert(oparg & 1);
-            PyValueBorrow method = IR_METHOD_POLY_LOOKUP(
-                FB_COUNTER(), PyValue_AsKnownObjectBorrow(owner));
-            EXIT_IF(PyValue_IsNull(method));
-            STAT_INC(LOAD_ATTR, hit);
-            attr = PyValue_DUP(method);
-            self_or_null[0] = TAKE(owner);
-        }
 
-        macro(LOAD_ATTR_METHOD_POLY) =
-            unused/9 +
-            _GUARD_TYPE_HAS_VERSION +
-            _LOAD_ATTR_METHOD_POLY;
 
-        op(_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES, (class_value/4, owner: consumed -- attr: owned))
-            effects(releases) exits(next)
-        {
-            assert((oparg & 1) == 0);
-            STAT_INC(LOAD_ATTR, hit);
-            PyValueBorrow found = _PyValueGuarded_Load(class_value);
-            attr = PyValue_DUP(found);
-            DECREF_INPUTS();
-        }
 
-        macro(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            _CHECK_MANAGED_OBJECT_HAS_VALUES +
-            unused/2 +
-            _LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
 
-        leaf op(_LOAD_ATTR_NONDESCRIPTOR_NO_DICT, (class_value/4, owner: consumed -- attr: owned))
-            effects(releases) exits(next)
-        {
-            assert((oparg & 1) == 0);
-            assert(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_dictoffset == 0);
-            STAT_INC(LOAD_ATTR, hit);
-            PyValueBorrow found = _PyValueGuarded_Load(class_value);
-            attr = PyValue_DUP(found);
-            DECREF_INPUTS();
-        }
 
-        macro(LOAD_ATTR_NONDESCRIPTOR_NO_DICT) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            unused/2 +
-            _LOAD_ATTR_NONDESCRIPTOR_NO_DICT;
 
-        /* A value getset (_PyValueGetSet, pycore_descrobject.h) found on the
-         * owner's type, read without the attribute protocol. The type version
-         * guard proves that the cached descriptor is still the one the lookup
-         * finds, and so that the owner is an instance of the type that the
-         * descriptor applies to (checked when specializing). A getset is a
-         * data descriptor: it wins over the instance dict. The getter may run
-         * Python and may mutate the type, which can drop the dict's reference
-         * to the descriptor. The record is read before the call and the
-         * descriptor is not used again. */
-        // Contract (G0d1): the getter (_PyGetSet_ValueRead) runs Python and may
-        // fail; DECREF_INPUTS releases the owner first.
-        ir_only op(_LOAD_ATTR_GETSET, (class_value/4, owner: consumed -- attr: owned))
-            effects(runs_python) exits(next, raise)
-        {
-            PyValueBorrow descriptor = _PyValueGuarded_LoadObject(class_value);
-            PyObject *getset = PyValue_AsKnownObjectBorrow(descriptor);
-            assert(Py_IS_TYPE(getset, &PyGetSetDescr_Type));
-            STAT_INC(LOAD_ATTR, hit);
-            PyValue found = _PyGetSet_ValueRead(getset, owner);
-            DECREF_INPUTS();
-            ERROR_IF(PyValue_IsNull(found));
-            attr = found;
-        }
 
-        macro(LOAD_ATTR_GETSET) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            unused/2 +
-            _LOAD_ATTR_GETSET +
-            _NULL_SLOT_CONDITIONAL;
 
         op(_CHECK_ATTR_METHOD_LAZY_DICT, (dictoffset/1, owner: object -- owner))
             effects(reads) exits(next, miss)
@@ -5259,27 +4838,7 @@ dummy_func(
             EXIT_IF(dict != NULL, "the owner's dict exists");
         }
 
-        op(_LOAD_ATTR_METHOD_LAZY_DICT,
-                (class_value/4, owner: consumed -- attr: owned, self: moved(owner)))
-            effects() exits(next)
-        {
-            assert(oparg & 1);
-            STAT_INC(LOAD_ATTR, hit);
-            PyValueBorrow method = _PyValueGuarded_Load(class_value);
-            assert(PyValue_IsObject(method));
-            assert(_PyType_HasFeature(
-                Py_TYPE(PyValue_AsKnownObjectBorrow(method)),
-                Py_TPFLAGS_METHOD_DESCRIPTOR));
-            attr = PyValue_DUP(method);
-            self = TAKE(owner);
-        }
 
-        macro(LOAD_ATTR_METHOD_LAZY_DICT) =
-            unused/1 +
-            _GUARD_TYPE_VERSION +
-            _CHECK_ATTR_METHOD_LAZY_DICT +
-            unused/1 +
-            _LOAD_ATTR_METHOD_LAZY_DICT;
 
         // Feedback: func_version
         // CALL_INTRINSIC_1/2, CALL_KW, and CALL_FUNCTION_EX aren't members!

@@ -34,10 +34,13 @@ is recorded.
 | G0a | The notation and verifier for every construct: sound ownership transitions, per-path nullness, exported facts from the live state, `holding(x)` raise checkpoints, skeleton steps and arrays across uops, feedback access, ROUTINE and transaction rows, V11, the counter functions, and the CONJOINS, NONNULL_FORM and SLOW columns (Opus) | merged, `ff4ac9500e5` |
 | G0a2 | The verifier fails closed: Astra's review of G0a found seven acceptance holes, each closed with a negative test; the columns' structural checks (Opus) | merged, `d38559113ef` |
 | TA | Template tightening from declared facts: guard fusion, dead NULL tests, box exits, results in destination registers, CSE by declared effects; rows for every primitive the templates use; no sampling of models (Opus) | merged, `0a4e7bd4bae` |
-| G0b | The seed: every uop and callee declared from today's records with byte-identical output; findings and decisions for what the vocabulary cannot say; the review manifest (Opus) | first pass merged (`29642dc6065`); part 2 at 182 of 351 declared |
+| G0b | The seed: every uop and callee declared from today's records with byte-identical output; findings and decisions for what the vocabulary cannot say; the review manifest (Opus) | merged, `f91d4f80af3`: 195 of 351 uops declared with unchanged generated output; 132 uops routed to G0c, 21 to G0a5 |
 | G0a3 | The vocabulary the seed needs: fact kinds, GUARD results, CONSTANT rows, the `closed` input mode, `moved(k)` results, SLOT rows, `assumed(fact) by`, error-label exits, preprocessor arms, HOME for frame homes (Opus) | merged, `5af180074c5` |
 | G1a | Whole-word completion stubs generated from declared uops for UNPACK_SEQUENCE and BINARY_OP's generic arms; a 23-byte shared site with one cold resolver (MISS, ESCAPED, RAISED, BRANCH, AGAIN); staleness found by execution (Opus) | merged, `a5502da133f` |
-| G0a4 | The last vocabulary before G0c: correlated status-and-value results, frame-path and call-state facts, a leaf `assume` op, moves out of operand homes, object constants (Opus) | running |
+| G0a4 | The last vocabulary before G0c: correlated status-and-value results, frame-path and call-state facts, a leaf `assume` op, moves out of operand homes, object constants (Opus) | merged, `6966e459c7e` |
+| G0c | Review of the seeded contracts in eight batches by topic: evidence per row, corrections in both directions, the routed uops declared, native tests; vocabulary frozen, gaps routed to G0a5 (8 Sonnet) | running |
+| G0a5 | The 21 uops the batches cannot declare (facts of an input's field, a declared calling-convention enum, walk gaps, yields the walk misses) and the vocabulary desk during G0c (Opus) | running |
+| G3D | Design of compiled frame transfers: a per-unit switch routine, the next frame's entry from its `instr_ptr`, one code pin per evaluation loop placed by a declared `retires_frame` effect, a SWITCH bit in G1a's ABI (Opus) | note written; revising after Astra's review |
 
 The design (`E59/regions89/rd/design.md`) sets the following units, in
 order:
@@ -87,3 +90,9 @@ chaos 1.014 to 0.940, fannkuch 0.955 to 0.915, go 1.004 to 0.979.
 unpack_sequence moves only from 1.424 to 1.380, and richards (1.157),
 deltablue (1.155) and raytrace (1.104) wait for compiled calls and returns
 (G3, G4).
+
+G3D measured one compiled call and return at 491 instructions, 137 of them
+driver turns and unit entries and exits; those are 14.9% of richards' and
+15.5% of deltablue's instructions. The design's estimate is about 57 after
+G3, leaving richards and deltablue near 1.05 of golden87; the call and
+return bodies (270 instructions) are G4's.

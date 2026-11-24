@@ -171,7 +171,10 @@ EXTRA_ROWS = """
     MACRO(SPAM_UNIQUE, ARGS(borrowed), TEST(unique), EFFECTS(), EXITS()) \
     MACRO(SPAM_NEEDS_UNIQUE, ARGS(borrowed unique), NONE, EFFECTS(writes), EXITS()) \
     MACRO(SPAM_GEN_OR_CORO, ARGS(borrowed), TEST(exact(PyGen_Type|PyCoro_Type)), \
-          EFFECTS(), EXITS())
+          EFFECTS(), EXITS()) \
+    MACRO(SPAM_GUARD_INT, ARGS(borrowed), GUARD(inline_int), EFFECTS(), EXITS(miss)) \
+    MACRO(SPAM_GUARD_INDEX, ARGS(borrowed, borrowed, scalar), GUARD(in_bounds(1)), \
+          EFFECTS(reads), EXITS(deopt))
 """
 
 
@@ -1210,6 +1213,43 @@ class VerifierTests(unittest.TestCase):
             {"x": frozenset({ir_contract.parse_fact("exact(PyTuple_Type)", None)})}])
         self.assertIn(ir_contract.parse_fact("exact(PyList_Type|PyTuple_Type)", None),
                       facts["x"])
+
+    # F2: a row's guard and the facts on its return
+
+    def test_guard_rows_establish_facts(self):
+        # _GUARD_ELEMENT_INT: IR_GUARD_INLINE_INT's facts hold on its return
+        source = """
+            op(_GUARD_ELEMENT_INT, (x -- x: %s)) effects() exits(next, miss) {
+                %s
+            }
+        """
+        self.verify(source % ("inline_int", "SPAM_GUARD_INT(x);"))
+        # Only on the path that calls it
+        self.refuses(source % ("inline_int", "if (oparg) { SPAM_GUARD_INT(x); }"),
+                     r"`x` is declared .*inline_int, which nothing establishes on every path")
+        # A row's in_bounds(k) names its argument k
+        self.verify("""
+            op(_GUARD_INDEX, (seq, i -- seq, i: in_bounds(seq))) effects(reads)
+                exits(next, deopt)
+            {
+                SPAM_GUARD_INDEX(i, seq, 0);
+            }
+        """)
+        for result, message in (
+                ("EXITS(next)", "GUARD\\(\\.\\.\\.\\) is the result of a row with a miss or deopt exit"),
+                ("EXITS(miss)", None)):
+            text = ("#define X(PRIMITIVE, HELPER, MACRO) "
+                    f"MACRO(SPAM, ARGS(borrowed), GUARD(inline_int), EFFECTS(), {result})")
+            if message is None:
+                ir_contract.parse_rows(text)
+            else:
+                with self.assertRaisesRegex(SyntaxError, message):
+                    ir_contract.parse_rows(text)
+        with self.assertRaisesRegex(SyntaxError, r"GUARD\(\.\.\.\) states 2 arguments' facts, "
+                                                 r"but the row has 1"):
+            ir_contract.parse_rows("#define X(PRIMITIVE, HELPER, MACRO) "
+                                   "MACRO(SPAM, ARGS(borrowed), GUARD(inline_int, inline), "
+                                   "EFFECTS(), EXITS(miss))")
 
     # The seed's vocabulary (g0b/decisions.md): F9, exits the body takes
 

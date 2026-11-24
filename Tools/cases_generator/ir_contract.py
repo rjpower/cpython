@@ -201,7 +201,7 @@ COMPONENTS_HEADER = ROOT / "Include/internal/pycore_ir_components.h"
 ROW_KINDS = ("PRIMITIVE", "HELPER", "ROUTINE", "MACRO", "INTRINSIC", "DESTRUCTOR", "FIELD",
              "CONSTANT")
 RESULT_SHAPES = ("NONE", "SCALAR", "VIEW", "PATH", "MEASURE", "TEST", "CONTEXT",
-                 "VALUE", "VALUE_OR_NULL", "STATUS")
+                 "VALUE", "VALUE_OR_NULL", "STATUS", "GUARD")
 # The failure value of a STATUS result: the int compares to 0 so
 STATUS_FAILURES = ("ZERO", "NEGATIVE", "NONZERO")
 BUILDS = ("gil", "free_threaded", "all")
@@ -223,6 +223,7 @@ class Result:
     facts: frozenset[VFact] = frozenset()   # VALUE, VALUE_OR_NULL
     measure: str = ""                       # MEASURE; PATH: the path
     tests: tuple[tuple[frozenset[VFact], frozenset[VFact]], ...] = ()  # TEST
+    guards: tuple[frozenset[VFact], ...] = ()  # GUARD: per argument, on return
     reason: str = ""                        # CONTEXT
     null_iff: int = -1                      # VALUE: NULL exactly where argument k is
     moved: int = -1                         # VALUE(moved(k)): argument k's value and
@@ -315,6 +316,11 @@ def _parse_result(text: str) -> Result:
         return Result("MEASURE", measure=inner.strip())
     if (inner := _inner(text, "CONTEXT")) is not None:
         return Result("CONTEXT", reason=inner.strip().strip('"'))
+    if (inner := _inner(text, "GUARD")) is not None:
+        # The facts of each argument on the row's normal return, after its
+        # effects; its guard failure is a miss or deopt exit (F2)
+        return Result("GUARD", guards=tuple(frozenset(parse_fact(w, None) for w in e.split())
+                                            for e in _split_text(inner)))
     if (inner := _inner(text, "TEST")) is not None:
         tests = []
         for entry in _split_text(inner):
@@ -499,6 +505,12 @@ def parse_rows(text: str, source: str = "pycore_ir_components.h") -> dict[str, R
             if k >= 0 and (k >= len(row.args)
                            or row.args[k].mode not in ("borrowed", "consumed", "taken")):
                 raise ValueError(f"null_iff({k}): argument {k} is no value argument")
+            if row.result.shape == "GUARD" and not row.exits & {"miss", "deopt"}:
+                raise ValueError("GUARD(...) is the result of a row with a miss or deopt "
+                                 "exit")
+            if row.result.shape == "GUARD" and len(row.result.guards) > len(row.args):
+                raise ValueError(f"GUARD(...) states {len(row.result.guards)} arguments' "
+                                 f"facts, but the row has {len(row.args)}")
             k = row.result.moved
             if k >= 0 and (k >= len(row.args) or row.args[k].mode != "consumed"):
                 raise ValueError(f"moved({k}): argument {k} is not consumed, so its "
@@ -1121,6 +1133,22 @@ def _intersection(found: list[Facts]) -> Facts:
     return result
 
 
+def _bind_facts(facts: frozenset[VFact], args: list[list[str]],
+                views: Views) -> frozenset[VFact] | None:
+    """A row's facts with its in_bounds(k) bound to the name of argument k;
+    None if that argument names nothing"""
+    bound = set()
+    for f in facts:
+        if f.kind == "in_bounds" and f.arg.isdigit():
+            k = int(f.arg)
+            other = views.resolve(args[k]) if k < len(args) else None
+            if other is None:
+                return None
+            f = VFact("in_bounds", other)
+        bound.add(f)
+    return frozenset(bound)
+
+
 def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
                     holds: bool) -> tuple[Facts, str] | None:
     """The facts that hold of the names where cond has the value holds, and
@@ -1159,16 +1187,9 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
             if name is None:
                 return None
             # A row's in_bounds(k) names its argument k: here, its name
-            bound = set()
-            for f in found:
-                if f.kind == "in_bounds" and f.arg.isdigit():
-                    other = (views.resolve(args[int(f.arg)]) if int(f.arg) < len(args)
-                             else None)
-                    if other is None:
-                        return None
-                    f = VFact("in_bounds", other)
-                bound.add(f)
-            found = frozenset(bound)
+            found = _bind_facts(found, args, views)
+            if found is None:
+                return None
             facts[name] = implied(facts.get(name, frozenset()) | found)
         return facts, ""
     if call is not None and call[0].result.shape == "CONTEXT":
@@ -1628,6 +1649,20 @@ class OwnershipWalk:
                 if effect != "reads" and effect != "raises":
                     state.end_restart(f"`{t.text}`, which may {effect}")
 
+    def guard_results(self, tokens: list[Token], state: _State) -> None:
+        """The GUARD rows called among tokens: on their normal return, after
+        their effects, their facts hold of their arguments"""
+        views = self.views_at(state)
+        for tkn, args in _calls_in(tokens):
+            row = self.table.get(tkn.text)
+            if row is None or row.result.shape != "GUARD":
+                continue
+            for arg, facts in zip(args, row.result.guards):
+                name = views.resolve(arg)
+                facts = _bind_facts(facts, args, views)
+                if name is not None and facts:
+                    state.add_facts(name, facts)
+
     def reenter(self, state: _State, why: str) -> None:
         """A reentry site: a value left in a home may be replaced there (and
         the old one freed), so its facts die now, and those of the locals
@@ -1829,6 +1864,7 @@ class OwnershipWalk:
                 ["->"], ["."]):
             self.calls(toks, state)
             self.effects(toks, state)
+            self.guard_results(toks, state)
             if e > 0:
                 self.assignment(toks, texts, e, state)
             return state
@@ -2589,19 +2625,38 @@ def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...],
     against effects is the reader's: the record keeps the effects' order."""
     table = rows()
     walk = walk_of(uop, table, kills=False)
-    cond, reason = guard_condition(uop, site)
     views = Views(uop, table)
+    values = {i.name: f"v{i.value}" for i in inputs}
+
+    def recorded(name: str, facts) -> list[Fact]:
+        # A local's fact is recorded on the local, as the inference did
+        live = walk.exit.facts.get(name, frozenset()) if walk.exit else frozenset()
+        return [Fact(FACT_KIND[f.kind], values.get(name, name),
+                     values.get(f.arg, f.arg) if f.kind == "in_bounds" else f.record("").arg)
+                for f in facts if f in live]
+
+    row = table.get(site.text)
+    if row is not None and row.result.shape == "GUARD":
+        # A GUARD row's facts of its arguments, on its return (F2)
+        texts = [t.text for t in _tokens(uop)]
+        i = _tokens(uop).index(site)
+        args = _call(texts[i:_close(texts, i + 1) + 1], site.text) or []
+        result = []
+        for arg, facts in zip(args, row.result.guards):
+            name = views.resolve(arg)
+            facts = _bind_facts(facts, args, views)
+            if name is not None and facts:
+                result += recorded(name, sorted(facts))
+        return tuple(result), ""
+    cond, reason = guard_condition(uop, site)
     found = condition_facts(cond, views, table, holds=False)
     if found is None:
         site_facts(uop, site, table)        # refuses a condition without a reason
         return (), reason
     stated = _stated_facts(cond, views, table, False)
-    values = {i.name: f"v{i.value}" for i in inputs}
     result = []
     for name, facts in stated.items():
-        # A local's fact is recorded on the local, as the inference did
-        live = walk.exit.facts.get(name, frozenset()) if walk.exit else frozenset()
-        result += [f.record(values.get(name, name)) for f in facts if f in live]
+        result += recorded(name, facts)
     return tuple(result), reason or found[1]
 
 

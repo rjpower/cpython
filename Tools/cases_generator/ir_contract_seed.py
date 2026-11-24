@@ -360,6 +360,10 @@ def seed_rows(analysis, table, ctypes, macros, effects_of) -> tuple[list[SeedRow
         if (name in table or name in ir_contract.DSL_CONSTRUCTS
                 or ir_contract.CHECKED_ARITHMETIC.fullmatch(name)):
             continue
+        if all(name in ir_contract.with_slots(u, table) for u, _ in sites[name]):
+            # A local that holds a SLOT protocol's pointer at every call
+            # site (F6): the protocol's row declares the call
+            continue
         tables: list[str] = []
         arity = max(len(a) for _, a in sites[name])
         effects = set(effects_of.get(name, ()))
@@ -596,8 +600,9 @@ def seed_clauses(uop, facts: dict, table, overrides: dict) -> Clauses:
     exits |= {GUARD_EXIT[k] for k in facts["guard_kinds"]}
     c.exits = [e for e in EXIT_ORDER if e in exits]
     feedback = set()
+    slots = ir_contract.with_slots(uop, table)
     for tkn, _ in ir_contract.body_calls(uop):
-        row = table.get(tkn.text)
+        row = slots.get(tkn.text)
         if row is not None:
             feedback |= row.feedback
     c.feedback = [f"{m}({f})" for m, f in sorted(feedback)]

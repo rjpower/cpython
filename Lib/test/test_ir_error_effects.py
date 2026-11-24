@@ -138,6 +138,39 @@ class ErrorEffectTests(unittest.TestCase):
         self.assertEqual(ir_error_effects.HELPERS["_PyEval_GetAwaitable"].homes,
                          effect.UNKNOWN)
 
+    def test_a_failure_is_the_rows_raises(self):
+        # A helper that runs Python and reports failure (NULL, a negative
+        # status, a `raised` outcome) with an exception set raises; the error
+        # walk reads that effect from the row, and no signature carries it
+        rows = ir_contract.rows()
+        failing = [row.name for row in rows.values()
+                   if row.kind == "HELPER" and "runs_python" in row.effects
+                   and (row.result.shape in ("VALUE_OR_NULL", "STATUS")
+                        or any(case.raised for case in row.result.cases))]
+        self.assertGreater(len(failing), 40)
+        for name in failing:
+            with self.subTest(row=name):
+                self.assertIn("raises", rows[name].effects)
+        # A scalar status (-1, or NULL, with an exception set) is no shape
+        for name in ("_PyValue_Contains", "_PyValue_DelItem", "_PyValue_IsInstance",
+                     "_PyValue_SetAttr", "_PyValue_SetItem", "_PyValue_Size",
+                     "PyCell_NewValue", "PyObject_HasAttrWithError", "PyType_GenericAlloc",
+                     "value_dict_merge_uniq", "PyDict_PopValue", "PyDict_SetValue",
+                     "PyDict_Update", "PySet_New", "_PyDict_ContainsValue",
+                     "_PyDict_SetValue", "_PyDict_SetValue_Take2", "_PyList_AppendTakeValue",
+                     "_PyList_Extend", "_PyList_SliceSubscript", "_PySet_AddValueTakeRef",
+                     "_PySet_Contains", "_PySet_Update", "_Py_call_instrumentation_2args",
+                     "_Py_call_instrumentation_jump", "monitor_stop_iteration",
+                     "_PyEval_StoreName", "_PyEval_StoreSlice"):
+            with self.subTest(status=name):
+                self.assertIn("raises", rows[name].effects)
+        for name in ("_PyEval_GetAwaitable", "_PyValue_IsTrue", "_PyValue_Negative",
+                     "_PyEval_GetANext", "check_periodics", "_Py_Instrument",
+                     "_Py_call_instrumentation", "_Py_call_instrumentation_line",
+                     "_Py_call_instrumentation_instruction", "IR_COMPLETE_STEP"):
+            with self.subTest(carried=name):
+                self.assertTrue(ir_error_effects.HELPERS[name].may_fail)
+
     def test_helper_failure_and_both_explicit_routes_remain_distinct(self):
         instruction, summary = self.analyze("""
             PyObject *result = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(input));

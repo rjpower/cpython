@@ -59,11 +59,10 @@ class HelperEffect:
 @dataclass(frozen=True)
 class Signature:
     """What the rows cannot say of a call: the typed source's kinds, and a
-    result's ownership and shape.  Its effects, its failure through a row's
-    `raises`, its home and observer claims are the row's."""
+    result's ownership and shape.  Its effects, its failure (`raises`), its
+    home and observer claims are the row's."""
     inputs: tuple[Kind, ...]
     result: Kind
-    fails: bool = False
     result_owned: bool | None = None
     result_canonical: bool = False
     result_nonnull: bool = False
@@ -72,9 +71,8 @@ class Signature:
     steals: tuple[int, ...] = ()
 
 
-def _signature(inputs, result, fails=False, *, owned=None, canonical=False, nonnull=False,
-               steals=()):
-    return Signature(inputs, result, fails, owned, canonical, nonnull, steals)
+def _signature(inputs, result, *, owned=None, canonical=False, nonnull=False, steals=()):
+    return Signature(inputs, result, owned, canonical, nonnull, steals)
 
 
 # The typed subset's names for the observer protocol's values (a tuple, an
@@ -83,7 +81,7 @@ def _signature(inputs, result, fails=False, *, owned=None, canonical=False, nonn
 # its effects: reentry, steals, homes and observer (HOMES, OBSERVER).
 SIGNATURES = {
     "coro_awaitable_can_transfer": _signature((Kind.VALUE,), Kind.SCALAR),
-    "_PyEval_GetAwaitable": _signature((Kind.VALUE, Kind.SCALAR), Kind.OBJECT, True,
+    "_PyEval_GetAwaitable": _signature((Kind.VALUE, Kind.SCALAR), Kind.OBJECT,
                                        owned=True),
     "IS_PEP523_HOOKED": _signature((Kind.TSTATE,), Kind.SCALAR),
     "PyValue_DUP": _signature((Kind.VALUE,), Kind.VALUE),
@@ -95,7 +93,7 @@ SIGNATURES = {
     "PyExceptionInstance_Check": _signature((Kind.OBJECT,), Kind.SCALAR),
     "PyValue_IsInlineInt": _signature((Kind.VALUE,), Kind.SCALAR),
     "PyValue_IsInlineFloat": _signature((Kind.VALUE,), Kind.SCALAR),
-    "_PyValue_IsTrue": _signature((Kind.VALUE,), Kind.SCALAR, True),
+    "_PyValue_IsTrue": _signature((Kind.VALUE,), Kind.SCALAR),
     "PyValue_FromInlineInt": _signature((Kind.SCALAR,), Kind.VALUE,
         owned=True, canonical=True, nonnull=True),
     # The emitter requires current exact-container/bounds/anchor receipts
@@ -107,30 +105,30 @@ SIGNATURES = {
         owned=True, canonical=True, nonnull=True),
     "PyValue_FromNonNumberSteal": _signature((Kind.OBJECT,), Kind.VALUE,
         owned=True, canonical=True, nonnull=True, steals=(0,)),
-    **{name: _signature((Kind.VALUE,), Kind.VALUE, True, owned=True)
+    **{name: _signature((Kind.VALUE,), Kind.VALUE, owned=True)
        for name in ("_PyValue_Negative", "_PyValue_Positive", "_PyValue_Invert")},
     "PyValue_CLOSE": _signature((Kind.VALUE,), Kind.VOID),
     "PyValue_XCLOSE": _signature((Kind.VALUE,), Kind.VOID),
     "GETLOCAL": _signature((Kind.SCALAR,), Kind.VALUE),
     "PyTuple_GET_VALUE": _signature((Kind.TUPLE, Kind.SCALAR), Kind.VALUE),
-    "_PyEval_GetANext": _signature((Kind.OBJECT,), Kind.OBJECT, True, owned=True),
-    "check_periodics": _signature((Kind.TSTATE,), Kind.SCALAR, True),
-    "_Py_Instrument": _signature((Kind.CODE, Kind.INTERP), Kind.SCALAR, True),
+    "_PyEval_GetANext": _signature((Kind.OBJECT,), Kind.OBJECT, owned=True),
+    "check_periodics": _signature((Kind.TSTATE,), Kind.SCALAR),
+    "_Py_Instrument": _signature((Kind.CODE, Kind.INTERP), Kind.SCALAR),
     "_Py_atomic_load_uintptr_relaxed": _signature((Kind.ATOMIC_ADDRESS,), Kind.SCALAR),
     "FT_ATOMIC_LOAD_UINTPTR_ACQUIRE": _signature((Kind.ATOMIC_FIELD,), Kind.SCALAR),
     "_Py_call_instrumentation": _signature(
-        (Kind.TSTATE, Kind.SCALAR, Kind.FRAME, Kind.INSTR), Kind.SCALAR, True),
+        (Kind.TSTATE, Kind.SCALAR, Kind.FRAME, Kind.INSTR), Kind.SCALAR),
     "monitor_reraise": _signature((Kind.TSTATE, Kind.FRAME, Kind.INSTR), Kind.VOID),
     "PyErr_GivenExceptionMatches": _signature((Kind.OBJECT, Kind.OBJECT), Kind.SCALAR),
     "Py_NewRef": _signature((Kind.OBJECT,), Kind.OBJECT, owned=True),
     "_PyErr_SetRaisedException": _signature((Kind.TSTATE, Kind.OBJECT), Kind.VOID),
     # The macro has its own checked argument/terminal grammar below. Its
     # generated helper also owns the encoded input window and recipient.
-    "IR_COMPLETE_STEP": _signature((), Kind.VOID, True),
+    "IR_COMPLETE_STEP": _signature((), Kind.VOID),
     "_Py_call_instrumentation_line": _signature(
-        (Kind.TSTATE, Kind.FRAME, Kind.INSTR, Kind.INSTR), Kind.OBSERVED_OPCODE, True),
+        (Kind.TSTATE, Kind.FRAME, Kind.INSTR, Kind.INSTR), Kind.OBSERVED_OPCODE),
     "_Py_call_instrumentation_instruction": _signature(
-        (Kind.TSTATE, Kind.FRAME, Kind.INSTR), Kind.OBSERVED_OPCODE, True),
+        (Kind.TSTATE, Kind.FRAME, Kind.INSTR), Kind.OBSERVED_OPCODE),
     "_PyCode_GetOriginalOpcode": _signature((Kind.LINE_INFO, Kind.SITE_INDEX),
                                             Kind.OBSERVED_OPCODE),
     "INSTR_OFFSET_OF": _signature((Kind.INSTR,), Kind.SITE_INDEX),
@@ -171,7 +169,7 @@ def helper_effect(name: str, signature: Signature) -> HelperEffect:
         at for at, (arg, param) in enumerate(zip(row.args, row.params))
         if arg.mode == "consumed" and param.replace(" ", "") == "PyObject*")
     return HelperEffect(signature.inputs, signature.result, homes,
-                        signature.fails or "raises" in row.effects, callback,
+                        "raises" in row.effects, callback,
                         signature.result_owned, steals, signature.result_canonical,
                         signature.result_nonnull, row.observer != "none")
 

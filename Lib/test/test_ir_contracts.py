@@ -2258,6 +2258,21 @@ class VerifierTests(unittest.TestCase):
             with self.subTest(text), self.assertRaisesRegex(ValueError, message):
                 ir_contract._parse_result(text)
 
+    def test_a_case_field_is_a_set_of_kinds_of_word(self):
+        # Nonnull by default; `nullable` and a union with null both allow
+        # NULL, and nullable is no more than that
+        [case, _] = ir_contract._parse_result(
+            "CASES(status<0 a(owned) b(owned nullable) c(inline encoding(tagged_index|null)) "
+            "d(owned exact(PyLong_Type)) e(null), status>0 a(owned) b(owned) c(null) "
+            "d(null) e(null))").cases
+        kinds = {f: (spec.kinds, spec.nullable) for f, spec in case.values}
+        self.assertEqual(kinds, {
+            "a": ({"inline_float", "inline_int", "object"}, False),
+            "b": ({"inline_float", "inline_int", "null", "object"}, True),
+            "c": ({"null", "tagged_index"}, True),
+            "d": ({"inline_int", "object"}, False),
+            "e": ({"null"}, True)})
+
     def test_the_walk_follows_each_outcome(self):
         # _LOAD_FROM_DICT_OR_GLOBALS: an error, a missing key, or an owned value
         source = """

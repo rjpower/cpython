@@ -408,10 +408,16 @@ SIGN_TESTS = {"<": {"neg"}, "<=": {"neg", "zero"}, "==": {"zero"}, "!=": {"neg",
 
 @dataclass(frozen=True)
 class Spec:
-    "A value field of a CASES result in one case: its mode or null, and facts"
+    """A value field of a CASES result in one case: its mode or null, its
+    facts, and the kinds of word it may be (the facts' set, nonnull unless
+    the case spells `nullable` or a union with null)"""
     mode: str                   # owned, borrowed, inline, or null
     facts: frozenset[VFact] = frozenset()
-    nullable: bool = False
+    kinds: frozenset[str] = frozenset({"null"})
+
+    @property
+    def nullable(self) -> bool:
+        return "null" in self.kinds
 
 
 @dataclass(frozen=True)
@@ -455,7 +461,12 @@ def _parse_case(text: str) -> Case:
         facts = frozenset(parse_fact(x, None) for x in words[1:] if x != "nullable")
         if words[0] == "null" and (facts or nullable):
             raise ValueError(f"`{w}`: a null field has no facts")
-        values.append((m.group(1), Spec(words[0], facts, nullable)))
+        # `nullable` spells the field without its default, nonnull; a
+        # union with null (encoding(tagged_index|null)) is nullable as well
+        union = any(f.kind == "encoding" and "null" in _members(f) for f in facts)
+        kinds = (frozenset({"null"}) if words[0] == "null" else
+                 word_kinds(facts if nullable or union else facts | {NONNULL}))
+        values.append((m.group(1), Spec(words[0], facts, kinds)))
     return Case(tuple(signs), tuple(values), raised, frozenset(exact))
 
 
@@ -2653,13 +2664,13 @@ class OwnershipWalk:
             # An inline value owes nothing: it is no object
             facts = spec.facts | ({VFact(EXCLUDES, "object")} if spec.mode == "inline"
                                   else set())
-            if any(f.kind == "encoding" and "null" in _members(f) for f in spec.facts):
-                # A union with null says what the field is on either path
-                st.assign(field_, facts, None, name)
-            elif spec.nullable:
-                st.assign(field_, frozenset(), facts | {NONNULL}, name)
-            else:
+            if not spec.nullable:
                 st.assign(field_, facts | {NONNULL}, None, name)
+            else:
+                # The facts of a value that may be NULL hold once it is not;
+                # a union with null holds on either path
+                st.assign(field_, facts if "null" in word_kinds(spec.facts) else frozenset(),
+                          facts | {NONNULL}, name)
         st.no_exception = "" if case.raised else name
         return st
 

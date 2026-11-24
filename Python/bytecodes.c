@@ -3853,10 +3853,7 @@ dummy_func(
         }
 
         // The compiler loads fromlist from a constant: None or a tuple of str
-        outlined inst(IMPORT_NAME,
-                (level: consumed, fromlist: consumed assumed(object) by compiler -- res: owned))
-            effects(runs_python) exits(next, raise)
-        {
+        outlined inst(IMPORT_NAME, (level, fromlist -- res)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
             assert(PyValue_IsObject(fromlist));

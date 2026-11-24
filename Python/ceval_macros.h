@@ -338,9 +338,6 @@ do { \
 
 /* Tuple access macros */
 
-#ifndef Py_DEBUG
-#define GETITEM(v, i) _PyTuple_GET_OBJECT((v), (i))
-#else
 static inline PyObject *
 GETITEM(PyObject *v, Py_ssize_t i) {
     assert(PyTuple_Check(v));
@@ -348,7 +345,6 @@ GETITEM(PyObject *v, Py_ssize_t i) {
     assert(i < PyTuple_GET_SIZE(v));
     return _PyTuple_GET_OBJECT(v, i);
 }
-#endif
 
 /* Code access macros */
 

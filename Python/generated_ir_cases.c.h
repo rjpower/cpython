@@ -199,6 +199,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&PyErr_SetHandledException
               "PyErr_SetHandledException: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyException_GetTraceback), PyObject * (*)(PyObject *)),
               "PyException_GetTraceback: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(PyLazyImport_CheckExact((PyObject *){0})), int),
+              "PyLazyImport_CheckExact: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyObject_HasAttrWithError), int (*)(PyObject *, PyObject *)),
               "PyObject_HasAttrWithError: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyType_Check), int (*)(PyObject *)),
@@ -319,6 +321,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(LOCK_OBJECT((PyObject *){0
               "LOCK_OBJECT: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(UNLOCK_OBJECT((PyObject *){0})), void),
               "UNLOCK_OBJECT: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&GETITEM), PyObject * (*)(PyObject *, Py_ssize_t)),
+              "GETITEM: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyDict_New), PyObject * (*)(void)),
               "PyDict_New: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyDict_PopValue), int (*)(PyObject *, PyValueBorrow, PyValue *)),
@@ -8727,7 +8731,6 @@ ir_run_IMPORT_NAME(
             PyValue res;
             fromlist = window[1];
             level = window[0];
-            assert(PyValue_IsObject(fromlist));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
             assert(PyValue_IsObject(fromlist));
@@ -11191,6 +11194,7 @@ ir_run_LOAD_ATTR_SHAPE(
             {
                 uint32_t offset = fb->offset;
                 attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                assert(!PyValue_IsNull(attr));
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -11252,6 +11256,7 @@ ir_run_LOAD_ATTR_SHAPE_LOCAL_TEMP(
             {
                 uint32_t offset = fb->offset;
                 attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                assert(!PyValue_IsNull(attr));
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
@@ -11309,6 +11314,7 @@ ir_run_LOAD_ATTR_SHAPE_POLY(
             {
                 uint32_t offset = ir_shape_offset;
                 attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                assert(!PyValue_IsNull(attr));
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -11367,6 +11373,7 @@ ir_run_LOAD_ATTR_SHAPE_POLY_LOCAL_TEMP(
             {
                 uint32_t offset = ir_shape_offset;
                 attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                assert(!PyValue_IsNull(attr));
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
@@ -25670,6 +25677,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 uint32_t offset = fb->offset;
                 attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                assert(!PyValue_IsNull(attr));
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -25727,6 +25735,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 uint32_t offset = fb->offset;
                 attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                assert(!PyValue_IsNull(attr));
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }
@@ -25780,6 +25789,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 uint32_t offset = ir_shape_offset;
                 attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                assert(!PyValue_IsNull(attr));
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, owner);
             }
@@ -25834,6 +25844,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 uint32_t offset = ir_shape_offset;
                 attr = _PyObject_ShapeReadDup(_PyValue_AsKnownObjectBorrowPointer(owner), offset);
+                assert(!PyValue_IsNull(attr));
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = PyValue_NULL;
             }

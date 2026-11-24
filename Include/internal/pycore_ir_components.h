@@ -763,6 +763,10 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyList_AppendTakeValue, int, (PyListObject *, PyValue), \
         ARGS(scalar, consumed), SCALAR, EFFECTS(runs_python)) \
+    /* pycore_list.h: _PyList_AppendTakeValue with the store in line while \
+     * the list has room (G0a5 item 3) */ \
+    HELPER(_PyList_AppendTakeValueInline, int, (PyListObject *, PyValue), \
+        ARGS(scalar, consumed), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyList_Extend, PyObject *, (PyListObject *, PyObject *), \
         ARGS(scalar, object), SCALAR, EFFECTS(runs_python)) \

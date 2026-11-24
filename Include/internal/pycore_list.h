@@ -62,6 +62,24 @@ Py_VALUE_COMPAT(_PyList_AppendTakeValue)
 PyAPI_FUNC(int) _PyList_AppendTakeRef(PyListObject *self, PyObject *newitem);
 PyAPI_FUNC(int) _PyList_AppendTakeValue(PyListObject *self, PyValue value);
 PyAPI_FUNC(PyValue) _PyList_GetValue(PyListObject *self, Py_ssize_t index);
+
+/* LIST_APPEND's append: the store is in line while the list has room, and
+   growth is _PyList_AppendTakeValue's.  It consumes the value on success and
+   failure, as that does. */
+static inline int
+_PyList_AppendTakeValueInline(PyListObject *self, PyValue value)
+{
+#ifndef Py_GIL_DISABLED
+    Py_ssize_t size = Py_SIZE(self);
+    if (self->allocated > size) {
+        self->ob_item[size] = value;
+        _PyValue_CheckHome(value);
+        Py_SET_SIZE(self, size + 1);
+        return 0;
+    }
+#endif
+    return _PyList_AppendTakeValue(self, value);
+}
 /* Consumes a strong HeapSafe value on success and failure. NULL is permitted
    only for internal construction/clearing, not as a Python list element. */
 PyAPI_FUNC(int) _PyList_SetItemTakeValue(PyListObject *self, Py_ssize_t index,

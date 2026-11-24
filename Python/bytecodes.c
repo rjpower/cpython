@@ -1433,25 +1433,15 @@ dummy_func(
             _BINARY_OP_SUBSCR_INIT_CALL +
             _PUSH_FRAME;
 
-        inline_ok inst(LIST_APPEND, (list, unused[oparg-1], v -- list, unused[oparg-1])) {
+        inline_ok inst(LIST_APPEND,
+                (list: object, unused[oparg-1], v: consumed -- list, unused[oparg-1]))
+            effects(runs_python) exits(next, raise)
+        {
             PyValue item = TAKE(v);
             PyListObject *list_o = (PyListObject *)PyValue_AsKnownObjectBorrow(list);
-            int err = 0;
-#ifdef Py_GIL_DISABLED
-            err = _PyList_AppendTakeValue(list_o, item);
-#else
             // The store is in line while the list has room; growth is the
             // function's.
-            Py_ssize_t size = Py_SIZE(list_o);
-            if (list_o->allocated > size) {
-                list_o->ob_item[size] = item;
-                _PyValue_CheckHome(item);
-                Py_SET_SIZE(list_o, size + 1);
-            }
-            else {
-                err = _PyList_AppendTakeValue(list_o, item);
-            }
-#endif
+            int err = _PyList_AppendTakeValueInline(list_o, item);
             ERROR_IF(err < 0);
         }
 
@@ -2514,7 +2504,11 @@ dummy_func(
             str = PyValue_FromObjectSteal(str_o);
         }
 
-        outlined inst(BUILD_INTERPOLATION, (value, str, format[oparg & 1] -- interpolation)) {
+        outlined inst(BUILD_INTERPOLATION,
+                (value: consumed, str: consumed object, format[oparg & 1]: consumed
+                 -- interpolation: owned))
+            effects(runs_python, releases) exits(next, raise)
+        {
             assert(PyValue_IsObject(str));
             PyObject *str_o = PyValue_AsKnownObjectBorrow(str);
             int conversion = oparg >> 2;
@@ -2527,13 +2521,7 @@ dummy_func(
             }
             // The value may be a number: the interpolation holds its box
             PyObject *interpolation_o = _PyInterpolation_BuildValue(value, str_o, conversion, format_o);
-            // The handler clears the slots of the array before it closes
-            // the element, so the element moves to a C variable first
-            PyValue format_ref = (oparg & 1) ? format[0] : PyValue_NULL;
-            DEAD(format);
-            PyValue_XCLOSE(format_ref);
-            PyValue_CLOSE(str);
-            PyValue_CLOSE(value);
+            DECREF_INPUTS();
             ERROR_IF(interpolation_o == NULL);
             interpolation = PyValue_FromObjectSteal(interpolation_o);
         }

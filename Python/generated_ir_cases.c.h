@@ -337,6 +337,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyDict_SetValue_Take2), 
               "_PyDict_SetValue_Take2: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyList_AppendTakeValue), int (*)(PyListObject *, PyValue)),
               "_PyList_AppendTakeValue: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyList_AppendTakeValueInline), int (*)(PyListObject *, PyValue)),
+              "_PyList_AppendTakeValueInline: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyList_Extend), PyObject * (*)(PyListObject *, PyObject *)),
               "_PyList_Extend: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyList_SliceSubscript), PyObject * (*)(PyObject *, PyObject *)),
@@ -3181,13 +3183,21 @@ ir_run_BUILD_INTERPOLATION(
                 format_o = &_Py_STR(empty);
             }
             PyObject *interpolation_o = _PyInterpolation_BuildValue(value, str_o, conversion, format_o);
-            PyValue format_ref = (oparg & 1) ? format[0] : PyValue_NULL;
-            IR_CLEAR_SLOTS(&window[2], (oparg & 1));
-            PyValue_XCLOSE(format_ref);
-            window[1] = PyValue_NULL;
-            _PyValue_CLOSE_POINTER(str);
-            window[0] = PyValue_NULL;
-            PyValue_CLOSE(value);
+            PyValue tmp;
+            for (int _i = oparg & 1; --_i >= 0;) {
+                tmp = format[_i];
+                format[_i] = PyValue_NULL;
+                PyValue_CLOSE(tmp);
+            }
+            tmp = str;
+            str = PyValue_NULL;
+            IR_SET_TEMP(window[1], str);
+            _PyValue_CLOSE_POINTER(tmp);
+            tmp = value;
+            value = PyValue_NULL;
+            IR_SET_TEMP(window[0], value);
+            PyValue_CLOSE(tmp);
+            IR_CLEAR_SLOTS(&window[0], 2 + (oparg & 1));
             if (interpolation_o == NULL) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
@@ -10007,21 +10017,7 @@ ir_run_LIST_APPEND(
             ir_own_B = IR_DETACH(ir_word, B, v);
             PyValue item = IR_TAKEN_REQUIRED(v, ir_own_B);
             PyListObject *list_o = (PyListObject *)PyValue_AsKnownObjectBorrow(list);
-            int err = 0;
-            #ifdef Py_GIL_DISABLED
-            err = _PyList_AppendTakeValue(list_o, item);
-            #else
-
-            Py_ssize_t size = Py_SIZE(list_o);
-            if (list_o->allocated > size) {
-                list_o->ob_item[size] = item;
-                _PyValue_CheckHome(item);
-                Py_SET_SIZE(list_o, size + 1);
-            }
-            else {
-                err = _PyList_AppendTakeValue(list_o, item);
-            }
-            #endif
+            int err = _PyList_AppendTakeValueInline(list_o, item);
             if (err < 0) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
@@ -24684,21 +24680,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             ir_own_B = IR_DETACH(ir_word, B, v);
             PyValue item = IR_TAKEN_REQUIRED(v, ir_own_B);
             PyListObject *list_o = (PyListObject *)PyValue_AsKnownObjectBorrow(list);
-            int err = 0;
-            #ifdef Py_GIL_DISABLED
-            err = _PyList_AppendTakeValue(list_o, item);
-            #else
-
-            Py_ssize_t size = Py_SIZE(list_o);
-            if (list_o->allocated > size) {
-                list_o->ob_item[size] = item;
-                _PyValue_CheckHome(item);
-                Py_SET_SIZE(list_o, size + 1);
-            }
-            else {
-                err = _PyList_AppendTakeValue(list_o, item);
-            }
-            #endif
+            int err = _PyList_AppendTakeValueInline(list_o, item);
             if (err < 0) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }

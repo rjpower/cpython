@@ -36,16 +36,25 @@ def have_dict_key_versions():
     return _testinternalcapi.get_next_dict_keys_version() < limit
 
 
+def adaptive_names(f):
+    """The names of f's adaptive words.  A stack instruction that lowers to a
+    register instruction arm (BINARY_OP's addition: Add.Int, Add.Float,
+    Add.Text, Add.Extended, Add.Generic) is named by its arm."""
+    instructions = dis.get_instructions(f, adaptive=True)
+    names = {instruction.opname for instruction in instructions}
+    arms = {w[0] for w in _testinternalcapi.get_ir(f.__code__, True)
+            if w[0].startswith("Add.")}
+    if arms:
+        names.discard("BINARY_OP")
+    return names | arms
+
+
 class TestBase(unittest.TestCase):
     def assert_specialized(self, f, opname):
-        instructions = dis.get_instructions(f, adaptive=True)
-        opnames = {instruction.opname for instruction in instructions}
-        self.assertIn(opname, opnames)
+        self.assertIn(opname, adaptive_names(f))
 
     def assert_no_opcode(self, f, opname):
-        instructions = dis.get_instructions(f, adaptive=True)
-        opnames = {instruction.opname for instruction in instructions}
-        self.assertNotIn(opname, opnames)
+        self.assertNotIn(opname, adaptive_names(f))
 
 
 class TestLoadSuperAttrCache(unittest.TestCase):
@@ -1403,7 +1412,7 @@ class TestSpecializer(TestBase):
 
         binary_op_add_int()
         if int_producers:
-            self.assert_specialized(binary_op_add_int, "BINARY_OP_ADD_INT")
+            self.assert_specialized(binary_op_add_int, "Add.Int")
             self.assert_no_opcode(binary_op_add_int, "BINARY_OP")
 
         def binary_op_int_wide_inline():
@@ -1420,7 +1429,7 @@ class TestSpecializer(TestBase):
 
         binary_op_int_wide_inline()
         if int_producers:
-            self.assert_specialized(binary_op_int_wide_inline, "BINARY_OP_ADD_INT")
+            self.assert_specialized(binary_op_int_wide_inline, "Add.Int")
             self.assert_specialized(binary_op_int_wide_inline, "BINARY_OP_SUBTRACT_INT")
             self.assert_specialized(binary_op_int_wide_inline, "BINARY_OP_MULTIPLY_INT")
 
@@ -1437,7 +1446,7 @@ class TestSpecializer(TestBase):
                 self.assertEqual(c, 10000000000000000)
 
         binary_op_int_boxed()
-        self.assert_no_opcode(binary_op_int_boxed, "BINARY_OP_ADD_INT")
+        self.assert_no_opcode(binary_op_int_boxed, "Add.Int")
         self.assert_no_opcode(binary_op_int_boxed, "BINARY_OP_SUBTRACT_INT")
         self.assert_no_opcode(binary_op_int_boxed, "BINARY_OP_MULTIPLY_INT")
 
@@ -1448,7 +1457,7 @@ class TestSpecializer(TestBase):
                 self.assertEqual(c, "foobar")
 
         binary_op_add_unicode()
-        self.assert_specialized(binary_op_add_unicode, "BINARY_OP_ADD_UNICODE")
+        self.assert_specialized(binary_op_add_unicode, "Add.Text")
         self.assert_no_opcode(binary_op_add_unicode, "BINARY_OP")
 
         def binary_op_add_extend():
@@ -1498,7 +1507,7 @@ class TestSpecializer(TestBase):
         binary_op_add_extend()
         # Float arithmetic takes an int operand.
         if int_producers:
-            for opname in ("BINARY_OP_ADD_FLOAT", "BINARY_OP_SUBTRACT_FLOAT",
+            for opname in ("Add.Float", "BINARY_OP_SUBTRACT_FLOAT",
                            "BINARY_OP_MULTIPLY_FLOAT", "BINARY_OP_TRUEDIV_FLOAT"):
                 self.assert_specialized(binary_op_add_extend, opname)
             self.assert_no_opcode(binary_op_add_extend, "BINARY_OP")
@@ -1516,7 +1525,7 @@ class TestSpecializer(TestBase):
                 self.assertEqual(tuple_sum, (1, 2, None))
 
         binary_op_add_extend_sequences()
-        self.assert_specialized(binary_op_add_extend_sequences, "BINARY_OP_EXTEND")
+        self.assert_specialized(binary_op_add_extend_sequences, "Add.Extended")
         self.assert_no_opcode(binary_op_add_extend_sequences, "BINARY_OP")
 
         def binary_op_zero_division():

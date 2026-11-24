@@ -148,7 +148,7 @@ dummy_func(
         }
 
         outlined inst(MATERIALIZE_KWARGS, (--))
-            effects(runs_python) exits(next, raise)
+            effects(writes, allocates, raises) exits(next, raise)
         {
             assert(frame->pending_kwargs == IR_NO_DST ||
                    frame->pending_kwargs == oparg);
@@ -455,12 +455,22 @@ dummy_func(
             PyValue_CLOSE(receiver);
         }
 
-        tier1 inst(INSTRUMENTED_END_SEND, (receiver, index_or_null, value -- val)) {
+        tier1 inst(INSTRUMENTED_END_SEND,
+                (receiver: consumed assumed(object) by compiler_send_loop,
+                 index_or_null: closed, value: consumed -- val: moved(value)))
+            effects(runs_python) exits(next, raise)
+        {
+            // The generator's own check wants the test in the body, beside the
+            // assertion that the assumption generates
             assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
             // Taken before the monitoring call, which can run code
             PyValue held = TAKE(value);
-            if (PyGen_Check(receiver_o) || PyCoro_CheckExact(receiver_o)) {
+            int stops = PyGen_Check(receiver_o) || PyCoro_CheckExact(receiver_o);
+            (void)index_or_null;
+            DEAD(index_or_null);
+            PyValue_CLOSE(receiver);
+            if (stops) {
                 int err = monitor_stop_iteration(tstate, frame, this_instr, held);
                 if (err) {
                     PyValue_CLOSE(held);
@@ -480,9 +490,6 @@ dummy_func(
                 next_instr = dest;
             }
             val = held;
-            (void)index_or_null;
-            DEAD(index_or_null);
-            PyValue_CLOSE(receiver);
         }
 
         macro(UNARY_NEGATIVE) = _UNARY_NEGATIVE + POP_TOP;
@@ -1827,7 +1834,8 @@ dummy_func(
         };
 
         specializing op(_SPECIALIZE_SEND,
-                (receiver, unused, unused -- receiver, unused, unused))
+                (receiver: assumed(object) by compiler_send_loop, unused, unused
+                 -- receiver, unused, unused))
             effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
         {
             #if ENABLE_SPECIALIZATION
@@ -2100,7 +2108,9 @@ dummy_func(
             }
         }
 
-        tier1 op(_MONITOR_END_ASYNC_FOR, ( -- )) {
+        tier1 op(_MONITOR_END_ASYNC_FOR, ( -- ))
+            effects(runs_python) exits(next, raise)
+        {
             assert(_PyIR_BaseOpcode(_PyIR_RealHandler(frame, JUMP_TARGET(oparg))) == SEND);
             INSTRUMENTED_JUMP(JUMP_TARGET(oparg), this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);
         }
@@ -4345,7 +4355,8 @@ dummy_func(
             FOR_ITER_DICT_ITEMS,
         };
 
-        specializing op(_SPECIALIZE_FOR_ITER, (iter, null_or_index -- iter, null_or_index))
+        specializing op(_SPECIALIZE_FOR_ITER,
+                (iter: assumed(object) by GET_ITER, null_or_index -- iter, null_or_index))
             effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
         {
             #if ENABLE_SPECIALIZATION
@@ -6248,14 +6259,16 @@ dummy_func(
         macro(INSTRUMENTED_POP_JUMP_IF_FALSE) =
             unused/1 + unused/2 + _TO_BOOL + _INSTRUMENTED_POP_JUMP_IF_FALSE;
 
-        inst(INSTRUMENTED_POP_JUMP_IF_NONE, (unused/1, value -- )) {
+        inst(INSTRUMENTED_POP_JUMP_IF_NONE, (unused/1, value: consumed -- ))
+            effects(runs_python) exits(next, branch, raise)
+        {
             int jump = PyValue_IsNone(value);
+            // None owes nothing; any other value is closed before the event
+            PyValue_CLOSE(value);
             if (jump) {
-                DEAD(value);
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
             }
             else {
-                PyValue_CLOSE(value);
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
             }
         }
@@ -6298,14 +6311,16 @@ dummy_func(
             }
         }
 
-        inst(INSTRUMENTED_POP_JUMP_IF_NOT_NONE, (unused/1, value -- )) {
+        inst(INSTRUMENTED_POP_JUMP_IF_NOT_NONE, (unused/1, value: consumed -- ))
+            effects(runs_python) exits(next, branch, raise)
+        {
             int jump = !PyValue_IsNone(value);
+            // None owes nothing; any other value is closed before the event
+            PyValue_CLOSE(value);
             if (jump) {
-                PyValue_CLOSE(value);
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT, _PyIR_EDGE_TAKEN);
             }
             else {
-                DEAD(value);
                 IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
             }
         }
@@ -6329,7 +6344,9 @@ dummy_func(
          * lowering (Python/flowgraph.c, _PyCfg_FromCode()) folds EXTENDED_ARG,
          * drops NOT_TAKEN and splits the superinstructions.  The stack
          * effects are the compiler's. */
-        tier1 inst(EXTENDED_ARG, ( -- )) {
+        tier1 inst(EXTENDED_ARG, ( -- ))
+            effects() exits(next)
+        {
             assert(oparg);
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
@@ -6390,6 +6407,9 @@ dummy_func(
             frame->return_pc = next_instr;
         }
 
+        // The error labels are one routine, _PyEval_ProcessError (its row has
+        // the evidence), entered at an ingress: a body's `goto error` and
+        // ERROR_IF are the word's raise exit at that site (G0c8 review).
         label(error) {
             IR_PROCESS_ERROR(RAISE, 0);
         }
@@ -6410,6 +6430,10 @@ dummy_func(
             IR_PROCESS_ERROR(THROW, 0);
         }
 
+        // A frame starts: the recursion check (_Py_EnterRecursivePy, whose row
+        // says it raises RecursionError), and on failure the unwind that ends
+        // the frame without a traceback entry; then the first word, which
+        // skips a RESUME that has nothing to do (G0c8 review).
         spilled label(start_frame) {
             int too_deep = _Py_EnterRecursivePy(tstate);
             if (too_deep) {

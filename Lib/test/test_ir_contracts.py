@@ -136,16 +136,43 @@ class SliceTests(unittest.TestCase):
                 inferred -= TABLE_OVER_DECLARED.get(name, set())
                 self.assertLessEqual(inferred - {"next"}, set(table[name].exits))
 
+    # The reviewed corrections of G0c, each listed with its evidence in the
+    # batch's differences.md and in the commit that made it.  Batch 8:
+    # MATERIALIZE_KWARGS is PyDict_New and one store, which run no Python;
+    # INSTRUMENTED_JUMP takes PROCESS_ERROR_AT when the event fails, so
+    # _MONITOR_END_ASYNC_FOR may raise
+    LISTED_DIFFERENCES = [
+        'MATERIALIZE_KWARGS.record.format.runs_code: inferred true, declared false',
+        'MATERIALIZE_KWARGS.record.uops[0].effects: inferred 6 entries '
+        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
+        '"READS_HEAP", "WRITES_HEAP"], declared 3 ["ALLOCATES", "MAY_RAISE", '
+        '"WRITES_HEAP"]',
+        'INSTRUMENTED_END_ASYNC_FOR/_MONITOR_END_ASYNC_FOR: declares exits(next, '
+        'raise), the record has next',
+    ]
+
+    # Batch 5: the assume op of `iter: assumed(object) by GET_ITER` in the
+    # leaf IR of the two iterator guards
+    LISTED_LEAF_DIFFERENCES = [
+        ("FOR_ITER_LIST.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
+        ("FOR_ITER_TUPLE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
+    ]
+
     def test_declarations_equal_the_inference(self):
         with cases.handle_stderr():
             lines = ir_contract_diff.report(str(BYTECODES))
-        # The reviewed differences (G0c): the assume op of `iter: assumed(object)
-        # by GET_ITER` in the leaf IR of the two iterator guards
-        listed = ["FOR_ITER_LIST.record.uops[0].leaf.blocks[0].ops:",
-                  "FOR_ITER_TUPLE.record.uops[0].leaf.blocks[0].ops:"]
-        self.assertEqual([line.split(" ")[0] for line in lines[:-1]], listed)
-        for line in lines[:-1]:
-            self.assertIn('"kind": "assume"', line)
+        # Every reported line is a reviewed difference: an exact line
+        # (LISTED_DIFFERENCES) or a long leaf-IR line named by its prefix and
+        # a substring it must contain (LISTED_LEAF_DIFFERENCES)
+        reported = lines[:-1]
+        exact = [line for line in reported if line in self.LISTED_DIFFERENCES]
+        self.assertCountEqual(exact, self.LISTED_DIFFERENCES)
+        leaf = [line for line in reported if line not in self.LISTED_DIFFERENCES]
+        self.assertCountEqual([line.split(" ")[0] for line in leaf],
+                              [prefix for prefix, _ in self.LISTED_LEAF_DIFFERENCES])
+        needs = dict(self.LISTED_LEAF_DIFFERENCES)
+        for line in leaf:
+            self.assertIn(needs[line.split(" ")[0]], line)
         self.assertRegex(lines[-1], r"^\d+ handlers compared; \d+ of \d+ uops declared$")
 
     def test_component_checks_are_generated(self):

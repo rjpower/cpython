@@ -477,23 +477,23 @@ _PyFb_AdvanceCounter(_PyFbHeader *fb)
     fb->counter = advance_backoff_counter(fb->counter);
 }
 
+/* Keep the site's counter from triggering while an instrumented twin runs the
+ * word, so that the specializer does not overwrite the instrumentation.  A
+ * function, not a macro, so its row (pycore_ir_components.h) is type checked;
+ * the name is the one the generator's tables use. */
+static inline void
+PAUSE_ADAPTIVE_COUNTER(_PyFbHeader *fb)
+{
+    if (fb == NULL) {
+        return;
+    }
 #ifdef Py_GIL_DISABLED
-#define PAUSE_ADAPTIVE_COUNTER(FB) \
-    do { \
-        _PyFbHeader *fb_ = (FB); \
-        if (fb_ != NULL && !backoff_counter_is_unreachable(fb_->counter)) { \
-            fb_->counter = pause_backoff_counter(fb_->counter); \
-        } \
-    } while (0);
-#else
-#define PAUSE_ADAPTIVE_COUNTER(FB) \
-    do { \
-        _PyFbHeader *fb_ = (FB); \
-        if (fb_ != NULL) { \
-            fb_->counter = pause_backoff_counter(fb_->counter); \
-        } \
-    } while (0);
+    if (backoff_counter_is_unreachable(fb->counter)) {
+        return;
+    }
 #endif
+    fb->counter = pause_backoff_counter(fb->counter);
+}
 
 /* The sense and the distance of a fused compare-and-jump, from the arg of
  * its entry and its word (Include/internal/pycore_ir.h) */

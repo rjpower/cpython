@@ -98,11 +98,18 @@
     /* Static immortal values (pycore_value.h): None, True and False are \
      * their static objects' addresses tagged Py_TAG_REFCNT, which no count \
      * changes, and NULL is bits 0 */ \
+    /* Evidence (G0c8): pycore_value.h:490-493: PyValue_None, PyValue_True and \
+     * PyValue_False are `{.bits = (uintptr_t)&_Py_NoneStruct | Py_TAG_REFCNT}` and its \
+     * twins: the address of a static immortal object, tagged as an immortal reference. \
+     * No count ever changes, so each is `inline` (owes nothing).  PyValue_NULL_BITS is 0 \
+     * (pycore_value.h:249), the `null` fact. */ \
     CONSTANT(PyValue_None, VALUE(inline exact(_PyNone_Type))) \
     CONSTANT(PyValue_True, VALUE(inline exact(PyBool_Type))) \
     CONSTANT(PyValue_False, VALUE(inline exact(PyBool_Type))) \
     CONSTANT(PyValue_NULL, VALUE(inline null)) \
     /* Static objects that guards compare by address */ \
+    /* Evidence (G0c8): Include/object.h:391 `PyAPI_DATA(PyTypeObject) PySuper_Type`: a static \
+     * type object, compared by address (LOAD_SUPER_ATTR's guard). */ \
     CONSTANT(PySuper_Type, OBJECT(PyTypeObject)) \
     /* Tag tests: bits in, no memory.  PyValue_IsNull is bits == 0: NULL \
      * exactly when it holds */ \
@@ -331,7 +338,12 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PyValue_FromObjectSteal, PyValue, (PyObject *), \
         ARGS(object), VALUE(owned), EFFECTS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Evidence (G0c8): pycore_value.h VALUE_CHECK_FUNC(Gen): PyValue_IsPointerSpace(value) \
+     * && PyGen_Check(object), i.e. PyObject_TypeCheck(op, &PyGen_Type): Py_IS_TYPE, else \
+     * PyType_IsSubtype, which walks tp_mro (a read; no callback, no allocation, no \
+     * exception).  A NULL or inline word is not pointer space and answers false, so the \
+     * argument needs no `nonnull`.  The answer is a scalar: a subtype fact on a true \
+     * result would be a heap fact (the MRO can change) and no uop uses one. */ \
     HELPER(PyValue_GenCheck, bool, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(reads)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -564,9 +576,12 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(CALL_STAT_INC, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from a C macro (no static check), ceval_macros.h, ir_records.effect_sites */ \
-    MACRO(PAUSE_ADAPTIVE_COUNTER, \
-        ARGS(scalar), SCALAR, EFFECTS(), EXITS(), FEEDBACK(write(counter))) \
+    /* Evidence (G0c8): ceval_macros.h:481: stores pause_backoff_counter(fb->counter) into the \
+     * entry header (nothing for NULL; the free-threaded build skips unreachable \
+     * counters).  A write of the counter only.  It was a do-while C macro; it is now the static inline function \
+     * of that name (ceval_macros.h), so the row is type checked. */ \
+    HELPER(PAUSE_ADAPTIVE_COUNTER, void, (_PyFbHeader *), \
+        ARGS(scalar), NONE, EFFECTS(writes), FEEDBACK(write(counter))) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PyCell_NewValue, PyObject *, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
@@ -678,7 +693,9 @@
      * uop caller is _POP_EXCEPT (G0a5) */ \
     MACRO(Py_XSETREF, \
         ARGS(scalar, consumed object), NONE, EFFECTS(releases), EXITS()) \
-    /* seeded from ir_leaf.ERASED */ \
+    /* Evidence (G0c8): ceval_macros.h:255-257: in the GIL build the macro is empty (no \
+     * statement); in the free-threaded build it reports the thread's quiescent state to \
+     * the QSBR reclaimer, which this scoped GIL product never builds. */ \
     INTRINSIC(QSBR_QUIESCENT_STATE, ARGS(scalar), NONE, BUILD(gil)) \
     /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
     MACRO(SYNC_SP, \
@@ -692,7 +709,9 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyCell_SwapValue, PyValue, (PyCellObject *, PyValue), \
         ARGS(scalar, consumed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Evidence (G0c8): pycore_instruments.h:161: `line_data->data[index * bytes_per_entry]`, \
+     * a read of the code's monitoring line data.  No callee; the caller (INSTRUMENTED_LINE \
+     * while tracing) passes the index of this_instr. */ \
     HELPER(_PyCode_GetOriginalOpcode, uint8_t, (_PyCoLineInstrumentationData *, int), \
         ARGS(scalar, scalar), SCALAR, EFFECTS(reads)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -758,7 +777,9 @@
      * returns 0 or 1; no failure, no allocation, no callback.                */ \
     HELPER(_PyUnicode_Equal, int, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(reads)) \
-    /* seeded from ir_leaf.ERASED */ \
+    /* Evidence (G0c8): pycore_emscripten_signal.h:25-26: the macro is empty outside \
+     * __EMSCRIPTEN__, the only build that polls browser signals; the GIL x86-64 \
+     * product has no statement here. */ \
     INTRINSIC(_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY, ARGS(), NONE, BUILD(gil)) \
     /* Include/internal/pycore_object.h defines a static inline function, \
      * but Python/ceval.h #undefs it and redefines it as a do { } while (0) \
@@ -986,6 +1007,9 @@
 #define _PyIR_COMPONENTS_SPECIALIZATION(PRIMITIVE, HELPER, MACRO) \
     /* The header of the word's feedback entry: an address, which each \
      * generator expands for its form (ir_generator.IR_INSTRUCTION_MACROS) */ \
+    /* Evidence (G0c8): the generator's expansion (ir_generator.IR_INSTRUCTION_MACROS): \
+     * `((_PyFbHeader *)fb)`, the handler's local `fb`, loaded from the word's feedback \
+     * entry before the handler body runs.  It computes an address and reads no heap. */ \
     MACRO(FB_COUNTER, ARGS(), SCALAR, EFFECTS(), EXITS()) \
     /* BINARY_OP_EXTEND's descriptor (pycore_code.h): its cache operand, \
      * typed, a pointer along the path binary_op_descr; the action it \
@@ -1004,85 +1028,156 @@
           ON(binary_op_descr), SLOT(binaryopactionfunc), EFFECTS(reads)) \
     /* The counter of an entry header (Python/ceval_macros.h): a test of \
      * it, and its advance; NULL has no counter */ \
-    PRIMITIVE(_PyFb_CounterTriggers, int, (_PyFbHeader *), \
+    /* Evidence (G0c8): ceval_macros.h `_PyFb_CounterTriggers`: `fb != NULL && \
+     * backoff_counter_triggers(fb->counter)`: one read of the entry header's counter \
+     * (NULL header: never triggers).  No callee that runs code or raises.  It has no \
+     * leaf model and no lowering: the specializing ops that call it are not leaf), \
+     * so it is a HELPER row, not a PRIMITIVE (V11). */ \
+    HELPER(_PyFb_CounterTriggers, int, (_PyFbHeader *), \
               ARGS(scalar), SCALAR, EFFECTS(reads), FEEDBACK(read(counter))) \
-    PRIMITIVE(_PyFb_AdvanceCounter, void, (_PyFbHeader *), \
+    /* Evidence (G0c8): ceval_macros.h `_PyFb_AdvanceCounter`: stores \
+     * advance_backoff_counter(fb->counter) into the header (nothing for a NULL header; \
+     * the free-threaded build also skips unreachable counters).  One write of the \
+     * feedback entry's counter; no callee that runs code or raises.  Like \
+     * _PyFb_CounterTriggers it has no leaf model or lowering: a HELPER row. */ \
+    HELPER(_PyFb_AdvanceCounter, void, (_PyFbHeader *), \
               ARGS(scalar), NONE, EFFECTS(writes), FEEDBACK(write(counter))) \
-    /* Python/ceval_macros.h: a load and test of tstate->eval_breaker */ \
+    /* Evidence (G0c8): ceval_macros.h: a relaxed load of tstate->eval_breaker masked with \
+     * _PY_EVAL_EVENTS_MASK.  No callee but the atomic load; it neither runs code nor \
+     * raises, and it is the fast path of every periodic check.  It has a leaf model \
+     * (ir_leaf.py) and a lowering (jit_lower.c), so it stays a PRIMITIVE. */ \
     PRIMITIVE(_Py_EvalBreakerHasEvents, bool, (PyThreadState *), \
               ARGS(tstate), CONTEXT("the thread's eval breaker"), EFFECTS(reads)) \
     /* _Py_HandlePending (Python/ceval_gil.c): stop-the-world, signal \
      * handlers and pending calls (Python code), the collector (finalizers); \
      * -1 with an exception set */ \
+    /* Evidence (G0c8): ceval_gil.c:1365: the checks it makes behind the eval breaker's bits: \
+     * stop-the-world (the thread suspends and re-attaches: other threads run), pending \
+     * signals (handle_signals: Python signal handlers), pending calls (Python), the \
+     * scheduled collector (_Py_RunGC: finalizers and weakref callbacks), the borrow \
+     * release (_PyBorrowScope_Exit).  Each may run Python, which may \
+     * rewrite the frame's homes and instrumentation; an error is -1 with an exception \
+     * set.  `polls` records that the eval breaker is the trigger. */ \
     HELPER(_Py_HandlePending, int, (PyThreadState *), \
            ARGS(tstate), STATUS(NEGATIVE), \
            EFFECTS(reads, writes, allocates, raises, releases, runs_python, polls)) \
-    /* The specializers rewrite the word's handler and its feedback entry \
-     * from the operands (Python/specialize.c).  Not reviewed: the effects \
-     * are today's inference (all of them).  Their transitive callees \
-     * include feedback-table allocation and, for BINARY_OP_SUBSCR_GETITEM, \
-     * specialize_subscr_getitem -> prepare_function_for_inline -> \
-     * _PyCode_GetExec (allocation, lowering and its failure handling); \
-     * G0c reviews them with that evidence */ \
+    /* Evidence (G0c8), for every _Py_Specialize_* row: Python/specialize.c.  A specializer \
+     * reads the operands (borrowed; none is closed or moved), looks up the type and its \
+     * dicts (_PyType_Lookup*: a dict lookup that can compare a non-str key of equal \
+     * hash, which runs __eq__), may lower a callee's code (_PyCode_GetExec, which \
+     * allocates; prepare_function_exec clears its failure with PyErr_Clear, which \
+     * releases the exception object and so may run a finalizer), registers dict \
+     * watchers (PyDict_Watch) and releases the references it took (Py_DECREF of a \
+     * looked-up __init__ or descriptor).  Then it writes the word's handler and the \
+     * site's feedback entry (set_counter, specialize_handler).  It raises nothing: a \
+     * failure leaves the generic word and sets the counter backoff.  The effect is \
+     * `runs_python` (a lookup callback or a finalizer can run code and rewrite frame \
+     * homes); the feedback is read(entry) (the cache fields it checks), write(entry) \
+     * and write(handler).  The operands are `borrowed`: PyValue operands are views \
+     * (the guards that cached them are the specialized words'). \
+     * BinaryOp also reaches specialize_subscr_getitem -> prepare_function_for_inline -> \
+     * _PyCode_GetExec for BINARY_OP_SUBSCR_GETITEM; its `PyValue *` out argument is \
+     * the frame's homes (LOCALS_ARRAY), read to find the operands' slots. */ \
     HELPER(_Py_Specialize_BinaryOp, void, \
            (PyValueBorrow, PyValueBorrow, _PyInstr *, int, PyValue *), \
            ARGS(borrowed, borrowed, scalar, scalar, scalar), NONE, \
            EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the sequence's type and \
+     * size (tuple, list); an inline operand is refused before any object access. */ \
     HELPER(_Py_Specialize_UnpackSequence, void, (PyValue, _PyInstr *, int), \
            ARGS(borrowed, scalar, scalar), NONE, EFFECTS(runs_python), \
            FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
+    /* Evidence (G0c8): the generator's expansion `_PyIR_FbHeaderOf(frame, instr, handler)` \
+     * (ceval_macros.h:1163): `_PyIR_InstrFeedback(code, exec, instr)`, which indexes the \
+     * code's feedback-index table and the executing copy's entry array (ir.c:705) and \
+     * returns an address, or NULL for a site without an entry.  Both tables are \
+     * interpreter structures that no Python code or specializer replaces for a live \
+     * word; the call reads no object, writes nothing and cannot raise. */ \
     MACRO(FB_HEADER_OF, \
         ARGS(scalar, scalar), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
+    /* Evidence (G0c8): the generator's expansion `_PyIR_OriginalHandler(frame, this_instr, op)` \
+     * (ir.c:795): `_PyCode_HandlerFor`, which reads the code object's words (never \
+     * rewritten: pycore_ir.h:841) and the handler format tables, and calls \
+     * _PyIR_GeneratorBoundaryHandler (a table lookup; Py_FatalError on a missing \
+     * entry, not a raise).  No object read, no write, no raise. */ \
     MACRO(ORIGINAL_HANDLER, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Evidence (G0c8): pycore_ir.h:581: `opcode in range && (_PyIR_Formats[opcode].effects & \
+     * _PyIR_SPECIALIZES)`, a read of the static const format table.  That table is not \
+     * heap state (nothing rewrites it), so the row reads nothing: `reads` is removed. */ \
     HELPER(_PyFb_HasEntry, int, (int), \
-        ARGS(scalar), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+        ARGS(scalar), SCALAR, EFFECTS()) \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. specialize_class_call looks up \
+     * __init__ (_PyType_LookupValueAndVersion) and releases it, and lowers it \
+     * (prepare_function_for_inline); specialize_py_call lowers the callee's code. */ \
     HELPER(_Py_Specialize_Call, void, (PyValue, PyValue, _PyInstr *, int), \
         ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the callee and its \
+     * argument tuple and builds the binding plan (_PyBindPlan_Init); no lowering. */ \
     HELPER(_Py_Specialize_CallFunctionEx, void, (PyValue, PyValue, _PyInstr *), \
         ARGS(borrowed, borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. specialize_py_call_kw / \
+     * specialize_keyword_binding build a binding plan (_PyBindPlan_Init) and lower \
+     * the callee. */ \
     HELPER(_Py_Specialize_CallKw, void, (PyValue, PyValue, PyValue, _PyInstr *, int), \
         ARGS(borrowed, borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the operands' types and \
+     * inline-number tags; no lookup. */ \
     HELPER(_Py_Specialize_CompareOp, void, (PyValueBorrow, PyValueBorrow, _PyInstr *, int), \
         ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the container's type and \
+     * its tp_value.contains slot. */ \
     HELPER(_Py_Specialize_ContainsOp, void, (PyValueBorrow, PyValueBorrow, _PyInstr *), \
         ARGS(borrowed, borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the iterator's type and \
+     * iteration slots, and classifies the failure \
+     * (_PySpecialization_ClassifyIterator). 
+     * The iterator is taken as an object without a test (PyValue_AsKnownObjectBorrow; GET_ITER always leaves one): the row requires `object`. */ \
     HELPER(_Py_Specialize_ForIter, void, (PyValue, PyValue, _PyInstr *, int), \
-        ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+        ARGS(borrowed object, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the iterable's type and \
+     * iteration slots (_PyType_IteratesByIndex, tp_iter); \
+     * specialize_iter_generator looks up __iter__ without allocating \
+     * (_PyType_TryLookupValueNoAlloc) and lowers a generator function's code \
+     * (prepare_function_exec). */ \
     HELPER(_Py_Specialize_GetIter, void, (PyValue, _PyInstr *), \
         ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. The attribute lookups \
+     * (specialize_instance_load_attr, specialize_class_load_attr, module and class \
+     * paths) read type and instance dicts and shapes and watch dicts. */ \
     HELPER(_Py_Specialize_LoadAttr, void, (PyValueBorrow, _PyInstr *, PyObject *), \
         ARGS(borrowed, scalar, object), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. \
+     * specialize_load_global_lock_held reads the globals' and builtins' keys under \
+     * their critical sections and PyDict_Watch es both; for a call it may lower \
+     * the function's code. */ \
     HELPER(_Py_Specialize_LoadGlobal, void, (PyObject *, PyObject *, _PyInstr *, PyObject *), \
         ARGS(object, object, scalar, object), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Compares the global `super` \
+     * with PySuper_Type by address and tests the class's type flag; no lookup and \
+     * no lowering. */ \
     HELPER(_Py_Specialize_LoadSuperAttr, void, (PyValue, PyValue, _PyInstr *, int), \
         ARGS(borrowed, borrowed, scalar, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. specialize_truth reads the \
+     * value's type and selects one handler from a table. */ \
     HELPER(_Py_Specialize_PopJumpIf, void, (PyValueBorrow, _PyInstr *), \
         ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. Reads the receiver's type and \
+     * its _tp_iteritem slot; no lookup and no lowering. 
+     * The receiver is taken as an object without a test (PyValue_AsKnownObjectBorrow; the send loop's receiver is always one): the row requires `object`. */ \
     HELPER(_Py_Specialize_Send, void, (PyValue, _PyInstr *), \
-        ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+        ARGS(borrowed object, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. The instance, slot and dict- \
+     * hint paths read shapes and keys (specialize_dict_access), as for loads. */ \
     HELPER(_Py_Specialize_StoreAttr, void, (PyValueBorrow, _PyInstr *, PyObject *), \
         ARGS(borrowed, scalar, object), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. store_subscr_fail_kind and \
+     * _PyType_LookupRef(__setitem__) (released with Py_XDECREF) classify the \
+     * container. */ \
     HELPER(_Py_Specialize_StoreSubscr, void, (PyValueBorrow, PyValueBorrow, _PyInstr *), \
         ARGS(borrowed, borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* seeded from the C prototype, the specializing annotation, G0a's specializer rows, ir_records.effect_sites */ \
+    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. specialize_truth reads the \
+     * value's type and selects one handler from a table. */ \
     HELPER(_Py_Specialize_ToBool, void, (PyValue, _PyInstr *), \
         ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler)))
 
@@ -1095,6 +1190,15 @@
      * (releases), pops frames that do not handle the exception \
      * (switches_frame), and either returns the handler's word in the frame \
      * that handles it (jump) or leaves the evaluator (exit) */ \
+    /* Evidence (G0c8): ceval.c:2253, reached only through IR_PROCESS_ERROR (PROCESS_ERROR_AT): \
+     * for the ingress it records the traceback (PyTraceBack_Here allocates), runs \
+     * monitor_throw, _PyEval_MonitorRaise, monitor_handled and monitor_unwind (callbacks: \
+     * Python), looks up the exception table, clears the frame's scratch slots down to the \
+     * handler's (error_clear_slots: releases, finalizers), writes the exception and lasti \
+     * homes (_PyFrame_WriteHome), and pops frames that do not handle the exception \
+     * (switches_frame; the frames' locals are released).  It returns the handler's \
+     * word (jump) or leaves the evaluator with the exception (exit).  It never returns \
+     * to the word that raised. */ \
     ROUTINE(_PyEval_ProcessError, _PyIRErrorResult, \
             (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, uint32_t), \
             ARGS(tstate, frame, scalar, scalar), SCALAR, \
@@ -1102,8 +1206,15 @@
     /* start_frame (Python/ceval_macros.h): the recursion check, which \
      * counts down the thread's remaining depth; nonzero \
      * with RecursionError set */ \
+    /* Evidence (G0c8): ceval_macros.h: decrements tstate->py_recursion_remaining (a write) \
+     * and, only at the limit, calls _Py_CheckRecursiveCallPy (ceval.c:1038): it raises \
+     * RecursionError with _PyErr_Format (allocates the exception and its message, and \
+     * chains the exception context, which may release the old context), or \
+     * Py_FatalError.  The exception types are static C types: no Python runs.  Nonzero \
+     * means the error is set.  `releases` is added: the context chain of \
+     * _PyErr_SetObject releases a replaced context. */ \
     HELPER(_Py_EnterRecursivePy, int, (PyThreadState *), \
-           ARGS(tstate), STATUS(NONZERO), EFFECTS(writes, allocates, raises))
+           ARGS(tstate), STATUS(NONZERO), EFFECTS(writes, allocates, raises, releases))
 
 /* Calls and frames */
 #define _PyIR_COMPONENTS_CALLS(PRIMITIVE, HELPER, MACRO) \
@@ -1139,9 +1250,15 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyFrame_GetFunction, PyFunctionObject *, (_PyInterpreterFrame *), \
         ARGS(frame), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Evidence (G0c8): frame.c:106: for a pending kwargs slot, PyDict_New and a store of the \
+     * new dict's word into frame->base[slot] (a home write), then pending_kwargs is cleared. \
+     * PyDict_New allocates (a free-list pop or a GC allocation; the collector is only \
+     * scheduled by _PyObject_GC_Link, never run here: _Py_ScheduleGC sets an eval-breaker \
+     * bit) and returns NULL on MemoryError, which this returns as -1.  No callback, no \
+     * release.  The row had runs_python: narrowed to writes, allocates, raises.  The \
+     * slot's old value is NULL (asserted), so nothing is released. */ \
     HELPER(_PyFrame_MaterializeKwargs, int, (_PyInterpreterFrame *), \
-        ARGS(frame), SCALAR, EFFECTS(runs_python)) \
+        ARGS(frame), STATUS(NEGATIVE), EFFECTS(writes, allocates, raises)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyFrame_PushUnchecked, _PyInterpreterFrame *, (PyThreadState *, PyValue, _PyInterpreterFrame *), \
         ARGS(tstate, consumed, frame), SCALAR, EFFECTS(allocates)) \
@@ -1184,10 +1301,18 @@
     /* seeded from a C macro (no static check), ir_records.predicate_facts, ir_records.effect_sites */ \
     MACRO(PyAsyncGenASend_CheckExact, \
         ARGS(scalar), TEST(exact(PyAsyncGenASend_Type)), EFFECTS(reads), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Evidence (G0c8): Include/cpython/genobject.h: Py_IS_TYPE(op, &PyCoro_Type), one read of \
+     * ob_type.  It dereferences the object: callers pass a PyObject * they know is an \
+     * object.  Left a MACRO row: the definition is a public header macro.  The result \
+     * could be TEST(exact(PyCoro_Type)) like PyAsyncGenASend_CheckExact; the only caller \
+     * (_INSTRUMENTED_END_SEND) uses the answer for a monitoring event, and no fact is \
+     * read, so none is declared. */ \
     MACRO(PyCoro_CheckExact, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Evidence (G0c8): Include/cpython/genobject.h: PyObject_TypeCheck(op, &PyGen_Type): \
+     * Py_IS_TYPE, else PyType_IsSubtype, which reads tp_mro.  No callback, allocation or \
+     * exception.  Left a MACRO row: the definition is a public header macro.  Callers \
+     * use the answer for a monitoring event only, so the result stays SCALAR. */ \
     MACRO(PyGen_Check, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -1278,43 +1403,79 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(DTRACE_FUNCTION_RETURN, \
         ARGS(), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Evidence (G0c8): ceval_macros.h:514, the jump's event.  While tracing it only sets \
+     * next_instr to the destination.  Otherwise _Py_call_instrumentation_jump \
+     * runs the tools' callbacks and the line events of the edge (Python \
+     * code: runs_python, and a callback can redirect frame->instr_ptr); NULL \
+     * is an error, which the macro takes to PROCESS_ERROR_AT(RAISE) itself, \
+     * with the instruction pointer set to the instruction after instr_ptr: \
+     * the word's raise exit.  It owns no values */ \
     MACRO(INSTRUMENTED_JUMP, \
-        ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(runs_python), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+        ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(runs_python), EXITS(raise)) \
+    /* Evidence (G0c8): ceval_macros.h:245: empty outside Py_DEBUG; in a debug build it \
+     * calls maybe_lltrace_resume_frame and stores frame->lltrace (a frame field). */ \
     MACRO(LLTRACE_RESUME_FRAME, \
         ARGS(), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Evidence (G0c8): instrumentation.c:2779: locks the code (LOCK_CODE) and runs \
+     * instrument_lock_held, which rewrites the code's instrumentation; it may \
+     * allocate and raise (MemoryError).  It rewrites the \
+     * words' handlers: the caller dispatches the word again.  `runs_python` covers the allocation, the raise and the release of \
+     * replaced data. */ \
     HELPER(_Py_Instrument, int, (PyCodeObject *, PyInterpreterState *), \
         ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Evidence (G0c8): instrumentation.c:1473: call_instrumentation_vector builds three \
+     * words, then call_one_instrument calls each tool's callback (arbitrary Python, \
+     * which may rewrite the frame's locals and the instrumentation), may stop the \
+     * world to disable a tool, and returns -1 with an exception set when a callback \
+     * fails.  A debugger may also move frame->instr_ptr (observer redirect), which the \
+     * caller reads back.  Returns 0 or -1. */ \
     HELPER(_Py_call_instrumentation, int, (PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *), \
         ARGS(tstate, scalar, frame, scalar), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_Py_call_instrumentation_2args, int, (PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, PyValueBorrow, PyValueBorrow), \
         ARGS(tstate, scalar, frame, scalar, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Evidence (G0c8): instrumentation.c:1483: as _Py_call_instrumentation with one more \
+     * argument: PyValue_XDUP(arg) takes a count and PyValue_XCLOSE(args[3]) releases it \
+     * after the callbacks; arg itself stays the caller's.  Callbacks run Python. */ \
     HELPER(_Py_call_instrumentation_arg, int, (PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, PyValueBorrow), \
         ARGS(tstate, scalar, frame, scalar, borrowed), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_Py_call_instrumentation_exc2, void, (PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, PyValueBorrow, PyValueBorrow), \
         ARGS(tstate, scalar, frame, scalar, borrowed, borrowed), NONE, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Evidence (G0c8): instrumentation.c:2080: reads the instruction's tools and calls \
+     * their callbacks (Python); returns the opcode to run next, or -1 with an exception \
+     * set.  It may redirect frame->instr_ptr through the debugger. */ \
     HELPER(_Py_call_instrumentation_instruction, int, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *), \
         ARGS(tstate, frame, scalar), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Evidence (G0c8): instrumentation.c:1827: the jump or branch event \
+     * (call_instrumentation_vector: callbacks run Python), then the line events of the \
+     * source edge (source_edge_events).  Returns the word to run: dest, frame->instr_ptr \
+     * when an observer redirected the frame, or NULL with an exception set.  The result \
+     * is a pointer, so it stays SCALAR; the caller tests NULL. */ \
     HELPER(_Py_call_instrumentation_jump, _PyInstr *, (_PyInstr *, PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, _PyInstr *), \
         ARGS(scalar, tstate, scalar, frame, scalar, scalar), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Evidence (G0c8): instrumentation.c:1920: finds the line event for this word and \
+     * calls the tools' callbacks (Python); returns the original opcode of the word, or \
+     * -1 with an exception set.  It may redirect frame->instr_ptr. */ \
     HELPER(_Py_call_instrumentation_line, int, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, _PyInstr *), \
         ARGS(tstate, frame, scalar, scalar), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Evidence (G0c8): ceval_macros.h: _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY and \
+     * QSBR_QUIESCENT_STATE (both empty in the GIL build), then _Py_EvalBreakerHasEvents \
+     * and, if set, _Py_HandlePending, whose effects it takes (the row had runs_python \
+     * without `polls`).  Returns 0, or -1 with an exception set. */ \
     HELPER(check_periodics, int, (PyThreadState *), \
-        ARGS(tstate), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+        ARGS(tstate), STATUS(NEGATIVE), EFFECTS(runs_python, polls)) \
+    /* Evidence (G0c8): ceval_macros.h: the same checks as check_periodics, with the pending \
+     * work in handle_periodics_at_end, which skips it after a LOAD_SPECIAL and otherwise \
+     * calls _Py_HandlePending.  Effects as check_periodics.  Returns 0, or -1 with an \
+     * exception set. */ \
     HELPER(check_periodics_at_end, int, (PyThreadState *, _PyInterpreterFrame *), \
-        ARGS(tstate, frame), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+        ARGS(tstate, frame), STATUS(NEGATIVE), EFFECTS(runs_python, polls)) \
+    /* Evidence (G0c8): ceval.h:488: asks for local tools first (no tools: returns 0). \
+     * Otherwise PyValue_AsObject boxes a number (allocates; NULL: -1), sets a \
+     * StopIteration with the value (PyErr_SetObject), releases its count, runs the \
+     * STOP_ITERATION callbacks (Python), and clears the exception.  Returns 0 or -1 \
+     * with the exception from a callback or a failed box.  `value` stays the caller's. */ \
     HELPER(monitor_stop_iteration, int, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValueBorrow), \
         ARGS(tstate, frame, scalar, borrowed), SCALAR, EFFECTS(runs_python))
 
@@ -1324,10 +1485,17 @@
      * arithmetic on two scalars; no memory, no failure.                      */ \
     MACRO(COMPARISON_BIT, \
         ARGS(scalar, scalar), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.TRANSFER_TOKENS, ir_records.effect_sites */ \
+    /* Evidence (G0c8): ceval_macros.h: NEXTOPARG (loads the word at next_instr), then goto \
+     * the handler.  In the function forms (ceval.c:2579) it returns {frame, next_instr}. \
+     * It runs no code, reads the word (immutable for the dispatch) and ends the word: \
+     * the `next` exit.  A body that sets next_instr first (instrumentation redirects, \
+     * _YIELD_VALUE_EVENT) still takes `next`: the vocabulary has no token for a \
+     * redirect to another word, and DISPATCH_SAME_OPARG is the `jump` to this word. */ \
     MACRO(DISPATCH, \
         ARGS(), NONE, EFFECTS(), EXITS(next)) \
-    /* seeded from a C macro (no static check), ir_records.TRANSFER_TOKENS, ir_records.effect_sites */ \
+    /* Evidence (G0c8): ceval_macros.h:197 `goto *opcode_targets[opcode]` (ceval.c:2581 in the \
+     * function forms): an indirect jump on the local `opcode`, which the body set from \
+     * ORIGINAL_HANDLER; it ends the word without reading the next word: `jump`. */ \
     MACRO(DISPATCH_GOTO, \
         ARGS(), NONE, EFFECTS(), EXITS(jump)) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
@@ -1348,9 +1516,11 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(FT_ATOMIC_LOAD_UINT64_RELAXED, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
-    MACRO(FT_ATOMIC_LOAD_UINTPTR_ACQUIRE, \
-        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* Evidence (G0c8): pycore_pyatomic_ft_wrappers.h:154: the GIL build defines it as its \
+     * argument, a plain load of a word of the code object (_co_instrumentation_version) \
+     * or of the thread state.  The free-threaded definition (acquire load, line 36) is \
+     * not in the scoped product. */ \
+    INTRINSIC(FT_ATOMIC_LOAD_UINTPTR_ACQUIRE, ARGS(scalar), SCALAR, BUILD(gil)) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(FT_ATOMIC_STORE_INT8_RELEASE, \
         ARGS(scalar, scalar), SCALAR, EFFECTS(reads, writes), EXITS()) \
@@ -1366,7 +1536,8 @@
     /* seeded from a C macro (no static check), ir_records.TRANSFER_TOKENS, ir_records.effect_sites */ \
     MACRO(JUMPTO, \
         ARGS(scalar), NONE, EFFECTS(), EXITS(jump)) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Evidence (G0c8): ceval_macros.h:368: IR_CHECK_BLOCK (an assert) and the address \
+     * frame->ir_words + T.  No load of the target word; the `jump` is taken by JUMPTO. */ \
     MACRO(JUMP_TARGET, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
@@ -1375,10 +1546,13 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(LOCALS, \
         ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Evidence (G0c8): ceval_macros.h:235: empty outside Py_DEBUG; in a debug build it \
+     * asserts the frame invariants and calls lltrace_instruction, which only prints. */ \
     MACRO(PRE_DISPATCH_GOTO, \
         ARGS(), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
+    /* Evidence (G0c8): generators_common.py's expansion: reloads the handler's cached stack \
+     * locals from the frame after a callback that may have run Python.  It reads frame \
+     * fields only, owns nothing and cannot raise. */ \
     MACRO(RELOAD_STACK, \
         ARGS(), NONE, EFFECTS(), EXITS()) \
     /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
@@ -1496,7 +1670,8 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_StoreSlice, int, (PyValueBorrow, PyValueBorrow, PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Evidence (G0c8): pyatomic_gcc.h:374: a relaxed atomic load of a word (of the thread \
+     * state's eval_breaker or a code object's version): one read, no callee. */ \
     HELPER(_Py_atomic_load_uintptr_relaxed, uintptr_t, (const uintptr_t *), \
         ARGS(scalar), SCALAR, EFFECTS(reads))
 
@@ -1511,6 +1686,8 @@
     /* Word-field and frame accessors: C macros of Include/internal/pycore_ir.h \
      * and Python/ceval_macros.h that read the word, the frame or the \
      * activation, and write nothing */ \
+    /* Evidence (G0c8): ceval_macros.h:221: `((_PyThreadStateImpl *)tstate)->eval_activation`, \
+     * one load of the thread state. */ \
     MACRO(IR_ACTIVATION, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
     /* Frame fields of Python/ceval_macros.h: GLOBALS() is frame->f_globals, \
      * BUILTINS() frame->f_builtins (PATH: fixed for the activation; \
@@ -1531,21 +1708,38 @@
           PATH(dict_keys), EFFECTS(reads)) \
     FIELD(PyDictKeysObject, dk_version, uint32_t, ON(dict_keys), \
           MEASURE(keys_version), EFFECTS(reads)) \
+    /* Evidence (G0c8): ceval_macros.h:375: `_PyFrame_GetCode(frame)->co_consts`, a load \
+     * of the code object's constants tuple.  The tuple of a live code object never \
+     * changes, so the read is not a heap fact; `reads` is kept so that the records of \
+     * the constant loads (batch 1) stay as they are, and G0d may remove it with them. */ \
     MACRO(FRAME_CO_CONSTS, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
+    /* Evidence (G0c8): ceval_macros.h:383 `(frame->base)`: the address of the \
+     * homes, fixed for the activation; no home is read or written by taking it */ \
     MACRO(IR_SLOTS, ARGS(), HOME(base), EFFECTS(), EXITS()) \
     MACRO(GETLOCAL, ARGS(scalar), HOME, EFFECTS(), EXITS()) \
     MACRO(IR_C, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* Evidence (G0c8): pycore_ir.h:208: `(uint32_t)(W >> 52)`, bits of the word. */ \
     MACRO(IR_D, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* Evidence (G0c8): pycore_ir.h:147: `(int)(W & IR_HANDLER_MASK)`, bits of the word. */ \
     MACRO(IR_HANDLER, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* Reviewed G0c2 (ceval_macros.h): the frame's home slot addressed by     \
      * an operand field; a read of the frame's slot array (reads), no         \
      * failure, no callback.                                                  */ \
     MACRO(IR_SLOT, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* Evidence (G0c8): the generator's expansion (ir_generator.py:2871): the operand word k of \
+     * a call, read in place, never owned or closed (a view).  A read of the executing \
+     * copy's words. */ \
     MACRO(IR_OPERAND, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
     MACRO(IR_CALL_ARG, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
     MACRO(IR_CALL_FIRST, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
+    /* Evidence (G0c8): ceval_macros.h:681: `F < IR_NFIXED()`, a load of the executing copy's \
+     * nfixed (the word before frame->ir_words). */ \
     MACRO(IR_IS_LOCAL, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* Evidence (G0c8): ceval_macros.h:502: IR_DS(ir_word), the signed D field of the word the \
+     * handler holds in a local: bits only. */ \
     MACRO(IR_FUSED_DISTANCE, ARGS(), SCALAR, EFFECTS(), EXITS()) \
+    /* Evidence (G0c8): ceval_macros.h:500: bit 8 of the entry header's `arg` field, read \
+     * through the handler's `fb` local. */ \
     MACRO(IR_FUSED_IF_FALSE, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
     /* IR_REPORT_EDGE (ceval_macros.h): ((void)(TAKEN)) in the interpreter */ \
     MACRO(IR_REPORT_EDGE, ARGS(scalar), NONE, EFFECTS(), EXITS()) \
@@ -1553,6 +1747,12 @@
      * polymorphic entry's payload and loads a guarded class value; NULL is \
      * a miss that the uop tests (no raise).  Result is the borrowed method. \
      * The payload is the site's feedback entry */ \
+    /* Evidence (G0c8): ceval_macros.h:1059: method_poly_lookup(frame->ir_words, h, owner), a \
+     * static inline function: poly_row_index over the entry's polymorphic rows keyed by \
+     * Py_TYPE(owner)->tp_version_tag, then (for LOAD_ATTR_METHOD_WITH_VALUES) a read of \
+     * the owner's inline-values `valid` byte, and a guarded load of the cached class \
+     * value.  NULL is a miss.  No callback, no allocation, no write.  Already a \
+     * function: the macro only supplies the frame's words. */ \
     MACRO(IR_METHOD_POLY_LOOKUP, ARGS(scalar, object), \
           VALUE(borrowed), EFFECTS(reads), EXITS(), FEEDBACK(read(entry))) \
     /* Markers that emit no code or a fixed statement \
@@ -1560,7 +1760,12 @@
      * and the prepare_call no-op; IR_MARKER_EFFECTS has an empty set for \
      * IR_BEGIN_CALL_EFFECTS) */ \
     MACRO(IR_GENERATOR_MARKER, ARGS(), NONE, EFFECTS(), EXITS()) \
+    /* Evidence (G0c8): ir_generator.py:3626: a marker that emits no code; it is accepted \
+     * only when the word's metadata-only passthrough is certified (argument 1). */ \
     MACRO(IR_METADATA_PASSTHROUGH, ARGS(scalar), NONE, EFFECTS(), EXITS()) \
+    /* Evidence (G0c8): ir_generator.py:4198: emits `call_state |= CALL_EFFECTS`, a write of the \
+     * call handler's register local (the `call_state` STATE row, which the uop names in \
+     * its state(...) clause).  No heap access. */ \
     MACRO(IR_BEGIN_CALL_EFFECTS, ARGS(), NONE, EFFECTS(), EXITS()) \
     /* IR_SKIP_RESUME (ceval_macros.h): reads the eval breaker, advances \
      * next_instr over a no-op RESUME; no table entry */ \
@@ -1569,6 +1774,12 @@
      * jit_run through IR_STEP_DONE, which runs the unit, which runs Python, \
      * and dispatches or leaves the evaluator; no table entry, so the larger \
      * declaration */ \
+    /* Evidence (G0c8): ceval_macros.h:1132 (GIL, _PY_JIT_SUPPORTED): a heat counter of the \
+     * executing copy (a write); at the threshold _PyJit_Event compiles the code \
+     * (allocates, may fail without raising) and jit_run runs the unit through \
+     * IR_STEP_DONE, which dispatches the unit's transfer or leaves the evaluator.  The \
+     * unit runs Python and switches frames.  In the function forms (ceval.c:2660) and \
+     * without the JIT it is empty.  Not narrowed: its exits are the unit's. */ \
     MACRO(IR_JIT_EVENT, ARGS(), NONE, \
           EFFECTS(reads, writes, allocates, raises, releases, runs_python, \
                   switches_frame), EXITS(enter, return, raise, exit)) \
@@ -1663,11 +1874,23 @@
     /* The observer's deferred close (ir_generator.py: defer_observer_input): \
      * the held value is closed after the observer; no table entry, so a \
      * release is declared */ \
+    /* Evidence (G0c8): ir_generator.py:4087 defer_observer_input: queues the owner's close \
+     * (PyValue_XCLOSE) after the last output store, which precedes the terminal observer, \
+     * and sets the local to PyValue_NULL.  The release runs after the stores: a \
+     * finalizer may run Python, and the owner is consumed. */ \
     MACRO(IR_DEFER_CLOSE, ARGS(consumed), NONE, EFFECTS(writes, releases), \
           EXITS()) \
     /* The monitoring event of a committed branch: IR_MARKER_EFFECTS \
      * escapes, error; TRANSFER_TOKENS (BRANCH, RAISE).  Arguments are the \
      * instruction, the target, the event and the edge: all scalars */ \
+    /* Evidence (G0c8): ir_generator.py:4097 and ceval.c:2679 ir_event_edge: the terminal \
+     * observer.  It first commits the uop's outputs (storage.push_outputs, \
+     * emit_final_outputs), then ir_event_edge stores frame->return_pc and frame->instr_ptr, \
+     * runs _PyIR_ObserveCommittedBranch (the branch event's callbacks: Python; a redirect \
+     * moves the destination) and returns the word to run, or PROCESS_ERROR_AT(RAISE) \
+     * for an error.  Exits: `branch` (the word runs on, at the destination) or `raise`. \
+     * The outputs are committed before the event, so they are live on the branch exit \
+     * (G0a5: committed exit); the EXITS tokens are G0a5's. */ \
     MACRO(IR_OBSERVE_COMMITTED_BRANCH, ARGS(scalar, scalar, scalar, scalar), \
           NONE, EFFECTS(reads, writes, raises, runs_python), \
           EXITS(branch, raise)) \
@@ -1691,6 +1914,11 @@
      * TRANSFER_TOKENS (RAISE) only.  PROCESS_ERROR_AT with an EXIT ingress \
      * leaves the evaluator and unwinding may pop frames, so exit is added \
      * to the table's raise */ \
+    /* Evidence (G0c8): ir_generator.py:5464 process_error: emits PROCESS_ERROR_AT(ingress, \
+     * checkpoint, origin), which records the ingress and checkpoint and jumps to \
+     * LABEL_process_error: _PyEval_ProcessError, whose effects and exits (jump, exit) \
+     * are that ROUTINE row's.  At the call site it is the uop's `raise` exit; the word \
+     * never continues. */ \
     MACRO(IR_PROCESS_ERROR, ARGS(scalar, scalar), NONE, \
           EFFECTS(reads, writes, raises, releases, runs_python, \
                   switches_frame), EXITS(raise, exit)) \
@@ -1704,6 +1932,10 @@
     MACRO(IR_FINISH_GENERATOR_RETURN, ARGS(borrowed, scalar), NONE, \
           EFFECTS(reads, writes, raises, runs_python, switches_frame), \
           EXITS(return, raise)) \
+    /* Evidence (G0c8): ir_generator.py:5549: emits IR_GEN_RETURN(value, dying, 1): a tail call \
+     * of ir_gen_return (ceval.c:2632), which completes the generator's return (callbacks: \
+     * Python; may raise) and returns the next frame and word.  A terminal transfer \
+     * (return or raise) that switches the frame. */ \
     MACRO(IR_FINISH_GENERATOR_RETURN_EMPTY, ARGS(borrowed, scalar), NONE, \
           EFFECTS(reads, writes, raises, runs_python, switches_frame), \
           EXITS(return, raise)) \
@@ -1714,6 +1946,11 @@
           EXITS(enter, raise)) \
     /* IR_MARKER_EFFECTS escapes, terminal, frame (no error); \
      * TRANSFER_TOKENS (YIELD) */ \
+    /* Evidence (G0c8): ir_generator.py:3634: suspends the frame for a delegated yield: stores \
+     * instr_ptr, detaches the generator's exception state (writes), leaves the recursion \
+     * count, switches to the previous frame, and stores the value to the caller's slot \
+     * (IR_STORE_RETURN, which may enter the unit: IR_JIT_RESUME runs Python).  It \
+     * consumes the yielded value into the caller's home and exits by `yield`. */ \
     MACRO(IR_SUSPEND_DELEGATED, ARGS(consumed), NONE, \
           EFFECTS(reads, writes, runs_python, switches_frame), EXITS(yield)) \
     /* ir_generator.try_dict_first_probe: _PyDict_TryGetFirstProbeValue \
@@ -1740,8 +1977,16 @@
     MACRO(IR_PREPARE_CALL_TUPLE, ARGS(), NONE, \
           EFFECTS(reads, writes, allocates, raises, runs_python), \
           EXITS(raise)) \
+    /* Evidence (G0c8): ir_generator.py:4189 (prepare_call): the marker emits no code.  The CALL \
+     * event is a step of call_run_*(), which runs it in order on the call's operands when \
+     * the call is invoked: Python callbacks, an error (raise) and a rewrite of the \
+     * operands.  The row carries those effects at the marker's place. */ \
     MACRO(IR_MONITOR_CALL, ARGS(), NONE, \
           EFFECTS(reads, writes, raises, runs_python), EXITS(raise)) \
+    /* Evidence (G0c8): ir_generator.py:4204: `if (call_refresh(tstate, frame, this_instr) < 0)` \
+     * error, then reloads the call's words and feedback (call_reload).  call_refresh \
+     * (ceval.c:2091) revalidates the operands after the specializer ran \
+     * (value_operation_refresh) and fails with an error if the frame changed. */ \
     MACRO(IR_REFRESH_CALL, ARGS(), NONE, \
           EFFECTS(reads, writes, raises, runs_python), EXITS(raise)) \
     /* Call invocation: IR_MARKER_EFFECTS escapes, error, terminal, frame; \

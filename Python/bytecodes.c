@@ -4690,9 +4690,13 @@ dummy_func(
             unused/1 +  // Skip over the entry distance
             _FOR_ITER_DICT_ITEMS;
 
-        inst(INSTRUMENTED_FOR_ITER, (unused/1, iter, null_or_index -- iter, null_or_index, next)) {
-            _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(iter), &window[1]);
-            null_or_index = window[1];
+        inst(INSTRUMENTED_FOR_ITER,
+                (unused/1, iter: assumed(object) by GET_ITER, index: consumed
+                 -- iter, next_index: inline encoding(tagged_index|null), next: owned))
+            effects(runs_python) exits(next, branch, raise)
+        {
+            PyValue cursor = TAKE(index);
+            _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(iter), cursor);
             PyValue item = step.value;
             int found = step.status;
             if (found <= 0) {
@@ -4702,6 +4706,7 @@ dummy_func(
                 PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
                 IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
+            next_index = step.cursor;
             next = item;
             IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
         }

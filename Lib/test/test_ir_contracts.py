@@ -360,6 +360,12 @@ class SliceTests(unittest.TestCase):
         'INSTRUMENTED_FOR_ITER.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
         'INSTRUMENTED_FOR_ITER.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
         'INSTRUMENTED_FOR_ITER.record.store_mode: inferred null, declared "store"',
+        # G0d2: INSTRUMENTED_FOR_ITER steps the cursor by value and declares
+        # it, as FOR_ITER does
+        'INSTRUMENTED_FOR_ITER.record.outputs[1][1]: inferred -1, declared 1',
+        'INSTRUMENTED_FOR_ITER.record.outputs[1][2].name: inferred "next_index", declared "index"',
+        'INSTRUMENTED_FOR_ITER.record.uops[0].inputs[1].changed: inferred false, declared true',
+        'INSTRUMENTED_FOR_ITER.record.uops[0].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", "subject": "v2"}]',
     ]
 
     # Batch 5 and G0c9: the assume op of `iter: assumed(object) by GET_ITER`

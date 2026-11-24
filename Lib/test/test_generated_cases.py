@@ -923,6 +923,30 @@ class TestIRCases(unittest.TestCase):
                         analysis.instructions['INSTRUMENTED_FOR_ITER'],
                         formats['INSTRUMENTED_FOR_ITER'])
 
+    def test_terminal_observer_owner_transport_reads_the_rows(self):
+        # The cursor taken by value is a C owner until the helper that
+        # consumes it (its row's ARGS) takes it; a use the rows do not name
+        # proves nothing
+        source = (Path(__file__).resolve().parents[2] / 'Python' / 'bytecodes.c').read_text()
+        start = source.index('inst(INSTRUMENTED_FOR_ITER,')
+        helper = 'PyValue_Borrow(iter), cursor);'
+        self.assertIn(helper, source[start:])
+
+        def paths(old, new):
+            changed = source[:start] + source[start:].replace(old, new, 1)
+            Path(self.temp_input_filename).write_text(changed)
+            analysis = analyzer.analyze_files([self.temp_input_filename])
+            formats = ir_generator.compute_formats(analysis)
+            return ir_generator.observer_terminal_paths(
+                analysis.instructions['INSTRUMENTED_FOR_ITER'],
+                formats['INSTRUMENTED_FOR_ITER'])
+
+        self.assertEqual(len(paths(helper, helper)), 1)
+        with self.assertRaisesRegex(SyntaxError, 'unproved terminal C owner transport'):
+            paths(helper, 'PyValue_Borrow(iter), PyValue_DUP(cursor));')
+        with self.assertRaisesRegex(SyntaxError, 'used after transfer: cursor'):
+            paths(helper, 'PyValue_Borrow(iter), cursor); steal(cursor);')
+
     def test_canonical_frame_transfer_provenance_fails_closed(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()

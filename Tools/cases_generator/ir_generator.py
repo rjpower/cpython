@@ -1849,6 +1849,7 @@ def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tup
     """
     paths: dict[Token, tuple[int, str]] = {}
     markers_declared = committed_markers()
+    table = ir_contract.rows()
     if not markers_declared & set(uop_tokens(inst)):
         return paths
     parts = [p for p in inst.parts if not isinstance(p, Skip)]
@@ -1887,28 +1888,49 @@ def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tup
         texts = [t.text for t in tokens]
         def mentions(name):
             pieces = name.replace('.', ' . ').split()
-            return any(texts[i:i + len(pieces)] == pieces for i in range(len(texts)))
+            # (a field of another value is not the local of the same name)
+            return any(texts[i:i + len(pieces)] == pieces and (i == 0 or texts[i - 1] != ".")
+                       for i in range(len(texts)))
         for name in spent:
             if mentions(name):
                 raise analysis_error("terminal C owner used after transfer: " + name, tokens[0])
-        used_owners = {name for name in owners if mentions(name)}
-        if used_owners:
-            calls = {texts[i] for i in range(len(texts) - 1)
-                     if tokens[i].kind == "IDENTIFIER" and texts[i + 1] == "("}
-            audited = set(VIEW_RELEASES) | {
-                "PyValue_DUP", "PyValue_IsNull", "_PyValue_IsTrue",
-                "IR_DEFER_CLOSE", "IR_COMPLETE_STEP"}
-            if calls - audited:
-                raise analysis_error("unproved terminal C owner transport", tokens[0])
-            bindings = declared_locals(uop_token_list(inst))
-            if any(name in bindings or any(c.name == name for c in uop.caches)
-                   for name in calls):
-                raise analysis_error("shadowed terminal owner helper", tokens[0])
-
         def transfer(name):
             if name in owners:
                 owners.remove(name)
                 spent.add(name)
+
+        used_owners = {name for name in owners if mentions(name)}
+        if used_owners:
+            # A statement that mentions a C owner calls only rows: an owner
+            # passed whole to an argument the row consumes is transferred
+            # (the helper's, TAKE's and IR_COMPLETE_STEP's declarations), one
+            # passed to a borrowed argument stays held; any other use of it
+            # in a call proves nothing
+            for call, args in ir_contract._calls_in(tokens):
+                row = table.get(call.text)
+                if row is None:
+                    raise analysis_error("unproved terminal C owner transport", tokens[0])
+                if call.text == "IR_DEFER_CLOSE":
+                    continue        # held until the observer, checked below
+                for position, arg in enumerate(args):
+                    whole = "".join(arg)
+                    inside = any(arg[i:i + len(pieces)] == pieces
+                                 for name in used_owners
+                                 for pieces in [name.replace(".", " . ").split()]
+                                 for i in range(len(arg)))
+                    if not inside:
+                        continue
+                    mode = row.args[position].mode if position < len(row.args) else ""
+                    if whole in used_owners and mode == "consumed":
+                        transfer(whole)
+                    elif not (whole in used_owners and mode == "borrowed"):
+                        raise analysis_error("unproved terminal C owner transport", tokens[0])
+            calls = {texts[i] for i in range(len(texts) - 1)
+                     if tokens[i].kind == "IDENTIFIER" and texts[i + 1] == "("}
+            bindings = declared_locals(uop_token_list(inst))
+            if any(name in bindings or any(c.name == name for c in uop.caches)
+                   for name in calls):
+                raise analysis_error("shadowed terminal owner helper", tokens[0])
 
         if texts[:1] == ["IR_DEFER_CLOSE"]:
             if len(texts) != 5 or texts[2] not in owners:
@@ -1921,12 +1943,18 @@ def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tup
             transfer(rhs)
             if rhs not in ("PyValue_NULL", "PyValue_None", "PyValue_True", "PyValue_False"):
                 owners.add(texts[1])
-        elif len(texts) > 3 and texts[0] == "_PyStatusValue" and texts[2] == "=":
-            helper = "_PyForIter_VirtualIteratorNext"
-            if (texts[3] != helper or helper in declared_locals(uop_token_list(inst)) or
+        elif (len(texts) > 4 and texts[2] == "=" and texts[3] in table and
+                table[texts[3]].result.shape == "CASES"):
+            # A struct result: the fields that its row declares owned are C
+            # owners, as `step.value` (the helper's declared outcomes)
+            helper = texts[3]
+            if (helper in declared_locals(uop_token_list(inst)) or
                     any(cache.name == helper for cache in uop.caches)):
                 raise analysis_error("unproved terminal status owner", tokens[0])
-            owners.add(texts[1] + ".value")
+            for case in table[helper].result.cases:
+                for field, spec in case.values:
+                    if spec.mode == "owned":
+                        owners.add(f"{texts[1]}.{field}")
         elif texts[:2] == ["PyObject", "*"]:
             raise analysis_error("unproved terminal C object owner", tokens[0])
         if len(texts) > 2 and texts[0] in VIEW_RELEASES and texts[1] == "(":

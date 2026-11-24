@@ -127,10 +127,23 @@ class SliceTests(unittest.TestCase):
                     inferred.add(exits[ir_records.GUARD_TOKENS[name]])
                 self.assertLessEqual(inferred - {"next"}, set(table[name].exits))
 
+    # The reviewed corrections of G0c, each listed with its evidence in the
+    # batch's differences.md and in the commit that made it.  Batch 1:
+    # _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise path calls
+    # _PyEval_FormatExcCheckArg, which runs Python (F11)
+    LISTED_DIFFERENCES = [
+        'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '
+        '[{"__type": "Fact", "arg": "", "kind": "IS_NULL", "subject": "v1"}]',
+        'LOAD_FAST_CHECK.record.format.runs_code: inferred false, declared true',
+        'LOAD_FAST_CHECK.record.uops[0].effects: inferred 2 entries '
+        '["MAY_RAISE", "READS_HEAP"], declared 6 ["ALLOCATES", "MAY_RAISE", '
+        '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
+    ]
+
     def test_declarations_equal_the_inference(self):
         with cases.handle_stderr():
             lines = ir_contract_diff.report(str(BYTECODES))
-        self.assertEqual(lines[:-1], [])
+        self.assertCountEqual(lines[:-1], self.LISTED_DIFFERENCES)
         self.assertRegex(lines[-1], r"^\d+ handlers compared; \d+ of \d+ uops declared$")
 
     def test_component_checks_are_generated(self):

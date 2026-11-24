@@ -2441,6 +2441,75 @@ register_stopped_state_bind(PyFrameObject *self, RegisterResumeAnalysis *analysi
     return 1;
 }
 
+/* The origins after recipe, as the unwinder applies it (ceval.c's
+ * error_apply_recipe()): each home takes its source's origin as if all
+ * moved at once, and a source that is no home is released. */
+static void
+register_apply_recipe(int *origins, int nl, const int32_t *recipe)
+{
+    int n = recipe[0];
+    uint64_t done[IR_MAX_SLOTS / 64 + 1] = {0};
+    int progress = 1;
+    while (progress) {
+        progress = 0;
+        for (int q = 0; q < n; q++) {
+            if ((done[q >> 6] >> (q & 63)) & 1) {
+                continue;
+            }
+            int h = recipe[2 + 2 * q], pending = 0;
+            for (int p = 0; p < n; p++) {
+                pending |= !((done[p >> 6] >> (p & 63)) & 1)
+                           && recipe[1 + 2 * p] == h;
+            }
+            if (pending) {
+                continue;
+            }
+            int s = recipe[1 + 2 * q];
+            int held = origins[h - nl];
+            origins[h - nl] = origins[s - nl];
+            origins[s - nl] = held;
+            done[q >> 6] |= (uint64_t)1 << (q & 63);
+            progress = 1;
+        }
+    }
+    for (int q = 0; q < n; q++) {
+        if ((done[q >> 6] >> (q & 63)) & 1) {
+            continue;
+        }
+        int vacant = recipe[1 + 2 * q];
+        int first = origins[vacant - nl];
+        for (;;) {
+            int r = -1;
+            for (int p = 0; p < n && r < 0; p++) {
+                if (!((done[p >> 6] >> (p & 63)) & 1)
+                    && recipe[2 + 2 * p] == vacant)
+                {
+                    r = p;
+                }
+            }
+            if (r < 0) {
+                break;
+            }
+            done[r >> 6] |= (uint64_t)1 << (r & 63);
+            if (r == q) {
+                origins[vacant - nl] = first;
+                break;
+            }
+            origins[vacant - nl] = origins[recipe[1 + 2 * r] - nl];
+            vacant = recipe[1 + 2 * r];
+        }
+    }
+    for (int q = 0; q < n; q++) {
+        int s = recipe[1 + 2 * q], home = 0;
+        for (int p = 0; p < n; p++) {
+            home |= recipe[2 + 2 * p] == s;
+        }
+        if (!home) {
+            origins[s - nl] = 0;
+        }
+    }
+}
+
 /* The recipe moves its sources to its homes first; unwind then clears
  * from the floor */
 static void
@@ -2449,16 +2518,7 @@ register_context_unwind(RegisterResumeAnalysis *analysis, int *origins,
 {
     int nl = analysis->nl;
     if (recipe != NULL) {
-        int moved[_PyIR_RECIPE_MAX];
-        for (int q = 0; q < recipe[0]; q++) {
-            moved[q] = origins[recipe[1 + 2 * q] - nl];
-        }
-        for (int q = 0; q < recipe[0]; q++) {
-            origins[recipe[1 + 2 * q] - nl] = 0;
-        }
-        for (int q = 0; q < recipe[0]; q++) {
-            origins[recipe[2 + 2 * q] - nl] = moved[q];
-        }
+        register_apply_recipe(origins, nl, recipe);
     }
     for (int j = Py_MAX(slot - lasti - nl, 0); j < analysis->nt; j++) {
         origins[j] = 0;

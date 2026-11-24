@@ -266,7 +266,7 @@ EXTRA_ROWS = """
     HELPER(T, PyValue, (PyValue), ARGS(taken), \\
            VALUE_OR_NULL(owned), EFFECTS(allocates, raises)) \\
     MACRO(SPAM_GUARD, ARGS(scalar), NONE, EFFECTS(), EXITS(miss)) \
-    MACRO(TAKE, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS()) \
+    MACRO(TAKE, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS(), TAKES_VIEW()) \
     HELPER(_PyValue_Size, Py_ssize_t, (PyValueBorrow), ARGS(borrowed), SCALAR, \
            EFFECTS(runs_python)) \
     HELPER(PyValue_FromInt64, PyValue, (int64_t), ARGS(scalar), VALUE_OR_NULL(owned), \
@@ -1198,10 +1198,27 @@ class VerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"PyValue_IsInlineInt: a PRIMITIVE with a "
                                                 r"model in ir_leaf.py but no lowering"):
             ir_contract.check_primitives(ir_leaf.PRIMITIVES, lowered)
-        # A row without a model needs none: no leaf uop can call it
+        # A PRIMITIVE row without a model is refused: it is a HELPER or an INTRINSIC
         self.assertNotIn("PyValue_TYPE", ir_leaf.PRIMITIVES)
+        row = dataclasses.replace(self.table["PyValue_IsNull"], name="PyValue_TYPE")
+        with self.assertRaisesRegex(ValueError, r"PyValue_TYPE: a PRIMITIVE with no model"):
+            ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings(),
+                                         {"PyValue_TYPE": row})
         ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings(),
                                      {"PyValue_TYPE": self.table["PyValue_TYPE"]})
+
+    def test_view_columns(self):
+        # The generator reads which calls take a view and how a view's owner is
+        # released from the rows (G0d3)
+        self.assertEqual({r.name for r in self.table.values() if r.takes_view},
+                         {"TAKE", "OWNER", "PyValue_AsKnownObjectSteal"})
+        self.assertEqual(self.table["PyValue_CLOSE"].view_close, "PyValue_XCLOSE")
+        self.assertEqual(self.table["PyValue_CLOSE_SPECIALIZED"].pointer_form,
+                         "_PyValue_XCLOSE_SPECIALIZED_POINTER")
+        with self.assertRaisesRegex(SyntaxError, r"TAKES_VIEW\(\) is a flag"):
+            ir_contract.parse_rows(
+                "#define X(PRIMITIVE, HELPER, MACRO) "
+                "MACRO(spam, ARGS(consumed), NONE, EFFECTS(), EXITS(), TAKES_VIEW(x))")
 
     def test_rows_are_checked(self):
         with self.assertRaisesRegex(SyntaxError, r"row spam: 1 ARGS for 2 parameters"):
@@ -1233,7 +1250,7 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual(rows["spam"].result.failure, "NEGATIVE")
         with self.assertRaisesRegex(SyntaxError, r"row spam: HELPER: 6 columns, then "
                                                  r"optionally each of FEEDBACK\(\.\.\.\), "
-                                                 r"SLOW\(\.\.\.\) once; got 'EXITS\(next\)'"):
+                                                 r"SLOW\(\.\.\.\), TAKES_VIEW\(\.\.\.\) once; got 'EXITS\(next\)'"):
             ir_contract.parse_rows(
                 "#define X(PRIMITIVE, HELPER, MACRO) "
                 "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(), EXITS(next))")

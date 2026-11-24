@@ -351,8 +351,14 @@
      * destructor row decides the effect (writes for a callback_free          \
      * DESTRUCTOR, releases otherwise), which is why this row declares        \
      * none. Consumes the value; no failure. No ir_leaf model: G0d.           */ \
+    /* Evidence (G0d3): the release of a view's owner (the generator's IR \
+     * forms): PyValue_XCLOSE_SPECIALIZED of the owner, which is NULL for a \
+     * local, or _PyValue_XCLOSE_SPECIALIZED_POINTER for a value known to be \
+     * in pointer space (pycore_value.h) */ \
     PRIMITIVE(PyValue_CLOSE_SPECIALIZED, void, (PyValue, destructor), \
-              ARGS(consumed, destructor), NONE, EFFECTS()) \
+              ARGS(consumed, destructor), NONE, EFFECTS(), \
+              VIEW_CLOSE(PyValue_XCLOSE_SPECIALIZED), \
+              POINTER_FORM(_PyValue_XCLOSE_SPECIALIZED_POINTER)) \
     /* _PyLong_ExactDealloc (Objects/longobject.c): re-immortalizes a small \
      * int, else _Py_FREELIST_FREE or PyObject_Free; an int holds no \
      * reference, so nothing is released and no Python runs */ \
@@ -446,14 +452,19 @@
      * type; arithmetic on scalars only.                                      */ \
     MACRO(Py_ARITHMETIC_RIGHT_SHIFT, \
         ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from ir_generator.VIEW_TAKES, ir_records.effect_sites; the \
+    /* seeded from ir_records.effect_sites; the \
      * result is argument 0 moved, value and obligation (F5).  Reviewed \
      * (G0c batch 1): TAKE is a generator replacer (ir_generator.py \
      * take_view, `_PyIR_Taken` in ceval_macros.h): in the interpreter \
      * form it is the value itself; in the IR forms the detached owner's \
      * count moves, or a local's value gets a new count (PyValue_XDUP: a \
      * count only).  No callback, no failure; it is not a C function */ \
-    MACRO(TAKE, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS()) \
+    MACRO(TAKE, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS(), TAKES_VIEW()) \
+    /* Evidence (G0d3): OWNER(x) is a generator replacer like TAKE \
+     * (IREmitter.take_view): the owner of x's input, PyValue_NULL for a \
+     * local, which only IR_RETIRE_PUBLISHED may read; for a value that is \
+     * not a view, x itself.  No callback, no failure; not a C function */ \
+    MACRO(OWNER, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS(), TAKES_VIEW()) \
     /* Evidence (G0c batch 6): Include/internal/pycore_interpframe.h: \
      * copies the bits of a view into an owner: no count changes. The \
      * caller must have cleared the slot that held the count (its comment). \
@@ -687,14 +698,18 @@
      * non-object word aborts (_PyValue_FatalNotObject), which the consumed   \
      * object requirement excludes. No failure path, no callback. It has no   \
      * ir_leaf model and no lowering: G0d.                                    */ \
-    PRIMITIVE(PyValue_AsKnownObjectSteal, PyObject *, (PyValue), \
-              ARGS(consumed object), VIEW, EFFECTS()) \
+    /* Evidence (G0d3), V11: no leaf uop calls it, so it has no leaf model and \
+     * no lowering, and its uops run as their handler's function form: a C function taking the owner of its argument (TAKES_VIEW) */ \
+    HELPER(PyValue_AsKnownObjectSteal, PyObject *, (PyValue), \
+              ARGS(consumed object), VIEW, EFFECTS(), TAKES_VIEW()) \
     /* The type of a value or an object, a pointer along the path `type`, \
      * and the version read through it \
      * pycore_value.h: the type of a word: ob_type of an object, the int\
      * or float type of an inline number; a read, no callee, no failure,\
      * no callback */ \
-    PRIMITIVE(PyValue_TYPE, PyTypeObject *, (PyValueBorrow), \
+    /* Evidence (G0d3), V11: no leaf uop calls it, so it has no leaf model and \
+     * no lowering, and its uops run as their handler's function form: a read of ob_type or the inline type */ \
+    HELPER(PyValue_TYPE, PyTypeObject *, (PyValueBorrow), \
               ARGS(borrowed), PATH(type), EFFECTS(reads)) \
     /* Include/object.h: a read of ob_type; no callee, no failure, no \
      * callback */ \
@@ -779,10 +794,17 @@
      * finalizer.  CLOSE is XCLOSE without the test for NULL; it declares \
      * no NONNULL_FORM, which test_columns_against_c would check by closing \
      * generated words */ \
+    /* Evidence (G0d3): the release of a view's owner: XCLOSE of the owner \
+     * (NULL for a local), or _PyValue_XCLOSE_POINTER for a value known to \
+     * be in pointer space (pycore_value.h) */ \
     PRIMITIVE(PyValue_XCLOSE, void, (PyValue), \
-              ARGS(consumed), NONE, EFFECTS(releases)) \
+              ARGS(consumed), NONE, EFFECTS(releases), \
+              VIEW_CLOSE(PyValue_XCLOSE), POINTER_FORM(_PyValue_XCLOSE_POINTER)) \
+    /* Evidence (G0d3): as PyValue_XCLOSE: a view's owner is released by \
+     * XCLOSE, which tests for the NULL of a local */ \
     PRIMITIVE(PyValue_CLOSE, void, (PyValue), \
-              ARGS(consumed nonnull), NONE, EFFECTS(releases)) \
+              ARGS(consumed nonnull), NONE, EFFECTS(releases), \
+              VIEW_CLOSE(PyValue_XCLOSE), POINTER_FORM(_PyValue_XCLOSE_POINTER)) \
     /* Identities: a borrowed view of a value; in a build with the GIL the \
      * relaxed atomic loads are plain loads */ \
     INTRINSIC(PyValue_Borrow, ARGS(borrowed), VIEW, BUILD(all)) \
@@ -861,7 +883,9 @@
     /* pycore_lazyimportobject.h (a static inline function): \
      * Py_IS_TYPE(op, &PyLazyImport_Type), a read of ob_type; no callee, \
      * no failure */ \
-    PRIMITIVE(PyLazyImport_CheckExact, int, (PyObject *), \
+    /* Evidence (G0d3), V11: no leaf uop calls it, so it has no leaf model and \
+     * no lowering, and its uops run as their handler's function form: a read of ob_type */ \
+    HELPER(PyLazyImport_CheckExact, int, (PyObject *), \
               ARGS(object), TEST(exact(PyLazyImport_Type)), EFFECTS(reads)) \
     /* Objects/object.c PyObject_HasAttrWithError -> _PyValue_GetOptionalAttr: \
      * __getattribute__ and __getattr__ run Python.  Returns 1 (found), 0 \
@@ -1359,6 +1383,10 @@
     /* Include/internal/pycore_tuple.h: the address of the inline \
      * ob_item array; no callee, no failure.  No model or lowering exists \
      * (V11): listed for G0d, as it is called only from non-leaf uops */ \
+    /* Include/internal/pycore_tuple.h (a macro): the address of the inline \
+     * ob_item array: an offset from the tuple, no read of its own, no \
+     * callee, no failure.  G0d3: modelled (ir_leaf.py) and lowered \
+     * (jit_lower.c), V11 */ \
     PRIMITIVE(_PyTuple_ITEMS, PyValue *, (PyObject *), \
               ARGS(object), SCALAR, EFFECTS(reads)) \
     /* The elements of a sequence into the arm's own outputs, the \
@@ -1375,12 +1403,14 @@
            (PyThreadState *, PyObject *, int, int, PyValue *), \
            ARGS(tstate, consumed, scalar, scalar, out), STATUS(ZERO), \
            EFFECTS(runs_python)) \
-    /* A free-threaded build's critical section: constant in this build */ \
-    PRIMITIVE(LOCK_OBJECT, int, (PyObject *), \
-              ARGS(object), CONTEXT("a free-threaded build's critical section"), \
-              EFFECTS()) \
-    PRIMITIVE(UNLOCK_OBJECT, void, (PyObject *), \
-              ARGS(object), NONE, EFFECTS()) \
+    /* Evidence (G0d3), pycore_critical_section.h: a free-threaded build's \
+     * critical section.  With the GIL, LOCK_OBJECT(op) is the constant 1 and \
+     * UNLOCK_OBJECT(op) nothing; the operand is not evaluated.  Reclassified \
+     * from PRIMITIVE: the leaf translator's CONSTANT_FORMS and ERASED \
+     * (V11: no model of a row's own) */ \
+    INTRINSIC(LOCK_OBJECT, ARGS(object), \
+              LITERAL(1, "a free-threaded build's critical section"), BUILD(gil)) \
+    INTRINSIC(UNLOCK_OBJECT, ARGS(object), NONE, BUILD(gil)) \
     /* ceval_macros.h (a static inline function, as in a Py_DEBUG build \
      * before): _PyTuple_GET_OBJECT(tuple, i), a read of the code's tuple \
      * of names; no callee beyond it, no failure path, no callback */ \
@@ -1549,7 +1579,9 @@
     /* Reviewed G0c2 (Include/internal/pycore_code.h): the cache operand's    \
      * pointer, typed. No memory read of its own; the FIELD rows below read   \
      * through it.                                                            */ \
-    PRIMITIVE(_PyBinaryOp_ExtendDescr, _PyBinaryOpSpecializationDescr *, (PyObject *), \
+    /* Evidence (G0d3), V11: no leaf uop calls it, so it has no leaf model and \
+     * no lowering, and its uops run as their handler's function form: a cast of the cache operand */ \
+    HELPER(_PyBinaryOp_ExtendDescr, _PyBinaryOpSpecializationDescr *, (PyObject *), \
               ARGS(scalar), PATH(binary_op_descr), EFFECTS()) \
     SLOT(binaryopactionfunc, PyObject *, (PyObject *, PyObject *), \
          ARGS(object, object), SCALAR, EFFECTS(runs_python)) \

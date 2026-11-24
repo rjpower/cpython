@@ -342,16 +342,16 @@ def owner_name(field: str) -> str:
 
 
 # The release of a view's owner, which is PyValue_NULL for a local, for each
-# release of a view and its form for a value known to be in pointer space
+# release of a view and its form for a value known to be in pointer space:
+# the VIEW_CLOSE and POINTER_FORM columns of the rows
 VIEW_RELEASES = {
-    "PyValue_CLOSE": ("PyValue_XCLOSE", "_PyValue_XCLOSE_POINTER"),
-    "PyValue_XCLOSE": ("PyValue_XCLOSE", "_PyValue_XCLOSE_POINTER"),
-    "PyValue_CLOSE_SPECIALIZED": ("PyValue_XCLOSE_SPECIALIZED",
-                                  "_PyValue_XCLOSE_SPECIALIZED_POINTER"),
+    row.name: (row.view_close, row.pointer_form)
+    for row in ir_contract.rows().values() if row.view_close
 }
 # The DSL calls that take a view: they give its owner, or a count of its
-# own for a local, to the caller (IREmitter.take_view())
-VIEW_TAKES = {"TAKE", "OWNER", "PyValue_AsKnownObjectSteal"}
+# own for a local, to the caller (IREmitter.take_view()): the rows that
+# declare TAKES_VIEW()
+VIEW_TAKES = frozenset(row.name for row in ir_contract.rows().values() if row.takes_view)
 # The DSL calls that read a view's owner, so that the handler must have
 # taken the input (IR_DETACH) before the statement that holds them
 OWNER_READS = set(VIEW_RELEASES) | VIEW_TAKES

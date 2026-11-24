@@ -154,6 +154,25 @@ class SliceTests(unittest.TestCase):
         '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
         '"READS_HEAP", "WRITES_HEAP"], declared 3 ["ALLOCATES", "MAY_RAISE", '
         '"MAY_RELEASE"]',
+        # Batch 7: no word executes RETURN_GENERATOR, so its result is NULL
+        # (F19); _YIELD_VALUE moves the yielded value into the caller's
+        # frame (F5); _GUARD_TOS_IS_NONE tests the identity of the word
+        # with PyValue_None (F20)
+        'RETURN_GENERATOR.record.uops[0].results: inferred 0 entries [], '
+        'declared 1 [{"__type": "Fact", "arg": "", "kind": "IS_NULL", '
+        '"subject": "v0"}]',
+        'INSTRUMENTED_YIELD_VALUE/_YIELD_VALUE: output `value` is declared '
+        'moved, the record has OWNED',
+        *(line
+          for handler in ("SEND_VIRTUAL", "SEND_VIRTUAL_XFER_DISCARD",
+                          "SEND_VIRTUAL_XFER_HOME", "SEND_VIRTUAL_XFER_POP_TOP",
+                          "SEND_VIRTUAL_XFER_RETURN", "SEND_VIRTUAL_XFER_STORE_FAST",
+                          "SEND_VIRTUAL_XFER_STORE_LOCAL")
+          for line in (
+              f'{handler}.record.uops[0].guards[0].facts[0].arg: '
+              'inferred "", declared "PyValue_None"',
+              f'{handler}.record.uops[0].guards[0].facts[0].kind: '
+              'inferred "IS_NONE", declared "IDENTITY"')),
     ]
 
     # Batch 5: the assume op of `iter: assumed(object) by GET_ITER` in the

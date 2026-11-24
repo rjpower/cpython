@@ -426,6 +426,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyFunction_SetVersion), 
               "_PyFunction_SetVersion: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyThreadState_HasStackSpace), bool (*)(PyThreadState *, int)),
               "_PyThreadState_HasStackSpace: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyThreadState_UpdateLastProfiledFrame), void (*)(PyThreadState *, _PyInterpreterFrame *, _PyInterpreterFrame *)),
+              "_PyThreadState_UpdateLastProfiledFrame: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_LeaveRecursiveCallPy), void (*)(PyThreadState *)),
               "_Py_LeaveRecursiveCallPy: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_LeaveRecursiveCallTstate), void (*)(PyThreadState *)),
@@ -6019,6 +6021,7 @@ ir_run_CLEANUP_THROW(
             PyValue value;
             exc_value_st = window[3];
             assert(PyValue_IsObject(exc_value_st));
+            assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
@@ -6057,6 +6060,7 @@ ir_run_CLEANUP_THROW_XFER_DISCARD(
             PyValue exc_value_st;
             PyValue value;
             exc_value_st = window[3];
+            assert(PyValue_IsObject(exc_value_st));
             assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
@@ -7682,8 +7686,7 @@ ir_run_END_ASYNC_FOR(
                 window[1] = PyValue_NULL;
             }
             else {
-                Py_INCREF(exc);
-                _PyErr_SetRaisedException(tstate, exc);
+                _PyErr_SetRaisedException(tstate, Py_NewRef(exc));
                 monitor_reraise(tstate, frame, this_instr);
                 PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
             }
@@ -8387,6 +8390,7 @@ ir_run_GET_ANEXT(
             PyValue awaitable;
             aiter = IR_SLOT(IR_B(ir_word));
             assert(PyValue_IsObject(aiter));
+            assert(PyValue_IsObject(aiter));
             PyObject *awaitable_o = _PyEval_GetANext(_PyValue_AsKnownObjectBorrowPointer(aiter));
             if (awaitable_o == NULL) {
                 PROCESS_ERROR_AT(RAISE, 1, this_instr);
@@ -8952,8 +8956,7 @@ ir_run_INSTRUMENTED_END_ASYNC_FOR(
                     window[1] = PyValue_NULL;
                 }
                 else {
-                    Py_INCREF(exc);
-                    _PyErr_SetRaisedException(tstate, exc);
+                    _PyErr_SetRaisedException(tstate, Py_NewRef(exc));
                     monitor_reraise(tstate, frame, this_instr);
                     PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
                 }
@@ -16855,6 +16858,7 @@ ir_run_WITH_EXCEPT_START(
             lasti = window[2];
             exit_self = window[1];
             exit_func = window[0];
+            assert(PyValue_IsObject(val));
             PyObject *exc, *tb;
             assert(PyValue_IsObject(val));
             assert(PyValue_IsObjectOrNull(exit_self));
@@ -21895,6 +21899,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue value;
             exc_value_st = window[3];
             assert(PyValue_IsObject(exc_value_st));
+            assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
@@ -21929,6 +21934,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue exc_value_st;
             PyValue value;
             exc_value_st = window[3];
+            assert(PyValue_IsObject(exc_value_st));
             assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
@@ -23698,8 +23704,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                     window[1] = PyValue_NULL;
                 }
                 else {
-                    Py_INCREF(exc);
-                    _PyErr_SetRaisedException(tstate, exc);
+                    _PyErr_SetRaisedException(tstate, Py_NewRef(exc));
                     monitor_reraise(tstate, frame, this_instr);
                     PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
                 }

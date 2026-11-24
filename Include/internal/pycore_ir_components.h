@@ -177,8 +177,15 @@
               ARGS(borrowed), TEST(object), EFFECTS()) \
     PRIMITIVE(PyValue_IsFalse, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(object), EFFECTS()) \
+    /* PyValue_IsNone (pycore_value.h) is `PyValue_Is(v, PyValue_None)`: \
+     * the word's bits against None's bits (an object word, the static \
+     * _Py_NoneStruct address with Py_TAG_REFCNT).  No call, no memory, no \
+     * callback, no failure.  True means the word is None, so the fact is \
+     * is(PyValue_None); the CONSTANT row gives None `inline \
+     * exact(_PyNone_Type)`, which implies object, so readers of the true \
+     * arm still get object */ \
     PRIMITIVE(PyValue_IsNone, bool, (PyValueBorrow), \
-              ARGS(borrowed), TEST(object), EFFECTS()) \
+              ARGS(borrowed), TEST(is(PyValue_None)), EFFECTS()) \
     /* VALUE_CHECK_FUNC(Bool) and PyValue_LongCheckExact (pycore_value.h): \
      * an object word, and its type read through ob_type.  The object check \
      * dereferences the word, so NULL is not admitted */ \
@@ -390,9 +397,11 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyIR_AdoptTemp, PyValue, (PyValueBorrow), \
         ARGS(borrowed), VALUE(owned), EFFECTS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ir.c: compares the handler against two ids and indexes the \
+     * const tables _PyIR_Formats and _PyOpcode_Deopt, which nothing \
+     * writes at run time.  No call, no heap read, no failure. */ \
     HELPER(_PyIR_BaseOpcode, int, (int), \
-        ARGS(scalar), SCALAR, EFFECTS(reads)) \
+        ARGS(scalar), SCALAR, EFFECTS()) \
     /* Objects/object.c (_PyValue_ASCII): _PyValue_Repr, then \
      * _PyUnicode_AsASCIIString on a non-ASCII repr: __repr__ runs Python.  \
      * Returns a new str reference or NULL with an exception set; the \
@@ -648,7 +657,14 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PyErr_Format, PyObject *, (PyObject *, const char *, ...), \
         ARGS(object, scalar), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/errors.c.  Callees: PyExceptionInstance_Check, \
+     * PyExceptionClass_Check and PyType_IsSubtype (reads the MRO, no \
+     * call into Python), and, for a tuple at the recursion limit, \
+     * _PyErr_GetRaisedException, _PyErr_SetString (RecursionError), \
+     * PyErr_FormatUnraisable (calls sys.unraisablehook, Python) and \
+     * _PyErr_SetRaisedException, which restores the pending exception. \
+     * No path leaves an exception set, and neither argument is stolen: \
+     * it returns 0 or 1.  The hook is the only route to Python. */ \
     HELPER(PyErr_GivenExceptionMatches, int, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
     /* Reviewed G0c2 (Python/errors.c): Py_XSETREF of                         \
@@ -658,10 +674,13 @@
      * Cannot fail.                                                           */ \
     HELPER(PyErr_SetHandledException, void, (PyObject *), \
         ARGS(object), NONE, EFFECTS(runs_python)) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Include/pyerrors.h: `_PyObject_CAST(Py_TYPE(x))`, a load of ob_type; \
+     * no call, no failure, no ownership (a borrowed view of the class). */ \
     MACRO(PyExceptionInstance_Class, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/exceptions.c: `Py_XNewRef(self->traceback)` under a \
+     * critical section (free-threaded only).  A new reference or NULL \
+     * with no exception set.  No callee that runs Python. */ \
     HELPER(PyException_GetTraceback, PyObject *, (PyObject *), \
         ARGS(object), SCALAR, EFFECTS(reads)) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
@@ -724,7 +743,9 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(Py_FatalError, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Include/refcount.h, a static inline function: an immortality test \
+     * and an increment; no call, no failure, no callback.  Free-threaded \
+     * it is atomic, outside the scoped product. */ \
     HELPER(Py_INCREF, void, (PyObject *), \
         ARGS(object), NONE, EFFECTS()) \
     /* seeded from a C macro (no static check), ir_records.predicate_facts, ir_records.effect_sites */ \
@@ -735,7 +756,10 @@
      * `reads` is over-declared and kept (sound).                             */ \
     MACRO(Py_IsNone, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Include/refcount.h: `_Py_NewRef(_PyObject_CAST(obj))`, an increment \
+     * (a count change is no effect, 1.3) returning obj: the result is a \
+     * new reference the caller owes.  No call (immortal check inline), no \
+     * failure. */ \
     MACRO(Py_NewRef, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* Include/object.h: ob_size = size, a store through the object.  \
@@ -782,9 +806,12 @@
      * while tracing) passes the index of this_instr. */ \
     HELPER(_PyCode_GetOriginalOpcode, uint8_t, (_PyCoLineInstrumentationData *, int), \
         ARGS(scalar, scalar), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Include/internal/pycore_ir.h, a static inline function: \
+     * IR_HANDLER(_PyCode_IRWords(co)[i]), a load of the code object's IR \
+     * word.  No call, no failure, no write.  Its only caller in this \
+     * batch is the Py_DEBUG assertion of _YIELD_VALUE. */ \
     HELPER(_PyCode_InstrHandler, int, (PyCodeObject *, int), \
-        ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(reads)) \
     /* Python/errors.c _PyErr_ChainExceptions1 -> \
      * _PyErr_ChainExceptions1Tstate: it steals the reference to exc, sets \
      * exc as the context of the exception now raised (PyException_SetContext) \
@@ -812,9 +839,15 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyErr_Occurred, PyObject *, (PyThreadState *), \
         ARGS(tstate), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/errors.c: `old = tstate->current_exception; \
+     * tstate->current_exception = exc; Py_XDECREF(old)`.  It steals exc \
+     * on its only path: the reference moves into the thread state.  exc \
+     * may be NULL, which clears the exception: a literal NULL names no \
+     * value and owes nothing (as for Py_XSETREF).  The displaced \
+     * exception is released, and its destructor may run Python.  No \
+     * failure path. */ \
     HELPER(_PyErr_SetRaisedException, void, (PyThreadState *, PyObject *), \
-        ARGS(tstate, object), NONE, EFFECTS(runs_python)) \
+        ARGS(tstate, consumed object), NONE, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyErr_SetString, void, (PyThreadState *, PyObject *, const char *), \
         ARGS(tstate, object, scalar), NONE, EFFECTS(runs_python)) \
@@ -964,7 +997,11 @@
      * over-declared and sound */ \
     HELPER(value_unicode_append, PyObject *, (PyObject *, PyObject *), \
         ARGS(consumed object, object), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ceval.c: builds a four-slot window of borrowed words and \
+     * calls _PyValue_Vectorcall(exit_func, ...), which runs any callable \
+     * (an inline exit_func is rejected with TypeError).  All five \
+     * arguments are borrowed (the window holds views).  Failure: NULL \
+     * with an exception set; success: a new reference. */ \
     HELPER(with_exit_call, PyValue, (PyValueBorrow, PyValueBorrow, PyObject *, PyObject *, PyObject *), \
         ARGS(borrowed, borrowed, object, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* seeded from ir_records.NOT_RELEASES */ \
@@ -1062,9 +1099,13 @@
      * frozenset; a read of ob_type; no failure, no callback.                 */ \
     MACRO(PyAnySet_CheckExact, \
         ARGS(scalar), TEST(exact(PyAnySet_Type)), EFFECTS(reads), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/dictobject.c: new_dict from the empty keys, with a free list \
+     * or PyObject_GC_New.  Callees: the allocator and the GC link.  A \
+     * collection is not run here: allocation only schedules it through \
+     * the eval breaker, which a later poll runs.  Failure: NULL with \
+     * MemoryError set; success: a new reference.  No callback. */ \
     HELPER(PyDict_New, PyObject *, (), \
-        ARGS(), SCALAR, EFFECTS(runs_python)) \
+        ARGS(), SCALAR, EFFECTS(allocates, raises)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PyDict_PopValue, int, (PyObject *, PyValueBorrow, PyValue *), \
         ARGS(object, borrowed, scalar), SCALAR, EFFECTS(runs_python)) \
@@ -1441,9 +1482,17 @@
     /* seeded from the C prototype, ir_records.CONTEXT_PREDICATES, ir_records.effect_sites */ \
     HELPER(_PyThreadState_HasStackSpace, bool, (PyThreadState *, int), \
         ARGS(tstate, scalar), CONTEXT("the data stack must hold the callee's frame"), EFFECTS(reads)) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
-    MACRO(_PyThreadState_UpdateLastProfiledFrame, \
-        ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(runs_python), EXITS()) \
+    /* Include/internal/pycore_interpframe.h, a static inline function. \
+     * Callees: none.  It compares tstate->last_profiled_frame with frame \
+     * and, on equality, stores previous there and increments the sequence \
+     * number: two stores to the thread state, no call, no allocation, no \
+     * release, no failure path and no callback (a profiler reads the \
+     * fields from another process).  The frame pointers are compared and \
+     * stored, never dereferenced.  Every call passes a frame, the frame's \
+     * previous or the thread's current frame. */ \
+    HELPER(_PyThreadState_UpdateLastProfiledFrame, void, \
+           (PyThreadState *, _PyInterpreterFrame *, _PyInterpreterFrame *), \
+           ARGS(tstate, scalar, scalar), NONE, EFFECTS(reads, writes)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_Py_LeaveRecursiveCallPy, void, (PyThreadState *), \
         ARGS(tstate), NONE, EFFECTS(reads, writes)) \
@@ -1471,7 +1520,9 @@
 
 /* Generators, coroutines and iteration */
 #define _PyIR_COMPONENTS_GENERATORS(PRIMITIVE, HELPER, MACRO) \
-    /* seeded from a C macro (no static check), ir_records.predicate_facts, ir_records.effect_sites */ \
+    /* Include/cpython/genobject.h: `Py_IS_TYPE(op, &_PyAsyncGenASend_Type)`: \
+     * one load of ob_type and a compare against a static type; no call, \
+     * no failure.  The type is static, so exact(...) is a value fact. */ \
     MACRO(PyAsyncGenASend_CheckExact, \
         ARGS(scalar), TEST(exact(PyAsyncGenASend_Type)), EFFECTS(reads), EXITS()) \
     /* Evidence (G0c8): Include/cpython/genobject.h: Py_IS_TYPE(op, &PyCoro_Type), one read of \
@@ -1488,10 +1539,20 @@
      * use the answer for a monitoring event only, so the result stays SCALAR. */ \
     MACRO(PyGen_Check, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ceval.c.  Borrows aiter.  Callees: the am_anext slot (any \
+     * __anext__, Python), _PyCoro_GetAwaitableIter (__await__, Python), \
+     * PyErr_Format and _PyErr_FormatFromCause, Py_DECREF of next_iter. \
+     * Failure: NULL with an exception set; success: a new reference to \
+     * the awaitable. */ \
     HELPER(_PyEval_GetANext, PyObject *, (PyObject *), \
         ARGS(object), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ceval.c.  Borrows its operand.  Callees: PyErr_Format and \
+     * _PyEval_FormatAwaitableError (reads the type, may run Python \
+     * through _PyEval_SpecialMethodCanSuggest's lookups), \
+     * _PyCoro_GetAwaitableIter (__await__, Python), Py_CLEAR of the \
+     * coroutine it rejects.  Failure: NULL with an exception set (a \
+     * number is no awaitable; a coroutine already being awaited); \
+     * success: a new reference. */ \
     HELPER(_PyEval_GetAwaitable, PyObject *, (PyValueBorrow, int), \
         ARGS(borrowed, scalar), SCALAR, EFFECTS(runs_python)) \
     /* Reviewed G0c5 (ceval.c).  Called with an error set.  Callees: \
@@ -1508,10 +1569,21 @@
      * not read here) */ \
     HELPER(_PyForIter_StopIsExhaustion, int, (PyThreadState *, _PyInterpreterFrame *), \
         ARGS(tstate, frame), SCALAR, EFFECTS(runs_python)) \
-    /* ceval.c: {1, item} owned, {0, NULL} at the end with no exception, {-1, NULL} with one (G0a4: a CASES result) */ \
+    /* Python/ceval.c: the out-of-line wrapper of \
+     * _PyForIter_VirtualIteratorNextInline, whose body it returns as it \
+     * is (reviewed with batch 5's row for the inline form, which carries \
+     * the callee chain).  Borrows iter.  Results: {1, item} with an \
+     * owned item and the cursor *index_ptr advanced (a tagged index, \
+     * inline); {0, NULL} at exhaustion with no exception (a tagged \
+     * cursor's iteritem returned NULL, or a StopIteration the step \
+     * raised, reported to monitoring and cleared); {0, v} where a step \
+     * returned PYGEN_RETURN, v the owned return value or NULL; {-1, NULL} \
+     * with an exception set.  Callbacks: the iterator's slot (any \
+     * __next__), _PyEval_MonitorRaise's tools, and the release of the \
+     * cleared exception; no argument is stolen. */ \
     HELPER(_PyForIter_VirtualIteratorNext, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *), \
         ARGS(tstate, frame, borrowed, scalar), \
-        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
+        CASES(status==-1 value(null) raised, status==0 value(owned nullable), status==1 value(owned)), EFFECTS(runs_python)) \
     /* Reviewed G0c5 (ceval.c; _PyForIter_VirtualIteratorNext is its \
      * out-of-line wrapper).  FOR_ITER's step of the iterator `iter` \
      * (borrowed) with its cursor at *index_ptr.  A tagged cursor: \
@@ -1537,19 +1609,36 @@
     HELPER(_PyForIter_VirtualIteratorNextInline, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *), \
         ARGS(tstate, frame, borrowed, scalar), \
         CASES(status==-1 value(null) raised, status==0 value(owned nullable), status==1 value(owned)), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Include/internal/pycore_genobject.h, a static inline function: \
+     * `frame - offsetof(PyGenObject, gi_iframe)`, address arithmetic with \
+     * no dereference (the owner assertion is Py_DEBUG only).  No call, \
+     * no failure. */ \
     HELPER(_PyGen_GetGeneratorFromFrame, PyGenObject *, (_PyInterpreterFrame *), \
-        ARGS(frame), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+        ARGS(frame), SCALAR, EFFECTS()) \
+    /* Python/ceval_macros.h, a static inline function: PyValue_IsObject, \
+     * PyCoro_CheckExact (a load of ob_type) and one relaxed load of the \
+     * coroutine's cr_frame_state.  No call into other code, no write, no \
+     * failure; the operand is borrowed.  True means the identity arm of \
+     * _PyEval_GetAwaitable: an exact coroutine that nobody awaits. */ \
     HELPER(coro_awaitable_can_transfer, bool, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ceval_macros.h, a static inline function.  GIL build: \
+     * `gen->gi_frame_state = FRAME_EXECUTING` and 1; no failure and no \
+     * call.  Free-threaded it can lose the claim to another thread, \
+     * set ValueError and return 0 (outside the scoped product, where \
+     * the caller's ERROR_NO_POP is then unreachable).  gen was accepted \
+     * by gen_may_claim. */ \
     HELPER(gen_claim, int, (PyThreadState *, PyGenObject *), \
         ARGS(tstate, scalar), SCALAR, EFFECTS(reads, writes)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ceval_macros.h, a static inline function: a relaxed load of \
+     * gi_frame_state and a comparison with FRAME_EXECUTING; no write, no \
+     * call, no failure. */ \
     HELPER(gen_may_claim, bool, (PyGenObject *), \
         ARGS(scalar), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ceval_macros.h, a static inline function.  GIL build: if \
+     * gi_frame_state < FRAME_EXECUTING it stores FRAME_EXECUTING and \
+     * returns true, else false (executing or finished).  One load, at \
+     * most one store; no call, no exception. */ \
     HELPER(gen_try_set_executing, bool, (PyGenObject *), \
         ARGS(scalar), SCALAR, EFFECTS(reads, writes))
 
@@ -1568,7 +1657,14 @@
      * borrowed (dupkey is released by the caller) */ \
     HELPER(_PyEval_FormatKwargsError, void, (PyThreadState *, PyValueBorrow, PyObject *, PyObject *), \
         ARGS(tstate, borrowed, object, object), NONE, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ceval.h: no_tools_for_local_event reads the code's monitoring \
+     * data; otherwise do_monitor_exc takes the pending exception \
+     * (PyErr_GetRaisedException), calls the tools' RERAISE callbacks \
+     * through _Py_call_instrumentation_arg (arbitrary Python) and puts \
+     * the exception back on success.  A callback's failure replaces the \
+     * pending exception and is not reported: the caller goes on to \
+     * exception_unwind either way.  Returns nothing; no argument is \
+     * stolen. */ \
     HELPER(monitor_reraise, void, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *), \
         ARGS(tstate, frame, scalar), NONE, EFFECTS(runs_python))
 
@@ -1675,9 +1771,12 @@
      * ORIGINAL_HANDLER; it ends the word without reading the next word: `jump`. */ \
     MACRO(DISPATCH_GOTO, \
         ARGS(), NONE, EFFECTS(), EXITS(jump)) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
-    MACRO(FT_ATOMIC_LOAD_INT8_RELAXED, \
-        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    /* Include/internal/pycore_pyatomic_ft_wrappers.h.  GIL build: \
+     * `#define FT_ATOMIC_LOAD_INT8_RELAXED(value) value`, the identity of \
+     * its operand expression, whose own `->` loads the body scan sees. \
+     * Free-threaded: _Py_atomic_load_int8_relaxed(&value), outside the \
+     * scoped product, like its UINT8 and PTR siblings. */ \
+    INTRINSIC(FT_ATOMIC_LOAD_INT8_RELAXED, ARGS(scalar), SCALAR, BUILD(gil)) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(FT_ATOMIC_LOAD_PTR, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
@@ -1698,16 +1797,30 @@
      * or of the thread state.  The free-threaded definition (acquire load, line 36) is \
      * not in the scoped product. */ \
     INTRINSIC(FT_ATOMIC_LOAD_UINTPTR_ACQUIRE, ARGS(scalar), SCALAR, BUILD(gil)) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Include/internal/pycore_pyatomic_ft_wrappers.h.  GIL build: \
+     * `#define FT_ATOMIC_STORE_INT8_RELEASE(value, new_value) value = \
+     * new_value`, one store to the object's field and no load: it \
+     * writes, it reads nothing, it calls nothing, and it cannot fail. \
+     * An assignment to its first argument, so it cannot be a function or \
+     * an INTRINSIC (not an identity).  Free-threaded: a release store. */ \
     MACRO(FT_ATOMIC_STORE_INT8_RELEASE, \
-        ARGS(scalar, scalar), SCALAR, EFFECTS(reads, writes), EXITS()) \
+        ARGS(scalar, scalar), NONE, EFFECTS(writes), EXITS()) \
     /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
     MACRO(INSTR_AT_OFFSET, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
+    /* Tools/cases_generator/generators_common.py expands it to \
+     * `{0} - _PyFrame_GetBytecode(frame)`: pointer arithmetic against the \
+     * frame's bytecode base.  _PyFrame_GetBytecode reads the frame's \
+     * executing copy (frame state, the word's own frame, not the heap), \
+     * calls nothing and cannot fail.  Its only caller in this batch is an \
+     * assertion under Py_DEBUG. */ \
     MACRO(INSTR_OFFSET_OF, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.TRANSFER_TOKENS, ir_records.effect_sites */ \
+    /* Python/ceval_macros.h: `(next_instr += (x))`, an advance of the \
+     * word cursor: no memory access, no call.  The generator reads it as \
+     * the word's jump (TRANSFER_TOKENS); JUMPBY(0), the only form in this \
+     * batch (_END_ASYNC_FOR), advances nothing and only names the source \
+     * word for sys.monitoring, so that handler continues at next. */ \
     MACRO(JUMPBY, \
         ARGS(scalar), NONE, EFFECTS(), EXITS(jump)) \
     /* seeded from a C macro (no static check), ir_records.TRANSFER_TOKENS, ir_records.effect_sites */ \
@@ -1790,7 +1903,13 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_CreateInitFrame, _PyInterpreterFrame *, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue, _PyInstr *), \
         ARGS(tstate, frame, scalar, consumed, consumed, scalar), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ceval.c.  Consumes obj on every return (an inline obj owes \
+     * nothing): the non-object path raises TypeError through \
+     * _PyErr_Format and owes nothing; every other path closes obj \
+     * (PyValue_CLOSE, a release).  Callees: _PyErr_Format, the type's \
+     * am_aiter slot (any __aiter__, Python), PyValue_CLOSE, Py_DECREF of \
+     * the iterator it rejects.  Failure: NULL with an exception set; \
+     * success: a new reference, an object whose type has am_anext. */ \
     HELPER(_PyEval_GetAIter, PyValue, (PyThreadState *, PyValue), \
         ARGS(tstate, consumed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Reviewed G0c5 (ceval.c).  Consumes `iterable` on every path: the \
@@ -1944,10 +2063,11 @@
      * function: the macro only supplies the frame's words. */ \
     MACRO(IR_METHOD_POLY_LOOKUP, ARGS(scalar, object), \
           VALUE(borrowed), EFFECTS(reads), EXITS(), FEEDBACK(read(entry))) \
-    /* Markers that emit no code or a fixed statement \
-     * (ir_generator.py: generator_marker, metadata_passthrough, call_effects, \
-     * and the prepare_call no-op; IR_MARKER_EFFECTS has an empty set for \
-     * IR_BEGIN_CALL_EFFECTS) */ \
+    /* ir_generator.py generator_marker: emits Py_UNREACHABLE() after the \
+     * ownership event GENERATOR_MARKER.  No word executes \
+     * RETURN_GENERATOR: a call creates the generator in \
+     * _PyGen_NewCall (Objects/genobject.c) with its frame past this word. \
+     * No callee, no effect, no exit. */ \
     MACRO(IR_GENERATOR_MARKER, ARGS(), NONE, EFFECTS(), EXITS()) \
     /* Evidence (G0c8): ir_generator.py:3626: a marker that emits no code; it is accepted \
      * only when the word's metadata-only passthrough is certified (argument 1). */ \
@@ -2147,8 +2267,16 @@
     MACRO(IR_FINISH_GENERATOR_RETURN_EMPTY, ARGS(borrowed, scalar), NONE, \
           EFFECTS(reads, writes, raises, runs_python, switches_frame), \
           EXITS(return, raise)) \
-    /* IR_MARKER_EFFECTS escapes, error, terminal, frame; TRANSFER_TOKENS \
-     * (ENTER_FRAME, RAISE) */ \
+    /* ir_generator.py enter_generator: stores the sent value's slot into \
+     * the resumed frame (frame->return_slot, return_pc, previous, the \
+     * generator's exc_info), makes the generator's frame current, then \
+     * either enters the recursion count (_Py_EnterRecursivePy, which can \
+     * fail with RecursionError: the sent value is closed, \
+     * PROCESS_ERROR_AT) or, in the generator boundary form, jumps through \
+     * IR_GEN_RESUME.  The new frame runs Python, so runs_python and \
+     * switches_frame; the sent value moves into the resumed frame, which \
+     * the walk cannot say, so the uop declares it taken.  Exits: enter (the \
+     * transfer), raise (the failed entry). */ \
     MACRO(IR_ENTER_GENERATOR, ARGS(object, scalar), NONE, \
           EFFECTS(reads, writes, raises, runs_python, switches_frame), \
           EXITS(enter, raise)) \

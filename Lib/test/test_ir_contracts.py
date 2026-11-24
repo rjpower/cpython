@@ -196,6 +196,11 @@ class SliceTests(unittest.TestCase):
         # its other arms make a new one; the result is owned on every path,
         # which the record's ALIAS (the input's home) does not say
         'FORMAT_SIMPLE/_FORMAT_SIMPLE: output `res` is declared owned, the record has ALIAS',
+        # G0c9: _GET_ITER's second result is a tagged index or NULL
+        # (_PyEval_GetIter's row, G0a5's representation table)
+        'GET_ITER.record.uops[1].results: inferred 0 entries [], declared 1 '
+        '[{"__type": "Fact", "arg": "tagged_index|null", "kind": "ENCODING", '
+        '"subject": "v2"}]',
         # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
         # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
         'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '

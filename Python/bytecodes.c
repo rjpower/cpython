@@ -4386,7 +4386,10 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        op(_GET_ITER, (iterable -- iter, index_or_null)) {
+        op(_GET_ITER,
+                (iterable: consumed -- iter: owned, index_or_null: inline encoding(tagged_index|null)))
+            effects(runs_python) exits(next, raise)
+        {
             _PyValuePair got = _PyEval_GetIter(iterable, oparg);
             DEAD(iterable);
             ERROR_IF(PyValue_IsNull(got.first));
@@ -4747,10 +4750,13 @@ dummy_func(
             _ITER_JUMP_RANGE +
             _ITER_NEXT_RANGE;
 
-        op(_FOR_ITER_GEN_FRAME, (iter, null -- iter, null, gen_frame)) {
-            assert(PyValue_IsObject(iter));
+        op(_FOR_ITER_GEN_FRAME,
+                (iter: assumed(object) by GET_ITER, null -- iter, null, gen_frame: owned))
+            effects(reads, writes, raises, runs_python, switches_frame)
+            exits(miss, raise, enter)
+        {
             PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(iter);
-            EXIT_IF(Py_TYPE(gen) != &PyGen_Type);
+            EXIT_IF(Py_TYPE(gen) != &PyGen_Type, "the iterator is not a generator");
             EXIT_IF(!gen_may_claim(gen), "the generator runs or has finished");
             STAT_INC(FOR_ITER, hit);
             if (!gen_claim(tstate, gen)) {

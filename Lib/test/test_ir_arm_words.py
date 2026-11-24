@@ -14,6 +14,8 @@ import types
 import textwrap
 import unittest
 
+from pathlib import Path
+from test import test_tools
 from test.support import import_helper, ir_dis
 from test.support.script_helper import assert_python_ok
 
@@ -287,13 +289,19 @@ class ForceArmTests(unittest.TestCase):
     def test_every_arm_stands_for_a_stack_op_of_its_family(self):
         # Tables sized for stack ops (_PyOpcode_Deopt, _PyOpcode_Caches, the
         # statistics) are indexed through the base opcode, never the handler
+        # The base is the first stack op of the family's ops(...) clause
+        test_tools.skip_if_missing("cases_generator")
+        with test_tools.imports_under_tool("cases_generator"):
+            import rop_check
+        root = Path(__file__).resolve().parents[2]
+        program = rop_check.load(
+            sorted((root / "Python" / "register_ops").glob("*.rop")))
         contract = _opcode.get_ir_contract()
-        stack_op = {"Add": "BINARY_OP", "GetAttr": "LOAD_ATTR",
-                    "GetMethod": "LOAD_ATTR"}
         for name, handler in capi.arm_handlers().items():
             with self.subTest(arm=name):
+                family = program.families[program.arms[name].family]
                 self.assertEqual(contract[handler].base,
-                                 dis.opmap[stack_op[name.split(".")[0]]])
+                                 dis.opmap[family.ops[0]])
                 self.assertEqual(contract[handler].shadow, contract[handler].base)
 
     def test_the_old_specializer_leaves_a_forced_arm_to_its_miss_route(self):

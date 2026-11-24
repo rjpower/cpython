@@ -260,9 +260,21 @@ def vocabulary_fact(kind: str, arg: str) -> ir_contract.VFact | None:
         # None is a CONSTANT row's value: its identity is is(PyValue_None)
         return ir_contract.VFact("is", "PyValue_None")
     word = ir_contract.VOCABULARY_OF_KIND.get(kind)
-    if word is None or word in ir_contract.FACTS_WITH_ARGUMENT and not re.fullmatch(r"\w+", arg):
+    if word is None:
         return None
-    return ir_contract.VFact(word, arg if word in ir_contract.FACTS_WITH_ARGUMENT else "")
+    if word == "exact":
+        # A union of exact types: exact(T1|T2), without spaces
+        arg = "|".join(t.strip() for t in arg.split("|"))
+    elif word == "type_slot":
+        # A slot's value: type_slot(slot,fn); other comparisons have no word
+        parts = [t.strip() for t in arg.split("==")]
+        arg = ",".join(parts) if len(parts) == 2 else arg
+    if word not in ir_contract.FACTS_WITH_ARGUMENT | ir_contract.FACTS_WITH_OPTIONAL_ARGUMENT:
+        arg = ""
+    try:
+        return ir_contract.parse_fact(f"{word}({arg})" if arg else word, None)
+    except ValueError:
+        return None
 
 
 def predicate_test(name: str, arity: int) -> tuple[str, list[str]] | None:

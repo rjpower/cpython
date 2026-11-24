@@ -10,6 +10,7 @@
 #include "pycore_long.h"
 #include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_native_scope.h"
+#include "pycore_rop_metadata.h"  // ROP_NUM_HANDLERS
 #include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
@@ -2556,6 +2557,19 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return error;
 }
 
+/* The form of a handler: the old generated table, then the register arms'
+ * (generated_rop_forms.c.h), which follow it */
+static const _PyIRForm ir_handler_forms[512];
+static const _PyIRForm ir_rop_forms[ROP_NUM_HANDLERS];
+static inline _PyIRForm
+ir_form(int handler)
+{
+    if (handler >= ROP_FIRST_HANDLER) {
+        return ir_rop_forms[handler - ROP_FIRST_HANDLER];
+    }
+    return ir_handler_forms[handler];
+}
+
 /* The function forms (tiers87, C2).  Every handler's body is also a function
  * of its own, ir_run_X(tstate, frame, next_instr, ir_word), and every VM
  * routine (Python/ceval_routines.h) and DSL label is a function ir_NAME; each
@@ -2618,7 +2632,7 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #define DISPATCH_SAME_OPARG() return (_PyIRTransfer){frame, next_instr}
 #define DISPATCH_GOTO() \
     do { \
-        Py_MUSTTAIL return ir_handler_forms[opcode](tstate, frame, next_instr, ir_word); \
+        Py_MUSTTAIL return ir_form(opcode)(tstate, frame, next_instr, ir_word); \
     } while (0)
 #define DISPATCH_INLINED(NEW_FRAME) \
     do { \
@@ -2821,13 +2835,22 @@ IR_HOT_ROUTINE(gen_complete, PyValue gen_value);
  * from the same handler text, with the forms' bindings of the macros they
  * do not bind themselves */
 #include "generated_ir_stubs.c.h"
+/* The forms of the register instruction arms (Python/register_ops), in a
+ * table of their own from ROP_FIRST_HANDLER */
+#include "generated_rop_forms.c.h"
 #pragma GCC diagnostic pop
 
 #ifdef _PY_JIT_SUPPORTED
+/* The forms of every handler by number: the old table and the arms' */
 const void *const *
 _PyEval_HandlerForms(void)
 {
-    return (const void *const *)ir_handler_forms;
+    static _PyIRForm forms[IR_HANDLER_MASK + 1];
+    if (forms[0] == NULL) {
+        memcpy(forms, ir_handler_forms, sizeof(ir_handler_forms));
+        memcpy(forms + ROP_FIRST_HANDLER, ir_rop_forms, sizeof(ir_rop_forms));
+    }
+    return (const void *const *)forms;
 }
 
 /* The raise exit of a baseline JIT template (Python/jit_template.c): its
@@ -2978,7 +3001,7 @@ ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfla
         int opcode;
         NEXTOPARG();
         PRE_DISPATCH_GOTO();
-        t = ir_handler_forms[opcode](tstate, frame, next_instr, ir_word);
+        t = ir_form(opcode)(tstate, frame, next_instr, ir_word);
     }
 }
 #pragma pop_macro("DISPATCH")
@@ -3016,7 +3039,7 @@ ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfla
 static Py_NO_INLINE PyValue
 ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
-#include "ir_targets.h"
+#include "rop_targets.h"
     _PyInstr *next_instr = frame->instr_ptr;
     _PyIRWord ir_word = 0;
     /* The operands of the shared bodies that the labels below read: the
@@ -3041,6 +3064,7 @@ ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
     goto *&&LABEL_start_frame;
 
 #include "generated_ir_cases.c.h"
+#include "generated_rop_cases.c.h"
 
     /* A function form returned no word: it raised (ir_execute_forms() has the
      * same contract), and process_error resolves it. */

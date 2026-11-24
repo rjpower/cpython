@@ -1,0 +1,10 @@
+# Pinned handler numbers of the register instruction arms.
+#
+# `Family.Arm NUMBER`.  Arms take the numbers from 418 (the old handlers end
+# at 417) to 511, the limit of the nine-bit handler field.  A number is a
+# fact of the .pyc format once a word can name the arm: change it only with a
+# bump of the magic number.  rop_generator.py checks that this file and the
+# definitions name the same arms.
+Add.Int 418
+Add.Generic 419
+GetAttr.Instance 420

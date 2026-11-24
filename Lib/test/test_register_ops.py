@@ -134,7 +134,7 @@ class ParseTests(unittest.TestCase):
          "releases, runs_python, polls, switches_frame)"),
         ("arm F.A inline effects() feedback() exits() { entry(): x = 1; }", 1, 56,
          "expected a statement or a terminator (goto, branch, call, each, advance, "
-         "exit), found 'x'"),
+         "exit, tail), found 'x'"),
         ("macro m() -> Unit effects() feedback() exits() pending;", 1, 40,
          "a macro's exits are its cases: no 'exits' clause"),
         ("point F.P(current, here, clear) keep() spent() defs() held();", 1, 20,
@@ -228,6 +228,10 @@ CHECK_CASES = [
          (10, 18, 'Enum<Opp>: no enum Opp is declared'),
          (29, 21, 'op: argument o is Enum<Opp>; PLUS is Enum<Op>'),
          (52, 21, 'op: argument o is Enum<Opp>; MINUS is Enum<Op>'),
+     ]),
+    ('macro publish', '  Run():\n    exit run();',
+     '  Run():\n    publish [] retire [] at F.Done;\n    exit run();', [
+         (21, 5, 'a macro does not publish; it returns a case and its arm publishes'),
      ]),
     ('callee', 'box(scale(l))',
      'box(scael(l))', [
@@ -585,6 +589,9 @@ class CheckTests(unittest.TestCase):
          [("t", "A"), ("u", "B+C"), ("s", "D")]),
         ("family F(a:Src, b:Src, c:Src, d:Src, u:FarHead) exits(next);", 1,
          [("a", "A"), ("b", "B"), ("c", "C"), ("d", "D"), ("u", "P0+P1")]),
+        # An argument descriptor's count takes a field; its homes follow
+        ("family F(d:Dst, fn:Src, a:Args, f:Fb<Call>) exits(next);", 0,
+         [("d", "A"), ("fn", "B"), ("a", "C"), ("f", "D")]),
     ]
 
     def test_derived_encoding(self):

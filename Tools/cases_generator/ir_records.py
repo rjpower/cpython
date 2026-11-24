@@ -973,9 +973,7 @@ def _nested_if(stmt: Stmt, site: Token) -> bool:
 # The guard markers and the facts that each establishes of its arguments
 MARKER_FACTS = {
     "IR_GUARD_INLINE_INT": lambda a, s: [Fact("INLINE_INT", s.of(a[0]))],
-    "IR_GUARD_ELEMENT_TYPE": lambda a, s: [Fact("EXACT_TYPE", s.of(a[0]),
-                                                {"LIST": "PyList_Type", "TUPLE": "PyTuple_Type"}
-                                                .get(" ".join(a[1]), " ".join(a[1])))],
+    "IR_GUARD_ELEMENT_TYPE": lambda a, s: [Fact("EXACT_TYPE", s.of(a[0]), " ".join(a[1]))],
     "IR_GUARD_ELEMENT_INDEX": lambda a, s: [Fact("IN_BOUNDS", s.of(a[1]), s.of(a[0]))],
     "IR_GUARD_SHAPE_READ": lambda a, s: [Fact("TYPE_VERSION", s.of(a[0]), " ".join(a[1])),
                                          Fact("SHAPE", s.of(a[0]), " ".join(a[2]))],

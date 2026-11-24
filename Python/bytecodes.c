@@ -1208,11 +1208,11 @@ dummy_func(
         }
 
         leaf inline_ok op(_GUARD_ELEMENT_LIST, (container, unused -- container, unused)) {
-            IR_GUARD_ELEMENT_TYPE(container, LIST);
+            IR_GUARD_ELEMENT_TYPE(container, PyList_Type);
         }
 
         leaf inline_ok op(_GUARD_ELEMENT_TUPLE, (container, unused -- container, unused)) {
-            IR_GUARD_ELEMENT_TYPE(container, TUPLE);
+            IR_GUARD_ELEMENT_TYPE(container, PyTuple_Type);
         }
 
         macro(BINARY_OP_SUBSCR_LIST_INT) =

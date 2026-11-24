@@ -63,7 +63,7 @@ class CanonicalElementTests(unittest.TestCase):
         read = "res = IR_DUP_CANONICAL_ELEMENT(list_st, index);"
         mutations = (
             ("IR_GUARD_INLINE_INT(value);", "(void)value;"),
-            ("IR_GUARD_ELEMENT_TYPE(container, LIST);", "(void)container;"),
+            ("IR_GUARD_ELEMENT_TYPE(container, PyList_Type);", "(void)container;"),
             (guard, guard.replace("FROM_END", "NONNEGATIVE")),
             (guard, guard.replace("sub_st", "list_st")),
             (read, read.replace("list_st", "sub_st")),

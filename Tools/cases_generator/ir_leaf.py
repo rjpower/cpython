@@ -986,10 +986,10 @@ def capability_expansion(name: str, args: list[str], pointer_test: str | None = 
     if name == "IR_GUARD_INLINE_INT":
         return [("guard", f"!PyValue_IsInlineInt({args[0]})")]
     if name == "IR_GUARD_ELEMENT_TYPE":
-        value, kind = args
-        prefix = {"LIST": "PyList", "TUPLE": "PyTuple"}[kind]
+        value, tp = args
+        prefix = {"PyList_Type": "PyList", "PyTuple_Type": "PyTuple"}[tp]
         test = pointer_test or f"PyValue_IsObject({value})"
-        items = [("gil_disabled_miss",)] if kind == "LIST" else []
+        items = [("gil_disabled_miss",)] if tp == "PyList_Type" else []
         items.append(("guard", f"!{test} || !{prefix}_CheckExact("
                                f"_PyValue_AsKnownObjectBorrowPointer({value}))"))
         return items

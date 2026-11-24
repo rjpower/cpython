@@ -180,6 +180,10 @@ EXTRA_ROWS = """
     MACRO(SPAM_GUARD_INT, ARGS(borrowed), GUARD(inline_int), EFFECTS(), EXITS(miss)) \
     MACRO(SPAM_GUARD_INDEX, ARGS(borrowed, borrowed, scalar), GUARD(in_bounds(1)), \
           EFFECTS(reads), EXITS(deopt)) \
+    MACRO(SPAM_GUARD_TYPE, ARGS(borrowed, scalar), GUARD(exact(1)), EFFECTS(reads), \
+          EXITS(miss)) \
+    MACRO(SPAM_GUARD_SHAPE, ARGS(object, scalar, scalar), GUARD(type_version(1) shape(2)), \
+          EFFECTS(reads), EXITS(miss)) \
     MACRO(SPAM_DESCR, ARGS(scalar), VALUE(borrowed assumed(nonnull) by spam_cache), \
           EFFECTS(reads), EXITS()) \
     MACRO(SPAM_DESCR_OR_NULL, ARGS(scalar), VALUE_OR_NULL(borrowed), EFFECTS(reads), EXITS()) \
@@ -1851,6 +1855,39 @@ class VerifierTests(unittest.TestCase):
             ir_contract.parse_rows("#define X(PRIMITIVE, HELPER, MACRO) "
                                    "MACRO(SPAM, ARGS(borrowed), GUARD(inline_int, inline), "
                                    "EFFECTS(), EXITS(miss))")
+
+    def test_guard_facts_take_scalar_arguments(self):
+        # _GUARD_ELEMENT_LIST and _GUARD_SHAPE_READ: a fact's argument k is
+        # the value of the row's scalar argument k
+        self.verify("""
+            op(_GUARD_ELEMENT_LIST, (container, unused -- container: exact(PyList_Type), unused))
+                effects(reads) exits(next, miss)
+            {
+                SPAM_GUARD_TYPE(container, PyList_Type);
+            }
+        """)
+        source = """
+            op(_GUARD_SHAPE_READ, (type_version/2, shape/0, owner: object -- owner: %s))
+                effects(reads) exits(next, miss)
+            {
+                SPAM_GUARD_SHAPE(PyValue_AsKnownObjectBorrow(owner), type_version, %s);
+            }
+        """
+        self.verify(source % ("shape(shape) type_version(type_version)", "shape"))
+        self.refuses(source % ("shape(shape) type_version(type_version)", "oparg + 1"),
+                     r"`owner` is declared .*shape\(shape\).*, which nothing establishes")
+        self.refuses(source % ("shape(type_version) type_version(type_version)", "shape"),
+                     r"`owner` is declared .*shape\(type_version\).*, which nothing establishes")
+        # A value fact takes a scalar argument; in_bounds names a value
+        for row, message in (
+                ("ARGS(borrowed, borrowed), GUARD(exact(1))",
+                 r"exact\(1\): argument 1 is borrowed; exact\(k\) takes a scalar argument"),
+                ("ARGS(borrowed, scalar), GUARD(in_bounds(1))",
+                 r"in_bounds\(1\): argument 1 is scalar; in_bounds\(k\) names a value"),
+                ("ARGS(borrowed), GUARD(shape(1))", r"shape\(1\): the row has no argument 1")):
+            with self.subTest(row=row), self.assertRaisesRegex(SyntaxError, message):
+                ir_contract.parse_rows(f"#define X(PRIMITIVE, HELPER, MACRO) MACRO(SPAM, {row}, "
+                                       "EFFECTS(reads), EXITS(miss))")
 
     # The seed's vocabulary (g0b/decisions.md): F9, exits the body takes
 

@@ -732,6 +732,19 @@ def parse_rows(text: str, source: str = "pycore_ir_components.h") -> dict[str, R
             if row.result.shape == "GUARD" and len(row.result.guards) > len(row.args):
                 raise ValueError(f"GUARD(...) states {len(row.result.guards)} arguments' "
                                  f"facts, but the row has {len(row.args)}")
+            # A fact of argument k: in_bounds(k) names value argument k, any
+            # other fact takes scalar argument k's value (F2)
+            for f in _row_facts(row):
+                if not f.arg.isdigit():
+                    continue
+                k = int(f.arg)
+                if k >= len(row.args):
+                    raise ValueError(f"{f}: the row has no argument {k}")
+                if (row.args[k].mode == "scalar") == (f.kind == "in_bounds"):
+                    raise ValueError(
+                        f"{f}: argument {k} is {row.args[k].mode or 'a value'}; "
+                        + ("in_bounds(k) names a value argument" if f.kind == "in_bounds"
+                           else f"{f.kind}(k) takes a scalar argument's value"))
             k = row.result.moved
             if k >= 0 and (k >= len(row.args) or row.args[k].mode != "consumed"):
                 raise ValueError(f"moved({k}): argument {k} is not consumed, so its "
@@ -1665,18 +1678,33 @@ def _intersection(found: list[Facts]) -> Facts:
 
 def _bind_facts(facts: frozenset[VFact], args: list[list[str]],
                 views: Views) -> frozenset[VFact] | None:
-    """A row's facts with its in_bounds(k) bound to the name of argument k;
-    None if that argument names nothing"""
+    """A row's facts with an argument k bound: in_bounds(k) to the name of
+    value argument k; any other fact's k to the scalar argument k, a name
+    (type_version(1), shape(2), exact(1) of a type).  None if that
+    argument names nothing"""
     bound = set()
     for f in facts:
-        if f.kind == "in_bounds" and f.arg.isdigit():
+        if f.arg.isdigit():
             k = int(f.arg)
-            other = views.resolve(args[k]) if k < len(args) else None
+            if f.kind == "in_bounds":
+                other = views.resolve(args[k]) if k < len(args) else None
+            else:
+                arg = _uncast(_strip(args[k])) if k < len(args) else []
+                other = arg[0] if len(arg) == 1 and re.fullmatch(r"\w+", arg[0]) else None
             if other is None:
                 return None
-            f = VFact("in_bounds", other)
+            f = VFact(f.kind, other)
         bound.add(f)
     return frozenset(bound)
+
+
+def _row_facts(row: Row):
+    "the facts that a row's GUARD and TEST results state of its arguments"
+    for facts in row.result.guards:
+        yield from facts
+    for sides in row.result.tests:
+        for side in sides:
+            yield from side
 
 
 def state_bit(cond: list[str], table: dict[str, Row]

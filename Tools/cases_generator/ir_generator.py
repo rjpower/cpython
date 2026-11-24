@@ -3982,9 +3982,11 @@ class IREmitter(Emitter):
             expand(names)
             stack.element_guards[("INT", owner)] = "INT"
         elif tkn.text == "IR_GUARD_ELEMENT_TYPE":
-            value, kind = names
-            if kind not in {"LIST", "TUPLE"}:
-                raise analysis_error("element type must be LIST or TUPLE", tkn)
+            # The type, which the GUARD row's exact(1) names (ir_contract.py)
+            value, tp = names
+            kind = {"PyList_Type": "LIST", "PyTuple_Type": "TUPLE"}.get(tp)
+            if kind is None:
+                raise analysis_error("element type must be PyList_Type or PyTuple_Type", tkn)
             # A slot that is read in place holds an object or an inline value,
             # never NULL: a local that may be unbound is checked before it is
             # read as an operand.  The test reads the slot's top bits.

@@ -189,6 +189,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(PyValue_CLOSE((PyValue){0}
               "PyValue_CLOSE: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyErr_Format), PyObject * (*)(PyThreadState *, PyObject *, const char *, ...)),
               "_PyErr_Format: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&PAUSE_ADAPTIVE_COUNTER), void (*)(_PyFbHeader *)),
+              "PAUSE_ADAPTIVE_COUNTER: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyCell_NewValue), PyObject * (*)(PyValueBorrow)),
               "PyCell_NewValue: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyErr_Format), PyObject * (*)(PyObject *, const char *, ...)),
@@ -357,9 +359,9 @@ static_assert(__builtin_types_compatible_p(__typeof__(binaryopactionfunc), PyObj
               "binaryopactionfunc: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(((_PyBinaryOpSpecializationDescr *)0)->action), binaryopactionfunc),
               "_PyBinaryOpSpecializationDescr.action: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyFb_CounterTriggers((_PyFbHeader *){0})), int),
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyFb_CounterTriggers), int (*)(_PyFbHeader *)),
               "_PyFb_CounterTriggers: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyFb_AdvanceCounter((_PyFbHeader *){0})), void),
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyFb_AdvanceCounter), void (*)(_PyFbHeader *)),
               "_PyFb_AdvanceCounter: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_Py_EvalBreakerHasEvents((PyThreadState *){0})), bool),
               "_Py_EvalBreakerHasEvents: its C type differs from pycore_ir_components.h");
@@ -7884,6 +7886,7 @@ ir_run_FOR_ITER(
             {
                 null_or_index = window[1];
                 iter = window[0];
+                assert(PyValue_IsObject(iter));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (_PyFb_CounterTriggers(feedback)) {
@@ -8979,13 +8982,20 @@ ir_run_INSTRUMENTED_END_SEND(
             index_or_null = IR_VIEW(IR_C(ir_word));
             receiver = IR_VIEW(IR_B(ir_word));
             assert(PyValue_IsObject(receiver));
+            assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = _PyValue_AsKnownObjectBorrowPointer(receiver);
             ir_own_D = IR_DETACH(ir_word, D, value);
             PyValue held = IR_TAKEN_REQUIRED(value, ir_own_D);
-            if (PyGen_Check(receiver_o) || PyCoro_CheckExact(receiver_o)) {
+            int stops = PyGen_Check(receiver_o) || PyCoro_CheckExact(receiver_o);
+            (void)index_or_null;
+            ir_own_C = IR_DETACH(ir_word, C, index_or_null);
+            ir_own_B = IR_DETACH(ir_word, B, receiver);
+            (void)(ir_own_B);
+            if (stops) {
                 int err = monitor_stop_iteration(tstate, frame, this_instr, held);
                 if (err) {
                     PyValue_CLOSE(held);
+                    _PyValue_XCLOSE_POINTER(ir_own_B);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
@@ -8995,16 +9005,13 @@ ir_run_INSTRUMENTED_END_SEND(
                     this_instr, next_instr);
                 if (dest == NULL) {
                     PyValue_CLOSE(held);
+                    _PyValue_XCLOSE_POINTER(ir_own_B);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 next_instr = dest;
             }
             val = held;
-            (void)index_or_null;
-            ir_own_C = IR_DETACH(ir_word, C, index_or_null);
-            ir_own_B = IR_DETACH(ir_word, B, receiver);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), val);
-            (void)(ir_own_B);
             _PyValue_XCLOSE_POINTER(ir_own_B);
             DISPATCH();
         }
@@ -9462,17 +9469,15 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_NONE(
             (void)ir_own_A;
             value = IR_VIEW(IR_A(ir_word));
             int jump = PyValue_IsNone(value);
-            if (jump) {
-                ir_own_A = IR_DETACH(ir_word, A, value);
-                {
+            ir_own_A = IR_DETACH(ir_word, A, value);
+            (void)(ir_own_A);
+            if (jump) {{
+                    PyValue_XCLOSE(ir_own_A);
                     _PyInstr *ir_observer_next = JUMP_TARGET ( oparg );
                     IR_OBSERVE_EDGE(this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_RIGHT, 1);
                 }
             }
-            else {
-                ir_own_A = IR_DETACH(ir_word, A, value);
-                (void)(ir_own_A);
-                {
+            else {{
                     PyValue_XCLOSE(ir_own_A);
                     _PyInstr *ir_observer_next = next_instr;
                     IR_OBSERVE_EDGE(this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_LEFT, 0);
@@ -9500,18 +9505,16 @@ ir_run_INSTRUMENTED_POP_JUMP_IF_NOT_NONE(
             (void)ir_own_A;
             value = IR_VIEW(IR_A(ir_word));
             int jump = !PyValue_IsNone(value);
-            if (jump) {
-                ir_own_A = IR_DETACH(ir_word, A, value);
-                (void)(ir_own_A);
-                {
+            ir_own_A = IR_DETACH(ir_word, A, value);
+            (void)(ir_own_A);
+            if (jump) {{
                     PyValue_XCLOSE(ir_own_A);
                     _PyInstr *ir_observer_next = JUMP_TARGET ( oparg );
                     IR_OBSERVE_EDGE(this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_RIGHT, 1);
                 }
             }
-            else {
-                ir_own_A = IR_DETACH(ir_word, A, value);
-                {
+            else {{
+                    PyValue_XCLOSE(ir_own_A);
                     _PyInstr *ir_observer_next = next_instr;
                     IR_OBSERVE_EDGE(this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_LEFT, 0);
                 }
@@ -14414,6 +14417,7 @@ ir_run_SEND(
             // _SPECIALIZE_SEND
             {
                 receiver = window[0];
+                assert(PyValue_IsObject(receiver));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (_PyFb_CounterTriggers(feedback)) {
@@ -14971,6 +14975,7 @@ ir_run_SEND_XFER_DISCARD(
             // _SPECIALIZE_SEND
             {
                 receiver = window[0];
+                assert(PyValue_IsObject(receiver));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (_PyFb_CounterTriggers(feedback)) {
@@ -23715,13 +23720,20 @@ static const _PyIRForm ir_handler_forms[512] = {
             index_or_null = IR_VIEW(IR_C(ir_word));
             receiver = IR_VIEW(IR_B(ir_word));
             assert(PyValue_IsObject(receiver));
+            assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = _PyValue_AsKnownObjectBorrowPointer(receiver);
             ir_own_D = IR_DETACH(ir_word, D, value);
             PyValue held = IR_TAKEN_REQUIRED(value, ir_own_D);
-            if (PyGen_Check(receiver_o) || PyCoro_CheckExact(receiver_o)) {
+            int stops = PyGen_Check(receiver_o) || PyCoro_CheckExact(receiver_o);
+            (void)index_or_null;
+            ir_own_C = IR_DETACH(ir_word, C, index_or_null);
+            ir_own_B = IR_DETACH(ir_word, B, receiver);
+            (void)(ir_own_B);
+            if (stops) {
                 int err = monitor_stop_iteration(tstate, frame, this_instr, held);
                 if (err) {
                     PyValue_CLOSE(held);
+                    _PyValue_XCLOSE_POINTER(ir_own_B);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
             }
@@ -23731,16 +23743,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                     this_instr, next_instr);
                 if (dest == NULL) {
                     PyValue_CLOSE(held);
+                    _PyValue_XCLOSE_POINTER(ir_own_B);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 next_instr = dest;
             }
             val = held;
-            (void)index_or_null;
-            ir_own_C = IR_DETACH(ir_word, C, index_or_null);
-            ir_own_B = IR_DETACH(ir_word, B, receiver);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), val);
-            (void)(ir_own_B);
             _PyValue_XCLOSE_POINTER(ir_own_B);
             DISPATCH();
         }
@@ -24164,17 +24173,15 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)ir_own_A;
             value = IR_VIEW(IR_A(ir_word));
             int jump = PyValue_IsNone(value);
-            if (jump) {
-                ir_own_A = IR_DETACH(ir_word, A, value);
-                {
+            ir_own_A = IR_DETACH(ir_word, A, value);
+            (void)(ir_own_A);
+            if (jump) {{
+                    PyValue_XCLOSE(ir_own_A);
                     _PyInstr *ir_observer_next = JUMP_TARGET ( oparg );
                     IR_OBSERVE_EDGE(this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_RIGHT, 1);
                 }
             }
-            else {
-                ir_own_A = IR_DETACH(ir_word, A, value);
-                (void)(ir_own_A);
-                {
+            else {{
                     PyValue_XCLOSE(ir_own_A);
                     _PyInstr *ir_observer_next = next_instr;
                     IR_OBSERVE_EDGE(this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_LEFT, 0);
@@ -24198,18 +24205,16 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)ir_own_A;
             value = IR_VIEW(IR_A(ir_word));
             int jump = !PyValue_IsNone(value);
-            if (jump) {
-                ir_own_A = IR_DETACH(ir_word, A, value);
-                (void)(ir_own_A);
-                {
+            ir_own_A = IR_DETACH(ir_word, A, value);
+            (void)(ir_own_A);
+            if (jump) {{
                     PyValue_XCLOSE(ir_own_A);
                     _PyInstr *ir_observer_next = JUMP_TARGET ( oparg );
                     IR_OBSERVE_EDGE(this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_RIGHT, 1);
                 }
             }
-            else {
-                ir_own_A = IR_DETACH(ir_word, A, value);
-                {
+            else {{
+                    PyValue_XCLOSE(ir_own_A);
                     _PyInstr *ir_observer_next = next_instr;
                     IR_OBSERVE_EDGE(this_instr, ir_observer_next, PY_MONITORING_EVENT_BRANCH_LEFT, 0);
                 }
@@ -28237,6 +28242,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _SPECIALIZE_SEND
             {
                 receiver = window[0];
+                assert(PyValue_IsObject(receiver));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (_PyFb_CounterTriggers(feedback)) {

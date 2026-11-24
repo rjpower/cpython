@@ -749,7 +749,7 @@ static inline void
 specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
 {
     assert(!PyErr_Occurred());
-    if (attr_collect != NULL && _PyOpcode_Deopt[specialized_opcode] == LOAD_ATTR) {
+    if (attr_collect != NULL && _PyIR_BaseOpcode(specialized_opcode) == LOAD_ATTR) {
         attr_collect->handler = handler;
         return;
     }

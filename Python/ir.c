@@ -656,7 +656,11 @@ _PyCode_InstrFbIndex(PyCodeObject *co, int i)
     _PyIRWord word = _PyCode_IRWords(co)[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (fmt->fb == _PyIR_LOC_NONE) {
-        return -1;
+        if (fmt->fixed_words == 0) {
+            return -1;
+        }
+        // An arm's entry is P0 of its first operand word
+        return (int)(_PyCode_IRWords(co)[i + 1] & 0xFFFF);
     }
     return (int)read_field(word, fmt->fb);
 }
@@ -881,10 +885,20 @@ make_exec(PyCodeObject *co, const _PyCodeIR *ir)
      * which handlers test in the word instead of loading nfixed. */
     const _PyIRWord *source = ir->words;
     uint32_t discard = ir->nfixed - 1;
-    for (Py_ssize_t i = 0; i < nwords; i++) {
-        assert(!(source[i] & IR_F_LOCAL_MASK));
-        words[i] = exec_discard_slot(source[i], discard);
-        words[i] |= _PyIR_ExecLocalFlags(words[i], exec->nfixed);
+    for (Py_ssize_t i = 0; i < nwords; ) {
+        int length = _PyIR_WordLength(source[i]);
+        int fixed = !_PyIR_HandlerHasOperands(IR_HANDLER(source[i])) && length > 1;
+        for (Py_ssize_t j = i; j < i + length && j < nwords; j++) {
+            if (fixed && j > i) {
+                // An arm's operand words hold 16-bit fields, not slots
+                words[j] = source[j];
+                continue;
+            }
+            assert(!(source[j] & IR_F_LOCAL_MASK));
+            words[j] = exec_discard_slot(source[j], discard);
+            words[j] |= _PyIR_ExecLocalFlags(words[j], exec->nfixed);
+        }
+        i += length;
     }
     /* A call is a head and its operand words, whose fields name its operands */
     for (Py_ssize_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {

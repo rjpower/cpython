@@ -945,7 +945,7 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
         if (op->handler < 0) {
             return ERROR;
         }
-        op->nwords = 1;
+        op->nwords = 1 + _PyIR_FormatOf(op->handler)->fixed_words;
         if (_PyIR_FormatOf(op->handler)->operands != _PyIR_OPERANDS_NONE) {
             op->noperands = call_noperands(op);
             if (op->noperands > IR_FIELD_MAX) {
@@ -1008,7 +1008,8 @@ place_entries(struct assembler *a, _PyRegCfg *cfg, int code_flags,
             continue;
         }
         const _PyIRFormat *fmt = _PyIR_FormatOf(op->handler);
-        if (fmt->fb == _PyIR_LOC_NONE) {
+        // An arm may keep its entry in an operand word
+        if (fmt->fb == _PyIR_LOC_NONE && fmt->fixed_words == 0) {
             continue;
         }
         // Only entry 0, which the sites without an entry share, is a counter
@@ -1179,10 +1180,14 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
         [_PyIR_ROLE_IN0 + 3] = slots.in[3],
     };
     uint32_t fields[4];
+    int ndst = 0;
     for (int r = 0; r < 4; r++) {
         int role = fmt->roles[r];
         assert(role < _PyIR_ROLE_IN0 + 4);
         int value = values[role];
+        if (role == _PyIR_ROLE_DST && ndst++ == 1) {
+            value = slots.dst2;
+        }
         if (!_PyIR_RoleIsImm(role) && (value < 0 || value > IR_FIELD_MAX)) {
             // Only unreachable code names slots past the frame, since the
             // slot count is checked first.
@@ -1315,6 +1320,10 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
             RETURN_IF_ERROR(encode(cfg, op, blk->reachable, &words[w]));
             if (_PyIR_FormatOf(op->handler)->operands != _PyIR_OPERANDS_NONE) {
                 encode_operand_words(cfg, op, &words[w + 1]);
+            }
+            else if (_PyIR_FormatOf(op->handler)->fixed_words) {
+                // P0 of the first operand word is the feedback entry
+                words[w + 1] = (_PyIRWord)(op->fb > 0 ? op->fb : IR_FB_SHARED);
             }
             else if (op->nwords > 1) {
                 int exit = jump_target(cfg, op);

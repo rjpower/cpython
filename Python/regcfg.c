@@ -1022,23 +1022,34 @@ rule_swap(_PyRegTr *t, const _PyRegOp *src)
  * GetAttr defines dst, GetMethod the callable and then self, pushed in the
  * order the stack held them, so the legacy CALL finds them as its window.
  * Every site starts under the family's Generic arm, which adapts it. */
-__attribute__((unused)) static int
+static int
 rule_load_attr(_PyRegTr *t, const _PyRegOp *src)
 {
+    // The family's name operand is the index into co_names; the stack op's
+    // oparg carries the method flag below it
+    int name = src->oparg >> 1;
+    if (src->oparg & 1) {
+        // GetMethod's arms are not wired yet: `import enum` crashes in a
+        // NoDict arm's callable (pyjit/rir90-p3 report)
+        return _PyRegTr_Legacy(t, src);
+    }
+    _PyRegOp *op;
     int obj;
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, &obj));
     if (!(src->oparg & 1)) {
         int dst;
         RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
         RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_GetAttr_Generic,
-                                      &obj, 1, &dst, 1, NULL));
+                                      &obj, 1, &dst, 1, &op));
+        op->oparg = name;
         return _PyRegTr_Push(t, dst);
     }
     int defs[2];
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[0]));
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &defs[1]));
     RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_GetMethod_Generic,
-                                  &obj, 1, defs, 2, NULL));
+                                  &obj, 1, defs, 2, &op));
+    op->oparg = name;
     RETURN_IF_ERROR(_PyRegTr_Push(t, defs[0]));
     return _PyRegTr_Push(t, defs[1]);
 }
@@ -1046,7 +1057,7 @@ rule_load_attr(_PyRegTr *t, const _PyRegOp *src)
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
     [SWAP] = rule_swap,
-    /* [LOAD_ATTR] = rule_load_attr: registered with F3's resolver */
+    [LOAD_ATTR] = rule_load_attr,
 };
 
 static int
@@ -1360,6 +1371,12 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
     int top = nl + op->depth;
     for (int k = 0; k < 4; k++) {
         slots->in[k] = 0;
+    }
+    slots->dst2 = 0;
+    if (op->opcode >= IR_NUM_OLD_HANDLERS && op->nout > 1) {
+        // A register family's second output has a DST role of its own
+        slots->dst2 = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
+                    : _PyRegCfg_Slot(cfg, out[1]);
     }
     if (fmt->flags & _PyIR_WINDOW) {
         slots->base = op->nread > 0 ? _PyRegCfg_Slot(cfg, in[0]) : op->base;

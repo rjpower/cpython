@@ -240,7 +240,7 @@ dummy_func(
             _JIT_EVENT;
 
         op(_MONITOR_RESUME, (--))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, raise, redirect)
         {
             int err = _Py_call_instrumentation(
                     tstate, oparg == 0 ? PY_MONITORING_EVENT_PY_START : PY_MONITORING_EVENT_PY_RESUME, frame, this_instr);
@@ -248,7 +248,7 @@ dummy_func(
             ERROR_IF(err);
             if (frame->instr_ptr != this_instr) {
                 /* Instrumentation has jumped */
-                next_instr = frame->instr_ptr;
+                DISPATCH_REDIRECT();
             }
         }
 
@@ -2056,7 +2056,7 @@ dummy_func(
             _YIELD_VALUE;
 
         tier1 op(_YIELD_VALUE_EVENT, (val -- val))
-            effects(runs_python) exits(next, raise)
+            effects(runs_python) exits(next, raise, redirect)
         {
             int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_YIELD,
@@ -2067,8 +2067,7 @@ dummy_func(
             }
             if (frame->instr_ptr != this_instr) {
                 RELOAD_STACK();
-                next_instr = frame->instr_ptr;
-                DISPATCH();
+                DISPATCH_REDIRECT();
             }
         }
 

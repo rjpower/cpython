@@ -1491,7 +1491,7 @@ def metadata_only_passthroughs(inst: Instruction) -> frozenset[int]:
             tstate, PY_MONITORING_EVENT_PY_YIELD, frame, this_instr, val);
         if (err) { RELOAD_STACK(); ERROR_NO_POP(); }
         if (frame->instr_ptr != this_instr) {
-            RELOAD_STACK(); next_instr = frame->instr_ptr; DISPATCH();
+            RELOAD_STACK(); DISPATCH_REDIRECT();
         }
     }"""
     if (len(markers) != 1 or len(inputs) != 3 or len(outputs) != 3
@@ -1891,7 +1891,8 @@ def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tup
                 nulls.discard(texts[0])
         if not markers:
             exits = texts and texts[0] in {
-                "ERROR_NO_POP", "IR_COMPLETE_STEP", "IR_RETURN_TO_CALLER", "DISPATCH"}
+                "ERROR_NO_POP", "IR_COMPLETE_STEP", "IR_RETURN_TO_CALLER", "DISPATCH",
+                "DISPATCH_REDIRECT"}
             if exits and deferred:
                 raise analysis_error("deferred owner exits before terminal observer", tokens[0])
             return not exits
@@ -3421,6 +3422,8 @@ class IREmitter(Emitter):
         self.current_uop: UopRecord | None = None
         self._replacers["INSTRUCTION_SIZE"] = self.ir_instruction_size
         self._replacers["DISPATCH_SAME_OPARG"] = self.dispatch_same_oparg
+        # DISPATCH_REDIRECT is DISPATCH() at the word the callback chose
+        self._replacers["DISPATCH_REDIRECT"] = self.dispatch
         self._replacers["IR_DST"] = self.ir_dst
         self._replacers["IR_DST_SLOT"] = self.ir_dst_slot
         self._replacers["IR_BASE"] = self.ir_base
@@ -6300,7 +6303,7 @@ def home_operation_contract(part: Uop) -> dict[int, tuple[str, int | str]]:
                 raise analysis_error("home loop index shadows its extent or array", stmt.for_)
             body = list(stmt.body.tokens())
             if any(t.text in {"break", "continue", "goto", "return", "DISPATCH",
-                              "DISPATCH_INLINED", "JUMPTO", "JUMPBY", "ERROR_IF",
+                              "DISPATCH_REDIRECT", "DISPATCH_INLINED", "JUMPTO", "JUMPBY", "ERROR_IF",
                               "ERROR_NO_POP", "EXIT_IF", "DEOPT_IF", "Py_UNREACHABLE"}
                    or t.kind.startswith("CMACRO") or
                    (t.kind == "IDENTIFIER" and t.text.isupper() and
@@ -6738,7 +6741,7 @@ def normal_vacate_capability(inst: Instruction, fmt: IRFormat) -> bool:
                         for t in uop_token_list(inst))
             and not any(t.text.startswith(("_PyFrame_", "_PyHomeBitmap_"))
                         for t in uop_token_list(inst))
-            and not any(t.text in {"slots", "window", "DISPATCH",
+            and not any(t.text in {"slots", "window", "DISPATCH", "DISPATCH_REDIRECT",
                                   "DISPATCH_INLINED", "IR_COMPLETE_STEP"}
                         for t in uop_token_list(inst))
             and all(not any(t.text == "frame" or t.text in NORMAL_FRAME_OBSERVERS
@@ -8271,8 +8274,7 @@ def abrupt_suspend_contract(inst: Instruction, fmt: IRFormat) -> bool:
             }
             if (frame->instr_ptr != this_instr) {
                 RELOAD_STACK();
-                next_instr = frame->instr_ptr;
-                DISPATCH();
+                DISPATCH_REDIRECT();
             }
         }"""))
     if len(parts) != len(expected):

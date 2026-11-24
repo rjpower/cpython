@@ -141,9 +141,11 @@ ENTER_FRAME = "ENTER_FRAME"     # runs a Python frame that it pushed
 RETURN = "RETURN"               # pops the frame
 YIELD = "YIELD"                 # suspends a generator
 EXIT = "EXIT"                   # leaves the evaluator
+REDIRECT = "REDIRECT"           # a monitoring callback moved the frame: the
+                                # word it chose, without the rest of the handler
 
 TRANSFER_KINDS = frozenset({NEXT, BRANCH, JUMP, DEOPT, RAISE, ENTER_FRAME,
-                            RETURN, YIELD, EXIT})
+                            RETURN, YIELD, EXIT, REDIRECT})
 
 # Guard kinds
 EXIT_GUARD, DEOPT_GUARD = "EXIT", "DEOPT"
@@ -251,6 +253,7 @@ TRANSFER_TOKENS: dict[str, tuple[str, ...]] = {
     "DISPATCH": (NEXT,),
     "DISPATCH_GOTO": (JUMP,),
     "DISPATCH_SAME_OPARG": (JUMP,),
+    "DISPATCH_REDIRECT": (REDIRECT,),
     "DISPATCH_INLINED": (ENTER_FRAME,),
     "JUMPBY": (JUMP,),
     "JUMPTO": (JUMP,),

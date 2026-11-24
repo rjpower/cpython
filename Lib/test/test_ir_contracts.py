@@ -2035,6 +2035,23 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"passes `x` to PyValue_AsKnownObjectBorrow, which requires .*object of it")
 
+    def test_a_redirect_is_its_own_exit(self):
+        # _MONITOR_RESUME, _YIELD_VALUE_EVENT: after a callback moved the
+        # frame, the word leaves for the word it chose (DISPATCH_REDIRECT),
+        # which is neither next nor the jump to the word itself
+        source = """
+            op(_OP, (--)) effects(runs_python) exits(%s) {
+                Py_ssize_t n = _PyValue_Size(PyValue_None);
+                ERROR_IF(n < 0);
+                if (frame->instr_ptr != this_instr) {
+                    DISPATCH_REDIRECT();
+                }
+            }
+        """
+        self.verify(source % "next, raise, redirect")
+        self.refuses(source % "next, raise",
+                     r"declares exits\(next, raise\), but the body takes next, raise, redirect")
+
     def test_an_assumption_on_a_temporary_survives_a_declared_redirect(self):
         # INSTRUMENTED_END_ASYNC_FOR: a temporary is replaced only by a
         # debugger's f_lineno jump, which redirects the frame; a uop that

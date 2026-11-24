@@ -2231,11 +2231,16 @@
     /* Evidence (G0c8): ceval_macros.h: NEXTOPARG (loads the word at next_instr), then goto \
      * the handler.  In the function forms (ceval.c:2579) it returns {frame, next_instr}. \
      * It runs no code, reads the word (immutable for the dispatch) and ends the word: \
-     * the `next` exit.  A body that sets next_instr first (instrumentation redirects, \
-     * _YIELD_VALUE_EVENT) still takes `next`: the vocabulary has no token for a \
-     * redirect to another word, and DISPATCH_SAME_OPARG is the `jump` to this word. */ \
+     * the `next` exit.  A redirect by a monitoring callback is DISPATCH_REDIRECT, and \
+     * DISPATCH_SAME_OPARG is the `jump` to this word. */ \
     MACRO(DISPATCH, \
         ARGS(), NONE, EFFECTS(), EXITS(next)) \
+    /* Evidence (G0d1): ceval_macros.h: `next_instr = frame->instr_ptr; DISPATCH();`, \
+     * after a monitoring callback moved frame->instr_ptr (a debugger's f_lineno jump, \
+     * frame_lineno_set_impl).  It runs no code and ends the word at the new word without \
+     * the rest of its handler: the `redirect` exit. */ \
+    MACRO(DISPATCH_REDIRECT, \
+        ARGS(), NONE, EFFECTS(), EXITS(redirect)) \
     /* Evidence (G0c8): ceval_macros.h:197 `goto *opcode_targets[opcode]` (ceval.c:2581 in the \
      * function forms): an indirect jump on the local `opcode`, which the body set from \
      * ORIGINAL_HANDLER; it ends the word without reading the next word: `jump`. */ \

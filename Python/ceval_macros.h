@@ -266,6 +266,14 @@ do { \
         DISPATCH_GOTO(); \
     }
 
+/* A monitoring callback redirected the frame (a debugger's f_lineno jump):
+ * the word leaves for frame->instr_ptr, the redirect exit */
+#define DISPATCH_REDIRECT() \
+    do { \
+        next_instr = frame->instr_ptr; \
+        DISPATCH(); \
+    } while (0)
+
 #define DISPATCH_SAME_OPARG() \
     { \
         opcode = IR_HANDLER(*next_instr); \

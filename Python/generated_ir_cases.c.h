@@ -9637,7 +9637,7 @@ ir_run_INSTRUMENTED_RESUME(
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 if (frame->instr_ptr != this_instr) {
-                    next_instr = frame->instr_ptr;
+                    DISPATCH_REDIRECT();
                 }
             }
             DISPATCH();
@@ -24357,7 +24357,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
                 if (frame->instr_ptr != this_instr) {
-                    next_instr = frame->instr_ptr;
+                    DISPATCH_REDIRECT();
                 }
             }
             DISPATCH();

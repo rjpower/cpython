@@ -2645,6 +2645,77 @@ class IdentityTranslationTest(unittest.TestCase):
             mon.free_tool_id(tool)
 
 
+class MoveResolutionTest(unittest.TestCase):
+    """Where allocation cannot give a value its home, resolution moves it by
+    SWAP words into vacant (NULL) homes, so that every value keeps one
+    owner (Python/regcfg.c, resolve_moves)"""
+
+    class Manager:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    @staticmethod
+    def moves(a, b, m, out):
+        # The with statement stages its manager for __enter__; the second
+        # comprehension's edge binds its parameters by a parallel move
+        with m:
+            out.append({x for x in a} <= {y for y in b})
+        return out
+
+    def sentinels(self):
+        s1, s2 = object(), object()
+        return s1, s2, [s1], [s1, s2], self.Manager()
+
+    def counts(self, *objs):
+        return [sys.getrefcount(o) for o in objs]
+
+    def test_moves_are_swap_words(self):
+        self.assertIn("SWAP", [w[0] for w in words(self.moves)])
+
+    def test_moves_leave_one_owner(self):
+        s1, s2, a, b, m = self.sentinels()
+        before = self.counts(s1, s2, a, b, m)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
+            self.assertEqual(self.moves(a, b, m, []), [True])
+            self.assertEqual(self.moves(b, a, m, []), [False])
+        self.assertEqual(self.counts(s1, s2, a, b, m), before)
+
+    def test_every_move_unwinds(self):
+        # An INSTRUCTION event that raises fails the word that it reports,
+        # SWAP words of resolution included
+        mon = sys.monitoring
+        tool = mon.DEBUGGER_ID
+        code = self.moves.__code__
+        s1, s2, a, b, m = self.sentinels()
+        offsets = []
+        mon.use_tool_id(tool, "test_ir")
+        try:
+            mon.register_callback(tool, mon.events.INSTRUCTION,
+                                  lambda code, offset: offsets.append(offset))
+            mon.set_local_events(tool, code, mon.events.INSTRUCTION)
+            self.moves(a, b, m, [])
+            mon.set_local_events(tool, code, 0)
+            before = self.counts(s1, s2, a, b, m)
+            for target in sorted(set(offsets)):
+                def event(code, offset):
+                    if offset == target:
+                        raise ZeroDivisionError
+                mon.register_callback(tool, mon.events.INSTRUCTION, event)
+                mon.set_local_events(tool, code, mon.events.INSTRUCTION)
+                with self.subTest(offset=target):
+                    with self.assertRaises(ZeroDivisionError):
+                        self.moves(a, b, m, [])
+                mon.set_local_events(tool, code, 0)
+            self.assertEqual(self.counts(s1, s2, a, b, m), before)
+        finally:
+            mon.set_local_events(tool, code, 0)
+            mon.register_callback(tool, mon.events.INSTRUCTION, None)
+            mon.free_tool_id(tool)
+
+
 class UnpackToLocalsTest(unittest.TestCase):
     """Unpacks that write their targets, a run of locals, themselves
     (Python/regcfg_passes.c, _PyRegPass_UnpackLocals)"""

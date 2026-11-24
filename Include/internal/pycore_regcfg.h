@@ -74,6 +74,10 @@ extern "C" {
 #define _PyReg_KWNAMES         4096 // an elided LOAD_CONST of the names of
                                     // the CALL_KW that reads it: the call
                                     // has the index in its kwnames
+#define _PyReg_MOVES           8192 // a parallel move (opcode SWAP): output
+                                    // j takes the value of implicit input j
+#define _PyReg_SLOT_RECIPE    16384 // its recipe's operands are pairs of a
+                                    // source slot and a home, not registers
 
 typedef struct _PyRegOp {
     int opcode;             // the stack instruction, or _PyReg_DEAD
@@ -88,6 +92,11 @@ typedef struct _PyRegOp {
      * them there. */
     int16_t nrecipe;
     int recipe;
+    /* Moves that allocation put before the op, run in parallel: pairs of a
+     * source register and the register that takes its value, whose later
+     * reads name it, in operands[stage ...] */
+    int16_t nstage;
+    int stage;
     int in;                 // index of in[0] in the operand pool
     int out;                // index of out[0]
     int dst;                // the local that dst names instead of out[], -1
@@ -158,13 +167,6 @@ typedef struct _PyRegCfg {
     int const_first;
     int nconst;
     PyValueBorrow *const_values;
-    /* Translation (Python/regcfg.c): per block, whether its region permuted
-     * identities (elided), and whether it must keep its SWAPs as words
-     * (legacy); fail_op is the op where allocation or verification failed,
-     * or -1. */
-    uint8_t *elided;
-    uint8_t *legacy;
-    int fail_op;
 } _PyRegCfg;
 
 int _PyRegCfg_PrepareKwargs(_PyRegCfg *cfg, int slot);

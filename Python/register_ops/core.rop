@@ -38,7 +38,12 @@ extern primitive as_object(v:B) -> Obj
 extern primitive present(m:Maybe<B>) -> Bool
   effects()
   test(present(m))
-  pending;
+  c _PyValue_BorrowPresent as bool
+  evidence(
+    review: "pycore_attr_recipe.h: not NULL.",
+    contract: "A comparison of the word: no memory, no callee.",
+    lowering: "none yet: PyValue_IsNull negated; add a lowering when a template needs it",
+    test: "test_rop_getattr row tests");
 
 // Adaptation (addendum section 2): rows around the adaptive counter and
 // the coherent recipe store.  No C code picks a handler number.

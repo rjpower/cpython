@@ -90,7 +90,7 @@ _PyIR_Rop_Stub_Add_Generic(
     PyValue binary_at_origin1_value;
     PyValue binary_at_origin1_kept;
     PyValue binary_at_origin1_dropped;
-    if (!_PyFb_TickQuiet(((_PyFbHeader *)IR_FB(IR_D(ir_word))))) {
+    if (!_PyFb_TickQuiet(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h)) {
         goto rop_Add_Generic_adapt_before_use_add2_Sample;
     }
     rop_Add_Generic_adapt_before_use_add2_Run:
@@ -129,7 +129,7 @@ _PyIR_Rop_Stub_Add_Generic(
     goto rop_Add_Generic_adapt_before_use_add2_Other;
     rop_Add_Generic_adapt_before_use_add2_Chosen:
     adapt_before_use_add2_c = ROP_HANDLER_Add_Int;
-    ret2 = _PyRop_Install(this_instr, ((_PyFbHeader *)IR_FB(IR_D(ir_word))), adapt_before_use_add2_c);
+    ret2 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_add2_c);
     if (ret2 == 0) {
         goto rop_Add_Generic_adapt_before_use_add2_Run;
     }
@@ -146,7 +146,7 @@ _PyIR_Rop_Stub_Add_Generic(
     goto rop_Add_Generic_adapt_before_use_add2_TryText;
     rop_Add_Generic_adapt_before_use_add2_ChosenFloat:
     adapt_before_use_add2_cf = ROP_HANDLER_Add_Float;
-    ret3 = _PyRop_Install(this_instr, ((_PyFbHeader *)IR_FB(IR_D(ir_word))), adapt_before_use_add2_cf);
+    ret3 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_add2_cf);
     if (ret3 > 0) {
         goto rop_Add_Generic_adapt_before_use_add2_Changed;
     }
@@ -161,7 +161,7 @@ _PyIR_Rop_Stub_Add_Generic(
     goto rop_Add_Generic_adapt_before_use_add2_TryExtended;
     rop_Add_Generic_adapt_before_use_add2_ChosenText:
     adapt_before_use_add2_ct = ROP_HANDLER_Add_Text;
-    ret4 = _PyRop_Install(this_instr, ((_PyFbHeader *)IR_FB(IR_D(ir_word))), adapt_before_use_add2_ct);
+    ret4 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_add2_ct);
     if (ret4 > 0) {
         goto rop_Add_Generic_adapt_before_use_add2_Changed;
     }
@@ -170,11 +170,11 @@ _PyIR_Rop_Stub_Add_Generic(
     }
     goto rop_Add_Generic_adapt_before_use_add2_Run;
     rop_Add_Generic_adapt_before_use_add2_TryExtended:
-    if (!_PyRop_FindAddExtension(((_PyFbHeader *)IR_FB(IR_D(ir_word))), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
+    if (!_PyRop_FindAddExtension(((_PyFbBinary *)IR_FB(IR_D(ir_word))), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
         goto rop_Add_Generic_adapt_before_use_add2_NoArm;
     }
     adapt_before_use_add2_ce = ROP_HANDLER_Add_Extended;
-    ret5 = _PyRop_Install(this_instr, ((_PyFbHeader *)IR_FB(IR_D(ir_word))), adapt_before_use_add2_ce);
+    ret5 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_add2_ce);
     if (ret5 > 0) {
         goto rop_Add_Generic_adapt_before_use_add2_Changed;
     }
@@ -183,7 +183,7 @@ _PyIR_Rop_Stub_Add_Generic(
     }
     goto rop_Add_Generic_adapt_before_use_add2_Run;
     rop_Add_Generic_adapt_before_use_add2_NoArm:
-    _PyRop_Backoff(((_PyFbHeader *)IR_FB(IR_D(ir_word))));
+    _PyRop_Backoff(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h);
     goto rop_Add_Generic_Run;
     rop_Add_Generic_binary_at_origin1_Failed:
     IR_STUB_ESCAPE();
@@ -338,12 +338,12 @@ _PyIR_Rop_Stub_Add_Extended(
     PyValue extension_at_origin1_dropped;
     l = PyValue_Borrow(*home_x);
     r = PyValue_Borrow(*home_y);
-    if (!_PyRop_ExtensionApplies(((_PyFbHeader *)IR_FB(IR_D(ir_word))), l, r)) {
+    if (!_PyRop_ExtensionApplies(((_PyFbBinary *)IR_FB(IR_D(ir_word))), l, r)) {
         JUMP_TO_PREDICTED(Add_Generic);
     }
     a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_C)}, {home_x, home_y}});
     IR_STUB_ESCAPE();
-    ret1 = _PyRop_RunExtension(((_PyFbHeader *)IR_FB(IR_D(ir_word))), _PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1));
+    ret1 = _PyRop_RunExtension(((_PyFbBinary *)IR_FB(IR_D(ir_word))), _PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1));
     if (PyValue_IsNull(ret1)) {
         goto rop_Add_Extended_extension_at_origin1_Failed;
     }

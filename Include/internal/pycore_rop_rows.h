@@ -136,10 +136,10 @@ _PyRop_ConcatText(PyValueBorrow a, PyValueBorrow b)
 }
 
 static inline bool
-_PyRop_ExtensionApplies(_PyFbHeader *fb, PyValueBorrow a, PyValueBorrow b)
+_PyRop_ExtensionApplies(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b)
 {
     const _PyBinaryOpSpecializationDescr *d =
-        _PyBinaryOp_ExtendDescr((PyObject *)((_PyFbBinary *)fb)->descr);
+        _PyBinaryOp_ExtendDescr((PyObject *)fb->descr);
     // The descriptors guard objects: inline operands go to the generic arm
     return d != NULL && PyValue_IsObject(a) && PyValue_IsObject(b) &&
            Py_TYPE(PyValue_AsKnownObjectBorrow(a)) == d->lhs_type &&
@@ -147,10 +147,10 @@ _PyRop_ExtensionApplies(_PyFbHeader *fb, PyValueBorrow a, PyValueBorrow b)
 }
 
 static inline PyValue
-_PyRop_RunExtension(_PyFbHeader *fb, PyValueBorrow a, PyValueBorrow b)
+_PyRop_RunExtension(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b)
 {
     const _PyBinaryOpSpecializationDescr *d =
-        _PyBinaryOp_ExtendDescr((PyObject *)((_PyFbBinary *)fb)->descr);
+        _PyBinaryOp_ExtendDescr((PyObject *)fb->descr);
     PyObject *res = d->action(PyValue_AsKnownObjectBorrow(a),
                               PyValue_AsKnownObjectBorrow(b));
     if (res == NULL) {
@@ -160,7 +160,7 @@ _PyRop_RunExtension(_PyFbHeader *fb, PyValueBorrow a, PyValueBorrow b)
 }
 
 /* Python/specialize.c: the adaptation rows */
-bool _PyRop_FindAddExtension(_PyFbHeader *fb, PyValueBorrow a, PyValueBorrow b);
+bool _PyRop_FindAddExtension(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b);
 void _PyRop_Backoff(_PyFbHeader *fb);
 int _PyRop_Install(_PyInstr *site, _PyFbHeader *fb, int handler);
 

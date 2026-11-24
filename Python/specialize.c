@@ -804,9 +804,8 @@ static int binary_op_extended_specialization(PyObject *lhs, PyObject *rhs, int o
                                              _PyBinaryOpSpecializationDescr **descr);
 
 bool
-_PyRop_FindAddExtension(_PyFbHeader *h, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
+_PyRop_FindAddExtension(_PyFbBinary *fb, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
 {
-    _PyFbBinary *fb = (_PyFbBinary *)h;
     fb->descr = NULL;
     if (!PyValue_IsObject(lhs_st) || !PyValue_IsObject(rhs_st)) {
         return false;

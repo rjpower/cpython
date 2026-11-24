@@ -771,6 +771,11 @@ static _PyIRTransfer ir_run_GET_ITER_PY_GENERATOR(PyThreadState *tstate, _PyInte
 static _PyIRTransfer ir_run_GET_ITER_SELF(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GET_ITER_VIRTUAL(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_GET_LEN(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetAttr_Instance(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetAttr_PolyShape(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetAttr_Shape(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetMethod_MethodValues(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_GetMethod_PolyMethod(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_IMPORT_FROM(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_IMPORT_NAME(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_INSTRUMENTED_CALL(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -17748,13 +17753,13 @@ static const _PyIRForm ir_handler_forms[512] = {
     [421] = ir_run_Add_Text,
     [422] = ir_run_Add_Extended,
     [423] = ir_run_Add_Generic,
-    [424] = ir_run_UNKNOWN_OPCODE,
+    [424] = ir_run_GetAttr_Instance,
     [425] = ir_run_UNKNOWN_OPCODE,
-    [426] = ir_run_UNKNOWN_OPCODE,
-    [427] = ir_run_UNKNOWN_OPCODE,
-    [428] = ir_run_UNKNOWN_OPCODE,
+    [426] = ir_run_GetAttr_Shape,
+    [427] = ir_run_GetAttr_PolyShape,
+    [428] = ir_run_GetMethod_MethodValues,
     [429] = ir_run_UNKNOWN_OPCODE,
-    [430] = ir_run_UNKNOWN_OPCODE,
+    [430] = ir_run_GetMethod_PolyMethod,
     [431] = ir_run_UNKNOWN_OPCODE,
     [432] = ir_run_UNKNOWN_OPCODE,
     [433] = ir_run_UNKNOWN_OPCODE,

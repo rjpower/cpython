@@ -868,7 +868,15 @@ def check_publish(c: Checker, scope: Scope, s: Publish, block: str, i: int) -> N
         if t is None or not is_dst(t):
             c.report(bind.span, scope.definition, f"publish [{bind.target} = ...]: "
                      f"{bind.target} is not a destination operand")
-        expect(c, scope, bind.value, O, block, i, outer=False)
+        # An optional destination takes an owner, or an optional owner whose
+        # absence leaves the home empty
+        have = type_of(c, scope, bind.value, O, block, i, False)
+        optional = WrapType(Wrap.Maybe, O)
+        if have is not None and have != O and not (t == WrapType(Wrap.Maybe, DST)
+                                                    and have == optional):
+            c.report(bind.value.span, scope.definition,
+                     f"{expr_text(bind.value)} is {type_text(have)}, "
+                     f"expected {type_text(O)}")
     for d in s.debts:
         want = {DebtKind.spent: SRC, DebtKind.old: DST,
                 DebtKind.roots: T(Handle.Anchors), DebtKind.owned: O}[d.kind]

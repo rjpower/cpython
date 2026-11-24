@@ -1,6 +1,7 @@
 /* Execute compiled code */
 
 #include "ceval.h"
+#include "pycore_attr_recipe.h"   // _PyAttr_AdmittedInstanceSlot()
 #include "pycore_descrobject.h"   // _PyGetSet_ValueRead()
 #include "pycore_dict.h"          // PyDict_GetValue()
 #include "pycore_function.h"      // FUNC_VERSION_FIRST_VALID
@@ -2287,6 +2288,31 @@ error_clear_slots(_PyInterpreterFrame *frame, int first)
     }
 }
 
+/* Apply the ingress recipe of an exceptional edge: take every source, put
+ * each in its home, then release what the homes held.  The moves may
+ * permute, so all are taken before any is put. */
+static void
+error_apply_recipe(_PyInterpreterFrame *frame, int index)
+{
+    const int32_t *recipe = _PyIR_Recipe(_PyCode_IR(_PyFrame_GetCode(frame)),
+                                         index);
+    int n = recipe[0];
+    assert(n > 0 && n <= _PyIR_RECIPE_MAX);
+    PyValue moved[_PyIR_RECIPE_MAX];
+    for (int q = 0; q < n; q++) {
+        moved[q] = _PyFrame_TakeHome(frame, &frame->base[recipe[1 + 2 * q]]);
+    }
+    PyValue held[_PyIR_RECIPE_MAX];
+    for (int q = 0; q < n; q++) {
+        PyValue *home = &frame->base[recipe[2 + 2 * q]];
+        held[q] = _PyFrame_TakeHome(frame, home);
+        _PyFrame_WriteHome(frame, home, moved[q]);
+    }
+    for (int q = 0; q < n; q++) {
+        PyValue_XCLOSE(held[q]);
+    }
+}
+
 /* All descriptors are local to this reached cold scope; no successful handler
  * gains an owner record. */
 static Py_NO_INLINE _PyIRErrorResult
@@ -2349,6 +2375,9 @@ _PyEval_ProcessError(PyThreadState *tstate, _PyInterpreterFrame *frame,
             }
         }
         if (found.handled) {
+            if (found.recipe) {
+                error_apply_recipe(frame, found.recipe);
+            }
             int first = found.exc_slot - found.lasti;
             error_clear_slots(frame, first);
             if (found.lasti) {

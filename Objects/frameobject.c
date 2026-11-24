@@ -2069,7 +2069,29 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                 _PyInstr *instr = _PyFrame_InstrAt(frame, i);
                 int real_handler = _PyIR_RealHandler(frame, instr);
                 _PyIRWord actual = (word & ~(_PyIRWord)IR_HANDLER_MASK) | real_handler;
+                int swap_lo = -1, swap_hi = -1;
+                if (_PyIR_BaseOpcode(real_handler) == SWAP) {
+                    /* A swap requires nothing: what is needed at one end
+                     * after it is needed at the other before it, which the
+                     * other lanes' transport already maps. */
+                    swap_lo = (int)IR_A(word) - nl;
+                    swap_hi = swap_lo + arg - 1;
+                    if (swap_lo < 0 || swap_hi >= nt || swap_lo >= swap_hi) {
+                        swap_lo = swap_hi = -1;
+                    }
+                    else if (lane == REGISTER_REQUIRE_ALL) {
+                        uint64_t lo = (work[swap_lo / 64] >> (swap_lo % 64)) & 1;
+                        uint64_t hi = (work[swap_hi / 64] >> (swap_hi % 64)) & 1;
+                        work[swap_lo / 64] &= ~((uint64_t)1 << (swap_lo % 64));
+                        work[swap_hi / 64] &= ~((uint64_t)1 << (swap_hi % 64));
+                        work[swap_lo / 64] |= hi << (swap_lo % 64);
+                        work[swap_hi / 64] |= lo << (swap_hi % 64);
+                    }
+                }
                 for (int j = 0; j < nt; j++) {
+                    if (j == swap_lo || j == swap_hi) {
+                        continue;
+                    }
                     int home = nl + j;
                     bool nullable = _PyIR_NullableHomeAs(actual, &_PyCode_IRWords(code)[i], arg, home);
                     bool path_null = analysis->null_states != NULL && nullable &&

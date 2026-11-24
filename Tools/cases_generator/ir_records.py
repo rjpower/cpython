@@ -496,7 +496,11 @@ def walk_values(inst: Instruction) -> ValueWalk:
         for i, item in enumerate(part.stack.inputs):
             inputs.append((item.name, popped[i][0],
                            BORROWED if i in kept else CONSUMED, item.size,
-                           item.name != "unused" and changes(part, item.name, item.is_array())))
+                           item.name != "unused" and (
+                               changes(part, item.name, item.is_array())
+                               # a replaced cursor is a new value in its entry
+                               or (i < len(part.stack.outputs)
+                                   and replaced_input(part, i) is not None))))
         bound.append((part, inputs, outputs))
         if ends_handler(part):
             break

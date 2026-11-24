@@ -260,7 +260,8 @@ class SliceTests(unittest.TestCase):
         # the output replaces the input in the same stack position (ir_records'
         # replaced_input reads that from the declared modes), so it takes the
         # FOR_ITER group for a plain push and a discarded window.  The declared
-        # records keep the group's format; the leaf records of the uops differ
+        # records keep the group's format and mark the replaced cursor changed
+        # (its entry holds a new value); the leaf records of the uops differ
         # only in the cursor's encoding fact, which GET_ITER and the cursor
         # helper establish.
         'FOR_ITER.record.format.discards: inferred false, declared true',
@@ -324,6 +325,10 @@ class SliceTests(unittest.TestCase):
         'FOR_ITER_VIRTUAL.record.outputs[1][2].name: inferred "next_index", declared "index"',
         'FOR_ITER_VIRTUAL.record.store_mode: inferred null, declared "store"',
         'FOR_ITER_VIRTUAL.record.uops[0].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", "subject": "v2"}]',
+        'FOR_ITER.record.uops[1].inputs[1].changed: inferred false, declared true',
+        'FOR_ITER_LIST.record.uops[2].inputs[1].changed: inferred false, declared true',
+        'FOR_ITER_TUPLE.record.uops[2].inputs[1].changed: inferred false, declared true',
+        'FOR_ITER_VIRTUAL.record.uops[0].inputs[1].changed: inferred false, declared true',
         'INSTRUMENTED_FOR_ITER.record.format.discards: inferred false, declared true',
         'INSTRUMENTED_FOR_ITER.record.format.dst_offset: inferred 1, declared 2',
         'INSTRUMENTED_FOR_ITER.record.format.store_dst: inferred false, declared true',

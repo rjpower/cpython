@@ -9,7 +9,7 @@ from rop_model import (Access, Advance, Arm, Block, BoolLit, Branch, Call, CallT
                        EnumDecl, EnumType, Exit, Expr, Extern, FactUse, Family, Goto,
                        Graph, Guard, HandleType, Let, Macro, Name, Nat, Param,
                        PairType, Point, Publish, Result, Returns, ScalarType,
-                       SchemaType, SchemaVar, SourceFile, SpanLit, Stmt, Target, Term,
+                       SchemaType, SchemaVar, SourceFile, SpanLit, Stmt, Tail, Target, Term,
                        Type, WrapType)
 
 
@@ -122,8 +122,11 @@ def _term(t: Term) -> list[str]:
                 f"exhaust {_target(t.exhaust)};"]
     if isinstance(t, Advance):
         return [f"advance {t.body};"]
+    if isinstance(t, Tail):
+        return [f"tail {t.callee}({_join(t.args)});"]
     assert isinstance(t, Exit)
-    return [f"exit {t.kind}({_join(t.args)});"]
+    resume = "" if t.resume is None else f" resume {t.resume}"
+    return [f"exit {t.kind}({_join(t.args)}){resume};"]
 
 
 def _graph(g: Graph) -> list[str]:
@@ -144,14 +147,20 @@ def decl_lines(d: Decl) -> list[str]:
     if isinstance(d, EnumDecl):
         return [f"enum {d.name}{_names(d.members)};"]
     if isinstance(d, Family):
-        return [f"family {d.name}{_params(d.params)}",
-                f"  exits{_names(d.exits)};"]
+        tail = f"  exits{_names(d.exits)}"
+        if d.ops:
+            tail += f" ops{_names(d.ops)}"
+        if d.events:
+            tail += f" events{_names(tuple(e.value for e in d.events))}"
+        return [f"family {d.name}{_params(d.params)}", tail + ";"]
     if isinstance(d, Point):
         return [f"point {d.name}({d.frame.value}, {d.pc.value}, {d.exc.value}) "
                 f"keep{_names(d.keep)} spent{_names(d.spent)} defs{_names(d.defs)} "
                 f"held{_names(d.held)};"]
     if isinstance(d, Arm):
-        return ([f"arm {d.name} {d.region.value}"]
+        select = ("" if not d.select else
+                  f" select({', '.join(m.value for m in d.select)})")
+        return ([f"arm {d.name} {d.region.value}{select}"]
                 + _contract(d.contract, True, True) + _graph(d.graph))
     if isinstance(d, Macro):
         head = [f"macro {d.name}{_schemas(d.schema_params)}{_params(d.params)}",

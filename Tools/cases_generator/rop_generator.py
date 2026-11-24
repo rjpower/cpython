@@ -19,6 +19,7 @@ unknown, so the assembler cannot select it.
 import argparse
 import sys
 from collections.abc import Mapping
+import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
@@ -29,7 +30,7 @@ import rop_check
 import rop_leaf
 from generators_common import root_relative_path, write_header
 from rop_cgen import ESCAPING, Lowering, Unsupported, lower_arm, pending_blockers
-from rop_catalog import FieldKind, Handle
+from rop_catalog import Effect, FieldKind, Handle, Slot
 from rop_check import Program
 from rop_model import Arm, HandleType, Param, WrapType
 from rop_print import type_text
@@ -255,21 +256,121 @@ def write_stubs(out: TextIO, p: Products, sources: list[str]) -> None:
     out.write("\n" + STUB_EPILOGUE)
 
 
+HEAD_FIELDS = {Slot.A: 0, Slot.B: 1, Slot.C: 2, Slot.D: 3}
+EFFECT_FLAGS = {
+    Effect.runs_python: ("_PyIR_ESCAPES", "_PyIR_RUNS_PYTHON"),
+    Effect.polls: ("_PyIR_POLLS",),
+    Effect.switches_frame: ("_PyIR_PUSHES_FRAME",),
+}
+EFFECT_ORDER = ("_PyIR_RAISES", "_PyIR_ESCAPES", "_PyIR_RUNS_PYTHON", "_PyIR_DEOPTS",
+                "_PyIR_PUSHES_FRAME", "_PyIR_POLLS", "_PyIR_SPECIALIZES")
+LOC_NAMES = {Slot.A: "_PyIR_LOC_A", Slot.B: "_PyIR_LOC_B", Slot.C: "_PyIR_LOC_C",
+             Slot.D: "_PyIR_LOC_D"}
+
+
+def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
+    """The fields of the arm's _PyIRFormat row.  Which homes a word reads and
+    defines come from the family's derived encoding: a Src operand is an
+    input and a Dst operand the destination.  Fields that describe stack
+    positions (through, windows, the stack-only flags) stay empty."""
+    fam = program.families[arm.family]
+    enc = program.encodings[arm.family]
+    params = {x.name: x for x in fam.params}
+    roles = ["_PyIR_ROLE_NONE"] * 4
+    imm = fb = "_PyIR_LOC_NONE"
+    fb_schema = None
+    ninputs = writes = 0
+    has_target = has_args = False
+    for pl in enc.placements:
+        param = params[pl.operand]
+        inner = param.type.arg if isinstance(param.type, WrapType) else param.type
+        has_args |= isinstance(inner, HandleType) and inner.handle is Handle.Args
+        if pl.kind is FieldKind.vector:
+            continue
+        in_head = bool(pl.slots) and pl.slots[0] in HEAD_FIELDS
+        role = "_PyIR_ROLE_IMM"
+        if pl.kind is FieldKind.home:
+            kind, _ = operand_role(param)
+            if kind == "SRC":
+                role = f"_PyIR_ROLE_IN0 + {ninputs}"
+                ninputs += 1
+            elif kind == "DST":
+                role = "_PyIR_ROLE_DST"
+                writes += 1
+            elif kind in ("CELL", "FREE"):
+                role = "_PyIR_ROLE_CELL"
+            else:
+                role = "_PyIR_ROLE_NONE"
+        elif pl.kind is FieldKind.feedback:
+            role = "_PyIR_ROLE_FB"
+            fb_schema = param.type.schema.value
+        elif pl.kind is FieldKind.target:
+            has_target = True
+        if not in_head:
+            continue
+        first = pl.slots[0]
+        roles[HEAD_FIELDS[first]] = role
+        if pl.kind is FieldKind.feedback:
+            fb = LOC_NAMES[first]
+        elif role == "_PyIR_ROLE_IMM" and imm == "_PyIR_LOC_NONE":
+            both = [s.name for s in pl.slots]
+            imm = "_PyIR_LOC_CD" if both == ["C", "D"] else LOC_NAMES.get(first, imm)
+    exits = set(arm.contract.exits)
+    effects = {"_PyIR_RAISES"} if "raise" in exits else set()
+    for e in arm.contract.effect_set:
+        effects.update(EFFECT_FLAGS.get(e, ()))
+    if "miss" in exits:
+        effects.add("_PyIR_DEOPTS")
+    if "enter" in exits:
+        effects.add("_PyIR_PUSHES_FRAME")
+    is_generic = arm.name == f"{arm.family}.Generic"
+    if is_generic and "again" in fam.exits:
+        effects.add("_PyIR_SPECIALIZES")
+    flags = ["_PyIR_VALID"]
+    if writes:
+        # A result that nothing reads goes to the frame's discard slot
+        flags += ["_PyIR_STORE_DST", "_PyIR_DISCARDS"]
+    if "_PyIR_RUNS_PYTHON" in effects:
+        flags.append("_PyIR_RUNS_CODE")
+    if has_target:
+        flags.append("_PyIR_JUMPS")
+        if not exits & {"next", "branch"}:
+            flags.append("_PyIR_JUMP_ALWAYS")
+    return ir_numbers.ArmFormat(
+        tuple(flags), tuple(e for e in EFFECT_ORDER if e in effects), tuple(roles),
+        imm, fb, ninputs, -ninputs if writes else None, (1 << ninputs) - 1,
+        fb_schema, "_PyIR_OPERANDS_CALL" if has_args else "_PyIR_OPERANDS_NONE",
+        0 if has_args else enc.words, writes)
+
+
 def arm_entries(p: Products) -> list[ir_numbers.ArmEntry]:
-    """The emitted arms for the old generator's forms, targets and stub-plan
-    tables (ir_generator.py), which list them after the old handlers"""
+    """Every arm, in handler order, for the per-handler tables, then the
+    observed wrapper (twin) of each arm of a family that declares events.
+    The old generator's forms, targets and stub plans list the emitted ones
+    after the old handlers (ir_generator.py)."""
     shared = [n for n in p.lowered if p.program.arms[n].region.name == "shared"]
     entries = []
-    for name in p.lowered:
-        arm = p.program.arms[name]
+    wrapped = [name for name, arm in p.program.arms.items()
+               if p.program.families[arm.family].events]
+    twin_index = {name: len(p.program.arms) + k for k, name in enumerate(wrapped)}
+    for name, arm in p.program.arms.items():
+        fam = p.program.families[arm.family]
         region = arm.region.name
-        if region not in ("inline", "shared"):
-            continue
+        emitted = name in p.lowered and region in ("inline", "shared")
         generic = p.generic.get(arm.family)
         entries.append(ir_numbers.ArmEntry(
             c_name(name), p.numbers[name], region, declares_escape(arm),
             stub_name(name) if name in shared else None,
-            stub_name(generic) if generic and generic in shared else None))
+            stub_name(generic) if generic and generic in shared else None,
+            name, fam.ops[0], tuple(e.value for e in fam.events),
+            "again" in fam.exits, name == f"{arm.family}.Generic",
+            arm_format(p.program, arm), twin_index.get(name), None, emitted))
+    for name in wrapped:
+        base = entries[p.numbers[name]]
+        entries.append(dataclasses.replace(
+            base, name=base.name + "_Observed", index=twin_index[name],
+            dotted=base.dotted + ".Observed", stub=None, generic=None,
+            twin=None, observes=base.index, emitted=False))
     return entries
 
 
@@ -355,11 +456,14 @@ def write_encodings(out: TextIO, p: Products) -> None:
         if not enc.placements:
             out.write("    {NULL},\n")
         out.write("};\n")
+        out.write(f"static const uint16_t _PyRop_Ops_{f}[] = {{"
+                  f"{', '.join(prog.families[f].ops) or '0'}}};\n")
     out.write(f"\nstatic const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {{\n")
     for f in families:
         enc = prog.encodings[f]
         out.write(f'    [ROP_FAMILY_{f}] = {{"{f}", {len(enc.placements)}, {enc.words}, '
-                  f'_PyRop_Operands_{f}}},\n')
+                  f'_PyRop_Operands_{f}, {len(prog.families[f].ops)}, '
+                  f'_PyRop_Ops_{f}}},\n')
     out.write("};\n\n")
 
 
@@ -372,20 +476,28 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     write_header(__file__, sources, out)
     families = sorted(prog.families)
     out.write("\n#ifndef Py_INTERNAL_ROP_METADATA_H\n#define Py_INTERNAL_ROP_METADATA_H\n")
-    out.write('\n#include "opcode_ids.h"        // IR_NUM_HANDLERS\n#include "pycore_ir.h"          // IR_F_LOCAL_A\n')
-    out.write("\n/* The arms' handler ids follow the old handlers, in definition order */\n")
-    out.write("#define ROP_FIRST_HANDLER IR_NUM_HANDLERS\n")
-    out.write(f"#define ROP_NUM_HANDLERS {len(prog.arms)}\n")
+    out.write('\n#include "opcode_ids.h"        // IR_NUM_OLD_HANDLERS\n#include "pycore_ir.h"          // IR_F_LOCAL_A\n')
+    twins = sum(1 for a in prog.arms.values() if prog.families[a.family].events)
+    out.write("\n/* The arms' handler ids follow the old handlers, in definition order; the\n"
+              " * observed wrappers of the arms of families that declare events follow them */\n")
+    out.write("#define ROP_FIRST_HANDLER IR_NUM_OLD_HANDLERS\n")
+    out.write(f"#define ROP_NUM_HANDLERS {len(prog.arms) + twins}\n")
     out.write('static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,\n'
               '              "the arms\' handler ids fit the handler field");\n')
     out.write(f"#define ROP_NUM_FAMILIES {len(families)}\n")
-    out.write(f"#define ROP_NUM_ARMS {len(prog.arms)}\n\n")
+    out.write(f"#define ROP_NUM_ARMS {len(prog.arms)}\n")
+    out.write("static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS == IR_NUM_HANDLERS,\n"
+              '              "the handler count is the old handlers, the arms and their wrappers");\n\n')
     out.write("/* Family numbers, in name order */\nenum {\n")
     for i, f in enumerate(families):
         out.write(f"    ROP_FAMILY_{f} = {i},\n")
     out.write("};\n\n/* Handler numbers of the arms */\n")
     for name in prog.arms:
         out.write(f"#define {handler(name)} (ROP_FIRST_HANDLER + {p.numbers[name]})\n")
+    wrapped = [n for n, a in prog.arms.items() if prog.families[a.family].events]
+    for k, name in enumerate(wrapped):
+        out.write(f"#define {handler(name)}_Observed "
+                  f"(ROP_FIRST_HANDLER + {len(prog.arms) + k})\n")
     out.write("\n/* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */\n")
     for name, k in p.points.items():
         out.write(f"#define ROP_POINT_{c_name(name)} {k}\n")
@@ -413,6 +525,8 @@ typedef struct {
     uint8_t noperands;
     uint8_t words;           /* operand words after the head, vectors aside */
     const _PyRopOperand *operands;
+    uint8_t nops;            /* the stack ops that lower to the family; the */
+    const uint16_t *ops;     /* first is the base opcode of its arms' words */
 } _PyRopFamily;
 
 typedef struct {

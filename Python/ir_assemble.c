@@ -449,6 +449,10 @@ choose_handler(_PyRegOp *op, PyObject *consts)
 {
     int opcode = op->opcode;
     int oparg = op->oparg;
+    /* A rule that emitted a register family's arm named its handler */
+    if (opcode >= IR_NUM_OLD_HANDLERS) {
+        return opcode;
+    }
     if (opcode == YIELD_VALUE && oparg == 1) {
         return YIELD_DELEGATED;
     }
@@ -912,8 +916,8 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
             op->nwords = 0;
             continue;
         }
-        assert(!IS_PSEUDO_INSTR(op->opcode));
-        assert(IS_VALID_OPCODE(op->opcode));
+        assert(op->opcode >= IR_NUM_OLD_HANDLERS
+               || (!IS_PSEUDO_INSTR(op->opcode) && IS_VALID_OPCODE(op->opcode)));
         if (op->opcode == NOP || (op->flags & (_PyReg_ELIDED | _PyReg_COMPLETED))) {
             op->handler = NOP;
             op->nwords = 0;

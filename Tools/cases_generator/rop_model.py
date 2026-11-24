@@ -13,7 +13,7 @@ from typing import Union
 
 from rop_catalog import (AccessMode, BuiltinType, DebtKind, Effect, ExcRole, Fact,
                          FieldKind,
-                         FrameRole, Handle, PcRole, Region, RowKind, Scalar, Schema,
+                         FrameRole, Handle, MonitoringEvent, PcRole, Region, RowKind, Scalar, Schema, Select,
                          SchemaCtor, Slot, Wrap)
 
 
@@ -341,13 +341,24 @@ class Advance:
 
 @dataclass(frozen=True, slots=True)
 class Exit:
-    """An arm exit constructor, or a macro's case."""
+    """An arm exit constructor, or a macro's case.  `resume` names the
+    continuation point of an `enter`: where and with what the caller goes on
+    when the child returns."""
     kind: str
+    args: tuple[Expr, ...]
+    span: SrcSpan = _span()
+    resume: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Tail:
+    """`tail r(args);`: the word leaves through routine r's own exits."""
+    callee: str
     args: tuple[Expr, ...]
     span: SrcSpan = _span()
 
 
-Term = Union[Goto, Branch, CallTerm, Each, Advance, Exit]
+Term = Union[Goto, Branch, CallTerm, Each, Advance, Exit, Tail]
 
 
 @dataclass(frozen=True, slots=True)
@@ -385,6 +396,11 @@ class Family:
     name: str
     params: tuple[Param, ...]
     exits: tuple[str, ...]
+    # The public stack ops that lower to the family; the first is the base
+    # and event opcode of its arms' words
+    ops: tuple[str, ...] = ()
+    # The events of the family's observed wrapper (its arms' twins)
+    events: tuple[MonitoringEvent, ...] = ()
     span: SrcSpan = _span()
 
 
@@ -433,6 +449,9 @@ class Arm:
     contract: Contract
     graph: Graph
     span: SrcSpan = _span()
+    # The static evidence that selects the arm (`select(...)`), for a family
+    # whose arms never miss
+    select: tuple[Select, ...] = ()
 
     @property
     def family(self) -> str:

@@ -128,8 +128,7 @@ class TranslatorRuleTests(unittest.TestCase):
             code = namespace[name].__code__
             names[name] = [row[0] for row in capi.get_ir(code, False)]
         if "GetAttr.Generic" not in names["attr"]:
-            self.skipTest("the rule is not registered until the handler tables "
-                          "describe arm words")
+            self.skipTest("the rule is registered with the translator resolver")
         self.assertIn("GetMethod.Generic", names["method"])
         # The callable and self land in the CALL's window: no move between
         self.assertNotIn("MOVE", names["method"])

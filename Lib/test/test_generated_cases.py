@@ -3155,7 +3155,7 @@ class TestIRCases(unittest.TestCase):
         lines = [line.strip() for line in out.getvalue().splitlines()]
         self.assertIn("#define _PyIR_OBSERVER_ENTRY_ABSENCE 0", lines)
         # The shared handler bound is emitted in opcode_ids.h, not metadata.
-        self.assertEqual(ir_generator.num_handlers(analysis), 258)
+        self.assertEqual(ir_generator.num_old_handlers(analysis), 258)
         # The oparg names the local that LOAD reads (_PyIR_ROLE_LOCAL_IN).
         # Only the twin runs Python itself; the format does, as the twin's.
         load = ("{ .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE | _PyIR_DISCARDS, "

@@ -32,6 +32,12 @@
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             int adapt_before_use_add2_c;
             int ret2;
+            int adapt_before_use_add2_cf;
+            int ret3;
+            int adapt_before_use_add2_ct;
+            int ret4;
+            int adapt_before_use_add2_ce;
+            int ret5;
             PyValue z;
             PyValue binary_at_origin1_value;
             PyValue binary_at_origin1_kept;
@@ -82,9 +88,53 @@
             if (ret2 < 0) {
                 goto rop_Add_Generic_adapt_before_use_add2_Run;
             }
+            rop_Add_Generic_adapt_before_use_add2_Changed:
             next_instr = this_instr;
             DISPATCH_SAME_OPARG();
             rop_Add_Generic_adapt_before_use_add2_Other:
+            if (_PyRop_FloatOperands(PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
+                goto rop_Add_Generic_adapt_before_use_add2_ChosenFloat;
+            }
+            goto rop_Add_Generic_adapt_before_use_add2_TryText;
+            rop_Add_Generic_adapt_before_use_add2_ChosenFloat:
+            adapt_before_use_add2_cf = ROP_HANDLER_Add_Float;
+            ret3 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_add2_cf);
+            if (ret3 > 0) {
+                goto rop_Add_Generic_adapt_before_use_add2_Changed;
+            }
+            if (ret3 == 0) {
+                goto rop_Add_Generic_adapt_before_use_add2_Run;
+            }
+            goto rop_Add_Generic_adapt_before_use_add2_Run;
+            rop_Add_Generic_adapt_before_use_add2_TryText:
+            if (_PyRop_BothExactStr(PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
+                goto rop_Add_Generic_adapt_before_use_add2_ChosenText;
+            }
+            goto rop_Add_Generic_adapt_before_use_add2_TryExtended;
+            rop_Add_Generic_adapt_before_use_add2_ChosenText:
+            adapt_before_use_add2_ct = ROP_HANDLER_Add_Text;
+            ret4 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_add2_ct);
+            if (ret4 > 0) {
+                goto rop_Add_Generic_adapt_before_use_add2_Changed;
+            }
+            if (ret4 == 0) {
+                goto rop_Add_Generic_adapt_before_use_add2_Run;
+            }
+            goto rop_Add_Generic_adapt_before_use_add2_Run;
+            rop_Add_Generic_adapt_before_use_add2_TryExtended:
+            if (!_PyRop_FindAddExtension(((_PyFbBinary *)IR_FB(IR_D(ir_word))), PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
+                goto rop_Add_Generic_adapt_before_use_add2_NoArm;
+            }
+            adapt_before_use_add2_ce = ROP_HANDLER_Add_Extended;
+            ret5 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_add2_ce);
+            if (ret5 > 0) {
+                goto rop_Add_Generic_adapt_before_use_add2_Changed;
+            }
+            if (ret5 == 0) {
+                goto rop_Add_Generic_adapt_before_use_add2_Run;
+            }
+            goto rop_Add_Generic_adapt_before_use_add2_Run;
+            rop_Add_Generic_adapt_before_use_add2_NoArm:
             _PyRop_Backoff(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h);
             goto rop_Add_Generic_Run;
             rop_Add_Generic_binary_at_origin1_Failed:
@@ -604,6 +654,168 @@
                 goto rop_Add_Int_Finish;
             }
             PROCESS_ERROR_AT(RAISE, 1, this_instr);
+        }
+
+        TARGET(Add_Float) {
+            // Add.Float (shared)
+            int opcode = ROP_HANDLER_Add_Float;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Add_Float);
+            PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow r;
+            PyValue ret1;
+            PyValue own_x = PyValue_NULL;
+            PyValue own_y = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            l = PyValue_Borrow(*home_x);
+            r = PyValue_Borrow(*home_y);
+            if (!_PyRop_FloatOperands(l, r)) {
+                JUMP_TO_PREDICTED(Add_Generic);
+            }
+            ret1 = _PyRop_AddFloats(l, r);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Add_Float_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_x = _PyFrame_TakeHome(frame, home_x);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                own_y = _PyFrame_TakeHome(frame, home_y);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(own_y);
+            PyValue_XCLOSE(own_x);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_Add_Float_Failed:
+            PROCESS_ERROR_AT(RAISE, 1, this_instr);
+        }
+
+        TARGET(Add_Text) {
+            // Add.Text (shared)
+            int opcode = ROP_HANDLER_Add_Text;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Add_Text);
+            PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow r;
+            PyValue ret1;
+            PyValue own_x = PyValue_NULL;
+            PyValue own_y = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            l = PyValue_Borrow(*home_x);
+            r = PyValue_Borrow(*home_y);
+            if (!_PyRop_BothExactStr(l, r)) {
+                JUMP_TO_PREDICTED(Add_Generic);
+            }
+            ret1 = _PyRop_ConcatText(l, r);
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Add_Text_Failed;
+            }
+            z = ret1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_x = _PyFrame_TakeHome(frame, home_x);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                own_y = _PyFrame_TakeHome(frame, home_y);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(own_y);
+            PyValue_XCLOSE(own_x);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_Add_Text_Failed:
+            PROCESS_ERROR_AT(RAISE, 1, this_instr);
+        }
+
+        TARGET(Add_Extended) {
+            // Add.Extended (shared)
+            int opcode = ROP_HANDLER_Add_Extended;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_Add_Extended);
+            PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow r;
+            _PyRopAnchors a;
+            PyValue ret1;
+            PyValue own_x = PyValue_NULL;
+            PyValue own_y = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            PyValue extension_at_origin1_value;
+            PyValue extension_at_origin1_kept;
+            PyValue extension_at_origin1_dropped;
+            l = PyValue_Borrow(*home_x);
+            r = PyValue_Borrow(*home_y);
+            if (!_PyRop_ExtensionApplies(((_PyFbBinary *)IR_FB(IR_D(ir_word))), l, r)) {
+                JUMP_TO_PREDICTED(Add_Generic);
+            }
+            a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_C)}, {home_x, home_y}});
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_RunExtension(((_PyFbBinary *)IR_FB(IR_D(ir_word))), _PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1));
+            if (PyValue_IsNull(ret1)) {
+                goto rop_Add_Extended_extension_at_origin1_Failed;
+            }
+            extension_at_origin1_value = ret1;
+            if (_PyRop_RedirectPending(frame)) {
+                extension_at_origin1_dropped = extension_at_origin1_value;
+                goto rop_Add_Extended_extension_at_origin1_Moved;
+            }
+            extension_at_origin1_kept = extension_at_origin1_value;
+            z = extension_at_origin1_kept;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_x = _PyFrame_TakeHome(frame, home_x);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                own_y = _PyFrame_TakeHome(frame, home_y);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_CloseAnchors(&a);
+            PyValue_XCLOSE(own_y);
+            PyValue_XCLOSE(own_x);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_Add_Extended_extension_at_origin1_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}});
+            PROCESS_ERROR_AT(RAISE, 3, this_instr);
+            rop_Add_Extended_extension_at_origin1_Moved:
+            IR_STUB_ESCAPE();
+            _PyRop_DiscardResult(extension_at_origin1_dropped);
+            IR_STUB_ESCAPE();
+            _PyRop_RetireAbandoned(&a);
+            IR_REDIRECT();
         }
 
         TARGET(GetAttr_Instance) {

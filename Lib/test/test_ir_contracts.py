@@ -142,7 +142,9 @@ EXTRA_ROWS = """
     MACRO(SPAM_TEST, ARGS(borrowed), TEST(inline_int), EFFECTS(writes), EXITS()) \\
     HELPER(spam_dealloc, void, (PyObject *), ARGS(object), NONE, EFFECTS()) \\
     HELPER(spam_write, void, (PyObject *), ARGS(object), NONE, EFFECTS(writes)) \\
-    INTRINSIC(SPAM_FT_ONLY, ARGS(scalar), SCALAR, BUILD(free_threaded))
+    INTRINSIC(SPAM_FT_ONLY, ARGS(scalar), SCALAR, BUILD(free_threaded)) \\
+    MACRO(SPAM_RAISE, ARGS(scalar), NONE, EFFECTS(raises), EXITS(raise)) \\
+    MACRO(SPAM_GUARD, ARGS(scalar), NONE, EFFECTS(), EXITS(miss))
 """
 
 
@@ -763,6 +765,29 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % ": inline_int",
                      r"OP: _USE requires .*inline_int.* of `values`, which nothing before "
                      r"it establishes")
+
+    def test_row_exits_are_sites(self):
+        # A row's exits leave the word from inside it: its raise needs the
+        # obligations met, its miss a restartable word
+        source = """
+            inst(OP, (value: consumed exact(PyLong_Type) --)) effects(writes, raises)
+                exits(next, raise)
+            {
+                %s
+            }
+        """
+        close = "PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);"
+        self.verify(source % (close + "SPAM_RAISE(oparg);"))
+        self.refuses(source % ("SPAM_RAISE(oparg);" + close),
+                     r"OP: on raise, `value` is still owned, but the site declares consumed")
+        self.refuses("""
+            inst(OP, (value: consumed exact(PyLong_Type) --)) effects(writes)
+                exits(next, miss)
+            {
+                PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                SPAM_GUARD(oparg);
+            }
+        """, r"OP: the miss follows .*, so the word cannot restart")
 
     def test_intrinsic_outside_its_build(self):
         self.refuses("""

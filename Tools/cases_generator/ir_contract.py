@@ -1282,6 +1282,9 @@ class OwnershipWalk:
             row = self.table.get(tkn.text)
             if row is None:
                 continue
+            for exit in sorted(row.exits & {"miss", "deopt"}):
+                # A row's guard exit, before the row takes anything
+                self.check_exit(exit, state, tkn)
             for arg, spec in zip(args, row.args):
                 name = self.views.resolve(arg)
                 if name is not None and spec.facts:
@@ -1302,6 +1305,10 @@ class OwnershipWalk:
                         state.arrays[array] = (PENDING if row.result.shape == "STATUS"
                                                else WRITTEN)
                         state.end_restart(f"the publication of `{array}` by {row.name}")
+            for exit in sorted(row.exits - {"next", "miss", "deopt"}):
+                # A row's other exits leave the word from inside it, after
+                # it has taken what its arguments' modes say
+                self.check_exit(exit, state, tkn)
 
     def discharge(self, name: str, state: _State, where: Token) -> None:
         "DEAD(name): only an inline value, or one already moved, owes nothing"

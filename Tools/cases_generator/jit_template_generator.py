@@ -92,6 +92,7 @@ LOWERINGS = {
     "PyList_GET_VALUE": Lowering(1),
     "PyTuple_GET_VALUE": Lowering(),
     "_PyList_ITEMS": Lowering(),
+    "_PyTuple_ITEMS": Lowering(),
     "_PyObject_InlineValues": Lowering(1),
     "_PyObject_Shape": Lowering(1),
     "_PyObject_ValueSlot": Lowering(),

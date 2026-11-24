@@ -497,6 +497,8 @@ PRIMITIVES = {p.name: p for p in (
        _tuple_item, READS),
     _p("_PyList_ITEMS", [P], ["PyValue*"], "Include/internal/pycore_list.h",
        lambda cx, o: cx.load(o + cx.off("PyListObject.ob_item"), "PyValue*"), READS),
+    _p("_PyTuple_ITEMS", [P], ["PyValue*"], "Include/internal/pycore_tuple.h",
+       lambda cx, o: o + cx.off("PyTupleObject.ob_item"), READS),
     _p("_PyObject_InlineValues", [P], ["PyDictValues*"], "Include/internal/pycore_object.h",
        _inline_values, READS),
     _p("_PyObject_Shape", [P], ["u32"], DICT_H,
@@ -541,21 +543,32 @@ PRIMITIVES = {p.name: p for p in (
        doc="the destructor of an exact type, which runs no Python"),
 )}
 
-# Forms with no operation of their own in the GIL build, the one in scope:
-# each is the identity on its (last) argument, or the constant given
-IDENTITIES = {
-    "PyValue_Borrow", "FT_ATOMIC_LOAD_PTR_ACQUIRE", "FT_ATOMIC_LOAD_SSIZE_RELAXED",
-    "FT_ATOMIC_LOAD_UINT32_RELAXED", "FT_ATOMIC_LOAD_UINT8",
-    "FT_ATOMIC_LOAD_UINT_RELAXED", "FT_ATOMIC_LOAD_UINT8_RELAXED",
-}
-CONSTANT_FORMS = {"LOCK_OBJECT": ("bool", 1)}
-# Statements that compile to nothing in a release build of the GIL build, the
-# one in scope, outside Emscripten
-ERASED = {
-    "assert", "STAT_INC", "OBJECT_STAT_INC", "_PyValue_CheckHome",
-    "_PyValue_RecheckHome", "UNLOCK_OBJECT", "DEAD", "INPUTS_DEAD",
-    "QSBR_QUIESCENT_STATE", "_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY",
-}
+def intrinsic(name: str):
+    """The INTRINSIC row of a form that has no operation of its own in the
+    build that the generator generates (the GIL build, outside Emscripten),
+    or the MACRO row of a form that moves its argument (TAKE): by result,
+    SCALAR or VIEW is the identity on the last argument, moved(k) is
+    argument k, LITERAL(k) the constant, NONE nothing"""
+    import ir_contract
+    row = ir_contract.rows().get(name)
+    if row is None:
+        return None
+    if row.kind == "INTRINSIC" and row.builds & {ir_contract.BUILD, "all"}:
+        return row
+    if row.kind == "MACRO" and row.takes_view and row.result.moved >= 0:
+        return row
+    return None
+
+
+def erased(name: str) -> bool:
+    "Whether a statement of this name compiles to nothing in the leaf IR"
+    import ir_contract
+    row = intrinsic(name)
+    if row is not None:
+        return row.result.shape == "NONE"
+    return name in ir_contract.ERASED_CONSTRUCTS
+
+
 # Constant words, as (symbol, tag)
 VALUE_CONSTANTS = {
     "PyValue_True": ("_Py_TrueStruct", 1), "PyValue_False": ("_Py_FalseStruct", 1),
@@ -1349,7 +1362,7 @@ class Translator:
 
     def call_statement(self, e: Expr) -> None:
         name, args, tok = e.value, e.args, e.token
-        if name in ERASED:
+        if erased(name):
             return
         if name in ("EXIT_IF", "DEOPT_IF"):
             kind = "EXIT" if name == "EXIT_IF" else "DEOPT"
@@ -1756,12 +1769,14 @@ class Translator:
 
     def call(self, e: Expr, want: bool):
         name, args, tok = e.value, e.args, e.token
-        if name in IDENTITIES or name in ("Py_UNLIKELY", "Py_LIKELY", "TAKE"):
+        form = intrinsic(name)
+        if form is not None and form.result.shape != "NONE":
+            if form.result.shape == "LITERAL":
+                return self.const("bool", int(form.result.measure))
+            if form.result.moved >= 0:
+                return self.rvalue(args[form.result.moved])
             return self.rvalue(args[-1])
-        if name in CONSTANT_FORMS:
-            t, x = CONSTANT_FORMS[name]
-            return self.const(t, x)
-        if name in ERASED:
+        if erased(name):
             if want:
                 raise LeafError(f"{name} has no value", tok)
             return None

@@ -149,9 +149,9 @@ static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_AsKnownObjectBorr
               "_PyValue_AsKnownObjectBorrowPointer: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyValueGuarded_Load((_PyValueGuarded){0})), PyValueBorrow),
               "_PyValueGuarded_Load: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_AsKnownObjectSteal((PyValue){0})), PyObject *),
+static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_AsKnownObjectSteal), PyObject * (*)(PyValue)),
               "PyValue_AsKnownObjectSteal: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_TYPE((PyValueBorrow){0})), PyTypeObject *),
+static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_TYPE), PyTypeObject * (*)(PyValueBorrow)),
               "PyValue_TYPE: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(Py_TYPE((PyObject *){0})), PyTypeObject *),
               "Py_TYPE: its C type differs from pycore_ir_components.h");
@@ -205,7 +205,7 @@ static_assert(__builtin_types_compatible_p(__typeof__(&PyErr_SetHandledException
               "PyErr_SetHandledException: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyException_GetTraceback), PyObject * (*)(PyObject *)),
               "PyException_GetTraceback: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyLazyImport_CheckExact((PyObject *){0})), int),
+static_assert(__builtin_types_compatible_p(__typeof__(&PyLazyImport_CheckExact), int (*)(PyObject *)),
               "PyLazyImport_CheckExact: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyObject_HasAttrWithError), int (*)(PyObject *, PyObject *)),
               "PyObject_HasAttrWithError: its C type differs from pycore_ir_components.h");
@@ -323,10 +323,6 @@ static_assert(__builtin_types_compatible_p(__typeof__(_PyTuple_ITEMS((PyObject *
               "_PyTuple_ITEMS: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_UnpackIterableValue), int (*)(PyThreadState *, PyObject *, int, int, PyValue *)),
               "_PyEval_UnpackIterableValue: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(LOCK_OBJECT((PyObject *){0})), int),
-              "LOCK_OBJECT: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(UNLOCK_OBJECT((PyObject *){0})), void),
-              "UNLOCK_OBJECT: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&GETITEM), PyObject * (*)(PyObject *, Py_ssize_t)),
               "GETITEM: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyDict_New), PyObject * (*)(void)),
@@ -363,7 +359,7 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PySlice_FromValues), PyO
               "_PySlice_FromValues: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyTuple_GET_OBJECT), PyObject * (*)(PyObject *, Py_ssize_t)),
               "_PyTuple_GET_OBJECT: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyBinaryOp_ExtendDescr((PyObject *){0})), _PyBinaryOpSpecializationDescr *),
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyBinaryOp_ExtendDescr), _PyBinaryOpSpecializationDescr * (*)(PyObject *)),
               "_PyBinaryOp_ExtendDescr: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(binaryopactionfunc), PyObject * (*)(PyObject *, PyObject *)),
               "binaryopactionfunc: its C type differs from pycore_ir_components.h");

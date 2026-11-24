@@ -4996,6 +4996,12 @@ class IREmitter(Emitter):
             self.cannot_escape = previous
             self.statement = None
             self.killed_inplace = None
+        if reachable and isinstance(uop, Uop):
+            # The facts a row's result has from its producer (F7)
+            texts = [t.text for t in stmt.contents if t.kind != "COMMENT"]
+            for line in ir_contract.assumed_assertions(uop, texts):
+                self.out.start_line()
+                self.emit(line + "\n")
         stack = storage.stack
         assert isinstance(stack, IRStack)
         if self.element_result is not None and assignment is not None:
@@ -5737,6 +5743,9 @@ def write_uop(
             emitter.emit(f"(void){name};\n")
         emitter.record_consumed.add(id(operand))
     emitter.emit_object_inputs(uop, storage, inst)
+    # The facts the uop assumes of its inputs, from their producers (F7)
+    for line in ir_contract.assumed_assertions(uop, None):
+        emitter.emit(line + "\n")
     reachable, storage = emitter.emit_tokens(uop, storage, inst, False)
     if emitter.pending_owner is not None:
         raise analysis_error(

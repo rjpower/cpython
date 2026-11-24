@@ -195,6 +195,58 @@ def parse_fact(word: str, where: Token | None) -> VFact:
     return VFact(kind, arg)
 
 
+@dataclass(frozen=True, order=True)
+class Assumption:
+    """`assumed(fact) by producer` (F7): a fact that a value has from a named
+    producer (the uop that pushes it, or an invariant of the runtime), which
+    the verifier trusts and every execution form asserts"""
+    fact: VFact
+    by: str
+
+
+# The C assertion of each fact an assumption may name, of a value {0}.  A
+# fact without one cannot be assumed: an assumption is always checked in
+# the assert build
+ASSERTION_FORMS = {
+    "nonnull": "!PyValue_IsNull({0})",
+    "object": "PyValue_IsObject({0})",
+    "inline": "PyValue_IsInline({0})",
+    "inline_int": "PyValue_IsInlineInt({0})",
+    "inline_float": "PyValue_IsInlineFloat({0})",
+    "exact": "!PyValue_IsNull({0}) && ({1})",
+}
+
+
+def assertion(fact: VFact, subject: str) -> str:
+    "The C assertion statement of an assumed fact of subject"
+    form = ASSERTION_FORMS[fact.kind]
+    types = " || ".join(f"PyValue_TYPE({subject}) == &{t}" for t in fact.arg.split("|"))
+    return f"assert({form.format(subject, types)});"
+
+
+def _assumptions(words: list[str], where: Token | None
+                 ) -> tuple[list[str], tuple[Assumption, ...]]:
+    "words without their `assumed(fact) by producer` triples, and the triples"
+    rest, found, i = [], [], 0
+    while i < len(words):
+        m = re.fullmatch(r"assumed\((.+)\)", words[i])
+        if m is None:
+            rest.append(words[i])
+            i += 1
+            continue
+        fact = parse_fact(m.group(1), where)
+        if words[i + 1:i + 2] != ["by"] or not re.fullmatch(r"\w+", "".join(words[i + 2:i + 3])):
+            message = f"`{words[i]}` names no producer: `{words[i]} by <producer>`"
+            raise analysis_error(message, where) if where else ValueError(message)
+        if fact.kind not in ASSERTION_FORMS:
+            message = (f"`{words[i]}`: {fact} has no assertion form, so it cannot be "
+                       f"assumed ({', '.join(ASSERTION_FORMS)})")
+            raise analysis_error(message, where) if where else ValueError(message)
+        found.append(Assumption(fact, words[i + 2]))
+        i += 3
+    return rest, tuple(found)
+
+
 # ---------------------------------------------------------------------------
 # The definition list (Include/internal/pycore_ir_components.h)
 
@@ -233,6 +285,9 @@ class Result:
     moved: int = -1                         # VALUE(moved(k)): argument k's value and
                                             # obligation
     failure: str = ""                       # STATUS: ZERO, NEGATIVE or NONZERO
+    # VALUE: the facts it has from a producer (F7), also in facts; the
+    # generator asserts them after each call
+    assumed: tuple[Assumption, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -354,14 +409,18 @@ def _parse_result(text: str) -> Result:
                 return Result(shape, "moved", moved=int(moved.group(1)))
             if not words or words[0] not in ("owned", "inline", "borrowed"):
                 raise ValueError(f"{shape} needs a mode: {text}")
-            null_iff, facts = -1, []
-            for w in words[1:]:
+            rest, assumed = _assumptions(words[1:], None)
+            if assumed and shape != "VALUE":
+                raise ValueError(f"an assumed fact qualifies a VALUE result: {text}")
+            null_iff, facts = -1, [a.fact for a in assumed]
+            for w in rest:
                 m = re.fullmatch(r"null_iff\((\d+)\)", w)
                 if m and shape == "VALUE":
                     null_iff = int(m.group(1))
                 else:
                     facts.append(parse_fact(w, None))
-            return Result(shape, words[0], frozenset(facts), null_iff=null_iff)
+            return Result(shape, words[0], frozenset(facts), null_iff=null_iff,
+                          assumed=assumed)
     raise ValueError(f"{text!r} is not a result shape ({', '.join(RESULT_SHAPES)})")
 
 
@@ -698,6 +757,9 @@ class Item:
     nullable: bool = False
     array: bool = False
     size: str = ""              # an array's size, as declared
+    # The facts its value has at the handler's entry from a producer (F7);
+    # not requirements, and not in facts
+    assumed: tuple[Assumption, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -723,7 +785,8 @@ class Contract:
 def _item(stack_item, modes: tuple[str, ...], where: Token) -> Item:
     name, through = stack_item.name, stack_item.peek
     mode, source, facts = "", "", []
-    for w in stack_item.contract:
+    words, assumed = _assumptions(list(stack_item.contract), where)
+    for w in words:
         m = re.fullmatch(r"moved\((\w+)\)", w)
         if m and "moved" in modes:
             mode, source = "moved", m.group(1)
@@ -741,7 +804,7 @@ def _item(stack_item, modes: tuple[str, ...], where: Token) -> Item:
     if mode and through:
         raise analysis_error(f"`{name}` passes through, so it takes no mode", where)
     return Item(name, mode, source, frozenset(facts), stack_item.nullable,
-                stack_item.is_array(), stack_item.size)
+                stack_item.is_array(), stack_item.size, assumed)
 
 
 _CONTRACTS: dict[int, tuple[Uop, Contract | None]] = {}
@@ -770,6 +833,10 @@ def contract_of(uop: Uop) -> Contract | None:
             if o.mode == "moved" and not any(i.name == o.source for i in inputs):
                 raise analysis_error(f"{uop.name}: `{o.name}` is moved from `{o.source}`, "
                                      "which is not an input", where)
+            if o.assumed:
+                raise analysis_error(f"{uop.name}: the output `{o.name}` is assumed; an "
+                                     "assumption is of a value that reaches the handler "
+                                     "(F7), and an output's facts are shown", where)
         feedback = parse_feedback(uop.clauses.get("feedback", ()), where)
         contract = Contract(inputs, outputs, effects, exits, feedback)
     # The uop is kept with its contract, so that its id is not reused
@@ -1452,7 +1519,9 @@ class OwnershipWalk:
             self.site_effects.setdefault(id(site.token), []).append(site.effect)
 
     def run(self) -> "OwnershipWalk":
-        facts = {n: implied(i.facts | (set() if i.nullable else {NONNULL}))
+        # An assumed fact holds at entry, and then lives as any fact (F7)
+        facts = {n: implied(i.facts | {a.fact for a in i.assumed}
+                            | (set() if i.nullable else {NONNULL}))
                  for n, i in self.declared.items()}
         state = _State({n: HELD for n in self.declared}, facts)
         state.arrays = {o.name: UNWRITTEN for o in self.contract.outputs
@@ -2498,7 +2567,8 @@ def check_guard_facts(uop: Uop, contract: Contract, walk: OwnershipWalk) -> None
         else:
             continue
         item = contract.input(source)
-        entry = (implied(item.facts | (set() if item.nullable else {NONNULL}))
+        entry = (implied(item.facts | {a.fact for a in item.assumed}
+                         | (set() if item.nullable else {NONNULL}))
                  if item is not None else frozenset())
         declared = implied(out.facts)
         extra = declared - live - {NONNULL}
@@ -2543,6 +2613,65 @@ def check_identities(uop: Uop, contract: Contract, table: dict[str, Row]) -> Non
 _VERIFIED: set[int] = set()
 
 
+def assumed_result_of(texts: list[str], table: dict[str, Row]) -> tuple[str, Row] | None:
+    """`[T] x = R(...);`, whose value is the call of a row R with assumed
+    result facts: (x, R).  The generator asserts them of x after the
+    statement (F7)"""
+    texts = [t for t in texts if t != ";"]
+    if texts.count("=") != 1:
+        return None
+    eq = texts.index("=")
+    call = _call_of(texts[eq + 1:], table)
+    if eq == 0 or call is None or not call[0].result.assumed:
+        return None
+    return texts[eq - 1], call[0]
+
+
+def assumed_assertions(uop: Uop, texts: list[str], table: dict[str, Row] | None = None
+                       ) -> list[str]:
+    """The assertions the generator emits for a declared uop: of its
+    assumed inputs at entry (texts None), or after a statement that binds
+    an assumed row result (F7)"""
+    contract = contract_of(uop)
+    if contract is None:
+        return []
+    if texts is None:
+        return [assertion(a.fact, i.name) for i in contract.inputs for a in i.assumed]
+    found = assumed_result_of(texts, rows() if table is None else table)
+    if found is None:
+        return []
+    name, row = found
+    return [assertion(a.fact, name) for a in row.result.assumed]
+
+
+def check_assumed_results(uop: Uop, table: dict[str, Row]) -> None:
+    """F7: a row's assumed result is bound to a local by the statement that
+    calls it, `[T] x = R(...);`, so that every form asserts it there; an
+    `assert` in the body never declares a fact"""
+    bound: set[int] = set()
+
+    def visit(stmt) -> None:
+        if not isinstance(stmt, SimpleStmt):
+            return
+        tokens = [t for t in stmt.contents if t.kind != "COMMENT"]
+        found = assumed_result_of([t.text for t in tokens], table)
+        if found is not None:
+            # The call is the whole right side: its name follows `=` and casts
+            call = next(t for t in tokens[[t.text for t in tokens].index("=") + 1:]
+                        if t.text == found[1].name)
+            bound.add(id(call))
+
+    uop.body.accept(visit)
+    for t, _ in body_calls(uop):
+        row = table.get(t.text)
+        if row is not None and row.result.assumed and id(t) not in bound:
+            raise analysis_error(
+                f"{uop.name}: {row.name}'s result is assumed "
+                f"{', '.join(f'{a.fact} by {a.by}' for a in row.result.assumed)}; "
+                f"bind it to a local, `x = {row.name}(...);`, where the generator "
+                "asserts it", t)
+
+
 def check_fact_subjects(uop: Uop, contract: Contract) -> None:
     """A declared fact's subjects: in_bounds(x) names an input; a fact of
     one site (unique) is never declared on an output, which exports it"""
@@ -2566,6 +2695,7 @@ def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None 
     if contract is None or (id(uop), implicit_guards) in _VERIFIED:
         return
     check_fact_subjects(uop, contract)
+    check_assumed_results(uop, table)
     check_preprocessor(uop)
     check_callees(uop, table)
     check_effects(uop, contract, table)
@@ -2619,6 +2749,10 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
     sizes: dict[int, str] = {}
     fresh = iter(range(1, 1 << 20))
     restartable, why = True, ""
+    # The values that reach the handler, and the first site since its entry
+    # that may have replaced any of them in its home (F7's binding)
+    entry: set[int] = set()
+    replaced = ""
 
     def pop(item: Item) -> int | None:
         "The value of an input, or None if the stack's depth is unknown"
@@ -2643,6 +2777,7 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
             return stack.pop()
         v = next(fresh)
         facts[v] = frozenset({NONNULL})
+        entry.add(v)
         return v
 
     # Whether the stack's depth is known: past an array of unknown size the
@@ -2663,6 +2798,20 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
         implicit = []
         for item in contract.inputs if known else ():
             value = bound[item.name]
+            if item.assumed:
+                # F7: a fact of the value that reaches the handler, from its
+                # producer; one this handler makes is shown, not assumed
+                said = ", ".join(f"{a.fact} by {a.by}" for a in item.assumed)
+                if value not in entry:
+                    raise analysis_error(
+                        f"{inst.name}: {part.name} assumes {said} of `{item.name}`, a value "
+                        "made in this handler, whose facts must show it", inst.where)
+                if replaced:
+                    raise analysis_error(
+                        f"{inst.name}: {part.name} assumes {said} of `{item.name}`, which "
+                        f"may have been replaced since the handler's entry, at {replaced}",
+                        inst.where)
+                facts[value] = implied(facts[value] | {a.fact for a in item.assumed})
             missing = implied(item.facts) - facts.get(value, frozenset())
             if missing <= {OBJECT, NONNULL} and OBJECT in missing and part.is_guard() \
                     and not part.properties.inline_ok:
@@ -2699,6 +2848,8 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
                                   and contract.output(i.name) is not None}
             for v in homes:
                 facts[v] = frozenset()
+        if contract.effects & REENTRY and not replaced:
+            replaced = f"{part.name}, which may reenter"
         changes = contract.effects - {"reads", "raises"}
         if restartable and changes:
             restartable, why = False, f"{part.name}, which may {', '.join(sorted(changes))}"
@@ -2717,6 +2868,7 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
                 # A close may run a finalizer, which can replace any home's
                 # value (design.md 3.2)
                 facts = {v: frozenset() for v in facts}
+                replaced = replaced or f"the skeleton's close of `{name}` after {part.name}"
                 if restartable and contract.input(name) is not None:
                     restartable = False
                     why = f"the skeleton's close of `{name}` after {part.name}"

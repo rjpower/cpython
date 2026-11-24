@@ -1112,8 +1112,27 @@ class Translator:
 
     # -- the body
 
+    def check_assumptions(self) -> None:
+        """A declared assumption (F7) is asserted in every form; the leaf IR
+        has no assertion, so the templates could not check it"""
+        import ir_contract
+        contract = ir_contract.contract_of(self.uop)
+        if contract is None:
+            return
+        for item in contract.inputs:
+            if item.assumed:
+                raise LeafError(f"`{item.name}` is assumed {item.assumed[0].fact}, whose "
+                                "assertion the leaf IR cannot state")
+        table = ir_contract.rows()
+        for tkn, _ in ir_contract.body_calls(self.uop):
+            row = table.get(tkn.text)
+            if row is not None and row.result.assumed:
+                raise LeafError(f"{row.name}'s result is assumed, whose assertion the leaf "
+                                "IR cannot state", tkn)
+
     def translate(self) -> LeafBody:
         uop = self.uop
+        self.check_assumptions()
         inputs, outputs = [], []
         for item in uop.stack.inputs:
             if item.name == "unused":

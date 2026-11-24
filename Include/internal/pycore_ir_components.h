@@ -26,14 +26,18 @@
  *       a macro that the generator expands; its C is generated
  *
  * ARGS: per parameter a mode (borrowed, consumed, taken, scalar, object,
- * tstate, frame, out) and the facts it requires.
+ * tstate, frame, out) and the facts it requires.  On a `PyObject *`
+ * parameter, `consumed object` is a stolen object pointer; on a PyValue,
+ * `object` is the fact.
  * result: NONE, SCALAR, VIEW (the object of argument 0), PATH(name) (a
  * pointer along a named path from argument 0: its type, its inline
  * values), MEASURE(kind) of argument 0, TEST(true facts | false facts, ...)
  * per argument, CONTEXT("reason"), VALUE(mode facts [null_iff(k)])
  * (infallible; with null_iff(k) NULL exactly where argument k is),
  * VALUE(moved(k)) (argument k itself, a consumed one, with its
- * obligation: TAKE),
+ * obligation: TAKE), VALUE(mode assumed(fact) by producer) (a fact the
+ * value has by its producer's invariant, which the generator asserts
+ * after each call; the call is bound to a local, `x = row(...);`),
  * VALUE_OR_NULL(mode facts) (NULL means raised), STATUS(ZERO | NEGATIVE |
  * NONZERO) (the failure value of an int status: raised, and the `out`
  * arguments unwritten), GUARD(facts per argument) (a row with a miss or

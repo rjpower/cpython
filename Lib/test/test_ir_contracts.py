@@ -179,7 +179,10 @@ EXTRA_ROWS = """
            EFFECTS()) \
     MACRO(SPAM_GUARD_INT, ARGS(borrowed), GUARD(inline_int), EFFECTS(), EXITS(miss)) \
     MACRO(SPAM_GUARD_INDEX, ARGS(borrowed, borrowed, scalar), GUARD(in_bounds(1)), \
-          EFFECTS(reads), EXITS(deopt))
+          EFFECTS(reads), EXITS(deopt)) \
+    MACRO(SPAM_DESCR, ARGS(scalar), VALUE(borrowed assumed(nonnull) by spam_cache), \
+          EFFECTS(reads), EXITS()) \
+    MACRO(SPAM_DESCR_OR_NULL, ARGS(scalar), VALUE_OR_NULL(borrowed), EFFECTS(reads), EXITS())
 """
 
 
@@ -1237,6 +1240,119 @@ class VerifierTests(unittest.TestCase):
         self.verify(source % ("consumed", "PyValue_AsKnownObjectSteal"))
         self.refuses(source % ("borrowed", "PyValue_AsKnownObjectBorrow"),
                      r"SPAM_STEAL consumes `x`, declared borrowed, which it does not own")
+
+    # F7: assumed(fact) by <producer>
+
+    def test_assumed_inputs(self):
+        # _POP_TOP_UNICODE: the input form; an assert in the body is no
+        # declaration
+        source = """
+            op(_OP, (value: consumed %s --)) effects(writes) exits(next) {
+                assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
+                PyValue_CLOSE_SPECIALIZED(value, _PyUnicode_ExactDealloc);
+            }
+        """
+        analysis = self.verify(source % "assumed(exact(PyUnicode_Type)) by _BINARY_OP_ADD_UNICODE")
+        item = ir_contract.contract_of(analysis.uops["_OP"]).inputs[0]
+        self.assertEqual(item.assumed, (ir_contract.Assumption(
+            ir_contract.VFact("exact", "PyUnicode_Type"), "_BINARY_OP_ADD_UNICODE"),))
+        self.assertEqual(item.facts, frozenset())       # no requirement
+        self.assertEqual(ir_contract.assumed_assertions(analysis.uops["_OP"], None), [
+            "assert(!PyValue_IsNull(value) && "
+            "(PyValue_TYPE(value) == &PyUnicode_Type));"])
+        self.refuses(source % "", r"frees only exact\(PyUnicode_Type\)")
+        self.refuses(source % "assumed(exact(PyUnicode_Type))",
+                     r"names no producer: `assumed\(exact\(PyUnicode_Type\)\) by <producer>`")
+        self.refuses(source % "assumed(length(n)) by _P", r"length\(n\) has no assertion form")
+        self.refuses("""
+            op(_OP, (-- r: owned assumed(nonnull) by _P)) effects() exits(next) {
+                r = PyValue_None;
+            }
+        """, r"the output `r` is assumed")
+
+    def test_an_assumption_binds_at_the_handlers_entry(self):
+        source = """
+            op(_FIRST, (%s)) effects(%s) exits(next) {
+                %s
+            }
+            op(_SECOND, (x: assumed(object) by _P -- x)) effects() exits(next) {
+                spam_dealloc(PyValue_AsKnownObjectBorrow(x));
+            }
+            macro(OP) = _FIRST + _SECOND;
+        """
+        # A value that reaches the handler
+        self.verify(source % ("x -- x", "", ""))
+        # Made in this handler: its producer's facts must show it
+        self.refuses(source % ("-- x: borrowed", "reads", "x = SPAM_BORROW();"),
+                     r"_SECOND assumes object by _P of `x`, a value made in this handler")
+        # The assumption does not revive a fact after a reentry
+        self.refuses(source % ("x -- x", "runs_python",
+                               "Py_ssize_t n = _PyValue_Size(x); (void)n;"),
+                     r"`x`, which may have been replaced since the handler's entry, at "
+                     r"_FIRST, which may reenter")
+        # Within the uop it lives as any fact: a reentry kills it
+        self.refuses("""
+            op(_OP, (x: assumed(object) by _P -- x)) effects(runs_python) exits(next) {
+                Py_ssize_t n = _PyValue_Size(x); (void)n;
+                spam_dealloc(PyValue_AsKnownObjectBorrow(x));
+            }
+        """, r"passes `x` to PyValue_AsKnownObjectBorrow, which requires .*object of it")
+
+    def test_assumed_row_results(self):
+        # _LOAD_ATTR_CLASS: the cached descriptor is not NULL by the cache's
+        # invariant, declared on the row that reads it
+        row = self.table["SPAM_DESCR"]
+        self.assertEqual(row.result.assumed, (ir_contract.Assumption(
+            ir_contract.NONNULL, "spam_cache"),))
+        source = """
+            op(_OP, (-- attr: owned)) effects(reads) exits(next) {
+                %s
+            }
+        """
+        analysis = self.verify(source % "PyValueBorrow found = SPAM_DESCR(oparg);\n"
+                               "attr = PyValue_DUP(found);")
+        uop = analysis.uops["_OP"]
+        texts = ["PyValueBorrow", "found", "=", "SPAM_DESCR", "(", "oparg", ")", ";"]
+        self.assertEqual(ir_contract.assumed_assertions(uop, texts, self.table),
+                         ["assert(!PyValue_IsNull(found));"])
+        self.assertEqual(ir_contract.assumed_assertions(uop, texts[:3] + ["oparg", ";"],
+                                                        self.table), [])
+        # The call is bound to a local, where every form asserts it
+        self.refuses(source % "attr = PyValue_DUP(SPAM_DESCR(oparg));",
+                     r"SPAM_DESCR's result is assumed nonnull by spam_cache; bind it to a local")
+        self.refuses(source % "if (SPAM_DESCR(oparg).bits) { attr = PyValue_None; }"
+                     " else { attr = PyValue_None; }",
+                     r"SPAM_DESCR's result is assumed")
+        # An assert in the body is no declaration
+        self.refuses(source % "PyValueBorrow found = SPAM_DESCR_OR_NULL(oparg);\n"
+                     "assert(!PyValue_IsNull(found));\nattr = PyValue_DUP(found);",
+                     r"passes `found` to PyValue_DUP, which requires nonnull of it")
+        for text, message in [
+                ("VALUE(borrowed assumed(nonnull))", "names no producer"),
+                ("VALUE_OR_NULL(borrowed assumed(nonnull) by p)", "qualifies a VALUE result"),
+                ("VALUE(borrowed assumed(length(x)) by p)", "has no assertion form")]:
+            with self.subTest(text), self.assertRaisesRegex(ValueError, message):
+                ir_contract._parse_result(text)
+
+    def test_assumptions_are_asserted_in_every_form(self):
+        analysis = self.verify("""
+            inst(OP, (value: consumed assumed(exact(PyUnicode_Type)) by _P --))
+                effects(writes) exits(next)
+            {
+                PyValue_CLOSE_SPECIALIZED(value, _PyUnicode_ExactDealloc);
+            }
+        """)
+        out = io.StringIO()
+        with cases.handle_stderr():
+            ir_generator.generate_ir([self.filename], analysis, out, False)
+        body = cases.expand_outlined(out.getvalue())
+        body = body[body.index("TARGET(OP)"):]
+        self.assertLess(body.index("assert(!PyValue_IsNull(value) && "
+                                   "(PyValue_TYPE(value) == &PyUnicode_Type));"),
+                        body.index("_PyUnicode_ExactDealloc"))
+        # The leaf IR has no assertion: no template without it
+        with self.assertRaisesRegex(ir_leaf.LeafError, r"`value` is assumed"):
+            ir_leaf.translate(analysis.uops["OP"])
 
     # F15: the GIL product's preprocessor path
 

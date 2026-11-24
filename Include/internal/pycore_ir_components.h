@@ -1128,10 +1128,10 @@
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* seeded from a C macro (no static check), ir_records.TRANSFER_TOKENS, ir_records.effect_sites */ \
     MACRO(JUMPBY, \
-        ARGS(scalar), NONE, EFFECTS(), EXITS(jump)) \
+        ARGS(scalar), NONE, EFFECTS(), EXITS(jump(successor))) \
     /* seeded from a C macro (no static check), ir_records.TRANSFER_TOKENS, ir_records.effect_sites */ \
     MACRO(JUMPTO, \
-        ARGS(scalar), NONE, EFFECTS(), EXITS(jump)) \
+        ARGS(scalar), NONE, EFFECTS(), EXITS(jump(successor))) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(JUMP_TARGET, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
@@ -1368,7 +1368,7 @@
      * instruction, the target, the event and the edge: all scalars */ \
     MACRO(IR_OBSERVE_COMMITTED_BRANCH, ARGS(scalar, scalar, scalar, scalar), \
           NONE, EFFECTS(reads, writes, raises, runs_python), \
-          EXITS(branch, raise)) \
+          EXITS(branch(committed), raise(committed))) \
     /* IR_MARKER_EFFECTS: escapes, error, terminal; TRANSFER_TOKENS (BRANCH, \
      * RAISE).  Arguments are the kind, the completion value and the \
      * oparg.  The completion helper (_PyEval_CompleteForIter, \

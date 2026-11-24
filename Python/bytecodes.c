@@ -6195,7 +6195,9 @@ dummy_func(
             }
         }
 
-        inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond -- res)) {
+        inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
+            effects(runs_python) exits(next, branch, raise)
+        {
             // Taken before the truth test, which can run code
             PyValue held = TAKE(cond);
             int truth = _PyValue_IsTrue(held);
@@ -6214,7 +6216,9 @@ dummy_func(
             }
         }
 
-        inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond -- res)) {
+        inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
+            effects(runs_python) exits(next, branch, raise)
+        {
             // Taken before the truth test, which can run code
             PyValue held = TAKE(cond);
             int truth = _PyValue_IsTrue(held);

@@ -1307,6 +1307,109 @@ class VerifierTests(unittest.TestCase):
         """, r"`res` is declared owned, but is assigned `TAKE \( value \)`, which is the "
              r"input `value`'s value: declare moved\(value\)")
 
+    def test_a_committed_exit_publishes_the_outputs(self):
+        # _INSTRUMENTED_JUMP_IF_FALSE_OR_POP: the observer is taken after the
+        # generator stores the outputs, so each must be written before it;
+        # it dispatches, so the walk ends there
+        source = """
+            op(_OP, (cond: consumed -- res: moved(cond)%s))
+                effects(runs_python) exits(next, branch, raise)
+            {
+                PyValue held = TAKE(cond);
+                int truth = _PyValue_IsTrue(held);
+                if (truth < 0) {
+                    PyValue_CLOSE(held);
+                    ERROR_NO_POP();
+                }
+                if (!truth) {
+                    res = held;
+                    IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg), 0, 0);
+                }
+                else {
+                    %s
+                    IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, 0, 0);
+                }
+            }
+        """
+        popped = "IR_DEFER_CLOSE(held);\n res = PyValue_NULL;"
+        self.verify(source % (" nullable", popped))
+        # NULL on one exit: the output says so
+        self.refuses(source % ("", popped),
+                     r"`res` may be NULL from PyValue_NULL, and nothing raises on it")
+        # An output the generator would store before it is written
+        self.refuses(source % (" nullable", "IR_DEFER_CLOSE(held);"),
+                     r"`res` is not written before IR_OBSERVE_COMMITTED_BRANCH, whose "
+                     r"exits \(branch, raise\) are committed")
+        self.refuses("""
+            op(_OP, (cond: consumed -- res: moved(cond)))
+                effects(runs_python) exits(branch, raise)
+            {
+                PyValue held = TAKE(cond);
+                IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, 0, 0);
+                res = held;
+            }
+        """, r"`res` is not written before IR_OBSERVE_COMMITTED_BRANCH")
+        # The generator's replacer and the declaration name the same row;
+        # the generator selecting it by declaration is a follow-up (G0d)
+        self.assertEqual({r.name for r in self.table.values() if r.committed},
+                         {"IR_OBSERVE_COMMITTED_BRANCH"})
+        # next publishes, and a guard exit restarts the word: neither is
+        # committed, nor a successor
+        for mark in ("committed", "successor"):
+            for exit in ("next", "miss"):
+                with self.subTest(mark=mark, exit=exit):
+                    with self.assertRaisesRegex(SyntaxError, f"{exit} cannot be {mark}"):
+                        ir_contract.parse_rows(
+                            "#define X(PRIMITIVE, HELPER, MACRO) MACRO(SPAM, ARGS(scalar), "
+                            f"NONE, EFFECTS(), EXITS({exit}({mark})))")
+
+    def test_a_successor_is_published_at_the_end(self):
+        # _POP_JUMP_IF_FALSE_NONE_OR_PLAIN + POP_TOP: JUMPTO assigns the
+        # next word; the uop continues, and POP_TOP runs on both paths, so v
+        # is published at the body's end as on next
+        source = """
+            op(_OP, (value: consumed -- v: moved(value))) effects() exits(next, branch) {
+                int flag = PyValue_IsNone(value);
+                IR_REPORT_EDGE(flag);
+                %s
+            }
+            op(_POP, (value: consumed --)) effects(releases) exits(next) {
+                PyValue_CLOSE(value);
+            }
+            macro(OP) = _OP + _POP;
+        """
+        self.verify(source % """
+                v = value;
+                DEAD(value);
+                if (flag) {
+                    JUMPTO(oparg);
+                }""")
+        # Unconditional, it is a jump
+        self.refuses(source % "v = value; DEAD(value); JUMPTO(oparg);",
+                     r"declares exits\(branch, next\), but the body takes jump, next")
+        # Written only off the jump path
+        self.refuses(source % """
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+                else {
+                    v = value;
+                    DEAD(value);
+                }""", r"`(v|value)` is owned on one path and not on another where they join")
+        # A word that has assigned its successor does not raise
+        self.refuses("""
+            op(_OP, (value: consumed -- v: moved(value)))
+                effects(raises) exits(next, branch, raise)
+            {
+                v = value;
+                DEAD(value);
+                if (oparg) {
+                    JUMPTO(oparg);
+                }
+                ERROR_IF(oparg > 3);
+            }
+        """, r"on raise, JUMPTO has assigned the next word")
+
     def test_identities_of_static_objects(self):
         # F21, _GUARD_LOAD_SUPER_ATTR_METHOD: a CONSTANT row names a static
         # object by address; a comparison with it establishes is(K)

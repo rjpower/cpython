@@ -398,6 +398,15 @@ class Row:
     # and the macro of the handler's word that initializes the item
     bits: tuple[tuple[str, frozenset, frozenset], ...] = ()
     init: str = ""
+    # EXITS(branch(committed)): the exits a row takes after the generator
+    # has stored the uop's outputs (IR_OBSERVE_COMMITTED_BRANCH), on which
+    # they are published as on next
+    committed: frozenset[str] = frozenset()
+    # EXITS(jump(successor)): the exits a row names by assigning the next
+    # word (JUMPTO is `next_instr = ...`): not an exit at the call; the body
+    # continues, and that path's successor is published at the body's end
+    # as next is
+    successor: frozenset[str] = frozenset()
     # CONSTANT: how the constant is held, VALUE (a PyValue, ret PyValue) or
     # OBJECT (a static object named by its address, ret its C type)
     representation: str = ""
@@ -527,6 +536,30 @@ def _parse_result(text: str) -> Result:
             return Result(shape, words[0], frozenset(facts), null_iff=null_iff,
                           assumed=assumed)
     raise ValueError(f"{text!r} is not a result shape ({', '.join(RESULT_SHAPES)})")
+
+
+def _parse_exits(text: str) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+    """EXITS(...): the exit names; those marked `(committed)`, taken after
+    the uop's outputs are stored; and those marked `(successor)`, which the
+    row assigns as the next word without leaving"""
+    inner = _inner(text, "EXITS")
+    if inner is None:
+        raise ValueError(f"expected EXITS(...), got {text.strip()!r}")
+    names: set[str] = set()
+    marked: dict[str, set[str]] = {"committed": set(), "successor": set()}
+    for n in (n.strip() for n in inner.replace("|", ",").split(",") if n.strip()):
+        m = re.fullmatch(r"(\w+)\((committed|successor)\)", n)
+        if m:
+            if m.group(1) in ("next", "miss", "deopt"):
+                raise ValueError(f"EXITS: {m.group(1)} cannot be {m.group(2)}: next "
+                                 "publishes the outputs, and a guard exit restarts the word")
+            marked[m.group(2)].add(m.group(1))
+            n = m.group(1)
+        names.add(n)
+    unknown = names - set(EXITS)
+    if unknown:
+        raise ValueError(f"EXITS: {sorted(unknown)} not in {EXITS}")
+    return frozenset(names), frozenset(marked["committed"]), frozenset(marked["successor"])
 
 
 def _parse_names(text: str, head: str, allowed: tuple[str, ...]) -> frozenset[str]:
@@ -661,10 +694,11 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
             raise ValueError("MACRO(name, ARGS(...), result, EFFECTS(...), EXITS(...)"
                              "[, FEEDBACK(...)])")
         name, args, result, effects, exits = fields[:5]
+        exits, committed, successor = _parse_exits(exits)
         return Row(kind, name, args=_parse_args(_inner(args, "ARGS")),
                    result=_parse_result(result),
                    effects=_parse_names(effects, "EFFECTS", EFFECTS),
-                   exits=_parse_names(exits, "EXITS", EXITS),
+                   exits=exits, committed=committed, successor=successor,
                    **_row_options(fields, 5, kind))
     fixed = 7 if kind == "ROUTINE" else 6
     if len(fields) < fixed:
@@ -679,8 +713,8 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
               tuple(p.strip() for p in _split_text(params[1:-1]) if p.strip()),
               _parse_args(_inner(args, "ARGS")), _parse_result(result),
               _parse_names(effects, "EFFECTS", EFFECTS),
-              exits=(_parse_names(fields[6], "EXITS", EXITS) if kind == "ROUTINE"
-                     else frozenset()),
+              **(dict(zip(("exits", "committed", "successor"), _parse_exits(fields[6])))
+                 if kind == "ROUTINE" else {}),
               **_row_options(fields, fixed, kind))
     fixed = [p for p in row.params if p != "..."]
     if len(row.args) != len(fixed):
@@ -1941,13 +1975,17 @@ class _State:
     # The CASES result whose outcome on this path sets no exception, until
     # a call that may raise
     no_exception: str = ""
+    # The row that assigned the next word on this path (JUMPTO): the word
+    # may then only continue to its end
+    successor: str = ""
 
     def copy(self) -> "_State":
         return _State(dict(self.owners), dict(self.facts), dict(self.pending),
                       dict(self.sources), dict(self.rehomed), dict(self.arrays),
                       dict(self.status), self.restartable, self.why, dict(self.bindings),
                       dict(self.origins), dict(self.null_when), dict(self.signs),
-                      set(self.exact), set(self.decided), self.split, self.no_exception)
+                      set(self.exact), set(self.decided), self.split, self.no_exception,
+                      self.successor)
 
     def end_restart(self, why: str) -> None:
         if self.restartable:
@@ -2039,8 +2077,25 @@ class OwnershipWalk:
     def fail(self, where: Token, message: str):
         raise analysis_error(f"{self.uop.name}: {message}", where)
 
+    def check_committed(self, row: Row, state: _State, where: Token) -> None:
+        """A row whose exits are committed runs after the generator stores
+        the uop's outputs: every output is written before it"""
+        for out in self.contract.outputs:
+            if not out.mode or out.name == "unused":
+                continue
+            written = (state.arrays.get(out.name) == WRITTEN if out.array
+                       else out.name in state.facts or out.name in state.owners)
+            if not written:
+                self.fail(where, f"`{out.name}` is not written before {row.name}, whose "
+                          f"exits ({', '.join(sorted(row.committed))}) are committed: "
+                          "the outputs are stored before it")
+
     def check_exit(self, exit: str, state: _State, where: Token,
-                   holding: frozenset[str] = frozenset()) -> None:
+                   holding: frozenset[str] = frozenset(), committed: bool = False) -> None:
+        if state.successor and exit != "next":
+            self.fail(where, f"on {exit}, {state.successor} has assigned the next word: "
+                      "after it the word may only continue to its end, where the "
+                      "outputs are published as on next")
         if exit in ("miss", "deopt"):
             if not state.restartable:
                 self.fail(where, f"the {exit} follows {state.why}, so the word cannot "
@@ -2053,9 +2108,10 @@ class OwnershipWalk:
                              if local else "the row succeeds, and its result is not kept"))
             item = self.declared.get(name)
             if item is None:
-                # A new owner: published on next if it is an output; released,
-                # or NULL, on every other exit
-                if status == HELD and not (exit == "next" and self.contract.output(name)):
+                # A new owner: published on next, or on a committed exit, if
+                # it is an output; released, or NULL, on every other exit
+                if status == HELD and not ((exit == "next" or committed)
+                                           and self.contract.output(name)):
                     self.fail(where, f"on {exit}, the new owner `{name}` is still held")
                 continue
             gone = status != HELD
@@ -2079,6 +2135,8 @@ class OwnershipWalk:
                 self.fail(where, f"on raise, `{name}` is released, but it is declared "
                           "taken (kept on raise)")
         for name, written in state.arrays.items():
+            if committed:
+                continue    # check_committed: written, and stored
             if exit == "next" and written != WRITTEN:
                 self.fail(where, f"on next, the output array `{name}` is "
                           f"{self.array_state(written)}, but it is published whole")
@@ -2086,7 +2144,9 @@ class OwnershipWalk:
                 self.fail(where, f"on {exit}, the output array `{name}` is "
                           f"{self.array_state(written)}: its values would leak or be "
                           "published by a word that did not complete")
-        if exit == "next":
+        if exit == "next" or committed:
+            # One publication: next, a committed exit (the generator stores
+            # the outputs before it), and a successor's path at the body's end
             self.check_outputs(state, where)
 
     @staticmethod
@@ -2280,8 +2340,10 @@ class OwnershipWalk:
         for other in live[1:]:
             for name in set(first.owners) | set(other.owners):
                 a, b = first.owners.get(name, GONE), other.owners.get(name, GONE)
-                if {a, b} == {HELD, NULL}:
-                    # A new owner, NULL on one path: held, and maybe NULL
+                if {a, b} == {HELD, NULL} or (HELD in (a, b) and NULL_FACT in (
+                        other if a == HELD else first).facts.get(name, frozenset())):
+                    # A new owner, NULL on one path (a NULL local, or a
+                    # PyValue_NULL assigned): held, and maybe NULL
                     a = HELD
                 elif HELD in (a, b) and self.owes_nothing(
                         (other if a == HELD else first).facts.get(name, frozenset())):
@@ -2330,6 +2392,8 @@ class OwnershipWalk:
             first.decided &= other.decided
             if first.no_exception != other.no_exception:
                 first.no_exception = ""
+            # A successor assigned on any path may be the next word
+            first.successor = first.successor or other.successor
             for name in set(first.bindings) | set(other.bindings):
                 if first.bindings.get(name, "") != other.bindings.get(name, ""):
                     first.bindings[name] = None
@@ -2583,7 +2647,9 @@ class OwnershipWalk:
                         state.arrays[array] = (PENDING if row.result.shape == "STATUS"
                                                else WRITTEN)
                         state.end_restart(f"the publication of `{array}` by {row.name}")
-            for exit in sorted(row.exits - {"next", "miss", "deopt"}):
+            if row.committed:
+                self.check_committed(row, state, tkn)
+            for exit in sorted(row.exits - {"next", "miss", "deopt"} - row.successor):
                 # A row's other exits leave the word from inside it, after
                 # it has taken what its arguments' modes say: on its raise,
                 # a `taken` argument is still the caller's (design 1.2)
@@ -2592,7 +2658,9 @@ class OwnershipWalk:
                     at = state.copy()
                     for owner in taken:
                         at.owners[owner] = HELD
-                self.check_exit(exit, at, tkn)
+                self.check_exit(exit, at, tkn, committed=exit in row.committed)
+            if row.successor:
+                state.successor = row.name
             if taken and row.result.shape in ("VALUE_OR_NULL", "STATUS"):
                 # Gone if the result reports success: the assignment binds
                 # the result's local, whose test decides (refine)
@@ -2660,9 +2728,13 @@ class OwnershipWalk:
         if self.contract.state_item(head) is not None and texts[1:2] in (["|="], ["&="], ["="]):
             self.write_state(toks, texts, state)
             return state
-        if head in self.table and "terminal" in IR_MARKER_EFFECTS.get(head, ()):
+        if head in self.table and ("terminal" in IR_MARKER_EFFECTS.get(head, ())
+                                   or (self.table[head].committed
+                                       and "next" not in self.table[head].exits)):
             # A terminal marker leaves on its row's exits, after its
-            # arguments' modes have taken what they say; it never returns
+            # arguments' modes have taken what they say; it never returns.
+            # So does a row whose exits are committed and none is next
+            # (IR_OBSERVE_COMMITTED_BRANCH dispatches the word it observes)
             self.calls(toks, state)
             self.effects(toks, state)
             return None
@@ -3252,7 +3324,13 @@ def body_exits(uop: Uop, table: dict[str, Row], implicit_guards: int) -> set[str
         elif tkn.text == "DISPATCH_SAME_OPARG":
             exits.add("jump")
         elif tkn.text in table:
-            exits |= table[tkn.text].exits
+            row = table[tkn.text]
+            exits |= row.exits - row.successor
+            for exit in row.successor:
+                # A successor assigned on some paths only: the word has two
+                # successors, a branch (the record's BRANCH)
+                exits.add("branch" if exit == "jump" and
+                          ir_records.conditional(uop.body.body, tkn) else exit)
     if implicit_guards:
         exits.add("miss")
     p = uop.properties

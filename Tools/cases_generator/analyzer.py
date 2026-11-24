@@ -412,8 +412,11 @@ def analyze_stack(
     op: parser.InstDef | parser.Pseudo, replace_op_arg_1: str | None = None
 ) -> StackEffect:
     for output in op.outputs:
-        if output.nullable:
-            raise analysis_error("nullable is an input read annotation", output.first_token)
+        # On a declared output, nullable is the contract's: the value may be
+        # NULL on next (an _OR_POP's popped result)
+        if output.nullable and not output.contract:
+            raise analysis_error("nullable is an input read annotation, or a declared "
+                                 "output's", output.first_token)
     inputs: list[StackItem] = [
         convert_stack_item(i, replace_op_arg_1)
         for i in op.inputs

@@ -126,6 +126,7 @@ CASES = {
     "PyTuple_GET_VALUE": [(id(o), i) for o in OBJECTS if type(o) is tuple for i in range(len(o))],
     "PyList_GET_SIZE": [(a,) for a in objects_of(list)],
     "_PyList_ITEMS": [(a,) for a in objects_of(list)],
+    "_PyTuple_ITEMS": [(a,) for a in objects_of(tuple)],
     "PyTuple_GET_SIZE": [(a,) for a in objects_of(tuple)],
     "_PyObject_InlineValues": [(a,) for a in objects_of(Holder)],
     "_PyObject_Shape": [(a,) for a in objects_of(Holder)],
@@ -345,6 +346,11 @@ REFUSALS = {
         }""",
     "a call of SPAM, which is neither a listed primitive nor a declared helper":
         "res = PyValue_FromInlineInt(SPAM(value));",
+    # A row without a model of its own (a HELPER row, V11) or of another build
+    "a call of PyValue_TYPE, which is neither a listed primitive nor a declared helper":
+        "res = PyValue_FromInlineInt(PyValue_TYPE(value)->tp_flags);",
+    "a call of _Py_IsOwnedByCurrentThread, which is neither a listed primitive nor a declared "
+    "helper": "EXIT_IF(_Py_IsOwnedByCurrentThread(value)); res = value; DEAD(value);",
     "untyped memory":
         "char *p = (char *)PyValue_AsKnownObjectBorrow(value); res = value; DEAD(value);",
     "field PyTypeObject.tp_as_mapping is not listed": """
@@ -365,6 +371,25 @@ class CheckerTests(unittest.TestCase):
                 with self.assertRaises(ir_leaf.LeafError) as cm:
                     ir_leaf.translate(uop)
                 self.assertIn(expected, str(cm.exception))
+
+    def test_forms_come_from_rows(self):
+        # The identities, the constant and the erased forms are INTRINSIC rows
+        # of the generated build (G0d3); TAKE moves its argument
+        for name, shape in (("PyValue_Borrow", "VIEW"), ("FT_ATOMIC_LOAD_PTR", "SCALAR"),
+                            ("LOCK_OBJECT", "LITERAL"), ("UNLOCK_OBJECT", "NONE"),
+                            ("QSBR_QUIESCENT_STATE", "NONE")):
+            with self.subTest(name):
+                self.assertEqual(ir_leaf.intrinsic(name).result.shape, shape)
+        self.assertEqual(ir_leaf.intrinsic("TAKE").result.moved, 0)
+        # Another build's form, a model's primitive and a name of no row are no form
+        for name in ("_Py_IsOwnedByCurrentThread", "PyValue_IsNull", "SPAM"):
+            with self.subTest(name):
+                self.assertIsNone(ir_leaf.intrinsic(name))
+        self.assertTrue(ir_leaf.erased("UNLOCK_OBJECT"))
+        self.assertTrue(ir_leaf.erased("STAT_INC"))
+        self.assertFalse(ir_leaf.erased("PyValue_Borrow"))
+        for name in ("IDENTITIES", "ERASED", "CONSTANT_FORMS"):
+            self.assertFalse(hasattr(ir_leaf, name))
 
     def test_array_operand(self):
         uop = analyze("op(_OP, (values[oparg] -- )) { DECREF_INPUTS(); }")["_OP"]

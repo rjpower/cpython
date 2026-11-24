@@ -234,6 +234,7 @@ class LoweringTests(unittest.TestCase):
             "_PyLong_IsZero": [(id(i),) for i in ints],
             "PyList_GET_SIZE": [(id(o),) for o in lists],
             "_PyList_ITEMS": [(id(o),) for o in lists],
+            "_PyTuple_ITEMS": [(id(o),) for o in tuples],
             "PyTuple_GET_SIZE": [(id(o),) for o in tuples],
             "PyList_GET_VALUE": [(id(o), i) for o in lists for i in range(len(o))],
             "PyTuple_GET_VALUE": [(id(o), i) for o in tuples for i in range(len(o))],

@@ -648,7 +648,7 @@ class TestIRCases(unittest.TestCase):
         self.assertLess(slow, body.index("IR_STORE_DST(ir_word, A, res);", slow))
 
         marker = "IR_TRY_DICT_FIRST_PROBE();"
-        guard = "DEOPT_IF(!Py_TYPE(o)->tp_as_mapping);"
+        guard = 'DEOPT_IF(!Py_TYPE(o)->tp_as_mapping, "the type has no mapping slots");'
         changes = (
             (marker, "STAT_INC(BINARY_OP, hit); " + marker),
             (marker, marker + " " + marker),

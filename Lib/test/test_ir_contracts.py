@@ -185,6 +185,39 @@ class SliceTests(unittest.TestCase):
               'inferred "", declared "PyValue_None"',
               f'{handler}.record.uops[0].guards[0].facts[0].kind: '
               'inferred "IS_NONE", declared "IDENTITY"')),
+        # G0c9: _TO_BOOL_NONE's guard states the identity of the word with
+        # PyValue_None, as _GUARD_TOS_IS_NONE's does (F20)
+        *(line
+          for handler in ("POP_JUMP_IF_FALSE_NONE", "POP_JUMP_IF_TRUE_NONE",
+                          "TO_BOOL_NONE")
+          for line in (
+              f'{handler}.record.uops[0].guards[0].facts[0].arg: '
+              'inferred "", declared "PyValue_None"',
+              f'{handler}.record.uops[0].guards[0].facts[0].kind: '
+              'inferred "IS_NONE", declared "IDENTITY"')),
+        # G0c9: BUILD_LIST is IR_BUILD_LIST (_PyList_FromValueStealOnSuccess),
+        # an allocation that runs no Python, as BUILD_TUPLE's twin row says
+        'BUILD_LIST.record.format.runs_code: inferred true, declared false',
+        'BUILD_LIST.record.uops[0].effects: inferred 6 entries '
+        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
+        '"READS_HEAP", "WRITES_HEAP"], declared 2 ["ALLOCATES", "MAY_RAISE"]',
+        # G0c9: FORMAT_SIMPLE's str arm passes the input's reference on and
+        # its other arms make a new one; the result is owned on every path,
+        # which the record's ALIAS (the input's home) does not say
+        'FORMAT_SIMPLE/_FORMAT_SIMPLE: output `res` is declared owned, the record has ALIAS',
+        # G0c9: _GET_ITER's second result is a tagged index or NULL
+        # (_PyEval_GetIter's row, G0a5's representation table)
+        'GET_ITER.record.uops[1].results: inferred 0 entries [], declared 1 '
+        '[{"__type": "Fact", "arg": "tagged_index|null", "kind": "ENCODING", '
+        '"subject": "v2"}]',
+        # G0c9: GET_AWAITABLE's coroutine arm passes the input's reference
+        # on and the other arm makes a new one; the result is owned on both
+        'GET_AWAITABLE/_GET_AWAITABLE: output `iter` is declared owned, the record has ALIAS',
+        # G0c9: _SEND_ASYNC_GEN's body completes in place (it reaches the end
+        # of the body, `next`); SEND_ASYNC_GEN_XFER_DISCARD's yield is its
+        # fused transfer's, which G0d takes from the declaration
+        'SEND_ASYNC_GEN_XFER_DISCARD/_SEND_ASYNC_GEN: declares exits(branch, next, raise), '
+        'the record has branch, raise, yield',
         # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
         # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
         'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '
@@ -224,11 +257,12 @@ class SliceTests(unittest.TestCase):
         'CALL_PY_GENERAL/_PY_FRAME_GENERAL_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
     ]
 
-    # Batch 5: the assume op of `iter: assumed(object) by GET_ITER` in the
-    # leaf IR of the two iterator guards
+    # Batch 5 and G0c9: the assume op of `iter: assumed(object) by GET_ITER`
+    # in the leaf IR of the three iterator guards
     LISTED_LEAF_DIFFERENCES = [
         ("FOR_ITER_LIST.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
         ("FOR_ITER_TUPLE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
+        ("FOR_ITER_RANGE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
         # G0d1: a yield is declared (`exits(yield)`); with the declarations
         # removed the inference no longer reads the generator's state, and
         # a frame switch that no site names is an entry
@@ -290,7 +324,7 @@ EXTRA_ROWS = """
     HELPER(T, PyValue, (PyValue), ARGS(taken), \\
            VALUE_OR_NULL(owned), EFFECTS(allocates, raises)) \\
     MACRO(SPAM_GUARD, ARGS(scalar), NONE, EFFECTS(), EXITS(miss)) \
-    MACRO(TAKE, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS()) \
+    MACRO(TAKE, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS(), TAKES_VIEW()) \
     HELPER(_PyValue_Size, Py_ssize_t, (PyValueBorrow), ARGS(borrowed), SCALAR, \
            EFFECTS(runs_python)) \
     HELPER(PyValue_FromInt64, PyValue, (int64_t), ARGS(scalar), VALUE_OR_NULL(owned), \
@@ -1222,10 +1256,27 @@ class VerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"PyValue_IsInlineInt: a PRIMITIVE with a "
                                                 r"model in ir_leaf.py but no lowering"):
             ir_contract.check_primitives(ir_leaf.PRIMITIVES, lowered)
-        # A row without a model needs none: no leaf uop can call it
+        # A PRIMITIVE row without a model is refused: it is a HELPER or an INTRINSIC
         self.assertNotIn("PyValue_TYPE", ir_leaf.PRIMITIVES)
+        row = dataclasses.replace(self.table["PyValue_IsNull"], name="PyValue_TYPE")
+        with self.assertRaisesRegex(ValueError, r"PyValue_TYPE: a PRIMITIVE with no model"):
+            ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings(),
+                                         {"PyValue_TYPE": row})
         ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings(),
                                      {"PyValue_TYPE": self.table["PyValue_TYPE"]})
+
+    def test_view_columns(self):
+        # The generator reads which calls take a view and how a view's owner is
+        # released from the rows (G0d3)
+        self.assertEqual({r.name for r in self.table.values() if r.takes_view},
+                         {"TAKE", "OWNER", "PyValue_AsKnownObjectSteal"})
+        self.assertEqual(self.table["PyValue_CLOSE"].view_close, "PyValue_XCLOSE")
+        self.assertEqual(self.table["PyValue_CLOSE_SPECIALIZED"].pointer_form,
+                         "_PyValue_XCLOSE_SPECIALIZED_POINTER")
+        with self.assertRaisesRegex(SyntaxError, r"TAKES_VIEW\(\) is a flag"):
+            ir_contract.parse_rows(
+                "#define X(PRIMITIVE, HELPER, MACRO) "
+                "MACRO(spam, ARGS(consumed), NONE, EFFECTS(), EXITS(), TAKES_VIEW(x))")
 
     def test_rows_are_checked(self):
         with self.assertRaisesRegex(SyntaxError, r"row spam: 1 ARGS for 2 parameters"):
@@ -1257,7 +1308,7 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual(rows["spam"].result.failure, "NEGATIVE")
         with self.assertRaisesRegex(SyntaxError, r"row spam: HELPER: 6 columns, then "
                                                  r"optionally each of FEEDBACK\(\.\.\.\), "
-                                                 r"SLOW\(\.\.\.\) once; got 'EXITS\(next\)'"):
+                                                 r"SLOW\(\.\.\.\), TAKES_VIEW\(\.\.\.\) once; got 'EXITS\(next\)'"):
             ir_contract.parse_rows(
                 "#define X(PRIMITIVE, HELPER, MACRO) "
                 "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(), EXITS(next))")

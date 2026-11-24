@@ -2656,7 +2656,7 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 /* Compiled code runs the forms: it is in its unit already, and leaves it
  * at every frame switch for the driver, which finds the next frame's unit
  * itself.  So a return store tests only a pending redirect, not the
- * frame's jit_resume bit. */
+ * frame's _PyFrame_JIT_RESUME flag. */
 #define IR_JIT_EVENT() ((void)0)
 #define IR_JIT_RESUME() ((void)0)
 #define IR_STORE_RETURN(V) \
@@ -2860,12 +2860,22 @@ jit_run(PyThreadState *tstate, _PyJitUnit *unit, _PyInterpreterFrame *frame,
                 FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(code->_co_instrumentation_version)) {
             next++;
         }
-        frame->jit_resume = 1;
+        frame->jit_flags |= _PyFrame_JIT_RESUME;
         impl->jit_frame = frame;
+        _PyEvalActivation *activation = IR_ACTIVATION();
+#ifndef NDEBUG
+        activation->jit_unit = unit;
+#endif
+        tstate->interp->ceval.jit_turns++;
         _PyIRTransfer t = ((jit_entry)unit->code.start)(
             tstate, frame, unit->entries[next - frame->ir_words]);
         impl->jit_frame = outer;
+#ifndef NDEBUG
+        activation->jit_unit = NULL;
+#endif
         Py_DECREF(code);
+        /* No unit runs: the code that it departed from last may go */
+        Py_CLEAR(activation->jit_pin);
         if (t.next == NULL) {
             return t;
         }
@@ -2897,7 +2907,7 @@ jit_resume(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next)
 {
     _PyJitUnit *unit = jit_unit_of(tstate, frame);
     if (unit == NULL) {
-        frame->jit_resume = 0;
+        frame->jit_flags &= ~_PyFrame_JIT_RESUME;
         return (_PyIRTransfer){frame, next};
     }
     return jit_run(tstate, unit, frame, next);
@@ -3147,6 +3157,8 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     activation.source_error_frame = NULL;
     activation.source_error_handler = (_PyExceptionHandler){0};
     activation.observer_context = NULL;
+    activation.jit_pin = NULL;
+    activation.jit_unit = NULL;
     tstate_impl->eval_activation = &activation;
 #if _Py_STACK_GROWS_DOWN
     assert(_Py_get_machine_stack_pointer() <= (uintptr_t)&activation);
@@ -3180,7 +3192,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->frame.return_pc = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.pending_kwargs = IR_NO_DST;
     entry->frame.pending_redirect = 0;
-    entry->frame.jit_resume = 0;
+    entry->frame.jit_flags = 0;
 #ifdef Py_DEBUG
     entry->frame.lltrace = 0;
 #endif
@@ -3221,6 +3233,11 @@ early_exit:
     result = PyValue_NULL;
 
 leave:
+    /* The pin of the last departure that compiled code or a function form
+     * made in this activation, now that nothing of it runs (the backstop of
+     * -X ir_forms, which has no jit_run()).  A callback that its release
+     * runs runs in a loop of its own. */
+    Py_CLEAR(activation.jit_pin);
     assert(borrow->eval_floor == floor);
     _PyBorrowScope_Exit(tstate, floor);
     borrow->eval_floor = outer_floor;

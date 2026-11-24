@@ -149,9 +149,9 @@ static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_AsKnownObjectBorr
               "_PyValue_AsKnownObjectBorrowPointer: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyValueGuarded_Load((_PyValueGuarded){0})), PyValueBorrow),
               "_PyValueGuarded_Load: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_AsKnownObjectSteal((PyValue){0})), PyObject *),
+static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_AsKnownObjectSteal), PyObject * (*)(PyValue)),
               "PyValue_AsKnownObjectSteal: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_TYPE((PyValueBorrow){0})), PyTypeObject *),
+static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_TYPE), PyTypeObject * (*)(PyValueBorrow)),
               "PyValue_TYPE: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(Py_TYPE((PyObject *){0})), PyTypeObject *),
               "Py_TYPE: its C type differs from pycore_ir_components.h");
@@ -205,7 +205,7 @@ static_assert(__builtin_types_compatible_p(__typeof__(&PyErr_SetHandledException
               "PyErr_SetHandledException: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyException_GetTraceback), PyObject * (*)(PyObject *)),
               "PyException_GetTraceback: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyLazyImport_CheckExact((PyObject *){0})), int),
+static_assert(__builtin_types_compatible_p(__typeof__(&PyLazyImport_CheckExact), int (*)(PyObject *)),
               "PyLazyImport_CheckExact: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyObject_HasAttrWithError), int (*)(PyObject *, PyObject *)),
               "PyObject_HasAttrWithError: its C type differs from pycore_ir_components.h");
@@ -325,10 +325,6 @@ static_assert(__builtin_types_compatible_p(__typeof__(_PyTuple_ITEMS((PyObject *
               "_PyTuple_ITEMS: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_UnpackIterableValue), int (*)(PyThreadState *, PyObject *, int, int, PyValue *)),
               "_PyEval_UnpackIterableValue: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(LOCK_OBJECT((PyObject *){0})), int),
-              "LOCK_OBJECT: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(UNLOCK_OBJECT((PyObject *){0})), void),
-              "UNLOCK_OBJECT: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&GETITEM), PyObject * (*)(PyObject *, Py_ssize_t)),
               "GETITEM: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyDict_New), PyObject * (*)(void)),
@@ -365,7 +361,7 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PySlice_FromValues), PyO
               "_PySlice_FromValues: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyTuple_GET_OBJECT), PyObject * (*)(PyObject *, Py_ssize_t)),
               "_PyTuple_GET_OBJECT: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyBinaryOp_ExtendDescr((PyObject *){0})), _PyBinaryOpSpecializationDescr *),
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyBinaryOp_ExtendDescr), _PyBinaryOpSpecializationDescr * (*)(PyObject *)),
               "_PyBinaryOp_ExtendDescr: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(binaryopactionfunc), PyObject * (*)(PyObject *, PyObject *)),
               "binaryopactionfunc: its C type differs from pycore_ir_components.h");
@@ -5971,8 +5967,8 @@ ir_run_CHECK_EG_MATCH(
             assert(!IR_IS_LOCAL_FIELD(ir_word, A));
             PyValueBorrow exc_value_st;
             PyValueBorrow match_type_st;
-            PyValue rest;
-            PyValue match;
+            PyValue exc_rest;
+            PyValue exc_match;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             PyValue ir_own_C = PyValue_NULL;
@@ -6003,10 +5999,10 @@ ir_run_CHECK_EG_MATCH(
             if (!Py_IsNone(match_o)) {
                 PyErr_SetHandledException(match_o);
             }
-            rest = PyValue_FromObjectSteal(rest_o);
-            match = PyValue_FromObjectSteal(match_o);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), rest);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), match);
+            exc_rest = PyValue_FromObjectSteal(rest_o);
+            exc_match = PyValue_FromObjectSteal(match_o);
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), exc_rest);
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), exc_match);
             DISPATCH();
         }
 
@@ -6074,7 +6070,6 @@ ir_run_CLEANUP_THROW(
             PyValue value;
             exc_value_st = window[3];
             assert(PyValue_IsObject(exc_value_st));
-            assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
@@ -6113,7 +6108,6 @@ ir_run_CLEANUP_THROW_XFER_DISCARD(
             PyValue exc_value_st;
             PyValue value;
             exc_value_st = window[3];
-            assert(PyValue_IsObject(exc_value_st));
             assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
@@ -7603,7 +7597,6 @@ ir_run_DICT_MERGE(
                 dict = window[3];
                 callable = window[0];
                 assert(PyValue_IsObject(dict));
-                assert(PyValue_IsObject(dict));
                 if (!PyValue_IsObject(update)) {
                     _PyErr_Format(tstate, PyExc_TypeError,
                               "Value after ** must be a mapping, not %N",
@@ -7657,7 +7650,6 @@ ir_run_DICT_UPDATE(
             {
                 update = window[1 + (oparg - 1)];
                 dict = window[0];
-                assert(PyValue_IsObject(dict));
                 assert(PyValue_IsObject(dict));
                 if (!PyValue_IsObject(update)) {
                     _PyErr_Format(tstate, PyExc_TypeError,
@@ -7851,7 +7843,7 @@ ir_run_FORMAT_SIMPLE(
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             value = IR_VIEW(IR_B(ir_word));
-            if (PyValue_IsInline(value)) {
+            if (!PyValue_IsObject(value)) {
                 PyObject *res_o = _PyValue_Str(value);
                 ir_own_B = IR_DETACH(ir_word, B, value);
                 (void)(ir_own_B);
@@ -8132,7 +8124,6 @@ ir_run_FOR_ITER_LIST(
                 null_or_index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyList_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
@@ -8283,7 +8274,6 @@ ir_run_FOR_ITER_TUPLE(
             {
                 null_or_index = window[1];
                 iter = window[0];
-                assert(PyValue_IsObject(iter));
                 assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyTuple_CheckExact(iter_o)) {
@@ -8443,7 +8433,6 @@ ir_run_GET_ANEXT(
             PyValue aiter;
             PyValue awaitable;
             aiter = IR_SLOT(IR_B(ir_word));
-            assert(PyValue_IsObject(aiter));
             assert(PyValue_IsObject(aiter));
             PyObject *awaitable_o = _PyEval_GetANext(_PyValue_AsKnownObjectBorrowPointer(aiter));
             if (awaitable_o == NULL) {
@@ -8794,9 +8783,9 @@ ir_run_IMPORT_NAME(
             PyValue res;
             fromlist = window[1];
             level = window[0];
+            assert(PyValue_IsObject(fromlist));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
-            assert(PyValue_IsObject(fromlist));
             int ilevel = value_import_level(level);
             if (ilevel == -1 && _PyErr_Occurred(tstate)) {
                 PyValue tmp = fromlist;
@@ -9045,7 +9034,6 @@ ir_run_INSTRUMENTED_END_SEND(
             value = IR_VIEW(IR_D(ir_word));
             index_or_null = IR_VIEW(IR_C(ir_word));
             receiver = IR_VIEW(IR_B(ir_word));
-            assert(PyValue_IsObject(receiver));
             assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = _PyValue_AsKnownObjectBorrowPointer(receiver);
             ir_own_D = IR_DETACH(ir_word, D, value);
@@ -10081,7 +10069,6 @@ ir_run_LIST_EXTEND(
             {
                 iterable_st = window[1 + (oparg-1)];
                 list_st = window[0];
-                assert(PyValue_IsObject(list_st));
                 assert(PyValue_IsObject(list_st));
                 if (!PyValue_IsObject(iterable_st)) {
                     _PyErr_Format(tstate, PyExc_TypeError,
@@ -12300,9 +12287,6 @@ ir_run_LOAD_SMALL_INT_INLINE(
             PyValue value;
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyValue_FromInlineInt(oparg);
-            if (PyValue_IsNull(value)) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -12689,7 +12673,6 @@ ir_run_MAKE_FUNCTION(
             {
                 codeobj_st = IR_VIEW(IR_B(ir_word));
                 assert(PyValue_IsObject(codeobj_st));
-                assert(PyValue_IsObject(codeobj_st));
                 PyObject *codeobj = _PyValue_AsKnownObjectBorrowPointer(codeobj_st);
                 PyFunctionObject *func_obj = (PyFunctionObject *)
                 PyFunction_New(codeobj, GLOBALS());
@@ -12789,7 +12772,6 @@ ir_run_MATCH_CLASS(
                 names = window[2];
                 type = window[1];
                 subject = window[0];
-                assert(PyValue_IsObject(names));
                 assert(PyValue_IsObject(names));
                 assert(PyTuple_CheckExact(_PyValue_AsKnownObjectBorrowPointer(names)));
                 PyObject *attrs_o = _PyEval_MatchClass(tstate,
@@ -15279,7 +15261,6 @@ ir_run_SET_UPDATE(
             {
                 iterable = window[1 + (oparg-1)];
                 set = window[0];
-                assert(PyValue_IsObject(set));
                 assert(PyValue_IsObject(set));
                 if (!PyValue_IsObject(iterable)) {
                     _PyErr_Format(tstate, PyExc_TypeError,
@@ -21966,7 +21947,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue value;
             exc_value_st = window[3];
             assert(PyValue_IsObject(exc_value_st));
-            assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
@@ -22001,7 +21981,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue exc_value_st;
             PyValue value;
             exc_value_st = window[3];
-            assert(PyValue_IsObject(exc_value_st));
             assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
@@ -23201,7 +23180,6 @@ static const _PyIRForm ir_handler_forms[512] = {
                 null_or_index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyList_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
@@ -23344,7 +23322,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 null_or_index = window[1];
                 iter = window[0];
-                assert(PyValue_IsObject(iter));
                 assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyTuple_CheckExact(iter_o)) {
@@ -23805,7 +23782,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             value = IR_VIEW(IR_D(ir_word));
             index_or_null = IR_VIEW(IR_C(ir_word));
             receiver = IR_VIEW(IR_B(ir_word));
-            assert(PyValue_IsObject(receiver));
             assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = _PyValue_AsKnownObjectBorrowPointer(receiver);
             ir_own_D = IR_DETACH(ir_word, D, value);
@@ -26497,9 +26473,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue value;
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyValue_FromInlineInt(oparg);
-            if (PyValue_IsNull(value)) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
             DISPATCH();

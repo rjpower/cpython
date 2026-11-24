@@ -382,7 +382,8 @@ COMPONENTS_HEADER = ROOT / "Include/internal/pycore_ir_components.h"
 ROW_KINDS = ("PRIMITIVE", "HELPER", "ROUTINE", "MACRO", "INTRINSIC", "DESTRUCTOR", "FIELD",
              "CONSTANT", "SLOT", "STATE")
 RESULT_SHAPES = ("NONE", "SCALAR", "VIEW", "PATH", "MEASURE", "TEST", "CONTEXT",
-                 "VALUE", "VALUE_OR_NULL", "STATUS", "GUARD", "HOME", "SLOT", "CASES")
+                 "VALUE", "VALUE_OR_NULL", "STATUS", "GUARD", "HOME", "SLOT", "CASES",
+                 "LITERAL")
 # The failure value of a STATUS result: the int compares to 0 so
 STATUS_FAILURES = ("ZERO", "NEGATIVE", "NONZERO")
 BUILDS = ("gil", "free_threaded", "all")
@@ -531,6 +532,14 @@ class Row:
     # SLOW(h): a VALUE_OR_NULL result is NULL only when the slow-path
     # helper h fails; the fast path cannot fail
     slow: str = ""
+    # TAKES_VIEW(): the call takes the owner of the view that its argument
+    # is (TAKE, a steal): the handler must have detached the input first
+    takes_view: bool = False
+    # VIEW_CLOSE(f), POINTER_FORM(g): the release of a view's owner is f
+    # (the owner is NULL for a local), g for a value known to be in pointer
+    # space
+    view_close: str = ""
+    pointer_form: str = ""
     # STATE: per bit, (bit, facts where it is set, facts where it is clear),
     # and the macro of the handler's word that initializes the item
     bits: tuple[tuple[str, frozenset, frozenset], ...] = ()
@@ -600,6 +609,12 @@ def _parse_result(text: str) -> Result:
     for shape in ("NONE", "SCALAR", "VIEW", "HOME"):
         if text == shape:
             return Result(shape)
+    if (inner := _inner(text, "LITERAL")) is not None:
+        # The constant the form is in its build (an INTRINSIC)
+        parts = _split_text(inner)
+        if len(parts) != 2 or not re.fullmatch(r"-?\d+", parts[0].strip()):
+            raise ValueError('LITERAL(integer, "reason")')
+        return Result("LITERAL", measure=parts[0].strip(), reason=parts[1].strip().strip('"'))
     if text == "HOME(base)":
         # The base of the frame's homes, fixed for the activation (F18)
         return Result("HOME", measure="base")
@@ -744,10 +759,11 @@ def feedback_covered(access: tuple[str, str], declared) -> bool:
 
 # The optional columns after a row's fixed ones, by row kind
 OPTIONAL_COLUMNS = {
-    "PRIMITIVE": ("FEEDBACK", "CONJOINS", "NONNULL_FORM", "SLOW"),
-    "HELPER": ("FEEDBACK", "SLOW"),
+    "PRIMITIVE": ("FEEDBACK", "CONJOINS", "NONNULL_FORM", "SLOW", "TAKES_VIEW", "VIEW_CLOSE",
+                  "POINTER_FORM"),
+    "HELPER": ("FEEDBACK", "SLOW", "TAKES_VIEW"),
     "ROUTINE": ("FEEDBACK",),
-    "MACRO": ("FEEDBACK",),
+    "MACRO": ("FEEDBACK", "TAKES_VIEW"),
     "SLOT": ("FEEDBACK",),
 }
 
@@ -766,6 +782,10 @@ def _row_options(fields: list[str], fixed: int, kind: str) -> dict:
         inner = _inner(text, head)
         if head == "FEEDBACK":
             found[head] = parse_feedback(_split_text(inner))
+        elif head == "TAKES_VIEW":
+            if inner.strip():
+                raise ValueError("TAKES_VIEW() is a flag")
+            found[head] = True
         elif not re.fullmatch(r"\w+", inner.strip()):
             raise ValueError(f"{head}(name) names one row")
         else:
@@ -773,7 +793,10 @@ def _row_options(fields: list[str], fixed: int, kind: str) -> dict:
     return {"feedback": found.get("FEEDBACK", frozenset()),
             "conjoins": found.get("CONJOINS", ""),
             "nonnull_form": found.get("NONNULL_FORM", ""),
-            "slow": found.get("SLOW", "")}
+            "slow": found.get("SLOW", ""),
+            "takes_view": found.get("TAKES_VIEW", False),
+            "view_close": found.get("VIEW_CLOSE", ""),
+            "pointer_form": found.get("POINTER_FORM", "")}
 
 
 def _parse_row(kind: str, fields: list[str]) -> Row:
@@ -1114,13 +1137,18 @@ def lowerings(source: str | None = None) -> frozenset[str]:
 
 def check_primitives(models, lowered: frozenset[str],
                      table: dict[str, Row] | None = None) -> None:
-    """V11: a PRIMITIVE row that has a model in ir_leaf.py has a machine
-    lowering in jit_lower.c.  A row without a model is one that no leaf uop
-    calls (the leaf translator refuses a call it has no model of); its uops
-    run as their handler's function form."""
+    """V11: every PRIMITIVE row has a model in ir_leaf.py and a machine
+    lowering in jit_lower.c, or is declared as another kind (HELPER for a
+    function that no leaf uop calls, INTRINSIC for a form with no operation
+    in the build).  The translator refuses a call it has no model of."""
     table = rows() if table is None else table
     for row in table.values():
-        if row.kind == "PRIMITIVE" and row.name in models and row.name not in lowered:
+        if row.kind != "PRIMITIVE":
+            continue
+        if row.name not in models:
+            raise ValueError(f"{row.name}: a PRIMITIVE with no model in ir_leaf.py: model it "
+                             "or declare it as a HELPER or an INTRINSIC (V11)")
+        if row.name not in lowered:
             raise ValueError(f"{row.name}: a PRIMITIVE with a model in ir_leaf.py "
                              "but no lowering in Python/jit_lower.c (V11)")
 
@@ -1397,6 +1425,10 @@ DSL_CONSTRUCTS = frozenset((
     "DECREF_INPUTS", "STAT_INC", "OPCODE_DEFERRED_INC", "DISPATCH_SAME_OPARG", "assert",
     "holding",
 ))
+# The constructs among them that the leaf IR drops: the stack effects they
+# state are the declaration's, and the statistics and assertions are not
+# part of a release build's operation
+ERASED_CONSTRUCTS = frozenset(("DEAD", "INPUTS_DEAD", "STAT_INC", "assert"))
 CHECKED_ARITHMETIC = re.compile(r"__builtin_(add|sub|mul)_overflow")
 GUARDS = {"EXIT_IF": "miss", "DEOPT_IF": "deopt"}
 RAISES = ("ERROR_IF", "ERROR_NO_POP")
@@ -1841,7 +1873,8 @@ def record_effect_sites(uop: Uop) -> list[tuple[Token, str]]:
 def _unwrap(tokens: list[str], table: dict[str, Row]) -> list[str]:
     "tokens without casts and the INTRINSIC identity forms around them"
     tokens = _strip(_uncast(tokens))
-    while tokens and tokens[0] in table and table[tokens[0]].kind == "INTRINSIC":
+    while (tokens and tokens[0] in table and table[tokens[0]].kind == "INTRINSIC"
+           and table[tokens[0]].result.shape in ("SCALAR", "VIEW")):
         args = _call(tokens, tokens[0])
         if args is None or len(args) != 1:
             break
@@ -2165,7 +2198,7 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
                 return None
             facts[name] = implied(facts.get(name, frozenset()) | found)
         return facts, ""
-    if call is not None and call[0].result.shape == "CONTEXT":
+    if call is not None and call[0].result.shape in ("CONTEXT", "LITERAL"):
         return {}, call[0].result.reason
     for op in ("!=", "=="):
         sides = _split(cond, op)

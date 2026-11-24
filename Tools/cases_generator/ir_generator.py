@@ -342,16 +342,16 @@ def owner_name(field: str) -> str:
 
 
 # The release of a view's owner, which is PyValue_NULL for a local, for each
-# release of a view and its form for a value known to be in pointer space
+# release of a view and its form for a value known to be in pointer space:
+# the VIEW_CLOSE and POINTER_FORM columns of the rows
 VIEW_RELEASES = {
-    "PyValue_CLOSE": ("PyValue_XCLOSE", "_PyValue_XCLOSE_POINTER"),
-    "PyValue_XCLOSE": ("PyValue_XCLOSE", "_PyValue_XCLOSE_POINTER"),
-    "PyValue_CLOSE_SPECIALIZED": ("PyValue_XCLOSE_SPECIALIZED",
-                                  "_PyValue_XCLOSE_SPECIALIZED_POINTER"),
+    row.name: (row.view_close, row.pointer_form)
+    for row in ir_contract.rows().values() if row.view_close
 }
 # The DSL calls that take a view: they give its owner, or a count of its
-# own for a local, to the caller (IREmitter.take_view())
-VIEW_TAKES = {"TAKE", "OWNER", "PyValue_AsKnownObjectSteal"}
+# own for a local, to the caller (IREmitter.take_view()): the rows that
+# declare TAKES_VIEW()
+VIEW_TAKES = frozenset(row.name for row in ir_contract.rows().values() if row.takes_view)
 # The DSL calls that read a view's owner, so that the handler must have
 # taken the input (IR_DETACH) before the statement that holds them
 OWNER_READS = set(VIEW_RELEASES) | VIEW_TAKES
@@ -8450,7 +8450,7 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
         "LOAD_CONST_INLINE_FLOAT": "{ value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); assert(PyValue_IsInlineFloat(value)); }",
         "LOAD_COMMON_CONSTANT": "{ assert(oparg < NUM_COMMON_CONSTANTS); value = PyValue_DUP(tstate->interp->common_consts[oparg]); }",
         "LOAD_SMALL_INT": "{ assert(oparg < _PY_NSMALLPOSINTS); value = PyValue_FromInlineInt(oparg); }",
-        "LOAD_SMALL_INT_INLINE": "{ assert(oparg < _PY_NSMALLPOSINTS); value = PyValue_FromInlineInt(oparg); ERROR_IF(PyValue_IsNull(value)); }",
+        "LOAD_SMALL_INT_INLINE": "{ assert(oparg < _PY_NSMALLPOSINTS); value = PyValue_FromInlineInt(oparg); }",
     }
     if inst.name in scalar:
         if (scalar_shape(0, 1) and fmt.field_of(ROLE_DST) is not None

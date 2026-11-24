@@ -13,6 +13,7 @@ extern "C" {
 #include "pycore_borrow.h"        // _PyBorrowScope_Exit()
 #include "pycore_code.h"          // _PyCode_GetTLBCFast()
 #include "pycore_interp.h"        // PyInterpreterState.eval_frame
+#include "pycore_interpframe_structs.h" // _PyInterpreterFrame
 #include "pycore_ir_observer.h"   // Scoped callback ownership phase
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_stats.h"         // EVAL_CALL_STAT_INC()
@@ -49,6 +50,55 @@ typedef struct {
     int handler;
     int lasti;
 } _PyExceptionHandler;
+
+/* An activation's entry frame: the frame below its first Python frame */
+typedef struct {
+    _PyInterpreterFrame frame;
+    PyValue stack[1];
+} _PyEntryFrame;
+
+/* The state of one activation of the evaluation loop that persists across
+ * its handlers: a local of _PyEval_EvalFrameLoop, linked from the thread
+ * state (_PyThreadStateImpl.eval_activation) while it runs.  No handler
+ * keeps state of its own here.  gdb walks the chain (Tools/gdb/libpython.py):
+ * the innermost Python frame of an activation is tstate->current_frame for
+ * the newest, and entry.frame.previous of the next newer one otherwise. */
+typedef struct _PyEvalActivation {
+    struct _PyEvalActivation *previous;   /* restored when this one exits */
+    _PyEntryFrame entry;                   /* its entry frame */
+    /* A nested C entry must not consume its parent's pending source error.
+     * This storage also covers failure to allocate an observer frame object. */
+    _PyInterpreterFrame *source_error_frame;
+    _PyExceptionHandler source_error_handler;
+    const _PyIRObserverSpec *observer_context;
+    /* Why a function form returned no next word (_PyIRTransfer), and what
+     * its caller needs to go on.  It is written on those exits only and read
+     * at once. */
+    int exit_kind;
+    uint32_t exit_entry;
+    _PyInstr *exit_next;
+    PyValue exit_value;
+    /* Whether the outlined conditional jump that ran last jumped
+     * (IR_REPORT_EDGE()), for the event of its instrumented twin. */
+    int edge;
+    /* The baseline JIT's execution pin: a strong reference to the code that
+     * compiled code of this activation last departed from by a return or a
+     * yield (_PyJit_PinDeparting()), or NULL.  The departing unit runs on
+     * until it has switched frames, so its code must outlive the frame it
+     * departs.  Released by the next pin, by jit_run() after each native
+     * call, and when the loop exits. */
+    PyObject *jit_pin;
+    /* Assert builds: the unit that this activation is running natively, or
+     * NULL; set where a unit is entered, cleared when it has left and before
+     * the pin is released.  _PyJit_FreeUnits() checks that it frees no unit
+     * named here.  The field is in every build, so that the layout does not
+     * depend on NDEBUG, which the test modules undefine. */
+    struct _PyJitUnit *jit_unit;
+#ifdef Py_STATS
+    /* The handler that ran last, for pair counts (INSTRUCTION_STATS()) */
+    int last_handler;
+#endif
+} _PyEvalActivation;
 
 /* Retain a failed source event's handler recipe across cleanup reentry. */
 extern void _PyEval_RecordSourceError(PyThreadState *tstate,

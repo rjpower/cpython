@@ -132,6 +132,7 @@ static PyObject *lp_PyTuple_GET_SIZE(PyObject *const *args) { RET_INT(PyTuple_GE
 static PyObject *lp_PyList_GET_VALUE(PyObject *const *args) { RET_VAL(PyList_GET_VALUE(PTR(PyObject, 0), INT(1))); }
 static PyObject *lp_PyTuple_GET_VALUE(PyObject *const *args) { RET_VAL(PyTuple_GET_VALUE(PTR(PyObject, 0), INT(1))); }
 static PyObject *lp__PyList_ITEMS(PyObject *const *args) { RET_WORD(_PyList_ITEMS(PTR(PyObject, 0))); }
+static PyObject *lp__PyTuple_ITEMS(PyObject *const *args) { RET_WORD(_PyTuple_ITEMS(PTR(PyObject, 0))); }
 static PyObject *lp__PyObject_InlineValues(PyObject *const *args) { RET_WORD(_PyObject_InlineValues(PTR(PyObject, 0))); }
 static PyObject *lp__PyObject_Shape(PyObject *const *args) { RET_INT(_PyObject_Shape(PTR(PyObject, 0))); }
 static PyObject *lp__PyObject_ValueSlot(PyObject *const *args) { RET_WORD(_PyObject_ValueSlot(PTR(PyObject, 0), (size_t)WORD(1))); }
@@ -224,7 +225,7 @@ static const struct {
     P(PyDict_CheckExact, 1), P(PyModule_CheckExact, 1),
     P(PyUnicode_CheckExact, 1), P(PyFunction_Check, 1),
     P(PyList_GET_SIZE, 1), P(PyTuple_GET_SIZE, 1), P(PyList_GET_VALUE, 2),
-    P(PyTuple_GET_VALUE, 2), P(_PyList_ITEMS, 1), P(_PyObject_InlineValues, 1),
+    P(PyTuple_GET_VALUE, 2), P(_PyList_ITEMS, 1), P(_PyTuple_ITEMS, 1), P(_PyObject_InlineValues, 1),
     P(_PyObject_Shape, 1), P(_PyObject_ValueSlot, 2), P(_PyObject_ShapeReadDup, 2),
     P(DK_UNICODE_ENTRIES, 1), P(_PyDictValues_AddToInsertionOrder, 2),
     P(_PyDictValues_SetShape, 2), P(_PyLong_IsZero, 1), P(_PyValueGuarded_Load, 1),

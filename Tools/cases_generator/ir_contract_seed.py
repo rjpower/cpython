@@ -382,8 +382,8 @@ def seed_rows(analysis, table, ctypes, macros, effects_of) -> tuple[list[SeedRow
         guard = any(in_guard(u, name) for u, _ in sites[name])
         test = predicate_test(name, arity) if guard else None
         context = ir_records.CONTEXT_PREDICATES.get(name)
-        if name in ir_leaf.IDENTITIES or name in ir_leaf.ERASED:
-            which = "IDENTITIES" if name in ir_leaf.IDENTITIES else "ERASED"
+        if ir_leaf.intrinsic(name) is not None or ir_leaf.erased(name):
+            which = "IDENTITIES" if not ir_leaf.erased(name) else "ERASED"
             result = "SCALAR" if which == "IDENTITIES" else "NONE"
             if context is not None:
                 result = f'CONTEXT("{context}")'

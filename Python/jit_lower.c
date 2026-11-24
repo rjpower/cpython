@@ -814,6 +814,12 @@ LOWERING(_PyList_ITEMS)                         // [dst, o]
     return _PyJitCond_NONE;
 }
 
+LOWERING(_PyTuple_ITEMS)                        // [dst, o]
+{
+    _PyJitAsm_Lea(A, REG(0), AT(REG(1), offsetof(PyTupleObject, ob_item)));
+    return _PyJitCond_NONE;
+}
+
 /* The items array is loaded before the index is used, and the result may
    share the register of either argument, so the array goes through t. */
 LOWERING(PyList_GET_VALUE)                      // [dst, o, i, t]

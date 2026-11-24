@@ -134,6 +134,10 @@ struct _ceval_state {
     uint64_t jit_compiled_codes;
     uint64_t jit_compiles;
     uint64_t jit_compiled_words;
+    /* Frames entered by a unit's switch routine, and native calls of a unit
+       by the driver (jit_run()), since startup */
+    uint64_t jit_switches;
+    uint64_t jit_turns;
 };
 
 

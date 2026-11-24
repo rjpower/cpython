@@ -29,8 +29,13 @@ is recorded.
 
 | Unit | Work | State |
 | --- | --- | --- |
-| RD | Design of G0 and G1 and a pilot of the notation and verifier on BINARY_OP, UNPACK_SEQUENCE and LOAD_ATTR_INSTANCE_VALUE (Opus) | design revised after Astra's review; pilot running |
+| RD | Design of G0 and G1 and a pilot of the notation and verifier on BINARY_OP, UNPACK_SEQUENCE and LOAD_ATTR_INSTANCE_VALUE (Opus) | design revised after two Astra reviews; pilot merged with G0a |
 | DV (G5) | `cqo` and `idiv`; signed division and remainder lowered from leaf IR; FLOOR_DIVIDE_INT and REMAINDER_INT as templates (Sonnet) | merged, `ac598a3df3f` |
+| G0a | The notation and verifier for every construct: sound ownership transitions, per-path nullness, exported facts from the live state, `holding(x)` raise checkpoints, skeleton steps and arrays across uops, feedback access, ROUTINE and transaction rows, V11, the counter functions, and the CONJOINS, NONNULL_FORM and SLOW columns (Opus) | merged, `ff4ac9500e5` |
+| G0a2 | The verifier fails closed: Astra's review of G0a found seven acceptance holes, each closed with a negative test; the columns' structural checks (Opus) | merged, `d38559113ef` |
+| TA | Template tightening from declared facts: guard fusion, dead NULL tests, box exits, results in destination registers, CSE by declared effects; rows for every primitive the templates use; no sampling of models (Opus) | merged, `0a4e7bd4bae` |
+| G0b | The seed: every uop and callee declared from today's records with byte-identical output; findings and decisions for what the vocabulary cannot say; the review manifest (Opus) | running: 134 of 351 uops declared |
+| G0a3 | The vocabulary the seed needs: fact kinds, GUARD results, CONSTANT rows, the `closed` input mode, `moved(k)` results, SLOT rows, `assumed(fact) by`, error-label exits, preprocessor arms, HOME for frame homes (Opus) | running |
 
 The design (`E59/regions89/rd/design.md`) sets the following units, in
 order:
@@ -38,8 +43,10 @@ order:
   `region(...)` on arms, one X-macro component list with call
   descriptors), the verifier rules and the restartability invariant, with
   a negative test per rule.
-- **G0b candidate seed:** declarations seeded from today's records, which
-  grant no new authority.
+- **G0b seed:** declarations seeded from today's records, with
+  byte-identical generated output, so that they grant no new authority.
+  There is no joined record and no review marker in code; review status
+  lives in the manifest.
 - **G0c review:** parallel Sonnet batches under a frozen symbol-to-owner
   manifest; every row carries its evidence.
 - **G0d cutover:** records from declarations only; the inference tables
@@ -57,3 +64,10 @@ order:
 DV, measured in instructions against jit88: all-29 0.9988; spectral_norm
 0.971; a `//` word 51 to 22 instructions, `%` 47 to 13. Each division site
 is 290-360 bytes larger than the form call it replaces; G1c tightens it.
+
+TA, measured in instructions against `ff4ac9500e5` with the JIT on: all-29
+0.9878; nbody 0.905, spectral_norm 0.947, chaos 0.961. Hot template bytes
+fall 8.6% over 62 templates (7523 hot, 2073 cold); ADD_INT's longest path
+34 to 28 instructions, LOAD_ATTR_INSTANCE_VALUE 41. A forced allocation
+failure in a compiled box raises in the word's own frame with its inputs in
+their homes.

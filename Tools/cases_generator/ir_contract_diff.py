@@ -36,7 +36,8 @@ import ir_records
 
 # The record's ownership of a declared mode (ir_records.walk_values)
 INPUT_OWNERSHIP = {"": ir_records.BORROWED, "borrowed": ir_records.CONSUMED,
-                   "consumed": ir_records.CONSUMED, "taken": ir_records.CONSUMED}
+                   "consumed": ir_records.CONSUMED, "taken": ir_records.CONSUMED,
+                   "closed": ir_records.CONSUMED}
 OUTPUT_OWNERSHIP = {"": ir_records.THROUGH, "owned": ir_records.OWNED,
                     "inline": ir_records.OWNED, "moved": ir_records.ALIAS,
                     "borrowed": ir_records.OWNED}

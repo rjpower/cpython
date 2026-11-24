@@ -1783,8 +1783,11 @@
      * an implicit operand of the call's uops, which a uop reads and writes \
      * only through its state(...) clause.  CALL_SELF_PRESENT is set where \
      * the call has a self operand; the generator initializes the local \
-     * from the word with IR_CALL_SELF_STATE (G0a4) */ \
-    STATE(call_state, int, BITS(CALL_SELF_PRESENT: self(present) | self(absent)), \
+     * from the word with IR_CALL_SELF_STATE (G0a4).  CALL_EXPANDED is set \
+     * where the callable operand is a bound method whose function and \
+     * receiver the push takes in its place (G3a) */ \
+    STATE(call_state, int, BITS(CALL_SELF_PRESENT: self(present) | self(absent), \
+                                CALL_EXPANDED: method(expanded) | method(whole)), \
           INIT(IR_CALL_SELF_STATE)) \
     /* Evidence (Python/ceval_macros.h, a static inline function since G0c \
      * batch 6; it was a macro).  One load of interp->eval_frame and a \

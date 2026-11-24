@@ -2476,7 +2476,10 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual((row.kind, row.ret, row.init), ("STATE", "int", "IR_CALL_SELF_STATE"))
         self.assertEqual(row.bits, (("CALL_SELF_PRESENT",
                                      frozenset({ir_contract.VFact("self", "present")}),
-                                     frozenset({ir_contract.VFact("self", "absent")})),))
+                                     frozenset({ir_contract.VFact("self", "absent")})),
+                                    ("CALL_EXPANDED",
+                                     frozenset({ir_contract.VFact("method", "expanded")}),
+                                     frozenset({ir_contract.VFact("method", "whole")}))))
         self.assertIn('static_assert((CALL_SELF_PRESENT) != 0, '
                       '"call_state: CALL_SELF_PRESENT is no bit");',
                       ir_contract.component_checks(self.table))
@@ -2485,6 +2488,8 @@ class VerifierTests(unittest.TestCase):
                  r"null is no fact of a handler's state"),
                 ("STATE(spam, int, BITS(SPAM: self(maybe) | self(absent)), INIT(SPAM_INIT))",
                  r"self\(maybe\) is no fact of a handler's state"),
+                ("STATE(spam, int, BITS(SPAM: method(bound) | method(whole)), INIT(SPAM_INIT))",
+                 r"method\(bound\) is no fact of a handler's state"),
                 ("STATE(spam, int, BITS(SPAM: self(present) | self(absent)))",
                  r"STATE\(name, ctype, BITS")]:
             with self.subTest(bad=bad):
@@ -2535,10 +2540,25 @@ class VerifierTests(unittest.TestCase):
                 %s
             }
         """
-        write = "call_state |= CALL_SELF_PRESENT | CALL_EXPANDED;"
+        write = "call_state |= CALL_SELF_PRESENT;"
         self.verify(source % ("", "self(present)", write))
         self.refuses(source % ("", "self(absent)", write),
                      r"`call_state` is declared self\(absent\), which nothing establishes")
+        # Each bit states its own facts, and a write kills only those of
+        # the bits it writes: CALL_EXPANDED leaves self(absent)
+        self.verify(source % ("", "self(absent) method(expanded)",
+                              "call_state |= CALL_EXPANDED;"))
+        self.verify(source % ("", "self(present) method(expanded)",
+                              "call_state |= CALL_SELF_PRESENT | CALL_EXPANDED;"))
+        self.refuses(source % ("", "self(absent)", "call_state |= CALL_EXPANDED;"),
+                     r"the body establishes method\(expanded\) of `call_state`, which the "
+                     r"uop does not declare")
+        # A bit that the STATE row does not list states nothing: refused
+        self.refuses(source % ("", "self(absent)", "call_state |= CALL_KWARGS_PRESENT;"),
+                     r"writes `CALL_KWARGS_PRESENT`, which is no bit of `call_state` "
+                     r"\(CALL_SELF_PRESENT, CALL_EXPANDED\)")
+        self.refuses(source % ("", "self(absent)", "call_state &= ~CALL_KWARGS_PRESENT;"),
+                     r"writes `CALL_KWARGS_PRESENT`, which is no bit of `call_state`")
         # Heap kills leave the state's facts
         self.verify(source % ("writes", "self(absent)",
                               "spam_write(PyValue_AsKnownObjectBorrow(x));"))

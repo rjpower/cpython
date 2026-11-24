@@ -101,13 +101,14 @@ FACT_KIND = {
     "type_slot": "TYPE_SLOT", "class_version": "CLASS_VERSION",
     "func_version": "FUNC_VERSION", "argcount": "ARGCOUNT", "vectorcall": "VECTORCALL",
     "convention": "CONVENTION", "ascii": "ASCII", "no_managed_dict": "NO_MANAGED_DICT",
-    "unique": "UNIQUE", "self": "SELF", "tagged_index": "TAGGED_INDEX",
+    "unique": "UNIQUE", "self": "SELF", "method": "METHOD",
+    "tagged_index": "TAGGED_INDEX",
     "encoding": "ENCODING",
 }
 VOCABULARY_OF_KIND = {v: k for k, v in FACT_KIND.items()}
 FACTS_WITH_ARGUMENT = frozenset(("exact", "type_version", "shape", "keys_version", "length",
                                  "in_bounds", "is", "subtype", "not_subtype", "not_exact",
-                                 "type_flag", "type_slot", "self", "encoding"))
+                                 "type_flag", "type_slot", "self", "method", "encoding"))
 # The call-shape kinds take a value where the guard names one
 FACTS_WITH_OPTIONAL_ARGUMENT = frozenset(("class_version", "func_version", "argcount",
                                           "vectorcall", "convention"))
@@ -123,9 +124,11 @@ HEAP_FACTS = frozenset(("type_version", "has_values", "shape", "keys_version", "
 SITE_FACTS = frozenset(("unique",))
 # Facts of a handler's state (a STATE row's item, call_state): they live
 # for the handler's run, and only a declared write of the item kills them;
-# heap kills and reentry do not (item 2 of G0a4, V8's implicit operands)
-STATE_FACTS = frozenset(("self",))
-STATE_ARGS = {"self": ("present", "absent")}
+# heap kills and reentry do not (item 2 of G0a4, V8's implicit operands).
+# method(expanded): the callable operand is a bound method whose function
+# and receiver the push takes in its place (CALL_EXPANDED)
+STATE_FACTS = frozenset(("self", "method"))
+STATE_ARGS = {"self": ("present", "absent"), "method": ("expanded", "whole")}
 # The representation table (design 1.1; the table of words in
 # pycore_value.h): each encoding of a value that is not NULL and not an
 # object, the TEST row that decides it, and the exact type of its values.
@@ -2842,23 +2845,34 @@ class OwnershipWalk:
         return self.simple(fold_fields(stmt.contents, self.structs), state)
 
     def write_state(self, toks: list[Token], texts: list[str], state: _State) -> None:
-        """A declared write of a STATE item kills its facts; `|= BIT | ...`
-        then states each bit set, `&= ~BIT` it clear"""
+        """A declared write of a STATE item: `|= BIT | ...` states each bit
+        set, `&= ~BIT` it clear, and kills the facts of the bits it writes;
+        any other assignment kills all its facts.  A term that is no bit of
+        the item's row is refused: an undeclared bit states nothing"""
         name, op = texts[0], texts[1]
         row = self.table[name]
         rhs = _strip(texts[2:-1] if texts[-1] == ";" else texts[2:])
-        facts: set[VFact] = set()
         bits = {b[0]: b for b in row.bits}
+
+        def bit(term: list[str]) -> tuple[str, frozenset, frozenset]:
+            if len(term) != 1 or term[0] not in bits:
+                self.fail(toks[0], f"`{name} {op} {' '.join(rhs)}` writes "
+                          f"`{' '.join(term)}`, which is no bit of `{name}` "
+                          f"({', '.join(bits)})")
+            return bits[term[0]]
+
         if op == "|=":
-            for term in _split(rhs, "|"):
-                term = _strip(term)
-                if len(term) == 1 and term[0] in bits:
-                    facts |= bits[term[0]][1]
-        elif op == "&=" and len(rhs) == 2 and rhs[0] == "~" and rhs[1] in bits:
-            facts |= bits[rhs[1]][2]
+            written = [bit(_strip(term)) for term in _split(rhs, "|")]
+            facts = frozenset().union(*(b[1] for b in written))
+        elif op == "&=" and len(rhs) == 2 and rhs[0] == "~":
+            written = [bit(rhs[1:])]
+            facts = written[0][2]
+        else:
+            written, facts = list(row.bits), frozenset()
+        kinds = {f.kind for b in written for f in b[1] | b[2]}
         state.facts[name] = frozenset(
             f for f in state.facts.get(name, frozenset())
-            if f.kind not in STATE_FACTS) | facts
+            if f.kind not in kinds) | facts
 
     def owes_nothing(self, facts: frozenset) -> bool:
         "whether a value with facts is inline or a CONSTANT row's (V8's roots)"

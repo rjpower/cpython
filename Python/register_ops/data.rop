@@ -25,92 +25,90 @@ enum IntrinsicId(INTRINSIC_PRINT, INTRINSIC_IMPORT_STAR, INTRINSIC_STOPITERATION
 
 // 1C: items and slices
 
-family GetItem(dst:Dst, obj:Src, key:Src, fb:Fb<Item>) layout HHHF
+family GetItem(dst:Dst, obj:Src, key:Src, fb:Fb<Item>)
   exits(next, enter, raise, miss, again);
 
-family SetItem(obj:Src, key:Src, value:Src, fb:Fb<Item>) layout HHHF
+family SetItem(obj:Src, key:Src, value:Src, fb:Fb<Item>)
   exits(next, raise, miss, again);
 
-family DelItem(obj:Src, key:Src) layout HH
+family DelItem(obj:Src, key:Src)
   exits(next, raise);
 
-family SliceRead(dst:Dst, obj:Src, start:Src, stop:Src) layout HHHH
+family SliceRead(dst:Dst, obj:Src, start:Src, stop:Src)
   exits(next, raise);
 
-family SliceWrite(obj:Src, start:Src, stop:Src, value:Src) layout HHHH
+family SliceWrite(obj:Src, start:Src, stop:Src, value:Src)
   exits(next, raise);
 
-family BuildSlice(dst:Dst, parts:Span<Src>) layout HV
+family BuildSlice(dst:Dst, parts:Span<Src>)
   exits(next, raise);
 
 // 1E: displays, updates, comprehension insertion, keyword merge, unpack
 
-family Build(dst:Dst, kind:Enum<BuildKind>, items:Span<Src>) layout HIV
+family Build(dst:Dst, kind:Enum<BuildKind>, items:Span<Src>)
   exits(next, raise);
 
 family AddElement(container:Src, kind:Enum<ElementKind>, item:Src, value:Maybe<Src>)
-  layout HIHH
   exits(next, raise);
 
-family UpdateContainer(container:Src, kind:Enum<UpdateKind>, source:Src) layout HIH
+family UpdateContainer(container:Src, kind:Enum<UpdateKind>, source:Src)
   exits(next, raise);
 
-family MergeKeywords(dict:Src, source:Src, fn:Src) layout HHH
+family MergeKeywords(dict:Src, source:Src, fn:Src)
   exits(next, raise);
 
 family Unpack(dsts:Span<Dst>, source:Src, before:U8, after:Maybe<U8>, fb:Fb<Unpack>)
-  layout VHIIF
   exits(next, raise, miss, again);
 
 // 1F: namespaces, cells, globals, annotations, import
 
 family Cell(mode:Enum<CellMode>, cell:Cell, value:Maybe<Src>, dst:Maybe<Dst>,
-            frees:Span<Free>) layout IHHHV
+            frees:Span<Free>)
   exits(next, raise);
 
 family NamespaceRead(dst:Dst, scope:Enum<NamespaceScope>, name:Maybe<Name>,
-                     mapping:Maybe<Src>) layout HINH
+                     mapping:Maybe<Src>)
   exits(next, raise);
 
 family NamespaceWrite(scope:Enum<NamespaceScope>, name:Name, value:Maybe<Src>,
-                      mode:Enum<WriteMode>) layout INHI
+                      mode:Enum<WriteMode>)
   exits(next, raise);
 
-family GlobalRead(dst:Dst, name:Name, fb:Fb<Global>) layout HNF
+family GlobalRead(dst:Dst, name:Name, fb:Fb<Global>)
   exits(next, raise, miss, again);
 
-family SetupAnnotations() layout Bare
+family SetupAnnotations()
   exits(next, raise);
 
 family Import(dst:Dst, mode:Enum<ImportMode>, name:Name, level:Maybe<Src>,
-              fromlist:Maybe<Src>, module:Maybe<Src>, flags:U8) layout HINHHHI
+              fromlist:Maybe<Src>, module:Maybe<Src>, flags:U8)
   exits(next, raise);
 
 // 1G: text
 
-family BuildText(dst:Dst, kind:Enum<TextKind>, parts:Span<Src>, flags:U8) layout HIVI
+family BuildText(dst:Dst, kind:Enum<TextKind>, parts:Span<Src>, flags:U8)
   exits(next, raise);
 
-family Convert(dst:Dst, value:Src, kind:Enum<ConvertKind>) layout HHI
+family Convert(dst:Dst, value:Src, kind:Enum<ConvertKind>)
   exits(next, raise);
 
-family Format(dst:Dst, value:Src, spec:Maybe<Src>) layout HHH
+family Format(dst:Dst, value:Src, spec:Maybe<Src>)
   exits(next, raise);
 
 // 1H: length and patterns
 
-family Length(dst:Dst, value:Src) layout HH
+family Length(dst:Dst, value:Src)
   exits(next, raise);
 
 family Pattern(dst:Maybe<Dst>, subject:Src, kind:Enum<PatternKind>, cls:Maybe<Src>,
-               names:Maybe<Src>, count:Maybe<U8>, mismatch:Head) layout HHIHHIJ
+               names:Maybe<Src>, count:Maybe<U8>, mismatch:Head)
   exits(next, branch, raise);
 
 // 1I: functions and intrinsics
 
 family Function(mode:Enum<FunctionMode>, dst:Maybe<Dst>, target:Src, value:Maybe<Src>,
-                field:Maybe<Enum<FunctionField>>) layout IHHHI
+                field:Maybe<Enum<FunctionField>>)
   exits(next, raise);
 
-family Intrinsic(dst:Dst, id:Enum<IntrinsicId>, args:Span<Src>) layout HIV
+family Intrinsic(dst:Dst, id:Enum<IntrinsicId>, args:Span<Src>)
   exits(next, raise);

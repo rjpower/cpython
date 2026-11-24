@@ -4,7 +4,7 @@
 parsed files.  Both return a `Program`: the declarations by name, a
 `GraphInfo` per arm and macro (the types of its names, block order,
 predecessors and dominators) and the diagnostics.  F0 checks names, types,
-graph shape, edges, exits and layouts; ownership, facts and effect
+graph shape, edges, exits and encodings; ownership, facts and effect
 coverage are F1's, on the same Program.
 
 Run as a script: `rop_check.py [FILE.rop ...]` (default: every file in
@@ -21,12 +21,14 @@ from pathlib import Path
 from typing import Any
 
 from rop_catalog import (CONVENTIONS, ENVIRONMENT, EVIDENCE_KEYS, EVIDENCE_PRIMITIVE,
-                         EVIDENCE_REQUIRED, FEEDBACK_ROOTS, LAYOUTS, LINEAR_HANDLES,
+                         EVIDENCE_REQUIRED, FEEDBACK_ROOTS, INDEX_BITS, LINEAR_HANDLES,
                          LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
-                         DebtKind, Effect, ExitKind, FieldKind, Handle, Layout,
-                         RowKind, Scalar, Schema, SchemaCtor, Slot, Wrap)
+                         SLOT_ORDER, WIDEST_IMMEDIATE, DebtKind, Effect, ExitKind,
+                         FieldKind, Handle, RowKind, Scalar, Schema, SchemaCtor, Slot,
+                         Wrap)
 from rop_model import (RESULT_CASE, Advance, Arm, Block, BoolLit, Branch, Call,
-                       CallTerm, Cases, Contract, Decl, Diagnostic, Each, EnumDecl,
+                       CallTerm, Cases, Contract, Decl, Diagnostic, Each, Encoding,
+                       EnumDecl, Placement,
                        EnumType, Exit, Expr, Extern, FactUse, Family, Goto, Graph,
                        Guard, HandleType, Let, Macro, Name, Nat, PairType, Param,
                        Point, Publish, Result, Returns, RopError, ScalarType,
@@ -123,6 +125,7 @@ class Program:
     macros: Mapping[str, Macro]
     externs: Mapping[str, Extern]
     graphs: Mapping[str, GraphInfo]
+    encodings: Mapping[str, Encoding]
     diagnostics: tuple[Diagnostic, ...]
 
     @property
@@ -201,54 +204,78 @@ HOME_HANDLES = frozenset({Handle.Src, Handle.Dst, Handle.Local, Handle.Cell,
                           Handle.Free, Handle.IterPair})
 
 
-def field_kinds(t: Type) -> frozenset[FieldKind]:
-    """The layout field kinds that can hold an operand of type t."""
+def field_kind(t: Type) -> FieldKind | None:
+    """The kind of field an operand of type t takes, or None if t is no
+    operand type."""
     inner = t.arg if isinstance(t, WrapType) and t.wrap == Wrap.Maybe else t
     if isinstance(inner, HandleType):
         h = inner.handle
         if h in HOME_HANDLES:
-            return frozenset({FieldKind.home})
+            return FieldKind.home
         if h == Handle.Name:
-            return frozenset({FieldKind.name})
+            return FieldKind.name
         if h == Handle.Const:
-            return frozenset({FieldKind.const})
+            return FieldKind.const
         if h == Handle.Head and inner is t:
-            return frozenset({FieldKind.target, FieldKind.delta})
+            return FieldKind.target
         if h == Handle.Args and inner is t:
-            return frozenset({FieldKind.vector})
-        return frozenset()
+            return FieldKind.vector
+        return None
     if isinstance(t, SchemaType) and t.ctor == SchemaCtor.Fb:
-        return frozenset({FieldKind.feedback})
+        return FieldKind.feedback
     if (isinstance(t, WrapType) and t.wrap == Wrap.Span and isinstance(t.arg, HandleType)
             and t.arg.handle in HOME_HANDLES):
-        return frozenset({FieldKind.vector})
-    if isinstance(inner, (ScalarType, EnumType)):
-        return frozenset({FieldKind.imm})
-    return frozenset()
+        return FieldKind.vector
+    if isinstance(inner, (ScalarType, EnumType)) and imm_bits(inner, {}) is not None:
+        return FieldKind.imm
+    return None
 
 
-def check_layouts() -> list[str]:
-    """The layout catalog's own consistency: no field slot used twice or
-    overlapping another, each slot wide enough for its kind."""
-    problems = []
-    for lay in LAYOUTS.values():
-        used: list[Slot] = []
-        for f in lay.fields:
-            if f.slot != Slot.VEC:
-                for other in used:
-                    lo, hi = f.slot.offset, f.slot.offset + f.slot.width
-                    olo, ohi = other.offset, other.offset + other.width
-                    if lo < ohi and olo < hi:
-                        problems.append(f"layout {lay.name}: {f.slot.name} overlaps "
-                                        f"{other.name}")
-                used.append(f.slot)
-            if f.slot != Slot.VEC and f.slot.width < f.kind.min_width:
-                problems.append(f"layout {lay.name}: {f.slot.name} has {f.slot.width} "
-                                f"bits, a {f.kind.name} field needs {f.kind.min_width}")
-            if (f.slot == Slot.VEC) != (f.kind == FieldKind.vector):
-                problems.append(f"layout {lay.name}: {f.slot.name} cannot hold a "
-                                f"{f.kind.name} field")
-    return problems
+def pack(family: str, params: Iterable[Param], enums: Mapping[str, EnumDecl]
+         ) -> tuple[Encoding, list[tuple[Param, str]]]:
+    """The packing rule.  Operands take the fixed fields A, B, C, D, then
+    the operand words' P0..P7, in declaration order; an immediate wider
+    than the next field takes it and the one after, if both are in the same
+    word.  Vectors take no fixed field and follow in the payload, in order.
+    Returns the encoding and the operands that cannot be packed, with the
+    reason."""
+    placements: list[Placement] = []
+    problems: list[tuple[Param, str]] = []
+    i = 0
+    for p in params:
+        kind = field_kind(p.type)
+        if kind is None:
+            problems.append((p, f"operand {p.name}:{type_text(p.type)} has no field "
+                             "kind"))
+            continue
+        if kind == FieldKind.vector:
+            placements.append(Placement(p.name, kind, 0, ()))
+            continue
+        bits = imm_bits(p.type, enums) if kind == FieldKind.imm else INDEX_BITS
+        assert bits is not None
+        if bits > WIDEST_IMMEDIATE:
+            problems.append((p, f"operand {p.name}:{type_text(p.type)} needs {bits} "
+                             f"bits; an immediate has at most {WIDEST_IMMEDIATE}"))
+            continue
+        if i >= len(SLOT_ORDER):
+            problems.append((p, f"operand {p.name}: every field is taken"))
+            continue
+        first = SLOT_ORDER[i]
+        if bits <= first.width:
+            placements.append(Placement(p.name, kind, bits, (first,)))
+            i += 1
+            continue
+        second = SLOT_ORDER[i + 1] if i + 1 < len(SLOT_ORDER) else None
+        if second is None or second.word != first.word or (
+                first.width + second.width < bits):
+            problems.append((p, f"operand {p.name}:{type_text(p.type)} needs {bits} "
+                             f"bits; field {first.name} and the next field of its word "
+                             "cannot hold it"))
+            continue
+        placements.append(Placement(p.name, kind, bits, (first, second)))
+        i += 2
+    words = max((s.word for pl in placements for s in pl.slots), default=0)
+    return Encoding(family, tuple(placements), words), problems
 
 
 # The checker
@@ -267,6 +294,7 @@ class Checker:
     externs: dict[str, Extern] = field(default_factory=dict)
     graphs: dict[str, GraphInfo] = field(default_factory=dict)
     callees: dict[str, frozenset[str]] = field(default_factory=dict)
+    encodings: dict[str, Encoding] = field(default_factory=dict)
 
     def report(self, span: SrcSpan, definition: str, message: str) -> None:
         self.diagnostics.append(Diagnostic(span, definition, message))
@@ -290,7 +318,7 @@ def check(files: Iterable[SourceFile]) -> Program:
     check_macro_recursion(c)
     return Program(c.files, dict(c.enums), dict(c.families), dict(c.points),
                    dict(c.arms), dict(c.macros), dict(c.externs), dict(c.graphs),
-                   tuple(sorted(c.diagnostics, key=diagnostic_order)))
+                   dict(c.encodings), tuple(sorted(c.diagnostics, key=diagnostic_order)))
 
 
 def diagnostic_order(d: Diagnostic) -> tuple[str, int, int]:
@@ -306,7 +334,7 @@ def load(paths: Iterable[Path], header: Mapping[str, Row] | None = None) -> Prog
         try:
             files.append(rop_syntax.parse_file(path))
         except RopError as e:
-            return Program((), {}, {}, {}, {}, {}, {}, {}, (e.diagnostic,))
+            return Program((), {}, {}, {}, {}, {}, {}, {}, {}, (e.diagnostic,))
     program = check(files)
     rows = rop_header.header_rows() if header is None else header
     extra = rop_header.disagreements(program.externs, rows)
@@ -390,29 +418,11 @@ def check_family(c: Checker, fam: Family) -> None:
     if "again" in fam.exits and not schemas:
         c.report(fam.span, fam.name, "exit again needs a feedback operand: its ticket "
                  "is over the family's schema")
-    layout = LAYOUTS.get(fam.layout)
-    if layout is None:
-        c.report(fam.span, fam.name, f"layout {fam.layout} is not in the catalog")
-        return
-    check_family_layout(c, fam, layout)
-
-
-def check_family_layout(c: Checker, fam: Family, layout: Layout) -> None:
-    if len(layout.fields) != len(fam.params):
-        c.report(fam.span, fam.name, f"layout {layout.name} has {len(layout.fields)} "
-                 f"fields for {len(fam.params)} operands")
-    for p, f in zip(fam.params, layout.fields):
-        kinds = field_kinds(p.type)
-        if f.kind not in kinds:
-            c.report(p.span, fam.name, f"operand {p.name}:{type_text(p.type)} cannot "
-                     f"be held in field {f.slot.name} of layout {layout.name}, a "
-                     f"{f.kind.name} field")
-            continue
-        bits = imm_bits(p.type, c.enums) if f.kind == FieldKind.imm else None
-        if bits is not None and bits > f.slot.width:
-            c.report(p.span, fam.name, f"operand {p.name}:{type_text(p.type)} needs "
-                     f"{bits} bits; field {f.slot.name} of layout {layout.name} has "
-                     f"{f.slot.width}")
+    encoding, problems = pack(fam.name, fam.params, c.enums)
+    for p, message in problems:
+        c.report(p.span, fam.name, message)
+    if not problems:
+        c.encodings[fam.name] = encoding
 
 
 def check_point(c: Checker, p: Point) -> None:

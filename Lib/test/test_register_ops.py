@@ -10,7 +10,6 @@ test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import ir_contract
     import lexer
-    import rop_catalog
     import rop_check
     import rop_header
     import rop_print
@@ -41,7 +40,7 @@ def parse_error(src: str) -> RopError:
 
 
 MINIMAL = """\
-family F(dst:Dst, x:Src) layout HH exits(next, miss);
+family F(dst:Dst, x:Src) exits(next, miss);
 arm F.A inline effects() feedback() exits(next, miss)
 {
   entry():
@@ -123,9 +122,9 @@ class ParseTests(unittest.TestCase):
                 self.assertEqual(rop_print.print_file(rop_syntax.parse(text, "x")), text)
 
     ERRORS = [
-        ("family F(x:Src) layout HH;", 1, 26, "expected 'exits', found ';'"),
-        ("family F(x:Int) layout HH exits();", 1, 12, "'Int' is not a type of the catalog"),
-        ("family F(x:Fb<Bin>) layout H exits();", 1, 15,
+        ("family F(x:Src);", 1, 16, "expected 'exits', found ';'"),
+        ("family F(x:Int) exits();", 1, 12, "'Int' is not a type of the catalog"),
+        ("family F(x:Fb<Bin>) exits();", 1, 15,
          "'Bin' is not a schema (one of: Binary, Attr, Global, Truth, Compare, "
          "Contains, Item, Unpack, Iter, Send, Call, Super)"),
         ("arm F.A fast effects() feedback() exits() { entry(): exit next(); }", 1, 9,
@@ -159,7 +158,7 @@ class ParseTests(unittest.TestCase):
 # piece of it and lists the diagnostics (line, column, message) that result
 CHECK_BASE = """\
 enum Op(PLUS, MINUS);
-family F(dst:Dst, x:Src, y:Src, fb:Fb<Binary>) layout HHHF
+family F(dst:Dst, x:Src, y:Src, fb:Fb<Binary>)
   exits(next, miss, again, raise);
 point F.Done(current, next_head, clear) keep() spent(y, x) defs(dst) held();
 point F.Failed(current, site, pending) keep(x, y) spent() defs() held();
@@ -248,14 +247,9 @@ CHECK_CASES = [
      'read(entry.knd)', [
          (40, 48, 'read(entry.knd): the schema has no field knd (fields: descr, kind)'),
      ]),
-    ('layout', 'layout HHHF',
-     'layout HHHX', [
-         (2, 1, 'layout HHHX is not in the catalog'),
-     ]),
-    ('fieldkind', 'fb:Fb<Binary>) layout',
-     'fb:Name) layout', [
+    ('fieldkind', 'fb:Fb<Binary>)\n',
+     'fb:Name)\n', [
          (2, 1, "exit again needs a feedback operand: its ticket is over the family's schema"),
-         (2, 33, 'operand fb:Name cannot be held in field D of layout HHHF, a feedback field'),
          (23, 52, 'read(counter): no feedback operand'),
          (40, 48, 'read(entry.kind): no feedback operand'),
          (43, 16, 'adapt: argument f is Fb<Binary>; fb is Name'),
@@ -451,13 +445,21 @@ CHECK_CASES = [
      'enum Op(PLUS, MINUS);\nenum Sign(PLUS);', [
          (30, 21, 'PLUS is a member of Op, Sign: qualify it'),
      ]),
-    ('width', 'y:Src, fb:Fb<Binary>) layout HHHF',
-     'y:Src, n:U16, fb:Fb<Binary>) layout HHHIF', [
-         (2, 33, 'operand n:U16 needs 16 bits; field D of layout HHHIF has 12'),
+    ('nofield', 'fb:Fb<Binary>)\n',
+     'fb:Fb<Binary>, o:Obj)\n', [
+         (2, 48, 'operand o:Obj has no field kind'),
      ]),
-    ('fieldcount', 'layout HHHF',
-     'layout HHH', [
-         (2, 1, 'layout HHH has 3 fields for 4 operands'),
+    ('wideimm', 'fb:Fb<Binary>)\n',
+     'fb:Fb<Binary>, n:U64)\n', [
+         (2, 48, 'operand n:U64 needs 64 bits; an immediate has at most 32'),
+     ]),
+    ('acrosswords', 'y:Src, fb:Fb<Binary>)',
+     'y:Src, n:U16, fb:Fb<Binary>)', [
+         (2, 33, 'operand n:U16 needs 16 bits; field D and the next field of its word cannot hold it'),
+     ]),
+    ('toomany', 'fb:Fb<Binary>)\n',
+     'fb:Fb<Binary>, a1:Src, a2:Src, a3:Src, a4:Src, a5:Src, a6:Src, a7:Src, a8:Src, a9:Src)\n', [
+         (2, 112, 'operand a9: every field is taken'),
      ]),
     ('unreachable', '  Failed(e:Err):\n    exit raise(F.Failed, e);',
      '  Failed(e:Err):\n    exit raise(F.Failed, e);\n  Spare():\n    exit next();', [
@@ -498,8 +500,27 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(rop_print.type_text(info.types["k"]), "Size")
         self.assertEqual(rop_print.type_text(info.types["fb"]), "Fb<Binary>")
 
-    def test_layout_catalog(self):
-        self.assertEqual(rop_check.check_layouts(), [])
+    ENCODINGS = [
+        ("family F(d:Dst, x:Src, y:Src, f:Fb<Binary>) exits(next);", 0,
+         [("d", "A"), ("x", "B"), ("y", "C"), ("f", "D")]),
+        ("family F(d:Dst, k:Bool, i:U16) exits(next);", 0,
+         [("d", "A"), ("k", "B"), ("i", "C+D")]),
+        ("family F(d:Dst, s:Span<Src>, a:Src, b:Src, c:Src, n:Name, i:U16) exits(next);", 1,
+         [("d", "A"), ("s", ""), ("a", "B"), ("b", "C"), ("c", "D"), ("n", "P0"),
+          ("i", "P1")]),
+        ("family F(t:Head, m:Maybe<U8>, a:Src, b:Src, w:U32) exits(next);", 1,
+         [("t", "A"), ("m", "B"), ("a", "C"), ("b", "D"), ("w", "P0+P1")]),
+    ]
+
+    def test_derived_encoding(self):
+        for src, words, expected in self.ENCODINGS:
+            with self.subTest(src):
+                program = rop_check.check([rop_syntax.parse(src, "t.rop")])
+                self.assertEqual(program.diagnostics, ())
+                encoding = program.encodings["F"]
+                self.assertEqual(encoding.words, words)
+                self.assertEqual([(p.operand, "+".join(s.name for s in p.slots))
+                                  for p in encoding.placements], expected)
 
 
 class DefinitionTests(unittest.TestCase):
@@ -561,8 +582,8 @@ class DefinitionTests(unittest.TestCase):
         self.assertEqual(sorted(self.program.families), sorted(self.APPENDIX_A))
         for fam in self.program.families.values():
             with self.subTest(fam.name):
-                layout = rop_catalog.LAYOUTS[fam.layout]
-                self.assertEqual(len(layout.fields), len(fam.params))
+                encoding = self.program.encodings[fam.name]
+                self.assertEqual(len(encoding.placements), len(fam.params))
                 self.assertTrue(fam.exits)
 
     def test_no_stack_notions(self):

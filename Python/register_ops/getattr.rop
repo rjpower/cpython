@@ -2,7 +2,7 @@
 // this site's name and an admitted lookup path; the duplicate precedes any
 // release of the receiver.
 
-family GetAttr(dst:Dst, obj:Src, name:Name, fb:Fb<Attr>) layout HHNF
+family GetAttr(dst:Dst, obj:Src, name:Name, fb:Fb<Attr>)
   exits(next, miss, again, enter, raise, redirect);
 
 point GetAttr.Done(current, next_head, clear) keep() spent(obj) defs(dst) held();

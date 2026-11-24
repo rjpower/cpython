@@ -13,87 +13,83 @@ enum PollKind(BACKEDGE, CALL_END, RESUME_POLL, JIT_EVENT);
 
 // P4: positional calls, init cleanup, return
 
-family Call(dst:Dst, fn:Src, self:Maybe<Src>, args:Args, fb:Fb<Call>) layout HHHVF
+family Call(dst:Dst, fn:Src, self:Maybe<Src>, args:Args, fb:Fb<Call>)
   exits(next, enter, raise, redirect, miss, again);
 
-family InitResult(value:Src) layout H
+family InitResult(value:Src)
   exits(next, raise);
 
-family Return(value:Src) layout H
+family Return(value:Src)
   exits(return, exit, raise, redirect);
 
 // 2A: keyword and expanded calls
 
 family CallKw(dst:Dst, fn:Src, self:Maybe<Src>, args:Args, names:Src, fb:Fb<Call>)
-  layout HHHVHF
   exits(next, enter, raise, redirect, miss, again);
 
-family CallEx(dst:Dst, fn:Src, star:Src, kwargs:Maybe<Src>, fb:Fb<Call>) layout HHHHF
+family CallEx(dst:Dst, fn:Src, star:Src, kwargs:Maybe<Src>, fb:Fb<Call>)
   exits(next, enter, raise, redirect, miss, again);
 
-family MaterializeKwargs(local:Local) layout H
+family MaterializeKwargs(local:Local)
   exits(next, raise);
 
 // 2B: iteration
 
 family IterOpen(pair:IterPair, source:Src, mode:Enum<IterMode>, fb:Fb<Iter>)
-  layout HHIF
   exits(next, raise, miss, again);
 
 // `second` receives the value of a dict-items pair delivery
 family ForIter(item:Dst, pair:IterPair, body:Head, done:Head, fb:Fb<Iter>,
-               second:Maybe<Dst>) layout HHJJFH
+               second:Maybe<Dst>)
   exits(next, branch, jump, enter, raise, redirect, miss, again);
 
 // 2C: async iteration, await, send, yield
 
-family AsyncIter(dst:Dst, source:Src, mode:Enum<AsyncIterMode>) layout HHI
+family AsyncIter(dst:Dst, source:Src, mode:Enum<AsyncIterMode>)
   exits(next, raise);
 
-family Awaitable(dst:Dst, source:Src, origin:Enum<AwaitOrigin>) layout HHI
+family Awaitable(dst:Dst, source:Src, origin:Enum<AwaitOrigin>)
   exits(next, raise);
 
 // A folded consumer can also return or yield
 family Send(yielded:Dst, completed:Dst, pair:IterPair, sent:Src, done:Head,
-            fb:Fb<Send>) layout HHHHJF
+            fb:Fb<Send>)
   exits(next, branch, enter, return, yield, raise, redirect, miss, again);
 
-family Yield(value:Src, resume:Dst, route:Head, mode:Enum<YieldMode>) layout HHJI
+family Yield(value:Src, resume:Dst, route:Head, mode:Enum<YieldMode>)
   exits(yield, raise, redirect);
 
 // 2D: exceptions
 
-family Raise(exc:Maybe<Src>, cause:Maybe<Src>) layout HH
+family Raise(exc:Maybe<Src>, cause:Maybe<Src>)
   exits(raise);
 
-family Reraise(exc:Src, lasti:Maybe<Src>) layout HH
+family Reraise(exc:Src, lasti:Maybe<Src>)
   exits(raise);
 
-family ExceptState(mode:Enum<ExceptMode>, dst:Maybe<Dst>, exc:Src) layout IHH
+family ExceptState(mode:Enum<ExceptMode>, dst:Maybe<Dst>, exc:Src)
   exits(next);
 
 family ExceptMatch(dst:Dst, rest:Maybe<Dst>, exc:Src, pattern:Src,
-                   mode:Enum<MatchMode>) layout HHHHI
+                   mode:Enum<MatchMode>)
   exits(next, raise);
 
 // 2E: throw completion, async-for termination, exceptional context exit
 
 family CleanupThrow(exc:Src, pair:IterPair, completed:Dst, done:Head, route:Head)
-  layout HHHJJ
   exits(branch, return, raise, redirect);
 
 // `send` is the original Send head, the origin its branch observer reports
-family EndAsyncFor(exc:Src, target:Head, send:Head) layout HJJ
+family EndAsyncFor(exc:Src, target:Head, send:Head)
   exits(next, jump, raise, redirect);
 
 family WithExit(dst:Dst, exit_fn:Src, self:Maybe<Src>, exc:Src, context:Src)
-  layout HHHHH
   exits(next, raise);
 
 // 2F: resume and polls
 
-family Resume(kind:Enum<ResumeKind>) layout I
+family Resume(kind:Enum<ResumeKind>)
   exits(next, jump, raise, redirect, exit);
 
-family Poll(kind:Enum<PollKind>) layout I
+family Poll(kind:Enum<PollKind>)
   exits(next, raise, redirect, exit);

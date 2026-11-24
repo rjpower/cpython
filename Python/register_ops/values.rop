@@ -19,85 +19,82 @@ enum Special(ENTER, EXIT, AENTER, AEXIT);
 // P1: constants, local bindings, saved locals, residual moves, origins
 
 // An origin or legal-entry boundary
-family Nop() layout Bare
+family Nop()
   exits(next);
 
 // Pool: the code's constant `index`; Small: the immediate int `index`;
 // Common: the interpreter root `index`
-family Const(dst:Dst, kind:Enum<ConstKind>, index:U16) layout HII
+family Const(dst:Dst, kind:Enum<ConstKind>, index:U16)
   exits(next);
 
-family LocalRead(dst:Dst, local:Local) layout HH
+family LocalRead(dst:Dst, local:Local)
   exits(next, raise);
 
-family LocalWrite(local:Local, value:Src) layout HH
+family LocalWrite(local:Local, value:Src)
   exits(next);
 
-family SaveLocal(dst:Dst, local:Local) layout HH
+family SaveLocal(dst:Dst, local:Local)
   exits(next);
 
-family LocalDelete(local:Local) layout H
+family LocalDelete(local:Local)
   exits(next, raise);
 
-family Move(dsts:Span<Dst>, srcs:Span<Src>, retire:Enum<MoveRetire>) layout VVI
+family Move(dsts:Span<Dst>, srcs:Span<Src>, retire:Enum<MoveRetire>)
   exits(next);
 
 // P5: truth, jumps, conditional retention, None branches
 
-family Truth(dst:Dst, value:Src, invert:Bool, fb:Fb<Truth>) layout HHIF
+family Truth(dst:Dst, value:Src, invert:Bool, fb:Fb<Truth>)
   exits(next, raise, miss, again);
 
-family Jump(target:Head, poll:Enum<PollMode>) layout TI
+family Jump(target:Head, poll:Enum<PollMode>)
   exits(jump, raise, redirect, exit);
 
 family BranchTruth(value:Src, target:Head, sense:Bool, keep:Enum<KeepMode>,
-                   fb:Fb<Truth>) layout HJIIF
+                   fb:Fb<Truth>)
   exits(next, branch, raise, miss, again);
 
-family BranchNone(value:Src, target:Head, sense:Bool) layout HJI
+family BranchNone(value:Src, target:Head, sense:Bool)
   exits(next, branch);
 
 // 1A: numeric and in-place operations, unary protocols
 
-family Binary(dst:Dst, x:Src, y:Src, op:Enum<Numeric>, fb:Fb<Binary>) layout HHHIF
+family Binary(dst:Dst, x:Src, y:Src, op:Enum<Numeric>, fb:Fb<Binary>)
   exits(next, raise, miss, again);
 
-family Unary(dst:Dst, value:Src, op:Enum<UnaryOp>) layout HHI
+family Unary(dst:Dst, value:Src, op:Enum<UnaryOp>)
   exits(next, raise);
 
 // 1B: value tests and their fused branch consumers
 
 family Compare(dst:Dst, x:Src, y:Src, relation:Enum<Relation>,
-               result:Enum<CompareResult>, fb:Fb<Compare>) layout HHHIIF
+               result:Enum<CompareResult>, fb:Fb<Compare>)
   exits(next, raise, miss, again);
 
-family Identity(dst:Dst, x:Src, y:Src, sense:Bool) layout HHHI
+family Identity(dst:Dst, x:Src, y:Src, sense:Bool)
   exits(next);
 
 family Contains(dst:Dst, item:Src, container:Src, sense:Bool, fb:Fb<Contains>)
-  layout HHHIF
   exits(next, raise, miss, again);
 
 family TestBranch(x:Src, y:Src, test:Enum<BranchTest>, target:Head, sense:Bool,
-                  fb:Fb<Compare>) layout HHIJIF
+                  fb:Fb<Compare>)
   exits(next, branch, raise, miss, again);
 
 // P3: method lookup
 
 family GetMethod(callable:Dst, self_dst:Maybe<Dst>, obj:Src, name:Name, fb:Fb<Attr>)
-  layout HHHNF
   exits(next, raise, redirect, miss, again);
 
 // 1D: attribute writes, super and special-method resolution
 
 family AttrWrite(obj:Src, name:Name, value:Maybe<Src>, mode:Enum<WriteMode>,
-                 fb:Fb<Attr>) layout HNHIF
+                 fb:Fb<Attr>)
   exits(next, raise, miss, again);
 
 family SuperLookup(dst:Dst, self_dst:Maybe<Dst>, sup:Src, cls:Src, self:Src,
-                   name:Name, mode:Enum<SuperMode>, fb:Fb<Super>) layout HHHHHNIF
+                   name:Name, mode:Enum<SuperMode>, fb:Fb<Super>)
   exits(next, raise, miss, again);
 
 family SpecialLookup(fn:Dst, self_dst:Maybe<Dst>, obj:Src, which:Enum<Special>)
-  layout HHHI
   exits(next, raise);

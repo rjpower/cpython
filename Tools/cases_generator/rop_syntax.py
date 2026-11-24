@@ -263,12 +263,10 @@ class Parser:
         name = self.ident("a family name")
         self.where = name.text
         params = self.params()
-        self.expect("layout")
-        layout = self.ident("a layout name")
         self.expect("exits")
         exits = self.names()
         self.expect(";")
-        return Family(name.text, params, layout.text, exits, start.span)
+        return Family(name.text, params, exits, start.span)
 
     def point(self) -> Point:
         start = self.take()

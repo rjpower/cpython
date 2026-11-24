@@ -259,17 +259,17 @@ class Fact(enum.Enum):
 FACT_ARITY = {Fact.in_bounds: 2, Fact.type_version: 2}
 
 
-# Head layout.  The low 16 bits are handler and flags; A, B, C and D are
-# the 12-bit operand fields of the head (design section 3), CD their
-# 24-bit union.  P0..P7 are 16-bit fields of up to two operand words that
-# follow the head.  VEC is a variable payload of ordered homes or an
-# argument descriptor; its length is part of the payload.
+# Encoding.  A family's encoding is derived from its operand types (V8
+# derives a bytecode's from its operand types); there is no layout to
+# declare.  The head's low 16 bits are handler and flags; A, B, C and D are
+# its 12-bit operand fields.  P0..P7 are the 16-bit fields of up to two
+# operand words that follow the head.  Vectors (spans, argument
+# descriptors) follow in a variable payload.
 class Slot(enum.Enum):
     A = (16, 12)
     B = (28, 12)
     C = (40, 12)
     D = (52, 12)
-    CD = (40, 24)
     P0 = (64, 16)
     P1 = (80, 16)
     P2 = (96, 16)
@@ -278,7 +278,6 @@ class Slot(enum.Enum):
     P5 = (144, 16)
     P6 = (160, 16)
     P7 = (176, 16)
-    VEC = (192, 0)
 
     @property
     def offset(self) -> int:
@@ -288,105 +287,33 @@ class Slot(enum.Enum):
     def width(self) -> int:
         return self.value[1]
 
+    @property
+    def word(self) -> int:
+        """0 for the head, 1 and 2 for the operand words."""
+        return self.offset // 64
+
+
+# Fixed fields are filled in this order (the packing rule, rop_check.pack)
+SLOT_ORDER = tuple(Slot)
+
 
 class FieldKind(enum.Enum):
-    """What a layout field holds, and the narrowest field it fits."""
-    home = "H"
-    feedback = "F"
-    name = "N"
-    const = "K"
-    imm = "I"
-    target = "T"
-    delta = "J"
-    vector = "V"
-
-    @property
-    def min_width(self) -> int:
-        return FIELD_MIN_WIDTH[self]
+    """What an operand field holds.  A home, index, feedback or target
+    field needs 12 bits; an operand whose value does not fit at run time
+    goes through the Wide descriptor.  An immediate needs its type's
+    width; a vector takes no fixed field."""
+    home = "home"
+    imm = "imm"
+    name = "name"
+    const = "const"
+    feedback = "feedback"
+    target = "target"
+    vector = "vector"
 
 
-FIELD_MIN_WIDTH = {
-    FieldKind.home: 12, FieldKind.feedback: 12, FieldKind.name: 12,
-    FieldKind.const: 12, FieldKind.imm: 1, FieldKind.target: 24,
-    FieldKind.delta: 12, FieldKind.vector: 0,
-}
-
-
-@dataclass(frozen=True, slots=True)
-class LayoutField:
-    slot: Slot
-    kind: FieldKind
-
-
-@dataclass(frozen=True, slots=True)
-class Layout:
-    """A family's operands map, in order, onto `fields`."""
-    name: str
-    fields: tuple[LayoutField, ...]
-
-
-def _layout(name: str, *fields: tuple[Slot, FieldKind]) -> Layout:
-    return Layout(name, tuple(LayoutField(s, k) for s, k in fields))
-
-
-H, F, N, K, I, T, J, V = (FieldKind.home, FieldKind.feedback, FieldKind.name,
-                          FieldKind.const, FieldKind.imm, FieldKind.target,
-                          FieldKind.delta, FieldKind.vector)
-A, B, C, D, CD = Slot.A, Slot.B, Slot.C, Slot.D, Slot.CD
-P0, P1, P2, P3, VEC = Slot.P0, Slot.P1, Slot.P2, Slot.P3, Slot.VEC
-
-# A layout's name spells its field kinds in operand order: H home, F
-# feedback, N name, K constant, I immediate, T absolute target, J relative
-# target, V vector; `_w` marks fields in operand words.
-LAYOUTS: dict[str, Layout] = {lay.name: lay for lay in (
-    _layout("Bare"),
-    _layout("I", (A, I)),
-    _layout("H", (A, H)),
-    _layout("HH", (A, H), (B, H)),
-    _layout("HHH", (A, H), (B, H), (C, H)),
-    _layout("HHHH", (A, H), (B, H), (C, H), (D, H)),
-    _layout("HHHHH", (A, H), (B, H), (C, H), (D, H), (P0, H)),
-    _layout("HHI", (A, H), (B, H), (C, I)),
-    _layout("HHHI", (A, H), (B, H), (C, H), (D, I)),
-    _layout("HHHHI", (A, H), (B, H), (C, H), (D, H), (P0, I)),
-    _layout("HII", (A, H), (B, I), (CD, I)),
-    _layout("HIH", (A, H), (B, I), (C, H)),
-    _layout("HIHH", (A, H), (B, I), (C, H), (D, H)),
-    _layout("IHH", (A, I), (B, H), (C, H)),
-    _layout("IHHHI", (A, I), (B, H), (C, H), (D, H), (P0, I)),
-    _layout("IHHHV", (A, I), (B, H), (C, H), (D, H), (VEC, V)),
-    _layout("HINH", (A, H), (B, I), (C, N), (D, H)),
-    _layout("INHI", (A, I), (B, N), (C, H), (D, I)),
-    _layout("HINHHHI", (A, H), (B, I), (C, N), (D, H), (P0, H), (P1, H), (P2, I)),
-    _layout("HV", (A, H), (VEC, V)),
-    _layout("HIV", (A, H), (B, I), (VEC, V)),
-    _layout("HIVI", (A, H), (B, I), (VEC, V), (C, I)),
-    _layout("VVI", (VEC, V), (VEC, V), (A, I)),
-    _layout("TI", (CD, T), (A, I)),
-    _layout("HJI", (A, H), (D, J), (B, I)),
-    _layout("HJJ", (A, H), (D, J), (C, J)),
-    _layout("HJIIF", (A, H), (D, J), (B, I), (C, I), (P0, F)),
-    _layout("HHJI", (A, H), (B, H), (D, J), (C, I)),
-    _layout("HHHJJ", (A, H), (B, H), (C, H), (D, J), (P0, J)),
-    _layout("HHIJIF", (A, H), (B, H), (C, I), (D, J), (P0, I), (P1, F)),
-    _layout("HHIHHIJ", (A, H), (B, H), (C, I), (D, H), (P0, H), (P1, I), (P2, J)),
-    _layout("HHJJFH", (A, H), (B, H), (P0, J), (D, J), (C, F), (P1, H)),
-    _layout("HHHHJF", (A, H), (B, H), (C, H), (P0, H), (D, J), (P1, F)),
-    _layout("HHIF", (A, H), (B, H), (C, I), (D, F)),
-    _layout("HHHF", (A, H), (B, H), (C, H), (D, F)),
-    _layout("HHNF", (A, H), (B, H), (D, N), (C, F)),
-    _layout("HNF", (A, H), (B, N), (C, F)),
-    _layout("HHHIF", (A, H), (B, H), (C, H), (D, I), (P0, F)),
-    _layout("HHHIIF", (A, H), (B, H), (C, H), (D, I), (P0, I), (P1, F)),
-    _layout("HHHNF", (A, H), (B, H), (C, H), (D, N), (P0, F)),
-    _layout("HNHIF", (A, H), (B, N), (C, H), (D, I), (P0, F)),
-    _layout("HHHHHNIF", (A, H), (B, H), (C, H), (D, H), (P0, H), (P1, N), (P2, I),
-            (P3, F)),
-    _layout("VHIIF", (VEC, V), (A, H), (B, I), (C, I), (D, F)),
-    _layout("HHHHF", (A, H), (B, H), (C, H), (D, H), (P0, F)),
-    _layout("HHHVF", (A, H), (B, H), (C, H), (VEC, V), (D, F)),
-    _layout("HHHVHF", (A, H), (B, H), (C, H), (VEC, V), (D, H), (P0, F)),
-)}
+INDEX_BITS = 12
+# Widest immediate the rule packs: two adjacent fields of one word
+WIDEST_IMMEDIATE = 32
 
 
 # C conventions: how a C entry point's result maps onto the row's logical

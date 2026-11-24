@@ -11,9 +11,9 @@ from dataclasses import dataclass, field
 from pathlib import PurePath
 from typing import Union
 
-from rop_catalog import (AccessMode, DebtKind, Effect, ExcRole, Fact, FrameRole,
-                         Handle, PcRole, Region, RowKind, Scalar, Schema,
-                         SchemaCtor, Wrap)
+from rop_catalog import (AccessMode, DebtKind, Effect, ExcRole, Fact, FieldKind,
+                         FrameRole, Handle, PcRole, Region, RowKind, Scalar, Schema,
+                         SchemaCtor, Slot, Wrap)
 
 
 @dataclass(frozen=True, slots=True)
@@ -372,13 +372,31 @@ class EnumDecl:
 
 @dataclass(frozen=True, slots=True)
 class Family:
-    """A register instruction family: its operands, in the order of its
-    layout's fields, and the exits its arms may take."""
+    """A register instruction family: its operands and the exits its arms
+    may take.  Its encoding is derived from the operand types (Encoding)."""
     name: str
     params: tuple[Param, ...]
-    layout: str
     exits: tuple[str, ...]
     span: SrcSpan = _span()
+
+
+@dataclass(frozen=True, slots=True)
+class Placement:
+    """Where one operand lives: its field kind, the bits it needs and the
+    fields it takes (none for a vector, which follows in the payload)."""
+    operand: str
+    kind: FieldKind
+    bits: int
+    slots: tuple[Slot, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Encoding:
+    """A family's derived encoding: placements in operand order, and the
+    number of operand words after the head (vectors aside)."""
+    family: str
+    placements: tuple[Placement, ...]
+    words: int
 
 
 @dataclass(frozen=True, slots=True)

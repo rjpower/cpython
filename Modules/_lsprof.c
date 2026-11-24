@@ -5,7 +5,6 @@
 #define Py_VALUE_CORE 1
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
-#include "pycore_ceval.h"         // _PyEval_SetProfile()
 #include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long_value.h"    // _PyValue_AsInt64()
 #include "pycore_pystate.h"       // _PyThreadState_GET()

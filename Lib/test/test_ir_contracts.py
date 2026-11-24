@@ -2366,5 +2366,141 @@ class ColumnTests(unittest.TestCase):
                         capi.leaf_primitive("PyValue_CLOSE", w)
 
 
+class Counted:
+    """An object whose finalizer counts: a stolen owner that a failure path
+    forgot to close shows as a missing finalization, and one it closed
+    twice as a crash"""
+    made = 0
+    freed = 0
+
+    def __init__(self):
+        type(self).made += 1
+
+    def __del__(self):
+        type(self).freed += 1
+
+
+class ContainerRowsRunTest(unittest.TestCase):
+    """The batch 3 rows' ownership claims, run through the handlers that
+    rely on them (the rows' evidence comments in pycore_ir_components.h):
+    _PyDict_SetValue_Take2 and _PySet_AddValueTakeRef consume their owners
+    on failure, _PyEval_StoreSlice and _PyEval_BinarySlice borrow theirs,
+    and _PyEval_UnpackIterableValue consumes the sequence and closes the
+    values it wrote when it fails"""
+
+    def setUp(self):
+        Counted.made = Counted.freed = 0
+
+    def check_balanced(self):
+        import gc
+        gc.collect()
+        self.assertEqual(Counted.made, Counted.freed)
+
+    def test_dict_store_with_an_unhashable_key_closes_both_owners(self):
+        def f():
+            d = {}
+            d[[]] = Counted()
+        for _ in range(3):
+            with self.assertRaises(TypeError):
+                f()
+        self.check_balanced()
+
+    def test_map_add_with_an_unhashable_key_closes_both_owners(self):
+        def f():
+            return {[]: Counted() for _ in range(1)}
+        for _ in range(3):
+            with self.assertRaises(TypeError):
+                f()
+        self.check_balanced()
+
+    def test_set_add_with_an_unhashable_element_closes_the_owner(self):
+        def f():
+            return {[Counted()] for _ in range(1)}
+        for _ in range(3):
+            with self.assertRaises(TypeError):
+                f()
+        self.check_balanced()
+
+    def test_replaced_dict_value_is_finalized_by_the_store(self):
+        order = []
+
+        class Old:
+            def __del__(self):
+                order.append("old")
+
+        def f():
+            d = {1: Old()}
+            d[1] = 2
+            order.append("stored")
+        f()
+        self.assertEqual(order, ["old", "stored"])
+
+    def test_failed_unpack_closes_the_sequence_and_the_values(self):
+        def f():
+            a, b = iter([Counted(), Counted(), Counted()])
+        for _ in range(3):
+            with self.assertRaises(ValueError):
+                f()
+        self.check_balanced()
+
+    def test_unpack_of_a_non_iterable_closes_the_value(self):
+        def f(x):
+            a, b = x
+        for _ in range(3):
+            with self.assertRaises(TypeError):
+                f(Counted())
+        for _ in range(3):
+            with self.assertRaises(TypeError):
+                f(7)
+        self.check_balanced()
+
+    def test_slice_operations_borrow_their_operands(self):
+        c = Counted()
+
+        def f(seq, lo, hi):
+            return seq[lo:hi]
+
+        def g(seq, lo, hi, v):
+            seq[lo:hi] = v
+
+        for _ in range(3):
+            self.assertEqual(f([1, 2, 3], 1, None), [2, 3])
+            self.assertEqual(f("abc", None, 2), "ab")
+            with self.assertRaises(TypeError):
+                f([1, 2, 3], c, 2)
+            with self.assertRaises(TypeError):
+                g([1, 2, 3], c, 2, [])
+            with self.assertRaises(TypeError):
+                g([1, 2, 3], 0, 1, Counted())
+        del c
+        self.check_balanced()
+
+    def test_build_slice_takes_none_for_an_absent_step(self):
+        def f(a, b):
+            return a[1:b], a[::b]
+        self.assertEqual(f([1, 2, 3], 3), ([2, 3], [1]))
+        lo = Counted()
+        s = slice(lo, None)
+        self.assertIs(s.start, lo)
+        self.assertIsNone(s.step)
+        del lo, s
+        self.check_balanced()
+
+    def test_dict_merge_and_update_errors_close_the_operand(self):
+        def merge(x):
+            return {**x}
+
+        def update(x):
+            return {1: 2, **x}
+
+        for g in (merge, update):
+            for _ in range(3):
+                with self.assertRaises(TypeError):
+                    g(Counted())
+                with self.assertRaises(TypeError):
+                    g(5)
+        self.check_balanced()
+
+
 if __name__ == "__main__":
     unittest.main()

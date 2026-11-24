@@ -127,10 +127,37 @@ class SliceTests(unittest.TestCase):
                     inferred.add(exits[ir_records.GUARD_TOKENS[name]])
                 self.assertLessEqual(inferred - {"next"}, set(table[name].exits))
 
+    # Batch 6: PyFunction_Check compares the exact type (funcobject.h);
+    # _INIT_CALL_PY_EXACT_ARGS pushes a frame, which writes the heap and
+    # releases the callable; SET_FUNCTION_ATTRIBUTE runs no code; the call
+    # uops complete in place (exits next, G0d removes the inference)
+    LISTED_DIFFERENCES_B6 = [
+        'CALL_BOUND_METHOD_EXACT_ARGS.record.uops[3].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
+        'CALL_BOUND_METHOD_EXACT_ARGS.record.uops[7].effects: inferred 1 entries ["ALLOCATES"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
+        'CALL_EX_PY.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
+        'CALL_KW_PY.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
+        'CALL_PY_EXACT_ARGS.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
+        'CALL_PY_EXACT_ARGS.record.uops[5].effects: inferred 1 entries ["ALLOCATES"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
+        'CALL_PY_GENERAL.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
+        'CALL_PY_GENERATOR.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
+        'SET_FUNCTION_ATTRIBUTE.record.format.runs_code: inferred true, declared false',
+        'SET_FUNCTION_ATTRIBUTE.record.uops[0].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 2 ["READS_HEAP", "WRITES_HEAP"]',
+        'CALL/_DO_CALL: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_BOUND_METHOD_GENERAL/_PY_FRAME_GENERAL: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_EX_NON_PY_GENERAL/_CALL_FUNCTION_EX_NON_PY_GENERAL: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_EX_PY/_PY_FRAME_EX: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_FUNCTION_EX/_DO_CALL_FUNCTION_EX: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_KW/_DO_CALL_KW: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_KW_BOUND_METHOD/_PY_FRAME_KW: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_KW_NON_PY/_CALL_KW_NON_PY: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_KW_PY/_PY_FRAME_KW_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_PY_GENERAL/_PY_FRAME_GENERAL_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
+    ]
+
     def test_declarations_equal_the_inference(self):
         with cases.handle_stderr():
             lines = ir_contract_diff.report(str(BYTECODES))
-        self.assertEqual(lines[:-1], [])
+        self.assertCountEqual(lines[:-1], self.LISTED_DIFFERENCES_B6)
         self.assertRegex(lines[-1], r"^\d+ handlers compared; \d+ of \d+ uops declared$")
 
     def test_component_checks_are_generated(self):

@@ -426,6 +426,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyFrame_PushUnchecked), 
               "_PyFrame_PushUnchecked: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyFunction_SetVersion), void (*)(PyFunctionObject *, uint32_t)),
               "_PyFunction_SetVersion: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyFunction_StoreAttribute), void (*)(PyFunctionObject *, int, PyObject *)),
+              "_PyFunction_StoreAttribute: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyThreadState_HasStackSpace), bool (*)(PyThreadState *, int)),
               "_PyThreadState_HasStackSpace: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_LeaveRecursiveCallPy), void (*)(PyThreadState *)),
@@ -12626,6 +12628,7 @@ ir_run_MAKE_FUNCTION(
             {
                 codeobj_st = IR_VIEW(IR_B(ir_word));
                 assert(PyValue_IsObject(codeobj_st));
+                assert(PyValue_IsObject(codeobj_st));
                 PyObject *codeobj = _PyValue_AsKnownObjectBorrowPointer(codeobj_st);
                 PyFunctionObject *func_obj = (PyFunctionObject *)
                 PyFunction_New(codeobj, GLOBALS());
@@ -15156,27 +15159,23 @@ ir_run_SET_FUNCTION_ATTRIBUTE(
             int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValueBorrow attr_st;
-            PyValueBorrow func_in;
+            PyValue func_in;
             PyValue func_out;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
-            PyValue ir_own_C = PyValue_NULL;
-            (void)ir_own_C;
-            func_in = IR_VIEW(IR_C(ir_word));
+            func_in = IR_SLOT(IR_C(ir_word));
             attr_st = IR_VIEW(IR_B(ir_word));
+            assert(PyValue_IsObject(attr_st));
+            assert(!PyValue_IsNull(func_in) && (PyValue_TYPE(func_in) == &PyFunction_Type));
             assert(PyValue_IsObject(func_in));
             assert(PyValue_IsObject(attr_st));
             PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_in);
             ir_own_B = IR_DETACH(ir_word, B, attr_st);
             PyObject *attr = _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(attr_st, ir_own_B));
-            ir_own_C = IR_DETACH(ir_word, C, func_in);
-            func_out = IR_TAKEN_POINTER(func_in, ir_own_C);
+            func_out = func_in;
+            _PyFrame_WriteHome(frame, &IR_SLOT(IR_C(ir_word)), PyValue_NULL);
             assert(PyFunction_Check(func));
-            size_t offset = _Py_FunctionAttributeOffsets[oparg];
-            assert(offset != 0);
-            PyObject **ptr = (PyObject **)(((char *)func) + offset);
-            assert(*ptr == NULL);
-            *ptr = attr;
+            _PyFunction_StoreAttribute((PyFunctionObject *)func, oparg, attr);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), func_out);
             DISPATCH();
         }

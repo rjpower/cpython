@@ -1076,6 +1076,13 @@
      * MAKE_FUNCTION. */ \
     HELPER(_PyFunction_SetVersion, void, (PyFunctionObject *, uint32_t), \
         ARGS(scalar, scalar), NONE, EFFECTS(reads, writes)) \
+    /* Evidence (G0c batch 6): Python/ceval_macros.h: one store of the \
+     * attribute into the slot that _Py_FunctionAttributeOffsets[oparg] \
+     * names (the slot is empty: assert); the function's slot takes the \
+     * attribute's reference. The function stays with its owner. No call, \
+     * no failure, no callback. Called only from SET_FUNCTION_ATTRIBUTE. */ \
+    HELPER(_PyFunction_StoreAttribute, void, (PyFunctionObject *, int, PyObject *), \
+        ARGS(borrowed, scalar, consumed object), NONE, EFFECTS(writes)) \
     /* Evidence (G0c batch 6): Include/internal/pycore_interpframe.h: \
      * compares size words with the room between datastack_top and \
      * datastack_limit. A read of two tstate fields; no call, no failure, \

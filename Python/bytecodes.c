@@ -5996,7 +5996,7 @@ dummy_func(
             _DO_CALL_FUNCTION_EX +
             _CHECK_PERIODIC_AT_END;
 
-        op(_MAKE_FUNCTION, (codeobj_st: taken object -- func: owned, co: moved(codeobj_st)))
+        op(_MAKE_FUNCTION, (codeobj_st: taken assumed(object) by codegen -- func: owned, co: moved(codeobj_st)))
             effects(runs_python) exits(next, raise)
         {
             // The compiler loads the code object from a constant
@@ -6020,7 +6020,11 @@ dummy_func(
 
         outlined macro(MAKE_FUNCTION) = _MAKE_FUNCTION + POP_TOP;
 
-        outlined inst(SET_FUNCTION_ATTRIBUTE, (attr_st, func_in -- func_out)) {
+        outlined inst(SET_FUNCTION_ATTRIBUTE,
+                (attr_st: consumed assumed(object) by codegen,
+                 func_in: consumed assumed(exact(PyFunction_Type)) by _MAKE_FUNCTION -- func_out: moved(func_in)))
+            effects(reads, writes) exits(next)
+        {
             // The attribute is a tuple, dict or function that the compiler built
             assert(PyValue_IsObject(func_in));
             assert(PyValue_IsObject(attr_st));
@@ -6028,11 +6032,7 @@ dummy_func(
             PyObject *attr = PyValue_AsKnownObjectSteal(attr_st);
             func_out = TAKE(func_in);
             assert(PyFunction_Check(func));
-            size_t offset = _Py_FunctionAttributeOffsets[oparg];
-            assert(offset != 0);
-            PyObject **ptr = (PyObject **)(((char *)func) + offset);
-            assert(*ptr == NULL);
-            *ptr = attr;
+            _PyFunction_StoreAttribute((PyFunctionObject *)func, oparg, attr);
         }
 
         // The marker at the start of a generator's code: nothing executes it,

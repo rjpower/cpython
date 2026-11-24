@@ -357,7 +357,9 @@ dummy_func(
             STORE_FAST,
         };
 
-        leaf pure inst(POP_TOP, (value --)) {
+        leaf inst(POP_TOP, (value: consumed --))
+            effects(releases) exits(next)
+        {
             PyValue_XCLOSE(value);
         }
 
@@ -392,7 +394,9 @@ dummy_func(
             PyValue_CLOSE_SPECIALIZED(value, _PyUnicode_ExactDealloc);
         }
 
-        op(_POP_TOP_OPARG, (args[oparg] -- )) {
+        op(_POP_TOP_OPARG, (args[oparg]: consumed --))
+            effects(releases) exits(next)
+        {
             IR_CLOSE_INPUTS(args);
         }
 

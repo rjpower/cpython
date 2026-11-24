@@ -1410,6 +1410,56 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"on raise, JUMPTO has assigned the next word")
 
+    def test_effects_confined_to_exits(self):
+        # _ITER_JUMP_RANGE + _ITER_NEXT_RANGE: the jump runs Python only in
+        # IR_COMPLETE_STEP, which leaves by branch or raise, so the facts
+        # the next uop needs survive the jump on the path to next
+        source = """
+            op(_CHECK, (iter, null_or_index -- iter: object, null_or_index))
+                effects() exits(next, miss)
+            {
+                EXIT_IF(!PyValue_IsObject(iter));
+            }
+            op(_JUMP, (iter: object, null_or_index -- iter, null_or_index))
+                effects(%s) exits(next, branch, raise)
+            {
+                _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
+                if (r->len <= 0) {
+                    PyValue completed = PyValue_None;
+                    IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
+                }
+            }
+            op(_NEXT, (iter: object, null_or_index -- iter, null_or_index, next: owned))
+                effects(reads, writes, allocates, raises) exits(next, raise)
+            {
+                _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
+                long value = r->start;
+                r->start = value + r->step;
+                r->len--;
+                next = PyValue_FromInt64(value);
+                ERROR_IF(PyValue_IsNull(next));
+            }
+            macro(OP) = _CHECK + _JUMP + _NEXT;
+        """
+        self.verify(source % "reads, runs_python(branch|raise)")
+        self.refuses(source % "runs_python",
+                     r"_NEXT requires nonnull, object of `iter`, which nothing before it "
+                     r"establishes or which an effect since killed")
+        # A site on the path to next
+        self.refuses(source % "reads(branch|raise), runs_python(branch|raise)",
+                     r"`->` may reads \(a load through a pointer\), which the uop "
+                     r"declares only on branch, raise, but it does not leave the uop")
+        # A call that may leave by an exit the confinement leaves out
+        self.refuses(source % "reads, runs_python(branch)",
+                     r"`IR_COMPLETE_STEP` may \w+ .*declares only on branch, "
+                     r"but it may leave by raise")
+        self.refuses(source % "reads, runs_python(branch|enter)",
+                     r"runs_python is confined to enter, which the uop does not declare")
+        self.refuses(source % "reads, runs_python(next|raise)",
+                     r"confines an effect to next")
+        self.refuses(source % "reads, runs_python(branch|nowhere)",
+                     r"confines an effect to nowhere, which is no exit")
+
     def test_identities_of_static_objects(self):
         # F21, _GUARD_LOAD_SUPER_ATTR_METHOD: a CONSTANT row names a static
         # object by address; a comparison with it establishes is(K)

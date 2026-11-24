@@ -991,6 +991,13 @@ class Contract:
     # paths(path: facts): the facts the guards establish of a frame path,
     # GLOBALS() or BUILTINS(), whose subject is the path's name
     paths: tuple[tuple[str, frozenset], ...] = ()
+    # effects(runs_python(branch|raise)): the effects that occur only on the
+    # exits named, at calls that leave by them; they are on no path to next
+    confined: tuple[tuple[str, frozenset[str]], ...] = ()
+
+    def next_effects(self) -> frozenset[str]:
+        "the effects that may occur on a path to next, which kill its facts"
+        return self.effects - {e for e, _ in self.confined}
 
     def state_item(self, name: str) -> tuple[str, frozenset, frozenset] | None:
         return next((i for i in self.state if i[0] == name), None)
@@ -1115,6 +1122,29 @@ def parse_paths(uop: Uop, texts: list[str] | None, where: Token
     return tuple(items)
 
 
+def _parse_effects(name: str, words: list[str], where: Token
+                   ) -> tuple[frozenset[str], tuple[tuple[str, frozenset[str]], ...]]:
+    """effects(...): the effect names, and those confined to exits, as in
+    `runs_python(branch|raise)`: the effect occurs only at calls that leave
+    by those exits, never on a path to next"""
+    effects, confined = set(), []
+    for w in words:
+        m = re.fullmatch(r"(\w+)\(([\w|]+)\)", w)
+        if m is None:
+            effects.add(w)
+            continue
+        on = frozenset(m.group(2).split("|"))
+        unknown = on - set(EXITS)
+        if unknown or "next" in on:
+            raise analysis_error(
+                f"{name}: {m.group(1)}({m.group(2)}) confines an effect to "
+                + (f"{', '.join(sorted(unknown))}, which is no exit" if unknown else
+                   "next, where every unconfined effect already lies"), where)
+        effects.add(m.group(1))
+        confined.append((m.group(1), on))
+    return frozenset(effects), tuple(sorted(confined, key=lambda c: c[0]))
+
+
 def contract_of(uop: Uop) -> Contract | None:
     "uop's declared contract, or None if it declares none"
     if id(uop) in _CONTRACTS:
@@ -1126,8 +1156,13 @@ def contract_of(uop: Uop) -> Contract | None:
             if clause not in uop.clauses:
                 raise analysis_error(f"{uop.name} declares a contract without {clause}()",
                                      where)
-        effects = frozenset(uop.clauses["effects"])
+        effects, confined = _parse_effects(uop.name, uop.clauses["effects"], where)
         exits = frozenset(uop.clauses["exits"])
+        for e, on in confined:
+            if not on <= exits:
+                raise analysis_error(f"{uop.name}: {e} is confined to "
+                                     f"{', '.join(sorted(on - exits))}, which the uop does "
+                                     "not declare as exits", where)
         for names, allowed, what in ((effects, EFFECTS, "effect"), (exits, EXITS, "exit")):
             for n in sorted(names - set(allowed)):
                 raise analysis_error(
@@ -1145,7 +1180,8 @@ def contract_of(uop: Uop) -> Contract | None:
         feedback = parse_feedback(uop.clauses.get("feedback", ()), where)
         state = parse_state(uop, uop.clauses.get("state"), where)
         paths = parse_paths(uop, uop.clauses.get("paths"), where)
-        contract = Contract(inputs, outputs, effects, exits, feedback, state, paths)
+        contract = Contract(inputs, outputs, effects, exits, feedback, state, paths,
+                            confined)
     # The uop is kept with its contract, so that its id is not reused
     _CONTRACTS[id(uop)] = (uop, contract)
     return contract
@@ -1449,13 +1485,37 @@ def covered(effect: str, declared: frozenset[str]) -> bool:
     return effect in declared or any(effect in COVERS.get(d, ()) for d in declared)
 
 
+def ends_path(row: Row) -> bool:
+    """whether a call of row never returns to the body: a terminal marker,
+    or a row whose exits are committed and none is next"""
+    return ("terminal" in IR_MARKER_EFFECTS.get(row.name, ())
+            or bool(row.committed) and "next" not in row.exits)
+
+
 def check_effects(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
-    "V2: the body's effects lie within the declared ones"
+    """V2: the body's effects lie within the declared ones; one declared
+    only on some exits occurs at a call that leaves by them"""
+    confined = dict(contract.confined)
+    free = contract.next_effects()
     for site in effect_sites(uop, table):
         if not covered(site.effect, contract.effects):
             raise analysis_error(
                 f"{uop.name}: `{site.token.text}` may {site.effect} ({site.why}), which "
                 f"effects({', '.join(sorted(contract.effects))}) does not declare",
+                site.token)
+        if covered(site.effect, free):
+            continue
+        on = frozenset().union(*(x for e, x in confined.items()
+                                 if covered(site.effect, frozenset((e,)))))
+        row = table.get(site.token.text)
+        leaves = (frozenset({"raise"}) if site.token.text in RAISES
+                  else row.exits if row is not None and ends_path(row) else None)
+        if leaves is None or not leaves <= on:
+            raise analysis_error(
+                f"{uop.name}: `{site.token.text}` may {site.effect} ({site.why}), which "
+                f"the uop declares only on {', '.join(sorted(on))}, but "
+                + ("it does not leave the uop" if leaves is None else
+                   f"it may leave by {', '.join(sorted(leaves - on))}"),
                 site.token)
     if "pure" in uop.annotations:
         bad = contract.effects - {"reads", "allocates", "raises"}
@@ -2728,9 +2788,7 @@ class OwnershipWalk:
         if self.contract.state_item(head) is not None and texts[1:2] in (["|="], ["&="], ["="]):
             self.write_state(toks, texts, state)
             return state
-        if head in self.table and ("terminal" in IR_MARKER_EFFECTS.get(head, ())
-                                   or (self.table[head].committed
-                                       and "next" not in self.table[head].exits)):
+        if head in self.table and ends_path(self.table[head]):
             # A terminal marker leaves on its row's exits, after its
             # arguments' modes have taken what they say; it never returns.
             # So does a row whose exits are committed and none is next
@@ -3720,16 +3778,18 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
         # its pass-throughs) may have been replaced there, so all of its
         # facts die.  Then the facts the uop declares on its outputs, which
         # V9 holds to the facts live at its exit.
-        if contract.effects & KILLS:
+        # Effects confined to other exits are on no path to next
+        effects = contract.next_effects()
+        if effects & KILLS:
             facts = {v: without_heap_facts(f) for v, f in facts.items()}
-        if contract.effects & REENTRY and known:
+        if effects & REENTRY and known:
             homes = set(stack) | {bound[i.name] for i in contract.inputs if not i.mode
                                   and contract.output(i.name) is not None}
             for v in homes:
                 facts[v] = frozenset()
-        if contract.effects & REENTRY and not replaced:
+        if effects & REENTRY and not replaced:
             replaced = f"{part.name}, which may reenter"
-        changes = contract.effects - {"reads", "raises"}
+        changes = effects - {"reads", "raises"}
         if restartable and changes:
             restartable, why = False, f"{part.name}, which may {', '.join(sorted(changes))}"
         if restartable and any(o.mode in ("owned", "inline") for o in contract.outputs):

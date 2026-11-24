@@ -867,6 +867,9 @@ def differences(before: dict, after: dict) -> dict[str, list[str]]:
 # ---------------------------------------------------------------------------
 
 OVERRIDE = re.compile(r"on raise, `(\w+)` is still owned, but the site declares consumed")
+# DEAD(x) of an input the body neither releases nor moves: the skeleton
+# closes it after the uop, on next and on raise, which is `closed` (F4)
+CLOSE = re.compile(r"DEAD\(`(\w+)`\) drops an owned value")
 REQUIREMENT = re.compile(r"passes `([^`]*)` to (\w+), which requires ([\w(), ]+) of it")
 REQUIRES = "requires"     # the overrides' key of an input's requirements
 
@@ -934,6 +937,12 @@ def main() -> None:
                 m = OVERRIDE.search(error)
                 if m and name in seeded and overrides[name].get(m.group(1)) != "taken":
                     overrides[name][m.group(1)] = "taken"
+                    retried.add(name)
+                    changed = True
+                    continue
+                m = CLOSE.search(error)
+                if m and name in seeded and overrides[name].get(m.group(1)) != "closed":
+                    overrides[name][m.group(1)] = "closed"
                     retried.add(name)
                     changed = True
                     continue

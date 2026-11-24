@@ -1447,10 +1447,14 @@ dummy_func(
                      "the type's mp_subscript is not dict's");
         }
 
-        op(_GUARD_NOS_DICT_STORE_SUBSCRIPT, (unused, nos, unused -- unused, nos, unused)) {
+        op(_GUARD_NOS_DICT_STORE_SUBSCRIPT,
+                (unused, nos: object, unused -- unused, nos, unused))
+            effects(reads) exits(next, miss, deopt)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(nos);
-            DEOPT_IF(!Py_TYPE(o)->tp_as_mapping);
-            DEOPT_IF(Py_TYPE(o)->tp_as_mapping->mp_ass_subscript != _PyDict_StoreSubscript);
+            DEOPT_IF(!Py_TYPE(o)->tp_as_mapping, "the type has no mapping slots");
+            DEOPT_IF(Py_TYPE(o)->tp_as_mapping->mp_ass_subscript != _PyDict_StoreSubscript,
+                     "the type's mp_ass_subscript is not dict's");
         }
 
         op(_GUARD_TOS_ANY_DICT, (tos: object -- tos: exact(PyAnyDict_Type)))

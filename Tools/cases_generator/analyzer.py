@@ -722,6 +722,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyFrame_AssertTemporariesClear",
     "_PyEval_GeneratorReturnTarget",
     "_PyFunction_SetVersion",
+    "_PyFunction_StoreAttribute",
     "_PyGen_GetGeneratorFromFrame",
     "gen_try_set_executing",
     "gen_may_claim",

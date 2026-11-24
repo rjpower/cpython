@@ -92,7 +92,7 @@ class AsyncExitTransferTests(unittest.TestCase):
             original.replace("DECREF_INPUTS();", "DECREF_INPUTS(); opaque(alias);", 1),
             original.replace("DECREF_INPUTS();", "DECREF_INPUTS(); frame->base[0] = PyValue_NULL;", 1),
             original.replace("PyExc_StopAsyncIteration", "PyExc_StopIteration", 1),
-            original.replace("Py_INCREF(exc);", "Py_XINCREF(exc);", 1),
+            original.replace("Py_NewRef(exc)", "Py_XNewRef(exc)", 1),
             original.replace("JUMP_TARGET(oparg), this_instr+1", "JUMP_TARGET(oparg), this_instr+2", 1),
             original.replace("_PyIR_RealHandler(frame,", "_PyIR_RealHandler(other,", 1),
         )
@@ -103,7 +103,12 @@ class AsyncExitTransferTests(unittest.TestCase):
                 altered.write_text(text[:start] + change + text[end:])
                 changed = analyzer.analyze_files([str(altered)])
                 changed_formats = ir_generator.compute_formats(changed)
-                changed_contracts = ir_generator.handler_contracts(changed, changed_formats)
+                try:
+                    changed_contracts = ir_generator.handler_contracts(changed, changed_formats)
+                except SyntaxError:
+                    # The uop declares its contract: the verifier refuses
+                    # a call it has no row for
+                    continue
                 for name in names:
                     self.assertNotEqual(changed_contracts[name].ownership_events, expected)
 

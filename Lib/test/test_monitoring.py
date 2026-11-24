@@ -2871,3 +2871,91 @@ class TestCApiEventGeneration(MonitoringTestBase, unittest.TestCase):
 
         finally:
             sys.monitoring.set_events(TEST_TOOL, 0)
+
+
+class Payload:
+    "An object with a weak reference, to see when its last owner lets go"
+
+
+class TestInstrumentedOwnership(MonitoringTestBase, unittest.TestCase):
+    """The owners of the values that the instrumented words close or move
+    (the G0c8 contracts of INSTRUMENTED_POP_JUMP_IF_NONE and _NOT_NONE and
+    INSTRUMENTED_END_SEND), on the paths where a callback runs or fails"""
+
+    def watch(self, function, event, callback):
+        "Run callback for event in function only"
+        # tearDown frees the tool, which drops these registrations
+        for bit in range(16):
+            if event & (1 << bit):
+                sys.monitoring.register_callback(TEST_TOOL, 1 << bit, callback)
+        sys.monitoring.set_local_events(TEST_TOOL, function.__code__, event)
+
+    def test_branch_on_none_releases_the_value(self):
+        import weakref
+        def is_none(value):
+            if value is None:
+                return "none"
+            return "value"
+        def is_not_none(value):
+            if value is not None:
+                return "value"
+            return "none"
+        for function in (is_none, is_not_none):
+            for make in (lambda: None, Payload):
+                with self.subTest(function=function.__name__, make=make):
+                    payload = make()
+                    events = []
+                    self.watch(function, E.BRANCH_LEFT | E.BRANCH_RIGHT,
+                               lambda code, src, dst: events.append(dst))
+                    ref = weakref.ref(payload) if payload is not None else None
+                    expected = "none" if payload is None else "value"
+                    self.assertEqual(function(payload), expected)
+                    self.assertEqual(len(events), 1)
+                    del payload
+                    if ref is not None:
+                        self.assertIsNone(ref())
+
+    def test_failed_branch_event_releases_the_value(self):
+        import weakref
+        def branch(value):
+            if value is None:
+                return 1
+            return 2
+        def fail(code, src, dst):
+            raise RuntimeError("branch")
+        self.watch(branch, E.BRANCH_LEFT | E.BRANCH_RIGHT, fail)
+        payload = Payload()
+        ref = weakref.ref(payload)
+        with self.assertRaises(RuntimeError):
+            branch(payload)
+        del payload
+        self.assertIsNone(ref())
+
+    def test_end_of_send_releases_the_result_when_the_event_fails(self):
+        import weakref
+        refs = []
+        def inner():
+            payload = Payload()
+            refs.append(weakref.ref(payload))
+            yield 1
+            return payload
+        def outer():
+            return (yield from inner())
+        def fail(code, offset, value):
+            raise RuntimeError("stop")
+        self.watch(outer, E.STOP_ITERATION, fail)
+        generator = outer()
+        self.assertEqual(next(generator), 1)
+        with self.assertRaises(RuntimeError):
+            next(generator)
+        del generator
+        self.assertIsNone(refs[0]())
+
+    def test_keyword_dict_is_new_for_each_call(self):
+        def collect(**kw):
+            return kw
+        first = collect()
+        second = collect()
+        self.assertEqual((first, second), ({}, {}))
+        self.assertIsNot(first, second)
+        self.assertEqual(collect(a=1), {"a": 1})

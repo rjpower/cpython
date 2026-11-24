@@ -188,8 +188,12 @@ class DelegatedYieldTests(unittest.TestCase):
             altered = analyzer.analyze_files([str(changed)])
             self.assertFalse(altered.uops["_GUARD_TOS_IS_NONE"].properties.escapes)
             altered_formats = ir_generator.compute_formats(altered)
-            # The write precedes the guard of the next uop
-            with self.assertRaisesRegex(SyntaxError, "guards that follow a change"):
+            # The write precedes the guard of the next uop.  The uop declares
+            # its contract, so the verifier refuses the call (it has no row)
+            # before the guard order is checked
+            with self.assertRaisesRegex(
+                    SyntaxError,
+                    "guards that follow a change|which pycore_ir_components.h does not declare"):
                 ir_generator.handler_contracts(altered, altered_formats)
             changed.write_text(text.replace("IR_METADATA_PASSTHROUGH(1);",
                                             "IR_METADATA_PASSTHROUGH(1);\n(void)unused_cursor;", 1))

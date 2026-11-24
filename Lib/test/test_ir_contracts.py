@@ -12,10 +12,13 @@ import io
 import os
 from pathlib import Path
 import re
+import sys
 import tempfile
 import textwrap
 import unittest
+import weakref
 
+from test import support
 from test.support import import_helper
 
 from test import test_generated_cases as cases
@@ -49,6 +52,9 @@ def setUpModule():
 
 def uop_record(handler, name):
     return next(u for u in records[handler].uops if u.name == name)
+
+
+TABLE_OVER_DECLARED = {"IR_TRY_DICT_FIRST_PROBE": {"raise"}}
 
 
 class SliceTests(unittest.TestCase):
@@ -110,6 +116,10 @@ class SliceTests(unittest.TestCase):
         self.assertEqual([facts(g) for g in load.guards], [["NOT_NULL(found)"]])
         self.assertEqual(load.effects, {READS_HEAP, MAY_RELEASE})
 
+    # Where the tables (ir_records, deleted at G0d) declare an exit that the
+    # macro's expansion cannot take.  IR_TRY_DICT_FIRST_PROBE: a hit stores
+    # the result and dispatches, a miss falls through; the probe reads one
+    # slot and calls no hash or __eq__ (G0c batch 2 review).
     def test_transaction_macros_have_rows(self):
         # Every IR_* macro a body calls is a MACRO row whose exits cover the
         # transfers and guard exits that today's tables give it
@@ -126,12 +136,107 @@ class SliceTests(unittest.TestCase):
                 inferred = {exits[t] for t in ir_records.TRANSFER_TOKENS.get(name, ())}
                 if name in ir_records.GUARD_TOKENS:
                     inferred.add(exits[ir_records.GUARD_TOKENS[name]])
+                inferred -= TABLE_OVER_DECLARED.get(name, set())
                 self.assertLessEqual(inferred - {"next"}, set(table[name].exits))
+
+    # The reviewed corrections of G0c, each listed with its evidence in the
+    # batch's differences.md and in the commit that made it.  Batch 8:
+    # MATERIALIZE_KWARGS is PyDict_New and one store, which run no Python;
+    # INSTRUMENTED_JUMP takes PROCESS_ERROR_AT when the event fails, so
+    # _MONITOR_END_ASYNC_FOR may raise
+    LISTED_DIFFERENCES = [
+        'MATERIALIZE_KWARGS.record.format.runs_code: inferred true, declared false',
+        'MATERIALIZE_KWARGS.record.uops[0].effects: inferred 6 entries '
+        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
+        '"READS_HEAP", "WRITES_HEAP"], declared 3 ["ALLOCATES", "MAY_RAISE", '
+        '"WRITES_HEAP"]',
+        'INSTRUMENTED_END_ASYNC_FOR/_MONITOR_END_ASYNC_FOR: declares exits(next, '
+        'raise), the record has next',
+        # Batch 3: _PyTemplate_Build is a GC allocation and runs no Python
+        'BUILD_TEMPLATE.record.uops[0].effects: inferred 6 entries '
+        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
+        '"READS_HEAP", "WRITES_HEAP"], declared 3 ["ALLOCATES", "MAY_RAISE", '
+        '"MAY_RELEASE"]',
+        # Batch 7: no word executes RETURN_GENERATOR, so its result is NULL
+        # (F19); _YIELD_VALUE moves the yielded value into the caller's
+        # frame (F5); _GUARD_TOS_IS_NONE tests the identity of the word
+        # with PyValue_None (F20)
+        'RETURN_GENERATOR.record.uops[0].results: inferred 0 entries [], '
+        'declared 1 [{"__type": "Fact", "arg": "", "kind": "IS_NULL", '
+        '"subject": "v0"}]',
+        'INSTRUMENTED_YIELD_VALUE/_YIELD_VALUE: output `value` is declared '
+        'moved, the record has OWNED',
+        *(line
+          for handler in ("SEND_VIRTUAL", "SEND_VIRTUAL_XFER_DISCARD",
+                          "SEND_VIRTUAL_XFER_HOME", "SEND_VIRTUAL_XFER_POP_TOP",
+                          "SEND_VIRTUAL_XFER_RETURN", "SEND_VIRTUAL_XFER_STORE_FAST",
+                          "SEND_VIRTUAL_XFER_STORE_LOCAL")
+          for line in (
+              f'{handler}.record.uops[0].guards[0].facts[0].arg: '
+              'inferred "", declared "PyValue_None"',
+              f'{handler}.record.uops[0].guards[0].facts[0].kind: '
+              'inferred "IS_NONE", declared "IDENTITY"')),
+        # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
+        # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
+        'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '
+        '[{"__type": "Fact", "arg": "", "kind": "IS_NULL", "subject": "v1"}]',
+        'LOAD_FAST_CHECK.record.format.runs_code: inferred false, declared true',
+        'LOAD_FAST_CHECK.record.uops[0].effects: inferred 2 entries '
+        '["MAY_RAISE", "READS_HEAP"], declared 6 ["ALLOCATES", "MAY_RAISE", '
+        '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
+        # Batch 4: the raise paths of LOAD_LOCALS and LOAD_DEREF can run
+        # Python (F11); LOAD_GLOBAL_BUILTIN's fact names the local it reads
+        'LOAD_DEREF.record.format.runs_code: inferred false, declared true',
+        'LOAD_DEREF.record.uops[0].effects: inferred 2 entries '
+        '["MAY_RAISE", "READS_HEAP"], declared 6 ["ALLOCATES", "MAY_RAISE", '
+        '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
+        'LOAD_LOCALS.record.format.runs_code: inferred false, declared true',
+        'LOAD_LOCALS.record.uops[0].effects: inferred 2 entries '
+        '["MAY_RAISE", "READS_HEAP"], declared 6 ["ALLOCATES", "MAY_RAISE", '
+        '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
+        'LOAD_GLOBAL_BUILTIN.record.uops[1].guards[0].facts[0].subject: '
+        'inferred "builtins", declared "dict"',
+        # Batch 6: _INIT_CALL_PY_EXACT_ARGS pushes a frame, which writes the heap and
+        # releases the callable; SET_FUNCTION_ATTRIBUTE runs no code; the call
+        # uops complete in place (exits next, G0d removes the inference)
+        'CALL_BOUND_METHOD_EXACT_ARGS.record.uops[7].effects: inferred 1 entries ["ALLOCATES"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
+        'CALL_PY_EXACT_ARGS.record.uops[5].effects: inferred 1 entries ["ALLOCATES"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
+        'SET_FUNCTION_ATTRIBUTE.record.format.runs_code: inferred true, declared false',
+        'SET_FUNCTION_ATTRIBUTE.record.uops[0].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 2 ["READS_HEAP", "WRITES_HEAP"]',
+        'CALL/_DO_CALL: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_BOUND_METHOD_GENERAL/_PY_FRAME_GENERAL: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_EX_NON_PY_GENERAL/_CALL_FUNCTION_EX_NON_PY_GENERAL: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_EX_PY/_PY_FRAME_EX: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_FUNCTION_EX/_DO_CALL_FUNCTION_EX: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_KW/_DO_CALL_KW: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_KW_BOUND_METHOD/_PY_FRAME_KW: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_KW_NON_PY/_CALL_KW_NON_PY: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_KW_PY/_PY_FRAME_KW_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_PY_GENERAL/_PY_FRAME_GENERAL_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
+    ]
+
+    # Batch 5: the assume op of `iter: assumed(object) by GET_ITER` in the
+    # leaf IR of the two iterator guards
+    LISTED_LEAF_DIFFERENCES = [
+        ("FOR_ITER_LIST.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
+        ("FOR_ITER_TUPLE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
+    ]
 
     def test_declarations_equal_the_inference(self):
         with cases.handle_stderr():
             lines = ir_contract_diff.report(str(BYTECODES))
-        self.assertEqual(lines[:-1], [])
+        # Every reported line is a reviewed difference: an exact line
+        # (LISTED_DIFFERENCES) or a long leaf-IR line named by its prefix and
+        # a substring it must contain (LISTED_LEAF_DIFFERENCES)
+        reported = lines[:-1]
+        exact = [line for line in reported if line in self.LISTED_DIFFERENCES]
+        self.assertCountEqual(exact, self.LISTED_DIFFERENCES)
+        leaf = [line for line in reported if line not in self.LISTED_DIFFERENCES]
+        self.assertCountEqual([line.split(" ")[0] for line in leaf],
+                              [prefix for prefix, _ in self.LISTED_LEAF_DIFFERENCES])
+        needs = dict(self.LISTED_LEAF_DIFFERENCES)
+        for line in leaf:
+            self.assertIn(needs[line.split(" ")[0]], line)
         self.assertRegex(lines[-1], r"^\d+ handlers compared; \d+ of \d+ uops declared$")
 
     def test_component_checks_are_generated(self):
@@ -1231,7 +1336,8 @@ class VerifierTests(unittest.TestCase):
         self.verify(source % "PyValue_IsNone(exc_value)")
         self.refuses(source % "!PyValue_IsNone(exc_value)",
                      r"DEAD\(`exc_value`\) drops an owned value")
-        self.refuses(source % "PyValue_IsFalse(exc_value)",
+        # A test of the kind of word names no value
+        self.refuses(source % "PyValue_IsObject(exc_value)",
                      r"DEAD\(`exc_value`\) drops an owned value")
 
     def test_a_status_states_facts_of_an_argument_on_success(self):
@@ -1647,7 +1753,7 @@ class VerifierTests(unittest.TestCase):
         # Nothing follows the switch: a guard there is refused, not skipped
         source = """
             op(_OP, (callable: taken, self_or_null: taken, args[oparg]: taken -- new_frame: owned))
-                effects(runs_python, switches_frame) exits(miss, raise, enter)
+                effects(runs_python, switches_frame) exits(miss, next, raise, enter)
             {
                 %s
                 IR_INVOKE_CALL();
@@ -2808,6 +2914,122 @@ def column_rows(text=COLUMN_ROWS):
     return table
 
 
+class IteratorRowTests(unittest.TestCase):
+    """The iterator rows (G0c batch 5) in the interpreter: the ownership,
+    failure and reentry claims that _FOR_ITER, _FOR_ITER_VIRTUAL and
+    _GET_ITER rely on.  Each loop runs often enough to be specialized"""
+
+    ROUNDS = 40
+
+    def test_a_returned_value_is_closed_once(self):
+        # _PyForIter_VirtualIteratorNextInline gives {0, value} with an
+        # owned value when an iterator returns one; IR_COMPLETE_STEP closes it
+        finalized = []
+
+        class Value:
+            def __del__(self):
+                finalized.append(1)
+
+        def source():
+            yield 1
+            return Value()
+
+        def run():
+            for _ in source():
+                pass
+
+        for _ in range(self.ROUNDS):
+            run()
+        self.assertEqual(len(finalized), self.ROUNDS)
+
+    def test_an_uniterable_is_closed_on_failure(self):
+        # _PyEval_GetIter consumes the iterable on its failure path
+        finalized = []
+
+        class Plain:
+            def __del__(self):
+                finalized.append(1)
+
+        def run():
+            for _ in Plain():
+                pass
+
+        for _ in range(self.ROUNDS):
+            with self.assertRaises(TypeError):
+                run()
+        self.assertEqual(len(finalized), self.ROUNDS)
+
+    def test_exhaustion_reports_the_stop_iteration_to_monitoring(self):
+        # _PyForIter_StopIsExhaustion runs the RAISE callbacks (runs_python)
+        # and clears the exception
+        class Counter:
+            def __init__(self):
+                self.n = 0
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                self.n += 1
+                if self.n > 3:
+                    raise StopIteration
+                return self.n
+
+        events = []
+        tool = sys.monitoring.PROFILER_ID
+
+        def run():
+            return [x for x in Counter()]
+
+        for _ in range(self.ROUNDS):
+            run()
+        sys.monitoring.use_tool_id(tool, "test_ir_contracts")
+        self.addCleanup(sys.monitoring.free_tool_id, tool)
+        sys.monitoring.register_callback(
+            tool, sys.monitoring.events.RAISE,
+            lambda code, offset, exc: events.append(type(exc)))
+        sys.monitoring.set_events(tool, sys.monitoring.events.RAISE)
+        self.addCleanup(sys.monitoring.set_events, tool, 0)
+        self.assertEqual(run(), [1, 2, 3])
+        self.assertIn(StopIteration, events)
+        self.assertIsNone(sys.exception())
+
+    def test_an_error_other_than_stop_iteration_propagates(self):
+        class Fails:
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                raise ZeroDivisionError
+
+        def run():
+            for _ in Fails():
+                pass
+
+        for _ in range(self.ROUNDS):
+            with self.assertRaises(ZeroDivisionError):
+                run()
+
+    def test_the_cursor_follows_the_sequence(self):
+        # _ITER_NEXT_LIST and _ITER_NEXT_TUPLE advance their cursor in place;
+        # the list is read at each step, so growth is seen
+        def over_list(items):
+            seen = []
+            for x in items:
+                seen.append(x)
+                if len(items) < 6:
+                    items.append(len(items))
+            return seen
+
+        def over_tuple(items):
+            return [x for x in items]
+
+        for _ in range(self.ROUNDS):
+            self.assertEqual(over_list([0, 1]), [0, 1, 2, 3, 4, 5])
+            self.assertEqual(over_tuple((7, 8, 9)), [7, 8, 9])
+            self.assertEqual(over_tuple(()), [])
+
+
 class ColumnTests(unittest.TestCase):
     "CONJOINS, NONNULL_FORM and SLOW: declared, checked, then tested in C"
 
@@ -2942,6 +3164,342 @@ class ColumnTests(unittest.TestCase):
                         w = capi.leaf_primitive(row.name, i)
                         self.assertNotEqual(w, 0)
                         capi.leaf_primitive("PyValue_CLOSE", w)
+
+
+class Counted:
+    """An object whose finalizer counts: a stolen owner that a failure path
+    forgot to close shows as a missing finalization, and one it closed
+    twice as a crash"""
+    made = 0
+    freed = 0
+
+    def __init__(self):
+        type(self).made += 1
+
+    def __del__(self):
+        type(self).freed += 1
+
+
+class ContainerRowsRunTest(unittest.TestCase):
+    """The batch 3 rows' ownership claims, run through the handlers that
+    rely on them (the rows' evidence comments in pycore_ir_components.h):
+    _PyDict_SetValue_Take2 and _PySet_AddValueTakeRef consume their owners
+    on failure, _PyEval_StoreSlice and _PyEval_BinarySlice borrow theirs,
+    and _PyEval_UnpackIterableValue consumes the sequence and closes the
+    values it wrote when it fails"""
+
+    def setUp(self):
+        Counted.made = Counted.freed = 0
+
+    def check_balanced(self):
+        import gc
+        gc.collect()
+        self.assertEqual(Counted.made, Counted.freed)
+
+    def test_dict_store_with_an_unhashable_key_closes_both_owners(self):
+        def f():
+            d = {}
+            d[[]] = Counted()
+        for _ in range(3):
+            with self.assertRaises(TypeError):
+                f()
+        self.check_balanced()
+
+    def test_map_add_with_an_unhashable_key_closes_both_owners(self):
+        def f():
+            return {[]: Counted() for _ in range(1)}
+        for _ in range(3):
+            with self.assertRaises(TypeError):
+                f()
+        self.check_balanced()
+
+    def test_set_add_with_an_unhashable_element_closes_the_owner(self):
+        def f():
+            return {[Counted()] for _ in range(1)}
+        for _ in range(3):
+            with self.assertRaises(TypeError):
+                f()
+        self.check_balanced()
+
+    def test_replaced_dict_value_is_finalized_by_the_store(self):
+        order = []
+
+        class Old:
+            def __del__(self):
+                order.append("old")
+
+        def f():
+            d = {1: Old()}
+            d[1] = 2
+            order.append("stored")
+        f()
+        self.assertEqual(order, ["old", "stored"])
+
+    def test_failed_unpack_closes_the_sequence_and_the_values(self):
+        def f():
+            a, b = iter([Counted(), Counted(), Counted()])
+        for _ in range(3):
+            with self.assertRaises(ValueError):
+                f()
+        self.check_balanced()
+
+    def test_unpack_of_a_non_iterable_closes_the_value(self):
+        def f(x):
+            a, b = x
+        for _ in range(3):
+            with self.assertRaises(TypeError):
+                f(Counted())
+        for _ in range(3):
+            with self.assertRaises(TypeError):
+                f(7)
+        self.check_balanced()
+
+    def test_slice_operations_borrow_their_operands(self):
+        c = Counted()
+
+        def f(seq, lo, hi):
+            return seq[lo:hi]
+
+        def g(seq, lo, hi, v):
+            seq[lo:hi] = v
+
+        for _ in range(3):
+            self.assertEqual(f([1, 2, 3], 1, None), [2, 3])
+            self.assertEqual(f("abc", None, 2), "ab")
+            with self.assertRaises(TypeError):
+                f([1, 2, 3], c, 2)
+            with self.assertRaises(TypeError):
+                g([1, 2, 3], c, 2, [])
+            with self.assertRaises(TypeError):
+                g([1, 2, 3], 0, 1, Counted())
+        del c
+        self.check_balanced()
+
+    def test_build_slice_takes_none_for_an_absent_step(self):
+        def f(a, b):
+            return a[1:b], a[::b]
+        self.assertEqual(f([1, 2, 3], 3), ([2, 3], [1]))
+        lo = Counted()
+        s = slice(lo, None)
+        self.assertIs(s.start, lo)
+        self.assertIsNone(s.step)
+        del lo, s
+        self.check_balanced()
+
+    def test_dict_merge_and_update_errors_close_the_operand(self):
+        def merge(x):
+            return {**x}
+
+        def update(x):
+            return {1: 2, **x}
+
+        for g in (merge, update):
+            for _ in range(3):
+                with self.assertRaises(TypeError):
+                    g(Counted())
+                with self.assertRaises(TypeError):
+                    g(5)
+        self.check_balanced()
+
+
+WARM = 200      # enough executions for every site to specialize and compile
+
+
+class ObjectRowTests(unittest.TestCase):
+    """The names, globals, cells, imports, super and attribute rows of
+    Include/internal/pycore_ir_components.h (G0c batch 4), and the claims
+    that their uops rely on: what a helper closes, what a failure leaves
+    behind, and what a guard's miss does to the word it restarts"""
+
+    def test_columns_of_the_reviewed_rows(self):
+        table = ir_contract.rows()
+        # The helpers read these arguments and never close them: the uops
+        # close their inputs (DECREF_INPUTS) after the call
+        self.assertEqual(table["value_import_level"].args[0].mode, "borrowed")
+        self.assertEqual(table["super_call"].args[2].mode, "borrowed")
+        # A new reference, or NULL with an exception
+        for name in ("_PyEval_ImportName", "_PyEval_LazyImportName",
+                     "_PyEval_LazyImportFrom", "value_load_global", "_PyEval_LoadName"):
+            with self.subTest(row=name):
+                self.assertEqual(table[name].result.shape, "VALUE_OR_NULL")
+        # An empty cell is NULL with no exception: the caller says what it means
+        self.assertEqual(table["_PyCell_GetValue"].result.shape, "VALUE_OR_NULL")
+        # The cache word is never NULL, and the generator asserts it
+        assumed = table["_PyValueGuarded_Load"].result.assumed
+        self.assertEqual([(a.fact.kind, a.by) for a in assumed], [("nonnull", "specializer")])
+
+    def test_empty_cell_raises_name_error(self):
+        def outer():
+            def inner():
+                return x
+            return inner
+            x = 1
+        inner = outer()
+        for _ in range(WARM):
+            with self.assertRaisesRegex(NameError, "free variable 'x'"):
+                inner()
+
+    def test_delete_of_an_unbound_cell(self):
+        def f():
+            x = 1
+            def g():
+                return x
+            del x
+            del x
+        for _ in range(WARM):
+            with self.assertRaises(UnboundLocalError):
+                f()
+
+    def test_store_and_delete_global_close_their_value_once(self):
+        class Value:
+            pass
+        namespace = {}
+        value = Value()
+        ref = weakref.ref(value)
+        namespace["value"] = value
+        code = compile("global g\ng = value\ndel g\ng = value\n", "<test>", "exec")
+        for _ in range(WARM):
+            exec(code, namespace)
+        del namespace["g"], namespace["value"], value
+        support.gc_collect()
+        self.assertIsNone(ref())
+        with self.assertRaises(NameError):
+            exec(compile("global g\ndel g\n", "<test>", "exec"), namespace)
+        self.assertNotIn("g", namespace)
+
+    def test_global_miss_raises_name_error(self):
+        namespace = {}
+        code = compile("def f():\n    return no_such_name\n", "<test>", "exec")
+        exec(code, namespace)
+        for _ in range(WARM):
+            with self.assertRaisesRegex(NameError, "no_such_name"):
+                namespace["f"]()
+        namespace["no_such_name"] = 1
+        for _ in range(WARM):
+            self.assertEqual(namespace["f"](), 1)
+        del namespace["no_such_name"]
+        with self.assertRaises(NameError):
+            namespace["f"]()
+
+    def test_builtin_is_shadowed_after_specialization(self):
+        namespace = {}
+        exec("def f():\n    return len\n", namespace)
+        for _ in range(WARM):
+            self.assertIs(namespace["f"](), len)
+        namespace["len"] = "shadow"
+        self.assertEqual(namespace["f"](), "shadow")
+        del namespace["len"]
+        self.assertIs(namespace["f"](), len)
+
+    def test_class_namespace_load_in_an_annotation_scope(self):
+        class C:
+            x = 7
+            type A = x
+        for _ in range(WARM):
+            self.assertEqual(C.A.__value__, 7)
+
+    def test_import_level_and_fromlist_are_closed_once(self):
+        namespace = {"__name__": "test.test_ir_contracts", "__package__": "test"}
+        code = compile("from . import support\nfrom os import path\n", "<test>", "exec")
+        for _ in range(WARM):
+            exec(code, namespace)
+        self.assertIs(namespace["support"], support)
+        self.assertIs(namespace["path"], os.path)
+        with self.assertRaises(ImportError):
+            exec(compile("from os import no_such_name\n", "<test>", "exec"), {})
+
+    def test_super_call_leaves_its_receiver_alone(self):
+        class A:
+            def f(self):
+                return 1
+        class B(A):
+            def f(self):
+                return super().f() + 1
+            def g(self):
+                return super().missing
+        b = B()
+        ref = weakref.ref(b)
+        for _ in range(WARM):
+            self.assertEqual(b.f(), 2)
+            with self.assertRaises(AttributeError):
+                b.g()
+        del b
+        support.gc_collect()
+        self.assertIsNone(ref())
+
+    def test_slot_load_deoptimizes_when_the_slot_empties(self):
+        class S:
+            __slots__ = ("x",)
+        s = S()
+        s.x = 1
+        def get(o):
+            return o.x
+        def put(o, v):
+            o.x = v
+        for _ in range(WARM):
+            put(s, 2)
+            self.assertEqual(get(s), 2)
+        del s.x
+        with self.assertRaises(AttributeError):
+            get(s)
+        put(s, 3)
+        self.assertEqual(get(s), 3)
+
+    def test_dict_attribute_with_a_hint(self):
+        class D:
+            pass
+        d = D()
+        for i in range(40):
+            setattr(d, f"a{i}", i)      # a dict with many keys
+        def get(o):
+            return o.a30
+        def put(o, v):
+            o.a30 = v
+        for i in range(WARM):
+            put(d, i)
+            self.assertEqual(get(d), i)
+        del d.a30
+        with self.assertRaises(AttributeError):
+            get(d)
+        d2 = D()
+        d2.a30 = "other"
+        self.assertEqual(get(d2), "other")
+
+    def test_class_attribute_follows_the_class_version(self):
+        class K:
+            v = 1
+        def get(k):
+            return k.v
+        for _ in range(WARM):
+            self.assertEqual(get(K), 1)
+        K.v = 2
+        self.assertEqual(get(K), 2)
+        del K.v
+        with self.assertRaises(AttributeError):
+            get(K)
+
+    def test_property_and_getattribute_frames(self):
+        class P:
+            @property
+            def p(self):
+                return 5
+        class G:
+            def __getattribute__(self, name):
+                return name
+        def get_p(o):
+            return o.p
+        def get_g(o):
+            return o.anything
+        p, g = P(), G()
+        refs = weakref.ref(p), weakref.ref(g)
+        for _ in range(WARM):
+            self.assertEqual(get_p(p), 5)
+            self.assertEqual(get_g(g), "anything")
+        P.p = property(lambda self: 6)
+        self.assertEqual(get_p(p), 6)
+        del p, g
+        support.gc_collect()
+        self.assertEqual([r() for r in refs], [None, None])
 
 
 if __name__ == "__main__":

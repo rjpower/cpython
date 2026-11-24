@@ -6206,7 +6206,8 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
             or "callable_o" not in checks[1][2]
             or checks[1][1] != "EXIT_IF ( ! PyFunction_Check ( callable_o ) ) ;"
             or checks[1][3] != "EXIT_IF ( func -> func_version != func_version ) ;"
-            or checks[2][0] != "DEOPT_IF ( tstate -> py_recursion_remaining <= 1 ) ;"):
+            or checks[2][0] != "DEOPT_IF ( tstate -> py_recursion_remaining <= 1 , "
+                               "\"the recursion budget is spent\" ) ;"):
 
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
 
@@ -6524,6 +6525,19 @@ def normal_observer_frame_footprint(part: Uop) -> bool:
                for at, token in enumerate(tokens))
 
 
+def without_guard_reason(text: list[str]) -> list[str]:
+    """An EXIT_IF or DEOPT_IF statement's tokens without its reason argument."""
+    if text[:2] not in (["EXIT_IF", "("], ["DEOPT_IF", "("]) or text[-2:] != [")", ";"]:
+        return text
+    depth = 0
+    for at, token in enumerate(text[1:-2], 1):
+        depth += token == "("
+        depth -= token == ")"
+        if depth == 1 and token == ",":
+            return text[:at] + text[-2:]
+    return text
+
+
 def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
     """A scalar input moved to an independently reserved returning child."""
     parts = [part for part in inst.parts if isinstance(part, Uop)]
@@ -6608,7 +6622,8 @@ def disjoint_child_transport(inst: Instruction, fmt: IRFormat) -> Uop | None:
         if (len(extra) != len(begin) + 1 + len(end)
                 or extra[:len(begin)] != begin or extra[-len(end):] != end):
             return None
-    before = statements[:at]
+    # A guard's reason documents its condition and does not change the match
+    before = [without_guard_reason(text) for text in statements[:at]]
     # Parameterize only the captured function value, not arbitrary C effects.
     # Shared guard/publication contracts and these read-only setup statements
     # exclude aliases that could write the parent's otherwise untouched homes.
@@ -6681,8 +6696,7 @@ def async_exit_transport(inst: Instruction, fmt: IRFormat) -> bool:
             DECREF_INPUTS();
         }
         else {
-            Py_INCREF(exc);
-            _PyErr_SetRaisedException(tstate, exc);
+            _PyErr_SetRaisedException(tstate, Py_NewRef(exc));
             monitor_reraise(tstate, frame, this_instr);
             goto exception_unwind;
         }

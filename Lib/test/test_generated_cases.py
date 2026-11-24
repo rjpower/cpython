@@ -653,7 +653,8 @@ class TestIRCases(unittest.TestCase):
             (marker, "STAT_INC(BINARY_OP, hit); " + marker),
             (marker, marker + " " + marker),
             (guard, "spam_call(); " + guard),
-            ("(dict_st, sub_st -- res)", "(sub_st, dict_st -- res)"),
+            ("(dict_st: consumed, sub_st: consumed -- res: owned)",
+             "(sub_st: consumed, dict_st: consumed -- res: owned)"),
             (marker, "if (oparg) { " + marker + " }"),
         )
         for old, new in changes:
@@ -738,7 +739,7 @@ class TestIRCases(unittest.TestCase):
              "_CHECK_RECURSION_REMAINING +"),
             ("_CHECK_RECURSION_REMAINING +\n            _PY_FRAME_KW_GUARDED +",
              "_PY_FRAME_KW_GUARDED +"),
-            ("(callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken\n"
+            ("(callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed\n"
              "                 -- new_frame: owned))",
              "(callable: taken, self_or_null: taken, args[oparg]: taken\n"
              "                 -- new_frame: owned))"),
@@ -976,8 +977,8 @@ class TestIRCases(unittest.TestCase):
             ('value = temp;', '#define temp replacement\nvalue = temp;\n#undef temp'),
             ('#endif\n            RELOAD_STACK();',
              '#else\n            value = PyValue_None;\n#endif\n            RELOAD_STACK();'),
-            ('window op(_YIELD_VALUE, (retval -- value))',
-             'window op(_YIELD_VALUE, (TAKE/1, retval -- value))'),
+            ('window op(_YIELD_VALUE, (retval: consumed -- value: moved(retval)))',
+             'window op(_YIELD_VALUE, (TAKE/1, retval: consumed -- value: moved(retval)))'),
         )
         for old, new in changes:
             with self.subTest(new=new):

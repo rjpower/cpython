@@ -2323,6 +2323,11 @@ UNMODELLED_HEADS = ("return", "goto", "break", "continue", "switch", "do")
 REENTRY = frozenset(("releases", "runs_python", "polls", "switches_frame"))
 
 
+def _input_path(name: str, inputs) -> bool:
+    "whether name is a path from an input, `callable.im_func`"
+    return "." in name and name.split(".", 1)[0] in inputs
+
+
 @dataclass
 class _State:
     # An input or a local that holds an obligation: held, gone or null
@@ -2389,11 +2394,12 @@ class _State:
         if self.restartable:
             self.restartable, self.why = False, why
 
-    def kill_heap_facts(self) -> None:
+    def kill_heap_facts(self, inputs) -> None:
         # Every fact of a path from an input is of the heap: a write may
-        # change the field it steps through (item 1 of G0a5)
+        # change the field it steps through (item 1 of G0a5).  A CASES
+        # result's fields (`found.value`) are locals, not paths
         self.facts = {n: without_heap_facts(f) for n, f in self.facts.items()
-                      if "." not in n}
+                      if not _input_path(n, inputs)}
         self.pending = {n: without_heap_facts(f) for n, f in self.pending.items()}
 
     def add_facts(self, name: str, facts) -> None:
@@ -2460,7 +2466,7 @@ class OwnershipWalk:
             for name, item in self.declared.items():
                 if (item.mode == "closed" and self.kills
                         and INLINE not in end.facts.get(name, frozenset())):
-                    end.kill_heap_facts()
+                    end.kill_heap_facts(self.declared)
                     self.reenter(end, f"the skeleton's close of `{name}` after the uop, "
                                  "which may release,")
             self.exit = end
@@ -2924,7 +2930,7 @@ class OwnershipWalk:
         for t in tokens:
             for effect in self.site_effects.get(id(t), ()):
                 if effect in KILLS and self.kills:
-                    state.kill_heap_facts()
+                    state.kill_heap_facts(self.declared)
                 if effect in REENTRY and self.kills:
                     self.reenter(state, f"`{t.text}` at line {t.line}, which may {effect},")
                 if effect != "reads" and effect != "raises":
@@ -2977,7 +2983,7 @@ class OwnershipWalk:
         that copy it"""
         # A site fact (unique) dies at any reentry, and a home load
         state.facts = {n: without_site_facts(f) for n, f in state.facts.items()
-                       if "." not in n}
+                       if not _input_path(n, self.declared)}
         self.kill_home_loads(state)
         for name, item in self.declared.items():
             if item.mode in UNOWNED:

@@ -110,11 +110,18 @@
               ARGS(borrowed), TEST(null | nonnull), EFFECTS()) \
     PRIMITIVE(PyValue_IsInlineInt, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(inline_int), EFFECTS()) \
-    /* PyValue_IsObject (Include/internal/pycore_pyvalue.h): bits > 2, in \
-     * pointer space and not tagged.  It is false for NULL (bits 0), so its \
-     * false branch says `inline` only of a value that is not NULL: the \
-     * argument must be.  Every caller in bytecodes.c tests a stack operand \
-     * or an argument slot, which is not NULL */ \
+    /* PyValue_IsObject (Include/internal/pycore_pyvalue.h): bits > 2, \
+     * bits < Py_PTR_LIMIT and bit 1 clear; a comparison of the word, no \
+     * memory, no callee.  True: a pointer-space word naming an object.  \
+     * NULL (bits 0) gives false, as do bits 1 and 2, a debug build's \
+     * PyValue_Wrap pointer (bit 1 set), a tagged index (0x0001 top bits, \
+     * at or above Py_PTR_LIMIT) and every inline number.  So the false arm \
+     * says only that the word is not an object: for a language value it \
+     * is an inline number, and for an iterator cursor it may be a tagged \
+     * index; for NULL it is neither, which is why the argument must be \
+     * nonnull.  Every caller in bytecodes.c tests a stack operand or an \
+     * argument slot, which is not NULL.  The row's tokens are corrected \
+     * by G0a5 (a partition of the encodings), not here */ \
     PRIMITIVE(PyValue_IsObject, int, (PyValueBorrow), \
               ARGS(borrowed nonnull), TEST(object | inline), EFFECTS()) \
     /* Each tag test below is a comparison of the word's bits against the \
@@ -123,6 +130,14 @@
      * none */ \
     PRIMITIVE(PyValue_IsPointerSpace, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(), EFFECTS()) \
+    /* PyValue_IsInline (Include/internal/pycore_value.h): bits >= \
+     * Py_DOUBLE_OFFSET, a comparison with a region bound; no memory, no \
+     * callee.  True: an inline float or int word (the unused NaN images \
+     * are in the range too, and no language value holds them).  False: \
+     * NULL, a pointer-space word (object, wrap pointer) or a tagged index \
+     * (0x0001 top bits, below Py_DOUBLE_OFFSET).  So the true arm gives \
+     * `inline`, and the false arm gives neither `object` nor `nonnull`: a \
+     * body that needs `object` tests PyValue_IsObject */ \
     PRIMITIVE(PyValue_IsInline, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(inline), EFFECTS()) \
     PRIMITIVE(PyValue_IsInlineFloat, bool, (PyValueBorrow), \
@@ -238,9 +253,19 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PyValue_FromObjectBorrow, PyValueBorrow, (PyObject *), \
         ARGS(object), VALUE(borrowed), EFFECTS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Include/internal/pycore_value.h PyValue_FromObjectSteal: a static \
+     * inline that reads the object's type to choose its word (an exact int \
+     * or float becomes an inline number and the object's reference is \
+     * dropped, else the word is the pointer).  It steals the reference on \
+     * every path and cannot fail.  The result is the argument's reference \
+     * (or an inline number whose discharge is a no-op), which is a move; \
+     * VALUE(moved(0)) needs a model of moves out of heap fields and is \
+     * deferred to G0d.  Callbacks: none for the identity path.  The drop of \
+     * a boxed number's count is a deallocation by _PyLong_ExactDealloc or \
+     * _PyFloat_ExactDealloc only when the box was unreferenced, which does \
+     * not run Python */ \
     HELPER(PyValue_FromObjectSteal, PyValue, (PyObject *), \
-        ARGS(object), VALUE(owned), EFFECTS()) \
+        ARGS(consumed object), VALUE(owned), EFFECTS()) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PyValue_GenCheck, bool, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(reads)) \
@@ -265,7 +290,11 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyIR_BaseOpcode, int, (int), \
         ARGS(scalar), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/object.c (_PyValue_ASCII): _PyValue_Repr, then \
+     * _PyUnicode_AsASCIIString on a non-ASCII repr: __repr__ runs Python.  \
+     * Returns a new str reference or NULL with an exception set; the \
+     * argument is borrowed.  A NULL word prints as "<NULL>", so the \
+     * argument is not required to be nonnull */ \
     HELPER(_PyValue_ASCII, PyObject *, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
     /* seeded from ir_leaf.ERASED */ \
@@ -273,10 +302,21 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_Contains, int, (PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/abstract.c (_PyValue_DelItem) -> value_ass_item with a \
+     * NULL value: an exact dict goes to _PyDict_DelValue, anything else to \
+     * mp_ass_subscript or sq_ass_item (Python: __delitem__, __eq__, \
+     * __hash__).  Returns 0, or -1 with an exception set (TypeError when \
+     * the type has no deletion).  Both arguments are borrowed */ \
     HELPER(_PyValue_DelItem, int, (PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/abstract.c _PyValue_Format (format(obj, spec)).  The spec may \
+     * be PyValue_NULL (no spec: FORMAT_SIMPLE), which ARGS allows; a \
+     * non-NULL spec that is not an exact-or-subclass str raises \
+     * SystemError.  Callees: _PyValue_Str for an empty spec on an exact \
+     * int or float, else the type's __format__ through a method lookup and \
+     * call: arbitrary Python.  Failure: NULL with an exception set; both \
+     * arguments borrowed on every path.  Result: a new reference (an exact \
+     * str argument comes back as Py_NewRef of itself) */ \
     HELPER(_PyValue_Format, PyObject *, (PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -313,10 +353,18 @@
         ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* seeded from ir_leaf.ERASED */ \
     INTRINSIC(_PyValue_RecheckHome, ARGS(scalar), NONE, BUILD(gil)) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Include/internal/pycore_value.h: in assert builds a loop of \
+     * _PyValue_RecheckHome over the window (a debug check that reports and \
+     * never changes state); `((void)0)` in release.  A C macro that wraps \
+     * plain code: converting it to a static inline function is listed, not \
+     * done (scope cut) */ \
     MACRO(_PyValue_RecheckWindow, \
         ARGS(scalar, scalar), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/object.c (_PyValue_Repr): PyErr_CheckSignals first (a \
+     * signal handler runs Python), then tp_repr (Python), with a recursion \
+     * check and a str-result check.  A NULL word prints as "<NULL>".  \
+     * Returns a new str reference or NULL with an exception set; the \
+     * argument is borrowed */ \
     HELPER(_PyValue_Repr, PyObject *, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -326,7 +374,10 @@
     HELPER(_PyValue_Send, _PyStatusValue, (PyObject *, PyValueBorrow), \
         ARGS(object, borrowed), \
         CASES(status==-1 value(null) raised, status==0 value(owned), status==1 value(owned)), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/abstract.c (_PyValue_SequenceCheck): an inline \
+     * number is not a sequence; for an object it tests PyDict_Check and \
+     * tp_as_sequence->sq_item through the type.  Reads only: no \
+     * allocation, no callback, no failure.  Returns 0 or 1 */ \
     HELPER(_PyValue_SequenceCheck, int, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(reads)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -335,13 +386,22 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_SetAttr, int, (PyValueBorrow, PyObject *, PyValueBorrow), \
         ARGS(borrowed, object, borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/abstract.c (_PyValue_SetItem) -> value_ass_item: an \
+     * exact dict goes to _PyDict_SetValue, an exact list with an inline int \
+     * index stores in place (releasing the old item: finalizer), anything \
+     * else calls mp_ass_subscript or sq_ass_item (Python).  Returns 0, or \
+     * -1 with an exception set.  The three arguments are borrowed on every \
+     * path */ \
     HELPER(_PyValue_SetItem, int, (PyValueBorrow, PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_Size, Py_ssize_t, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/object.c (_PyValue_Str): PyErr_CheckSignals (Python), \
+     * an exact str returns itself, else tp_str (Python) with a recursion \
+     * check; a non-str result raises TypeError.  A NULL word prints as \
+     * "<NULL>".  Returns a new str reference or NULL with an exception \
+     * set; the argument is borrowed */ \
     HELPER(_PyValue_Str, PyObject *, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(runs_python))
 
@@ -473,7 +533,10 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(PyLazyImport_CheckExact, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/object.c PyObject_HasAttrWithError -> _PyValue_GetOptionalAttr: \
+     * __getattribute__ and __getattr__ run Python.  Returns 1 (found), 0 \
+     * (AttributeError cleared) or -1 with an exception set; the found value \
+     * is closed inside, and both arguments are borrowed */ \
     HELPER(PyObject_HasAttrWithError, int, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -503,7 +566,9 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(Py_ARRAY_LENGTH, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Include/object.h: drops a count, and on zero calls the \
+     * deallocator, which can run a finalizer, weakref callbacks and \
+     * __del__ (releases).  A C macro over public API: not converted */ \
     MACRO(Py_DECREF, \
         ARGS(scalar), SCALAR, EFFECTS(releases), EXITS()) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
@@ -521,13 +586,15 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(Py_NewRef, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Include/object.h: ob_size = size, a store through the object.  \
+     * The seed said runs_python; the store runs nothing, so writes */ \
     MACRO(Py_SET_SIZE, \
-        ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(writes), EXITS()) \
+    /* Include/object.h: a read of ob_size */ \
     MACRO(Py_SIZE, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Include/object.h: as Py_DECREF, with a NULL test.  A C macro \
+     * over public API: not converted */ \
     MACRO(Py_XDECREF, \
         ARGS(scalar), SCALAR, EFFECTS(releases), EXITS()) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -538,7 +605,8 @@
         ARGS(scalar, scalar), SCALAR, EFFECTS(releases), EXITS()) \
     /* seeded from ir_leaf.ERASED */ \
     INTRINSIC(QSBR_QUIESCENT_STATE, ARGS(scalar), NONE, BUILD(gil)) \
-    /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
+    /* generators_common.py's expansion: stores the stack pointer \
+     * back for the code that follows.  No C call, no effect */ \
     MACRO(SYNC_SP, \
         ARGS(), NONE, EFFECTS(), EXITS()) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -556,18 +624,30 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyCode_InstrHandler, int, (PyCodeObject *, int), \
         ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/errors.c _PyErr_ChainExceptions1 -> \
+     * _PyErr_ChainExceptions1Tstate: it steals the reference to exc, sets \
+     * exc as the context of the exception now raised (PyException_SetContext) \
+     * or restores exc as the raised exception.  _PyErr_SetRaisedException \
+     * releases the exception it replaces, whose finalizer may run Python */ \
     HELPER(_PyErr_ChainExceptions1, void, (PyObject *), \
-        ARGS(object), NONE, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+        ARGS(consumed object), NONE, EFFECTS(runs_python)) \
+    /* Python/errors.c _PyErr_Clear -> _PyErr_Restore(NULL): releases the \
+     * raised exception, whose deallocator can run Python (releases).  No \
+     * failure path */ \
     HELPER(_PyErr_Clear, void, (PyThreadState *), \
         ARGS(tstate), NONE, EFFECTS(releases)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/errors.c _PyErr_ExceptionMatches -> \
+     * PyErr_GivenExceptionMatches: a subtype test through tp_mro / \
+     * tp_bases and, for a tuple, each member; reads only, no allocation and \
+     * no callback.  Returns 0 or 1 */ \
     HELPER(_PyErr_ExceptionMatches, int, (PyThreadState *, PyObject *), \
         ARGS(tstate, object), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/errors.c _PyErr_GetRaisedException: moves \
+     * tstate->current_exception to the caller (a new reference; the \
+     * thread's field becomes NULL).  It reads and writes the thread state \
+     * and calls nothing, so writes, not runs_python (the seed's) */ \
     HELPER(_PyErr_GetRaisedException, PyObject *, (PyThreadState *), \
-        ARGS(tstate), SCALAR, EFFECTS(runs_python)) \
+        ARGS(tstate), SCALAR, EFFECTS(reads, writes)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyErr_Occurred, PyObject *, (PyThreadState *), \
         ARGS(tstate), SCALAR, EFFECTS(reads)) \
@@ -577,9 +657,17 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyErr_SetString, void, (PyThreadState *, PyObject *, const char *), \
         ARGS(tstate, object, scalar), NONE, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/interpolationobject.c \
+     * (_PyInterpolation_BuildValue): PyValue_AsObject boxes an inline \
+     * number (allocation, MemoryError), _PyInterpolation_Build allocates \
+     * the object, takes counts of value, str and format_spec, and for a \
+     * bad conversion code raises SystemError and drops the object it just \
+     * made; the box is dropped after.  No type slot or finalizer of user \
+     * code is reached (the objects dropped hold counts the caller keeps).  \
+     * Failure: NULL with an exception set; the arguments are borrowed.  \
+     * Narrowed from the seed's runs_python to allocates, raises */ \
     HELPER(_PyInterpolation_BuildValue, PyObject *, (PyValueBorrow, PyObject *, int, PyObject *), \
-        ARGS(borrowed, object, scalar, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed, object, scalar, object), SCALAR, EFFECTS(allocates, raises)) \
     /* seeded from a definition under Py_GIL_DISABLED */ \
     INTRINSIC(_PyObject_GC_IS_SHARED, ARGS(scalar), SCALAR, BUILD(free_threaded)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -598,9 +686,17 @@
     HELPER(_PySuper_LookupValue, _PyStatusValue, (PyTypeObject *, PyValueBorrow, PyObject *, int), \
         ARGS(scalar, borrowed, object, scalar), \
         CASES(status==-1 value(null) raised, status==0 value(owned), status==1 value(owned)), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/templateobject.c _PyTemplate_Build.  Callees: PyObject_GC_New \
+     * (gc_alloc: MemoryError on failure, and _PyObject_GC_Link, which only \
+     * schedules a collection through the eval breaker), Py_NewRef of both \
+     * arguments, PyObject_GC_Track.  Failure: NULL with MemoryError set; the \
+     * arguments are borrowed and untouched (the new object holds its own \
+     * counts, so the caller still owns its references).  Callbacks: none; \
+     * nothing is released and no type slot or finalizer is called.  Result: \
+     * a new reference to a Template (the caller boxes it with \
+     * PyValue_FromObjectSteal) */ \
     HELPER(_PyTemplate_Build, PyObject *, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object, object), SCALAR, EFFECTS(allocates, raises)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyType_IteratesByIndex, int, (PyTypeObject *), \
         ARGS(scalar), SCALAR, EFFECTS(reads)) \
@@ -615,7 +711,9 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(_Py_DECREF_SPECIALIZED, \
         ARGS(scalar, scalar), SCALAR, EFFECTS(writes), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Include/internal/pycore_global_strings.h: the address of a static \
+     * immortal string, `&_Py_SINGLETON(...)`: an arithmetic constant.  A C \
+     * macro over a table: not converted */ \
     MACRO(_Py_ID, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* seeded from a definition under Py_GIL_DISABLED */ \
@@ -635,7 +733,14 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(super_call, PyValue, (PyValueBorrow, PyValueBorrow, PyValue, int), \
         ARGS(borrowed, borrowed, consumed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ceval.c value_dict_merge_uniq -> _PyDict_MergeUniq(dict, update, \
+     * &dupkey): inserts each item of update into dict, stopping at a key \
+     * dict already holds.  A non-dict update is read through keys() and \
+     * __getitem__, and keys are hashed and compared: Python.  Status >= 0 \
+     * is success.  Status < 0 is failure with an exception set (KeyError \
+     * for a duplicate, with the new reference to the duplicate key in \
+     * .object; another error leaves .object NULL).  The caller owns \
+     * .object and releases it (X form).  Both arguments are borrowed */ */ \
     HELPER(value_dict_merge_uniq, _PyStatusObject, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -665,8 +770,14 @@
 
 /* Containers */
 #define _PyIR_COMPONENTS_CONTAINERS(PRIMITIVE, HELPER, MACRO) \
+    /* Include/cpython/listobject.h: Py_IS_TYPE(op, &PyList_Type), a \
+     * read of ob_type compared with a static address.  No callee, no \
+     * failure.  A static type cannot be reassigned by __class__, so the \
+     * TEST's fact is a value fact */ \
     PRIMITIVE(PyList_CheckExact, int, (PyObject *), \
               ARGS(object), TEST(exact(PyList_Type)), EFFECTS(reads)) \
+    /* Include/cpython/tupleobject.h: Py_IS_TYPE(op, &PyTuple_Type); \
+     * as PyList_CheckExact */ \
     PRIMITIVE(PyTuple_CheckExact, int, (PyObject *), \
               ARGS(object), TEST(exact(PyTuple_Type)), EFFECTS(reads)) \
     /* Py_IS_TYPE of the named type: a read of ob_type */ \
@@ -674,6 +785,8 @@
               ARGS(object), TEST(exact(PyDict_Type)), EFFECTS(reads)) \
     PRIMITIVE(PyModule_CheckExact, int, (PyObject *), \
               ARGS(object), TEST(exact(PyModule_Type)), EFFECTS(reads)) \
+    /* Include/cpython/unicodeobject.h: Py_IS_TYPE(op, &PyUnicode_Type); \
+     * as PyList_CheckExact */ \
     PRIMITIVE(PyUnicode_CheckExact, int, (PyObject *), \
               ARGS(object), TEST(exact(PyUnicode_Type)), EFFECTS(reads)) \
     PRIMITIVE(PyFunction_Check, int, (PyObject *), \
@@ -692,12 +805,23 @@
      * from dk_log2_index_bytes */ \
     PRIMITIVE(DK_UNICODE_ENTRIES, PyDictUnicodeEntry *, (PyDictKeysObject *), \
               ARGS(scalar), SCALAR, EFFECTS(reads)) \
+    /* Include/cpython/listobject.h: a read of ob_size (the length \
+     * changes at any write to the list, so facts built on it are heap \
+     * facts); no callee, no failure */ \
     PRIMITIVE(PyList_GET_SIZE, Py_ssize_t, (PyObject *), \
               ARGS(object), MEASURE(length), EFFECTS(reads)) \
+    /* Include/cpython/tupleobject.h: a read of ob_size, which a tuple \
+     * never changes after construction; no callee, no failure */ \
     PRIMITIVE(PyTuple_GET_SIZE, Py_ssize_t, (PyObject *), \
               ARGS(object), MEASURE(length), EFFECTS(reads)) \
+    /* Include/internal/pycore_list.h: the address of ob_item, a read \
+     * of the list; the array it names is reallocated by any resize, so a \
+     * pointer from it dies at every write.  No callee, no failure */ \
     PRIMITIVE(_PyList_ITEMS, PyValue *, (PyObject *), \
               ARGS(object), SCALAR, EFFECTS(reads)) \
+    /* Include/internal/pycore_tuple.h: the address of the inline \
+     * ob_item array; no callee, no failure.  No model or lowering exists \
+     * (V11): listed for G0d, as it is called only from non-leaf uops */ \
     PRIMITIVE(_PyTuple_ITEMS, PyValue *, (PyObject *), \
               ARGS(object), SCALAR, EFFECTS(reads)) \
     /* The elements of a sequence into the arm's own outputs, the \
@@ -738,10 +862,20 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PyDict_SetValue, int, (PyObject *, PyValueBorrow, PyValueBorrow), \
         ARGS(object, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/dictobject.c PyDict_Update -> dict_merge_api(a, b, 1): a \
+     * dict or mapping b merged into dict a; for a non-dict b it calls \
+     * b.keys() and b[key], hashes and compares keys, and resizes a \
+     * (arbitrary Python).  Failure: -1 with an exception set (AttributeError \
+     * when b has no keys(), which _DICT_UPDATE rewrites); both arguments are \
+     * borrowed on every path.  Result 0 or -1 */ \
     HELPER(PyDict_Update, int, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/setobject.c PySet_New -> make_new_set.  With a NULL iterable \
+     * (BUILD_SET's only call) it allocates an empty set (MemoryError on \
+     * failure) and runs nothing; with an iterable it iterates, hashes and \
+     * compares: Python.  The contract is the function's, so runs_python.  \
+     * The result is a new reference, NULL with an exception set; the \
+     * argument is borrowed */ \
     HELPER(PySet_New, PyObject *, (PyObject *), \
         ARGS(object), SCALAR, EFFECTS(runs_python)) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
@@ -750,33 +884,72 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyDict_ContainsValue, int, (PyDictObject *, PyValueBorrow), \
         ARGS(scalar, borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/dictobject.c (_PyDict_SetValue) -> _PyDict_SetValue_Take2 \
+     * (PyValue_DUP of key and value first): hashing and comparing keys, \
+     * resizing, and releasing the replaced value, whose finalizer runs \
+     * Python; an unhashable key raises TypeError.  Failure: -1 with an \
+     * exception set.  Key and value are borrowed on every path (the DUPs \
+     * are consumed by the Take2 callee).  The dict must be an exact dict or \
+     * subclass (asserted) */ \
     HELPER(_PyDict_SetValue, int, (PyDictObject *, PyValueBorrow, PyValueBorrow), \
         ARGS(scalar, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/dictobject.c _PyDict_SetValue_Take2 -> \
+     * setitem_take2_lock_held: hash (unhashable: setitem_unhashable closes \
+     * both owners and returns -1), insert_to_emptydict or insertdict, which \
+     * compare keys, resize, and release a replaced value.  Both owners are \
+     * consumed on every return, success and failure.  Failure: -1 with an \
+     * exception set.  Callbacks: __hash__, __eq__, and the finalizer of a \
+     * replaced value */ \
     HELPER(_PyDict_SetValue_Take2, int, (PyDictObject *, PyValue, PyValue), \
         ARGS(scalar, consumed, consumed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/listobject.c _PyList_AppendTakeValue: \
+     * list_resize on a full list (MemoryError, -1), then the store and the \
+     * size update.  The owner is consumed on both outcomes: on a failed \
+     * resize PyValue_CLOSE(value) releases it, which can run a finalizer, \
+     * so the exact set is writes, allocates, raises, releases; runs_python \
+     * covers it.  Callbacks: only that finalizer */ \
     HELPER(_PyList_AppendTakeValue, int, (PyListObject *, PyValue), \
         ARGS(scalar, consumed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/listobject.c _PyList_Extend -> _list_extend: an exact \
+     * list or tuple is copied, anything else is iterated (__iter__, \
+     * __next__, __length_hint__: Python).  Returns a new reference to None \
+     * (immortal) or NULL with an exception set (a TypeError when the \
+     * iterable is not iterable, which _LIST_EXTEND rewrites).  Arguments \
+     * are borrowed */ \
     HELPER(_PyList_Extend, PyObject *, (PyListObject *, PyObject *), \
         ARGS(scalar, object), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyList_SliceSubscript, PyObject *, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/setobject.c _PySet_AddValueTakeRef: hashes the \
+     * key (unhashable: set_unhashable_type, PyValue_XCLOSE(key), -1), then \
+     * set_add_entry_takeref, which compares keys (__eq__) and resizes.  The \
+     * owner is consumed on every return.  Failure: -1 with an exception \
+     * set */ \
     HELPER(_PySet_AddValueTakeRef, int, (PySetObject *, PyValue), \
         ARGS(scalar, consumed), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PySet_Contains, int, (PySetObject *, PyValueBorrow), \
         ARGS(scalar, borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/setobject.c _PySet_Update -> set_update_internal: a set or \
+     * dict is merged directly, any other iterable is iterated; hashing, \
+     * __eq__ and iteration run Python.  A non-set first argument is \
+     * PyErr_BadInternalCall.  Returns 0 or -1 with an exception set; both \
+     * arguments are borrowed */ \
     HELPER(_PySet_Update, int, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/sliceobject.c _PySlice_FromValues: value_bound maps each of \
+     * the three arguments to an owned copy, PyValue_None for PyValue_NULL \
+     * (BUILD_SLICE passes NULL for an absent step), so every argument may be NULL (a row's ARGS require nonnull only \
+     * when they say so).  slice_from_owned pops the slice freelist or calls \
+     * PyObject_GC_New (MemoryError on failure, after which it closes the \
+     * three copies: each was just duplicated from a value the caller still \
+     * holds, so the close drops no last count), stores the copies and \
+     * GC-tracks.  Failure: NULL with an exception set; the arguments are \
+     * borrowed throughout.  Callbacks: none (the allocation only schedules \
+     * a collection through the eval breaker).  Result: a new reference */ \
     HELPER(_PySlice_FromValues, PyObject *, (PyValueBorrow, PyValueBorrow, PyValueBorrow), \
-        ARGS(borrowed, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed, borrowed), SCALAR, EFFECTS(allocates, raises)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyTuple_GET_OBJECT, PyObject *, (PyObject *, Py_ssize_t), \
         ARGS(object, scalar), SCALAR, EFFECTS(reads))
@@ -1026,7 +1199,11 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_FormatExcUnbound, void, (PyThreadState *, PyCodeObject *, int), \
         ARGS(tstate, scalar, scalar), NONE, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ceval.c _PyEval_FormatKwargsError: builds a \
+     * TypeError (or re-raises the KeyError) by formatting func's name and \
+     * the duplicated key: PyObject_Str / repr of Python objects, so \
+     * runs_python.  It always leaves an exception set.  Arguments are \
+     * borrowed (dupkey is released by the caller) */ \
     HELPER(_PyEval_FormatKwargsError, void, (PyThreadState *, PyValueBorrow, PyObject *, PyObject *), \
         ARGS(tstate, borrowed, object, object), NONE, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -1146,7 +1323,14 @@
     /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
     MACRO(SAVE_STACK, \
         ARGS(), NONE, EFFECTS(), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ceval.c (_PyEval_BinarySlice).  An exact list, tuple \
+     * or str with inline int or None bounds is sliced directly \
+     * (PyList_GetSlice, PyTuple_GetSlice, PyUnicode_Substring); object \
+     * bounds go through _PyList/_PyTuple/_PyUnicode_BinarySlice (__index__ \
+     * runs Python); anything else builds a slice (slice_of_bounds, \
+     * _PySlice_FromValues) and calls _PyValue_GetItem (__getitem__: \
+     * Python).  Failure: PyValue_NULL with an exception set.  The three \
+     * arguments are borrowed on every path; the result is an owner */ \
     HELPER(_PyEval_BinarySlice, PyValue, (PyValueBorrow, PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -1204,7 +1388,12 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_StoreName, int, (PyThreadState *, PyValueBorrow, PyObject *, PyObject *), \
         ARGS(tstate, borrowed, object, object), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ceval.c (_PyEval_StoreSlice).  An exact list with \
+     * inline bounds goes to _PyList_StoreSlice (list_ass_slice: \
+     * allocation, and releasing the replaced items, whose finalizers run \
+     * Python; the right side may be iterated); otherwise a slice object is \
+     * built and _PyValue_SetItem runs __setitem__.  Returns 0, or -1 with \
+     * an exception set.  The four arguments are borrowed on every path */ \
     HELPER(_PyEval_StoreSlice, int, (PyValueBorrow, PyValueBorrow, PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -1329,10 +1518,22 @@
      * IR_HELPER_EFFECTS marks them "escapes" (they hash, compare and \
      * release, which may run Python).  The values are taken, as for the \
      * tuple */ \
-    MACRO(IR_BUILD_STRING, ARGS(taken), VALUE_OR_NULL(owned), \
+    /* Evidence (Python/ceval.c _Py_BuildString_ValueSteal, which \
+     * ir_generator.home_helper expands to): _PyUnicode_JoinArray over the \
+     * borrowed window, then clear_value_arguments on every path, success \
+     * and failure, so the pieces are consumed and never come back (the \
+     * seed said taken, which leaves them to the skeleton on failure). \
+     * Failure: NULL with an exception set.  Callbacks: the join reads str \
+     * pieces only; the close releases them, which may run a finalizer */ \
+    MACRO(IR_BUILD_STRING, ARGS(consumed), VALUE_OR_NULL(owned), \
           EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
           EXITS()) \
-    MACRO(IR_BUILD_MAP, ARGS(taken), VALUE_OR_NULL(owned), \
+    /* Evidence (Python/ceval.c _Py_BuildMap_ValueSteal): \
+     * _PyDict_FromValueItems over the window, then clear_value_arguments on \
+     * every path, success and failure: the values are consumed, not taken. \
+     * Failure: NULL with an exception set (unhashable key, MemoryError, a \
+     * key's __hash__/__eq__ may run Python) */ \
+    MACRO(IR_BUILD_MAP, ARGS(consumed), VALUE_OR_NULL(owned), \
           EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
           EXITS()) \
     /* _PyObject_LookupSpecialMethod: 1 found, 0 missing (the uop raises), \
@@ -1348,6 +1549,13 @@
      * design 1.3 excludes from writes ("a home other than its outputs") */ \
     MACRO(IR_WRITE_OUTPUT, ARGS(out, scalar, consumed), NONE, \
           EFFECTS(), EXITS()) \
+    /* ir_generator.take_input_home expands it to _PyFrame_TakeHome(frame, \
+     * &values[i]) (pycore_interpframe.h): read the home's word, store \
+     * PyValue_NULL there, return the word.  The result owns the count the \
+     * home held (an owner created from the input array); it writes only a \
+     * home of the input array, which design 1.3 does not count, so the \
+     * seeded writes is kept for TA's CSE.  No callee that can fail or run \
+     * Python */ \
     MACRO(IR_TAKE_INPUT, ARGS(consumed, scalar), VALUE(owned), \
           EFFECTS(reads, writes), EXITS()) \
     /* _PyFrame_CloseHomeRange: "escapes" in IR_HELPER_EFFECTS; the close \

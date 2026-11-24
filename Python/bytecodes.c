@@ -225,12 +225,13 @@ dummy_func(
         // the code's compiled unit at the next word once it has one
         // (IR_JIT_EVENT(), Python/jit.c).  Compiled code runs the forms,
         // where the event does nothing.
-        // Contract (G0d1): IR_JIT_EVENT's row (EFFECTS(... runs_python,
-        // switches_frame), EXITS(enter, return, raise, exit)): the unit it starts
-        // runs Python and leaves through its own transfers; otherwise the word
+        // Contract (G0d1): IR_JIT_EVENT's row (EFFECTS(... runs_python),
+        // EXITS(redirect, raise, exit)): the unit it starts runs this frame's
+        // words, which enter and leave frames by their own records; the frame
+        // goes on where the unit stopped (redirect). Otherwise the word
         // continues (next).
         ir_only op(_JIT_EVENT, (--))
-            effects(runs_python, switches_frame) exits(next, enter, return, raise, exit)
+            effects(runs_python) exits(next, redirect, raise, exit)
         {
             IR_JIT_EVENT();
         }

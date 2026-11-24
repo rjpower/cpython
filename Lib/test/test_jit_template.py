@@ -1188,6 +1188,30 @@ class TemplateGraphTests(unittest.TestCase):
                 self.assertFalse(jit_template_generator.thread_tests(graph))
                 self.assertFalse(jit_template_generator.thread_branches(graph))
 
+    def test_an_assumption_is_checked_only_with_assertions(self):
+        # F7: an `assume` op becomes a check that traps, under #ifndef NDEBUG;
+        # without assertions the template is the one with no assumption
+        handler = "BINARY_OP_ADD_FLOAT"
+        record = RECORDS[handler]
+        plain = jit_template_generator.template_of(handler, record)
+        uops = list(record.uops)
+        i, u = next((i, u) for i, u in enumerate(uops) if u.leaf is not None)
+        leaf = dataclasses.replace(u.leaf, blocks=list(u.leaf.blocks))
+        entry = leaf.blocks[0]
+        arg = next(op for op in entry.ops if op.kind == "arg")
+        ops = list(entry.ops)
+        ops.insert(ops.index(arg) + 1,
+                   ir_leaf.Op("assume", (), arg.results, ("exact", "PyUnicode_Type")))
+        leaf.blocks[0] = dataclasses.replace(entry, ops=ops)
+        uops[i] = dataclasses.replace(u, leaf=leaf)
+        planted = jit_template_generator.template_of(
+            handler, dataclasses.replace(record, uops=uops))
+        start, end = planted.index("#ifndef NDEBUG"), planted.index("#endif")
+        check = "\n".join(planted[start:end])
+        self.assertIn("&PyUnicode_Type", check)
+        self.assertIn("0x0f, 0x0b", check)  # ud2
+        self.assertEqual(planted[:start] + planted[end + 1:], plain)
+
 
 if __name__ == "__main__":
     unittest.main()

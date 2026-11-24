@@ -2152,8 +2152,68 @@ class Emitter:
                    f"(const _PyJitArg[]){{{argl or '_PyJitArg_NONE'}}}, {result});")
             if res:
                 self.extend(res[0])
+        elif kd == "assume":
+            self.assume(args[0], *op.attr)
         else:
             raise Refused(f"no emission of {kd}")
+
+    def assume(self, v: int, kind: str, arg: str) -> None:
+        """`assume(fact)` (F7): in a build with assertions, a check of the
+        fact of the value in its register, which traps (ud2) where it does
+        not hold; nothing otherwise.  The check saves the two registers it
+        uses on the stack, so the allocation is the same in every build"""
+        w = self.R(v)
+        scratch = [self.gpr(r) for r in GPR_POOL if self.gpr(r) != w][:2]
+        t, k = scratch
+        a = "_PyJitAsm"
+        lines = ["_PyJitLabel ok = _PyJitAsm_NewLabel(a);",
+                 "_PyJitLabel trap = _PyJitAsm_NewLabel(a);",
+                 f"{a}_Push(a, {t});", f"{a}_Push(a, {k});"]
+
+        def test(name: str, regs: list[str], holds: bool = True) -> None:
+            c = f"_PyJitLower_{name}(cx, (const uint8_t[]){{{', '.join(regs)}}}, NULL)"
+            cond = f"(_PyJitCond){c}" if holds else f"_PyJitCond_Not((_PyJitCond){c})"
+            lines.append(f"{a}_Jcc(a, {cond}, ok);")
+
+        if kind == "nonnull":
+            test("PyValue_IsNull", [w], holds=False)
+        elif kind in ("object", "inline", "inline_int"):
+            name = {"object": "PyValue_IsObject", "inline": "PyValue_IsInline",
+                    "inline_int": "PyValue_IsInlineInt"}[kind]
+            test(name, [w, t])
+        elif kind == "inline_float":
+            test("PyValue_IsInlineFloat", [w, t, k])
+        elif kind == "exact":
+            types = arg.split("|")
+            # An inline value's type is its encoding's
+            if "PyLong_Type" in types:
+                test("PyValue_IsInlineInt", [w, t])
+            if "PyFloat_Type" in types:
+                test("PyValue_IsInlineFloat", [w, t, k])
+            c = f"_PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){{{w}, {t}}}, NULL)"
+            lines.append(f"{a}_Jcc(a, _PyJitCond_Not((_PyJitCond){c}), trap);")
+            for tp in types:
+                lines += [f"{a}_MovRR(a, {t}, {w});",
+                          f"{a}_AluRI(a, _PyJitAlu_AND, {t}, ~(int32_t)Py_TAG_REFCNT);",
+                          f"{a}_MovRM(a, {t}, _PyJitMem_At({t}, "
+                          "(int32_t)offsetof(PyObject, ob_type)));",
+                          f"{a}_MovImm(a, {k}, (int64_t)(uintptr_t)&{tp});",
+                          f"{a}_AluRR(a, _PyJitAlu_CMP, {t}, {k});",
+                          f"{a}_Jcc(a, _PyJitCond_E, ok);"]
+        else:
+            raise Refused(f"no check of the assumed {kind}")
+        lines += ["_PyJitAsm_Bind(a, trap);",
+                  "_PyJitAsm_Data(a, (const uint8_t[]){0x0f, 0x0b}, 2);  /* ud2 */",
+                  "_PyJitAsm_Bind(a, ok);",
+                  f"{a}_Pop(a, {k});", f"{a}_Pop(a, {t});"]
+        self.lines.append("#ifndef NDEBUG")
+        self.w("{")
+        self.indent += 1
+        for line in lines:
+            self.w(line)
+        self.indent -= 1
+        self.w("}")
+        self.lines.append("#endif")
 
     def load(self, r: int, t: str, mem: str) -> None:
         if is_xmm(t):

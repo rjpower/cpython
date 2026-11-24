@@ -1282,7 +1282,8 @@ class VerifierTests(unittest.TestCase):
             op(_BAD_ARRAY, (-- values[1]: owned inline_int)) effects() exits(next) {
                 values[0] = PyValue_NULL;
             }
-        """, r"_BAD_ARRAY: stores `PyValue_NULL` into the owned array `values`")
+        """, r"_BAD_ARRAY: stores `PyValue_NULL`, which may be NULL, into `values`, "
+             r"whose elements are not nullable")
         source = """
             op(_ARRAY, (a: consumed %s -- values[1]: owned inline_int)) effects() exits(next) {
                 values[0] = a;
@@ -1486,6 +1487,30 @@ class VerifierTests(unittest.TestCase):
                 %s
             }
         """ % (exits, body))
+
+    def test_an_array_sized_by_a_test_is_empty_where_it_fails(self):
+        # _LOAD_ATTR: self_or_null[oparg&1] has no element where `oparg & 1`
+        # is false; there it is neither written nor owed
+        source = """
+            op(_OP, (owner: borrowed -- attr: owned, self_or_null[oparg&1]: owned nullable))
+                effects() exits(next)
+            {
+                if (oparg & 1) {
+                    self_or_null[0] = PyValue_NULL;
+                    %s
+                }
+                else {
+                    %s
+                }
+                attr = PyValue_None;
+            }
+        """
+        self.verify(source % ("", ""))
+        self.refuses(source % ("", "self_or_null[0] = PyValue_NULL;"),
+                     r"stores into `self_or_null`, which has no element here")
+        # Written on the true side only where the test holds
+        self.refuses(source.replace("self_or_null[0] = PyValue_NULL;", "") % ("", ""),
+                     r"the output array `self_or_null` is unwritten")
 
     def test_an_identity_test_shares_facts(self):
         # PyValue_Is is declared IDENTITY(): where it holds, its arguments

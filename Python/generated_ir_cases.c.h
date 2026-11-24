@@ -10171,30 +10171,33 @@ ir_run_LOAD_ATTR(
             {
                 self_or_null = ((oparg&1) ? &IR_SLOT(IR_A(ir_word) + 1) : NULL);
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
-                PyValue found_attr;
-                PyValue found_self = PyValue_NULL;
                 if (oparg & 1) {
                     PyValue receiver = PyValue_DUP(owner);
                     _PyStatusValue found = _PyValue_GetMethod(receiver, name);
-                    found_attr = found.value;
+                    ir_own_B = IR_DETACH(ir_word, B, owner);
+                    if (found.status < 0) {
+                        PyValue_CLOSE(receiver);
+                        PyValue_XCLOSE(ir_own_B);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                    attr = found.value;
                     if (found.status > 0) {
-                        found_self = receiver;
+                        self_or_null[0] = receiver;
                     }
                     else {
                         PyValue_CLOSE(receiver);
+                        self_or_null[0] = PyValue_NULL;
+                        IR_CLEAR_SLOTS(&IR_SLOT(IR_A(ir_word) + 1), (oparg&1));
                     }
                 }
                 else {
-                    found_attr = _PyValue_GetAttr(owner, name);
-                }
-                ir_own_B = IR_DETACH(ir_word, B, owner);
-                if (PyValue_IsNull(found_attr)) {
-                    PyValue_XCLOSE(ir_own_B);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-                attr = found_attr;
-                if (oparg & 1) {
-                    self_or_null[0] = found_self;
+                    PyValue found_attr = _PyValue_GetAttr(owner, name);
+                    ir_own_B = IR_DETACH(ir_word, B, owner);
+                    if (PyValue_IsNull(found_attr)) {
+                        PyValue_XCLOSE(ir_own_B);
+                        PROCESS_ERROR_AT(RAISE, 0, this_instr);
+                    }
+                    attr = found_attr;
                 }
             }
             IR_STORE_DST(ir_word, A, attr);

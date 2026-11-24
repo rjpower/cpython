@@ -2474,6 +2474,9 @@ HELD, GONE, NULL = "held", "gone", "null"
 # (element stores), or written if the status local named after PENDING
 # says success
 UNWRITTEN, WRITTEN, PARTIAL, PENDING = "unwritten", "written", "partly written", "pending:"
+# An array whose declared size is 0 on this path (`oparg & 1` tested false):
+# nothing to write, publish or release
+EMPTY = "empty"
 # An owner that a row takes (ARGS `taken`): gone if the row succeeds, still
 # the caller's if it fails.  TAKEN alone until the row's result is bound to
 # a local, then TAKEN + the local, until a test of the local decides it
@@ -2669,7 +2672,7 @@ class OwnershipWalk:
         for out in self.contract.outputs:
             if not out.mode or out.name == "unused":
                 continue
-            written = (state.arrays.get(out.name) == WRITTEN if out.array
+            written = (state.arrays.get(out.name) in (WRITTEN, EMPTY) if out.array
                        else out.name in state.facts or out.name in state.owners)
             if not written:
                 self.fail(where, f"`{out.name}` is not written before {row.name}, whose "
@@ -2723,6 +2726,8 @@ class OwnershipWalk:
         for name, written in state.arrays.items():
             if committed:
                 continue    # check_committed: written, and stored
+            if written == EMPTY:
+                continue
             if exit == "next" and written != WRITTEN:
                 self.fail(where, f"on next, the output array `{name}` is "
                           f"{self.array_state(written)}, but it is published whole")
@@ -3000,6 +3005,12 @@ class OwnershipWalk:
             for name, why in other.rehomed.items():
                 first.rehomed.setdefault(name, why)
             for name in first.arrays:
+                # An empty array joins as the other path's: the size test
+                # decided each path's array
+                if first.arrays[name] == EMPTY:
+                    first.arrays[name] = other.arrays.get(name, UNWRITTEN)
+                elif other.arrays.get(name) == EMPTY:
+                    continue
                 if first.arrays[name] != other.arrays.get(name):
                     self.fail(self.uop.body.open, f"the output array `{name}` is "
                               f"{self.array_state(first.arrays[name])} on one path and "
@@ -3072,6 +3083,13 @@ class OwnershipWalk:
         cond = _strip(cond)
         while cond[:1] == ["!"]:
             cond, holds = _strip(cond[1:]), not holds
+        if not holds:
+            # The test of an output array's declared size (`oparg & 1`)
+            # fails: the array has no element, so it is wholly written
+            for out in self.contract.outputs:
+                if (out.array and out.name in state.arrays
+                        and "".join(cond) == re.sub(r"[\s()]", "", out.size)):
+                    state.arrays[out.name] = EMPTY
         for name, (when, null_if) in list(state.null_when.items()):
             if tuple(cond) == when:
                 self.set_null(state, name, holds == null_if)
@@ -3871,6 +3889,9 @@ class OwnershipWalk:
         array = _element_base(texts, i)
         if array not in state.arrays:
             return
+        if state.arrays[array] == EMPTY:
+            self.fail(toks[0], f"stores into `{array}`, which has no element here: its "
+                      "size test failed")
         declared = self.contract.output(array)
         value = _uncast(rhs)
         if len(value) == 1 and value[0] in state.owners:
@@ -3883,6 +3904,9 @@ class OwnershipWalk:
                               f"`{array}`: no owner moves")
             else:
                 self.take(value[0], state, toks[0], "moves")
+        elif value == ["PyValue_NULL"]:
+            # No value and no obligation: only a nullable array takes it
+            facts = frozenset({NULL_FACT})
         else:
             call = _call_of(value, self.table)
             row = call[0] if call is not None else None

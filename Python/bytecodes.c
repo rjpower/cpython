@@ -3135,31 +3135,35 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        inline_ok op(_LOAD_ATTR, (owner -- attr, self_or_null[oparg&1])) {
+        inline_ok op(_LOAD_ATTR,
+                (owner: consumed -- attr: owned, self_or_null[oparg&1]: owned nullable))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
-            PyValue found_attr;
-            PyValue found_self = PyValue_NULL;
             if (oparg & 1) {
                 // A count of its own before the call, which can run code
                 // that rebinds the local that owner views
                 PyValue receiver = PyValue_DUP(owner);
                 _PyStatusValue found = _PyValue_GetMethod(receiver, name);
-                found_attr = found.value;
+                DECREF_INPUTS();
+                if (found.status < 0) {
+                    PyValue_CLOSE(receiver);
+                    ERROR_IF(true);
+                }
+                attr = found.value;
                 if (found.status > 0) {
-                    found_self = receiver;
+                    self_or_null[0] = receiver;
                 }
                 else {
                     PyValue_CLOSE(receiver);
+                    self_or_null[0] = PyValue_NULL;
                 }
             }
             else {
-                found_attr = _PyValue_GetAttr(owner, name);
-            }
-            DECREF_INPUTS();
-            ERROR_IF(PyValue_IsNull(found_attr));
-            attr = found_attr;
-            if (oparg & 1) {
-                self_or_null[0] = found_self;
+                PyValue found_attr = _PyValue_GetAttr(owner, name);
+                DECREF_INPUTS();
+                ERROR_IF(PyValue_IsNull(found_attr));
+                attr = found_attr;
             }
         }
 

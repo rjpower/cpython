@@ -21,6 +21,7 @@ from test import test_tools
 ir_generator = cases.ir_generator
 with test_tools.imports_under_tool("cases_generator"):
     import ir_contract
+    import ir_contract_diff
     import ir_error_effects
     import ir_leaf
     import ir_records
@@ -123,6 +124,14 @@ class SliceTests(unittest.TestCase):
                 if name in ir_records.GUARD_TOKENS:
                     inferred.add(exits[ir_records.GUARD_TOKENS[name]])
                 self.assertLessEqual(inferred - {"next"}, set(table[name].exits))
+
+    def test_declarations_equal_the_inference(self):
+        parts = {(name, part.name): part
+                 for name, inst in ir_generator.handler_instructions(analysis).items()
+                 for part in inst.parts if isinstance(part, cases.analyzer.Uop)}
+        lines = ir_contract_diff.differences(records, parts)
+        self.assertEqual(lines[:-1], [])
+        self.assertRegex(lines[-1], r"^\d+ declared uops compared$")
 
     def test_component_checks_are_generated(self):
         checks = "\n".join(ir_contract.component_checks())
@@ -788,6 +797,19 @@ class VerifierTests(unittest.TestCase):
                 SPAM_GUARD(oparg);
             }
         """, r"OP: the miss follows .*, so the word cannot restart")
+
+    def test_declared_and_inferred_records_differ(self):
+        # The review script (outside the generator) reports a declaration
+        # wider than today's inference; the tree's declarations equal it
+        analysis = self.verify("""
+            inst(OP, (value -- value)) effects(reads) exits(next) {
+            }
+        """)
+        records = ir_generator.build_records(analysis, ir_generator.compute_formats(analysis))
+        parts = {("OP", u.name): u for u in analysis.uops.values()}
+        self.assertEqual(ir_contract_diff.differences(records, parts),
+                         ["OP/_OP: effects: declared ['READS_HEAP'], inferred []",
+                          "1 declared uops compared"])
 
     def test_intrinsic_outside_its_build(self):
         self.refuses("""

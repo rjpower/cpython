@@ -276,7 +276,6 @@ EFFECT_OPS = {"detach", "slot_store", "store", "take"}
 COUNT_PRIMS = {"PyValue_DUP", "PyValue_XDUP", "PyValue_CLOSE", "PyValue_XCLOSE",
                "PyValue_CLOSE_SPECIALIZED"}
 CLOSES = {"PyValue_CLOSE", "PyValue_XCLOSE", "PyValue_CLOSE_SPECIALIZED"}
-INLINE_FACTS = {"INLINE_INT", "INLINE_FLOAT", "NUMBER"}
 
 
 def temp_test(operand) -> str | None:
@@ -424,7 +423,8 @@ class Builder:
         # its close is nothing
         for guard in u.guards:
             for fact in guard.facts:
-                if fact.kind in INLINE_FACTS and fact.subject[1:].isdigit():
+                if (fact.kind == "ENCODING" and fact.subject[1:].isdigit()
+                        and set(fact.arg.split("|")) <= ir_contract.INLINE_WORDS):
                     v = self.env.get(int(fact.subject[1:]))
                     if v is not None:
                         self.inline.add(v)

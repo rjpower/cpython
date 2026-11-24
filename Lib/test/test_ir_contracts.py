@@ -90,17 +90,18 @@ class SliceTests(unittest.TestCase):
         def facts(guard):
             return [str(f) for f in guard.facts]
         add_int = uop_record("BINARY_OP_ADD_INT", "_GUARD_TOS_INT")
-        self.assertEqual([facts(g) for g in add_int.guards], [["INLINE_INT(v1)"]])
+        self.assertEqual([facts(g) for g in add_int.guards], [["ENCODING(v1, inline_int)"]])
         add_float = uop_record("BINARY_OP_ADD_FLOAT", "_BINARY_OP_ADD_FLOAT")
         self.assertEqual([facts(g) for g in add_float.guards],
-                         [["NUMBER(v0)", "NUMBER(v1)"]])
+                         [["ENCODING(v0, inline_float|inline_int)",
+                           "ENCODING(v1, inline_float|inline_int)"]])
         self.assertEqual([str(f) for f in add_float.results], ["EXACT_TYPE(v2, PyFloat_Type)"])
         result = uop_record("BINARY_OP_ADD_INT", "_BINARY_OP_ADD_INT").results
         self.assertEqual([str(f) for f in result], ["EXACT_TYPE(v2, PyLong_Type)"])
         # The implicit pointer-space guard, then the declared type test
         guard_list = uop_record("UNPACK_SEQUENCE_LIST", "_GUARD_TOS_LIST")
         self.assertEqual([facts(g) for g in guard_list.guards],
-                         [["OBJECT(v0)"], ["EXACT_TYPE(v0, PyList_Type)"]])
+                         [["ENCODING(v0, object)"], ["EXACT_TYPE(v0, PyList_Type)"]])
         unpack = uop_record("UNPACK_SEQUENCE_LIST", "_UNPACK_SEQUENCE_LIST")
         self.assertEqual([(facts(g), g.reason) for g in unpack.guards],
                          [([], "a free-threaded build's critical section"),
@@ -109,11 +110,11 @@ class SliceTests(unittest.TestCase):
         # inline values' flag; and the loaded value's, recorded on the local
         handler = "LOAD_ATTR_INSTANCE_VALUE"
         self.assertEqual([facts(g) for g in uop_record(handler, "_GUARD_TYPE_VERSION").guards],
-                         [["OBJECT(v0)"], ["TYPE_VERSION(v0, type_version)"]])
+                         [["ENCODING(v0, object)"], ["TYPE_VERSION(v0, type_version)"]])
         has_values = uop_record(handler, "_CHECK_MANAGED_OBJECT_HAS_VALUES")
         self.assertEqual([facts(g) for g in has_values.guards], [["INLINE_VALUES_VALID(v0)"]])
         load = uop_record(handler, "_LOAD_ATTR_INSTANCE_VALUE")
-        self.assertEqual([facts(g) for g in load.guards], [["NOT_NULL(found)"]])
+        self.assertEqual([facts(g) for g in load.guards], [["ENCODING(found, inline_float|inline_int|object)"]])
         self.assertEqual(load.effects, {READS_HEAP, MAY_RELEASE})
 
     # Where the tables (ir_records, deleted at G0d) declare an exit that the
@@ -163,7 +164,7 @@ class SliceTests(unittest.TestCase):
         # frame (F5); _GUARD_TOS_IS_NONE tests the identity of the word
         # with PyValue_None (F20)
         'RETURN_GENERATOR.record.uops[0].results: inferred 0 entries [], '
-        'declared 1 [{"__type": "Fact", "arg": "", "kind": "IS_NULL", '
+        'declared 1 [{"__type": "Fact", "arg": "null", "kind": "ENCODING", '
         '"subject": "v0"}]',
         'INSTRUMENTED_YIELD_VALUE/_YIELD_VALUE: output `value` is declared '
         'moved, the record has OWNED',
@@ -180,7 +181,7 @@ class SliceTests(unittest.TestCase):
         # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
         # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
         'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '
-        '[{"__type": "Fact", "arg": "", "kind": "IS_NULL", "subject": "v1"}]',
+        '[{"__type": "Fact", "arg": "null", "kind": "ENCODING", "subject": "v1"}]',
         'LOAD_FAST_CHECK.record.format.runs_code: inferred false, declared true',
         'LOAD_FAST_CHECK.record.uops[0].effects: inferred 2 entries '
         '["MAY_RAISE", "READS_HEAP"], declared 6 ["ALLOCATES", "MAY_RAISE", '

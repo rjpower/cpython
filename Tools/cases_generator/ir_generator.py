@@ -79,9 +79,9 @@ import ir_numbers
 from ir_records import (
     ASSIGNMENTS, CONST, DEOPT, ENTER_FRAME, EXIT_GUARD, FEEDBACK, GUARD_TOKENS, NEXT,
     IMMEDIATE, LOCAL, MAY_RAISE, OPERANDS, POLY_TABLE_READERS, RELEASE_LIKE,
-    RUNS_PYTHON, SITE_TOKENS, SLOT, TARGET, TEMP, WINDOW, YIELD, CallShape, Fact,
+    RUNS_PYTHON, SITE_TOKENS, SLOT, TARGET, TEMP, WINDOW, YIELD, CallShape,
     FeedbackOperand, FeedbackSchema, Guard, Operand, OperationRecord, Subjects,
-    Transfer, UopRecord, assigns_to, changes, check_record, feedback_schema,
+    Transfer, UopRecord, assigns_to, changes, check_record, encoding, feedback_schema,
     guard_facts, uop_record_effects, passed_through, record_through, result_facts,
     site_tokens, uop_transfers, walk_values,
 )
@@ -5971,7 +5971,7 @@ def implicit_object_guards(walk, index: int, uop: Uop, known: set[int]) -> list[
     for item in inputs:
         if item.name in uop.object_inputs and item.value not in known:
             result.append(Guard(EXIT_GUARD, None, item.name,
-                                facts=(Fact("OBJECT", f"v{item.value}"),)))
+                                facts=(encoding(f"v{item.value}", "object"),)))
             known.add(item.value)
     return result
 

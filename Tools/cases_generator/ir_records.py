@@ -604,14 +604,38 @@ class Fact:
 # TYPE_VERSION(v, K): type(v)'s version is K; TYPE_VERSION(v) without an
 # argument: type(v) has a version, not a specific one.
 FACT_KINDS = frozenset((
-    "INLINE_INT", "INLINE_FLOAT", "NUMBER", "OBJECT", "NOT_NULL", "IS_NULL",
-    "IS_NONE", "EXACT_TYPE", "NOT_TYPE", "SUBTYPE", "IDENTITY", "TYPE_VERSION",
+    "ENCODING", "IS_NONE", "EXACT_TYPE", "NOT_TYPE", "SUBTYPE", "IDENTITY", "TYPE_VERSION",
     "CLASS_VERSION", "KEYS_VERSION", "SHAPE", "INLINE_VALUES_VALID",
     "FUNC_VERSION", "LENGTH", "IN_BOUNDS", "NON_NEGATIVE", "NON_ZERO",
     "ARGCOUNT", "OPERAND_COUNT", "CONVENTION", "SELF", "TYPE_FLAG", "TYPE_SLOT",
     "VECTORCALL", "UNIQUE", "ASCII", "NOT_SUBTYPE", "KEYS_KIND", "ENTRY_KEY",
-    "NO_MANAGED_DICT", "TAGGED_INDEX", "ENCODING",
+    "NO_MANAGED_DICT", "TAGGED_INDEX",
 ))
+
+
+def encoding(subject: str, word: str) -> Fact:
+    """The representation fact that the vocabulary's word (`inline_int`,
+    `object`, `nonnull`...) states: ENCODING with the kinds of word it allows
+    (ir_contract's lattice), the one kind of every representation fact"""
+    import ir_contract
+    return ir_contract.VFact(word).record(subject)
+
+
+def join_encodings(facts) -> tuple[Fact, ...]:
+    """facts with one ENCODING fact per subject, at its first: the kinds of
+    word that all of the subject's allow"""
+    kinds: dict[str, set[str]] = {}
+    for f in facts:
+        if f.kind == "ENCODING":
+            members = set(f.arg.split("|"))
+            kinds[f.subject] = kinds[f.subject] & members if f.subject in kinds else members
+    result = []
+    for f in facts:
+        if f.kind != "ENCODING":
+            result.append(f)
+        elif f.subject in kinds:
+            result.append(Fact("ENCODING", f.subject, "|".join(sorted(kinds.pop(f.subject)))))
+    return tuple(result)
 
 # Predicates of the thread or interpreter, which hold no fact of an operand
 CONTEXT_PREDICATES = {
@@ -742,8 +766,13 @@ _EXACT_CHECKS = frozenset({"PyFunction_Check", "PyMethod_Check"})
 def predicate_facts(p: list, subjects: Subjects) -> list[Fact] | None:
     "The facts that predicate p, which holds, establishes, or None"
     p = _strip(p)
-    simple = {"PyValue_IsInlineInt": "INLINE_INT", "PyValue_IsInlineFloat": "INLINE_FLOAT",
-              "PyValue_IsObject": "OBJECT", "PyValue_IsNone": "IS_NONE",
+    encodings = {"PyValue_IsInlineInt": "inline_int", "PyValue_IsInlineFloat": "inline_float",
+                 "PyValue_IsObject": "object"}
+    for name, word in encodings.items():
+        args = _call(p, name)
+        if args is not None and len(args) == 1:
+            return [encoding(subjects.of(args[0]), word)]
+    simple = {"PyValue_IsNone": "IS_NONE",
               "_PyObject_IsUniquelyReferenced": "UNIQUE",
               "PyUnicode_IS_COMPACT_ASCII": "ASCII"}
     for name, kind in simple.items():
@@ -752,7 +781,7 @@ def predicate_facts(p: list, subjects: Subjects) -> list[Fact] | None:
             return [Fact(kind, subjects.of(args[0]))]
     args = _call(p, "PyValue_FloatOperandValues")
     if args is not None:
-        return [Fact("NUMBER", subjects.of(args[0])), Fact("NUMBER", subjects.of(args[1]))]
+        return [encoding(subjects.of(args[0]), "inline"), encoding(subjects.of(args[1]), "inline")]
     args = _call(p, "PyValue_LongCheckExact")
     if args is not None:
         return [Fact("EXACT_TYPE", subjects.of(args[0]), "PyLong_Type")]
@@ -855,10 +884,10 @@ def comparison_facts(lhs: list, op: str, rhs: list,
         if len(left) == 1 and right[:1] == ["&"] or _uncast(rhs)[:1] == ["&"]:
             return [Fact("IDENTITY", subjects.of(left), " ".join(_uncast(rhs)).lstrip("& "))]
         if right == ["NULL"]:
-            return [Fact("IS_NULL", subjects.of(left))]
+            return [encoding(subjects.of(left), "null")]
     if op == "==":
         if right == ["NULL"]:
-            return [Fact("NOT_NULL", subjects.of(left))]
+            return [encoding(subjects.of(left), "nonnull")]
         if right == ["0"] and left[-2:] == ["->", "tp_version_tag"]:
             owner = subjects.of(left[:-2])
             if owner.startswith("type(") and owner.endswith(")"):
@@ -925,7 +954,7 @@ def failure_term_facts(term: list, subjects: Subjects) -> list[Fact] | None:
                      subjects.of(_call(term, term[0])[0]), m.group(1) + "_Type")]
     args = _call(term, "PyValue_IsNull")
     if args is not None:
-        return [Fact("NOT_NULL", subjects.of(args[0]))]
+        return [encoding(subjects.of(args[0]), "nonnull")]
     args = _call(term, "_PyObject_GetManagedDict")
     if args is not None:
         return [Fact("NO_MANAGED_DICT", subjects.of(args[0]))]
@@ -996,7 +1025,7 @@ def _nested_if(stmt: Stmt, site: Token) -> bool:
 
 # The guard markers and the facts that each establishes of its arguments
 MARKER_FACTS = {
-    "IR_GUARD_INLINE_INT": lambda a, s: [Fact("INLINE_INT", s.of(a[0]))],
+    "IR_GUARD_INLINE_INT": lambda a, s: [encoding(s.of(a[0]), "inline_int")],
     "IR_GUARD_ELEMENT_TYPE": lambda a, s: [Fact("EXACT_TYPE", s.of(a[0]), " ".join(a[1]))],
     "IR_GUARD_ELEMENT_INDEX": lambda a, s: [Fact("IN_BOUNDS", s.of(a[1]), s.of(a[0]))],
     "IR_GUARD_SHAPE_READ": lambda a, s: [Fact("TYPE_VERSION", s.of(a[0]), " ".join(a[1])),
@@ -1010,7 +1039,7 @@ def guard_facts(uop: Uop, site: Token, subjects: Subjects) -> tuple[tuple[Fact, 
         tokens = [t.text for t in uop.body.tokens() if t.kind != "COMMENT"]
         i = [t for t in uop.body.tokens() if t.kind != "COMMENT"].index(site)
         args = _call(tokens[i:_close(tokens, i + 1) + 1], site.text)
-        return tuple(MARKER_FACTS[site.text](args, subjects)), ""
+        return join_encodings(MARKER_FACTS[site.text](args, subjects)), ""
     cond, reason = guard_condition(uop, site)
     if reason:
         return (), reason
@@ -1021,7 +1050,7 @@ def guard_facts(uop: Uop, site: Token, subjects: Subjects) -> tuple[tuple[Fact, 
     if facts is None:
         return (), ""       # check_record() refuses it
     assert all(f.kind in FACT_KINDS for f in facts)
-    return tuple(facts), ""
+    return join_encodings(facts), ""
 
 
 # The facts of a uop's results: every assignment to an output makes a
@@ -1053,7 +1082,7 @@ def result_facts(uop: Uop, outputs: tuple[UopOutput, ...]) -> tuple[Fact, ...]:
         if all(BOOL_RESULT.fullmatch(" ".join(src)) for src in sources):
             facts.append(Fact("EXACT_TYPE", subject, "PyBool_Type"))
         elif callees <= INLINE_INT_RESULTS:
-            facts += [Fact("INLINE_INT", subject), Fact("EXACT_TYPE", subject, "PyLong_Type")]
+            facts += [encoding(subject, "inline_int"), Fact("EXACT_TYPE", subject, "PyLong_Type")]
         elif callees <= INT_RESULTS:
             facts.append(Fact("EXACT_TYPE", subject, "PyLong_Type"))
         elif callees <= FLOAT_RESULTS:

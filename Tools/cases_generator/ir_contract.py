@@ -96,20 +96,22 @@ ARG_MODES = ("borrowed", "consumed", "taken", "scalar", "object", "tstate", "fra
 # the length of input x, `is(K)` the identity of a CONSTANT row's value,
 # `encoding(E1|E2|null)` a union of encodings (the representation table).
 FACT_KIND = {
-    "nonnull": "NOT_NULL", "inline": "NUMBER", "inline_int": "INLINE_INT",
-    "inline_float": "INLINE_FLOAT", "object": "OBJECT", "exact": "EXACT_TYPE",
+    "exact": "EXACT_TYPE",
     "type_version": "TYPE_VERSION", "has_values": "INLINE_VALUES_VALID",
     "shape": "SHAPE", "keys_version": "KEYS_VERSION", "length": "LENGTH",
-    "null": "IS_NULL", "in_bounds": "IN_BOUNDS", "nonnegative": "NON_NEGATIVE",
+    "in_bounds": "IN_BOUNDS", "nonnegative": "NON_NEGATIVE",
     "nonzero": "NON_ZERO", "is": "IDENTITY", "subtype": "SUBTYPE",
     "not_subtype": "NOT_SUBTYPE", "not_exact": "NOT_TYPE", "type_flag": "TYPE_FLAG",
     "type_slot": "TYPE_SLOT", "class_version": "CLASS_VERSION",
     "func_version": "FUNC_VERSION", "argcount": "ARGCOUNT", "vectorcall": "VECTORCALL",
     "convention": "CONVENTION", "ascii": "ASCII", "no_managed_dict": "NO_MANAGED_DICT",
     "unique": "UNIQUE", "self": "SELF", "tagged_index": "TAGGED_INDEX",
-    "encoding": "ENCODING",
+    # Every representation word is one record kind, ENCODING, with the set
+    # of kinds of word that it allows (VFact.record)
+    **{word: "ENCODING" for word in ("nonnull", "null", "inline", "inline_int",
+                                    "inline_float", "object", "encoding")},
 }
-VOCABULARY_OF_KIND = {v: k for k, v in FACT_KIND.items()}
+VOCABULARY_OF_KIND = {v: k for k, v in FACT_KIND.items() if v != "ENCODING"}
 FACTS_WITH_ARGUMENT = frozenset(("exact", "type_version", "shape", "keys_version", "length",
                                  "in_bounds", "is", "subtype", "not_subtype", "not_exact",
                                  "type_flag", "type_slot", "self", "encoding"))
@@ -160,7 +162,9 @@ class VFact:
 
     def record(self, subject: str) -> Fact:
         arg = self.arg
-        if self.kind in ("exact", "convention"):
+        if FACT_KIND[self.kind] == "ENCODING":
+            arg = "|".join(sorted(word_kinds({self})))
+        elif self.kind in ("exact", "convention"):
             arg = " | ".join(arg.split("|"))
         elif self.kind == "type_slot":
             arg = " == ".join(arg.split(","))
@@ -4307,9 +4311,9 @@ def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...],
         # A local's fact is recorded on the local, as the inference did
         live = walk.exit.facts.get(name, frozenset()) if walk.exit else frozenset()
         root, dot, rest = name.partition(".")
-        return [Fact(FACT_KIND[f.kind], values.get(root, root) + dot + rest,
-                     values.get(f.arg, f.arg) if f.kind == "in_bounds" else f.record("").arg)
-                for f in facts if f in live]
+        subject = values.get(root, root) + dot + rest
+        return [Fact(FACT_KIND[f.kind], subject, values.get(f.arg, f.arg)) if f.kind == "in_bounds"
+                else f.record(subject) for f in facts if f in live]
 
     row = table.get(site.text)
     if row is not None and row.result.shape == "GUARD":
@@ -4323,7 +4327,7 @@ def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...],
             facts = _bind_facts(facts, args, views)
             if name is not None and facts:
                 result += recorded(name, sorted(facts))
-        return tuple(result), ""
+        return ir_records.join_encodings(result), ""
     cond, reason = guard_condition(uop, site)
     found = condition_facts(cond, views, table, holds=False)
     if found is None:
@@ -4333,7 +4337,7 @@ def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...],
     result = []
     for name, facts in stated.items():
         result += recorded(name, facts)
-    return tuple(result), reason or found[1]
+    return ir_records.join_encodings(result), reason or found[1]
 
 
 def _stated_facts(cond: list[str], views: Views, table: dict[str, Row],
@@ -4371,8 +4375,9 @@ def _stated_facts(cond: list[str], views: Views, table: dict[str, Row],
             sides = set(true | false)
             have = found[0].get(name, frozenset())
             if any(f.kind == EXCLUDES for f in false):
-                # A `rest` side, where the test failed, states what remains
-                # in the plain words the record has today (records: G0d)
+                # A `rest` side, where the test failed, states what remains:
+                # the value's plain words, which the record joins in one
+                # ENCODING
                 sides = set(true) if true <= have else {
                     f for f in have if f.kind in SPELLINGS}
             for f in sorted(sides):
@@ -4426,4 +4431,4 @@ def record_results(uop: Uop, outputs) -> tuple[Fact, ...]:
         out = by_name.get(item.name)
         if out is not None and item.mode in ("owned", "inline"):
             result += [f.record(f"v{out.value}") for f in sorted(item.facts)]
-    return tuple(result)
+    return ir_records.join_encodings(result)

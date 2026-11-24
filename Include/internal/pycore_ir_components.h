@@ -1290,19 +1290,20 @@
      * frame state */ \
     MACRO(IR_GUARD_INLINE_INT, ARGS(borrowed), GUARD(inline_int), EFFECTS(), \
           EXITS(miss)) \
-    /* IR_GUARD_ELEMENT_TYPE's fact is exact(T) with T named by its scalar \
-     * argument (LIST or TUPLE, ir_records.MARKER_FACTS), which no GUARD \
-     * entry can bind yet */ \
-    MACRO(IR_GUARD_ELEMENT_TYPE, ARGS(borrowed, scalar), NONE, \
+    /* MARKER_FACTS: exact(T) of the value, T the type its scalar argument \
+     * 1 names (LIST or TUPLE: PyList_Type or PyTuple_Type), bound by G0a4 */ \
+    MACRO(IR_GUARD_ELEMENT_TYPE, ARGS(borrowed, scalar), GUARD(exact(1)), \
           EFFECTS(reads), EXITS(miss)) \
     /* MARKER_FACTS: the subscript (argument 1) is in_bounds of the \
      * container (argument 0) */ \
     MACRO(IR_GUARD_ELEMENT_INDEX, ARGS(borrowed, borrowed, scalar, scalar), \
           GUARD(, in_bounds(0)), EFFECTS(reads), EXITS(miss)) \
     /* GUARD_TOKENS: IR_GUARD_SHAPE_READ is an EXIT_GUARD; its owner is a \
-     * PyObject * (PyValue_AsKnownObjectBorrow), the rest scalars */ \
-    MACRO(IR_GUARD_SHAPE_READ, ARGS(object, scalar, scalar), NONE, \
-          EFFECTS(reads), EXITS(miss)) \
+     * PyObject * (PyValue_AsKnownObjectBorrow), the rest scalars.  \
+     * MARKER_FACTS: the owner's type version and shape are scalar \
+     * arguments 1 and 2 */ \
+    MACRO(IR_GUARD_SHAPE_READ, ARGS(object, scalar, scalar), \
+          GUARD(type_version(1) shape(2)), EFFECTS(reads), EXITS(miss)) \
     /* Duplicating reads (ir_generator.py: shape_read_value, \
      * IR_DUP_CANONICAL_ELEMENT in IR_HELPER_EFFECTS with an empty set): a \
      * new reference to an element or a slot's value, no Python */ \

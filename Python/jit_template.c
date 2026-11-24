@@ -73,17 +73,9 @@ _PyJitTemplate_SarLog2(_PyJitWordCx *cx, _PyJitReg dst, size_t size)
 }
 
 #include "jit_lowerings.h"
-#include "jit_templates.c.h"
-/* The templates of the register instruction arms (Python/register_ops) */
+/* The templates of the register instruction arms (Python/register_ops);
+ * the one table of templates, in jit_templates.c.h, lists them */
 #include "generated_rop_templates.c.h"
-
-_PyJitTemplate
-_PyJit_TemplateOf(int handler)
-{
-    if (handler >= ROP_FIRST_HANDLER) {
-        return _PyJit_RopTemplates[handler - ROP_FIRST_HANDLER];
-    }
-    return _PyJit_Templates[handler];
-}
+#include "jit_templates.c.h"
 
 #endif  // _PY_JIT_SUPPORTED

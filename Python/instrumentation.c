@@ -1611,7 +1611,9 @@ source_line_event(PyThreadState *tstate, _PyInterpreterFrame *frame,
 error:
     if (!observer_redirected(frame, before)) {
         _PyExceptionHandler handler = {
-            event.handler >= 0, event.exc_slot, event.handler, event.lasti};
+            .exc_slot = event.exc_slot, .handler = event.handler,
+            .recipe = event.recipe, .handled = event.handler >= 0,
+            .lasti = event.lasti};
         _PyEval_RecordSourceError(tstate, frame, handler);
         if (frame->frame_obj) {
             frame->frame_obj->f_source_event_error = (int)index;

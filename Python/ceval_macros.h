@@ -481,6 +481,18 @@ _PyFb_AdvanceCounter(_PyFbHeader *fb)
     fb->counter = advance_backoff_counter(fb->counter);
 }
 
+/* The `tick` row (Python/register_ops/core.rop): quiet when the counter has
+ * not triggered, which advances it. */
+static inline bool
+_PyFb_TickQuiet(_PyFbHeader *fb)
+{
+    if (_PyFb_CounterTriggers(fb)) {
+        return false;
+    }
+    _PyFb_AdvanceCounter(fb);
+    return true;
+}
+
 /* Keep the site's counter from triggering while an instrumented twin runs the
  * word, so that the specializer does not overwrite the instrumentation.  A
  * function, not a macro, so its row (pycore_ir_components.h) is type checked;

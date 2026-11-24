@@ -3077,4 +3077,5 @@ const _PyJitTemplate _PyJit_Templates[512] = {
     [307] = jit_template_COMPARE_OP_JUMP_INT,
     [319] = jit_template_LOAD_ATTR_SHAPE_LOCAL_TEMP,
     [418] = jit_template_RESUME_CHECK,
+    [ROP_HANDLER_Add_Int] = jit_template_Add_Int,
 };

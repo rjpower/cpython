@@ -536,12 +536,16 @@ _opcode.get_exception_entries
     code: object(type="PyCodeObject *", subclass_of="&PyCode_Type")
     /
 
-Return admitted (start, end, target, slot, lasti) exception entries.
+Return admitted exception entries.
+
+Each is (start, end, target, slot, lasti, recipe).  The recipe is a
+tuple of the (source, home) slot pairs that the unwinder moves before
+it enters the handler.
 [clinic start generated code]*/
 
 static PyValue
 _opcode_get_exception_entries_impl(PyObject *module, PyCodeObject *code)
-/*[clinic end generated code: output=05d34b778bd6dfb2 input=2edb896bcdc0d4be]*/
+/*[clinic end generated code: output=05d34b778bd6dfb2 input=219f916e93cbf374]*/
 {
     // The tables are those of the IR, which code that has not run lacks
     if (_PyCode_GetIR(code) == NULL) {
@@ -555,13 +559,30 @@ _opcode_get_exception_entries_impl(PyObject *module, PyCodeObject *code)
         return PyValue_NULL;
     }
     while (p < end) {
-        _PyIRExceptionEntry entry;
+        _PyIRExceptionEntry entry = {0};
         int valid = _PyIR_ExceptionNext(&p, end, &entry);
         assert(valid == 0);
         (void)valid;
-        PyObject *row = Py_BuildValue("(iiiiO)", entry.start, entry.end,
+        const int32_t *recipe = _PyIR_Recipe(_PyCode_IR(code), entry.recipe);
+        int n = recipe != NULL ? recipe[0] : 0;
+        PyObject *moves = PyTuple_New(n);
+        if (moves == NULL) {
+            Py_DECREF(result);
+            return PyValue_NULL;
+        }
+        for (int q = 0; q < n; q++) {
+            PyObject *pair = Py_BuildValue("(ii)", recipe[1 + 2 * q],
+                                           recipe[2 + 2 * q]);
+            if (pair == NULL) {
+                Py_DECREF(moves);
+                Py_DECREF(result);
+                return PyValue_NULL;
+            }
+            PyTuple_SET_VALUE(moves, q, PyValue_FromObjectSteal(pair));
+        }
+        PyObject *row = Py_BuildValue("(iiiiON)", entry.start, entry.end,
                                       entry.target, entry.slot,
-                                      entry.lasti ? Py_True : Py_False);
+                                      entry.lasti ? Py_True : Py_False, moves);
         if (row == NULL || PyList_AppendValue(result, PyValue_FromObjectBorrow(row)) < 0) {
             Py_XDECREF(row);
             Py_DECREF(result);

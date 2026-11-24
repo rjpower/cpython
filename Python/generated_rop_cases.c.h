@@ -4,9 +4,9 @@
 // Do not edit!
 //
 // Arms left out, and what blocks each:
-//   Add.Generic: pending: anchor_for_call, backoff, binary_at_origin, install, retire_abandoned, retire_failed_call, tick
-//   GetAttr.Generic: pending: anchor_for_call, backoff, getattr_at_origin, install, retire_abandoned, retire_failed_call, tick
-//   GetMethod.Generic: pending: anchor_for_call, backoff, getmethod_at_origin, install, retire_abandoned, retire_failed_call, tick
+//   Add.Generic: pending: binary_at_origin
+//   GetAttr.Generic: pending: getattr_at_origin
+//   GetMethod.Generic: pending: getmethod_at_origin
 
 /* A family with no generic arm cannot miss: no word selects its arms yet. */
 #ifndef ROP_NO_GENERIC

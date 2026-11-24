@@ -2540,6 +2540,111 @@ class RegCfgTest(unittest.TestCase):
         self.assertEqual(f([0, 2]), 0.5)
         self.assertIsInstance(f([0]), ZeroDivisionError)
 
+class IdentityTranslationTest(unittest.TestCase):
+    """SWAP permutes the translator's value identities instead of running a
+    word; an exceptional edge whose handler then finds its parameters
+    elsewhere carries an ingress recipe, which the unwinder applies
+    (Python/regcfg.c, _PyEval_ProcessError)"""
+
+    @staticmethod
+    def comp(xs):
+        x = "outer"
+        try:
+            {x for x in xs}
+        except (MemoryError, ZeroDivisionError):
+            return "caught", x
+        return "done", x
+
+    def test_no_swap_words(self):
+        def comp(xs):
+            return [x for x in xs]
+        def unpack(p):
+            a, b = p
+            return b
+        for func in comp, unpack:
+            with self.subTest(func=func.__name__):
+                self.assertNotIn("SWAP", [w[0] for w in words(func)])
+        self.assertEqual(comp((1, 2)), [1, 2])
+        self.assertEqual(unpack((1, 2)), 2)
+
+    def test_the_container_edge_carries_a_recipe(self):
+        # Until GET_ITER takes the iterable, the comprehension's handler
+        # finds it below its depth, where the set goes later: the recipe
+        # moves it there
+        words(self.comp)
+        recipes = [entry[5] for entry in
+                   _opcode.get_exception_entries(self.comp.__code__)
+                   if entry[5]]
+        self.assertEqual(len(recipes), 1)
+        ((source, home),) = recipes[0]
+        self.assertGreaterEqual(home, nlocalsplus(self.comp))
+        self.assertGreater(source, home)
+
+    def check_unwinds(self, fail, values=("outer",)):
+        xs = [1, 2]
+        before = sys.getrefcount(xs)
+        caught, x = fail(xs)
+        self.assertEqual(caught, "caught")
+        self.assertIn(x, values)
+        self.assertEqual(sys.getrefcount(xs), before)
+
+    def test_unwind_applies_the_recipe(self):
+        # The set's is the first allocation of the comprehension, unless the
+        # runtime allocates first (a compile), so fail each of the first few
+        _testcapi = import_helper.import_module("_testcapi")
+        xs = [1, 2]
+        before = sys.getrefcount(xs)
+        results = set()
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
+            for start in range(4):
+                _testcapi.set_nomemory(start, start + 1)
+                try:
+                    result = self.comp(xs)
+                except MemoryError:
+                    result = None
+                finally:
+                    _testcapi.remove_mem_hooks()
+                results.add(result)
+        self.assertIn(("caught", "outer"), results)
+        self.assertLessEqual(results, {("caught", "outer"), ("done", "outer"), None})
+        self.assertEqual(sys.getrefcount(xs), before)
+
+    def test_every_edge_unwinds(self):
+        # An INSTRUCTION event that raises fails the word that it reports
+        mon = sys.monitoring
+        tool = mon.DEBUGGER_ID
+        code = self.comp.__code__
+        offsets = []
+        mon.use_tool_id(tool, "test_ir")
+        try:
+            mon.register_callback(tool, mon.events.INSTRUCTION,
+                                  lambda code, offset: offsets.append(offset))
+            mon.set_local_events(tool, code, mon.events.INSTRUCTION)
+            self.comp([1, 2])
+            mon.set_local_events(tool, code, 0)
+            for target in sorted(set(offsets)):
+                def event(code, offset):
+                    if offset == target:
+                        raise ZeroDivisionError
+                mon.register_callback(tool, mon.events.INSTRUCTION, event)
+                mon.set_local_events(tool, code, mon.events.INSTRUCTION)
+                def fail(xs):
+                    try:
+                        return self.comp(xs)
+                    except ZeroDivisionError:
+                        # Outside the try statement
+                        return "caught", "outer"
+                # The comprehension's handler restores x; after its range,
+                # x keeps the last element
+                with self.subTest(offset=target):
+                    self.check_unwinds(fail, ("outer", 2))
+                mon.set_local_events(tool, code, 0)
+        finally:
+            mon.set_local_events(tool, code, 0)
+            mon.register_callback(tool, mon.events.INSTRUCTION, None)
+            mon.free_tool_id(tool)
+
+
 class UnpackToLocalsTest(unittest.TestCase):
     """Unpacks that write their targets, a run of locals, themselves
     (Python/regcfg_passes.c, _PyRegPass_UnpackLocals)"""

@@ -4661,7 +4661,8 @@ decode_exceptions(PyCodeObject *co, decoded_instr *instrs, int ninstrs,
     int k = 0;
     while (cursor < end) {
         _PyIRExceptionEntry entry;
-        if (_PyIR_ExceptionNext(&cursor, end, &entry) < 0 ||
+        if (_PyIR_ExceptionDecode(&cursor, end, _PyCODE_EXCEPTION_FIELDS,
+                                  &entry) < 0 ||
             entry.end > units || entry.target >= units ||
             instr_of_unit[entry.target] < 0)
         {

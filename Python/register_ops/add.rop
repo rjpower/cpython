@@ -30,16 +30,6 @@ extern primitive int_scaled(v:B) -> Scaled51
     lowering: "jit_lower.c LOWERING(_PyValue_IntScaled)",
     test: "test_ir_leaf CASES");
 
-extern primitive unbox_i51(v:B) -> I51
-  effects()
-  requires(inline_int(v))
-  c PyValue_InlineInt64 as scalar
-  evidence(
-    review: "Reviewed G0c2. pycore_value.h: arithmetic shift of the scaled word.",
-    contract: "Inline int required (asserted). No memory, no failure.",
-    lowering: "jit_lower.c LOWERING(PyValue_InlineInt64)",
-    test: "test_ir_leaf CASES");
-
 extern primitive from_int_scaled(s:Scaled51) -> O
   effects()
   ensures(result.inline_int(result))
@@ -51,16 +41,15 @@ extern primitive from_int_scaled(s:Scaled51) -> O
     lowering: "jit_lower.c LOWERING(_PyValue_FromIntScaled)",
     test: "test_ir_leaf CASES[_PyValue_FromIntScaled]");
 
-// The scaled sum: fits(s) when a + b does not overflow 64 bits, else
-// overflow().  Declared ahead of its C body and lowering (F2).
+// The scaled sum: fits(s) when a + b does not overflow 64 bits; else
+// overflow(w) with w the unscaled sum of the two int51s, which fits in 64
+// bits and lies outside the int51 range.  The case carries the value its
+// fact is about, so the fact stays unary.  Declared ahead of its C body and
+// lowering (F2).
 extern primitive add_checked_scaled(a:Scaled51, b:Scaled51)
-  cases(fits(s:Scaled51), overflow())
+  cases(fits(s:Scaled51), overflow(w:I64))
   effects()
-  pending;
-
-// The sum of two int51s, which always fits in 64 bits
-extern primitive sum_i51_wide(a:I51, b:I51) -> I64
-  effects()
+  ensures(overflow.outside_i51(w))
   pending;
 
 extern helper box_i64(v:I64)
@@ -141,8 +130,7 @@ arm Add.Int inline
     }
   Fits(s:Scaled51):
     goto Finish(from_int_scaled(s));
-  Overflow():
-    let full:I64 = sum_i51_wide(unbox_i51(l), unbox_i51(r));
+  Overflow(full:I64):
     call box_i64(full) {
       ok -> Finish();
       err -> Failed();

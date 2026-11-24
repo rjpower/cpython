@@ -513,8 +513,7 @@ class DefinitionTests(unittest.TestCase):
 
     def test_pending_rows(self):
         pending = set(self.program.pending)
-        for name in ("add_checked_scaled", "sum_i51_wide", "tick", "install",
-                     "admitted_instance_slot"):
+        for name in ("add_checked_scaled", "tick", "install", "admitted_instance_slot"):
             self.assertIn(name, pending)
         for x in self.program.externs.values():
             if x.c is not None:

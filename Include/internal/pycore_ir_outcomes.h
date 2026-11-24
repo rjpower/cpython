@@ -741,6 +741,7 @@ enum {
     _PyIR_PHYS_SWAP,
     _PyIR_PHYS_YIELD,
     _PyIR_PHYS_FOR_ITER,
+    _PyIR_PHYS_COMPLETE,
     _PyIR_PHYS_GENERIC,
 };
 
@@ -899,7 +900,41 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
             }
             p->mode = _PyIR_PHYS_CLEAR_A;
             return;
+        case POP_EXCEPT:
+            /* It detaches scratch A, the saved exception, as POP_TOP does */
+            if (edge || handler != POP_EXCEPT ||
+                fmt->roles[0] != _PyIR_ROLE_IN0 ||
+                fmt->roles[1] != _PyIR_ROLE_NONE ||
+                fmt->roles[2] != _PyIR_ROLE_NONE ||
+                fmt->roles[3] != _PyIR_ROLE_NONE ||
+                IR_A(word) < (uint32_t)nl)
+            {
+                return;
+            }
+            p->mode = _PyIR_PHYS_CLEAR_A;
+            return;
+        case SEND:
+        case CLEANUP_THROW:
+            /* A completion that discards its value retires the whole window
+             * (gen_complete): the receiver, the cursor, the sent value and,
+             * for a throw, the exception. */
+            if (edge == 1 && base >= 0 && (fmt->flags & _PyIR_DISCARDS) &&
+                fmt->roles[1] == _PyIR_ROLE_BASE)
+            {
+                p->completion = _PyIR_BaseOpcode(handler) == SEND ? 3 : 4;
+                if (base > limit - p->completion) {
+                    return;
+                }
+                p->mode = _PyIR_PHYS_COMPLETE;
+                return;
+            }
+            break;
         case YIELD_VALUE:
+            if (_PyIR_HandlerBase[handler] == YIELD_DELEGATED) {
+                /* A send's delegated yield names its inputs in IN fields;
+                 * the generic rule keeps every other home. */
+                break;
+            }
             if (edge || fmt->roles[0] != _PyIR_ROLE_DST ||
                 fmt->roles[1] != _PyIR_ROLE_BASE || reads != 1 || writes != 1 ||
                 through != 0 || base < 0)
@@ -927,7 +962,11 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
             return;
     }
 
-    if (fmt->effects & _PyIR_PUSHES_FRAME) {
+    /* A send enters the receiver generator's own frame, never this frame's
+     * arena, so homes outside its window survive like any window word's. */
+    if ((fmt->effects & _PyIR_PUSHES_FRAME) &&
+        !(_PyIR_BaseOpcode(handler) == SEND && base >= 0))
+    {
         /* Only an actual independent reservation preserves the parent's
          * homes outside its consumed inputs and eventual recipient. */
         if (fmt->owner_events != 1) {
@@ -1013,6 +1052,9 @@ _PyIR_PhysicalAt(const _PyIRPhysicalWord *p, int home)
                 return set_null;
             }
             return unknown;
+        case _PyIR_PHYS_COMPLETE:
+            return home >= p->base && home - p->base < p->completion
+                ? set_null : preserve;
     }
     assert(p->mode == _PyIR_PHYS_GENERIC);
     /* In every other format, a read outside the unchanged prefix or a

@@ -1386,9 +1386,16 @@ class VerifierTests(unittest.TestCase):
         self.assertLess(body.index("assert(!PyValue_IsNull(value) && "
                                    "(PyValue_TYPE(value) == &PyUnicode_Type));"),
                         body.index("_PyUnicode_ExactDealloc"))
-        # The leaf IR has no assertion: no template without it
-        with self.assertRaisesRegex(ir_leaf.LeafError, r"`value` is assumed"):
-            ir_leaf.translate(analysis.uops["OP"])
+        # The leaf IR states it as an assume op, which the templates check
+        # (test_ir_leaf, test_jit_template)
+        analysis = self.verify("""
+            inst(OP, (value: borrowed assumed(exact(PyUnicode_Type)) by _P --))
+                effects() exits(next)
+            {
+            }
+        """)
+        self.assertIn("  assume exact PyUnicode_Type %0",
+                      ir_leaf.translate(analysis.uops["OP"]).dump())
 
     def test_frame_paths(self):
         # GLOBALS() and BUILTINS() are pointers along paths from the frame,

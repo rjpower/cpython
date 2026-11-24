@@ -5969,8 +5969,8 @@ ir_run_CHECK_EG_MATCH(
             assert(!IR_IS_LOCAL_FIELD(ir_word, A));
             PyValueBorrow exc_value_st;
             PyValueBorrow match_type_st;
-            PyValue rest;
-            PyValue match;
+            PyValue exc_rest;
+            PyValue exc_match;
             PyValue ir_own_B = PyValue_NULL;
             (void)ir_own_B;
             PyValue ir_own_C = PyValue_NULL;
@@ -6001,10 +6001,10 @@ ir_run_CHECK_EG_MATCH(
             if (!Py_IsNone(match_o)) {
                 PyErr_SetHandledException(match_o);
             }
-            rest = PyValue_FromObjectSteal(rest_o);
-            match = PyValue_FromObjectSteal(match_o);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), rest);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), match);
+            exc_rest = PyValue_FromObjectSteal(rest_o);
+            exc_match = PyValue_FromObjectSteal(match_o);
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), exc_rest);
+            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), exc_match);
             DISPATCH();
         }
 

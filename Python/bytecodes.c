@@ -3944,8 +3944,13 @@ dummy_func(
         macro(INSTRUMENTED_IS_OP_JUMP) =
             _IS_OP + POP_TOP + POP_TOP + _INSTRUMENTED_JUMP_IF_COND;
 
-        outlined inst(CHECK_EG_MATCH, (exc_value_st, match_type_st -- rest, match)) {
-            assert(PyValue_IsObject(exc_value_st));
+        outlined inst(CHECK_EG_MATCH,
+                (exc_value_st: consumed assumed(object) by exception_unwind, match_type_st: consumed
+                 -- exc_rest: owned, exc_match: owned))
+            effects(runs_python, releases) exits(next, raise)
+        {
+            // The exception being handled is an object; the generator
+            // asserts the assumption
             PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
             // Taken before the check, which can run code
             PyValue held_exc = TAKE(exc_value_st);
@@ -3970,8 +3975,8 @@ dummy_func(
             if (!Py_IsNone(match_o)) {
                 PyErr_SetHandledException(match_o);
             }
-            rest = PyValue_FromObjectSteal(rest_o);
-            match = PyValue_FromObjectSteal(match_o);
+            exc_rest = PyValue_FromObjectSteal(rest_o);
+            exc_match = PyValue_FromObjectSteal(match_o);
         }
 
         outlined inst(CHECK_EXC_MATCH, (left, right -- left, b)) {

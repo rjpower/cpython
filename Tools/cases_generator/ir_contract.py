@@ -2748,6 +2748,12 @@ class OwnershipWalk:
                     "which nothing tests here")
         return written
 
+    def holds_an_object(self, name: str) -> bool:
+        """Whether the declared input may be an object: a value that never
+        is (a tagged index) has no owner, so passing it on names no move"""
+        item = self.declared[name]
+        return "object" in word_kinds(item.facts | {a.fact for a in item.assumed})
+
     def check_outputs(self, state: _State, where: Token) -> None:
         """V5 on the paths to next: each value output is not NULL unless it
         is nullable, and has its declared facts, whatever path reached it"""
@@ -2758,7 +2764,7 @@ class OwnershipWalk:
             source = state.sources.get(out.name)
             origin = state.origins.get(out.name)
             if (out.mode in ("owned", "inline") and origin and origin in self.declared
-                    and out.name in self.moves):
+                    and out.name in self.moves and self.holds_an_object(origin)):
                 self.fail(*self.moves[out.name])
             if out.source == HOME_SOURCE and state.origins.get(out.name) != HOME_SOURCE:
                 self.fail(where, f"on next, `{out.name}` is declared moved(home), but the "

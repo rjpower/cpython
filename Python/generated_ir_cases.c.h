@@ -8110,22 +8110,21 @@ ir_run_FOR_ITER_LIST(
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue iter;
-            PyValue null_or_index;
             PyValue index;
             PyValue next_index;
             PyValue next;
             // _ITER_CHECK_LIST
             {
-                null_or_index = window[1];
+                index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
+                assert(PyValue_IsTaggedIndex(index));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyList_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
-                assert(PyValue_IsTaggedIndex(null_or_index));
                 #ifdef Py_GIL_DISABLED
                 if (!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
@@ -8142,8 +8141,8 @@ ir_run_FOR_ITER_LIST(
                 PyObject *list_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(Py_TYPE(list_o) == &PyList_Type);
                 STAT_INC(FOR_ITER, hit);
-                if ((size_t)PyValue_UntagIndex(null_or_index) >= (size_t)PyList_GET_SIZE(list_o)) {
-                    null_or_index = PyValue_TagIndex(-1);
+                if ((size_t)PyValue_UntagIndex(index) >= (size_t)PyList_GET_SIZE(list_o)) {
+                    next_index = PyValue_TagIndex(-1);
                     PyValue completed = PyValue_None;{
                         _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, completed);
                         next_instr = ir_step_result.next;
@@ -8152,10 +8151,11 @@ ir_run_FOR_ITER_LIST(
                     }
                 }
                 #endif
+                next_index = index;
             }
             // _ITER_NEXT_LIST
             {
-                index = null_or_index;
+                index = next_index;
                 PyObject *list_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(PyList_CheckExact(list_o));
                 next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
@@ -8264,22 +8264,21 @@ ir_run_FOR_ITER_TUPLE(
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue iter;
-            PyValue null_or_index;
             PyValue index;
             PyValue next_index;
             PyValue next;
             // _ITER_CHECK_TUPLE
             {
-                null_or_index = window[1];
+                index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
+                assert(PyValue_IsTaggedIndex(index));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyTuple_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
-                assert(PyValue_IsTaggedIndex(null_or_index));
             }
             // _ITER_JUMP_TUPLE
             {
@@ -8287,8 +8286,8 @@ ir_run_FOR_ITER_TUPLE(
                 (void)tuple_o;
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
                 STAT_INC(FOR_ITER, hit);
-                if ((size_t)PyValue_UntagIndex(null_or_index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
-                    null_or_index = PyValue_TagIndex(-1);
+                if ((size_t)PyValue_UntagIndex(index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
+                    next_index = PyValue_TagIndex(-1);
                     PyValue completed = PyValue_None;{
                         _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, completed);
                         next_instr = ir_step_result.next;
@@ -8296,10 +8295,11 @@ ir_run_FOR_ITER_TUPLE(
                         DISPATCH();
                     }
                 }
+                next_index = index;
             }
             // _ITER_NEXT_TUPLE
             {
-                index = null_or_index;
+                index = next_index;
                 PyObject *tuple_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
                 uintptr_t i = PyValue_UntagIndex(index);
@@ -23199,22 +23199,21 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue iter;
-            PyValue null_or_index;
             PyValue index;
             PyValue next_index;
             PyValue next;
             // _ITER_CHECK_LIST
             {
-                null_or_index = window[1];
+                index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
+                assert(PyValue_IsTaggedIndex(index));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyList_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
-                assert(PyValue_IsTaggedIndex(null_or_index));
                 #ifdef Py_GIL_DISABLED
                 if (!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
@@ -23231,8 +23230,8 @@ static const _PyIRForm ir_handler_forms[512] = {
                 PyObject *list_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(Py_TYPE(list_o) == &PyList_Type);
                 STAT_INC(FOR_ITER, hit);
-                if ((size_t)PyValue_UntagIndex(null_or_index) >= (size_t)PyList_GET_SIZE(list_o)) {
-                    null_or_index = PyValue_TagIndex(-1);
+                if ((size_t)PyValue_UntagIndex(index) >= (size_t)PyList_GET_SIZE(list_o)) {
+                    next_index = PyValue_TagIndex(-1);
                     PyValue completed = PyValue_None;{
                         _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, completed);
                         next_instr = ir_step_result.next;
@@ -23241,10 +23240,11 @@ static const _PyIRForm ir_handler_forms[512] = {
                     }
                 }
                 #endif
+                next_index = index;
             }
             // _ITER_NEXT_LIST
             {
-                index = null_or_index;
+                index = next_index;
                 PyObject *list_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(PyList_CheckExact(list_o));
                 next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
@@ -23345,22 +23345,21 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue iter;
-            PyValue null_or_index;
             PyValue index;
             PyValue next_index;
             PyValue next;
             // _ITER_CHECK_TUPLE
             {
-                null_or_index = window[1];
+                index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
+                assert(PyValue_IsTaggedIndex(index));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyTuple_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
-                assert(PyValue_IsTaggedIndex(null_or_index));
             }
             // _ITER_JUMP_TUPLE
             {
@@ -23368,8 +23367,8 @@ static const _PyIRForm ir_handler_forms[512] = {
                 (void)tuple_o;
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
                 STAT_INC(FOR_ITER, hit);
-                if ((size_t)PyValue_UntagIndex(null_or_index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
-                    null_or_index = PyValue_TagIndex(-1);
+                if ((size_t)PyValue_UntagIndex(index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
+                    next_index = PyValue_TagIndex(-1);
                     PyValue completed = PyValue_None;{
                         _PyIRStepResult ir_step_result = _PyEval_CompleteForIter(tstate, frame, this_instr, IR_B(ir_word), next_instr + oparg, completed);
                         next_instr = ir_step_result.next;
@@ -23377,10 +23376,11 @@ static const _PyIRForm ir_handler_forms[512] = {
                         DISPATCH();
                     }
                 }
+                next_index = index;
             }
             // _ITER_NEXT_TUPLE
             {
-                index = null_or_index;
+                index = next_index;
                 PyObject *tuple_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
                 uintptr_t i = PyValue_UntagIndex(index);

@@ -951,6 +951,20 @@ jit_template_FOR_ITER_LIST(_PyJitWordCx *cx)
         _PyJitAsm_Pop(a, _PyJitReg_RCX);
     }
 #endif
+#ifndef NDEBUG
+    {
+        _PyJitLabel ok = _PyJitAsm_NewLabel(a);
+        _PyJitLabel trap = _PyJitAsm_NewLabel(a);
+        _PyJitAsm_Push(a, _PyJitReg_RAX);
+        _PyJitAsm_Push(a, _PyJitReg_RDX);
+        _PyJitAsm_Jcc(a, (_PyJitCond)_PyJitLower_PyValue_IsTaggedIndex(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL), ok);
+        _PyJitAsm_Bind(a, trap);
+        _PyJitAsm_Data(a, (const uint8_t[]){0x0f, 0x0b}, 2);  /* ud2 */
+        _PyJitAsm_Bind(a, ok);
+        _PyJitAsm_Pop(a, _PyJitReg_RDX);
+        _PyJitAsm_Pop(a, _PyJitReg_RAX);
+    }
+#endif
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX}, NULL);
     int c7 = _PyJitLower_PyList_CheckExact(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
     _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c7), cx->slow);
@@ -1071,6 +1085,20 @@ jit_template_FOR_ITER_TUPLE(_PyJitWordCx *cx)
         _PyJitAsm_Bind(a, ok);
         _PyJitAsm_Pop(a, _PyJitReg_RDX);
         _PyJitAsm_Pop(a, _PyJitReg_RCX);
+    }
+#endif
+#ifndef NDEBUG
+    {
+        _PyJitLabel ok = _PyJitAsm_NewLabel(a);
+        _PyJitLabel trap = _PyJitAsm_NewLabel(a);
+        _PyJitAsm_Push(a, _PyJitReg_RAX);
+        _PyJitAsm_Push(a, _PyJitReg_RDX);
+        _PyJitAsm_Jcc(a, (_PyJitCond)_PyJitLower_PyValue_IsTaggedIndex(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL), ok);
+        _PyJitAsm_Bind(a, trap);
+        _PyJitAsm_Data(a, (const uint8_t[]){0x0f, 0x0b}, 2);  /* ud2 */
+        _PyJitAsm_Bind(a, ok);
+        _PyJitAsm_Pop(a, _PyJitReg_RDX);
+        _PyJitAsm_Pop(a, _PyJitReg_RAX);
     }
 #endif
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX}, NULL);

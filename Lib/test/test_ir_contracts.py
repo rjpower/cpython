@@ -313,9 +313,13 @@ class SliceTests(unittest.TestCase):
         'FOR_ITER_LIST.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
         'FOR_ITER_LIST.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
         'FOR_ITER_LIST.record.outputs[1][1]: inferred -1, declared 1',
-        'FOR_ITER_LIST.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
+        'FOR_ITER_LIST.record.outputs[1][2].name: inferred "next_index", declared "index"',
         'FOR_ITER_LIST.record.outputs[1][2].peek: inferred false, declared true',
         'FOR_ITER_LIST.record.store_mode: inferred null, declared "store"',
+        # G0d2: _ITER_JUMP_LIST's cursor is a tagged index (GET_ITER, for an
+        # exact list); the jump carries it under a new name
+        'FOR_ITER_LIST.record.uops[1].inputs[1].changed: inferred false, declared true',
+        'FOR_ITER_LIST.record.uops[1].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "", "kind": "TAGGED_INDEX", "subject": "v2"}]',
         'FOR_ITER_RANGE.record.format.discards: inferred false, declared true',
         'FOR_ITER_RANGE.record.format.dst_offset: inferred 1, declared 2',
         'FOR_ITER_RANGE.record.format.store_dst: inferred false, declared true',
@@ -330,9 +334,11 @@ class SliceTests(unittest.TestCase):
         'FOR_ITER_TUPLE.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
         'FOR_ITER_TUPLE.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
         'FOR_ITER_TUPLE.record.outputs[1][1]: inferred -1, declared 1',
-        'FOR_ITER_TUPLE.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
+        'FOR_ITER_TUPLE.record.outputs[1][2].name: inferred "next_index", declared "index"',
         'FOR_ITER_TUPLE.record.outputs[1][2].peek: inferred false, declared true',
         'FOR_ITER_TUPLE.record.store_mode: inferred null, declared "store"',
+        'FOR_ITER_TUPLE.record.uops[1].inputs[1].changed: inferred false, declared true',
+        'FOR_ITER_TUPLE.record.uops[1].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "", "kind": "TAGGED_INDEX", "subject": "v2"}]',
         'FOR_ITER_VIRTUAL.record.format.discards: inferred false, declared true',
         'FOR_ITER_VIRTUAL.record.format.dst_offset: inferred 1, declared 2',
         'FOR_ITER_VIRTUAL.record.format.store_dst: inferred false, declared true',
@@ -2412,6 +2418,28 @@ class VerifierTests(unittest.TestCase):
                 analysis = self.verify(source % fact)
                 self.assertEqual(
                     ir_contract.assumed_assertions(analysis.uops["_OP"], None), [text])
+        # The assertion reads the input, which the body does not: it is
+        # loaded all the same
+        source = """
+            op(_OP, (cursor: assumed(tagged_index) by GET_ITER -- cursor)) effects() exits(next) {
+            }
+        """
+        analysis = self.verify(source)
+        self.assertTrue(analysis.uops["_OP"].stack.inputs[0].used)
+
+    def test_a_cursor_moves_without_an_owner(self):
+        # _ITER_JUMP_LIST: a tagged index passed on names no move, however
+        # many paths carry it; an object that is passed on does
+        source = """
+            op(_OP, (iter: object, index: consumed %s -- iter, next_index: %s)) effects(reads) exits(next) {
+                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                (void)iter_o;
+                next_index = index;
+                DEAD(index);
+            }
+        """
+        self.verify(source % ("tagged_index", "inline tagged_index"))
+        self.refuses(source % ("", "inline"), r"next_index. is declared inline, but index gives an moved value")
 
     def test_a_redirect_is_its_own_exit(self):
         # _MONITOR_RESUME, _YIELD_VALUE_EVENT: after a callback moved the

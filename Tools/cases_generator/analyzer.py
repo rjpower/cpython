@@ -476,6 +476,8 @@ def analyze_stack(
                 variable_used(op, input.name)
                 or variable_used(op, "DECREF_INPUTS")
                 or (not input.peek and input.name in output_names)
+                # An assumed fact is asserted of the input at entry (F7)
+                or any(word.startswith("assumed(") for word in input.contract)
             ):
                 input.used = True
         for output in outputs:

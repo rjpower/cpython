@@ -4706,22 +4706,28 @@ dummy_func(
             IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
         }
 
+        // GET_ITER leaves a tagged index beside an exact list or tuple (its
+        // `_PyEval_GetIter` stores `PyValue_TagIndex(0)` for them), so the
+        // cursor of these loops is one
         leaf op(_ITER_CHECK_LIST,
-                (iter: assumed(object) by GET_ITER, null_or_index
-                 -- iter: exact(PyList_Type), null_or_index))
+                (iter: assumed(object) by GET_ITER,
+                 index: assumed(tagged_index) by GET_ITER
+                 -- iter: exact(PyList_Type), index: tagged_index))
             effects(reads) exits(next, miss)
         {
             // GET_ITER always leaves an object, never an inline value.
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(!PyList_CheckExact(iter_o));
-            assert(PyValue_IsTaggedIndex(null_or_index));
 #ifdef Py_GIL_DISABLED
             EXIT_IF(!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o),
                     "a list another thread owns, and that is not shared");
 #endif
         }
 
-        leaf replaced op(_ITER_JUMP_LIST, (iter, null_or_index -- iter, null_or_index)) {
+        leaf replaced op(_ITER_JUMP_LIST,
+                (iter: object, index: consumed tagged_index -- iter, next_index: inline tagged_index))
+            effects(reads, runs_python(branch|raise)) exits(next, branch, raise)
+        {
 #ifdef Py_GIL_DISABLED
             // For free-threaded Python, the loop exit can happen at any point during
             // item retrieval, so it doesn't make much sense to check and jump
@@ -4731,12 +4737,14 @@ dummy_func(
             PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
             assert(Py_TYPE(list_o) == &PyList_Type);
             STAT_INC(FOR_ITER, hit);
-            if ((size_t)PyValue_UntagIndex(null_or_index) >= (size_t)PyList_GET_SIZE(list_o)) {
-                null_or_index = PyValue_TagIndex(-1);
+            if ((size_t)PyValue_UntagIndex(index) >= (size_t)PyList_GET_SIZE(list_o)) {
+                next_index = PyValue_TagIndex(-1);
                 PyValue completed = PyValue_None;
                 IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
 #endif
+            next_index = index;
+            DEAD(index);
         }
 
         leaf replaced op(_ITER_NEXT_LIST,
@@ -4757,25 +4765,30 @@ dummy_func(
             _ITER_NEXT_LIST;
 
         leaf op(_ITER_CHECK_TUPLE,
-                (iter: assumed(object) by GET_ITER, null_or_index
-                 -- iter: exact(PyTuple_Type), null_or_index))
+                (iter: assumed(object) by GET_ITER,
+                 index: assumed(tagged_index) by GET_ITER
+                 -- iter: exact(PyTuple_Type), index: tagged_index))
             effects(reads) exits(next, miss)
         {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(!PyTuple_CheckExact(iter_o));
-            assert(PyValue_IsTaggedIndex(null_or_index));
         }
 
-        leaf replaced op(_ITER_JUMP_TUPLE, (iter, null_or_index -- iter, null_or_index)) {
+        leaf replaced op(_ITER_JUMP_TUPLE,
+                (iter: object, index: consumed tagged_index -- iter, next_index: inline tagged_index))
+            effects(reads, runs_python(branch|raise)) exits(next, branch, raise)
+        {
             PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
             (void)tuple_o;
             assert(Py_TYPE(tuple_o) == &PyTuple_Type);
             STAT_INC(FOR_ITER, hit);
-            if ((size_t)PyValue_UntagIndex(null_or_index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
-                null_or_index = PyValue_TagIndex(-1);
+            if ((size_t)PyValue_UntagIndex(index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
+                next_index = PyValue_TagIndex(-1);
                 PyValue completed = PyValue_None;
                 IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
+            next_index = index;
+            DEAD(index);
         }
 
         leaf op(_ITER_NEXT_TUPLE,

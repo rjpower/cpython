@@ -2878,7 +2878,6 @@ static const struct {
     const char *name;
     pass_fn fn;
 } passes[] = {
-    {"swap renaming", _PyRegPass_SwapRename},
     {"copy propagation", _PyRegPass_CopyProp},
     {"store elimination", _PyRegPass_StoreElim},
     {"unpack to locals", _PyRegPass_UnpackLocals},

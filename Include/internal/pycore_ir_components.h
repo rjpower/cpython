@@ -1055,10 +1055,21 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyForIter_StopIsExhaustion, int, (PyThreadState *, _PyInterpreterFrame *), \
         ARGS(tstate, frame), SCALAR, EFFECTS(reads)) \
-    /* ceval.c: {1, item} owned, {0, NULL} at the end with no exception, {-1, NULL} with one (G0a4: a CASES result) */ \
+    /* Python/ceval.c: the out-of-line wrapper of \
+     * _PyForIter_VirtualIteratorNextInline, whose body it returns as it \
+     * is (reviewed with batch 5's row for the inline form, which carries \
+     * the callee chain).  Borrows iter.  Results: {1, item} with an \
+     * owned item and the cursor *index_ptr advanced (a tagged index, \
+     * inline); {0, NULL} at exhaustion with no exception (a tagged \
+     * cursor's iteritem returned NULL, or a StopIteration the step \
+     * raised, reported to monitoring and cleared); {0, v} where a step \
+     * returned PYGEN_RETURN, v the owned return value or NULL; {-1, NULL} \
+     * with an exception set.  Callbacks: the iterator's slot (any \
+     * __next__), _PyEval_MonitorRaise's tools, and the release of the \
+     * cleared exception; no argument is stolen. */ \
     HELPER(_PyForIter_VirtualIteratorNext, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *), \
         ARGS(tstate, frame, borrowed, scalar), \
-        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
+        CASES(status==-1 value(null) raised, status==0 value(owned nullable), status==1 value(owned)), EFFECTS(runs_python)) \
     /* ceval.c: as _PyForIter_VirtualIteratorNext (G0a4: a CASES result) */ \
     HELPER(_PyForIter_VirtualIteratorNextInline, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *), \
         ARGS(tstate, frame, borrowed, scalar), \

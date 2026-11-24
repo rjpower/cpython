@@ -6681,8 +6681,7 @@ def async_exit_transport(inst: Instruction, fmt: IRFormat) -> bool:
             DECREF_INPUTS();
         }
         else {
-            Py_INCREF(exc);
-            _PyErr_SetRaisedException(tstate, exc);
+            _PyErr_SetRaisedException(tstate, Py_NewRef(exc));
             monitor_reraise(tstate, frame, this_instr);
             goto exception_unwind;
         }

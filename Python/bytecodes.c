@@ -2040,7 +2040,10 @@ dummy_func(
             goto exception_unwind;
         }
 
-        tier1 window op(_END_ASYNC_FOR, (awaitable_st, exc_st -- )) {
+        tier1 window op(_END_ASYNC_FOR,
+                (awaitable_st: taken, exc_st: taken assumed(object) by exception_unwind -- ))
+            effects(runs_python) exits(next, jump, raise)
+        {
             JUMPBY(0); // Pretend jump as we need source offset for monitoring
             (void)oparg;
             // An exception being handled is an instance of BaseException
@@ -2053,8 +2056,7 @@ dummy_func(
                 DECREF_INPUTS();
             }
             else {
-                Py_INCREF(exc);
-                _PyErr_SetRaisedException(tstate, exc);
+                _PyErr_SetRaisedException(tstate, Py_NewRef(exc));
                 monitor_reraise(tstate, frame, this_instr);
                 goto exception_unwind;
             }

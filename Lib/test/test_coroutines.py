@@ -2630,5 +2630,159 @@ class CAPITest(unittest.TestCase):
             self.assertEqual(foo().send(None), 1)
 
 
+class OwnershipOfAwaitRowsTests(unittest.TestCase):
+    # The declared contracts of the generator and await rows
+    # (Include/internal/pycore_ir_components.h) say who owns what on the
+    # failure paths: a value a failing helper consumed is released, and the
+    # helper does not leak it. A leaked value stays alive after its last
+    # name goes.
+
+    class Plain:
+        pass
+
+    class Weak(ValueError):
+        # a user subclass of an exception can be weakly referenced
+        pass
+
+    def run_to_end(self, coro):
+        try:
+            coro.send(None)
+        except StopIteration:
+            pass
+
+    def assert_freed(self, make, run):
+        import weakref
+        obj = make()
+        ref = weakref.ref(obj)
+        try:
+            run(obj)
+        except BaseException:
+            pass
+        del obj
+        support.gc_collect()
+        self.assertIsNone(ref())
+
+    def test_get_aiter_failure_closes_its_operand(self):
+        # _PyEval_GetAIter consumes obj on every return, the TypeError too
+        async def f(obj):
+            async for _ in obj:
+                pass
+        def run(obj):
+            with self.assertRaises(TypeError):
+                self.run_to_end(f(obj))
+        self.assert_freed(self.Plain, run)
+
+    def test_get_aiter_of_a_number(self):
+        async def f():
+            async for _ in 1:
+                pass
+        with self.assertRaisesRegex(TypeError, "requires an object"):
+            self.run_to_end(f())
+
+    def test_get_awaitable_failure_closes_its_operand(self):
+        # GET_AWAITABLE closes iterable before it raises
+        async def f(obj):
+            await obj
+        def run(obj):
+            with self.assertRaises(TypeError):
+                self.run_to_end(f(obj))
+        self.assert_freed(self.Plain, run)
+
+    def test_awaiting_a_coroutine_twice(self):
+        # the identity arm (coro_awaitable_can_transfer) and the error arm
+        # of _PyEval_GetAwaitable agree on a coroutine that is awaited
+        async def inner():
+            await Suspend()
+        class Suspend:
+            def __await__(self):
+                yield
+        async def outer(c):
+            await c
+        c = inner()
+        o1 = outer(c)
+        o1.send(None)
+        o2 = outer(c)
+        with self.assertRaisesRegex(RuntimeError, "already"):
+            o2.send(None)
+        o1.close()
+
+    def test_with_exit_failure_releases_the_exception_state(self):
+        # WITH_EXCEPT_START borrows the exception and drops the traceback
+        # it fetched, whether the exit function returns or raises
+        class Exit:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                raise KeyError("exit")
+        def run(obj):
+            try:
+                with Exit():
+                    raise obj
+            except KeyError as e:
+                self.assertIsInstance(e.__context__, type(obj))
+        self.assert_freed(lambda: self.Weak("x"), run)
+
+    def test_reraise_through_end_async_for(self):
+        # _END_ASYNC_FOR hands a new reference of the exception to the
+        # thread state (_PyErr_SetRaisedException steals it)
+        class It:
+            def __aiter__(self):
+                return self
+            async def __anext__(self):
+                raise self.exc
+        def make():
+            it = It()
+            it.exc = self.Weak("v")
+            return it.exc, it
+        async def f(it):
+            async for _ in it:
+                pass
+        import weakref
+        exc, it = make()
+        ref = weakref.ref(exc)
+        with self.assertRaises(self.Weak) as cm:
+            self.run_to_end(f(it))
+        self.assertIs(cm.exception, exc)
+        del exc, it, cm
+        support.gc_collect()
+        self.assertIsNone(ref())
+
+    def test_cleanup_throw_reraise(self):
+        # _CLEANUP_THROW raises the exception it does not match with a new
+        # reference, and consumes its window
+        class W:
+            def __await__(self):
+                try:
+                    yield
+                except ValueError:
+                    raise
+        async def f():
+            await W()
+        c = f()
+        c.send(None)
+        err = ValueError("t")
+        with self.assertRaises(ValueError) as cm:
+            c.throw(err)
+        self.assertIs(cm.exception, err)
+
+    def test_send_into_executing_generator(self):
+        # gen_may_claim declines an executing generator and the generic send
+        # raises, before gen_claim writes anything
+        def g():
+            yield from h()
+        def h():
+            yield
+            try:
+                next(gen)
+            except ValueError as e:
+                self.assertIn("already executing", str(e))
+                yield "ok"
+        gen = g()
+        for _ in range(2):
+            gen = g()
+            self.assertIsNone(next(gen))
+            self.assertEqual(gen.send(None), "ok")
+
+
 if __name__=="__main__":
     unittest.main()

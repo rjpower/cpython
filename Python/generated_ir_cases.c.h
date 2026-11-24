@@ -7661,6 +7661,7 @@ ir_run_END_ASYNC_FOR(
             PyValue exc_st;
             exc_st = window[1];
             awaitable_st = window[0];
+            assert(PyValue_IsObject(exc_st));
             JUMPBY(0);
             (void)oparg;
             assert(PyValue_IsObject(exc_st));
@@ -7680,8 +7681,7 @@ ir_run_END_ASYNC_FOR(
                 window[1] = PyValue_NULL;
             }
             else {
-                Py_INCREF(exc);
-                _PyErr_SetRaisedException(tstate, exc);
+                _PyErr_SetRaisedException(tstate, Py_NewRef(exc));
                 monitor_reraise(tstate, frame, this_instr);
                 PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
             }
@@ -8929,6 +8929,7 @@ ir_run_INSTRUMENTED_END_ASYNC_FOR(
             {
                 exc_st = window[1];
                 awaitable_st = window[0];
+                assert(PyValue_IsObject(exc_st));
                 JUMPBY(0);
                 (void)oparg;
                 assert(PyValue_IsObject(exc_st));
@@ -8948,8 +8949,7 @@ ir_run_INSTRUMENTED_END_ASYNC_FOR(
                     window[1] = PyValue_NULL;
                 }
                 else {
-                    Py_INCREF(exc);
-                    _PyErr_SetRaisedException(tstate, exc);
+                    _PyErr_SetRaisedException(tstate, Py_NewRef(exc));
                     monitor_reraise(tstate, frame, this_instr);
                     PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
                 }
@@ -23669,6 +23669,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 exc_st = window[1];
                 awaitable_st = window[0];
+                assert(PyValue_IsObject(exc_st));
                 JUMPBY(0);
                 (void)oparg;
                 assert(PyValue_IsObject(exc_st));
@@ -23688,8 +23689,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                     window[1] = PyValue_NULL;
                 }
                 else {
-                    Py_INCREF(exc);
-                    _PyErr_SetRaisedException(tstate, exc);
+                    _PyErr_SetRaisedException(tstate, Py_NewRef(exc));
                     monitor_reraise(tstate, frame, this_instr);
                     PROCESS_ERROR_AT(UNWIND, 0, next_instr - 1);
                 }

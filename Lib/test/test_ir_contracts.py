@@ -1592,6 +1592,48 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % ("", guard),
                      r"this statement follows IR_INVOKE_CALL, which never returns")
 
+    def test_facts_of_an_inputs_field(self):
+        # _CHECK_METHOD_VERSION: facts of callable.im_func, a path from an
+        # input through declared FIELD rows
+        source = """
+            op(_OP, (func_version/2, callable: object, null, unused[oparg]
+                     -- callable: exact(PyMethod_Type), null, unused[oparg]))
+                effects(%s) exits(next, miss)
+                %s
+            {
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                EXIT_IF(Py_TYPE(callable_o) != &PyMethod_Type);
+                PyObject *func = ((PyMethodObject *)callable_o)->im_func;
+                EXIT_IF(!PyFunction_Check(func));
+                EXIT_IF(((PyFunctionObject *)func)->func_version != func_version);
+                %s
+            }
+        """
+        path = "paths(callable.im_func: exact(PyFunction_Type) func_version(func_version))"
+        self.verify(source % ("reads", path, ""))
+        # Established and not declared
+        self.refuses(source % ("reads", "", ""),
+                     r"the guards establish .*func_version.* of the path `callable.im_func`, "
+                     r"which paths\(...\) does not declare")
+        # A write may change a field on the path: its facts die
+        self.refuses(source % ("reads, writes", path, "spam_write(callable_o);"),
+                     r"`callable.im_func` is declared .*which nothing establishes")
+        # A path steps through declared fields only
+        self.refuses(source % ("reads", "paths(callable.im_spam: null)", ""),
+                     r"steps through `im_spam`, which no FIELD row declares")
+        self.refuses(source % ("reads", "paths(spam.im_func: null)", ""),
+                     r"starts at `spam`, which is no input")
+        # The NULL test of a pointer field along the path
+        self.verify("""
+            op(_OP, (callable: object -- callable: exact(PyMethod_Type)))
+                effects(reads) exits(next, miss) paths(callable.im_weakreflist: null)
+            {
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                EXIT_IF(Py_TYPE(callable_o) != &PyMethod_Type);
+                EXIT_IF(((PyMethodObject *)callable_o)->im_weakreflist != NULL);
+            }
+        """)
+
     def test_identities_of_static_objects(self):
         # F21, _GUARD_LOAD_SUPER_ATTR_METHOD: a CONSTANT row names a static
         # object by address; a comparison with it establishes is(K)

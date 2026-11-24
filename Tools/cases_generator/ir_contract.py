@@ -1177,13 +1177,15 @@ _CONTRACTS: dict[int, tuple[Uop, Contract | None]] = {}
 
 
 def _clause_text(texts: list[str]) -> str:
-    return re.sub(r"\s*([():|])\s*", r"\1", " ".join(texts)).replace(":", ": ")
+    # A space after `)` separates two facts: `exact(T) func_version(v)`
+    text = re.sub(r"\s*([(:|])\s*", r"\1", " ".join(texts))
+    return re.sub(r"\s*\)", ")", text).replace(":", ": ")
 
 
 def _named_facts(uop: Uop, part: str, where: Token) -> tuple[str, frozenset]:
     name, _, words = part.partition(":")
-    name = name.strip()
-    if not re.fullmatch(r"\w+", name):
+    name = re.sub(r"\s*\.\s*", ".", name.strip())
+    if not re.fullmatch(r"\w+(\.\w+)*", name):
         raise analysis_error(f"{uop.name}: `{part.strip()}` is no `item: facts`", where)
     return name, frozenset(parse_fact(w, where) for w in _split_words(words))
 
@@ -1217,6 +1219,10 @@ def parse_state(uop: Uop, texts: list[str] | None, where: Token
     return tuple(items)
 
 
+# The kinds of path from an input that name their fields: an input's
+# object, a pointer field of it, and dict keys reached from one
+INPUT_PATHS = frozenset(("object", "pointer"))
+
 # The frame paths whose facts a uop may declare: the PATH rows without
 # arguments (from the frame, which the activation does not replace)
 def parse_paths(uop: Uop, texts: list[str] | None, where: Token
@@ -1228,14 +1234,31 @@ def parse_paths(uop: Uop, texts: list[str] | None, where: Token
     frame_paths = {r.result.measure for r in rows().values()
                    if r.result.shape == "PATH" and not r.args}
     items = []
+    inputs = {i.name for i in uop.stack.inputs if i.name != "unused"}
+    fields = {r.field: r for r in rows().values()
+              if r.kind == "FIELD" and r.result.shape == "PATH"}
     for part in _split_text(_clause_text(texts)):
         name, facts = _named_facts(uop, part, where)
-        if name not in frame_paths:
+        root, *steps = name.split(".")
+        if steps:
+            # A path from an input through declared FIELD rows that hold
+            # pointers: callable.im_func, owner.md_dict.ma_keys
+            if root not in inputs:
+                raise analysis_error(f"{uop.name}: paths({name}) starts at `{root}`, "
+                                     "which is no input", where)
+            for step in steps:
+                if step not in fields:
+                    raise analysis_error(f"{uop.name}: paths({name}) steps through "
+                                         f"`{step}`, which no FIELD row declares as a "
+                                         "pointer (PATH)", where)
+        elif name not in frame_paths:
             raise analysis_error(f"{uop.name}: paths({name}) names no frame path "
                                  f"({', '.join(sorted(frame_paths))})", where)
-        for f in facts:
-            if f.kind not in HEAP_FACTS:
-                raise analysis_error(f"{uop.name}: {f} of the path {name} is no heap fact", where)
+        else:
+            for f in facts:
+                if f.kind not in HEAP_FACTS:
+                    raise analysis_error(f"{uop.name}: {f} of the path {name} is no heap "
+                                         "fact", where)
         items.append((name, facts))
     return tuple(items)
 
@@ -1784,6 +1807,11 @@ class Views:
                 return None
             if tokens[0] in self.names:
                 return self.names[tokens[0]]
+            path = self.paths.get(tokens[0])
+            if path is not None and path[1] in INPUT_PATHS:
+                # A pointer along a path from an input: the path itself
+                # (callable.im_func), whose facts paths(...) declares
+                return path[0]
             return tokens[0] if locals_ and tokens[0] in self.locals else None
         call = _call_of(tokens, self.table)
         if call is not None and call[0].result.shape == "VIEW" and len(call[1]) == 1:
@@ -1798,9 +1826,12 @@ class Views:
             return None if tokens[0] in self.unknown else self.paths.get(tokens[0])
         if len(tokens) >= 3 and tokens[-2] == "->":
             # A field that holds a pointer along a further path
-            # (globals->ma_keys)
+            # (globals->ma_keys); from an input, the path names each field
+            # it steps through (callable.im_func, owner.md_dict.ma_keys)
             found = self.field(tokens)
             if found is not None and found[0].result.shape == "PATH":
+                if found[2]:
+                    return f"{found[1]}.{tokens[-1]}", found[0].result.measure
                 return found[1], found[0].result.measure
             return None
         call = _call_of(tokens, self.table)
@@ -1815,18 +1846,23 @@ class Views:
                 return name, call[0].result.measure
         return None
 
-    def field(self, tokens: list[str]) -> tuple[Row, str] | None:
+    def field(self, tokens: list[str]) -> tuple[Row, str, bool] | None:
         """the FIELD row of a read `p->field` through a pointer p along a
-        path from an input, and that input"""
+        path from an input, that input (or the path from it), and whether
+        the read steps along an input path (item 1 of G0a5): p is the
+        object of an input, or a pointer along such a path"""
         tokens = _unwrap(tokens, self.table)
         if len(tokens) < 3 or tokens[-2] != "->":
             return None
         path = self.path(tokens[:-2])
         if path is None:
-            return None
+            base = self.resolve(tokens[:-2], locals_=False)
+            if base is None:
+                return None
+            path = (base, "object")
         row = next((r for r in self.table.values() if r.kind == "FIELD"
                     and r.field == tokens[-1] and path[1] in r.on.split("|")), None)
-        return (row, path[0]) if row is not None else None
+        return (row, path[0], path[1] in INPUT_PATHS) if row is not None else None
 
 
 _SLOTS: dict[tuple[int, int], tuple[Uop, dict, dict[str, Row], list]] = {}
@@ -2036,6 +2072,16 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
     else:
         return None
     other = _unwrap(sides[1], table)
+    typed = _call_of(_unwrap(sides[0], table), table)
+    if other[:1] == ["&"] and len(other) == 2 and re.fullmatch(r"\w+_Type", other[1]) \
+            and typed is not None and typed[0].result.shape == "PATH" \
+            and typed[0].result.measure == "type" and len(typed[1]) == 1:
+        # `Py_TYPE(x) != &T`: x's type is exactly T where it is equal
+        name = views.resolve(typed[1][0])
+        if name is None:
+            return None
+        return ({name: implied({VFact("exact", other[1])})} if (op == "==") == holds
+                else {}), ""
     if other[:1] == ["&"] and len(other) == 2 and table.get(other[1]) is not None \
             and table[other[1]].representation == "OBJECT":
         # `x == &K`: x's object is the static object K, is(K)
@@ -2044,6 +2090,12 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
             return None
         return ({name: implied({VFact("is", other[1])})} if (op == "==") == holds
                 else {}), ""
+    if _strip(sides[1]) == ["NULL"]:
+        # A pointer along a path from an input, `m->im_weakreflist != NULL`
+        path = views.path(sides[0])
+        if path is not None and path[1] in INPUT_PATHS:
+            null = (op == "==") == holds
+            return {path[0]: frozenset({NULL_FACT if null else NONNULL})}, ""
     field = views.field(sides[0])
     call = _call_of(_unwrap(sides[0], table), table)
     if field is not None and field[0].result.shape == "MEASURE":
@@ -2183,7 +2235,10 @@ class _State:
             self.restartable, self.why = False, why
 
     def kill_heap_facts(self) -> None:
-        self.facts = {n: without_heap_facts(f) for n, f in self.facts.items()}
+        # Every fact of a path from an input is of the heap: a write may
+        # change the field it steps through (item 1 of G0a5)
+        self.facts = {n: without_heap_facts(f) for n, f in self.facts.items()
+                      if "." not in n}
         self.pending = {n: without_heap_facts(f) for n, f in self.pending.items()}
 
     def add_facts(self, name: str, facts) -> None:
@@ -2761,7 +2816,8 @@ class OwnershipWalk:
         the old one freed), so its facts die now, and those of the locals
         that copy it"""
         # A site fact (unique) dies at any reentry, and a home load
-        state.facts = {n: without_site_facts(f) for n, f in state.facts.items()}
+        state.facts = {n: without_site_facts(f) for n, f in state.facts.items()
+                       if "." not in n}
         self.kill_home_loads(state)
         for name, item in self.declared.items():
             if item.mode in UNOWNED:
@@ -3625,12 +3681,16 @@ def check_state_facts(uop: Uop, contract: Contract, walk: OwnershipWalk) -> None
     if walk.exit is not None:
         frame_paths = {r.result.measure for r in walk.table.values()
                        if r.result.shape == "PATH" and not r.args}
-        for name in sorted(frame_paths - {n for n, _ in contract.paths}):
+        inputs = {i.name for i in uop.stack.inputs}
+        input_paths = {n for n in walk.exit.facts
+                       if "." in n and n.split(".", 1)[0] in inputs}
+        for name in sorted((frame_paths | input_paths) - {n for n, _ in contract.paths}):
             live = walk.exported(name) - {NONNULL}
             if live:
+                kind = "path" if name in input_paths else "frame path"
                 raise analysis_error(
                     f"{uop.name}: the guards establish {', '.join(sorted(map(str, live)))} "
-                    f"of the frame path `{name}`, which paths(...) does not declare",
+                    f"of the {kind} `{name}`, which paths(...) does not declare",
                     uop.body.open)
 
 
@@ -4017,7 +4077,8 @@ def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...],
     def recorded(name: str, facts) -> list[Fact]:
         # A local's fact is recorded on the local, as the inference did
         live = walk.exit.facts.get(name, frozenset()) if walk.exit else frozenset()
-        return [Fact(FACT_KIND[f.kind], values.get(name, name),
+        root, dot, rest = name.partition(".")
+        return [Fact(FACT_KIND[f.kind], values.get(root, root) + dot + rest,
                      values.get(f.arg, f.arg) if f.kind == "in_bounds" else f.record("").arg)
                 for f in facts if f in live]
 
@@ -4060,6 +4121,15 @@ def _stated_facts(cond: list[str], views: Views, table: dict[str, Row],
         for f in sorted(facts):
             row = table.get(f.arg) if f.kind == "is" else None
             if row is not None and row.representation == "OBJECT" and "&" in cond:
+                result.setdefault(name, []).append(f)
+            # The NULL test of a pointer along an input path
+            if "." in name and f in (NULL_FACT, NONNULL) and "NULL" in cond \
+                    and f not in result.get(name, []):
+                result.setdefault(name, []).append(f)
+            # A comparison of a type with a static type's address,
+            # `Py_TYPE(x) != &T`
+            if f.kind == "exact" and f"{f.arg}" in cond and "&" in cond and \
+                    {"Py_TYPE", "PyValue_TYPE"} & set(cond) and f not in result.get(name, []):
                 result.setdefault(name, []).append(f)
     for tkn_text, args in _calls_in_texts(cond):
         row = table.get(tkn_text)

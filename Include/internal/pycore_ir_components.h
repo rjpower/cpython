@@ -478,7 +478,7 @@
         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PyType_Check, int, (PyObject *), \
-        ARGS(object), SCALAR, EFFECTS(reads)) \
+        ARGS(object), TEST(subtype(PyType_Type)), EFFECTS(reads)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PyType_GenericAlloc, PyObject *, (PyTypeObject *, Py_ssize_t), \
         ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python)) \
@@ -1242,8 +1242,20 @@
     MACRO(BUILTINS, ARGS(), PATH(builtins), EFFECTS(reads), EXITS()) \
     /* A frame path's dict keys (pycore_dict.h), and their version: a \
      * fact of the path, `paths(globals: keys_version(v))` (G0a4) */ \
-    FIELD(PyDictObject, ma_keys, PyDictKeysObject *, ON(globals | builtins), \
+    FIELD(PyDictObject, ma_keys, PyDictKeysObject *, ON(globals | builtins | object), \
           PATH(dict_keys), EFFECTS(reads)) \
+    /* Fields along a path from an input (G0a5 item 1): the path names \
+     * each field it steps through, `paths(callable.im_func: ...)`, and \
+     * its facts die as heap facts.  PATH(object) holds an object, \
+     * PATH(pointer) a pointer whose only fact is its NULL test */ \
+    FIELD(PyMethodObject, im_func, PyObject *, ON(object), PATH(object), EFFECTS(reads)) \
+    FIELD(PyMethodObject, im_weakreflist, PyObject *, ON(object), PATH(pointer), \
+          EFFECTS(reads)) \
+    FIELD(PyFunctionObject, func_version, uint32_t, ON(object), MEASURE(func_version), \
+          EFFECTS(reads)) \
+    FIELD(PyTypeObject, tp_vectorcall, vectorcallfunc, ON(object), PATH(pointer), \
+          EFFECTS(reads)) \
+    FIELD(PyModuleObject, md_dict, PyObject *, ON(object), PATH(object), EFFECTS(reads)) \
     FIELD(PyDictKeysObject, dk_version, uint32_t, ON(dict_keys), \
           MEASURE(keys_version), EFFECTS(reads)) \
     MACRO(FRAME_CO_CONSTS, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \

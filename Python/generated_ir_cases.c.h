@@ -534,6 +534,16 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_Py_atomic_load_uintptr_r
               "_Py_atomic_load_uintptr_relaxed: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(((PyDictObject *)0)->ma_keys), PyDictKeysObject *),
               "PyDictObject.ma_keys: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(((PyMethodObject *)0)->im_func), PyObject *),
+              "PyMethodObject.im_func: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(((PyMethodObject *)0)->im_weakreflist), PyObject *),
+              "PyMethodObject.im_weakreflist: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(((PyFunctionObject *)0)->func_version), uint32_t),
+              "PyFunctionObject.func_version: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(((PyTypeObject *)0)->tp_vectorcall), vectorcallfunc),
+              "PyTypeObject.tp_vectorcall: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(((PyModuleObject *)0)->md_dict), PyObject *),
+              "PyModuleObject.md_dict: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(((PyDictKeysObject *)0)->dk_version), uint32_t),
               "PyDictKeysObject.dk_version: its C type differs from pycore_ir_components.h");
 static inline void _PyIR_CheckConstants(void) {

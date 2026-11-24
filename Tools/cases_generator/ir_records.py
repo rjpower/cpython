@@ -718,6 +718,9 @@ class Subjects:
 
 
 _TYPE_CHECK = re.compile(r"(Py\w+?)_(CheckExact|Check)")
+# Check macros that are Py_IS_TYPE: they test the exact type
+# (Include/cpython/funcobject.h, Include/cpython/classobject.h)
+_EXACT_CHECKS = frozenset({"PyFunction_Check", "PyMethod_Check"})
 
 
 def predicate_facts(p: list, subjects: Subjects) -> list[Fact] | None:
@@ -749,7 +752,8 @@ def predicate_facts(p: list, subjects: Subjects) -> list[Fact] | None:
     if len(p) >= 3 and _TYPE_CHECK.fullmatch(p[0]) and _call(p, p[0]) is not None:
         args = _call(p, p[0])
         m = _TYPE_CHECK.fullmatch(p[0])
-        kind = "EXACT_TYPE" if m.group(2) == "CheckExact" else "SUBTYPE"
+        exact = m.group(2) == "CheckExact" or p[0] in _EXACT_CHECKS
+        kind = "EXACT_TYPE" if exact else "SUBTYPE"
         return [Fact(kind, subjects.of(args[0]), m.group(1) + "_Type")]
     args = _call(p, "PyType_HasFeature")
     if args is not None:
@@ -897,7 +901,8 @@ def failure_term_facts(term: list, subjects: Subjects) -> list[Fact] | None:
     # A positive type test failing: x is not of the type
     if term and _TYPE_CHECK.fullmatch(term[0]) and _call(term, term[0]) is not None:
         m = _TYPE_CHECK.fullmatch(term[0])
-        return [Fact("NOT_TYPE" if m.group(2) == "CheckExact" else "NOT_SUBTYPE",
+        exact = m.group(2) == "CheckExact" or term[0] in _EXACT_CHECKS
+        return [Fact("NOT_TYPE" if exact else "NOT_SUBTYPE",
                      subjects.of(_call(term, term[0])[0]), m.group(1) + "_Type")]
     args = _call(term, "PyValue_IsNull")
     if args is not None:

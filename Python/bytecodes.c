@@ -2869,14 +2869,14 @@ dummy_func(
             _GUARD_LOAD_SUPER_ATTR_METHOD +
             _LOAD_SUPER_ATTR_METHOD;
 
-        op(_GUARD_LOAD_SUPER_ATTR_METHOD, (global_super_st: object, class_st: object, unused -- global_super_st: is(PySuper_Type), class_st, unused))
+        op(_GUARD_LOAD_SUPER_ATTR_METHOD, (global_super_st: object, class_st: object, unused -- global_super_st: is(PySuper_Type), class_st: subtype(PyType_Type), unused))
             effects(reads) exits(next, miss)
         {
             PyObject *global_super = PyValue_AsKnownObjectBorrow(global_super_st);
             PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
             assert(oparg & 1);
             EXIT_IF(global_super != (PyObject *)&PySuper_Type);
-            EXIT_IF(!PyType_Check(class), "the class is not a type");
+            EXIT_IF(!PyType_Check(class));
         }
 
         op(_LOAD_SUPER_ATTR_METHOD, (global_super_st, class_st, self_st -- attr, self_or_null)) {
@@ -3064,14 +3064,17 @@ dummy_func(
             EXIT_IF(!PyModule_CheckExact(PyValue_AsKnownObjectBorrow(owner)));
         }
 
-        leaf op(_LOAD_ATTR_MODULE, (dict_version/2, index/1, owner -- attr)) {
+        leaf op(_LOAD_ATTR_MODULE, (dict_version/2, index/1, owner: consumed object -- attr: owned))
+            effects(reads, releases) exits(next, miss)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             PyDictObject *dict = (PyDictObject *)((PyModuleObject *)owner_o)->md_dict;
             assert(dict != NULL);
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
             EXIT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != dict_version);
             assert(keys->dk_kind == DICT_KEYS_UNICODE);
-            EXIT_IF(index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries));
+            EXIT_IF(index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries),
+                    "the module's keys have no entry at the index");
             PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(keys) + index;
             PyValueBorrow found = PyValue_Borrow(ep->me_value);
             EXIT_IF(PyValue_IsNull(found));
@@ -4926,7 +4929,12 @@ dummy_func(
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
-        op(_CHECK_METHOD_VERSION, (func_version/2, callable, null, unused[oparg] -- callable, null, unused[oparg])) {
+        op(_CHECK_METHOD_VERSION,
+                (func_version/2, callable: object, null, unused[oparg]
+                 -- callable: exact(PyMethod_Type), null, unused[oparg]))
+            effects(reads) exits(next, miss) state(call_state -- call_state: self(absent))
+            paths(callable.im_func: exact(PyFunction_Type) func_version(func_version))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
 
             EXIT_IF(Py_TYPE(callable_o) != &PyMethod_Type);
@@ -4979,7 +4987,12 @@ dummy_func(
             _CALL_NON_PY_GENERAL +
             _CHECK_PERIODIC_AT_END;
 
-        op(_CHECK_CALL_BOUND_METHOD_EXACT_ARGS, (callable, null, unused[oparg] -- callable, null, unused[oparg])) {
+        op(_CHECK_CALL_BOUND_METHOD_EXACT_ARGS,
+                (callable: object, null, unused[oparg]
+                 -- callable: exact(PyMethod_Type), null, unused[oparg]))
+            effects(reads) exits(next, miss) state(call_state -- call_state: self(absent))
+            paths(callable.im_weakreflist: null)
+        {
             EXIT_IF(call_state & CALL_SELF_PRESENT);
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(Py_TYPE(callable_o) != &PyMethod_Type);
@@ -5006,12 +5019,17 @@ dummy_func(
             DEOPT_IF(IS_PEP523_HOOKED(tstate));
         }
 
-        op(_CHECK_FUNCTION_EXACT_ARGS, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
+        op(_CHECK_FUNCTION_EXACT_ARGS,
+                (callable: exact(PyFunction_Type), self_or_null, unused[oparg]
+                 -- callable, self_or_null, unused[oparg]))
+            effects(reads) exits(next, miss) state(call_state -- call_state)
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             assert(PyFunction_Check(callable_o));
             PyFunctionObject *func = (PyFunctionObject *)callable_o;
             PyCodeObject *code = (PyCodeObject *)func->func_code;
-            EXIT_IF(code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0));
+            EXIT_IF(code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0),
+                    "the function takes another number of arguments");
         }
 
         op(_CHECK_STACK_SPACE,
@@ -5264,7 +5282,11 @@ dummy_func(
             DEAD(should_be_none);
         }
 
-        op(_GUARD_CALLABLE_BUILTIN_CLASS, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
+        op(_GUARD_CALLABLE_BUILTIN_CLASS,
+                (callable: object, unused, unused[oparg]
+                 -- callable: subtype(PyType_Type), unused, unused[oparg]))
+            effects(reads) exits(next, miss) paths(callable.tp_vectorcall: nonnull)
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyType_Check(callable_o));
             PyTypeObject *tp = (PyTypeObject *)callable_o;
@@ -5744,7 +5766,12 @@ dummy_func(
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
-        op(_CHECK_METHOD_VERSION_KW, (func_version/2, callable, null, unused[oparg], unused -- callable, null, unused[oparg], unused)) {
+        op(_CHECK_METHOD_VERSION_KW,
+                (func_version/2, callable: object, null, unused[oparg], unused
+                 -- callable: exact(PyMethod_Type), null, unused[oparg], unused))
+            effects(reads) exits(next, miss) state(call_state -- call_state: self(absent))
+            paths(callable.im_func: exact(PyFunction_Type) func_version(func_version))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
 
             EXIT_IF(Py_TYPE(callable_o) != &PyMethod_Type);

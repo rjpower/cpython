@@ -182,7 +182,9 @@ EXTRA_ROWS = """
           EFFECTS(reads), EXITS(deopt)) \
     MACRO(SPAM_DESCR, ARGS(scalar), VALUE(borrowed assumed(nonnull) by spam_cache), \
           EFFECTS(reads), EXITS()) \
-    MACRO(SPAM_DESCR_OR_NULL, ARGS(scalar), VALUE_OR_NULL(borrowed), EFFECTS(reads), EXITS())
+    MACRO(SPAM_DESCR_OR_NULL, ARGS(scalar), VALUE_OR_NULL(borrowed), EFFECTS(reads), EXITS()) \
+    SLOT(hashfunc, Py_hash_t, (PyObject *), ARGS(object), SCALAR, EFFECTS(runs_python)) \
+    FIELD(PyTypeObject, tp_hash, hashfunc, ON(type), SLOT(hashfunc), EFFECTS(reads))
 """
 
 
@@ -1353,6 +1355,50 @@ class VerifierTests(unittest.TestCase):
         # The leaf IR has no assertion: no template without it
         with self.assertRaisesRegex(ir_leaf.LeafError, r"`value` is assumed"):
             ir_leaf.translate(analysis.uops["OP"])
+
+    # F6: calls through a protocol's pointer
+
+    def test_slot_rows(self):
+        row = self.table["hashfunc"]
+        self.assertEqual((row.kind, row.ret, row.params, row.effects),
+                         ("SLOT", "Py_hash_t", ("PyObject *",), frozenset({"runs_python"})))
+        self.assertEqual(self.table["PyTypeObject.tp_hash"].result,
+                         ir_contract.Result("SLOT", measure="hashfunc"))
+        # The static check holds the protocol's pointer type
+        self.assertIn("__typeof__(hashfunc), Py_hash_t (*)(PyObject *)",
+                      "\n".join(ir_contract.component_checks(self.table)))
+        # A field that holds a protocol's pointer has its C type
+        for rows, message in [
+                ("FIELD(PyTypeObject, tp_hash, lenfunc, ON(type), SLOT(hashfunc), "
+                 "EFFECTS(reads))", r"the field's C type is lenfunc, not the protocol's"),
+                ("MACRO(SPAM_H, ARGS(), SLOT(hashfunc), EFFECTS(), EXITS())",
+                 r"a FIELD that holds a pointer of a SLOT row's protocol"),
+                ("FIELD(PyTypeObject, tp_hash, hashfunc, ON(type), SLOT(nothing), "
+                 "EFFECTS(reads))", r"SLOT\(nothing\) names no row")]:
+            with self.subTest(rows), self.assertRaisesRegex(SyntaxError, message):
+                ir_contract.check_columns(self.table | ir_contract.parse_rows(rows))
+
+    def test_a_local_calls_the_protocol_its_field_holds(self):
+        source = """
+            op(_OP, (x: object -- x)) effects(%s) exits(next) {
+                PyObject *o = PyValue_AsKnownObjectBorrow(x);
+                hashfunc h = %s;
+                Py_hash_t v = h(o);
+                (void)v;
+            }
+        """
+        self.verify(source % ("runs_python", "Py_TYPE(o)->tp_hash"))
+        # The call is the protocol's: its effects are the uop's
+        self.refuses(source % ("reads", "Py_TYPE(o)->tp_hash"),
+                     r"`h` may runs_python \(hashfunc declares it\), which effects\(reads\) "
+                     r"does not declare")
+        self.refuses(source % ("runs_python", "(hashfunc)Py_TYPE(o)->tp_hash"),
+                     r"`h` is called through a cast")
+        self.refuses(source % ("runs_python", "Py_TYPE(o)->tp_version_tag"),
+                     r"`h` is called, but `Py_TYPE \( o \) -> tp_version_tag` is no FIELD "
+                     r"that declares the SLOT it holds")
+        self.refuses(source % ("runs_python", "spam_lookup"),
+                     r"`spam_lookup` is no FIELD that declares the SLOT it holds")
 
     # F15: the GIL product's preprocessor path
 

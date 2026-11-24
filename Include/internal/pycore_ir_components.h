@@ -65,6 +65,11 @@
  *       a field read through a pointer along a path (`tp->tp_version_tag`
  *       with tp the type of an operand): a MEASURE or a TEST of the
  *       operand
+ *   SLOT(name, ret, (params), ARGS(...), result, EFFECTS(...)[, FEEDBACK(...)])
+ *       a protocol of function pointers, named by its C pointer type: the
+ *       contract every target meets.  A FIELD with result SLOT(name) holds
+ *       such a pointer; a local assigned only from such fields, without a
+ *       cast, calls the protocol
  *   CONSTANT(name, VALUE(inline facts))
  *       a static immortal value (V8's roots): PyValue_None, PyValue_True,
  *       PyValue_False and PyValue_NULL, whose fact is `null`, the negation

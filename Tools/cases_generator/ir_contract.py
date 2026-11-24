@@ -252,9 +252,9 @@ def _assumptions(words: list[str], where: Token | None
 
 COMPONENTS_HEADER = ROOT / "Include/internal/pycore_ir_components.h"
 ROW_KINDS = ("PRIMITIVE", "HELPER", "ROUTINE", "MACRO", "INTRINSIC", "DESTRUCTOR", "FIELD",
-             "CONSTANT")
+             "CONSTANT", "SLOT")
 RESULT_SHAPES = ("NONE", "SCALAR", "VIEW", "PATH", "MEASURE", "TEST", "CONTEXT",
-                 "VALUE", "VALUE_OR_NULL", "STATUS", "GUARD", "HOME")
+                 "VALUE", "VALUE_OR_NULL", "STATUS", "GUARD", "HOME", "SLOT")
 # The failure value of a STATUS result: the int compares to 0 so
 STATUS_FAILURES = ("ZERO", "NEGATIVE", "NONZERO")
 BUILDS = ("gil", "free_threaded", "all")
@@ -370,6 +370,12 @@ def _parse_result(text: str) -> Result:
         return Result("HOME", measure="base")
     if (inner := _inner(text, "PATH")) is not None:
         return Result("PATH", measure=inner.strip())
+    if (inner := _inner(text, "SLOT")) is not None:
+        # A FIELD that holds a pointer of the protocol that SLOT row names
+        # (F6): a local assigned from it calls that row
+        if not re.fullmatch(r"\w+", inner.strip()):
+            raise ValueError("SLOT(protocol) names one SLOT row")
+        return Result("SLOT", measure=inner.strip())
     if (inner := _inner(text, "STATUS")) is not None:
         if inner.strip() not in STATUS_FAILURES:
             raise ValueError(f"STATUS({' | '.join(STATUS_FAILURES)})")
@@ -460,6 +466,7 @@ OPTIONAL_COLUMNS = {
     "HELPER": ("FEEDBACK", "SLOW"),
     "ROUTINE": ("FEEDBACK",),
     "MACRO": ("FEEDBACK",),
+    "SLOT": ("FEEDBACK",),
 }
 
 
@@ -564,13 +571,17 @@ def parse_rows(text: str, source: str = "pycore_ir_components.h") -> dict[str, R
     are not rows)"""
     text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S).replace("\\\n", " ")
     rows: dict[str, Row] = {}
+    inside = 0      # the end of the last row: a SLOT(...) result is no row
     for m in re.finditer(rf"\b({'|'.join(ROW_KINDS)})\(", text):
+        if m.start() < inside:
+            continue
         start = m.end() - 1
         end, depth = start, 0
         for end in range(start, len(text)):
             depth += {"(": 1, ")": -1}.get(text[end], 0)
             if depth == 0:
                 break
+        inside = end
         fields = [f.strip() for f in _split_text(text[start + 1:end])]
         if all(f in ROW_KINDS for f in fields):
             continue
@@ -672,6 +683,15 @@ def check_columns(table: dict[str, Row]) -> None:
             if not helper.effects <= row.effects:
                 fail(row, f"SLOW({helper.name}): the row declares fewer effects than "
                      f"{helper.name}")
+        if row.result.shape == "SLOT":
+            # A field that holds a protocol's pointer has the protocol's C type
+            protocol = named(row, "SLOT", row.result.measure)
+            if row.kind != "FIELD" or protocol.kind != "SLOT":
+                fail(row, f"SLOT({protocol.name}): a FIELD that holds a pointer of a "
+                     "SLOT row's protocol")
+            if row.ret != protocol.name:
+                fail(row, f"SLOT({protocol.name}): the field's C type is {row.ret}, "
+                     f"not the protocol's, {protocol.name}")
 
 
 _ROWS: dict[str, Row] = {}
@@ -701,6 +721,9 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
         if row.kind in ("HELPER", "ROUTINE"):
             check(f"&{row.name}", f"{row.ret} (*)({', '.join(row.params) or 'void'})",
                   row.name)
+        elif row.kind == "SLOT":
+            # The protocol's pointer type
+            check(row.name, f"{row.ret} (*)({', '.join(row.params) or 'void'})", row.name)
         elif row.kind == "DESTRUCTOR":
             check(f"&{row.name}", "void (*)(PyObject *)", row.name)
         elif row.kind == "FIELD":
@@ -1010,7 +1033,7 @@ def _call_effects(row: Row, args: list[list[str]], table: dict[str, Row],
 def effect_sites(uop: Uop, table: dict[str, Row] | None = None) -> list[Site]:
     """The sites of uop's body that have an effect, in order: calls of rows,
     the DSL's raises and releases, and the body's own heap accesses"""
-    table = rows() if table is None else table
+    table = with_slots(uop, rows() if table is None else table)
     contract = contract_of(uop)
     inline = {i.name for i in contract.inputs if INLINE in implied(i.facts)} \
         if contract else set()
@@ -1249,6 +1272,62 @@ class Views:
         return (row, path[0]) if row is not None else None
 
 
+_SLOTS: dict[tuple[int, int], tuple[Uop, dict, dict[str, Row], list]] = {}
+
+
+def _slot_bindings(uop: Uop, table: dict[str, Row]) -> tuple[dict[str, Row], list]:
+    """table, with each local of uop that it calls bound to the SLOT row of
+    the protocol it holds (F6): every assignment to the local reads a FIELD
+    that declares SLOT(protocol), without a cast.  Also the refusals, as
+    (token, message), of the locals it calls that bind to no protocol"""
+    key = (id(uop), id(table))
+    if key in _SLOTS and _SLOTS[key][0] is uop and _SLOTS[key][1] is table:
+        return _SLOTS[key][2], _SLOTS[key][3]
+    views = Views(uop, table)
+    bound: dict[str, Row] = {}
+    refused: list[tuple[Token, str]] = []
+    for tkn, _ in body_calls(uop):
+        name = tkn.text
+        if name in table or name in DSL_CONSTRUCTS or name in bound:
+            continue
+        assignments = _assignments(uop, name)
+        if not assignments:
+            continue        # no local: V1 refuses the call
+        protocols: set[str] = set()
+        for where, rhs in assignments:
+            found = views.field(rhs)
+            if _uncast(rhs) != _strip(rhs):
+                refused.append((where, f"`{name}` is called through a cast, "
+                                f"`{' '.join(rhs)}`, which binds it to no protocol"))
+            elif found is None or found[0].result.shape != "SLOT":
+                refused.append((where, f"`{name}` is called, but `{' '.join(rhs)}` is no "
+                                "FIELD that declares the SLOT it holds"))
+            else:
+                protocols.add(found[0].result.measure)
+                continue
+            break
+        else:
+            if len(protocols) == 1:
+                bound[name] = table[protocols.pop()]
+            else:
+                refused.append((tkn, f"`{name}` holds pointers of "
+                                f"{', '.join(sorted(protocols))}"))
+    result = table | bound if bound else table
+    _SLOTS[key] = (uop, table, result, refused)
+    return result, refused
+
+
+def with_slots(uop: Uop, table: dict[str, Row]) -> dict[str, Row]:
+    "table with uop's locals bound to the protocols they hold (F6)"
+    return _slot_bindings(uop, table)[0]
+
+
+def check_slots(uop: Uop, table: dict[str, Row]) -> None:
+    "F6: a local that the body calls holds a pointer of one declared protocol"
+    for where, message in _slot_bindings(uop, table)[1]:
+        raise analysis_error(f"{uop.name}: {message}", where)
+
+
 def _call_of(tokens: list[str], table: dict[str, Row]) -> tuple[Row, list[list[str]]] | None:
     tokens = _strip(_uncast(tokens))
     if tokens and tokens[0] in table:
@@ -1378,7 +1457,7 @@ def site_facts(uop: Uop, site: Token, table: dict[str, Row] | None = None
                ) -> tuple[Facts, str]:
     """V9: the facts that a guard site establishes of the names of the
     uop's body, from the rows its condition calls, and its reason"""
-    table = rows() if table is None else table
+    table = with_slots(uop, rows() if table is None else table)
     cond, reason = guard_condition(uop, site)
     found = condition_facts(cond, Views(uop, table), table, holds=False)
     if found is None:
@@ -2409,7 +2488,7 @@ _WALKS: dict[tuple[int, bool], tuple[Uop, OwnershipWalk]] = {}
 def walk_of(uop: Uop, table: dict[str, Row] | None = None,
             kills: bool = True) -> OwnershipWalk:
     "The walk of a declared uop's body, run"
-    table = rows() if table is None else table
+    table = with_slots(uop, rows() if table is None else table)
     key = (id(uop), kills)
     if table is _ROWS and key in _WALKS:
         return _WALKS[key][1]
@@ -2690,10 +2769,11 @@ def check_fact_subjects(uop: Uop, contract: Contract) -> None:
 
 def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None = None) -> None:
     "Check a declared uop's body against its contract (V1-V5, V7, V9; V6 inside it)"
-    table = rows() if table is None else table
+    table = with_slots(uop, rows() if table is None else table)
     contract = contract_of(uop)
     if contract is None or (id(uop), implicit_guards) in _VERIFIED:
         return
+    check_slots(uop, table)
     check_fact_subjects(uop, contract)
     check_assumed_results(uop, table)
     check_preprocessor(uop)
@@ -2921,7 +3001,7 @@ def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...],
     exit are recorded: the record's readers (the templates) take a guard's
     facts as the uop's, so a conditional guard's are not.  Their lifetime
     against effects is the reader's: the record keeps the effects' order."""
-    table = rows()
+    table = with_slots(uop, rows())
     walk = walk_of(uop, table, kills=False)
     views = Views(uop, table)
     values = {i.name: f"v{i.value}" for i in inputs}

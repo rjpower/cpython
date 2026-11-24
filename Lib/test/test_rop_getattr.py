@@ -196,6 +196,19 @@ class MethodOwnershipTests(unittest.TestCase):
         self.drift(site, _Values.__dict__["m"])
         self.drift(site, _Slots.__dict__["m"])
 
+    def test_receiver_in_the_callable_home(self):
+        # The receiver is a temporary, so the translator gives the callable
+        # the receiver's home: the arm takes the receiver out of the home
+        # before it reads the old callable, and releases it once
+        holder = [_Values()]
+        receiver = holder[0]
+        site = lambda: holder[0].m(1)
+        self.drift(site, _Values.__dict__["m"])
+        before = sys.getrefcount(receiver)
+        for _ in range(self.N):
+            site()
+        self.assertEqual(sys.getrefcount(receiver), before)
+
     def test_generic_miss_after_specialising(self):
         # A site that specialised for one type then sees others and
         # attributes that are not methods

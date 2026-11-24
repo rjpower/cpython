@@ -24,7 +24,10 @@ from test.support import import_helper, os_helper, script_helper
 import _opcode
 
 CONTRACT = _opcode.get_ir_contract()
-ROWS = {h: row for h, row in enumerate(CONTRACT) if row is not None}
+# The rows of the register instruction arms follow the old handlers and have
+# no stack effect to check (test_ir_arm_words)
+OLD_CONTRACT = CONTRACT[:_opcode.IR_NUM_OLD_HANDLERS]
+ROWS = {h: row for h, row in enumerate(OLD_CONTRACT) if row is not None}
 BY_NAME = {opcode.opname[h]: row for h, row in ROWS.items()}
 
 SLOT_ROLES = (_opcode.IR_ROLE_LOCAL_IN, _opcode.IR_ROLE_LOCAL_OUT,

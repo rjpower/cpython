@@ -177,7 +177,7 @@
     PRIMITIVE(PyValue_UntagIndex, intptr_t, (PyValueBorrow), \
               ARGS(borrowed), SCALAR, EFFECTS()) \
     PRIMITIVE(PyValue_IncrementTaggedIndexNoOverflow, PyValue, (PyValue), \
-              ARGS(consumed), VALUE(inline), EFFECTS()) \
+              ARGS(scalar), VALUE(inline), EFFECTS()) \
     /* PyValue_FromInt64 (pycore_value.h): _PyValue_FromIntScaled when the \
      * int fits inline, else _PyValue_BoxInt64, which gives NULL only when \
      * its allocation fails */ \
@@ -1001,7 +1001,7 @@
     /* ceval.c: as _PyForIter_VirtualIteratorNext (G0a4: a CASES result) */ \
     HELPER(_PyForIter_VirtualIteratorNextInline, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *), \
         ARGS(tstate, frame, borrowed, scalar), \
-        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
+        CASES(status==-1 value(null) raised, status==0 value(owned nullable), status==1 value(owned)), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyGen_GetGeneratorFromFrame, PyGenObject *, (_PyInterpreterFrame *), \
         ARGS(frame), SCALAR, EFFECTS(reads)) \

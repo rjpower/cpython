@@ -24,6 +24,19 @@ shared native-call site. Startup is 79.0M instructions for `-I -S -c pass`
 (golden86 37.5M): the cost of first-call lowering, which the user accepts.
 The full suites show known failures only.
 
+**Next: rir90, proposed 2026-11-24**
+([plan](design/proposals/rir90.md)). The user decided that semantics move
+from the stack uops to a register instruction set designed as V8 would
+design one:
+- stack bytecode becomes transport, lowered at first call;
+- register instruction families carry all behavior, defined in a typed
+  language that generates the interpreter, function forms, templates,
+  stubs and the tracer's SSA.
+
+Astra's [design](design/proposals/rir90-astra-design.md) and
+[addendum](design/proposals/rir90-astra-addendum.md) back the plan. F0, the
+language's frontend, is running.
+
 **Active: regions89, 2026-11-23**
 ([record](issues/register-semantics59/regions89.md)): declared operation
 contracts (V8-style declarations, verified, replacing inference) and shared
@@ -36,13 +49,21 @@ completion stubs with 23-byte sites; and G0b's seed, 195 of 351 uops
 declared with unchanged generated output. Timed at `a5502da133f` against
 golden87 with its JIT off, `on` runs 1.022 of the warm time (jit88: 1.060);
 nbody 0.748, spectral_norm 0.792, unpack_sequence 1.380, richards 1.157.
-Merged since, at `887c6a4bb1a` (not yet pushed; the push is refused):
-G0c's eight review batches, G0a5, G0c9, the four G0d units' declarations
-and G3a's: every instruction's uop is declared (353 of 353), with each
-generated difference listed. The verifier fails closed. The smoke set
-shows known failures only. Running: G0d1's last step, which deletes the
-inference fallback and declares 14 uops of IR-only handlers; then G3a's
-compiled frame transfers. G0d1 fixed two crashes from plain Python, each
+Merged since, at `e0cefcf2df6` (pushed): G0c's eight review batches, G0a5,
+G0c9, the four G0d units and G3a's declarations. All 373 uops are
+declared, including those of IR-only handlers, and each generated
+difference is listed. The inference is deleted, and the verifier fails
+closed. G0d1 fixed a settrace regression: 31 `f_lineno` jumps under
+`always`, from a wrong frame-push row. The full suites at `d344a3dcd5a`
+(release and assert, `always`) and the smoke set at `e0cefcf2df6` show
+known failures only.
+
+Running: G3a's compiled frame transfers, phase D. It adds the execution
+pins, `RESUME_CHECK` as a template, and calls and returns between compiled
+frames through the switch routine in one native activation. Without it,
+fib(18) under `always` takes 16,687 driver turns; with it, 0 turns and
+16,828 switches. The units on the stack uops (G1c, G2, G4 and G6) are held
+for rir90 (below). G0d1 fixed two crashes from plain Python, each
 in golden86 and golden87: a specialised in-place str add (`y = s + t`)
 aborted when `y` held an inline number (`cbf27b04cb2`); and `yield from`
 a subiterator whose `throw()` raises a `StopIteration` made without

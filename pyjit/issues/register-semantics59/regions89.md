@@ -72,6 +72,18 @@ order:
   call and return regions, and `split` arms with typed continuations.
 - **G6:** write-through register caching across words.
 
+On 2026-11-24 the user moved semantics from the stack uops to register
+instruction families ([rir90](../../design/proposals/rir90.md)). G1c, G2,
+G4 and G6 are held so that they are not built on the stack uops. Rir90
+gives each a new home:
+- G1c becomes measured work on `Add.Int` after the pilot;
+- G2 becomes the pilot's poly arms for `GetAttr` and `GetMethod`;
+- G4 follows the pilot's `Call` and `Return`;
+- G6 follows the independent-entry tests.
+
+G3a's runtime work carries over: the execution pins, the switch routine and
+`RESUME_CHECK`.
+
 DV, measured in instructions against jit88: all-29 0.9988; spectral_norm
 0.971; a `//` word 51 to 22 instructions, `%` 47 to 13. Each division site
 is 290-360 bytes larger than the form call it replaces; G1c tightens it.

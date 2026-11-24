@@ -1666,7 +1666,9 @@ dummy_func(
 
         outlined macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + POP_TOP;
 
-        outlined inst(CALL_INTRINSIC_2, (value2_st:nullable, value1_st -- res)) {
+        outlined inst(CALL_INTRINSIC_2, (value2_st: consumed nullable, value1_st: consumed -- res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             assert(oparg <= MAX_INTRINSIC_2);
             // Taken before the calls, which can run code
             PyValue held2 = TAKE(value2_st);
@@ -1683,10 +1685,8 @@ dummy_func(
                 PyObject *target = PyValue_ObjectOrNull(held1);
                 assert(target != NULL && PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
                 PyValueBorrow owner = PyTuple_GET_VALUE(target, 0);
-                PyValueBorrow attr_name = PyTuple_GET_VALUE(target, 1);
-                assert(PyValue_IsObject(attr_name));
-                int err = _PyValue_SetAttr(owner, PyValue_AsKnownObjectBorrow(attr_name),
-                                           held2);
+                PyObject *attr_name = _PyTuple_GET_OBJECT(target, 1);
+                int err = _PyValue_SetAttr(owner, attr_name, held2);
                 res = err < 0 ? PyValue_NULL : PyValue_None;
             }
             else {

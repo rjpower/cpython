@@ -4568,10 +4568,8 @@ ir_run_CALL_INTRINSIC_2(
                 PyObject *target = PyValue_ObjectOrNull(held1);
                 assert(target != NULL && PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
                 PyValueBorrow owner = PyTuple_GET_VALUE(target, 0);
-                PyValueBorrow attr_name = PyTuple_GET_VALUE(target, 1);
-                assert(PyValue_IsObject(attr_name));
-                int err = _PyValue_SetAttr(owner, PyValue_AsKnownObjectBorrow(attr_name),
-                    held2);
+                PyObject *attr_name = _PyTuple_GET_OBJECT(target, 1);
+                int err = _PyValue_SetAttr(owner, attr_name, held2);
                 res = err < 0 ? PyValue_NULL : PyValue_None;
             }
             else {

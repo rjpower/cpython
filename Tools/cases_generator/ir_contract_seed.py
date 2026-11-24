@@ -256,6 +256,9 @@ def topic(name: str) -> str:
 
 
 def vocabulary_fact(kind: str, arg: str) -> ir_contract.VFact | None:
+    if kind == "IS_NONE":
+        # None is a CONSTANT row's value: its identity is is(PyValue_None)
+        return ir_contract.VFact("is", "PyValue_None")
     word = ir_contract.VOCABULARY_OF_KIND.get(kind)
     if word is None or word in ir_contract.FACTS_WITH_ARGUMENT and not re.fullmatch(r"\w+", arg):
         return None

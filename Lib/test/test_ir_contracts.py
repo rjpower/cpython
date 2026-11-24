@@ -213,6 +213,12 @@ class SliceTests(unittest.TestCase):
         # fused transfer's, which G0d takes from the declaration
         'SEND_ASYNC_GEN_XFER_DISCARD/_SEND_ASYNC_GEN: declares exits(branch, next, raise), '
         'the record has branch, raise, yield',
+        # G3a: a RETURN variant's completion returns (its boundary(...) clause,
+        # completes(RETURN: exits(return, raise))) where the uop branches
+        'SEND_ASYNC_GEN_XFER_RETURN/_SEND_ASYNC_GEN: declares exits(branch, next, raise), '
+        'the record has raise, return, yield',
+        'CLEANUP_THROW_XFER_RETURN/_CLEANUP_THROW: declares exits(branch, raise), '
+        'the record has raise, return',
         # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
         # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
         'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '
@@ -3767,6 +3773,126 @@ class ObjectRowTests(unittest.TestCase):
         del p, g
         support.gc_collect()
         self.assertEqual([r() for r in refs], [None, None])
+
+
+SEND_CLAUSE = """        boundary(SEND) at(last) yields(delegated) completes(
+            RETURN: exits(return, raise),
+            STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));"""
+SEND_GEN_CLAUSE = SEND_CLAUSE.replace("boundary(SEND) at(last)",
+                                      "boundary(SEND_GEN) at(enter)")
+CLEANUP_CLAUSE = """        boundary(CLEANUP_THROW) at(last) completes(
+            RETURN: exits(return, raise),
+            STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));"""
+
+
+def expand_variants(analysis):
+    "Generate each generator-boundary variant to no output"
+    formats = ir_generator.compute_formats(analysis)
+    insts = ir_generator.handler_instructions(analysis)
+    for name in ir_generator.generator_boundaries(analysis):
+        out = ir_generator.CWriter.null()
+        emitter = ir_generator.IREmitter(out, analysis, formats)
+        emitter.handler_format = formats[name]
+        emitter.allowed_error_checkpoints = None
+        ir_generator.generate_handler(name, insts[name], formats[name], emitter, out)
+
+
+class BoundaryTests(unittest.TestCase):
+    """The generator-boundary variants (*_XFER_*): their records come from
+    the boundary(...) clauses, and their expansions are checked against
+    them (g3/design.md section 7)"""
+
+    def test_variants_come_from_the_clauses(self):
+        boundaries = ir_generator.generator_boundaries(analysis)
+        sources = {b.base for b in boundaries.values()}
+        self.assertEqual(sources, {
+            "SEND", "SEND_GEN", "SEND_VIRTUAL", "SEND_ASYNC_GEN", "CLEANUP_THROW",
+            "YIELD_VALUE", "YIELD_DELEGATED", "INSTRUMENTED_YIELD_VALUE",
+            "INSTRUMENTED_YIELD_DELEGATED"})
+        self.assertEqual(len(boundaries), 5 * 6 + 4 * 2)
+        self.assertEqual(boundaries["SEND_GEN_XFER_RETURN"].at, "enter")
+        self.assertEqual(boundaries["SEND_VIRTUAL_XFER_RETURN"].exits, ("return", "raise"))
+        self.assertEqual(boundaries["CLEANUP_THROW_XFER_HOME"].yielded, "NONE")
+        self.assertEqual(boundaries["YIELD_VALUE_XFER_STORE_LOCAL"].resume, "STORE_LOCAL")
+
+    def test_records_take_the_declared_exits(self):
+        def kinds(name):
+            return [t.kind for t in records[name].uops[-1].transfers]
+        for source in ("SEND", "SEND_VIRTUAL", "SEND_ASYNC_GEN"):
+            with self.subTest(source=source):
+                returning, storing = kinds(f"{source}_XFER_RETURN"), kinds(f"{source}_XFER_POP_TOP")
+                self.assertEqual(returning[-1], "YIELD")
+                self.assertIn("RETURN", returning)
+                self.assertNotIn("BRANCH", returning)
+                self.assertEqual(storing[-1], "YIELD")
+                self.assertIn("BRANCH", storing)
+                self.assertNotIn("RETURN", storing)
+        self.assertIn("RETURN", kinds("CLEANUP_THROW_XFER_RETURN"))
+        self.assertNotIn("YIELD", kinds("CLEANUP_THROW_XFER_RETURN"))
+        # SEND_GEN yields and completes in the frame it enters
+        self.assertEqual(kinds("SEND_GEN_XFER_RETURN"), kinds("SEND_GEN"))
+
+    def test_expansions_agree_with_the_clauses(self):
+        with cases.handle_stderr():
+            expand_variants(analysis)
+
+    def refuses(self, changes, message):
+        text = BYTECODES.read_text()
+        for old, new in changes:
+            self.assertEqual(text.count(old), 1, old)
+            text = text.replace(old, new)
+        fd, filename = tempfile.mkstemp(suffix=".c")
+        os.close(fd)
+        self.addCleanup(os.remove, filename)
+        with open(filename, "w") as f:
+            f.write(text)
+        with self.assertRaisesRegex(SyntaxError, message), cases.handle_stderr():
+            expand_variants(cases.analyzer.analyze_files([filename]))
+
+    def test_expansion_reaches_an_omitted_return(self):
+        # The RETURN arm of the completion routine returns from the frame
+        self.refuses([(SEND_CLAUSE, SEND_CLAUSE.replace("RETURN: exits(return, raise)",
+                                                        "RETURN: exits(branch, raise)")),
+                      (SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace(
+                          "RETURN: exits(return, raise)", "RETURN: exits(branch, raise)"))],
+                     r"SEND_\w*XFER_RETURN: its expansion reaches \['return'\], "
+                     r"which its boundary\(\.\.\.\) clause omits")
+        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace(
+                          "RETURN: exits(return, raise)", "RETURN: exits(raise)"))],
+                     r"CLEANUP_THROW_XFER_RETURN: its expansion reaches \['return'\]")
+
+    def test_expansion_reaches_an_omitted_yield(self):
+        self.refuses([(SEND_CLAUSE, SEND_CLAUSE.replace(" yields(delegated)", "")),
+                      (SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace(" yields(delegated)", ""))],
+                     r"SEND_\w*XFER_\w+: its expansion reaches `yield`, which its "
+                     r"boundary\(\.\.\.\) clause omits")
+
+    def test_clause_declares_an_unreached_exit(self):
+        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace(
+                          "POP_TOP: exits(branch, raise)", "POP_TOP: exits(branch, return, raise)"))],
+                     r"CLEANUP_THROW_XFER_\w+: its boundary\(\.\.\.\) clause declares "
+                     r"\['return'\], which its expansion never reaches")
+        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace("at(last)",
+                                                              "at(last) yields(delegated)"))],
+                     r"_CLEANUP_THROW: a delegated yield needs the departing uop's fall-through")
+
+    def test_departure_is_declared(self):
+        # No default: a clause states where its variants depart
+        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace(" at(last)", ""))],
+                     r"boundary\(CLEANUP_THROW\) needs at\(last\) or at\(enter\)")
+        # SEND_GEN's last uop only enters
+        self.refuses([(SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace("at(enter)", "at(last)"))],
+                     r"_PUSH_FRAME: a delegated yield needs the departing uop's fall-through")
+        # A native send yields and completes in its own uops
+        self.refuses([(SEND_CLAUSE, SEND_CLAUSE.replace("at(last)", "at(enter)"))],
+                     r"SEND\w*_XFER_\w+: departs at\(enter\), and its expansion reaches")
+
+    def test_member_clause_differs_only_in_departure(self):
+        self.refuses([(SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace("HOME, ", ""))],
+                     r"boundary\(SEND_GEN\) may differ from its family's "
+                     r"boundary\(SEND\) only in at\(\.\.\.\)")
+        self.refuses([(SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace(" yields(delegated)", ""))],
+                     r"boundary\(SEND_GEN\) may differ")
 
 
 if __name__ == "__main__":

@@ -50,6 +50,9 @@ def uop_record(handler, name):
     return next(u for u in records[handler].uops if u.name == name)
 
 
+TABLE_OVER_DECLARED = {"IR_TRY_DICT_FIRST_PROBE": {"raise"}}
+
+
 class SliceTests(unittest.TestCase):
     "The pilot slice: records from declarations, equal to what was inferred"
 
@@ -109,6 +112,10 @@ class SliceTests(unittest.TestCase):
         self.assertEqual([facts(g) for g in load.guards], [["NOT_NULL(found)"]])
         self.assertEqual(load.effects, {READS_HEAP, MAY_RELEASE})
 
+    # Where the tables (ir_records, deleted at G0d) declare an exit that the
+    # macro's expansion cannot take.  IR_TRY_DICT_FIRST_PROBE: a hit stores
+    # the result and dispatches, a miss falls through; the probe reads one
+    # slot and calls no hash or __eq__ (G0c batch 2 review).
     def test_transaction_macros_have_rows(self):
         # Every IR_* macro a body calls is a MACRO row whose exits cover the
         # transfers and guard exits that today's tables give it
@@ -125,6 +132,7 @@ class SliceTests(unittest.TestCase):
                 inferred = {exits[t] for t in ir_records.TRANSFER_TOKENS.get(name, ())}
                 if name in ir_records.GUARD_TOKENS:
                     inferred.add(exits[ir_records.GUARD_TOKENS[name]])
+                inferred -= TABLE_OVER_DECLARED.get(name, set())
                 self.assertLessEqual(inferred - {"next"}, set(table[name].exits))
 
     def test_declarations_equal_the_inference(self):

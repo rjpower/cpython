@@ -1573,10 +1573,10 @@ class VerifierTests(unittest.TestCase):
                 res = held;
             }
         """, r"`res` is not written before IR_OBSERVE_COMMITTED_BRANCH")
-        # The generator's replacer and the declaration name the same row;
-        # the generator selecting it by declaration is a follow-up (G0d)
-        self.assertEqual({r.name for r in self.table.values() if r.committed},
-                         {"IR_OBSERVE_COMMITTED_BRANCH"})
+        # The generator's observer replacer is selected by the declaration
+        self.assertEqual(ir_generator.committed_markers(),
+                         {r.name for r in self.table.values() if r.committed})
+        self.assertIn("IR_OBSERVE_COMMITTED_BRANCH", ir_generator.committed_markers())
         # next publishes, and a guard exit restarts the word: neither is
         # committed, nor a successor
         for mark in ("committed", "successor"):

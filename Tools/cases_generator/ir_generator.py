@@ -1746,7 +1746,11 @@ def uop_token_list(inst: Instruction) -> list[Token]:
             for t in part.body.tokens() if t.kind != "COMMENT"]
 
 
-OBSERVER_MARKER = "IR_OBSERVE_COMMITTED_BRANCH"
+def committed_markers() -> frozenset[str]:
+    """The rows that observe a committed exit: those declared
+    EXITS(...(committed)) (ir_contract.Row.committed), whose observer the
+    emitter's replacer generates"""
+    return frozenset(row.name for row in ir_contract.rows().values() if row.committed)
 
 
 def observer_terminal_arguments(tokens: list[Token]) -> tuple[list[str], int]:
@@ -1795,7 +1799,8 @@ def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tup
     when each marker is emitted. Metadata and emission use these same paths.
     """
     paths: dict[Token, tuple[int, str]] = {}
-    if OBSERVER_MARKER not in uop_tokens(inst):
+    markers_declared = committed_markers()
+    if not markers_declared & set(uop_tokens(inst)):
         return paths
     parts = [p for p in inst.parts if not isinstance(p, Skip)]
 
@@ -1827,7 +1832,7 @@ def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tup
                 destination.update(source)
             return left_live or right_live
         tokens = [t for t in stmt.tokens() if t.kind != "COMMENT"]
-        markers = [t for t in tokens if t.text == OBSERVER_MARKER]
+        markers = [t for t in tokens if t.text in markers_declared]
         if not isinstance(stmt, SimpleStmt):
             raise analysis_error("terminal observer in unsupported control flow", tokens[0])
         texts = [t.text for t in tokens]
@@ -1899,7 +1904,7 @@ def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tup
         if owners:
             raise analysis_error("terminal observer has untransferred C owners: " +
                                  ", ".join(sorted(owners)), marker)
-        if len(markers) != 1 or texts[0] != OBSERVER_MARKER or following:
+        if len(markers) != 1 or texts[0] not in markers_declared or following:
             raise analysis_error("semantic work follows terminal observer", marker)
         if not parts or parts[-1] is not uop:
             raise analysis_error("terminal observer must finish the composed handler", marker)
@@ -1919,7 +1924,7 @@ def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tup
         return False
 
     for part in parts:
-        if isinstance(part, Uop) and any(t.text == OBSERVER_MARKER for t in part.body.tokens()):
+        if isinstance(part, Uop) and any(t.text in markers_declared for t in part.body.tokens()):
             deferred: set[str] = set()
             live = walk(part.body, set(), set(), set(), deferred, False, part)
             if live and deferred:
@@ -3426,7 +3431,8 @@ class IREmitter(Emitter):
         self._replacers["IR_BASE"] = self.ir_base
         self._replacers["IR_COMPLETE_STEP"] = self.complete_step
         self._replacers["IR_PROCESS_ERROR"] = self.process_error
-        self._replacers["IR_OBSERVE_COMMITTED_BRANCH"] = self.observe_committed_branch
+        for marker in committed_markers():
+            self._replacers[marker] = self.observe_committed_branch
         self._replacers["IR_DEFER_CLOSE"] = self.defer_observer_input
         self._replacers["IR_RETURN_TO_CALLER"] = self.return_to_caller
         self._replacers["IR_FINISH_GENERATOR_RETURN"] = self.finish_generator_return

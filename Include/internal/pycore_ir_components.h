@@ -120,7 +120,14 @@
     /* Each tag test below is a comparison of the word's bits against the \
      * region bounds of pycore_value.h (the cited predicate); none reads \
      * memory.  A test with no fact of the vocabulary to declare declares \
-     * none */ \
+     * none.  Reviewed (G0c batch 1): PyValue_IsPointerSpace is `bits < \
+     * Py_PTR_LIMIT`, which NULL (bits 0) and the tag-bit words 1 and 2 \
+     * satisfy, so no fact (not even nonnull) follows from it; \
+     * PyValue_IsTaggedIndex is `bits - Py_INDEX_BASE < Py_DOUBLE_OFFSET - \
+     * Py_INDEX_BASE`; PyValue_IsInline is `bits >= Py_DOUBLE_OFFSET`, an \
+     * int or a float, never a True, False or None word.  No call, no \
+     * allocation, no callback, no failure.  The vocabulary has no \
+     * tagged_index fact, so TEST() is all a tagged-index test can say */ \
     PRIMITIVE(PyValue_IsPointerSpace, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(), EFFECTS()) \
     PRIMITIVE(PyValue_IsInline, bool, (PyValueBorrow), \
@@ -138,16 +145,24 @@
     /* Bits compared with bits (pycore_value.h: PyValue_Is, \
      * _PyValue_NamesObject, PyValue_IsTrue, IsFalse, IsNone).  A word that \
      * is True, False or None is an object word: a static object's address \
-     * with Py_TAG_REFCNT */ \
+     * with Py_TAG_REFCNT.  Reviewed (G0c batch 1): PyValue_IsTrue and \
+     * PyValue_IsFalse are `bits == (&_Py_TrueStruct | Py_TAG_REFCNT)` and \
+     * the same for _Py_FalseStruct: no memory, no call, no failure.  A true \
+     * result says the word is that constant, is(PyValue_True) or \
+     * is(PyValue_False); the CONSTANT rows give them `inline \
+     * exact(PyBool_Type)`, which implies object, so a reader of the true \
+     * arm still has object.  (They declared TEST(object), which was true \
+     * but less than the test says; PyValue_IsNone below is the same \
+     * correction.) */ \
     PRIMITIVE(PyValue_Is, bool, (PyValueBorrow, PyValueBorrow), \
               ARGS(borrowed, borrowed), TEST(,), EFFECTS()) \
     PRIMITIVE(_PyValue_NamesObject, bool, (PyValueBorrow, PyObject *), \
               ARGS(borrowed, object), TEST(,), EFFECTS()) \
     PRIMITIVE(PyValue_IsTrue, bool, (PyValueBorrow), \
-              ARGS(borrowed), TEST(object), EFFECTS()) \
+              ARGS(borrowed), TEST(is(PyValue_True)), EFFECTS()) \
     PRIMITIVE(PyValue_IsFalse, bool, (PyValueBorrow), \
-              ARGS(borrowed), TEST(object), EFFECTS()) \
-    /* PyValue_IsNone (pycore_value.h) is `PyValue_Is(v, PyValue_None)`: \
+              ARGS(borrowed), TEST(is(PyValue_False)), EFFECTS()) \
+    /* PyValue_IsNone (pycore_value.h, reviewed G0c batch 1) is `PyValue_Is(v, PyValue_None)`: \
      * the word's bits against None's bits (an object word, the static \
      * _Py_NoneStruct address with Py_TAG_REFCNT).  No call, no memory, no \
      * callback, no failure.  True means the word is None, so the fact is \
@@ -158,7 +173,15 @@
               ARGS(borrowed), TEST(is(PyValue_None)), EFFECTS()) \
     /* VALUE_CHECK_FUNC(Bool) and PyValue_LongCheckExact (pycore_value.h): \
      * an object word, and its type read through ob_type.  The object check \
-     * dereferences the word, so NULL is not admitted */ \
+     * dereferences the word, so NULL is not admitted.  Reviewed (G0c \
+     * batch 1): PyValue_BoolCheck is `PyValue_IsPointerSpace(v) && \
+     * PyBool_Check(AsKnownObjectBorrow(v))`; NULL is in the pointer space \
+     * and would be dereferenced, hence ARGS(borrowed nonnull); an inline \
+     * int or float is not in it and gives false.  PyBool_Check reads ob_type \
+     * (reads) and calls nothing.  PyValue_LongCheckExact is `IsInlineInt(v) \
+     * || (IsPointerSpace(v) && PyLong_CheckExact(...))`: the same, and it \
+     * is true for an inline int too, which is why its fact is \
+     * exact(PyLong_Type) and not object */ \
     PRIMITIVE(PyValue_BoolCheck, bool, (PyValueBorrow), \
               ARGS(borrowed nonnull), TEST(exact(PyBool_Type)), EFFECTS(reads)) \
     PRIMITIVE(PyValue_LongCheckExact, bool, (PyValueBorrow), \
@@ -181,6 +204,10 @@
     /* Tagged indices (pycore_value.h): arithmetic on the word */ \
     PRIMITIVE(PyValue_TagIndex, PyValue, (intptr_t), \
               ARGS(scalar), VALUE(inline), EFFECTS()) \
+    /* PyValue_UntagIndex (pycore_value.h): a shift of the word's bits, no \
+     * memory, no failure.  It asserts PyValue_IsTaggedIndex(r) (a \
+     * precondition of the caller's contract that the vocabulary cannot \
+     * state: no tagged_index fact) */ \
     PRIMITIVE(PyValue_UntagIndex, intptr_t, (PyValueBorrow), \
               ARGS(borrowed), SCALAR, EFFECTS()) \
     PRIMITIVE(PyValue_IncrementTaggedIndexNoOverflow, PyValue, (PyValue), \
@@ -264,7 +291,12 @@
     MACRO(Py_ARITHMETIC_RIGHT_SHIFT, \
         ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(), EXITS()) \
     /* seeded from ir_generator.VIEW_TAKES, ir_records.effect_sites; the \
-     * result is argument 0 moved, value and obligation (F5) */ \
+     * result is argument 0 moved, value and obligation (F5).  Reviewed \
+     * (G0c batch 1): TAKE is a generator replacer (ir_generator.py \
+     * take_view, `_PyIR_Taken` in ceval_macros.h): in the interpreter \
+     * form it is the value itself; in the IR forms the detached owner's \
+     * count moves, or a local's value gets a new count (PyValue_XDUP: a \
+     * count only).  No callback, no failure; it is not a C function */ \
     MACRO(TAKE, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS()) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyIR_AdoptTemp, PyValue, (PyValueBorrow), \
@@ -275,7 +307,12 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_ASCII, PyObject *, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from ir_leaf.ERASED */ \
+    /* Reviewed (G0c batch 1).  _PyValue_CheckHome (pycore_value.h) is \
+     * `((void)0)` unless Py_DEBUG; under Py_DEBUG it reads the word and \
+     * its object's identity (_PyValue_IsHome) and, on a violation, \
+     * reports it (fatal, or counted by _PYTHON_VALUE_HOME_REPORT); it \
+     * runs no Python and takes no count.  The verified product is the \
+     * build without Py_DEBUG, where it is erased (ir_leaf.ERASED) */ \
     INTRINSIC(_PyValue_CheckHome, ARGS(scalar), NONE, BUILD(gil)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_Contains, int, (PyValueBorrow, PyValueBorrow), \
@@ -297,19 +334,36 @@
     HELPER(_PyValue_GetOptionalItem, _PyStatusValue, (PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed), \
         CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed (G0c batch 1).  _PyValue_Invert and _PyValue_Negative \
+     * (UNARY_FUNC in Objects/abstract.c): a NULL argument is null_error, \
+     * NULL result; else the type's nb_invert or nb_negative slot through \
+     * call_unary, which runs any __invert__ or __neg__ (runs_python); a \
+     * type without the slot is value_type_error, NULL result.  Failure is \
+     * exactly a NULL result with an exception set; the argument is \
+     * borrowed on every path (the slot receives a borrow); the result is a \
+     * new owner (an inline int or float, or an object with a count), \
+     * allocated by the slot (covered by runs_python).  Callbacks: the \
+     * slot, and the release of an old result a slot discards */ \
     HELPER(_PyValue_Invert, PyValue, (PyValueBorrow), \
         ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_IsInstance, int, (PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed (G0c batch 1).  _PyValue_IsTrue (pycore_value_ops.h) is a \
+     * static inline function: bits of True, False, None, an inline int or \
+     * float answer without a call; any other object goes to \
+     * _PyValue_IsTrueSlow (Objects/object.c), which runs the type's \
+     * nb_bool, mp_length or sq_length slot (any __bool__ or __len__: \
+     * runs_python) and returns 1 when it has none.  Result 0 or 1, or a \
+     * negative value with an exception set (the slot failed); the argument \
+     * is borrowed on every path.  A NULL argument is not admitted: the \
+     * slow path dereferences it */ \
     HELPER(_PyValue_IsTrue, int, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.INT_RESULTS, ir_records.effect_sites */ \
     HELPER(_PyValue_LshiftInt64, PyValue, (int64_t, int64_t), \
         ARGS(scalar, scalar), VALUE(owned exact(PyLong_Type)), EFFECTS(allocates)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* _PyValue_Negative: see _PyValue_Invert above */ \
     HELPER(_PyValue_Negative, PyValue, (PyValueBorrow), \
         ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -345,7 +399,12 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_SetItem, int, (PyValueBorrow, PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed (G0c batch 1).  _PyValue_Size (Objects/abstract.c) asserts \
+     * a non-NULL argument; an inline int or float is value_type_error \
+     * (-1); else the type's sq_length (any __len__) or, failing that, \
+     * _PyValue_MappingSize, which runs mp_length.  Result a length >= 0, \
+     * or -1 with an exception set; the argument is borrowed on every \
+     * path.  Callbacks: the length slots (runs_python) */ \
     HELPER(_PyValue_Size, Py_ssize_t, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -513,7 +572,15 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(Py_DECREF, \
         ARGS(scalar), SCALAR, EFFECTS(releases), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Reviewed (G0c batch 1).  Py_FatalError(msg) is a C macro of \
+     * Include/cpython/pyerrors.h: `_Py_FatalErrorFunc(__func__, msg)`, a \
+     * _Py_NO_RETURN function (Python/pylifecycle.c) that prints the \
+     * message and the traceback of every thread, then aborts the \
+     * process.  It cannot become a function (it names __func__).  It \
+     * never returns; the row's EXITS() is the conservative reading (the \
+     * uops that call it declare `next`, which is over-declared and \
+     * sound); a declared `exit` would need CACHE and RESERVED (batch 8) \
+     * to say so too */ \
     MACRO(Py_FatalError, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -630,7 +697,11 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(_Py_SINGLETON, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Reviewed (G0c batch 1).  _Py_STR(name) is a C macro of \
+     * Include/internal/pycore_global_strings.h: the address of a static \
+     * string object in the runtime's global table (an address constant): \
+     * no memory is read, nothing can fail.  It cannot be a function: the \
+     * argument is a token pasted into a member name */ \
     MACRO(_Py_STR, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -687,12 +758,22 @@
               ARGS(object), TEST(exact(PyFunction_Type)), EFFECTS(reads)) \
     /* An element of a list or tuple: a borrow rooted by the container \
      * (pycore_list.h, pycore_tuple.h).  A tuple under construction holds \
-     * NULL, so no fact is declared of it */ \
+     * NULL, so no fact is declared of it.  Reviewed (G0c batch 1): \
+     * PyTuple_GET_VALUE (pycore_tuple.h) is `PyValue_Borrow(tuple->ob_item \
+     * [index])` with an assert of the bounds: one load of an item (reads), \
+     * no call, no callback, no failure.  The result is a borrow rooted by \
+     * the tuple; a caller that can run Python before using it takes a \
+     * count first (the header comment).  No nonnull fact: an \
+     * `assumed(nonnull)` result would need a row of its own for the code \
+     * object's constants (_LOAD_CONST is left for it) */ \
     PRIMITIVE(PyList_GET_VALUE, PyValueBorrow, (PyObject *, Py_ssize_t), \
               ARGS(object, scalar), SCALAR, EFFECTS(reads)) \
     PRIMITIVE(PyTuple_GET_VALUE, PyValueBorrow, (PyObject *, Py_ssize_t), \
               ARGS(object, scalar), SCALAR, EFFECTS(reads)) \
-    /* pycore_long.h: the sign bits of lv_tag */ \
+    /* pycore_long.h: the sign bits of lv_tag.  Reviewed (G0c batch 1): \
+     * `(op->long_value.lv_tag & SIGN_MASK) == SIGN_ZERO`, one load of the \
+     * int's header (reads); no call, no failure.  The argument is a \
+     * boxed int: an inline int has no PyLongObject */ \
     PRIMITIVE(_PyLong_IsZero, bool, (const PyLongObject *), \
               ARGS(object), TEST(), EFFECTS(reads)) \
     /* pycore_dict.h: the address of the entries after the index table, \
@@ -1123,7 +1204,11 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(FT_ATOMIC_STORE_INT8_RELEASE, \
         ARGS(scalar, scalar), SCALAR, EFFECTS(reads, writes), EXITS()) \
-    /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
+    /* Reviewed (G0c batch 1).  INSTR_AT_OFFSET(n) is a generator \
+     * expansion (generators_common.py: `_PyFrame_GetBytecode(frame) + n`; \
+     * ir_generator.py: `_PyFrame_InstrAt(frame, n)`): an address of an \
+     * instruction word, computed from the frame's code; no load of the \
+     * instruction, no failure.  _RERAISE passes it to frame->instr_ptr */ \
     MACRO(INSTR_AT_OFFSET, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
@@ -1132,7 +1217,12 @@
     /* seeded from a C macro (no static check), ir_records.TRANSFER_TOKENS, ir_records.effect_sites */ \
     MACRO(JUMPBY, \
         ARGS(scalar), NONE, EFFECTS(), EXITS(jump)) \
-    /* seeded from a C macro (no static check), ir_records.TRANSFER_TOKENS, ir_records.effect_sites */ \
+    /* Reviewed (G0c batch 1).  JUMPTO(T) is `next_instr = JUMP_TARGET(T)` \
+     * (Python/ceval_macros.h): an assignment to the evaluator's successor \
+     * local, which the dispatch reads at the end of the handler; the \
+     * macro continues after it (a `+ POP_TOP` after the uop still runs). \
+     * No memory, no failure.  The `jump` exit names the successor it \
+     * sets; a C macro that assigns a local cannot be a function */ \
     MACRO(JUMPTO, \
         ARGS(scalar), NONE, EFFECTS(), EXITS(jump)) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
@@ -1262,7 +1352,11 @@
     MACRO(IR_IS_LOCAL, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
     MACRO(IR_FUSED_DISTANCE, ARGS(), SCALAR, EFFECTS(), EXITS()) \
     MACRO(IR_FUSED_IF_FALSE, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
-    /* IR_REPORT_EDGE (ceval_macros.h): ((void)(TAKEN)) in the interpreter */ \
+    /* IR_REPORT_EDGE (ceval_macros.h): ((void)(TAKEN)) in the interpreter. \
+     * Reviewed (G0c batch 1): in the function form (ceval.c) it stores the \
+     * flag in the activation record, `IR_ACTIVATION()->edge = (TAKEN)`, a \
+     * local C struct that is neither heap nor a home; no failure, no \
+     * callback.  Per-form macros cannot be one function */ \
     MACRO(IR_REPORT_EDGE, ARGS(scalar), NONE, EFFECTS(), EXITS()) \
     /* IR_METHOD_POLY_LOOKUP (ceval_macros.h): method_poly_lookup() reads the \
      * polymorphic entry's payload and loads a guarded class value; NULL is \
@@ -1357,10 +1451,18 @@
           EFFECTS(), EXITS()) \
     MACRO(IR_TAKE_INPUT, ARGS(consumed, scalar), VALUE(owned), \
           EFFECTS(reads, writes), EXITS()) \
-    /* _PyFrame_CloseHomeRange: "escapes" in IR_HELPER_EFFECTS; the close \
-     * of owned values runs finalizers */ \
+    /* Reviewed (G0c batch 1).  IR_CLOSE_INPUTS(array) is a generator \
+     * replacer (ir_generator.py close_input_homes) for \
+     * `_PyFrame_CloseHomeRange(frame, homes, oparg)` \
+     * (pycore_interpframe.h): for each of the oparg homes, from the last, \
+     * _PyFrame_TakeHome empties the home (writes) and PyValue_CLOSE \
+     * releases the owner; the release may run a finalizer (releases, \
+     * which already covers Python entered through a destructor).  The \
+     * walk's `array` is the window's homes, consumed whole; no failure \
+     * path.  It declared runs_python as well, which nothing in the body \
+     * does beyond that release: removed */ \
     MACRO(IR_CLOSE_INPUTS, ARGS(consumed), NONE, \
-          EFFECTS(writes, releases, runs_python), EXITS()) \
+          EFFECTS(writes, releases), EXITS()) \
     /* The observer's deferred close (ir_generator.py: defer_observer_input): \
      * the held value is closed after the observer; no table entry, so a \
      * release is declared */ \

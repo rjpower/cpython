@@ -397,7 +397,7 @@ dummy_func(
         }
 
         op(_POP_TOP_OPARG, (args[oparg]: consumed --))
-            effects(releases) exits(next)
+            effects(writes, releases) exits(next)
         {
             IR_CLOSE_INPUTS(args);
         }

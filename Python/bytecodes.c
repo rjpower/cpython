@@ -2005,13 +2005,20 @@ dummy_func(
         macro(INSTRUMENTED_YIELD_DELEGATED) =
             _YIELD_VALUE_EVENT + _YIELD_DELEGATED;
 
-        outlined inst(POP_EXCEPT, (exc_value -- )) {
+        outlined inst(POP_EXCEPT, (exc_value: consumed assumed(object) by _PUSH_EXC_INFO -- ))
+            effects(reads, releases) exits(next)
+        {
             // PUSH_EXC_INFO saved an exception instance or None: always an object
             assert(PyValue_IsObject(exc_value));
             _PyErr_StackItem *exc_info = tstate->exc_info;
-            Py_XSETREF(exc_info->exc_value,
-                   PyValue_IsNone(exc_value)
-                    ? NULL : PyValue_AsKnownObjectSteal(exc_value));
+            if (PyValue_IsNone(exc_value)) {
+                DEAD(exc_value);    // immortal: it owes no count
+                Py_XSETREF(exc_info->exc_value, NULL);
+            }
+            else {
+                PyObject *exc = PyValue_AsKnownObjectSteal(exc_value);
+                Py_XSETREF(exc_info->exc_value, exc);
+            }
         }
 
         outlined tier1 inst(RERAISE, (values[oparg], exc_st -- values[oparg])) {

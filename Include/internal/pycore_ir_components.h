@@ -148,7 +148,7 @@
     PRIMITIVE(PyValue_IsFalse, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(object), EFFECTS()) \
     PRIMITIVE(PyValue_IsNone, bool, (PyValueBorrow), \
-              ARGS(borrowed), TEST(object), EFFECTS()) \
+              ARGS(borrowed), TEST(is(PyValue_None)), EFFECTS()) \
     /* VALUE_CHECK_FUNC(Bool) and PyValue_LongCheckExact (pycore_value.h): \
      * an object word, and its type read through ob_type.  The object check \
      * dereferences the word, so NULL is not admitted */ \
@@ -534,8 +534,12 @@
     HELPER(Py_XINCREF, void, (PyObject *), \
         ARGS(object), NONE, EFFECTS()) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Py_XSETREF's new value may be NULL: the walk accepts the literal \
+     * NULL for `consumed object` only because it names no value, so it \
+     * has no requirement to check and no obligation to take; a local \
+     * that may hold NULL is refused (object implies nonnull) */ \
     MACRO(Py_XSETREF, \
-        ARGS(scalar, scalar), SCALAR, EFFECTS(releases), EXITS()) \
+        ARGS(scalar, consumed object), NONE, EFFECTS(releases), EXITS()) \
     /* seeded from ir_leaf.ERASED */ \
     INTRINSIC(QSBR_QUIESCENT_STATE, ARGS(scalar), NONE, BUILD(gil)) \
     /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \

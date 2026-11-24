@@ -12907,11 +12907,17 @@ ir_run_POP_EXCEPT(
             (void)ir_own_A;
             exc_value = IR_VIEW(IR_A(ir_word));
             assert(PyValue_IsObject(exc_value));
+            assert(PyValue_IsObject(exc_value));
             _PyErr_StackItem *exc_info = tstate->exc_info;
-            ir_own_A = IR_DETACH(ir_word, A, exc_value);
-            Py_XSETREF(exc_info->exc_value,
-                       PyValue_IsNone(exc_value)
-                       ? NULL : _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(exc_value, ir_own_A)));
+            if (PyValue_IsNone(exc_value)) {
+                ir_own_A = IR_DETACH(ir_word, A, exc_value);
+                Py_XSETREF(exc_info->exc_value, NULL);
+            }
+            else {
+                ir_own_A = IR_DETACH(ir_word, A, exc_value);
+                PyObject *exc = _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(exc_value, ir_own_A));
+                Py_XSETREF(exc_info->exc_value, exc);
+            }
             DISPATCH();
         }
 

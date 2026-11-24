@@ -2587,7 +2587,9 @@ class OwnershipWalk:
         item = self.declared.get(name)
         if item is not None and item.mode == "closed":
             return
-        if state.owners.get(name) == HELD and INLINE not in state.facts.get(name, frozenset()):
+        # A static immortal value, is(PyValue_None), owes no count either
+        if state.owners.get(name) == HELD and not self.owes_nothing(
+                state.facts.get(name, frozenset())):
             self.fail(where, f"DEAD(`{name}`) drops an owned value: release it, move it "
                       "first, or declare it inline")
         if name in state.owners:

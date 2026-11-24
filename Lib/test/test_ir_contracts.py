@@ -1212,6 +1212,27 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"is\(PyValue_NULL\): NULL is no identity; it is `null`")
 
+    def test_a_static_immortal_value_owes_no_count(self):
+        # _POP_EXCEPT: None is a CONSTANT row's value, which DEAD may drop
+        source = """
+            op(_OP, (exc_value: consumed object --)) effects(reads, releases) exits(next) {
+                _PyErr_StackItem *exc_info = tstate->exc_info;
+                if (%s) {
+                    DEAD(exc_value);
+                    Py_XSETREF(exc_info->exc_value, NULL);
+                }
+                else {
+                    PyObject *exc = PyValue_AsKnownObjectSteal(exc_value);
+                    Py_XSETREF(exc_info->exc_value, exc);
+                }
+            }
+        """
+        self.verify(source % "PyValue_IsNone(exc_value)")
+        self.refuses(source % "!PyValue_IsNone(exc_value)",
+                     r"DEAD\(`exc_value`\) drops an owned value")
+        self.refuses(source % "PyValue_IsFalse(exc_value)",
+                     r"DEAD\(`exc_value`\) drops an owned value")
+
     def test_identities_of_static_objects(self):
         # F21, _GUARD_LOAD_SUPER_ATTR_METHOD: a CONSTANT row names a static
         # object by address; a comparison with it establishes is(K)

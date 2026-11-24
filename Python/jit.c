@@ -483,9 +483,9 @@ resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *sit
     return (resolved_status){NULL, next};
 }
 
-/* The cold path of planned word i, in the cold section: status, entered
- * with a stub's nonzero status in eax, or miss, entered when the arm's
- * guard failed with the word untouched.  resolve_status() decides; the
+/* The cold path of planned word i, in the cold section: status (or -1),
+ * entered with a stub's nonzero status in eax, or miss (or -1), entered
+ * when the arm's guard failed with the word untouched.  resolve_status() decides; the
  * unit leaves with its transfer, or goes on at the next word or the word
  * again. */
 static void
@@ -500,8 +500,23 @@ emit_status_cold(_PyJitCompiler *c, uint32_t i, _PyJitLabel status, _PyJitLabel 
         _PyJitAsm_MovImm(a, R(RCX), _PyIR_MISS);
         _PyJitAsm_Jmp(a, resolve);
     }
-    _PyJitAsm_Bind(a, status);
-    _PyJitAsm_MovRR(a, R(RCX), R(RAX));
+    if (status >= 0) {
+        _PyJitAsm_Bind(a, status);
+        if (next < c->nwords && c->labels[next] >= 0) {
+            /* ESCAPED alone, the status of every completion that may have
+             * run Python (a generic arm declares it at entry): the RETIRED
+             * test inline, the resolver only for a retired unit.  Only the
+             * status's low bits are defined. */
+            _PyJitLabel general = _PyJitAsm_NewLabel(a);
+            _PyJitAsm_TestRI(a, R(RAX),
+                             _PyIR_MISS | _PyIR_RAISED | _PyIR_BRANCH | _PyIR_AGAIN);
+            _PyJitAsm_Jcc(a, _PyJitCond_NE, general);
+            _PyJitAsm_TestMI(a, AT(RBX, offsetof(_PyJitUnit, invalid)), _PyJIT_RETIRED);
+            _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[next]);
+            _PyJitAsm_Bind(a, general);
+        }
+        _PyJitAsm_MovRR(a, R(RCX), R(RAX));
+    }
     _PyJitAsm_Bind(a, resolve);
     _PyJitAsm_MovRR(a, R(RDI), R(R12));
     _PyJitAsm_MovRR(a, R(RSI), R(R13));
@@ -724,7 +739,7 @@ emit_template_word(_PyJitCompiler *c, uint32_t i, _PyJitTemplate template)
         _PyJitAsm_Jmp(a, cx.release_back[k]);
     }
     if (planned) {
-        emit_status_cold(c, i, _PyJitAsm_NewLabel(a), cx.slow);
+        emit_status_cold(c, i, -1, cx.slow);
     }
     else {
         _PyJitAsm_Bind(a, cx.slow);

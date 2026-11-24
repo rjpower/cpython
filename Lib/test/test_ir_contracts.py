@@ -1684,6 +1684,33 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % "reads, runs_python(branch|nowhere)",
                      r"confines an effect to nowhere, which is no exit")
 
+    def test_a_confined_effect_is_exported_where_compiled_code_goes_on(self):
+        # The record, the metadata and the stub plans read the effects of the
+        # paths after which compiled code goes on: an effect confined to
+        # raise leaves them, one confined to branch stays (the branch's
+        # target runs after it)
+        source = """
+            op(_JUMP, (iter: object, null_or_index -- iter, null_or_index))
+                effects(reads, %s) exits(next, branch, raise)
+            {
+                _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
+                if (r->len <= 0) {
+                    PyValue completed = PyValue_None;
+                    IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
+                }
+            }
+        """
+        contract = ir_contract.contract_of(self.verify(
+            source % "runs_python(branch|raise)").uops["_JUMP"])
+        self.assertNotIn("runs_python", contract.next_effects())
+        self.assertIn("runs_python", contract.continuing_effects())
+        # An effect confined to raise alone is not on a path that goes on
+        self.assertEqual(
+            ir_contract.Contract((), (), frozenset(("runs_python", "reads")),
+                                 frozenset(("next", "raise")), confined=(
+                ("runs_python", frozenset(("raise",))),)).continuing_effects(),
+            frozenset(("reads",)))
+
     def test_the_representation_table(self):
         # _TO_BOOL_INT: an exact int whose one encoding tested false is an
         # object

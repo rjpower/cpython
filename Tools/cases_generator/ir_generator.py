@@ -7483,7 +7483,7 @@ class StubPlan:
 
 
 def arm_escapes(inst: Instruction) -> bool:
-    return any(ir_contract.contract_of(part).effects & STUB_REENTRY
+    return any(ir_contract.contract_of(part).continuing_effects() & STUB_REENTRY
                for part in inst.parts if isinstance(part, Uop))
 
 
@@ -7570,7 +7570,7 @@ def stub_escapes(inst: Instruction) -> frozenset[str]:
         if not isinstance(part, Uop):
             continue
         contract = ir_contract.contract_of(part)
-        if contract.effects & STUB_REENTRY:
+        if contract.continuing_effects() & STUB_REENTRY:
             names.add(part.name)
         elif any(site.effect == "releases" and site.token.text not in reporting
                  for site in ir_contract.effect_sites(part)):

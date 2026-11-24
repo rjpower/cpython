@@ -66,6 +66,9 @@ KILLS = frozenset(("writes", "releases", "runs_python", "polls", "switches_frame
 
 EXITS = ("next", "branch", "jump", "miss", "deopt", "raise", "enter", "return",
          "yield", "exit")
+# The exits after which no compiled code of the word's frame state runs: the
+# error route and the evaluator's exit
+LEAVING_EXITS = frozenset(("raise", "exit"))
 
 # Feedback access (design 1.6, section 6): what a row or a uop reads and
 # writes of its site's feedback, transitively.  `entry` is every field of
@@ -1181,6 +1184,14 @@ class Contract:
         "the effects that may occur on a path to next, which kill its facts"
         return self.effects - {e for e, _ in self.confined}
 
+    def continuing_effects(self) -> frozenset[str]:
+        """the effects that may occur on a path after which compiled code
+        goes on: every effect except one confined to exits that leave the
+        word's frame state (raise, exit).  An effect confined to branch
+        stays: the branch's target runs after it, and the baseline JIT tests
+        RETIRED after a word that may run Python"""
+        return self.effects - {e for e, on in self.confined if on <= LEAVING_EXITS}
+
     def state_item(self, name: str) -> tuple[str, frozenset, frozenset] | None:
         return next((i for i in self.state if i[0] == name), None)
 
@@ -1191,7 +1202,7 @@ class Contract:
         return next((o for o in self.outputs if o.name == name), None)
 
     def record_effects(self) -> frozenset[str]:
-        return frozenset().union(*(RECORD_EFFECT[e] for e in self.effects))
+        return frozenset().union(*(RECORD_EFFECT[e] for e in self.continuing_effects()))
 
 
 # moved(home): an output that takes the value and the obligation of the

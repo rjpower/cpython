@@ -137,11 +137,15 @@ class SliceTests(unittest.TestCase):
         checks = "\n".join(ir_contract.component_checks())
         table = ir_contract.rows()
         for row in table.values():
-            if row.kind in ("HELPER", "PRIMITIVE", "DESTRUCTOR", "FIELD"):
+            if row.kind in ("HELPER", "PRIMITIVE", "DESTRUCTOR", "FIELD", "CONSTANT"):
                 self.assertIn(f'"{row.name}: its C type differs', checks)
         self.assertIn("__typeof__(&_PyValue_BoxInt64), PyValue (*)(int64_t)", checks)
         self.assertIn("__typeof__(&_PyLong_ExactDealloc), void (*)(PyObject *)", checks)
         self.assertIn("__typeof__(((PyTypeObject *)0)->tp_version_tag), unsigned int", checks)
+        # at block scope: an address in a file-scope literal is no constant
+        self.assertIn("static inline void _PyIR_CheckConstants(void) {\n"
+                      "static_assert(__builtin_types_compatible_p("
+                      "__typeof__(PyValue_None), PyValue),", checks)
         generated = (BYTECODES.parent / "generated_ir_cases.c.h").read_text()
         self.assertIn(checks, generated)
 
@@ -155,7 +159,32 @@ EXTRA_ROWS = """
     MACRO(SPAM_RAISE, ARGS(scalar), NONE, EFFECTS(raises), EXITS(raise)) \\
     HELPER(T, PyValue, (PyValue), ARGS(taken), \\
            VALUE_OR_NULL(owned), EFFECTS(allocates, raises)) \\
-    MACRO(SPAM_GUARD, ARGS(scalar), NONE, EFFECTS(), EXITS(miss))
+    MACRO(SPAM_GUARD, ARGS(scalar), NONE, EFFECTS(), EXITS(miss)) \
+    MACRO(TAKE, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS()) \
+    HELPER(_PyValue_Size, Py_ssize_t, (PyValueBorrow), ARGS(borrowed), SCALAR, \
+           EFFECTS(runs_python)) \
+    HELPER(PyValue_FromInt64, PyValue, (int64_t), ARGS(scalar), VALUE_OR_NULL(owned), \
+           EFFECTS(allocates, raises)) \
+    MACRO(SPAM_STATUS, ARGS(), SCALAR, EFFECTS(raises), EXITS()) \
+    MACRO(SPAM_NEW, ARGS(), VALUE_OR_NULL(owned), EFFECTS(allocates, raises), EXITS()) \
+    MACRO(SPAM_BORROW, ARGS(), VALUE(borrowed), EFFECTS(reads), EXITS()) \
+    MACRO(SPAM_IN_BOUNDS, ARGS(borrowed, borrowed), TEST(in_bounds(1) |, |), \
+          EFFECTS(reads), EXITS()) \
+    MACRO(SPAM_UNIQUE, ARGS(borrowed), TEST(unique), EFFECTS(), EXITS()) \
+    MACRO(SPAM_NEEDS_UNIQUE, ARGS(borrowed unique), NONE, EFFECTS(writes), EXITS()) \
+    MACRO(SPAM_GEN_OR_CORO, ARGS(borrowed), TEST(exact(PyGen_Type|PyCoro_Type)), \
+          EFFECTS(), EXITS()) \
+    MACRO(SPAM_NEEDS_INT, ARGS(borrowed inline_int), NONE, EFFECTS(), EXITS()) \
+    HELPER(SPAM_STEAL, PyValue, (PyObject *), ARGS(consumed object), VALUE(owned), \
+           EFFECTS()) \
+    MACRO(SPAM_GUARD_INT, ARGS(borrowed), GUARD(inline_int), EFFECTS(), EXITS(miss)) \
+    MACRO(SPAM_GUARD_INDEX, ARGS(borrowed, borrowed, scalar), GUARD(in_bounds(1)), \
+          EFFECTS(reads), EXITS(deopt)) \
+    MACRO(SPAM_DESCR, ARGS(scalar), VALUE(borrowed assumed(nonnull) by spam_cache), \
+          EFFECTS(reads), EXITS()) \
+    MACRO(SPAM_DESCR_OR_NULL, ARGS(scalar), VALUE_OR_NULL(borrowed), EFFECTS(reads), EXITS()) \
+    SLOT(hashfunc, Py_hash_t, (PyObject *), ARGS(object), SCALAR, EFFECTS(runs_python)) \
+    FIELD(PyTypeObject, tp_hash, hashfunc, ON(type), SLOT(hashfunc), EFFECTS(reads))
 """
 
 
@@ -384,7 +413,7 @@ class VerifierTests(unittest.TestCase):
         """, r"PyValue_CLOSE_SPECIALIZED consumes `value`, which is already consumed or moved")
         # Moved to an output, then released
         self.refuses("""
-            inst(OP, (value: consumed exact(PyLong_Type) -- res: owned)) effects(writes)
+            inst(OP, (value: consumed exact(PyLong_Type) -- res: moved(value))) effects(writes)
                 exits(next)
             {
                 res = value;
@@ -393,7 +422,9 @@ class VerifierTests(unittest.TestCase):
         """, r"PyValue_CLOSE_SPECIALIZED consumes `value`, which is already consumed or moved")
         # Moved twice
         self.refuses("""
-            inst(OP, (value: consumed -- a: owned, b: owned)) effects() exits(next) {
+            inst(OP, (value: consumed -- a: moved(value), b: moved(value))) effects()
+                exits(next)
+            {
                 a = value;
                 b = value;
             }
@@ -843,9 +874,12 @@ class VerifierTests(unittest.TestCase):
                 %s
             }
         """
+        # A conditional's arms are paths: a move on one only is refused at
+        # the join (F3)
         self.refuses(source % "PyValue t = oparg ? a : b;",
-                     r"`PyValue t = oparg \? a : b` uses `a` in a form the walk does not "
-                     r"model")
+                     r"`[ab]` is owned on one path and not on another where they join")
+        self.refuses(source % "PyValue t = oparg ? a : (b ? a : b);",
+                     r"uses `[ab]` in a form the walk does not model")
         self.refuses(source % "goto done;", r"`goto` is a form the walk does not model")
         self.refuses(source % "r = PyValue_XDUP(PyValue_XDUP(a));",
                      r"calls PyValue_XDUP, which makes an owner, in a form the walk does "
@@ -1093,6 +1127,642 @@ class VerifierTests(unittest.TestCase):
             ir_contract.parse_rows(
                 "#define X(PRIMITIVE, HELPER, MACRO) "
                 "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(), EXITS(next))")
+
+    # F1: fact kinds, their classes and lifetimes
+
+    def test_fact_kinds(self):
+        for word in ("in_bounds(seq)", "nonnegative", "nonzero", "is(PyValue_None)",
+                     "subtype(PyType_Type)", "not_subtype(PyType_Type)",
+                     "not_exact(PyList_Type)", "exact(PyGen_Type|PyCoro_Type)",
+                     "type_flag(Py_TPFLAGS_HEAPTYPE)", "type_slot(tp_iter,PyObject_SelfIter)",
+                     "class_version", "func_version(K)", "argcount", "vectorcall",
+                     "call_flags", "ascii", "no_managed_dict", "unique", "null"):
+            self.assertEqual(str(ir_contract.parse_fact(word, None)), word)
+        for word, message in (("in_bounds", "needs an argument"),
+                              ("exact(PyGen_Type|)", "the argument of `exact`"),
+                              ("type_slot(tp_iter)", "the argument of `type_slot`"),
+                              ("ascii(x)", "takes no argument")):
+            with self.assertRaisesRegex(ValueError, message):
+                ir_contract.parse_fact(word, None)
+        # Mutable state's facts are heap facts; a value's are not
+        for kind in ("in_bounds", "subtype", "not_exact", "type_flag", "class_version"):
+            self.assertIn(kind, ir_contract.HEAP_FACTS)
+        for kind in ("nonnegative", "nonzero", "is", "ascii", "exact", "null"):
+            self.assertNotIn(kind, ir_contract.HEAP_FACTS)
+        # A union of exact types is a fact of the record as a union
+        union = ir_contract.parse_fact("exact(PyGen_Type|PyCoro_Type)", None)
+        self.assertEqual(union.record("v0").arg, "PyGen_Type | PyCoro_Type")
+
+    def test_in_bounds_names_an_input_and_dies_with_the_heap(self):
+        source = """
+            op(_GUARD, (seq, i -- seq, i: in_bounds(%s))) effects(%s) exits(next, miss) {
+                EXIT_IF(!SPAM_IN_BOUNDS(i, seq));
+                %s
+            }
+        """
+        self.verify(source % ("seq", "reads", ""))
+        self.refuses(source % ("other", "reads", ""),
+                     r"`i` is declared in_bounds\(other\), but `other` is not an input")
+        self.refuses(source % ("seq", "reads, writes", "int z = SPAM_TEST(seq);"),
+                     r"`i` is declared .*in_bounds\(seq\).*, which nothing establishes")
+
+    def test_unique_is_a_fact_of_one_site(self):
+        source = """
+            op(_OP, (x: borrowed --)) effects(writes, runs_python) exits(next) {
+                if (SPAM_UNIQUE(x)) {
+                    %s
+                    SPAM_NEEDS_UNIQUE(x);
+                }
+            }
+        """
+        self.verify(source % "")
+        # It dies at a reentry within the uop
+        self.refuses(source % "Py_ssize_t n = _PyValue_Size(x);",
+                     r"passes `x` to SPAM_NEEDS_UNIQUE, which requires .*unique of it")
+        # and is never exported
+        self.refuses("""
+            op(_OP, (x -- x: unique)) effects() exits(next) {
+                int z = 0;
+            }
+        """, r"`x` is declared unique, a fact of one site, which is never exported")
+
+    def test_identities_name_constants(self):
+        self.verify("""
+            op(_OP, (-- res: inline is(PyValue_None))) effects() exits(next) {
+                res = PyValue_None;
+            }
+        """)
+        self.refuses("""
+            op(_OP, (-- res: inline is(PyValue_True))) effects() exits(next) {
+                res = oparg ? PyValue_True : PyValue_False;
+            }
+        """, r"`res` is declared is\(PyValue_True\), but PyValue_False gives")
+        self.refuses("""
+            op(_OP, (x -- x: is(spam))) effects() exits(next) {
+                int z = 0;
+            }
+        """, r"is\(spam\) names `spam`, which is no CONSTANT row")
+        self.refuses("""
+            op(_OP, (x -- x: is(PyValue_NULL))) effects() exits(next) {
+                int z = 0;
+            }
+        """, r"is\(PyValue_NULL\): NULL is no identity; it is `null`")
+
+    def test_exact_types_join_by_union(self):
+        # A union TEST, and the join of two exact types
+        source = """
+            op(_GUARD, (x -- x: %s)) effects() exits(next, miss) {
+                EXIT_IF(!SPAM_GEN_OR_CORO(x));
+            }
+        """
+        self.verify(source % "exact(PyGen_Type|PyCoro_Type)")
+        self.refuses(source % "exact(PyGen_Type)", r"`x` is declared exact\(PyGen_Type\), "
+                                                   r"which nothing establishes")
+        facts = ir_contract._intersection([
+            {"x": frozenset({ir_contract.parse_fact("exact(PyList_Type)", None)})},
+            {"x": frozenset({ir_contract.parse_fact("exact(PyTuple_Type)", None)})}])
+        self.assertIn(ir_contract.parse_fact("exact(PyList_Type|PyTuple_Type)", None),
+                      facts["x"])
+
+    # A stolen object pointer
+
+    def test_consumed_object_steals_a_pointer(self):
+        steal = self.table["SPAM_STEAL"].args[0]
+        self.assertEqual((steal.mode, steal.object, steal.facts), ("consumed", True, frozenset()))
+        # On a PyValue parameter `object` stays the value's fact
+        view = self.table["PyValue_AsKnownObjectSteal"].args[0]
+        self.assertEqual((view.mode, view.object), ("consumed", False))
+        self.assertIn(ir_contract.OBJECT, view.facts)
+        source = """
+            op(_OP, (x: %s object -- r: owned)) effects() exits(next) {
+                PyObject *o = %s(x);
+                r = SPAM_STEAL(o);
+            }
+        """
+        self.verify(source % ("consumed", "PyValue_AsKnownObjectSteal"))
+        self.refuses(source % ("borrowed", "PyValue_AsKnownObjectBorrow"),
+                     r"SPAM_STEAL consumes `x`, declared borrowed, which it does not own")
+
+    # F7: assumed(fact) by <producer>
+
+    def test_assumed_inputs(self):
+        # _POP_TOP_UNICODE: the input form; an assert in the body is no
+        # declaration
+        source = """
+            op(_OP, (value: consumed %s --)) effects(writes) exits(next) {
+                assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
+                PyValue_CLOSE_SPECIALIZED(value, _PyUnicode_ExactDealloc);
+            }
+        """
+        analysis = self.verify(source % "assumed(exact(PyUnicode_Type)) by _BINARY_OP_ADD_UNICODE")
+        item = ir_contract.contract_of(analysis.uops["_OP"]).inputs[0]
+        self.assertEqual(item.assumed, (ir_contract.Assumption(
+            ir_contract.VFact("exact", "PyUnicode_Type"), "_BINARY_OP_ADD_UNICODE"),))
+        self.assertEqual(item.facts, frozenset())       # no requirement
+        self.assertEqual(ir_contract.assumed_assertions(analysis.uops["_OP"], None), [
+            "assert(!PyValue_IsNull(value) && "
+            "(PyValue_TYPE(value) == &PyUnicode_Type));"])
+        self.refuses(source % "", r"frees only exact\(PyUnicode_Type\)")
+        self.refuses(source % "assumed(exact(PyUnicode_Type))",
+                     r"names no producer: `assumed\(exact\(PyUnicode_Type\)\) by <producer>`")
+        self.refuses(source % "assumed(length(n)) by _P", r"length\(n\) has no assertion form")
+        self.refuses("""
+            op(_OP, (-- r: owned assumed(nonnull) by _P)) effects() exits(next) {
+                r = PyValue_None;
+            }
+        """, r"the output `r` is assumed")
+
+    def test_an_assumption_binds_at_the_handlers_entry(self):
+        source = """
+            op(_FIRST, (%s)) effects(%s) exits(next) {
+                %s
+            }
+            op(_SECOND, (x: assumed(object) by _P -- x)) effects() exits(next) {
+                spam_dealloc(PyValue_AsKnownObjectBorrow(x));
+            }
+            macro(OP) = _FIRST + _SECOND;
+        """
+        # A value that reaches the handler
+        self.verify(source % ("x -- x", "", ""))
+        # Made in this handler: its producer's facts must show it
+        self.refuses(source % ("-- x: borrowed", "reads", "x = SPAM_BORROW();"),
+                     r"_SECOND assumes object by _P of `x`, a value made in this handler")
+        # The assumption does not revive a fact after a reentry
+        self.refuses(source % ("x -- x", "runs_python",
+                               "Py_ssize_t n = _PyValue_Size(x); (void)n;"),
+                     r"`x`, which may have been replaced since the handler's entry, at "
+                     r"_FIRST, which may reenter")
+        # Within the uop it lives as any fact: a reentry kills it
+        self.refuses("""
+            op(_OP, (x: assumed(object) by _P -- x)) effects(runs_python) exits(next) {
+                Py_ssize_t n = _PyValue_Size(x); (void)n;
+                spam_dealloc(PyValue_AsKnownObjectBorrow(x));
+            }
+        """, r"passes `x` to PyValue_AsKnownObjectBorrow, which requires .*object of it")
+
+    def test_assumed_row_results(self):
+        # _LOAD_ATTR_CLASS: the cached descriptor is not NULL by the cache's
+        # invariant, declared on the row that reads it
+        row = self.table["SPAM_DESCR"]
+        self.assertEqual(row.result.assumed, (ir_contract.Assumption(
+            ir_contract.NONNULL, "spam_cache"),))
+        source = """
+            op(_OP, (-- attr: owned)) effects(reads) exits(next) {
+                %s
+            }
+        """
+        analysis = self.verify(source % "PyValueBorrow found = SPAM_DESCR(oparg);\n"
+                               "attr = PyValue_DUP(found);")
+        uop = analysis.uops["_OP"]
+        texts = ["PyValueBorrow", "found", "=", "SPAM_DESCR", "(", "oparg", ")", ";"]
+        self.assertEqual(ir_contract.assumed_assertions(uop, texts, self.table),
+                         ["assert(!PyValue_IsNull(found));"])
+        self.assertEqual(ir_contract.assumed_assertions(uop, texts[:3] + ["oparg", ";"],
+                                                        self.table), [])
+        # The call is bound to a local, where every form asserts it
+        self.refuses(source % "attr = PyValue_DUP(SPAM_DESCR(oparg));",
+                     r"SPAM_DESCR's result is assumed nonnull by spam_cache; bind it to a local")
+        self.refuses(source % "if (SPAM_DESCR(oparg).bits) { attr = PyValue_None; }"
+                     " else { attr = PyValue_None; }",
+                     r"SPAM_DESCR's result is assumed")
+        # An assert in the body is no declaration
+        self.refuses(source % "PyValueBorrow found = SPAM_DESCR_OR_NULL(oparg);\n"
+                     "assert(!PyValue_IsNull(found));\nattr = PyValue_DUP(found);",
+                     r"passes `found` to PyValue_DUP, which requires nonnull of it")
+        for text, message in [
+                ("VALUE(borrowed assumed(nonnull))", "names no producer"),
+                ("VALUE_OR_NULL(borrowed assumed(nonnull) by p)", "qualifies a VALUE result"),
+                ("VALUE(borrowed assumed(length(x)) by p)", "has no assertion form")]:
+            with self.subTest(text), self.assertRaisesRegex(ValueError, message):
+                ir_contract._parse_result(text)
+
+    def test_assumptions_are_asserted_in_every_form(self):
+        analysis = self.verify("""
+            inst(OP, (value: consumed assumed(exact(PyUnicode_Type)) by _P --))
+                effects(writes) exits(next)
+            {
+                PyValue_CLOSE_SPECIALIZED(value, _PyUnicode_ExactDealloc);
+            }
+        """)
+        out = io.StringIO()
+        with cases.handle_stderr():
+            ir_generator.generate_ir([self.filename], analysis, out, False)
+        body = cases.expand_outlined(out.getvalue())
+        body = body[body.index("TARGET(OP)"):]
+        self.assertLess(body.index("assert(!PyValue_IsNull(value) && "
+                                   "(PyValue_TYPE(value) == &PyUnicode_Type));"),
+                        body.index("_PyUnicode_ExactDealloc"))
+        # The leaf IR has no assertion: no template without it
+        with self.assertRaisesRegex(ir_leaf.LeafError, r"`value` is assumed"):
+            ir_leaf.translate(analysis.uops["OP"])
+
+    def test_frame_paths(self):
+        # GLOBALS() and BUILTINS() are pointers along paths from the frame,
+        # fixed for the activation (F1): PATH rows without arguments
+        for name, path in (("GLOBALS", "globals"), ("BUILTINS", "builtins")):
+            row = self.table[name]
+            self.assertEqual((row.args, row.result), ((), ir_contract.Result("PATH", measure=path)))
+
+    # F6: calls through a protocol's pointer
+
+    def test_slot_rows(self):
+        row = self.table["hashfunc"]
+        self.assertEqual((row.kind, row.ret, row.params, row.effects),
+                         ("SLOT", "Py_hash_t", ("PyObject *",), frozenset({"runs_python"})))
+        self.assertEqual(self.table["PyTypeObject.tp_hash"].result,
+                         ir_contract.Result("SLOT", measure="hashfunc"))
+        # The static check holds the protocol's pointer type
+        self.assertIn("__typeof__(hashfunc), Py_hash_t (*)(PyObject *)",
+                      "\n".join(ir_contract.component_checks(self.table)))
+        # A field that holds a protocol's pointer has its C type
+        for rows, message in [
+                ("FIELD(PyTypeObject, tp_hash, lenfunc, ON(type), SLOT(hashfunc), "
+                 "EFFECTS(reads))", r"the field's C type is lenfunc, not the protocol's"),
+                ("MACRO(SPAM_H, ARGS(), SLOT(hashfunc), EFFECTS(), EXITS())",
+                 r"a FIELD that holds a pointer of a SLOT row's protocol"),
+                ("FIELD(PyTypeObject, tp_hash, hashfunc, ON(type), SLOT(nothing), "
+                 "EFFECTS(reads))", r"SLOT\(nothing\) names no row")]:
+            with self.subTest(rows), self.assertRaisesRegex(SyntaxError, message):
+                ir_contract.check_columns(self.table | ir_contract.parse_rows(rows))
+
+    def test_a_local_calls_the_protocol_its_field_holds(self):
+        source = """
+            op(_OP, (x: object -- x)) effects(%s) exits(next) {
+                PyObject *o = PyValue_AsKnownObjectBorrow(x);
+                hashfunc h = %s;
+                Py_hash_t v = h(o);
+                (void)v;
+            }
+        """
+        self.verify(source % ("runs_python", "Py_TYPE(o)->tp_hash"))
+        # The call is the protocol's: its effects are the uop's
+        self.refuses(source % ("reads", "Py_TYPE(o)->tp_hash"),
+                     r"`h` may runs_python \(hashfunc declares it\), which effects\(reads\) "
+                     r"does not declare")
+        self.refuses(source % ("runs_python", "(hashfunc)Py_TYPE(o)->tp_hash"),
+                     r"`h` is called through a cast")
+        self.refuses(source % ("runs_python", "Py_TYPE(o)->tp_version_tag"),
+                     r"`h` is called, but `Py_TYPE \( o \) -> tp_version_tag` is no FIELD "
+                     r"that declares the SLOT it holds")
+        self.refuses(source % ("runs_python", "spam_lookup"),
+                     r"`spam_lookup` is no FIELD that declares the SLOT it holds")
+
+    # F15: the GIL product's preprocessor path
+
+    def test_build_arms(self):
+        # _ITER_CHECK_LIST: a free-threaded intrinsic in the free-threaded arm
+        source = """
+            op(_OP, (x -- x)) effects() exits(next) {
+            %s
+                int y = SPAM_FT_ONLY(1);
+            %s
+            }
+        """
+        self.verify(source % ("#ifdef Py_GIL_DISABLED", "#endif"))
+        self.verify(source % ("#if !defined(Py_GIL_DISABLED)\n#else", "#endif"))
+        self.refuses(source % ("#ifndef Py_GIL_DISABLED", "#endif"),
+                     r"calls SPAM_FT_ONLY, an INTRINSIC of the free_threaded build")
+        # Nested, with #else: only the selected arm is code
+        source = """
+            op(_OP, (x: borrowed object --)) effects(%s) exits(next) {
+            #ifdef Py_GIL_DISABLED
+                int y = SPAM_FT_ONLY(1);
+            #else
+            #if ENABLE_SPECIALIZATION
+                spam_write(PyValue_AsKnownObjectBorrow(x));
+            #else
+                int z = SPAM_FT_ONLY(2);
+            #endif
+            #endif
+            }
+        """
+        self.verify(source % "writes")
+        self.refuses(source % "", r"`spam_write` may writes")
+        # An arm that no macro of the product decides holds no code
+        source = """
+            op(_OP, (x -- x)) effects() exits(next) {
+            #ifdef Py_DEBUG
+                %s
+            #endif
+            }
+        """
+        self.verify(source % "assert(oparg >= 0);")
+        self.refuses(source % "int y = oparg;",
+                     r"`#ifdef Py_DEBUG` is decided by no macro of the GIL product")
+        self.refuses("""
+            op(_OP, (x -- x)) effects() exits(next) {
+            #if ENABLE_SPECIALIZATION
+                int y = 0;
+            #elif Py_DEBUG
+                int y = 1;
+            #endif
+            }
+        """, r"`#elif` is a preprocessor form the walk does not model")
+
+    # F18: a frame home is not the heap
+
+    def test_homes_are_their_own_location(self):
+        # _LOAD_FAST: a home load reads no heap
+        source = """
+            op(_OP, (x: %s -- )) effects() exits(next) {
+                PyValue v = GETLOCAL(oparg);
+                if (PyValue_IsInlineInt(v)) {
+                    %s
+                    SPAM_NEEDS_INT(v);
+                }
+                %s
+            }
+        """
+        self.verify(source % ("consumed inline", "", "DEAD(x);"))
+        # A home write kills what was loaded from a home
+        self.refuses(source % ("consumed", "GETLOCAL(oparg + 1) = x;", ""),
+                     r"passes `v` to SPAM_NEEDS_INT, which requires .*inline_int.* of it")
+        # A store into a home moves an owner there
+        self.refuses(source % ("borrowed", "GETLOCAL(oparg + 1) = x;", ""),
+                     r"moves into a home `x`, declared borrowed, which it does not own")
+        with self.assertRaisesRegex(SyntaxError, r"a HOME row addresses a frame home, which "
+                                                 r"is not the heap"):
+            ir_contract.parse_rows("#define X(PRIMITIVE, HELPER, MACRO) "
+                                   "MACRO(SPAM, ARGS(scalar), HOME, EFFECTS(reads), EXITS())")
+
+    # F2: a row's guard and the facts on its return
+
+    def test_guard_rows_establish_facts(self):
+        # _GUARD_ELEMENT_INT: IR_GUARD_INLINE_INT's facts hold on its return
+        source = """
+            op(_GUARD_ELEMENT_INT, (x -- x: %s)) effects() exits(next, miss) {
+                %s
+            }
+        """
+        self.verify(source % ("inline_int", "SPAM_GUARD_INT(x);"))
+        # Only on the path that calls it
+        self.refuses(source % ("inline_int", "if (oparg) { SPAM_GUARD_INT(x); }"),
+                     r"`x` is declared .*inline_int, which nothing establishes on every path")
+        # A row's in_bounds(k) names its argument k
+        self.verify("""
+            op(_GUARD_INDEX, (seq, i -- seq, i: in_bounds(seq))) effects(reads)
+                exits(next, deopt)
+            {
+                SPAM_GUARD_INDEX(i, seq, 0);
+            }
+        """)
+        for result, message in (
+                ("EXITS(next)", "GUARD\\(\\.\\.\\.\\) is the result of a row with a miss or deopt exit"),
+                ("EXITS(miss)", None)):
+            text = ("#define X(PRIMITIVE, HELPER, MACRO) "
+                    f"MACRO(SPAM, ARGS(borrowed), GUARD(inline_int), EFFECTS(), {result})")
+            if message is None:
+                ir_contract.parse_rows(text)
+            else:
+                with self.assertRaisesRegex(SyntaxError, message):
+                    ir_contract.parse_rows(text)
+        with self.assertRaisesRegex(SyntaxError, r"GUARD\(\.\.\.\) states 2 arguments' facts, "
+                                                 r"but the row has 1"):
+            ir_contract.parse_rows("#define X(PRIMITIVE, HELPER, MACRO) "
+                                   "MACRO(SPAM, ARGS(borrowed), GUARD(inline_int, inline), "
+                                   "EFFECTS(), EXITS(miss))")
+
+    # The seed's vocabulary (g0b/decisions.md): F9, exits the body takes
+
+    def test_error_labels_are_raise_exits(self):
+        # _INSTRUMENTED_LINE: `goto error` is its raise exit at that site
+        source = """
+            op(_LINE, (--)) effects(raises) exits(%s) {
+                int original = SPAM_STATUS();
+                if (original < 0) {
+                    goto error;
+                }
+            }
+        """
+        self.verify(source % "next, raise")
+        self.refuses(source % "next", r"_LINE: declares exits\(next\), but the body takes "
+                                      r"next, raise")
+        # The checkpoint is the site's: what is held there is checked there
+        self.refuses("""
+            op(_OP, (x: consumed --)) effects(raises) exits(raise) {
+                goto exception_unwind;
+            }
+        """, r"on raise, `x` is still owned, but the site declares consumed")
+        # Labels that pop stack items, and any other, stay refused
+        self.refuses(source.replace("goto error", "goto pop_1_error") % "next, raise",
+                     r"`goto` is a form the walk does not model")
+
+    def test_return_leaves_the_evaluator(self):
+        # _INTERPRETER_EXIT: the value goes to the evaluator's caller
+        source = """
+            op(_EXIT, (retval: %s --)) effects() exits(%s) {
+                PyValue result = TAKE(retval);
+                return result;
+            }
+        """
+        self.verify(source % ("consumed", "exit"))
+        self.refuses(source % ("consumed", "next"), r"declares exits\(next\), but the body "
+                                                    r"takes exit")
+        self.refuses(source % ("borrowed", "exit"),
+                     r"TAKE consumes `retval`, declared borrowed, which it does not own")
+        self.refuses("""
+            op(_EXIT, (retval: consumed --)) effects() exits(exit) {
+                PyValue result = TAKE(retval);
+                return;
+            }
+        """, r"`return` is a form the walk does not model")
+
+    def test_frame_properties_give_exits(self):
+        source = """
+            returns op(_RET, (--)) effects(switches_frame) exits(%s) {
+                int x = 0;
+            }
+        """
+        self.verify(source % "return")
+        self.refuses(source % "next, return",
+                     r"declares exits\(next, return\), but the body takes return")
+
+    # F4: inputs the skeleton closes
+
+    def test_closed_inputs_are_closed_by_the_skeleton(self):
+        # _CALL_LEN: the inputs stay in their homes; the skeleton closes
+        # them after the uop, on next and on raise
+        source = """
+            op(_CALL_LEN, (callable: closed, null: closed, arg: closed -- res: owned))
+                effects(runs_python) exits(next, raise)
+            {
+                Py_ssize_t len_i = _PyValue_Size(arg);
+                if (len_i < 0) {
+                    ERROR_NO_POP();
+                }
+                res = PyValue_FromInt64(len_i);
+                if (PyValue_IsNull(res)) {
+                    ERROR_NO_POP();
+                }
+                %s
+            }
+        """
+        self.verify(source % "INPUTS_DEAD();")
+        self.verify(source % "DEAD(arg);")
+        # The body does not release a closed input
+        self.refuses(source.replace("arg: closed", "arg: closed exact(PyLong_Type)")
+                     % "PyValue_CLOSE_SPECIALIZED(arg, _PyLong_ExactDealloc);",
+                     r"PyValue_CLOSE_SPECIALIZED consumes `arg`, declared closed, which it "
+                     r"does not own")
+        # DEAD surrenders a held owner only if it is closed
+        self.refuses("""
+            op(_OP, (x: consumed --)) effects() exits(next) {
+                DEAD(x);
+            }
+        """, r"DEAD\(`x`\) drops an owned value")
+        # and still marks an input already discharged (_CREATE_INIT_FRAME)
+        self.verify("""
+            op(_OP, (x: consumed -- r: moved(x))) effects() exits(next) {
+                r = x;
+                DEAD(x);
+            }
+        """)
+
+    def test_the_skeleton_close_is_a_release(self):
+        # After the uop: a finalizer may replace a pass-through's home
+        self.refuses("""
+            op(_OP, (b, a: closed -- b: inline_int)) effects() exits(next, miss) {
+                EXIT_IF(!PyValue_IsInlineInt(b));
+                DEAD(a);
+            }
+        """, r"`b` is declared .*inline_int, but the skeleton's close of `a` after the uop, "
+             r"which may release, may replace the value in its home")
+        # and the word cannot restart after it
+        self.refuses("""
+            op(_CLOSE, (a: closed --)) effects() exits(next) {
+                DEAD(a);
+            }
+            op(_GUARD, (b -- b: inline_int)) effects() exits(next, miss) {
+                EXIT_IF(!PyValue_IsInlineInt(b));
+            }
+            macro(OP) = _CLOSE + _GUARD;
+        """, r"the guard in _GUARD follows the skeleton's close of `a` after _CLOSE")
+
+    # F5: moves through rows and locals
+
+    def test_moved_results(self):
+        # _MAKE_HEAP_SAFE, and a move through a local (_JUMP_IF_FALSE_OR_POP)
+        self.verify("""
+            op(_MAKE_HEAP_SAFE, (value: consumed -- taken: moved(value))) effects()
+                exits(next)
+            {
+                taken = TAKE(value);
+            }
+            op(_THROUGH, (cond: consumed -- res: moved(cond))) effects() exits(next) {
+                PyValue held = TAKE(cond);
+                res = held;
+            }
+        """)
+        # Only an owner made in the body is declared owned
+        self.refuses("""
+            op(_OP, (value: consumed -- res: owned)) effects() exits(next) {
+                PyValue held = TAKE(value);
+                res = held;
+            }
+        """, r"`res` is declared owned, but is assigned `held`, which is the input `value`'s "
+             r"value: declare moved\(value\)")
+        # and a moved output holds its input's value
+        self.refuses("""
+            op(_OP, (value: consumed, other: consumed -- res: moved(value)))
+                effects() exits(next)
+            {
+                res = TAKE(other);
+                PyValue gone = TAKE(value);
+                res = gone;
+            }
+        """, r"`res` is declared moved\(value\), but is assigned `TAKE \( other \)`, which is "
+             r"`other`'s value")
+        self.refuses("""
+            op(_OP, (value: consumed -- res: moved(value))) effects(allocates, raises)
+                exits(next, raise)
+            {
+                res = SPAM_NEW();
+                ERROR_IF(PyValue_IsNull(res));
+            }
+        """, r"`res` is declared moved\(value\), but is assigned `SPAM_NEW \( \)`, which is "
+             r"no input's value")
+        # A row's moved(k) takes argument k's obligation
+        with self.assertRaisesRegex(SyntaxError, r"row SPAM: moved\(0\): argument 0 is not "
+                                                 r"consumed"):
+            ir_contract.parse_rows("#define X(PRIMITIVE, HELPER, MACRO) "
+                                   "MACRO(SPAM, ARGS(borrowed), VALUE(moved(0)), EFFECTS(), "
+                                   "EXITS())")
+
+    # F3: constants, locals and conditionals
+
+    def test_constants_and_conditionals(self):
+        # _CALL_ISINSTANCE: a conditional between two constants
+        source = """
+            op(_OP, (-- b: inline exact(PyBool_Type))) effects() exits(next) {
+                b = oparg ? PyValue_True : %s;
+            }
+        """
+        self.verify(source % "PyValue_False")
+        self.refuses(source % "PyValue_None",
+                     r"`b` is declared exact\(PyBool_Type\), but PyValue_None gives "
+                     r"exact\(_PyNone_Type\)")
+        # _PUSH_NULL: an output that is NULL on next declares it
+        source = """
+            op(_PUSH_NULL, (-- res: %s)) effects() exits(next) {
+                res = PyValue_NULL;
+            }
+        """
+        self.verify(source % "inline null")
+        self.refuses(source % "inline", r"`res` may be NULL from PyValue_NULL")
+        with self.assertRaisesRegex(SyntaxError, r"row SPAM: a CONSTANT is a static immortal "
+                                                 r"value"):
+            ir_contract.parse_rows("#define X(PRIMITIVE, HELPER, MACRO) "
+                                   "CONSTANT(SPAM, VALUE(owned))")
+
+    def test_null_is_the_negation_of_nonnull(self):
+        # PyValue_IsNull declares both sides; `null` implies nothing more
+        null = ir_contract.parse_fact("null", None)
+        self.assertEqual(self.table["PyValue_IsNull"].result.tests,
+                         ((frozenset({null}), frozenset({ir_contract.NONNULL})),))
+        self.assertEqual(ir_contract.implied({null}), {null})
+        # A word that is NULL where a guard passes declares it
+        source = """
+            op(_GUARD, (x -- x: %s)) effects() exits(next, deopt) {
+                DEOPT_IF(!PyValue_IsNull(x));
+            }
+        """
+        self.verify(source % "null")
+        self.refuses(source % "nonnull", r"the guards establish null of `x`")
+
+    def test_a_null_arm_follows_its_condition(self):
+        # _CALL_INTRINSIC_2: NULL exactly where the raise's condition holds
+        source = """
+            op(_OP, (-- res: owned)) effects(raises) exits(next, raise) {
+                int err = SPAM_STATUS();
+                res = err < 0 ? PyValue_NULL : PyValue_None;
+                ERROR_IF(%s);
+            }
+        """
+        self.verify(source % "err < 0")
+        self.refuses(source % "err > 0", r"on raise, the new owner `res` is still held")
+
+    def test_values_through_locals(self):
+        # _CALL_BUILTIN_O: a row's result reaches the output through a local
+        source = """
+            op(_OP, (-- res: owned%s)) effects(allocates, raises, reads) exits(next, raise) {
+                PyValue result = %s;
+                if (PyValue_IsNull(result)) {
+                    ERROR_NO_POP();
+                }
+                res = result;
+            }
+        """
+        self.verify(source % ("", "SPAM_NEW()"))
+        self.refuses(source % (" exact(PyLong_Type)", "SPAM_NEW()"),
+                     r"`res` is declared exact\(PyLong_Type\), but SPAM_NEW gives no fact")
+        self.refuses(source % ("", "SPAM_BORROW()"),
+                     r"`res` is declared owned, but `result` holds no owner \(from "
+                     r"SPAM_BORROW\): no owner moves")
+        self.refuses("""
+            op(_OP, (x: borrowed -- res: owned)) effects() exits(next) {
+                res = x.bits;
+            }
+        """, r"`x \. bits` is assigned to an output, but it is no row with a value result")
 
 
 # Rows that use the columns that name another row; TA declares the tree's

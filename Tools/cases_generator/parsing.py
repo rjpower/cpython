@@ -440,16 +440,23 @@ class Parser(PLexer):
 
     def item_contract(self) -> list[str]:
         """The words after an item's colon: each an identifier, or an
-        identifier with a parenthesized argument, `exact(PyLong_Type)`"""
+        identifier with a parenthesized argument, `exact(PyLong_Type)`,
+        `exact(PyGen_Type|PyCoro_Type)`, `type_slot(tp_iter,fn)`, or a
+        fact as the argument, `assumed(exact(PyUnicode_Type))`"""
         words = []
         while tkn := self.word():
-            text = tkn.text
-            if self.expect(lx.LPAREN):
-                arg = self.require(lx.IDENTIFIER).text
-                self.require(lx.RPAREN)
-                text = f"{text}({arg})"
-            words.append(text)
+            words.append(tkn.text + self.contract_argument())
         return words
+
+    def contract_argument(self) -> str:
+        "A contract word's parenthesized argument, or \"\" if it has none"
+        if not self.expect(lx.LPAREN):
+            return ""
+        arg = self.require(lx.IDENTIFIER).text + self.contract_argument()
+        while sep := (self.expect(lx.OR) or self.expect(lx.COMMA)):
+            arg += sep.text + self.require(lx.IDENTIFIER).text
+        self.require(lx.RPAREN)
+        return f"({arg})"
 
     def io_effect(self) -> tuple[list[InputEffect], list[OutputEffect]]:
         # '(' [inputs] '--' [outputs] ')'

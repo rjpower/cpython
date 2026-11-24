@@ -21,6 +21,7 @@ inference.
 """
 
 import copy
+import dataclasses
 from dataclasses import dataclass, field
 import re
 
@@ -75,23 +76,49 @@ FEEDBACK_MODES = ("read", "write")
 FEEDBACK_FIELDS = ("counter", "entry", "handler")
 FEEDBACK_COVERS = {"entry": {"counter"}}
 
-INPUT_MODES = ("borrowed", "consumed", "taken")
+INPUT_MODES = ("borrowed", "consumed", "taken", "closed")
+# The input modes whose value the body does not own: a pass-through (""),
+# a borrowed input, and a closed one, which the skeleton closes after the
+# uop on next and on raise (design 1.2)
+UNOWNED = ("", "borrowed", "closed")
 OUTPUT_MODES = ("owned", "inline", "borrowed", "moved")
 ARG_MODES = ("borrowed", "consumed", "taken", "scalar", "object", "tstate", "frame",
              "out", "destructor")
 
 # Facts: the vocabulary's words and the record's Fact kinds.  A fact with an
-# argument is written `kind(arg)`.
+# argument is written `kind(arg)`; `exact(T1|T2)` is a union of exact types,
+# `type_slot(slot,fn)` a type slot's value, `in_bounds(x)` an index within
+# the length of input x, `is(K)` the identity of a CONSTANT row's value.
 FACT_KIND = {
     "nonnull": "NOT_NULL", "inline": "NUMBER", "inline_int": "INLINE_INT",
     "inline_float": "INLINE_FLOAT", "object": "OBJECT", "exact": "EXACT_TYPE",
     "type_version": "TYPE_VERSION", "has_values": "INLINE_VALUES_VALID",
     "shape": "SHAPE", "keys_version": "KEYS_VERSION", "length": "LENGTH",
+    "null": "IS_NULL", "in_bounds": "IN_BOUNDS", "nonnegative": "NON_NEGATIVE",
+    "nonzero": "NON_ZERO", "is": "IDENTITY", "subtype": "SUBTYPE",
+    "not_subtype": "NOT_SUBTYPE", "not_exact": "NOT_TYPE", "type_flag": "TYPE_FLAG",
+    "type_slot": "TYPE_SLOT", "class_version": "CLASS_VERSION",
+    "func_version": "FUNC_VERSION", "argcount": "ARGCOUNT", "vectorcall": "VECTORCALL",
+    "call_flags": "CALL_FLAGS", "ascii": "ASCII", "no_managed_dict": "NO_MANAGED_DICT",
+    "unique": "UNIQUE",
 }
 VOCABULARY_OF_KIND = {v: k for k, v in FACT_KIND.items()}
-FACTS_WITH_ARGUMENT = frozenset(("exact", "type_version", "shape", "keys_version", "length"))
-# Properties of mutable heap state: they die at every KILLS site (1.1)
-HEAP_FACTS = frozenset(("type_version", "has_values", "shape", "keys_version", "length"))
+FACTS_WITH_ARGUMENT = frozenset(("exact", "type_version", "shape", "keys_version", "length",
+                                 "in_bounds", "is", "subtype", "not_subtype", "not_exact",
+                                 "type_flag", "type_slot"))
+# The call-shape kinds take a value where the guard names one
+FACTS_WITH_OPTIONAL_ARGUMENT = frozenset(("class_version", "func_version", "argcount",
+                                          "vectorcall", "call_flags"))
+# Properties of mutable heap state: they die at every KILLS site (1.1).
+# not_exact(T) is one: a mutable class's membership can change
+HEAP_FACTS = frozenset(("type_version", "has_values", "shape", "keys_version", "length",
+                        "in_bounds", "subtype", "not_subtype", "not_exact", "type_flag",
+                        "type_slot", "class_version", "func_version", "argcount",
+                        "vectorcall", "call_flags", "no_managed_dict"))
+# Facts of one site (refcount 1): they die at any count change of the
+# value, any publication and any reentry, within the uop, and are never
+# exported (F1)
+SITE_FACTS = frozenset(("unique",))
 NUMBER_TYPES = ("PyLong_Type", "PyFloat_Type")
 
 
@@ -105,10 +132,16 @@ class VFact:
         return f"{self.kind}({self.arg})" if self.arg else self.kind
 
     def record(self, subject: str) -> Fact:
-        return Fact(FACT_KIND[self.kind], subject, self.arg)
+        arg = self.arg
+        if self.kind == "exact":
+            arg = " | ".join(arg.split("|"))
+        elif self.kind == "type_slot":
+            arg = " == ".join(arg.split(","))
+        return Fact(FACT_KIND[self.kind], subject, arg)
 
 
 NONNULL = VFact("nonnull")
+NULL_FACT = VFact("null")       # the negation of nonnull
 OBJECT = VFact("object")
 INLINE = VFact("inline")
 
@@ -121,13 +154,15 @@ def implied(facts) -> frozenset[VFact]:
             result |= {INLINE, VFact("exact", "PyLong_Type")}
         elif f.kind == "inline_float":
             result |= {INLINE, VFact("exact", "PyFloat_Type")}
-        elif f.kind == "exact" and f.arg not in NUMBER_TYPES:
+        elif f.kind == "exact" and not set(f.arg.split("|")) & set(NUMBER_TYPES):
             result.add(OBJECT)
-        elif f.kind in ("type_version", "has_values", "keys_version", "length"):
+        elif f.kind in ("type_version", "has_values", "keys_version", "length", "subtype",
+                        "type_flag", "type_slot", "class_version", "func_version",
+                        "ascii", "no_managed_dict", "unique"):
             result.add(OBJECT)
         elif f.kind == "shape":
             result |= {VFact("has_values"), OBJECT}
-    if result:
+    if result and NULL_FACT not in result:
         result.add(NONNULL)
     return frozenset(result)
 
@@ -136,27 +171,90 @@ def without_heap_facts(facts: frozenset[VFact]) -> frozenset[VFact]:
     return frozenset(f for f in facts if f.kind not in HEAP_FACTS)
 
 
+def without_site_facts(facts: frozenset[VFact]) -> frozenset[VFact]:
+    return frozenset(f for f in facts if f.kind not in SITE_FACTS)
+
+
 def parse_fact(word: str, where: Token | None) -> VFact:
-    m = re.fullmatch(r"(\w+)(?:\((\w+)\))?", word)
+    m = re.fullmatch(r"(\w+)(?:\(([\w|,]+)\))?", word)
     if m is None or m.group(1) not in FACT_KIND:
         message = (f"`{word}` is not a fact of the contract vocabulary "
                    f"({', '.join(sorted(FACT_KIND))})")
         raise analysis_error(message, where) if where else ValueError(message)
     kind, arg = m.group(1), m.group(2) or ""
-    if (kind in FACTS_WITH_ARGUMENT) != bool(arg):
+    shape = {"exact": r"\w+(\|\w+)*", "type_slot": r"\w+,\w+"}.get(kind, r"\w+")
+    if arg and not re.fullmatch(shape, arg):
+        message = f"`{word}`: the argument of `{kind}` is {shape}"
+        raise analysis_error(message, where) if where else ValueError(message)
+    if kind in FACTS_WITH_OPTIONAL_ARGUMENT:
+        pass
+    elif (kind in FACTS_WITH_ARGUMENT) != bool(arg):
         message = (f"the fact `{kind}` "
                    f"{'needs an' if kind in FACTS_WITH_ARGUMENT else 'takes no'} argument")
         raise analysis_error(message, where) if where else ValueError(message)
     return VFact(kind, arg)
 
 
+@dataclass(frozen=True, order=True)
+class Assumption:
+    """`assumed(fact) by producer` (F7): a fact that a value has from a named
+    producer (the uop that pushes it, or an invariant of the runtime), which
+    the verifier trusts and every execution form asserts"""
+    fact: VFact
+    by: str
+
+
+# The C assertion of each fact an assumption may name, of a value {0}.  A
+# fact without one cannot be assumed: an assumption is always checked in
+# the assert build
+ASSERTION_FORMS = {
+    "nonnull": "!PyValue_IsNull({0})",
+    "object": "PyValue_IsObject({0})",
+    "inline": "PyValue_IsInline({0})",
+    "inline_int": "PyValue_IsInlineInt({0})",
+    "inline_float": "PyValue_IsInlineFloat({0})",
+    "exact": "!PyValue_IsNull({0}) && ({1})",
+}
+
+
+def assertion(fact: VFact, subject: str) -> str:
+    "The C assertion statement of an assumed fact of subject"
+    form = ASSERTION_FORMS[fact.kind]
+    types = " || ".join(f"PyValue_TYPE({subject}) == &{t}" for t in fact.arg.split("|"))
+    return f"assert({form.format(subject, types)});"
+
+
+def _assumptions(words: list[str], where: Token | None
+                 ) -> tuple[list[str], tuple[Assumption, ...]]:
+    "words without their `assumed(fact) by producer` triples, and the triples"
+    rest, found, i = [], [], 0
+    while i < len(words):
+        m = re.fullmatch(r"assumed\((.+)\)", words[i])
+        if m is None:
+            rest.append(words[i])
+            i += 1
+            continue
+        fact = parse_fact(m.group(1), where)
+        if words[i + 1:i + 2] != ["by"] or not re.fullmatch(r"\w+", "".join(words[i + 2:i + 3])):
+            message = f"`{words[i]}` names no producer: `{words[i]} by <producer>`"
+            raise analysis_error(message, where) if where else ValueError(message)
+        if fact.kind not in ASSERTION_FORMS:
+            message = (f"`{words[i]}`: {fact} has no assertion form, so it cannot be "
+                       f"assumed ({', '.join(ASSERTION_FORMS)})")
+            raise analysis_error(message, where) if where else ValueError(message)
+        found.append(Assumption(fact, words[i + 2]))
+        i += 3
+    return rest, tuple(found)
+
+
 # ---------------------------------------------------------------------------
 # The definition list (Include/internal/pycore_ir_components.h)
 
 COMPONENTS_HEADER = ROOT / "Include/internal/pycore_ir_components.h"
-ROW_KINDS = ("PRIMITIVE", "HELPER", "ROUTINE", "MACRO", "INTRINSIC", "DESTRUCTOR", "FIELD")
+ROW_KINDS = ("PRIMITIVE", "HELPER", "ROUTINE", "MACRO", "INTRINSIC", "DESTRUCTOR", "FIELD",
+             "CONSTANT", "SLOT")
 RESULT_SHAPES = ("NONE", "SCALAR", "VIEW", "PATH", "MEASURE", "TEST", "CONTEXT",
-                 "VALUE", "VALUE_OR_NULL", "STATUS")
+                 "VALUE", "VALUE_OR_NULL", "STATUS", "GUARD", "HOME", "SLOT")
 # The failure value of a STATUS result: the int compares to 0 so
 STATUS_FAILURES = ("ZERO", "NEGATIVE", "NONZERO")
 BUILDS = ("gil", "free_threaded", "all")
@@ -169,6 +267,9 @@ BUILD = "gil"
 class Arg:
     mode: str
     facts: frozenset[VFact] = frozenset()
+    # `consumed object` of a `PyObject *` parameter: a stolen object
+    # pointer; mode and representation are separate words
+    object: bool = False
 
 
 @dataclass(frozen=True)
@@ -178,9 +279,15 @@ class Result:
     facts: frozenset[VFact] = frozenset()   # VALUE, VALUE_OR_NULL
     measure: str = ""                       # MEASURE; PATH: the path
     tests: tuple[tuple[frozenset[VFact], frozenset[VFact]], ...] = ()  # TEST
+    guards: tuple[frozenset[VFact], ...] = ()  # GUARD: per argument, on return
     reason: str = ""                        # CONTEXT
     null_iff: int = -1                      # VALUE: NULL exactly where argument k is
+    moved: int = -1                         # VALUE(moved(k)): argument k's value and
+                                            # obligation
     failure: str = ""                       # STATUS: ZERO, NEGATIVE or NONZERO
+    # VALUE: the facts it has from a producer (F7), also in facts; the
+    # generator asserts them after each call
+    assumed: tuple[Assumption, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -255,11 +362,20 @@ def _parse_args(text: str | None) -> tuple[Arg, ...]:
 
 def _parse_result(text: str) -> Result:
     text = text.strip()
-    for shape in ("NONE", "SCALAR", "VIEW"):
+    for shape in ("NONE", "SCALAR", "VIEW", "HOME"):
         if text == shape:
             return Result(shape)
+    if text == "HOME(base)":
+        # The base of the frame's homes, fixed for the activation (F18)
+        return Result("HOME", measure="base")
     if (inner := _inner(text, "PATH")) is not None:
         return Result("PATH", measure=inner.strip())
+    if (inner := _inner(text, "SLOT")) is not None:
+        # A FIELD that holds a pointer of the protocol that SLOT row names
+        # (F6): a local assigned from it calls that row
+        if not re.fullmatch(r"\w+", inner.strip()):
+            raise ValueError("SLOT(protocol) names one SLOT row")
+        return Result("SLOT", measure=inner.strip())
     if (inner := _inner(text, "STATUS")) is not None:
         if inner.strip() not in STATUS_FAILURES:
             raise ValueError(f"STATUS({' | '.join(STATUS_FAILURES)})")
@@ -268,26 +384,49 @@ def _parse_result(text: str) -> Result:
         return Result("MEASURE", measure=inner.strip())
     if (inner := _inner(text, "CONTEXT")) is not None:
         return Result("CONTEXT", reason=inner.strip().strip('"'))
+    if (inner := _inner(text, "GUARD")) is not None:
+        # The facts of each argument on the row's normal return, after its
+        # effects; its guard failure is a miss or deopt exit (F2)
+        return Result("GUARD", guards=tuple(frozenset(parse_fact(w, None) for w in e.split())
+                                            for e in _split_text(inner)))
     if (inner := _inner(text, "TEST")) is not None:
         tests = []
         for entry in _split_text(inner):
-            true, _, false = entry.partition("|")
+            # The sides split at the `|` outside a fact's parentheses
+            depth, bar = 0, len(entry)
+            for i, ch in enumerate(entry):
+                depth += {"(": 1, ")": -1}.get(ch, 0)
+                if ch == "|" and depth == 0:
+                    bar = i
+                    break
+            true, false = entry[:bar], entry[bar + 1:]
             tests.append((frozenset(parse_fact(w, None) for w in true.split()),
                           frozenset(parse_fact(w, None) for w in false.split())))
         return Result("TEST", tests=tuple(tests))
     for shape in ("VALUE_OR_NULL", "VALUE"):
         if (inner := _inner(text, shape)) is not None:
             words = inner.split()
+            moved = re.fullmatch(r"moved\((\d+)\)", words[0]) if words else None
+            if moved and shape == "VALUE":
+                # Argument k itself: its value, its identity and its
+                # obligation (a move, as an output's moved(x))
+                if len(words) > 1:
+                    raise ValueError(f"VALUE(moved(k)) is argument k as it is: {text}")
+                return Result(shape, "moved", moved=int(moved.group(1)))
             if not words or words[0] not in ("owned", "inline", "borrowed"):
                 raise ValueError(f"{shape} needs a mode: {text}")
-            null_iff, facts = -1, []
-            for w in words[1:]:
+            rest, assumed = _assumptions(words[1:], None)
+            if assumed and shape != "VALUE":
+                raise ValueError(f"an assumed fact qualifies a VALUE result: {text}")
+            null_iff, facts = -1, [a.fact for a in assumed]
+            for w in rest:
                 m = re.fullmatch(r"null_iff\((\d+)\)", w)
                 if m and shape == "VALUE":
                     null_iff = int(m.group(1))
                 else:
                     facts.append(parse_fact(w, None))
-            return Result(shape, words[0], frozenset(facts), null_iff=null_iff)
+            return Result(shape, words[0], frozenset(facts), null_iff=null_iff,
+                          assumed=assumed)
     raise ValueError(f"{text!r} is not a result shape ({', '.join(RESULT_SHAPES)})")
 
 
@@ -327,6 +466,7 @@ OPTIONAL_COLUMNS = {
     "HELPER": ("FEEDBACK", "SLOW"),
     "ROUTINE": ("FEEDBACK",),
     "MACRO": ("FEEDBACK",),
+    "SLOT": ("FEEDBACK",),
 }
 
 
@@ -364,6 +504,14 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
         return Row(kind, f"{struct}.{name}", ctype, result=_parse_result(result),
                    effects=_parse_names(effects, "EFFECTS", EFFECTS),
                    struct=struct, field=name, on=_inner(on, "ON").strip())
+    if kind == "CONSTANT":
+        # A static immortal value (V8's roots): its facts are the value's
+        if len(fields) != 2:
+            raise ValueError("CONSTANT(name, VALUE(inline facts))")
+        result = _parse_result(fields[1])
+        if result.shape != "VALUE" or result.mode != "inline":
+            raise ValueError("a CONSTANT is a static immortal value: VALUE(inline facts)")
+        return Row(kind, fields[0], "PyValue", result=result)
     if kind == "DESTRUCTOR":
         if (len(fields) != 3 or fields[2] not in ("callback_free",)
                 or not re.fullmatch(r"\w+", fields[1])):
@@ -405,7 +553,16 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
     fixed = [p for p in row.params if p != "..."]
     if len(row.args) != len(fixed):
         raise ValueError(f"{len(row.args)} ARGS for {len(fixed)} parameters")
-    return row
+    # A value mode with `object` on a `PyObject *` parameter is the
+    # representation: `consumed object` steals an object pointer.  On a
+    # PyValue parameter `object` stays the fact the value must have
+    args = []
+    for arg, param in zip(row.args, fixed):
+        if (arg.mode in ("consumed", "taken") and OBJECT in arg.facts
+                and re.sub(r"\s+", "", param) == "PyObject*"):
+            arg = Arg(arg.mode, arg.facts - {OBJECT}, object=True)
+        args.append(arg)
+    return dataclasses.replace(row, args=tuple(args + list(row.args[len(fixed):])))
 
 
 def parse_rows(text: str, source: str = "pycore_ir_components.h") -> dict[str, Row]:
@@ -414,13 +571,17 @@ def parse_rows(text: str, source: str = "pycore_ir_components.h") -> dict[str, R
     are not rows)"""
     text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S).replace("\\\n", " ")
     rows: dict[str, Row] = {}
+    inside = 0      # the end of the last row: a SLOT(...) result is no row
     for m in re.finditer(rf"\b({'|'.join(ROW_KINDS)})\(", text):
+        if m.start() < inside:
+            continue
         start = m.end() - 1
         end, depth = start, 0
         for end in range(start, len(text)):
             depth += {"(": 1, ")": -1}.get(text[end], 0)
             if depth == 0:
                 break
+        inside = end
         fields = [f.strip() for f in _split_text(text[start + 1:end])]
         if all(f in ROW_KINDS for f in fields):
             continue
@@ -430,6 +591,19 @@ def parse_rows(text: str, source: str = "pycore_ir_components.h") -> dict[str, R
             if k >= 0 and (k >= len(row.args)
                            or row.args[k].mode not in ("borrowed", "consumed", "taken")):
                 raise ValueError(f"null_iff({k}): argument {k} is no value argument")
+            if row.result.shape == "HOME" and row.effects & {"reads", "writes"}:
+                raise ValueError("a HOME row addresses a frame home, which is not the heap: "
+                                 "it declares no reads or writes")
+            if row.result.shape == "GUARD" and not row.exits & {"miss", "deopt"}:
+                raise ValueError("GUARD(...) is the result of a row with a miss or deopt "
+                                 "exit")
+            if row.result.shape == "GUARD" and len(row.result.guards) > len(row.args):
+                raise ValueError(f"GUARD(...) states {len(row.result.guards)} arguments' "
+                                 f"facts, but the row has {len(row.args)}")
+            k = row.result.moved
+            if k >= 0 and (k >= len(row.args) or row.args[k].mode != "consumed"):
+                raise ValueError(f"moved({k}): argument {k} is not consumed, so its "
+                                 "obligation cannot move to the result")
         except ValueError as e:
             raise SyntaxError(f"{source}: row {fields[0]}: {e}") from None
         if row.name in rows:
@@ -509,6 +683,15 @@ def check_columns(table: dict[str, Row]) -> None:
             if not helper.effects <= row.effects:
                 fail(row, f"SLOW({helper.name}): the row declares fewer effects than "
                      f"{helper.name}")
+        if row.result.shape == "SLOT":
+            # A field that holds a protocol's pointer has the protocol's C type
+            protocol = named(row, "SLOT", row.result.measure)
+            if row.kind != "FIELD" or protocol.kind != "SLOT":
+                fail(row, f"SLOT({protocol.name}): a FIELD that holds a pointer of a "
+                     "SLOT row's protocol")
+            if row.ret != protocol.name:
+                fail(row, f"SLOT({protocol.name}): the field's C type is {row.ret}, "
+                     f"not the protocol's, {protocol.name}")
 
 
 _ROWS: dict[str, Row] = {}
@@ -533,10 +716,14 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
         lines.append(f"static_assert(__builtin_types_compatible_p(__typeof__({expr}), {ctype}),")
         lines.append(f"              \"{name}: its C type differs from pycore_ir_components.h\");")
 
+    constants = []
     for row in table.values():
         if row.kind in ("HELPER", "ROUTINE"):
             check(f"&{row.name}", f"{row.ret} (*)({', '.join(row.params) or 'void'})",
                   row.name)
+        elif row.kind == "SLOT":
+            # The protocol's pointer type
+            check(row.name, f"{row.ret} (*)({', '.join(row.params) or 'void'})", row.name)
         elif row.kind == "DESTRUCTOR":
             check(f"&{row.name}", "void (*)(PyObject *)", row.name)
         elif row.kind == "FIELD":
@@ -544,6 +731,15 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
         elif row.kind == "PRIMITIVE":
             call = ", ".join(f"({p}){{0}}" for p in row.params)
             check(f"{row.name}({call})", row.ret, row.name)
+        elif row.kind == "CONSTANT":
+            constants.append(row.name)
+    if constants:
+        # A constant's compound literal holds an address, which is no constant
+        # expression at file scope (GCC refuses it without optimization)
+        lines.append("static inline void _PyIR_CheckConstants(void) {")
+        for name in constants:
+            check(name, "PyValue", name)
+        lines.append("}")
     return lines
 
 
@@ -584,6 +780,9 @@ class Item:
     nullable: bool = False
     array: bool = False
     size: str = ""              # an array's size, as declared
+    # The facts its value has at the handler's entry from a producer (F7);
+    # not requirements, and not in facts
+    assumed: tuple[Assumption, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -609,7 +808,8 @@ class Contract:
 def _item(stack_item, modes: tuple[str, ...], where: Token) -> Item:
     name, through = stack_item.name, stack_item.peek
     mode, source, facts = "", "", []
-    for w in stack_item.contract:
+    words, assumed = _assumptions(list(stack_item.contract), where)
+    for w in words:
         m = re.fullmatch(r"moved\((\w+)\)", w)
         if m and "moved" in modes:
             mode, source = "moved", m.group(1)
@@ -627,7 +827,7 @@ def _item(stack_item, modes: tuple[str, ...], where: Token) -> Item:
     if mode and through:
         raise analysis_error(f"`{name}` passes through, so it takes no mode", where)
     return Item(name, mode, source, frozenset(facts), stack_item.nullable,
-                stack_item.is_array(), stack_item.size)
+                stack_item.is_array(), stack_item.size, assumed)
 
 
 _CONTRACTS: dict[int, tuple[Uop, Contract | None]] = {}
@@ -656,6 +856,10 @@ def contract_of(uop: Uop) -> Contract | None:
             if o.mode == "moved" and not any(i.name == o.source for i in inputs):
                 raise analysis_error(f"{uop.name}: `{o.name}` is moved from `{o.source}`, "
                                      "which is not an input", where)
+            if o.assumed:
+                raise analysis_error(f"{uop.name}: the output `{o.name}` is assumed; an "
+                                     "assumption is of a value that reaches the handler "
+                                     "(F7), and an output's facts are shown", where)
         feedback = parse_feedback(uop.clauses.get("feedback", ()), where)
         contract = Contract(inputs, outputs, effects, exits, feedback)
     # The uop is kept with its contract, so that its id is not reused
@@ -675,10 +879,87 @@ DSL_CONSTRUCTS = frozenset((
 CHECKED_ARITHMETIC = re.compile(r"__builtin_(add|sub|mul)_overflow")
 GUARDS = {"EXIT_IF": "miss", "DEOPT_IF": "deopt"}
 RAISES = ("ERROR_IF", "ERROR_NO_POP")
+# The labels a body may goto: its raise exit at that site, as ERROR_NO_POP.
+# What the error routine does after (its jump or exit) is the boundary of
+# its ROUTINE row, not the uop's.  The pop_N_error labels close stack
+# items the walk does not model, and are refused with every other goto.
+ERROR_LABELS = ("error", "exception_unwind")
+
+
+# The macros of the scoped GIL product that select preprocessor arms (F15):
+# Py_GIL_DISABLED is not defined in a build with the GIL, and
+# pycore_code.h defines ENABLE_SPECIALIZATION as 1 in every build.  Any
+# other macro (Py_DEBUG, Py_SHAPES) differs between builds of the product
+BUILD_MACROS: dict[str, str | None] = {"Py_GIL_DISABLED": None, "ENABLE_SPECIALIZATION": "1"}
+
+
+def macro_condition(directive: str) -> bool | None:
+    """Whether the arm after `#if`, `#ifdef` or `#ifndef` is the GIL
+    product's, or None if its macros do not decide it"""
+    text = directive.strip()[1:].strip()
+    m = re.fullmatch(r"(ifdef|ifndef)\s+(\w+)(\s*(/\*.*\*/|//.*))?", text)
+    if m:
+        if m.group(2) not in BUILD_MACROS:
+            return None
+        defined = BUILD_MACROS[m.group(2)] is not None
+        return defined if m.group(1) == "ifdef" else not defined
+    m = re.fullmatch(r"if\s+(!?)\s*(?:defined\s*\(\s*(\w+)\s*\)|(\w+))(\s*(/\*.*\*/|//.*))?",
+                     text)
+    if m:
+        name = m.group(2) or m.group(3)
+        if name not in BUILD_MACROS:
+            return None
+        value = BUILD_MACROS[name]
+        holds = value is not None if m.group(2) else value not in (None, "0")
+        return holds != bool(m.group(1))
+    return None
+
+
+def _macro_ifs(uop: Uop) -> list[MacroIfStmt]:
+    found: list[MacroIfStmt] = []
+    uop.body.accept(lambda stmt: found.append(stmt) if isinstance(stmt, MacroIfStmt) else None)
+    return found
 
 
 def _tokens(uop: Uop) -> list[Token]:
-    return [t for t in uop.body.tokens() if t.kind != "COMMENT"]
+    """The body's tokens on the GIL product's preprocessor path: an arm
+    that the build's macros exclude is not code (F15).  An arm they do not
+    decide stays, and verify_uop refuses it where it is code"""
+    excluded: set[int] = set()
+    for stmt in _macro_ifs(uop):
+        excluded.add(id(stmt.condition))
+        holds = macro_condition(stmt.condition.text)
+        if holds is not None:
+            for other in (stmt.else_body or []) if holds else stmt.body:
+                excluded |= {id(t) for t in other.tokens()}
+    return [t for t in uop.body.tokens() if t.kind != "COMMENT" and id(t) not in excluded]
+
+
+def check_preprocessor(uop: Uop) -> None:
+    """F15: an arm whose condition the GIL product's macros do not decide
+    may hold no code beyond assertions; `#elif`, which the parser does not
+    model, is refused"""
+    for t in uop.body.tokens():
+        if t.kind == "CMACRO_OTHER" and t.text.strip()[1:].strip().startswith("elif"):
+            raise analysis_error(f"{uop.name}: `#elif` is a preprocessor form the walk does "
+                                 "not model; nest #if and #else", t)
+    for stmt in _macro_ifs(uop):
+        if macro_condition(stmt.condition.text) is not None:
+            continue
+        tokens = [t for arm in (stmt.body, stmt.else_body or []) for s_ in arm
+                  for t in s_.tokens() if t.kind != "COMMENT"]
+        texts = [t.text for t in tokens]
+        i = 0
+        while i < len(tokens):
+            if texts[i] == "assert" and texts[i + 1:i + 2] == ["("]:
+                i = _close(texts, i + 1) + 1
+                continue
+            if texts[i] != ";":
+                raise analysis_error(
+                    f"{uop.name}: `{stmt.condition.text.strip()}` is decided by no macro of "
+                    f"the GIL product ({', '.join(sorted(BUILD_MACROS))}), and its arm "
+                    "holds code", tokens[i])
+            i += 1
 
 
 def _calls_in(tokens: list[Token]) -> list[tuple[Token, list[list[str]]]]:
@@ -752,7 +1033,7 @@ def _call_effects(row: Row, args: list[list[str]], table: dict[str, Row],
 def effect_sites(uop: Uop, table: dict[str, Row] | None = None) -> list[Site]:
     """The sites of uop's body that have an effect, in order: calls of rows,
     the DSL's raises and releases, and the body's own heap accesses"""
-    table = rows() if table is None else table
+    table = with_slots(uop, rows() if table is None else table)
     contract = contract_of(uop)
     inline = {i.name for i in contract.inputs if INLINE in implied(i.facts)} \
         if contract else set()
@@ -991,6 +1272,62 @@ class Views:
         return (row, path[0]) if row is not None else None
 
 
+_SLOTS: dict[tuple[int, int], tuple[Uop, dict, dict[str, Row], list]] = {}
+
+
+def _slot_bindings(uop: Uop, table: dict[str, Row]) -> tuple[dict[str, Row], list]:
+    """table, with each local of uop that it calls bound to the SLOT row of
+    the protocol it holds (F6): every assignment to the local reads a FIELD
+    that declares SLOT(protocol), without a cast.  Also the refusals, as
+    (token, message), of the locals it calls that bind to no protocol"""
+    key = (id(uop), id(table))
+    if key in _SLOTS and _SLOTS[key][0] is uop and _SLOTS[key][1] is table:
+        return _SLOTS[key][2], _SLOTS[key][3]
+    views = Views(uop, table)
+    bound: dict[str, Row] = {}
+    refused: list[tuple[Token, str]] = []
+    for tkn, _ in body_calls(uop):
+        name = tkn.text
+        if name in table or name in DSL_CONSTRUCTS or name in bound:
+            continue
+        assignments = _assignments(uop, name)
+        if not assignments:
+            continue        # no local: V1 refuses the call
+        protocols: set[str] = set()
+        for where, rhs in assignments:
+            found = views.field(rhs)
+            if _uncast(rhs) != _strip(rhs):
+                refused.append((where, f"`{name}` is called through a cast, "
+                                f"`{' '.join(rhs)}`, which binds it to no protocol"))
+            elif found is None or found[0].result.shape != "SLOT":
+                refused.append((where, f"`{name}` is called, but `{' '.join(rhs)}` is no "
+                                "FIELD that declares the SLOT it holds"))
+            else:
+                protocols.add(found[0].result.measure)
+                continue
+            break
+        else:
+            if len(protocols) == 1:
+                bound[name] = table[protocols.pop()]
+            else:
+                refused.append((tkn, f"`{name}` holds pointers of "
+                                f"{', '.join(sorted(protocols))}"))
+    result = table | bound if bound else table
+    _SLOTS[key] = (uop, table, result, refused)
+    return result, refused
+
+
+def with_slots(uop: Uop, table: dict[str, Row]) -> dict[str, Row]:
+    "table with uop's locals bound to the protocols they hold (F6)"
+    return _slot_bindings(uop, table)[0]
+
+
+def check_slots(uop: Uop, table: dict[str, Row]) -> None:
+    "F6: a local that the body calls holds a pointer of one declared protocol"
+    for where, message in _slot_bindings(uop, table)[1]:
+        raise analysis_error(f"{uop.name}: {message}", where)
+
+
 def _call_of(tokens: list[str], table: dict[str, Row]) -> tuple[Row, list[list[str]]] | None:
     tokens = _strip(_uncast(tokens))
     if tokens and tokens[0] in table:
@@ -1011,9 +1348,42 @@ def _union(found: list[Facts]) -> Facts:
     return result
 
 
+def _exact_types(facts: frozenset[VFact]) -> frozenset[str] | None:
+    "The exact types a name may have, if its facts say"
+    found = [frozenset(f.arg.split("|")) for f in facts if f.kind == "exact"]
+    return frozenset.intersection(*found) if found else None
+
+
 def _intersection(found: list[Facts]) -> Facts:
+    """The facts that hold on every alternative.  A conjunction of facts
+    joins by intersection; the exact type joins by the union of the
+    alternatives' types (F1)"""
     names = set.intersection(*(set(f) for f in found)) if found else set()
-    return {n: frozenset.intersection(*(implied(f[n]) for f in found)) for n in names}
+    result = {}
+    for n in names:
+        common = frozenset.intersection(*(implied(f[n]) for f in found))
+        types = [_exact_types(implied(f[n])) for f in found]
+        if all(t is not None for t in types) and not any(f.kind == "exact" for f in common):
+            union = frozenset.union(*types)
+            common = implied(common | {VFact("exact", "|".join(sorted(union)))})
+        result[n] = common
+    return result
+
+
+def _bind_facts(facts: frozenset[VFact], args: list[list[str]],
+                views: Views) -> frozenset[VFact] | None:
+    """A row's facts with its in_bounds(k) bound to the name of argument k;
+    None if that argument names nothing"""
+    bound = set()
+    for f in facts:
+        if f.kind == "in_bounds" and f.arg.isdigit():
+            k = int(f.arg)
+            other = views.resolve(args[k]) if k < len(args) else None
+            if other is None:
+                return None
+            f = VFact("in_bounds", other)
+        bound.add(f)
+    return frozenset(bound)
 
 
 def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
@@ -1053,6 +1423,10 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
             name = views.resolve(arg)
             if name is None:
                 return None
+            # A row's in_bounds(k) names its argument k: here, its name
+            found = _bind_facts(found, args, views)
+            if found is None:
+                return None
             facts[name] = implied(facts.get(name, frozenset()) | found)
         return facts, ""
     if call is not None and call[0].result.shape == "CONTEXT":
@@ -1083,7 +1457,7 @@ def site_facts(uop: Uop, site: Token, table: dict[str, Row] | None = None
                ) -> tuple[Facts, str]:
     """V9: the facts that a guard site establishes of the names of the
     uop's body, from the rows its condition calls, and its reason"""
-    table = rows() if table is None else table
+    table = with_slots(uop, rows() if table is None else table)
     cond, reason = guard_condition(uop, site)
     found = condition_facts(cond, Views(uop, table), table, holds=False)
     if found is None:
@@ -1132,7 +1506,8 @@ def obligated(status: str | None) -> bool:
     return status is not None and (status == HELD or status.startswith(TAKEN))
 
 
-# Statement heads whose control flow the walk does not follow
+# Statement heads whose control flow the walk does not follow, beyond a
+# `goto` of an ERROR_LABELS label and the `return` of a name
 UNMODELLED_HEADS = ("return", "goto", "break", "continue", "switch", "do")
 # The effects whose sites may run Python.  Python may write the frame's
 # homes (a finalizer through FrameLocalsProxy), so a value that stays in a
@@ -1163,11 +1538,19 @@ class _State:
     # What each local assigned so far stands for: an input it views, a
     # (input, path) pointer, "" for itself, None where paths disagree
     bindings: dict[str, object] = field(default_factory=dict)
+    # The input whose value (and obligation) a local or an output holds,
+    # through moves; "" for a value made in the body, None where paths
+    # disagree (F5)
+    origins: dict[str, str | None] = field(default_factory=dict)
+    # A local assigned `c ? NULL : v` or `c ? v : NULL`: the condition, as
+    # tokens, and whether the local is NULL where it holds (F3)
+    null_when: dict[str, tuple[tuple[str, ...], bool]] = field(default_factory=dict)
 
     def copy(self) -> "_State":
         return _State(dict(self.owners), dict(self.facts), dict(self.pending),
                       dict(self.sources), dict(self.rehomed), dict(self.arrays),
-                      dict(self.status), self.restartable, self.why, dict(self.bindings))
+                      dict(self.status), self.restartable, self.why, dict(self.bindings),
+                      dict(self.origins), dict(self.null_when))
 
     def end_restart(self, why: str) -> None:
         if self.restartable:
@@ -1215,7 +1598,9 @@ class OwnershipWalk:
             self.site_effects.setdefault(id(site.token), []).append(site.effect)
 
     def run(self) -> "OwnershipWalk":
-        facts = {n: implied(i.facts | (set() if i.nullable else {NONNULL}))
+        # An assumed fact holds at entry, and then lives as any fact (F7)
+        facts = {n: implied(i.facts | {a.fact for a in i.assumed}
+                            | (set() if i.nullable else {NONNULL}))
                  for n, i in self.declared.items()}
         state = _State({n: HELD for n in self.declared}, facts)
         state.arrays = {o.name: UNWRITTEN for o in self.contract.outputs
@@ -1223,6 +1608,14 @@ class OwnershipWalk:
         end = self.block(self.uop.body.body, state)
         if end is not None and not self.uop.properties.always_exits:
             self.check_exit("next", end, self.uop.body.close)
+            # After the uop, the skeleton closes its closed inputs: a
+            # release, which may run a finalizer (design 3.2)
+            for name, item in self.declared.items():
+                if (item.mode == "closed" and self.kills
+                        and INLINE not in end.facts.get(name, frozenset())):
+                    end.kill_heap_facts()
+                    self.reenter(end, f"the skeleton's close of `{name}` after the uop, "
+                                 "which may release,")
             self.exit = end
         return self
 
@@ -1231,7 +1624,7 @@ class OwnershipWalk:
         left in a home that a reentry site may have rewritten"""
         if self.exit is None or name in self.exit.rehomed:
             return frozenset()
-        return self.exit.facts.get(name, frozenset())
+        return without_site_facts(self.exit.facts.get(name, frozenset()))
 
     # -- exits
 
@@ -1263,7 +1656,7 @@ class OwnershipWalk:
                 if gone:
                     self.fail(where, f"on {exit}, `{name}` is released or moved, but a "
                               "guard exit must leave it untouched")
-            elif item.mode in ("borrowed", "") and gone:
+            elif item.mode in UNOWNED and gone:
                 self.fail(where, f"on {exit}, `{name}` is released or moved, but it is "
                           f"declared {mode}")
             elif exit == "next" and item.mode in ("consumed", "taken") and not gone:
@@ -1303,7 +1696,8 @@ class OwnershipWalk:
                 continue
             live = state.facts.get(out.name, frozenset())
             source = state.sources.get(out.name)
-            if not out.nullable and NONNULL not in live:
+            # An output declared `null` is NULL on next (_PUSH_NULL)
+            if not out.nullable and NULL_FACT not in out.facts and NONNULL not in live:
                 if source is not None:
                     self.fail(where, f"`{out.name}` may be NULL from {source}, and nothing "
                               "raises on it on every path to next")
@@ -1328,6 +1722,11 @@ class OwnershipWalk:
         if isinstance(stmt, BlockStmt):
             return self.block(stmt.body, state)
         if isinstance(stmt, MacroIfStmt):
+            # The GIL product's arm (F15); an undecided one holds no code
+            # (check_preprocessor), so both are walked
+            holds = macro_condition(stmt.condition.text)
+            if holds is not None:
+                return self.block(stmt.body if holds else stmt.else_body or [], state)
             return self.join([self.block(stmt.body, state.copy()),
                               self.block(stmt.else_body or [], state.copy())])
         if isinstance(stmt, IfStmt):
@@ -1357,19 +1756,31 @@ class OwnershipWalk:
         for other in live[1:]:
             for name in set(first.owners) | set(other.owners):
                 a, b = first.owners.get(name, GONE), other.owners.get(name, GONE)
-                if obligated(a) != obligated(b) or (
+                if {a, b} == {HELD, NULL}:
+                    # A new owner, NULL on one path: held, and maybe NULL
+                    a = HELD
+                elif obligated(a) != obligated(b) or (
                         a != b and (a.startswith(TAKEN) or b.startswith(TAKEN))):
                     self.fail(self.uop.body.open, f"`{name}` is owned on one path and "
                               "not on another where they join")
                 first.owners[name] = a
             # What holds of a name once it is not NULL, on each path: its
-            # pending facts, or the facts it already has
+            # pending facts, or the facts it already has; a path where it is
+            # NULL adds nothing
             pending = {}
-            for name in set(first.pending) | set(other.pending):
+            nulls = {n for st in (first, other) for n, f in st.facts.items() if NULL_FACT in f}
+            for name in set(first.pending) | set(other.pending) | nulls:
                 a, b = (implied(st.facts.get(name, frozenset()) | st.pending.get(name, frozenset()))
                         for st in (first, other))
-                if a & b:
-                    pending[name] = a & b
+                found = (b if NULL_FACT in a else a if NULL_FACT in b else a & b) - {NULL_FACT}
+                if found and not (NULL_FACT in a and NULL_FACT in b):
+                    pending[name] = found
+            for name in set(first.origins) | set(other.origins):
+                a, b = first.origins.get(name, ""), other.origins.get(name, "")
+                if a != b and NULL_FACT not in other.facts.get(name, frozenset()):
+                    # A NULL on one path carries no identity
+                    first.origins[name] = (b if NULL_FACT in first.facts.get(name, frozenset())
+                                           else None)
             first.facts = _intersection([first.facts, other.facts])
             first.pending = pending
             first.sources.update(other.sources)
@@ -1385,6 +1796,9 @@ class OwnershipWalk:
             for name in set(first.bindings) | set(other.bindings):
                 if first.bindings.get(name, "") != other.bindings.get(name, ""):
                     first.bindings[name] = None
+            for name in set(first.null_when) | set(other.null_when):
+                if first.null_when.get(name) != other.null_when.get(name):
+                    first.null_when.pop(name, None)
             if not other.restartable:
                 first.end_restart(other.why)
         return first
@@ -1416,6 +1830,9 @@ class OwnershipWalk:
         cond = _strip(cond)
         while cond[:1] == ["!"]:
             cond, holds = _strip(cond[1:]), not holds
+        for name, (when, null_if) in list(state.null_when.items()):
+            if tuple(cond) == when:
+                self.set_null(state, name, holds == null_if)
         null = _call(cond, "PyValue_IsNull")
         if null is not None and len(null) == 1:
             name = " ".join(null[0])
@@ -1423,10 +1840,17 @@ class OwnershipWalk:
                 if status == TAKEN + name:
                     state.owners[owner] = HELD if holds else GONE
             if state.owners.get(name) == HELD and name in self.new:
-                if holds:
-                    state.owners[name] = NULL
-                else:
-                    state.add_facts(name, {NONNULL})
+                self.set_null(state, name, holds)
+
+    def set_null(self, state: _State, name: str, null: bool) -> None:
+        "name is NULL, and owes nothing, or it is not, and has its pending facts"
+        if null:
+            if state.owners.get(name) == HELD and name in self.new:
+                state.owners[name] = NULL
+            state.facts[name] = frozenset({NULL_FACT})
+            state.pending.pop(name, None)
+        else:
+            state.add_facts(name, {NONNULL})
 
     # A STATUS result's test: the predicate that a condition states of it
     STATUS_TESTS = {("==", "0"): "zero", ("!=", "0"): "nonzero", ("<", "0"): "negative",
@@ -1465,20 +1889,54 @@ class OwnershipWalk:
                 if effect in KILLS and self.kills:
                     state.kill_heap_facts()
                 if effect in REENTRY and self.kills:
-                    # A value left in a home may be replaced there (and the
-                    # old one freed): its facts die now, and those of the
-                    # locals that copy it
-                    for name, item in self.declared.items():
-                        if item.mode in ("", "borrowed"):
-                            state.rehomed.setdefault(
-                                name, f"`{t.text}` at line {t.line}, which may {effect},")
-                            state.facts[name] = frozenset()
-                            state.pending.pop(name, None)
-                    for name, source in state.sources.items():
-                        if source in state.rehomed and name not in state.owners:
-                            state.facts[name] = frozenset()
+                    self.reenter(state, f"`{t.text}` at line {t.line}, which may {effect},")
                 if effect != "reads" and effect != "raises":
                     state.end_restart(f"`{t.text}`, which may {effect}")
+
+    def guard_results(self, tokens: list[Token], state: _State) -> None:
+        """The GUARD rows called among tokens: on their normal return, after
+        their effects, their facts hold of their arguments"""
+        views = self.views_at(state)
+        for tkn, args in _calls_in(tokens):
+            row = self.table.get(tkn.text)
+            if row is None or row.result.shape != "GUARD":
+                continue
+            for arg, facts in zip(args, row.result.guards):
+                name = views.resolve(arg)
+                facts = _bind_facts(facts, args, views)
+                if name is not None and facts:
+                    state.add_facts(name, facts)
+
+    def home_store(self, texts: list[str], i: int) -> bool:
+        "Whether the assignment at texts[i] stores through a HOME row"
+        lhs = texts[:i]
+        start = next((j for j in range(len(lhs) - 1, -1, -1) if lhs[j] in (";", "{", "}")), -1)
+        call = _call_of(lhs[start + 1:], self.table)
+        return call is not None and call[0].result.shape == "HOME"
+
+    def kill_home_loads(self, state: _State) -> None:
+        "The values loaded from homes may be gone: their facts die (F18)"
+        for name, source in state.sources.items():
+            row = self.table.get(source)
+            if row is not None and row.result.shape == "HOME" and name not in state.owners:
+                state.facts[name] = frozenset()
+                state.pending.pop(name, None)
+
+    def reenter(self, state: _State, why: str) -> None:
+        """A reentry site: a value left in a home may be replaced there (and
+        the old one freed), so its facts die now, and those of the locals
+        that copy it"""
+        # A site fact (unique) dies at any reentry, and a home load
+        state.facts = {n: without_site_facts(f) for n, f in state.facts.items()}
+        self.kill_home_loads(state)
+        for name, item in self.declared.items():
+            if item.mode in UNOWNED:
+                state.rehomed.setdefault(name, why)
+                state.facts[name] = frozenset()
+                state.pending.pop(name, None)
+        for name, source in state.sources.items():
+            if source in state.rehomed and name not in state.owners:
+                state.facts[name] = frozenset()
 
     def owner_of(self, arg: list[str], state: _State) -> str | None:
         """The obligation that an argument passes: a name that holds one, or
@@ -1495,7 +1953,7 @@ class OwnershipWalk:
     def take(self, name: str, state: _State, where: Token, what: str) -> None:
         "an owner's obligation leaves it (a consumption or a move)"
         item = self.declared.get(name)
-        if item is not None and item.mode in ("borrowed", ""):
+        if item is not None and item.mode in UNOWNED:
             self.fail(where, f"{what} `{name}`, declared {item.mode or 'a pass-through'}, "
                       "which it does not own")
         status = state.owners.get(name)
@@ -1536,6 +1994,10 @@ class OwnershipWalk:
                     if missing:
                         self.fail(tkn, f"passes `{' '.join(arg)}` to {row.name}, which "
                                   f"requires {', '.join(sorted(map(str, missing)))} of it")
+                if name in state.facts and (row.new_owner() or spec.mode in (
+                        "consumed", "taken", "out")):
+                    # A count change of the value: unique dies
+                    state.facts[name] = without_site_facts(state.facts[name])
                 if spec.mode in ("consumed", "taken"):
                     owner = self.owner_of(arg, state)
                     if owner is not None:
@@ -1576,7 +2038,13 @@ class OwnershipWalk:
                     state.owners[owner] = TAKEN
 
     def discharge(self, name: str, state: _State, where: Token) -> None:
-        "DEAD(name): only an inline value, or one already moved, owes nothing"
+        """DEAD(name): an input already moved or released, or an inline
+        value, owes nothing; a closed input still held is handed to the
+        skeleton, which closes it after the uop; any other held owner would
+        leak"""
+        item = self.declared.get(name)
+        if item is not None and item.mode == "closed":
+            return
         if state.owners.get(name) == HELD and INLINE not in state.facts.get(name, frozenset()):
             self.fail(where, f"DEAD(`{name}`) drops an owned value: release it, move it "
                       "first, or declare it inline")
@@ -1618,6 +2086,17 @@ class OwnershipWalk:
             return state
         if head == "DISPATCH_SAME_OPARG":
             return None
+        if head == "goto" and texts[1:2] and texts[1] in ERROR_LABELS:
+            # The raise exit at this site, with its checkpoint here
+            self.check_exit("raise", state, toks[0])
+            return None
+        if head == "return" and len(texts) == 3 and re.fullmatch(r"\w+", texts[1]):
+            # Leaves the evaluator with the value: its obligation goes to the
+            # evaluator's caller
+            if obligated(state.owners.get(texts[1])):
+                self.take(texts[1], state, toks[0], "returns")
+            self.check_exit("exit", state, toks[0])
+            return None
         if head == "DEAD":
             name = self.views_at(state).resolve(texts[2:_close(texts, 1)])
             if name is not None:
@@ -1630,7 +2109,7 @@ class OwnershipWalk:
         if head == "DECREF_INPUTS":
             # The emitters close the inputs that are still held
             for name, item in self.declared.items():
-                if state.owners[name] == HELD and item.mode in ("borrowed", ""):
+                if state.owners[name] == HELD and item.mode in UNOWNED:
                     self.fail(toks[0], f"DECREF_INPUTS releases `{name}`, declared "
                               f"{item.mode or 'a pass-through'}")
                 state.owners[name] = GONE
@@ -1638,11 +2117,45 @@ class OwnershipWalk:
             state.end_restart("DECREF_INPUTS")
             return state
         self.check_forms(toks, texts, state)
-        self.calls(toks, state)
-        self.effects(toks, state)
-        if "=" in texts:
-            self.assignment(toks, texts, texts.index("="), state)
-        return state
+        e = texts.index("=") if "=" in texts else -1
+        end = len(texts) - 1 if texts[-1] == ";" else len(texts)
+        arms = _conditional(texts[e + 1:end]) if e > 0 else None
+        if arms is None or not re.fullmatch(r"\w+", texts[e - 1]) or texts[e - 2:e - 1] in (
+                ["->"], ["."]):
+            self.calls(toks, state)
+            self.effects(toks, state)
+            self.guard_results(toks, state)
+            if e > 0:
+                self.assignment(toks, texts, e, state)
+            return state
+        return self.conditional(toks, texts, e, e + 1 + arms[0], e + 1 + arms[1], end, state)
+
+    def conditional(self, toks: list[Token], texts: list[str], e: int, q: int, c: int,
+                    end: int, state: _State) -> _State:
+        """`x = cond ? a : b;`: each arm on its own path, refined by the
+        condition, then joined (F3): its facts are those of both arms, its
+        obligation the same on both, and where one arm is NULL the local
+        is NULL exactly where the condition says so (refine)"""
+        self.calls(toks[:q], state)
+        self.effects(toks[:q], state)
+        cond = _strip(texts[e + 1:q])
+        ends, nulls = [], []
+        for (lo, hi), holds in (((q + 1, c), True), ((c + 1, end), False)):
+            path = state.copy()
+            self.refine(path, cond, holds)
+            self.calls(toks[lo:hi], path)
+            self.effects(toks[lo:hi], path)
+            self.assignment(toks, texts, e, path, rhs=_strip(texts[lo:hi]))
+            nulls.append(NULL_FACT in path.facts.get(texts[e - 1], frozenset()))
+            ends.append(path)
+        joined = self.join(ends)
+        if nulls[0] != nulls[1]:
+            # As refine reads a condition: without its negations
+            null_if = nulls[0]
+            while cond[:1] == ["!"]:
+                cond, null_if = _strip(cond[1:]), not null_if
+            joined.null_when[texts[e - 1]] = (tuple(cond), null_if)
+        return joined
 
     def check_forms(self, toks: list[Token], texts: list[str], state: _State,
                     statement: bool = True) -> None:
@@ -1659,6 +2172,7 @@ class OwnershipWalk:
         covered = [False] * len(texts)
         expr = texts[:-1] if texts[-1:] == [";"] else texts
         rhs: list[str] | None = None
+        arms: list[list[str]] = []
         if statement and "=" in expr:
             e = expr.index("=")
             rhs = _uncast(expr[e + 1:])
@@ -1667,9 +2181,20 @@ class OwnershipWalk:
                 covered[j] = True
             named = (re.fullmatch(r"\w+", lhs[-1]) is not None
                      and (len(lhs) < 2 or lhs[-2] not in ("->", ".", "*")))
-            element = lhs[-1] == "]" and _element_base(texts, e) in state.arrays
-            if len(rhs) == 1 and rhs[0] in tracked and (named or element):
-                covered[len(texts) - 1 - texts[::-1].index(rhs[0])] = True
+            element = ((lhs[-1] == "]" and _element_base(texts, e) in state.arrays)
+                       or self.home_store(texts, e))
+            # The values assigned: the right side, or the arms of `c ? a : b`
+            # into a name, at their positions in texts
+            spots = [(e + 1, len(expr))]
+            marks = _conditional(expr[e + 1:]) if named else None
+            if marks is not None:
+                q, c = e + 1 + marks[0], e + 1 + marks[1]
+                spots = [(q + 1, c), (c + 1, len(expr))]
+            for lo, hi in spots:
+                arm = _uncast(texts[lo:hi])
+                arms.append(arm)
+                if len(arm) == 1 and arm[0] in tracked and (named or element):
+                    covered[hi - 1 - texts[lo:hi][::-1].index(arm[0])] = True
         for j in range(len(texts) - 3):
             if texts[j:j + 3] == ["(", "void", ")"] and re.fullmatch(r"\w+", texts[j + 3]):
                 covered[j:j + 4] = [True] * 4
@@ -1685,7 +2210,7 @@ class OwnershipWalk:
             consuming = any(a.mode in ("consumed", "taken") for a in row.args)
             if not (owning or consuming):
                 continue
-            as_rhs = rhs is not None and _strip(rhs) == call
+            as_rhs = any(_strip(arm) == call for arm in arms)
             whole = statement and rhs is None and _uncast(expr) == call
             as_arg = False
             for p, pend in spans:
@@ -1707,11 +2232,21 @@ class OwnershipWalk:
             if not covered[j] and t in tracked:
                 self.fail(toks[0], f"`{what}` uses `{t}` in a form the walk does not model")
 
-    def assignment(self, toks: list[Token], texts: list[str], i: int, state: _State) -> None:
+    def assignment(self, toks: list[Token], texts: list[str], i: int, state: _State,
+                   rhs: list[str] | None = None) -> None:
         lhs = texts[i - 1]
-        rhs = _strip(texts[i + 1:-1] if texts[-1] == ";" else texts[i + 1:])
+        if rhs is None:
+            rhs = _strip(texts[i + 1:-1] if texts[-1] == ";" else texts[i + 1:])
         if lhs == "]":
             self.element_store(toks, texts, i, rhs, state)
+            return
+        if self.home_store(texts, i):
+            # A home write (F18): the value's obligation moves into the
+            # home, and what was loaded from a home dies
+            if len(rhs) == 1 and rhs[0] in state.owners:
+                self.take(rhs[0], state, toks[0], "moves into a home")
+                state.end_restart(f"the store of `{rhs[0]}` into a home")
+            self.kill_home_loads(state)
             return
         if i >= 2 and texts[i - 2] in ("->", ".") or not re.fullmatch(r"\w+", lhs):
             return      # a store through a pointer: V2's `writes`
@@ -1726,12 +2261,48 @@ class OwnershipWalk:
             path = views.path(rhs)
             state.bindings[lhs] = (path if path is not None
                                    else views.resolve(rhs, locals_=False) or "")
+        self.bind(toks, lhs, rhs, state)
+
+    def bind(self, toks: list[Token], lhs: str, rhs: list[str], state: _State) -> None:
+        """`lhs = rhs` for a name: a move, a copy, a constant, a row's value
+        or anything else; the value's obligation, facts and identity go to
+        lhs, and an output's identity is checked against its mode"""
         out = self.contract.output(lhs)
+        state.null_when.pop(lhs, None)
+        state.origins[lhs] = ""
+        self.bind_value(toks, lhs, rhs, state, out)
+        if out is not None and not out.array:
+            self.check_identity(toks, out, rhs, state)
+        if out is not None and lhs in state.facts:
+            # A publication: unique dies
+            state.facts[lhs] = without_site_facts(state.facts[lhs])
+
+    def check_identity(self, toks: list[Token], out: Item, rhs: list[str],
+                       state: _State) -> None:
+        """F5: a moved output holds its input's value, through moves and
+        locals; an owned or inline one a value made in the body.  NULL is no
+        input's value and needs no identity"""
+        origin = state.origins.get(out.name)
+        if NULL_FACT in state.facts.get(out.name, frozenset()):
+            return
+        what = f"`{out.name}` is declared {out.mode or 'a pass-through'}"
+        if out.mode == "moved" and origin != out.source:
+            self.fail(toks[0], f"`{out.name}` is declared moved({out.source}), but is "
+                      f"assigned `{' '.join(rhs)}`, which "
+                      + (f"is `{origin}`'s value" if origin else
+                         "is no input's value" if origin == "" else
+                         "differs by path"))
+        if out.mode in ("owned", "inline") and origin:
+            self.fail(toks[0], f"{what}, but is assigned `{' '.join(rhs)}`, which is the "
+                      f"input `{origin}`'s value: declare moved({origin})")
+
+    def bind_value(self, toks: list[Token], lhs: str, rhs: list[str], state: _State,
+                   out: Item | None) -> None:
         if len(rhs) == 1 and (rhs[0] in self.declared or rhs[0] in state.owners):
             # A move, `out = in;` or `PyValue tmp = in;`: the obligation goes
             # with the value, and the new holder must discharge it
             source = self.declared.get(rhs[0])
-            if source is not None and source.mode in ("borrowed", ""):
+            if source is not None and source.mode in UNOWNED:
                 if out is not None and out.mode == "moved":
                     self.fail(toks[0], f"on next, `{rhs[0]}` is moved, but it is declared "
                               f"{source.mode or 'a pass-through'}")
@@ -1747,7 +2318,42 @@ class OwnershipWalk:
             self.new.add(lhs)
             state.assign(lhs, state.facts.get(rhs[0], frozenset()),
                          state.pending.get(rhs[0]), rhs[0])
+            state.origins[lhs] = (rhs[0] if rhs[0] in self.declared
+                                  else state.origins.get(rhs[0], ""))
             state.end_restart(f"the move of `{rhs[0]}`")
+            return
+        constant = self.table.get(rhs[0]) if len(rhs) == 1 else None
+        if constant is not None and constant.kind == "CONSTANT":
+            # A static immortal value: its declared facts, no count
+            facts = implied(constant.result.facts | (
+                set() if NULL_FACT in constant.result.facts else {NONNULL}))
+            if NULL_FACT not in facts:
+                facts = facts | {VFact("is", constant.name)}
+            state.assign(lhs, facts, None, constant.name)
+            if out is not None and out.mode == "owned":
+                # An owned output's obligation, as for any inline value
+                state.owners[lhs] = NULL if NULL_FACT in facts else HELD
+                self.new.add(lhs)
+            if out is not None:
+                state.end_restart(f"the assignment of the output `{lhs}`")
+            return
+        if len(rhs) == 1 and rhs[0] in state.facts:
+            # A local that holds no obligation: a borrowed or inline value,
+            # or NULL.  Its facts and identity go with it
+            facts = state.facts[rhs[0]]
+            if (out is not None and out.mode == "owned" and INLINE not in facts
+                    and NULL_FACT not in facts):
+                self.fail(toks[0], f"`{lhs}` is declared owned, but `{rhs[0]}` holds no "
+                          f"owner (from {state.sources.get(rhs[0], 'its assignment')}): "
+                          "no owner moves")
+            state.assign(lhs, facts, state.pending.get(rhs[0]),
+                         state.sources.get(rhs[0], rhs[0]))
+            state.origins[lhs] = state.origins.get(rhs[0], "")
+            if out is not None and out.mode == "owned":
+                state.owners[lhs] = NULL if NULL_FACT in facts else HELD
+                self.new.add(lhs)
+            if out is not None:
+                state.end_restart(f"the assignment of the output `{lhs}`")
             return
         call = _call_of(_uncast(rhs), self.table)
         if call is None:
@@ -1756,6 +2362,30 @@ class OwnershipWalk:
             return
         row, args = call
         result = row.result
+        if result.shape == "HOME":
+            # A home load: a borrowed copy of the home's value, whose facts
+            # die at a home write and a reentry
+            state.assign(lhs, frozenset(), None, row.name)
+            if out is not None:
+                state.end_restart(f"the assignment of the output `{lhs}`")
+            return
+        if result.mode == "moved":
+            # VALUE(moved(k)): argument k itself, whose obligation the row
+            # took (calls); it is the local's now
+            arg = args[result.moved] if len(args) > result.moved else []
+            source = self.views_at(state).resolve(arg)
+            owner = self.owner_of(arg, state)
+            if owner is None:
+                self.fail(toks[0], f"{row.name} moves `{' '.join(arg)}`, which holds no "
+                          "obligation")
+            state.owners[lhs] = HELD
+            self.new.add(lhs)
+            state.assign(lhs, state.facts.get(source, frozenset()),
+                         state.pending.get(source), owner)
+            state.origins[lhs] = (owner if owner in self.declared
+                                  else state.origins.get(owner, ""))
+            state.end_restart(f"the move of `{owner}` by {row.name}")
+            return
         if result.shape in ("VALUE_OR_NULL", "STATUS"):
             # The owners this row takes are decided by its result's local
             for owner, status in state.owners.items():
@@ -1821,7 +2451,7 @@ class OwnershipWalk:
         if len(value) == 1 and value[0] in state.owners:
             facts = state.facts.get(value[0], frozenset())
             item = self.declared.get(value[0])
-            if item is not None and item.mode in ("borrowed", ""):
+            if item is not None and item.mode in UNOWNED:
                 if INLINE not in facts:
                     self.fail(toks[0], f"stores `{value[0]}`, declared "
                               f"{item.mode or 'a pass-through'}, into the owned array "
@@ -1858,7 +2488,7 @@ _WALKS: dict[tuple[int, bool], tuple[Uop, OwnershipWalk]] = {}
 def walk_of(uop: Uop, table: dict[str, Row] | None = None,
             kills: bool = True) -> OwnershipWalk:
     "The walk of a declared uop's body, run"
-    table = rows() if table is None else table
+    table = with_slots(uop, rows() if table is None else table)
     key = (id(uop), kills)
     if table is _ROWS and key in _WALKS:
         return _WALKS[key][1]
@@ -1871,6 +2501,19 @@ def walk_of(uop: Uop, table: dict[str, Row] | None = None,
 # ---------------------------------------------------------------------------
 # Result facts (V5), exits (V7) and exported guard facts (V9)
 
+def _conditional(texts: list[str]) -> tuple[int, int] | None:
+    """The indices of `?` and `:` if texts are `c ? a : b` outside any
+    parentheses, with no other conditional among them"""
+    depth, marks = 0, []
+    for i, t in enumerate(texts):
+        depth += {"(": 1, ")": -1, "[": 1, "]": -1}.get(t, 0)
+        if depth == 0 and t in ("?", ":"):
+            marks.append(i)
+    if len(marks) == 2 and texts[marks[0]] == "?" and texts[marks[1]] == ":":
+        return marks[0], marks[1]
+    return None
+
+
 def _assignments(uop: Uop, name: str) -> list[tuple[Token, list[str]]]:
     tokens = _tokens(uop)
     texts = [t.text for t in tokens]
@@ -1882,47 +2525,78 @@ def _assignments(uop: Uop, name: str) -> list[tuple[Token, list[str]]]:
     return found
 
 
+def _value_results(uop: Uop, where: Token, rhs: list[str], table: dict[str, Row],
+                   inputs: dict[str, Item], seen: frozenset[str] = frozenset()
+                   ) -> list[tuple[frozenset[VFact], str, str]]:
+    """What a value assigned to an output can be, as (facts, mode, source)
+    for each alternative: a row's value, a constant, an input, the arms of
+    a conditional, and through a local each value assigned to it (F3)"""
+    rhs = _uncast(rhs)
+    marks = _conditional(rhs)
+    if marks is not None:
+        q, c = marks
+        return (_value_results(uop, where, rhs[q + 1:c], table, inputs, seen)
+                + _value_results(uop, where, rhs[c + 1:], table, inputs, seen))
+    call = _call_of(rhs, table)
+    if call is not None and call[0].result.mode == "moved":
+        row, args = call
+        return _value_results(uop, where, args[row.result.moved], table, inputs, seen)
+    if call is not None and call[0].result.shape in ("VALUE", "VALUE_OR_NULL"):
+        result = call[0].result
+        return [(implied(result.facts), result.mode, call[0].name)]
+    if len(rhs) == 1 and rhs[0] in inputs:
+        return [(implied(inputs[rhs[0]].facts), "moved", rhs[0])]
+    row = table.get(rhs[0]) if len(rhs) == 1 else None
+    if row is not None and row.kind == "CONSTANT":
+        identity = set() if NULL_FACT in row.result.facts else {VFact("is", row.name)}
+        return [(implied(row.result.facts | identity), "inline", row.name)]
+    if len(rhs) == 1 and re.fullmatch(r"[A-Za-z_]\w*", rhs[0]) and rhs[0] not in seen:
+        found = _assignments(uop, rhs[0])
+        if found:
+            return [r for at, value in found
+                    for r in _value_results(uop, at, value, table, inputs, seen | {rhs[0]})]
+    raise analysis_error(f"{uop.name}: `{' '.join(rhs)}` is assigned to an output, but it is "
+                         "no row with a value result, constant, input, conditional of them "
+                         "or local assigned them", where)
+
+
 def check_results(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
-    """V5: every assignment to an output gives its declared mode and facts.
-    That they hold on every path to next, joins and kills included, and that
-    a non-nullable output is not NULL there, is the walk's check
-    (OwnershipWalk.check_outputs)"""
+    """V5: every assignment to an output gives its declared mode and facts,
+    through locals and the arms of conditionals.  That they hold on every
+    path to next, joins and kills included, and that a non-nullable output
+    is not NULL there, is the walk's check (OwnershipWalk.check_outputs);
+    so is a moved output's identity (check_identity)"""
     inputs = {i.name: i for i in contract.inputs}
     for out in contract.outputs:
-        if out.mode in ("", "borrowed"):
+        if out.mode in ("", "borrowed", "moved"):
             continue
         for where, rhs in _assignments(uop, out.name):
-            rhs = _uncast(rhs)
-            if out.mode == "moved":
-                if rhs != [out.source]:
-                    raise analysis_error(f"{uop.name}: `{out.name}` is declared "
-                                         f"moved({out.source}), but is assigned "
-                                         f"`{' '.join(rhs)}`", where)
-                continue
-            call = _call_of(rhs, table)
-            if call is not None and call[0].result.shape in ("VALUE", "VALUE_OR_NULL"):
-                result = call[0].result
-                gives, mode, source = implied(result.facts), result.mode, call[0].name
-            elif len(rhs) == 1 and rhs[0] in inputs:
-                gives, mode, source = implied(inputs[rhs[0]].facts), "moved", rhs[0]
-            else:
-                raise analysis_error(f"{uop.name}: `{out.name}` is assigned "
-                                     f"`{' '.join(rhs)}`, which is no row with a value "
-                                     "result", where)
-            missing = sorted(map(str, implied(out.facts) - gives - {NONNULL}))
-            if missing:
-                raise analysis_error(
-                    f"{uop.name}: `{out.name}` is declared {', '.join(missing)}, but "
-                    f"{source} gives {', '.join(sorted(map(str, gives))) or 'no fact'}",
-                    where)
-            if out.mode == "inline" and mode != "inline":
-                raise analysis_error(f"{uop.name}: `{out.name}` is declared inline, but "
-                                     f"{source} gives an {mode} value", where)
+            for gives, mode, source in _value_results(uop, where, rhs, table, inputs):
+                if NULL_FACT in gives:
+                    continue        # NULL: the walk holds it to nullable
+                missing = sorted(map(str, implied(out.facts) - gives - {NONNULL}))
+                if missing:
+                    raise analysis_error(
+                        f"{uop.name}: `{out.name}` is declared {', '.join(missing)}, but "
+                        f"{source} gives {', '.join(sorted(map(str, gives))) or 'no fact'}",
+                        where)
+                if out.mode == "inline" and mode != "inline":
+                    raise analysis_error(f"{uop.name}: `{out.name}` is declared inline, but "
+                                         f"{source} gives an {mode} value", where)
 
 
 def body_exits(uop: Uop, table: dict[str, Row], implicit_guards: int) -> set[str]:
-    "The exits that uop's body takes"
+    """The exits that uop's body takes: its sites' (the DSL's, its rows',
+    `goto` an error label, `return` from the evaluator), and those of its
+    properties: `returns` pops the frame and `switches_frame` continues in
+    another, each in place of `next` (the record's transfers)"""
     exits = set()
+    tokens = _tokens(uop)
+    for i, tkn in enumerate(tokens):
+        if tkn.kind == "GOTO" and tokens[i + 1].text in ERROR_LABELS:
+            exits.add("raise")
+        elif tkn.kind == "RETURN":
+            exits.add("exit")
     for tkn, _ in body_calls(uop):
         if tkn.text in GUARDS:
             exits.add(GUARDS[tkn.text])
@@ -1934,7 +2608,14 @@ def body_exits(uop: Uop, table: dict[str, Row], implicit_guards: int) -> set[str
             exits |= table[tkn.text].exits
     if implicit_guards:
         exits.add("miss")
-    if not uop.properties.always_exits:
+    p = uop.properties
+    if p.returns:
+        if "return" not in exits:
+            exits.add("return")
+    elif p.switches_frame:
+        if not exits & {"enter", "return", "yield"}:
+            exits.add("yield" if ir_records.suspends_frame(uop) else "enter")
+    elif not p.always_exits:
         exits.add("next")
     return exits
 
@@ -1965,7 +2646,8 @@ def check_guard_facts(uop: Uop, contract: Contract, walk: OwnershipWalk) -> None
         else:
             continue
         item = contract.input(source)
-        entry = (implied(item.facts | (set() if item.nullable else {NONNULL}))
+        entry = (implied(item.facts | {a.fact for a in item.assumed}
+                         | (set() if item.nullable else {NONNULL}))
                  if item is not None else frozenset())
         declared = implied(out.facts)
         extra = declared - live - {NONNULL}
@@ -1986,20 +2668,121 @@ def check_guard_facts(uop: Uop, contract: Contract, walk: OwnershipWalk) -> None
                 f"of `{source}`, which `{out.name}` does not declare", uop.body.open)
 
 
+def check_identities(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
+    """is(K) names a CONSTANT row's value, which is not NULL (that is
+    `null`), in the uop's declaration and in the rows it calls"""
+    facts = [(f, uop.body.open) for i in contract.inputs + contract.outputs for f in i.facts]
+    for tkn, _ in body_calls(uop):
+        row = table.get(tkn.text)
+        if row is not None:
+            facts += [(f, tkn) for a in row.args for f in a.facts]
+            facts += [(f, tkn) for f in row.result.facts]
+            facts += [(f, tkn) for t in row.result.tests for side in t for f in side]
+    for f, where in facts:
+        if f.kind != "is":
+            continue
+        constant = table.get(f.arg)
+        if constant is None or constant.kind != "CONSTANT":
+            raise analysis_error(f"{uop.name}: {f} names `{f.arg}`, which is no CONSTANT row",
+                                 where)
+        if NULL_FACT in constant.result.facts:
+            raise analysis_error(f"{uop.name}: {f}: NULL is no identity; it is `null`", where)
+
+
 _VERIFIED: set[int] = set()
+
+
+def assumed_result_of(texts: list[str], table: dict[str, Row]) -> tuple[str, Row] | None:
+    """`[T] x = R(...);`, whose value is the call of a row R with assumed
+    result facts: (x, R).  The generator asserts them of x after the
+    statement (F7)"""
+    texts = [t for t in texts if t != ";"]
+    if texts.count("=") != 1:
+        return None
+    eq = texts.index("=")
+    call = _call_of(texts[eq + 1:], table)
+    if eq == 0 or call is None or not call[0].result.assumed:
+        return None
+    return texts[eq - 1], call[0]
+
+
+def assumed_assertions(uop: Uop, texts: list[str], table: dict[str, Row] | None = None
+                       ) -> list[str]:
+    """The assertions the generator emits for a declared uop: of its
+    assumed inputs at entry (texts None), or after a statement that binds
+    an assumed row result (F7)"""
+    contract = contract_of(uop)
+    if contract is None:
+        return []
+    if texts is None:
+        return [assertion(a.fact, i.name) for i in contract.inputs for a in i.assumed]
+    found = assumed_result_of(texts, rows() if table is None else table)
+    if found is None:
+        return []
+    name, row = found
+    return [assertion(a.fact, name) for a in row.result.assumed]
+
+
+def check_assumed_results(uop: Uop, table: dict[str, Row]) -> None:
+    """F7: a row's assumed result is bound to a local by the statement that
+    calls it, `[T] x = R(...);`, so that every form asserts it there; an
+    `assert` in the body never declares a fact"""
+    bound: set[int] = set()
+
+    def visit(stmt) -> None:
+        if not isinstance(stmt, SimpleStmt):
+            return
+        tokens = [t for t in stmt.contents if t.kind != "COMMENT"]
+        found = assumed_result_of([t.text for t in tokens], table)
+        if found is not None:
+            # The call is the whole right side: its name follows `=` and casts
+            call = next(t for t in tokens[[t.text for t in tokens].index("=") + 1:]
+                        if t.text == found[1].name)
+            bound.add(id(call))
+
+    uop.body.accept(visit)
+    for t, _ in body_calls(uop):
+        row = table.get(t.text)
+        if row is not None and row.result.assumed and id(t) not in bound:
+            raise analysis_error(
+                f"{uop.name}: {row.name}'s result is assumed "
+                f"{', '.join(f'{a.fact} by {a.by}' for a in row.result.assumed)}; "
+                f"bind it to a local, `x = {row.name}(...);`, where the generator "
+                "asserts it", t)
+
+
+def check_fact_subjects(uop: Uop, contract: Contract) -> None:
+    """A declared fact's subjects: in_bounds(x) names an input; a fact of
+    one site (unique) is never declared on an output, which exports it"""
+    where = uop.body.open
+    for o in contract.outputs:
+        for f in sorted(o.facts):
+            if f.kind in SITE_FACTS:
+                raise analysis_error(f"{uop.name}: `{o.name}` is declared {f}, a fact of "
+                                     "one site, which is never exported", where)
+    for item in contract.inputs + contract.outputs:
+        for f in sorted(item.facts):
+            if f.kind == "in_bounds" and contract.input(f.arg) is None:
+                raise analysis_error(f"{uop.name}: `{item.name}` is declared {f}, but "
+                                     f"`{f.arg}` is not an input", where)
 
 
 def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None = None) -> None:
     "Check a declared uop's body against its contract (V1-V5, V7, V9; V6 inside it)"
-    table = rows() if table is None else table
+    table = with_slots(uop, rows() if table is None else table)
     contract = contract_of(uop)
     if contract is None or (id(uop), implicit_guards) in _VERIFIED:
         return
+    check_slots(uop, table)
+    check_fact_subjects(uop, contract)
+    check_assumed_results(uop, table)
+    check_preprocessor(uop)
     check_callees(uop, table)
     check_effects(uop, contract, table)
     check_feedback(uop, contract, table)
     check_feedback_pointers(uop, table)
     check_guard_conditions(uop, table)
+    check_identities(uop, contract, table)
     for tkn, _ in body_calls(uop):
         if tkn.text in GUARDS:
             site_facts(uop, tkn, table)     # a condition without facts needs a reason
@@ -2046,6 +2829,10 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
     sizes: dict[int, str] = {}
     fresh = iter(range(1, 1 << 20))
     restartable, why = True, ""
+    # The values that reach the handler, and the first site since its entry
+    # that may have replaced any of them in its home (F7's binding)
+    entry: set[int] = set()
+    replaced = ""
 
     def pop(item: Item) -> int | None:
         "The value of an input, or None if the stack's depth is unknown"
@@ -2070,6 +2857,7 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
             return stack.pop()
         v = next(fresh)
         facts[v] = frozenset({NONNULL})
+        entry.add(v)
         return v
 
     # Whether the stack's depth is known: past an array of unknown size the
@@ -2090,6 +2878,20 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
         implicit = []
         for item in contract.inputs if known else ():
             value = bound[item.name]
+            if item.assumed:
+                # F7: a fact of the value that reaches the handler, from its
+                # producer; one this handler makes is shown, not assumed
+                said = ", ".join(f"{a.fact} by {a.by}" for a in item.assumed)
+                if value not in entry:
+                    raise analysis_error(
+                        f"{inst.name}: {part.name} assumes {said} of `{item.name}`, a value "
+                        "made in this handler, whose facts must show it", inst.where)
+                if replaced:
+                    raise analysis_error(
+                        f"{inst.name}: {part.name} assumes {said} of `{item.name}`, which "
+                        f"may have been replaced since the handler's entry, at {replaced}",
+                        inst.where)
+                facts[value] = implied(facts[value] | {a.fact for a in item.assumed})
             missing = implied(item.facts) - facts.get(value, frozenset())
             if missing <= {OBJECT, NONNULL} and OBJECT in missing and part.is_guard() \
                     and not part.properties.inline_ok:
@@ -2126,6 +2928,8 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
                                   and contract.output(i.name) is not None}
             for v in homes:
                 facts[v] = frozenset()
+        if contract.effects & REENTRY and not replaced:
+            replaced = f"{part.name}, which may reenter"
         changes = contract.effects - {"reads", "raises"}
         if restartable and changes:
             restartable, why = False, f"{part.name}, which may {', '.join(sorted(changes))}"
@@ -2141,9 +2945,13 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
                        if step == "detach" else
                        f"the skeleton's publication of `{name}`")
             if step == "close":
-                # The displaced value's close may run a finalizer, which can
-                # replace any home's value (design.md 3.2)
+                # A close may run a finalizer, which can replace any home's
+                # value (design.md 3.2)
                 facts = {v: frozenset() for v in facts}
+                replaced = replaced or f"the skeleton's close of `{name}` after {part.name}"
+                if restartable and contract.input(name) is not None:
+                    restartable = False
+                    why = f"the skeleton's close of `{name}` after {part.name}"
         if not known:
             continue
         for item in contract.outputs:
@@ -2169,10 +2977,14 @@ def skeleton_steps(contract: Contract, last: bool) -> list[tuple[str, str]]:
     """The skeleton's steps after a uop, in the order the generator emits
     them: each input taken from its home is detached at the end of the uop
     that takes it (IR_DETACH; a consumed input's home is cleared no later);
-    after the word's last uop the outputs are published to their homes
-    (IR_STORE_DST) and each displaced old value is closed (ir_old)"""
+    each closed input is closed after its uop; after the word's last uop
+    the outputs are published to their homes (IR_STORE_DST) and each
+    displaced old value is closed (ir_old)"""
     steps = [("detach", i.name) for i in contract.inputs
              if i.mode in ("consumed", "taken") and i.name != "unused"]
+    # A closed input is closed after its uop, on next as on raise
+    steps += [("close", i.name) for i in contract.inputs
+              if i.mode == "closed" and i.name != "unused"]
     if last:
         steps += [("publish", o.name) for o in contract.outputs if o.name != "unused"]
         steps += [("close", o.name) for o in contract.outputs if o.name != "unused"]
@@ -2189,21 +3001,40 @@ def record_guard_facts(uop: Uop, site: Token, inputs) -> tuple[tuple[Fact, ...],
     exit are recorded: the record's readers (the templates) take a guard's
     facts as the uop's, so a conditional guard's are not.  Their lifetime
     against effects is the reader's: the record keeps the effects' order."""
-    table = rows()
+    table = with_slots(uop, rows())
     walk = walk_of(uop, table, kills=False)
-    cond, reason = guard_condition(uop, site)
     views = Views(uop, table)
+    values = {i.name: f"v{i.value}" for i in inputs}
+
+    def recorded(name: str, facts) -> list[Fact]:
+        # A local's fact is recorded on the local, as the inference did
+        live = walk.exit.facts.get(name, frozenset()) if walk.exit else frozenset()
+        return [Fact(FACT_KIND[f.kind], values.get(name, name),
+                     values.get(f.arg, f.arg) if f.kind == "in_bounds" else f.record("").arg)
+                for f in facts if f in live]
+
+    row = table.get(site.text)
+    if row is not None and row.result.shape == "GUARD":
+        # A GUARD row's facts of its arguments, on its return (F2)
+        texts = [t.text for t in _tokens(uop)]
+        i = _tokens(uop).index(site)
+        args = _call(texts[i:_close(texts, i + 1) + 1], site.text) or []
+        result = []
+        for arg, facts in zip(args, row.result.guards):
+            name = views.resolve(arg)
+            facts = _bind_facts(facts, args, views)
+            if name is not None and facts:
+                result += recorded(name, sorted(facts))
+        return tuple(result), ""
+    cond, reason = guard_condition(uop, site)
     found = condition_facts(cond, views, table, holds=False)
     if found is None:
         site_facts(uop, site, table)        # refuses a condition without a reason
         return (), reason
     stated = _stated_facts(cond, views, table, False)
-    values = {i.name: f"v{i.value}" for i in inputs}
     result = []
     for name, facts in stated.items():
-        # A local's fact is recorded on the local, as the inference did
-        live = walk.exit.facts.get(name, frozenset()) if walk.exit else frozenset()
-        result += [f.record(values.get(name, name)) for f in facts if f in live]
+        result += recorded(name, facts)
     return tuple(result), reason or found[1]
 
 

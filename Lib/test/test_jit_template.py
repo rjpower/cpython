@@ -1136,6 +1136,39 @@ class TemplateGraphTests(unittest.TestCase):
         self.assertEqual(self.cse_loads([lambda g, o, v: TOp("call", [g.value(ir_leaf.VALUE)],
                                                              [v], "_PyValue_BoxInt64")]), 1)
 
+    def cse_home_loads(self, middle):
+        """A graph that loads a frame home (GETLOCAL), runs the ops in middle
+        (TOp makers given the loaded value) and loads it again; the number
+        of home loads after CSE"""
+        TOp = jit_template_generator.TOp
+        g = jit_template_generator.Graph()
+        entry = g.blocks[g.entry]
+        index = g.value("i32")
+        entry.ops.append(TOp("const", [index], [], 3))
+        first = g.value(ir_leaf.VALUE)
+        entry.ops.append(TOp("prim", [first], [index], "GETLOCAL"))
+        for make in middle:
+            entry.ops.append(make(g, first))
+        second = g.value(ir_leaf.VALUE)
+        entry.ops.append(TOp("prim", [second], [index], "GETLOCAL"))
+        entry.term = ("end", second)
+        jit_template_generator.cse(g)
+        return sum(op.kind == "prim" and op.attr == "GETLOCAL" for op in entry.ops)
+
+    def test_home_loads_are_their_own_location(self):
+        # A home is not the heap (HOME): a heap store leaves a home load;
+        # a home write, a release and Python change it
+        TOp = jit_template_generator.TOp
+        self.assertTrue(jit_template_generator.home_load("GETLOCAL"))
+        self.assertFalse(jit_template_generator.home_load("IR_SLOTS"))
+        self.assertEqual(self.cse_home_loads([]), 1)
+        self.assertEqual(self.cse_home_loads(
+            [lambda g, v: TOp("store", [], [v, v], "_PyRangeIterObject.len")]), 1)
+        self.assertEqual(self.cse_home_loads([lambda g, v: TOp("slot_store", [], [v], 3)]), 2)
+        self.assertEqual(self.cse_home_loads([lambda g, v: TOp("detach", [], [], 3)]), 2)
+        self.assertEqual(self.cse_home_loads(
+            [lambda g, v: TOp("prim", [], [v], "PyValue_CLOSE")]), 2)
+
     def test_range_iterator_reads_its_length_once(self):
         graph = graph_of("FOR_ITER_RANGE")
         loads = [op.attr for b in graph.blocks.values() for op in b.ops if op.kind == "load"]

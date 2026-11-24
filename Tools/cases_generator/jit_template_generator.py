@@ -1002,11 +1002,12 @@ def single_test(name: str):
 
 
 def is_null_test(name: str) -> bool:
-    """The test whose false side declares the word not NULL and whose true
-    side declares nothing (`TEST(| nonnull)`): the negation of that fact, so
-    that a word known not NULL decides it"""
+    """The test whose true side declares the word NULL and whose false side
+    not NULL (`TEST(null | nonnull)`): `null` contradicts a known nonnull,
+    so that a word known not NULL decides it"""
     t = single_test(name)
-    return t is not None and not t[0] and ir_contract.NONNULL in ir_contract.implied(t[1])
+    return (t is not None and ir_contract.NULL_FACT in t[0]
+            and ir_contract.NONNULL in ir_contract.implied(t[1]))
 
 
 def test_facts(name: str) -> tuple[bool, bool]:
@@ -1063,6 +1064,15 @@ CSE_KINDS = {"const", "jconst", "cache", "fieldaddr", "ptradd", "add", "sub", "m
 # not heap writes (CR); they change a count word, which only a load of
 # ob_refcnt reads.
 ALL = "all"
+# The location class of the frame's homes (F18): a load through a HOME row
+# (GETLOCAL) dies at a home write (a slot store, a detach), and at ALL
+HOME = "home"
+
+
+def home_load(name) -> bool:
+    "A primitive that loads a frame home: a HOME row other than the homes' base"
+    r = row(name)
+    return r is not None and r.result.shape == "HOME" and r.result.measure != "base"
 
 
 def effects_of(op: TOp):
@@ -1091,7 +1101,7 @@ def changes(op: TOp):
         return {op.attr, None} if op.attr in ir_leaf.FIELDS else ALL
     if op.kind in ("slot_store", "detach"):
         # A home is not the heap, but a primitive may read one
-        return {None}
+        return {None, HOME}
     if op.kind == "take":
         return {"PyObject.ob_refcnt", None}
     if op.kind in ("call", "prim"):
@@ -1123,8 +1133,12 @@ def cse(g: Graph) -> bool:
         children.setdefault(d, []).append(b)
     mapping: dict[int, int] = {}
 
+    def is_home(key) -> bool:
+        return key[0] == "prim" and home_load(key[1])
+
     def is_read(key) -> bool:
-        return key[0] == "load" or (key[0] == "prim" and "reads" in row(key[1]).effects)
+        return (key[0] == "load" or is_home(key)
+                or (key[0] == "prim" and "reads" in row(key[1]).effects))
 
     def walk(i: int, seen: dict) -> None:
         b = g.blocks[i]
@@ -1147,7 +1161,8 @@ def cse(g: Graph) -> bool:
                 seen = {k: v for k, v in seen.items()
                         if not is_read(k) or (gone != ALL and (
                             (k[0] == "load" and k[1] in ir_leaf.FIELDS and k[1] not in gone)
-                            or (k[0] == "prim" and None not in gone)))}
+                            or (is_home(k) and HOME not in gone)
+                            or (k[0] == "prim" and not is_home(k) and None not in gone)))}
             keep.append(op)
         b.ops = keep
         for c in children.get(i, []):
@@ -1489,7 +1504,7 @@ def cond_result(op: TOp) -> int:
 def reads_memory(op: TOp) -> bool:
     if op.kind == "prim":
         effects = effects_of(op)
-        return effects is None or bool(effects)
+        return effects is None or bool(effects) or home_load(prim_name(op))
     return op.kind not in ("cmp", "fcmp", "cmpmask", "xorb", "lnot")
 
 

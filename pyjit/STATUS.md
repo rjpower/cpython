@@ -36,15 +36,18 @@ completion stubs with 23-byte sites; and G0b's seed, 195 of 351 uops
 declared with unchanged generated output. Timed at `a5502da133f` against
 golden87 with its JIT off, `on` runs 1.022 of the warm time (jit88: 1.060);
 nbody 0.748, spectral_norm 0.792, unpack_sequence 1.380, richards 1.157.
-Merged since, at `1adf6360360` (not yet pushed): G0c's eight review
-batches, G0a5 and G0c9, 320 of 351 uops declared with each generated
-difference listed; G0d3, the leaf translator reading rows; and G3a's
-runtime phase and generator-boundary clauses. Running: G0d1, G0d2 and
-G0d4, the cutover to declarations only, and G3a's remaining declarations;
-then G3a's compiled frame transfers. G0d1 found a crash in golden86 and
-golden87, fixed on G0d1's branch (`cbf27b04cb2`): once `y = s + t` is
-specialised as an in-place str add, the process aborts if `y` holds an
-inline number before the add.
+Merged since, at `887c6a4bb1a` (not yet pushed; the push is refused):
+G0c's eight review batches, G0a5, G0c9, the four G0d units' declarations
+and G3a's: every instruction's uop is declared (353 of 353), with each
+generated difference listed. The verifier fails closed. The smoke set
+shows known failures only. Running: G0d1's last step, which deletes the
+inference fallback and declares 14 uops of IR-only handlers; then G3a's
+compiled frame transfers. G0d1 fixed two crashes from plain Python, each
+in golden86 and golden87: a specialised in-place str add (`y = s + t`)
+aborted when `y` held an inline number (`cbf27b04cb2`); and `yield from`
+a subiterator whose `throw()` raises a `StopIteration` made without
+`__init__` read its NULL value (`64daed03258`; upstream has the same
+bug).
 
 **Jit88, qualified 2026-11-23** at `ea4d023c2b4`
 ([record](issues/register-semantics59/jit88.md)): the baseline method JIT

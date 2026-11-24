@@ -28,7 +28,7 @@ extern "C" {
    JUMP_BACKWARD_JIT (a backward jump), which the lowering gives a code
    under a mode other than off, count a warm-up event and enter the unit
    once the code has one; and a return or yield into a frame that has run in
-   its unit (_PyInterpreterFrame.jit_resume), or an exception handled in it,
+   its unit (_PyFrame_JIT_RESUME), or an exception handled in it,
    goes back to the unit.
 
    A unit is entered by calling its code as

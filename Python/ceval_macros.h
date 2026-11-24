@@ -1159,7 +1159,7 @@ method_poly_lookup(const _PyIRWord *words, const _PyFbHeader *h, PyObject *owner
     } while (0)
 #define IR_JIT_RESUME() \
     do { \
-        if (frame->jit_resume) { \
+        if (frame->jit_flags & _PyFrame_JIT_RESUME) { \
             IR_STEP_DONE(jit_resume(tstate, frame, next_instr)); \
         } \
     } while (0)

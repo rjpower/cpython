@@ -2656,7 +2656,7 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 /* Compiled code runs the forms: it is in its unit already, and leaves it
  * at every frame switch for the driver, which finds the next frame's unit
  * itself.  So a return store tests only a pending redirect, not the
- * frame's jit_resume bit. */
+ * frame's _PyFrame_JIT_RESUME flag. */
 #define IR_JIT_EVENT() ((void)0)
 #define IR_JIT_RESUME() ((void)0)
 #define IR_STORE_RETURN(V) \
@@ -2860,7 +2860,7 @@ jit_run(PyThreadState *tstate, _PyJitUnit *unit, _PyInterpreterFrame *frame,
                 FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(code->_co_instrumentation_version)) {
             next++;
         }
-        frame->jit_resume = 1;
+        frame->jit_flags |= _PyFrame_JIT_RESUME;
         impl->jit_frame = frame;
         _PyIRTransfer t = ((jit_entry)unit->code.start)(
             tstate, frame, unit->entries[next - frame->ir_words]);
@@ -2897,7 +2897,7 @@ jit_resume(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next)
 {
     _PyJitUnit *unit = jit_unit_of(tstate, frame);
     if (unit == NULL) {
-        frame->jit_resume = 0;
+        frame->jit_flags &= ~_PyFrame_JIT_RESUME;
         return (_PyIRTransfer){frame, next};
     }
     return jit_run(tstate, unit, frame, next);
@@ -3180,7 +3180,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->frame.return_pc = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.pending_kwargs = IR_NO_DST;
     entry->frame.pending_redirect = 0;
-    entry->frame.jit_resume = 0;
+    entry->frame.jit_flags = 0;
 #ifdef Py_DEBUG
     entry->frame.lltrace = 0;
 #endif

@@ -3009,6 +3009,7 @@ _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
         _PyFrame_Slots(current_frame())[_PyIR_CallOperand(head, 0)]);
     int nargs = (int)IR_C(word) - (self_slot && !self_present);
     PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
+    fb->callable_type_version = fb_type_version(Py_TYPE(callable));
     if (PyFunction_Check(callable)) {
         return call_classify_function(fb, (PyFunctionObject *)callable, nargs)
             ? CALL_CASE_EXACT : CALL_CASE_OTHER;

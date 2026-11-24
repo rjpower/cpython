@@ -2200,6 +2200,19 @@ class Emitter:
             test(name, [w, t])
         elif kind == "inline_float":
             test("PyValue_IsInlineFloat", [w, t, k])
+        elif kind == "tagged_index":
+            test("PyValue_IsTaggedIndex", [w, t])
+        elif kind == "encoding":
+            # A union: the value holds one of its members' encodings
+            for member in arg.split("|"):
+                if member == "null":
+                    test("PyValue_IsNull", [w])
+                elif member == "object":
+                    test("PyValue_IsObject", [w, t])
+                elif member == "tagged_index":
+                    test("PyValue_IsTaggedIndex", [w, t])
+                else:
+                    raise Refused(f"no check of the assumed encoding {member}")
         elif kind == "exact":
             types = arg.split("|")
             # An inline value's type is its encoding's

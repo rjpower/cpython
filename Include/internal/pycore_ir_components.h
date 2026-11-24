@@ -402,7 +402,7 @@
      * whatever the method raised). Callbacks: arbitrary Python.              */ \
     HELPER(value_binary_op, PyValue, (int, PyValueBorrow, PyValueBorrow), \
            ARGS(scalar, borrowed, borrowed), VALUE_OR_NULL(owned), \
-           EFFECTS(runs_python)) \
+           EFFECTS(runs_python, raises)) \
     /* Reviewed G0c2 (pycore_value.h):                                        \
      * Py_NewRef(PyValue_AsKnownObjectBorrow(value)); a macro over two        \
      * inline functions with no code of its own, so it stays a MACRO row.     \
@@ -504,7 +504,7 @@
      * argument is borrowed.  A NULL word prints as "<NULL>", so the \
      * argument is not required to be nonnull */ \
     HELPER(_PyValue_ASCII, PyObject *, (PyValueBorrow), \
-        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Reviewed (G0c batch 1).  _PyValue_CheckHome (pycore_value.h) is \
      * `((void)0)` unless Py_DEBUG; under Py_DEBUG it reads the word and \
      * its object's identity (_PyValue_IsHome) and, on a violation, \
@@ -518,14 +518,14 @@
      * exception set (TypeError for a non-container); both arguments          \
      * borrowed.                                                              */ \
     HELPER(_PyValue_Contains, int, (PyValueBorrow, PyValueBorrow), \
-        ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python, raises)) \
     /* Objects/abstract.c (_PyValue_DelItem) -> value_ass_item with a \
      * NULL value: an exact dict goes to _PyDict_DelValue, anything else to \
      * mp_ass_subscript or sq_ass_item (Python: __delitem__, __eq__, \
      * __hash__).  Returns 0, or -1 with an exception set (TypeError when \
      * the type has no deletion).  Both arguments are borrowed */ \
     HELPER(_PyValue_DelItem, int, (PyValueBorrow, PyValueBorrow), \
-        ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python, raises)) \
     /* Objects/abstract.c _PyValue_Format (format(obj, spec)).  The spec may \
      * be PyValue_NULL (no spec: FORMAT_SIMPLE), which ARGS allows; a \
      * non-NULL spec that is not an exact-or-subclass str raises \
@@ -535,7 +535,7 @@
      * arguments borrowed on every path.  Result: a new reference (an exact \
      * str argument comes back as Py_NewRef of itself) */ \
     HELPER(_PyValue_Format, PyObject *, (PyValueBorrow, PyValueBorrow), \
-        ARGS(borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Objects/object.c: _PyObject_CheckAttributeName (TypeError for a \
      * non-str name), then call_getattro on the value's type: \
      * tp_getattro, which is any __getattribute__ or __getattr__ (runs \
@@ -543,7 +543,7 @@
      * suggestion data.  Returns an owned value, or PyValue_NULL with an \
      * exception set.  Arguments borrowed */ \
     HELPER(_PyValue_GetAttr, PyValue, (PyValueBorrow, PyObject *), \
-        ARGS(borrowed, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed, object), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* pycore_value_ops.h: status 1 an unbound method, 0 the attribute, -1 an \
      * error; the value owned unless NULL (G0a4: a CASES result).  \
      * Objects/object.c: the type-cache lookup of name; a type whose \
@@ -554,11 +554,11 @@
      * caller keeps its own count of the receiver across the call */ \
     HELPER(_PyValue_GetMethod, _PyStatusValue, (PyValueBorrow, PyObject *), \
         ARGS(borrowed, object), \
-        CASES(status==-1 value(null) raised, status==0 value(owned), status==1 value(owned)), EFFECTS(runs_python)) \
+        CASES(status==-1 value(null) raised, status==0 value(owned), status==1 value(owned)), EFFECTS(runs_python, raises)) \
     /* pycore_value_ops.h: 1 with the item, 0 for a missing key (no exception), -1 on another error (G0a4: a CASES result) */ \
     HELPER(_PyValue_GetOptionalItem, _PyStatusValue, (PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed), \
-        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
+        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python, raises)) \
     /* Reviewed (G0c batch 1).  _PyValue_Invert and _PyValue_Negative \
      * (UNARY_FUNC in Objects/abstract.c): a NULL argument is null_error, \
      * NULL result; else the type's nb_invert or nb_negative slot through \
@@ -570,7 +570,7 @@
      * allocated by the slot (covered by runs_python).  Callbacks: the \
      * slot, and the release of an old result a slot discards */ \
     HELPER(_PyValue_Invert, PyValue, (PyValueBorrow), \
-        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python), \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises), \
         HOMES(canonical), OBSERVER(none)) \
     /* Evidence (G0c batch 6): Objects/abstract.c _PyValue_IsInstance \
      * (PyObject_IsInstance): exact-type fast path, then the metaclass's \
@@ -579,7 +579,7 @@
      * arguments are borrowed. Callbacks: __instancecheck__, __class__ and \
      * __bases__ lookups: `runs_python`. */ \
     HELPER(_PyValue_IsInstance, int, (PyValueBorrow, PyValueBorrow), \
-        ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python, raises)) \
     /* Reviewed (G0c batch 1).  _PyValue_IsTrue (pycore_value_ops.h) is a \
      * static inline function: bits of True, False, None, an inline int or \
      * float answer without a call; any other object goes to \
@@ -590,7 +590,7 @@
      * is borrowed on every path.  A NULL argument is not admitted: the \
      * slow path dereferences it */ \
     HELPER(_PyValue_IsTrue, int, (PyValueBorrow), \
-        ARGS(borrowed), SCALAR, EFFECTS(runs_python), \
+        ARGS(borrowed), SCALAR, EFFECTS(runs_python, raises), \
         HOMES(canonical), OBSERVER(none)) \
     /* Objects/longobject.c: the shift of a nonzero word by a count >= 0 \
      * through long_lshift_spans().  It gives PyValue_NULL with an exception \
@@ -606,7 +606,7 @@
         EFFECTS(allocates, raises)) \
     /* _PyValue_Negative: see _PyValue_Invert above */ \
     HELPER(_PyValue_Negative, PyValue, (PyValueBorrow), \
-        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python), \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises), \
         HOMES(canonical), OBSERVER(none)) \
     /* Evidence (G0c batch 6): Include/internal/pycore_value.h: builds the \
      * view of an object pointer. No count change, no call, no failure, no \
@@ -621,7 +621,7 @@
      * 'bad operand type for unary +' and NULL. Returns an owner, or NULL \
      * with an exception set. The argument is borrowed. `runs_python`. */ \
     HELPER(_PyValue_Positive, PyValue, (PyValueBorrow), \
-        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python), \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises), \
         HOMES(canonical), OBSERVER(none)) \
     /* pycore_value.h: a debug check, erased with the GIL */ \
     INTRINSIC(_PyValue_RecheckHome, ARGS(scalar), NONE, BUILD(gil)) \
@@ -638,7 +638,7 @@
      * Returns a new str reference or NULL with an exception set; the \
      * argument is borrowed */ \
     HELPER(_PyValue_Repr, PyObject *, (PyValueBorrow), \
-        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Reviewed G0c2 (Objects/object.c). NULL operands raise                  \
      * BadInternalCall; richcompare_exit decides fast identity and exact      \
      * cases; richcompare_protocol calls tp_richcompare of either operand     \
@@ -646,11 +646,11 @@
      * or False for the fast cases, any object otherwise, or NULL with an     \
      * exception set. Operands borrowed on every path.                        */ \
     HELPER(_PyValue_RichCompare, PyValue, (PyValueBorrow, PyValueBorrow, int), \
-        ARGS(borrowed, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* pycore_value_ops.h: 1 with the yielded item, 0 with the return value, -1 on error (G0a4: a CASES result) */ \
     HELPER(_PyValue_Send, _PyStatusValue, (PyObject *, PyValueBorrow), \
         ARGS(object, borrowed), \
-        CASES(status==-1 value(null) raised, status==0 value(owned), status==1 value(owned)), EFFECTS(runs_python)) \
+        CASES(status==-1 value(null) raised, status==0 value(owned), status==1 value(owned)), EFFECTS(runs_python, raises)) \
     /* Objects/abstract.c (_PyValue_SequenceCheck): an inline \
      * number is not a sequence; for an object it tests PyDict_Check and \
      * tp_as_sequence->sq_item through the type.  Reads only: no \
@@ -665,14 +665,14 @@
      * reference to an exact tuple, or NULL with an exception set; the \
      * argument is borrowed. */ \
     HELPER(_PyValue_SequenceTuple, PyObject *, (PyValueBorrow), \
-        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Objects/object.c: SystemError if the value is NULL with an \
      * exception set, _PyObject_CheckAttributeName, interning of the \
      * name, then the type's setattro (any __setattr__, descriptor \
      * __set__ or __delete__ runs Python).  Returns 0, or -1 with an \
      * exception; a NULL value means deletion.  Arguments borrowed */ \
     HELPER(_PyValue_SetAttr, int, (PyValueBorrow, PyObject *, PyValueBorrow), \
-        ARGS(borrowed, object, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed, object, borrowed), SCALAR, EFFECTS(runs_python, raises)) \
     /* Objects/abstract.c (_PyValue_SetItem) -> value_ass_item: an \
      * exact dict goes to _PyDict_SetValue, an exact list with an inline int \
      * index stores in place (releasing the old item: finalizer), anything \
@@ -680,7 +680,7 @@
      * -1 with an exception set.  The three arguments are borrowed on every \
      * path */ \
     HELPER(_PyValue_SetItem, int, (PyValueBorrow, PyValueBorrow, PyValueBorrow), \
-        ARGS(borrowed, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed, borrowed), SCALAR, EFFECTS(runs_python, raises)) \
     /* Reviewed (G0c batch 1).  _PyValue_Size (Objects/abstract.c) asserts \
      * a non-NULL argument; an inline int or float is value_type_error \
      * (-1); else the type's sq_length (any __len__) or, failing that, \
@@ -688,14 +688,14 @@
      * or -1 with an exception set; the argument is borrowed on every \
      * path.  Callbacks: the length slots (runs_python) */ \
     HELPER(_PyValue_Size, Py_ssize_t, (PyValueBorrow), \
-        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed), SCALAR, EFFECTS(runs_python, raises)) \
     /* Objects/object.c (_PyValue_Str): PyErr_CheckSignals (Python), \
      * an exact str returns itself, else tp_str (Python) with a recursion \
      * check; a non-str result raises TypeError.  A NULL word prints as \
      * "<NULL>".  Returns a new str reference or NULL with an exception \
      * set; the argument is borrowed */ \
     HELPER(_PyValue_Str, PyObject *, (PyValueBorrow), \
-        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python))
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises))
 
 /* Objects */
 #define _PyIR_COMPONENTS_OBJECTS(PRIMITIVE, HELPER, MACRO) \
@@ -919,7 +919,7 @@
      * (allocates and raises is the contract); G1 may narrow it.  G0d1: \
      * VALUE_OR_NULL(owned), the new cell (SCALAR hid it) */ \
     HELPER(PyCell_NewValue, PyObject *, (PyValueBorrow), \
-        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Evidence (G0c batch 6): Python/errors.c PyErr_Format -> \
      * _PyErr_FormatV: formats the message (PyUnicode_FromFormatV, an \
      * allocation) and sets the exception with _PyErr_SetObject; always \
@@ -968,7 +968,7 @@
      * (AttributeError cleared) or -1 with an exception set; the found value \
      * is closed inside, and both arguments are borrowed */ \
     HELPER(PyObject_HasAttrWithError, int, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object, object), SCALAR, EFFECTS(runs_python, raises)) \
     /* Include/object.h: PyType_FastSubclass(Py_TYPE(op), \
      * Py_TPFLAGS_TYPE_SUBCLASS), reads of ob_type and tp_flags; no \
      * callee, no failure, no callback */ \
@@ -980,7 +980,7 @@
      * on failure. Callbacks: none of its own, but an allocation may start \
      * a collection and its finalizers may run Python, so `runs_python`. */ \
     HELPER(PyType_GenericAlloc, PyObject *, (PyTypeObject *, Py_ssize_t), \
-        ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python, raises)) \
     /* Reviewed G0c2 (Include/object.h): a static inline read of              \
      * type->tp_flags. No failure, no callback. A static inline function,     \
      * not an out-of-line HELPER: G0d kind.                                   */ \
@@ -1238,7 +1238,7 @@
      * Arguments borrowed */ \
     HELPER(_PySuper_LookupValue, _PyStatusValue, (PyTypeObject *, PyValueBorrow, PyObject *, int), \
         ARGS(scalar, borrowed, object, scalar), \
-        CASES(status==-1 value(null) raised, status==0 value(owned), status==1 value(owned)), EFFECTS(runs_python)) \
+        CASES(status==-1 value(null) raised, status==0 value(owned), status==1 value(owned)), EFFECTS(runs_python, raises)) \
     /* Objects/templateobject.c _PyTemplate_Build.  Callees: PyObject_GC_New \
      * (gc_alloc: MemoryError on failure, and _PyObject_GC_Link, which only \
      * schedules a collection through the eval breaker), Py_NewRef of both \
@@ -1333,7 +1333,7 @@
      * callee and the scope's callbacks run arbitrary Python: \
      * `runs_python`. The seed said `consumed`. */ \
     HELPER(native_call_builtin_o, PyValue, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue *), \
-        ARGS(tstate, frame, scalar, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, frame, scalar, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Python/ceval.c: takes a count of class for the argument vector \
      * {class, self}, calls the super type through _PyValue_Vectorcall \
      * (the vector is the caller's window: arguments are not consumed), \
@@ -1342,7 +1342,7 @@
      * the caller's DECREF_INPUTS closes it (the seed declared it \
      * consumed) */ \
     HELPER(super_call, PyValue, (PyValueBorrow, PyValueBorrow, PyValue, int), \
-        ARGS(borrowed, borrowed, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Python/ceval.c value_dict_merge_uniq -> _PyDict_MergeUniq(dict, update, \
      * &dupkey): inserts each item of update into dict, stopping at a key \
      * dict already holds.  A non-dict update is read through keys() and \
@@ -1354,7 +1354,7 @@
     HELPER(value_dict_merge_uniq, _PyStatusObject, (PyObject *, PyObject *), \
         ARGS(object, object), \
         CASES(status<0 object(owned nullable) raised, status>=0 object(null)), \
-        EFFECTS(runs_python)) \
+        EFFECTS(runs_python, raises)) \
     /* Reviewed G0c2 (Python/ceval.c). Wraps _PyEval_ExceptionGroupMatch      \
      * (exception_group_match: isinstance checks, split()/derive of the       \
      * group: arbitrary Python). Returns {match, rest} as new references,     \
@@ -1363,7 +1363,7 @@
     HELPER(value_exception_group_match, _PyObjectPair, (_PyInterpreterFrame *, PyObject *, PyObject *), \
         ARGS(frame, object, object), \
         CASES(match(null) rest(null) raised, match(owned) rest(owned)), \
-        EFFECTS(runs_python)) \
+        EFFECTS(runs_python, raises)) \
     /* Python/ceval.c: an inline int in range is returned as a C int with \
      * no allocation; otherwise PyValue_AsObject boxes the level, \
      * _PyValue_AsInt (PyLong_AsInt: __index__ for a non-int, \
@@ -1376,7 +1376,7 @@
     /* ceval.c: as _PyValue_GetOptionalItem, -1 if the lazy import fails (G0a4: a CASES result) */ \
     HELPER(value_load_from_dict, _PyStatusValue, (PyThreadState *, PyObject *, PyObject *), \
         ARGS(tstate, object, object), \
-        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python)) \
+        CASES(status==-1 value(null) raised, status==0 value(null), status==1 value(owned)), EFFECTS(runs_python, raises)) \
     /* Python/ceval.c: _PyEval_LoadGlobalValue through a local out- \
      * parameter: the exact-dict fast path _PyDict_LoadGlobalValue (hash \
      * of an exact str, no user code) or mapping lookups \
@@ -1385,7 +1385,7 @@
      * (_PyLazyImport_Reify imports).  Returns an owned value or \
      * PyValue_NULL with an exception set.  Arguments borrowed */ \
     HELPER(value_load_global, PyValue, (PyObject *, PyObject *, PyObject *), \
-        ARGS(object, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(object, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Reviewed G0c2 (Python/ceval.c). An exact dict goes to                  \
      * _PyDict_GetValue (hashes and compares the key: __hash__ and __eq__     \
      * of key types run Python), a miss sets KeyError through                 \
@@ -1395,7 +1395,7 @@
      * borrowed on every path; the result owned or NULL with an exception     \
      * set.                                                                   */ \
     HELPER(value_subscript, PyValue, (PyValueBorrow, PyValueBorrow), \
-        ARGS(borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Python/ceval.c: PyUnicode_Append(&left, right) in a frame of its \
      * own.  It consumes left on every return (extends it in place when \
      * its count allows, else replaces it with a new str and releases it, \
@@ -1408,14 +1408,15 @@
      * kept as the seed had it: nothing here calls Python, so it is \
      * over-declared and sound */ \
     HELPER(value_unicode_append, PyObject *, (PyObject *, PyObject *), \
-        ARGS(consumed object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(consumed object, object), VALUE_OR_NULL(owned), \
+        EFFECTS(runs_python, raises)) \
     /* Python/ceval.c: builds a four-slot window of borrowed words and \
      * calls _PyValue_Vectorcall(exit_func, ...), which runs any callable \
      * (an inline exit_func is rejected with TypeError).  All five \
      * arguments are borrowed (the window holds views).  Failure: NULL \
      * with an exception set; success: a new reference. */ \
     HELPER(with_exit_call, PyValue, (PyValueBorrow, PyValueBorrow, PyObject *, PyObject *, PyObject *), \
-        ARGS(borrowed, borrowed, object, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed, object, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Objects/unicodeobject.c: frees an exact str's memory (the \
      * interned-state and the cached utf8 buffer are freed too) and \
      * releases no other object */ \
@@ -1516,7 +1517,7 @@
     HELPER(_PyEval_UnpackIterableValue, int, \
            (PyThreadState *, PyObject *, int, int, PyValue *), \
            ARGS(tstate, consumed, scalar, scalar, out), STATUS(ZERO), \
-           EFFECTS(runs_python)) \
+           EFFECTS(runs_python, raises)) \
     /* Evidence (G0d3), pycore_critical_section.h: a free-threaded build's \
      * critical section.  With the GIL, LOCK_OBJECT(op) is the constant 1 and \
      * UNLOCK_OBJECT(op) nothing; the operand is not evaluated.  Reclassified \
@@ -1554,7 +1555,7 @@
      * *result (if not NULL) is first set to NULL and then owns the \
      * removed value on 1.  The key is borrowed */ \
     HELPER(PyDict_PopValue, int, (PyObject *, PyValueBorrow, PyValue *), \
-        ARGS(object, borrowed, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object, borrowed, scalar), SCALAR, EFFECTS(runs_python, raises)) \
     /* Objects/dictobject.c: the dict check (-1 with TypeError or \
      * SystemError), then _PyDict_SetValue_Take2 with a count taken of \
      * key and value (the row's arguments stay borrowed), \
@@ -1563,7 +1564,7 @@
      * the failure paths close both new counts.  Returns 0, or -1 with an \
      * exception */ \
     HELPER(PyDict_SetValue, int, (PyObject *, PyValueBorrow, PyValueBorrow), \
-        ARGS(object, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object, borrowed, borrowed), SCALAR, EFFECTS(runs_python, raises)) \
     /* Objects/dictobject.c PyDict_Update -> dict_merge_api(a, b, 1): a \
      * dict or mapping b merged into dict a; for a non-dict b it calls \
      * b.keys() and b[key], hashes and compares keys, and resizes a \
@@ -1571,7 +1572,7 @@
      * when b has no keys(), which _DICT_UPDATE rewrites); both arguments are \
      * borrowed on every path.  Result 0 or -1 */ \
     HELPER(PyDict_Update, int, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object, object), SCALAR, EFFECTS(runs_python, raises)) \
     /* Objects/setobject.c PySet_New -> make_new_set.  With a NULL iterable \
      * (BUILD_SET's only call) it allocates an empty set (MemoryError on \
      * failure) and runs nothing; with an iterable it iterates, hashes and \
@@ -1579,7 +1580,7 @@
      * The result is a new reference, NULL with an exception set; the \
      * argument is borrowed */ \
     HELPER(PySet_New, PyObject *, (PyObject *), \
-        ARGS(object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object), SCALAR, EFFECTS(runs_python, raises)) \
     /* Reviewed G0c2 (Include/sliceobject.h): Py_IS_TYPE(op,                  \
      * &PySlice_Type), a read of ob_type. No failure, no callback.            */ \
     MACRO(PySlice_Check, \
@@ -1591,7 +1592,7 @@
      * arguments are borrowed (the status value it fetches is closed          \
      * inside).                                                               */ \
     HELPER(_PyDict_ContainsValue, int, (PyDictObject *, PyValueBorrow), \
-        ARGS(scalar, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(scalar, borrowed), SCALAR, EFFECTS(runs_python, raises)) \
     /* Objects/dictobject.c (_PyDict_SetValue) -> _PyDict_SetValue_Take2 \
      * (PyValue_DUP of key and value first): hashing and comparing keys, \
      * resizing, and releasing the replaced value, whose finalizer runs \
@@ -1600,7 +1601,7 @@
      * are consumed by the Take2 callee).  The dict must be an exact dict or \
      * subclass (asserted) */ \
     HELPER(_PyDict_SetValue, int, (PyDictObject *, PyValueBorrow, PyValueBorrow), \
-        ARGS(scalar, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(scalar, borrowed, borrowed), SCALAR, EFFECTS(runs_python, raises)) \
     /* Objects/dictobject.c _PyDict_SetValue_Take2 -> \
      * setitem_take2_lock_held: hash (unhashable: setitem_unhashable closes \
      * both owners and returns -1), insert_to_emptydict or insertdict, which \
@@ -1609,7 +1610,7 @@
      * exception set.  Callbacks: __hash__, __eq__, and the finalizer of a \
      * replaced value */ \
     HELPER(_PyDict_SetValue_Take2, int, (PyDictObject *, PyValue, PyValue), \
-        ARGS(scalar, consumed, consumed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(scalar, consumed, consumed), SCALAR, EFFECTS(runs_python, raises)) \
     /* Objects/listobject.c _PyList_AppendTakeValue: \
      * list_resize on a full list (MemoryError, -1), then the store and the \
      * size update.  The owner is consumed on both outcomes: on a failed \
@@ -1617,7 +1618,7 @@
      * so the exact set is writes, allocates, raises, releases; runs_python \
      * covers it.  Callbacks: only that finalizer */ \
     HELPER(_PyList_AppendTakeValue, int, (PyListObject *, PyValue), \
-        ARGS(scalar, consumed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(scalar, consumed), SCALAR, EFFECTS(runs_python, raises)) \
     /* pycore_list.h: _PyList_AppendTakeValue with the store in line while \
      * the list has room (G0a5 item 3) */ \
     HELPER(_PyList_AppendTakeValueInline, int, (PyListObject *, PyValue), \
@@ -1629,34 +1630,34 @@
      * iterable is not iterable, which _LIST_EXTEND rewrites).  Arguments \
      * are borrowed */ \
     HELPER(_PyList_Extend, PyObject *, (PyListObject *, PyObject *), \
-        ARGS(scalar, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(scalar, object), SCALAR, EFFECTS(runs_python, raises)) \
     /* Reviewed G0c2 (Objects/listobject.c). PySlice_Unpack calls __index__   \
      * of the slice parts (arbitrary Python) and can raise TypeError or       \
      * OverflowError; list_slice_wrap then allocates a list and increfs the   \
      * items (no Python). Returns a new list or NULL with an exception set;   \
      * both arguments are borrowed.                                           */ \
     HELPER(_PyList_SliceSubscript, PyObject *, (PyObject *, PyObject *), \
-        ARGS(object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Objects/setobject.c _PySet_AddValueTakeRef: hashes the \
      * key (unhashable: set_unhashable_type, PyValue_XCLOSE(key), -1), then \
      * set_add_entry_takeref, which compares keys (__eq__) and resizes.  The \
      * owner is consumed on every return.  Failure: -1 with an exception \
      * set */ \
     HELPER(_PySet_AddValueTakeRef, int, (PySetObject *, PyValue), \
-        ARGS(scalar, consumed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(scalar, consumed), SCALAR, EFFECTS(runs_python, raises)) \
     /* Reviewed G0c2 (Objects/setobject.c). Hashes the key (a str's cached    \
      * hash, else the type's __hash__) and probes with the key's __eq__:      \
      * arbitrary Python. Returns 1, 0 or -1 with the exception set; both      \
      * arguments are borrowed.                                                */ \
     HELPER(_PySet_Contains, int, (PySetObject *, PyValueBorrow), \
-        ARGS(scalar, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(scalar, borrowed), SCALAR, EFFECTS(runs_python, raises)) \
     /* Objects/setobject.c _PySet_Update -> set_update_internal: a set or \
      * dict is merged directly, any other iterable is iterated; hashing, \
      * __eq__ and iteration run Python.  A non-set first argument is \
      * PyErr_BadInternalCall.  Returns 0 or -1 with an exception set; both \
      * arguments are borrowed */ \
     HELPER(_PySet_Update, int, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object, object), SCALAR, EFFECTS(runs_python, raises)) \
     /* Objects/sliceobject.c _PySlice_FromValues: value_bound maps each of \
      * the three arguments to an owned copy, PyValue_None for PyValue_NULL \
      * (BUILD_SLICE passes NULL for an absent step), so every argument may be NULL (a row's ARGS require nonnull only \
@@ -1938,7 +1939,7 @@
      * an exact function (not declared: the row's result is the raw \
      * pointer). */ \
     HELPER(PyFunction_New, PyObject *, (PyObject *, PyObject *), \
-        ARGS(object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Evidence (Python/ceval.c _PyEval_FrameClearAndPopGeneralWithResult; \
      * G0c batch 6).  The frame is already unlinked (tstate->current_frame \
      * is its caller) and the result is held in C, not NULL.  Callees: \
@@ -2057,7 +2058,7 @@
      * with an exception set, nothing taken. Callbacks: the builtin may run \
      * any Python: `runs_python`. The seed said `consumed`. */ \
     HELPER(call_builtin_values, PyValue, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, int), \
-        ARGS(tstate, frame, scalar, scalar, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, frame, scalar, scalar, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Evidence (G0c batch 6): Python/ceval.c: call_class_values: as \
      * call_builtin_values for a class with a vectorcall \
      * (tp_value_vectorcall, else tp_vectorcall through the adapter): the \
@@ -2066,7 +2067,7 @@
      * runs arbitrary Python (__init__ through type vectorcall): \
      * `runs_python`. The seed said `consumed`. */ \
     HELPER(call_class_values, PyValue, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, int), \
-        ARGS(tstate, frame, scalar, scalar, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, frame, scalar, scalar, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Evidence (G0c batch 6): Python/ceval.c: call_descriptor_values: as \
      * call_builtin_values for a method descriptor: the receiver is operand \
      * `first`, the descriptor's value entry or object vectorcall is called \
@@ -2074,7 +2075,7 @@
      * with an exception set on failure; the method runs arbitrary Python: \
      * `runs_python`. The seed said `consumed`. */ \
     HELPER(call_descriptor_values, PyValue, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, int), \
-        ARGS(tstate, frame, scalar, scalar, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, frame, scalar, scalar, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Evidence (G0c batch 6): Python/ceval.c: call_push_exact: pushes the \
      * frame of the exactly-matching Python function \
      * (_PyFrame_PushUnchecked: a write of the data stack and tstate) and \
@@ -2101,7 +2102,7 @@
      * publishes the result and call_publish releases the temporaries. The \
      * seed said `consumed`. */ \
     HELPER(call_vector, PyValue, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, PyValue), \
-        ARGS(tstate, frame, scalar, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python))
+        ARGS(tstate, frame, scalar, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises))
 
 /* Generators, coroutines and iteration */
 #define _PyIR_COMPONENTS_GENERATORS(PRIMITIVE, HELPER, MACRO) \
@@ -2130,7 +2131,7 @@
      * Failure: NULL with an exception set; success: a new reference to \
      * the awaitable. */ \
     HELPER(_PyEval_GetANext, PyObject *, (PyObject *), \
-        ARGS(object), VALUE_OR_NULL(owned), EFFECTS(runs_python), HOMES(canonical)) \
+        ARGS(object), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises), HOMES(canonical)) \
     /* Python/ceval.c.  Borrows its operand.  Callees: PyErr_Format and \
      * _PyEval_FormatAwaitableError (reads the type, may run Python \
      * through _PyEval_SpecialMethodCanSuggest's lookups), \
@@ -2139,7 +2140,7 @@
      * number is no awaitable; a coroutine already being awaited); \
      * success: a new reference. */ \
     HELPER(_PyEval_GetAwaitable, PyObject *, (PyValueBorrow, int), \
-        ARGS(borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python), HOMES(unknown)) \
+        ARGS(borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises), HOMES(unknown)) \
     /* Reviewed G0c5 (ceval.c).  Called with an error set.  Callees: \
      * _PyErr_ExceptionMatches (a read; PyErr_GivenExceptionMatches walks \
      * the exception's MRO, which a metaclass __subclasscheck__ cannot \
@@ -2168,7 +2169,7 @@
      * cleared exception; no argument is stolen. */ \
     HELPER(_PyForIter_VirtualIteratorNext, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *), \
         ARGS(tstate, frame, borrowed, scalar), \
-        CASES(status==-1 value(null) raised, status==0 value(owned nullable), status==1 value(owned)), EFFECTS(runs_python)) \
+        CASES(status==-1 value(null) raised, status==0 value(owned nullable), status==1 value(owned)), EFFECTS(runs_python, raises)) \
     /* Reviewed G0c5 (ceval.c; _PyForIter_VirtualIteratorNext is its \
      * out-of-line wrapper).  FOR_ITER's step of the iterator `iter` \
      * (borrowed) with its cursor at *index_ptr.  A tagged cursor: \
@@ -2201,7 +2202,7 @@
         ARGS(tstate, frame, borrowed, consumed), \
         CASES(status==-1 value(null) cursor(inline encoding(tagged_index|null)) raised, \
               status==0 value(owned nullable) cursor(inline encoding(tagged_index|null)), \
-              status==1 value(owned) cursor(inline encoding(tagged_index|null))), EFFECTS(runs_python)) \
+              status==1 value(owned) cursor(inline encoding(tagged_index|null))), EFFECTS(runs_python, raises)) \
     /* Include/internal/pycore_genobject.h, a static inline function: \
      * `frame - offsetof(PyGenObject, gi_iframe)`, address arithmetic with \
      * no dereference (the owner assertion is Py_DEBUG only).  No call, \
@@ -2312,7 +2313,7 @@
      * words' handlers: the caller dispatches the word again.  `runs_python` covers the allocation, the raise and the release of \
      * replaced data. */ \
     HELPER(_Py_Instrument, int, (PyCodeObject *, PyInterpreterState *), \
-        ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python, raises)) \
     /* Evidence (G0c8): instrumentation.c:1473: call_instrumentation_vector builds three \
      * words, then call_one_instrument calls each tool's callback (arbitrary Python, \
      * which may rewrite the frame's locals and the instrumentation), may stop the \
@@ -2320,14 +2321,14 @@
      * fails.  A debugger may also move frame->instr_ptr (observer redirect), which the \
      * caller reads back.  Returns 0 or -1. */ \
     HELPER(_Py_call_instrumentation, int, (PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *), \
-        ARGS(tstate, scalar, frame, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(tstate, scalar, frame, scalar), SCALAR, EFFECTS(runs_python, raises)) \
     /* Python/instrumentation.c: two counts taken (PyValue_XDUP) for the \
      * argument vector, call_instrumentation_vector calls each tool's \
      * callback (arbitrary Python) and may change the word's \
      * instrumentation, then the counts are closed.  Returns 0, or -1 \
      * with an exception set.  Arguments borrowed */ \
     HELPER(_Py_call_instrumentation_2args, int, (PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, PyValueBorrow, PyValueBorrow), \
-        ARGS(tstate, scalar, frame, scalar, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(tstate, scalar, frame, scalar, borrowed, borrowed), SCALAR, EFFECTS(runs_python, raises)) \
     /* Evidence (G0c8): instrumentation.c:1483: as _Py_call_instrumentation with one more \
      * argument: PyValue_XDUP(arg) takes a count and PyValue_XCLOSE(args[3]) releases it \
      * after the callbacks; arg itself stays the caller's.  Callbacks run Python. */ \
@@ -2345,7 +2346,7 @@
      * their callbacks (Python); returns the opcode to run next, or -1 with an exception \
      * set.  It may redirect frame->instr_ptr through the debugger. */ \
     HELPER(_Py_call_instrumentation_instruction, int, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *), \
-        ARGS(tstate, frame, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(tstate, frame, scalar), SCALAR, EFFECTS(runs_python, raises)) \
     /* Evidence (G0c8): instrumentation.c:1827: the jump or branch event \
      * (call_instrumentation_vector: callbacks run Python), then the line events of the \
      * source edge (source_edge_events).  Returns a status and the word to run: {0, dest}; \
@@ -2354,31 +2355,31 @@
      * exception set.  The result holds no value, so it is SCALAR; the caller tests the \
      * status. */ \
     HELPER(_Py_call_instrumentation_jump, _PyIRObserverResult, (_PyInstr *, PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *, _PyInstr *), \
-        ARGS(scalar, tstate, scalar, frame, scalar, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(scalar, tstate, scalar, frame, scalar, scalar), SCALAR, EFFECTS(runs_python, raises)) \
     /* Evidence (G0c8): instrumentation.c:1920: finds the line event for this word and \
      * calls the tools' callbacks (Python); returns the original opcode of the word, or \
      * -1 with an exception set.  It may redirect frame->instr_ptr. */ \
     HELPER(_Py_call_instrumentation_line, int, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, _PyInstr *), \
-        ARGS(tstate, frame, scalar, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(tstate, frame, scalar, scalar), SCALAR, EFFECTS(runs_python, raises)) \
     /* Evidence (G0c8): ceval_macros.h: _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY and \
      * QSBR_QUIESCENT_STATE (both empty in the GIL build), then _Py_EvalBreakerHasEvents \
      * and, if set, _Py_HandlePending, whose effects it takes (the row had runs_python \
      * without `polls`).  Returns 0, or -1 with an exception set. */ \
     HELPER(check_periodics, int, (PyThreadState *), \
-        ARGS(tstate), STATUS(NEGATIVE), EFFECTS(runs_python, polls)) \
+        ARGS(tstate), STATUS(NEGATIVE), EFFECTS(runs_python, polls, raises)) \
     /* Evidence (G0c8): ceval_macros.h: the same checks as check_periodics, with the pending \
      * work in handle_periodics_at_end, which skips it after a LOAD_SPECIAL and otherwise \
      * calls _Py_HandlePending.  Effects as check_periodics.  Returns 0, or -1 with an \
      * exception set. */ \
     HELPER(check_periodics_at_end, int, (PyThreadState *, _PyInterpreterFrame *), \
-        ARGS(tstate, frame), STATUS(NEGATIVE), EFFECTS(runs_python, polls)) \
+        ARGS(tstate, frame), STATUS(NEGATIVE), EFFECTS(runs_python, polls, raises)) \
     /* Evidence (G0c8): ceval.h:488: asks for local tools first (no tools: returns 0). \
      * Otherwise PyValue_AsObject boxes a number (allocates; NULL: -1), sets a \
      * StopIteration with the value (PyErr_SetObject), releases its count, runs the \
      * STOP_ITERATION callbacks (Python), and clears the exception.  Returns 0 or -1 \
      * with the exception from a callback or a failed box.  `value` stays the caller's. */ \
     HELPER(monitor_stop_iteration, int, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValueBorrow), \
-        ARGS(tstate, frame, scalar, borrowed), SCALAR, EFFECTS(runs_python))
+        ARGS(tstate, frame, scalar, borrowed), SCALAR, EFFECTS(runs_python, raises))
 
 /* The evaluator: dispatch, the frame's namespaces, atomics */
 #define _PyIR_COMPONENTS_EVALUATOR(PRIMITIVE, HELPER, MACRO) \
@@ -2514,7 +2515,7 @@
      * Python).  Failure: PyValue_NULL with an exception set.  The three \
      * arguments are borrowed on every path; the result is an owner */ \
     HELPER(_PyEval_BinarySlice, PyValue, (PyValueBorrow, PyValueBorrow, PyValueBorrow), \
-        ARGS(borrowed, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Reviewed G0c2 (Python/ceval.c). An object goes to                      \
      * _PyIntrinsics_UnaryFunctions[oparg].func as it is; a number is boxed   \
      * in a _PyValueTemps record (allocation, closed on return). The          \
@@ -2523,7 +2524,7 @@
      * argument is borrowed on every path; the result is owned or NULL with   \
      * an exception set.                                                      */ \
     HELPER(_PyEval_CallIntrinsic1, PyValue, (PyThreadState *, int, PyValueBorrow), \
-        ARGS(tstate, scalar, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, scalar, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Reviewed G0c2 (Python/ceval.c). Boxes the operands that are numbers    \
      * in a _PyValueTemps record, calls                                       \
      * _PyIntrinsics_BinaryFunctions[oparg].func(tstate, value2, value1)      \
@@ -2532,7 +2533,7 @@
      * Python), closes the temps. Both operands borrowed; the result owned,   \
      * or NULL with an exception set.                                         */ \
     HELPER(_PyEval_CallIntrinsic2, PyValue, (PyThreadState *, int, PyValueBorrow, PyValueBorrow), \
-        ARGS(tstate, scalar, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, scalar, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Evidence (G0c batch 6): Python/ceval.c: boxes self if it is a number \
      * into a temporary record, calls cfunc(self, NULL) inside a borrow \
      * scope, closes the temporaries (the boxes: a release). Returns a new \
@@ -2540,13 +2541,13 @@
      * is borrowed. cfunc is a C method that may run any Python: \
      * `runs_python`. */ \
     HELPER(_PyEval_CallMethodDescriptorNoArgs, PyValue, (PyThreadState *, PyCFunction, PyValueBorrow), \
-        ARGS(tstate, scalar, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, scalar, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Evidence (G0c batch 6): Python/ceval.c: as \
      * _PyEval_CallMethodDescriptorNoArgs, with cfunc(self, arg) and both \
      * arguments borrowed and boxed if numbers. Returns a new reference or \
      * NULL with an exception set; `runs_python`. */ \
     HELPER(_PyEval_CallMethodDescriptorO, PyValue, (PyThreadState *, PyCFunction, PyValueBorrow, PyValueBorrow), \
-        ARGS(tstate, scalar, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, scalar, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Reviewed G0c2 (Python/ceval.c): as the except form, then rejects     \
      * ExceptionGroup subclasses with PyObject_IsSubclass(exc,            \
      * PyExc_BaseExceptionGroup) (Objects/abstract.c object_issubclass: its \
@@ -2593,7 +2594,7 @@
      * the iterator it rejects.  Failure: NULL with an exception set; \
      * success: a new reference, an object whose type has am_anext. */ \
     HELPER(_PyEval_GetAIter, PyValue, (PyThreadState *, PyValue), \
-        ARGS(tstate, consumed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, consumed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Reviewed G0c5 (ceval.c).  Consumes `iterable` on every path: the \
      * by-index and self-iterator cases return it as `first`; the \
      * coroutine-in-yield-from case raises TypeError and closes it; the \
@@ -2610,14 +2611,14 @@
      * token is corrected by G0a5).  Callbacks: yes */ \
     HELPER(_PyEval_GetIter, _PyValuePair, (PyValue, int), \
         ARGS(consumed, scalar), \
-        CASES(first(null) second(null) raised, first(owned object) second(inline encoding(tagged_index|null))), EFFECTS(runs_python)) \
+        CASES(first(null) second(null) raised, first(owned object) second(inline encoding(tagged_index|null))), EFFECTS(runs_python, raises)) \
     /* Python/ceval.c: _PyValue_GetOptionalAttr (getattr: runs Python); \
      * on a miss _eval_import_from_miss reads __name__ and __spec__ (and \
      * its origin) by getattr, formats the message (allocates) and sets \
      * ImportError (runs Python).  Returns an owned value, or \
      * PyValue_NULL with an exception set.  The module is borrowed */ \
     HELPER(_PyEval_ImportFromValue, PyValue, (PyThreadState *, PyValueBorrow, PyObject *), \
-        ARGS(tstate, borrowed, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, borrowed, object), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Python/ceval.c: PyMapping_GetOptionalItem of \
      * builtins['__import__'] (runs Python for a mapping that is not \
      * exact), ImportError if it is missing, then \
@@ -2627,7 +2628,7 @@
      * exception.  All arguments borrowed; locals may be NULL (treated as \
      * None) */ \
     HELPER(_PyEval_ImportName, PyObject *, (PyThreadState *, PyObject *, PyObject *, PyObject *, PyObject *, PyObject *, int), \
-        ARGS(tstate, object, object, object, object, object, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, object, object, object, object, object, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Objects/lazyimportobject.c: a new reference, or NULL with an exception \
      * set.  The arguments are borrowed.  Callees: lazy_import_get_loaded_attr \
      * (sys.modules lookups, getattr on the loaded module, which runs \
@@ -2635,7 +2636,7 @@
      * without one, which falls to the new lazy object) and _PyLazyImport_New \
      * (allocates; NULL on failure) */ \
     HELPER(_PyEval_LazyImportFrom, PyObject *, (PyThreadState *, _PyInterpreterFrame *, PyObject *, PyObject *), \
-        ARGS(tstate, frame, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, frame, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Python/ceval.c: the lazy-imports policy \
      * (PyImport_GetLazyImportsMode, check_lazy_import_compatibility: \
      * reads __lazy_modules__ from globals, runs Python), then \
@@ -2643,7 +2644,7 @@
      * (the default builds a lazy object, else it is called).  A new \
      * reference, or NULL with an exception.  All arguments borrowed */ \
     HELPER(_PyEval_LazyImportName, PyObject *, (PyThreadState *, PyObject *, PyObject *, PyObject *, PyObject *, PyObject *, int, int), \
-        ARGS(tstate, object, object, object, object, object, scalar, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, object, object, object, object, object, scalar, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Python/ceval.c: frame->f_locals lookup through \
      * value_load_from_dict (a mapping's __getitem__ runs Python; a lazy \
      * import in the result is reified, which imports), then globals \
@@ -2652,7 +2653,7 @@
      * exception set.  SystemError if f_locals is NULL.  Arguments \
      * borrowed */ \
     HELPER(_PyEval_LoadName, PyValue, (PyThreadState *, _PyInterpreterFrame *, PyObject *), \
-        ARGS(tstate, frame, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, frame, object), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Reviewed G0c2 (Python/ceval.c). A non-class type_value sets            \
      * TypeError; _PyValue_IsInstance (any __instancecheck__) decides the     \
      * match; then positional and keyword attributes are fetched with         \
@@ -2663,7 +2664,7 @@
      * subject, type and kwargs are borrowed on every path. Callbacks:        \
      * arbitrary Python.                                                      */ \
     HELPER(_PyEval_MatchClass, PyObject *, (PyThreadState *, PyValueBorrow, PyValueBorrow, Py_ssize_t, PyObject *), \
-        ARGS(tstate, borrowed, borrowed, scalar, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, borrowed, borrowed, scalar, object), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Reviewed G0c2 (Python/ceval.c). Looks up map.get with                  \
      * _PyValue_GetMethod, makes a set and a dummy object, then for each      \
      * key a set test and add (key __hash__/__eq__) and a dict read or a      \
@@ -2672,7 +2673,7 @@
      * exception set (a duplicate key sets ValueError). map and keys are      \
      * borrowed on every path.                                                */ \
     HELPER(_PyEval_MatchKeys, PyObject *, (PyThreadState *, PyObject *, PyObject *), \
-        ARGS(tstate, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Python/ceval.c: type_has_special_method twice: _PyType_LookupRef \
      * (the type cache; on a miss find_name_in_mro compares dict keys, \
      * which can run a user __eq__) then Py_TYPE(r)->tp_descr_get and \
@@ -2687,7 +2688,7 @@
      * (__setitem__, __delitem__, hash and equality of the key).  The \
      * value is borrowed and is not closed: STORE_NAME closes it */ \
     HELPER(_PyEval_StoreName, int, (PyThreadState *, PyValueBorrow, PyObject *, PyObject *), \
-        ARGS(tstate, borrowed, object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(tstate, borrowed, object, object), SCALAR, EFFECTS(runs_python, raises)) \
     /* Python/ceval.c (_PyEval_StoreSlice).  An exact list with \
      * inline bounds goes to _PyList_StoreSlice (list_ass_slice: \
      * allocation, and releasing the replaced items, whose finalizers run \
@@ -2695,7 +2696,7 @@
      * built and _PyValue_SetItem runs __setitem__.  Returns 0, or -1 with \
      * an exception set.  The four arguments are borrowed on every path */ \
     HELPER(_PyEval_StoreSlice, int, (PyValueBorrow, PyValueBorrow, PyValueBorrow, PyValueBorrow), \
-        ARGS(borrowed, borrowed, borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed, borrowed, borrowed, borrowed), SCALAR, EFFECTS(runs_python, raises)) \
     /* Evidence (G0c8): pyatomic_gcc.h:374: a relaxed atomic load of a word (of the thread \
      * state's eval_breaker or a code object's version): one read, no callee. */ \
     HELPER(_Py_atomic_load_uintptr_relaxed, uintptr_t, (const uintptr_t *), \

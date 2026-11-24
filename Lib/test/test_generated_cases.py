@@ -374,7 +374,11 @@ class TestIRCases(unittest.TestCase):
         for before, after in (
             ("assert(JUMP_TARGET(oparg) < next_instr);",
              "unknown_effect(); assert(JUMP_TARGET(oparg) < next_instr);"),
-            ("_PyValue_Send(receiver_o, v)", "unknown_send(receiver_o, v)"),
+            # A call that no row declares is refused by the verifier of the
+            # uop's declaration; the closure holds the declaration to what a
+            # SEND may do
+            ("effects(runs_python, switches_frame) exits(next, branch, enter, raise)",
+             "effects(runs_python, switches_frame, polls) exits(next, branch, enter, raise)"),
         ):
             with self.subTest(mutation=before):
                 self.assertIn(before, source)
@@ -430,8 +434,8 @@ class TestIRCases(unittest.TestCase):
         ir_generator.generate_handler(name, instructions[name], formats[name],
                                       emitter, out)
         body = output.getvalue()
-        update = body.index("null_or_index = PyValue_TagIndex(index);")
-        publish = body.index("IR_SET_TEMP(window[1], null_or_index);", update)
+        update = body.index("next_index = PyValue_TagIndex(item.index);")
+        publish = body.index("IR_SET_TEMP(window[1], next_index);", update)
         clear = body.index("window[2] = PyValue_NULL;", publish)
         transfer = body.index("IR_GEN_YIELD(next);", clear)
         self.assertLess(update, publish)
@@ -918,6 +922,30 @@ class TestIRCases(unittest.TestCase):
                     ir_generator.observer_terminal_paths(
                         analysis.instructions['INSTRUMENTED_FOR_ITER'],
                         formats['INSTRUMENTED_FOR_ITER'])
+
+    def test_terminal_observer_owner_transport_reads_the_rows(self):
+        # The cursor taken by value is a C owner until the helper that
+        # consumes it (its row's ARGS) takes it; a use the rows do not name
+        # proves nothing
+        source = (Path(__file__).resolve().parents[2] / 'Python' / 'bytecodes.c').read_text()
+        start = source.index('inst(INSTRUMENTED_FOR_ITER,')
+        helper = 'PyValue_Borrow(iter), cursor);'
+        self.assertIn(helper, source[start:])
+
+        def paths(old, new):
+            changed = source[:start] + source[start:].replace(old, new, 1)
+            Path(self.temp_input_filename).write_text(changed)
+            analysis = analyzer.analyze_files([self.temp_input_filename])
+            formats = ir_generator.compute_formats(analysis)
+            return ir_generator.observer_terminal_paths(
+                analysis.instructions['INSTRUMENTED_FOR_ITER'],
+                formats['INSTRUMENTED_FOR_ITER'])
+
+        self.assertEqual(len(paths(helper, helper)), 1)
+        with self.assertRaisesRegex(SyntaxError, 'unproved terminal C owner transport'):
+            paths(helper, 'PyValue_Borrow(iter), PyValue_DUP(cursor));')
+        with self.assertRaisesRegex(SyntaxError, 'used after transfer: cursor'):
+            paths(helper, 'PyValue_Borrow(iter), cursor); steal(cursor);')
 
     def test_canonical_frame_transfer_provenance_fails_closed(self):
         source = (Path(__file__).resolve().parents[2] /

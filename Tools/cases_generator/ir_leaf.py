@@ -38,7 +38,8 @@ BOXES = frozenset((ALLOCATES, MAY_RAISE))
 
 # The facts an `assume` op may state: those with a C assertion
 # (ir_contract.ASSERTION_FORMS), each of which the templates check
-ASSUMABLE = ("nonnull", "object", "inline", "inline_int", "inline_float", "exact")
+ASSUMABLE = ("nonnull", "object", "inline", "inline_int", "inline_float",
+             "tagged_index", "exact", "encoding")
 
 
 # ---------------------------------------------------------------------------

@@ -351,15 +351,24 @@ ASSERTION_FORMS = {
     "inline": "PyValue_IsInline({0})",
     "inline_int": "PyValue_IsInlineInt({0})",
     "inline_float": "PyValue_IsInlineFloat({0})",
+    "tagged_index": "PyValue_IsTaggedIndex({0})",
     "exact": "!PyValue_IsNull({0}) && ({1})",
+    "encoding": "{1}",
 }
 
 
 def assertion(fact: VFact, subject: str) -> str:
     "The C assertion statement of an assumed fact of subject"
     form = ASSERTION_FORMS[fact.kind]
-    types = " || ".join(f"PyValue_TYPE({subject}) == &{t}" for t in fact.arg.split("|"))
-    return f"assert({form.format(subject, types)});"
+    if fact.kind == "encoding":
+        # A union holds where one of its members' tests does
+        tests = {"null": "PyValue_IsNull", "object": "PyValue_IsObject",
+                 **{e: test for e, (test, _) in ENCODINGS.items()}}
+        alternatives = " || ".join(f"{tests[m]}({subject})" for m in fact.arg.split("|"))
+    else:
+        alternatives = " || ".join(f"PyValue_TYPE({subject}) == &{t}"
+                                   for t in fact.arg.split("|"))
+    return f"assert({form.format(subject, alternatives)});"
 
 
 def _assumptions(words: list[str], where: Token | None
@@ -2741,11 +2750,20 @@ class OwnershipWalk:
                 self.fail(where, f"on next, `{name}` is still owned, but it is declared "
                           f"{item.mode}")
             elif exit == "raise" and item.mode == "consumed":
+                # A value that is never an object (a cursor) has no
+                # release to wait for: held or gone, the site agrees
+                # (the declared and assumed facts of the input's value, which
+                # no reentry changes)
+                kinds = word_kinds(item.facts | {a.fact for a in item.assumed})
+                if "object" not in kinds and kinds - {"null"}:
+                    continue
                 if gone == (name in holding):
                     self.fail(where, f"on raise, `{name}` is "
                               f"{'released' if gone else 'still owned'}, but the site "
                               f"declares {'holding' if name in holding else 'consumed'}")
-            elif exit == "raise" and item.mode == "taken" and gone:
+            elif (exit == "raise" and item.mode == "taken" and gone
+                  and not self.owes_nothing(state.facts.get(name, frozenset()))):
+                # (a value that owes nothing, None, is kept or not alike)
                 self.fail(where, f"on raise, `{name}` is released, but it is declared "
                           "taken (kept on raise)")
         for name, written in state.arrays.items():
@@ -2772,6 +2790,12 @@ class OwnershipWalk:
                     "which nothing tests here")
         return written
 
+    def holds_an_object(self, name: str) -> bool:
+        """Whether the declared input may be an object: a value that never
+        is (a tagged index) has no owner, so passing it on names no move"""
+        item = self.declared[name]
+        return "object" in word_kinds(item.facts | {a.fact for a in item.assumed})
+
     def check_outputs(self, state: _State, where: Token) -> None:
         """V5 on the paths to next: each value output is not NULL unless it
         is nullable, and has its declared facts, whatever path reached it"""
@@ -2782,7 +2806,7 @@ class OwnershipWalk:
             source = state.sources.get(out.name)
             origin = state.origins.get(out.name)
             if (out.mode in ("owned", "inline") and origin and origin in self.declared
-                    and out.name in self.moves):
+                    and out.name in self.moves and self.holds_an_object(origin)):
                 self.fail(*self.moves[out.name])
             if out.source == HOME_SOURCE and state.origins.get(out.name) != HOME_SOURCE:
                 self.fail(where, f"on next, `{out.name}` is declared moved(home), but the "
@@ -2976,8 +3000,11 @@ class OwnershipWalk:
     def owes_nothing(self, facts: frozenset) -> bool:
         "whether a value with facts is inline or a CONSTANT row's (V8's roots)"
         # A word that is neither an object nor NULL: an inline number, a
-        # tagged index
-        return not word_kinds(facts) & {"object", "null"} or any(f.kind == "is" and is_value_constant(self.table.get(f.arg)) for f in facts) \
+        # tagged index; or one that is that or NULL (a cursor, a tagged
+        # index or NULL), whose close releases nothing either
+        kinds = word_kinds(facts)
+        return not kinds & {"object", "null"} or (
+            "object" not in kinds and bool(kinds - {"null"})) or any(f.kind == "is" and is_value_constant(self.table.get(f.arg)) for f in facts) \
             or owes_nothing_by_type(facts, self.table)
 
     def join(self, ends: list[_State | None]) -> _State | None:
@@ -4025,7 +4052,11 @@ def _value_results(uop: Uop, where: Token, rhs: list[str], table: dict[str, Row]
         result = call[0].result
         return [(implied(result.facts), result.mode, call[0].name)]
     if len(rhs) == 1 and rhs[0] in inputs:
-        return [(implied(inputs[rhs[0]].facts), "moved", rhs[0])]
+        item = inputs[rhs[0]]
+        # An assumed fact holds at entry (F7), as in the walk; a value that
+        # is never an object owns nothing, so it moves as an inline one
+        facts = implied(item.facts | {a.fact for a in item.assumed})
+        return [(facts, "inline" if "object" not in word_kinds(facts) else "moved", rhs[0])]
     if len(rhs) == 1 and rhs[0].count(".") == 1:
         # A value field of a CASES result: what each outcome that is not
         # NULL gives (F6)
@@ -4113,9 +4144,17 @@ def body_exits(uop: Uop, table: dict[str, Row], implicit_guards: int,
                           ir_records.conditional(uop.body.body, tkn) else exit)
     if implicit_guards:
         exits.add("miss")
-    if analyzer.assigns_frame(list(uop.body.tokens())):
+    switches = analyzer.frame_switch_sites(list(uop.body.tokens()))
+    if switches:
         if not exits & SWITCH_EXITS:
             exits |= declared & SWITCH_EXITS
+        # A switch on some paths only (`if (...) { IR_ENTER_GENERATOR(...); }`)
+        # leaves the others to run to the end of the body
+        if (not uop.properties.always_exits
+                and any(ir_records.conditional(uop.body.body, site) for site in switches)
+                and not any(ir_records.conditional(uop.body.body, site) is False
+                            for site in switches)):
+            exits.add("next")
     elif not uop.properties.always_exits:
         exits.add("next")
     return exits

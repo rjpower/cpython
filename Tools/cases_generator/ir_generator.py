@@ -1472,78 +1472,6 @@ SEND_EFFECTS = frozenset(("reads", "writes", "allocates", "raises", "releases",
 SEND_EXITS = frozenset(("next", "branch", "jump", "miss", "deopt", "raise", "enter"))
 
 
-UNDECLARED_SEND_BODY = """{
-            assert(PyValue_IsObject(receiver));
-            PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
-            assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
-            if (!IS_PEP523_HOOKED(tstate) &&
-                (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
-                !(FT_ATOMIC_LOAD_INT8_RELAXED(((PyGenObject *)receiver_o)->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v)) &&
-                gen_try_set_executing((PyGenObject *)receiver_o)) {
-                PyGenObject *gen = (PyGenObject *)receiver_o;
-                IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
-            }
-            if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(receiver), &window[1]);
-                null_or_index = window[1];
-                PyValue item = next.value;
-                int found = next.status;
-                if (found <= 0) {
-                    if (found < 0) { ERROR_NO_POP(); }
-                    PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
-                    IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
-                }
-                retval = item;
-                DEAD(v);
-            }
-            else {
-                _PyStatusValue sent = _PyValue_Send(receiver_o, v);
-                if (sent.status == PYGEN_ERROR) { ERROR_NO_POP(); }
-                if (sent.status == PYGEN_RETURN) {
-                    PyValue completed = sent.value;
-                    IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
-                }
-                PyValue_CLOSE(v);
-                retval = sent.value;
-            }
-        }"""
-
-
-UNDECLARED_SEND_VIRTUAL_BODY = """{
-            assert(PyValue_IsObject(iter));
-            PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            Py_ssize_t index = PyValue_UntagIndex(null_or_index);
-            _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
-            _PyValueIndexPair next_index = iteritem(iter_o, index);
-            index = next_index.index;
-            if (PyValue_IsNull(next_index.value)) {
-                if (index < 0) { ERROR_NO_POP(); }
-                PyValue completed = PyValue_None;
-                IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
-            }
-            DEAD(none);
-            next = next_index.value;
-            null_or_index = PyValue_TagIndex(index);
-        }"""
-# The uops that declare nothing yet: their signatures and audited bodies
-UNDECLARED_SENDS = (
-    (("receiver", "null_or_index", "v"), ("receiver", "null_or_index", "retval"),
-     UNDECLARED_SEND_BODY),
-    (("iter", "null_or_index", "none"), ("iter", "null_or_index", "next"),
-     UNDECLARED_SEND_VIRTUAL_BODY),
-)
-
-
-def is_undeclared_send(part: Uop) -> bool:
-    "Whether part is _SEND or _SEND_VIRTUAL as they stand, with the bodies that were audited"
-    return any(
-        tuple(item.name for item in part.stack.inputs) == incoming
-        and tuple(item.name for item in part.stack.outputs) == outgoing
-        and statement_shape(part.body) == statement_shape(
-            Parser(body, "<SEND yielded transport contract>").block())
-        for incoming, outgoing, body in UNDECLARED_SENDS)
-
-
 def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | None:
     """The native-step source footprint shared by normal and abrupt edges:
     the uops of a SEND handler up to the one that sends (the first that is
@@ -1569,14 +1497,8 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     for index, part in enumerate(parts):
         contract = ir_contract.contract_of(part)
-        if contract is None:
-            # The two uops that declare nothing yet, _SEND and _SEND_VIRTUAL:
-            # each assigns the cursor that it passes through (F16), which a
-            # declaration cannot state until the cursor is an input and an
-            # output of its own (G0d1); their bodies stay pinned till then
-            if not is_undeclared_send(part):
-                return None
-        elif contract.effects - SEND_EFFECTS or contract.exits - SEND_EXITS:
+        if contract is None or (contract.effects - SEND_EFFECTS
+                                or contract.exits - SEND_EXITS):
             return None
         if any(item.is_array() for item in (*part.stack.inputs, *part.stack.outputs)):
             return None
@@ -1589,8 +1511,7 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
             return tuple(parts[:index + 1])
         # A guard or the specializer inspects or redispatches unchanged
         # inputs, and acquires no frame or home-pointer capability
-        if (contract is None or shape[0] != shape[1]
-                or contract.effects & {"writes", "switches_frame"}):
+        if shape[0] != shape[1] or contract.effects & {"writes", "switches_frame"}:
             return None
     return None
 
@@ -1928,6 +1849,7 @@ def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tup
     """
     paths: dict[Token, tuple[int, str]] = {}
     markers_declared = committed_markers()
+    table = ir_contract.rows()
     if not markers_declared & set(uop_tokens(inst)):
         return paths
     parts = [p for p in inst.parts if not isinstance(p, Skip)]
@@ -1966,28 +1888,49 @@ def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tup
         texts = [t.text for t in tokens]
         def mentions(name):
             pieces = name.replace('.', ' . ').split()
-            return any(texts[i:i + len(pieces)] == pieces for i in range(len(texts)))
+            # (a field of another value is not the local of the same name)
+            return any(texts[i:i + len(pieces)] == pieces and (i == 0 or texts[i - 1] != ".")
+                       for i in range(len(texts)))
         for name in spent:
             if mentions(name):
                 raise analysis_error("terminal C owner used after transfer: " + name, tokens[0])
-        used_owners = {name for name in owners if mentions(name)}
-        if used_owners:
-            calls = {texts[i] for i in range(len(texts) - 1)
-                     if tokens[i].kind == "IDENTIFIER" and texts[i + 1] == "("}
-            audited = set(VIEW_RELEASES) | {
-                "PyValue_DUP", "PyValue_IsNull", "_PyValue_IsTrue",
-                "IR_DEFER_CLOSE", "IR_COMPLETE_STEP"}
-            if calls - audited:
-                raise analysis_error("unproved terminal C owner transport", tokens[0])
-            bindings = declared_locals(uop_token_list(inst))
-            if any(name in bindings or any(c.name == name for c in uop.caches)
-                   for name in calls):
-                raise analysis_error("shadowed terminal owner helper", tokens[0])
-
         def transfer(name):
             if name in owners:
                 owners.remove(name)
                 spent.add(name)
+
+        used_owners = {name for name in owners if mentions(name)}
+        if used_owners:
+            # A statement that mentions a C owner calls only rows: an owner
+            # passed whole to an argument the row consumes is transferred
+            # (the helper's, TAKE's and IR_COMPLETE_STEP's declarations), one
+            # passed to a borrowed argument stays held; any other use of it
+            # in a call proves nothing
+            for call, args in ir_contract._calls_in(tokens):
+                row = table.get(call.text)
+                if row is None:
+                    raise analysis_error("unproved terminal C owner transport", tokens[0])
+                if call.text == "IR_DEFER_CLOSE":
+                    continue        # held until the observer, checked below
+                for position, arg in enumerate(args):
+                    whole = "".join(arg)
+                    inside = any(arg[i:i + len(pieces)] == pieces
+                                 for name in used_owners
+                                 for pieces in [name.replace(".", " . ").split()]
+                                 for i in range(len(arg)))
+                    if not inside:
+                        continue
+                    mode = row.args[position].mode if position < len(row.args) else ""
+                    if whole in used_owners and mode == "consumed":
+                        transfer(whole)
+                    elif not (whole in used_owners and mode == "borrowed"):
+                        raise analysis_error("unproved terminal C owner transport", tokens[0])
+            calls = {texts[i] for i in range(len(texts) - 1)
+                     if tokens[i].kind == "IDENTIFIER" and texts[i + 1] == "("}
+            bindings = declared_locals(uop_token_list(inst))
+            if any(name in bindings or any(c.name == name for c in uop.caches)
+                   for name in calls):
+                raise analysis_error("shadowed terminal owner helper", tokens[0])
 
         if texts[:1] == ["IR_DEFER_CLOSE"]:
             if len(texts) != 5 or texts[2] not in owners:
@@ -2000,12 +1943,18 @@ def observer_terminal_paths(inst: Instruction, fmt: IRFormat) -> dict[Token, tup
             transfer(rhs)
             if rhs not in ("PyValue_NULL", "PyValue_None", "PyValue_True", "PyValue_False"):
                 owners.add(texts[1])
-        elif len(texts) > 3 and texts[0] == "_PyStatusValue" and texts[2] == "=":
-            helper = "_PyForIter_VirtualIteratorNext"
-            if (texts[3] != helper or helper in declared_locals(uop_token_list(inst)) or
+        elif (len(texts) > 4 and texts[2] == "=" and texts[3] in table and
+                table[texts[3]].result.shape == "CASES"):
+            # A struct result: the fields that its row declares owned are C
+            # owners, as `step.value` (the helper's declared outcomes)
+            helper = texts[3]
+            if (helper in declared_locals(uop_token_list(inst)) or
                     any(cache.name == helper for cache in uop.caches)):
                 raise analysis_error("unproved terminal status owner", tokens[0])
-            owners.add(texts[1] + ".value")
+            for case in table[helper].result.cases:
+                for field, spec in case.values:
+                    if spec.mode == "owned":
+                        owners.add(f"{texts[1]}.{field}")
         elif texts[:2] == ["PyObject", "*"]:
             raise analysis_error("unproved terminal C object owner", tokens[0])
         if len(texts) > 2 and texts[0] in VIEW_RELEASES and texts[1] == "(":

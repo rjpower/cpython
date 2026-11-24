@@ -1911,9 +1911,20 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        tier1 window op(_SEND, (receiver, null_or_index, v -- receiver, null_or_index, retval)) {
+        // The cursor goes by value, as in _FOR_ITER: a tagged index steps an
+        // index-protocol iterator, NULL sends to a generator or any other
+        // iterator object.  The compiler's send loop pushes the cursor
+        // slot as NULL (await, PUSH_NULL) or as GET_ITER's cursor, a
+        // tagged index or NULL (yield from).
+        tier1 window op(_SEND,
+                (receiver: assumed(object) by compiler_send_loop,
+                 index: consumed assumed(encoding(tagged_index|null)) by compiler_send_loop,
+                 v: taken
+                 -- receiver, next_index: inline encoding(tagged_index|null) replaces(index),
+                 retval: owned))
+            effects(runs_python, switches_frame) exits(next, branch, enter, raise)
+        {
             // GET_AWAITABLE and GET_YIELD_FROM_ITER returned an iterator object
-            assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
             if (!IS_PEP523_HOOKED(tstate) &&
@@ -1924,11 +1935,13 @@ dummy_func(
                 PyGenObject *gen = (PyGenObject *)receiver_o;
                 IR_ENTER_GENERATOR(gen, _PY_IR_SEND);
             }
-            if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                _PyStatusValue next = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(receiver), &window[1]);
-                null_or_index = window[1];
-                PyValue item = next.value;
-                int found = next.status;
+            if (!PyValue_IsNull(index) && PyValue_IsNone(v)) {
+                // v is None: it is dead before the cursor, which lies below it
+                DEAD(v);
+                PyValue cursor = TAKE(index);
+                _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(receiver), cursor);
+                PyValue item = step.value;
+                int found = step.status;
                 if (found <= 0) {
                     if (found < 0) {
                         ERROR_NO_POP();
@@ -1936,8 +1949,8 @@ dummy_func(
                     PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
                     IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
                 }
+                next_index = step.cursor;
                 retval = item;
-                DEAD(v);
             }
             else {
                 _PyStatusValue sent = _PyValue_Send(receiver_o, v);
@@ -1949,6 +1962,8 @@ dummy_func(
                     IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
                 }
                 PyValue_CLOSE(v);
+                next_index = index;
+                DEAD(index);
                 retval = sent.value;
             }
         }
@@ -2000,24 +2015,31 @@ dummy_func(
             EXIT_IF(PyValue_IsNull(nos));
         }
 
-        replaced op(_SEND_VIRTUAL, (iter, null_or_index, none -- iter, null_or_index, next)) {
+        // The cursor goes by value, as in _FOR_ITER_VIRTUAL.  `none` is
+        // released on a raise and its home is kept: it is dead first.
+        replaced op(_SEND_VIRTUAL,
+                (iter: assumed(object) by GET_ITER, index: consumed,
+                 none: consumed is(PyValue_None)
+                 -- iter, next_index: inline replaces(index), next: owned))
+            effects(runs_python) exits(next, branch, raise)
+        {
             // SEND specialized on an iterator object with _tp_iteritem
-            assert(PyValue_IsObject(iter));
+            DEAD(none);
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+            Py_ssize_t position = PyValue_UntagIndex(index);
+            PyValue spent = TAKE(index);
+            _PyValue_DropCursor(spent);
             _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
-            _PyValueIndexPair next_index = iteritem(iter_o, index);
-            index = next_index.index;
-            if (PyValue_IsNull(next_index.value)) {
-                if (index < 0) {
+            _PyValueIndexPair item = iteritem(iter_o, position);
+            if (PyValue_IsNull(item.value)) {
+                if (item.index < 0) {
                     ERROR_NO_POP();
                 }
                 PyValue completed = PyValue_None;
                 IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);
             }
-            DEAD(none);
-            next = next_index.value;
-            null_or_index = PyValue_TagIndex(index);
+            next = item.value;
+            next_index = PyValue_TagIndex(item.index);
         }
 
         macro(SEND_VIRTUAL) =
@@ -4691,9 +4713,13 @@ dummy_func(
             unused/1 +  // Skip over the entry distance
             _FOR_ITER_DICT_ITEMS;
 
-        inst(INSTRUMENTED_FOR_ITER, (unused/1, iter, null_or_index -- iter, null_or_index, next)) {
-            _PyStatusValue step = _PyForIter_VirtualIteratorNext(tstate, frame, PyValue_Borrow(iter), &window[1]);
-            null_or_index = window[1];
+        inst(INSTRUMENTED_FOR_ITER,
+                (unused/1, iter: assumed(object) by GET_ITER, index: consumed
+                 -- iter, next_index: inline encoding(tagged_index|null) replaces(index), next: owned))
+            effects(runs_python) exits(next, branch, raise)
+        {
+            PyValue cursor = TAKE(index);
+            _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(iter), cursor);
             PyValue item = step.value;
             int found = step.status;
             if (found <= 0) {
@@ -4703,6 +4729,7 @@ dummy_func(
                 PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
                 IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
+            next_index = step.cursor;
             next = item;
             IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
         }
@@ -4715,14 +4742,21 @@ dummy_func(
             // GET_ITER always leaves an object, never an inline value.
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(!PyList_CheckExact(iter_o));
-            assert(PyValue_IsTaggedIndex(null_or_index));
 #ifdef Py_GIL_DISABLED
             EXIT_IF(!_Py_IsOwnedByCurrentThread(iter_o) && !_PyObject_GC_IS_SHARED(iter_o),
                     "a list another thread owns, and that is not shared");
 #endif
         }
 
-        leaf replaced op(_ITER_JUMP_LIST, (iter, null_or_index -- iter, null_or_index)) {
+        // GET_ITER stores a tagged index beside an exact list (its
+        // `_PyEval_GetIter` gives `PyValue_TagIndex(0)` for it), and the
+        // guard before this uop has shown that the iterator is one: only
+        // then is the cursor assumed, so the assertion follows the guard
+        leaf replaced op(_ITER_JUMP_LIST,
+                (iter: object, index: consumed assumed(tagged_index) by GET_ITER
+                 -- iter, next_index: inline tagged_index replaces(index)))
+            effects(reads, runs_python(branch|raise)) exits(next, branch, raise)
+        {
 #ifdef Py_GIL_DISABLED
             // For free-threaded Python, the loop exit can happen at any point during
             // item retrieval, so it doesn't make much sense to check and jump
@@ -4732,12 +4766,14 @@ dummy_func(
             PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
             assert(Py_TYPE(list_o) == &PyList_Type);
             STAT_INC(FOR_ITER, hit);
-            if ((size_t)PyValue_UntagIndex(null_or_index) >= (size_t)PyList_GET_SIZE(list_o)) {
-                null_or_index = PyValue_TagIndex(-1);
+            if ((size_t)PyValue_UntagIndex(index) >= (size_t)PyList_GET_SIZE(list_o)) {
+                next_index = PyValue_TagIndex(-1);
                 PyValue completed = PyValue_None;
                 IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
 #endif
+            next_index = index;
+            DEAD(index);
         }
 
         leaf replaced op(_ITER_NEXT_LIST,
@@ -4766,19 +4802,28 @@ dummy_func(
         {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(!PyTuple_CheckExact(iter_o));
-            assert(PyValue_IsTaggedIndex(null_or_index));
         }
 
-        leaf replaced op(_ITER_JUMP_TUPLE, (iter, null_or_index -- iter, null_or_index)) {
+        // GET_ITER stores a tagged index beside an exact tuple (its
+        // `_PyEval_GetIter` gives `PyValue_TagIndex(0)` for it), and the
+        // guard before this uop has shown that the iterator is one: only
+        // then is the cursor assumed, so the assertion follows the guard
+        leaf replaced op(_ITER_JUMP_TUPLE,
+                (iter: object, index: consumed assumed(tagged_index) by GET_ITER
+                 -- iter, next_index: inline tagged_index replaces(index)))
+            effects(reads, runs_python(branch|raise)) exits(next, branch, raise)
+        {
             PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
             (void)tuple_o;
             assert(Py_TYPE(tuple_o) == &PyTuple_Type);
             STAT_INC(FOR_ITER, hit);
-            if ((size_t)PyValue_UntagIndex(null_or_index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
-                null_or_index = PyValue_TagIndex(-1);
+            if ((size_t)PyValue_UntagIndex(index) >= (size_t)PyTuple_GET_SIZE(tuple_o)) {
+                next_index = PyValue_TagIndex(-1);
                 PyValue completed = PyValue_None;
                 IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
+            next_index = index;
+            DEAD(index);
         }
 
         leaf op(_ITER_NEXT_TUPLE,

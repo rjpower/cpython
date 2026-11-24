@@ -515,6 +515,8 @@ def analyze_stack(
                 variable_used(op, input.name)
                 or variable_used(op, "DECREF_INPUTS")
                 or (not input.peek and input.name in output_names)
+                # An assumed fact is asserted of the input at entry (F7)
+                or any(word.startswith("assumed(") for word in input.contract)
             ):
                 input.used = True
         for output in outputs:
@@ -931,23 +933,28 @@ def find_aliased_outputs(op: parser.InstDef) -> tuple[str, ...]:
     return tuple(found)
 
 
+def frame_switch_sites(tokens: list[lexer.Token]) -> list[lexer.Token]:
+    """The tokens where a body assigns `frame`, directly or through
+    DISPATCH_INLINED or a marker that switches"""
+    tokens = [t for t in tokens if t.kind != "COMMENT"]
+    sites = []
+    for i, tkn in enumerate(tokens):
+        if tkn.kind != "IDENTIFIER":
+            continue
+        if tkn.text == "DISPATCH_INLINED" or "frame" in IR_MARKER_EFFECTS.get(tkn.text, ()):
+            sites.append(tkn)
+        elif (tkn.text == "frame" and i + 1 < len(tokens)
+                and tokens[i + 1].kind == "EQUALS"
+                and tokens[i - 1].kind in ("SEMI", "LBRACE", "RBRACE", "EQUALS")):
+            sites.append(tkn)
+    return sites
+
+
 def assigns_frame(tokens: list[lexer.Token]) -> bool:
     """Whether a body assigns `frame`, directly or through DISPATCH_INLINED
     or a marker that switches.  A check only: a uop that does must declare
     switches_frame (ir_contract.py), which is the authority"""
-    tokens = [t for t in tokens if t.kind != "COMMENT"]
-    for i, tkn in enumerate(tokens):
-        if tkn.kind != "IDENTIFIER":
-            continue
-        if tkn.text == "DISPATCH_INLINED":
-            return True
-        if "frame" in IR_MARKER_EFFECTS.get(tkn.text, ()):
-            return True
-        if (tkn.text == "frame" and i + 1 < len(tokens)
-                and tokens[i + 1].kind == "EQUALS"
-                and tokens[i - 1].kind in ("SEMI", "LBRACE", "RBRACE", "EQUALS")):
-            return True
-    return False
+    return bool(frame_switch_sites(tokens))
 
 
 def compute_properties(op: parser.CodeDef) -> Properties:

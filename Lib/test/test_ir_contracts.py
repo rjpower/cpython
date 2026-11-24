@@ -247,6 +247,36 @@ class SliceTests(unittest.TestCase):
         'CALL_KW_NON_PY/_CALL_KW_NON_PY: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_KW_PY/_PY_FRAME_KW_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_PY_GENERAL/_PY_FRAME_GENERAL_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
+        # G0d2: _SEND and _SEND_VIRTUAL are declared, with the cursor by
+        # value under distinct names (`index` in, `next_index` out, F16), as
+        # G0d4's iterator uops are: the inference reads the handlers with
+        # their declarations removed, and takes the renamed cursor for a push
+        # (format and output lines) where the declaration marks the replaced
+        # cursor changed.  SEND_GEN and SEND_ASYNC_GEN share the group's
+        # format.  _SEND may enter a generator or run to the end of its body
+        # (exits next), _SEND_VIRTUAL's fused transfers yield in place of its
+        # next, as SEND_ASYNC_GEN's do
+        'SEND.record.format.dst_offset: inferred 1, declared 2',
+        'SEND.record.outputs[1][1]: inferred -1, declared 1',
+        'SEND.record.outputs[1][2].name: inferred "next_index", declared "unused"',
+        'SEND.record.outputs[1][2].peek: inferred false, declared true',
+        'SEND.record.uops[1].inputs[1].changed: inferred false, declared true',
+        'SEND.record.uops[1].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", "subject": "v3"}]',
+        'SEND_ASYNC_GEN.record.format.dst_offset: inferred 1, declared 2',
+        'SEND_GEN.record.format.dst_offset: inferred 1, declared 2',
+        'SEND_VIRTUAL.record.format.dst_offset: inferred 1, declared 2',
+        'SEND_VIRTUAL.record.outputs[1][1]: inferred -1, declared 1',
+        'SEND_VIRTUAL.record.outputs[1][2].name: inferred "next_index", declared "nos"',
+        'SEND_VIRTUAL.record.outputs[1][2].peek: inferred false, declared true',
+        'SEND_VIRTUAL.record.uops[2].inputs[1].changed: inferred false, declared true',
+        'SEND_VIRTUAL_XFER_DISCARD/_SEND_VIRTUAL: declares exits(branch, next, raise), '
+        'the record has branch, raise, yield',
+        'SEND_VIRTUAL_XFER_RETURN/_SEND_VIRTUAL: declares exits(branch, next, raise), '
+        'the record has raise, return, yield',
+        'SEND_XFER_DISCARD/_SEND: declares exits(branch, enter, next, raise), '
+        'the record has branch, enter, raise, yield',
+        'SEND_XFER_RETURN/_SEND: declares exits(branch, enter, next, raise), '
+        'the record has enter, raise, return, yield',
         # G0d4: the iterator family's cursor has distinct names (`index` in,
         # `next_index` out, as the F16 rule asks).  The inference reads the
         # handlers with their declarations removed, where nothing says that
@@ -291,6 +321,10 @@ class SliceTests(unittest.TestCase):
         'FOR_ITER_LIST.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
         'FOR_ITER_LIST.record.outputs[1][2].peek: inferred false, declared true',
         'FOR_ITER_LIST.record.store_mode: inferred null, declared "store"',
+        # G0d2: _ITER_JUMP_LIST's cursor is a tagged index (GET_ITER, for an
+        # exact list); the jump carries it under a new name
+        'FOR_ITER_LIST.record.uops[1].inputs[1].changed: inferred false, declared true',
+        'FOR_ITER_LIST.record.uops[1].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "", "kind": "TAGGED_INDEX", "subject": "v2"}]',
         'FOR_ITER_RANGE.record.format.discards: inferred false, declared true',
         'FOR_ITER_RANGE.record.format.dst_offset: inferred 1, declared 2',
         'FOR_ITER_RANGE.record.format.store_dst: inferred false, declared true',
@@ -308,6 +342,8 @@ class SliceTests(unittest.TestCase):
         'FOR_ITER_TUPLE.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
         'FOR_ITER_TUPLE.record.outputs[1][2].peek: inferred false, declared true',
         'FOR_ITER_TUPLE.record.store_mode: inferred null, declared "store"',
+        'FOR_ITER_TUPLE.record.uops[1].inputs[1].changed: inferred false, declared true',
+        'FOR_ITER_TUPLE.record.uops[1].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "", "kind": "TAGGED_INDEX", "subject": "v2"}]',
         'FOR_ITER_VIRTUAL.record.format.discards: inferred false, declared true',
         'FOR_ITER_VIRTUAL.record.format.dst_offset: inferred 1, declared 2',
         'FOR_ITER_VIRTUAL.record.format.store_dst: inferred false, declared true',
@@ -329,12 +365,23 @@ class SliceTests(unittest.TestCase):
         'INSTRUMENTED_FOR_ITER.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
         'INSTRUMENTED_FOR_ITER.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
         'INSTRUMENTED_FOR_ITER.record.store_mode: inferred null, declared "store"',
+        # G0d2: INSTRUMENTED_FOR_ITER steps the cursor by value and declares
+        # it, as FOR_ITER does
+        'INSTRUMENTED_FOR_ITER.record.outputs[1][1]: inferred -1, declared 1',
+        'INSTRUMENTED_FOR_ITER.record.outputs[1][2].name: inferred "next_index", declared "index"',
+        'INSTRUMENTED_FOR_ITER.record.uops[0].inputs[1].changed: inferred false, declared true',
+        'INSTRUMENTED_FOR_ITER.record.uops[0].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", "subject": "v2"}]',
     ]
 
     # Batch 5 and G0c9: the assume op of `iter: assumed(object) by GET_ITER`
     # in the leaf IR of the three iterator guards
     LISTED_LEAF_DIFFERENCES = [
         ("FOR_ITER_LIST.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
+        # G0d2: the jumps assume the cursor of an exact list or tuple is a
+        # tagged index (`index: assumed(tagged_index) by GET_ITER`): the
+        # declared leaf has one more op, the assume
+        ("FOR_ITER_LIST.record.uops[1].leaf.blocks[0].ops:", "inferred 8 entries"),
+        ("FOR_ITER_TUPLE.record.uops[1].leaf.blocks[0].ops:", "inferred 8 entries"),
         ("FOR_ITER_TUPLE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
         ("FOR_ITER_RANGE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
         # G0d1: a yield is declared (`exits(yield)`); with the declarations
@@ -591,12 +638,16 @@ class VerifierTests(unittest.TestCase):
 
     def test_replacements_are_declared(self):
         # F16's cursor: each uop that advances it declares the entry that
-        # its next_index takes over, and only those replace an input
+        # its next_index takes over, and only those replace an input (the
+        # FOR_ITER family, its jumps, INSTRUMENTED_FOR_ITER and the SEND
+        # family's cursor)
         replaced = {(name, j) for name, uop in analysis.uops.items()
                     for j in range(len(uop.stack.outputs))
                     if ir_records.replaced_input(uop, j) is not None}
         self.assertEqual(replaced, {(name, 1) for name in (
-            "_FOR_ITER", "_FOR_ITER_VIRTUAL", "_ITER_NEXT_LIST", "_ITER_NEXT_TUPLE")})
+            "_FOR_ITER", "_FOR_ITER_VIRTUAL", "_ITER_NEXT_LIST", "_ITER_NEXT_TUPLE",
+            "_ITER_JUMP_LIST", "_ITER_JUMP_TUPLE", "INSTRUMENTED_FOR_ITER",
+            "_SEND", "_SEND_VIRTUAL")})
         for name, _ in replaced:
             output = analysis.uops[name].stack.outputs[1]
             self.assertEqual((output.name, output.replaces), ("next_index", "index"))
@@ -2622,6 +2673,58 @@ class VerifierTests(unittest.TestCase):
                 int x = 0;
             }
         """, r"declares exits\(enter\), but not the effect switches_frame")
+
+    def test_a_switch_on_some_paths_leaves_next(self):
+        # _SEND: the generator is entered when it can be claimed; otherwise
+        # the body runs on to its end
+        source = """
+            op(_OP, (--)) effects(switches_frame) exits(%s) {
+                if (oparg) {
+                    frame = tstate->current_frame;
+                }
+            }
+        """
+        self.verify(source % "enter, next")
+        self.refuses(source % "enter", r"declares exits\(enter\), but the body takes enter, next")
+
+    def test_assumed_cursor_encodings(self):
+        # A FOR_ITER cursor is a tagged index (GET_ITER, for exact lists and
+        # tuples), a SEND's one a tagged index or NULL
+        source = """
+            op(_OP, (cursor: consumed assumed(%s) by GET_ITER --)) effects() exits(next) {
+                DEAD(cursor);
+            }
+        """
+        for fact, text in (
+                ("tagged_index", "assert(PyValue_IsTaggedIndex(cursor));"),
+                ("encoding(tagged_index|null)",
+                 "assert(PyValue_IsTaggedIndex(cursor) || PyValue_IsNull(cursor));")):
+            with self.subTest(fact=fact):
+                analysis = self.verify(source % fact)
+                self.assertEqual(
+                    ir_contract.assumed_assertions(analysis.uops["_OP"], None), [text])
+        # The assertion reads the input, which the body does not: it is
+        # loaded all the same
+        source = """
+            op(_OP, (cursor: assumed(tagged_index) by GET_ITER -- cursor)) effects() exits(next) {
+            }
+        """
+        analysis = self.verify(source)
+        self.assertTrue(analysis.uops["_OP"].stack.inputs[0].used)
+
+    def test_a_cursor_moves_without_an_owner(self):
+        # _ITER_JUMP_LIST: a tagged index passed on names no move, however
+        # many paths carry it; an object that is passed on does
+        source = """
+            op(_OP, (iter: object, index: consumed %s -- iter, next_index: %s)) effects(reads) exits(next) {
+                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                (void)iter_o;
+                next_index = index;
+                DEAD(index);
+            }
+        """
+        self.verify(source % ("tagged_index", "inline tagged_index"))
+        self.refuses(source % ("", "inline"), r"next_index. is declared inline, but index gives an moved value")
 
     def test_a_redirect_is_its_own_exit(self):
         # _MONITOR_RESUME, _YIELD_VALUE_EVENT: after a callback moved the

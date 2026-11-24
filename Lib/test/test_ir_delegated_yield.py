@@ -206,9 +206,20 @@ class DelegatedYieldTests(unittest.TestCase):
         text = source.read_text()
         with tempfile.TemporaryDirectory() as directory:
             changed = Path(directory) / "bytecodes.c"
-            marker = "null_or_index = window[1];"
+            # The cursor goes by value; a send that drops it is refused where
+            # _SEND's declaration is checked
+            marker = "PyValue cursor = TAKE(index);"
             self.assertIn(marker, text)
-            changed.write_text(text.replace(marker, "null_or_index = window[0];", 1))
+            changed.write_text(text.replace(marker, "PyValue cursor = PyValue_NULL;", 1))
+            altered = analyzer.analyze_files([str(changed)])
+            altered_formats = ir_generator.compute_formats(altered)
+            with self.assertRaisesRegex(SyntaxError, "_SEND: on next, `index` is still owned"):
+                ir_generator.build_records(altered, altered_formats)
+            # A uop that declares more than a SEND may is no SEND source
+            marker = "effects(runs_python, switches_frame) exits(next, branch, enter, raise)"
+            self.assertIn(marker, text)
+            changed.write_text(text.replace(
+                marker, "effects(runs_python, switches_frame, polls) exits(next, branch, enter, raise)", 1))
             altered = analyzer.analyze_files([str(changed)])
             altered_formats = ir_generator.compute_formats(altered)
             with self.assertRaisesRegex(SyntaxError,

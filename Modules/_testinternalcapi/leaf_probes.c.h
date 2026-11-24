@@ -105,7 +105,7 @@ leaf_probe__BINARY_OP_FLOOR_DIVIDE_INT(_PyInterpreterFrame *frame, PyValue *stac
     int64_t a = PyValue_InlineInt64(left);
     STAT_INC(BINARY_OP, hit);
     int64_t quotient = a / b;
-    if (a % b != 0 && (a ^ b) < 0) {
+    if (quotient * b != a && (a ^ b) < 0) {
         quotient--;
     }
     res = PyValue_FromInt64(quotient);

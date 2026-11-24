@@ -123,6 +123,10 @@ u64_tuple(const uint64_t *items, int n)
     return t;
 }
 
+static void *failing_malloc(void *ctx, size_t size) { return NULL; }
+static void *failing_calloc(void *ctx, size_t n, size_t size) { return NULL; }
+static void *failing_realloc(void *ctx, void *p, size_t size) { return NULL; }
+
 /* jit_lower(name, ops, gprs, xmms, aux, args_live) -> (cond, gprs_in, gprs, xmms)
 
    Runs the lowering of primitive `name` on the registers `ops` (its
@@ -181,11 +185,18 @@ jit_lower(PyObject *module, PyObject *args)
         }
     }
     const void *aux = NULL;
+    /* aux "exit": the label that a NULL result leaves for; the result reports
+       whether the lowering left by it (a predicate leaves where it is false).
+       "exit_fail": the same, with object
+       allocation failing while the code runs, so that a box fails */
+    int has_exit = 0, fail_boxes = 0;
     if (aux_name != Py_None) {
         const char *d = PyUnicode_AsUTF8(aux_name);
         if (d == NULL) {
             return NULL;
         }
+        fail_boxes = strcmp(d, "exit_fail") == 0;
+        has_exit = fail_boxes || strcmp(d, "exit") == 0;
         aux = strcmp(d, "_PyFloat_ExactDealloc") == 0
             ? (const void *)_PyFloat_ExactDealloc : (const void *)_PyLong_ExactDealloc;
     }
@@ -216,9 +227,22 @@ jit_lower(PyObject *module, PyObject *args)
         .target = -1, .slow = -1, .leave = -1,
     };
     emit_prologue(&a);
+    _PyJitLabel exit = -1;
+    if (has_exit) {
+        exit = _PyJitAsm_NewLabel(&a);
+        aux = (const void *)(intptr_t)(exit + 1);
+    }
     int cond = info->lower(&cx, ops, aux);
     assert(cx.cold_depth == 0);
-    if (info->predicate) {
+    if (has_exit) {
+        _PyJitLabel end = _PyJitAsm_NewLabel(&a);
+        _PyJitAsm_MovMI(&a, AT(_PyJitReg_RBP, offsetof(RegState, cond)), 0);
+        _PyJitAsm_Jmp(&a, end);
+        _PyJitAsm_Bind(&a, exit);
+        _PyJitAsm_MovMI(&a, AT(_PyJitReg_RBP, offsetof(RegState, cond)), 1);
+        _PyJitAsm_Bind(&a, end);
+    }
+    if (info->predicate && !has_exit) {
         _PyJitLabel holds = _PyJitAsm_NewLabel(&a);
         _PyJitAsm_MovMI(&a, AT(_PyJitReg_RBP, offsetof(RegState, cond)), 1);
         _PyJitAsm_Jcc(&a, (_PyJitCond)cond, holds);
@@ -238,7 +262,20 @@ jit_lower(PyObject *module, PyObject *args)
         PyErr_SetString(PyExc_MemoryError, "cannot place the lowering");
         return NULL;
     }
+    PyMemAllocatorEx allocator;
+    if (fail_boxes) {
+        PyMem_GetAllocator(PYMEM_DOMAIN_OBJ, &allocator);
+        PyMemAllocatorEx failing = allocator;
+        failing.malloc = failing_malloc;
+        failing.calloc = failing_calloc;
+        failing.realloc = failing_realloc;
+        PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &failing);
+    }
     ((void (*)(RegState *))(uintptr_t)code.start)(&s);
+    if (fail_boxes) {
+        PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &allocator);
+        PyErr_Clear();
+    }
     _PyJitMemory_Free(&code);
 
     PyObject *gin = u64_tuple(s.gpr_in, 16);
@@ -247,7 +284,7 @@ jit_lower(PyObject *module, PyObject *args)
     PyObject *result = NULL;
     if (gin != NULL && gout != NULL && xout != NULL) {
         result = Py_BuildValue("(OOOO)",
-                               info->predicate ? (s.cond ? Py_True : Py_False) : Py_None,
+                               info->predicate || has_exit ? (s.cond ? Py_True : Py_False) : Py_None,
                                gin, gout, xout);
     }
     Py_XDECREF(gin);
@@ -322,7 +359,7 @@ emit_transfer(_PyJitAsm *a, int index, _PyJitLabel leave)
    compiled unit gives it.  The slow path calls the word's form. */
 static int
 build_unit(_PyInterpreterFrame *frame, uint32_t index, _PyJitTemplate template,
-           _PyJitCode *code)
+           _PyJitCode *code, size_t *template_bytes)
 {
     const _PyIRWord *words = (const _PyIRWord *)frame->ir_words;
     _PyIRWord w = words[index];
@@ -346,8 +383,14 @@ build_unit(_PyInterpreterFrame *frame, uint32_t index, _PyJitTemplate template,
     _PyJitAsm_MovzxRM16(&a, _PyJitReg_RAX, AT(_PyJit_WORDS, (int32_t)(index * sizeof(_PyIRWord))));
     _PyJitAsm_AluRI(&a, _PyJitAlu_CMP, _PyJitReg_RAX, (int32_t)(w & 0xFFFF));
     _PyJitAsm_Jcc(&a, _PyJitCond_NE, cx.slow);
+    size_t hot_before = a.sections[_PyJitSection_HOT].size;
+    size_t cold_before = a.sections[_PyJitSection_COLD].size;
     template(&cx);
     assert(cx.cold_depth == 0);
+    if (template_bytes != NULL) {
+        template_bytes[0] = a.sections[_PyJitSection_HOT].size - hot_before;
+        template_bytes[1] = a.sections[_PyJitSection_COLD].size - cold_before;
+    }
     int target = static_target(words, index);
     emit_transfer(&a, (int)index + _PyIR_WordLength(w), cx.leave);
     _PyJitAsm_Bind(&a, cx.target);
@@ -476,7 +519,7 @@ jit_template_run(PyObject *module, PyObject *args)
     if (use_template) {
         _PyJitTemplate template = _PyJit_Templates[_PyJit_CompiledHandler(w)];
         _PyJitCode unit;
-        if (template == NULL || build_unit(frame, index, template, &unit) < 0) {
+        if (template == NULL || build_unit(frame, index, template, &unit, NULL) < 0) {
             tstate->current_frame = previous;
             clear_and_pop(tstate, frame);
             PyErr_SetString(PyExc_ValueError, "no template for the word, or no code memory");
@@ -514,8 +557,50 @@ jit_template_run(PyObject *module, PyObject *args)
                          exc ? exc : Py_None, out);
 }
 
+/* jit_template_size(func, index) -> (hot, cold)
+
+   The bytes of the template of word index of func, in the hot and in the
+   cold section, as compiled for that word (the slots that it names are the
+   word's own). */
+static PyObject *
+jit_template_size(PyObject *module, PyObject *args)
+{
+    PyObject *func;
+    unsigned int index;
+    if (!PyArg_ParseTuple(args, "O!I", &PyFunction_Type, &func, &index)) {
+        return NULL;
+    }
+    PyCodeObject *code = (PyCodeObject *)((PyFunctionObject *)func)->func_code;
+    if (code->_co_exec == NULL) {
+        PyErr_SetString(PyExc_ValueError, "the code has not run");
+        return NULL;
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (!_PyThreadState_HasStackSpace(tstate, code->co_framesize)) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = _PyFrame_PushUnchecked(
+        tstate, PyValue_FromObjectSteal(Py_NewRef(func)), tstate->current_frame);
+    _PyIRWord w = ((const _PyIRWord *)frame->ir_words)[index];
+    _PyJitTemplate template = _PyJit_Templates[_PyJit_CompiledHandler(w)];
+    _PyJitCode unit;
+    size_t bytes[2];
+    int built = template == NULL ? -1 : build_unit(frame, index, template, &unit, bytes);
+    if (built >= 0) {
+        _PyJitMemory_Free(&unit);
+    }
+    clear_and_pop(tstate, frame);
+    if (built < 0) {
+        PyErr_SetString(PyExc_ValueError, "no template for the word, or no code memory");
+        return NULL;
+    }
+    return Py_BuildValue("(nn)", (Py_ssize_t)bytes[0], (Py_ssize_t)bytes[1]);
+}
+
 static PyMethodDef test_methods[] = {
     {"jit_template_run", jit_template_run, METH_VARARGS},
+    {"jit_template_size", jit_template_size, METH_VARARGS},
     {"jit_lower", jit_lower, METH_VARARGS},
     {"jit_lowerings", jit_lowerings, METH_NOARGS},
     {NULL},

@@ -760,8 +760,10 @@ dummy_func(
             EXIT_IF(b == 0);
             int64_t a = PyValue_InlineInt64(left);
             STAT_INC(BINARY_OP, hit);
+            // One division: the quotient is inexact when it does not
+            // multiply back, and the operands differ in sign
             int64_t quotient = a / b;
-            if (a % b != 0 && (a ^ b) < 0) {
+            if (quotient * b != a && (a ^ b) < 0) {
                 quotient--;
             }
             res = PyValue_FromInt64(quotient);
@@ -775,7 +777,7 @@ dummy_func(
 
         // The remainder is smaller than the divisor in magnitude, so it is
         // inline.
-        inline_ok pure op(_BINARY_OP_REMAINDER_INT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_REMAINDER_INT, (left, right -- res, l, r)) {
             int64_t b = PyValue_InlineInt64(right);
             EXIT_IF(b == 0);
             int64_t a = PyValue_InlineInt64(left);

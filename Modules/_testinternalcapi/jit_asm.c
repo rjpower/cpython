@@ -75,6 +75,8 @@ label_of(Program *p, int64_t number)
     OP(imul_rr, 2, 0, _PyJitAsm_ImulRR(A, v[0], v[1])) \
     OP(imul_rm, 1, 1, _PyJitAsm_ImulRM(A, v[0], M(0))) \
     OP(imul_rri, 3, 0, _PyJitAsm_ImulRRI(A, v[0], v[1], v[2])) \
+    OP(cqo, 0, 0, _PyJitAsm_Cqo(A)) \
+    OP(idiv_r, 1, 0, _PyJitAsm_IdivR(A, v[0])) \
     OP(unary_r, 2, 0, _PyJitAsm_UnaryR(A, v[0], v[1])) \
     OP(unary_m, 1, 1, _PyJitAsm_UnaryM(A, v[0], M(0))) \
     OP(unary_m32, 1, 1, _PyJitAsm_UnaryM32(A, v[0], M(0))) \

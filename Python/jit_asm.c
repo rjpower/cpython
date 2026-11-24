@@ -529,6 +529,21 @@ _PyJitAsm_ImulRRI(_PyJitAsm *a, _PyJitReg dst, _PyJitReg src, int32_t imm)
     emit_imm8_or_32(a, imm);
 }
 
+/* cqo sign-extends rax into rdx:rax; idiv divides rdx:rax by its operand,
+   leaving the quotient in rax and the remainder in rdx. */
+void
+_PyJitAsm_Cqo(_PyJitAsm *a)
+{
+    emit_u8(a, 0x48);
+    emit_u8(a, 0x99);
+}
+
+void
+_PyJitAsm_IdivR(_PyJitAsm *a, _PyJitReg src)
+{
+    emit_rr(a, 0, 1, 0xF7, 7, src, 0);
+}
+
 /* not, neg, inc and dec: opcode and ModRM extension. */
 static const struct { uint8_t op; uint8_t ext; } unary_forms[] = {
     [_PyJitUnary_NOT] = {0xF7, 2},

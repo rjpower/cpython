@@ -15,9 +15,9 @@ generated C uses the value API and never `.bits`.
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from rop_catalog import (CONVENTIONS, CReturn, CSource, CTest, DebtKind, Effect, Fact,
-                         FieldKind,
-                         Handle, Scalar, SchemaCtor, Slot, Wrap)
+from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, CReturn, CSource, CTest, DebtKind,
+                         Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
+                         Slot, Wrap)
 from rop_check import GraphInfo, Program
 from rop_model import (Advance, Arm, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
@@ -98,8 +98,14 @@ def source_text(source: CSource, ret: str, out: str | None) -> str:
             return ""
 
 
+# The C entry type of each feedback schema whose arms are lowered
+SCHEMA_C = {Schema.Attr: "_PyFbAttr", Schema.Call: "_PyFbCall"}
+
+
 def c_type(t: Type) -> str | None:
     """The C type of a graph value, None for one that has no C variable"""
+    if isinstance(t, SchemaType) and t.ctor is SchemaCtor.Recipe:
+        return {Schema.Attr: "_PyAttrRecipe"}.get(t.schema)
     if isinstance(t, ScalarType):
         return SCALAR_C.get(t.scalar)
     if isinstance(t, HandleType):
@@ -399,6 +405,7 @@ def home_views(flat: FlatGraph) -> dict[str, str]:
 class Lowering:
     """The statements of one arm, with its decoding and labels"""
     arm: str
+    words: int = 0           # operand words after the head, which dispatch skips
     decls: list[str] = field(default_factory=list)
     body: list[str] = field(default_factory=list)
 
@@ -427,6 +434,7 @@ class ArmLowerer:
         self.facts_in: dict[str, Facts] = {}
         self.targeted: set[str] = set()      # blocks reached by a goto
         self.next_label: str | None = None
+        self.acquired: set[str] = set()      # operands whose owner acquire() took
 
     # Names
 
@@ -454,12 +462,22 @@ class ArmLowerer:
 
     def slot(self, operand: str) -> Slot:
         p = self.placements[operand]
-        if p.kind is not FieldKind.home and p.kind is not FieldKind.feedback:
+        if p.kind not in (FieldKind.home, FieldKind.feedback, FieldKind.name):
             raise Unsupported(f"{self.arm.name}: operand {operand} is a {p.kind.name} field")
         (slot,) = p.slots
-        if slot.word != 0:
+        if slot.word != 0 and p.kind is not FieldKind.feedback:
             raise Unsupported(f"{self.arm.name}: operand {operand} is in an operand word")
         return slot
+
+    def field(self, operand: str) -> str:
+        """The C expression of an operand's field.  The head's fields are
+        IR_A to IR_D; a field of an operand word is read from the word at its
+        place after the head, which the handler has not yet passed over."""
+        slot = self.slot(operand)
+        if slot.word == 0:
+            return f"IR_{slot.name}(ir_word)"
+        return (f"((uint32_t)(this_instr[{slot.word}] >> {slot.offset - 64 * slot.word})"
+                f" & {(1 << slot.width) - 1:#x})")
 
     def home(self, operand: str) -> str:
         """The address of an operand's home, declared on first use"""
@@ -486,7 +504,7 @@ class ArmLowerer:
         if isinstance(e, Call):
             if e.callee == "use":
                 return HandleType(Handle.B)
-            if e.callee == "dup":
+            if e.callee in ("dup", "acquire"):
                 return HandleType(Handle.O)
             if e.callee == "candidate":
                 return None
@@ -528,6 +546,9 @@ class ArmLowerer:
         text = self.expr_text(e)
         if want is None:
             return text
+        if (isinstance(want, SchemaType) and want.ctor is SchemaCtor.Fb
+                and want.schema in SCHEMA_C):
+            return f"(const {SCHEMA_C[want.schema]} *){text}"
         have = self.type_of(e)
         if have == HandleType(Handle.O) and want == HandleType(Handle.B):
             return f"PyValue_Borrow({text})"
@@ -535,15 +556,10 @@ class ArmLowerer:
 
     def expr_text(self, e: Expr) -> str:
         if isinstance(e, Name):
-            if e.name == "site":
-                return "this_instr"
-            if e.name == "frame":
-                return "frame"
+            if e.name in ENVIRONMENT_C:
+                return ENVIRONMENT_C[e.name]
             if e.name in self.placements:
-                p = self.placements[e.name]
-                if p.kind is FieldKind.feedback:
-                    return f"((_PyFbHeader *)IR_FB(IR_{self.slot(e.name).name}(ir_word)))"
-                raise Unsupported(f"{self.arm.name}: operand {e.name} used as a value")
+                return self.operand_value(e.name)
             if e.name not in self.info.types:
                 return e.name.rsplit(".", 1)[-1]
             return self.local(e.name)
@@ -555,6 +571,18 @@ class ArmLowerer:
             return self.call_expr(e)
         raise Unsupported(f"{self.arm.name}: expression {e}")
 
+    def operand_value(self, operand: str) -> str:
+        """A name or feedback operand read as a value: the interned name, or
+        the site's entry (the entry is declared by its own field)"""
+        p = self.placements[operand]
+        if p.kind is FieldKind.name:
+            return f"GETITEM(FRAME_CO_NAMES, {self.field(operand)})"
+        if p.kind is FieldKind.feedback:
+            # The entry's header; a row that takes the schema's entry casts
+            # it (expr)
+            return f"IR_FB({self.field(operand)})"
+        raise Unsupported(f"{self.arm.name}: operand {operand} used as a value")
+
     def call_expr(self, e: Call) -> str:
         if e.callee == "use":
             (arg,) = e.args
@@ -563,6 +591,15 @@ class ArmLowerer:
         if e.callee == "dup":
             (arg,) = e.args
             return f"PyValue_DUP({self.expr_text(arg)})"
+        if e.callee == "acquire":
+            # The owner of a dying source: a local keeps its binding, so the
+            # instruction takes a count of its own; a temporary gives its own
+            (arg,) = e.args
+            assert isinstance(arg, Name)
+            home = self.home(arg.name)
+            self.acquired.add(arg.name)
+            return (f"((ir_word & {self.local_flag(arg.name)}) ? PyValue_DUP(*{home}) "
+                    f": _PyFrame_TakeHome(frame, {home}))")
         if e.callee == "unwrap":
             (arg,) = e.args
             return self.expr_text(arg)
@@ -595,7 +632,8 @@ class ArmLowerer:
         body = []
         for line in self.lines:
             body.append(line)
-        return Lowering(self.arm.name, self.decls, self.drop_unused_labels(body))
+        return Lowering(self.arm.name, self.enc.words, self.decls,
+                        self.drop_unused_labels(body))
 
     def drop_unused_labels(self, lines: list[str]) -> list[str]:
         text = "\n".join(lines)
@@ -690,6 +728,10 @@ class ArmLowerer:
                 raise Unsupported(f"{self.arm.name}: debt {d.kind.name} is not lowered yet")
         owners: dict[str, str | None] = {}
         for d in spent:
+            if d.subject in self.acquired:
+                # acquire() already took the owner or a count of its own
+                owners[d.subject] = None
+                continue
             home, flag = self.home(d.subject), self.local_flag(d.subject)
             view = self.views.get(d.subject)
             if view is not None and facts.has(view, Fact.inline_int):
@@ -765,6 +807,9 @@ class ArmLowerer:
         args = self.c_args(t.args, x.params)
         cases = x.result.cases
         edges = {e.case: e for e in t.edges}
+        if conv.indexed:
+            self.lower_indexed_call(t, x, args)
+            return
         out = None
         if any(CSource.out in o.payload for o in conv.outcomes):
             out = self.new_temp(c_type(cases[0].params[0].type), "out")
@@ -788,6 +833,29 @@ class ArmLowerer:
         ways.sort(key=lambda w: w[1].label == self.next_label)
         for outcome, target, payload in ways[:-1]:
             self.emit(f"if ({test_text(outcome.test, conv.returns, ret)}) {{")
+            self.jump(target, payload, "    ", force=True)
+            self.emit("}")
+        _, target, payload = ways[-1]
+        self.jump(target, payload)
+
+    def lower_indexed_call(self, t: CallTerm, x: Extern, args: list[str]) -> None:
+        """A row whose C result is the position of its case; a payload value
+        is written through the last parameter"""
+        cases = x.result.cases
+        payload_case = next((c for c in cases if c.params), None)
+        out = None
+        if payload_case is not None:
+            out = self.new_temp(c_type(payload_case.params[0].type), "out")
+            args.append(f"&{out}")
+        if x.contract.effect_set & ESCAPING:
+            self.emit("IR_STUB_ESCAPE();")
+        ret = self.new_temp("int", "ret")
+        self.emit(f"{ret} = {x.c.symbol}({', '.join(args)});")
+        edges = {e.case: e.target for e in t.edges}
+        ways = [(i, edges[c.name], (out,) if c.params else ()) for i, c in enumerate(cases)]
+        ways.sort(key=lambda w: w[1].label == self.next_label)
+        for i, target, payload in ways[:-1]:
+            self.emit(f"if ({ret} == {i}) {{")
             self.jump(target, payload, "    ", force=True)
             self.emit("}")
         _, target, payload = ways[-1]

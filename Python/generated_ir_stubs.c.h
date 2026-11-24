@@ -638,6 +638,12 @@ static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _P
 const _PyIRStubPlan _PyIR_StubPlans[512] = {
     [419] = {_PyIR_PLAN_INLINE, 0, 419, NULL, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Int
     [420] = {_PyIR_PLAN_SHARED, 1, 420, (const void *)_PyIR_Rop_Stub_Add_Generic, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Generic
+    [424] = {_PyIR_PLAN_NONE, 0, 424, NULL, NULL},  // Return_Generator
+    [426] = {_PyIR_PLAN_INLINE, 0, 426, NULL, NULL},  // GetAttr_Instance
+    [428] = {_PyIR_PLAN_INLINE, 0, 428, NULL, NULL},  // GetAttr_Shape
+    [429] = {_PyIR_PLAN_INLINE, 0, 429, NULL, NULL},  // GetAttr_PolyShape
+    [430] = {_PyIR_PLAN_INLINE, 0, 430, NULL, NULL},  // GetMethod_MethodValues
+    [432] = {_PyIR_PLAN_INLINE, 0, 432, NULL, NULL},  // GetMethod_PolyMethod
     [117] = {_PyIR_PLAN_SHARED, 1, 117, (const void *)_PyIR_Stub_UNPACK_SEQUENCE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE
     [124] = {_PyIR_PLAN_SHARED, 0, 124, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_LIST, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_LIST
     [125] = {_PyIR_PLAN_SHARED, 0, 125, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_TUPLE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_TUPLE

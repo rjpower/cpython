@@ -589,6 +589,11 @@ def check_extern(c: Checker, x: Extern) -> None:
     elif conv.single != isinstance(x.result, Returns):
         shape = "-> T" if conv.single else "cases(...)"
         c.report(x.c.span, x.name, f"convention {conv.name} maps onto a {shape} row")
+    elif isinstance(x.result, Cases) and conv.indexed:
+        for case in x.result.cases:
+            if len(case.params) > 1:
+                c.report(case.span, x.name, f"case {case.name} has {len(case.params)} "
+                         f"payload values; {conv.name} gives at most one")
     elif isinstance(x.result, Cases):
         if len(x.result.cases) != len(conv.outcomes):
             c.report(x.c.span, x.name, f"convention {conv.name} has "
@@ -911,7 +916,15 @@ def check_publish(c: Checker, scope: Scope, s: Publish, block: str, i: int) -> N
         if t is None or not is_dst(t):
             c.report(bind.span, scope.definition, f"publish [{bind.target} = ...]: "
                      f"{bind.target} is not a destination operand")
-        expect(c, scope, bind.value, O, block, i, outer=False)
+        # An optional destination takes an owner, or an optional owner whose
+        # absence leaves the home empty
+        have = type_of(c, scope, bind.value, O, block, i, False)
+        optional = WrapType(Wrap.Maybe, O)
+        if have is not None and have != O and not (t == WrapType(Wrap.Maybe, DST)
+                                                    and have == optional):
+            c.report(bind.value.span, scope.definition,
+                     f"{expr_text(bind.value)} is {type_text(have)}, "
+                     f"expected {type_text(O)}")
     for d in s.debts:
         want = {DebtKind.spent: SRC, DebtKind.old: DST,
                 DebtKind.roots: T(Handle.Anchors), DebtKind.owned: O}[d.kind]

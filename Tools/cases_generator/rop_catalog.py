@@ -245,6 +245,17 @@ ENVIRONMENT = {
     "next_head": Handle.Head,
 }
 
+# The C expression of each implicit name in every product.  The prologue of
+# a case, a function form and a stub binds the same names: `this_instr` is
+# the head's address (the stub's `site`), `next_instr` the head after the
+# instruction.  The activation has no C value yet and is not listed.
+ENVIRONMENT_C = {
+    "thread": "tstate",
+    "frame": "frame",
+    "site": "this_instr",
+    "next_head": "next_instr",
+}
+
 # Types of which an owner, error or resource must be accounted for: `_`
 # cannot discard them (rule 2), and F1 tracks them as linear tokens.
 LINEAR_HANDLES = frozenset({Handle.O, Handle.Err, Handle.Claim, Handle.Pin,
@@ -444,6 +455,10 @@ class Convention:
     returns: CReturn
     single: bool
     outcomes: tuple[COutcome, ...]
+    # The C result is the index of the case, in declaration order; a case
+    # with one payload value gets it through the last C parameter.  The row
+    # declares any number of cases.
+    indexed: bool = False
 
 
 def _conv(name: str, returns: CReturn, *outcomes: COutcome, single: bool = False
@@ -486,6 +501,13 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("pointer_or_null", CReturn.pointer,
           COutcome(CTest.nonnull, _RES, (_RES,), False),
           COutcome(CTest.null, _RES, (), False)),
+    # hit(v)/absent(): the bool says whether the value written through the
+    # last parameter is there; no exception
+    _conv("bool_out_hit", CReturn.bool,
+          COutcome(CTest.true, _RES, (CSource.out,), False, "hit"),
+          COutcome(CTest.false, _RES, (), False, "absent")),
+    # k(): the int is the position of the case among the row's cases
+    Convention("case_index", CReturn.int_status, False, (), True),
     # A status int: 0 is success, negative raised
     _conv("int_zero_ok", CReturn.int_status,
           COutcome(CTest.zero, _RES, (), False),

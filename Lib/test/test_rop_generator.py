@@ -166,6 +166,79 @@ class StubTests(unittest.TestCase):
                          ("F_Copy", "shared", "_PyIR_Rop_Stub_F_Copy"))
 
 
+ENVIRONMENT = """\
+family F(dst:Dst, x:Src) exits(next, miss);
+extern helper probe(t:Thread, f:Frame, s:Site, h:Head) -> Bool
+  effects(reads)
+  c probe_c as bool
+  evidence(review: "r", contract: "c");
+arm F.Probe shared effects() feedback() exits(next, miss)
+{
+  entry():
+    guard probe(thread, frame, site, next_head) else miss;
+    exit next();
+}
+"""
+
+
+class EnvironmentTests(unittest.TestCase):
+    def test_table_covers_implicit_names_the_checker_knows(self):
+        import rop_catalog
+        self.assertLessEqual(set(rop_catalog.ENVIRONMENT_C), set(rop_catalog.ENVIRONMENT))
+
+    def test_each_name_has_the_same_c_expression_in_every_product(self):
+        import io
+        program = rop_check.check([rop_syntax.parse(ENVIRONMENT, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        self.assertEqual(p.left_out, {})
+        for write in (rop_generator.write_cases, rop_generator.write_forms,
+                      rop_generator.write_stubs):
+            out = io.StringIO()
+            write(out, p, [])
+            self.assertIn("probe_c(tstate, frame, this_instr, next_instr)", out.getvalue(),
+                          write.__name__)
+
+
+INDEXED = """\
+family F(dst:Dst, x:Src, fb:Fb<Attr>) exits(next, miss);
+extern helper classify(v:B, f:Fb<Attr>)
+  cases(first(r:Recipe<Attr>), second(), none())
+  effects(reads)
+  c classify_c as case_index
+  evidence(review: "r", contract: "c");
+arm F.Sort shared effects() feedback() exits(next, miss)
+{
+  entry():
+    call classify(use(x), fb) {
+      first -> A();
+      second -> B();
+      none -> C();
+    }
+  A(r:Recipe<Attr>):
+    exit next();
+  B():
+    exit next();
+  C():
+    exit miss();
+}
+"""
+
+
+class IndexedConventionTests(unittest.TestCase):
+    def test_case_index_row_switches_on_the_result(self):
+        program = rop_check.check([rop_syntax.parse(INDEXED, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        self.assertEqual(p.left_out, {})
+        text = "\n".join(p.lowered["F.Sort"].body)
+        self.assertIn("classify_c(", text)
+        self.assertIn("&out1", text)
+        # The case that falls through needs no test
+        self.assertIn("== 1", text)
+        self.assertIn("== 2", text)
+
+
 class GeneratedAddIntTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

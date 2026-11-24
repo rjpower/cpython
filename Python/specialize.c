@@ -2,6 +2,7 @@
 
 #include "opcode.h"
 
+#include "pycore_attr_recipe.h"   // _PyAttrRecipe
 #include "pycore_bytesobject.h"   // _PyBytes_Concat
 #include "pycore_call.h"          // _Py_METH_CALL_FLAGS
 #include "pycore_code.h"
@@ -438,6 +439,7 @@ fb_row_of(_PyFbHeader *h, int opcode)
              * The recorded handler identifies the active payload member. */
             switch (opcode) {
                 case LOAD_ATTR_SHAPE:
+                case ROP_HANDLER_GetAttr_Shape:
                     row.payload.read_kind = ((_PyFbAttr *)h)->read_kind;
                     break;
                 case LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES:
@@ -449,6 +451,7 @@ fb_row_of(_PyFbHeader *h, int opcode)
                 case LOAD_ATTR_METHOD_WITH_VALUES:
                 case LOAD_ATTR_METHOD_NO_DICT:
                 case LOAD_ATTR_METHOD_LAZY_DICT:
+                case ROP_HANDLER_GetMethod_MethodValues:
                     row.payload.class_value = ((_PyFbAttr *)h)->class_value;
                     break;
                 case STORE_ATTR_SHAPE_ADD:
@@ -642,7 +645,8 @@ fb_shape_read_set(_PyInstr *instr, _PyFbHeader *h)
     _PyFbPoly *poly = _PyFb_PolyOf(fb_block(instr), h);
     int count = 0;
     for (; count < FB_POLY_SIZE && poly->handler[count] != 0; count++) {
-        if (poly->handler[count] != LOAD_ATTR_SHAPE ||
+        if ((poly->handler[count] != LOAD_ATTR_SHAPE &&
+             poly->handler[count] != ROP_HANDLER_GetAttr_Shape) ||
             poly->payload[count].read_kind != _Py_FB_READ_SHAPE ||
             poly->type_version[count] == 0 ||
             poly->aux[count] == _Py_SHAPE_NONE)
@@ -677,7 +681,8 @@ fb_method_poly_set(_PyInstr *instr, _PyFbHeader *h)
     int count = 0;
     for (; count < FB_POLY_SIZE && poly->handler[count] != 0; count++) {
         if ((poly->handler[count] != LOAD_ATTR_METHOD_WITH_VALUES &&
-             poly->handler[count] != LOAD_ATTR_METHOD_NO_DICT) ||
+             poly->handler[count] != LOAD_ATTR_METHOD_NO_DICT &&
+             poly->handler[count] != ROP_HANDLER_GetMethod_MethodValues) ||
             poly->type_version[count] == 0)
         {
             return 0;
@@ -719,12 +724,28 @@ instr_is_fused(_PyInstr *instr)
     return (_PyIR_FormatOf(handler)->flags & _PyIR_FUSED) != 0;
 }
 
+/* The evidence rows of GetAttr and GetMethod (classify_getattr and
+ * classify_getmethod, Python/register_ops/getattr.rop) run the attribute
+ * specializer in a collecting mode: a nomination of the LOAD_ATTR family
+ * fills the site's entry as before and is reported to the row, which answers
+ * with a case.  The row never sets a handler; the adaptation macro installs
+ * the arm it chooses. */
+typedef struct {
+    int handler;        // the LOAD_ATTR handler the specializer chose, or 0
+} attr_nomination;
+
+static attr_nomination *attr_collect;
+
 /* Install handler, the form of specialized_opcode (the opcode whose family
  * the site is in) for this site. */
 static inline void
 specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
 {
     assert(!PyErr_Occurred());
+    if (attr_collect != NULL && _PyOpcode_Deopt[specialized_opcode] == LOAD_ATTR) {
+        attr_collect->handler = handler;
+        return;
+    }
     if (handler == LOAD_ATTR_SHAPE) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
         int nlocalsplus = (int)_PyFrame_Exec(current_frame())->nfixed;
@@ -774,6 +795,10 @@ static inline void
 unspecialize(_PyInstr *instr)
 {
     assert(!PyErr_Occurred());
+    if (attr_collect != NULL) {
+        // The row reports the failure; the macro backs off
+        return;
+    }
     STAT_INC(_PyOpcode_Deopt[instr_opcode(instr)], failure);
     // For BINARY_OP, the handler of the operation
     _PyInterpreterFrame *frame = current_frame();
@@ -1517,6 +1542,9 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
             }
             // Retry after the cooldown.  A specialised opcode in memory
             // would read the entry that fb_begin() cleared.
+            if (attr_collect != NULL) {
+                return 0;
+            }
             set_opcode(instr, LOAD_ATTR);
             set_counter(&fb->h, adaptive_counter_cooldown());
             return 0;
@@ -1719,6 +1747,85 @@ fail:
 success:
     PyValue_XCLOSE(descr);
     return;
+}
+
+/* The case that a nominated LOAD_ATTR handler stands for, as an index into
+ * the cases of classify_getattr (instance, shape) or classify_getmethod
+ * (method_values); the last case of each row is "none".  Nominations of
+ * arms that are not written yet are "none": the site stays generic. */
+static int
+attr_case_of(int handler, bool method)
+{
+    switch (handler) {
+        case LOAD_ATTR_INSTANCE_VALUE:
+            return method ? -1 : 0;
+        case LOAD_ATTR_SHAPE:
+        case LOAD_ATTR_SHAPE_LOCAL_TEMP:
+            return method ? -1 : 1;
+        case LOAD_ATTR_METHOD_WITH_VALUES:
+            return method ? 0 : -1;
+        default:
+            return -1;
+    }
+}
+
+static int
+attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
+              PyObject *name, bool method, _PyAttrRecipe *recipe)
+{
+    assert(attr_collect == NULL);
+    attr_nomination nominated = {0};
+    attr_collect = &nominated;
+    (_Py_Specialize_LoadAttr)(owner, site, name);
+    attr_collect = NULL;
+    int kind = attr_case_of(nominated.handler, method);
+    int none = method ? 1 : 2;
+    if (kind < 0) {
+        return none;
+    }
+    _PyFbHeader *h = (_PyFbHeader *)fb;
+    int arm = ROP_HANDLER_GetAttr_Instance;
+    switch (nominated.handler) {
+        case LOAD_ATTR_SHAPE:
+        case LOAD_ATTR_SHAPE_LOCAL_TEMP:
+            arm = ROP_HANDLER_GetAttr_Shape;
+            break;
+        case LOAD_ATTR_METHOD_WITH_VALUES:
+            arm = ROP_HANDLER_GetMethod_MethodValues;
+            break;
+    }
+    // The first poly observation saves what the entry described before
+    fb_record(site, h, arm);
+    bool admitted = method ? _PyAttr_AdmittedMethod(fb, name, recipe)
+        : arm == ROP_HANDLER_GetAttr_Shape ? _PyAttr_AdmittedShape(fb, name, recipe)
+        : _PyAttr_AdmittedInstanceSlot(fb, name, recipe);
+    return admitted ? kind : none;
+}
+
+int
+_PyAttr_ClassifyGetAttr(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
+                        PyObject *name, _PyAttrRecipe *recipe)
+{
+    return attr_classify(owner, site, fb, name, false, recipe);
+}
+
+int
+_PyAttr_ClassifyGetMethod(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
+                          PyObject *name, _PyAttrRecipe *recipe)
+{
+    return attr_classify(owner, site, fb, name, true, recipe);
+}
+
+bool
+_PyAttr_PolyShapeReady(_PyInstr *site, const _PyFbAttr *fb)
+{
+    return fb_shape_read_set(site, (_PyFbHeader *)fb) != 0;
+}
+
+bool
+_PyAttr_PolyMethodReady(_PyInstr *site, const _PyFbAttr *fb)
+{
+    return fb_method_poly_set(site, (_PyFbHeader *)fb) != 0;
 }
 
 #ifdef Py_STATS

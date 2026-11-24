@@ -111,13 +111,13 @@ _PyIRWord *const this_instr = next_instr;
 (void)this_instr;
 frame->instr_ptr = next_instr;
 IR_HOLD_NEXT();
-next_instr += 1;
+next_instr += {advance};
 INSTRUCTION_STATS({handler});"""
 
 
 def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
     lines = [f"// {arm.name} ({arm.region.name})"]
-    lines += PROLOGUE.format(handler=handler(arm.name)).splitlines()
+    lines += PROLOGUE.format(handler=handler(arm.name), advance=1 + low.words).splitlines()
     lines += low.decls
     lines += low.body
     return [indent + line if line else line for line in lines]

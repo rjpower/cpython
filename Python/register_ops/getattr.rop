@@ -5,6 +5,7 @@
 family GetAttr(dst:Dst, obj:Src, name:Name, fb:Fb<Attr>)
   exits(next, miss, again, enter, raise, redirect);
 
+point GetAttr.Failed(current, site, pending) keep() spent(obj) defs() held();
 point GetAttr.Done(current, next_head, clear) keep() spent(obj) defs(dst) held();
 
 // Instance-slot evidence: a recipe for this name on the observed type, read
@@ -13,26 +14,45 @@ extern helper admitted_instance_slot(f:Fb<Attr>, n:Name)
   cases(hit(r:Recipe<Attr>), absent())
   effects(reads)
   feedback(read(entry.kind), read(entry.type_version), read(entry.offset))
-  pending;
+  c _PyAttr_AdmittedInstanceSlot as bool_out_hit
+  evidence(
+    review: "pycore_attr_recipe.h: the entry is the recipe when it holds a live type version.",
+    contract: "Reads the entry only; no callee, no failure. The name is the site's own,"
+              "so the entry cannot belong to another name.");
 
 // guard_current_nonzero_type_version: the object's type has the recipe's
 // live nonzero version
 extern primitive instance_version(o:Obj, r:Recipe<Attr>) -> Bool
   effects(reads)
   test(type_version(o, r))
-  pending;
+  c _PyAttr_InstanceVersion as bool
+  evidence(
+    review: "pycore_attr_recipe.h: the type's version tag equals the recipe's, a relaxed load.",
+    contract: "One load of the type, no memory write, no callee.",
+    lowering: "none yet: an arm that calls it keeps the call of its form (rop_leaf has no lowering)",
+    test: "test_rop_getattr row tests");
 
 // guard_managed_inline_values_valid
 extern primitive valid_inline_values(o:Obj) -> Bool
   effects(reads)
   test(has_values(o))
-  pending;
+  c _PyAttr_ValidInlineValues as bool
+  evidence(
+    review: "pycore_attr_recipe.h: the valid byte of the inline values, an atomic load.",
+    contract: "Requires a type with inline values, which a version match proves.",
+    lowering: "none yet: an arm that calls it keeps the call of its form (rop_leaf has no lowering)",
+    test: "test_rop_getattr row tests");
 
 // The slot the recipe names; vacant on a valid instance is NULL
 extern primitive borrow_value_slot(o:Obj, r:Recipe<Attr>) -> Maybe<B>
   effects(reads)
   requires(type_version(o, r), has_values(o))
-  pending;
+  c _PyAttr_BorrowValueSlot as borrow
+  evidence(
+    review: "pycore_attr_recipe.h: the word at the recipe's offset in the values, as a borrow.",
+    contract: "A read; NULL is a vacant slot, which is a legal value of the type.",
+    lowering: "none yet: an arm that calls it keeps the call of its form (rop_leaf has no lowering)",
+    test: "test_rop_getattr row tests");
 
 arm GetAttr.Instance inline
   effects(reads, writes, releases)
@@ -54,6 +74,403 @@ arm GetAttr.Instance inline
     guard present(item) else miss;
     let result:O = dup(unwrap(item));
     publish [dst = result] retire [spent(obj), old(dst)] at GetAttr.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+// Python lookup: _PyValue_GetAttr on the receiver the anchors hold, the
+// frame checked on return like binary_at_origin.  Body with the shared
+// call-boundary macros.
+macro getattr_at_origin(n:Name, a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+  pending;
+
+// Adaptation evidence (specialize.c): the attribute specializer in
+// collecting mode fills the site's entry, records the observation in the
+// site's poly table and answers with the arm family that the receiver
+// stands for.  Arms that are not written nominate "none".
+extern helper classify_getattr(v:B, at:Site, f:Fb<Attr>, n:Name)
+  cases(instance(r:Recipe<Attr>), shape(r:Recipe<Attr>), none())
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry))
+  c _PyAttr_ClassifyGetAttr as case_index
+  evidence(
+    review: "specialize.c attr_classify: runs _Py_Specialize_LoadAttr with its handler choice collected; the case is the choice, the recipe is the entry it wrote.",
+    contract: "Writes the site's entry and poly table and sets no handler. No Python runs: the lookups are NoAlloc.");
+
+extern helper poly_shape_ready(at:Site, f:Fb<Attr>) -> Bool
+  effects(reads)
+  feedback(read(entry))
+  c _PyAttr_PolyShapeReady as bool
+  evidence(
+    review: "specialize.c: fb_shape_read_set, two to four live shape rows of distinct type versions.",
+    contract: "Reads the poly table only.");
+
+// Adaptation policy (addendum section 2): sample when the counter is due,
+// nominate by evidence, and select poly when the site's table is ready.
+macro adapt_before_use_getattr(f:Fb<Attr>, o:Src, n:Name)
+  cases(run(), changed(t:Ticket<Attr>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_getattr(use(o), site, f, n) {
+      instance -> Instance();
+      shape -> Shape();
+      none -> Other();
+    }
+  Instance(ri:Recipe<Attr>):
+    let ci:Candidate<Attr> = candidate(GetAttr.Instance, ri);
+    call install(site, f, ci) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Shape(rs:Recipe<Attr>):
+    branch poly_shape_ready(site, f) -> Poly(), Mono(rs);
+  Poly():
+    let cp:Candidate<Attr> = candidate(GetAttr.PolyShape);
+    call install(site, f, cp) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Mono(rm:Recipe<Attr>):
+    let cm:Candidate<Attr> = candidate(GetAttr.Shape, rm);
+    call install(site, f, cm) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Attr>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+arm GetAttr.Generic shared
+  effects(runs_python, raises)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise, redirect)
+{
+  entry():
+    call adapt_before_use_getattr(fb, obj, name) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Attr>):
+    exit again(t);
+  Run():
+    let a:Anchors = anchor_for_call([obj]);
+    call getattr_at_origin(name, a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(obj), old(dst)] at GetAttr.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [obj], e);
+    exit raise(GetAttr.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+// Shape evidence: the site's recipe when it holds a shape read
+extern helper admitted_shape(f:Fb<Attr>, n:Name)
+  cases(hit(r:Recipe<Attr>), absent())
+  effects(reads)
+  feedback(read(entry.kind), read(entry.type_version), read(entry.shape), read(entry.offset))
+  c _PyAttr_AdmittedShape as bool_out_hit
+  evidence(
+    review: "pycore_attr_recipe.h: the entry is the recipe when its read kind is a shape read.",
+    contract: "Reads the entry only; no callee, no failure.");
+
+// The owner's shape is the recipe's.  An owner has a shape only while it has
+// valid inline values, and a shape names the slots that are filled.
+extern primitive shape_current(o:Obj, r:Recipe<Attr>) -> Bool
+  effects(reads)
+  requires(type_version(o, r))
+  test(has_values(o))
+  c _PyAttr_ShapeCurrent as bool
+  evidence(
+    review: "pycore_attr_recipe.h: the shape byte of the inline values equals the recipe's.",
+    contract: "One load. The shape is _Py_SHAPE_NONE for an owner with a dictionary or invalid values.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_getattr row tests");
+
+// A slot that the type version and the shape prove filled
+extern primitive borrow_shape_slot(o:Obj, r:Recipe<Attr>) -> B
+  effects(reads)
+  requires(type_version(o, r), has_values(o))
+  c _PyAttr_BorrowValueSlotFilled as borrow
+  evidence(
+    review: "pycore_attr_recipe.h: the word at the recipe's offset; asserted not NULL.",
+    contract: "A read; the shape names the slot as filled, so the borrow is a value.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_getattr row tests");
+
+// The row of a poly table for the owner's type and shape: the whole
+// recipe of that observation.
+extern helper poly_shape(fr:Frame, f:Fb<Attr>, o:Obj)
+  cases(hit(r:Recipe<Attr>), absent())
+  effects(reads)
+  ensures(hit.type_version(o, r), hit.has_values(o))
+  c _PyAttr_PolyShape as bool_out_hit
+  evidence(
+    review: "pycore_attr_recipe.h: the row of the owner's version whose shape is the owner's.",
+    contract: "Reads the site's poly table; no callee. The hit carries the version and the shape that it matched.");
+
+arm GetAttr.Shape inline
+  effects(reads, writes, releases)
+  feedback(read(entry.kind), read(entry.type_version), read(entry.shape), read(entry.offset))
+  exits(next, miss)
+{
+  entry():
+    call admitted_shape(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    guard shape_current(o, r) else miss;
+    let result:O = dup(borrow_shape_slot(o, r));
+    publish [dst = result] retire [spent(obj), old(dst)] at GetAttr.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+// Two to four compatible recipes of one site: the row of the owner's type
+arm GetAttr.PolyShape inline
+  effects(reads, writes, releases)
+  feedback(read(entry.kind), read(entry.rows))
+  exits(next, miss)
+{
+  entry():
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    call poly_shape(frame, fb, o) {
+      hit -> Read();
+      absent -> Miss();
+    }
+  Read(r:Recipe<Attr>):
+    let result:O = dup(borrow_shape_slot(o, r));
+    publish [dst = result] retire [spent(obj), old(dst)] at GetAttr.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+// GetMethod: the method form of attribute lookup.  It publishes the callable
+// and, in its own home, the receiver or an absent self.
+
+family GetMethod(callable:Dst, self_dst:Maybe<Dst>, obj:Src, name:Name, fb:Fb<Attr>)
+  exits(next, miss, again, raise, redirect);
+
+point GetMethod.Failed(current, site, pending) keep() spent(obj) defs() held();
+point GetMethod.Done(current, next_head, clear) keep() spent(obj) defs(callable, self_dst) held();
+
+// Method evidence: the site's recipe when it names an unshadowed method of
+// the observed type
+extern helper admitted_method(f:Fb<Attr>, n:Name)
+  cases(hit(r:Recipe<Attr>), absent())
+  effects(reads)
+  feedback(read(entry.kind), read(entry.type_version), read(entry.descr))
+  c _PyAttr_AdmittedMethod as bool_out_hit
+  evidence(
+    review: "pycore_attr_recipe.h: the entry is the recipe when it holds a live type version and a method.",
+    contract: "Reads the entry only; no callee, no failure.");
+
+// The method object the recipe caches, under its guard
+extern primitive receiver_valid(o:Obj, r:Recipe<Attr>) -> Bool
+  effects(reads)
+  c _PyAttr_ValidReceiver as bool
+  evidence(
+    review: "pycore_attr_recipe.h: a values-layout row needs the receiver's inline values valid.",
+    contract: "One load of the valid byte, only for a values-layout recipe.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_getattr row tests");
+
+extern helper poly_method(fr:Frame, f:Fb<Attr>, o:Obj)
+  cases(hit(r:Recipe<Attr>), absent())
+  effects(reads)
+  ensures(hit.type_version(o, r))
+  c _PyAttr_PolyMethod as bool_out_hit
+  evidence(
+    review: "pycore_attr_recipe.h: the row of the owner's type version in the site's poly table.",
+    contract: "Reads the poly table; no callee. The hit carries the version it matched.");
+
+extern primitive borrow_method(r:Recipe<Attr>) -> B
+  effects(reads)
+  c _PyAttr_BorrowMethod as borrow
+  evidence(
+    review: "pycore_attr_recipe.h: _PyValueGuarded_Load of the entry's class value.",
+    contract: "A read of the recipe's own payload; an object with the method-descriptor flag.",
+    lowering: "none yet: an arm that calls it keeps the call of its form",
+    test: "test_rop_getattr row tests");
+
+// _PyValue_GetMethod on the receiver the anchors hold: the callable and
+// either the receiver (an unbound method) or an absent self
+macro getmethod_at_origin(n:Name, a:Anchors)
+  cases(ok(f:O, s:Maybe<O>), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+  pending;
+
+extern helper classify_getmethod(v:B, at:Site, f:Fb<Attr>, n:Name)
+  cases(method_values(r:Recipe<Attr>), none())
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry))
+  c _PyAttr_ClassifyGetMethod as case_index
+  evidence(
+    review: "specialize.c attr_classify: as classify_getattr, for a word with the method bit.",
+    contract: "Writes the site's entry and poly table and sets no handler.");
+
+extern helper poly_method_ready(at:Site, f:Fb<Attr>) -> Bool
+  effects(reads)
+  feedback(read(entry))
+  c _PyAttr_PolyMethodReady as bool
+  evidence(
+    review: "specialize.c: fb_method_poly_set, two to four method rows of distinct type versions.",
+    contract: "Reads the poly table only.");
+
+macro adapt_before_use_getmethod(f:Fb<Attr>, o:Src, n:Name)
+  cases(run(), changed(t:Ticket<Attr>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_getmethod(use(o), site, f, n) {
+      method_values -> Method();
+      none -> Other();
+    }
+  Method(rr:Recipe<Attr>):
+    branch poly_method_ready(site, f) -> Poly(), Mono(rr);
+  Poly():
+    let cp:Candidate<Attr> = candidate(GetMethod.PolyMethod);
+    call install(site, f, cp) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Mono(r:Recipe<Attr>):
+    let cm:Candidate<Attr> = candidate(GetMethod.MethodValues, r);
+    call install(site, f, cm) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Other():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Attr>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+arm GetMethod.MethodValues inline
+  effects(reads, writes, releases)
+  feedback(read(entry.kind), read(entry.type_version), read(entry.descr))
+  exits(next, miss)
+{
+  entry():
+    call admitted_method(fb, name) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    guard instance_version(o, r) else miss;
+    guard valid_inline_values(o) else miss;
+    let method:O = dup(borrow_method(r));
+    let receiver:O = acquire(obj);
+    publish [callable = method, self_dst = receiver]
+      retire [spent(obj), old(callable), old(self_dst)] at GetMethod.Done;
+    exit next();
+  Miss():
+    exit miss();
+}
+
+arm GetMethod.Generic shared
+  effects(runs_python, raises)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise, redirect)
+{
+  entry():
+    call adapt_before_use_getmethod(fb, obj, name) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(t:Ticket<Attr>):
+    exit again(t);
+  Run():
+    let a:Anchors = anchor_for_call([obj]);
+    call getmethod_at_origin(name, a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(f:O, s:Maybe<O>):
+    publish [callable = f, self_dst = s]
+      retire [roots(a), spent(obj), old(callable), old(self_dst)] at GetMethod.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [obj], e);
+    exit raise(GetMethod.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+// Two to four method rows of one site: the row of the receiver's type, with
+// its own shadowing guard
+arm GetMethod.PolyMethod inline
+  effects(reads, writes, releases)
+  feedback(read(entry.kind), read(entry.rows))
+  exits(next, miss)
+{
+  entry():
+    let v:B = use(obj);
+    guard is_object(v) else miss;
+    let o:Obj = as_object(v);
+    call poly_method(frame, fb, o) {
+      hit -> Check();
+      absent -> Miss();
+    }
+  Check(r:Recipe<Attr>):
+    guard receiver_valid(o, r) else miss;
+    let method:O = dup(borrow_method(r));
+    let receiver:O = acquire(obj);
+    publish [callable = method, self_dst = receiver]
+      retire [spent(obj), old(callable), old(self_dst)] at GetMethod.Done;
     exit next();
   Miss():
     exit miss();

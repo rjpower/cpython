@@ -1216,12 +1216,17 @@
      * (ir_leaf.capability_expansion), a test of the operand's tag bits \
      * (the PyValue_IsInlineInt row: EFFECTS()), so it reads no heap or \
      * frame state */ \
-    MACRO(IR_GUARD_INLINE_INT, ARGS(borrowed), NONE, EFFECTS(), \
+    MACRO(IR_GUARD_INLINE_INT, ARGS(borrowed), GUARD(inline_int), EFFECTS(), \
           EXITS(miss)) \
+    /* IR_GUARD_ELEMENT_TYPE's fact is exact(T) with T named by its scalar \
+     * argument (LIST or TUPLE, ir_records.MARKER_FACTS), which no GUARD \
+     * entry can bind yet */ \
     MACRO(IR_GUARD_ELEMENT_TYPE, ARGS(borrowed, scalar), NONE, \
           EFFECTS(reads), EXITS(miss)) \
+    /* MARKER_FACTS: the subscript (argument 1) is in_bounds of the \
+     * container (argument 0) */ \
     MACRO(IR_GUARD_ELEMENT_INDEX, ARGS(borrowed, borrowed, scalar, scalar), \
-          NONE, EFFECTS(reads), EXITS(miss)) \
+          GUARD(, in_bounds(0)), EFFECTS(reads), EXITS(miss)) \
     /* GUARD_TOKENS: IR_GUARD_SHAPE_READ is an EXIT_GUARD; its owner is a \
      * PyObject * (PyValue_AsKnownObjectBorrow), the rest scalars */ \
     MACRO(IR_GUARD_SHAPE_READ, ARGS(object, scalar, scalar), NONE, \

@@ -30,7 +30,7 @@ import rop_check
 import rop_leaf
 from generators_common import root_relative_path, write_header
 from rop_cgen import ESCAPING, Lowering, Unsupported, lower_arm, pending_blockers
-from rop_catalog import Effect, FieldKind, Handle, Slot
+from rop_catalog import Effect, FieldKind, Handle, Slot, Wrap
 from rop_check import Program
 from rop_model import Arm, HandleType, Param, WrapType
 from rop_print import type_text
@@ -118,7 +118,9 @@ INSTRUCTION_STATS({handler});"""
 
 def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
     lines = [f"// {arm.name} ({arm.region.name})"]
-    lines += PROLOGUE.format(handler=handler(arm.name), advance=1 + low.words).splitlines()
+    # A span instruction's length depends on its counts
+    advance = "_PyIR_SpanWordLength(opcode, ir_word)" if low.spans else 1 + low.words
+    lines += PROLOGUE.format(handler=handler(arm.name), advance=advance).splitlines()
     lines += low.decls
     lines += low.body
     return [indent + line if line else line for line in lines]
@@ -280,16 +282,22 @@ def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
     imm = fb = "_PyIR_LOC_NONE"
     fb_schema = None
     ninputs = writes = 0
-    has_target = has_args = False
+    has_target = has_args = has_span = False
+    for slot in enc.elements:
+        roles[HEAD_FIELDS[slot]] = "_PyIR_ROLE_ELEMENT"
     for pl in enc.placements:
         param = params[pl.operand]
         inner = param.type.arg if isinstance(param.type, WrapType) else param.type
-        has_args |= isinstance(inner, HandleType) and inner.handle is Handle.Args
-        if pl.kind is FieldKind.vector:
+        is_args = isinstance(inner, HandleType) and inner.handle is Handle.Args
+        has_args |= is_args
+        if pl.kind is FieldKind.vector and is_args:
             continue
         in_head = bool(pl.slots) and pl.slots[0] in HEAD_FIELDS
         role = "_PyIR_ROLE_IMM"
-        if pl.kind is FieldKind.home:
+        if pl.kind is FieldKind.vector:
+            role = "_PyIR_ROLE_COUNT"
+            has_span = True
+        elif pl.kind is FieldKind.home:
             kind, _ = operand_role(param)
             if kind == "SRC":
                 role = f"_PyIR_ROLE_IN0 + {ninputs}"
@@ -339,8 +347,10 @@ def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
     return ir_numbers.ArmFormat(
         tuple(flags), tuple(e for e in EFFECT_ORDER if e in effects), tuple(roles),
         imm, fb, ninputs, -ninputs if writes else None, (1 << ninputs) - 1,
-        fb_schema, "_PyIR_OPERANDS_CALL" if has_args else "_PyIR_OPERANDS_NONE",
+        fb_schema, ("_PyIR_OPERANDS_CALL" if has_args else
+                    "_PyIR_OPERANDS_SPANS" if has_span else "_PyIR_OPERANDS_NONE"),
         0 if has_args else enc.words, writes)
+
 
 
 def arm_entries(p: Products) -> list[ir_numbers.ArmEntry]:
@@ -498,6 +508,12 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     for k, name in enumerate(wrapped):
         out.write(f"#define {handler(name)}_Observed "
                   f"(ROP_FIRST_HANDLER + {len(prog.arms) + k})\n")
+    out.write("\n/* The arm of a statically selected family that each selection admits\n"
+              " * (its `select`): ROP_SELECT_<Family>_<member>... */\n")
+    for name, arm in prog.arms.items():
+        if arm.select:
+            members = "_".join(m.value for m in arm.select)
+            out.write(f"#define ROP_SELECT_{arm.family}_{members} {handler(name)}\n")
     out.write("\n/* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */\n")
     for name, k in p.points.items():
         out.write(f"#define ROP_POINT_{c_name(name)} {k}\n")

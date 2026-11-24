@@ -871,6 +871,9 @@ static _PyIRTransfer ir_run_MATCH_KEYS(PyThreadState *tstate, _PyInterpreterFram
 static _PyIRTransfer ir_run_MATCH_MAPPING(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_MATCH_SEQUENCE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_MATERIALIZE_KWARGS(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Move_Copy(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Move_Retire(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Move_Transfer(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_NOP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_POP_EXCEPT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_POP_ITER(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -17760,9 +17763,9 @@ static const _PyIRForm ir_handler_forms[512] = {
     [428] = ir_run_GetMethod_MethodValues,
     [429] = ir_run_UNKNOWN_OPCODE,
     [430] = ir_run_GetMethod_PolyMethod,
-    [431] = ir_run_UNKNOWN_OPCODE,
-    [432] = ir_run_UNKNOWN_OPCODE,
-    [433] = ir_run_UNKNOWN_OPCODE,
+    [431] = ir_run_Move_Transfer,
+    [432] = ir_run_Move_Retire,
+    [433] = ir_run_Move_Copy,
     [434] = ir_run_UNKNOWN_OPCODE,
     [435] = ir_run_UNKNOWN_OPCODE,
     [436] = ir_run_UNKNOWN_OPCODE,

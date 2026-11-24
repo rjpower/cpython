@@ -26,6 +26,27 @@ typedef struct {
     PyValue *home[_PY_ROP_MAX_SRCS];
 } _PyRopSrcs;
 
+/* A span operand of the instruction whose head is head, which runs as
+ * handler (pycore_ir.h, _PyIR_SpanElement()): count homes from element
+ * first of the word's spans */
+typedef struct {
+    _PyInterpreterFrame *frame;
+    const _PyIRWord *head;
+    int handler;
+    int first;
+    int count;
+} _PyRopSpan;
+
+/* The rows of the Move arms, in ceval.c */
+PyAPI_FUNC(void) _PyFrame_ParallelMove(_PyInterpreterFrame *frame, int n,
+                                       const int32_t *src, const int32_t *dst,
+                                       int stride);
+PyAPI_FUNC(void) _PyFrame_ApplyRecipe(_PyInterpreterFrame *frame,
+                                      const int32_t *recipe);
+PyAPI_FUNC(void) _PyRop_ParallelMove(const _PyRopSpan *d, const _PyRopSpan *s);
+PyAPI_FUNC(void) _PyRop_CloseRest(const _PyRopSpan *d, const _PyRopSpan *s);
+PyAPI_FUNC(void) _PyRop_CopyHomes(const _PyRopSpan *d, const _PyRopSpan *s);
+
 /* The values a call reads.  A local source is held by an owner of its own,
  * because the call can reassign the local; a temporary is held by its
  * home. */

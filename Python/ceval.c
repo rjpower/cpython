@@ -2288,79 +2288,92 @@ error_clear_slots(_PyInterpreterFrame *frame, int first)
     }
 }
 
-/* Whether a pair of recipe other than a done one has source s */
+/* Whether a pair other than a done one has source s */
 static int
-recipe_pending_source(const int32_t *recipe, const uint64_t *done, int s)
+parallel_pending_source(int n, const int32_t *src, int stride,
+                        const uint64_t *done, int s)
 {
-    for (int q = 0; q < recipe[0]; q++) {
-        if (!((done[q >> 6] >> (q & 63)) & 1) && recipe[1 + 2 * q] == s) {
+    for (int q = 0; q < n; q++) {
+        if (!((done[q >> 6] >> (q & 63)) & 1) && src[q * stride] == s) {
             return 1;
         }
     }
     return 0;
 }
 
-/* Apply the ingress recipe of an exceptional edge: put each source in its
- * home as if all moved at once, then release what the homes held.  A home
+/* The parallel move of n pairs of homes, src[q * stride] to
+ * dst[q * stride], as if all moved at once: the Move instruction's and the
+ * unwinder's ingress recipe's (pyjit/design/proposals/rir90.md).  A home
  * that no pending pair still reads takes its value by a swap, which leaves
  * what the home held at the source; what is left forms cycles, each turned
- * through one value.  The sources that are no home end with the values the
- * homes held. */
-static void
-error_apply_recipe(_PyInterpreterFrame *frame, int index)
+ * through one value held in a C local, the rooted temporary.  Nothing is
+ * closed: a source that is no destination ends with what its destination
+ * held, which the caller closes, if anything. */
+void
+_PyFrame_ParallelMove(_PyInterpreterFrame *frame, int n, const int32_t *src,
+                      const int32_t *dst, int stride)
 {
-    const int32_t *recipe = _PyIR_Recipe(_PyCode_IR(_PyFrame_GetCode(frame)),
-                                         index);
-    int n = recipe[0];
-    assert(n > 0 && n <= IR_MAX_SLOTS);
+    assert(n >= 0 && n <= IR_MAX_SLOTS);
     uint64_t done[IR_MAX_SLOTS / 64 + 1] = {0};
-#define RECIPE_DONE(Q) (done[(Q) >> 6] |= (uint64_t)1 << ((Q) & 63))
-#define RECIPE_IS_DONE(Q) ((done[(Q) >> 6] >> ((Q) & 63)) & 1)
+#define MOVE_DONE(Q) (done[(Q) >> 6] |= (uint64_t)1 << ((Q) & 63))
+#define MOVE_IS_DONE(Q) ((done[(Q) >> 6] >> ((Q) & 63)) & 1)
     int progress = 1;
     while (progress) {
         progress = 0;
         for (int q = 0; q < n; q++) {
-            int s = recipe[1 + 2 * q], h = recipe[2 + 2 * q];
-            if (RECIPE_IS_DONE(q) || recipe_pending_source(recipe, done, h)) {
+            int s = src[q * stride], h = dst[q * stride];
+            if (MOVE_IS_DONE(q) ||
+                parallel_pending_source(n, src, stride, done, h)) {
                 continue;
             }
             PyValue value = _PyFrame_TakeHome(frame, &frame->base[s]);
             PyValue held = _PyFrame_TakeHome(frame, &frame->base[h]);
             _PyFrame_WriteHome(frame, &frame->base[h], value);
             _PyFrame_WriteHome(frame, &frame->base[s], held);
-            RECIPE_DONE(q);
+            MOVE_DONE(q);
             progress = 1;
         }
     }
     for (int q = 0; q < n; q++) {
-        if (RECIPE_IS_DONE(q)) {
+        if (MOVE_IS_DONE(q)) {
             continue;
         }
         // Every home of a cycle is a source of it
-        int s = recipe[1 + 2 * q];
+        int s = src[q * stride];
         PyValue first = _PyFrame_TakeHome(frame, &frame->base[s]);
         int vacant = s;
         for (;;) {
             int r = -1;
             for (int p = 0; p < n && r < 0; p++) {
-                if (!RECIPE_IS_DONE(p) && recipe[2 + 2 * p] == vacant) {
+                if (!MOVE_IS_DONE(p) && dst[p * stride] == vacant) {
                     r = p;
                 }
             }
             assert(r >= 0);
-            RECIPE_DONE(r);
+            MOVE_DONE(r);
             if (r == q) {
                 _PyFrame_WriteHome(frame, &frame->base[vacant], first);
                 break;
             }
-            int from = recipe[1 + 2 * r];
+            int from = src[r * stride];
             _PyFrame_WriteHome(frame, &frame->base[vacant],
                                _PyFrame_TakeHome(frame, &frame->base[from]));
             vacant = from;
         }
     }
-#undef RECIPE_DONE
-#undef RECIPE_IS_DONE
+#undef MOVE_DONE
+#undef MOVE_IS_DONE
+}
+
+/* Apply an ingress recipe, recipe[0] pairs of source and home: put each
+ * source in its home as if all moved at once, then release what the homes
+ * held, which the sources that are no home are left with. */
+void
+_PyFrame_ApplyRecipe(_PyInterpreterFrame *frame, const int32_t *recipe)
+{
+    int n = recipe[0];
+    assert(n > 0 && n <= IR_MAX_SLOTS);
+    _PyFrame_ParallelMove(frame, n, &recipe[1], &recipe[2], 2);
     for (int q = 0; q < n; q++) {
         int s = recipe[1 + 2 * q];
         int home = 0;
@@ -2370,6 +2383,66 @@ error_apply_recipe(_PyInterpreterFrame *frame, int index)
         if (!home) {
             PyValue_XCLOSE(_PyFrame_TakeHome(frame, &frame->base[s]));
         }
+    }
+}
+
+static void
+error_apply_recipe(_PyInterpreterFrame *frame, int index)
+{
+    _PyFrame_ApplyRecipe(frame, _PyIR_Recipe(
+        _PyCode_IR(_PyFrame_GetCode(frame)), index));
+}
+
+/* The rows of the Move arms (Python/register_ops/values.rop).  The homes of
+ * a span are decoded once; a set has at most IR_FIELD_MAX pairs. */
+static int
+span_slots(const _PyRopSpan *span, int32_t *slots)
+{
+    for (int i = 0; i < span->count; i++) {
+        slots[i] = _PyIR_SpanElement(span->head, span->handler, span->first + i);
+    }
+    return span->count;
+}
+
+void
+_PyRop_ParallelMove(const _PyRopSpan *d, const _PyRopSpan *s)
+{
+    int32_t dst[IR_FIELD_MAX + 1], src[IR_FIELD_MAX + 1];
+    int n = span_slots(d, dst);
+    assert(s->count >= n);
+    for (int i = 0; i < n; i++) {
+        src[i] = _PyIR_SpanElement(s->head, s->handler, s->first + i);
+    }
+    _PyFrame_ParallelMove(d->frame, n, src, dst, 1);
+}
+
+void
+_PyRop_CloseRest(const _PyRopSpan *d, const _PyRopSpan *s)
+{
+    // Every home is written before any close runs a finalizer
+    PyValue taken[IR_FIELD_MAX + 1];
+    int n = 0;
+    for (int i = d->count; i < s->count; i++) {
+        int slot = _PyIR_SpanElement(s->head, s->handler, s->first + i);
+        taken[n++] = _PyFrame_TakeHome(s->frame, &s->frame->base[slot]);
+    }
+    for (int i = 0; i < n; i++) {
+        PyValue_XCLOSE(taken[i]);
+    }
+}
+
+void
+_PyRop_CopyHomes(const _PyRopSpan *d, const _PyRopSpan *s)
+{
+    assert(d->count == s->count);
+    for (int i = 0; i < d->count; i++) {
+        int from = _PyIR_SpanElement(s->head, s->handler, s->first + i);
+        int to = _PyIR_SpanElement(d->head, d->handler, d->first + i);
+        PyValue old = _PyFrame_TakeHome(d->frame, &d->frame->base[to]);
+        assert(PyValue_IsNull(old));
+        (void)old;
+        _PyFrame_WriteHome(d->frame, &d->frame->base[to],
+                           PyValue_DUP(PyValue_Borrow(d->frame->base[from])));
     }
 }
 

@@ -2646,9 +2646,9 @@ class IdentityTranslationTest(unittest.TestCase):
 
 
 class MoveResolutionTest(unittest.TestCase):
-    """Where allocation cannot give a value its home, resolution moves it by
-    SWAP words into vacant (NULL) homes, so that every value keeps one
-    owner (Python/regcfg.c, resolve_moves)"""
+    """Where allocation cannot give a value its home, resolution emits one
+    Move instruction per parallel set of moves, so that every value keeps
+    one owner (Python/regcfg.c, resolve_moves)"""
 
     class Manager:
         def __enter__(self):
@@ -2665,6 +2665,31 @@ class MoveResolutionTest(unittest.TestCase):
             out.append({x for x in a} <= {y for y in b})
         return out
 
+    @staticmethod
+    def cycle(a, b, c):
+        # The chained comparison exchanges b.real and its copy of b: a
+        # Move whose destinations are its sources
+        if a <= b.real < c:
+            return 1
+        return 0
+
+    @staticmethod
+    def move_sets(func):
+        """The (destinations, sources) of each Move word of func"""
+        ir = get_ir(func.__code__, True)
+        sets = []
+        for i, word in enumerate(ir):
+            if not word[0].startswith("Move."):
+                continue
+            ndst, nsrc = word[1], word[2]
+            elements = list(word[3:])
+            for operands in ir[i + 1:]:
+                if operands[0] != "IR_OPERANDS":
+                    break
+                elements += operands[1:]
+            sets.append((elements[:ndst], elements[ndst:ndst + nsrc]))
+        return sets
+
     def sentinels(self):
         s1, s2 = object(), object()
         return s1, s2, [s1], [s1, s2], self.Manager()
@@ -2672,8 +2697,21 @@ class MoveResolutionTest(unittest.TestCase):
     def counts(self, *objs):
         return [sys.getrefcount(o) for o in objs]
 
-    def test_moves_are_swap_words(self):
-        self.assertIn("SWAP", [w[0] for w in words(self.moves)])
+    def test_moves_are_move_words(self):
+        self.moves([], [], self.Manager(), [])
+        found = handlers(self.moves)
+        self.assertIn("Move.Transfer", found)
+        self.assertNotIn("SWAP", found)
+
+    def test_one_pair_is_one_word(self):
+        # A set of one pair carries both homes in its head word
+        self.moves([], [], self.Manager(), [])
+        ir = get_ir(self.moves.__code__, True)
+        singles = [i for i, word in enumerate(ir)
+                   if word[0] == "Move.Transfer" and word[1:3] == (1, 1)]
+        self.assertTrue(singles)
+        for i in singles:
+            self.assertNotEqual(ir[i + 1][0], "IR_OPERANDS")
 
     def test_moves_leave_one_owner(self):
         s1, s2, a, b, m = self.sentinels()
@@ -2683,22 +2721,80 @@ class MoveResolutionTest(unittest.TestCase):
             self.assertEqual(self.moves(b, a, m, []), [False])
         self.assertEqual(self.counts(s1, s2, a, b, m), before)
 
-    def test_every_move_unwinds(self):
+    def test_cycle_word(self):
+        class Real:
+            def __init__(self, real):
+                self.real = real
+        b = Real(object())
+        self.cycle(0, Real(1), 2)
+        cycles = [(dsts, srcs) for dsts, srcs in self.move_sets(self.cycle)
+                  if sorted(dsts) == sorted(srcs) and dsts != srcs]
+        self.assertTrue(cycles)
+        before = self.counts(b, b.real)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
+            self.assertEqual(self.cycle(0, Real(1), 2), 1)
+            self.assertEqual(self.cycle(0, Real(5), 2), 0)
+            with self.assertRaises(TypeError):
+                self.cycle(0, b, 2)
+        self.assertEqual(self.counts(b, b.real), before)
+
+    def test_cycle_recipe(self):
+        # The unwinder's ingress recipe runs the same parallel move as the
+        # Move word: the cycle of self.cycle, then a longer cycle with a
+        # chain whose last source is released
+        dsts, srcs = next((d, s) for d, s in self.move_sets(self.cycle)
+                          if sorted(d) == sorted(s) and d != s)
+
+        names = [f"a{i}" for i in range(max(dsts + srcs) + 1)]
+        ns = {}
+        exec(f"def frame({', '.join(names)}):\n    yield", ns)
+        values = [object() for _ in names]
+        # The first call of counts holds one more reference in its loop
+        self.counts(*values)
+        before = self.counts(*values)
+        gen = ns["frame"](*values)
+        _testinternalcapi.apply_recipe(gen, list(zip(srcs, dsts)))
+        homes = gen.gi_frame.f_locals
+        expected = list(values)
+        for d, s in zip(dsts, srcs):
+            expected[d] = values[s]
+        self.assertEqual([homes[name] for name in names], expected)
+        del gen, homes, expected
+        self.assertEqual(self.counts(*values), before)
+
+        def frame(a, b, c, d, e):
+            yield
+
+        values = [object() for _ in range(5)]
+        before = self.counts(*values)
+        gen = frame(*values)
+        # a -> b -> c -> a, d -> e: e's value is released and d is vacated
+        _testinternalcapi.apply_recipe(gen, [(0, 1), (1, 2), (2, 0), (3, 4)])
+        homes = gen.gi_frame.f_locals
+        self.assertEqual([homes[name] for name in "abce"],
+                         [values[2], values[0], values[1], values[3]])
+        self.assertNotIn("d", homes)
+        # The frame holds a, b, c and d's value, and released e's
+        self.assertEqual(self.counts(*values),
+                         [n + 1 for n in before[:4]] + before[4:])
+        del gen, homes
+        self.assertEqual(self.counts(*values), before)
+
+    def raise_at_each_word(self, func, args):
         # An INSTRUCTION event that raises fails the word that it reports,
-        # SWAP words of resolution included
+        # the Move words of resolution included
         mon = sys.monitoring
         tool = mon.DEBUGGER_ID
-        code = self.moves.__code__
-        s1, s2, a, b, m = self.sentinels()
+        code = func.__code__
         offsets = []
         mon.use_tool_id(tool, "test_ir")
         try:
             mon.register_callback(tool, mon.events.INSTRUCTION,
                                   lambda code, offset: offsets.append(offset))
             mon.set_local_events(tool, code, mon.events.INSTRUCTION)
-            self.moves(a, b, m, [])
+            func(*args())
             mon.set_local_events(tool, code, 0)
-            before = self.counts(s1, s2, a, b, m)
+            before = self.counts(*args())
             for target in sorted(set(offsets)):
                 def event(code, offset):
                     if offset == target:
@@ -2707,13 +2803,23 @@ class MoveResolutionTest(unittest.TestCase):
                 mon.set_local_events(tool, code, mon.events.INSTRUCTION)
                 with self.subTest(offset=target):
                     with self.assertRaises(ZeroDivisionError):
-                        self.moves(a, b, m, [])
+                        func(*args())
                 mon.set_local_events(tool, code, 0)
-            self.assertEqual(self.counts(s1, s2, a, b, m), before)
+            self.assertEqual(self.counts(*args()), before)
         finally:
             mon.set_local_events(tool, code, 0)
             mon.register_callback(tool, mon.events.INSTRUCTION, None)
             mon.free_tool_id(tool)
+
+    def test_every_move_unwinds(self):
+        s1, s2, a, b, m = self.sentinels()
+        self.raise_at_each_word(self.moves, lambda: (a, b, m, []))
+
+    def test_every_cycle_word_unwinds(self):
+        class Real:
+            real = 1
+        b = Real()
+        self.raise_at_each_word(self.cycle, lambda: (0, b, 2))
 
 
 class UnpackToLocalsTest(unittest.TestCase):

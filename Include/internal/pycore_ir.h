@@ -1024,9 +1024,9 @@ _PyIR_CallWordLength(_PyIRWord word)
  * fields each after the fixed operand words.  Element j of the word whose
  * head is head: */
 static inline int
-_PyIR_SpanElement(const _PyIRWord *head, int j)
+_PyIR_SpanElement(const _PyIRWord *head, int handler, int j)
 {
-    const _PyIRFormat *fmt = &_PyIR_Formats[IR_HANDLER(head[0])];
+    const _PyIRFormat *fmt = &_PyIR_Formats[handler];
     int nhead = 0;
     for (int f = 0; f < 4; f++) {
         if (fmt->roles[f] == _PyIR_ROLE_ELEMENT) {
@@ -1043,9 +1043,9 @@ _PyIR_SpanElement(const _PyIRWord *head, int j)
 /* The words of a span instruction: the head, its fixed operand words, and
  * the words of the elements that the head's free fields do not hold */
 static inline int
-_PyIR_SpanWordLength(_PyIRWord word)
+_PyIR_SpanWordLength(int handler, _PyIRWord word)
 {
-    const _PyIRFormat *fmt = &_PyIR_Formats[IR_HANDLER(word)];
+    const _PyIRFormat *fmt = &_PyIR_Formats[handler];
     int total = 0, nhead = 0;
     for (int f = 0; f < 4; f++) {
         int value = (int)((word >> (16 + 12 * f)) & IR_FIELD_MAX);
@@ -1062,7 +1062,7 @@ _PyIR_WordLength(_PyIRWord word)
 {
     int handler = IR_HANDLER(word);
     if (_PyIR_Formats[handler].operands == _PyIR_OPERANDS_SPANS) {
-        return _PyIR_SpanWordLength(word);
+        return _PyIR_SpanWordLength(handler, word);
     }
     if (!_PyIR_HandlerHasOperands(handler)) {
         // A register instruction arm may have fixed operand words

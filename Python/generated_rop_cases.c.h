@@ -610,3 +610,47 @@
             rop_GetMethod_PolyMethod_Miss:
             ROP_NO_GENERIC(GetMethod);
         }
+
+        TARGET(Move_Transfer) {
+            // Move.Transfer (shared)
+            int opcode = ROP_HANDLER_Move_Transfer;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            INSTRUCTION_STATS(ROP_HANDLER_Move_Transfer);
+            _PyRop_ParallelMove(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &(_PyRopSpan){frame, this_instr, opcode, IR_A(ir_word), IR_B(ir_word)});
+            DISPATCH();
+        }
+
+        TARGET(Move_Retire) {
+            // Move.Retire (shared)
+            int opcode = ROP_HANDLER_Move_Retire;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            INSTRUCTION_STATS(ROP_HANDLER_Move_Retire);
+            _PyRop_ParallelMove(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &(_PyRopSpan){frame, this_instr, opcode, IR_A(ir_word), IR_B(ir_word)});
+            IR_STUB_ESCAPE();
+            _PyRop_CloseRest(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &(_PyRopSpan){frame, this_instr, opcode, IR_A(ir_word), IR_B(ir_word)});
+            DISPATCH();
+        }
+
+        TARGET(Move_Copy) {
+            // Move.Copy (shared)
+            int opcode = ROP_HANDLER_Move_Copy;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += _PyIR_SpanWordLength(opcode, ir_word);
+            INSTRUCTION_STATS(ROP_HANDLER_Move_Copy);
+            _PyRop_CopyHomes(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_A(ir_word)}, &(_PyRopSpan){frame, this_instr, opcode, IR_A(ir_word), IR_B(ir_word)});
+            DISPATCH();
+        }

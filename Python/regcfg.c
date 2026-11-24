@@ -2947,65 +2947,19 @@ _PyRegCfg_Build(_PyRegCfg *cfg)
 
 /* Resolution.  Allocation leaves moves where homes disagree: the staging
  * moves before an op and the parallel moves (_PyReg_MOVES) that bind a
- * region's parameters at an edge.  Each becomes a sequence of SWAP words.
- * A move's target is vacant (NULL) or the source of another move of the
- * set, so a SWAP into a vacant target moves the value and leaves its source
- * NULL, and a cycle resolves by swapping and following the displaced value:
- * no value ever has two owners, and none is left behind.  Every word keeps
- * its op's handler, with the recipe that finds the handler's values where
- * the words before it put them (_PyReg_SLOT_RECIPE). */
+ * region's parameters at an edge.  Each set becomes one Move.Transfer
+ * word (Python/register_ops/values.rop), whose run is the parallel move
+ * that the unwinder's recipes use too (_PyFrame_ParallelMove()).  A
+ * move's target is vacant (NULL) or the source of another move of the
+ * set, so no value ever has two owners, and none is left behind.  The word
+ * keeps its op's handler, with the recipe that finds the handler's values
+ * where they are before it (_PyReg_SLOT_RECIPE). */
 
 typedef struct {
     int *src;           // pending moves, slot to slot
     int *dst;
     int n;
-    int *swaps;         // pairs of slots, in order
-    int nswaps;
 } move_set;
-
-static void
-sequence_moves(move_set *m)
-{
-    m->nswaps = 0;
-    while (m->n > 0) {
-        int j = -1;
-        for (int a = 0; a < m->n && j < 0; a++) {
-            int free = 1;
-            for (int b = 0; b < m->n; b++) {
-                free &= b == a || m->src[b] != m->dst[a];
-            }
-            if (free) {
-                j = a;
-            }
-        }
-        int cycle = j < 0;
-        if (cycle) {
-            j = 0;
-        }
-        int from = m->src[j], to = m->dst[j];
-        m->swaps[2 * m->nswaps] = from;
-        m->swaps[2 * m->nswaps + 1] = to;
-        m->nswaps++;
-        m->n--;
-        m->src[j] = m->src[m->n];
-        m->dst[j] = m->dst[m->n];
-        if (!cycle) {
-            continue;
-        }
-        // The value that was at to is now at from
-        for (int b = 0; b < m->n; b++) {
-            if (m->src[b] == to) {
-                m->src[b] = from;
-                if (m->dst[b] == from) {
-                    m->n--;
-                    m->src[b] = m->src[m->n];
-                    m->dst[b] = m->dst[m->n];
-                }
-                break;
-            }
-        }
-    }
-}
 
 /* The parallel moves of op as slot pairs in m, and its recipe: the slot
  * before the moves of each value that the handler finds elsewhere than its
@@ -3081,7 +3035,7 @@ resolve_moves(_PyRegCfg *cfg)
             continue;
         }
         int n = ((op->flags & _PyReg_MOVES) ? op->nout : 0) + op->nstage;
-        extra += n;
+        extra += n > 0;
         max = Py_MAX(max, n + op->nrecipe);
     }
     if (extra == 0) {
@@ -3096,7 +3050,7 @@ resolve_moves(_PyRegCfg *cfg)
         PyErr_NoMemory();
         goto done;
     }
-    move_set m = {.src = buf, .dst = buf + max, .swaps = buf + 2 * max};
+    move_set m = {.src = buf, .dst = buf + max};
     int *from = buf + 4 * max, *home = buf + 5 * max;
     int nops = 0;
     for (int i = 0; i < cfg->nops; i++) {
@@ -3112,20 +3066,19 @@ resolve_moves(_PyRegCfg *cfg)
         if (collect_moves(cfg, op, &m, from, &home[0], &nrec) < 0) {
             goto done;
         }
-        sequence_moves(&m);
-        for (int w = 0; w < m.nswaps; w++) {
-            int a = m.swaps[2 * w], b = m.swaps[2 * w + 1];
-            // The recipe before this word
-            int *pairs = NULL;
+        if (m.n > 0) {
+            // The recipe before the word: where the handler's values are
             int npairs = 0;
             for (int q = 0; q < nrec; q++) {
                 npairs += from[q] != home[q];
             }
-            int at = 0;
-            if (npairs && _PyRegCfg_AddOperands(cfg, 2 * npairs, &at) < 0) {
+            int at = 0, elems;
+            if ((npairs && _PyRegCfg_AddOperands(cfg, 2 * npairs, &at) < 0) ||
+                _PyRegCfg_AddOperands(cfg, 2 + 2 * m.n, &elems) < 0)
+            {
                 goto done;
             }
-            pairs = &cfg->operands[at];
+            int *pairs = &cfg->operands[at];
             for (int q = 0, p = 0; q < nrec; q++) {
                 if (from[q] != home[q]) {
                     pairs[2 * p] = from[q];
@@ -3133,22 +3086,26 @@ resolve_moves(_PyRegCfg *cfg)
                     p++;
                 }
             }
-            _PyRegOp *swap = &ops[nops++];
-            *swap = *op;
-            swap->opcode = SWAP;
-            swap->oparg = Py_ABS(b - a) + 1;
-            swap->base = Py_MIN(a, b);
-            swap->nread = swap->npop = swap->nimplicit = swap->nout = 0;
-            swap->nstage = 0;
-            swap->dst = swap->target = -1;
-            swap->reader = -1;
-            swap->fuse = swap->completion = swap->kwnames = 0;
-            swap->flags = _PyReg_SLOT_RECIPE;
-            swap->nrecipe = npairs;
-            swap->recipe = at;
-            for (int q = 0; q < nrec; q++) {
-                from[q] = from[q] == a ? b : from[q] == b ? a : from[q];
+            // Its counts, then the destinations, then the sources
+            int *e = &cfg->operands[elems];
+            e[0] = e[1] = m.n;
+            for (int q = 0; q < m.n; q++) {
+                e[2 + q] = m.dst[q];
+                e[2 + m.n + q] = m.src[q];
             }
+            _PyRegOp *move = &ops[nops++];
+            *move = *op;
+            move->opcode = ROP_SELECT_Move_transfer;
+            move->oparg = 0;
+            move->in = elems;
+            move->nread = move->npop = move->nimplicit = move->nout = 0;
+            move->nstage = 0;
+            move->dst = move->target = -1;
+            move->reader = -1;
+            move->fuse = move->completion = move->kwnames = 0;
+            move->flags = _PyReg_SLOT_RECIPE | _PyReg_MOVE_SLOTS;
+            move->nrecipe = npairs;
+            move->recipe = at;
         }
         index[i] = nops;
         if (moves) {

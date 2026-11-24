@@ -407,6 +407,7 @@ class Lowering:
     """The statements of one arm, with its decoding and labels"""
     arm: str
     words: int = 0           # operand words after the head, which dispatch skips
+    spans: bool = False      # span operands: the counts give the length
     decls: list[str] = field(default_factory=list)
     body: list[str] = field(default_factory=list)
 
@@ -463,7 +464,8 @@ class ArmLowerer:
 
     def slot(self, operand: str) -> Slot:
         p = self.placements[operand]
-        if p.kind not in (FieldKind.home, FieldKind.feedback, FieldKind.name):
+        if p.kind not in (FieldKind.home, FieldKind.feedback, FieldKind.name,
+                          FieldKind.vector):
             raise Unsupported(f"{self.arm.name}: operand {operand} is a {p.kind.name} field")
         (slot,) = p.slots
         if slot.word != 0 and p.kind is not FieldKind.feedback:
@@ -525,6 +527,24 @@ class ArmLowerer:
         flags = ", ".join(f"!!(ir_word & {self.local_flag(n)})" for n in names)
         return (f"&(_PyRopSrcs){{frame, {len(names)}, {{{flags}}}, {{{homes}}}}}")
 
+    def is_span(self, e: Expr) -> bool:
+        return (isinstance(e, Name) and e.name in self.placements
+                and self.placements[e.name].kind is FieldKind.vector)
+
+    def span(self, operand: str) -> str:
+        """A span operand: its count, and the index of its first element
+        among the elements of the word's spans, which follow in
+        declaration order (pycore_ir.h, _PyIR_SpanElement())"""
+        before = []
+        for name, p in self.placements.items():
+            if name == operand:
+                break
+            if p.kind is FieldKind.vector:
+                before.append(self.field(name))
+        first = " + ".join(before) or "0"
+        return (f"&(_PyRopSpan){{frame, this_instr, opcode, {first}, "
+                f"{self.field(operand)}}}")
+
     def c_args(self, args, params) -> list[str]:
         """The C arguments of a row call: a token has no value, an anchor
         and a span of sources are passed by address"""
@@ -537,6 +557,8 @@ class ArmLowerer:
                 continue
             if isinstance(a, SpanLit):
                 out.append(self.srcs(a))
+            elif self.is_span(a):
+                out.append(self.span(a.name))
             elif isinstance(t, HandleType) and t.handle is Handle.Anchors:
                 out.append("&" + self.expr_text(a))
             elif (isinstance(t, SchemaType) and t.ctor is SchemaCtor.Fb
@@ -636,7 +658,9 @@ class ArmLowerer:
         body = []
         for line in self.lines:
             body.append(line)
-        return Lowering(self.arm.name, self.enc.words, self.decls,
+        return Lowering(self.arm.name, self.enc.words,
+                        any(p.kind is FieldKind.vector for p in self.enc.placements),
+                        self.decls,
                         self.drop_unused_labels(body))
 
     def drop_unused_labels(self, lines: list[str]) -> list[str]:

@@ -240,11 +240,12 @@ class SliceTests(unittest.TestCase):
         'CALL_PY_GENERAL/_PY_FRAME_GENERAL_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
     ]
 
-    # Batch 5: the assume op of `iter: assumed(object) by GET_ITER` in the
-    # leaf IR of the two iterator guards
+    # Batch 5 and G0c9: the assume op of `iter: assumed(object) by GET_ITER`
+    # in the leaf IR of the three iterator guards
     LISTED_LEAF_DIFFERENCES = [
         ("FOR_ITER_LIST.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
         ("FOR_ITER_TUPLE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
+        ("FOR_ITER_RANGE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
     ]
 
     def test_declarations_equal_the_inference(self):

@@ -994,6 +994,20 @@ jit_template_FOR_ITER_RANGE(_PyJitWordCx *cx)
     _PyJitLabel raise = _PyJitAsm_NewLabel(a);
     _PyJitAsm_Bind(a, L0);
     _PyJitAsm_MovRM(a, _PyJitReg_RAX, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * (IR_B(ir_word) + 0))));
+#ifndef NDEBUG
+    {
+        _PyJitLabel ok = _PyJitAsm_NewLabel(a);
+        _PyJitLabel trap = _PyJitAsm_NewLabel(a);
+        _PyJitAsm_Push(a, _PyJitReg_RCX);
+        _PyJitAsm_Push(a, _PyJitReg_RDX);
+        _PyJitAsm_Jcc(a, (_PyJitCond)_PyJitLower_PyValue_IsObject(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RCX}, NULL), ok);
+        _PyJitAsm_Bind(a, trap);
+        _PyJitAsm_Data(a, (const uint8_t[]){0x0f, 0x0b}, 2);  /* ud2 */
+        _PyJitAsm_Bind(a, ok);
+        _PyJitAsm_Pop(a, _PyJitReg_RDX);
+        _PyJitAsm_Pop(a, _PyJitReg_RCX);
+    }
+#endif
     _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX}, NULL);
     _PyJitLower_Py_TYPE(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RAX}, NULL);
     _PyJitAsm_MovImm(a, _PyJitReg_RDX, (int64_t)(uintptr_t)&PyRangeIter_Type);

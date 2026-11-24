@@ -4700,18 +4700,22 @@ dummy_func(
             _ITER_JUMP_TUPLE +
             _ITER_NEXT_TUPLE;
 
-        leaf op(_ITER_CHECK_RANGE, (iter, null_or_index -- iter, null_or_index)) {
-            assert(PyValue_IsObject(iter));
+        leaf op(_ITER_CHECK_RANGE,
+                (iter: assumed(object) by GET_ITER, null_or_index
+                 -- iter: exact(PyRangeIter_Type), null_or_index))
+            effects(reads) exits(next, miss)
+        {
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(Py_TYPE(r) != &PyRangeIter_Type);
 #ifdef Py_GIL_DISABLED
-            EXIT_IF(!_PyObject_IsUniquelyReferenced((PyObject *)r));
+            EXIT_IF(!_PyObject_IsUniquelyReferenced((PyObject *)r),
+                    "another reference to the range iterator exists");
 #endif
         }
 
         leaf replaced op(_ITER_JUMP_RANGE,
                 (iter: object, null_or_index -- iter, null_or_index))
-            effects(runs_python) exits(next, branch, raise)
+            effects(reads, runs_python(branch|raise)) exits(next, branch, raise)
         {
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
             assert(Py_TYPE(r) == &PyRangeIter_Type);

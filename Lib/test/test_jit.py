@@ -1231,6 +1231,9 @@ class TestUnwind(unittest.TestCase):
             self.assertEqual(len(at), 1, popped)
         self.assertEqual(rule_at(ret + 1), body)
         self.assertEqual(rule_at(size - 1), body)
+        # The switch routine, after the shared exit, keeps the body's rule
+        self.assertGreater(unit["switch"], ret)
+        self.assertEqual(rule_at(unit["switch"]), body)
 
     def test_backtrace_walks_through_units(self):
         """backtrace(), which has no frame pointers to follow, finds the

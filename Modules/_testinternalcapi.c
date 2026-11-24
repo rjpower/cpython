@@ -4984,7 +4984,7 @@ jit_unit(PyObject *self, PyObject *code_object)
         }
         Py_DECREF(range);
     }
-    PyObject *result = Py_BuildValue("{sIsisisnsnsisIsisNsy#}",
+    PyObject *result = Py_BuildValue("{sIsisisnsnsisIsisNsnsy#}",
         "nwords", unit->nwords,
         "heads", heads,
         "guarded", guarded,
@@ -4994,6 +4994,7 @@ jit_unit(PyObject *self, PyObject *code_object)
         "compiles", exec->jit_compiles,
         "units", units,
         "ranges", ranges,
+        "switch", (Py_ssize_t)((const uint8_t *)unit->switch_routine - unit->code.start),
         "eh_frame", (const char *)unit->unwind.eh_frame,
         (Py_ssize_t)(unit->code.size - frame_offset));
     return result;
@@ -5003,15 +5004,17 @@ jit_unit(PyObject *self, PyObject *code_object)
 #endif
 }
 
-/* Code objects compiled, compiles and words compiled, since startup */
+/* Code objects compiled, compiles, words compiled and frames entered by a
+ * switch routine, since startup */
 static PyObject *
 jit_stats(PyObject *self, PyObject *Py_UNUSED(args))
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    return Py_BuildValue("{sKsKsK}",
+    return Py_BuildValue("{sKsKsKsK}",
         "codes", (unsigned long long)interp->ceval.jit_compiled_codes,
         "compiles", (unsigned long long)interp->ceval.jit_compiles,
-        "words", (unsigned long long)interp->ceval.jit_compiled_words);
+        "words", (unsigned long long)interp->ceval.jit_compiled_words,
+        "switches", (unsigned long long)interp->ceval.jit_switches);
 }
 
 /* The execution pin of the calling activation (_PyJit_PinDeparting()).

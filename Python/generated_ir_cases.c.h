@@ -12722,6 +12722,7 @@ ir_run_MATCH_CLASS(
                 type = window[1];
                 subject = window[0];
                 assert(PyValue_IsObject(names));
+                assert(PyValue_IsObject(names));
                 assert(PyTuple_CheckExact(_PyValue_AsKnownObjectBorrowPointer(names)));
                 PyObject *attrs_o = _PyEval_MatchClass(tstate,
                     subject,
@@ -12786,6 +12787,8 @@ ir_run_MATCH_KEYS(
             PyValue values_or_none;
             keys = IR_SLOT(IR_C(ir_word));
             subject = IR_SLOT(IR_B(ir_word));
+            assert(PyValue_IsObject(subject));
+            assert(PyValue_IsObject(keys));
             assert(PyValue_IsObject(subject));
             assert(PyValue_IsObject(keys));
             PyObject *values_or_none_o = _PyEval_MatchKeys(tstate,

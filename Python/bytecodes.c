@@ -387,7 +387,9 @@ dummy_func(
             DEAD(value);
         }
 
-        op(_POP_TOP_UNICODE, (value --)) {
+        op(_POP_TOP_UNICODE, (value: consumed exact(PyUnicode_Type) --))
+            effects(writes) exits(next)
+        {
             assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
             PyValue_CLOSE_SPECIALIZED(value, _PyUnicode_ExactDealloc);
         }
@@ -595,9 +597,11 @@ dummy_func(
             EXIT_IF(!PyList_CheckExact(o));
         }
 
-        op(_GUARD_TOS_SLICE, (tos -- tos)) {
+        op(_GUARD_TOS_SLICE, (tos: object -- tos))
+            effects(reads) exits(next, miss)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(tos);
-            EXIT_IF(!PySlice_Check(o));
+            EXIT_IF(!PySlice_Check(o), "the operand is not a slice");
         }
 
         macro(TO_BOOL_LIST) = _GUARD_TOS_LIST + unused/1 + unused/2 + _TO_BOOL_LIST + POP_TOP;
@@ -624,10 +628,13 @@ dummy_func(
 
         macro(TO_BOOL_NONE) = unused/1 + unused/2 + _TO_BOOL_NONE;
 
-        op(_GUARD_NOS_COMPACT_ASCII, (nos, unused -- nos, unused)) {
+        op(_GUARD_NOS_COMPACT_ASCII,
+                (nos: object, unused -- nos: exact(PyUnicode_Type), unused))
+            effects(reads) exits(next, miss)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(nos);
             EXIT_IF(!PyUnicode_CheckExact(o));
-            EXIT_IF(!PyUnicode_IS_COMPACT_ASCII(o));
+            EXIT_IF(!PyUnicode_IS_COMPACT_ASCII(o), "the str is not compact ASCII");
         }
 
         op(_GUARD_NOS_UNICODE, (nos: object, unused -- nos: exact(PyUnicode_Type), unused))
@@ -828,9 +835,13 @@ dummy_func(
         // exits, and BINARY_OP raises. The operands are int51, so int64
         // division does not trap; only Py_INT_MIN // -1 leaves the inline
         // range, and PyValue_FromInt64() boxes it.
-        leaf inline_ok pure op(_BINARY_OP_FLOOR_DIVIDE_INT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_FLOOR_DIVIDE_INT,
+                (left: taken inline_int, right: taken inline_int
+                 -- res: owned exact(PyLong_Type), l: moved(left), r: moved(right)))
+            effects(allocates, raises) exits(next, miss, raise)
+        {
             int64_t b = PyValue_InlineInt64(right);
-            EXIT_IF(b == 0);
+            EXIT_IF(b == 0, "the divisor is zero");
             int64_t a = PyValue_InlineInt64(left);
             STAT_INC(BINARY_OP, hit);
             // One division: the quotient is inexact when it does not
@@ -850,9 +861,13 @@ dummy_func(
 
         // The remainder is smaller than the divisor in magnitude, so it is
         // inline.
-        leaf inline_ok pure op(_BINARY_OP_REMAINDER_INT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_REMAINDER_INT,
+                (left: taken inline_int, right: taken inline_int
+                 -- res: owned exact(PyLong_Type) inline_int, l: moved(left), r: moved(right)))
+            effects(raises) exits(next, miss, raise)
+        {
             int64_t b = PyValue_InlineInt64(right);
-            EXIT_IF(b == 0);
+            EXIT_IF(b == 0, "the divisor is zero");
             int64_t a = PyValue_InlineInt64(left);
             STAT_INC(BINARY_OP, hit);
             int64_t remainder = a % b;
@@ -919,9 +934,13 @@ dummy_func(
         // result fits in int64 is made there, and PyValue_FromInt64() boxes
         // it if it leaves the inline range; a longer shift of anything but 0
         // makes a long int.
-        inline_ok pure op(_BINARY_OP_LSHIFT_INT, (left, right -- res, l, r)) {
+        inline_ok pure op(_BINARY_OP_LSHIFT_INT,
+                (left: taken inline_int, right: taken inline_int
+                 -- res: owned exact(PyLong_Type), l: moved(left), r: moved(right)))
+            effects(allocates, raises) exits(next, miss, raise)
+        {
             int64_t b = PyValue_InlineInt64(right);
-            EXIT_IF(b < 0);
+            EXIT_IF(b < 0, "the shift count is negative");
             int64_t a = PyValue_InlineInt64(left);
             STAT_INC(BINARY_OP, hit);
             int64_t shifted = b < 63 ? (int64_t)((uint64_t)a << b) : 0;
@@ -944,9 +963,13 @@ dummy_func(
 
         // Python's >> rounds towards minus infinity, as an arithmetic shift
         // does; shifting an int51 by 63 places or more leaves its sign.
-        inline_ok pure op(_BINARY_OP_RSHIFT_INT, (left, right -- res, l, r)) {
+        inline_ok pure op(_BINARY_OP_RSHIFT_INT,
+                (left: taken inline_int, right: taken inline_int
+                 -- res: owned exact(PyLong_Type) inline_int, l: moved(left), r: moved(right)))
+            effects(raises) exits(next, miss, raise)
+        {
             int64_t b = PyValue_InlineInt64(right);
-            EXIT_IF(b < 0);
+            EXIT_IF(b < 0, "the shift count is negative");
             int64_t a = PyValue_InlineInt64(left);
             STAT_INC(BINARY_OP, hit);
             res = PyValue_FromInlineInt(Py_ARITHMETIC_RIGHT_SHIFT(int64_t, a, b < 63 ? b : 63));
@@ -1050,10 +1073,14 @@ dummy_func(
         }
 
         // Division by zero exits, and BINARY_OP raises.
-        leaf inline_ok pure op(_BINARY_OP_TRUEDIV_FLOAT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_TRUEDIV_FLOAT,
+                (left: taken, right: taken
+                 -- res: owned exact(PyFloat_Type), l: moved(left) inline, r: moved(right) inline))
+            effects(allocates, raises) exits(next, miss, raise)
+        {
             double a, b;
             EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
-            EXIT_IF(b == 0.0);
+            EXIT_IF(b == 0.0, "the divisor is zero");
             STAT_INC(BINARY_OP, hit);
             res = PyValue_FromDouble(a / b);
             if (PyValue_IsNull(res)) {
@@ -1100,7 +1127,11 @@ dummy_func(
         // This is a subtle one. We write NULL to the local that dst
         // names, the target of the STORE_FAST folded into the word, and
         // leave the result for IR_STORE_RESULT to store.
-        op(_BINARY_OP_INPLACE_ADD_UNICODE, (left, right -- res)) {
+        op(_BINARY_OP_INPLACE_ADD_UNICODE,
+                (left: consumed exact(PyUnicode_Type), right: consumed exact(PyUnicode_Type)
+                 -- res: owned))
+            effects(reads, writes, allocates, raises, releases, runs_python) exits(next, miss, raise)
+        {
             PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
             assert(PyUnicode_CheckExact(left_o));
             assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(right)));
@@ -1294,13 +1325,17 @@ dummy_func(
         macro(BINARY_OP_SUBSCR_STR_INT) =
             _GUARD_TOS_INT + _GUARD_NOS_COMPACT_ASCII + unused/5 + _BINARY_OP_SUBSCR_STR_INT + _POP_TOP_INT + _POP_TOP_UNICODE;
 
-        inline_ok op(_BINARY_OP_SUBSCR_STR_INT, (str_st, sub_st -- res, s, i)) {
+        inline_ok op(_BINARY_OP_SUBSCR_STR_INT,
+                (str_st: consumed object, sub_st: consumed inline_int
+                 -- res: owned, s: moved(str_st), i: moved(sub_st)))
+            effects(reads) exits(next, miss)
+        {
             PyObject *str = PyValue_AsKnownObjectBorrow(str_st);
             assert(PyUnicode_CheckExact(str));
 
             Py_ssize_t index = PyValue_InlineInt64(sub_st);
-            EXIT_IF(index < 0);
-            EXIT_IF(PyUnicode_GET_LENGTH(str) <= index);
+            EXIT_IF(index < 0, "the index is negative");
+            EXIT_IF(PyUnicode_GET_LENGTH(str) <= index, "the index is out of range");
             uint8_t c = PyUnicode_1BYTE_DATA(str)[index];
             assert(c < 128);
             STAT_INC(BINARY_OP, hit);
@@ -1314,16 +1349,21 @@ dummy_func(
         macro(BINARY_OP_SUBSCR_USTR_INT) =
             _GUARD_TOS_INT + _GUARD_NOS_UNICODE + unused/5 + _BINARY_OP_SUBSCR_USTR_INT + _POP_TOP_INT + _POP_TOP_UNICODE;
 
-        inline_ok op(_BINARY_OP_SUBSCR_USTR_INT, (str_st, sub_st -- res, s, i)) {
+        inline_ok op(_BINARY_OP_SUBSCR_USTR_INT,
+                (str_st: consumed object, sub_st: consumed inline_int
+                 -- res: owned, s: moved(str_st), i: moved(sub_st)))
+            effects(reads) exits(next, miss)
+        {
             PyObject *str = PyValue_AsKnownObjectBorrow(str_st);
             assert(PyUnicode_CheckExact(str));
 
             Py_ssize_t index = PyValue_InlineInt64(sub_st);
-            EXIT_IF(index < 0);
-            EXIT_IF(PyUnicode_GET_LENGTH(str) <= index);
+            EXIT_IF(index < 0, "the index is negative");
+            EXIT_IF(PyUnicode_GET_LENGTH(str) <= index, "the index is out of range");
             // Specialize for reading an ASCII character from any string:
             Py_UCS4 c = PyUnicode_READ_CHAR(str, index);
-            EXIT_IF(Py_ARRAY_LENGTH(_Py_SINGLETON(strings).ascii) <= c);
+            EXIT_IF(Py_ARRAY_LENGTH(_Py_SINGLETON(strings).ascii) <= c,
+                    "the character is not ASCII");
             STAT_INC(BINARY_OP, hit);
             PyObject *res_o = (PyObject*)&_Py_SINGLETON(strings).ascii[c];
             s = str_st;
@@ -1366,10 +1406,13 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        op(_GUARD_NOS_DICT_SUBSCRIPT, (nos, unused -- nos, unused)) {
+        op(_GUARD_NOS_DICT_SUBSCRIPT, (nos: object, unused -- nos, unused))
+            effects(reads) exits(next, miss, deopt)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(nos);
-            DEOPT_IF(!Py_TYPE(o)->tp_as_mapping);
-            DEOPT_IF(Py_TYPE(o)->tp_as_mapping->mp_subscript != _PyDict_Subscript);
+            DEOPT_IF(!Py_TYPE(o)->tp_as_mapping, "the type has no mapping slots");
+            DEOPT_IF(Py_TYPE(o)->tp_as_mapping->mp_subscript != _PyDict_Subscript,
+                     "the type's mp_subscript is not dict's");
         }
 
         op(_GUARD_NOS_DICT_STORE_SUBSCRIPT, (unused, nos, unused -- unused, nos, unused)) {
@@ -1388,7 +1431,10 @@ dummy_func(
         macro(BINARY_OP_SUBSCR_DICT) =
             _GUARD_NOS_DICT_SUBSCRIPT + unused/5 + _BINARY_OP_SUBSCR_DICT;
 
-        inline_ok op(_BINARY_OP_SUBSCR_DICT, (dict_st, sub_st -- res)) {
+        inline_ok op(_BINARY_OP_SUBSCR_DICT,
+                (dict_st: consumed, sub_st: consumed -- res: owned))
+            effects(reads, writes, raises, releases, runs_python) exits(next, raise)
+        {
             IR_TRY_DICT_FIRST_PROBE();
             STAT_INC(BINARY_OP, hit);
             res = value_subscript(dict_st, sub_st);
@@ -1396,19 +1442,24 @@ dummy_func(
             ERROR_IF(PyValue_IsNull(res));
         }
 
-        inline_ok op(_BINARY_OP_SUBSCR_CHECK_FUNC, (container, unused -- container, unused, getitem)) {
+        inline_ok op(_BINARY_OP_SUBSCR_CHECK_FUNC,
+                (container, unused -- container: object, unused, getitem: owned))
+            effects(reads) exits(next, miss)
+        {
             EXIT_IF(!PyValue_IsObject(container));
             PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(container));
-            EXIT_IF(!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE));
+            EXIT_IF(!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE), "the type is not a heap type");
             PyHeapTypeObject *ht = (PyHeapTypeObject *)tp;
             PyObject *getitem_o = FT_ATOMIC_LOAD_PTR_ACQUIRE(ht->_spec_cache.getitem);
-            EXIT_IF(getitem_o == NULL);
+            EXIT_IF(getitem_o == NULL, "the type caches no __getitem__");
             assert(PyFunction_Check(getitem_o));
             uint32_t cached_version = FT_ATOMIC_LOAD_UINT32_RELAXED(ht->_spec_cache.getitem_version);
-            EXIT_IF(((PyFunctionObject *)getitem_o)->func_version != cached_version);
+            EXIT_IF(((PyFunctionObject *)getitem_o)->func_version != cached_version,
+                    "the cached __getitem__ changed version");
             PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(getitem_o);
             assert(code->co_argcount == 2);
-            EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));
+            EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize),
+                    "the thread has no stack space for the frame");
             getitem = PyValue_DUP(PyValue_FromObjectBorrow(getitem_o));
         }
 
@@ -3716,7 +3767,11 @@ dummy_func(
                     && !PyList_CheckExact(o));
         }
 
-        op(_CONTAINS_OP_SEQUENCE, (left, right -- b, l, r)) {
+        op(_CONTAINS_OP_SEQUENCE,
+                (left: taken, right: taken object
+                 -- b: owned exact(PyBool_Type), l: moved(left), r: moved(right)))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
             STAT_INC(CONTAINS_OP, hit);
             _Py_containsvaluefunc contains_slot = _PyType_VALUE_SLOT(Py_TYPE(right_o), contains);
@@ -4107,7 +4162,7 @@ dummy_func(
         }
 
         op(_MATCH_CLASS,
-                (subject: taken, type: taken, names: taken object
+                (subject: taken, type: taken, names: taken assumed(object) by codegen_pattern_class
                  -- attrs: owned, s: moved(subject), tp: moved(type), n: moved(names)))
             effects(runs_python) exits(next, raise)
         {
@@ -4152,7 +4207,11 @@ dummy_func(
             res = match ? PyValue_True : PyValue_False;
         }
 
-        outlined inst(MATCH_KEYS, (subject, keys -- subject, keys, values_or_none)) {
+        outlined inst(MATCH_KEYS,
+                (subject: assumed(object) by MATCH_MAPPING, keys: assumed(object) by codegen_pattern_mapping
+                 -- subject, keys, values_or_none: owned))
+            effects(runs_python) exits(next, raise)
+        {
             // On successful match, PUSH(values). Otherwise, PUSH(None).
             // MATCH_MAPPING has accepted the subject: a mapping, not a number
             assert(PyValue_IsObject(subject));

@@ -108,6 +108,8 @@
      * exactly when it holds */ \
     PRIMITIVE(PyValue_IsNull, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(null | nonnull), EFFECTS()) \
+    /* Reviewed G0c2. pycore_value.h: bits >= Py_INT_BASE, a compare of the   \
+     * word; no memory read, no failure, no callback.                         */ \
     PRIMITIVE(PyValue_IsInlineInt, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(inline_int), EFFECTS()) \
     /* PyValue_IsObject (Include/internal/pycore_pyvalue.h): bits > 2, in \
@@ -125,6 +127,8 @@
               ARGS(borrowed), TEST(), EFFECTS()) \
     PRIMITIVE(PyValue_IsInline, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(inline), EFFECTS()) \
+    /* Reviewed G0c2. pycore_value.h: one subtract and compare of the         \
+     * word's bits; no memory, no failure, no callback.                       */ \
     PRIMITIVE(PyValue_IsInlineFloat, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(inline_float), EFFECTS()) \
     PRIMITIVE(PyValue_IsTaggedIndex, bool, (PyValueBorrow), \
@@ -132,6 +136,8 @@
     /* (a & b) >= Py_INT_BASE: exactly IsInlineInt(a) and IsInlineInt(b) \
      * (the comment above its definition in pycore_value.h: the AND has the \
      * top Py_INT_SHIFT bits set only if both words do) */ \
+    /* Reviewed G0c2. pycore_value.h: (a & b) >= Py_INT_BASE on the two       \
+     * words; no memory, no failure, no callback.                             */ \
     PRIMITIVE(PyValue_BothInlineInt, bool, (PyValueBorrow, PyValueBorrow), \
               ARGS(borrowed, borrowed), TEST(inline_int, inline_int), EFFECTS(), \
               CONJOINS(PyValue_IsInlineInt)) \
@@ -139,6 +145,8 @@
      * _PyValue_NamesObject, PyValue_IsTrue, IsFalse, IsNone).  A word that \
      * is True, False or None is an object word: a static object's address \
      * with Py_TAG_REFCNT */ \
+    /* Reviewed G0c2. pycore_value.h: compares the words' bits, ignoring      \
+     * bit 0 of a pointer; no memory, no failure, no callback.                */ \
     PRIMITIVE(PyValue_Is, bool, (PyValueBorrow, PyValueBorrow), \
               ARGS(borrowed, borrowed), TEST(,), EFFECTS()) \
     PRIMITIVE(_PyValue_NamesObject, bool, (PyValueBorrow, PyObject *), \
@@ -154,21 +162,40 @@
      * dereferences the word, so NULL is not admitted */ \
     PRIMITIVE(PyValue_BoolCheck, bool, (PyValueBorrow), \
               ARGS(borrowed nonnull), TEST(exact(PyBool_Type)), EFFECTS(reads)) \
+    /* Reviewed G0c2. pycore_value.h: IsInlineInt, else IsPointerSpace and    \
+     * PyLong_CheckExact (a read of ob_type: reads). NULL is pointer space    \
+     * and would be dereferenced, hence nonnull. No failure, no callback.     */ \
     PRIMITIVE(PyValue_LongCheckExact, bool, (PyValueBorrow), \
               ARGS(borrowed nonnull), TEST(exact(PyLong_Type)), EFFECTS(reads)) \
     /* Inline ints: scaled values, see _PyValue_IntScaled() */ \
+    /* Reviewed G0c2. pycore_value.h: the word shifted left by                \
+     * Py_INT_SHIFT; inline int required (asserted); pure bit arithmetic.     */ \
     PRIMITIVE(_PyValue_IntScaled, int64_t, (PyValueBorrow), \
               ARGS(borrowed inline_int), SCALAR, EFFECTS()) \
+    /* Reviewed G0c2. pycore_value.h: arithmetic shift of the scaled word;    \
+     * the argument must be an inline int (asserted). No memory, no           \
+     * failure.                                                               */ \
     PRIMITIVE(PyValue_InlineInt64, int64_t, (PyValueBorrow), \
               ARGS(borrowed inline_int), SCALAR, EFFECTS()) \
+    /* Reviewed G0c2. pycore_value.h: ((uint64_t)s >> Py_INT_SHIFT) |         \
+     * Py_INT_BASE; s must be a multiple of 2**Py_INT_SHIFT (asserted).       \
+     * Never NULL, owns no count, no memory.                                  */ \
     PRIMITIVE(_PyValue_FromIntScaled, PyValue, (int64_t), \
               ARGS(scalar), VALUE(inline inline_int), EFFECTS()) \
     /* Inline constructors (pycore_value.h): the caller has checked the \
      * range; the result is a word with tag bits set, never NULL */ \
+    /* Reviewed G0c2. pycore_value.h: Py_INT_BASE | bits of i; i must fit     \
+     * inline (asserted). Never NULL, owns no count, no memory, no            \
+     * callback.                                                              */ \
     PRIMITIVE(PyValue_FromInlineInt, PyValue, (int64_t), \
               ARGS(scalar), VALUE(inline inline_int), EFFECTS()) \
+    /* Reviewed G0c2. pycore_value.h: the word minus Py_DOUBLE_OFFSET,        \
+     * copied as a double; inline float required (asserted); no memory.       */ \
     PRIMITIVE(PyValue_InlineFloat, double, (PyValueBorrow), \
               ARGS(borrowed inline_float), SCALAR, EFFECTS()) \
+    /* Reviewed G0c2. pycore_value.h: the double's bits plus                  \
+     * Py_DOUBLE_OFFSET; d must not be NaN (asserted). Never NULL, no         \
+     * count, no memory.                                                      */ \
     PRIMITIVE(PyValue_FromDoubleNotNaN, PyValue, (double), \
               ARGS(scalar), VALUE(inline inline_float), EFFECTS()) \
     /* Tagged indices (pycore_value.h): arithmetic on the word */ \
@@ -181,58 +208,108 @@
     /* PyValue_FromInt64 (pycore_value.h): _PyValue_FromIntScaled when the \
      * int fits inline, else _PyValue_BoxInt64, which gives NULL only when \
      * its allocation fails */ \
+    /* Reviewed G0c2. pycore_value.h: PyValue_FromInlineInt when the int      \
+     * fits, else _PyValue_BoxInt64 (the SLOW column), whose row allocates    \
+     * and raises; NULL means MemoryError. No other callee, no Python.        */ \
     PRIMITIVE(PyValue_FromInt64, PyValue, (int64_t), \
               ARGS(scalar), VALUE_OR_NULL(owned exact(PyLong_Type)), \
               EFFECTS(allocates, raises), SLOW(_PyValue_BoxInt64)) \
     /* A new int outside the inline range: allocates, and raises \
      * MemoryError when that fails; calls no Python */ \
+    /* Reviewed G0c2. Python/pyvalue.c: PyLong_FromLongLong then              \
+     * _PyValue_PointerSteal; NULL (with MemoryError set) only if the         \
+     * allocation fails. The argument is outside the inline range             \
+     * (asserted), so the result is a new boxed int. No finalizer, no         \
+     * Python.                                                                */ \
     HELPER(_PyValue_BoxInt64, PyValue, (int64_t), \
            ARGS(scalar), VALUE_OR_NULL(owned exact(PyLong_Type)), \
            EFFECTS(allocates, raises)) \
     /* Floats: the operands of float arithmetic are inline floats, or an \
      * inline float and an inline int; NaN results are boxed (allocates, \
      * MemoryError) */ \
+    /* Reviewed G0c2. pycore_value.h: tests the operands (two inline floats   \
+     * first, then PyValue_FloatOperandsCheck) and writes *da and *db only    \
+     * when it returns true; on false the outputs are unwritten. No memory    \
+     * beyond the two out doubles, no failure, no callback. The true result   \
+     * says both operands are inline.                                         */ \
     PRIMITIVE(PyValue_FloatOperandValues, bool, \
               (PyValueBorrow, PyValueBorrow, double *, double *), \
               ARGS(borrowed, borrowed, out, out), TEST(inline, inline), EFFECTS()) \
     /* A NaN is boxed by _PyValue_BoxDouble (PyValue_FromDouble in \
      * pycore_value.h), which gives NULL only when its allocation fails; any \
      * other double is an inline float */ \
+    /* Reviewed G0c2. Python/pyvalue.c: PyFloat_FromDouble of a NaN           \
+     * (asserted) then PyValue_FromObjectSteal; NULL with MemoryError only    \
+     * if allocation fails (float freelist, then PyObject_Malloc). No         \
+     * Python.                                                                */ \
     HELPER(_PyValue_BoxDouble, PyValue, (double), \
            ARGS(scalar), VALUE_OR_NULL(owned exact(PyFloat_Type)), \
            EFFECTS(allocates, raises)) \
+    /* Reviewed G0c2. pycore_value.h: PyValue_FromDoubleNotNaN for a          \
+     * non-NaN, else _PyValue_BoxDouble (the SLOW column: allocates,          \
+     * MemoryError, NULL). No Python.                                         */ \
     PRIMITIVE(PyValue_FromDouble, PyValue, (double), \
               ARGS(scalar), VALUE_OR_NULL(owned exact(PyFloat_Type)), \
               EFFECTS(allocates, raises), SLOW(_PyValue_BoxDouble)) \
     /* a * b of two words below 2**60 in magnitude: a new int outside the \
      * inline range, or NULL where allocation fails (pycore_value.h) */ \
+    /* Reviewed G0c2. Objects/longobject.c: __builtin_mul_overflow, then      \
+     * PyValue_FromInt64 of the product (inline or boxed: the result is       \
+     * exact int, not necessarily outside the inline range), else             \
+     * long_mul_spans on digit buffers and _PyLong_OutValue. NULL with        \
+     * MemoryError on allocation failure. No object is released, no Python.   */ \
     HELPER(_PyValue_MultiplyInt64, PyValue, (int64_t, int64_t), \
            ARGS(scalar, scalar), VALUE_OR_NULL(owned exact(PyLong_Type)), \
            EFFECTS(allocates, raises)) \
     /* The close of an owned value through a named deallocator.  Its effect \
      * is the deallocator's: `writes` for a DESTRUCTOR row, `releases` for \
      * any other (ir_contract.py) */ \
+    /* Reviewed G0c2. pycore_value.h: if the value owns a counted pointer,    \
+     * Py_DECREF_MORTAL_SPECIALIZED calls the named destructor at zero; the   \
+     * destructor row decides the effect (writes for a callback_free          \
+     * DESTRUCTOR, releases otherwise), which is why this row declares        \
+     * none. Consumes the value; no failure. No ir_leaf model: G0d.           */ \
     PRIMITIVE(PyValue_CLOSE_SPECIALIZED, void, (PyValue, destructor), \
               ARGS(consumed, destructor), NONE, EFFECTS()) \
     /* _PyLong_ExactDealloc (Objects/longobject.c): re-immortalizes a small \
      * int, else _Py_FREELIST_FREE or PyObject_Free; an int holds no \
      * reference, so nothing is released and no Python runs */ \
+    /* Reviewed G0c2 (Objects/longobject.c, _PyLong_ExactDealloc): a small    \
+     * int is made immortal again; a compact int goes to the ints freelist    \
+     * (_Py_FREELIST_FREE) else PyObject_Free; any other int is               \
+     * PyObject_Free. An int holds no references, no finalizer, no weakref    \
+     * callback (exact ints have no weaklist): callback_free confirmed.       */ \
     DESTRUCTOR(_PyLong_ExactDealloc, PyLong_Type, callback_free) \
     /* _PyFloat_ExactDealloc (Objects/floatobject.c): _Py_FREELIST_FREE of \
      * the float, or PyObject_Free; a float holds no reference */ \
+    /* Reviewed G0c2 (Objects/floatobject.c): _Py_FREELIST_FREE(floats,       \
+     * ...) else PyObject_Free; a float holds no references and an exact      \
+     * float has no finalizer: callback_free confirmed.                       */ \
     DESTRUCTOR(_PyFloat_ExactDealloc, PyFloat_Type, callback_free) \
     /* The generic binary operation: value_binary_op -> PyNumber_* -> an \
      * nb_* slot -> any __add__ and friends: runs Python */ \
+    /* Reviewed G0c2 (Python/ceval.c). value_binary_op(oparg, lhs, rhs):      \
+     * NB_SUBSCR goes to value_subscript, any other operation to              \
+     * _PyValue_BinaryOps[oparg](lhs, rhs) -> PyNumber_* -> binary_op1 ->     \
+     * an nb_* slot -> any __add__ and friends, or the __r*__ fallback.       \
+     * Both operands are borrowed on every path; the result is owned, or      \
+     * NULL with an exception set (TypeError for no implementation, or        \
+     * whatever the method raised). Callbacks: arbitrary Python.              */ \
     HELPER(value_binary_op, PyValue, (int, PyValueBorrow, PyValueBorrow), \
            ARGS(scalar, borrowed, borrowed), VALUE_OR_NULL(owned), \
            EFFECTS(runs_python)) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Reviewed G0c2 (pycore_value.h):                                        \
+     * Py_NewRef(PyValue_AsKnownObjectBorrow(value)); a macro over two        \
+     * inline functions with no code of its own, so it stays a MACRO row.     \
+     * Takes a new reference (not an effect), cannot fail.                    */ \
     MACRO(PyValue_AsPyObjectNew, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(PyValue_CLEAR, \
         ARGS(scalar), SCALAR, EFFECTS(releases), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (pycore_value.h): _PyValue_PointerSteal of an object     \
+     * that is not an exact int or float (asserted); the value owns the       \
+     * argument's count. Never NULL (asserted), no callback.                  */ \
     HELPER(PyValue_FromNonNumberSteal, PyValue, (PyObject *), \
         ARGS(object), VALUE(owned), EFFECTS()) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -253,7 +330,8 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PyValue_Wrap, PyValue, (void *), \
         ARGS(scalar), VALUE(owned), EFFECTS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Include/pyport.h): an arithmetic shift of a signed      \
+     * type; arithmetic on scalars only.                                      */ \
     MACRO(Py_ARITHMETIC_RIGHT_SHIFT, \
         ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(), EXITS()) \
     /* seeded from ir_generator.VIEW_TAKES, ir_records.effect_sites; the \
@@ -270,7 +348,11 @@
         ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
     /* seeded from ir_leaf.ERASED */ \
     INTRINSIC(_PyValue_CheckHome, ARGS(scalar), NONE, BUILD(gil)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Objects/abstract.c, pycore_value_ops.h). The            \
+     * container's contains slot (sq_contains, or iteration with __eq__       \
+     * when it has none): arbitrary Python. Returns 1, 0 or -1 with the       \
+     * exception set (TypeError for a non-container); both arguments          \
+     * borrowed.                                                              */ \
     HELPER(_PyValue_Contains, int, (PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -299,9 +381,18 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_IsTrue, int, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.INT_RESULTS, ir_records.effect_sites */ \
+    /* Objects/longobject.c: the shift of a nonzero word by a count >= 0 \
+     * through long_lshift_spans().  It gives PyValue_NULL with an exception \
+     * set where the result would have too many digits (OverflowError) or \
+     * the allocation fails (MemoryError), so the result is VALUE_OR_NULL \
+     * and the row raises (the seed declared an infallible VALUE: wrong).  \
+     * Callees: PyErr_SetString, _PyLong_SpanOfWord, long_lshift_spans, \
+     * _PyLong_OutValue: arithmetic on digit buffers and one allocation; no \
+     * object is released and no Python runs.  The result is an exact int, \
+     * boxed or, for a small result, as _PyLong_OutValue makes it */ \
     HELPER(_PyValue_LshiftInt64, PyValue, (int64_t, int64_t), \
-        ARGS(scalar, scalar), VALUE(owned exact(PyLong_Type)), EFFECTS(allocates)) \
+        ARGS(scalar, scalar), VALUE_OR_NULL(owned exact(PyLong_Type)), \
+        EFFECTS(allocates, raises)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_Negative, PyValue, (PyValueBorrow), \
         ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
@@ -319,7 +410,12 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyValue_Repr, PyObject *, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Objects/object.c). NULL operands raise                  \
+     * BadInternalCall; richcompare_exit decides fast identity and exact      \
+     * cases; richcompare_protocol calls tp_richcompare of either operand     \
+     * (arbitrary __eq__, __lt__ ... and the reflected form). Returns True    \
+     * or False for the fast cases, any object otherwise, or NULL with an     \
+     * exception set. Operands borrowed on every path.                        */ \
     HELPER(_PyValue_RichCompare, PyValue, (PyValueBorrow, PyValueBorrow, int), \
         ARGS(borrowed, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* pycore_value_ops.h: 1 with the yielded item, 0 with the return value, -1 on error (G0a4: a CASES result) */ \
@@ -354,6 +450,12 @@
     /* The identity on a feedback word's bits (pycore_value.h) */ \
     PRIMITIVE(_PyValueGuarded_Load, PyValueBorrow, (_PyValueGuarded), \
               ARGS(scalar), SCALAR, EFFECTS()) \
+    /* Reviewed G0c2 (pycore_value.h): for a pointer-space word returns its   \
+     * pointer, taking over its count if the value owns one, else a new       \
+     * reference (Py_NewRef) to the immortal or borrowed object; a            \
+     * non-object word aborts (_PyValue_FatalNotObject), which the consumed   \
+     * object requirement excludes. No failure path, no callback. It has no   \
+     * ir_leaf model and no lowering: G0d.                                    */ \
     PRIMITIVE(PyValue_AsKnownObjectSteal, PyObject *, (PyValue), \
               ARGS(consumed object), VIEW, EFFECTS()) \
     /* The type of a value or an object, a pointer along the path `type`, \
@@ -461,7 +563,11 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PyErr_GivenExceptionMatches, int, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Python/errors.c): Py_XSETREF of                         \
+     * tstate->exc_info->exc_value with a new reference to the argument       \
+     * (borrowed here, None meaning NULL). The old handled exception is       \
+     * released, and its finalizer may run Python: runs_python covers it.     \
+     * Cannot fail.                                                           */ \
     HELPER(PyErr_SetHandledException, void, (PyObject *), \
         ARGS(object), NONE, EFFECTS(runs_python)) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
@@ -482,25 +588,41 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PyType_GenericAlloc, PyObject *, (PyTypeObject *, Py_ssize_t), \
         ARGS(scalar, scalar), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Include/object.h): a static inline read of              \
+     * type->tp_flags. No failure, no callback. A static inline function,     \
+     * not an out-of-line HELPER: G0d kind.                                   */ \
     HELPER(PyType_HasFeature, int, (PyTypeObject *, long unsigned int), \
         ARGS(scalar, scalar), SCALAR, EFFECTS(reads)) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Include/cpython/unicodeobject.h): the address of the    \
+     * str's characters, computed from its state (compact ASCII or compact    \
+     * or legacy layout). Reads the state bits; no failure, no callback.      */ \
     MACRO(PyUnicode_1BYTE_DATA, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Objects/unicodeobject.c). ensure_unicode(left) and a    \
+     * PyUnicode_Check of right set TypeError; the sum of lengths             \
+     * overflowing sets OverflowError; PyUnicode_New can set MemoryError:     \
+     * each returns NULL with the exception set, with both arguments          \
+     * untouched (borrowed). An empty operand gives PyUnicode_FromObject of   \
+     * the other (a new reference). It copies characters and calls no         \
+     * Python and releases nothing. The seed lacked `raises`.                 */ \
     HELPER(PyUnicode_Concat, PyObject *, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(reads, allocates)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+        ARGS(object, object), SCALAR, EFFECTS(reads, allocates, raises)) \
+    /* Reviewed G0c2 (Include/cpython/unicodeobject.h): a read of the str's   \
+     * length field (asserts PyUnicode_Check). No failure, no callback.       \
+     * Inline, not an out-of-line HELPER: G0d kind.                           */ \
     HELPER(PyUnicode_GET_LENGTH, Py_ssize_t, (PyObject *), \
         ARGS(object), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Include/cpython/unicodeobject.h): a read of the str's   \
+     * state bits. No failure, no callback. Inline: G0d kind.                 */ \
     HELPER(PyUnicode_IS_COMPACT_ASCII, int, (PyObject *), \
         ARGS(object), SCALAR, EFFECTS(reads)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Include/cpython/unicodeobject.h): reads the character   \
+     * of a ready str by its kind; index must be in range (asserted). No      \
+     * failure, no callback. A macro over inline functions: G0d kind.         */ \
     HELPER(PyUnicode_READ_CHAR, Py_UCS4, (PyObject *, Py_ssize_t), \
         ARGS(object, scalar), SCALAR, EFFECTS(reads)) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Include/pymacro.h): sizeof(array)/sizeof(array[0]), a   \
+     * compile-time constant; no code.                                        */ \
     MACRO(Py_ARRAY_LENGTH, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
@@ -515,7 +637,9 @@
     /* seeded from a C macro (no static check), ir_records.predicate_facts, ir_records.effect_sites */ \
     MACRO(Py_IS_TYPE, \
         ARGS(scalar, scalar), TEST(exact(a1), ), EFFECTS(reads), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Include/object.h): Py_Is(x, Py_None), a pointer         \
+     * compare with the None singleton; it reads no memory. The seed's        \
+     * `reads` is over-declared and kept (sound).                             */ \
     MACRO(Py_IsNone, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
@@ -533,9 +657,14 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(Py_XINCREF, void, (PyObject *), \
         ARGS(object), NONE, EFFECTS()) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Include/refcount.h: Py_XSETREF(dst, src) stores src into the lvalue \
+     * dst, then Py_XDECREFs dst's old value.  It takes src's reference \
+     * (consumed; src may be NULL, the X: ARGS has no nullable mark, the walk accepts a literal NULL there because it names no value and refuses a local that may be NULL) and returns nothing.  The old \
+     * value's finalizer may run Python (releases).  Failure paths: none. \
+     * Callbacks: the old value's deallocator.  Root's correction; the only \
+     * uop caller is _POP_EXCEPT (G0a5) */ \
     MACRO(Py_XSETREF, \
-        ARGS(scalar, scalar), SCALAR, EFFECTS(releases), EXITS()) \
+        ARGS(scalar, consumed object), NONE, EFFECTS(releases), EXITS()) \
     /* seeded from ir_leaf.ERASED */ \
     INTRINSIC(QSBR_QUIESCENT_STATE, ARGS(scalar), NONE, BUILD(gil)) \
     /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
@@ -607,20 +736,34 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(_PyType_VALUE_SLOT, \
         ARGS(scalar, scalar), SCALAR, EFFECTS(reads), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Objects/unicodeobject.c): identity, else unicode_eq     \
+     * compares length, kind and bytes of two str (asserted). Reads;          \
+     * returns 0 or 1; no failure, no allocation, no callback.                */ \
     HELPER(_PyUnicode_Equal, int, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(reads)) \
     /* seeded from ir_leaf.ERASED */ \
     INTRINSIC(_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY, ARGS(), NONE, BUILD(gil)) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Include/internal/pycore_object.h defines a static inline function, \
+     * but Python/ceval.h #undefs it and redefines it as a do { } while (0) \
+     * statement macro (a constant destructor call): the evaluator's C is \
+     * the macro, so the row stays a MACRO and has no static type check. \
+     * Converting it to the inline function is a change to ceval.h and a \
+     * measurement: listed, not done.  Semantics: drops one count of op \
+     * unless it is immortal and calls the destructor at zero.  Consumes \
+     * op; no failure path.  Callbacks: only the destructor, whose own row \
+     * decides the effect (a DESTRUCTOR row is `writes`, any other \
+     * `releases`), as for PyValue_CLOSE_SPECIALIZED.  The reftracer hook \
+     * is a debugging facility outside the language semantics */ \
     MACRO(_Py_DECREF_SPECIALIZED, \
-        ARGS(scalar, scalar), SCALAR, EFFECTS(writes), EXITS()) \
+        ARGS(consumed object, destructor), NONE, EFFECTS(writes), EXITS()) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(_Py_ID, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* seeded from a definition under Py_GIL_DISABLED */ \
     INTRINSIC(_Py_IsOwnedByCurrentThread, ARGS(scalar), SCALAR, BUILD(free_threaded)) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Reviewed G0c2 (pycore_global_objects.h): the address of a static       \
+     * object in _PyRuntime's global objects; a constant address, no memory   \
+     * read.                                                                  */ \
     MACRO(_Py_SINGLETON, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
@@ -638,7 +781,11 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(value_dict_merge_uniq, _PyStatusObject, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Python/ceval.c). Wraps _PyEval_ExceptionGroupMatch      \
+     * (exception_group_match: isinstance checks, split()/derive of the       \
+     * group: arbitrary Python). Returns {match, rest} as new references,     \
+     * or {NULL, NULL} with an exception set. The frame is only read for      \
+     * its f_exc state; exc_value and match_type are borrowed.                */ \
     HELPER(value_exception_group_match, _PyObjectPair, (_PyInterpreterFrame *, PyObject *, PyObject *), \
         ARGS(frame, object, object), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -651,12 +798,29 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(value_load_global, PyValue, (PyObject *, PyObject *, PyObject *), \
         ARGS(object, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Python/ceval.c). An exact dict goes to                  \
+     * _PyDict_GetValue (hashes and compares the key: __hash__ and __eq__     \
+     * of key types run Python), a miss sets KeyError through                 \
+     * _PyErr_SetKeyErrorValue and returns NULL. An exact list or tuple       \
+     * with an in-range inline index reads the item, else _PyValue_GetItem    \
+     * -> mp_subscript / sq_item / __class_getitem__ (any Python). Operands   \
+     * borrowed on every path; the result owned or NULL with an exception     \
+     * set.                                                                   */ \
     HELPER(value_subscript, PyValue, (PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Python/ceval.c: PyUnicode_Append(&left, right) in a frame of its \
+     * own.  It consumes left on every return (extends it in place when \
+     * its count allows, else replaces it with a new str and releases it, \
+     * and releases it on error) and borrows right; it returns the new str \
+     * owned, or NULL with an exception set.  Callees: PyUnicode_Append -> \
+     * unicode_resize / PyUnicode_New and a copy: allocation and a realloc \
+     * that may move the object, and the release of left, a str, whose \
+     * deallocator runs no Python; no slot of either operand is called.  \
+     * `releases` is declared for the deallocator of left, and runs_python \
+     * kept as the seed had it: nothing here calls Python, so it is \
+     * over-declared and sound */ \
     HELPER(value_unicode_append, PyObject *, (PyObject *, PyObject *), \
-        ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(consumed object, object), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(with_exit_call, PyValue, (PyValueBorrow, PyValueBorrow, PyObject *, PyObject *, PyObject *), \
         ARGS(borrowed, borrowed, object, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
@@ -723,10 +887,12 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(GETITEM, \
         ARGS(scalar, scalar), SCALAR, EFFECTS(reads), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.predicate_facts, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Include/cpython/dictobject.h): Py_TYPE(op) is dict or   \
+     * frozendict; a read of ob_type; no failure, no callback.                */ \
     MACRO(PyAnyDict_CheckExact, \
         ARGS(scalar), TEST(exact(PyAnyDict_Type)), EFFECTS(reads), EXITS()) \
-    /* seeded from a C macro (no static check), ir_records.predicate_facts, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Include/setobject.h): Py_TYPE(op) is set or             \
+     * frozenset; a read of ob_type; no failure, no callback.                 */ \
     MACRO(PyAnySet_CheckExact, \
         ARGS(scalar), TEST(exact(PyAnySet_Type)), EFFECTS(reads), EXITS()) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -744,10 +910,16 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(PySet_New, PyObject *, (PyObject *), \
         ARGS(object), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Include/sliceobject.h): Py_IS_TYPE(op,                  \
+     * &PySlice_Type), a read of ob_type. No failure, no callback.            */ \
     MACRO(PySlice_Check, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Objects/dictobject.c). A str key with a cached hash     \
+     * probes unicode-only keys without callbacks; any other key goes to      \
+     * dict_get_value, which hashes (__hash__) and compares (__eq__):         \
+     * arbitrary Python. Returns 1, 0 or -1 with the exception set; both      \
+     * arguments are borrowed (the status value it fetches is closed          \
+     * inside).                                                               */ \
     HELPER(_PyDict_ContainsValue, int, (PyDictObject *, PyValueBorrow), \
         ARGS(scalar, borrowed), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -762,13 +934,20 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyList_Extend, PyObject *, (PyListObject *, PyObject *), \
         ARGS(scalar, object), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Objects/listobject.c). PySlice_Unpack calls __index__   \
+     * of the slice parts (arbitrary Python) and can raise TypeError or       \
+     * OverflowError; list_slice_wrap then allocates a list and increfs the   \
+     * items (no Python). Returns a new list or NULL with an exception set;   \
+     * both arguments are borrowed.                                           */ \
     HELPER(_PyList_SliceSubscript, PyObject *, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PySet_AddValueTakeRef, int, (PySetObject *, PyValue), \
         ARGS(scalar, consumed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Objects/setobject.c). Hashes the key (a str's cached    \
+     * hash, else the type's __hash__) and probes with the key's __eq__:      \
+     * arbitrary Python. Returns 1, 0 or -1 with the exception set; both      \
+     * arguments are borrowed.                                                */ \
     HELPER(_PySet_Contains, int, (PySetObject *, PyValueBorrow), \
         ARGS(scalar, borrowed), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -792,6 +971,9 @@
      * concatenations, repeats and dict | dict, which return a new \
      * reference or NULL with an exception, and may run Python (a key's \
      * __eq__ in dict | dict) (G0a4) */ \
+    /* Reviewed G0c2 (Include/internal/pycore_code.h): the cache operand's    \
+     * pointer, typed. No memory read of its own; the FIELD rows below read   \
+     * through it.                                                            */ \
     PRIMITIVE(_PyBinaryOp_ExtendDescr, _PyBinaryOpSpecializationDescr *, (PyObject *), \
               ARGS(scalar), PATH(binary_op_descr), EFFECTS()) \
     SLOT(binaryopactionfunc, PyObject *, (PyObject *, PyObject *), \
@@ -919,7 +1101,8 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(PyCFunction_GET_FLAGS, \
         ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Include/cpython/funcobject.h): a static inline read     \
+     * of func_code. No failure, no callback.                                 */ \
     HELPER(PyFunction_GET_CODE, PyObject *, (PyObject *), \
         ARGS(object), SCALAR, EFFECTS(reads)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -1083,7 +1266,8 @@
 
 /* The evaluator: dispatch, the frame's namespaces, atomics */
 #define _PyIR_COMPONENTS_EVALUATOR(PRIMITIVE, HELPER, MACRO) \
-    /* seeded from a C macro (no static check), ir_records.effect_sites */ \
+    /* Reviewed G0c2 (pycore_code.h): 1 << (2 * (x >= y) + (x <= y)),         \
+     * arithmetic on two scalars; no memory, no failure.                      */ \
     MACRO(COMPARISON_BIT, \
         ARGS(scalar, scalar), SCALAR, EFFECTS(), EXITS()) \
     /* seeded from a C macro (no static check), ir_records.TRANSFER_TOKENS, ir_records.effect_sites */ \
@@ -1149,10 +1333,22 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_BinarySlice, PyValue, (PyValueBorrow, PyValueBorrow, PyValueBorrow), \
         ARGS(borrowed, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Python/ceval.c). An object goes to                      \
+     * _PyIntrinsics_UnaryFunctions[oparg].func as it is; a number is boxed   \
+     * in a _PyValueTemps record (allocation, closed on return). The          \
+     * intrinsic may be any of them (PRINT calls sys.displayhook, TYPEVAR     \
+     * and friends build objects, ASYNC_GEN_WRAP): arbitrary Python. The      \
+     * argument is borrowed on every path; the result is owned or NULL with   \
+     * an exception set.                                                      */ \
     HELPER(_PyEval_CallIntrinsic1, PyValue, (PyThreadState *, int, PyValueBorrow), \
         ARGS(tstate, scalar, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Python/ceval.c). Boxes the operands that are numbers    \
+     * in a _PyValueTemps record, calls                                       \
+     * _PyIntrinsics_BinaryFunctions[oparg].func(tstate, value2, value1)      \
+     * (PREP_RERAISE_STAR, typevar constructors, SET_FUNCTION_TYPE_PARAMS:    \
+     * object construction and exception group splitting, which can call      \
+     * Python), closes the temps. Both operands borrowed; the result owned,   \
+     * or NULL with an exception set.                                         */ \
     HELPER(_PyEval_CallIntrinsic2, PyValue, (PyThreadState *, int, PyValueBorrow, PyValueBorrow), \
         ARGS(tstate, scalar, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -1161,12 +1357,24 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_CallMethodDescriptorO, PyValue, (PyThreadState *, PyCFunction, PyValueBorrow, PyValueBorrow), \
         ARGS(tstate, scalar, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Python/ceval.c): as the except form, then rejects     \
+     * ExceptionGroup subclasses with PyObject_IsSubclass(exc,            \
+     * PyExc_BaseExceptionGroup) (Objects/abstract.c object_issubclass: its \
+     * cls is an exact `type` instance, so recursive_issubclass walks the   \
+     * MRO and calls no __subclasscheck__): no Python.  Returns 0 or -1 with \
+     * the exception set; the argument is borrowed.  The seed's runs_python \
+     * was over-declared and is narrowed                                    */ \
     HELPER(_PyEval_CheckExceptStarTypeValidValue, int, (PyThreadState *, PyValueBorrow), \
-        ARGS(tstate, borrowed), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+        ARGS(tstate, borrowed), SCALAR, EFFECTS(reads, allocates, raises)) \
+    /* Reviewed G0c2 (Python/ceval.c): a number is not an exception class     \
+     * (TypeError); otherwise _PyEval_CheckExceptTypeValid walks a type or    \
+     * a tuple of types with PyExceptionClass_Check (reads) and sets          \
+     * TypeError through _PyErr_SetString (allocates the message). Returns    \
+     * 0 or -1 with the exception set; the argument is borrowed. It calls     \
+     * no slot and no Python, so it is narrower than the seed's               \
+     * runs_python: reads, allocates, raises.                                 */ \
     HELPER(_PyEval_CheckExceptTypeValidValue, int, (PyThreadState *, PyValueBorrow), \
-        ARGS(tstate, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(tstate, borrowed), SCALAR, EFFECTS(reads, allocates, raises)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_CreateInitFrame, _PyInterpreterFrame *, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue, _PyInstr *), \
         ARGS(tstate, frame, scalar, consumed, consumed, scalar), SCALAR, EFFECTS(runs_python)) \
@@ -1192,10 +1400,24 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_LoadName, PyValue, (PyThreadState *, _PyInterpreterFrame *, PyObject *), \
         ARGS(tstate, frame, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Python/ceval.c). A non-class type_value sets            \
+     * TypeError; _PyValue_IsInstance (any __instancecheck__) decides the     \
+     * match; then positional and keyword attributes are fetched with         \
+     * _PyValue_GetOptionalAttr (any __getattr__ or descriptor) into a new    \
+     * tuple, with a set for duplicates. Returns the attribute tuple          \
+     * (owned), or NULL with no exception for a failed match, or NULL with    \
+     * an exception (the caller tells them apart with _PyErr_Occurred).       \
+     * subject, type and kwargs are borrowed on every path. Callbacks:        \
+     * arbitrary Python.                                                      */ \
     HELPER(_PyEval_MatchClass, PyObject *, (PyThreadState *, PyValueBorrow, PyValueBorrow, Py_ssize_t, PyObject *), \
         ARGS(tstate, borrowed, borrowed, scalar, object), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Reviewed G0c2 (Python/ceval.c). Looks up map.get with                  \
+     * _PyValue_GetMethod, makes a set and a dummy object, then for each      \
+     * key a set test and add (key __hash__/__eq__) and a dict read or a      \
+     * call of get (arbitrary Python). Returns a new tuple of values, or a    \
+     * new reference to None when a key is absent, or NULL with an            \
+     * exception set (a duplicate key sets ValueError). map and keys are      \
+     * borrowed on every path.                                                */ \
     HELPER(_PyEval_MatchKeys, PyObject *, (PyThreadState *, PyObject *, PyObject *), \
         ARGS(tstate, object, object), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
@@ -1248,6 +1470,9 @@
     MACRO(IR_C, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     MACRO(IR_D, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     MACRO(IR_HANDLER, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* Reviewed G0c2 (ceval_macros.h): the frame's home slot addressed by     \
+     * an operand field; a read of the frame's slot array (reads), no         \
+     * failure, no callback.                                                  */ \
     MACRO(IR_SLOT, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
     MACRO(IR_OPERAND, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
     MACRO(IR_CALL_ARG, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
@@ -1288,14 +1513,23 @@
      * (ir_leaf.capability_expansion), a test of the operand's tag bits \
      * (the PyValue_IsInlineInt row: EFFECTS()), so it reads no heap or \
      * frame state */ \
+    /* Reviewed G0c2: expands to !PyValue_IsInlineInt(x)                      \
+     * (ir_leaf.capability_expansion); a tag test with no memory read.        */ \
     MACRO(IR_GUARD_INLINE_INT, ARGS(borrowed), GUARD(inline_int), EFFECTS(), \
           EXITS(miss)) \
     /* MARKER_FACTS: exact(T) of the value, T the type its scalar argument \
      * 1 names (LIST or TUPLE: PyList_Type or PyTuple_Type), bound by G0a4 */ \
+    /* Reviewed G0c2 (ir_generator.element_operation): a pointer-space test   \
+     * of the slot word and a compare of ob_type with PyList_Type or          \
+     * PyTuple_Type; a miss restarts the word. Reads ob_type; no callback.    */ \
     MACRO(IR_GUARD_ELEMENT_TYPE, ARGS(borrowed, scalar), GUARD(exact(1)), \
           EFFECTS(reads), EXITS(miss)) \
     /* MARKER_FACTS: the subscript (argument 1) is in_bounds of the \
      * container (argument 0) */ \
+    /* Reviewed G0c2 (ir_generator.element_operation): for a list, an index   \
+     * from the end is folded and compared with the length; for a tuple the   \
+     * index is nonnegative and compared with the length; a miss restarts     \
+     * the word. Reads the container's size. No allocation, no callback.      */ \
     MACRO(IR_GUARD_ELEMENT_INDEX, ARGS(borrowed, borrowed, scalar, scalar), \
           GUARD(, in_bounds(0)), EFFECTS(reads), EXITS(miss)) \
     /* GUARD_TOKENS: IR_GUARD_SHAPE_READ is an EXIT_GUARD; its owner is a \
@@ -1307,6 +1541,11 @@
     /* Duplicating reads (ir_generator.py: shape_read_value, \
      * IR_DUP_CANONICAL_ELEMENT in IR_HELPER_EFFECTS with an empty set): a \
      * new reference to an element or a slot's value, no Python */ \
+    /* Reviewed G0c2 (ir_generator.element_operation,                         \
+     * ir_leaf.capability_expansion): reads an item of a checked list or      \
+     * tuple at a checked index and takes a new reference (an inline word     \
+     * takes none). The index was proved in bounds by                         \
+     * IR_GUARD_ELEMENT_INDEX; no failure, no callback.                       */ \
     MACRO(IR_DUP_CANONICAL_ELEMENT, ARGS(borrowed, scalar), VALUE(owned), \
           EFFECTS(reads), EXITS()) \
     MACRO(IR_DUP_SHAPE_READ, ARGS(borrowed, scalar), VALUE(owned), \
@@ -1401,11 +1640,22 @@
      * TRANSFER_TOKENS (YIELD) */ \
     MACRO(IR_SUSPEND_DELEGATED, ARGS(consumed), NONE, \
           EFFECTS(reads, writes, runs_python, switches_frame), EXITS(yield)) \
-    /* IR_MARKER_EFFECTS escapes, error; TRANSFER_TOKENS (RAISE).  A hit \
-     * stores the result and dispatches, so the macro also leaves by next */ \
+    /* ir_generator.try_dict_first_probe: _PyDict_TryGetFirstProbeValue \
+     * (Objects/dictobject.c) reads an exact dict's first probe slot for an \
+     * inline int key and returns a new reference to the value only on an \
+     * identity hit; every other case returns NULL with the inputs, the \
+     * table and the exception state untouched, and no hash or __eq__ runs. \
+     * On a hit the macro detaches both inputs, stores the result in the \
+     * destination, closes the inputs and the displaced destination \
+     * (releases: a last reference may run a finalizer) and dispatches the \
+     * next word.  It never raises: the tables' RAISE was wrong, and the \
+     * raise sites of the uop lie after it, where the uop's own inputs are \
+     * released.  On a miss it falls through with everything unchanged. \
+     * The hit's inputs are consumed by the macro, which the walk does not \
+     * model; the fall-through path is the one it follows */ \
     MACRO(IR_TRY_DICT_FIRST_PROBE, ARGS(), NONE, \
-          EFFECTS(reads, writes, raises, releases, runs_python), \
-          EXITS(raise)) \
+          EFFECTS(reads, writes, releases), \
+          EXITS(next)) \
     /* Call preparation: IR_MARKER_EFFECTS escapes, error; TRANSFER_TOKENS \
      * (RAISE) */ \
     MACRO(IR_PREPARE_CALL_METHOD, ARGS(), NONE, \

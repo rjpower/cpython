@@ -634,7 +634,8 @@ class TestIRCases(unittest.TestCase):
             (marker, "STAT_INC(BINARY_OP, hit); " + marker),
             (marker, marker + " " + marker),
             (guard, "spam_call(); " + guard),
-            ("(dict_st, sub_st -- res)", "(sub_st, dict_st -- res)"),
+            ("(dict_st: consumed, sub_st: consumed -- res: owned)",
+             "(sub_st: consumed, dict_st: consumed -- res: owned)"),
             (marker, "if (oparg) { " + marker + " }"),
         )
         for old, new in changes:

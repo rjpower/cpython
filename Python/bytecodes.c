@@ -4217,7 +4217,7 @@ dummy_func(
             STAT_INC(GET_ITER, hit);
         }
 
-        op(_PUSH_TAGGED_ZERO, ( -- zero: owned))
+        op(_PUSH_TAGGED_ZERO, ( -- zero: inline))
             effects() exits(next)
         {
             zero = PyValue_TagIndex(0);

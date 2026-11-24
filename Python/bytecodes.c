@@ -4207,7 +4207,11 @@ dummy_func(
             res = match ? PyValue_True : PyValue_False;
         }
 
-        outlined inst(MATCH_KEYS, (subject, keys -- subject, keys, values_or_none)) {
+        outlined inst(MATCH_KEYS,
+                (subject: assumed(object) by MATCH_MAPPING, keys: assumed(object) by codegen_pattern_mapping
+                 -- subject, keys, values_or_none: owned))
+            effects(runs_python) exits(next, raise)
+        {
             // On successful match, PUSH(values). Otherwise, PUSH(None).
             // MATCH_MAPPING has accepted the subject: a mapping, not a number
             assert(PyValue_IsObject(subject));

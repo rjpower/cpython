@@ -3157,9 +3157,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     activation.source_error_handler = (_PyExceptionHandler){0};
     activation.observer_context = NULL;
     activation.jit_pin = NULL;
-#ifndef NDEBUG
     activation.jit_unit = NULL;
-#endif
     tstate_impl->eval_activation = &activation;
 #if _Py_STACK_GROWS_DOWN
     assert(_Py_get_machine_stack_pointer() <= (uintptr_t)&activation);

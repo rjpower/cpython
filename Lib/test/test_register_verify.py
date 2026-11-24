@@ -745,6 +745,10 @@ class PilotTests(unittest.TestCase):
         guard = at("getattr.rop", "guard present(item) else miss;")
         raise_attr = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5)
         raise_method = at("getattr.rop", "exit raise(GetMethod.Failed, saved);", 5)
+        truth_slot = at("truth.rop", "exit raise(Truth.Failed, saved);", 5)
+        truth_generic = at("truth.rop", "exit raise(Truth.Failed, saved);", 5, last=True)
+        branch_slot = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5)
+        branch_generic = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5, last=True)
         mutations = [
             ("add.rop", "  effects(writes, allocates, raises, releases)\n",
              "  effects(writes, raises, releases)\n",
@@ -779,7 +783,15 @@ class PilotTests(unittest.TestCase):
               f"{raise_attr}: GetAttr.Generic: points: raise at GetAttr.Failed: "
               "GetAttr.Failed lists obj in spent, but obj is intact",
               f"{raise_method}: GetMethod.Generic: points: raise at GetMethod.Failed: "
-              "GetMethod.Failed lists obj in spent, but obj is intact"]),
+              "GetMethod.Failed lists obj in spent, but obj is intact",
+              f"{truth_slot}: Truth.Slot: points: raise at Truth.Failed: "
+              "Truth.Failed lists value in spent, but value is intact",
+              f"{truth_generic}: Truth.Generic: points: raise at Truth.Failed: "
+              "Truth.Failed lists value in spent, but value is intact",
+              f"{branch_slot}: BranchTruth.Slot: points: raise at BranchTruth.Failed: "
+              "BranchTruth.Failed lists value in spent, but value is intact",
+              f"{branch_generic}: BranchTruth.Generic: points: raise at BranchTruth.Failed: "
+              "BranchTruth.Failed lists value in spent, but value is intact"]),
         ]
         for filename, old, new, expected in mutations:
             with self.subTest(old):

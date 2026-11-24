@@ -6,7 +6,7 @@
 enum ConstKind(POOL, SMALL, COMMON);
 enum MoveRetire(KEEP_SOURCES, RETIRE_SOURCES);
 enum PollMode(POLL, NO_POLL);
-// The four conditional jumps of the stack bytecode: the sense of the test and
+// The four conditional jumps of the old bytecode: the sense of the test and
 // whether the jump edge keeps the tested owner (JUMP_IF_x_OR_POP)
 enum BranchMode(BRANCH_IF_FALSE, BRANCH_IF_TRUE, BRANCH_KEEP_IF_FALSE, BRANCH_KEEP_IF_TRUE);
 enum UnaryOp(NEGATIVE, POSITIVE, INVERT);

@@ -205,6 +205,13 @@
         next_instr = frame->return_pc; \
         DISPATCH(); \
     } while (0)
+/* A register instruction's branch or jump: go on at the word its target
+ * operand names (a stub reports BRANCH instead, Tools/cases_generator/rop_generator.py) */
+#define IR_BRANCH(TARGET) \
+    do { \
+        next_instr = (TARGET); \
+        DISPATCH(); \
+    } while (0)
 #define DISPATCH_GOTO() goto *opcode_targets[opcode]
 /* An error leaves the handler for the shared label process_error, which
  * unwinds by the exception table and either dispatches at the handler found

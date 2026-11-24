@@ -3819,6 +3819,41 @@ type_valid(PyTypeObject *Py_UNUSED(ty))
     return 0;
 }
 
+/* The truth rows' adaptation (Python/register_ops/truth.rop): the entry
+ * takes the operand's type version, and a type whose version the arm may
+ * guard is validated, which can assign the version. */
+void
+_PyRop_BeginTruth(_PyFbUnary *fb, PyValueBorrow v)
+{
+    fb->type_version = fb_type_version(PyValue_TYPE(v));
+}
+
+bool
+_PyRop_ValidatePlain(_PyFbUnary *fb, PyValueBorrow v)
+{
+    PyTypeObject *tp = PyValue_TYPE(v);
+    unsigned int version = 0;
+    if (!PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE)
+        || _PyType_Validate(tp, check_type_always_true, &version) != 0) {
+        return false;
+    }
+    assert(version);
+    fb->type_version = version;
+    return true;
+}
+
+bool
+_PyRop_ValidateSlot(_PyFbUnary *fb, PyValueBorrow v)
+{
+    unsigned int version = 0;
+    if (_PyType_Validate(PyValue_TYPE(v), type_valid, &version) != 0) {
+        return false;
+    }
+    assert(version);
+    fb->type_version = version;
+    return true;
+}
+
 /* The specialisations of a truth test, in the order of truth_ops below */
 enum { TRUTH_BOOL, TRUTH_INT, TRUTH_LIST, TRUTH_NONE, TRUTH_STR,
        TRUTH_ALWAYS_TRUE, TRUTH_SLOT, TRUTH_COUNT };

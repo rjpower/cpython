@@ -100,7 +100,8 @@ def source_text(source: CSource, ret: str, out: str | None) -> str:
 
 # The C entry type of each feedback schema whose arms are lowered
 SCHEMA_C = {Schema.Binary: "_PyFbBinary", Schema.Attr: "_PyFbAttr",
-            Schema.Global: "_PyFbGlobal", Schema.Call: "_PyFbCall"}
+            Schema.Global: "_PyFbGlobal", Schema.Call: "_PyFbCall",
+            Schema.Truth: "_PyFbUnary"}
 
 
 def c_type(t: Type) -> str | None:
@@ -463,9 +464,12 @@ class ArmLowerer:
 
     def slot(self, operand: str) -> Slot:
         p = self.placements[operand]
-        if p.kind not in (FieldKind.home, FieldKind.feedback, FieldKind.name):
+        if p.kind not in (FieldKind.home, FieldKind.feedback, FieldKind.name,
+                          FieldKind.imm, FieldKind.target):
             raise Unsupported(f"{self.arm.name}: operand {operand} is a {p.kind.name} field")
-        (slot,) = p.slots
+        slot = p.slots[0]
+        if len(p.slots) > 1 and p.kind is not FieldKind.target:
+            raise Unsupported(f"{self.arm.name}: operand {operand} takes {len(p.slots)} fields")
         if slot.word != 0 and p.kind is not FieldKind.feedback:
             raise Unsupported(f"{self.arm.name}: operand {operand} is in an operand word")
         return slot
@@ -585,7 +589,27 @@ class ArmLowerer:
             if schema not in SCHEMA_C:
                 raise Unsupported(f"{self.arm.name}: no C entry type for feedback {schema}")
             return f"(({SCHEMA_C[schema]} *)IR_FB({self.field(operand)}))"
+        if p.kind is FieldKind.imm:
+            param = next(x for x in self.family.params if x.name == operand)
+            if param.type == ScalarType(Scalar.Bool):
+                return f"({self.field(operand)} != 0)"
+            return self.field(operand)
+        if p.kind is FieldKind.target:
+            return self.target_value(operand)
         raise Unsupported(f"{self.arm.name}: operand {operand} used as a value")
+
+    def target_value(self, operand: str) -> str:
+        """A branch or jump target: the word the signed distance in the
+        operand's field or fields leads to, counted from the word after the
+        head (the jump operands of a family have no operand words)"""
+        p = self.placements[operand]
+        if self.enc.words:
+            raise Unsupported(f"{self.arm.name}: a target in a family with operand words")
+        first = p.slots[0]
+        assert [s.offset for s in p.slots] == [first.offset + 12 * i for i in range(len(p.slots))]
+        sign = 1 << (p.bits - 1)
+        raw = f"((uint32_t)(ir_word >> {first.offset}) & {(1 << p.bits) - 1:#x})"
+        return f"(this_instr + 1 + ((int)({raw} ^ {sign:#x}) - {sign:#x}))"
 
     def call_expr(self, e: Call) -> str:
         if e.callee == "use":
@@ -846,6 +870,12 @@ class ArmLowerer:
             self.emit(self.miss())
         elif t.kind == "redirect":
             self.emit("IR_REDIRECT();")
+        elif t.kind in ("branch", "jump"):
+            # The target is the family's operand: the word's static target.
+            # A stub reports BRANCH and leaves the target to its caller.
+            (target,) = t.args
+            assert isinstance(target, Name)
+            self.emit(f"IR_BRANCH({self.operand_value(target.name)});")
         elif t.kind == "again":
             # The word runs again, under the handler it now names
             self.emit("next_instr = this_instr;")

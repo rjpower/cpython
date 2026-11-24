@@ -195,6 +195,8 @@ STUB_PREAMBLE = """\
 #undef IR_STUB_ESCAPE
 #pragma push_macro("IR_REDIRECT")
 #undef IR_REDIRECT
+#pragma push_macro("IR_BRANCH")
+#undef IR_BRANCH
 #pragma push_macro("PyValue_CLOSE")
 #undef PyValue_CLOSE
 #pragma push_macro("PyValue_XCLOSE")
@@ -211,6 +213,7 @@ STUB_PREAMBLE = """\
         return ir_status | _PyIR_RAISED; \\
     } while (0)
 #define IR_STUB_ESCAPE() (ir_status |= _PyIR_ESCAPED)
+#define IR_BRANCH(TARGET) return ir_status | _PyIR_BRANCH
 #define IR_REDIRECT() do { \\
         if (frame->pending_redirect) { \\
             _PyFrame_CompleteRedirect(frame); \\
@@ -224,6 +227,7 @@ STUB_PREAMBLE = """\
 STUB_EPILOGUE = """\
 #pragma pop_macro("PyValue_XCLOSE")
 #pragma pop_macro("PyValue_CLOSE")
+#pragma pop_macro("IR_BRANCH")
 #pragma pop_macro("IR_REDIRECT")
 #pragma pop_macro("IR_STUB_ESCAPE")
 #pragma pop_macro("PROCESS_ERROR_AT")
@@ -281,6 +285,7 @@ def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
     fb_schema = None
     ninputs = writes = 0
     has_target = has_args = False
+    target = "_PyIR_LOC_NONE"
     for pl in enc.placements:
         param = params[pl.operand]
         inner = param.type.arg if isinstance(param.type, WrapType) else param.type
@@ -304,12 +309,21 @@ def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
         elif pl.kind is FieldKind.feedback:
             role = "_PyIR_ROLE_FB"
             fb_schema = param.type.schema.value
+            if fb_schema == "Truth":
+                # Truth sites share the unary entry
+                fb_schema = "Unary"
         elif pl.kind is FieldKind.target:
             has_target = True
+            target = "_PyIR_LOC_AB" if len(pl.slots) == 2 else LOC_NAMES[pl.slots[0]]
         if not in_head:
             continue
         first = pl.slots[0]
         roles[HEAD_FIELDS[first]] = role
+        if pl.kind is FieldKind.target:
+            for slot in pl.slots:
+                roles[HEAD_FIELDS[slot]] = role
+            # The assembler writes the distance into the target's fields
+            continue
         if pl.kind is FieldKind.feedback:
             fb = LOC_NAMES[first]
         elif role == "_PyIR_ROLE_IMM" and imm == "_PyIR_LOC_NONE":
@@ -333,14 +347,14 @@ def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
     if "_PyIR_RUNS_PYTHON" in effects:
         flags.append("_PyIR_RUNS_CODE")
     if has_target:
-        flags.append("_PyIR_JUMPS")
+        flags.append("_PyIR_FORWARD")
         if not exits & {"next", "branch"}:
             flags.append("_PyIR_JUMP_ALWAYS")
     return ir_numbers.ArmFormat(
         tuple(flags), tuple(e for e in EFFECT_ORDER if e in effects), tuple(roles),
         imm, fb, ninputs, -ninputs if writes else None, (1 << ninputs) - 1,
         fb_schema, "_PyIR_OPERANDS_CALL" if has_args else "_PyIR_OPERANDS_NONE",
-        0 if has_args else enc.words, writes)
+        0 if has_args else enc.words, writes, target)
 
 
 def arm_entries(p: Products) -> list[ir_numbers.ArmEntry]:

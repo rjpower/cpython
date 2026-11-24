@@ -355,7 +355,7 @@ static_target(const _PyIRWord *words, uint32_t i)
         return (int)IR_CD(w);
     }
     if (fmt->flags & _PyIR_FORWARD) {
-        return (int)i + 1 + IR_DS(w);
+        return (int)i + 1 + _PyIR_FormatDistance(fmt, w);
     }
     return -1;
 }

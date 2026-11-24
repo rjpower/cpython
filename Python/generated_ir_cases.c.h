@@ -691,6 +691,15 @@ static _PyIRTransfer ir_run_BUILD_SLICE(PyThreadState *tstate, _PyInterpreterFra
 static _PyIRTransfer ir_run_BUILD_STRING(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BUILD_TEMPLATE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BUILD_TUPLE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_BranchNone_Test(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_BranchTruth_Bool(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_BranchTruth_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_BranchTruth_Int(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_BranchTruth_List(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_BranchTruth_None(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_BranchTruth_Plain(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_BranchTruth_Slot(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_BranchTruth_Str(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_CACHE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_CALL(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_CALL_ALLOC_AND_ENTER_INIT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -937,6 +946,14 @@ static _PyIRTransfer ir_run_TO_BOOL_INT(PyThreadState *tstate, _PyInterpreterFra
 static _PyIRTransfer ir_run_TO_BOOL_LIST(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_TO_BOOL_NONE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_TO_BOOL_STR(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Truth_Bool(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Truth_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Truth_Int(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Truth_List(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Truth_None(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Truth_Plain(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Truth_Slot(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Truth_Str(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UNARY_INVERT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UNARY_NEGATIVE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_UNARY_NOT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -17760,23 +17777,23 @@ static const _PyIRForm ir_handler_forms[512] = {
     [428] = ir_run_GetMethod_MethodValues,
     [429] = ir_run_UNKNOWN_OPCODE,
     [430] = ir_run_GetMethod_PolyMethod,
-    [431] = ir_run_UNKNOWN_OPCODE,
-    [432] = ir_run_UNKNOWN_OPCODE,
-    [433] = ir_run_UNKNOWN_OPCODE,
-    [434] = ir_run_UNKNOWN_OPCODE,
-    [435] = ir_run_UNKNOWN_OPCODE,
-    [436] = ir_run_UNKNOWN_OPCODE,
-    [437] = ir_run_UNKNOWN_OPCODE,
-    [438] = ir_run_UNKNOWN_OPCODE,
-    [439] = ir_run_UNKNOWN_OPCODE,
-    [440] = ir_run_UNKNOWN_OPCODE,
-    [441] = ir_run_UNKNOWN_OPCODE,
-    [442] = ir_run_UNKNOWN_OPCODE,
-    [443] = ir_run_UNKNOWN_OPCODE,
-    [444] = ir_run_UNKNOWN_OPCODE,
-    [445] = ir_run_UNKNOWN_OPCODE,
-    [446] = ir_run_UNKNOWN_OPCODE,
-    [447] = ir_run_UNKNOWN_OPCODE,
+    [431] = ir_run_Truth_Bool,
+    [432] = ir_run_Truth_Int,
+    [433] = ir_run_Truth_List,
+    [434] = ir_run_Truth_None,
+    [435] = ir_run_Truth_Str,
+    [436] = ir_run_Truth_Plain,
+    [437] = ir_run_Truth_Slot,
+    [438] = ir_run_Truth_Generic,
+    [439] = ir_run_BranchTruth_Bool,
+    [440] = ir_run_BranchTruth_Int,
+    [441] = ir_run_BranchTruth_List,
+    [442] = ir_run_BranchTruth_None,
+    [443] = ir_run_BranchTruth_Str,
+    [444] = ir_run_BranchTruth_Plain,
+    [445] = ir_run_BranchTruth_Slot,
+    [446] = ir_run_BranchTruth_Generic,
+    [447] = ir_run_BranchNone_Test,
     [448] = ir_run_UNKNOWN_OPCODE,
     [449] = ir_run_UNKNOWN_OPCODE,
     [450] = ir_run_UNKNOWN_OPCODE,

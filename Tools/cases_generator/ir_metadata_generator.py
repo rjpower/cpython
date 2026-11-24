@@ -262,7 +262,8 @@ def arm_row(analysis: Analysis, arm: ir_numbers.ArmEntry) -> str:
     return (
         f"{{ .flags = {bits(list(fmt.flags))}, .effects = {bits(list(fmt.effects))}, "
         f".roles = {{ {', '.join(fmt.roles)} }}, .imm = {fmt.imm}, "
-        f".fb = {fmt.fb}, .ninputs = {fmt.ninputs}, .dst = {dst}, "
+        f".fb = {fmt.fb}, .target = {fmt.target}, .ninputs = {fmt.ninputs}, "
+        f".dst = {dst}, "
         f".borrow_mask = {fmt.borrow_mask:#x}, .fb_kind = {fb_kind}, "
         f".fb_size = {fb_size}, .result_phase = _PyIR_RESULT_PHASE_NONE, "
         f".output_kind = _PyIR_OUTPUT_REGISTER_DST, "

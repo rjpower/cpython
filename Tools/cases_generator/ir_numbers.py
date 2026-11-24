@@ -49,6 +49,7 @@ class ArmFormat:
     operands: str             # _PyIR_OPERANDS_*
     fixed_words: int          # operand words after the head
     writes: int
+    target: str = "_PyIR_LOC_NONE"   # where a jump target lives (flag FORWARD)
 
 
 @dataclass(frozen=True)

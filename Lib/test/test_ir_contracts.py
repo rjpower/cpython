@@ -246,6 +246,15 @@ class SliceTests(unittest.TestCase):
         'CALL_KW_NON_PY/_CALL_KW_NON_PY: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_KW_PY/_PY_FRAME_KW_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_PY_GENERAL/_PY_FRAME_GENERAL_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
+        # G0d4: the slot stores go through _PyValueSlot_Exchange, _ExchangeFilled and
+        # _Fill (pycore_object.h), which the inference does not know and takes for
+        # any effect; the declarations read their rows (reads, writes, and the
+        # releases of the closes)
+        'STORE_ATTR_INSTANCE_VALUE.record.uops[3].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 3 ["MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
+        'STORE_ATTR_SHAPE.record.uops[2].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 3 ["MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
+        'STORE_ATTR_SHAPE_ADD.record.uops[2].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 3 ["MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
+        'STORE_ATTR_SLOT.record.uops[1].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 3 ["MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
+        'STORE_SUBSCR_LIST_INT.record.uops[2].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 3 ["MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
     ]
 
     # Batch 5 and G0c9: the assume op of `iter: assumed(object) by GET_ITER`

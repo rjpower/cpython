@@ -760,6 +760,28 @@
     /* The address of a value slot at a byte offset: arithmetic only */ \
     PRIMITIVE(_PyObject_ValueSlot, PyValue *, (PyObject *, size_t), \
               ARGS(object, scalar), SCALAR, EFFECTS()) \
+    /* Evidence (G0d4), pycore_object.h, a static inline function: loads the \
+     * slot and stores the value into it (a read and a write, no call, no \
+     * failure, no callback).  The value moves into the slot, and the \
+     * previous contents come out as an owner: PyValue_NULL for a slot never \
+     * assigned, with no exception set (VALUE_OR_NULL, as _PyCell_SwapValue: \
+     * the caller closes it with PyValue_XCLOSE, which runs the finalizer \
+     * after any unlock). */ \
+    PRIMITIVE(_PyValueSlot_Exchange, PyValue, (PyValue *, PyValue), \
+              ARGS(scalar, consumed), VALUE_OR_NULL(owned), EFFECTS(reads, writes)) \
+    /* Evidence (G0d4), pycore_object.h: _PyValueSlot_Exchange for a slot that \
+     * holds a value.  The caller's guards show it: a shape names only filled \
+     * slots (_GUARD_SHAPE), a list item is never NULL once published (the \
+     * list's length bounds the index), and the hint's entry is tested for \
+     * NULL before the store.  The function asserts it. */ \
+    PRIMITIVE(_PyValueSlot_ExchangeFilled, PyValue, (PyValue *, PyValue), \
+              ARGS(scalar, consumed), VALUE(owned assumed(nonnull) by guards), \
+              EFFECTS(reads, writes)) \
+    /* Evidence (G0d4), pycore_object.h: a store of the value into a slot \
+     * that holds NULL (the shape guard shows the attribute is absent): it \
+     * moves in, nothing is displaced, no call, no failure, no callback. */ \
+    PRIMITIVE(_PyValueSlot_Fill, void, (PyValue *, PyValue), \
+              ARGS(scalar, consumed), NONE, EFFECTS(writes)) \
     /* The shape of an object's inline values (pycore_dict.h: a read of \
      * _PyObject_InlineValues(obj)->shape) \
      * Evidence: pycore_dict.h returns _PyObject_InlineValues(obj)->shape\

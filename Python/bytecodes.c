@@ -1576,7 +1576,11 @@ dummy_func(
             _GUARD_TOS_INT + _GUARD_NOS_LIST + unused/1 + _STORE_SUBSCR_LIST_INT + POP_TOP + POP_TOP;
 
         // The index and stored value stay in canonical representation.
-        leaf inline_ok op(_STORE_SUBSCR_LIST_INT, (value, list_st, sub_st -- ls, ss)) {
+        leaf inline_ok op(_STORE_SUBSCR_LIST_INT,
+                (value: consumed, list_st: taken exact(PyList_Type), sub_st: taken inline_int
+                 -- ls: moved(list_st) exact(PyList_Type), ss: moved(sub_st) inline_int))
+            effects(reads, writes, releases) exits(next, deopt)
+        {
             PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
             assert(PyList_CheckExact(list));
 
@@ -1589,18 +1593,17 @@ dummy_func(
             }
             if (index < 0 || index >= len) {
                 UNLOCK_OBJECT(list);
-                DEOPT_IF(true);
+                DEOPT_IF(true, "the index is out of range");
             }
             STAT_INC(STORE_SUBSCR, hit);
 
-            // a move: replaced below
-            PyValue old_value = _PyList_ITEMS(list)[index];
-            _PyList_ITEMS(list)[index] = TAKE(value);
-            assert(!PyValue_IsNull(old_value));
+            // A list's items are never NULL, and the index is in range
+            PyValue item = TAKE(value);
+            PyValue old_value = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index, item);
             UNLOCK_OBJECT(list);  // unlock before decrefs!
-            INPUTS_DEAD();
             ls = list_st;
             ss = sub_st;
+            INPUTS_DEAD();
             PyValue_CLOSE(old_value);
         }
 
@@ -3460,17 +3463,19 @@ dummy_func(
             }
         }
 
-        inline_ok op(_STORE_ATTR_INSTANCE_VALUE, (offset/1, value, owner --)) {
+        inline_ok op(_STORE_ATTR_INSTANCE_VALUE,
+                (offset/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases) exits(next, miss)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
 
             assert(_PyObject_GetManagedDict(owner_o) == NULL);
             PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-            PyValue old_value = *value_ptr;  // a move: replaced below
 #ifdef Py_SHAPES
             /* This store does not grow the type's shapes.  An addition whose
              * transition is missing goes to STORE_ATTR, which creates it, so
              * that the instance keeps a shape. */
-            if (PyValue_IsNull(old_value)) {
+            if (PyValue_IsNull(*value_ptr)) {
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 if (_PyShape_TransitionMissing(Py_TYPE(owner_o), values->shape,
                                                value_ptr - values->values)) {
@@ -3480,7 +3485,8 @@ dummy_func(
             }
 #endif
             STAT_INC(STORE_ATTR, hit);
-            *value_ptr = TAKE(value);
+            PyValue item = TAKE(value);
+            PyValue old_value = _PyValueSlot_Exchange(value_ptr, item);
             if (PyValue_IsNull(old_value)) {
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 Py_ssize_t index = value_ptr - values->values;
@@ -3508,12 +3514,15 @@ dummy_func(
             _GUARD_DORV_NO_DICT +
             _STORE_ATTR_INSTANCE_VALUE;
 
-        leaf inline_ok op(_STORE_ATTR_SHAPE, (offset/1, value, owner --)) {
+        leaf inline_ok op(_STORE_ATTR_SHAPE,
+                (offset/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases) exits(next)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-            PyValue old_value = *value_ptr;  // a move: replaced below
-            assert(!PyValue_IsNull(old_value));
-            *value_ptr = TAKE(value);
+            PyValue item = TAKE(value);
+            // The shape guard shows the slot filled
+            PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
             STAT_INC(STORE_ATTR, hit);
             PyValue_XCLOSE(owner);
             PyValue_CLOSE(old_value);
@@ -3525,11 +3534,15 @@ dummy_func(
             _GUARD_SHAPE +
             _STORE_ATTR_SHAPE;
 
-        leaf inline_ok op(_STORE_ATTR_SHAPE_ADD, (shape_to/0, offset/1, value, owner --)) {
+        leaf inline_ok op(_STORE_ATTR_SHAPE_ADD,
+                (shape_to/0, offset/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases) exits(next)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-            assert(PyValue_IsNull(*value_ptr));
-            *value_ptr = TAKE(value);
+            PyValue item = TAKE(value);
+            // The shape guard shows the attribute absent: the slot holds NULL
+            _PyValueSlot_Fill(value_ptr, item);
             PyDictValues *values = _PyObject_InlineValues(owner_o);
             _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
             _PyDictValues_SetShape(values, (uint8_t)shape_to);
@@ -3543,7 +3556,10 @@ dummy_func(
             _GUARD_SHAPE +
             _STORE_ATTR_SHAPE_ADD;
 
-        inline_ok op(_STORE_ATTR_WITH_HINT, (hint/1, value, owner --)) {
+        inline_ok op(_STORE_ATTR_WITH_HINT,
+                (hint/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases, runs_python) exits(next, deopt, raise)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
             PyDictObject *dict = _PyObject_GetManagedDict(owner_o);
@@ -3568,8 +3584,7 @@ dummy_func(
             // values, apart from its keys.
             PyValue *value_ptr = dict->ma_values == NULL ?
                 &ep->me_value : &dict->ma_values->values[hint];
-            PyValue old_value = *value_ptr;  // a move: replaced below
-            if (PyValue_IsNull(old_value)) {
+            if (PyValue_IsNull(*value_ptr)) {
                 UNLOCK_OBJECT(dict);
                 DEOPT_IF(true, "the hinted entry holds no value");
             }
@@ -3583,7 +3598,8 @@ dummy_func(
                 ERROR_IF(err < 0);
             }
             else {
-                *value_ptr = TAKE(value);
+                PyValue item = TAKE(value);
+                PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
                 UNLOCK_OBJECT(dict);
                 PyValue_XCLOSE(owner);
                 PyValue_XCLOSE(old_value);
@@ -3596,14 +3612,16 @@ dummy_func(
             _GUARD_TYPE_VERSION +
             _STORE_ATTR_WITH_HINT;
 
-        leaf op(_STORE_ATTR_SLOT, (index/1, value, owner --)) {
+        leaf op(_STORE_ATTR_SLOT, (index/1, value: consumed, owner: consumed object --))
+            effects(reads, writes, releases) exits(next, deopt)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
 
             DEOPT_IF(!LOCK_OBJECT(owner_o));
             PyValue *addr = _PyObject_ValueSlot(owner_o, index);
             STAT_INC(STORE_ATTR, hit);
-            PyValue old_value = *addr;  // a move: replaced below
-            *addr = TAKE(value);
+            PyValue item = TAKE(value);
+            PyValue old_value = _PyValueSlot_Exchange(addr, item);
             UNLOCK_OBJECT(owner_o);
             PyValue_XCLOSE(owner);
             PyValue_XCLOSE(old_value);

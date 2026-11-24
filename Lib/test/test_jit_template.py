@@ -46,7 +46,8 @@ COUNTS = {"PyValue_DUP", "PyValue_XDUP", "PyValue_CLOSE", "PyValue_XCLOSE",
 # Tested on their own: they read the frame of the test's caller, or write
 FRAME = {"GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "GETLOCAL", "IR_SLOTS"}
 SLOTS = {"_PyObject_ShapeReadDup", "_PyDictValues_SetShape",
-         "_PyDictValues_AddToInsertionOrder"}
+         "_PyDictValues_AddToInsertionOrder", "_PyValueSlot_Exchange",
+         "_PyValueSlot_ExchangeFilled", "_PyValueSlot_Fill"}
 APART = COUNTS | FRAME | SLOTS
 HIGH = [R8, R9, R10, R11, RSI, RDI]
 
@@ -456,6 +457,27 @@ class LoweringTests(unittest.TestCase):
                         self.check_registers(name, ops, before, after)
                         self.assertEqual(snapshot(), expected)
         restore()
+
+    def test_value_slot_stores(self):
+        "The slot's word moves out and the new one in, as C's do, in every register assignment"
+        rng = random.Random(96)
+        slot = (ctypes.c_uint64 * 1)()
+        address = ctypes.addressof(slot)
+        held_words = [0, 1 << 40 | 3, 0xFFFF_FFFF_FFFF_FFF0]
+        new = 0x1234_5678_9ABC_DEF0
+        for name, helds in (("_PyValueSlot_Exchange", held_words),
+                            ("_PyValueSlot_ExchangeFilled", held_words[1:]),
+                            ("_PyValueSlot_Fill", held_words[:1])):
+            nres, nargs, _, _, kinds, _ = lowerings()[name]
+            for held in helds:
+                for ops in assignments(kinds, nres, nargs, rng):
+                    with self.subTest(primitive=name, held=held, ops=ops):
+                        slot[0] = held
+                        _, results, before, after = run(name, ops, (address, new), rng)
+                        self.check_registers(name, ops, before, after)
+                        self.assertEqual(slot[0], new)
+                        if nres:
+                            self.assertEqual(results[0], held)
 
 
 # Under a JIT mode the lowering picks these forms of RESUME and

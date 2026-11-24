@@ -175,6 +175,12 @@ static_assert(__builtin_types_compatible_p(__typeof__(((PyDictValues *)0)->valid
               "PyDictValues.valid: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyObject_ValueSlot((PyObject *){0}, (size_t){0})), PyValue *),
               "_PyObject_ValueSlot: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValueSlot_Exchange((PyValue *){0}, (PyValue){0})), PyValue),
+              "_PyValueSlot_Exchange: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValueSlot_ExchangeFilled((PyValue *){0}, (PyValue){0})), PyValue),
+              "_PyValueSlot_ExchangeFilled: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyValueSlot_Fill((PyValue *){0}, (PyValue){0})), void),
+              "_PyValueSlot_Fill: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyObject_Shape((PyObject *){0})), uint32_t),
               "_PyObject_Shape: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(_PyObject_ShapeReadDup((PyObject *){0}, (uint32_t){0})), PyValue),
@@ -15410,10 +15416,9 @@ ir_run_STORE_ATTR_INSTANCE_VALUE(
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(_PyObject_GetManagedDict(owner_o) == NULL);
                 PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-                PyValue old_value = *value_ptr;
                 #ifdef Py_SHAPES
 
-                if (PyValue_IsNull(old_value)) {
+                if (PyValue_IsNull(*value_ptr)) {
                     PyDictValues *values = _PyObject_InlineValues(owner_o);
                     if (_PyShape_TransitionMissing(Py_TYPE(owner_o), values->shape,
                             value_ptr - values->values)) {
@@ -15428,7 +15433,8 @@ ir_run_STORE_ATTR_INSTANCE_VALUE(
                 #endif
                 STAT_INC(STORE_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue old_value = _PyValueSlot_Exchange(value_ptr, item);
                 if (PyValue_IsNull(old_value)) {
                     PyDictValues *values = _PyObject_InlineValues(owner_o);
                     Py_ssize_t index = value_ptr - values->values;
@@ -15499,10 +15505,10 @@ ir_run_STORE_ATTR_SHAPE(
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-                PyValue old_value = *value_ptr;
-                assert(!PyValue_IsNull(old_value));
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
+                assert(!PyValue_IsNull(old_value));
                 STAT_INC(STORE_ATTR, hit);
                 ir_own_A = IR_DETACH(ir_word, A, owner);
                 (void)(ir_own_A);
@@ -15565,9 +15571,9 @@ ir_run_STORE_ATTR_SHAPE_ADD(
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-                assert(PyValue_IsNull(*value_ptr));
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                _PyValueSlot_Fill(value_ptr, item);
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
                 _PyDictValues_SetShape(values, (uint8_t)shape_to);
@@ -15628,9 +15634,9 @@ ir_run_STORE_ATTR_SLOT(
                 }
                 PyValue *addr = _PyObject_ValueSlot(owner_o, index);
                 STAT_INC(STORE_ATTR, hit);
-                PyValue old_value = *addr;
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *addr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue old_value = _PyValueSlot_Exchange(addr, item);
                 UNLOCK_OBJECT(owner_o);
                 ir_own_A = IR_DETACH(ir_word, A, owner);
                 (void)(ir_own_A);
@@ -15719,8 +15725,7 @@ ir_run_STORE_ATTR_WITH_HINT(
                 }
                 PyValue *value_ptr = dict->ma_values == NULL ?
                 &ep->me_value : &dict->ma_values->values[hint];
-                PyValue old_value = *value_ptr;
-                if (PyValue_IsNull(old_value)) {
+                if (PyValue_IsNull(*value_ptr)) {
                     UNLOCK_OBJECT(dict);
                     if (true) {
                         UPDATE_MISS_STATS(STORE_ATTR);
@@ -15742,7 +15747,9 @@ ir_run_STORE_ATTR_WITH_HINT(
                 }
                 else {
                     ir_own_B = IR_DETACH(ir_word, B, value);
-                    *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                    PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                    PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
+                    assert(!PyValue_IsNull(old_value));
                     UNLOCK_OBJECT(dict);
                     ir_own_A = IR_DETACH(ir_word, A, owner);
                     (void)(ir_own_A);
@@ -16148,15 +16155,15 @@ ir_run_STORE_SUBSCR_LIST_INT(
                     }
                 }
                 STAT_INC(STORE_SUBSCR, hit);
-                PyValue old_value = _PyList_ITEMS(list)[index];
                 ir_own_C = IR_DETACH(ir_word, C, value);
-                _PyList_ITEMS(list)[index] = IR_TAKEN_REQUIRED(value, ir_own_C);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_C);
+                PyValue old_value = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index, item);
                 assert(!PyValue_IsNull(old_value));
                 UNLOCK_OBJECT(list);
-                ir_own_A = IR_DETACH(ir_word, A, list_st);
-                ir_own_B = IR_DETACH(ir_word, B, sub_st);
                 ls = list_st;
                 ss = sub_st;
+                ir_own_A = IR_DETACH(ir_word, A, ls);
+                ir_own_B = IR_DETACH(ir_word, B, ss);
                 PyValue_CLOSE(old_value);
             }
             // _POP_TOP
@@ -28489,10 +28496,9 @@ static const _PyIRForm ir_handler_forms[512] = {
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 assert(_PyObject_GetManagedDict(owner_o) == NULL);
                 PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-                PyValue old_value = *value_ptr;
                 #ifdef Py_SHAPES
 
-                if (PyValue_IsNull(old_value)) {
+                if (PyValue_IsNull(*value_ptr)) {
                     PyDictValues *values = _PyObject_InlineValues(owner_o);
                     if (_PyShape_TransitionMissing(Py_TYPE(owner_o), values->shape,
                             value_ptr - values->values)) {
@@ -28507,7 +28513,8 @@ static const _PyIRForm ir_handler_forms[512] = {
                 #endif
                 STAT_INC(STORE_ATTR, hit);
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue old_value = _PyValueSlot_Exchange(value_ptr, item);
                 if (PyValue_IsNull(old_value)) {
                     PyDictValues *values = _PyObject_InlineValues(owner_o);
                     Py_ssize_t index = value_ptr - values->values;
@@ -28574,10 +28581,10 @@ static const _PyIRForm ir_handler_forms[512] = {
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-                PyValue old_value = *value_ptr;
-                assert(!PyValue_IsNull(old_value));
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
+                assert(!PyValue_IsNull(old_value));
                 STAT_INC(STORE_ATTR, hit);
                 ir_own_A = IR_DETACH(ir_word, A, owner);
                 (void)(ir_own_A);
@@ -28636,9 +28643,9 @@ static const _PyIRForm ir_handler_forms[512] = {
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = _PyValue_AsKnownObjectBorrowPointer(owner);
                 PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-                assert(PyValue_IsNull(*value_ptr));
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                _PyValueSlot_Fill(value_ptr, item);
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
                 _PyDictValues_SetShape(values, (uint8_t)shape_to);
@@ -28695,9 +28702,9 @@ static const _PyIRForm ir_handler_forms[512] = {
                 }
                 PyValue *addr = _PyObject_ValueSlot(owner_o, index);
                 STAT_INC(STORE_ATTR, hit);
-                PyValue old_value = *addr;
                 ir_own_B = IR_DETACH(ir_word, B, value);
-                *addr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                PyValue old_value = _PyValueSlot_Exchange(addr, item);
                 UNLOCK_OBJECT(owner_o);
                 ir_own_A = IR_DETACH(ir_word, A, owner);
                 (void)(ir_own_A);
@@ -28782,8 +28789,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 }
                 PyValue *value_ptr = dict->ma_values == NULL ?
                 &ep->me_value : &dict->ma_values->values[hint];
-                PyValue old_value = *value_ptr;
-                if (PyValue_IsNull(old_value)) {
+                if (PyValue_IsNull(*value_ptr)) {
                     UNLOCK_OBJECT(dict);
                     if (true) {
                         UPDATE_MISS_STATS(STORE_ATTR);
@@ -28805,7 +28811,9 @@ static const _PyIRForm ir_handler_forms[512] = {
                 }
                 else {
                     ir_own_B = IR_DETACH(ir_word, B, value);
-                    *value_ptr = IR_TAKEN_REQUIRED(value, ir_own_B);
+                    PyValue item = IR_TAKEN_REQUIRED(value, ir_own_B);
+                    PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
+                    assert(!PyValue_IsNull(old_value));
                     UNLOCK_OBJECT(dict);
                     ir_own_A = IR_DETACH(ir_word, A, owner);
                     (void)(ir_own_A);
@@ -29018,15 +29026,15 @@ static const _PyIRForm ir_handler_forms[512] = {
                     }
                 }
                 STAT_INC(STORE_SUBSCR, hit);
-                PyValue old_value = _PyList_ITEMS(list)[index];
                 ir_own_C = IR_DETACH(ir_word, C, value);
-                _PyList_ITEMS(list)[index] = IR_TAKEN_REQUIRED(value, ir_own_C);
+                PyValue item = IR_TAKEN_REQUIRED(value, ir_own_C);
+                PyValue old_value = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index, item);
                 assert(!PyValue_IsNull(old_value));
                 UNLOCK_OBJECT(list);
-                ir_own_A = IR_DETACH(ir_word, A, list_st);
-                ir_own_B = IR_DETACH(ir_word, B, sub_st);
                 ls = list_st;
                 ss = sub_st;
+                ir_own_A = IR_DETACH(ir_word, A, ls);
+                ir_own_B = IR_DETACH(ir_word, B, ss);
                 PyValue_CLOSE(old_value);
             }
             // _POP_TOP

@@ -2025,8 +2025,8 @@ leaf_probe__STORE_ATTR_SHAPE(_PyInterpreterFrame *frame, PyValue *stack_pointer,
     value = stack_pointer[-2];
     PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
     PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-    PyValue old_value = *value_ptr;
-    *value_ptr =      value ;
+    PyValue item =      value ;
+    PyValue old_value = _PyValueSlot_ExchangeFilled(value_ptr, item);
     STAT_INC(STORE_ATTR, hit);
     stack_pointer += -2;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -2049,7 +2049,8 @@ leaf_probe__STORE_ATTR_SHAPE_ADD(_PyInterpreterFrame *frame, PyValue *stack_poin
     value = stack_pointer[-2];
     PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
     PyValue *value_ptr = _PyObject_ValueSlot(owner_o, offset);
-    *value_ptr =      value ;
+    PyValue item =      value ;
+    _PyValueSlot_Fill(value_ptr, item);
     PyDictValues *values = _PyObject_InlineValues(owner_o);
     _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
     _PyDictValues_SetShape(values, (uint8_t)shape_to);
@@ -2077,8 +2078,8 @@ leaf_probe__STORE_ATTR_SLOT(_PyInterpreterFrame *frame, PyValue *stack_pointer, 
     }
     PyValue *addr = _PyObject_ValueSlot(owner_o, index);
     STAT_INC(STORE_ATTR, hit);
-    PyValue old_value = *addr;
-    *addr =      value ;
+    PyValue item =      value ;
+    PyValue old_value = _PyValueSlot_Exchange(addr, item);
     UNLOCK_OBJECT(owner_o);
     stack_pointer += -2;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -2114,8 +2115,8 @@ leaf_probe__STORE_SUBSCR_LIST_INT(_PyInterpreterFrame *frame, PyValue *stack_poi
         }
     }
     STAT_INC(STORE_SUBSCR, hit);
-    PyValue old_value = _PyList_ITEMS(list)[index];
-    _PyList_ITEMS(list)[index] =      value ;
+    PyValue item =      value ;
+    PyValue old_value = _PyValueSlot_ExchangeFilled(_PyList_ITEMS(list) + index, item);
     UNLOCK_OBJECT(list);
     ls = list_st;
     ss = sub_st;

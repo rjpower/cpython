@@ -31,9 +31,12 @@ stubs with typed completion for the baseline JIT, after Astra's review of
 jit88's handlers. Merged into `pyjit/regions89` at `0a4e7bd4bae`: DV's signed
 division templates; G0a and G0a2, the declared-contract notation and a
 verifier that fails closed; TA, inline templates tightened from declared
-facts (all-29 instructions with the JIT on 0.988, nbody 0.905). G0b is
-seeding every uop's declaration from today's records (134 of 351 so far),
-and G0a3 adds the vocabulary the rest need.
+facts; G0a3, the vocabulary the seed needs; G1a, whole-word completion
+stubs with 23-byte sites; and G0b's first seed. Timed at `a5502da133f`
+against golden87 with its JIT off, `on` runs 1.022 of the warm time (jit88:
+1.060); nbody 0.748, spectral_norm 0.792, unpack_sequence 1.380, richards
+1.157. G0b's seed declares 182 of 351 uops so far; G0a4 adds the last
+vocabulary before the G0c review.
 
 **Jit88, qualified 2026-11-23** at `ea4d023c2b4`
 ([record](issues/register-semantics59/jit88.md)): the baseline method JIT

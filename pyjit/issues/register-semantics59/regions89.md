@@ -34,8 +34,10 @@ is recorded.
 | G0a | The notation and verifier for every construct: sound ownership transitions, per-path nullness, exported facts from the live state, `holding(x)` raise checkpoints, skeleton steps and arrays across uops, feedback access, ROUTINE and transaction rows, V11, the counter functions, and the CONJOINS, NONNULL_FORM and SLOW columns (Opus) | merged, `ff4ac9500e5` |
 | G0a2 | The verifier fails closed: Astra's review of G0a found seven acceptance holes, each closed with a negative test; the columns' structural checks (Opus) | merged, `d38559113ef` |
 | TA | Template tightening from declared facts: guard fusion, dead NULL tests, box exits, results in destination registers, CSE by declared effects; rows for every primitive the templates use; no sampling of models (Opus) | merged, `0a4e7bd4bae` |
-| G0b | The seed: every uop and callee declared from today's records with byte-identical output; findings and decisions for what the vocabulary cannot say; the review manifest (Opus) | running: 134 of 351 uops declared |
-| G0a3 | The vocabulary the seed needs: fact kinds, GUARD results, CONSTANT rows, the `closed` input mode, `moved(k)` results, SLOT rows, `assumed(fact) by`, error-label exits, preprocessor arms, HOME for frame homes (Opus) | running |
+| G0b | The seed: every uop and callee declared from today's records with byte-identical output; findings and decisions for what the vocabulary cannot say; the review manifest (Opus) | first pass merged (`29642dc6065`); part 2 at 182 of 351 declared |
+| G0a3 | The vocabulary the seed needs: fact kinds, GUARD results, CONSTANT rows, the `closed` input mode, `moved(k)` results, SLOT rows, `assumed(fact) by`, error-label exits, preprocessor arms, HOME for frame homes (Opus) | merged, `5af180074c5` |
+| G1a | Whole-word completion stubs generated from declared uops for UNPACK_SEQUENCE and BINARY_OP's generic arms; a 23-byte shared site with one cold resolver (MISS, ESCAPED, RAISED, BRANCH, AGAIN); staleness found by execution (Opus) | merged, `a5502da133f` |
+| G0a4 | The last vocabulary before G0c: correlated status-and-value results, frame-path and call-state facts, a leaf `assume` op, moves out of operand homes, object constants (Opus) | running |
 
 The design (`E59/regions89/rd/design.md`) sets the following units, in
 order:
@@ -71,3 +73,17 @@ fall 8.6% over 62 templates (7523 hot, 2073 cold); ADD_INT's longest path
 34 to 28 instructions, LOAD_ATTR_INSTANCE_VALUE 41. A forced allocation
 failure in a compiled box raises in the word's own frame with its inputs in
 their homes.
+
+G1a: a shared word's site is 23 hot bytes (86 before); unpack_sequence's
+compiled loop 90.4 KB to 78.5 KB; all-29 instructions with the JIT on
+0.9974. Recompiles on an import-heavy start 380 to 377: staleness found by
+execution does not shorten the tail of codes compiled 5-8 times.
+
+Timed at `a5502da133f` on CPU 15 against golden87 with its JIT off (cold /
+warm geomean): `always` 1.038 / 1.030, `on` at warm-up 32 1.024 / 1.022,
+at warm-up 1024 1.021 / 1.019; jit88 at warm-up 32 was 1.065 / 1.060. At
+warm-up 32, warm: nbody 0.964 to 0.748, spectral_norm 1.133 to 0.792,
+chaos 1.014 to 0.940, fannkuch 0.955 to 0.915, go 1.004 to 0.979.
+unpack_sequence moves only from 1.424 to 1.380, and richards (1.157),
+deltablue (1.155) and raytrace (1.104) wait for compiled calls and returns
+(G3, G4).

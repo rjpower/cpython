@@ -85,8 +85,9 @@ INPUT_MODES = ("borrowed", "consumed", "taken", "closed")
 # uop on next and on raise (design 1.2)
 UNOWNED = ("", "borrowed", "closed")
 OUTPUT_MODES = ("owned", "inline", "borrowed", "moved")
+# `lvalue`: a macro argument that the macro assigns (PyValue_CLEAR(x) sets x)
 ARG_MODES = ("borrowed", "consumed", "taken", "scalar", "object", "tstate", "frame",
-             "out", "destructor")
+             "out", "lvalue", "destructor")
 
 # Facts: the vocabulary's words and the record's Fact kinds.  A fact with an
 # argument is written `kind(arg)`; `exact(T1|T2)` is a union of exact types,
@@ -666,9 +667,11 @@ def _parse_result(text: str) -> Result:
             if moved and shape == "VALUE":
                 # Argument k itself: its value, its identity and its
                 # obligation (a move, as an output's moved(x))
-                if len(words) > 1:
+                # null_iff(k) says it is NULL exactly where argument k is
+                k = int(moved.group(1))
+                if words[1:] not in ([], [f"null_iff({k})"]):
                     raise ValueError(f"VALUE(moved(k)) is argument k as it is: {text}")
-                return Result(shape, "moved", moved=int(moved.group(1)))
+                return Result(shape, "moved", moved=k, null_iff=k if words[1:] else -1)
             if not words or words[0] not in ("owned", "inline", "borrowed"):
                 raise ValueError(f"{shape} needs a mode: {text}")
             rest, assumed = _assumptions(words[1:], None)

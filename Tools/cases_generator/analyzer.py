@@ -555,6 +555,10 @@ IR_MARKER_EFFECTS = {
     "IR_SUSPEND_DELEGATED": frozenset(("escapes", "sync", "pc", "terminal", "frame")),
     "IR_TRY_DICT_FIRST_PROBE": frozenset(("escapes", "error", "sync", "pc")),
     "IR_BEGIN_CALL_EFFECTS": frozenset(),
+    # The retirement closes the published owner itself (retire_published);
+    # code that runs before it, between it and OWNER(), is what is refused
+    **dict.fromkeys(("IR_RETIRE_PUBLISHED", "IR_RETIRE_PUBLISHED_RESULT",
+                     "IR_RETIRE_PUBLISHED_PAIR"), frozenset()),
     **dict.fromkeys(("IR_PREPARE_CALL_METHOD", "IR_PREPARE_CALL_TUPLE",
                      "IR_MONITOR_CALL", "IR_REFRESH_CALL"),
                     frozenset(("escapes", "error", "sync", "pc"))),

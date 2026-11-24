@@ -26,7 +26,7 @@
  *       a macro that the generator expands; its C is generated
  *
  * ARGS: per parameter a mode (borrowed, consumed, taken, scalar, object,
- * tstate, frame, out) and the facts it requires.  On a `PyObject *`
+ * tstate, frame, out, lvalue: a macro argument it assigns) and the facts it requires.  On a `PyObject *`
  * parameter, `consumed object` is a stolen object pointer; on a PyValue,
  * `object` is the fact.
  * result: NONE, SCALAR, VIEW (the object of argument 0), PATH(name) (a
@@ -396,7 +396,7 @@
      * to PyValue_NULL; the release is XCLOSE's (releases, which can run \
      * a finalizer) */ \
     MACRO(PyValue_CLEAR, \
-        ARGS(scalar), SCALAR, EFFECTS(releases), EXITS()) \
+        ARGS(lvalue), SCALAR, EFFECTS(releases), EXITS()) \
     /* Reviewed G0c2 (pycore_value.h): _PyValue_PointerSteal of an object     \
      * that is not an exact int or float (asserted); the value owns the       \
      * argument's count. Never NULL (asserted), no callback.                  */ \
@@ -459,7 +459,7 @@
      * form it is the value itself; in the IR forms the detached owner's \
      * count moves, or a local's value gets a new count (PyValue_XDUP: a \
      * count only).  No callback, no failure; it is not a C function */ \
-    MACRO(TAKE, ARGS(consumed), VALUE(moved(0)), EFFECTS(), EXITS(), TAKES_VIEW()) \
+    MACRO(TAKE, ARGS(consumed), VALUE(moved(0) null_iff(0)), EFFECTS(), EXITS(), TAKES_VIEW()) \
     /* Evidence (G0d3): OWNER(x) is a generator replacer like TAKE \
      * (IREmitter.take_view): the owner of x's input, PyValue_NULL for a \
      * local, which only IR_RETIRE_PUBLISHED may read; for a value that is \
@@ -1005,7 +1005,7 @@
      * Callbacks: the old value's deallocator.  Root's correction; the only \
      * uop caller is _POP_EXCEPT (G0a5) */ \
     MACRO(Py_XSETREF, \
-        ARGS(scalar, consumed object), NONE, EFFECTS(releases), EXITS()) \
+        ARGS(lvalue, consumed object), NONE, EFFECTS(releases), EXITS()) \
     /* Evidence (G0c8): ceval_macros.h:255-257: in the GIL build the macro is empty (no \
      * statement); in the free-threaded build it reports the thread's quiescent state to \
      * the QSBR reclaimer, which this scoped GIL product never builds. */ \

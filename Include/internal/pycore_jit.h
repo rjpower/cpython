@@ -168,16 +168,17 @@ PyAPI_FUNC(int) _PyJit_IsAvailable(void);
 PyAPI_FUNC(int) _PyJit_PinDeparting(PyThreadState *tstate,
                                     struct _PyInterpreterFrame *frame);
 
-#ifdef _PY_JIT_SUPPORTED
-
 /* A warm-up event of frame: the frame enters or resumes its code, or jumps
  * back (RESUME_JIT, JUMP_BACKWARD_JIT, a unit's backward jump when it is
  * invalid), or goes back to an invalid unit.  Returns the code's valid
  * unit; otherwise counts the event, and compiles the code when it is warm
  * or recompiles a stale unit.  Returns the unit to run, or NULL to run the
- * frame in the evaluator. */
+ * frame in the evaluator.  Declared in every build, for its row's static
+ * check (pycore_ir_components.h); defined where the JIT is supported. */
 extern _PyJitUnit *_PyJit_Event(PyThreadState *tstate,
                                 struct _PyInterpreterFrame *frame);
+
+#ifdef _PY_JIT_SUPPORTED
 
 /* The code of exec is monitored: compiled code leaves its unit at the next
  * test (Python/instrumentation.c). */

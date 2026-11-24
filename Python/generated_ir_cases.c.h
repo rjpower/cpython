@@ -609,6 +609,10 @@ static_assert(__builtin_types_compatible_p(__typeof__(_PyMethodDef_Convention((P
               "PyMethodDef.convention: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(((PyDictKeysObject *)0)->dk_version), uint32_t),
               "PyDictKeysObject.dk_version: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyJit_PinDeparting), int (*)(PyThreadState *, _PyInterpreterFrame *)),
+              "_PyJit_PinDeparting: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyJit_Event), _PyJitUnit * (*)(PyThreadState *, _PyInterpreterFrame *)),
+              "_PyJit_Event: its C type differs from pycore_ir_components.h");
 static inline void _PyIR_CheckConstants(void) {
 static_assert(__builtin_types_compatible_p(__typeof__(PyValue_None), PyValue),
               "PyValue_None: its C type differs from pycore_ir_components.h");

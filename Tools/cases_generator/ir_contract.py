@@ -39,15 +39,19 @@ from ir_records import (ALLOCATES, EFFECTS as RECORD_EFFECTS, MAY_RAISE, MAY_REL
 # ---------------------------------------------------------------------------
 # The vocabulary (design.md section 1).  Each set is closed.
 
+# retires_frame: drops a frame's references, its code's among them (the
+# frame clears and pops, error processing): a property of a callee that
+# constrains its callers (VT3), as Torque's `transitioning`.  No other
+# effect covers it: a uop that calls such a row declares it
 EFFECTS = ("reads", "writes", "allocates", "raises", "releases", "runs_python",
-           "polls", "switches_frame")
-# Each declared effect in the record's terms; runs_python, polls and
-# switches_frame may do anything
+           "polls", "switches_frame", "retires_frame")
+# Each declared effect in the record's terms; runs_python, polls,
+# switches_frame and retires_frame may do anything
 RECORD_EFFECT = {
     "reads": {READS_HEAP}, "writes": {WRITES_HEAP}, "allocates": {ALLOCATES},
     "raises": {MAY_RAISE}, "releases": {MAY_RELEASE},
     "runs_python": set(RECORD_EFFECTS), "polls": set(RECORD_EFFECTS),
-    "switches_frame": set(RECORD_EFFECTS),
+    "switches_frame": set(RECORD_EFFECTS), "retires_frame": set(RECORD_EFFECTS),
 }
 # The one record effect that stands for a site of each declared effect
 # (ir_records.guard_order reads sites)
@@ -55,15 +59,18 @@ SITE_EFFECT = {
     "reads": READS_HEAP, "writes": WRITES_HEAP, "allocates": ALLOCATES,
     "raises": MAY_RAISE, "releases": MAY_RELEASE, "runs_python": MAY_RUN_PYTHON,
     "polls": MAY_RUN_PYTHON, "switches_frame": MAY_RUN_PYTHON,
+    "retires_frame": MAY_RUN_PYTHON,
 }
 # The effects that a declared effect covers
 COVERS = {
-    "runs_python": set(EFFECTS) - {"polls", "switches_frame"},
-    "polls": set(EFFECTS) - {"switches_frame"},
-    "switches_frame": set(EFFECTS) - {"polls"},
+    "runs_python": set(EFFECTS) - {"polls", "switches_frame", "retires_frame"},
+    "polls": set(EFFECTS) - {"switches_frame", "retires_frame"},
+    "switches_frame": set(EFFECTS) - {"polls", "retires_frame"},
+    "retires_frame": set(EFFECTS) - {"polls", "switches_frame"},
 }
 # The effects at whose sites heap facts die (1.1)
-KILLS = frozenset(("writes", "releases", "runs_python", "polls", "switches_frame"))
+KILLS = frozenset(("writes", "releases", "runs_python", "polls", "switches_frame",
+                   "retires_frame"))
 
 # `redirect`: a monitoring callback moved the frame to another word (a
 # debugger's f_lineno jump, which retires the temporaries it does not keep);
@@ -585,6 +592,10 @@ class Row:
     # OBSERVER(none): the code that a reentrant row runs opens no observer
     # (instrumentation) context of the current frame
     observer: str = ""
+    # CALLS(r, ...): the declared rows that this row calls (a helper's
+    # callees, a macro's expansion).  Its effects include each callee's
+    # retires_frame, and its exits each callee's frame switch (VT1, VT3)
+    calls: tuple[str, ...] = ()
     # CONSTANT: how the constant is held, VALUE (a PyValue, ret PyValue) or
     # OBJECT (a static object named by its address, ret its C type)
     representation: str = ""
@@ -801,9 +812,9 @@ def feedback_covered(access: tuple[str, str], declared) -> bool:
 OPTIONAL_COLUMNS = {
     "PRIMITIVE": ("FEEDBACK", "CONJOINS", "NONNULL_FORM", "SLOW", "TAKES_VIEW", "VIEW_CLOSE",
                   "POINTER_FORM", "HOMES", "OBSERVER", "IDENTITY"),
-    "HELPER": ("FEEDBACK", "SLOW", "TAKES_VIEW", "HOMES", "OBSERVER"),
-    "ROUTINE": ("FEEDBACK",),
-    "MACRO": ("FEEDBACK", "TAKES_VIEW", "HOMES", "OBSERVER"),
+    "HELPER": ("FEEDBACK", "SLOW", "TAKES_VIEW", "HOMES", "OBSERVER", "CALLS"),
+    "ROUTINE": ("FEEDBACK", "CALLS"),
+    "MACRO": ("FEEDBACK", "TAKES_VIEW", "HOMES", "OBSERVER", "CALLS"),
     "SLOT": ("FEEDBACK",),
 }
 
@@ -822,6 +833,11 @@ def _row_options(fields: list[str], fixed: int, kind: str) -> dict:
         inner = _inner(text, head)
         if head == "FEEDBACK":
             found[head] = parse_feedback(_split_text(inner))
+        elif head == "CALLS":
+            names = tuple(n.strip() for n in _split_text(inner))
+            if not names or not all(re.fullmatch(r"\w+", n) for n in names):
+                raise ValueError("CALLS(row, ...) names the rows that the row calls")
+            found[head] = names
         elif head in ("TAKES_VIEW", "IDENTITY"):
             if inner.strip():
                 raise ValueError(f"{head}() is a flag")
@@ -839,7 +855,8 @@ def _row_options(fields: list[str], fixed: int, kind: str) -> dict:
             "pointer_form": found.get("POINTER_FORM", ""),
             "homes": found.get("HOMES", ""),
             "observer": found.get("OBSERVER", ""),
-            "identity": found.get("IDENTITY", False)}
+            "identity": found.get("IDENTITY", False),
+            "calls": found.get("CALLS", ())}
 
 
 def _parse_row(kind: str, fields: list[str]) -> Row:
@@ -1034,6 +1051,19 @@ def check_columns(table: dict[str, Row]) -> None:
     for row in table.values():
         if len(row.result.success) > len(row.args):
             fail(row, "STATUS states facts of more arguments than ARGS has")
+        for name in row.calls:
+            # VT1 and VT3 through callees: each edge carries the callee's
+            # retirement and frame switch, so a chain of rows carries them
+            # to its first row
+            callee = named(row, "CALLS", name)
+            if "retires_frame" in callee.effects and "retires_frame" not in row.effects:
+                fail(row, f"calls {name}, which retires a frame, and does not declare "
+                     "retires_frame")
+            switches = callee.exits & SWITCH_EXITS - row.exits
+            if switches:
+                fail(row, f"calls {name}, which switches frames by "
+                     f"{', '.join(sorted(switches))}, and does not declare "
+                     f"exits({', '.join(sorted(switches))})")
         for name in row.instances:
             # Each instance is a VALUE CONSTANT of exactly this type
             instance = named(row, "INSTANCES", name)
@@ -2541,7 +2571,8 @@ UNMODELLED_HEADS = ("return", "goto", "break", "continue", "switch", "do")
 # homes (a finalizer through FrameLocalsProxy), so a value that stays in a
 # home, a pass-through or a borrowed input, may be replaced there: its
 # facts no longer describe the home (design 1.3, 3.2)
-REENTRY = frozenset(("releases", "runs_python", "polls", "switches_frame"))
+REENTRY = frozenset(("releases", "runs_python", "polls", "switches_frame",
+                     "retires_frame"))
 
 
 def _input_path(name: str, inputs) -> bool:
@@ -4202,6 +4233,45 @@ def check_exits(uop: Uop, contract: Contract, table: dict[str, Row],
     if actual != set(contract.exits):
         raise analysis_error(f"{uop.name}: declares exits({', '.join(sorted(contract.exits))}), "
                              f"but the body takes {', '.join(sorted(actual))}", uop.body.open)
+    check_transfer_exits(uop, contract, table)
+
+
+# The exits after which the word goes on in its own frame
+COMPLETING_EXITS = frozenset(("next", "branch", "jump"))
+GUARD_EXITS = frozenset(("miss", "deopt"))
+# The exits that leave the frame for good: after one, its code may die
+DEPARTING_EXITS = frozenset(("return", "yield"))
+
+
+def check_transfer_exits(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
+    """VT3: a uop that retires a frame (it declares retires_frame, as each
+    row it calls that retires one makes it) declares return.  VT4: a uop
+    does not both guard and depart; its guards go in their own uop, before
+    the pin.  VT5: a uop that may also complete in its frame switches only
+    through a row that declares the switch; there `DISPATCH()` is the
+    completion, and an assignment of `frame` says nothing"""
+    retires = "retires_frame" in contract.effects
+    if retires and "return" not in contract.exits:
+        raise analysis_error(f"{uop.name}: retires a frame (retires_frame), and does not "
+                             "declare exits(return)", uop.body.open)
+    guards = contract.exits & GUARD_EXITS
+    departs = contract.exits & DEPARTING_EXITS | ({"retires_frame"} if retires else set())
+    if guards and departs:
+        raise analysis_error(f"{uop.name}: declares exits({', '.join(sorted(guards))}) and "
+                             f"departs ({', '.join(sorted(departs))}): split the guards into "
+                             "their own uop, which runs before the pin", uop.body.open)
+    switches = contract.exits & SWITCH_EXITS
+    if switches and contract.exits & COMPLETING_EXITS:
+        by_rows = set()
+        for tkn, _ in body_calls(uop):
+            if tkn.text in table:
+                by_rows |= table[tkn.text].exits & SWITCH_EXITS
+        if switches - by_rows:
+            raise analysis_error(
+                f"{uop.name}: completes in its frame and switches by "
+                f"{', '.join(sorted(switches - by_rows))}, which no row it calls declares: "
+                "take the switch through a row that declares it (DISPATCH() here is the "
+                "completion)", uop.body.open)
 
 
 def check_guard_facts(uop: Uop, contract: Contract, walk: OwnershipWalk) -> None:
@@ -4461,6 +4531,33 @@ def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None 
 REGION_KINDS = ("inline", "split", "shared")
 
 
+def check_transfer_order(inst: Instruction, parts: list[Uop],
+                         contracts: list[Contract]) -> None:
+    """VT2: a uop that switches frames and is followed by another uop of the
+    arm declares a completing exit (next, branch, jump), on which alone the
+    rest runs; its switch exits bind to SWITCH or to another frame.  VT4:
+    no guard (miss, deopt) follows a uop that switches or departs, nor the
+    pin, which follows the last guard"""
+    departed = None
+    for index, (part, contract) in enumerate(zip(parts, contracts)):
+        if departed is not None and contract.exits & GUARD_EXITS:
+            raise analysis_error(
+                f"{inst.name}: {part.name} guards "
+                f"({', '.join(sorted(contract.exits & GUARD_EXITS))}) after {departed}, "
+                "which switches or departs: a guard after a pin or a switch cannot "
+                "restart the word", inst.where)
+        switches = "switches_frame" in contract.effects
+        if (switches and index + 1 < len(parts)
+                and not contract.exits & COMPLETING_EXITS):
+            raise analysis_error(
+                f"{inst.name}: {part.name} switches frames, and {parts[index + 1].name} "
+                "follows it, but it declares no completing exit (next, branch, jump) "
+                "on which the rest runs", inst.where)
+        if (switches or contract.exits & DEPARTING_EXITS
+                or "retires_frame" in contract.effects) and departed is None:
+            departed = part.name
+
+
 def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
                    leaf: dict[str, bool] | None = None,
                    temporaries: bool = False) -> None:
@@ -4486,6 +4583,7 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
     contracts = [declared_contract(p) for p in parts]
     if not parts:
         return
+    check_transfer_order(inst, parts, contracts)
     # A stack of value numbers; facts by value.  An array is one value, its
     # elements' common facts, with its declared size
     stack: list[int] = []

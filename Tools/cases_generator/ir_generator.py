@@ -2271,11 +2271,10 @@ def generator_entry_recipe(inst: Instruction) -> GeneratorEntryRecipe | None:
         return None
     kind = tokens[4].text
     count = 2 if kind == "_PY_IR_FOR_ITER" else 3
-    if (len(entry.stack.inputs) != count or len(entry.stack.outputs) != 3
+    if (len(entry.stack.inputs) != count or len(entry.stack.outputs) != 2
             or any(item.is_array() for item in
                    entry.stack.inputs + entry.stack.outputs)
-            or any(passed_through(entry, j) != j for j in range(2))
-            or passed_through(entry, 2) is not None):
+            or any(passed_through(entry, j) != j for j in range(2))):
         return None
     at = parts.index(entry)
     for part in parts[:at]:
@@ -2286,12 +2285,8 @@ def generator_entry_recipe(inst: Instruction) -> GeneratorEntryRecipe | None:
                 or effect.callback or effect.changes_origin or effect.may_fail
                 or effect.error_sources or effect.unwind_sources):
             return None
-    # The legacy frame output supplies only the stack model. Its sole consumer
-    # is unreachable after the intrinsic's actual terminal frame handoff.
-    tail = parts[at + 1:]
-    if (len(tail) != 1 or len(tail[0].stack.inputs) != 1
-            or tail[0].stack.inputs[0].is_array() or tail[0].stack.outputs
-            or not tail[0].properties.switches_frame):
+    # The intrinsic's frame handoff is terminal: nothing follows it (VT2)
+    if parts[at + 1:]:
         return None
     inputs, outputs = external_io(inst)
     if (len(inputs) != count or len(outputs) != 2

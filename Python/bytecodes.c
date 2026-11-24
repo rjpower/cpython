@@ -1777,7 +1777,7 @@ dummy_func(
         // The result remains C-owned through child retirement. Completion
         // publishes it to the caller or consumes it as a loop/send outcome.
         op(_RETURN_VALUE, (retval: consumed --))
-            effects(switches_frame) exits(return, raise)
+            effects(switches_frame, retires_frame) exits(return, raise)
         {
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
             PyValue temp = retval;
@@ -1798,7 +1798,7 @@ dummy_func(
         }
 
         ir_only op(_RETURN_VALUE_EMPTY, (retval: consumed --))
-            effects(switches_frame) exits(return, raise)
+            effects(switches_frame, retires_frame) exits(return, raise)
         {
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
             PyValue temp = retval;
@@ -1977,7 +1977,7 @@ dummy_func(
         macro(SEND) = unused/1 + _SPECIALIZE_SEND + _SEND;
 
         inline_ok op(_SEND_GEN_FRAME,
-                (receiver, null: nullable, v: taken -- receiver, null, gen_frame: owned))
+                (receiver, null: nullable, v: taken -- receiver, null))
             effects(runs_python, switches_frame) exits(miss, enter, raise)
         {
             EXIT_IF(!PyValue_IsObject(receiver), "a number is no generator");
@@ -1997,8 +1997,7 @@ dummy_func(
         macro(SEND_GEN) =
             unused/1 +
             _CHECK_PEP_523 +
-            _SEND_GEN_FRAME +
-            _PUSH_FRAME;
+            _SEND_GEN_FRAME;
 
         /* SEND_GEN enters the generator's frame: the delegated yield and
          * the consumer's arm run when that frame yields or returns to this
@@ -4952,7 +4951,7 @@ dummy_func(
             _ITER_NEXT_RANGE;
 
         op(_FOR_ITER_GEN_FRAME,
-                (iter: assumed(object) by GET_ITER, null -- iter, null, gen_frame: owned))
+                (iter: assumed(object) by GET_ITER, null -- iter, null))
             effects(reads, writes, raises, runs_python, switches_frame)
             exits(miss, raise, enter)
         {
@@ -4969,8 +4968,7 @@ dummy_func(
         macro(FOR_ITER_GEN) =
             unused/1 +
             _CHECK_PEP_523 +
-            _FOR_ITER_GEN_FRAME +
-            _PUSH_FRAME;
+            _FOR_ITER_GEN_FRAME;
 
         // A window: the method and self go to the canonical slots, which a
         // folded input, a local, would not name

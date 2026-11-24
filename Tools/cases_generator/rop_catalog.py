@@ -374,6 +374,7 @@ class CReturn(enum.Enum):
     value = "PyValue"            # an owned or inline word
     borrow = "PyValueBorrow"
     pointer = "pointer"          # an object or frame pointer handle
+    handle = "handle"            # the C type of the row's logical handle result
     int_status = "int"
     status_value = "_PyStatusValue"   # {int status; PyValue value;}
 
@@ -399,6 +400,7 @@ class CSource(enum.Enum):
     exception = "exception"          # the pending exception: an Err token
     nonzero = "nonzero"              # the C result compared with 0, as a Bool
     out = "out"                      # the scalar written through the last C parameter
+    token = "token"                  # a proof with no runtime value (a Ticket)
 
 
 @dataclass(frozen=True, slots=True)
@@ -444,6 +446,9 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
           single=True),
     _conv("borrow", CReturn.borrow, COutcome(CTest.always, _RES, (_RES,), False),
           single=True),
+    # The result is the C type of the logical handle (Anchors)
+    _conv("handle", CReturn.handle, COutcome(CTest.always, _RES, (_RES,), False),
+          single=True),
     _conv("pointer", CReturn.pointer, COutcome(CTest.always, _RES, (_RES,), False),
           single=True),
     # ok(v) when the word is not NULL, err(e) with the exception set
@@ -463,6 +468,12 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
           COutcome(CTest.positive, _RES, (), False),
           COutcome(CTest.zero, _RES, (), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
+    # An adaptation status: positive changed (the ticket is a proof, not a
+    # value), zero same, negative blocked; none of them raises
+    _conv("ticket_status", CReturn.int_status,
+          COutcome(CTest.positive, _RES, (CSource.token,), False),
+          COutcome(CTest.zero, _RES, (), False),
+          COutcome(CTest.negative, _RES, (), False)),
     # bool tests as two cases: true first
     _conv("bool_cases", CReturn.bool,
           COutcome(CTest.true, _RES, (), False),

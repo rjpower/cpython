@@ -602,7 +602,7 @@ class DefinitionTests(unittest.TestCase):
 
     def test_pending_rows(self):
         pending = set(self.program.pending)
-        for name in ("tick", "install", "admitted_instance_slot"):
+        for name in ("binary_at_origin", "admitted_instance_slot"):
             self.assertIn(name, pending)
         for x in self.program.externs.values():
             if x.c is not None:

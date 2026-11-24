@@ -11,6 +11,7 @@
 #include "pycore_long_value.h"    // _PyValue_AsInt()
 #include "pycore_native_scope.h"
 #include "pycore_rop_metadata.h"  // ROP_HANDLER_*
+#include "pycore_rop_rows.h"      // _PyRop_AnchorForCall()
 #include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value_call.h"    // _PyValue_VectorcallTstate()

@@ -16,7 +16,7 @@ import ir_leaf
 import jit_template_generator as jt
 from rop_catalog import CONVENTIONS, DebtKind, Fact, FieldKind, Handle, Scalar
 from rop_cgen import (Unsupported, add_test_facts, arm_facts, edges_of,
-                      home_views)
+                      flatten, home_views)
 from rop_check import Program
 from rop_model import (Arm, BoolLit, Branch, Call, CallTerm, Cases, Exit,
                        Expr, Goto, Guard, HandleType, Let, Name, Nat, Publish,
@@ -145,8 +145,9 @@ class LeafBuilder:
             for s in b.stmts:
                 self.stmt(s)
             self.term(b.term)
-        facts = arm_facts(self.program, self.arm)
-        views = home_views(self.arm)
+        flat = flatten(self.program, self.arm)
+        facts = arm_facts(self.program, flat)
+        views = home_views(flat)
         inline = frozenset(
             home for home, view in views.items()
             if all(f.has(view, Fact.inline_int) for lbl, f in facts.items()

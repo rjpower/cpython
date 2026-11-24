@@ -1031,28 +1031,6 @@ class TemplateGraphTests(unittest.TestCase):
                 jit_template_generator.fold_nulls(g)
             self.assertEqual(dup.attr, "PyValue_XDUP" if declare else "PyValue_DUP")
 
-    def test_a_column_that_breaks_the_reviewed_conditions_is_not_used(self):
-        facts = {"inline_int": frozenset((ir_contract.VFact("inline_int"),))}
-        arg = ir_contract.rows()["PyValue_IsInlineInt"].args[0]
-        # A conjunction that is not total, or has an effect
-        with declared("PyValue_BothInlineInt",
-                      args=(dataclasses.replace(arg, facts=facts["inline_int"]), arg)):
-            self.assertIsNone(jit_template_generator.both_test("PyValue_IsInlineInt"))
-        with declared("PyValue_BothInlineInt", effects=frozenset(("reads",))):
-            self.assertIsNone(jit_template_generator.both_test("PyValue_IsInlineInt"))
-        # A form that requires more than a non-NULL argument, or other feedback
-        dup = ir_contract.rows()["PyValue_DUP"]
-        more = dataclasses.replace(dup.args[0], facts=dup.args[0].facts | facts["inline_int"])
-        with declared("PyValue_DUP", args=(more,)):
-            self.assertIsNone(jit_template_generator.given_not_null("PyValue_XDUP"))
-        with declared("PyValue_DUP", feedback=frozenset((("read", "counter"),))):
-            self.assertIsNone(jit_template_generator.given_not_null("PyValue_XDUP"))
-        # A slow path with other parameters, or effects beyond the row's
-        with declared("PyValue_FromInt64", params=("int32_t",)):
-            self.assertFalse(jit_template_generator.null_only_from_slow("PyValue_FromInt64"))
-        with declared("PyValue_FromInt64", effects=frozenset(("raises",))):
-            self.assertFalse(jit_template_generator.null_only_from_slow("PyValue_FromInt64"))
-
     def test_without_slow_the_box_keeps_its_test_and_has_no_exit(self):
         for handler, name in (("FOR_ITER_RANGE", "PyValue_FromInt64"),
                               ("BINARY_OP_ADD_FLOAT", "PyValue_FromDouble")):

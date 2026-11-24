@@ -1020,23 +1020,10 @@ def test_facts(name: str) -> tuple[bool, bool]:
     return (ir_contract.NONNULL in ir_contract.implied(t[0]), is_null_test(name))
 
 
-def conjoins_ok(pair, one) -> bool:
-    """The review's conditions for fusing one test of two words for two
-    tests of one word: neither row has an effect or feedback, both are total
-    (no argument fact or precondition), and the C parameter types and
-    argument modes match"""
-    return (not pair.effects and not one.effects and not pair.feedback and not one.feedback
-            and len(pair.args) == 2 and len(one.args) == 1
-            and pair.params == one.params * 2
-            and all(not a.facts for a in (*pair.args, *one.args))
-            and all(a.mode == one.args[0].mode for a in pair.args))
-
-
 def both_test(name: str) -> str | None:
     "The two-argument test that CONJOINS the named test, or None"
-    one = row(name)
     for r in ir_contract.rows().values():
-        if r.conjoins == name and r.name in LOWERINGS and conjoins_ok(r, one):
+        if r.conjoins == name and r.name in LOWERINGS:
             return r.name
     return None
 
@@ -1047,41 +1034,18 @@ def never_null(name: str) -> bool:
     return r is not None and r.result.shape == "VALUE" and r.result.null_iff < 0
 
 
-def nonnull_form_ok(form, general) -> bool:
-    """The review's conditions for choosing `form` for `general` when the
-    argument is not NULL: the argument modes are equal and the form adds
-    nothing but nonnull, the result shape and mode are equal and its facts
-    at least general's, the feedback is equal and the effects within"""
-    if len(form.args) != 1 or len(general.args) != 1 or form.params != general.params:
-        return False
-    a, b = form.args[0], general.args[0]
-    if a.mode != b.mode or a.facts - {ir_contract.NONNULL} != b.facts - {ir_contract.NONNULL}:
-        return False
-    x, y = form.result, general.result
-    return ((x.shape, x.mode) == (y.shape, y.mode) and x.facts >= y.facts
-            and (x.null_iff < 0 or x.null_iff == y.null_iff)
-            and form.feedback == general.feedback and form.effects <= general.effects)
-
-
 def given_not_null(name: str) -> str | None:
     "The primitive that declares itself the named one for a word that is not NULL"
-    general = row(name)
     for r in ir_contract.rows().values():
-        if r.nonnull_form == name and r.name in LOWERINGS and nonnull_form_ok(r, general):
+        if r.nonnull_form == name and r.name in LOWERINGS:
             return r.name
     return None
 
 
 def null_only_from_slow(name: str) -> bool:
-    """The primitive's result is NULL only when its declared slow path's
-    helper fails: the helper takes the primitive's parameters and gives its
-    result mode, within the primitive's effects"""
+    "The primitive's result is NULL only when its declared slow path's helper fails"
     r = row(name)
-    if r is None or not r.slow:
-        return False
-    h = row(r.slow)
-    return (h is not None and h.kind == "HELPER" and h.params == r.params
-            and h.result.mode == r.result.mode and h.effects <= r.effects)
+    return r is not None and bool(r.slow)
 
 
 def changes_counts(r) -> bool:

@@ -1046,35 +1046,11 @@ profiler_traverse(PyObject *op, visitproc visit, void *arg)
     return RotatingTree_Enum(self->profilerEntries, visit_entry, &v);
 }
 
-/* Removing the profile function runs code (audit hooks), which a dealloc
-   that the sweep of a tracing collector makes may not do; the collector
-   calls the finalizer first. */
-static void
-profiler_finalize(PyObject *op)
-{
-    ProfilerObject *self = ProfilerObject_CAST(op);
-    if (self->flags & POF_ENABLED) {
-        PyThreadState *tstate = _PyThreadState_GET();
-        if (_PyEval_SetProfile(tstate, NULL, NULL) < 0) {
-            PyErr_FormatUnraisable("Exception ignored while "
-                                   "destroying _lsprof profiler");
-        }
-        self->flags &= ~POF_ENABLED;
-    }
-}
-
 static void
 profiler_dealloc(PyObject *op)
 {
     ProfilerObject *self = ProfilerObject_CAST(op);
     PyObject_GC_UnTrack(self);
-    if (self->flags & POF_ENABLED) {
-        PyThreadState *tstate = _PyThreadState_GET();
-        if (_PyEval_SetProfile(tstate, NULL, NULL) < 0) {
-            PyErr_FormatUnraisable("Exception ignored while "
-                                   "destroying _lsprof profiler");
-        }
-    }
 
     /* Drop the external timer before flushing: it is Python code, and the
        profiler can be deallocated by the garbage collector. */
@@ -1155,7 +1131,6 @@ static PyType_Slot _lsprof_profiler_type_spec_slots[] = {
     {Py_tp_dealloc, profiler_dealloc},
     {Py_tp_init, profiler_init},
     {Py_tp_traverse, profiler_traverse},
-    {Py_tp_finalize, profiler_finalize},
     {0, 0}
 };
 

@@ -4982,6 +4982,8 @@ _PyCfg_LowerCode(PyCodeObject *co, _PyRegCfg **result)
         goto done;
     }
     int flags = co->co_flags;
+    cfg->generator =
+        (flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) != 0;
     if ((flags & (CO_OPTIMIZED | CO_VARKEYWORDS)) ==
             (CO_OPTIMIZED | CO_VARKEYWORDS) &&
         !(flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)))

@@ -243,6 +243,8 @@ int _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home);
 bool _PyRop_FindAddExtension(_PyFbBinary *fb, PyValueBorrow a, PyValueBorrow b);
 void _PyRop_Backoff(_PyFbHeader *fb);
 int _PyRop_Install(_PyInstr *site, _PyFbHeader *fb, int handler);
+int _PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
+                        const _PyIRWord *head);
 
 #ifdef __cplusplus
 }

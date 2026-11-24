@@ -416,7 +416,7 @@ _PyIR_Rop_Stub_LocalRead_Checked(
     DISPATCH();
     rop_LocalRead_Checked_Unbound:
     _PyRop_UnboundLocal(frame, home_local);
-    PROCESS_ERROR_AT(RAISE, 11, this_instr);
+    PROCESS_ERROR_AT(RAISE, 17, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -493,7 +493,7 @@ _PyIR_Rop_Stub_LocalDelete_Checked(
     }
     DISPATCH();
     rop_LocalDelete_Checked_Failed:
-    PROCESS_ERROR_AT(RAISE, 9, this_instr);
+    PROCESS_ERROR_AT(RAISE, 15, this_instr);
 }
 
 static Py_NO_INLINE int

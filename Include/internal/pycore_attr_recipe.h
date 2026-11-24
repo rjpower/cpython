@@ -41,6 +41,18 @@ _PyAttr_ValidInlineValues(PyObject *o)
     return FT_ATOMIC_LOAD_UINT8(_PyObject_InlineValues(o)->valid) != 0;
 }
 
+/* The evidence rows of the adaptation macros (Python/specialize.c): the
+   position of the case the site's receiver stands for among the cases of the
+   row, and the recipe when that case has one.  The last case is "none". */
+extern int _PyAttr_ClassifyGetAttr(PyValueBorrow owner, _PyInstr *site,
+                                   const _PyFbAttr *fb, PyObject *name,
+                                   _PyAttrRecipe *recipe);
+extern int _PyAttr_ClassifyGetMethod(PyValueBorrow owner, _PyInstr *site,
+                                     const _PyFbAttr *fb, PyObject *name,
+                                     _PyAttrRecipe *recipe);
+extern bool _PyAttr_PolyShapeReady(_PyInstr *site, const _PyFbAttr *fb);
+extern bool _PyAttr_PolyMethodReady(_PyInstr *site, const _PyFbAttr *fb);
+
 /* The site's recipe when its entry holds a live type version */
 static inline bool
 _PyAttr_AdmittedInstanceSlot(const _PyFbAttr *fb, PyObject *name,

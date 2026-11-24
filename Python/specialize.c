@@ -2,6 +2,7 @@
 
 #include "opcode.h"
 
+#include "pycore_attr_recipe.h"   // _PyAttrRecipe
 #include "pycore_bytesobject.h"   // _PyBytes_Concat
 #include "pycore_call.h"          // _Py_METH_CALL_FLAGS
 #include "pycore_code.h"
@@ -260,6 +261,16 @@ current_frame(void)
     return _PyThreadState_GET()->current_frame;
 }
 
+/* The stack op that the word's handler stands for, whether it is an old
+ * handler, an IR-only one or a register instruction arm: the index for the
+ * tables that are sized for stack ops (_PyOpcode_Deopt, _PyOpcode_Caches,
+ * the statistics) */
+static inline int
+instr_base_opcode(_PyInstr *instr)
+{
+    return _PyIR_BaseOpcode(IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr)));
+}
+
 /* The opcode of the handler; for an IR-only handler, the instruction that
  * it stands for, as BINARY_OP for BINARY_OP_ADD. */
 static inline int
@@ -438,6 +449,7 @@ fb_row_of(_PyFbHeader *h, int opcode)
              * The recorded handler identifies the active payload member. */
             switch (opcode) {
                 case LOAD_ATTR_SHAPE:
+                case ROP_HANDLER_GetAttr_Shape:
                     row.payload.read_kind = ((_PyFbAttr *)h)->read_kind;
                     break;
                 case LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES:
@@ -449,6 +461,7 @@ fb_row_of(_PyFbHeader *h, int opcode)
                 case LOAD_ATTR_METHOD_WITH_VALUES:
                 case LOAD_ATTR_METHOD_NO_DICT:
                 case LOAD_ATTR_METHOD_LAZY_DICT:
+                case ROP_HANDLER_GetMethod_MethodValues:
                     row.payload.class_value = ((_PyFbAttr *)h)->class_value;
                     break;
                 case STORE_ATTR_SHAPE_ADD:
@@ -642,7 +655,8 @@ fb_shape_read_set(_PyInstr *instr, _PyFbHeader *h)
     _PyFbPoly *poly = _PyFb_PolyOf(fb_block(instr), h);
     int count = 0;
     for (; count < FB_POLY_SIZE && poly->handler[count] != 0; count++) {
-        if (poly->handler[count] != LOAD_ATTR_SHAPE ||
+        if ((poly->handler[count] != LOAD_ATTR_SHAPE &&
+             poly->handler[count] != ROP_HANDLER_GetAttr_Shape) ||
             poly->payload[count].read_kind != _Py_FB_READ_SHAPE ||
             poly->type_version[count] == 0 ||
             poly->aux[count] == _Py_SHAPE_NONE)
@@ -677,7 +691,8 @@ fb_method_poly_set(_PyInstr *instr, _PyFbHeader *h)
     int count = 0;
     for (; count < FB_POLY_SIZE && poly->handler[count] != 0; count++) {
         if ((poly->handler[count] != LOAD_ATTR_METHOD_WITH_VALUES &&
-             poly->handler[count] != LOAD_ATTR_METHOD_NO_DICT) ||
+             poly->handler[count] != LOAD_ATTR_METHOD_NO_DICT &&
+             poly->handler[count] != ROP_HANDLER_GetMethod_MethodValues) ||
             poly->type_version[count] == 0)
         {
             return 0;
@@ -719,12 +734,28 @@ instr_is_fused(_PyInstr *instr)
     return (_PyIR_FormatOf(handler)->flags & _PyIR_FUSED) != 0;
 }
 
+/* The evidence rows of GetAttr and GetMethod (classify_getattr and
+ * classify_getmethod, Python/register_ops/getattr.rop) run the attribute
+ * specializer in a collecting mode: a nomination of the LOAD_ATTR family
+ * fills the site's entry as before and is reported to the row, which answers
+ * with a case.  The row never sets a handler; the adaptation macro installs
+ * the arm it chooses. */
+typedef struct {
+    int handler;        // the LOAD_ATTR handler the specializer chose, or 0
+} attr_nomination;
+
+static attr_nomination *attr_collect;
+
 /* Install handler, the form of specialized_opcode (the opcode whose family
  * the site is in) for this site. */
 static inline void
 specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
 {
     assert(!PyErr_Occurred());
+    if (attr_collect != NULL && _PyOpcode_Deopt[specialized_opcode] == LOAD_ATTR) {
+        attr_collect->handler = handler;
+        return;
+    }
     if (handler == LOAD_ATTR_SHAPE) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*instr);
         int nlocalsplus = (int)_PyFrame_Exec(current_frame())->nfixed;
@@ -735,12 +766,12 @@ specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
         }
     }
     if (!set_opcode(instr, handler)) {
-        STAT_INC(_PyOpcode_Deopt[specialized_opcode], failure);
-        SPECIALIZATION_FAIL(_PyOpcode_Deopt[specialized_opcode],
+        STAT_INC(_PyIR_BaseOpcode(specialized_opcode), failure);
+        SPECIALIZATION_FAIL(_PyIR_BaseOpcode(specialized_opcode),
                             SPEC_FAIL_OTHER);
         return;
     }
-    STAT_INC(_PyOpcode_Deopt[specialized_opcode], success);
+    STAT_INC(_PyIR_BaseOpcode(specialized_opcode), success);
     _PyFbHeader *h = instr_fb(instr);
     if (h == NULL) {
         // RESUME specialises without an entry
@@ -774,13 +805,17 @@ static inline void
 unspecialize(_PyInstr *instr)
 {
     assert(!PyErr_Occurred());
-    STAT_INC(_PyOpcode_Deopt[instr_opcode(instr)], failure);
+    if (attr_collect != NULL) {
+        // The row reports the failure; the macro backs off
+        return;
+    }
+    STAT_INC(instr_base_opcode(instr), failure);
     // For BINARY_OP, the handler of the operation
     _PyInterpreterFrame *frame = current_frame();
     int generic = _PyCode_GenericHandler(_PyFrame_GetCode(frame),
                                          _PyFrame_InstrOffset(frame, instr));
     if (!set_opcode(instr, generic)) {
-        SPECIALIZATION_FAIL(_PyOpcode_Deopt[instr_opcode(instr)], SPEC_FAIL_OTHER);
+        SPECIALIZATION_FAIL(instr_base_opcode(instr), SPEC_FAIL_OTHER);
         return;
     }
     _PyFbHeader *h = instr_fb(instr);
@@ -1537,6 +1572,9 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
             }
             // Retry after the cooldown.  A specialised opcode in memory
             // would read the entry that fb_begin() cleared.
+            if (attr_collect != NULL) {
+                return 0;
+            }
             set_opcode(instr, LOAD_ATTR);
             set_counter(&fb->h, adaptive_counter_cooldown());
             return 0;
@@ -1739,6 +1777,85 @@ fail:
 success:
     PyValue_XCLOSE(descr);
     return;
+}
+
+/* The case that a nominated LOAD_ATTR handler stands for, as an index into
+ * the cases of classify_getattr (instance, shape) or classify_getmethod
+ * (method_values); the last case of each row is "none".  Nominations of
+ * arms that are not written yet are "none": the site stays generic. */
+static int
+attr_case_of(int handler, bool method)
+{
+    switch (handler) {
+        case LOAD_ATTR_INSTANCE_VALUE:
+            return method ? -1 : 0;
+        case LOAD_ATTR_SHAPE:
+        case LOAD_ATTR_SHAPE_LOCAL_TEMP:
+            return method ? -1 : 1;
+        case LOAD_ATTR_METHOD_WITH_VALUES:
+            return method ? 0 : -1;
+        default:
+            return -1;
+    }
+}
+
+static int
+attr_classify(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
+              PyObject *name, bool method, _PyAttrRecipe *recipe)
+{
+    assert(attr_collect == NULL);
+    attr_nomination nominated = {0};
+    attr_collect = &nominated;
+    (_Py_Specialize_LoadAttr)(owner, site, name);
+    attr_collect = NULL;
+    int kind = attr_case_of(nominated.handler, method);
+    int none = method ? 1 : 2;
+    if (kind < 0) {
+        return none;
+    }
+    _PyFbHeader *h = (_PyFbHeader *)fb;
+    int arm = ROP_HANDLER_GetAttr_Instance;
+    switch (nominated.handler) {
+        case LOAD_ATTR_SHAPE:
+        case LOAD_ATTR_SHAPE_LOCAL_TEMP:
+            arm = ROP_HANDLER_GetAttr_Shape;
+            break;
+        case LOAD_ATTR_METHOD_WITH_VALUES:
+            arm = ROP_HANDLER_GetMethod_MethodValues;
+            break;
+    }
+    // The first poly observation saves what the entry described before
+    fb_record(site, h, arm);
+    bool admitted = method ? _PyAttr_AdmittedMethod(fb, name, recipe)
+        : arm == ROP_HANDLER_GetAttr_Shape ? _PyAttr_AdmittedShape(fb, name, recipe)
+        : _PyAttr_AdmittedInstanceSlot(fb, name, recipe);
+    return admitted ? kind : none;
+}
+
+int
+_PyAttr_ClassifyGetAttr(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
+                        PyObject *name, _PyAttrRecipe *recipe)
+{
+    return attr_classify(owner, site, fb, name, false, recipe);
+}
+
+int
+_PyAttr_ClassifyGetMethod(PyValueBorrow owner, _PyInstr *site, const _PyFbAttr *fb,
+                          PyObject *name, _PyAttrRecipe *recipe)
+{
+    return attr_classify(owner, site, fb, name, true, recipe);
+}
+
+bool
+_PyAttr_PolyShapeReady(_PyInstr *site, const _PyFbAttr *fb)
+{
+    return fb_shape_read_set(site, (_PyFbHeader *)fb) != 0;
+}
+
+bool
+_PyAttr_PolyMethodReady(_PyInstr *site, const _PyFbAttr *fb)
+{
+    return fb_method_poly_set(site, (_PyFbHeader *)fb) != 0;
 }
 
 #ifdef Py_STATS
@@ -2840,6 +2957,89 @@ _Py_Specialize_Call(PyValue callable_st, PyValue self_or_null_st, _PyInstr *inst
     }
 }
 
+/* The evidence row of Call (classify_call, Python/register_ops/calls.rop):
+ * the arm that a call of fn at site stands for, as the index of its case
+ * (exact, bound_exact, init, other), with the site's entry filled for that
+ * arm.  The decisions are specialize_py_call's and specialize_class_call's;
+ * every other callable is "other", which runs in Call.Generic. */
+enum { CALL_CASE_EXACT, CALL_CASE_BOUND_EXACT, CALL_CASE_INIT, CALL_CASE_OTHER };
+
+static bool
+call_classify_function(_PyFbCall *fb, PyFunctionObject *func, int nargs)
+{
+    PyCodeObject *code = (PyCodeObject *)func->func_code;
+    if (!_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()) ||
+        func->vectorcall != _PyFunction_Vectorcall ||
+        function_signature(code) != SIMPLE_SIGNATURE ||
+        code->co_argcount != nargs || code_creates_generator(code) ||
+        !prepare_function_exec(code))
+    {
+        return false;
+    }
+    int version = _PyFunction_GetVersionForCurrentState(func);
+    if (!_PyFunction_IsVersionValid(version)) {
+        return false;
+    }
+    fb->func_version = version;
+    return true;
+}
+
+static bool
+call_classify_class(_PyFbCall *fb, PyTypeObject *tp)
+{
+    if ((tp->tp_flags & Py_TPFLAGS_IMMUTABLETYPE) ||
+        Py_TYPE(tp) != &PyType_Type || tp->tp_new != PyBaseObject_Type.tp_new) {
+        return false;
+    }
+    unsigned int tp_version = 0;
+    PyObject *init = get_init_for_simple_managed_python_class(tp, &tp_version);
+    bool cached = tp_version != 0 && init != NULL &&
+        _PyType_CacheInitForSpecialization((PyHeapTypeObject *)tp, init, tp_version);
+    Py_XDECREF(init);
+    if (cached) {
+        fb->type_version = tp_version;
+    }
+    return cached;
+}
+
+int
+_PyRop_ClassifyCall(_PyInstr *site, _PyFbCall *fb, PyValueBorrow fn,
+                    const _PyIRWord *head)
+{
+    assert(site == head);
+    (void)site;
+    if (is_shared_entry(&fb->h) || !PyValue_IsObject(fn)) {
+        return CALL_CASE_OTHER;
+    }
+    memset(&fb->h + 1, 0, sizeof(_PyFbCall) - sizeof(_PyFbHeader));
+    _PyIRWord word = head[0];
+    // The arguments the callee receives, a self that is present among them
+    int self_slot = (word & IR_F_NO_SELF) == 0;
+    int self_present = self_slot && !PyValue_IsNull(
+        _PyFrame_Slots(current_frame())[_PyIR_CallOperand(head, 0)]);
+    int nargs = (int)IR_C(word) - (self_slot && !self_present);
+    PyObject *callable = PyValue_AsKnownObjectBorrow(fn);
+    fb->callable_type_version = fb_type_version(Py_TYPE(callable));
+    if (PyFunction_Check(callable)) {
+        return call_classify_function(fb, (PyFunctionObject *)callable, nargs)
+            ? CALL_CASE_EXACT : CALL_CASE_OTHER;
+    }
+    if (self_present) {
+        return CALL_CASE_OTHER;
+    }
+    if (PyMethod_Check(callable)) {
+        PyObject *func = ((PyMethodObject *)callable)->im_func;
+        return PyFunction_Check(func) &&
+            call_classify_function(fb, (PyFunctionObject *)func, nargs + 1)
+            ? CALL_CASE_BOUND_EXACT : CALL_CASE_OTHER;
+    }
+    if (PyType_Check(callable)) {
+        return call_classify_class(fb, (PyTypeObject *)callable)
+            ? CALL_CASE_INIT : CALL_CASE_OTHER;
+    }
+    return CALL_CASE_OTHER;
+}
+
 Py_NO_INLINE void
 _Py_Specialize_CallKw(PyValue callable_st, PyValue self_or_null,
                      PyValue kwnames, _PyInstr *instr, int nargs)
@@ -3917,7 +4117,7 @@ Py_NO_INLINE void
         POP_JUMP_IF_TRUE_NONE, POP_JUMP_IF_TRUE_STR,
         POP_JUMP_IF_TRUE_ALWAYS_TRUE, POP_JUMP_IF_TRUE_SLOT,
     };
-    int opcode = _PyOpcode_Deopt[instr_opcode(instr)];
+    int opcode = instr_base_opcode(instr);
     assert(opcode == POP_JUMP_IF_FALSE || opcode == POP_JUMP_IF_TRUE);
     specialize_truth(value_o, instr,
                      opcode == POP_JUMP_IF_FALSE ? if_false : if_true);

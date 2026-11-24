@@ -30,8 +30,8 @@ import rop_check
 import rop_leaf
 from generators_common import root_relative_path, write_header
 from rop_cgen import ESCAPING, Lowering, Unsupported, lower_arm, pending_blockers
-from rop_catalog import Effect, FieldKind, Handle, Slot, Wrap
-from rop_check import Program
+from rop_catalog import SELECT_DIMENSIONS, Effect, FieldKind, Handle, Slot, Wrap
+from rop_check import Program, select_dimension
 from rop_model import Arm, HandleType, Param, WrapType
 from rop_print import type_text
 
@@ -118,8 +118,11 @@ INSTRUCTION_STATS({handler});"""
 
 def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
     lines = [f"// {arm.name} ({arm.region.name})"]
-    # A span instruction's length depends on its counts
-    advance = "_PyIR_SpanWordLength(opcode, ir_word)" if low.spans else 1 + low.words
+    advance = str(1 + low.words) if low.payload is None else f"{1 + low.words} + {low.payload}"
+    if low.spans:
+        # A span instruction's length depends on its counts
+        assert low.payload is None, arm.name
+        advance = "_PyIR_SpanWordLength(opcode, ir_word)"
     lines += PROLOGUE.format(handler=handler(arm.name), advance=advance).splitlines()
     lines += low.decls
     lines += low.body
@@ -291,6 +294,12 @@ def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
         is_args = isinstance(inner, HandleType) and inner.handle is Handle.Args
         has_args |= is_args
         if pl.kind is FieldKind.vector and is_args:
+            # An argument vector's count field is an immediate of the head
+            if pl.slots and pl.slots[0] in HEAD_FIELDS:
+                roles[HEAD_FIELDS[pl.slots[0]]] = "_PyIR_ROLE_IMM"
+                if imm == "_PyIR_LOC_NONE":
+                    imm = LOC_NAMES[pl.slots[0]]
+            continue
             continue
         in_head = bool(pl.slots) and pl.slots[0] in HEAD_FIELDS
         role = "_PyIR_ROLE_IMM"
@@ -353,21 +362,38 @@ def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
         0 if has_args else enc.words, writes)
 
 
+def observer(program: Program, family: str) -> str | None:
+    """The family's observed wrapper, the arm `<Family>.Observed`, if it has
+    one: every twin of the family's other arms runs it."""
+    name = f"{family}.{rop_check.OBSERVED}"
+    return name if name in program.arms else None
+
+
+def wrapped_arms(program: Program) -> list[str]:
+    """The arms that have a twin: those of a family that declares events,
+    but for the family's observed wrapper"""
+    return [name for name, arm in program.arms.items()
+            if program.families[arm.family].events
+            and name != observer(program, arm.family)]
+
 
 def arm_entries(p: Products) -> list[ir_numbers.ArmEntry]:
     """Every arm, in handler order, for the per-handler tables, then the
     observed wrapper (twin) of each arm of a family that declares events.
     The old generator's forms, targets and stub plans list the emitted ones
-    after the old handlers (ir_generator.py)."""
+    after the old handlers (ir_generator.py).  A twin runs its family's
+    `<Family>.Observed` arm, whose case and form it names; without one it
+    has neither."""
     shared = [n for n in p.lowered if p.program.arms[n].region.name == "shared"]
     entries = []
-    wrapped = [name for name, arm in p.program.arms.items()
-               if p.program.families[arm.family].events]
+    wrapped = wrapped_arms(p.program)
     twin_index = {name: len(p.program.arms) + k for k, name in enumerate(wrapped)}
     for name, arm in p.program.arms.items():
         fam = p.program.families[arm.family]
-        region = arm.region.name
-        emitted = name in p.lowered and region in ("inline", "shared")
+        # A split arm has no stub and no template: compiled code calls its
+        # function form, the plan of an unplanned handler
+        region = "none" if arm.region.name == "split" else arm.region.name
+        emitted = name in p.lowered
         generic = p.generic.get(arm.family)
         entries.append(ir_numbers.ArmEntry(
             c_name(name), p.numbers[name], region, declares_escape(arm),
@@ -378,10 +404,19 @@ def arm_entries(p: Products) -> list[ir_numbers.ArmEntry]:
             arm_format(p.program, arm), twin_index.get(name), None, emitted))
     for name in wrapped:
         base = entries[p.numbers[name]]
+        runs = observer(p.program, p.program.arms[name].family)
+        if runs is None:
+            entries.append(dataclasses.replace(
+                base, name=base.name + "_Observed", index=twin_index[name],
+                dotted=base.dotted + ".Observed", stub=None, generic=None,
+                twin=None, observes=base.index, emitted=False))
+            continue
+        wrapper = entries[p.numbers[runs]]
         entries.append(dataclasses.replace(
-            base, name=base.name + "_Observed", index=twin_index[name],
-            dotted=base.dotted + ".Observed", stub=None, generic=None,
-            twin=None, observes=base.index, emitted=False))
+            base, name=wrapper.name, index=twin_index[name],
+            dotted=base.dotted + ".Observed", region=wrapper.region,
+            escapes=wrapper.escapes, stub=wrapper.stub, generic=None,
+            twin=None, observes=base.index, emitted=wrapper.emitted))
     return entries
 
 
@@ -488,7 +523,8 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     families = sorted(prog.families)
     out.write("\n#ifndef Py_INTERNAL_ROP_METADATA_H\n#define Py_INTERNAL_ROP_METADATA_H\n")
     out.write('\n#include "opcode_ids.h"        // IR_NUM_OLD_HANDLERS\n#include "pycore_ir.h"          // IR_F_LOCAL_A\n')
-    twins = sum(1 for a in prog.arms.values() if prog.families[a.family].events)
+    wrapped = wrapped_arms(prog)
+    twins = len(wrapped)
     out.write("\n/* The arms' handler ids follow the old handlers, in definition order; the\n"
               " * observed wrappers of the arms of families that declare events follow them */\n")
     out.write("#define ROP_FIRST_HANDLER IR_NUM_OLD_HANDLERS\n")
@@ -505,7 +541,6 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     out.write("};\n\n/* Handler numbers of the arms */\n")
     for name in prog.arms:
         out.write(f"#define {handler(name)} (ROP_FIRST_HANDLER + {p.numbers[name]})\n")
-    wrapped = [n for n, a in prog.arms.items() if prog.families[a.family].events]
     for k, name in enumerate(wrapped):
         out.write(f"#define {handler(name)}_Observed "
                   f"(ROP_FIRST_HANDLER + {len(prog.arms) + k})\n")
@@ -579,7 +614,34 @@ typedef struct {
             f'{list(type(pt.pc)).index(pt.pc)}, {list(type(pt.exc)).index(pt.exc)}, '
             f'{operand_mask(pt.keep, operands)}, {operand_mask(pt.spent, operands)}, '
             f'{operand_mask(pt.defs, operands)}, {operand_mask(pt.held, operands)}}},\n')
-    out.write("};\n\n#endif\n")
+    out.write("};\n\n")
+    write_selectors(out, prog)
+    out.write("#endif\n")
+
+
+def write_selectors(out: TextIO, prog: Program) -> None:
+    """The static selection of the families whose arms name `select(...)`:
+    one member of each catalog dimension, as an enum, and per family a
+    constant expression from the members that hold to the arm's handler,
+    which a static word array can use"""
+    out.write("/* Static selection (rop_catalog.Select): the members of each dimension */\n")
+    for dim, members in SELECT_DIMENSIONS.items():
+        names = ", ".join(f"ROP_SELECT_{m.value.upper()}" for m in members)
+        out.write(f"enum {{ {names} }};  /* {dim} */\n")
+    for fam in sorted(prog.families):
+        arms = [a for a in prog.arms_of(fam) if a.select]
+        if not arms:
+            continue
+        dims = sorted({select_dimension(m) for a in arms for m in a.select})
+        params = ", ".join(dims)
+        out.write(f"\n/* The arm of {fam} that holds for ({params}) */\n")
+        out.write(f"#define _PyRop_Select{fam}({params}) ( \\\n")
+        for a in arms:
+            tests = " && ".join(f"({select_dimension(m)}) == ROP_SELECT_{m.value.upper()}"
+                                for m in a.select)
+            out.write(f"    ({tests}) ? {handler(a.name)} : \\\n")
+        out.write("    -1)\n")
+    out.write("\n")
 
 
 # Entry point

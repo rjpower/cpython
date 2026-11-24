@@ -2076,6 +2076,77 @@ force_arm(PyObject *self, PyObject *args)
     return NULL;
 }
 
+/* plant_arm_words(code, offset, arm, payload): put the arm's head over the
+ * word at `offset` and the integers of `payload` (as many as the arm has fixed
+ * operand words) over the words after it, which must lie in code that never
+ * runs.  No translation rule emits an arm with operand words yet; this makes
+ * such a word for the walkers over a code object's words.  It checks the
+ * family, not the operand layout. */
+static PyObject *
+plant_arm_words(PyObject *self, PyObject *args)
+{
+    PyCodeObject *code;
+    int offset;
+    const char *arm_name;
+    PyObject *payload;
+    if (!PyArg_ParseTuple(args, "O!isO!", &PyCode_Type, &code, &offset,
+                          &arm_name, &PyTuple_Type, &payload)) {
+        return NULL;
+    }
+    const _PyRopArm *arm = find_arm(arm_name);
+    if (arm == NULL) {
+        return NULL;
+    }
+    const _PyRopFamily *family = &_PyRop_Families[arm->family];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(arm->handler);
+    if (PyTuple_Size(payload) != fmt->fixed_words) {
+        PyErr_Format(PyExc_ValueError, "%s has %d operand words", arm_name,
+                     (int)fmt->fixed_words);
+        return NULL;
+    }
+    _PyCodeExec *exec = _PyCode_GetExec(code);
+    if (exec == NULL) {
+        return NULL;
+    }
+    int i = _PyCode_OffsetWord(code, offset);
+    if (i + fmt->fixed_words >= (int)exec->nwords ||
+        _PyCode_WordOffset(code, i) != offset)
+    {
+        PyErr_SetString(PyExc_ValueError, "no room for the operand words");
+        return NULL;
+    }
+    int base = _PyIR_BaseOpcode(_PyCode_InstrHandler(code, i));
+    for (int k = 0; k < family->nops; k++) {
+        if (family->ops[k] != base) {
+            continue;
+        }
+        /* The lowered words too: instrumentation restores a word to its
+         * canonical handler, which must be the arm to keep its operand words. */
+        _PyIRWord *canonical = (_PyIRWord *)_PyCode_IRWords(code);
+        _PyJit_Retire(exec);
+        _PyIR_SetHandler(&exec->words[i], arm->handler);
+        _PyIR_SetHandler(&canonical[i], arm->handler);
+        for (int w = 0; w < fmt->fixed_words; w++) {
+            PyObject *item = PyTuple_GetItemRef(payload, w);
+            if (item == NULL) {
+                return NULL;
+            }
+            unsigned long long value = PyLong_AsUnsignedLongLong(item);
+            Py_DECREF(item);
+            if (value == (unsigned long long)-1 && PyErr_Occurred()) {
+                return NULL;
+            }
+            exec->words[i + 1 + w] = (_PyIRWord)value;
+            canonical[i + 1 + w] = (_PyIRWord)value;
+        }
+        Py_RETURN_NONE;
+    }
+    PyErr_Format(PyExc_ValueError,
+                 "the word at offset %d is not a stack op of family %s",
+                 offset, family->name);
+    return NULL;
+}
+
 static PyObject *
 ir_normal_physical_transfer(PyObject *self, PyObject *args)
 {
@@ -5424,6 +5495,7 @@ static PyMethodDef module_functions[] = {
     {"get_ir_raw", get_ir_raw, METH_O, NULL},
     {"arm_handlers", arm_handlers, METH_NOARGS, NULL},
     {"force_arm", force_arm, METH_VARARGS, NULL},
+    {"plant_arm_words", plant_arm_words, METH_VARARGS, NULL},
     {"ir_normal_physical_transfer", ir_normal_physical_transfer,
      METH_VARARGS, NULL},
     {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},

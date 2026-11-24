@@ -12,11 +12,11 @@
 /* The arms' handler ids follow the old handlers, in definition order; the
  * observed wrappers of the arms of families that declare events follow them */
 #define ROP_FIRST_HANDLER IR_NUM_OLD_HANDLERS
-#define ROP_NUM_HANDLERS 24
+#define ROP_NUM_HANDLERS 43
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,
               "the arms' handler ids fit the handler field");
 #define ROP_NUM_FAMILIES 68
-#define ROP_NUM_ARMS 24
+#define ROP_NUM_ARMS 35
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS == IR_NUM_HANDLERS,
               "the handler count is the old handlers, the arms and their wrappers");
 
@@ -98,28 +98,51 @@ enum {
 #define ROP_HANDLER_Add_Text (ROP_FIRST_HANDLER + 2)
 #define ROP_HANDLER_Add_Extended (ROP_FIRST_HANDLER + 3)
 #define ROP_HANDLER_Add_Generic (ROP_FIRST_HANDLER + 4)
-#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 5)
-#define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 6)
-#define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 7)
-#define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 8)
-#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 9)
-#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 10)
-#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 11)
-#define ROP_HANDLER_Const_Pool (ROP_FIRST_HANDLER + 12)
-#define ROP_HANDLER_Const_Small (ROP_FIRST_HANDLER + 13)
-#define ROP_HANDLER_Const_Common (ROP_FIRST_HANDLER + 14)
-#define ROP_HANDLER_LocalRead_Bound (ROP_FIRST_HANDLER + 15)
-#define ROP_HANDLER_LocalRead_Checked (ROP_FIRST_HANDLER + 16)
-#define ROP_HANDLER_LocalWrite_Store (ROP_FIRST_HANDLER + 17)
-#define ROP_HANDLER_LocalWrite_Restore (ROP_FIRST_HANDLER + 18)
-#define ROP_HANDLER_SaveLocal_Take (ROP_FIRST_HANDLER + 19)
-#define ROP_HANDLER_LocalDelete_Checked (ROP_FIRST_HANDLER + 20)
-#define ROP_HANDLER_Move_Transfer (ROP_FIRST_HANDLER + 21)
-#define ROP_HANDLER_Move_Retire (ROP_FIRST_HANDLER + 22)
-#define ROP_HANDLER_Move_Copy (ROP_FIRST_HANDLER + 23)
+#define ROP_HANDLER_Call_Exact (ROP_FIRST_HANDLER + 5)
+#define ROP_HANDLER_Call_BoundExact (ROP_FIRST_HANDLER + 6)
+#define ROP_HANDLER_Call_Init (ROP_FIRST_HANDLER + 7)
+#define ROP_HANDLER_Call_Generic (ROP_FIRST_HANDLER + 8)
+#define ROP_HANDLER_InitResult_Check (ROP_FIRST_HANDLER + 9)
+#define ROP_HANDLER_Call_Observed (ROP_FIRST_HANDLER + 10)
+#define ROP_HANDLER_Return_Ordinary (ROP_FIRST_HANDLER + 11)
+#define ROP_HANDLER_Return_Empty (ROP_FIRST_HANDLER + 12)
+#define ROP_HANDLER_Return_Generator (ROP_FIRST_HANDLER + 13)
+#define ROP_HANDLER_Return_Observed (ROP_FIRST_HANDLER + 14)
+#define ROP_HANDLER_Return_External (ROP_FIRST_HANDLER + 15)
+#define ROP_HANDLER_GetAttr_Instance (ROP_FIRST_HANDLER + 16)
+#define ROP_HANDLER_GetAttr_Generic (ROP_FIRST_HANDLER + 17)
+#define ROP_HANDLER_GetAttr_Shape (ROP_FIRST_HANDLER + 18)
+#define ROP_HANDLER_GetAttr_PolyShape (ROP_FIRST_HANDLER + 19)
+#define ROP_HANDLER_GetMethod_MethodValues (ROP_FIRST_HANDLER + 20)
+#define ROP_HANDLER_GetMethod_Generic (ROP_FIRST_HANDLER + 21)
+#define ROP_HANDLER_GetMethod_PolyMethod (ROP_FIRST_HANDLER + 22)
+#define ROP_HANDLER_Const_Pool (ROP_FIRST_HANDLER + 23)
+#define ROP_HANDLER_Const_Small (ROP_FIRST_HANDLER + 24)
+#define ROP_HANDLER_Const_Common (ROP_FIRST_HANDLER + 25)
+#define ROP_HANDLER_LocalRead_Bound (ROP_FIRST_HANDLER + 26)
+#define ROP_HANDLER_LocalRead_Checked (ROP_FIRST_HANDLER + 27)
+#define ROP_HANDLER_LocalWrite_Store (ROP_FIRST_HANDLER + 28)
+#define ROP_HANDLER_LocalWrite_Restore (ROP_FIRST_HANDLER + 29)
+#define ROP_HANDLER_SaveLocal_Take (ROP_FIRST_HANDLER + 30)
+#define ROP_HANDLER_LocalDelete_Checked (ROP_FIRST_HANDLER + 31)
+#define ROP_HANDLER_Move_Transfer (ROP_FIRST_HANDLER + 32)
+#define ROP_HANDLER_Move_Retire (ROP_FIRST_HANDLER + 33)
+#define ROP_HANDLER_Move_Copy (ROP_FIRST_HANDLER + 34)
+#define ROP_HANDLER_Call_Exact_Observed (ROP_FIRST_HANDLER + 35)
+#define ROP_HANDLER_Call_BoundExact_Observed (ROP_FIRST_HANDLER + 36)
+#define ROP_HANDLER_Call_Init_Observed (ROP_FIRST_HANDLER + 37)
+#define ROP_HANDLER_Call_Generic_Observed (ROP_FIRST_HANDLER + 38)
+#define ROP_HANDLER_Return_Ordinary_Observed (ROP_FIRST_HANDLER + 39)
+#define ROP_HANDLER_Return_Empty_Observed (ROP_FIRST_HANDLER + 40)
+#define ROP_HANDLER_Return_Generator_Observed (ROP_FIRST_HANDLER + 41)
+#define ROP_HANDLER_Return_External_Observed (ROP_FIRST_HANDLER + 42)
 
 /* The arm of a statically selected family that each selection admits
  * (its `select`): ROP_SELECT_<Family>_<member>... */
+#define ROP_SELECT_Return_thread_frame_live_scratch ROP_HANDLER_Return_Ordinary
+#define ROP_SELECT_Return_thread_frame_vacant_scratch ROP_HANDLER_Return_Empty
+#define ROP_SELECT_Return_generator_frame ROP_HANDLER_Return_Generator
+#define ROP_SELECT_Return_entry_frame ROP_HANDLER_Return_External
 #define ROP_SELECT_Const_pool ROP_HANDLER_Const_Pool
 #define ROP_SELECT_Const_small ROP_HANDLER_Const_Small
 #define ROP_SELECT_Const_common ROP_HANDLER_Const_Common
@@ -135,15 +158,23 @@ enum {
 #define ROP_POINT_Add_BoxFailed 1
 #define ROP_POINT_Add_Done 2
 #define ROP_POINT_Add_OpFailed 3
-#define ROP_POINT_Const_Done 4
-#define ROP_POINT_GetAttr_Done 5
-#define ROP_POINT_GetAttr_Failed 6
-#define ROP_POINT_GetMethod_Done 7
-#define ROP_POINT_GetMethod_Failed 8
-#define ROP_POINT_LocalDelete_Unbound 9
-#define ROP_POINT_LocalRead_Done 10
-#define ROP_POINT_LocalRead_Unbound 11
-#define ROP_POINT_LocalWrite_Done 12
+#define ROP_POINT_Call_Done 4
+#define ROP_POINT_Call_Failed 5
+#define ROP_POINT_Call_PollFailed 6
+#define ROP_POINT_Call_Returned 7
+#define ROP_POINT_Const_Done 8
+#define ROP_POINT_GetAttr_Done 9
+#define ROP_POINT_GetAttr_Failed 10
+#define ROP_POINT_GetMethod_Done 11
+#define ROP_POINT_GetMethod_Failed 12
+#define ROP_POINT_InitResult_Done 13
+#define ROP_POINT_InitResult_Wrong 14
+#define ROP_POINT_LocalDelete_Unbound 15
+#define ROP_POINT_LocalRead_Done 16
+#define ROP_POINT_LocalRead_Unbound 17
+#define ROP_POINT_LocalWrite_Done 18
+#define ROP_POINT_Return_Delivered 19
+#define ROP_POINT_Return_EventFailed 20
 
 /* How a family's operands sit in its words (Program.encodings): the field
  * kind, the role of a home, the bit offset in the 64-bit-per-word image of
@@ -714,6 +745,17 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Add.Text", ROP_HANDLER_Add_Text, ROP_FAMILY_Add, 1},
     {"Add.Extended", ROP_HANDLER_Add_Extended, ROP_FAMILY_Add, 1},
     {"Add.Generic", ROP_HANDLER_Add_Generic, ROP_FAMILY_Add, 1},
+    {"Call.Exact", ROP_HANDLER_Call_Exact, ROP_FAMILY_Call, 1},
+    {"Call.BoundExact", ROP_HANDLER_Call_BoundExact, ROP_FAMILY_Call, 1},
+    {"Call.Init", ROP_HANDLER_Call_Init, ROP_FAMILY_Call, 1},
+    {"Call.Generic", ROP_HANDLER_Call_Generic, ROP_FAMILY_Call, 1},
+    {"InitResult.Check", ROP_HANDLER_InitResult_Check, ROP_FAMILY_InitResult, 1},
+    {"Call.Observed", ROP_HANDLER_Call_Observed, ROP_FAMILY_Call, 1},
+    {"Return.Ordinary", ROP_HANDLER_Return_Ordinary, ROP_FAMILY_Return, 1},
+    {"Return.Empty", ROP_HANDLER_Return_Empty, ROP_FAMILY_Return, 1},
+    {"Return.Generator", ROP_HANDLER_Return_Generator, ROP_FAMILY_Return, 1},
+    {"Return.Observed", ROP_HANDLER_Return_Observed, ROP_FAMILY_Return, 1},
+    {"Return.External", ROP_HANDLER_Return_External, ROP_FAMILY_Return, 1},
     {"GetAttr.Instance", ROP_HANDLER_GetAttr_Instance, ROP_FAMILY_GetAttr, 1},
     {"GetAttr.Generic", ROP_HANDLER_GetAttr_Generic, ROP_FAMILY_GetAttr, 0},
     {"GetAttr.Shape", ROP_HANDLER_GetAttr_Shape, ROP_FAMILY_GetAttr, 1},
@@ -735,19 +777,69 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"Move.Copy", ROP_HANDLER_Move_Copy, ROP_FAMILY_Move, 1},
 };
 
-static const _PyRopPoint _PyRop_Points[12] = {
+static const _PyRopPoint _PyRop_Points[20] = {
     {"Add.BoxFailed", ROP_FAMILY_Add, 1, 0, 0, 1, (1 << 1) | (1 << 2), 0, 0, 0},
     {"Add.Done", ROP_FAMILY_Add, 2, 0, 1, 0, 0, (1 << 2) | (1 << 1), (1 << 0), 0},
     {"Add.OpFailed", ROP_FAMILY_Add, 3, 0, 0, 1, 0, (1 << 2) | (1 << 1), 0, 0},
-    {"Const.Done", ROP_FAMILY_Const, 4, 0, 1, 0, 0, 0, (1 << 0), 0},
-    {"GetAttr.Done", ROP_FAMILY_GetAttr, 5, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
-    {"GetAttr.Failed", ROP_FAMILY_GetAttr, 6, 0, 0, 1, 0, (1 << 1), 0, 0},
-    {"GetMethod.Done", ROP_FAMILY_GetMethod, 7, 0, 1, 0, 0, (1 << 2), (1 << 0) | (1 << 1), 0},
-    {"GetMethod.Failed", ROP_FAMILY_GetMethod, 8, 0, 0, 1, 0, (1 << 2), 0, 0},
-    {"LocalDelete.Unbound", ROP_FAMILY_LocalDelete, 9, 0, 0, 1, 0, 0, 0, 0},
-    {"LocalRead.Done", ROP_FAMILY_LocalRead, 10, 0, 1, 0, (1 << 1), 0, (1 << 0), 0},
-    {"LocalRead.Unbound", ROP_FAMILY_LocalRead, 11, 0, 0, 1, (1 << 1), 0, 0, 0},
-    {"LocalWrite.Done", ROP_FAMILY_LocalWrite, 12, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
+    {"Call.Done", ROP_FAMILY_Call, 4, 0, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
+    {"Call.Failed", ROP_FAMILY_Call, 5, 0, 0, 1, 0, (1 << 1) | (1 << 2), 0, 0},
+    {"Call.PollFailed", ROP_FAMILY_Call, 6, 0, 0, 1, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
+    {"Call.Returned", ROP_FAMILY_Call, 7, 1, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
+    {"Const.Done", ROP_FAMILY_Const, 8, 0, 1, 0, 0, 0, (1 << 0), 0},
+    {"GetAttr.Done", ROP_FAMILY_GetAttr, 9, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
+    {"GetAttr.Failed", ROP_FAMILY_GetAttr, 10, 0, 0, 1, 0, (1 << 1), 0, 0},
+    {"GetMethod.Done", ROP_FAMILY_GetMethod, 11, 0, 1, 0, 0, (1 << 2), (1 << 0) | (1 << 1), 0},
+    {"GetMethod.Failed", ROP_FAMILY_GetMethod, 12, 0, 0, 1, 0, (1 << 2), 0, 0},
+    {"InitResult.Done", ROP_FAMILY_InitResult, 13, 0, 1, 0, 0, (1 << 0), 0, 0},
+    {"InitResult.Wrong", ROP_FAMILY_InitResult, 14, 0, 0, 1, (1 << 0), 0, 0, 0},
+    {"LocalDelete.Unbound", ROP_FAMILY_LocalDelete, 15, 0, 0, 1, 0, 0, 0, 0},
+    {"LocalRead.Done", ROP_FAMILY_LocalRead, 16, 0, 1, 0, (1 << 1), 0, (1 << 0), 0},
+    {"LocalRead.Unbound", ROP_FAMILY_LocalRead, 17, 0, 0, 1, (1 << 1), 0, 0, 0},
+    {"LocalWrite.Done", ROP_FAMILY_LocalWrite, 18, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
+    {"Return.Delivered", ROP_FAMILY_Return, 19, 1, 3, 0, 0, (1 << 0), 0, 0},
+    {"Return.EventFailed", ROP_FAMILY_Return, 20, 0, 0, 1, 0, (1 << 0), 0, 0},
 };
+
+/* Static selection (rop_catalog.Select): the members of each dimension */
+enum { ROP_SELECT_THREAD_FRAME, ROP_SELECT_GENERATOR_FRAME, ROP_SELECT_ENTRY_FRAME };  /* frame */
+enum { ROP_SELECT_VACANT_SCRATCH, ROP_SELECT_LIVE_SCRATCH };  /* scratch */
+enum { ROP_SELECT_TRANSFER, ROP_SELECT_RETIRE, ROP_SELECT_COPY };  /* move */
+enum { ROP_SELECT_POOL, ROP_SELECT_SMALL, ROP_SELECT_COMMON };  /* const */
+enum { ROP_SELECT_BOUND, ROP_SELECT_CHECKED };  /* read */
+enum { ROP_SELECT_STORE, ROP_SELECT_RESTORE };  /* write */
+
+/* The arm of Const that holds for (const) */
+#define _PyRop_SelectConst(const) ( \
+    ((const) == ROP_SELECT_POOL) ? ROP_HANDLER_Const_Pool : \
+    ((const) == ROP_SELECT_SMALL) ? ROP_HANDLER_Const_Small : \
+    ((const) == ROP_SELECT_COMMON) ? ROP_HANDLER_Const_Common : \
+    -1)
+
+/* The arm of LocalRead that holds for (read) */
+#define _PyRop_SelectLocalRead(read) ( \
+    ((read) == ROP_SELECT_BOUND) ? ROP_HANDLER_LocalRead_Bound : \
+    ((read) == ROP_SELECT_CHECKED) ? ROP_HANDLER_LocalRead_Checked : \
+    -1)
+
+/* The arm of LocalWrite that holds for (write) */
+#define _PyRop_SelectLocalWrite(write) ( \
+    ((write) == ROP_SELECT_STORE) ? ROP_HANDLER_LocalWrite_Store : \
+    ((write) == ROP_SELECT_RESTORE) ? ROP_HANDLER_LocalWrite_Restore : \
+    -1)
+
+/* The arm of Move that holds for (move) */
+#define _PyRop_SelectMove(move) ( \
+    ((move) == ROP_SELECT_TRANSFER) ? ROP_HANDLER_Move_Transfer : \
+    ((move) == ROP_SELECT_RETIRE) ? ROP_HANDLER_Move_Retire : \
+    ((move) == ROP_SELECT_COPY) ? ROP_HANDLER_Move_Copy : \
+    -1)
+
+/* The arm of Return that holds for (frame, scratch) */
+#define _PyRop_SelectReturn(frame, scratch) ( \
+    ((frame) == ROP_SELECT_THREAD_FRAME && (scratch) == ROP_SELECT_LIVE_SCRATCH) ? ROP_HANDLER_Return_Ordinary : \
+    ((frame) == ROP_SELECT_THREAD_FRAME && (scratch) == ROP_SELECT_VACANT_SCRATCH) ? ROP_HANDLER_Return_Empty : \
+    ((frame) == ROP_SELECT_GENERATOR_FRAME) ? ROP_HANDLER_Return_Generator : \
+    ((frame) == ROP_SELECT_ENTRY_FRAME) ? ROP_HANDLER_Return_External : \
+    -1)
 
 #endif

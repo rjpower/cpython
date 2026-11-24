@@ -8,7 +8,7 @@
 #include "pycore_opcode_utils.h"    // IS_BACKWARDS_JUMP_OPCODE
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
-#include "pycore_rop_metadata.h"    // ROP_FIRST_HANDLER
+#include "pycore_rop_metadata.h"    // ROP_HANDLER_Call_Generic, ROP_FIRST_HANDLER
 #include "pycore_symtable.h"        // _Py_SourceLocation
 #include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_value.h"           // Canonical constant representation
@@ -536,7 +536,7 @@ call_role_flags(const _PyRegOp *op)
     if (op->opcode == CALL_FUNCTION_EX) {
         return (op->flags & _PyReg_CALL_NO_KWARGS) ? IR_F_NO_KW : 0;
     }
-    if (op->opcode == CALL || op->opcode == CALL_KW) {
+    if (op->opcode == ROP_HANDLER_Call_Generic || op->opcode == CALL_KW) {
         return (op->flags & _PyReg_CALL_NO_SELF) ? IR_F_NO_SELF : 0;
     }
     assert(!(op->flags & (_PyReg_CALL_NO_SELF | _PyReg_CALL_NO_KWARGS)));
@@ -550,6 +550,10 @@ choose_handler(_PyRegOp *op, PyObject *consts)
 {
     int opcode = op->opcode;
     int oparg = op->oparg;
+    /* A rule that emitted a register family's arm named its handler */
+    if (opcode >= IR_NUM_OLD_HANDLERS) {
+        return opcode;
+    }
     if (opcode == YIELD_VALUE && oparg == 1) {
         return YIELD_DELEGATED;
     }
@@ -567,13 +571,6 @@ choose_handler(_PyRegOp *op, PyObject *consts)
             return ERROR;
         }
         return _PyIR_BINARY_OP_FIRST + oparg;
-    }
-    /* A return that finds the stack holding only its result leaves no scratch
-     * slot owning a reference: each op retires the inputs it pops, and the
-     * unwinder retires the stack above a handler's depth.  Such a return skips
-     * the clearing of the scratch slots. */
-    if (opcode == RETURN_VALUE && op->depth == 1) {
-        return RETURN_VALUE_EMPTY;
     }
     // Canonical scalar constants have the same representation in every
     // supported interpreter.

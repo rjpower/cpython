@@ -15,14 +15,15 @@ generated C uses the value API and never `.bits`.
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from rop_catalog import (ENVIRONMENT_C, Schema, CONVENTIONS, CReturn, CSource, CTest, DebtKind, Effect, Fact,
-                         FieldKind,
-                         Handle, Scalar, SchemaCtor, Slot, Wrap)
-from rop_check import GraphInfo, Program
+from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, CReturn, CSource, CTest, DebtKind,
+                         Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
+                         Slot, Wrap)
+from rop_check import GraphInfo, Program, is_args
 from rop_model import (Advance, Arm, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
                        HandleType, Let, Name, Nat, Param, Placement, Publish,
-                       ScalarType, SchemaType, SchemaVar, SpanLit, Target, Type, WrapType)
+                       ScalarType, SchemaType, SchemaVar, SpanLit, Tail, Target, Type,
+                       WrapType)
 
 
 class Unsupported(Exception):
@@ -43,6 +44,14 @@ HANDLE_C = {
     Handle.O: "PyValue",
     Handle.Obj: "PyObject *",
     Handle.Anchors: "_PyRopAnchors",
+    Handle.Thread: "PyThreadState *",
+    Handle.Frame: "_PyInterpreterFrame *",
+    Handle.NewFrame: "_PyInterpreterFrame *",
+    Handle.DeadFrame: "_PyInterpreterFrame *",
+    Handle.Head: "_PyInstr *",
+    # An argument descriptor is the instruction's head: a row reads its
+    # count, self role and homes from the head and the operand words
+    Handle.Args: "const _PyIRWord *",
 }
 
 # Linear tokens that the generated C does not carry as values
@@ -407,6 +416,9 @@ class Lowering:
     """The statements of one arm, with its decoding and labels"""
     arm: str
     words: int = 0           # operand words after the head, which dispatch skips
+    # The C expression of the payload words that follow them (an argument
+    # descriptor's homes, four to a word), if the family has a payload
+    payload: str | None = None
     spans: bool = False      # span operands: the counts give the length
     decls: list[str] = field(default_factory=list)
     body: list[str] = field(default_factory=list)
@@ -465,7 +477,7 @@ class ArmLowerer:
     def slot(self, operand: str) -> Slot:
         p = self.placements[operand]
         if p.kind not in (FieldKind.home, FieldKind.feedback, FieldKind.name,
-                          FieldKind.vector):
+                          FieldKind.vector) or not p.slots:
             raise Unsupported(f"{self.arm.name}: operand {operand} is a {p.kind.name} field")
         (slot,) = p.slots
         if slot.word != 0 and p.kind is not FieldKind.feedback:
@@ -490,6 +502,13 @@ class ArmLowerer:
             self.declare(name, "PyValue *const",
                          f"&IR_SLOT(IR_{self.slot(operand).name}(ir_word))")
         return self.homes[operand]
+
+    def is_vector(self, operand: str) -> bool:
+        """An argument descriptor (Args): its homes follow in the payload
+        words.  Other vector operands are spans (is_span_operand)."""
+        p = self.placements.get(operand)
+        return (p is not None and p.kind is FieldKind.vector
+                and not self.is_span_operand(operand))
 
     def local_flag(self, operand: str) -> str:
         return f"IR_F_LOCAL_{self.slot(operand).name}"
@@ -527,9 +546,16 @@ class ArmLowerer:
         flags = ", ".join(f"!!(ir_word & {self.local_flag(n)})" for n in names)
         return (f"&(_PyRopSrcs){{frame, {len(names)}, {{{flags}}}, {{{homes}}}}}")
 
+    def is_span_operand(self, operand: str) -> bool:
+        """A vector operand other than an argument descriptor (Args), whose
+        homes follow in the payload words"""
+        p = self.placements.get(operand)
+        return (p is not None and p.kind is FieldKind.vector
+                and not is_args(next(x for x in self.family.params
+                                     if x.name == operand).type))
+
     def is_span(self, e: Expr) -> bool:
-        return (isinstance(e, Name) and e.name in self.placements
-                and self.placements[e.name].kind is FieldKind.vector)
+        return isinstance(e, Name) and self.is_span_operand(e.name)
 
     def span(self, operand: str) -> str:
         """A span operand: its count, and the index of its first element
@@ -539,7 +565,7 @@ class ArmLowerer:
         for name, p in self.placements.items():
             if name == operand:
                 break
-            if p.kind is FieldKind.vector:
+            if self.is_span_operand(name):
                 before.append(self.field(name))
         first = " + ".join(before) or "0"
         return (f"&(_PyRopSpan){{frame, this_instr, opcode, {first}, "
@@ -561,6 +587,10 @@ class ArmLowerer:
                 out.append(self.span(a.name))
             elif isinstance(t, HandleType) and t.handle is Handle.Anchors:
                 out.append("&" + self.expr_text(a))
+            elif (t == HandleType(Handle.Src) and isinstance(a, Name)
+                    and a.name in self.placements):
+                # A row that spends a source takes its home
+                out.append(self.home(a.name))
             elif (isinstance(t, SchemaType) and t.ctor is SchemaCtor.Fb
                   and isinstance(t.schema, SchemaVar)):
                 # A row over every schema reads the entry's common header
@@ -622,6 +652,8 @@ class ArmLowerer:
             if schema not in SCHEMA_C:
                 raise Unsupported(f"{self.arm.name}: no C entry type for feedback {schema}")
             return f"(({SCHEMA_C[schema]} *)IR_FB({self.field(operand)}))"
+        if p.kind is FieldKind.vector and p.slots:
+            return "this_instr"
         raise Unsupported(f"{self.arm.name}: operand {operand} used as a value")
 
     def call_expr(self, e: Call) -> str:
@@ -673,10 +705,21 @@ class ArmLowerer:
         body = []
         for line in self.lines:
             body.append(line)
-        return Lowering(self.arm.name, self.enc.words,
-                        any(p.kind is FieldKind.vector for p in self.enc.placements),
+        return Lowering(self.arm.name, self.enc.words, self.payload_words(),
+                        any(self.is_span_operand(n) for n in self.placements),
                         self.decls,
                         self.drop_unused_labels(body))
+
+    def payload_words(self) -> str | None:
+        """An argument descriptor's homes follow the operand words, four to
+        a word, as many as its count field says"""
+        args = [p for p in self.enc.placements
+                if self.is_vector(p.operand) and p.slots]
+        if not args:
+            return None
+        (p,) = args
+        return (f"(({self.field(p.operand)} + IR_OPERANDS_PER_WORD - 1) / "
+                "IR_OPERANDS_PER_WORD)")
 
     def drop_unused_labels(self, lines: list[str]) -> list[str]:
         text = "\n".join(lines)
@@ -771,6 +814,11 @@ class ArmLowerer:
                 raise Unsupported(f"{self.arm.name}: debt {d.kind.name} is not lowered yet")
         owners: dict[str, str | None] = {}
         for d in spent:
+            if self.is_vector(d.subject):
+                # An argument vector's temporaries close after the bindings
+                # (_PyRop_SpendArgs), all but a home that a binding now holds
+                owners[d.subject] = None
+                continue
             if d.subject in self.acquired:
                 # acquire() already took the owner or a count of its own
                 owners[d.subject] = None
@@ -797,8 +845,11 @@ class ArmLowerer:
             home = self.home(b.target)
             self.emit(f"_PyFrame_WriteHome(frame, {home}, {self.expr(b.value)});")
             self.emit(f"_PyValue_CheckHome(*{home});")
+        kept = self.home(s.bindings[0].target) if len(s.bindings) == 1 else "NULL"
         for d in s.debts:
-            if d.kind is DebtKind.spent and owners[d.subject] is not None:
+            if d.kind is DebtKind.spent and self.is_vector(d.subject):
+                self.emit(f"_PyRop_SpendArgs(frame, this_instr, {kept});")
+            elif d.kind is DebtKind.spent and owners[d.subject] is not None:
                 self.emit(f"PyValue_XCLOSE({owners[d.subject]});")
             elif d.kind is DebtKind.old:
                 self.emit(f"PyValue_XCLOSE(old_{d.subject});")
@@ -821,6 +872,11 @@ class ArmLowerer:
             self.lower_call(t)
         elif isinstance(t, Exit):
             self.lower_exit(t)
+        elif isinstance(t, Tail):
+            x = self.program.externs[t.callee]
+            if x.c is None:
+                raise Unsupported(f"{self.arm.name}: {t.callee} has no C body (pending)")
+            self.emit(f"{x.c.symbol}({', '.join(self.c_args(t.args, x.params))});")
         elif isinstance(t, (Each, Advance)):
             raise Unsupported(f"{self.arm.name}: each/advance is not lowered yet")
 
@@ -850,6 +906,9 @@ class ArmLowerer:
         args = self.c_args(t.args, x.params)
         cases = x.result.cases
         edges = {e.case: e for e in t.edges}
+        if conv.indexed:
+            self.lower_indexed_call(t, x, args)
+            return
         out = None
         if any(CSource.out in o.payload for o in conv.outcomes):
             out = self.new_temp(c_type(cases[0].params[0].type), "out")
@@ -861,8 +920,9 @@ class ArmLowerer:
         if x.contract.effect_set & ESCAPING_CALL:
             self.emit("IR_STUB_ESCAPE();")
         if conv.returns is CReturn.void:
-            # A row that always raises (`raised`): one outcome, no result
+            # The row's one outcome always holds (raised)
             self.emit(f"{ret};")
+            ret = ""
         elif not inline:
             call = ret
             ret = self.new_temp(RETURN_C[conv.returns], "ret")
@@ -876,6 +936,29 @@ class ArmLowerer:
         ways.sort(key=lambda w: w[1].label == self.next_label)
         for outcome, target, payload in ways[:-1]:
             self.emit(f"if ({test_text(outcome.test, conv.returns, ret)}) {{")
+            self.jump(target, payload, "    ", force=True)
+            self.emit("}")
+        _, target, payload = ways[-1]
+        self.jump(target, payload)
+
+    def lower_indexed_call(self, t: CallTerm, x: Extern, args: list[str]) -> None:
+        """A row whose C result is the position of its case; a payload value
+        is written through the last parameter"""
+        cases = x.result.cases
+        payload_case = next((c for c in cases if c.params), None)
+        out = None
+        if payload_case is not None:
+            out = self.new_temp(c_type(payload_case.params[0].type), "out")
+            args.append(f"&{out}")
+        if x.contract.effect_set & ESCAPING:
+            self.emit("IR_STUB_ESCAPE();")
+        ret = self.new_temp("int", "ret")
+        self.emit(f"{ret} = {x.c.symbol}({', '.join(args)});")
+        edges = {e.case: e.target for e in t.edges}
+        ways = [(i, edges[c.name], (out,) if c.params else ()) for i, c in enumerate(cases)]
+        ways.sort(key=lambda w: w[1].label == self.next_label)
+        for i, target, payload in ways[:-1]:
+            self.emit(f"if ({ret} == {i}) {{")
             self.jump(target, payload, "    ", force=True)
             self.emit("}")
         _, target, payload = ways[-1]
@@ -896,8 +979,25 @@ class ArmLowerer:
             point = t.args[0]
             assert isinstance(point, Name)
             self.emit(f"PROCESS_ERROR_AT(RAISE, {self.points[point.name]}, this_instr);")
+        elif t.kind == "enter":
+            self.emit(f"ROP_ENTER({self.expr(t.args[0])}, {self.resume_slot(t)});")
+        elif t.kind == "return":
+            caller, head = (self.expr(a) for a in t.args)
+            self.emit(f"ROP_RETURN({caller}, {head});")
+        elif t.kind == "exit":
+            self.emit(f"IR_EXIT({self.expr(t.args[0])});")
         else:
             raise Unsupported(f"{self.arm.name}: exit {t.kind} is not lowered yet")
+
+    def resume_slot(self, t: Exit) -> str:
+        """The home that the child's return value goes to: the resume
+        point's definition"""
+        assert t.resume is not None
+        defs = self.program.points[t.resume].defs
+        if not defs:
+            raise Unsupported(f"{self.arm.name}: a resume point with no definition")
+        (dst,) = defs
+        return self.field(dst)
 
 
 def lower_arm(program: Program, arm: Arm, numbers: Mapping[str, int],

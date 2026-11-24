@@ -27,7 +27,7 @@
 #include "pycore_opcode_utils.h"      // IS_SCOPE_EXIT_OPCODE()
 #include "pycore_pystate.h"           // _Py_GetConfig()
 #include "pycore_regcfg.h"
-#include "pycore_rop_metadata.h"      // ROP_HANDLER_Add_Generic
+#include "pycore_rop_metadata.h"      // ROP_HANDLER_Add_Generic, ROP_HANDLER_Call_Generic
 
 #undef SUCCESS
 #undef ERROR
@@ -1045,6 +1045,14 @@ rule_binary_op(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, dst);
 }
 
+static int
+stack_underflow(const _PyRegOp *src)
+{
+    PyErr_Format(PyExc_SystemError, "stack underflow at line %d",
+                 src->loc.lineno);
+    return ERROR;
+}
+
 /* Whether identity v may hold an absent binding (a Maybe value): one that
  * SaveLocal took, or a parameter of a position where one has been.  The
  * positions over-approximate the edges, which is safe: a Restore of a
@@ -1081,14 +1089,17 @@ read_local(_PyRegTr *t, const _PyRegOp *src, int local, int handler)
 static int
 write_local(_PyRegTr *t, const _PyRegOp *src, int local)
 {
-    int value;
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int value = t->stack[t->sp - 1];
     _PyRegOp *op;
-    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, &value));
     int handler = maybe_absent(t, value) ? ROP_SELECT_LocalWrite_restore
                                          : ROP_SELECT_LocalWrite_store;
     RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &value, 1, &local, 1, &op));
     op->oparg = local;
     op->dst = local;
+    t->sp--;
     return SUCCESS;
 }
 
@@ -1189,9 +1200,54 @@ rule_load_common_constant(_PyRegTr *t, const _PyRegOp *src)
     return load_const(t, src, ROP_SELECT_Const_common);
 }
 
+/* The rules below emit an op before it takes its operands off the stack:
+ * if the op raises, its handler finds the stack as it was when the op
+ * began, operands included, and the op's depth is that stack's. */
+
+/* CALL is the Call family (Python/register_ops/calls.rop): fn, then the
+ * arguments, self first, in; dst out.  The word starts on Call.Generic,
+ * which installs the arm the call calls for. */
+static int
+rule_call(_PyRegTr *t, const _PyRegOp *src)
+{
+    int nuses = 2 + src->oparg;
+    if (nuses > t->sp) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Call_Generic,
+                                  &t->stack[t->sp - nuses], nuses, &dst, 1,
+                                  NULL));
+    t->sp -= nuses;
+    return _PyRegTr_Push(t, dst);
+}
+
+/* RETURN_VALUE is the Return family: value in.  The frame it leaves and
+ * whether a scratch slot may still own a value select the arm: a return
+ * that finds only its value on the stack leaves none, since each op
+ * retires the inputs it takes and the unwinder the stack above a
+ * handler's depth. */
+static int
+rule_return_value(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int handler = _PyRop_SelectReturn(
+        t->cfg->generator ? ROP_SELECT_GENERATOR_FRAME
+                          : ROP_SELECT_THREAD_FRAME,
+        t->sp == 1 ? ROP_SELECT_VACANT_SCRATCH : ROP_SELECT_LIVE_SCRATCH);
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - 1], 1,
+                                  NULL, 0, NULL));
+    t->sp--;
+    return SUCCESS;
+}
+
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
     [BINARY_OP] = rule_binary_op,
+    [CALL] = rule_call,
     [DELETE_FAST] = rule_delete_fast,
     [LOAD_COMMON_CONSTANT] = rule_load_common_constant,
     [LOAD_CONST] = rule_load_const,
@@ -1202,6 +1258,7 @@ static const _PyRegRule rules[256] = {
     [LOAD_FAST_CHECK] = rule_load_fast_check,
     [LOAD_FAST_LOAD_FAST] = rule_load_fast_load_fast,
     [LOAD_SMALL_INT] = rule_load_small_int,
+    [RETURN_VALUE] = rule_return_value,
     [STORE_FAST] = rule_store_fast,
     [STORE_FAST_LOAD_FAST] = rule_store_fast_load_fast,
     [STORE_FAST_STORE_FAST] = rule_store_fast_store_fast,

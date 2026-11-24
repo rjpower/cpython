@@ -45,6 +45,8 @@ TRANSFER_EXIT = {ir_records.NEXT: "next", ir_records.BRANCH: "branch",
                  ir_records.ENTER_FRAME: "enter", ir_records.RETURN: "return",
                  ir_records.YIELD: "yield", ir_records.EXIT: "exit"}
 GUARD_EXIT = {ir_records.EXIT_GUARD: "miss", ir_records.DEOPT_GUARD: "deopt"}
+# The fields that hold a conjunction of facts
+CONJUNCTIONS = {ir_records.Guard: ("facts",), ir_records.UopRecord: ("results",)}
 # The analyzer's objects, which a record names rather than holds
 NAMED = (analyzer.Instruction, analyzer.Uop, analyzer.Family, analyzer.PseudoInstruction)
 
@@ -67,9 +69,12 @@ def normal(value, tokens: dict[int, str]):
     if isinstance(value, int):
         return tokens.get(value, value)
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return {"__type": type(value).__name__,
-                **{f.name: normal(getattr(value, f.name), tokens)
-                   for f in dataclasses.fields(value)}}
+        fields = {f.name: normal(getattr(value, f.name), tokens)
+                  for f in dataclasses.fields(value)}
+        for name in CONJUNCTIONS.get(type(value), ()):
+            # A conjunction of facts: their order says nothing
+            fields[name] = sorted(fields[name], key=repr)
+        return {"__type": type(value).__name__, **fields}
     if isinstance(value, dict):
         return {repr(normal(k, tokens)): normal(v, tokens) for k, v in value.items()}
     if isinstance(value, (set, frozenset)):

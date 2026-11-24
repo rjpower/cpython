@@ -5,6 +5,7 @@
 #endif
 
 #include "pycore_ir.h"
+#include "pycore_rop_metadata.h"   // ROP_SELECT_Move_copy
 
 /* Cold consumers must distinguish an edge's definitions from the frontend
  * stack shape. A definition or a retired NULL home needs no incoming owner.
@@ -306,7 +307,7 @@ _PyIR_ObservedHomes(_PyIRWord word, int edge, int nl, int limit,
 static inline int
 _PyIR_IsCallWord(_PyIRWord word)
 {
-    return _PyIR_FormatOf(IR_HANDLER(word))->operands != _PyIR_OPERANDS_NONE;
+    return _PyIR_CALL_SHAPED(_PyIR_FormatOf(IR_HANDLER(word))->operands);
 }
 
 static inline int
@@ -443,12 +444,60 @@ _PyIR_ReadsWindowHome(_PyIRWord word, int arg, int home)
     }
 }
 
+/* A Move word (Python/register_ops/values.rop): its destination count, its
+ * source count, and where element j of its spans is */
+static inline int
+_PyIR_IsMoveWord(_PyIRWord word)
+{
+    return _PyIR_FormatOf(IR_HANDLER(word))->operands == _PyIR_OPERANDS_SPANS;
+}
+
+/* The pair of a Move whose source is home, or -1; *extra says that home is
+ * a source past the pairs, which Move.Retire closes */
+static inline int
+_PyIR_MoveSourceOf(const _PyIRWord *wp, int home, int *extra)
+{
+    int nd = (int)IR_A(*wp), ns = (int)IR_B(*wp);
+    *extra = 0;
+    for (int k = 0; k < ns; k++) {
+        if (_PyIR_SpanElement(wp, IR_HANDLER(*wp), nd + k) == home) {
+            *extra = k >= nd;
+            return k < nd ? k : -1;
+        }
+    }
+    return -1;
+}
+
+/* The source home that a Move gives home, or -1 if home is no destination */
+static inline int
+_PyIR_MoveGives(const _PyIRWord *wp, int home)
+{
+    int nd = (int)IR_A(*wp);
+    for (int k = 0; k < nd; k++) {
+        if (_PyIR_SpanElement(wp, IR_HANDLER(*wp), k) == home) {
+            return _PyIR_SpanElement(wp, IR_HANDLER(*wp), nd + k);
+        }
+    }
+    return -1;
+}
+
+static inline int
+_PyIR_MoveReads(const _PyIRWord *wp, int home)
+{
+    int extra;
+    return _PyIR_MoveSourceOf(wp, home, &extra) >= 0 || extra;
+}
+
 /* A physical home can alias several semantic inputs. Every actual read,
  * including an independent window use, must accept NULL. */
 static inline int
 _PyIR_NullableHomeAs(_PyIRWord word, const _PyIRWord *wp, int arg, int home)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (fmt->operands == _PyIR_OPERANDS_SPANS) {
+        // A move moves what it finds, NULL too
+        return _PyIR_MoveReads(wp, home);
+    }
     uint32_t inputs = _PyIR_NullableInputs(word);
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int seen = 0;
@@ -499,6 +548,9 @@ _PyIR_ReadsHome(const _PyIRWord *wp, int arg, int home)
 {
     _PyIRWord word = *wp;
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (fmt->operands == _PyIR_OPERANDS_SPANS) {
+        return _PyIR_MoveReads(wp, home);
+    }
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     for (int f = 0; f < 4; f++) {
         if (fmt->roles[f] >= _PyIR_ROLE_IN0 && (int)fields[f] == home) {
@@ -522,6 +574,14 @@ _PyIR_ReadBounds(const _PyIRWord *wp, int arg, int *lo, int *hi)
     uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
     int low = INT_MAX, high = INT_MIN;
     int window = -1;
+    if (fmt->operands == _PyIR_OPERANDS_SPANS) {
+        int nd = (int)IR_A(word), ns = (int)IR_B(word);
+        for (int k = 0; k < ns; k++) {
+            int src = _PyIR_SpanElement(wp, IR_HANDLER(word), nd + k);
+            low = Py_MIN(low, src);
+            high = Py_MAX(high, src + 1);
+        }
+    }
     for (int f = 0; f < 4; f++) {
         if (fmt->roles[f] >= _PyIR_ROLE_IN0) {
             low = Py_MIN(low, (int)fields[f]);
@@ -653,6 +713,7 @@ _PyIR_DefinesOf(_PyIRWord word, int arg)
 {
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     const _PyIRDefines none = {0, 0, INT_MIN, INT_MIN};
+    // A swap or a move transports values: it makes none
     if (_PyIR_Outcome(word, 0).semantic ||
         _PyIR_BaseOpcode(IR_HANDLER(word)) == SWAP)
     {
@@ -739,6 +800,7 @@ enum {
     _PyIR_PHYS_CLEAR_A,
     _PyIR_PHYS_COPY,
     _PyIR_PHYS_SWAP,
+    _PyIR_PHYS_MOVE,
     _PyIR_PHYS_YIELD,
     _PyIR_PHYS_FOR_ITER,
     _PyIR_PHYS_COMPLETE,
@@ -774,6 +836,19 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
     if (!(fmt->flags & _PyIR_VALID) ||
         (edge && !(fmt->flags & (_PyIR_JUMPS | _PyIR_FORWARD))))
     {
+        return;
+    }
+    if (fmt->operands == _PyIR_OPERANDS_SPANS) {
+        if (edge) {
+            return;
+        }
+        p->wp = wp;
+        p->fmt = fmt;
+        p->nl = nl;
+        p->limit = limit;
+        p->edge = edge;
+        p->arg = arg;
+        p->mode = _PyIR_PHYS_MOVE;
         return;
     }
     p->fields[0] = IR_A(word);
@@ -831,7 +906,7 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
     p->through = through;
     p->writes = writes;
 
-    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+    if (_PyIR_CALL_SHAPED(fmt->operands)) {
         /* Every successful call route takes its callable and operand
          * homes: native retirement clears them, and a Python child moves
          * them into its frame, which lies above the parent's.  Only the
@@ -1033,6 +1108,20 @@ _PyIR_PhysicalAt(const _PyIRPhysicalWord *p, int home)
                 return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_TRANSPORT, p->base};
             }
             return preserve;
+        case _PyIR_PHYS_MOVE: {
+            /* A destination takes its source's value; a source that no
+             * pair writes is left vacant by Transfer and Retire, and keeps
+             * its value under Copy */
+            int from = _PyIR_MoveGives(p->wp, home);
+            if (from >= 0) {
+                return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_TRANSPORT, from};
+            }
+            if (_PyIR_MoveReads(p->wp, home)) {
+                return IR_HANDLER(*p->wp) == ROP_SELECT_Move_copy
+                    ? preserve : set_null;
+            }
+            return preserve;
+        }
         case _PyIR_PHYS_SWAP:
             if (home == p->base) {
                 return (_PyIRPhysicalTransfer){_PyIR_PHYSICAL_TRANSPORT,
@@ -1119,7 +1208,7 @@ _PyIR_NormalCallAbsence(const _PyIRWord *wp, int arg, int home, int nl, int limi
         return _PyIR_ABSENCE_UNKNOWN;
     }
     int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
-    int is_call = fmt->operands != _PyIR_OPERANDS_NONE;
+    int is_call = _PyIR_CALL_SHAPED(fmt->operands);
     int base = (int)IR_B(word), dst = (int)IR_A(word);
     if (!is_call) {
         /* Reached suspension/child outcomes leave their new recipient live.

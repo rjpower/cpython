@@ -269,21 +269,21 @@ def pack(family: str, params: Iterable[Param], enums: Mapping[str, EnumDecl]
     """The packing rule.  Operands take the fixed fields A, B, C, D, then
     the operand words' P0..P7, in declaration order; an immediate wider
     than the next field takes it and the one after, if both are in the same
-    word.  A span takes no fixed field; an argument descriptor (Args) takes
-    one for its count.  The homes of both follow in the payload, in order.
-    Returns the encoding and the operands that cannot be packed, with the
-    reason."""
+    word.  A span and an argument descriptor (Args) take one field for
+    their count.  A span's elements, the spans in declaration order, fill
+    the head's fields that no operand takes, then follow in operand words
+    of four fields each; Args's homes follow in the payload.  Returns the
+    encoding and the operands that cannot be packed, with the reason."""
     placements: list[Placement] = []
     problems: list[tuple[Param, str]] = []
     i = 0
+    spans = False
     for p in params:
         kind = field_kind(p.type)
+        spans |= kind == FieldKind.vector and not is_args(p.type)
         if kind is None:
             problems.append((p, f"operand {p.name}:{type_text(p.type)} has no field "
                              "kind"))
-            continue
-        if kind == FieldKind.vector and not is_args(p.type):
-            placements.append(Placement(p.name, kind, 0, ()))
             continue
         bits = operand_bits(p.type, kind, enums)
         if bits > WIDEST_IMMEDIATE:
@@ -308,7 +308,8 @@ def pack(family: str, params: Iterable[Param], enums: Mapping[str, EnumDecl]
         placements.append(Placement(p.name, kind, bits, (first, second)))
         i += 2
     words = max((s.word for pl in placements for s in pl.slots), default=0)
-    return Encoding(family, tuple(placements), words), problems
+    elements = tuple(s for s in SLOT_ORDER[i:] if s.word == 0) if spans else ()
+    return Encoding(family, tuple(placements), words, elements), problems
 
 
 # The checker

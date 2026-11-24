@@ -261,6 +261,16 @@ current_frame(void)
     return _PyThreadState_GET()->current_frame;
 }
 
+/* The stack op that the word's handler stands for, whether it is an old
+ * handler, an IR-only one or a register instruction arm: the index for the
+ * tables that are sized for stack ops (_PyOpcode_Deopt, _PyOpcode_Caches,
+ * the statistics) */
+static inline int
+instr_base_opcode(_PyInstr *instr)
+{
+    return _PyIR_BaseOpcode(IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr)));
+}
+
 /* The opcode of the handler; for an IR-only handler, the instruction that
  * it stands for, as BINARY_OP for BINARY_OP_ADD. */
 static inline int
@@ -756,12 +766,12 @@ specialize_handler(_PyInstr *instr, int specialized_opcode, int handler)
         }
     }
     if (!set_opcode(instr, handler)) {
-        STAT_INC(_PyOpcode_Deopt[specialized_opcode], failure);
-        SPECIALIZATION_FAIL(_PyOpcode_Deopt[specialized_opcode],
+        STAT_INC(_PyIR_BaseOpcode(specialized_opcode), failure);
+        SPECIALIZATION_FAIL(_PyIR_BaseOpcode(specialized_opcode),
                             SPEC_FAIL_OTHER);
         return;
     }
-    STAT_INC(_PyOpcode_Deopt[specialized_opcode], success);
+    STAT_INC(_PyIR_BaseOpcode(specialized_opcode), success);
     _PyFbHeader *h = instr_fb(instr);
     if (h == NULL) {
         // RESUME specialises without an entry
@@ -799,13 +809,13 @@ unspecialize(_PyInstr *instr)
         // The row reports the failure; the macro backs off
         return;
     }
-    STAT_INC(_PyOpcode_Deopt[instr_opcode(instr)], failure);
+    STAT_INC(instr_base_opcode(instr), failure);
     // For BINARY_OP, the handler of the operation
     _PyInterpreterFrame *frame = current_frame();
     int generic = _PyCode_GenericHandler(_PyFrame_GetCode(frame),
                                          _PyFrame_InstrOffset(frame, instr));
     if (!set_opcode(instr, generic)) {
-        SPECIALIZATION_FAIL(_PyOpcode_Deopt[instr_opcode(instr)], SPEC_FAIL_OTHER);
+        SPECIALIZATION_FAIL(instr_base_opcode(instr), SPEC_FAIL_OTHER);
         return;
     }
     _PyFbHeader *h = instr_fb(instr);
@@ -3810,7 +3820,7 @@ Py_NO_INLINE void
         POP_JUMP_IF_TRUE_NONE, POP_JUMP_IF_TRUE_STR,
         POP_JUMP_IF_TRUE_ALWAYS_TRUE, POP_JUMP_IF_TRUE_SLOT,
     };
-    int opcode = _PyOpcode_Deopt[instr_opcode(instr)];
+    int opcode = instr_base_opcode(instr);
     assert(opcode == POP_JUMP_IF_FALSE || opcode == POP_JUMP_IF_TRUE);
     specialize_truth(value_o, instr,
                      opcode == POP_JUMP_IF_FALSE ? if_false : if_true);

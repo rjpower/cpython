@@ -641,6 +641,9 @@ static int _PyIR_Rop_Stub_Add_Text(PyThreadState *, _PyInterpreterFrame *, _PyIR
 static int _PyIR_Rop_Stub_Add_Extended(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Move_Transfer(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Move_Retire(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
+static int _PyIR_Rop_Stub_Move_Copy(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *);
 const _PyIRStubPlan _PyIR_StubPlans[512] = {
     [419] = {_PyIR_PLAN_INLINE, 0, 419, NULL, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Int
     [420] = {_PyIR_PLAN_SHARED, 0, 420, (const void *)_PyIR_Rop_Stub_Add_Float, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Float
@@ -663,14 +666,17 @@ const _PyIRStubPlan _PyIR_StubPlans[512] = {
     [438] = {_PyIR_PLAN_INLINE, 0, 438, NULL, NULL},  // GetAttr_PolyShape
     [439] = {_PyIR_PLAN_INLINE, 0, 439, NULL, NULL},  // GetMethod_MethodValues
     [441] = {_PyIR_PLAN_INLINE, 0, 441, NULL, NULL},  // GetMethod_PolyMethod
-    [442] = {_PyIR_PLAN_NONE, 1, 442, NULL, NULL},  // Call_Observed
-    [443] = {_PyIR_PLAN_NONE, 1, 443, NULL, NULL},  // Call_Observed
-    [444] = {_PyIR_PLAN_NONE, 1, 444, NULL, NULL},  // Call_Observed
+    [442] = {_PyIR_PLAN_SHARED, 0, 442, (const void *)_PyIR_Rop_Stub_Move_Transfer, NULL},  // Move_Transfer
+    [443] = {_PyIR_PLAN_SHARED, 1, 443, (const void *)_PyIR_Rop_Stub_Move_Retire, NULL},  // Move_Retire
+    [444] = {_PyIR_PLAN_SHARED, 0, 444, (const void *)_PyIR_Rop_Stub_Move_Copy, NULL},  // Move_Copy
     [445] = {_PyIR_PLAN_NONE, 1, 445, NULL, NULL},  // Call_Observed
-    [446] = {_PyIR_PLAN_NONE, 1, 446, NULL, NULL},  // Return_Observed
-    [447] = {_PyIR_PLAN_NONE, 1, 447, NULL, NULL},  // Return_Observed
-    [448] = {_PyIR_PLAN_NONE, 1, 448, NULL, NULL},  // Return_Observed
+    [446] = {_PyIR_PLAN_NONE, 1, 446, NULL, NULL},  // Call_Observed
+    [447] = {_PyIR_PLAN_NONE, 1, 447, NULL, NULL},  // Call_Observed
+    [448] = {_PyIR_PLAN_NONE, 1, 448, NULL, NULL},  // Call_Observed
     [449] = {_PyIR_PLAN_NONE, 1, 449, NULL, NULL},  // Return_Observed
+    [450] = {_PyIR_PLAN_NONE, 1, 450, NULL, NULL},  // Return_Observed
+    [451] = {_PyIR_PLAN_NONE, 1, 451, NULL, NULL},  // Return_Observed
+    [452] = {_PyIR_PLAN_NONE, 1, 452, NULL, NULL},  // Return_Observed
     [117] = {_PyIR_PLAN_SHARED, 1, 117, (const void *)_PyIR_Stub_UNPACK_SEQUENCE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE
     [124] = {_PyIR_PLAN_SHARED, 0, 124, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_LIST, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_LIST
     [125] = {_PyIR_PLAN_SHARED, 0, 125, (const void *)_PyIR_Stub_UNPACK_SEQUENCE_TUPLE, (const void *)_PyIR_Stub_UNPACK_SEQUENCE},  // UNPACK_SEQUENCE_TUPLE

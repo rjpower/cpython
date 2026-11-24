@@ -642,6 +642,311 @@ class TestHandOff(JitTestCase):
                                  ["False", "0"])
 
 
+@unittest.skipIf(_testinternalcapi is None, "needs _testinternalcapi")
+class TestCompletionStubs(JitTestCase):
+    """Whole-word completion stubs (g1a/abi.md): UNPACK_SEQUENCE's arms and
+    BINARY_OP's generic are calls of generated C stubs, BINARY_OP's add arms
+    are templates whose misses run the family's generic stub.  The inline,
+    stub and generic paths give the interpreter's results, exceptions,
+    slots and counts, and a finalizer that a release runs sees its events
+    from the next word on."""
+
+    def test_unpack_arms_and_generic(self):
+        # Lists, tuples, other iterables, length failures and non-iterables
+        # at one site: the list and tuple arms, their misses to the generic
+        # stub, and the generic's raise
+        self.check_same("""
+            import sys
+            def f(seqs):
+                out = []
+                for s in seqs:
+                    try:
+                        a, b = s
+                        out.append((a, b))
+                    except (ValueError, TypeError) as e:
+                        out.append(type(e).__name__ + ": " + str(e))
+                return out
+            seqs = [[1, 2], (3, 4), [5, 6, 7], (8,), "xy", iter([9, 10]),
+                    {11: 0, 12: 0}, 13, None, [14], ([15], (16,))]
+            for i in range(30):
+                f(seqs[:2] * 5)
+            print(f(seqs))
+            print(f(seqs[::-1]))
+        """)
+
+    def test_unpack_into_locals_and_temporaries(self):
+        # The elements go to locals (the direct form) or to temporaries; the
+        # destination aliases the sequence's own local; the counts of the
+        # elements are the interpreter's
+        self.check_same("""
+            import sys
+            class O: pass
+            x, y = O(), O()
+            def f(n, l, t):
+                for i in range(n):
+                    a, b, c = l
+                    k, m = t
+                    t = (k, m)
+                    t, m = t, t
+                    d = {}
+                    e = [a, c]
+                    d["p"], d["q"] = e
+                return a, b, c, k, m, sorted(d.items(), key=str)
+            for i in range(5):
+                r = f(10, [x, y, 3], (x, [y]))
+            print([type(v).__name__ for v in r[:5]])
+            del r
+            print(sys.getrefcount(x), sys.getrefcount(y))
+        """)
+
+    def test_unpack_element_finalizers(self):
+        # Displaced locals die in the unpack, in the interpreter's order
+        self.check_same("""
+            order = []
+            class D:
+                def __init__(self, n): self.n = n
+                def __del__(self): order.append(self.n)
+            def f(n):
+                a = b = None
+                for i in range(n):
+                    seq = [D(2 * i), D(2 * i + 1)]
+                    a, b = seq
+                return a.n, b.n
+            for i in range(4):
+                order.clear()
+                r = f(5)
+            print(r, order)
+        """)
+
+    def test_binary_op_arms_and_generic(self):
+        # The add templates, their misses to BINARY_OP's generic stub (the
+        # operation from the word's entry: + and +=), overflow, and the
+        # generic stub's results and raises for other operations
+        self.check_same("""
+            class V:
+                def __init__(self, v): self.v = v
+                def __add__(self, o): return V(self.v + getattr(o, "v", o))
+                def __repr__(self): return f"V({self.v})"
+            def f(pairs):
+                out = []
+                for a, b in pairs:
+                    try:
+                        x = a + b
+                        a += b
+                        out.append((x, a, a * 2, a - b if not isinstance(a, str) else a))
+                    except TypeError as e:
+                        out.append(str(e))
+                return out
+            ints = [(i, i * 3) for i in range(10)]
+            mixed = ints + [(2**62, 2**62), (1.5, 2), (2.5, 0.5), ("a", "b"),
+                            (V(1), 2), (1, "x"), (None, 1), (-2**62, -2**62)]
+            for i in range(30):
+                f(ints)
+            print(f(mixed))
+            print(f(ints))
+        """)
+
+    def test_monitoring_enabled_by_a_finalizer(self):
+        # A __del__ turns LINE events on: run by the generic unpack stub's
+        # release of its iterable (the stub reports ESCAPED and the site's
+        # cold path finds the unit retired), by the close of a local that an
+        # unpack's store displaces, and by an add's displaced local (the
+        # template's release slow path).  The compiled code leaves at the
+        # next word and the events are the interpreter's from there.
+        self.check_same("""
+            import sys
+            mon = sys.monitoring
+            E = mon.events
+            TOOL = 3
+            events = []
+            mon.use_tool_id(TOOL, "test")
+            mon.register_callback(TOOL, E.LINE,
+                lambda code, line: events.append((code.co_name, line)))
+            class D:
+                def __del__(self):
+                    mon.set_events(TOOL, E.LINE)
+            class It:
+                def __init__(self, die): self.die = die
+                def __iter__(self): return iter((1, 2))
+                def __del__(self):
+                    if self.die:
+                        mon.set_events(TOOL, E.LINE)
+            def generic(n, at):
+                s = 0
+                for i in range(n):
+                    a, b = It(i == at)
+                    s += a + b
+                return s
+            def unpack(n, at):
+                s = 0
+                a = None
+                for i in range(n):
+                    if i == at:
+                        a = D()
+                    seq = [i, 1]
+                    a, b = seq
+                    s += a
+                return s
+            def add(n, at):
+                s = 0
+                x = None
+                for i in range(n):
+                    if i == at:
+                        x = D()
+                    x = i + 1
+                    s += x
+                return s
+            for f in (generic, unpack, add):
+                for i in range(5):
+                    f(6, -1)
+                events.clear()
+                r = f(6, 2)
+                mon.set_events(TOOL, 0)
+                print(f.__name__, r, events)
+        """)
+
+    def test_settrace_enabled_by_a_finalizer(self):
+        # The same with sys.settrace, from a displaced local's close and from
+        # the release of an unpacked iterable (the generic stub).  The
+        # finalizer also traces the running frame, whose next line events
+        # then show where compiled code left.
+        self.check_same("""
+            import sys
+            events = []
+            def tracer(frame, event, arg):
+                events.append((frame.f_code.co_name, event, frame.f_lineno))
+                return tracer
+            def trace_caller():
+                sys.settrace(tracer)
+                sys._getframe(2).f_trace = tracer
+            class D:
+                def __del__(self):
+                    trace_caller()
+            class It:
+                def __init__(self, die): self.die = die
+                def __iter__(self): return iter((1, 2))
+                def __del__(self):
+                    if self.die:
+                        trace_caller()
+            def unpack(n, at):
+                s = 0
+                a = None
+                for i in range(n):
+                    if i == at:
+                        a = D()
+                    seq = (i, 1)
+                    a, b = seq
+                    s += a
+                return s
+            def generic(n, at):
+                s = 0
+                for i in range(n):
+                    a, b = It(i == at)
+                    s += a + b
+                return s
+            def add(n, at):
+                s = 0
+                x = None
+                for i in range(n):
+                    if i == at:
+                        x = D()
+                    x = i + 1
+                    s += x
+                return s
+            for f in (unpack, generic, add):
+                for i in range(5):
+                    f(6, -1)
+                events.clear()
+                r = f(6, 2)
+                sys.settrace(None)
+                print(f.__name__, r, events)
+        """)
+
+    def test_specialization_reruns_the_word(self):
+        # The generic arm specializes its word inside the unit (AGAIN): the
+        # word runs again through the generic stub with the right result,
+        # the unit is marked stale and recompiles at the next warm-up event,
+        # and the second compile plans the specialized arm
+        out = run("""
+            import _testinternalcapi as t
+            def f(n, l):
+                s = 0
+                for i in range(n):
+                    a, b = l
+                    s += a * b
+                return s
+            print(f(200, [3, 4]))
+            names = [w[0] for w in t.get_ir(f.__code__, True)]
+            print([n for n in names if n.startswith("UNPACK_SEQUENCE")])
+            u = t.jit_unit(f.__code__)
+            print(u["compiles"], u["invalid"])
+            print(f(3, [5, 6]), t.jit_unit(f.__code__)["compiles"])
+        """, "jit=always")
+        lines = out.splitlines()
+        self.assertEqual(lines[0], str(200 * 12))
+        self.assertEqual(lines[1], "['UNPACK_SEQUENCE_LIST']")
+        # The rewrites recompiled the code within the call (words that run
+        # once per call, such as the call of range, specialize later)
+        compiles, invalid = map(int, lines[2].split())
+        self.assertGreaterEqual(compiles, 2)
+        self.assertLess(compiles, 8)
+        self.assertEqual(invalid, 0)
+        self.assertEqual(lines[3].split()[0], "90")
+
+    def test_misses_do_not_mark_unchanged_words(self):
+        # A guard miss whose generic run leaves the word as it is does not
+        # make the unit stale
+        out = run("""
+            import _testinternalcapi as t
+            def f(n, l):
+                s = 0
+                for i in range(n):
+                    a, b = l[i % 2]
+                    s += a + b
+                return s
+            seqs = [[1, 2], [3, 4]]
+            for i in range(10):
+                f(20, seqs)
+            u = t.jit_unit(f.__code__)
+            before = u["compiles"]
+            print(f(20, [(1, 2), [3, 4]]))
+            u = t.jit_unit(f.__code__)
+            print(u["compiles"] == before, u["invalid"])
+        """, "jit=always")
+        lines = out.splitlines()
+        self.assertEqual(lines[0], str(10 * 3 + 10 * 7))
+        self.assertEqual(lines[1], "True 0")
+
+    def test_capped_units_are_not_marked(self):
+        # A unit compiled at the recompile cap carries no mark: a plan change
+        # leaves it valid, and the code compiles no more
+        out = run("""
+            import _testinternalcapi as t
+            def f(n, l):
+                s = 0
+                for i in range(n):
+                    a, b = l
+                    s += a * b
+                return s
+            f(1, [1, 2])
+            for i in range(8):
+                t.jit_compile(f.__code__)
+            print(t.jit_unit(f.__code__)["compiles"])
+            print(f(200, [3, 4]))
+            names = [w[0] for w in t.get_ir(f.__code__, True)]
+            print([n for n in names if n.startswith("UNPACK_SEQUENCE")])
+            u = t.jit_unit(f.__code__)
+            print(u["compiles"], u["invalid"])
+        """, "jit=always")
+        lines = out.splitlines()
+        self.assertGreaterEqual(int(lines[0]), 8)
+        self.assertEqual(lines[1], str(200 * 12))
+        self.assertEqual(lines[2], "['UNPACK_SEQUENCE_LIST']")
+        compiles, invalid = map(int, lines[3].split())
+        self.assertEqual(compiles, int(lines[0]))
+        self.assertEqual(invalid, 0)
+
+
 def cfi_rows(program, initial):
     """Run a CFI program (x86-64: code alignment 1, data alignment -8) from
     the CIE's initial rule.  Returns [(location, rule)], one per location

@@ -50,7 +50,18 @@ typedef struct {
     _PyJitLabel leave;          // leaves the unit with the transfer in rax:rdx
     int cold_depth;             // nesting of _PyJitLower_ColdBegin()
     _PyJitSection cold_saved;   // the section that the outermost one left
+    /* The template's releases that may run Python (a last count's
+       _Py_Dealloc): each slow path comes back through release_tail[k] to
+       release_back[k], which the compiler binds after the template, with
+       a RETIRED test when the release is the template's last code
+       (g1a/abi.md).  nreleases past _PyJit_MAX_RELEASES counts a release
+       that has no tail (a Py_REF_DEBUG build's call). */
+    int nreleases;
+    _PyJitLabel release_tail[2];
+    _PyJitLabel release_back[2];
+    size_t release_end;         // the hot section's size after the last one
 } _PyJitWordCx;
+#define _PyJit_MAX_RELEASES 2
 
 /* A lowering emits its primitive on the registers in ops: its results
    first (a predicate's bool result is not among them), then its arguments,

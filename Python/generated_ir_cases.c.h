@@ -872,6 +872,7 @@ ir_binary_op(
             (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
+                IR_STUB_ESCAPE();
                 rhs = IR_VIEW(IR_C(ir_word));
                 lhs = IR_VIEW(IR_B(ir_word));
                 #if ENABLE_SPECIALIZATION
@@ -889,6 +890,7 @@ ir_binary_op(
             }
             // _BINARY_OP
             {
+                IR_STUB_ESCAPE();
                 res = value_binary_op(oparg, lhs, rhs);
                 ir_own_C = IR_DETACH(ir_word, C, rhs);
                 ir_own_B = IR_DETACH(ir_word, B, lhs);
@@ -16614,6 +16616,7 @@ ir_run_UNPACK_SEQUENCE(
             PyValue *top;
             // _SPECIALIZE_UNPACK_SEQUENCE
             {
+                IR_STUB_ESCAPE();
                 seq = window[0];
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
@@ -16629,6 +16632,7 @@ ir_run_UNPACK_SEQUENCE(
             }
             // _UNPACK_SEQUENCE
             {
+                IR_STUB_ESCAPE();
                 top = &window[oparg];
                 if (!PyValue_IsObject(seq)) {
                     _PyErr_Format(tstate, PyExc_TypeError,
@@ -17677,6 +17681,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
+                IR_STUB_ESCAPE();
                 rhs = IR_VIEW(IR_C(ir_word));
                 lhs = IR_VIEW(IR_B(ir_word));
                 #if ENABLE_SPECIALIZATION
@@ -17694,6 +17699,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             }
             // _BINARY_OP
             {
+                IR_STUB_ESCAPE();
                 res = value_binary_op(oparg, lhs, rhs);
                 ir_own_C = IR_DETACH(ir_word, C, rhs);
                 ir_own_B = IR_DETACH(ir_word, B, lhs);

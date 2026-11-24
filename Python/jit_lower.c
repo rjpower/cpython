@@ -591,6 +591,28 @@ LOWERING(_Py_EvalBreakerHasEvents)              // []
    Py_OWNED_MASK is set.  In a build with Py_REF_DEBUG every count goes
    through its C definition, which keeps the reference totals. */
 
+/* A release whose slow path may run Python, coming back to done on the hot
+   path; returns the label its slow path goes on to (cx->release_tail), or
+   done when the template has more releases than the tails record. */
+static _PyJitLabel
+note_release(_PyJitWordCx *cx, _PyJitLabel done)
+{
+    int k = cx->nreleases++;
+    if (cx->cold_depth == 0) {
+        cx->release_end = A->sections[_PyJitSection_HOT].size;
+    }
+    else {
+        /* Not on the hot path: never the template's last code */
+        cx->release_end = SIZE_MAX;
+    }
+    if (k >= _PyJit_MAX_RELEASES) {
+        return done;
+    }
+    cx->release_tail[k] = _PyJitAsm_NewLabel(A);
+    cx->release_back[k] = done;
+    return cx->release_tail[k];
+}
+
 #ifdef Py_REF_DEBUG
 static PyValue ref_dup(PyValue v) { return PyValue_DUP(v); }
 static PyValue ref_xdup(PyValue v) { return PyValue_XDUP(v); }
@@ -604,6 +626,10 @@ ref_call(_PyJitWordCx *cx, const void *fn, int publish, _PyJitReg w, _PyJitArg r
 {
     _PyJitArg arg = _PyJitArg_GPR(w);
     _PyJitLower_Call(cx, fn, publish, 1, &arg, result);
+    if (fn == (const void *)ref_close || fn == (const void *)ref_xclose) {
+        /* A release with no slow path of its own: no tail */
+        cx->nreleases = _PyJit_MAX_RELEASES + 1;
+    }
 }
 #else
 /* t := the owned bits of w: E when w owns a count (and is not NULL) */
@@ -653,7 +679,12 @@ close_value(_PyJitWordCx *cx, _PyJitReg w, _PyJitReg t, int may_be_null,
     _PyJitAsm_Jcc(A, _PyJitCond_E, last);
     _PyJitAsm_Bind(A, done);
     _PyJitArg arg = _PyJitArg_GPR(w);
-    cold_call(cx, last, done, destroy ? destroy : (const void *)_Py_Dealloc,
+    _PyJitLabel back = done;
+    if (destroy == NULL) {
+        /* _Py_Dealloc may run Python: the compiler decides what follows */
+        back = note_release(cx, done);
+    }
+    cold_call(cx, last, back, destroy ? destroy : (const void *)_Py_Dealloc,
               destroy == NULL, 1, &arg, _PyJitArg_NONE, -1);
 }
 

@@ -143,6 +143,7 @@ from typing import TextIO
 
 DEFAULT_OUTPUT = ROOT / "Python/generated_ir_cases.c.h"
 DEFAULT_TARGETS_OUTPUT = ROOT / "Python/ir_targets.h"
+DEFAULT_STUBS_OUTPUT = ROOT / "Python/generated_ir_stubs.c.h"
 
 ERROR_INGRESSES = {
     "error": "RAISE",
@@ -3407,6 +3408,9 @@ class IREmitter(Emitter):
         self.observer_calls = set()
         # Emitting the one body that every generic BINARY_OP operation shares
         self.shared_binary_op = False
+        # The uops of the handler being printed whose entry sets the stub's
+        # ESCAPED bit (stub_escapes()), or None if it has no stub
+        self.stub_escapes: frozenset[str] | None = None
         # The record of the handler being printed, and the identities of its
         # elements printed so far (check_record_consumed())
         self.record: OperationRecord | None = None
@@ -5721,6 +5725,9 @@ def write_uop(
     if braces:
         emitter.out.emit(f"// {uop.name}\n")
         emitter.emit("{\n")
+    if emitter.stub_escapes is not None and uop.name in emitter.stub_escapes:
+        # Nothing in the evaluator and the forms; ESCAPED in a stub
+        emitter.emit("IR_STUB_ESCAPE();\n")
     storage = Storage.for_uop(stack, uop, emitter.out)
     record = emitter.uop_record(uop)
     for operand in record.feedback:
@@ -7406,12 +7413,296 @@ def event_twin_function(name: str, event: str, base: str) -> str:
 """)
 
 
+# ---------------------------------------------------------------------------
+# Whole-word completion stubs (regions89 G1a; rd/design.md section 5 and
+# g1a/abi.md).
+#
+# A family is planned when its generic arm declares region(shared); each of
+# its members that declares a region is planned with it, and the others
+# keep their path.  A shared arm becomes a C function of the completion
+# shape,
+#
+#     int _PyIR_Stub_X(PyThreadState *tstate, _PyInterpreterFrame *frame,
+#                      _PyIRWord *site);
+#
+# printed from the same handler text as the evaluator's handler and the
+# function form, with the transfer macros bound to status returns
+# (STUB_BINDINGS).  An inline arm keeps B2's template; its plan names the
+# family's generic stub, which the JIT calls on a miss.  Plans are read
+# from declarations only: an arm with a uop that declares no contract is
+# refused, never planned from the inferred record.
+
+# The exits a planned arm may declare: the completion ABI has no branch
+# result site yet (G1b) and no transfers (G3, G4).  `jump` is the
+# specializing uop's redispatch (DISPATCH_SAME_OPARG), status AGAIN.
+STUB_EXITS = frozenset(("next", "miss", "deopt", "raise", "jump"))
+STUB_REGIONS = ("inline", "shared")
+# The effects after which a path may have reentered Python whatever it
+# released: the uop's entry sets ESCAPED
+STUB_REENTRY = frozenset(("runs_python", "polls"))
+
+
+@dataclass(frozen=True)
+class StubPlan:
+    region: str         # inline or shared
+    family: str         # whose generic stub runs the word after a miss
+    escapes: bool       # a uop declares runs_python or polls: every
+                        # completion that reaches it reports ESCAPED
+
+
+def arm_escapes(inst: Instruction) -> bool:
+    return any(ir_contract.contract_of(part).effects & STUB_REENTRY
+               for part in inst.parts if isinstance(part, Uop))
+
+
+def stub_function_name(handler: str) -> str:
+    return f"_PyIR_Stub_{handler}"
+
+
+def release_forms() -> tuple[str, ...]:
+    """The releases whose stub binding reports ESCAPED only when it drops a
+    last count (g1a/abi.md): every PRIMITIVE row that only releases its one
+    consumed value, and the form for a value known to be in pointer space
+    that the generator prints for it (IREmitter.decref_inputs)"""
+    names = []
+    for row in ir_contract.rows().values():
+        if (row.kind == "PRIMITIVE" and row.effects == {"releases"}
+                and row.result.shape == "NONE"
+                and [a.mode for a in row.args] == ["consumed"]):
+            names += [row.name, f"_{row.name}_POINTER"]
+    return tuple(sorted(names))
+
+
+def check_stub_arm(arm: Instruction, generic: bool) -> None:
+    "Refuse an arm that a stub plan cannot serve, naming what it lacks"
+    if arm.region not in STUB_REGIONS:
+        raise analysis_error(f"{arm.name}: region({arm.region}) has no stub plan "
+                             f"before G4 ({', '.join(STUB_REGIONS)})", arm.where)
+    for part in arm.parts:
+        if not isinstance(part, Uop):
+            continue
+        contract = ir_contract.contract_of(part)
+        if contract is None:
+            raise analysis_error(f"{arm.name} declares region({arm.region}), but its uop "
+                                 f"{part.name} declares no contract", arm.where)
+        for site in ir_contract.effect_sites(part):
+            if site.token.text in ir_contract.rows() or site.effect != "releases":
+                continue
+            if site.token.text != "DECREF_INPUTS":
+                raise analysis_error(f"{arm.name}: {part.name} releases through "
+                                     f"`{site.token.text}`, which no row declares",
+                                     site.token)
+        extra = contract.exits - STUB_EXITS
+        if extra:
+            raise analysis_error(f"{arm.name}: {part.name} declares the exits "
+                                 f"{', '.join(sorted(extra))}, which no stub plan has "
+                                 "before G1b", arm.where)
+        if "jump" in contract.exits and "specializing" not in part.annotations:
+            raise analysis_error(f"{arm.name}: {part.name} declares `jump`, which a "
+                                 "stub has only as a specializing uop's redispatch",
+                                 arm.where)
+        if generic and contract.exits & {"miss", "deopt"}:
+            raise analysis_error(f"{arm.name} is its family's generic arm, but "
+                                 f"{part.name} can miss", arm.where)
+
+
+def stub_plans(analysis: Analysis) -> dict[str, StubPlan]:
+    "The plan of each handler that has one, by handler name"
+    insts = all_instructions(analysis)
+    plans: dict[str, StubPlan] = {}
+    handlers = handler_instructions(analysis)
+    for family in analysis.families.values():
+        head = insts.get(family.name)
+        if head is None or head.region is None:
+            continue
+        if head.region != "shared":
+            raise analysis_error(f"{family.name}: a family's generic arm is "
+                                 "region(shared)", head.where)
+        arms = [head] + [m for m in family.members if m.region is not None]
+        for arm in arms:
+            check_stub_arm(arm, arm is head)
+        for name, inst in handlers.items():
+            if any(inst is arm for arm in arms) and name not in EXECUTION_VARIANTS:
+                plans[name] = StubPlan(inst.region, family.name, arm_escapes(inst))
+    return plans
+
+
+def stub_escapes(inst: Instruction) -> frozenset[str]:
+    """The uops of a planned arm whose entry sets ESCAPED: those that
+    declare runs_python or polls, and those with a release that no release
+    form reports (a row other than release_forms(), whose effects declare
+    `releases`)"""
+    reporting = set(release_forms()) | {"DECREF_INPUTS"}
+    names = set()
+    for part in inst.parts:
+        if not isinstance(part, Uop):
+            continue
+        contract = ir_contract.contract_of(part)
+        if contract.effects & STUB_REENTRY:
+            names.add(part.name)
+        elif any(site.effect == "releases" and site.token.text not in reporting
+                 for site in ir_contract.effect_sites(part)):
+            names.add(part.name)
+    return frozenset(names)
+
+
+STUB_PARAMETERS = "PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site"
+
+
+def stub_header(function: str, extra: str = "") -> str:
+    return (f"\nstatic Py_NO_INLINE int\n{function}(\n    {STUB_PARAMETERS}{extra})\n{{\n"
+            "    _PyInstr *next_instr = site;\n"
+            "    _PyIRWord ir_word = *site;\n"
+            "    int ir_status = 0;\n")
+
+
+def stub_function(function: str, text: str, marker: str, extra: str = "") -> str:
+    "The stub `function`, from a handler's text printed for the evaluator"
+    assert marker in text
+    return text.replace(marker, stub_header(function, extra), 1)
+
+
+BINARY_OP_STUB = stub_function_name("binary_op")
+
+
+def binary_op_stub(name: str, operation: str) -> str:
+    "The stub of the generic BINARY_OP handler `name`"
+    return (f"\nstatic Py_NO_INLINE int\n{stub_function_name(name)}({STUB_PARAMETERS})\n{{\n"
+            f"    Py_MUSTTAIL return {BINARY_OP_STUB}(tstate, frame, site, {operation});\n}}\n")
+
+
+def binary_op_family_stub(fb: str) -> str:
+    """BINARY_OP's generic stub after a specialised arm's miss: the shared
+    body with the word's operation, which its entry keeps (as the forms'
+    IR_DEOPT_BINARY_OP)"""
+    return (f"\nstatic Py_NO_INLINE int\n{stub_function_name(BINARY_OP_FAMILY)}"
+            f"({STUB_PARAMETERS})\n{{\n"
+            "    _PyIRWord ir_word = *site;\n"
+            f"    Py_MUSTTAIL return {BINARY_OP_STUB}(tstate, frame, site,\n"
+            f"        (int)((_PyFbHeader *)IR_FB({fb}))->arg);\n}}\n")
+
+
+# The transfer macros that a stub binds (g1a/abi.md).  The others that the
+# forms bind are left undefined, so that a stub using one does not compile.
+STUB_BINDINGS = {
+    "DISPATCH()": "return ir_status",
+    "DISPATCH_SAME_OPARG()": "return ir_status | _PyIR_AGAIN",
+    "JUMP_TO_PREDICTED(name)":
+        "do { assert(ir_status == 0); return _PyIR_MISS; } while (0)",
+    "IR_DEOPT_BINARY_OP(F)":
+        "do { assert(ir_status == 0); return _PyIR_MISS; } while (0)",
+    "PROCESS_ERROR_AT(ingress, checkpoint, origin)": (
+        "do { \\\n"
+        "        _PyEvalActivation *ir_exit = IR_ACTIVATION(); \\\n"
+        "        ir_exit->exit_kind = _PyIR_EXIT_RAISE; \\\n"
+        "        ir_exit->exit_next = (origin); \\\n"
+        "        ir_exit->exit_entry = \\\n"
+        "            _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint); \\\n"
+        "        return ir_status | _PyIR_RAISED; \\\n"
+        "    } while (0)"),
+    "IR_STUB_ESCAPE()": "(ir_status |= _PyIR_ESCAPED)",
+    "IR_CLOSE_WINDOW(W, N)": "_PyIR_STUB_CLOSE_WINDOW((W), (N))",
+}
+STUB_UNBOUND = ("DISPATCH_GOTO", "DISPATCH_INLINED", "IR_EXIT", "IR_OBSERVE_EDGE",
+                "IR_STEP_DONE", "IR_REPORT_EDGE", "IR_GEN_YIELD_AT",
+                "IR_GEN_COMPLETE_AT", "IR_GEN_RETURN", "IR_GEN_RESUME",
+                "GEN_DISPATCH", "GEN_STEP_JUMP", "GEN_STEP_EFFECT", "IR_STORE_RETURN")
+
+
+def macro_name(binding: str) -> str:
+    return binding.split("(", 1)[0]
+
+
+def stub_prologue() -> tuple[str, list[str]]:
+    releases = release_forms()
+    names = ([macro_name(b) for b in STUB_BINDINGS] + list(STUB_UNBOUND)
+             + list(releases))
+    lines = ["""
+/* The whole-word completion stubs (regions89 G1a; g1a/abi.md), printed by
+ * Tools/cases_generator/ir_generator.py from the handlers' text with the
+ * transfer macros bound to status returns.  Python/ceval.c includes this
+ * file after the function forms, whose bindings of the other macros the
+ * stubs share. */
+
+/* Whether closing V drops a last count, which runs its destructor: then
+ * the path may have reentered Python (ESCAPED) */
+static inline int
+_PyIR_StubDropsLast(PyValue v)
+{
+    return PyValue_RefcountOnObject(v) && Py_REFCNT(BITS_TO_PTR(v)) == 1
+        ? _PyIR_ESCAPED : 0;
+}
+
+static inline int
+_PyIR_StubWindowDropsLast(const PyValue *window, int n)
+{
+    int status = 0;
+    for (int i = 0; i < n; i++) {
+        status |= _PyIR_StubDropsLast(window[i]);
+    }
+    return status;
+}
+
+/* A release that reports ESCAPED exactly when it deallocates */
+#define _PyIR_STUB_RELEASE(CLOSE, V) \\
+    do { \\
+        PyValue ir_released = (V); \\
+        ir_status |= _PyIR_StubDropsLast(ir_released); \\
+        (CLOSE)(ir_released); \\
+    } while (0)
+#define _PyIR_STUB_CLOSE_WINDOW(W, N) \\
+    (ir_status |= _PyIR_StubWindowDropsLast((W), (N)), _PyIR_CloseWindow((W), (N)))
+"""]
+    for name in names:
+        lines.append(f'#pragma push_macro("{name}")\n#undef {name}\n')
+    for binding, value in STUB_BINDINGS.items():
+        lines.append(f"#define {binding} {value}\n")
+    for name in releases:
+        lines.append(f"#define {name}(V) _PyIR_STUB_RELEASE({name}, V)\n")
+    return "".join(lines), names
+
+
+def generate_ir_stubs(analysis: Analysis, formats: dict[str, IRFormat],
+                      stubs: dict[str, str], outfile: TextIO) -> None:
+    """The stubs of the planned shared arms (their texts in stubs, by
+    function), the family stubs that a miss calls, and the plan table that
+    Python/jit.c reads"""
+    plans = stub_plans(analysis)
+    ids = handler_ids(analysis)
+    write_header(__file__, [], outfile)
+    prologue, names = stub_prologue()
+    outfile.write(prologue)
+    # The shared BINARY_OP body first: the operations' stubs call it
+    for function in sorted(stubs, key=lambda f: (f != BINARY_OP_STUB, f)):
+        outfile.write(stubs[function])
+    families = sorted({plan.family for plan in plans.values()})
+    if BINARY_OP_FAMILY in families:
+        fmt = formats[binary_op_handlers(analysis)[0]]
+        outfile.write(binary_op_family_stub(field_expr(fmt.fb)))
+    for name in reversed(names):
+        outfile.write(f'#pragma pop_macro("{name}")\n')
+    outfile.write("\n/* The plan of each handler that has one: its region, whether "
+                  "its\n * completions report ESCAPED, its stub (shared), and its "
+                  "family's generic\n * stub, which runs the word after a miss */\n")
+    outfile.write(f"const _PyIRStubPlan _PyIR_StubPlans[{ir_numbers.IR_LIMIT}] = {{\n")
+    for name in sorted(plans, key=lambda n: ids[n]):
+        plan = plans[name]
+        stub = (f"(const void *){stub_function_name(name)}"
+                if plan.region == "shared" else "NULL")
+        outfile.write(f"    [{ids[name]}] = {{_PyIR_PLAN_{plan.region.upper()}, "
+                      f"{int(plan.escapes)}, {stub}, "
+                      f"(const void *){stub_function_name(plan.family)}}},  "
+                      f"// {name}\n")
+    outfile.write("};\n")
+
+
 def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
                       outfile: TextIO, lines: bool,
-                      checkpoints: dict[str, tuple[ErrorCheckpoint, ...]] | None = None
-                      ) -> list[str]:
+                      checkpoints: dict[str, tuple[ErrorCheckpoint, ...]] | None = None,
+                      stubs: dict[str, str] | None = None) -> list[str]:
     """Write the handlers to outfile, and return their function forms.  An
-    outlined handler's handler is a call of its form."""
+    outlined handler's handler is a call of its form.  The stubs of the
+    planned shared arms go to stubs, by function."""
     out = CWriter(outfile, 2, lines)
     emitter = IREmitter(out, analysis, formats)
     out.emit("\n")
@@ -7425,9 +7716,12 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
     shared_binary_op_done = False
     family_heads = {inst.family.name for inst in all_instructions(analysis).values()
                     if inst.family is not None} | set(analysis.families)
+    plans = stub_plans(analysis)
     for name, inst in sorted(handler_instructions(analysis).items()):
         if generator_word_entry(name, analysis) != name:
             continue
+        plan = plans.get(name)
+        stub = plan is not None and plan.region == "shared" and stubs is not None
         if name in binary_ops:
             operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
             out.emit(f"TARGET({name}) {{\n")
@@ -7435,6 +7729,8 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
             out.emit("goto LABEL_binary_op;\n")
             out.emit("}\n")
             functions.append(binary_op_function(name, operation))
+            if stub:
+                stubs[stub_function_name(name)] = binary_op_stub(name, operation)
             if shared_binary_op_done:
                 continue
             shared_binary_op_done = True
@@ -7457,6 +7753,7 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         emitter.allowed_error_checkpoints = frozenset(
             checkpoint.id for checkpoint in (checkpoints or {}).get(name, ()))
         emitter.execution_variant = EXECUTION_VARIANTS.get(name)
+        emitter.stub_escapes = stub_escapes(inst) if plan is not None else None
         # The generic path of an adaptive family runs only until a
         # specialisation replaces it, or if it cannot
         generic_head = (name in family_heads
@@ -7474,9 +7771,16 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
             check_body("binary_op", text, inst.where, BINARY_OP_OPERAND)
             functions.append(binary_op_routine(text))
             outfile.write(text)
+            if stub:
+                stubs[BINARY_OP_STUB] = stub_function(
+                    BINARY_OP_STUB, text, "LABEL(binary_op) {",
+                    f", int {BINARY_OP_OPERAND}")
         else:
             check_body(name, text, inst.where)
             functions.append(function_form(name, text))
+            if stub:
+                stubs[stub_function_name(name)] = stub_function(
+                    stub_function_name(name), text, f"TARGET({name}) {{")
             if outlined:
                 outlined_names.add(name)
                 out.emit(f"TARGET({name}) {{\n")
@@ -7489,6 +7793,7 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
                 raise analysis_error("error checkpoint changed during final emission", inst.where)
         emitter.handler_format = None
         emitter.execution_variant = None
+        emitter.stub_escapes = None
         emitter.shared_binary_op = False
     handlers = handler_instructions(analysis)
     for twin, (base, _) in EDGE_TWINS.items():
@@ -8789,14 +9094,17 @@ def check_no_addressable_locals(analysis: Analysis) -> None:
 
 
 def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
-                lines: bool) -> None:
+                lines: bool, stubs_outfile: TextIO | None = None) -> None:
     formats = compute_formats(analysis)
     check_no_addressable_locals(analysis)
     checkpoints = {}
     analyze_handlers(analysis, formats, checkpoints=checkpoints)
     write_header(__file__, filenames, outfile)
     cases = io.StringIO()
-    functions = generate_ir_cases(analysis, formats, cases, lines, checkpoints)
+    stubs: dict[str, str] = {}
+    functions = generate_ir_cases(analysis, formats, cases, lines, checkpoints, stubs)
+    if stubs_outfile is not None:
+        generate_ir_stubs(analysis, formats, stubs, stubs_outfile)
     # The file is included twice by Python/ceval.c: at file scope for the
     # function forms of every handler and entry label, and in ir_evaluate()
     # for the evaluator's handlers and labels
@@ -8907,6 +9215,11 @@ arg_parser.add_argument(
 )
 
 arg_parser.add_argument(
+    "-s", "--stubs", type=str, help="Generated completion stubs",
+    default=DEFAULT_STUBS_OUTPUT
+)
+
+arg_parser.add_argument(
     "-l", "--emit-line-directives", help="Emit #line directives", action="store_true"
 )
 
@@ -8920,7 +9233,8 @@ if __name__ == "__main__":
     if len(args.input) == 0:
         args.input.append(DEFAULT_INPUT)
     data = analyze_files(args.input)
-    with open(args.output, "w") as outfile:
-        generate_ir(args.input, data, outfile, args.emit_line_directives)
+    with open(args.output, "w") as outfile, open(args.stubs, "w") as stubs_outfile:
+        generate_ir(args.input, data, outfile, args.emit_line_directives,
+                    stubs_outfile)
     with open(args.targets, "w") as outfile:
         generate_ir_targets(args.input, data, outfile)

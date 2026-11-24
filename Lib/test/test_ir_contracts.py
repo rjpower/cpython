@@ -1960,6 +1960,22 @@ class VerifierTests(unittest.TestCase):
         self.verify(source % (" object", "SPAM_STEAL(PyValue_AsKnownObjectBorrow(value))",
                               "DEAD(value);\n"))
 
+    def test_an_unowned_input_is_not_assigned(self):
+        # A pass-through, borrowed or closed input names its home, whose
+        # word stays the caller's: a new value written there is owned by
+        # no one (F16: `null_or_index = window[1]` in _FOR_ITER)
+        source = """
+            op(_OP, (x%s -- %s)) effects() exits(next) {
+                %s = PyValue_None;
+            }
+        """
+        self.refuses(source % ("", "x", "x"),
+                     r"assigns `x`, an input declared a pass-through")
+        self.refuses(source % (": borrowed", "", "x"),
+                     r"assigns `x`, an input declared borrowed")
+        # A copy in a local of its own may change
+        self.verify(source % ("", "x", "PyValue y = x;\n                y"))
+
     # F7: assumed(fact) by <producer>
 
     def test_assumed_inputs(self):
@@ -2212,7 +2228,9 @@ class VerifierTests(unittest.TestCase):
     def test_value_slots_and_index_steps(self):
         # _FOR_ITER_VIRTUAL: an iternext value slot read through
         # _PyType_VALUE_SLOT, and an index step through _tp_iteritem, whose
-        # _PyValueIndexPair is a CASES result
+        # _PyValueIndexPair is a CASES result.  The uop's store of the next
+        # index into its pass-through input is left out: an unowned input is
+        # not assigned (F16; G0d1 gives the output a name of its own)
         source = """
             op(_OP, (iter: object, null_or_index -- iter, null_or_index, next: owned))
                 effects(reads, runs_python) exits(next, miss, raise, branch)
@@ -2241,7 +2259,6 @@ class VerifierTests(unittest.TestCase):
                         PyValue completed = PyValue_None;
                         IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
                     }
-                    null_or_index = PyValue_TagIndex(index);
                     next = next_index.value;
                 }
             }

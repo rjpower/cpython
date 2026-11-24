@@ -3362,6 +3362,12 @@ class OwnershipWalk:
         if i >= 2 and texts[i - 2] in ("->", ".") or not re.fullmatch(r"\w+", lhs):
             return      # a store through a pointer: V2's `writes`
         item = self.declared.get(lhs)
+        if item is not None and item.mode in UNOWNED:
+            # The home keeps the input's word: a new value there is owned
+            # by no one, and a pass-through output would publish it as the
+            # caller's value
+            self.fail(toks[0], f"assigns `{lhs}`, an input declared "
+                      f"{item.mode or 'a pass-through'}")
         if obligated(state.owners.get(lhs)) and (item is None or item.mode
                                                   in ("consumed", "taken")):
             self.fail(toks[0], f"`{lhs}` is assigned while it holds an owner, which "

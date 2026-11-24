@@ -448,7 +448,8 @@ static void dtrace_function_return(_PyInterpreterFrame *);
  * Entry 0, the header that the sites without an entry share, never triggers
  * either: its counter is unreachable (make_exec() in ir.c), which
  * backoff_counter_triggers() never reports, so nothing after a trigger
- * writes past a header there.  Every specializing op tests and advances its
+ * writes past a header there (asserted where a handler gets its entry,
+ * IR_FB()).  Every specializing op tests and advances its
  * counter with these two functions, whose rows are in
  * pycore_ir_components.h. */
 static inline int
@@ -966,8 +967,21 @@ coro_awaitable_can_transfer(PyValueBorrow value)
            state != FRAME_SUSPENDED_YIELD_FROM_LOCKED;
 }
 
-/* The feedback entry at index F. */
-#define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_words, (F)))
+/* The feedback entry at index F.  Entry 0 (field IR_FB_SHARED), the header
+ * that the sites without an entry of their own share, never triggers: its
+ * counter is unreachable from make_exec() on, and nothing makes it
+ * reachable (advancing and pausing keep its backoff bits).  The counter
+ * functions take no frame, so the invariant is checked here, where a
+ * handler gets its entry. */
+static inline void *
+_PyIR_FbOfHandler(_PyFbHeader *entry, uint32_t field)
+{
+    assert(field != IR_FB_SHARED || !backoff_counter_triggers(entry->counter));
+    (void)field;
+    return entry;
+}
+#define IR_FB(F) \
+    (IR_CHECK_BLOCK(), _PyIR_FbOfHandler(_PyIR_FbEntry(frame->ir_words, (F)), (F)))
 
 /* The poly row of the site whose entry header is H that records the
  * receiver type version VERSION, or -1.  WORDS is the frame's ir_words; the

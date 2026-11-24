@@ -996,6 +996,32 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual(ir_contract.rows()["IR_METHOD_POLY_LOOKUP"].feedback,
                          {("read", "entry")})
 
+    def test_feedback_only_through_rows(self):
+        self.refuses("""
+            op(_READ_COUNTER, (--)) effects(reads) exits(next) {
+                _PyFbHeader *f = FB_COUNTER();
+                _Py_BackoffCounter c = f->counter;
+            }
+        """, r"_READ_COUNTER: dereferences the feedback pointer `f`; a body reaches "
+             r"feedback only through rows")
+        self.refuses("""
+            op(_READ_COUNTER, (--)) effects(reads) exits(next) {
+                _Py_BackoffCounter c = FB_COUNTER()->counter;
+            }
+        """, r"dereferences the feedback pointer `FB_COUNTER`")
+        self.refuses("""
+            op(_READ_COUNTER, (--)) effects(reads) exits(next) {
+                _PyFbHeader *f = FB_COUNTER();
+                int x = PyValue_IsNull(f);
+            }
+        """, r"passes a feedback pointer to PyValue_IsNull, which declares no FEEDBACK")
+        self.verify("""
+            op(_READ_COUNTER, (--)) effects(reads) exits(next) feedback(read(counter)) {
+                _PyFbHeader *f = FB_COUNTER();
+                int x = _PyFb_CounterTriggers(f);
+            }
+        """)
+
     def test_intrinsic_outside_its_build(self):
         self.refuses("""
             inst(OP, (value -- value)) effects() exits(next) {

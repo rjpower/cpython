@@ -822,6 +822,49 @@ def check_feedback(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
                     f"which feedback({declared}) does not declare", tkn)
 
 
+# The rows that give the address of the site's feedback
+FEEDBACK_POINTERS = ("FB_COUNTER",)
+
+
+def check_feedback_pointers(uop: Uop, table: dict[str, Row]) -> None:
+    """A body reaches feedback only through rows, so that the clause's union
+    over its callees is complete: a feedback pointer (FB_COUNTER(), or a
+    local holding one) is never dereferenced in the body, and is passed only
+    to rows that declare FEEDBACK"""
+    tokens = _tokens(uop)
+    texts = [t.text for t in tokens]
+    pointers: set[str] = set()
+    for i, t in enumerate(texts):
+        if t == "=" and i > 0:
+            end = texts.index(";", i) if ";" in texts[i:] else len(texts)
+            if any(x in FEEDBACK_POINTERS or x in pointers for x in texts[i + 1:end]):
+                pointers.add(texts[i - 1])
+
+    def fail(tkn: Token, what: str):
+        raise analysis_error(f"{uop.name}: {what}; a body reaches feedback only through "
+                             "rows that declare FEEDBACK", tkn)
+
+    for i, t in enumerate(texts):
+        after = i + 1
+        if t in FEEDBACK_POINTERS and texts[i + 1:i + 2] == ["("]:
+            after = _close(texts, i + 1) + 1
+        elif t not in pointers:
+            continue
+        if texts[after:after + 1] in (["->"], ["["], ["."]):
+            fail(tokens[i], f"dereferences the feedback pointer `{t}`")
+        if (i > 0 and texts[i - 1] == "*"
+                and (i < 2 or not re.fullmatch(r"\w+", texts[i - 2]))):
+            fail(tokens[i], f"dereferences the feedback pointer `{t}`")
+    for tkn, args in body_calls(uop):
+        row = table.get(tkn.text)
+        if tkn.text in FEEDBACK_POINTERS or row is None or row.feedback:
+            continue
+        for arg in args:
+            if any(x in FEEDBACK_POINTERS or x in pointers for x in arg):
+                fail(tkn, f"passes a feedback pointer to {tkn.text}, which declares no "
+                     "FEEDBACK")
+
+
 def feedback_access(uop: Uop) -> frozenset[tuple[str, str]]:
     """What a declared uop reads and writes of its site's feedback: its
     clause, and a read of the field of each cache operand"""
@@ -1939,6 +1982,7 @@ def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None 
     check_callees(uop, table)
     check_effects(uop, contract, table)
     check_feedback(uop, contract, table)
+    check_feedback_pointers(uop, table)
     check_guard_conditions(uop, table)
     for tkn, _ in body_calls(uop):
         if tkn.text in GUARDS:

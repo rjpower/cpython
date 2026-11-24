@@ -402,7 +402,9 @@ dummy_func(
             IR_CLOSE_INPUTS(args);
         }
 
-        pure inst(PUSH_NULL, (-- res)) {
+        pure inst(PUSH_NULL, (-- res: owned null))
+            effects() exits(next)
+        {
             res = PyValue_NULL;
         }
 
@@ -6269,7 +6271,9 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        tier1 inst(NOT_TAKEN, ( -- )) {
+        tier1 inst(NOT_TAKEN, ( -- ))
+            effects() exits(next)
+        {
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }

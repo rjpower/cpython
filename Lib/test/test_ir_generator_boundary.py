@@ -83,7 +83,7 @@ class SpecializationPreservationTests(unittest.TestCase):
         for _ in range(ROUNDS):
             self.assertEqual(add(1.25, 2.5), 3.75)
             self.assertEqual(subtract(2.5, 1.25), 1.25)
-        self.assertIn("BINARY_OP_ADD_FLOAT", ordinary_names(add))
+        self.assertIn("Add.Float", ordinary_names(add))
         self.assertIn("BINARY_OP_SUBTRACT_FLOAT", ordinary_names(subtract))
         for function in (add, subtract):
             for _, _, row in sites(function):

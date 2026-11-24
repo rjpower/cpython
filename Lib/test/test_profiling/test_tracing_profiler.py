@@ -1,4 +1,5 @@
 """Test suite for the cProfile module."""
+import gc
 import multiprocessing
 import sys
 import unittest
@@ -185,6 +186,33 @@ class CProfileTest(ProfileTest):
             level1(profiler)
         profiler.disable()
         profiler.clear()
+
+    def test_collected_profiler_keeps_sys_setprofile(self):
+        # A profiler that is still marked enabled once its tool id is freed
+        # is garbage.  Collecting it must not clear the profile function of
+        # the thread that happens to run the collection.
+        import _lsprof
+
+        def leak():
+            def timer():
+                return 0
+
+            profiler = _lsprof.Profiler(timer=timer)
+            timer.profiler = profiler
+            profiler.enable()
+            # The registered callbacks were the profiler's only other
+            # references.
+            sys.monitoring.free_tool_id(sys.monitoring.PROFILER_ID)
+
+        leak()
+
+        def profile(frame, event, arg):
+            pass
+
+        sys.setprofile(profile)
+        self.addCleanup(sys.setprofile, None)
+        gc.collect()
+        self.assertIs(sys.getprofile(), profile)
 
     def test_bad_descriptor(self):
         # gh-132250

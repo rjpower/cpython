@@ -3079,7 +3079,6 @@ binary_op_fail_kind(int oparg, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
     PyTypeObject *lhs_type = PyValue_TYPE(lhs_st);
     PyTypeObject *rhs_type = PyValue_TYPE(rhs_st);
     switch (oparg) {
-        case NB_ADD:
         case NB_INPLACE_ADD:
             if (lhs_type != rhs_type) {
                 return SPEC_FAIL_BINARY_OP_ADD_DIFFERENT_TYPES;
@@ -3412,7 +3411,7 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
     bool floats = producers && PyValue_FloatOperandsCheck(lhs_st, rhs_st);
 
     switch (oparg) {
-        case NB_ADD:
+        /* NB_ADD is the Add family's (add.rop adapt_before_use_add) */
         case NB_INPLACE_ADD:
             if (inline_ints) {
                 specialize(instr, BINARY_OP_ADD_INT);

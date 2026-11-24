@@ -1078,7 +1078,9 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(formats["GET_AWAITABLE"].borrow_mask, 1)
         self.assertTrue(formats["GET_AWAITABLE"].store_dst)
         self.assertFalse(formats["GET_AWAITABLE"].no_fold)
-        self.assertEqual(instruction.parts[0].aliased_outputs, ("iter",))
+        # Declared `iter: owned`: the transferred reference is the output's
+        # own, so it aliases no input
+        self.assertEqual(instruction.parts[0].aliased_outputs, ())
         predicate = "coro_awaitable_can_transfer"
         self.assertIn(predicate, analyzer.NON_ESCAPING_FUNCTIONS)
         self.assertNotIn(predicate, analyzer.IR_MARKER_EFFECTS)

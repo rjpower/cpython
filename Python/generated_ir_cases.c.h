@@ -7836,6 +7836,8 @@ ir_run_FORMAT_SIMPLE(
             IR_HOLD_NEXT();
             next_instr += 1;
             INSTRUCTION_STATS(FORMAT_SIMPLE);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
             PyValueBorrow value;
             PyValue res;
             PyValue ir_own_B = PyValue_NULL;
@@ -7865,8 +7867,9 @@ ir_run_FORMAT_SIMPLE(
                 ir_own_B = IR_DETACH(ir_word, B, value);
                 res = IR_TAKEN_REQUIRED(value, ir_own_B);
             }
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
+            IR_STORE_DST(ir_word, A, res);
             PyValue_XCLOSE(ir_own_B);
+            PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
 

@@ -167,14 +167,11 @@ class SliceTests(unittest.TestCase):
         '"READS_HEAP", "WRITES_HEAP"], declared 3 ["ALLOCATES", "MAY_RAISE", '
         '"MAY_RELEASE"]',
         # Batch 7: no word executes RETURN_GENERATOR, so its result is NULL
-        # (F19); _YIELD_VALUE moves the yielded value into the caller's
-        # frame (F5); _GUARD_TOS_IS_NONE tests the identity of the word
-        # with PyValue_None (F20)
+        # (F19); _GUARD_TOS_IS_NONE tests the identity of the word with
+        # PyValue_None (F20)
         'RETURN_GENERATOR.record.uops[0].results: inferred 0 entries [], '
         'declared 1 [{"__type": "Fact", "arg": "null", "kind": "ENCODING", '
         '"subject": "v0"}]',
-        'INSTRUMENTED_YIELD_VALUE/_YIELD_VALUE: output `value` is declared '
-        'moved, the record has OWNED',
         *(line
           for handler in ("SEND_VIRTUAL", "SEND_VIRTUAL_XFER_DISCARD",
                           "SEND_VIRTUAL_XFER_HOME", "SEND_VIRTUAL_XFER_POP_TOP",
@@ -201,18 +198,11 @@ class SliceTests(unittest.TestCase):
         'BUILD_LIST.record.uops[0].effects: inferred 6 entries '
         '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
         '"READS_HEAP", "WRITES_HEAP"], declared 2 ["ALLOCATES", "MAY_RAISE"]',
-        # G0c9: FORMAT_SIMPLE's str arm passes the input's reference on and
-        # its other arms make a new one; the result is owned on every path,
-        # which the record's ALIAS (the input's home) does not say
-        'FORMAT_SIMPLE/_FORMAT_SIMPLE: output `res` is declared owned, the record has ALIAS',
         # G0c9: _GET_ITER's second result is a tagged index or NULL
         # (_PyEval_GetIter's row, G0a5's representation table)
         'GET_ITER.record.uops[1].results: inferred 0 entries [], declared 1 '
         '[{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", '
         '"subject": "v2"}]',
-        # G0c9: GET_AWAITABLE's coroutine arm passes the input's reference
-        # on and the other arm makes a new one; the result is owned on both
-        'GET_AWAITABLE/_GET_AWAITABLE: output `iter` is declared owned, the record has ALIAS',
         # G0c9: _SEND_ASYNC_GEN's body completes in place (it reaches the end
         # of the body, `next`); SEND_ASYNC_GEN_XFER_DISCARD's yield is its
         # fused transfer's, which G0d takes from the declaration

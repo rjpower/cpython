@@ -385,6 +385,18 @@ def assigns_to(uop: Uop, name: str) -> bool:
     )
 
 
+def passes(uop: Uop, item: StackItem) -> bool:
+    """Whether output item, named as an input, passes that input's value
+    through: declared without a mode, or for an undeclared uop, an output
+    that the body does not assign"""
+    if item.name == "unused":
+        return True
+    if uop.clauses:
+        import ir_contract
+        return not ir_contract.contract_of(uop).output(item.name).mode
+    return not assigns_to(uop, item.name)
+
+
 def ends_handler(uop: Uop) -> bool:
     """Whether no uop after uop runs: a terminal call transaction owns the
     call's result and its return, so the uops after it do not execute"""
@@ -437,7 +449,7 @@ def walk_values(inst: Instruction) -> ValueWalk:
         outputs = []
         for j, item in enumerate(part.stack.outputs):
             i = passed_through(part, j)
-            if i is not None and not (item.name != "unused" and assigns_to(part, item.name)):
+            if i is not None and passes(part, item):
                 kept.add(i)
                 stack.append(popped[i])
                 outputs.append((item.name, popped[i][0], THROUGH, item.size))

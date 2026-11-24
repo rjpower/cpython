@@ -1023,6 +1023,12 @@ def stmt_escapes(stmt: Stmt) -> bool:
     else:
         assert False, "Unexpected statement type"
 
+def declared_aliases(stack: StackEffect) -> tuple[str, ...]:
+    "The outputs that a declared uop moves from an input: `moved(x)`"
+    inputs = {f"moved({i.name})" for i in stack.inputs}
+    return tuple(o.name for o in stack.outputs if inputs & set(o.contract))
+
+
 def find_aliased_outputs(op: parser.InstDef) -> tuple[str, ...]:
     """The outputs that a statement `out = in;` or `out = TAKE(in);` makes
     alias an input: TAKE gives the input's value a count of its own, so the
@@ -1234,7 +1240,8 @@ def make_uop(
         properties=compute_properties(op),
         object_inputs=object_inputs,
         asserted_objects=asserted_objects,
-        aliased_outputs=find_aliased_outputs(op),
+        aliased_outputs=(declared_aliases(stack) if op.clauses
+                         else find_aliased_outputs(op)),
         clauses=op.clauses,
     )
 

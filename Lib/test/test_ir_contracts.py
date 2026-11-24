@@ -905,6 +905,62 @@ class VerifierTests(unittest.TestCase):
         """, r"BAD_ARRAY: the guard in _GUARD_ARRAY follows _WRITE, which may writes, so "
              r"the word cannot restart")
 
+    def test_element_stores_are_checked(self):
+        self.refuses("""
+            op(_BAD_ARRAY, (-- values[1]: owned inline_int)) effects() exits(next) {
+                values[0] = PyValue_NULL;
+            }
+        """, r"_BAD_ARRAY: stores `PyValue_NULL` into the owned array `values`")
+        source = """
+            op(_ARRAY, (a: consumed %s -- values[1]: owned inline_int)) effects() exits(next) {
+                values[0] = a;
+            }
+        """
+        self.verify(source % "inline_int")
+        self.refuses(source % "", r"stores `a` into `values`, declared .*inline_int, which it "
+                                  r"is not shown to be")
+        self.refuses("""
+            op(_BORROWED, (a -- a, values[1]: owned)) effects() exits(next) {
+                values[0] = a;
+            }
+        """, r"stores `a`, declared a pass-through, into the owned array `values`: no "
+             r"owner moves")
+
+    def test_borrowed_outputs_are_checked(self):
+        self.refuses("""
+            op(_BAD_BORROW, (x: borrowed nullable -- y: borrowed inline_int))
+                effects() exits(next) {
+                y = x;
+            }
+        """, r"_BAD_BORROW: `y` may be NULL from x")
+        self.refuses("""
+            op(_BAD_BORROW, (x: borrowed -- y: borrowed inline_int)) effects() exits(next) {
+                y = x;
+            }
+        """, r"on next, `y` is declared .*inline_int, which does not hold")
+
+    def test_a_rebound_view_certifies_the_value_tested(self):
+        source = """
+            op(_WRONG_FACT, (a, b -- %s)) effects() exits(next, miss) {
+                PyValueBorrow v = PyValue_Borrow(a);
+                v = PyValue_Borrow(b);
+                EXIT_IF(!PyValue_IsInlineInt(v));
+            }
+        """
+        self.refuses(source % "a: inline_int, b",
+                     r"_WRONG_FACT: `a` is declared .*inline_int.*, which nothing "
+                     r"establishes")
+        self.verify(source % "a, b: inline_int")
+
+    def test_reentry_kills_home_facts_in_the_body(self):
+        self.refuses("""
+            op(_STALE, (v: inline_int, victim: consumed -- v))
+                effects(releases) exits(next) {
+                PyValue_CLOSE_SPECIALIZED(victim, _Py_Dealloc);
+                int64_t n = _PyValue_IntScaled(v);
+            }
+        """, r"_STALE: passes `v` to _PyValue_IntScaled, which requires .*inline_int")
+
     def test_intrinsic_outside_its_build(self):
         self.refuses("""
             inst(OP, (value -- value)) effects() exits(next) {

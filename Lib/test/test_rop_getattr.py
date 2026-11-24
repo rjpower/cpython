@@ -2,6 +2,7 @@
 definitions (Python/register_ops/getattr.rop) and their generated C."""
 
 import io
+import sys
 import unittest
 from pathlib import Path
 
@@ -110,13 +111,9 @@ class GeneratedCTests(unittest.TestCase):
         self.assertIn("_PyAttr_PolyMethod(frame,", arm_text(self.text, "GetMethod.PolyMethod"))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TranslatorRuleTests(unittest.TestCase):
     """LOAD_ATTR's rule (Python/regcfg.c rule_load_attr) selects the family's
-    Generic arm; the words show it once the rule is registered."""
+    Generic arm."""
 
     def test_load_attr_words_are_the_family_generics(self):
         capi = import_helper.import_module("_testinternalcapi")
@@ -127,9 +124,93 @@ class TranslatorRuleTests(unittest.TestCase):
         for name in ("attr", "method"):
             code = namespace[name].__code__
             names[name] = [row[0] for row in capi.get_ir(code, False)]
-        if "GetAttr.Generic" not in names["attr"]:
-            self.skipTest("the rule is registered with the translator resolver")
+        self.assertIn("GetAttr.Generic", names["attr"])
         self.assertIn("GetMethod.Generic", names["method"])
         # The callable and self land in the CALL's window: no move between
         self.assertNotIn("MOVE", names["method"])
         self.assertNotIn("SWAP", names["method"])
+
+
+class _Slots:
+    __slots__ = ()
+
+    def m(self, y):
+        return y
+
+
+class _Values:
+    def __init__(self):
+        self.x = 1
+
+    def m(self, y):
+        return y
+
+
+class _ClassMethod:
+    @classmethod
+    def m(cls, y):
+        return y
+
+
+class MethodOwnershipTests(unittest.TestCase):
+    """A method call through each GetMethod arm leaves the count of the
+    function in the type's dict where it was: the callable the arm publishes
+    is owned by the call's window and retired once."""
+
+    N = 20000
+
+    def drift(self, site, descriptor):
+        for _ in range(200):
+            site()
+        before = sys.getrefcount(descriptor)
+        for _ in range(self.N):
+            site()
+        self.assertEqual(sys.getrefcount(descriptor), before)
+
+    def test_no_dict_builtin(self):
+        items = []
+
+        def site():
+            items.append(1)
+            items.pop()
+        self.drift(site, list.__dict__["append"])
+
+    def test_no_dict_python_method(self):
+        obj = _Slots()
+        self.drift(lambda: obj.m(1), _Slots.__dict__["m"])
+
+    def test_method_values(self):
+        obj = _Values()
+        self.drift(lambda: obj.m(1), _Values.__dict__["m"])
+
+    def test_class_method(self):
+        obj = _ClassMethod()
+        self.drift(lambda: obj.m(1), _ClassMethod.__dict__["m"].__func__)
+
+    def test_poly_site(self):
+        objs = [_Values(), _Slots(), _Values()]
+
+        def site():
+            for o in objs:
+                o.m(1)
+        self.drift(site, _Values.__dict__["m"])
+        self.drift(site, _Slots.__dict__["m"])
+
+    def test_generic_miss_after_specialising(self):
+        # A site that specialised for one type then sees others and
+        # attributes that are not methods
+        class Late:
+            m = 5
+
+        def site(o):
+            return o.m
+
+        objs = [_Values(), _Values(), Late()]
+        for _ in range(100):
+            site(objs[0])
+        self.assertEqual(site(objs[2]), 5)
+        self.assertEqual(site(objs[1])(1), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

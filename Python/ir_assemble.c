@@ -767,7 +767,7 @@ completion_error(_PyRegCfg *cfg, _PyRegOp *op, const char *detail)
         "handler=%d floor=%d target=%d target_op=%d target_nread=%d "
         "out=[%d,%d,%d] target_in=[%d,%d,%d])",
         op->loc.lineno, detail, op->opcode, op->depth, op->nread, op->nout,
-        slots.base, slots.dst, cfg->nlocalsplus, op->except, handler_base,
+        slots.base, slots.out[0], cfg->nlocalsplus, op->except, handler_base,
         target, end ? end->opcode : -1, end ? end->nread : -1,
         op->nout > 0 ? out[0] : -1, op->nout > 1 ? out[1] : -1,
         op->nout > 2 ? out[2] : -1,
@@ -900,11 +900,11 @@ lower_completions(_PyRegCfg *cfg)
         /* Final code construction proves the actual handler cannot read a
          * retired home before redefining it. A preserved exception prefix may
          * contain dead implicit unwind anchors, as in generator wrappers. */
-        int dst = slots.dst;
+        int dst = slots.out[0];
         if (op->opcode != FOR_ITER) {
             _PyRegSlots completed;
             _PyRegCfg_OpSlots(cfg, &cfg->ops[op->completion - 1], &completed);
-            dst = completed.dst;
+            dst = completed.out[0];
         }
         if (dst != IR_NO_DST &&
             (dst < 0 || dst >= limit ||
@@ -1158,14 +1158,14 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
     if ((op->opcode == SEND || op->opcode == CLEANUP_THROW) && op->completion) {
         _PyRegSlots completed;
         _PyRegCfg_OpSlots(cfg, &cfg->ops[op->completion - 1], &completed);
-        slots.dst = completed.dst;
+        slots.out[0] = completed.out[0];
     }
     int oparg = handler_oparg(cfg, op);
     // Every role's value, then a pick per field.  DST is meaningless when
     // fmt->dst is _PyIR_NO_DST.
     int values[_PyIR_ROLE_IN0 + 4] = {
         [_PyIR_ROLE_NONE] = 0,
-        [_PyIR_ROLE_DST] = slots.dst,
+        [_PyIR_ROLE_DST] = slots.out[0],
         [_PyIR_ROLE_BASE] = slots.base,
         [_PyIR_ROLE_FB] = op->fb > 0 ? op->fb : IR_FB_SHARED,
         [_PyIR_ROLE_IMM] = oparg,
@@ -1185,8 +1185,8 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
         int role = fmt->roles[r];
         assert(role < _PyIR_ROLE_IN0 + 4);
         int value = values[role];
-        if (role == _PyIR_ROLE_DST && ndst++ == 1) {
-            value = slots.dst2;
+        if (role == _PyIR_ROLE_DST) {
+            value = slots.out[ndst++];
         }
         if (!_PyIR_RoleIsImm(role) && (value < 0 || value > IR_FIELD_MAX)) {
             // Only unreachable code names slots past the frame, since the
@@ -1247,7 +1247,8 @@ place_generator_boundaries(_PyIRWord *words, int nwords, int nlocalsplus)
 #ifdef Py_GIL_DISABLED
     return;
 #else
-    for (int pc = 0; pc < nwords; pc++) {
+    // An arm's operand words are not instructions: step over them
+    for (int pc = 0; pc < nwords; pc += _PyIR_WordLength(words[pc])) {
         int handler = _PyIR_GeneratorBoundaryCandidate(
             words, nwords, nlocalsplus, pc);
         if (handler >= 0) {
@@ -1259,7 +1260,7 @@ place_generator_boundaries(_PyIRWord *words, int nwords, int nlocalsplus)
     int changed;
     do {
         changed = 0;
-        for (int pc = 0; pc < nwords; pc++) {
+        for (int pc = 0; pc < nwords; pc += _PyIR_WordLength(words[pc])) {
             int handler = IR_HANDLER(words[pc]);
             const _PyIRGeneratorBoundary *boundary =
                 _PyIR_GeneratorBoundaryOf(handler);

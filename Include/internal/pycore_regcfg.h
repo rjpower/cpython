@@ -306,8 +306,7 @@ _PyRegCfg_Slot(const _PyRegCfg *cfg, int v)
 
 /* The slot of each role of an op's word */
 typedef struct {
-    int dst;
-    int dst2;           // the second output of a family that has two
+    int out[2];         // the outputs, in the order of the encoding's DST roles
     int base;           // the deepest input of a window-style op
     int in[4];          // the inputs of a register-style one, bottom first
 } _PyRegSlots;

@@ -1028,11 +1028,6 @@ rule_load_attr(_PyRegTr *t, const _PyRegOp *src)
     // The family's name operand is the index into co_names; the stack op's
     // oparg carries the method flag below it
     int name = src->oparg >> 1;
-    if (src->oparg & 1) {
-        // GetMethod's arms are not wired yet: `import enum` crashes in a
-        // NoDict arm's callable (pyjit/rir90-p3 report)
-        return _PyRegTr_Legacy(t, src);
-    }
     _PyRegOp *op;
     int obj;
     RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, &obj));
@@ -1372,10 +1367,10 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
     for (int k = 0; k < 4; k++) {
         slots->in[k] = 0;
     }
-    slots->dst2 = 0;
+    slots->out[1] = 0;
     if (op->opcode >= IR_NUM_OLD_HANDLERS && op->nout > 1) {
         // A register family's second output has a DST role of its own
-        slots->dst2 = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
+        slots->out[1] = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
                     : _PyRegCfg_Slot(cfg, out[1]);
     }
     if (fmt->flags & _PyIR_WINDOW) {
@@ -1386,10 +1381,10 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
             slots->in[k] = first + k >= 0 ? _PyRegCfg_Slot(cfg, in[first + k]) : 0;
         }
         if (fmt->flags & _PyIR_UNPACKS) {
-            slots->dst = op->dst >= 0 ? op->dst : IR_NO_DST;
+            slots->out[0] = op->dst >= 0 ? op->dst : IR_NO_DST;
             return;
         }
-        slots->dst = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
+        slots->out[0] = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
                    : op->dst >= 0 ? op->dst : slots->base + fmt->dst;
         return;
     }
@@ -1398,13 +1393,13 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
         // The callable is the deepest input, and the rest are operand words
         slots->in[0] = _PyRegCfg_Slot(cfg, in[0]);
         if (op->flags & _PyReg_DISCARD) {
-            slots->dst = IR_NO_DST;
+            slots->out[0] = IR_NO_DST;
         }
         else if (op->dst >= 0) {
-            slots->dst = op->dst;
+            slots->out[0] = op->dst;
         }
         else {
-            slots->dst = _PyRegCfg_Slot(cfg, out[0]);
+            slots->out[0] = _PyRegCfg_Slot(cfg, out[0]);
         }
         return;
     }
@@ -1413,17 +1408,17 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
         slots->in[k] = first + k >= 0 ? _PyRegCfg_Slot(cfg, in[first + k]) : 0;
     }
     if (op->flags & _PyReg_DISCARD) {
-        slots->dst = IR_NO_DST;
+        slots->out[0] = IR_NO_DST;
     }
     else if (op->dst >= 0) {
-        slots->dst = op->dst;
+        slots->out[0] = op->dst;
     }
     else if (fmt->dst == _PyIR_NO_DST) {
-        slots->dst = 0;
+        slots->out[0] = 0;
     }
     else {
         int j = op->npop + fmt->dst;
-        slots->dst = j < op->nout ? _PyRegCfg_Slot(cfg, out[j]) : top + fmt->dst;
+        slots->out[0] = j < op->nout ? _PyRegCfg_Slot(cfg, out[j]) : top + fmt->dst;
     }
 }
 
@@ -2446,11 +2441,12 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
         _PyRegSlots slots;
         _PyRegCfg_OpSlots(cfg, op, &slots);
         int high = -1;
+        int ndst = 0;
         for (int r = 0; r < 4; r++) {
             int role = fmt->roles[r];
             if (role == _PyIR_ROLE_DST && fmt->dst != _PyIR_NO_DST
                 && !(op->flags & _PyReg_DISCARD)) {
-                high = Py_MAX(high, slots.dst);
+                high = Py_MAX(high, slots.out[ndst++]);
             }
             else if (role == _PyIR_ROLE_BASE) {
                 // A window's handler reads and writes from its base up

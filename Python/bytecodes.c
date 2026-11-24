@@ -2292,7 +2292,9 @@ dummy_func(
         // names the dict the specialiser saw.  Builtins can be any object,
         // so _LOAD_GLOBAL_BUILTINS still checks the type before it reads
         // the keys.
-        leaf op(_GUARD_GLOBALS_VERSION, (globals_version/1 --)) {
+        leaf op(_GUARD_GLOBALS_VERSION, (globals_version/1 --))
+            effects(reads) exits(next, deopt) paths(globals: keys_version(globals_version))
+        {
             PyDictObject *dict = (PyDictObject *)GLOBALS();
             PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
             DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version);
@@ -4723,6 +4725,7 @@ dummy_func(
                 (callable, self_or_null, unused[oparg]
                  -- callable, self_or_null, unused[oparg]))
             effects(runs_python) exits(next, raise) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+            state(call_state -- call_state)
         {
             #if ENABLE_SPECIALIZATION
             {
@@ -4980,15 +4983,21 @@ dummy_func(
             _CHECK_FUNCTION_EXACT_ARGS +
             _CALL_PY_GENERATOR;
 
-        op(_GUARD_NOS_NULL, (null, unused -- null, unused)) {
+        op(_GUARD_NOS_NULL, (null, unused -- null, unused))
+            effects() exits(next, miss) state(call_state -- call_state: self(absent))
+        {
             EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
 
-        op(_GUARD_CALL_SELF_PRESENT, (unused, unused -- unused, unused)) {
+        op(_GUARD_CALL_SELF_PRESENT, (unused, unused -- unused, unused))
+            effects() exits(next, miss) state(call_state -- call_state: self(present))
+        {
             EXIT_IF(!(call_state & CALL_SELF_PRESENT));
         }
 
-        op(_GUARD_THIRD_NULL, (null, unused, unused -- null, unused, unused)) {
+        op(_GUARD_THIRD_NULL, (null, unused, unused -- null, unused, unused))
+            effects() exits(next, miss) state(call_state -- call_state: self(absent))
+        {
             EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
 

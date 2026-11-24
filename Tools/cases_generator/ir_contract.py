@@ -100,12 +100,12 @@ FACT_KIND = {
     "type_slot": "TYPE_SLOT", "class_version": "CLASS_VERSION",
     "func_version": "FUNC_VERSION", "argcount": "ARGCOUNT", "vectorcall": "VECTORCALL",
     "call_flags": "CALL_FLAGS", "ascii": "ASCII", "no_managed_dict": "NO_MANAGED_DICT",
-    "unique": "UNIQUE",
+    "unique": "UNIQUE", "self": "SELF",
 }
 VOCABULARY_OF_KIND = {v: k for k, v in FACT_KIND.items()}
 FACTS_WITH_ARGUMENT = frozenset(("exact", "type_version", "shape", "keys_version", "length",
                                  "in_bounds", "is", "subtype", "not_subtype", "not_exact",
-                                 "type_flag", "type_slot"))
+                                 "type_flag", "type_slot", "self"))
 # The call-shape kinds take a value where the guard names one
 FACTS_WITH_OPTIONAL_ARGUMENT = frozenset(("class_version", "func_version", "argcount",
                                           "vectorcall", "call_flags"))
@@ -119,6 +119,11 @@ HEAP_FACTS = frozenset(("type_version", "has_values", "shape", "keys_version", "
 # value, any publication and any reentry, within the uop, and are never
 # exported (F1)
 SITE_FACTS = frozenset(("unique",))
+# Facts of a handler's state (a STATE row's item, call_state): they live
+# for the handler's run, and only a declared write of the item kills them;
+# heap kills and reentry do not (item 2 of G0a4, V8's implicit operands)
+STATE_FACTS = frozenset(("self",))
+STATE_ARGS = {"self": ("present", "absent")}
 NUMBER_TYPES = ("PyLong_Type", "PyFloat_Type")
 
 
@@ -252,7 +257,7 @@ def _assumptions(words: list[str], where: Token | None
 
 COMPONENTS_HEADER = ROOT / "Include/internal/pycore_ir_components.h"
 ROW_KINDS = ("PRIMITIVE", "HELPER", "ROUTINE", "MACRO", "INTRINSIC", "DESTRUCTOR", "FIELD",
-             "CONSTANT", "SLOT")
+             "CONSTANT", "SLOT", "STATE")
 RESULT_SHAPES = ("NONE", "SCALAR", "VIEW", "PATH", "MEASURE", "TEST", "CONTEXT",
                  "VALUE", "VALUE_OR_NULL", "STATUS", "GUARD", "HOME", "SLOT", "CASES")
 # The failure value of a STATUS result: the int compares to 0 so
@@ -389,6 +394,10 @@ class Row:
     # SLOW(h): a VALUE_OR_NULL result is NULL only when the slow-path
     # helper h fails; the fast path cannot fail
     slow: str = ""
+    # STATE: per bit, (bit, facts where it is set, facts where it is clear),
+    # and the macro of the handler's word that initializes the item
+    bits: tuple[tuple[str, frozenset, frozenset], ...] = ()
+    init: str = ""
 
     def new_owner(self) -> bool:
         "whether a call returns a value that its caller must release"
@@ -588,9 +597,35 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
         struct, name, ctype, on, result, effects = fields
         if _inner(on, "ON") is None:
             raise ValueError("expected ON(path)")
+        # ON(globals | builtins): a field of the pointers along either path
+        paths = "|".join(w.strip() for w in _inner(on, "ON").split("|"))
         return Row(kind, f"{struct}.{name}", ctype, result=_parse_result(result),
                    effects=_parse_names(effects, "EFFECTS", EFFECTS),
-                   struct=struct, field=name, on=_inner(on, "ON").strip())
+                   struct=struct, field=name, on=paths)
+    if kind == "STATE":
+        # A handler's state item, an implicit operand (V8's implicit register
+        # operands): its C type, the facts its bits state, its initializer
+        if len(fields) != 4 or _inner(fields[2], "BITS") is None \
+                or _inner(fields[3], "INIT") is None:
+            raise ValueError("STATE(name, ctype, BITS(BIT: set facts | clear facts, ...), "
+                             "INIT(macro))")
+        bits = []
+        for part in _split_text(_inner(fields[2], "BITS")):
+            bit, _, facts = part.partition(":")
+            set_, _, clear = facts.partition("|")
+            parsed = [frozenset(parse_fact(w, None) for w in _split_words(side))
+                      for side in (set_, clear)]
+            for f in parsed[0] | parsed[1]:
+                if f.kind not in STATE_FACTS or f.arg not in STATE_ARGS[f.kind]:
+                    raise ValueError(f"{f} is no fact of a handler's state "
+                                     f"({', '.join(sorted(STATE_FACTS))})")
+            if not re.fullmatch(r"\w+", bit.strip()):
+                raise ValueError(f"`{bit.strip()}` is no bit macro")
+            bits.append((bit.strip(), parsed[0], parsed[1]))
+        init = _inner(fields[3], "INIT").strip()
+        if not re.fullmatch(r"\w+", init):
+            raise ValueError("INIT(macro): a macro of the handler's word")
+        return Row(kind, fields[0].strip(), fields[1].strip(), bits=tuple(bits), init=init)
     if kind == "CONSTANT":
         # A static immortal value (V8's roots): its facts are the value's
         if len(fields) != 2:
@@ -826,6 +861,9 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
             check(f"{row.name}({call})", row.ret, row.name)
         elif row.kind == "CONSTANT":
             constants.append(row.name)
+        elif row.kind == "STATE":
+            for bit, _, _ in row.bits:
+                lines.append(f"static_assert(({bit}) != 0, \"{row.name}: {bit} is no bit\");")
     if constants:
         # A constant's compound literal holds an address, which is no constant
         # expression at file scope (GCC refuses it without optimization)
@@ -887,6 +925,16 @@ class Contract:
     # The feedback the body reads and writes through its callees, beyond its
     # cache operands: (read|write, field)
     feedback: frozenset[tuple[str, str]] = frozenset()
+    # state(item: required -- item: declared): the STATE items the body
+    # reads, the facts it requires of each at entry and those it declares
+    # at its next exit (item 2 of G0a4)
+    state: tuple[tuple[str, frozenset, frozenset], ...] = ()
+    # paths(path: facts): the facts the guards establish of a frame path,
+    # GLOBALS() or BUILTINS(), whose subject is the path's name
+    paths: tuple[tuple[str, frozenset], ...] = ()
+
+    def state_item(self, name: str) -> tuple[str, frozenset, frozenset] | None:
+        return next((i for i in self.state if i[0] == name), None)
 
     def input(self, name: str) -> Item | None:
         return next((i for i in self.inputs if i.name == name), None)
@@ -926,6 +974,70 @@ def _item(stack_item, modes: tuple[str, ...], where: Token) -> Item:
 _CONTRACTS: dict[int, tuple[Uop, Contract | None]] = {}
 
 
+def _clause_text(texts: list[str]) -> str:
+    return re.sub(r"\s*([():|])\s*", r"\1", " ".join(texts)).replace(":", ": ")
+
+
+def _named_facts(uop: Uop, part: str, where: Token) -> tuple[str, frozenset]:
+    name, _, words = part.partition(":")
+    name = name.strip()
+    if not re.fullmatch(r"\w+", name):
+        raise analysis_error(f"{uop.name}: `{part.strip()}` is no `item: facts`", where)
+    return name, frozenset(parse_fact(w, where) for w in _split_words(words))
+
+
+def parse_state(uop: Uop, texts: list[str] | None, where: Token
+                ) -> tuple[tuple[str, frozenset, frozenset], ...]:
+    """`state(call_state: self(absent) -- call_state: self(present))`: each
+    item names a STATE row and appears on both sides; its facts are the
+    row's (a handler's state)"""
+    if texts is None:
+        return ()
+    sides = _clause_text(texts).split("--")
+    if len(sides) != 2:
+        raise analysis_error(f"{uop.name}: state(required -- declared) has one `--`", where)
+    required, declared = ({n: f for n, f in (_named_facts(uop, p, where)
+                                             for p in _split_text(side) if p.strip())}
+                          for side in sides)
+    if set(required) != set(declared):
+        raise analysis_error(f"{uop.name}: a state item appears on both sides of `--`", where)
+    table = rows()
+    items = []
+    for name in required:
+        row = table.get(name)
+        if row is None or row.kind != "STATE":
+            raise analysis_error(f"{uop.name}: state({name}) names no STATE row", where)
+        for f in required[name] | declared[name]:
+            if f.kind not in STATE_FACTS:
+                raise analysis_error(f"{uop.name}: {f} is no fact of a handler's state "
+                                     f"({', '.join(sorted(STATE_FACTS))})", where)
+        items.append((name, required[name], declared[name]))
+    return tuple(items)
+
+
+# The frame paths whose facts a uop may declare: the PATH rows without
+# arguments (from the frame, which the activation does not replace)
+def parse_paths(uop: Uop, texts: list[str] | None, where: Token
+                ) -> tuple[tuple[str, frozenset], ...]:
+    """`paths(globals: keys_version(v))`: facts of a frame path, with heap
+    lifetime, whose subject in the record is the path's name"""
+    if texts is None:
+        return ()
+    frame_paths = {r.result.measure for r in rows().values()
+                   if r.result.shape == "PATH" and not r.args}
+    items = []
+    for part in _split_text(_clause_text(texts)):
+        name, facts = _named_facts(uop, part, where)
+        if name not in frame_paths:
+            raise analysis_error(f"{uop.name}: paths({name}) names no frame path "
+                                 f"({', '.join(sorted(frame_paths))})", where)
+        for f in facts:
+            if f.kind not in HEAP_FACTS:
+                raise analysis_error(f"{uop.name}: {f} of the path {name} is no heap fact", where)
+        items.append((name, facts))
+    return tuple(items)
+
+
 def contract_of(uop: Uop) -> Contract | None:
     "uop's declared contract, or None if it declares none"
     if id(uop) in _CONTRACTS:
@@ -954,7 +1066,9 @@ def contract_of(uop: Uop) -> Contract | None:
                                      "assumption is of a value that reaches the handler "
                                      "(F7), and an output's facts are shown", where)
         feedback = parse_feedback(uop.clauses.get("feedback", ()), where)
-        contract = Contract(inputs, outputs, effects, exits, feedback)
+        state = parse_state(uop, uop.clauses.get("state"), where)
+        paths = parse_paths(uop, uop.clauses.get("paths"), where)
+        contract = Contract(inputs, outputs, effects, exits, feedback, state, paths)
     # The uop is kept with its contract, so that its id is not reused
     _CONTRACTS[id(uop)] = (uop, contract)
     return contract
@@ -1406,7 +1520,17 @@ class Views:
         tokens = _unwrap(tokens, self.table)
         if len(tokens) == 1:
             return None if tokens[0] in self.unknown else self.paths.get(tokens[0])
+        if len(tokens) >= 3 and tokens[-2] == "->":
+            # A field that holds a pointer along a further path
+            # (globals->ma_keys)
+            found = self.field(tokens)
+            if found is not None and found[0].result.shape == "PATH":
+                return found[1], found[0].result.measure
+            return None
         call = _call_of(tokens, self.table)
+        if call is not None and call[0].result.shape == "PATH" and not call[0].args:
+            # A frame path (GLOBALS()): its subject is the path's name
+            return call[0].result.measure, call[0].result.measure
         if call is not None and call[0].result.shape == "PATH" and call[1]:
             arg = _unwrap(call[1][0], self.table)
             name = (arg[0] if len(arg) == 1 and arg[0] in self.caches
@@ -1425,7 +1549,7 @@ class Views:
         if path is None:
             return None
         row = next((r for r in self.table.values() if r.kind == "FIELD"
-                    and r.field == tokens[-1] and r.on == path[1]), None)
+                    and r.field == tokens[-1] and path[1] in r.on.split("|")), None)
         return (row, path[0]) if row is not None else None
 
 
@@ -1543,6 +1667,19 @@ def _bind_facts(facts: frozenset[VFact], args: list[list[str]],
     return frozenset(bound)
 
 
+def state_bit(cond: list[str], table: dict[str, Row]
+              ) -> tuple[str, frozenset, frozenset] | None:
+    """`call_state & CALL_SELF_PRESENT`: a STATE item's bit, with the facts
+    where it is set and where it is clear"""
+    if len(cond) != 3 or cond[1] != "&":
+        return None
+    row = table.get(cond[0])
+    if row is None or row.kind != "STATE":
+        return None
+    found = next((b for b in row.bits if b[0] == cond[2]), None)
+    return (row.name, found[1], found[2]) if found else None
+
+
 def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
                     holds: bool) -> tuple[Facts, str] | None:
     """The facts that hold of the names where cond has the value holds, and
@@ -1564,6 +1701,10 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
     if cond[:1] == ["!"]:
         return condition_facts(cond[1:], views, table, not holds)
     cond = _unwrap(cond, table)
+    bit = state_bit(cond, table)
+    if bit is not None:
+        name, set_, clear = bit
+        return {name: set_ if holds else clear}, ""
     field = views.field(cond)
     if field is not None and field[0].result.shape == "TEST":
         true, false = field[0].result.tests[0]
@@ -1780,6 +1921,8 @@ class OwnershipWalk:
         facts = {n: implied(i.facts | {a.fact for a in i.assumed}
                             | (set() if i.nullable else {NONNULL}))
                  for n, i in self.declared.items()}
+        for name, required, _ in self.contract.state:
+            facts[name] = implied(required) - {NONNULL}
         state = _State({n: HELD for n in self.declared}, facts)
         state.arrays = {o.name: UNWRITTEN for o in self.contract.outputs
                         if o.array and o.mode == "owned"}
@@ -2004,6 +2147,25 @@ class OwnershipWalk:
             return self.join([self.stmt(stmt.body, state.copy()), state])
         assert isinstance(stmt, SimpleStmt)
         return self.simple(fold_fields(stmt.contents, self.structs), state)
+
+    def write_state(self, toks: list[Token], texts: list[str], state: _State) -> None:
+        """A declared write of a STATE item kills its facts; `|= BIT | ...`
+        then states each bit set, `&= ~BIT` it clear"""
+        name, op = texts[0], texts[1]
+        row = self.table[name]
+        rhs = _strip(texts[2:-1] if texts[-1] == ";" else texts[2:])
+        facts: set[VFact] = set()
+        bits = {b[0]: b for b in row.bits}
+        if op == "|=":
+            for term in _split(rhs, "|"):
+                term = _strip(term)
+                if len(term) == 1 and term[0] in bits:
+                    facts |= bits[term[0]][1]
+        elif op == "&=" and len(rhs) == 2 and rhs[0] == "~" and rhs[1] in bits:
+            facts |= bits[rhs[1]][2]
+        state.facts[name] = frozenset(
+            f for f in state.facts.get(name, frozenset())
+            if f.kind not in STATE_FACTS) | facts
 
     def owes_nothing(self, facts: frozenset) -> bool:
         "whether a value with facts is inline or a CONSTANT row's (V8's roots)"
@@ -2373,6 +2535,9 @@ class OwnershipWalk:
             return state
         if head == "DISPATCH_SAME_OPARG":
             return None
+        if self.contract.state_item(head) is not None and texts[1:2] in (["|="], ["&="], ["="]):
+            self.write_state(toks, texts, state)
+            return state
         if head in self.table and "terminal" in IR_MARKER_EFFECTS.get(head, ()):
             # A terminal marker leaves on its row's exits, after its
             # arguments' modes have taken what they say; it never returns
@@ -3006,6 +3171,57 @@ def check_guard_facts(uop: Uop, contract: Contract, walk: OwnershipWalk) -> None
                 f"of `{source}`, which `{out.name}` does not declare", uop.body.open)
 
 
+def check_state_facts(uop: Uop, contract: Contract, walk: OwnershipWalk) -> None:
+    """V9 for a handler's state and the frame paths: what holds of each at
+    the next exit is what the uop declares there"""
+    items = [(n, req, decl) for n, req, decl in contract.state] + \
+            [(n, frozenset(), decl) for n, decl in contract.paths]
+    states = {n for n, _, _ in contract.state}
+    for name, required, declared in items:
+        live = walk.exported(name) - {NONNULL}
+        if name in states:
+            live = frozenset(f for f in live if f.kind in STATE_FACTS)
+        declared, required = implied(declared) - {NONNULL}, implied(required) - {NONNULL}
+        extra = declared - live
+        if extra and walk.exit is not None:
+            raise analysis_error(
+                f"{uop.name}: `{name}` is declared {', '.join(sorted(map(str, extra)))}, "
+                "which nothing establishes on every path to next", uop.body.open)
+        missing = live - declared - required
+        if missing:
+            raise analysis_error(
+                f"{uop.name}: the body establishes {', '.join(sorted(map(str, missing)))} "
+                f"of `{name}`, which the uop does not declare", uop.body.open)
+    # A frame path's facts that the body establishes are declared
+    if walk.exit is not None:
+        frame_paths = {r.result.measure for r in walk.table.values()
+                       if r.result.shape == "PATH" and not r.args}
+        for name in sorted(frame_paths - {n for n, _ in contract.paths}):
+            live = walk.exported(name) - {NONNULL}
+            if live:
+                raise analysis_error(
+                    f"{uop.name}: the guards establish {', '.join(sorted(map(str, live)))} "
+                    f"of the frame path `{name}`, which paths(...) does not declare",
+                    uop.body.open)
+
+
+def check_state_reads(uop: Uop, contract: Contract | None, table: dict[str, Row]) -> None:
+    """A STATE item is read only by a uop whose state(...) clause declares
+    it, and never addressed: its writes are the declared ones"""
+    tokens = _tokens(uop)
+    for i, t in enumerate(tokens):
+        row = table.get(t.text)
+        if row is None or row.kind != "STATE":
+            continue
+        if i and tokens[i - 1].text == "&" and (
+                i < 2 or not re.fullmatch(r"\w+|\)|\]", tokens[i - 2].text)):
+            raise analysis_error(f"{uop.name}: `&{t.text}` addresses a handler's state, "
+                                 "whose writes must be the declared ones", t)
+        if contract is None or contract.state_item(t.text) is None:
+            raise analysis_error(f"{uop.name}: reads `{t.text}`, a handler's state, which "
+                                 "no state(...) clause declares", t)
+
+
 def check_identities(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
     """is(K) names a CONSTANT row's value, which is not NULL (that is
     `null`), in the uop's declaration and in the rows it calls"""
@@ -3112,6 +3328,7 @@ def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None 
     if contract is None or (id(uop), implicit_guards) in _VERIFIED:
         return
     check_slots(uop, table)
+    check_state_reads(uop, contract, table)
     check_fact_subjects(uop, contract)
     check_assumed_results(uop, table)
     check_preprocessor(uop)
@@ -3128,6 +3345,7 @@ def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None 
     walk = walk_of(uop, table)
     check_exits(uop, contract, table, implicit_guards)
     check_guard_facts(uop, contract, walk)
+    check_state_facts(uop, contract, walk)
     if table is _ROWS:
         _VERIFIED.add((id(uop), implicit_guards))
 
@@ -3201,7 +3419,23 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
     # Whether the stack's depth is known: past an array of unknown size the
     # fact walk (V8) stops, and restartability and the uops' own checks go on
     known = True
+    # The facts of each STATE item (call_state): at entry the word's, which
+    # no uop has shown; a uop that declares the item requires its facts and
+    # leaves those it declares.  Neither heap kills nor reentry touch them
+    state_facts: dict[str, frozenset[VFact]] = {}
     for index, (part, contract) in enumerate(zip(parts, contracts)):
+        for name, required, declared in contract.state:
+            missing = implied(required) - {NONNULL} - state_facts.get(name, frozenset())
+            if missing:
+                raise analysis_error(
+                    f"{inst.name}: {part.name} requires "
+                    f"{', '.join(sorted(map(str, missing)))} of the handler's `{name}`, "
+                    "which nothing before it establishes", inst.where)
+            texts = [t.text for t in _tokens(part)]
+            writes = any(t == name and texts[i + 1:i + 2] in (["="], ["|="], ["&="])
+                         for i, t in enumerate(texts))
+            kept = frozenset() if writes else state_facts.get(name, frozenset())
+            state_facts[name] = kept | (implied(declared) - {NONNULL})
         bound: dict[str, int] = {}
         for item in reversed(contract.inputs):
             value = pop(item) if known else None
@@ -3382,6 +3616,10 @@ def _stated_facts(cond: list[str], views: Views, table: dict[str, Row],
     order of the condition and their arguments, without implications"""
     found = condition_facts(cond, views, table, holds) or ({}, "")
     result: dict[str, list[VFact]] = {}
+    # The bits of STATE items, `call_state & CALL_SELF_PRESENT`
+    for name, facts in found[0].items():
+        if name in table and table[name].kind == "STATE":
+            result[name] = sorted(f for f in facts if f.kind in STATE_FACTS)
     for tkn_text, args in _calls_in_texts(cond):
         row = table.get(tkn_text)
         if row is None:

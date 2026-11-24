@@ -1564,6 +1564,135 @@ class VerifierTests(unittest.TestCase):
                      r"`action` is called, but `d -> action` is no FIELD that declares "
                      r"the SLOT it holds")
 
+    # A handler's state (call_state) and frame paths (G0a4 item 2)
+
+    def test_state_rows(self):
+        row = self.table["call_state"]
+        self.assertEqual((row.kind, row.ret, row.init), ("STATE", "int", "IR_CALL_SELF_STATE"))
+        self.assertEqual(row.bits, (("CALL_SELF_PRESENT",
+                                     frozenset({ir_contract.VFact("self", "present")}),
+                                     frozenset({ir_contract.VFact("self", "absent")})),))
+        self.assertIn('static_assert((CALL_SELF_PRESENT) != 0, '
+                      '"call_state: CALL_SELF_PRESENT is no bit");',
+                      ir_contract.component_checks(self.table))
+        for bad, message in [
+                ("STATE(spam, int, BITS(SPAM: null | self(absent)), INIT(SPAM_INIT))",
+                 r"null is no fact of a handler's state"),
+                ("STATE(spam, int, BITS(SPAM: self(maybe) | self(absent)), INIT(SPAM_INIT))",
+                 r"self\(maybe\) is no fact of a handler's state"),
+                ("STATE(spam, int, BITS(SPAM: self(present) | self(absent)))",
+                 r"STATE\(name, ctype, BITS")]:
+            with self.subTest(bad=bad):
+                with self.assertRaisesRegex(SyntaxError, message):
+                    ir_contract.parse_rows(bad)
+
+    def test_the_generator_initializes_the_state_as_its_row_declares(self):
+        source = (Path(__file__).resolve().parents[2] / "Python"
+                  / "generated_ir_cases.c.h").read_text()
+        self.assertIn("int call_state = IR_CALL_SELF_STATE(ir_word);", source)
+
+    def test_guards_state_facts_of_call_state(self):
+        # _GUARD_NOS_NULL and _GUARD_CALL_SELF_PRESENT
+        source = """
+            op(_OP, (null, unused -- null, unused)) effects() exits(next, miss)
+                %s
+            {
+                EXIT_IF(%s);
+            }
+        """
+        absent = "state(call_state -- call_state: self(absent))"
+        present = "state(call_state -- call_state: self(present))"
+        bit = "call_state & CALL_SELF_PRESENT"
+        self.verify(source % (absent, bit))
+        self.verify(source % (present, f"!({bit})"))
+        self.refuses(source % (present, bit),
+                     r"`call_state` is declared self\(present\), which nothing establishes")
+        self.refuses(source % ("state(call_state -- call_state)", bit),
+                     r"the body establishes self\(absent\) of `call_state`, which the uop "
+                     r"does not declare")
+        # An undeclared read, and an address
+        self.refuses(source % ("", bit),
+                     r"reads `call_state`, a handler's state, which no state\(...\) clause "
+                     r"declares")
+        self.refuses(source.replace("EXIT_IF(%s);", "int *p = &call_state;\n(void)p;\nEXIT_IF(%s);")
+                     % (absent, bit), r"`&call_state` addresses a handler's state")
+        self.refuses(source % ("state(spam -- spam)", bit), r"state\(spam\) names no STATE row")
+        self.refuses(source % ("state(call_state -- call_state: exact(PyLong_Type))", bit),
+                     r"exact\(PyLong_Type\) is no fact of a handler's state")
+
+    def test_a_declared_write_of_the_state(self):
+        # _INIT_CALL_BOUND_METHOD_EXACT_ARGS: self(absent) to self(present)
+        source = """
+            op(_OP, (x: object -- x: object)) effects(%s) exits(next)
+                state(call_state: self(absent) -- call_state: %s)
+            {
+                assert(!(call_state & CALL_SELF_PRESENT));
+                %s
+            }
+        """
+        write = "call_state |= CALL_SELF_PRESENT | CALL_EXPANDED;"
+        self.verify(source % ("", "self(present)", write))
+        self.refuses(source % ("", "self(absent)", write),
+                     r"`call_state` is declared self\(absent\), which nothing establishes")
+        # Heap kills leave the state's facts
+        self.verify(source % ("writes", "self(absent)",
+                              "spam_write(PyValue_AsKnownObjectBorrow(x));"))
+
+    def test_a_handler_requires_its_state_facts(self):
+        source = """
+            op(_GUARD, (x: object -- x: object)) effects() exits(next, miss)
+                state(call_state -- call_state: self(absent))
+            {
+                EXIT_IF(call_state & CALL_SELF_PRESENT);
+            }
+            op(_KILL, (x: object -- x: object)) effects(writes) exits(next) {
+                spam_write(PyValue_AsKnownObjectBorrow(x));
+            }
+            op(_NOTHING, (x -- x)) effects() exits(next) {
+            }
+            op(_INIT, (x -- x)) effects() exits(next)
+                state(call_state: self(absent) -- call_state: self(present))
+            {
+                call_state |= CALL_SELF_PRESENT;
+            }
+            macro(OP) = %s;
+        """
+        self.verify(source % "_GUARD + _KILL + _INIT")
+        self.refuses(source % "_NOTHING + _INIT",
+                     r"OP: _INIT requires self\(absent\) of the handler's `call_state`, which "
+                     r"nothing before it establishes")
+        self.refuses(source % "_GUARD + _INIT + _INIT",
+                     r"OP: _INIT requires self\(absent\)")
+
+    def test_facts_of_a_frame_path(self):
+        # _GUARD_GLOBALS_VERSION: the subject is the path
+        source = """
+            op(_OP, (globals_version/1 --)) effects(reads) exits(next, deopt) %s {
+                PyDictObject *dict = (PyDictObject *)%s();
+                PyDictKeysObject *keys = FT_ATOMIC_LOAD_PTR_ACQUIRE(dict->ma_keys);
+                DEOPT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(keys->dk_version) != globals_version);
+            }
+        """
+        self.verify(source % ("paths(globals: keys_version(globals_version))", "GLOBALS"))
+        self.verify(source % ("paths(builtins: keys_version(globals_version))", "BUILTINS"))
+        self.refuses(source % ("", "GLOBALS"),
+                     r"the guards establish keys_version\(globals_version\).* of the frame "
+                     r"path `globals`, which paths\(...\) does not declare")
+        self.refuses(source % ("paths(builtins: keys_version(globals_version))", "GLOBALS"),
+                     r"`builtins` is declared keys_version\(globals_version\)")
+        self.refuses(source % ("paths(spam: keys_version(globals_version))", "GLOBALS"),
+                     r"paths\(spam\) names no frame path")
+        self.refuses(source % ("paths(globals: exact(PyDict_Type))", "GLOBALS"),
+                     r"exact\(PyDict_Type\) of the path globals is no heap fact")
+        # A heap fact: an effect that kills heap facts kills it
+        self.refuses(source.replace("(globals_version/1 --)",
+                                    "(globals_version/1, x: object -- x: object)").replace(
+                         "effects(reads)", "effects(reads, writes)").replace(
+                         "!= globals_version);", "!= globals_version);\n"
+                         "                spam_write(PyValue_AsKnownObjectBorrow(x));")
+                     % ("paths(globals: keys_version(globals_version))", "GLOBALS"),
+                     r"`globals` is declared keys_version\(globals_version\)")
+
     # F15: the GIL product's preprocessor path
 
     def test_build_arms(self):

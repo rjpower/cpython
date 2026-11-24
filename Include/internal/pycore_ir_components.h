@@ -897,6 +897,13 @@
 
 /* Calls and frames */
 #define _PyIR_COMPONENTS_CALLS(PRIMITIVE, HELPER, MACRO) \
+    /* A call handler's state, its register local call_state (ceval.c): \
+     * an implicit operand of the call's uops, which a uop reads and writes \
+     * only through its state(...) clause.  CALL_SELF_PRESENT is set where \
+     * the call has a self operand; the generator initializes the local \
+     * from the word with IR_CALL_SELF_STATE (G0a4) */ \
+    STATE(call_state, int, BITS(CALL_SELF_PRESENT: self(present) | self(absent)), \
+          INIT(IR_CALL_SELF_STATE)) \
     /* seeded from a C macro (no static check), ir_records.CONTEXT_PREDICATES, ir_records.effect_sites */ \
     MACRO(IS_PEP523_HOOKED, \
         ARGS(scalar), CONTEXT("a PEP 523 frame evaluator may replace the call"), EFFECTS(reads), EXITS()) \
@@ -1223,6 +1230,12 @@
      * close kill (HOME) */ \
     MACRO(GLOBALS, ARGS(), PATH(globals), EFFECTS(reads), EXITS()) \
     MACRO(BUILTINS, ARGS(), PATH(builtins), EFFECTS(reads), EXITS()) \
+    /* A frame path's dict keys (pycore_dict.h), and their version: a \
+     * fact of the path, `paths(globals: keys_version(v))` (G0a4) */ \
+    FIELD(PyDictObject, ma_keys, PyDictKeysObject *, ON(globals | builtins), \
+          PATH(dict_keys), EFFECTS(reads)) \
+    FIELD(PyDictKeysObject, dk_version, uint32_t, ON(dict_keys), \
+          MEASURE(keys_version), EFFECTS(reads)) \
     MACRO(FRAME_CO_CONSTS, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
     MACRO(IR_SLOTS, ARGS(), HOME(base), EFFECTS(), EXITS()) \
     MACRO(GETLOCAL, ARGS(scalar), HOME, EFFECTS(), EXITS()) \

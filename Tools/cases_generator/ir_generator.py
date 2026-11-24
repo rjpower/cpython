@@ -7102,10 +7102,19 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
         # a kwargs operand), and what the handler did before the call
         # (call_state, in a register).  The operands are the words after the
         # head.
-        out.emit("int call_state = "
-                 + ("IR_CALL_KWARGS_STATE(ir_word)" if kind == "CALL_EX"
-                    else "IR_CALL_SELF_STATE(ir_word)") + ";\n")
-        out.emit("(void)call_state;\n")
+        # The local is the STATE row's (pycore_ir_components.h), initialized
+        # as the row declares; CALL_FUNCTION_EX's holds its kwargs operand
+        # instead, which no uop's state(...) clause reads
+        state = ir_contract.rows()["call_state"]
+        init = "IR_CALL_KWARGS_STATE" if kind == "CALL_EX" else state.init
+        if kind == "CALL_EX" and any(
+                (c := ir_contract.contract_of(part)) is not None and c.state_item(state.name)
+                for part in inst.parts if isinstance(part, Uop)):
+            raise analysis_error(f"{name}: a uop declares state({state.name}), whose "
+                                 "facts are the STATE row's, but CALL_FUNCTION_EX's "
+                                 f"{state.name} holds its kwargs operand", inst.where)
+        out.emit(f"{state.ret} {state.name} = {init}(ir_word);\n")
+        out.emit(f"(void){state.name};\n")
         if emitter.call_has_feedback:
             out.emit(f"uint32_t call_feedback = {field_expr(fmt.fb)};\n")
             out.emit("(void)call_feedback;\n")

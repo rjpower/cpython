@@ -403,6 +403,7 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_ProcessError), _P
               "_PyEval_ProcessError: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_EnterRecursivePy), int (*)(PyThreadState *)),
               "_Py_EnterRecursivePy: its C type differs from pycore_ir_components.h");
+static_assert((CALL_SELF_PRESENT) != 0, "call_state: CALL_SELF_PRESENT is no bit");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyFunction_GET_CODE), PyObject * (*)(PyObject *)),
               "PyFunction_GET_CODE: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyFunction_New), PyObject * (*)(PyObject *, PyObject *)),
@@ -529,6 +530,10 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_StoreSlice), int 
               "_PyEval_StoreSlice: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_atomic_load_uintptr_relaxed), uintptr_t (*)(const uintptr_t *)),
               "_Py_atomic_load_uintptr_relaxed: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(((PyDictObject *)0)->ma_keys), PyDictKeysObject *),
+              "PyDictObject.ma_keys: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(((PyDictKeysObject *)0)->dk_version), uint32_t),
+              "PyDictKeysObject.dk_version: its C type differs from pycore_ir_components.h");
 static inline void _PyIR_CheckConstants(void) {
 static_assert(__builtin_types_compatible_p(__typeof__(PyValue_None), PyValue),
               "PyValue_None: its C type differs from pycore_ir_components.h");

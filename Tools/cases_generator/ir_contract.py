@@ -202,7 +202,7 @@ COMPONENTS_HEADER = ROOT / "Include/internal/pycore_ir_components.h"
 ROW_KINDS = ("PRIMITIVE", "HELPER", "ROUTINE", "MACRO", "INTRINSIC", "DESTRUCTOR", "FIELD",
              "CONSTANT")
 RESULT_SHAPES = ("NONE", "SCALAR", "VIEW", "PATH", "MEASURE", "TEST", "CONTEXT",
-                 "VALUE", "VALUE_OR_NULL", "STATUS", "GUARD")
+                 "VALUE", "VALUE_OR_NULL", "STATUS", "GUARD", "HOME")
 # The failure value of a STATUS result: the int compares to 0 so
 STATUS_FAILURES = ("ZERO", "NEGATIVE", "NONZERO")
 BUILDS = ("gil", "free_threaded", "all")
@@ -307,9 +307,12 @@ def _parse_args(text: str | None) -> tuple[Arg, ...]:
 
 def _parse_result(text: str) -> Result:
     text = text.strip()
-    for shape in ("NONE", "SCALAR", "VIEW"):
+    for shape in ("NONE", "SCALAR", "VIEW", "HOME"):
         if text == shape:
             return Result(shape)
+    if text == "HOME(base)":
+        # The base of the frame's homes, fixed for the activation (F18)
+        return Result("HOME", measure="base")
     if (inner := _inner(text, "PATH")) is not None:
         return Result("PATH", measure=inner.strip())
     if (inner := _inner(text, "STATUS")) is not None:
@@ -518,6 +521,9 @@ def parse_rows(text: str, source: str = "pycore_ir_components.h") -> dict[str, R
             if k >= 0 and (k >= len(row.args)
                            or row.args[k].mode not in ("borrowed", "consumed", "taken")):
                 raise ValueError(f"null_iff({k}): argument {k} is no value argument")
+            if row.result.shape == "HOME" and row.effects & {"reads", "writes"}:
+                raise ValueError("a HOME row addresses a frame home, which is not the heap: "
+                                 "it declares no reads or writes")
             if row.result.shape == "GUARD" and not row.exits & {"miss", "deopt"}:
                 raise ValueError("GUARD(...) is the result of a row with a miss or deopt "
                                  "exit")
@@ -1753,12 +1759,28 @@ class OwnershipWalk:
                 if name is not None and facts:
                     state.add_facts(name, facts)
 
+    def home_store(self, texts: list[str], i: int) -> bool:
+        "Whether the assignment at texts[i] stores through a HOME row"
+        lhs = texts[:i]
+        start = next((j for j in range(len(lhs) - 1, -1, -1) if lhs[j] in (";", "{", "}")), -1)
+        call = _call_of(lhs[start + 1:], self.table)
+        return call is not None and call[0].result.shape == "HOME"
+
+    def kill_home_loads(self, state: _State) -> None:
+        "The values loaded from homes may be gone: their facts die (F18)"
+        for name, source in state.sources.items():
+            row = self.table.get(source)
+            if row is not None and row.result.shape == "HOME" and name not in state.owners:
+                state.facts[name] = frozenset()
+                state.pending.pop(name, None)
+
     def reenter(self, state: _State, why: str) -> None:
         """A reentry site: a value left in a home may be replaced there (and
         the old one freed), so its facts die now, and those of the locals
         that copy it"""
-        # A site fact (unique) dies at any reentry
+        # A site fact (unique) dies at any reentry, and a home load
         state.facts = {n: without_site_facts(f) for n, f in state.facts.items()}
+        self.kill_home_loads(state)
         for name, item in self.declared.items():
             if item.mode in UNOWNED:
                 state.rehomed.setdefault(name, why)
@@ -2011,7 +2033,8 @@ class OwnershipWalk:
                 covered[j] = True
             named = (re.fullmatch(r"\w+", lhs[-1]) is not None
                      and (len(lhs) < 2 or lhs[-2] not in ("->", ".", "*")))
-            element = lhs[-1] == "]" and _element_base(texts, e) in state.arrays
+            element = ((lhs[-1] == "]" and _element_base(texts, e) in state.arrays)
+                       or self.home_store(texts, e))
             # The values assigned: the right side, or the arms of `c ? a : b`
             # into a name, at their positions in texts
             spots = [(e + 1, len(expr))]
@@ -2068,6 +2091,14 @@ class OwnershipWalk:
             rhs = _strip(texts[i + 1:-1] if texts[-1] == ";" else texts[i + 1:])
         if lhs == "]":
             self.element_store(toks, texts, i, rhs, state)
+            return
+        if self.home_store(texts, i):
+            # A home write (F18): the value's obligation moves into the
+            # home, and what was loaded from a home dies
+            if len(rhs) == 1 and rhs[0] in state.owners:
+                self.take(rhs[0], state, toks[0], "moves into a home")
+                state.end_restart(f"the store of `{rhs[0]}` into a home")
+            self.kill_home_loads(state)
             return
         if i >= 2 and texts[i - 2] in ("->", ".") or not re.fullmatch(r"\w+", lhs):
             return      # a store through a pointer: V2's `writes`
@@ -2183,6 +2214,13 @@ class OwnershipWalk:
             return
         row, args = call
         result = row.result
+        if result.shape == "HOME":
+            # A home load: a borrowed copy of the home's value, whose facts
+            # die at a home write and a reentry
+            state.assign(lhs, frozenset(), None, row.name)
+            if out is not None:
+                state.end_restart(f"the assignment of the output `{lhs}`")
+            return
         if result.mode == "moved":
             # VALUE(moved(k)): argument k itself, whose obligation the row
             # took (calls); it is the local's now

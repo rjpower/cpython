@@ -172,6 +172,7 @@ EXTRA_ROWS = """
     MACRO(SPAM_NEEDS_UNIQUE, ARGS(borrowed unique), NONE, EFFECTS(writes), EXITS()) \
     MACRO(SPAM_GEN_OR_CORO, ARGS(borrowed), TEST(exact(PyGen_Type|PyCoro_Type)), \
           EFFECTS(), EXITS()) \
+    MACRO(SPAM_NEEDS_INT, ARGS(borrowed inline_int), NONE, EFFECTS(), EXITS()) \
     HELPER(SPAM_STEAL, PyValue, (PyObject *), ARGS(consumed object), VALUE(owned), \
            EFFECTS()) \
     MACRO(SPAM_GUARD_INT, ARGS(borrowed), GUARD(inline_int), EFFECTS(), EXITS(miss)) \
@@ -1286,6 +1287,32 @@ class VerifierTests(unittest.TestCase):
             #endif
             }
         """, r"`#elif` is a preprocessor form the walk does not model")
+
+    # F18: a frame home is not the heap
+
+    def test_homes_are_their_own_location(self):
+        # _LOAD_FAST: a home load reads no heap
+        source = """
+            op(_OP, (x: %s -- )) effects() exits(next) {
+                PyValue v = GETLOCAL(oparg);
+                if (PyValue_IsInlineInt(v)) {
+                    %s
+                    SPAM_NEEDS_INT(v);
+                }
+                %s
+            }
+        """
+        self.verify(source % ("consumed inline", "", "DEAD(x);"))
+        # A home write kills what was loaded from a home
+        self.refuses(source % ("consumed", "GETLOCAL(oparg + 1) = x;", ""),
+                     r"passes `v` to SPAM_NEEDS_INT, which requires .*inline_int.* of it")
+        # A store into a home moves an owner there
+        self.refuses(source % ("borrowed", "GETLOCAL(oparg + 1) = x;", ""),
+                     r"moves into a home `x`, declared borrowed, which it does not own")
+        with self.assertRaisesRegex(SyntaxError, r"a HOME row addresses a frame home, which "
+                                                 r"is not the heap"):
+            ir_contract.parse_rows("#define X(PRIMITIVE, HELPER, MACRO) "
+                                   "MACRO(SPAM, ARGS(scalar), HOME, EFFECTS(reads), EXITS())")
 
     # F2: a row's guard and the facts on its return
 

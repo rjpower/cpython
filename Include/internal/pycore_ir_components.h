@@ -36,7 +36,9 @@
  * obligation: TAKE),
  * VALUE_OR_NULL(mode facts) (NULL means raised), STATUS(ZERO | NEGATIVE |
  * NONZERO) (the failure value of an int status: raised, and the `out`
- * arguments unwritten).
+ * arguments unwritten), GUARD(facts per argument) (a row with a miss or
+ * deopt exit: the facts on its normal return), HOME (a frame home:
+ * GETLOCAL) and HOME(base) (the base of the homes: IR_SLOTS).
  * EFFECTS: reads writes allocates raises releases runs_python polls
  * switches_frame.  A `releases` may run a finalizer, which may run Python
  * and write the frame's homes (FrameLocalsProxy).
@@ -405,12 +407,16 @@
     /* Frame fields of Python/ceval_macros.h: GLOBALS() is frame->f_globals, \
      * BUILTINS() frame->f_builtins, FRAME_CO_CONSTS the code object's \
      * constants, IR_SLOTS() frame->base (an address, fixed for the \
-     * activation), GETLOCAL(i) the home IR_SLOTS()[i] */ \
+     * activation), GETLOCAL(i) the home IR_SLOTS()[i].  A home is not the \
+     * heap (design 1.3, 3.2): GETLOCAL addresses a home, which every use \
+     * in bytecodes.c indexes by oparg, and loads and stores through it \
+     * are home accesses, which a home write, a reentry and the skeleton's \
+     * close kill (HOME) */ \
     MACRO(GLOBALS, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
     MACRO(BUILTINS, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
     MACRO(FRAME_CO_CONSTS, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
-    MACRO(IR_SLOTS, ARGS(), SCALAR, EFFECTS(), EXITS()) \
-    MACRO(GETLOCAL, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    MACRO(IR_SLOTS, ARGS(), HOME(base), EFFECTS(), EXITS()) \
+    MACRO(GETLOCAL, ARGS(scalar), HOME, EFFECTS(), EXITS()) \
     MACRO(IR_C, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     MACRO(IR_D, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     MACRO(IR_HANDLER, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \

@@ -621,6 +621,7 @@ NON_ESCAPING_FUNCTIONS = (
     "native_vector_capture",
     "_PyShape_FindTransition",
     "PyCFunction_GET_FLAGS",
+    "_PyMethodDef_Convention",
     "PyCFunction_GET_FUNCTION",
     "PyCell_GetRef",
     "PyCell_New",

@@ -544,6 +544,12 @@ static_assert(__builtin_types_compatible_p(__typeof__(((PyTypeObject *)0)->tp_ve
               "PyTypeObject.tp_vectorcall: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(((PyModuleObject *)0)->md_dict), PyObject *),
               "PyModuleObject.md_dict: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(((PyCFunctionObject *)0)->m_ml), PyMethodDef *),
+              "PyCFunctionObject.m_ml: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(((PyMethodDescrObject *)0)->d_method), PyMethodDef *),
+              "PyMethodDescrObject.d_method: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(_PyMethodDef_Convention((PyMethodDef *)0)), _PyCallConvention),
+              "PyMethodDef.convention: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(((PyDictKeysObject *)0)->dk_version), uint32_t),
               "PyDictKeysObject.dk_version: its C type differs from pycore_ir_components.h");
 static inline void _PyIR_CheckConstants(void) {
@@ -4041,15 +4047,21 @@ ir_run_CALL_BUILTIN_FAST(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
-                if (flags != METH_FASTCALL
-                    && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE) {
+                _PyCallConvention conv =
+                _PyMethodDef_Convention(((PyCFunctionObject *)callable_o)->m_ml);
+                if (conv != _Py_CALL_FASTCALL && conv != _Py_CALL_VALUE
+                    && conv != _Py_CALL_VALUE_NOARGS && conv != _Py_CALL_VALUE_O) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
-                if ((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 1 : 0)) {
+                if (conv == _Py_CALL_VALUE_NOARGS && n != 0) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (conv == _Py_CALL_VALUE_O && n != 1) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -4122,9 +4134,9 @@ ir_run_CALL_BUILTIN_FAST_WITH_KEYWORDS(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
-                if (flags != (METH_FASTCALL | METH_KEYWORDS)
-                    && flags != (METH_VALUE | METH_KEYWORDS)) {
+                _PyCallConvention conv =
+                _PyMethodDef_Convention(((PyCFunctionObject *)callable_o)->m_ml);
+                if (conv != _Py_CALL_FASTCALL_KEYWORDS && conv != _Py_CALL_VALUE_KEYWORDS) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -4197,8 +4209,9 @@ ir_run_CALL_BUILTIN_O(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if ((PyCFunction_GET_FLAGS(callable_o) &
-                     _Py_METH_CALL_FLAGS) != METH_O) {
+                _PyCallConvention conv =
+                _PyMethodDef_Convention(((PyCFunctionObject *)callable_o)->m_ml);
+                if (conv != _Py_CALL_O) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5055,14 +5068,14 @@ ir_run_CALL_METHOD_DESCRIPTOR_FAST(
                 }
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-                if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                if (Py_TYPE(callable_o) != &PyMethodDescr_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
-                if (flags != METH_FASTCALL
-                    && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE) {
+                _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+                if (conv != _Py_CALL_FASTCALL && conv != _Py_CALL_VALUE
+                    && conv != _Py_CALL_VALUE_NOARGS && conv != _Py_CALL_VALUE_O) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5073,7 +5086,12 @@ ir_run_CALL_METHOD_DESCRIPTOR_FAST(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if ((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 2 : 1)) {
+                if (conv == _Py_CALL_VALUE_NOARGS && n != 1) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (conv == _Py_CALL_VALUE_O && n != 2) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5148,14 +5166,13 @@ ir_run_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS(
                 }
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-                if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                if (Py_TYPE(callable_o) != &PyMethodDescr_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
-                if (flags != (METH_FASTCALL | METH_KEYWORDS)
-                    && flags != (METH_VALUE | METH_KEYWORDS)) {
+                _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+                if (conv != _Py_CALL_FASTCALL_KEYWORDS && conv != _Py_CALL_VALUE_KEYWORDS) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5236,13 +5253,13 @@ ir_run_CALL_METHOD_DESCRIPTOR_NOARGS(
                 }
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-                if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                if (Py_TYPE(callable_o) != &PyMethodDescr_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if ((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
-                    METH_NOARGS) {
+                _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+                if (conv != _Py_CALL_NOARGS) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -5330,13 +5347,13 @@ ir_run_CALL_METHOD_DESCRIPTOR_O(
                 }
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-                if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                if (Py_TYPE(callable_o) != &PyMethodDescr_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if ((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
-                    METH_O) {
+                _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+                if (conv != _Py_CALL_O) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -20321,15 +20338,21 @@ static const _PyIRForm ir_handler_forms[512] = {
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
-                if (flags != METH_FASTCALL
-                    && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE) {
+                _PyCallConvention conv =
+                _PyMethodDef_Convention(((PyCFunctionObject *)callable_o)->m_ml);
+                if (conv != _Py_CALL_FASTCALL && conv != _Py_CALL_VALUE
+                    && conv != _Py_CALL_VALUE_NOARGS && conv != _Py_CALL_VALUE_O) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
                 int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
-                if ((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 1 : 0)) {
+                if (conv == _Py_CALL_VALUE_NOARGS && n != 0) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (conv == _Py_CALL_VALUE_O && n != 1) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -20398,9 +20421,9 @@ static const _PyIRForm ir_handler_forms[512] = {
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
-                if (flags != (METH_FASTCALL | METH_KEYWORDS)
-                    && flags != (METH_VALUE | METH_KEYWORDS)) {
+                _PyCallConvention conv =
+                _PyMethodDef_Convention(((PyCFunctionObject *)callable_o)->m_ml);
+                if (conv != _Py_CALL_FASTCALL_KEYWORDS && conv != _Py_CALL_VALUE_KEYWORDS) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -20469,8 +20492,9 @@ static const _PyIRForm ir_handler_forms[512] = {
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if ((PyCFunction_GET_FLAGS(callable_o) &
-                     _Py_METH_CALL_FLAGS) != METH_O) {
+                _PyCallConvention conv =
+                _PyMethodDef_Convention(((PyCFunctionObject *)callable_o)->m_ml);
+                if (conv != _Py_CALL_O) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -21060,14 +21084,14 @@ static const _PyIRForm ir_handler_forms[512] = {
                 }
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-                if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                if (Py_TYPE(callable_o) != &PyMethodDescr_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
-                if (flags != METH_FASTCALL
-                    && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE) {
+                _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+                if (conv != _Py_CALL_FASTCALL && conv != _Py_CALL_VALUE
+                    && conv != _Py_CALL_VALUE_NOARGS && conv != _Py_CALL_VALUE_O) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -21078,7 +21102,12 @@ static const _PyIRForm ir_handler_forms[512] = {
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if ((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 2 : 1)) {
+                if (conv == _Py_CALL_VALUE_NOARGS && n != 1) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
+                if (conv == _Py_CALL_VALUE_O && n != 2) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -21149,14 +21178,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 }
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-                if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                if (Py_TYPE(callable_o) != &PyMethodDescr_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
-                if (flags != (METH_FASTCALL | METH_KEYWORDS)
-                    && flags != (METH_VALUE | METH_KEYWORDS)) {
+                _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+                if (conv != _Py_CALL_FASTCALL_KEYWORDS && conv != _Py_CALL_VALUE_KEYWORDS) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -21233,13 +21261,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 }
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-                if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                if (Py_TYPE(callable_o) != &PyMethodDescr_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if ((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
-                    METH_NOARGS) {
+                _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+                if (conv != _Py_CALL_NOARGS) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
@@ -21323,13 +21351,13 @@ static const _PyIRForm ir_handler_forms[512] = {
                 }
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
                 PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-                if (!Py_IS_TYPE(method, &PyMethodDescr_Type)) {
+                if (Py_TYPE(callable_o) != &PyMethodDescr_Type) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                if ((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
-                    METH_O) {
+                _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+                if (conv != _Py_CALL_O) {
                     UPDATE_MISS_STATS(CALL);
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);

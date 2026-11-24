@@ -100,7 +100,7 @@ FACT_KIND = {
     "not_subtype": "NOT_SUBTYPE", "not_exact": "NOT_TYPE", "type_flag": "TYPE_FLAG",
     "type_slot": "TYPE_SLOT", "class_version": "CLASS_VERSION",
     "func_version": "FUNC_VERSION", "argcount": "ARGCOUNT", "vectorcall": "VECTORCALL",
-    "call_flags": "CALL_FLAGS", "ascii": "ASCII", "no_managed_dict": "NO_MANAGED_DICT",
+    "convention": "CONVENTION", "ascii": "ASCII", "no_managed_dict": "NO_MANAGED_DICT",
     "unique": "UNIQUE", "self": "SELF", "tagged_index": "TAGGED_INDEX",
     "encoding": "ENCODING",
 }
@@ -110,13 +110,13 @@ FACTS_WITH_ARGUMENT = frozenset(("exact", "type_version", "shape", "keys_version
                                  "type_flag", "type_slot", "self", "encoding"))
 # The call-shape kinds take a value where the guard names one
 FACTS_WITH_OPTIONAL_ARGUMENT = frozenset(("class_version", "func_version", "argcount",
-                                          "vectorcall", "call_flags"))
+                                          "vectorcall", "convention"))
 # Properties of mutable heap state: they die at every KILLS site (1.1).
 # not_exact(T) is one: a mutable class's membership can change
 HEAP_FACTS = frozenset(("type_version", "has_values", "shape", "keys_version", "length",
                         "in_bounds", "subtype", "not_subtype", "not_exact", "type_flag",
                         "type_slot", "class_version", "func_version", "argcount",
-                        "vectorcall", "call_flags", "no_managed_dict"))
+                        "vectorcall", "convention", "no_managed_dict"))
 # Facts of one site (refcount 1): they die at any count change of the
 # value, any publication and any reentry, within the uop, and are never
 # exported (F1)
@@ -155,7 +155,7 @@ class VFact:
 
     def record(self, subject: str) -> Fact:
         arg = self.arg
-        if self.kind == "exact":
+        if self.kind in ("exact", "convention"):
             arg = " | ".join(arg.split("|"))
         elif self.kind == "type_slot":
             arg = " == ".join(arg.split(","))
@@ -242,6 +242,11 @@ def implied(facts) -> frozenset[VFact]:
     facts = set(facts)
     if any(f.kind == "shape" for f in facts):
         facts.add(VFact("has_values"))
+    conventions = [f for f in facts if f.kind == "convention" and f.arg]
+    if len(conventions) > 1:
+        members = frozenset.intersection(*(frozenset(f.arg.split("|")) for f in conventions))
+        facts -= set(conventions)
+        facts.add(VFact("convention", "|".join(sorted(members))))
     kinds = word_kinds(facts)
     for e, (_, ty) in ENCODINGS.items():
         if kinds == {e} and ty:
@@ -285,7 +290,7 @@ def parse_fact(word: str, where: Token | None) -> VFact:
         raise analysis_error(message, where) if where else ValueError(message)
     kind, arg = m.group(1), m.group(2) or ""
     shape = {"exact": r"\w+(\|\w+)*", "encoding": r"\w+(\|\w+)*",
-             "type_slot": r"\w+,\w+"}.get(kind, r"\w+")
+             "convention": r"\w+(\|\w+)*", "type_slot": r"\w+,\w+"}.get(kind, r"\w+")
     if arg and not re.fullmatch(shape, arg):
         message = f"`{word}`: the argument of `{kind}` is {shape}"
         raise analysis_error(message, where) if where else ValueError(message)
@@ -293,6 +298,13 @@ def parse_fact(word: str, where: Token | None) -> VFact:
         message = (f"`{word}`: {', '.join(sorted(set(arg.split('|')) - set(WORD_KINDS)))} "
                    f"is no kind of word ({', '.join(WORD_KINDS)})")
         raise analysis_error(message, where) if where else ValueError(message)
+    if kind == "convention" and arg:
+        unknown = set(arg.split("|")) - call_conventions()
+        if unknown:
+            message = (f"`{word}`: {', '.join(sorted(unknown))} is no member of "
+                       "_PyCallConvention (pycore_call.h)")
+            raise analysis_error(message, where) if where else ValueError(message)
+        arg = "|".join(sorted(set(arg.split("|"))))
     if kind in FACTS_WITH_OPTIONAL_ARGUMENT:
         pass
     elif (kind in FACTS_WITH_ARGUMENT) != bool(arg):
@@ -1016,9 +1028,12 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
         elif row.kind == "FIELD":
             accessor = next((a for a, prefix in FIELD_ACCESSORS.items()
                              if row.field.startswith(prefix + ".")), None)
+            reader = next((r for r, f in FIELD_READERS.items() if f == row.field), None)
             if accessor is not None:
                 field = row.field.split(".", 1)[1]
                 check(f"{accessor}(({row.struct} *)0, {field})", row.ret, row.name)
+            elif reader is not None:
+                check(f"{reader}(({row.struct} *)0)", row.ret, row.name)
             else:
                 check(f"(({row.struct} *)0)->{row.field}", row.ret, row.name)
         elif row.kind == "PRIMITIVE":
@@ -1220,8 +1235,8 @@ def parse_state(uop: Uop, texts: list[str] | None, where: Token
 
 
 # The kinds of path from an input that name their fields: an input's
-# object, a pointer field of it, and dict keys reached from one
-INPUT_PATHS = frozenset(("object", "pointer"))
+# object, a pointer field of it, and a PyMethodDef reached from one
+INPUT_PATHS = frozenset(("object", "pointer", "method_def"))
 
 # The frame paths whose facts a uop may declare: the PATH rows without
 # arguments (from the frame, which the activation does not replace)
@@ -1416,6 +1431,22 @@ def struct_locals(tokens: list[Token], types: frozenset[str]) -> frozenset[str]:
 # and component_checks holds a FIELD row of `tp_value.f` to the accessor's
 # type rather than the storage's.
 FIELD_ACCESSORS = {"_PyType_VALUE_SLOT": "tp_value"}
+# Readers of a field that the struct does not store (item 2 of G0a5):
+# `_PyMethodDef_Convention(m)` reads `m->convention`, the masked flags.
+# component_checks holds the FIELD row to the reader's type
+FIELD_READERS = {"_PyMethodDef_Convention": "convention"}
+
+
+def call_conventions() -> frozenset[str]:
+    "The members of _PyCallConvention (Include/internal/pycore_call.h)"
+    if not _CONVENTIONS:
+        text = (ROOT / "Include/internal/pycore_call.h").read_text()
+        body = re.search(r"typedef enum \{(.*?)\} _PyCallConvention;", text, re.S)
+        _CONVENTIONS.update(re.findall(r"^\s*(_Py_CALL_\w+)\s*=", body.group(1), re.M))
+    return frozenset(_CONVENTIONS)
+
+
+_CONVENTIONS: set[str] = set()
 
 
 def fold_fields(tokens: list[Token], structs: frozenset[str]) -> list[Token]:
@@ -1423,12 +1454,22 @@ def fold_fields(tokens: list[Token], structs: frozenset[str]) -> list[Token]:
     `x.f`: the walk tracks a CASES result's fields as names (F6).  A typed
     accessor of a field, `_PyType_VALUE_SLOT(t, f)`, becomes the read
     `(t)->tp_value.f` (FIELD_ACCESSORS)"""
-    if not structs and not any(t.text in FIELD_ACCESSORS for t in tokens):
+    if not structs and not any(t.text in FIELD_ACCESSORS or t.text in FIELD_READERS
+                               for t in tokens):
         return tokens
     out: list[Token] = []
     i = 0
     while i < len(tokens):
         t = tokens[i]
+        if t.text in FIELD_READERS and i + 1 < len(tokens) and tokens[i + 1].text == "(":
+            def synth(text: str, at: Token) -> Token:
+                return Token(at.filename, at.kind, text, at.begin, at.end)
+            end = _close([x.text for x in tokens], i + 1)
+            out += [synth("(", tokens[i + 1]), *fold_fields(tokens[i + 2:end], structs),
+                    synth(")", tokens[end]), synth("->", t),
+                    synth(FIELD_READERS[t.text], t)]
+            i = end + 1
+            continue
         if t.text in FIELD_ACCESSORS and i + 1 < len(tokens) and tokens[i + 1].text == "(":
             texts = [x.text for x in tokens]
             end = _close(texts, i + 1)
@@ -1775,6 +1816,9 @@ class Views:
         # A cache operand roots paths too (a feedback descriptor's fields)
         self.caches = {c.name for c in uop.caches if c.name != "unused"}
         self.paths: dict[str, tuple[str, str]] = {}
+        # Locals bound once to a MEASURE field read, `conv = m->convention`:
+        # the read, which a comparison of the local states facts of
+        self.measures: dict[str, list[str]] = {}
         self.locals: set[str] = set()
         # Locals whose binding at a use the walk could not follow (they were
         # bound differently on paths that join): they stand for nothing
@@ -1794,6 +1838,10 @@ class Views:
             path = self.path(texts[i + 1:end])
             if path is not None:
                 self.paths.setdefault(texts[i - 1], path)
+                continue
+            read = self.field(texts[i + 1:end])
+            if read is not None and read[0].result.shape == "MEASURE":
+                self.measures[texts[i - 1]] = texts[i + 1:end]
                 continue
             inner = self.resolve(texts[i + 1:end], locals_=False)
             if inner is not None:
@@ -1852,6 +1900,8 @@ class Views:
         the read steps along an input path (item 1 of G0a5): p is the
         object of an input, or a pointer along such a path"""
         tokens = _unwrap(tokens, self.table)
+        if len(tokens) == 1 and tokens[0] in self.measures and tokens[0] not in self.unknown:
+            return self.field(self.measures[tokens[0]])
         if len(tokens) < 3 or tokens[-2] != "->":
             return None
         path = self.path(tokens[:-2])
@@ -1959,6 +2009,13 @@ def _intersection(found: list[Facts]) -> Facts:
         if all(t is not None for t in types) and not any(f.kind == "exact" for f in common):
             union = frozenset.union(*types)
             common = implied(common | {VFact("exact", "|".join(sorted(union)))})
+        # A calling convention joins by the union of the members, as the
+        # exact type does: `conv != A && conv != B` failing is A or B
+        members = [[f.arg for f in implied(f[n]) if f.kind == "convention" and f.arg]
+                   for f in found]
+        if all(members) and not any(f.kind == "convention" for f in common):
+            union = {m for ms in members for a in ms for m in a.split("|")}
+            common = implied(common | {VFact("convention", "|".join(sorted(union)))})
         # The kinds of word join by their union: NULL on one path and a
         # tagged index on another is encoding(null|tagged_index)
         union = frozenset.union(*(word_kinds(f[n]) for f in found))
@@ -2144,6 +2201,66 @@ def check_guard_conditions(uop: Uop, table: dict[str, Row]) -> None:
                     f"{uop.name}: the guard calls {tkn.text}, which may "
                     f"{', '.join(sorted(row.effects - {'reads'}))}; a guard's condition "
                     "may only read", tkn)
+
+
+# The spellings of a calling convention that a guard may not test: the
+# flags and their mask, which the reader and its members replace
+RAW_CALL_FLAGS = frozenset(("ml_flags", "_Py_METH_CALL_FLAGS", "PyCFunction_GET_FLAGS"))
+
+
+def check_convention_guards(uop: Uop, table: dict[str, Row]) -> None:
+    """Item 2 of G0a5: a guard tests a calling convention in one of two
+    fixed forms, on a local bound to the reader (`conv =
+    _PyMethodDef_Convention(m)`): `conv != M1 && ... && conv != Mk`, whose
+    failure is convention(M1|...|Mk), or an arity check `conv == M && ...`
+    whose other terms do not name it.  No `||`, no mask, no other
+    variable, and no member outside _PyCallConvention"""
+    views = Views(uop, table)
+    convs = {n for n, read in views.measures.items()
+             if (f := views.field(read)) is not None and f[0].result.measure == "convention"}
+    members = call_conventions()
+    for tkn, _ in body_calls(uop):
+        if tkn.text not in GUARDS:
+            continue
+        cond, _ = guard_condition(uop, tkn)
+        named = convs & set(cond)
+        if RAW_CALL_FLAGS & set(cond) or FIELD_READERS.keys() & set(cond):
+            raise analysis_error(
+                f"{uop.name}: the guard tests the call flags directly; bind "
+                "`_PyMethodDef_Convention(...)` to a local and compare it with "
+                "_PyCallConvention's members", tkn)
+        if not named:
+            continue
+        cond = _strip(cond)
+        if len(_split(cond, "||")) > 1:
+            raise analysis_error(
+                f"{uop.name}: the guard joins convention tests with `||`; write "
+                "`conv != M1 && ... && conv != Mk`", tkn)
+        terms = [_strip(t) for t in _split(cond, "&&")]
+        tests = []
+        for term in terms:
+            if not convs & set(term):
+                tests.append(None)
+                continue
+            if (len(term) != 3 or term[0] not in convs or term[1] not in ("!=", "==")
+                    or term[2] not in members):
+                raise analysis_error(
+                    f"{uop.name}: `{' '.join(term)}` is no comparison of a convention "
+                    "local with a member of _PyCallConvention (no mask, no other "
+                    "variable)", tkn)
+            tests.append(term)
+        if len(named) > 1:
+            raise analysis_error(
+                f"{uop.name}: the guard tests more than one convention local", tkn)
+        if all(t is not None and t[1] == "!=" for t in tests):
+            continue        # the convention guard
+        if sum(t is not None for t in tests) == 1 and next(
+                t for t in tests if t is not None)[1] == "==":
+            continue        # an arity check of one member
+        raise analysis_error(
+            f"{uop.name}: the guard mixes convention tests; write the convention "
+            "guard `conv != M1 && ... && conv != Mk`, or an arity check "
+            "`conv == M && ...` of one member", tkn)
 
 
 # ---------------------------------------------------------------------------
@@ -3857,6 +3974,7 @@ def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None 
     check_feedback(uop, contract, table)
     check_feedback_pointers(uop, table)
     check_guard_conditions(uop, table)
+    check_convention_guards(uop, table)
     check_identities(uop, contract, table)
     for tkn, _ in body_calls(uop):
         if tkn.text in GUARDS:
@@ -4180,6 +4298,14 @@ def _stated_facts(cond: list[str], views: Views, table: dict[str, Row],
             for f in sorted(found[0].get(name, ())):
                 if f.kind == row.result.measure and f not in result.get(name, []):
                     result.setdefault(name, []).append(f)
+    # Comparisons of a local bound to a MEASURE read, `conv != M`
+    for local in sorted(set(cond) & set(views.measures)):
+        read = views.field([local])
+        if read is None:
+            continue
+        for f in sorted(found[0].get(read[1], ())):
+            if f.kind == read[0].result.measure and f not in result.get(read[1], []):
+                result.setdefault(read[1], []).append(f)
     # Reads of FIELD rows, `p->field`
     for i, t in enumerate(cond):
         if t != "->" or i + 1 >= len(cond):

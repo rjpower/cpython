@@ -1256,6 +1256,16 @@
     FIELD(PyTypeObject, tp_vectorcall, vectorcallfunc, ON(object), PATH(pointer), \
           EFFECTS(reads)) \
     FIELD(PyModuleObject, md_dict, PyObject *, ON(object), PATH(object), EFFECTS(reads)) \
+    /* A builtin function's and a method descriptor's PyMethodDef, and its \
+     * calling convention, which _PyMethodDef_Convention reads: a fact of \
+     * the path, `paths(callable.d_method: convention(_Py_CALL_O))` (G0a5 \
+     * item 2) */ \
+    FIELD(PyCFunctionObject, m_ml, PyMethodDef *, ON(object), PATH(method_def), \
+          EFFECTS(reads)) \
+    FIELD(PyMethodDescrObject, d_method, PyMethodDef *, ON(object), PATH(method_def), \
+          EFFECTS(reads)) \
+    FIELD(PyMethodDef, convention, _PyCallConvention, ON(method_def), MEASURE(convention), \
+          EFFECTS(reads)) \
     FIELD(PyDictKeysObject, dk_version, uint32_t, ON(dict_keys), \
           MEASURE(keys_version), EFFECTS(reads)) \
     MACRO(FRAME_CO_CONSTS, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \

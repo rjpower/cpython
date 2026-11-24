@@ -1140,7 +1140,7 @@ class VerifierTests(unittest.TestCase):
                      "not_exact(PyList_Type)", "exact(PyGen_Type|PyCoro_Type)",
                      "type_flag(Py_TPFLAGS_HEAPTYPE)", "type_slot(tp_iter,PyObject_SelfIter)",
                      "class_version", "func_version(K)", "argcount", "vectorcall",
-                     "call_flags", "ascii", "no_managed_dict", "unique", "null"):
+                     "convention(_Py_CALL_NOARGS|_Py_CALL_O)", "ascii", "no_managed_dict", "unique", "null"):
             self.assertEqual(str(ir_contract.parse_fact(word, None)), word)
         for word, message in (("in_bounds", "needs an argument"),
                               ("exact(PyGen_Type|)", "the argument of `exact`"),
@@ -1633,6 +1633,74 @@ class VerifierTests(unittest.TestCase):
                 EXIT_IF(((PyMethodObject *)callable_o)->im_weakreflist != NULL);
             }
         """)
+
+    def test_calling_conventions(self):
+        # _GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST: a guard tests a local
+        # bound to the reader against _PyCallConvention's members, and the
+        # members it tests are a fact of the path callable.d_method
+        members = "_Py_CALL_FASTCALL|_Py_CALL_VALUE|_Py_CALL_VALUE_NOARGS|_Py_CALL_VALUE_O"
+        source = """
+            op(_OP, (callable: object, self_or_null, args[oparg]
+                     -- callable: exact(PyMethodDescr_Type), self_or_null, args[oparg]))
+                effects(reads) exits(next, miss)
+                %s
+            {
+                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+                PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
+                EXIT_IF(Py_TYPE(callable_o) != &PyMethodDescr_Type);
+                _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+                %s
+                int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
+                EXIT_IF(conv == _Py_CALL_VALUE_O && n != 2,
+                        "the arguments do not fit the value form's fixed arity");
+            }
+        """
+        guard = ("EXIT_IF(conv != _Py_CALL_FASTCALL && conv != _Py_CALL_VALUE\n"
+                 "        && conv != _Py_CALL_VALUE_NOARGS && conv != _Py_CALL_VALUE_O);")
+        self.verify(source % (f"paths(callable.d_method: convention({members}))", guard))
+        # The members are a set: their order in the declaration is free
+        self.verify(source % ("paths(callable.d_method: convention(_Py_CALL_VALUE_O|"
+                              "_Py_CALL_VALUE_NOARGS|_Py_CALL_VALUE|_Py_CALL_FASTCALL))",
+                              guard))
+        one = "EXIT_IF(conv != _Py_CALL_O);"
+        self.verify(source % ("paths(callable.d_method: convention(_Py_CALL_O))", one))
+        # A declared union that differs from the members tested
+        self.refuses(source % ("paths(callable.d_method: convention(_Py_CALL_FASTCALL))",
+                               guard),
+                     r"`callable.d_method` is declared convention\(_Py_CALL_FASTCALL\), "
+                     "which nothing establishes")
+        self.refuses(source % ("paths(callable.d_method: convention(_Py_CALL_O|"
+                               "_Py_CALL_NOARGS))", one),
+                     r"`callable.d_method` is declared convention\(_Py_CALL_NOARGS\|"
+                     r"_Py_CALL_O\), which nothing establishes")
+        # Established and not declared
+        self.refuses(source % ("", one),
+                     r"the guards establish convention\(_Py_CALL_O\) of the path "
+                     r"`callable.d_method`, which paths\(...\) does not declare")
+        # A member outside the enum
+        self.refuses(source % ("paths(callable.d_method: convention(_Py_CALL_SPAM))", one),
+                     r"_Py_CALL_SPAM is no member of _PyCallConvention")
+        # The forms the guard may not take: `||`, a mask, another variable or
+        # value, the reader inline, and the flags themselves
+        path = "paths(callable.d_method: convention(_Py_CALL_O))"
+        for body, message in [
+            ("EXIT_IF(conv == _Py_CALL_NOARGS || conv == _Py_CALL_VALUE);",
+             r"joins convention tests with `\|\|`"),
+            ("EXIT_IF((conv & METH_O) == 0);",
+             r"is no comparison of a convention local with a member"),
+            ("EXIT_IF(conv != METH_O);",
+             r"`conv != METH_O` is no comparison of a convention local with a member"),
+            ("int other = oparg;\nEXIT_IF(conv != other);",
+             r"`conv != other` is no comparison of a convention local with a member"),
+            ("EXIT_IF(_PyMethodDef_Convention(method->d_method) != _Py_CALL_O);",
+             r"tests the call flags directly"),
+            ("EXIT_IF((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) != METH_O);",
+             r"tests the call flags directly"),
+            ("EXIT_IF(conv != _Py_CALL_O && conv == _Py_CALL_NOARGS);",
+             r"mixes convention tests"),
+        ]:
+            with self.subTest(body=body):
+                self.refuses(source % (path, body), message)
 
     def test_identities_of_static_objects(self):
         # F21, _GUARD_LOAD_SUPER_ATTR_METHOD: a CONSTANT row names a static

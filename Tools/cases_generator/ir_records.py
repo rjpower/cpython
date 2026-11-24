@@ -597,7 +597,7 @@ FACT_KINDS = frozenset((
     "IS_NONE", "EXACT_TYPE", "NOT_TYPE", "SUBTYPE", "IDENTITY", "TYPE_VERSION",
     "CLASS_VERSION", "KEYS_VERSION", "SHAPE", "INLINE_VALUES_VALID",
     "FUNC_VERSION", "LENGTH", "IN_BOUNDS", "NON_NEGATIVE", "NON_ZERO",
-    "ARGCOUNT", "OPERAND_COUNT", "CALL_FLAGS", "SELF", "TYPE_FLAG", "TYPE_SLOT",
+    "ARGCOUNT", "OPERAND_COUNT", "CONVENTION", "SELF", "TYPE_FLAG", "TYPE_SLOT",
     "VECTORCALL", "UNIQUE", "ASCII", "NOT_SUBTYPE", "KEYS_KIND", "ENTRY_KEY",
     "NO_MANAGED_DICT", "TAGGED_INDEX", "ENCODING",
 ))
@@ -697,6 +697,11 @@ class Subjects:
         if args is not None and len(args) == 1:
             inner = self.resolve(args[0])
             return f"type({inner})" if inner is not None else None
+        args = _call(tokens, "_PyMethodDef_Convention")
+        if args is not None and len(args) == 1:
+            # The calling convention of a PyMethodDef along a path
+            inner = self.resolve(args[0])
+            return f"{inner}.convention" if inner is not None else None
         if _call(tokens, "GLOBALS") == []:
             return "globals"
         if _call(tokens, "BUILTINS") == []:
@@ -833,8 +838,9 @@ def comparison_facts(lhs: list, op: str, rhs: list,
             return [Fact("LENGTH", subjects.of(args[0]), text)]
         if left[:1] == ["total_args"] and len(left) == 1:
             return [Fact("OPERAND_COUNT", "word", text)]
-        if any(t in ("ml_flags", "PyCFunction_GET_FLAGS", "flags") for t in left):
-            return [Fact("CALL_FLAGS", "callable", f"{' '.join(left)} == {text}")]
+        owner = subjects.resolve(left)
+        if owner is not None and owner.endswith(".convention"):
+            return [Fact("CONVENTION", owner.removesuffix(".convention"), text)]
         if len(left) == 1 and right[:1] == ["&"] or _uncast(rhs)[:1] == ["&"]:
             return [Fact("IDENTITY", subjects.of(left), " ".join(_uncast(rhs)).lstrip("& "))]
         if right == ["NULL"]:
@@ -892,11 +898,13 @@ def failure_term_facts(term: list, subjects: Subjects) -> list[Fact] | None:
         # x is none of several types: that it is one of them
         found = [failure_term_facts(_strip(c), subjects) if _strip(c)[:1] != ["!"]
                  else predicate_facts(_strip(c)[1:], subjects) for c in conj]
-        for kind in ("EXACT_TYPE", "CALL_FLAGS"):
+        for kind in ("EXACT_TYPE", "CONVENTION"):
             if (all(f is not None and len(f) == 1 and f[0].kind == kind for f in found)
                     and len({f[0].subject for f in found}) == 1):
+                args = [f[0].arg for f in found]
+                # A convention is a set of members, as the declaration sorts it
                 return [Fact(kind, found[0][0].subject,
-                             " | ".join(f[0].arg for f in found))]
+                             " | ".join(sorted(args) if kind == "CONVENTION" else args))]
         return None
     # A positive type test failing: x is not of the type
     if term and _TYPE_CHECK.fullmatch(term[0]) and _call(term, term[0]) is not None:
@@ -1138,6 +1146,7 @@ READER_CALLS = re.compile(
     r"PyUnicode_IS_COMPACT_ASCII|_PyObject_(InlineValues|Shape|ManagedDictPointer|"
     r"GetManagedDict|IsUniquelyReferenced|GC_IS_\w+|GC_MAY_BE_TRACKED)|_PyCode_\w+|"
     r"_?PyType_(HasFeature|IteratesByIndex|VALUE_SLOT|FastSubclass)|PyType_FastSubclass|"
+    r"_PyMethodDef_Convention|"
     r"_PyErr_Occurred|_PyErr_ExceptionMatches|_PyInterpreterState_GET|_PyThreadState_HasStackSpace|"
     r"_Py_EvalBreakerHasEvents|"
     r"PyExceptionInstance_Class|PyException_Get\w+|_PyCell_GetValue|"

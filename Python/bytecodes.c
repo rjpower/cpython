@@ -5319,16 +5319,22 @@ dummy_func(
             _CALL_BUILTIN_CLASS +
             _CHECK_PERIODIC_AT_END;
 
-        op(_GUARD_CALLABLE_BUILTIN_O, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
+        op(_GUARD_CALLABLE_BUILTIN_O,
+                (callable: object, self_or_null, args[oparg]
+                 -- callable: exact(PyCFunction_Type), self_or_null, args[oparg]))
+            effects(reads) exits(next, miss) state(call_state -- call_state)
+            paths(callable.m_ml: convention(_Py_CALL_O))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyCFunction_CheckExact(callable_o));
-            EXIT_IF((PyCFunction_GET_FLAGS(callable_o) &
-                     _Py_METH_CALL_FLAGS) != METH_O);
+            _PyCallConvention conv =
+                _PyMethodDef_Convention(((PyCFunctionObject *)callable_o)->m_ml);
+            EXIT_IF(conv != _Py_CALL_O);
             int total_args = oparg;
             if (call_state & CALL_SELF_PRESENT) {
                 total_args++;
             }
-            EXIT_IF(total_args != 1);
+            EXIT_IF(total_args != 1, "the call has another number of arguments");
         }
 
         op(_CALL_BUILTIN_O,
@@ -5360,17 +5366,25 @@ dummy_func(
             _CALL_BUILTIN_O +
             _CHECK_PERIODIC_AT_END;
 
-        op(_GUARD_CALLABLE_BUILTIN_FAST, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
+        op(_GUARD_CALLABLE_BUILTIN_FAST,
+                (callable: object, unused, unused[oparg]
+                 -- callable: exact(PyCFunction_Type), unused, unused[oparg]))
+            effects(reads) exits(next, miss)
+            paths(callable.m_ml: convention(_Py_CALL_FASTCALL|_Py_CALL_VALUE|_Py_CALL_VALUE_NOARGS|_Py_CALL_VALUE_O))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyCFunction_CheckExact(callable_o));
-            int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
+            _PyCallConvention conv =
+                _PyMethodDef_Convention(((PyCFunctionObject *)callable_o)->m_ml);
             /* A METH_VALUE function (alone or with METH_NOARGS or METH_O)
                reaches the same value vectorcall, as METH_FASTCALL does.
                With METH_KEYWORDS it takes the _WITH_KEYWORDS handler. */
-            EXIT_IF(flags != METH_FASTCALL
-                    && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE);
+            EXIT_IF(conv != _Py_CALL_FASTCALL && conv != _Py_CALL_VALUE
+                    && conv != _Py_CALL_VALUE_NOARGS && conv != _Py_CALL_VALUE_O);
             int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
-            EXIT_IF((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 1 : 0),
+            EXIT_IF(conv == _Py_CALL_VALUE_NOARGS && n != 0,
+                    "the arguments do not fit the value form's fixed arity");
+            EXIT_IF(conv == _Py_CALL_VALUE_O && n != 1,
                     "the arguments do not fit the value form's fixed arity");
         }
 
@@ -5398,12 +5412,17 @@ dummy_func(
             _CALL_BUILTIN_FAST +
             _CHECK_PERIODIC_AT_END;
 
-        op(_GUARD_CALLABLE_BUILTIN_FAST_WITH_KEYWORDS, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
+        op(_GUARD_CALLABLE_BUILTIN_FAST_WITH_KEYWORDS,
+                (callable: object, unused, unused[oparg]
+                 -- callable: exact(PyCFunction_Type), unused, unused[oparg]))
+            effects(reads) exits(next, miss)
+            paths(callable.m_ml: convention(_Py_CALL_FASTCALL_KEYWORDS|_Py_CALL_VALUE_KEYWORDS))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyCFunction_CheckExact(callable_o));
-            int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
-            EXIT_IF(flags != (METH_FASTCALL | METH_KEYWORDS)
-                    && flags != (METH_VALUE | METH_KEYWORDS));
+            _PyCallConvention conv =
+                _PyMethodDef_Convention(((PyCFunctionObject *)callable_o)->m_ml);
+            EXIT_IF(conv != _Py_CALL_FASTCALL_KEYWORDS && conv != _Py_CALL_VALUE_KEYWORDS);
         }
 
         inline_ok op(_CALL_BUILTIN_FAST_WITH_KEYWORDS,
@@ -5534,19 +5553,25 @@ dummy_func(
             none = PyValue_None;
         }
 
-        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_O, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
+        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_O,
+                (callable: object, self_or_null, args[oparg]
+                 -- callable: exact(PyMethodDescr_Type), self_or_null, args[oparg]))
+            effects(reads) exits(next, miss) state(call_state -- call_state)
+            paths(callable.d_method: convention(_Py_CALL_O))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-            EXIT_IF(!Py_IS_TYPE(method, &PyMethodDescr_Type));
-            EXIT_IF((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
-                    METH_O);
+            EXIT_IF(Py_TYPE(callable_o) != &PyMethodDescr_Type);
+            _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+            EXIT_IF(conv != _Py_CALL_O);
             int total_args = oparg;
             if (call_state & CALL_SELF_PRESENT) {
                 total_args++;
             }
-            EXIT_IF(total_args != 2);
+            EXIT_IF(total_args != 2, "the call has another number of arguments");
             PyValue self = IR_CALL_ARG(0);
-            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
+            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type,
+                    "the receiver is not of the descriptor's class");
         }
 
         op(_CALL_METHOD_DESCRIPTOR_O,
@@ -5584,17 +5609,22 @@ dummy_func(
             _CALL_METHOD_DESCRIPTOR_O +
             _CHECK_PERIODIC_AT_END;
 
-        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
+        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS,
+                (callable: object, self_or_null, args[oparg]
+                 -- callable: exact(PyMethodDescr_Type), self_or_null, args[oparg]))
+            effects(reads) exits(next, miss)
+            paths(callable.d_method: convention(_Py_CALL_FASTCALL_KEYWORDS|_Py_CALL_VALUE_KEYWORDS))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-            EXIT_IF(!Py_IS_TYPE(method, &PyMethodDescr_Type));
-            int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
-            EXIT_IF(flags != (METH_FASTCALL | METH_KEYWORDS)
-                    && flags != (METH_VALUE | METH_KEYWORDS));
+            EXIT_IF(Py_TYPE(callable_o) != &PyMethodDescr_Type);
+            _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+            EXIT_IF(conv != _Py_CALL_FASTCALL_KEYWORDS && conv != _Py_CALL_VALUE_KEYWORDS);
             int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
             EXIT_IF(n == 0, "the call has no receiver");
             PyValue self = IR_CALL_ARG(0);
-            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
+            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type,
+                    "the receiver is not of the descriptor's class");
         }
 
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS,
@@ -5620,19 +5650,25 @@ dummy_func(
             _CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS +
             _CHECK_PERIODIC_AT_END;
 
-        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_NOARGS, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
+        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_NOARGS,
+                (callable: object, self_or_null, args[oparg]
+                 -- callable: exact(PyMethodDescr_Type), self_or_null, args[oparg]))
+            effects(reads) exits(next, miss) state(call_state -- call_state)
+            paths(callable.d_method: convention(_Py_CALL_NOARGS))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-            EXIT_IF(!Py_IS_TYPE(method, &PyMethodDescr_Type));
-            EXIT_IF((method->d_method->ml_flags & _Py_METH_CALL_FLAGS) !=
-                    METH_NOARGS);
+            EXIT_IF(Py_TYPE(callable_o) != &PyMethodDescr_Type);
+            _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+            EXIT_IF(conv != _Py_CALL_NOARGS);
             int total_args = oparg;
             if (call_state & CALL_SELF_PRESENT) {
                 total_args++;
             }
-            EXIT_IF(total_args != 1);
+            EXIT_IF(total_args != 1, "the call has another number of arguments");
             PyValue self = IR_CALL_ARG(0);
-            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
+            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type,
+                    "the receiver is not of the descriptor's class");
         }
 
         op(_CALL_METHOD_DESCRIPTOR_NOARGS,
@@ -5664,20 +5700,28 @@ dummy_func(
             _CALL_METHOD_DESCRIPTOR_NOARGS +
             _CHECK_PERIODIC_AT_END;
 
-        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
+        op(_GUARD_CALLABLE_METHOD_DESCRIPTOR_FAST,
+                (callable: object, self_or_null, args[oparg]
+                 -- callable: exact(PyMethodDescr_Type), self_or_null, args[oparg]))
+            effects(reads) exits(next, miss)
+            paths(callable.d_method: convention(_Py_CALL_FASTCALL|_Py_CALL_VALUE|_Py_CALL_VALUE_NOARGS|_Py_CALL_VALUE_O))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
             /* Builtin METH_FASTCALL methods, without keywords */
-            EXIT_IF(!Py_IS_TYPE(method, &PyMethodDescr_Type));
-            int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
-            EXIT_IF(flags != METH_FASTCALL
-                    && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE);
+            EXIT_IF(Py_TYPE(callable_o) != &PyMethodDescr_Type);
+            _PyCallConvention conv = _PyMethodDef_Convention(method->d_method);
+            EXIT_IF(conv != _Py_CALL_FASTCALL && conv != _Py_CALL_VALUE
+                    && conv != _Py_CALL_VALUE_NOARGS && conv != _Py_CALL_VALUE_O);
             int n = (int)IR_C(ir_word) - IR_CALL_FIRST();
             EXIT_IF(n == 0, "the call has no receiver");
-            EXIT_IF((flags & (METH_O | METH_NOARGS)) && n != ((flags & METH_O) ? 2 : 1),
+            EXIT_IF(conv == _Py_CALL_VALUE_NOARGS && n != 1,
+                    "the arguments do not fit the value form's fixed arity");
+            EXIT_IF(conv == _Py_CALL_VALUE_O && n != 2,
                     "the arguments do not fit the value form's fixed arity");
             PyValue self = IR_CALL_ARG(0);
-            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type);
+            EXIT_IF(PyValue_TYPE(self) != method->d_common.d_type,
+                    "the receiver is not of the descriptor's class");
         }
 
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST,

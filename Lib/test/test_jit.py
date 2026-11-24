@@ -283,6 +283,37 @@ class TestCompiled(JitTestCase):
             print(events)
         """)
 
+    def test_jump_over_comprehension(self):
+        # A debugger's f_lineno jump backward over a comprehension, at the
+        # line after it: under always the frame runs JUMP_BACKWARD_JIT and
+        # RESUME_JIT, whose owner programs the jump reads, as the
+        # interpreter's JUMP_BACKWARD.
+        self.check_same("""
+            import sys
+            def f(out):
+                out.append(1)
+                x = [i for i in range(10)]
+                out.append(3)
+            first = f.__code__.co_firstlineno
+            jumped = []
+            def tracer(frame, event, arg):
+                if frame.f_code is f.__code__:
+                    if (event == "line" and frame.f_lineno == first + 3
+                            and not jumped):
+                        jumped.append(True)
+                        try:
+                            frame.f_lineno = first + 1
+                        except ValueError as error:
+                            jumped.append(str(error))
+                    return tracer
+                return None
+            out = []
+            sys.settrace(tracer)
+            f(out)
+            sys.settrace(None)
+            print(out, jumped)
+        """)
+
     def test_monitoring_while_compiled(self):
         # LINE and branch events switched on in the middle of a compiled
         # function start in that function at once, as in the interpreter.

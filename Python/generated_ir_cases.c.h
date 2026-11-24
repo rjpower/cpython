@@ -9094,7 +9094,7 @@ ir_run_INSTRUMENTED_END_SEND(
                     _PyValue_XCLOSE_POINTER(ir_own_B);
                     DISPATCH_REDIRECT();
                 }
-                next_instr = jump.next;
+                assert(jump.next == next_instr);
             }
             val = held;
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), val);
@@ -9903,7 +9903,6 @@ ir_run_JUMP_BACKWARD_JIT(
             (void)oparg;
             // _CHECK_PERIODIC
             {
-                IR_PIN_DEPARTING();
                 _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
                 QSBR_QUIESCENT_STATE(tstate);
                 if (_Py_EvalBreakerHasEvents(tstate)) {
@@ -14333,7 +14332,6 @@ ir_run_RESUME_JIT(
             (void)oparg;
             // _MAYBE_INSTRUMENT
             {
-                IR_PIN_DEPARTING();
                 #ifdef Py_GIL_DISABLED
 
                 int check_instrumentation = 1;
@@ -23893,7 +23891,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                     _PyValue_XCLOSE_POINTER(ir_own_B);
                     DISPATCH_REDIRECT();
                 }
-                next_instr = jump.next;
+                assert(jump.next == next_instr);
             }
             val = held;
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), val);
@@ -24647,7 +24645,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)oparg;
             // _CHECK_PERIODIC
             {
-                IR_PIN_DEPARTING();
                 _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
                 QSBR_QUIESCENT_STATE(tstate);
                 if (_Py_EvalBreakerHasEvents(tstate)) {
@@ -27801,7 +27798,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)oparg;
             // _MAYBE_INSTRUMENT
             {
-                IR_PIN_DEPARTING();
                 #ifdef Py_GIL_DISABLED
 
                 int check_instrumentation = 1;

@@ -225,12 +225,13 @@ dummy_func(
         // the code's compiled unit at the next word once it has one
         // (IR_JIT_EVENT(), Python/jit.c).  Compiled code runs the forms,
         // where the event does nothing.
-        // Contract (G0d1): IR_JIT_EVENT's row (EFFECTS(... runs_python,
-        // switches_frame), EXITS(enter, return, raise, exit)): the unit it starts
-        // runs Python and leaves through its own transfers; otherwise the word
+        // Contract (G0d1): IR_JIT_EVENT's row (EFFECTS(... runs_python),
+        // EXITS(redirect, raise, exit)): the unit it starts runs this frame's
+        // words, which enter and leave frames by their own records; the frame
+        // goes on where the unit stopped (redirect). Otherwise the word
         // continues (next).
         ir_only op(_JIT_EVENT, (--))
-            effects(runs_python, switches_frame) exits(next, enter, return, raise, exit)
+            effects(runs_python) exits(next, redirect, raise, exit)
         {
             IR_JIT_EVENT();
         }
@@ -519,7 +520,9 @@ dummy_func(
                     PyValue_CLOSE(held);
                     DISPATCH_REDIRECT();
                 }
-                next_instr = jump.next;
+                // Unredirected, the call returns the destination it was
+                // given (instrumentation.c), so the word goes on to next
+                assert(jump.next == next_instr);
             }
             val = held;
         }
@@ -4739,10 +4742,11 @@ dummy_func(
         // Contract (G0d1): the iterator is GET_ITER's object; the step
         // (_PyDictIterItem_Next) writes the two locals and may raise; exhaustion
         // completes the step (IR_COMPLETE_STEP: branch, runs Python); a wrong type
-        // or an instrumented unpack word misses.
+        // or an instrumented unpack word misses. A step continues after the
+        // unpack word (`next_instr++`), not at the next word: jump (G0d1, V12).
         ir_only op(_FOR_ITER_DICT_ITEMS,
                 (iter: assumed(object) by GET_ITER, null_or_index -- iter, null_or_index, unused))
-            effects(runs_python) exits(next, branch, raise, miss)
+            effects(runs_python) exits(jump, branch, raise, miss)
         {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(Py_TYPE(iter_o) != &PyDictIterItem_Type);

@@ -2932,10 +2932,19 @@
      * (allocates, may fail without raising) and jit_run runs the unit through \
      * IR_STEP_DONE, which dispatches the unit's transfer or leaves the evaluator.  The \
      * unit runs Python and switches frames.  In the function forms (ceval.c:2660) and \
-     * without the JIT it is empty.  Not narrowed: its exits are the unit's. */ \
+     * without the JIT it is empty. */ \
+    /* Corrected (G0d1): the unit runs this frame's own words from next_instr, and \
+     * a frame it enters or returns from is entered or left by one of those words \
+     * (a CALL's enter, a RETURN_VALUE's return), whose records say so.  The event \
+     * word pushes no frame and returns none: the frame goes on at the word where \
+     * the unit stopped (redirect), raises, or the evaluator exits.  The unit's \
+     * code is runs_python, as for IR_STORE_RETURN's IR_JIT_RESUME.  Declared as \
+     * enter and return, the event was a frame-pushing word (_PyIR_PUSHES_FRAME), \
+     * and the debugger's stopped-state analysis took every temporary to die at \
+     * RESUME_JIT and JUMP_BACKWARD_JIT. */ \
     MACRO(IR_JIT_EVENT, ARGS(), NONE, \
-          EFFECTS(reads, writes, allocates, raises, releases, runs_python, \
-                  switches_frame), EXITS(enter, return, raise, exit)) \
+          EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
+          EXITS(redirect, raise, exit)) \
     /* The execution pin (g3/design.md section 2; Python/jit.c).  The \
      * generator prints IR_PIN_DEPARTING() after the last guard of every \
      * arm with a return or a yield; no body writes it.  \

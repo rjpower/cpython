@@ -49,6 +49,8 @@ _PyIR_StubWindowDropsLast(const PyValue *window, int n)
 #undef PROCESS_ERROR_AT
 #pragma push_macro("IR_STUB_ESCAPE")
 #undef IR_STUB_ESCAPE
+#pragma push_macro("IR_PIN_DEPARTING")
+#undef IR_PIN_DEPARTING
 #pragma push_macro("IR_CLOSE_WINDOW")
 #undef IR_CLOSE_WINDOW
 #pragma push_macro("DISPATCH_GOTO")
@@ -100,6 +102,7 @@ _PyIR_StubWindowDropsLast(const PyValue *window, int n)
         return ir_status | _PyIR_RAISED; \
     } while (0)
 #define IR_STUB_ESCAPE() (ir_status |= _PyIR_ESCAPED)
+#define IR_PIN_DEPARTING() (ir_status |= _PyJit_PinDeparting(tstate, frame))
 #define IR_CLOSE_WINDOW(W, N) _PyIR_STUB_CLOSE_WINDOW((W), (N))
 #define PyValue_CLOSE(V) _PyIR_STUB_RELEASE(PyValue_CLOSE, V)
 #define PyValue_XCLOSE(V) _PyIR_STUB_RELEASE(PyValue_XCLOSE, V)
@@ -563,6 +566,7 @@ _PyIR_Stub_BINARY_OP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWor
 #pragma pop_macro("DISPATCH_INLINED")
 #pragma pop_macro("DISPATCH_GOTO")
 #pragma pop_macro("IR_CLOSE_WINDOW")
+#pragma pop_macro("IR_PIN_DEPARTING")
 #pragma pop_macro("IR_STUB_ESCAPE")
 #pragma pop_macro("PROCESS_ERROR_AT")
 #pragma pop_macro("IR_DEOPT_BINARY_OP")

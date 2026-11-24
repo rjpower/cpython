@@ -6111,6 +6111,7 @@ ir_run_CLEANUP_THROW_XFER_DISCARD(
             PyValue exc_value_st;
             exc_value_st = window[3];
             assert(PyValue_IsObject(exc_value_st));
+            IR_PIN_DEPARTING();
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
@@ -9902,6 +9903,7 @@ ir_run_JUMP_BACKWARD_JIT(
             (void)oparg;
             // _CHECK_PERIODIC
             {
+                IR_PIN_DEPARTING();
                 _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
                 QSBR_QUIESCENT_STATE(tstate);
                 if (_Py_EvalBreakerHasEvents(tstate)) {
@@ -14331,6 +14333,7 @@ ir_run_RESUME_JIT(
             (void)oparg;
             // _MAYBE_INSTRUMENT
             {
+                IR_PIN_DEPARTING();
                 #ifdef Py_GIL_DISABLED
 
                 int check_instrumentation = 1;
@@ -14412,6 +14415,7 @@ ir_run_RETURN_VALUE(
             // _MAKE_HEAP_SAFE
             {
                 value = IR_VIEW(IR_A(ir_word));
+                IR_PIN_DEPARTING();
                 ir_own_A = IR_DETACH(ir_word, A, value);
                 taken = IR_TAKEN_REQUIRED(value, ir_own_A);
             }
@@ -14464,6 +14468,7 @@ ir_run_RETURN_VALUE_EMPTY(
             // _MAKE_HEAP_SAFE
             {
                 value = IR_VIEW(IR_A(ir_word));
+                IR_PIN_DEPARTING();
                 ir_own_A = IR_DETACH(ir_word, A, value);
                 taken = IR_TAKEN_REQUIRED(value, ir_own_A);
             }
@@ -14732,6 +14737,7 @@ ir_run_SEND_ASYNC_GEN_XFER_DISCARD(
             {
                 v = window[2];
                 null_in = window[1];
+                IR_PIN_DEPARTING();
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(PyAsyncGenASend_CheckExact(iter_o));
                 _PyStatusValue sent = _PyValue_Send(iter_o, v);
@@ -15040,6 +15046,7 @@ ir_run_SEND_VIRTUAL_XFER_DISCARD(
                 index = nos;
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
+                IR_PIN_DEPARTING();
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 Py_ssize_t position = PyValue_UntagIndex(index);
                 PyValue spent = index;
@@ -15096,6 +15103,7 @@ ir_run_SEND_XFER_DISCARD(
             {
                 receiver = window[0];
                 assert(PyValue_IsObject(receiver));
+                IR_PIN_DEPARTING();
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (_PyFb_CounterTriggers(feedback)) {
@@ -17000,6 +17008,7 @@ ir_run_YIELD_DELEGATED(
             (void)ir_old;
             PyValue retval;
             retval = IR_SLOT(IR_B(ir_word));
+            IR_PIN_DEPARTING();
             PyValue outgoing = retval;
             _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
             assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
@@ -17050,6 +17059,7 @@ ir_run_YIELD_VALUE(
             // _MAKE_HEAP_SAFE
             {
                 value = window[0];
+                IR_PIN_DEPARTING();
                 taken = value;
             }
             // _YIELD_VALUE
@@ -22032,6 +22042,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue exc_value_st;
             exc_value_st = window[3];
             assert(PyValue_IsObject(exc_value_st));
+            IR_PIN_DEPARTING();
             PyObject *exc_value = _PyValue_AsKnownObjectBorrowPointer(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
@@ -24636,6 +24647,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)oparg;
             // _CHECK_PERIODIC
             {
+                IR_PIN_DEPARTING();
                 _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
                 QSBR_QUIESCENT_STATE(tstate);
                 if (_Py_EvalBreakerHasEvents(tstate)) {
@@ -27789,6 +27801,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)oparg;
             // _MAYBE_INSTRUMENT
             {
+                IR_PIN_DEPARTING();
                 #ifdef Py_GIL_DISABLED
 
                 int check_instrumentation = 1;
@@ -27862,6 +27875,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _MAKE_HEAP_SAFE
             {
                 value = IR_VIEW(IR_A(ir_word));
+                IR_PIN_DEPARTING();
                 ir_own_A = IR_DETACH(ir_word, A, value);
                 taken = IR_TAKEN_REQUIRED(value, ir_own_A);
             }
@@ -27910,6 +27924,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _MAKE_HEAP_SAFE
             {
                 value = IR_VIEW(IR_A(ir_word));
+                IR_PIN_DEPARTING();
                 ir_own_A = IR_DETACH(ir_word, A, value);
                 taken = IR_TAKEN_REQUIRED(value, ir_own_A);
             }
@@ -28049,6 +28064,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 v = window[2];
                 null_in = window[1];
+                IR_PIN_DEPARTING();
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 assert(PyAsyncGenASend_CheckExact(iter_o));
                 _PyStatusValue sent = _PyValue_Send(iter_o, v);
@@ -28341,6 +28357,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                 index = nos;
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
+                IR_PIN_DEPARTING();
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 Py_ssize_t position = PyValue_UntagIndex(index);
                 PyValue spent = index;
@@ -28393,6 +28410,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             {
                 receiver = window[0];
                 assert(PyValue_IsObject(receiver));
+                IR_PIN_DEPARTING();
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (_PyFb_CounterTriggers(feedback)) {
@@ -29671,6 +29689,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)ir_old;
             PyValue retval;
             retval = IR_SLOT(IR_B(ir_word));
+            IR_PIN_DEPARTING();
             PyValue outgoing = retval;
             _PyFrame_WriteHome(frame, &IR_SLOT(IR_B(ir_word)), PyValue_NULL);
             assert(frame->owner == FRAME_OWNED_BY_GENERATOR);
@@ -29717,6 +29736,7 @@ static const _PyIRForm ir_handler_forms[512] = {
             // _MAKE_HEAP_SAFE
             {
                 value = window[0];
+                IR_PIN_DEPARTING();
                 taken = value;
             }
             // _YIELD_VALUE

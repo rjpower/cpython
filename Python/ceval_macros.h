@@ -1185,6 +1185,11 @@ method_poly_lookup(const _PyIRWord *words, const _PyFbHeader *h, PyObject *owner
 #define IR_JIT_RESUME() ((void)0)
 #endif
 
+/* The execution pin (g3/design.md section 2) that a departing arm takes
+ * after its last guard.  The evaluator runs in no unit: nothing to keep
+ * alive.  The function forms and the stubs bind it to _PyJit_PinDeparting(). */
+#define IR_PIN_DEPARTING() ((void)0)
+
 /* The oparg and feedback entry of another instruction of the frame. */
 #define _PyIR_Oparg(FRAME, INSTR) \
     _PyCode_InstrOparg(_PyFrame_GetCode(FRAME), \

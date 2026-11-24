@@ -1299,6 +1299,27 @@ class TestFrameTransfers(JitTestCase):
                 del f
             print(total)
 
+            # 6. a capped unit's RETURN form loses the last reference to
+            #    its code: the code is at the recompile cap, so its unit
+            #    runs the forms, which pin as the stubs do
+            for i in range(20):
+                ns = {}
+                exec("def f(drop):\\n"
+                     "    if drop:\\n"
+                     "        ns.clear()\\n"
+                     "    return 6\\n", {"ns": ns}, ns)
+                for k in range(8):
+                    t.jit_compile(ns["f"].__code__)
+                if i == 0:
+                    unit = t.jit_unit(ns["f"].__code__)
+                    print("jit capped", unit and unit["compiles"])
+                for k in range(3):
+                    ns["f"](False)
+                keep = weakref.ref(ns["f"].__code__, died("six"))
+                ns["f"](True)
+            print(log[-1], len(log))
+            log.clear()
+
             # 7. code.replace() and __code__ assignment while frames of the
             #    old code run and return
             def outer(n):
@@ -1363,6 +1384,85 @@ class TestFrameTransfers(JitTestCase):
             gens = [maker() for i in range(5)]
             print([list(g) for g in gens])
         """)
+
+    def test_generator_boundary_pins(self):
+        # The guarded generator-boundary variants, warmed until their
+        # words specialise: (a) a miss at the guard while the old pin's
+        # code has no other reference, which the generic's pin drops (the
+        # miss takes no pin); (b) a completion whose departing frame's code
+        # loses its last reference (GEN_COMPLETE_RETURN for the RETURN
+        # consumers)
+        outs = self.check_transfers("""
+            import gc
+            log = []
+            def g(x):
+                return x * 2
+            def died(name):
+                return lambda ref: log.append((name, [g(i) for i in range(3)]))
+            def dying_pin(name):
+                # A return that leaves the pin on a code with no other
+                # reference
+                ns = {}
+                exec("def d():\\n    ns.clear()\\n    return 0\\n", {"ns": ns}, ns)
+                keep = weakref.ref(ns["d"].__code__, died(name))
+                ns["d"]()
+                return keep
+            def inner():
+                yield 5
+                return 6
+            async def agen():
+                yield 1
+            async def coro():
+                return 9
+            class Other:
+                # An awaitable that is no async generator's asend
+                def asend(self, value):
+                    return coro()
+            def drive(c):
+                try:
+                    while True:
+                        c.send(None)
+                except StopIteration as e:
+                    return e.value
+            def run_virtual(f, it, drop):
+                return list(f(it, drop))
+            def run_async(f, it, drop):
+                return drive(f(it, drop))
+            DROP = "    if drop:\\n        ns.clear()\\n"
+            cases = [
+                ("SEND_VIRTUAL_XFER_RETURN",
+                 "def f(it, drop):\\n" + DROP + "    return (yield from it)\\n",
+                 run_virtual, lambda: [1, 2], inner),
+                ("SEND_VIRTUAL_XFER_POP_TOP",
+                 "def f(it, drop):\\n" + DROP + "    yield from it\\n    return 1\\n",
+                 run_virtual, lambda: [1, 2], inner),
+                ("SEND_ASYNC_GEN_XFER_RETURN",
+                 "async def f(it, drop):\\n" + DROP + "    return await it.asend(None)\\n",
+                 run_async, agen, Other),
+                ("SEND_ASYNC_GEN_XFER_STORE_FAST",
+                 "async def f(it, drop):\\n" + DROP +
+                 "    x = await it.asend(None)\\n    return x\\n",
+                 run_async, agen, Other),
+            ]
+            for name, source, run, hit, miss in cases:
+                ns = {}
+                exec(source, {"ns": ns}, ns)
+                for k in range(40):
+                    run(ns["f"], hit(), False)
+                words = {r[0] for r in t.get_ir(ns["f"].__code__, True)}
+                print("jit words", name, name in words)
+                # (a)
+                keep_a = dying_pin(name + " a")
+                print(name, "a", run(ns["f"], miss(), False))
+                # (b)
+                keep_b = weakref.ref(ns["f"].__code__, died(name + " b"))
+                print(name, "b", run(ns["f"], hit(), True))
+                gc.collect()
+            print(sorted(log))
+        """)
+        for line in outs["always"].splitlines():
+            if line.startswith("jit words"):
+                self.assertTrue(line.endswith("True"), line)
 
     def test_unwinding(self):
         self.check_transfers("""

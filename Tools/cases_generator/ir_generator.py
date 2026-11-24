@@ -3485,6 +3485,11 @@ class IREmitter(Emitter):
         # The uops of the handler being printed whose entry sets the stub's
         # ESCAPED bit (stub_escapes()), or None if it has no stub
         self.stub_escapes: frozenset[str] | None = None
+        # The index of the uop before whose body the handler being printed
+        # pins its departing frame's code (pin_point()), or None, and whether
+        # it has printed the pin
+        self.pin_at: int | None = None
+        self.pinned = False
         # The record of the handler being printed, and the identities of its
         # elements printed so far (check_record_consumed())
         self.record: OperationRecord | None = None
@@ -5823,6 +5828,12 @@ def write_uop(
     # The facts the uop assumes of its inputs, from their producers (F7)
     for line in ir_contract.assumed_assertions(uop, None):
         emitter.emit(line + "\n")
+    if emitter.uop_index - 1 == emitter.pin_at:
+        # After the arm's last guard: the word is untouched (g3/design.md
+        # section 2).  A stub reports the old pin's release, the forms
+        # discard it and the evaluator binds it to nothing
+        emitter.emit("IR_PIN_DEPARTING();\n")
+        emitter.pinned = True
     reachable, storage = emitter.emit_tokens(uop, storage, inst, False)
     if emitter.pending_owner is not None:
         raise analysis_error(
@@ -6862,6 +6873,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     validate_guarded_python_call(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)
     record = build_record(name, inst, fmt, emitter.analysis, emitter.formats)
+    emitter.pin_at = pin_point(name, inst, emitter.analysis)
     saved = emitter.out
     roles: dict[str, set[str]] = {}
     emitter.declared_roles = {}
@@ -6881,12 +6893,52 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.declared_roles = roles
     emitter.declared_closes = set(emitter.close_names)
     emit_handler(record, emitter, out, {})
+    if emitter.pin_at is not None and not emitter.pinned:
+        raise analysis_error(f"{name}: departs its frame, and the emitter printed no "
+                             "IR_PIN_DEPARTING() before its departing uop", inst.where)
+    emitter.pin_at = None
     if record.generator_boundary is not None:
         check_boundary_expansion(name, record.generator_boundary, record,
                                  emitter.boundary_reached,
                                  emitter.boundary_completions, inst.where)
     check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
     ir_leaf.check_leaf(record, [p for p in inst.parts if isinstance(p, Uop)])
+
+
+def arm_departs(inst: Instruction, boundary: GeneratorBoundary | None) -> bool:
+    """Whether the arm departs its frame by a return or a yield: one of its
+    uops declares the exit, or its boundary(...) clause does (a delegated
+    yield, or a consumer whose completion returns).  A variant that departs
+    at(enter) leaves through the frame that it enters, whose arms pin."""
+    if any(ir_contract.declared_contract(part).exits & ir_contract.DEPARTING_EXITS
+           for part in inst.parts if isinstance(part, Uop)):
+        return True
+    if boundary is None or boundary.at == "enter":
+        return False
+    return boundary.yielded != "NONE" or "return" in boundary.exits
+
+
+def pin_point(name: str, inst: Instruction, analysis: Analysis) -> int | None:
+    """The uop of handler `name` before whose body the arm pins the code of
+    the frame it departs (IR_PIN_DEPARTING(), g3/design.md section 2): the
+    uop after its last guard, the last uop that declares miss or deopt.
+    None if no arm that runs this body departs; a body that generator-
+    boundary variants share (generator_word_entry()) pins if one of them
+    departs.  VT4 keeps every guard before the departing uop."""
+    boundaries = generator_boundaries(analysis)
+    insts = all_instructions(analysis)
+    sharing = {name} | {n for n in boundaries if generator_word_entry(n, analysis) == name}
+    if not any(arm_departs(insts[n] if n in insts else inst, boundaries.get(n))
+               for n in sharing):
+        return None
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    guards = [i for i, part in enumerate(parts)
+              if ir_contract.declared_contract(part).exits & ir_contract.GUARD_EXITS]
+    at = guards[-1] + 1 if guards else 0
+    if at == len(parts):
+        raise analysis_error(f"{name}: departs its frame, and its last uop guards: no uop "
+                             "after its guards can take the pin", inst.where)
+    return at
 
 
 def canonical_body_tokens(part: Uop) -> list[str]:
@@ -7060,6 +7112,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
                             for site in (*uop.guards, *uop.transfers)
                             if site.site is not None}
     emitter.uop_index = 0
+    emitter.pinned = False
     emitter.generator_boundary = record.generator_boundary
     emitter.boundary_reached = set()
     emitter.boundary_completions = []
@@ -7698,6 +7751,8 @@ STUB_BINDINGS = {
         "        return ir_status | _PyIR_RAISED; \\\n"
         "    } while (0)"),
     "IR_STUB_ESCAPE()": "(ir_status |= _PyIR_ESCAPED)",
+    # The departing frame's unit runs on until a switch leaves it
+    "IR_PIN_DEPARTING()": "(ir_status |= _PyJit_PinDeparting(tstate, frame))",
     "IR_CLOSE_WINDOW(W, N)": "_PyIR_STUB_CLOSE_WINDOW((W), (N))",
 }
 STUB_UNBOUND = ("DISPATCH_GOTO", "DISPATCH_INLINED", "IR_EXIT", "IR_OBSERVE_EDGE",

@@ -2614,6 +2614,8 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
 #undef IR_JIT_RESUME
 #pragma push_macro("IR_STORE_RETURN")
 #undef IR_STORE_RETURN
+#pragma push_macro("IR_PIN_DEPARTING")
+#undef IR_PIN_DEPARTING
 #define DISPATCH() return (_PyIRTransfer){frame, next_instr}
 #define DISPATCH_SAME_OPARG() return (_PyIRTransfer){frame, next_instr}
 #define DISPATCH_GOTO() \
@@ -2697,6 +2699,9 @@ generator_complete_publish(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * frame's _PyFrame_JIT_RESUME flag. */
 #define IR_JIT_EVENT() ((void)0)
 #define IR_JIT_RESUME() ((void)0)
+/* The pin's release status is not needed: every pinned arm runs Python, so
+ * the form's continuation tests RETIRED when the word stays in its frame */
+#define IR_PIN_DEPARTING() ((void)_PyJit_PinDeparting(tstate, frame))
 #define IR_STORE_RETURN(V) \
     do { \
         assert(_PyValue_IsHome(V)); \
@@ -3005,6 +3010,7 @@ ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfla
 #pragma pop_macro("IR_JIT_EVENT")
 #pragma pop_macro("IR_JIT_RESUME")
 #pragma pop_macro("IR_STORE_RETURN")
+#pragma pop_macro("IR_PIN_DEPARTING")
 
 /* The evaluator: every handler and label of the interpreter in one
  * function, which dispatches by computed goto (Python/ceval_macros.h).  Its

@@ -4391,5 +4391,101 @@ class BoundaryTests(unittest.TestCase):
                      r"boundary\(SEND_GEN\) may differ")
 
 
+
+class PinTests(unittest.TestCase):
+    """The execution pin (g3/design.md section 2): every arm that departs
+    its frame by a return or a yield pins the frame's code once, after its
+    last guard, in every product: the function forms (and the evaluator,
+    whose handlers are the same text) and the stubs"""
+
+    @classmethod
+    def setUpClass(cls):
+        formats = ir_generator.compute_formats(analysis)
+        cls.stubs = {}
+        out = io.StringIO()
+        cls.forms = ir_generator.generate_ir_cases(analysis, formats, out, False,
+                                                   None, cls.stubs)
+        cls.evaluator = out.getvalue()
+        cls.handlers = ir_generator.handler_instructions(analysis)
+
+    def declares_departure(self, name):
+        return any(t.kind in (ir_records.RETURN, ir_records.YIELD)
+                   for u in records[name].uops for t in u.transfers)
+
+    def departs(self, name):
+        "Whether a handler that runs name's body declares return or yield"
+        return any(self.declares_departure(n) for n in self.handlers
+                   if ir_generator.generator_word_entry(n, analysis) == name)
+
+    def form(self, name):
+        return next(f for f in self.forms
+                    if re.search(rf"\bir_run_{name}\(", f.split("{", 1)[0]))
+
+    def test_every_departing_arm_pins_once(self):
+        named = 0
+        for text in self.forms:
+            m = re.search(r"\bir_run_(\w+)\(", text.split("{", 1)[0])
+            if m is None or m.group(1) not in self.handlers:
+                continue
+            name = m.group(1)
+            if (ir_generator.generator_word_entry(name, analysis) != name
+                    or name in ir_generator.EDGE_TWINS or name in ir_generator.EVENT_TWINS):
+                # A twin calls its base's form, which pins
+                continue
+            named += 1
+            with self.subTest(name=name):
+                self.assertEqual(text.count("IR_PIN_DEPARTING();"),
+                                 1 if self.departs(name) else 0)
+        self.assertGreater(named, 200)
+        # The stubs are the same text with the stub bindings
+        for function, text in self.stubs.items():
+            name = function.removeprefix("_PyIR_Stub_")
+            if name in self.handlers:
+                with self.subTest(stub=name):
+                    self.assertEqual(text.count("IR_PIN_DEPARTING();"),
+                                     1 if self.departs(name) else 0)
+        for name in ("RETURN_VALUE", "YIELD_VALUE", "SEND_VIRTUAL_XFER_DISCARD"):
+            self.assertTrue(self.departs(name), name)
+        for name in ("CALL_PY_EXACT_ARGS", "SEND_GEN_XFER_DISCARD", "LOAD_FAST"):
+            self.assertFalse(self.departs(name), name)
+
+    def test_the_pin_follows_the_last_guard(self):
+        # The guarded variants share their family's body, whose RETURN
+        # consumer completes through GEN_COMPLETE_RETURN
+        for name, guards, body, first in (
+                ("SEND_VIRTUAL_XFER_RETURN",
+                 ("_GUARD_TOS_IS_NONE", "_GUARD_NOS_NOT_NULL"), "_SEND_VIRTUAL",
+                 "PyObject *iter_o"),
+                ("SEND_VIRTUAL_XFER_STORE_LOCAL",
+                 ("_GUARD_TOS_IS_NONE", "_GUARD_NOS_NOT_NULL"), "_SEND_VIRTUAL",
+                 "PyObject *iter_o"),
+                ("SEND_ASYNC_GEN_XFER_RETURN",
+                 ("_GUARD_3OS_ASYNC_GEN_ASEND",), "_SEND_ASYNC_GEN",
+                 "PyObject *iter_o"),
+                ("SEND_ASYNC_GEN_XFER_POP_TOP",
+                 ("_GUARD_3OS_ASYNC_GEN_ASEND",), "_SEND_ASYNC_GEN",
+                 "PyObject *iter_o")):
+            with self.subTest(name=name):
+                self.assertTrue(self.declares_departure(name))
+                entry = ir_generator.generator_word_entry(name, analysis)
+                text = self.form(entry)
+                pin = text.index("IR_PIN_DEPARTING();")
+                for guard in guards:
+                    self.assertLess(text.index(f"// {guard}\n"), pin)
+                start = text.index(f"// {body}\n")
+                self.assertLess(start, pin)
+                self.assertLess(pin, text.index(first, start))
+                self.assertEqual(ir_generator.pin_point(entry, self.handlers[entry],
+                                                        analysis), len(guards))
+
+    def test_an_unguarded_return_pins_first(self):
+        # RETURN_VALUE has no guard: the pin is before its first uop's body
+        text = self.form("RETURN_VALUE")
+        self.assertLess(text.index("// _MAKE_HEAP_SAFE\n"), text.index("IR_PIN_DEPARTING();"))
+        self.assertLess(text.index("IR_PIN_DEPARTING();"), text.index("IR_DETACH("))
+        self.assertEqual(ir_generator.pin_point("RETURN_VALUE",
+                                                self.handlers["RETURN_VALUE"], analysis), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

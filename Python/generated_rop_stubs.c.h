@@ -3,7 +3,7 @@
 //   Python/register_ops/add.rop, Python/register_ops/calls.rop, Python/register_ops/core.rop, Python/register_ops/data.rop, Python/register_ops/getattr.rop, Python/register_ops/values.rop
 // Do not edit!
 //
-// 0 stubs.
+// 1 stubs.
 
 /* The whole-word completion stubs of the shared register arms (g1a/abi.md):
  * the arm's statements with the transfer macros bound to status returns.
@@ -26,6 +26,8 @@
 #undef PROCESS_ERROR_AT
 #pragma push_macro("IR_STUB_ESCAPE")
 #undef IR_STUB_ESCAPE
+#pragma push_macro("IR_REDIRECT")
+#undef IR_REDIRECT
 #pragma push_macro("PyValue_CLOSE")
 #undef PyValue_CLOSE
 #pragma push_macro("PyValue_XCLOSE")
@@ -42,11 +44,112 @@
         return ir_status | _PyIR_RAISED; \
     } while (0)
 #define IR_STUB_ESCAPE() (ir_status |= _PyIR_ESCAPED)
+#define IR_REDIRECT() do { \
+        if (frame->pending_redirect) { \
+            _PyFrame_CompleteRedirect(frame); \
+        } \
+        return ir_status | _PyIR_ESCAPED | _PyIR_REDIRECT; \
+    } while (0)
 #define PyValue_CLOSE(V) _PyIR_STUB_RELEASE(PyValue_CLOSE, V)
 #define PyValue_XCLOSE(V) _PyIR_STUB_RELEASE(PyValue_XCLOSE, V)
 
+static Py_NO_INLINE int
+_PyIR_Rop_Stub_Add_Generic(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)
+{
+    _PyInstr *next_instr = site;
+    _PyIRWord ir_word = *site;
+    int ir_status = 0;
+
+    // Add.Generic (shared)
+    int opcode = ROP_HANDLER_Add_Generic;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 1;
+    INSTRUCTION_STATS(ROP_HANDLER_Add_Generic);
+    PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
+    PyValue *const home_y = &IR_SLOT(IR_C(ir_word));
+    _PyRopAnchors a;
+    PyValue ret1;
+    PyValue own_x = PyValue_NULL;
+    PyValue own_y = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int adapt_before_use_add2_c;
+    int ret2;
+    PyValue z;
+    PyValue binary_at_origin1_value;
+    PyValue binary_at_origin1_kept;
+    PyValue binary_at_origin1_dropped;
+    if (!_PyFb_TickQuiet(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h)) {
+        goto rop_Add_Generic_adapt_before_use_add2_Sample;
+    }
+    rop_Add_Generic_adapt_before_use_add2_Run:
+    rop_Add_Generic_Run:
+    a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_C)}, {home_x, home_y}});
+    IR_STUB_ESCAPE();
+    ret1 = value_binary_op(NB_ADD, _PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1));
+    if (PyValue_IsNull(ret1)) {
+        goto rop_Add_Generic_binary_at_origin1_Failed;
+    }
+    binary_at_origin1_value = ret1;
+    if (_PyRop_RedirectPending(frame)) {
+        binary_at_origin1_dropped = binary_at_origin1_value;
+        goto rop_Add_Generic_binary_at_origin1_Moved;
+    }
+    binary_at_origin1_kept = binary_at_origin1_value;
+    z = binary_at_origin1_kept;
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_x = _PyFrame_TakeHome(frame, home_x);
+    }
+    if (!(ir_word & IR_F_LOCAL_C)) {
+        own_y = _PyFrame_TakeHome(frame, home_y);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    _PyRop_CloseAnchors(&a);
+    PyValue_XCLOSE(own_y);
+    PyValue_XCLOSE(own_x);
+    PyValue_XCLOSE(old_dst);
+    DISPATCH();
+    rop_Add_Generic_adapt_before_use_add2_Sample:
+    if (PyValue_BothInlineInt(PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
+        goto rop_Add_Generic_adapt_before_use_add2_Chosen;
+    }
+    goto rop_Add_Generic_adapt_before_use_add2_Other;
+    rop_Add_Generic_adapt_before_use_add2_Chosen:
+    adapt_before_use_add2_c = ROP_HANDLER_Add_Int;
+    ret2 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_add2_c);
+    if (ret2 == 0) {
+        goto rop_Add_Generic_adapt_before_use_add2_Run;
+    }
+    if (ret2 < 0) {
+        goto rop_Add_Generic_adapt_before_use_add2_Run;
+    }
+    next_instr = this_instr;
+    DISPATCH_SAME_OPARG();
+    rop_Add_Generic_adapt_before_use_add2_Other:
+    _PyRop_Backoff(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h);
+    goto rop_Add_Generic_Run;
+    rop_Add_Generic_binary_at_origin1_Failed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_y, home_x}});
+    PROCESS_ERROR_AT(RAISE, 3, this_instr);
+    rop_Add_Generic_binary_at_origin1_Moved:
+    IR_STUB_ESCAPE();
+    _PyRop_DiscardResult(binary_at_origin1_dropped);
+    IR_STUB_ESCAPE();
+    _PyRop_RetireAbandoned(&a);
+    IR_REDIRECT();
+}
+
 #pragma pop_macro("PyValue_XCLOSE")
 #pragma pop_macro("PyValue_CLOSE")
+#pragma pop_macro("IR_REDIRECT")
 #pragma pop_macro("IR_STUB_ESCAPE")
 #pragma pop_macro("PROCESS_ERROR_AT")
 #pragma pop_macro("JUMP_TO_PREDICTED")

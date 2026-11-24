@@ -844,7 +844,11 @@ class ArmLowerer:
             self.emit("DISPATCH();")
         elif t.kind == "miss":
             self.emit(self.miss())
+        elif t.kind == "redirect":
+            self.emit("IR_REDIRECT();")
         elif t.kind == "again":
+            # The word runs again, under the handler it now names
+            self.emit("next_instr = this_instr;")
             self.emit("DISPATCH_SAME_OPARG();")
         elif t.kind == "raise":
             point = t.args[0]

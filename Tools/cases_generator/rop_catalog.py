@@ -490,6 +490,11 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
           COutcome(CTest.positive, _RES, (CSource.token,), False),
           COutcome(CTest.zero, _RES, (), False),
           COutcome(CTest.negative, _RES, (), False)),
+    # Whether a state bit is set: false the first case, true the second, whose
+    # payload is a proof
+    _conv("redirect_status", CReturn.bool,
+          COutcome(CTest.false, _RES, (), False),
+          COutcome(CTest.true, _RES, (CSource.token,), False)),
     # bool tests as two cases: true first
     _conv("bool_cases", CReturn.bool,
           COutcome(CTest.true, _RES, (), False),

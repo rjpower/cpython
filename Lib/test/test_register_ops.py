@@ -614,10 +614,11 @@ class DefinitionTests(unittest.TestCase):
                          ["Add.Generic", "Add.Int"])
         self.assertIn("GetAttr.Instance", p.arms)
         self.assertIsNotNone(p.macros["adapt_before_use_add"].graph)
+        self.assertIsNotNone(p.macros["binary_at_origin"].graph)
 
     def test_pending_rows(self):
         pending = set(self.program.pending)
-        for name in ("binary_at_origin", "getattr_at_origin"):
+        for name in ("getattr_at_origin",):
             self.assertIn(name, pending)
         for x in self.program.externs.values():
             if x.c is not None:

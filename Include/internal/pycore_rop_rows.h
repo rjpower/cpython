@@ -77,6 +77,25 @@ _PyRop_RetireAbandoned(_PyRopAnchors *a)
     _PyRop_CloseAnchors(a);
 }
 
+static inline PyValueBorrow
+_PyRop_AnchorArg(const _PyRopAnchors *a, size_t i)
+{
+    assert(i < a->n);
+    return a->view[i];
+}
+
+static inline bool
+_PyRop_RedirectPending(_PyInterpreterFrame *frame)
+{
+    return frame->pending_redirect;
+}
+
+static inline void
+_PyRop_DiscardResult(PyValue z)
+{
+    PyValue_XCLOSE(z);
+}
+
 /* Python/specialize.c: the adaptation rows */
 void _PyRop_Backoff(_PyFbHeader *fb);
 int _PyRop_Install(_PyInstr *site, _PyFbHeader *fb, int handler);

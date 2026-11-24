@@ -387,7 +387,9 @@ dummy_func(
             DEAD(value);
         }
 
-        op(_POP_TOP_UNICODE, (value --)) {
+        op(_POP_TOP_UNICODE, (value: consumed exact(PyUnicode_Type) --))
+            effects(writes) exits(next)
+        {
             assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
             PyValue_CLOSE_SPECIALIZED(value, _PyUnicode_ExactDealloc);
         }

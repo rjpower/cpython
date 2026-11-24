@@ -15,7 +15,8 @@ generated C uses the value API and never `.bits`.
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from rop_catalog import (CONVENTIONS, CReturn, CSource, CTest, DebtKind, Fact, FieldKind,
+from rop_catalog import (CONVENTIONS, CReturn, CSource, CTest, DebtKind, Effect, Fact,
+                         FieldKind,
                          Handle, Scalar, Slot, Wrap)
 from rop_check import GraphInfo, Program
 from rop_model import (Advance, Arm, BoolLit, Branch, Call, CallTerm, Cases,
@@ -42,6 +43,9 @@ HANDLE_C = {
     Handle.O: "PyValue",
     Handle.Obj: "PyObject *",
 }
+
+# Effects after which Python may have run: a stub reports ESCAPED
+ESCAPING = frozenset({Effect.runs_python, Effect.polls})
 
 # Names the handler's C scope owns
 RESERVED = frozenset({
@@ -204,6 +208,53 @@ def edges_of(program: Program, blocks, block):
             yield edge.target, extra
 
 
+def pending_blockers(program: Program, arm: Arm) -> list[str]:
+    """Every row without a C body and every macro without a graph that the
+    arm reaches, directly or through the macros it calls, in name order"""
+    found: set[str] = set()
+    seen: set[str] = set()
+
+    def walk(graph) -> None:
+        for b in graph.blocks:
+            exprs: list[Expr] = []
+            for s in b.stmts:
+                exprs += [s.cond] if isinstance(s, Guard) else \
+                    [s.value] if isinstance(s, Let) else \
+                    [x.value for x in s.bindings] if isinstance(s, Publish) else []
+            t = b.term
+            if isinstance(t, CallTerm):
+                visit(t.callee)
+                exprs += list(t.args)
+            elif isinstance(t, Goto):
+                exprs += list(t.target.args)
+            elif isinstance(t, Branch):
+                exprs.append(t.cond)
+            elif isinstance(t, Exit):
+                exprs += list(t.args)
+            while exprs:
+                e = exprs.pop()
+                if isinstance(e, Call):
+                    visit(e.callee)
+                    exprs += list(e.args)
+
+    def visit(name: str) -> None:
+        if name in seen:
+            return
+        seen.add(name)
+        x = program.externs.get(name)
+        if x is not None and x.c is None:
+            found.add(name)
+        m = program.macros.get(name)
+        if m is not None:
+            if m.graph is None:
+                found.add(name)
+            else:
+                walk(m.graph)
+
+    walk(arm.graph)
+    return sorted(found)
+
+
 def home_views(arm: Arm) -> dict[str, str]:
     """The value each `let v = use(x)` binds, by home operand"""
     views: dict[str, str] = {}
@@ -307,6 +358,8 @@ class ArmLowerer:
         if isinstance(e, Call):
             if e.callee == "use":
                 return HandleType(Handle.B)
+            if e.callee == "dup":
+                return HandleType(Handle.O)
             x = self.program.externs.get(e.callee)
             if x is not None and not isinstance(x.result, Cases):
                 return x.result.type
@@ -339,6 +392,9 @@ class ArmLowerer:
             (arg,) = e.args
             assert isinstance(arg, Name)
             return f"PyValue_Borrow(*{self.home(arg.name)})"
+        if e.callee == "dup":
+            (arg,) = e.args
+            return f"PyValue_DUP({self.expr_text(arg)})"
         if e.callee == "unwrap":
             (arg,) = e.args
             return self.expr_text(arg)
@@ -408,6 +464,7 @@ class ArmLowerer:
     def lower_block(self, block, label: str) -> None:
         if label != "entry":
             self.emit(f"{self.label(label)}:")
+        self.current_facts = self.facts_in[label]
         for s in block.stmts:
             self.lower_stmt(s)
         self.lower_term(block, label)
@@ -535,6 +592,8 @@ class ArmLowerer:
         # and the payloads that read it
         inline = conv.returns is CReturn.bool and len(conv.outcomes) == 2
         ret = f"{x.c.symbol}({', '.join(args)})"
+        if x.contract.effect_set & ESCAPING:
+            self.emit("IR_STUB_ESCAPE();")
         if not inline:
             call = ret
             ret = self.new_temp(RETURN_C[conv.returns], "ret")

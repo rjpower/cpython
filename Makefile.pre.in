@@ -2256,18 +2256,21 @@ regen-ir-cases:
 	$(UPDATE_FILE) $(srcdir)/Python/generated_ir_stubs.c.h $(srcdir)/Python/generated_ir_stubs.c.h.new
 	$(UPDATE_FILE) $(srcdir)/Python/ir_targets.h $(srcdir)/Python/ir_targets.h.new
 
-# The register instruction arms (Python/register_ops).  The dispatch table
-# extends the old one, so it is made after it.
+# The register instruction arms (Python/register_ops)
 .PHONY: regen-rop
-regen-rop: regen-ir-cases
+regen-rop:
 	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/cases_generator/rop_generator.py \
 	    --cases $(srcdir)/Python/generated_rop_cases.c.h.new \
 	    --forms $(srcdir)/Python/generated_rop_forms.c.h.new \
-	    --targets $(srcdir)/Python/rop_targets.h.new \
+	    --targets $(srcdir)/Python/generated_rop_targets.h.new \
+	    --stubs $(srcdir)/Python/generated_rop_stubs.c.h.new \
+	    --templates $(srcdir)/Python/generated_rop_templates.c.h.new \
 	    --metadata $(srcdir)/Include/internal/pycore_rop_metadata.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_cases.c.h $(srcdir)/Python/generated_rop_cases.c.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_forms.c.h $(srcdir)/Python/generated_rop_forms.c.h.new
-	$(UPDATE_FILE) --create $(srcdir)/Python/rop_targets.h $(srcdir)/Python/rop_targets.h.new
+	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_targets.h $(srcdir)/Python/generated_rop_targets.h.new
+	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_stubs.c.h $(srcdir)/Python/generated_rop_stubs.c.h.new
+	$(UPDATE_FILE) --create $(srcdir)/Python/generated_rop_templates.c.h $(srcdir)/Python/generated_rop_templates.c.h.new
 	$(UPDATE_FILE) --create $(srcdir)/Include/internal/pycore_rop_metadata.h $(srcdir)/Include/internal/pycore_rop_metadata.h.new
 
 .PHONY: regen-jit-templates
@@ -2279,7 +2282,8 @@ regen-jit-templates:
 	$(UPDATE_FILE) $(srcdir)/Python/jit_templates.c.h $(srcdir)/Python/jit_templates.c.h.new
 
 Python/jit_lower.o: $(srcdir)/Python/jit_lowerings.h
-Python/jit_template.o: $(srcdir)/Python/jit_templates.c.h $(srcdir)/Python/jit_lowerings.h
+Python/jit_template.o: $(srcdir)/Python/jit_templates.c.h $(srcdir)/Python/jit_lowerings.h \
+		$(srcdir)/Python/generated_rop_templates.c.h $(srcdir)/Include/internal/pycore_rop_metadata.h
 
 .PHONY: regen-ir-metadata
 regen-ir-metadata:
@@ -2314,7 +2318,8 @@ Python/ceval.o: \
 		$(srcdir)/Python/ir_targets.h \
 		$(srcdir)/Python/generated_rop_cases.c.h \
 		$(srcdir)/Python/generated_rop_forms.c.h \
-		$(srcdir)/Python/rop_targets.h \
+		$(srcdir)/Python/generated_rop_stubs.c.h \
+		$(srcdir)/Python/generated_rop_targets.h \
 		$(srcdir)/Include/internal/pycore_rop_metadata.h \
 		$(srcdir)/Include/internal/pycore_ir.h \
 		$(srcdir)/Include/internal/pycore_ir_metadata.h

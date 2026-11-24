@@ -2838,6 +2838,16 @@ IR_HOT_ROUTINE(gen_complete, PyValue gen_value);
 /* The forms of the register instruction arms (Python/register_ops), in a
  * table of their own from ROP_FIRST_HANDLER */
 #include "generated_rop_forms.c.h"
+#include "generated_rop_stubs.c.h"
+
+const _PyIRStubPlan *
+_PyIR_StubPlanOf(int handler)
+{
+    if (handler >= ROP_FIRST_HANDLER) {
+        return &_PyIR_RopStubPlans[handler - ROP_FIRST_HANDLER];
+    }
+    return &_PyIR_StubPlans[handler];
+}
 #pragma GCC diagnostic pop
 
 #ifdef _PY_JIT_SUPPORTED
@@ -3039,7 +3049,17 @@ ir_execute_forms(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfla
 static Py_NO_INLINE PyValue
 ir_evaluate(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
-#include "rop_targets.h"
+    /* The dispatch table: the old generated entries, then the register
+     * arms'.  Built on the first activation; label addresses are known only
+     * here. */
+#define opcode_targets opcode_targets_base
+#include "ir_targets.h"
+#undef opcode_targets
+    static void *opcode_targets[512];
+    if (opcode_targets[0] == NULL) {
+        memcpy(opcode_targets, opcode_targets_base, sizeof(opcode_targets));
+#include "generated_rop_targets.h"
+    }
     _PyInstr *next_instr = frame->instr_ptr;
     _PyIRWord ir_word = 0;
     /* The operands of the shared bodies that the labels below read: the

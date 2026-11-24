@@ -532,7 +532,7 @@ jit_template_run(PyObject *module, PyObject *args)
     Transfer t;
     slow_taken = 0;
     if (use_template) {
-        _PyJitTemplate template = _PyJit_Templates[_PyJit_CompiledHandler(w)];
+        _PyJitTemplate template = _PyJit_TemplateOf(_PyJit_CompiledHandler(w));
         _PyJitCode unit;
         if (template == NULL || build_unit(frame, index, template, &unit, NULL) < 0) {
             tstate->current_frame = previous;
@@ -598,7 +598,7 @@ jit_template_size(PyObject *module, PyObject *args)
     _PyInterpreterFrame *frame = _PyFrame_PushUnchecked(
         tstate, PyValue_FromObjectSteal(Py_NewRef(func)), tstate->current_frame);
     _PyIRWord w = ((const _PyIRWord *)frame->ir_words)[index];
-    _PyJitTemplate template = _PyJit_Templates[_PyJit_CompiledHandler(w)];
+    _PyJitTemplate template = _PyJit_TemplateOf(_PyJit_CompiledHandler(w));
     _PyJitCode unit;
     size_t bytes[2];
     int built = template == NULL ? -1 : build_unit(frame, index, template, &unit, bytes);

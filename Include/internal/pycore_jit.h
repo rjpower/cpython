@@ -81,6 +81,9 @@ typedef struct {
 } _PyIRStubPlan;
 
 PyAPI_DATA(const _PyIRStubPlan) _PyIR_StubPlans[];
+/* The plan of a handler of either table: the old handlers' and the
+ * register arms' (Python/generated_rop_stubs.c.h) */
+PyAPI_FUNC(const _PyIRStubPlan *) _PyIR_StubPlanOf(int handler);
 
 /* The jit modes (-X jit, PYTHON_JIT) */
 enum {

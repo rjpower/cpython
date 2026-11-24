@@ -4,8 +4,8 @@
 // Do not edit!
 //
 // Arms left out, and what blocks each:
-//   Add.Generic: Add.Generic: adapt_before_use_add has no C body (pending)
-//   GetAttr.Instance: GetAttr.Instance: admitted_instance_slot has no C body (pending)
+//   Add.Generic: pending: anchor_for_call, backoff, binary_at_origin, install, retire_abandoned, retire_failed_call, tick
+//   GetAttr.Instance: pending: admitted_instance_slot, borrow_value_slot, instance_version, present, valid_inline_values
 
 /* A family with no generic arm cannot miss: no word selects its arms yet. */
 #ifndef ROP_NO_GENERIC
@@ -15,14 +15,14 @@
 
         TARGET(Add_Int) {
             // Add.Int (inline)
-            int opcode = 418;
+            int opcode = ROP_HANDLER_Add_Int;
             (void)opcode;
             _PyIRWord *const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             IR_HOLD_NEXT();
             next_instr += 1;
-            INSTRUCTION_STATS(418);
+            INSTRUCTION_STATS(ROP_HANDLER_Add_Int);
             PyValue *const home_x = &IR_SLOT(IR_B(ir_word));
             PyValueBorrow l;
             PyValue *const home_y = &IR_SLOT(IR_C(ir_word));

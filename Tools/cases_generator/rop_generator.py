@@ -16,28 +16,28 @@ unknown, so the assembler cannot select it.
 """
 
 import argparse
-import re
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
 
+import jit_template_generator
 import rop_check
+import rop_leaf
 from generators_common import root_relative_path, write_header
-from rop_catalog import Slot
-from rop_cgen import Lowering, Unsupported, lower_arm
+from rop_cgen import ESCAPING, Lowering, Unsupported, lower_arm, pending_blockers
+from rop_catalog import FieldKind, Handle
 from rop_check import Program
-from rop_model import Arm
+from rop_model import Arm, HandleType, Param, WrapType
+from rop_print import type_text
 
 ROOT = Path(__file__).resolve().parents[2]
 ROP_DIR = ROOT / "Python" / "register_ops"
-NUMBERS = ROP_DIR / "handlers.txt"
-OLD_TARGETS = ROOT / "Python" / "ir_targets.h"
 
-# The handler ids of the arms follow the old handlers; the field holds nine
-# bits
-FIRST_HANDLER = 418
+# The arms' handler ids follow the old handlers (ROP_FIRST_HANDLER is the old
+# count in the generated metadata) and are dense, in definition order.  They
+# are private: nothing outside the generated files names one.
 HANDLER_LIMIT = 512
 
 
@@ -45,41 +45,18 @@ class GenerateError(Exception):
     pass
 
 
-def read_numbers(path: Path = NUMBERS) -> dict[str, int]:
-    """The pinned handler number of each arm: `Family.Arm NUMBER` lines"""
-    numbers: dict[str, int] = {}
-    for n, line in enumerate(path.read_text().splitlines(), 1):
-        line = line.split("#")[0].strip()
-        if not line:
-            continue
-        name, number = line.split()
-        if name in numbers:
-            raise GenerateError(f"{path.name}:{n}: {name} appears twice")
-        numbers[name] = int(number)
-    seen: dict[int, str] = {}
-    for name, number in numbers.items():
-        if not FIRST_HANDLER <= number < HANDLER_LIMIT:
-            raise GenerateError(
-                f"{path.name}: {name} has number {number}, outside "
-                f"{FIRST_HANDLER}..{HANDLER_LIMIT - 1}")
-        if number in seen:
-            raise GenerateError(f"{path.name}: {name} and {seen[number]} share {number}")
-        seen[number] = name
-    return numbers
-
-
-def check_numbers(program: Program, numbers: Mapping[str, int]) -> None:
-    for name in program.arms:
-        if name not in numbers:
-            raise GenerateError(
-                f"handlers.txt has no line for arm {name}; add `{name} N`")
-    for name in numbers:
-        if name not in program.arms:
-            raise GenerateError(f"handlers.txt names {name}, which is no arm")
-
-
 def c_name(arm: str) -> str:
     return arm.replace(".", "_")
+
+
+def number_arms(program: Program) -> dict[str, int]:
+    """Each arm's index among the arms, in definition order"""
+    return {name: i for i, name in enumerate(program.arms)}
+
+
+def handler(name: str) -> str:
+    """The C name of an arm's handler id"""
+    return f"ROP_HANDLER_{c_name(name)}"
 
 
 @dataclass(frozen=True)
@@ -89,6 +66,7 @@ class Products:
     points: Mapping[str, int]
     lowered: Mapping[str, Lowering]
     left_out: Mapping[str, str]       # arm -> what blocks it
+    generic: Mapping[str, str | None]  # family -> its generic arm, if emitted
 
 
 def point_numbers(program: Program) -> dict[str, int]:
@@ -105,34 +83,39 @@ def lower_all(program: Program, numbers: Mapping[str, int]) -> Products:
     # The family's miss adapter is its Generic arm, when that arm is emitted;
     # a Generic arm that does not lower leaves its family without one
     generic: dict[str, str | None] = {f: None for f in program.families}
+    generic_arms: dict[str, str | None] = {f: None for f in program.families}
     ordered = sorted(program.arms.values(), key=lambda a: a.name != f"{a.family}.Generic")
     for arm in ordered:
         try:
             lowered[arm.name] = lower_arm(program, arm, numbers, points, generic)
         except Unsupported as e:
-            left_out[arm.name] = str(e)
+            pending = pending_blockers(program, arm)
+            left_out[arm.name] = (f"pending: {', '.join(pending)}" if pending
+                                  else str(e))
             continue
         if arm.name.endswith(".Generic"):
             generic[arm.family] = c_name(arm.name)
-    return Products(program, numbers, points, lowered, left_out)
+            generic_arms[arm.family] = arm.name
+    return Products(program, numbers, points, lowered, left_out,
+                    generic_arms)
 
 
 # Interpreter cases and function forms
 
 PROLOGUE = """\
-int opcode = {number};
+int opcode = {handler};
 (void)opcode;
 _PyIRWord *const this_instr = next_instr;
 (void)this_instr;
 frame->instr_ptr = next_instr;
 IR_HOLD_NEXT();
 next_instr += 1;
-INSTRUCTION_STATS({number});"""
+INSTRUCTION_STATS({handler});"""
 
 
-def handler_text(arm: Arm, number: int, low: Lowering, indent: str) -> list[str]:
+def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
     lines = [f"// {arm.name} ({arm.region.name})"]
-    lines += PROLOGUE.format(number=number).splitlines()
+    lines += PROLOGUE.format(handler=handler(arm.name)).splitlines()
     lines += low.decls
     lines += low.body
     return [indent + line if line else line for line in lines]
@@ -158,7 +141,7 @@ def write_cases(out: TextIO, p: Products, sources: list[str]) -> None:
     for name, low in p.lowered.items():
         arm = p.program.arms[name]
         out.write(f"\n        TARGET({c_name(name)}) {{\n")
-        text = handler_text(arm, p.numbers[name], low, "            ")
+        text = handler_text(arm, low, "            ")
         out.write("\n".join(text) + "\n        }\n")
 
 
@@ -184,48 +167,191 @@ def write_forms(out: TextIO, p: Products, sources: list[str]) -> None:
         out.write(f"\nstatic Py_NO_INLINE _PyIRTransfer\nir_run_{c_name(name)}(\n"
                   "    PyThreadState *tstate, _PyInterpreterFrame *frame, "
                   "_PyInstr *next_instr, _PyIRWord ir_word)\n{\n")
-        out.write("\n".join(handler_text(arm, p.numbers[name], low, "    ")) + "\n}\n")
+        out.write("\n".join(handler_text(arm, low, "    ")) + "\n}\n")
     out.write("\nstatic const _PyIRForm ir_rop_forms[ROP_NUM_HANDLERS] = {\n")
     for name in p.lowered:
-        out.write(f"    [{p.numbers[name] - FIRST_HANDLER}] = ir_run_{c_name(name)},\n")
+        out.write(f"    [{handler(name)} - ROP_FIRST_HANDLER] = ir_run_{c_name(name)},\n")
     out.write("};\n")
 
 
-# The dispatch table: the old table, with the arms' entries
-
-TARGET_ENTRY = re.compile(r"^\s*\[(\d+)\] = &&TARGET_(\w+),$")
-
-
-def old_dispatch(path: Path = OLD_TARGETS) -> dict[int, str]:
-    inside = False
-    table: dict[int, str] = {}
-    for line in path.read_text().splitlines():
-        if line.startswith("static void *const opcode_targets"):
-            inside = True
-        elif inside and (m := TARGET_ENTRY.match(line)):
-            table[int(m[1])] = m[2]
-    if len(table) != HANDLER_LIMIT:
-        raise GenerateError(f"{path.name}: {len(table)} dispatch entries, not {HANDLER_LIMIT}")
-    return table
-
+# The dispatch table: ceval.c copies the old table, then runs these
+# assignments once
 
 def write_targets(out: TextIO, p: Products, sources: list[str]) -> None:
-    table = old_dispatch()
-    for name in p.lowered:
-        if table[p.numbers[name]] != "UNKNOWN_OPCODE":
-            raise GenerateError(f"handler {p.numbers[name]} of {name} is in use")
-        table[p.numbers[name]] = c_name(name)
     write_header(__file__, sources, out)
-    out.write("// The dispatch table of Python/ir_targets.h with the register arms.\n")
-    out.write("static void *const opcode_targets[512] = {\n")
-    for i in range(HANDLER_LIMIT):
-        out.write(f"    [{i}] = &&TARGET_{table[i]},\n")
+    for name in p.lowered:
+        out.write(f"opcode_targets[{handler(name)}] = &&TARGET_{c_name(name)};\n")
+
+
+# Whole-word completion stubs (regions89 G1a) and the plan of each arm
+
+STUB_PREAMBLE = """\
+/* The whole-word completion stubs of the shared register arms (g1a/abi.md):
+ * the arm's statements with the transfer macros bound to status returns.
+ * A release reports ESCAPED exactly when it deallocates. */
+#ifndef _PyIR_STUB_RELEASE
+#define _PyIR_STUB_RELEASE(CLOSE, V) \\
+    do { \\
+        PyValue ir_released = (V); \\
+        ir_status |= _PyIR_StubDropsLast(ir_released); \\
+        (CLOSE)(ir_released); \\
+    } while (0)
+#endif
+#pragma push_macro("DISPATCH")
+#undef DISPATCH
+#pragma push_macro("DISPATCH_SAME_OPARG")
+#undef DISPATCH_SAME_OPARG
+#pragma push_macro("JUMP_TO_PREDICTED")
+#undef JUMP_TO_PREDICTED
+#pragma push_macro("PROCESS_ERROR_AT")
+#undef PROCESS_ERROR_AT
+#pragma push_macro("IR_STUB_ESCAPE")
+#undef IR_STUB_ESCAPE
+#pragma push_macro("PyValue_CLOSE")
+#undef PyValue_CLOSE
+#pragma push_macro("PyValue_XCLOSE")
+#undef PyValue_XCLOSE
+#define DISPATCH() return ir_status
+#define DISPATCH_SAME_OPARG() return ir_status | _PyIR_AGAIN
+#define JUMP_TO_PREDICTED(name) do { assert(ir_status == 0); return _PyIR_MISS; } while (0)
+#define PROCESS_ERROR_AT(ingress, checkpoint, origin) do { \\
+        _PyEvalActivation *ir_exit = IR_ACTIVATION(); \\
+        ir_exit->exit_kind = _PyIR_EXIT_RAISE; \\
+        ir_exit->exit_next = (origin); \\
+        ir_exit->exit_entry = \\
+            _PyIR_ERROR_ENTRY(_PyIR_ERROR_INGRESS_##ingress, checkpoint); \\
+        return ir_status | _PyIR_RAISED; \\
+    } while (0)
+#define IR_STUB_ESCAPE() (ir_status |= _PyIR_ESCAPED)
+#define PyValue_CLOSE(V) _PyIR_STUB_RELEASE(PyValue_CLOSE, V)
+#define PyValue_XCLOSE(V) _PyIR_STUB_RELEASE(PyValue_XCLOSE, V)
+"""
+
+STUB_EPILOGUE = """\
+#pragma pop_macro("PyValue_XCLOSE")
+#pragma pop_macro("PyValue_CLOSE")
+#pragma pop_macro("IR_STUB_ESCAPE")
+#pragma pop_macro("PROCESS_ERROR_AT")
+#pragma pop_macro("JUMP_TO_PREDICTED")
+#pragma pop_macro("DISPATCH_SAME_OPARG")
+#pragma pop_macro("DISPATCH")
+"""
+
+
+def stub_name(arm: str) -> str:
+    return f"_PyIR_Rop_Stub_{c_name(arm)}"
+
+
+def declares_escape(arm: Arm) -> bool:
+    return bool(arm.contract.effect_set & ESCAPING)
+
+
+def write_stubs(out: TextIO, p: Products, sources: list[str]) -> None:
+    write_header(__file__, sources, out)
+    shared = [n for n in p.lowered if p.program.arms[n].region.name == "shared"]
+    out.write(f"//\n// {len(shared)} stubs.\n\n")
+    out.write(STUB_PREAMBLE)
+    for name in shared:
+        arm = p.program.arms[name]
+        out.write(f"\nstatic Py_NO_INLINE int\n{stub_name(name)}(\n"
+                  "    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site)\n{\n"
+                  "    _PyInstr *next_instr = site;\n    _PyIRWord ir_word = *site;\n"
+                  "    int ir_status = 0;\n\n")
+        out.write("\n".join(handler_text(arm, p.lowered[name], "    ")) + "\n}\n")
+    out.write("\n" + STUB_EPILOGUE)
+    out.write("\n/* The plan of each arm, by handler from ROP_FIRST_HANDLER: its region,\n"
+              " * whether its completions report ESCAPED, its stub (shared), and its\n"
+              " * family's generic stub, which runs the word after a miss */\n")
+    out.write("const _PyIRStubPlan _PyIR_RopStubPlans[ROP_NUM_HANDLERS] = {\n")
+    for name in p.lowered:
+        arm = p.program.arms[name]
+        generic = p.generic.get(arm.family)
+        generic_text = f"(const void *){stub_name(generic)}" if generic and generic in shared else "NULL"
+        region = {"inline": "_PyIR_PLAN_INLINE", "shared": "_PyIR_PLAN_SHARED"}.get(arm.region.name)
+        if region is None:
+            continue
+        stub = f"(const void *){stub_name(name)}" if name in shared else "NULL"
+        out.write(f"    [{handler(name)} - ROP_FIRST_HANDLER] = {{{region}, "
+                  f"{int(declares_escape(arm))}, {stub}, {generic_text}}},  // {name}\n")
     out.write("};\n")
-    out.write('static_assert(Py_ARRAY_LENGTH(opcode_targets) == IR_HANDLER_MASK + 1,\n'
-              '              "dispatch covers every id that IR_HANDLER yields");\n')
+
+
+# Baseline templates, from the leaf graphs of the inline arms
+
+def template_texts(p: Products) -> tuple[dict[str, list[str]], dict[str, str]]:
+    made: dict[str, list[str]] = {}
+    refused: dict[str, str] = {}
+    for name, arm in p.program.arms.items():
+        if arm.region.name != "inline":
+            continue
+        try:
+            leaf = rop_leaf.leaf_of_arm(p.program, arm)
+            lines = rop_leaf.template_of_arm(p.program, arm, c_name(name), leaf)
+        except (Unsupported, jit_template_generator.Refused) as e:
+            refused[name] = str(e)
+            continue
+        made[name] = ["// The leaf graph of " + name + ":"] + [
+            "//   " + line for line in leaf.body.dump()] + lines
+    return made, refused
+
+
+def write_templates(out: TextIO, p: Products, sources: list[str]) -> None:
+    made, refused = template_texts(p)
+    write_header(__file__, sources, out)
+    out.write(f"//\n// {len(made)} templates.  Inline arms that keep the call of their form:\n")
+    for name, why in sorted(refused.items()):
+        out.write(f"//   {name}: {why}\n")
+    out.write("\n")
+    for lines in made.values():
+        out.write("\n".join(lines) + "\n\n")
+    out.write("const _PyJitTemplate _PyJit_RopTemplates[ROP_NUM_HANDLERS] = {\n")
+    for name in made:
+        out.write(f"    [{handler(name)} - ROP_FIRST_HANDLER] = jit_template_{c_name(name)},\n")
+    out.write("};\n")
 
 
 # Metadata
+
+HOME_ROLES = {Handle.Src: "SRC", Handle.Dst: "DST", Handle.Local: "LOCAL",
+              Handle.Cell: "CELL", Handle.Free: "FREE", Handle.IterPair: "ITERPAIR"}
+
+
+def operand_role(param: Param) -> tuple[str, bool]:
+    """The role of a home operand and whether it is optional"""
+    t, optional = param.type, False
+    if isinstance(t, WrapType):
+        t, optional = t.arg, True
+    if isinstance(t, HandleType):
+        return HOME_ROLES.get(t.handle, "NONE"), optional
+    return "NONE", optional
+
+
+def write_encodings(out: TextIO, p: Products) -> None:
+    prog = p.program
+    families = sorted(prog.families)
+    for f in families:
+        enc = prog.encodings[f]
+        params = {x.name: x for x in prog.families[f].params}
+        out.write(f"static const _PyRopOperand _PyRop_Operands_{f}[] = {{\n")
+        for pl in enc.placements:
+            role, optional = operand_role(params[pl.operand])
+            slots = pl.slots
+            offset = slots[0].offset if slots else 0
+            flag = (f"IR_F_LOCAL_{slots[0].name}" if pl.kind is FieldKind.home
+                    and slots and slots[0].word == 0 else "0")
+            out.write(f'    {{"{pl.operand}", ROP_FIELD_{pl.kind.name.upper()}, '
+                      f'ROP_ROLE_{role}, {int(optional)}, {pl.bits if slots else 0}, '
+                      f'{offset}, {flag}}},  /* {type_text(params[pl.operand].type)} */\n')
+        if not enc.placements:
+            out.write("    {NULL},\n")
+        out.write("};\n")
+    out.write(f"\nstatic const _PyRopFamily _PyRop_Families[ROP_NUM_FAMILIES] = {{\n")
+    for f in families:
+        enc = prog.encodings[f]
+        out.write(f'    [ROP_FAMILY_{f}] = {{"{f}", {len(enc.placements)}, {enc.words}, '
+                  f'_PyRop_Operands_{f}}},\n')
+    out.write("};\n\n")
+
 
 def operand_mask(names: tuple[str, ...], operands: list[str]) -> str:
     return " | ".join(f"(1 << {operands.index(n)})" for n in names) or "0"
@@ -236,20 +362,49 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     write_header(__file__, sources, out)
     families = sorted(prog.families)
     out.write("\n#ifndef Py_INTERNAL_ROP_METADATA_H\n#define Py_INTERNAL_ROP_METADATA_H\n")
-    out.write(f"\n#define ROP_FIRST_HANDLER {FIRST_HANDLER}\n")
-    out.write(f"#define ROP_NUM_HANDLERS {max(p.numbers.values()) - FIRST_HANDLER + 1}\n")
+    out.write('\n#include "opcode_ids.h"        // IR_NUM_HANDLERS\n#include "pycore_ir.h"          // IR_F_LOCAL_A\n')
+    out.write("\n/* The arms' handler ids follow the old handlers, in definition order */\n")
+    out.write("#define ROP_FIRST_HANDLER IR_NUM_HANDLERS\n")
+    out.write(f"#define ROP_NUM_HANDLERS {len(prog.arms)}\n")
+    out.write('static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,\n'
+              '              "the arms\' handler ids fit the handler field");\n')
     out.write(f"#define ROP_NUM_FAMILIES {len(families)}\n")
     out.write(f"#define ROP_NUM_ARMS {len(prog.arms)}\n\n")
     out.write("/* Family numbers, in name order */\nenum {\n")
     for i, f in enumerate(families):
         out.write(f"    ROP_FAMILY_{f} = {i},\n")
     out.write("};\n\n/* Handler numbers of the arms */\n")
-    for name in sorted(prog.arms, key=lambda n: p.numbers[n]):
-        out.write(f"#define ROP_HANDLER_{c_name(name)} {p.numbers[name]}\n")
+    for name in prog.arms:
+        out.write(f"#define {handler(name)} (ROP_FIRST_HANDLER + {p.numbers[name]})\n")
     out.write("\n/* Error checkpoint numbers of the points (PROCESS_ERROR_AT) */\n")
     for name, k in p.points.items():
         out.write(f"#define ROP_POINT_{c_name(name)} {k}\n")
     out.write("""
+/* How a family's operands sit in its words (Program.encodings): the field
+ * kind, the role of a home, the bit offset in the 64-bit-per-word image of
+ * the head and operand words, the width and, for a home in the head, the
+ * word flag that says it names a local.  A vector follows in the payload. */
+enum { ROP_FIELD_HOME, ROP_FIELD_IMM, ROP_FIELD_NAME, ROP_FIELD_CONST,
+       ROP_FIELD_FEEDBACK, ROP_FIELD_TARGET, ROP_FIELD_VECTOR };
+enum { ROP_ROLE_NONE, ROP_ROLE_SRC, ROP_ROLE_DST, ROP_ROLE_LOCAL, ROP_ROLE_CELL,
+       ROP_ROLE_FREE, ROP_ROLE_ITERPAIR };
+
+typedef struct {
+    const char *name;
+    uint8_t kind, role;
+    uint8_t optional;        /* Maybe<...>: a sentinel field value means absent */
+    uint8_t bits;
+    uint16_t offset;
+    uint32_t local_flag;
+} _PyRopOperand;
+
+typedef struct {
+    const char *name;
+    uint8_t noperands;
+    uint8_t words;           /* operand words after the head, vectors aside */
+    const _PyRopOperand *operands;
+} _PyRopFamily;
+
 typedef struct {
     const char *name;
     uint16_t handler;
@@ -267,10 +422,11 @@ typedef struct {
 } _PyRopPoint;
 
 """)
+    write_encodings(out, p)
     out.write("static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {\n")
-    for name in sorted(prog.arms, key=lambda n: p.numbers[n]):
+    for name in prog.arms:
         arm = prog.arms[name]
-        out.write(f'    {{"{name}", {p.numbers[name]}, ROP_FAMILY_{arm.family}, '
+        out.write(f'    {{"{name}", {handler(name)}, ROP_FAMILY_{arm.family}, '
                   f'{int(name in p.lowered)}}},\n')
     out.write("};\n\n")
     out.write(f"static const _PyRopPoint _PyRop_Points[{len(p.points)}] = {{\n")
@@ -292,6 +448,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", help="the interpreter cases")
     parser.add_argument("--forms", help="the function forms")
     parser.add_argument("--targets", help="the dispatch table")
+    parser.add_argument("--stubs", help="the completion stubs and arm plans")
+    parser.add_argument("--templates", help="the baseline templates")
     parser.add_argument("--metadata", help="the metadata header")
     parser.add_argument("sources", nargs="*", type=Path)
     args = parser.parse_args(argv)
@@ -301,12 +459,13 @@ def main(argv: list[str] | None = None) -> int:
         for d in program.diagnostics:
             print(d, file=sys.stderr)
         return 1
-    numbers = read_numbers()
-    check_numbers(program, numbers)
+    numbers = number_arms(program)
     products = lower_all(program, numbers)
     sources = [root_relative_path(str(s)) for s in paths]
     for option, writer in (("cases", write_cases), ("forms", write_forms),
-                           ("targets", write_targets), ("metadata", write_metadata)):
+                           ("targets", write_targets), ("stubs", write_stubs),
+                           ("templates", write_templates),
+                           ("metadata", write_metadata)):
         target = getattr(args, option)
         if target:
             with open(target, "w") as out:

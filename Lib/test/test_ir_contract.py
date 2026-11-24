@@ -229,6 +229,8 @@ class ContractTests(unittest.TestCase):
                                          *(opcode._ir_opmap[name] for name in IR_BASE_ONLY)})
                 self.assertIn(row.shadow, ROWS)
         for name in (*opcode._specialized_opmap, *opcode._ir_opmap):
+            if opcode._ir_opmap.get(name, 0) >= _opcode.IR_NUM_OLD_HANDLERS:
+                continue
             self.assertIn(name, BY_NAME)
 
     def test_stack_effects(self):

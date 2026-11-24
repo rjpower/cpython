@@ -342,7 +342,7 @@ _PyIR_CheckGeneratorBoundary(const _PyIRWord *words, int nwords, int nl,
         /* END_SEND has both normal SEND and CLEANUP_THROW ingress. Select
          * them together; a compatible window on one edge cannot certify a
          * different edge's value or make a partial public cycle complete. */
-        for (int i = 0; i < nwords; i++) {
+        for (int i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {
             const _PyIROwnershipEvent *event = generator_completion(words[i]);
             if (event == NULL || generator_exit(words[i], i) != target) {
                 continue;
@@ -378,6 +378,7 @@ _PyIR_EventOpcode(int handler)
 int
 _PyIR_BaseOpcode(int handler)
 {
+    assert(handler >= 0 && handler < IR_NUM_HANDLERS);
     if (handler == IR_JUMP) {
         return JUMP_FORWARD;
     }
@@ -389,6 +390,8 @@ _PyIR_BaseOpcode(int handler)
         handler = _PyIR_Formats[handler].shadow;
         assert(handler < IR_FIRST_ONLY_HANDLER);
     }
+    // _PyOpcode_Deopt is sized for the stack ops: a handler id is no index
+    assert(handler < (int)Py_ARRAY_LENGTH(_PyOpcode_Deopt));
     return _PyOpcode_Deopt[handler];
 }
 
@@ -890,6 +893,15 @@ make_exec(PyCodeObject *co, const _PyCodeIR *ir)
         assert(!(source[i] & IR_F_LOCAL_MASK));
         words[i] = exec_discard_slot(source[i], discard);
         words[i] |= _PyIR_ExecLocalFlags(words[i], exec->nfixed);
+        /* An arm's fixed operand words are payload: no handler field,
+         * no slot flags. */
+        int fixed = _PyIR_WordLength(source[i]) - 1;
+        if (!_PyIR_HandlerHasOperands(IR_HANDLER(source[i]))) {
+            for (int k = 0; k < fixed; k++) {
+                words[i + 1 + k] = source[i + 1 + k];
+            }
+            i += fixed;
+        }
     }
     /* A call is a head and its operand words, whose fields name its operands */
     for (Py_ssize_t i = 0; i < nwords; i += _PyIR_WordLength(words[i])) {

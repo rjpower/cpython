@@ -531,7 +531,20 @@ _ir_opmap = frozendict(
     RESUME_JIT=416,
     JUMP_BACKWARD_JIT=417,
     RESUME_CHECK=418,
-)
+    ) | frozendict({
+        "Add.Int": 419,
+        "Add.Float": 420,
+        "Add.Text": 421,
+        "Add.Extended": 422,
+        "Add.Generic": 423,
+        "GetAttr.Instance": 424,
+        "GetAttr.Generic": 425,
+        "GetAttr.Shape": 426,
+        "GetAttr.PolyShape": 427,
+        "GetMethod.MethodValues": 428,
+        "GetMethod.Generic": 429,
+        "GetMethod.PolyMethod": 430,
+})
 
 HAVE_ARGUMENT = 41
 MIN_INSTRUMENTED_OPCODE = 233

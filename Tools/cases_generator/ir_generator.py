@@ -6205,8 +6205,10 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
             or not checks[1][2].startswith("PyFunctionObject * func = ")
             or "callable_o" not in checks[1][2]
             or checks[1][1] != "EXIT_IF ( ! PyFunction_Check ( callable_o ) ) ;"
-            or checks[1][3] != "EXIT_IF ( func -> func_version != func_version ) ;"
-            or checks[2][0] != "DEOPT_IF ( tstate -> py_recursion_remaining <= 1 ) ;"):
+            or checks[1][3] != "EXIT_IF ( func -> func_version != func_version , "
+                               "\"the function version differs from the cache's\" ) ;"
+            or checks[2][0] != "DEOPT_IF ( tstate -> py_recursion_remaining <= 1 , "
+                               "\"the recursion budget is spent\" ) ;"):
 
         raise analysis_error("guarded Python call requires the checked prefix", inst.where)
 

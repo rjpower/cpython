@@ -1673,7 +1673,9 @@ dummy_func(
             ERROR_IF(PyValue_IsNull(res));
         }
 
-        outlined tier1 inst(RAISE_VARARGS, (args[oparg] -- )) {
+        outlined tier1 inst(RAISE_VARARGS, (args[oparg]: consumed -- ))
+            effects(runs_python) exits(raise)
+        {
             assert(oparg < 3);
             _PyValue_RecheckWindow(args, oparg);
             PyObject *exc = NULL;
@@ -1683,7 +1685,7 @@ dummy_func(
                 if (!PyValue_IsObject(args[0])) {
                     _PyErr_SetString(tstate, PyExc_TypeError,
                                      "exceptions must derive from BaseException");
-                    ERROR_NO_POP();
+                    ERROR_IF(true, holding(args));
                 }
                 exc = PyValue_AsKnownObjectBorrow(args[0]);
             }
@@ -1733,7 +1735,9 @@ dummy_func(
 
         // The result remains C-owned through child retirement. Completion
         // publishes it to the caller or consumes it as a loop/send outcome.
-        returns op(_RETURN_VALUE, (retval --)) {
+        returns op(_RETURN_VALUE, (retval: consumed --))
+            effects(switches_frame) exits(return, raise)
+        {
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
             PyValue temp = retval;
             DEAD(retval);
@@ -1752,7 +1756,9 @@ dummy_func(
             IR_RETURN_TO_CALLER(temp, generator_return);
         }
 
-        ir_only returns op(_RETURN_VALUE_EMPTY, (retval --)) {
+        ir_only returns op(_RETURN_VALUE_EMPTY, (retval: consumed --))
+            effects(switches_frame) exits(return, raise)
+        {
             assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
             PyValue temp = retval;
             DEAD(retval);
@@ -5003,7 +5009,7 @@ dummy_func(
         // When calling Python, inline the call using DISPATCH_INLINED().
         inline_ok op(_DO_CALL,
                 (callable: taken, self_or_null: taken, args[oparg]: taken -- res: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
@@ -5021,7 +5027,7 @@ dummy_func(
         inline_ok op(_PY_FRAME_GENERAL,
                 (callable: taken, self_or_null: taken, args[oparg]: taken
                  -- new_frame: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
@@ -5029,16 +5035,20 @@ dummy_func(
         inline_ok op(_PY_FRAME_GENERAL_GUARDED,
                 (callable: taken, self_or_null: taken, args[oparg]: taken
                  -- new_frame: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_GUARDED_PYTHON_CALL();
         }
 
-        op(_CHECK_FUNCTION_VERSION, (func_version/2, callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
+        op(_CHECK_FUNCTION_VERSION,
+                (func_version/2, callable: object, unused, unused[oparg]
+                 -- callable: exact(PyFunction_Type), unused, unused[oparg]))
+            effects(reads) exits(next, miss)
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyFunction_Check(callable_o));
             PyFunctionObject *func = (PyFunctionObject *)callable_o;
-            EXIT_IF(func->func_version != func_version);
+            EXIT_IF(func->func_version != func_version, "the function version differs from the cache's");
         }
 
         macro(CALL_PY_GENERAL) =
@@ -5078,15 +5088,24 @@ dummy_func(
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
-        inline_ok op(_CHECK_IS_NOT_PY_CALLABLE, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
+        inline_ok op(_CHECK_IS_NOT_PY_CALLABLE,
+                (callable, unused, unused[oparg] -- callable, unused, unused[oparg]))
+            effects(reads) exits(next, miss)
+        {
             if (PyValue_IsObject(callable)) {
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-                EXIT_IF(PyFunction_Check(callable_o));
-                EXIT_IF(Py_TYPE(callable_o) == &PyMethod_Type);
+                EXIT_IF(PyFunction_Check(callable_o),
+                        "the callable is a Python function");
+                EXIT_IF(Py_TYPE(callable_o) == &PyMethod_Type,
+                        "the callable is a bound method");
             }
         }
 
-        inline_ok op(_CALL_NON_PY_GENERAL, (callable, self_or_null, args[oparg] -- res)) {
+        inline_ok op(_CALL_NON_PY_GENERAL,
+                (callable: closed, self_or_null: closed, args[oparg]: closed
+                 -- res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             STAT_INC(CALL, hit);
             PyValue result = call_vector(tstate, frame, this_instr, callable);
             if (PyValue_IsNull(result)) {
@@ -5126,7 +5145,9 @@ dummy_func(
             callable = _PyIR_AdoptTemp(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
         }
 
-        op(_CHECK_PEP_523, (--)) {
+        op(_CHECK_PEP_523, (--))
+            effects(reads) exits(next, deopt)
+        {
             DEOPT_IF(IS_PEP523_HOOKED(tstate));
         }
 
@@ -5149,17 +5170,20 @@ dummy_func(
             DEOPT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));
         }
 
-        op(_CHECK_RECURSION_REMAINING, (--)) {
-            DEOPT_IF(tstate->py_recursion_remaining <= 1);
+        op(_CHECK_RECURSION_REMAINING, (--))
+            effects(reads) exits(next, deopt)
+        {
+            DEOPT_IF(tstate->py_recursion_remaining <= 1, "the recursion budget is spent");
         }
 
         // The child takes its callable and arguments from the operands
         // (a temporary moves, a local is counted) at the arena top, and
         // the bound method's operand is released.
-        pure op(_INIT_CALL_PY_EXACT_ARGS,
+        op(_INIT_CALL_PY_EXACT_ARGS,
                 (callable: consumed, self_or_null: consumed, args[oparg]: closed
                  -- new_frame: owned))
-            effects(allocates) exits(next) state(call_state -- call_state)
+            effects(reads, writes, allocates, releases) exits(next)
+            state(call_state -- call_state)
         {
             STAT_INC(CALL, hit);
             _PyInterpreterFrame *pushed_frame = call_push_exact(
@@ -5168,7 +5192,9 @@ dummy_func(
             new_frame = PyValue_Wrap(pushed_frame);
         }
 
-        op(_PUSH_FRAME, (new_frame -- )) {
+        op(_PUSH_FRAME, (new_frame: consumed -- ))
+            effects(switches_frame) exits(enter)
+        {
             assert(!IS_PEP523_HOOKED(tstate));
             _PyInterpreterFrame *temp = PyValue_Unwrap(new_frame);
             DEAD(new_frame);
@@ -5248,11 +5274,17 @@ dummy_func(
             EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
 
-        op(_GUARD_CALLABLE_TYPE_1, (callable, unused, unused -- callable, unused, unused)) {
-            EXIT_IF(!_PyValue_NamesObject(callable, &PyType_Type));
+        op(_GUARD_CALLABLE_TYPE_1, (callable, unused, unused -- callable, unused, unused))
+            effects() exits(next, miss)
+        {
+            EXIT_IF(!_PyValue_NamesObject(callable, &PyType_Type),
+                    "the callable is not type");
         }
 
-        inline_ok op(_CALL_TYPE_1, (callable, null, arg -- res)) {
+        inline_ok op(_CALL_TYPE_1,
+                (callable: closed, null: closed, arg: closed -- res: owned))
+            effects(reads) exits(next)
+        {
             assert(oparg == 1);
             STAT_INC(CALL, hit);
             // A type is never an exact int or float, so it has no inline form
@@ -5267,11 +5299,17 @@ dummy_func(
             _GUARD_CALLABLE_TYPE_1 +
             _CALL_TYPE_1;
 
-        op(_GUARD_CALLABLE_STR_1, (callable, unused, unused -- callable, unused, unused)) {
-            EXIT_IF(!_PyValue_NamesObject(callable, &PyUnicode_Type));
+        op(_GUARD_CALLABLE_STR_1, (callable, unused, unused -- callable, unused, unused))
+            effects() exits(next, miss)
+        {
+            EXIT_IF(!_PyValue_NamesObject(callable, &PyUnicode_Type),
+                    "the callable is not str");
         }
 
-        op(_CALL_STR_1, (callable, null, arg -- res)) {
+        op(_CALL_STR_1,
+                (callable: closed, null: closed, arg: closed -- res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             assert(oparg == 1);
             STAT_INC(CALL, hit);
             PyObject *res_o = _PyValue_Str(arg);
@@ -5290,11 +5328,17 @@ dummy_func(
             _CALL_STR_1 +
             _CHECK_PERIODIC_AT_END;
 
-        op(_GUARD_CALLABLE_TUPLE_1, (callable, unused, unused -- callable, unused, unused)) {
-            EXIT_IF(!_PyValue_NamesObject(callable, &PyTuple_Type));
+        op(_GUARD_CALLABLE_TUPLE_1, (callable, unused, unused -- callable, unused, unused))
+            effects() exits(next, miss)
+        {
+            EXIT_IF(!_PyValue_NamesObject(callable, &PyTuple_Type),
+                    "the callable is not tuple");
         }
 
-        op(_CALL_TUPLE_1, (callable, null, arg -- res)) {
+        op(_CALL_TUPLE_1,
+                (callable: closed, null: closed, arg: closed -- res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             assert(oparg == 1);
             STAT_INC(CALL, hit);
             PyObject *res_o = _PyValue_SequenceTuple(arg);
@@ -5313,12 +5357,17 @@ dummy_func(
             _CALL_TUPLE_1 +
             _CHECK_PERIODIC_AT_END;
 
-        op(_CHECK_OBJECT, (type_version/2, callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
+        op(_CHECK_OBJECT,
+                (type_version/2, callable: object, self_or_null, unused[oparg]
+                 -- callable, self_or_null, unused[oparg]))
+            effects(reads) exits(next, miss) state(call_state -- call_state: self(absent))
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(call_state & CALL_SELF_PRESENT);
-            EXIT_IF(!PyType_Check(callable_o));
+            EXIT_IF(!PyType_Check(callable_o), "the callable is not a type");
             PyTypeObject *tp = (PyTypeObject *)callable_o;
-            EXIT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(tp->tp_version_tag) != type_version);
+            EXIT_IF(FT_ATOMIC_LOAD_UINT32_RELAXED(tp->tp_version_tag) != type_version,
+                    "the type version differs from the cache's");
         }
 
         op(_ALLOCATE_OBJECT, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
@@ -5399,7 +5448,7 @@ dummy_func(
         // from their homes, and call the callee directly (call_*_values());
         // the handler publishes the result and releases the temporaries.
         inline_ok op(_CALL_BUILTIN_CLASS,
-                (callable: consumed, self_or_null: closed, args[oparg]: closed
+                (callable: closed, self_or_null: closed, args[oparg]: closed
                  -- res: owned))
             effects(runs_python) exits(next, raise)
         {
@@ -5434,7 +5483,7 @@ dummy_func(
         }
 
         op(_CALL_BUILTIN_O,
-                (callable: consumed, self_or_null: closed, args[oparg]: closed
+                (callable: closed, self_or_null: closed, args[oparg]: closed
                  -- res: owned))
             effects(runs_python) exits(next, raise)
         {
@@ -5477,7 +5526,7 @@ dummy_func(
         }
 
         inline_ok op(_CALL_BUILTIN_FAST,
-                (callable: consumed, self_or_null: closed, args[oparg]: closed
+                (callable: closed, self_or_null: closed, args[oparg]: closed
                  -- res: owned))
             effects(runs_python) exits(next, raise)
         {
@@ -5509,7 +5558,7 @@ dummy_func(
         }
 
         inline_ok op(_CALL_BUILTIN_FAST_WITH_KEYWORDS,
-                (callable: consumed, self_or_null: closed, args[oparg]: closed
+                (callable: closed, self_or_null: closed, args[oparg]: closed
                  -- res: owned))
             effects(runs_python) exits(next, raise)
         {
@@ -5539,11 +5588,14 @@ dummy_func(
             _GUARD_CALLABLE_LEN +
             _CALL_LEN;
 
-        op(_GUARD_CALLABLE_LEN, (callable, unused, unused -- callable, unused, unused)){
+        op(_GUARD_CALLABLE_LEN, (callable, unused, unused -- callable, unused, unused))
+            effects(reads) exits(next, miss)
+        {
             // The cached builtin is an object, so a word that names it is
             // one (a rebinding to an inline value exits here).
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF(!_PyValue_NamesObject(callable, interp->callable_cache.len));
+            EXIT_IF(!_PyValue_NamesObject(callable, interp->callable_cache.len),
+                    "the callable is not the cached len");
         }
 
         op(_CALL_LEN,
@@ -5565,11 +5617,14 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        op(_GUARD_CALLABLE_ISINSTANCE, (callable, unused, unused, unused -- callable, unused, unused, unused)) {
+        op(_GUARD_CALLABLE_ISINSTANCE, (callable, unused, unused, unused -- callable, unused, unused, unused))
+            effects(reads) exits(next, miss)
+        {
             // The cached builtin is an object, so a word that names it is
             // one (a rebinding to an inline value exits here).
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF(!_PyValue_NamesObject(callable, interp->callable_cache.isinstance));
+            EXIT_IF(!_PyValue_NamesObject(callable, interp->callable_cache.isinstance),
+                    "the callable is not the cached isinstance");
         }
 
         inline_ok op(_CALL_ISINSTANCE,
@@ -5608,11 +5663,14 @@ dummy_func(
             _GUARD_NOS_LIST +
             _CALL_LIST_APPEND;
 
-        op(_GUARD_CALLABLE_LIST_APPEND, (callable, unused, unused -- callable, unused, unused)){
+        op(_GUARD_CALLABLE_LIST_APPEND, (callable, unused, unused -- callable, unused, unused))
+            effects(reads) exits(next, miss)
+        {
             // The cached builtin is an object, so a word that names it is
             // one (a rebinding to an inline value exits here).
             PyInterpreterState *interp = tstate->interp;
-            EXIT_IF(!_PyValue_NamesObject(callable, interp->callable_cache.list_append));
+            EXIT_IF(!_PyValue_NamesObject(callable, interp->callable_cache.list_append),
+                    "the callable is not the cached list_append");
         }
 
         inline_ok op(_CALL_LIST_APPEND,
@@ -5700,7 +5758,7 @@ dummy_func(
         }
 
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS,
-                (callable: consumed, self_or_null: closed, args[oparg]: closed
+                (callable: closed, self_or_null: closed, args[oparg]: closed
                  -- res: owned))
             effects(runs_python) exits(next, raise)
         {
@@ -5783,7 +5841,7 @@ dummy_func(
         }
 
         inline_ok op(_CALL_METHOD_DESCRIPTOR_FAST,
-                (callable: consumed, self_or_null: closed, args[oparg]: closed
+                (callable: closed, self_or_null: closed, args[oparg]: closed
                  -- res: owned))
             effects(runs_python) exits(next, raise)
         {
@@ -5829,34 +5887,38 @@ dummy_func(
         }
 
         inline_ok op(_DO_CALL_KW,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken
+                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
                  -- res: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
 
         inline_ok op(_PY_FRAME_KW,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken
+                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
                  -- new_frame: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
 
         inline_ok op(_PY_FRAME_KW_GUARDED,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken
+                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
                  -- new_frame: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_GUARDED_PYTHON_CALL();
         }
 
-        op(_CHECK_FUNCTION_VERSION_KW, (func_version/2, callable, unused, unused[oparg], unused -- callable, unused, unused[oparg], unused)) {
+        op(_CHECK_FUNCTION_VERSION_KW,
+                (func_version/2, callable: object, unused, unused[oparg], unused
+                 -- callable: exact(PyFunction_Type), unused, unused[oparg], unused))
+            effects(reads) exits(next, miss)
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyFunction_Check(callable_o));
             PyFunctionObject *func = (PyFunctionObject *)callable_o;
-            EXIT_IF(func->func_version != func_version);
+            EXIT_IF(func->func_version != func_version, "the function version differs from the cache's");
         }
 
         macro(CALL_KW_PY) =
@@ -5928,19 +5990,24 @@ dummy_func(
             _MONITOR_CALL_KW +
             _DO_CALL_KW;
 
-        inline_ok op(_CHECK_IS_NOT_PY_CALLABLE_KW, (callable, unused, unused[oparg], unused -- callable, unused, unused[oparg], unused)) {
+        inline_ok op(_CHECK_IS_NOT_PY_CALLABLE_KW,
+                (callable, unused, unused[oparg], unused -- callable, unused, unused[oparg], unused))
+            effects(reads) exits(next, miss)
+        {
             if (PyValue_IsObject(callable)) {
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-                EXIT_IF(PyFunction_Check(callable_o));
-                EXIT_IF(Py_TYPE(callable_o) == &PyMethod_Type);
+                EXIT_IF(PyFunction_Check(callable_o),
+                        "the callable is a Python function");
+                EXIT_IF(Py_TYPE(callable_o) == &PyMethod_Type,
+                        "the callable is a bound method");
             }
         }
 
 
         inline_ok op(_CALL_KW_NON_PY,
-                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken
+                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed
                  -- res: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
@@ -5966,7 +6033,7 @@ dummy_func(
         inline_ok op(_DO_CALL_FUNCTION_EX,
                 (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
                  -- result: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
@@ -5996,16 +6063,21 @@ dummy_func(
             _DO_CALL_FUNCTION_EX +
             _CHECK_PERIODIC_AT_END;
 
-        op(_CHECK_IS_PY_CALLABLE_EX, (func_st, unused, unused, unused -- func_st, unused, unused, unused)) {
+        op(_CHECK_IS_PY_CALLABLE_EX,
+                (func_st: object, unused, unused, unused
+                 -- func_st: exact(PyFunction_Type), unused, unused, unused))
+            effects(reads) exits(next, miss)
+        {
             PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
-            EXIT_IF(Py_TYPE(func) != &PyFunction_Type);
-            EXIT_IF(((PyFunctionObject *)func)->vectorcall != _PyFunction_Vectorcall);
+            EXIT_IF(!PyFunction_Check(func));
+            EXIT_IF(((PyFunctionObject *)func)->vectorcall != _PyFunction_Vectorcall,
+                    "the function has its own vectorcall");
         }
 
         inline_ok op(_PY_FRAME_EX,
                 (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
                  -- ex_frame: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
@@ -6035,7 +6107,7 @@ dummy_func(
         inline_ok op(_CALL_FUNCTION_EX_NON_PY_GENERAL,
                 (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
                  -- result: owned))
-            effects(runs_python, switches_frame) exits(raise, enter)
+            effects(runs_python, switches_frame) exits(next, raise, enter)
         {
             IR_INVOKE_CALL();
         }
@@ -6053,7 +6125,7 @@ dummy_func(
             _DO_CALL_FUNCTION_EX +
             _CHECK_PERIODIC_AT_END;
 
-        op(_MAKE_FUNCTION, (codeobj_st: taken object -- func: owned, co: moved(codeobj_st)))
+        op(_MAKE_FUNCTION, (codeobj_st: taken assumed(object) by codegen -- func: owned, co: moved(codeobj_st)))
             effects(runs_python) exits(next, raise)
         {
             // The compiler loads the code object from a constant
@@ -6077,7 +6149,11 @@ dummy_func(
 
         outlined macro(MAKE_FUNCTION) = _MAKE_FUNCTION + POP_TOP;
 
-        outlined inst(SET_FUNCTION_ATTRIBUTE, (attr_st, func_in -- func_out)) {
+        outlined inst(SET_FUNCTION_ATTRIBUTE,
+                (attr_st: consumed assumed(object) by codegen,
+                 func_in: consumed assumed(exact(PyFunction_Type)) by _MAKE_FUNCTION -- func_out: moved(func_in)))
+            effects(reads, writes) exits(next)
+        {
             // The attribute is a tuple, dict or function that the compiler built
             assert(PyValue_IsObject(func_in));
             assert(PyValue_IsObject(attr_st));
@@ -6085,11 +6161,7 @@ dummy_func(
             PyObject *attr = PyValue_AsKnownObjectSteal(attr_st);
             func_out = TAKE(func_in);
             assert(PyFunction_Check(func));
-            size_t offset = _Py_FunctionAttributeOffsets[oparg];
-            assert(offset != 0);
-            PyObject **ptr = (PyObject **)(((char *)func) + offset);
-            assert(*ptr == NULL);
-            *ptr = attr;
+            _PyFunction_StoreAttribute((PyFunctionObject *)func, oparg, attr);
         }
 
         // The marker at the start of a generator's code: nothing executes it,

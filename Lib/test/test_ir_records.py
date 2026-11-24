@@ -71,7 +71,7 @@ class HandlerRecordTests(unittest.TestCase):
                 # A close whose deallocator cannot run Python only frees
                 ("_POP_TOP_INT", {WRITES_HEAP}),
                 ("_POP_TOP", {MAY_RELEASE}),
-                ("_INIT_CALL_PY_EXACT_ARGS", {ALLOCATES}),
+                ("_INIT_CALL_PY_EXACT_ARGS", {ALLOCATES, READS_HEAP, WRITES_HEAP, MAY_RELEASE}),
                 # The method's function becomes the callee as a view: no
                 # count moves and nothing escapes (contract87 TR)
                 ("_INIT_CALL_BOUND_METHOD_EXACT_ARGS", {READS_HEAP}),

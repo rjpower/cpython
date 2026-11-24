@@ -549,7 +549,23 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 
 #define _PyGC_CLEAR_ARRAY(ARR) ((void)0)
 
-#define IS_PEP523_HOOKED(tstate) (tstate->interp->eval_frame != NULL)
+static inline bool
+IS_PEP523_HOOKED(PyThreadState *tstate)
+{
+    return tstate->interp->eval_frame != NULL;
+}
+
+/* Store the attribute that SET_FUNCTION_ATTRIBUTE's oparg selects into its
+ * slot of the function, which takes the attribute's reference. */
+static inline void
+_PyFunction_StoreAttribute(PyFunctionObject *func, int oparg, PyObject *attr)
+{
+    size_t offset = _Py_FunctionAttributeOffsets[oparg];
+    assert(offset != 0);
+    PyObject **ptr = (PyObject **)(((char *)func) + offset);
+    assert(*ptr == NULL);
+    *ptr = attr;
+}
 
 /* Whether the thread has an event for _Py_HandlePending(): one load and test
  * of its eval breaker, the periodic checks' fast path. */

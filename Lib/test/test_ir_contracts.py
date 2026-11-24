@@ -173,6 +173,30 @@ class SliceTests(unittest.TestCase):
               'inferred "", declared "PyValue_None"',
               f'{handler}.record.uops[0].guards[0].facts[0].kind: '
               'inferred "IS_NONE", declared "IDENTITY"')),
+        # Batch 6: PyFunction_Check compares the exact type (funcobject.h);
+        # _INIT_CALL_PY_EXACT_ARGS pushes a frame, which writes the heap and
+        # releases the callable; SET_FUNCTION_ATTRIBUTE runs no code; the call
+        # uops complete in place (exits next, G0d removes the inference)
+        'CALL_BOUND_METHOD_EXACT_ARGS.record.uops[3].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
+        'CALL_BOUND_METHOD_EXACT_ARGS.record.uops[7].effects: inferred 1 entries ["ALLOCATES"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
+        'CALL_EX_PY.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
+        'CALL_KW_PY.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
+        'CALL_PY_EXACT_ARGS.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
+        'CALL_PY_EXACT_ARGS.record.uops[5].effects: inferred 1 entries ["ALLOCATES"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
+        'CALL_PY_GENERAL.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
+        'CALL_PY_GENERATOR.record.uops[1].guards[1].facts[0].kind: inferred "SUBTYPE", declared "EXACT_TYPE"',
+        'SET_FUNCTION_ATTRIBUTE.record.format.runs_code: inferred true, declared false',
+        'SET_FUNCTION_ATTRIBUTE.record.uops[0].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 2 ["READS_HEAP", "WRITES_HEAP"]',
+        'CALL/_DO_CALL: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_BOUND_METHOD_GENERAL/_PY_FRAME_GENERAL: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_EX_NON_PY_GENERAL/_CALL_FUNCTION_EX_NON_PY_GENERAL: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_EX_PY/_PY_FRAME_EX: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_FUNCTION_EX/_DO_CALL_FUNCTION_EX: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_KW/_DO_CALL_KW: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_KW_BOUND_METHOD/_PY_FRAME_KW: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_KW_NON_PY/_CALL_KW_NON_PY: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_KW_PY/_PY_FRAME_KW_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
+        'CALL_PY_GENERAL/_PY_FRAME_GENERAL_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
     ]
 
     # Batch 5: the assume op of `iter: assumed(object) by GET_ITER` in the

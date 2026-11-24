@@ -720,7 +720,7 @@ class TestIRCases(unittest.TestCase):
              "_CHECK_RECURSION_REMAINING +"),
             ("_CHECK_RECURSION_REMAINING +\n            _PY_FRAME_KW_GUARDED +",
              "_PY_FRAME_KW_GUARDED +"),
-            ("(callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken\n"
+            ("(callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: borrowed\n"
              "                 -- new_frame: owned))",
              "(callable: taken, self_or_null: taken, args[oparg]: taken\n"
              "                 -- new_frame: owned))"),

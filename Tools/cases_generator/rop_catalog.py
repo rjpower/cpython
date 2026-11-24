@@ -333,15 +333,59 @@ H, F, N, K, I, T, J, V = (FieldKind.home, FieldKind.feedback, FieldKind.name,
                           FieldKind.const, FieldKind.imm, FieldKind.target,
                           FieldKind.delta, FieldKind.vector)
 A, B, C, D, CD = Slot.A, Slot.B, Slot.C, Slot.D, Slot.CD
-P0, P1, P2, P3, P4, P5, VEC = (Slot.P0, Slot.P1, Slot.P2, Slot.P3, Slot.P4, Slot.P5,
-                               Slot.VEC)
+P0, P1, P2, P3, VEC = Slot.P0, Slot.P1, Slot.P2, Slot.P3, Slot.VEC
 
 # A layout's name spells its field kinds in operand order: H home, F
 # feedback, N name, K constant, I immediate, T absolute target, J relative
 # target, V vector; `_w` marks fields in operand words.
 LAYOUTS: dict[str, Layout] = {lay.name: lay for lay in (
+    _layout("Bare"),
+    _layout("I", (A, I)),
+    _layout("H", (A, H)),
+    _layout("HH", (A, H), (B, H)),
+    _layout("HHH", (A, H), (B, H), (C, H)),
+    _layout("HHHH", (A, H), (B, H), (C, H), (D, H)),
+    _layout("HHHHH", (A, H), (B, H), (C, H), (D, H), (P0, H)),
+    _layout("HHI", (A, H), (B, H), (C, I)),
+    _layout("HHHI", (A, H), (B, H), (C, H), (D, I)),
+    _layout("HHHHI", (A, H), (B, H), (C, H), (D, H), (P0, I)),
+    _layout("HII", (A, H), (B, I), (CD, I)),
+    _layout("HIH", (A, H), (B, I), (C, H)),
+    _layout("HIHH", (A, H), (B, I), (C, H), (D, H)),
+    _layout("IHH", (A, I), (B, H), (C, H)),
+    _layout("IHHHI", (A, I), (B, H), (C, H), (D, H), (P0, I)),
+    _layout("IHHHV", (A, I), (B, H), (C, H), (D, H), (VEC, V)),
+    _layout("HINH", (A, H), (B, I), (C, N), (D, H)),
+    _layout("INHI", (A, I), (B, N), (C, H), (D, I)),
+    _layout("HINHHHI", (A, H), (B, I), (C, N), (D, H), (P0, H), (P1, H), (P2, I)),
+    _layout("HV", (A, H), (VEC, V)),
+    _layout("HIV", (A, H), (B, I), (VEC, V)),
+    _layout("HIVI", (A, H), (B, I), (VEC, V), (C, I)),
+    _layout("VVI", (VEC, V), (VEC, V), (A, I)),
+    _layout("TI", (CD, T), (A, I)),
+    _layout("HJI", (A, H), (D, J), (B, I)),
+    _layout("HJJ", (A, H), (D, J), (C, J)),
+    _layout("HJIIF", (A, H), (D, J), (B, I), (C, I), (P0, F)),
+    _layout("HHJI", (A, H), (B, H), (D, J), (C, I)),
+    _layout("HHHJJ", (A, H), (B, H), (C, H), (D, J), (P0, J)),
+    _layout("HHIJIF", (A, H), (B, H), (C, I), (D, J), (P0, I), (P1, F)),
+    _layout("HHIHHIJ", (A, H), (B, H), (C, I), (D, H), (P0, H), (P1, I), (P2, J)),
+    _layout("HHJJFH", (A, H), (B, H), (P0, J), (D, J), (C, F), (P1, H)),
+    _layout("HHHHJF", (A, H), (B, H), (C, H), (P0, H), (D, J), (P1, F)),
+    _layout("HHIF", (A, H), (B, H), (C, I), (D, F)),
     _layout("HHHF", (A, H), (B, H), (C, H), (D, F)),
     _layout("HHNF", (A, H), (B, H), (D, N), (C, F)),
+    _layout("HNF", (A, H), (B, N), (C, F)),
+    _layout("HHHIF", (A, H), (B, H), (C, H), (D, I), (P0, F)),
+    _layout("HHHIIF", (A, H), (B, H), (C, H), (D, I), (P0, I), (P1, F)),
+    _layout("HHHNF", (A, H), (B, H), (C, H), (D, N), (P0, F)),
+    _layout("HNHIF", (A, H), (B, N), (C, H), (D, I), (P0, F)),
+    _layout("HHHHHNIF", (A, H), (B, H), (C, H), (D, H), (P0, H), (P1, N), (P2, I),
+            (P3, F)),
+    _layout("VHIIF", (VEC, V), (A, H), (B, I), (C, I), (D, F)),
+    _layout("HHHHF", (A, H), (B, H), (C, H), (D, H), (P0, F)),
+    _layout("HHHVF", (A, H), (B, H), (C, H), (VEC, V), (D, F)),
+    _layout("HHHVHF", (A, H), (B, H), (C, H), (VEC, V), (D, H), (P0, F)),
 )}
 
 

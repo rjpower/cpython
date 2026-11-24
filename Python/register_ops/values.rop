@@ -1,0 +1,103 @@
+// Family interfaces of Appendix A, "Values, control, arithmetic, and
+// lookup" (Add is in add.rop, GetAttr in getattr.rop).  Arms come with
+// their batches.  Every instruction has the implicit `site`; no family
+// takes its origin as an operand.
+
+enum ConstKind(POOL, SMALL, COMMON);
+enum MoveRetire(KEEP_SOURCES, RETIRE_SOURCES);
+enum PollMode(POLL, NO_POLL);
+enum KeepMode(DROP, KEEP_ON_TRUE, KEEP_ON_FALSE);
+enum UnaryOp(NEGATIVE, POSITIVE, INVERT);
+enum Relation(LT, LE, EQ, NE, GT, GE);
+enum CompareResult(RICH, TRUTH);
+enum BranchTest(IDENTITY, CONTAINS, TEST_LT, TEST_LE, TEST_EQ, TEST_NE, TEST_GT,
+                TEST_GE);
+enum WriteMode(SET, DELETE);
+enum SuperMode(SUPER_ATTR, SUPER_METHOD);
+enum Special(ENTER, EXIT, AENTER, AEXIT);
+
+// P1: constants, local bindings, saved locals, residual moves, origins
+
+// An origin or legal-entry boundary
+family Nop() layout Bare
+  exits(next);
+
+// Pool: the code's constant `index`; Small: the immediate int `index`;
+// Common: the interpreter root `index`
+family Const(dst:Dst, kind:Enum<ConstKind>, index:U16) layout HII
+  exits(next);
+
+family LocalRead(dst:Dst, local:Local) layout HH
+  exits(next, raise);
+
+family LocalWrite(local:Local, value:Src) layout HH
+  exits(next);
+
+family SaveLocal(dst:Dst, local:Local) layout HH
+  exits(next);
+
+family LocalDelete(local:Local) layout H
+  exits(next, raise);
+
+family Move(dsts:Span<Dst>, srcs:Span<Src>, retire:Enum<MoveRetire>) layout VVI
+  exits(next);
+
+// P5: truth, jumps, conditional retention, None branches
+
+family Truth(dst:Dst, value:Src, invert:Bool, fb:Fb<Truth>) layout HHIF
+  exits(next, raise, miss, again);
+
+family Jump(target:Head, poll:Enum<PollMode>) layout TI
+  exits(jump, raise, redirect, exit);
+
+family BranchTruth(value:Src, target:Head, sense:Bool, keep:Enum<KeepMode>,
+                   fb:Fb<Truth>) layout HJIIF
+  exits(next, branch, raise, miss, again);
+
+family BranchNone(value:Src, target:Head, sense:Bool) layout HJI
+  exits(next, branch);
+
+// 1A: numeric and in-place operations, unary protocols
+
+family Binary(dst:Dst, x:Src, y:Src, op:Enum<Numeric>, fb:Fb<Binary>) layout HHHIF
+  exits(next, raise, miss, again);
+
+family Unary(dst:Dst, value:Src, op:Enum<UnaryOp>) layout HHI
+  exits(next, raise);
+
+// 1B: value tests and their fused branch consumers
+
+family Compare(dst:Dst, x:Src, y:Src, relation:Enum<Relation>,
+               result:Enum<CompareResult>, fb:Fb<Compare>) layout HHHIIF
+  exits(next, raise, miss, again);
+
+family Identity(dst:Dst, x:Src, y:Src, sense:Bool) layout HHHI
+  exits(next);
+
+family Contains(dst:Dst, item:Src, container:Src, sense:Bool, fb:Fb<Contains>)
+  layout HHHIF
+  exits(next, raise, miss, again);
+
+family TestBranch(x:Src, y:Src, test:Enum<BranchTest>, target:Head, sense:Bool,
+                  fb:Fb<Compare>) layout HHIJIF
+  exits(next, branch, raise, miss, again);
+
+// P3: method lookup
+
+family GetMethod(callable:Dst, self_dst:Maybe<Dst>, obj:Src, name:Name, fb:Fb<Attr>)
+  layout HHHNF
+  exits(next, raise, redirect, miss, again);
+
+// 1D: attribute writes, super and special-method resolution
+
+family AttrWrite(obj:Src, name:Name, value:Maybe<Src>, mode:Enum<WriteMode>,
+                 fb:Fb<Attr>) layout HNHIF
+  exits(next, raise, miss, again);
+
+family SuperLookup(dst:Dst, self_dst:Maybe<Dst>, sup:Src, cls:Src, self:Src,
+                   name:Name, mode:Enum<SuperMode>, fb:Fb<Super>) layout HHHHHNIF
+  exits(next, raise, miss, again);
+
+family SpecialLookup(fn:Dst, self_dst:Maybe<Dst>, obj:Src, which:Enum<Special>)
+  layout HHHI
+  exits(next, raise);

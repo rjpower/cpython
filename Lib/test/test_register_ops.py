@@ -451,6 +451,14 @@ CHECK_CASES = [
      'enum Op(PLUS, MINUS);\nenum Sign(PLUS);', [
          (30, 21, 'PLUS is a member of Op, Sign: qualify it'),
      ]),
+    ('width', 'y:Src, fb:Fb<Binary>) layout HHHF',
+     'y:Src, n:U16, fb:Fb<Binary>) layout HHHIF', [
+         (2, 33, 'operand n:U16 needs 16 bits; field D of layout HHHIF has 12'),
+     ]),
+    ('fieldcount', 'layout HHHF',
+     'layout HHH', [
+         (2, 1, 'layout HHH has 3 fields for 4 operands'),
+     ]),
     ('unreachable', '  Failed(e:Err):\n    exit raise(F.Failed, e);',
      '  Failed(e:Err):\n    exit raise(F.Failed, e);\n  Spare():\n    exit next();', [
          (39, 3, 'block Spare is unreachable'),
@@ -533,6 +541,29 @@ class DefinitionTests(unittest.TestCase):
             "c _PyValue_BoxInt64: exits () disagree with header row "
             "HELPER(_PyValue_BoxInt64)'s (miss)",
         ])
+
+    # Appendix A of the addendum, in its order
+    APPENDIX_A = """
+        Nop Const LocalRead LocalWrite SaveLocal LocalDelete Move Add Truth Jump
+        BranchTruth BranchNone Binary Unary Compare Identity Contains TestBranch
+        GetAttr GetMethod AttrWrite SuperLookup SpecialLookup
+        GetItem SetItem DelItem SliceRead SliceWrite BuildSlice Build AddElement
+        UpdateContainer MergeKeywords Unpack Cell NamespaceRead NamespaceWrite
+        GlobalRead SetupAnnotations Import BuildText Convert Format Length Pattern
+        Function Intrinsic
+        Call InitResult Return CallKw CallEx MaterializeKwargs IterOpen ForIter
+        AsyncIter Awaitable Send Yield Raise Reraise ExceptState ExceptMatch
+        CleanupThrow EndAsyncFor WithExit Resume Poll
+    """.split()
+
+    def test_appendix_a_families(self):
+        self.assertEqual(len(self.APPENDIX_A), 68)
+        self.assertEqual(sorted(self.program.families), sorted(self.APPENDIX_A))
+        for fam in self.program.families.values():
+            with self.subTest(fam.name):
+                layout = rop_catalog.LAYOUTS[fam.layout]
+                self.assertEqual(len(layout.fields), len(fam.params))
+                self.assertTrue(fam.exits)
 
     def test_no_stack_notions(self):
         words = ("pop", "push", "stack", "unused", "window", "uop", "replaces",

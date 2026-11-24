@@ -743,18 +743,19 @@
         ARGS(object, object), SCALAR, EFFECTS(reads)) \
     /* seeded from ir_leaf.ERASED */ \
     INTRINSIC(_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY, ARGS(), NONE, BUILD(gil)) \
-    /* Include/internal/pycore_object.h: a static inline function (GIL \
-     * build).  Drops one count of op unless it is immortal and calls \
-     * destruct(op) when the count reaches zero.  Consumes op; no failure \
-     * path.  Callbacks: only destruct, whose own row decides the effect \
-     * (a DESTRUCTOR row is `writes`, any other `releases`), as for \
-     * PyValue_CLOSE_SPECIALIZED.  The reftracer hook \
-     * (_PyReftracerTrack) is a debugging facility whose tracer is a C \
-     * callback outside the language semantics.  Was a MACRO row; the C is \
-     * a function, so it is a PRIMITIVE.  It has no ir_leaf model and no \
-     * lowering: G0d reclassifies it or models it (V11) */ \
-    PRIMITIVE(_Py_DECREF_SPECIALIZED, void, (PyObject *, destructor), \
-        ARGS(consumed object, destructor), NONE, EFFECTS()) \
+    /* Include/internal/pycore_object.h defines a static inline function, \
+     * but Python/ceval.h #undefs it and redefines it as a do { } while (0) \
+     * statement macro (a constant destructor call): the evaluator's C is \
+     * the macro, so the row stays a MACRO and has no static type check. \
+     * Converting it to the inline function is a change to ceval.h and a \
+     * measurement: listed, not done.  Semantics: drops one count of op \
+     * unless it is immortal and calls the destructor at zero.  Consumes \
+     * op; no failure path.  Callbacks: only the destructor, whose own row \
+     * decides the effect (a DESTRUCTOR row is `writes`, any other \
+     * `releases`), as for PyValue_CLOSE_SPECIALIZED.  The reftracer hook \
+     * is a debugging facility outside the language semantics */ \
+    MACRO(_Py_DECREF_SPECIALIZED, \
+        ARGS(consumed object, destructor), NONE, EFFECTS(writes), EXITS()) \
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(_Py_ID, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
@@ -1356,13 +1357,15 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_CallMethodDescriptorO, PyValue, (PyThreadState *, PyCFunction, PyValueBorrow, PyValueBorrow), \
         ARGS(tstate, scalar, borrowed, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
-    /* Reviewed G0c2 (Python/ceval.c): as the except form, then rejects       \
-     * ExceptionGroup subclasses with PyObject_IsSubclass(exc,                \
-     * PyExc_BaseExceptionGroup), which calls __subclasscheck__ of the        \
-     * metaclass: runs_python. Returns 0 or -1 with the exception set; the    \
-     * argument is borrowed.                                                  */ \
+    /* Reviewed G0c2 (Python/ceval.c): as the except form, then rejects     \
+     * ExceptionGroup subclasses with PyObject_IsSubclass(exc,            \
+     * PyExc_BaseExceptionGroup) (Objects/abstract.c object_issubclass: its \
+     * cls is an exact `type` instance, so recursive_issubclass walks the   \
+     * MRO and calls no __subclasscheck__): no Python.  Returns 0 or -1 with \
+     * the exception set; the argument is borrowed.  The seed's runs_python \
+     * was over-declared and is narrowed                                    */ \
     HELPER(_PyEval_CheckExceptStarTypeValidValue, int, (PyThreadState *, PyValueBorrow), \
-        ARGS(tstate, borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(tstate, borrowed), SCALAR, EFFECTS(reads, allocates, raises)) \
     /* Reviewed G0c2 (Python/ceval.c): a number is not an exception class     \
      * (TypeError); otherwise _PyEval_CheckExceptTypeValid walks a type or    \
      * a tuple of types with PyExceptionClass_Check (reads) and sets          \

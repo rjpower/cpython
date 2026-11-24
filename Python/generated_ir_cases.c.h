@@ -261,8 +261,6 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyType_IteratesByIndex),
               "_PyType_IteratesByIndex: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyUnicode_Equal), int (*)(PyObject *, PyObject *)),
               "_PyUnicode_Equal: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_Py_DECREF_SPECIALIZED((PyObject *){0}, (destructor){0})), void),
-              "_Py_DECREF_SPECIALIZED: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&do_raise), int (*)(PyThreadState *, PyObject *, PyObject *, bool)),
               "do_raise: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&native_call_builtin_o), PyValue (*)(PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue *)),

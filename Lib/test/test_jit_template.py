@@ -760,7 +760,9 @@ class FailedBoxTests(unittest.TestCase):
                 namespace = {}
                 exec(f"def f(a, b):\\n    return {expression}\\n"
                      "def g(a, b):\\n    try:\\n        x = f(a, b)\\n"
-                     "    except MemoryError:\\n        return ('failed', a, b)\\n    return x\\n",
+                     "    except MemoryError as e:\\n"
+                     "        return ('failed', a, b, e.__traceback__.tb_next.tb_frame.f_code)\\n"
+                     "    return x\\n",
                      namespace)
                 f, g = namespace["f"], namespace["g"]
                 for _ in range(300):
@@ -786,7 +788,8 @@ class FailedBoxTests(unittest.TestCase):
                     del held
                     if isinstance(got, tuple) and got[:1] == ("failed",):
                         failed += 1
-                        assert got[1] is a and got[2] is b, got
+                        # Raised in f, at its word, with the inputs in their homes
+                        assert got[1] is a and got[2] is b and got[3] is f.__code__, got
                     else:
                         assert got == boxed or got != got, got
                     # The function works after the failure

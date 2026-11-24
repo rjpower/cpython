@@ -172,6 +172,7 @@ FIELDS = {f"{f.struct}.{f.name}": f for f in (
     Field("_PyInterpreterFrame", "base", "PyValue*"),
     Field("PyCodeObject", "co_consts", "PyObject*"),
     Field("PyThreadState", "eval_breaker", "u64"),
+    Field("PyCodeObject", "_co_instrumentation_version", "u64"),
 )}
 # Element sizes that pointer arithmetic needs
 SIZES = ("PyValue", "PyDictUnicodeEntry")
@@ -383,6 +384,11 @@ def _getlocal(cx, i):
     return cx.load(base + i * cx.size("PyValue"), VALUE)
 
 
+def _frame_code_instrumentation_version(cx):
+    code = cx.load(cx.frame + cx.off("_PyInterpreterFrame.f_executable"), "PyCodeObject*")
+    return cx.load(code + cx.off("PyCodeObject._co_instrumentation_version"), "u64")
+
+
 def _frame_co_consts(cx):
     code = cx.load(cx.frame + cx.off("_PyInterpreterFrame.f_executable"), "PyCodeObject*")
     return cx.load(code + cx.off("PyCodeObject.co_consts"), "PyObject*")
@@ -563,6 +569,12 @@ PRIMITIVES = {p.name: p for p in (
        lambda cx: (cx.load(cx.tstate + cx.off("PyThreadState.eval_breaker"), "u64")
                    & cx.k("_PY_EVAL_EVENTS_MASK")) != 0,
        READS, thread=True, doc="an event for _Py_HandlePending(): the periodic check"),
+    _p("_Py_EvalBreaker", [], ["u64"], MACROS_H,
+       lambda cx: cx.load(cx.tstate + cx.off("PyThreadState.eval_breaker"), "u64"),
+       READS, thread=True, doc="the eval breaker: event bits and instrumentation version"),
+    _p("FRAME_CODE_INSTRUMENTATION_VERSION", [], ["u64"], MACROS_H,
+       _frame_code_instrumentation_version, READS, frame=True,
+       doc="the instrumentation version of the frame's code"),
     # Ownership: counts are not heap writes (CR)
     _p("PyValue_DUP", [V], [V], VALUE_H, _dup, pre=lambda cx, w: w != 0),
     _p("PyValue_XDUP", [V], [V], VALUE_H, _dup),

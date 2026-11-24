@@ -155,7 +155,8 @@ SEPARATE = {"PyValue_DUP", "PyValue_XDUP", "PyValue_CLOSE", "PyValue_XCLOSE",
             "_PyDictValues_AddToInsertionOrder", "_PyDictValues_SetShape",
             "_PyValueSlot_Exchange", "_PyValueSlot_ExchangeFilled", "_PyValueSlot_Fill",
             "GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "GETLOCAL", "IR_SLOTS",
-            "_Py_EvalBreakerHasEvents",
+            "_Py_EvalBreakerHasEvents", "_Py_EvalBreaker",
+            "FRAME_CODE_INSTRUMENTATION_VERSION",
             "PyValue_FromInt64", "PyValue_FromDouble"}
 
 
@@ -244,7 +245,8 @@ class PrimitiveTests(unittest.TestCase):
     def test_frame_primitives(self):
         # The spec and C read the frame of this function
         frame = capi.leaf_frame()
-        for name in ("GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "IR_SLOTS"):
+        for name in ("GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "IR_SLOTS",
+                     "FRAME_CODE_INSTRUMENTATION_VERSION"):
             with self.subTest(primitive=name):
                 expected = ir_leaf.PRIMITIVES[name].spec(context(frame=frame))
                 self.assertEqual(capi.leaf_primitive(name), expected)
@@ -262,6 +264,8 @@ class PrimitiveTests(unittest.TestCase):
         for bits, expected in ((1 << 4, True), (K["_PY_EVAL_EVENTS_MASK"] + 1, False)):
             cx.store(breaker, "u64", cx.load(breaker, "u64") & ~K["_PY_EVAL_EVENTS_MASK"] | bits)
             self.assertIs(prim.spec(cx), expected)
+        breaker = ir_leaf.PRIMITIVES["_Py_EvalBreaker"]
+        self.assertEqual(capi.leaf_primitive(breaker.name), breaker.spec(context()))
 
     def check_count_change(self, name, obj, *extra):
         "The spec's write of obj's count against the change C makes"

@@ -623,6 +623,14 @@ _PyJitAsm_Jmp(_PyJitAsm *a, _PyJitLabel target)
 }
 
 void
+_PyJitAsm_Call(_PyJitAsm *a, _PyJitLabel target)
+{
+    emit_u8(a, 0xE8);
+    add_fixup(a, _PyJitFixup_REL32_LABEL, target, NULL);
+    emit_u32(a, 0);
+}
+
+void
 _PyJitAsm_Jcc(_PyJitAsm *a, _PyJitCond cond, _PyJitLabel target)
 {
     emit_u8(a, 0x0F);

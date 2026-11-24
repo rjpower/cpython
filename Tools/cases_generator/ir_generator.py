@@ -87,6 +87,8 @@ from ir_records import (
 )
 # The exits of the generator-boundary variants (boundary_departure())
 from ir_records import BRANCH, RAISE, RETURN
+# The jumps that a stub binds (check_stub_arm())
+from ir_records import JUMP, TRANSFER_TOKENS
 from ir_read_effects import (
     error_nonnull_value, null_value_condition, value_assignment, value_declaration,
     value_nonnull_changes, value_transport_expression,
@@ -432,8 +434,13 @@ def generator_boundary_source_closed(boundary: GeneratorBoundary,
 def redispatch_cohorts(analysis: Analysis, formats: dict[str, "IRFormat"]):
     """Intersect only bodies selectable with the same physical entry."""
     boundaries = generator_boundaries(analysis)
+    # A family's baseline(...) arm is compiled code's, never a word's
+    # handler: no word redispatches to it
+    baselines = {family.baseline for family in analysis.families.values()}
     groups = {}
     for name in handler_instructions(analysis):
+        if name in baselines:
+            continue
         boundary = boundaries.get(name)
         shape = None if boundary is None else (
             boundary.yielded, boundary.completed, boundary.resume)
@@ -2271,11 +2278,10 @@ def generator_entry_recipe(inst: Instruction) -> GeneratorEntryRecipe | None:
         return None
     kind = tokens[4].text
     count = 2 if kind == "_PY_IR_FOR_ITER" else 3
-    if (len(entry.stack.inputs) != count or len(entry.stack.outputs) != 3
+    if (len(entry.stack.inputs) != count or len(entry.stack.outputs) != 2
             or any(item.is_array() for item in
                    entry.stack.inputs + entry.stack.outputs)
-            or any(passed_through(entry, j) != j for j in range(2))
-            or passed_through(entry, 2) is not None):
+            or any(passed_through(entry, j) != j for j in range(2))):
         return None
     at = parts.index(entry)
     for part in parts[:at]:
@@ -2286,12 +2292,8 @@ def generator_entry_recipe(inst: Instruction) -> GeneratorEntryRecipe | None:
                 or effect.callback or effect.changes_origin or effect.may_fail
                 or effect.error_sources or effect.unwind_sources):
             return None
-    # The legacy frame output supplies only the stack model. Its sole consumer
-    # is unreachable after the intrinsic's actual terminal frame handoff.
-    tail = parts[at + 1:]
-    if (len(tail) != 1 or len(tail[0].stack.inputs) != 1
-            or tail[0].stack.inputs[0].is_array() or tail[0].stack.outputs
-            or not tail[0].properties.switches_frame):
+    # The intrinsic's frame handoff is terminal: nothing follows it (VT2)
+    if parts[at + 1:]:
         return None
     inputs, outputs = external_io(inst)
     if (len(inputs) != count or len(outputs) != 2
@@ -3490,6 +3492,11 @@ class IREmitter(Emitter):
         # The uops of the handler being printed whose entry sets the stub's
         # ESCAPED bit (stub_escapes()), or None if it has no stub
         self.stub_escapes: frozenset[str] | None = None
+        # The index of the uop before whose body the handler being printed
+        # pins its departing frame's code (pin_point()), or None, and whether
+        # it has printed the pin
+        self.pin_at: int | None = None
+        self.pinned = False
         # The record of the handler being printed, and the identities of its
         # elements printed so far (check_record_consumed())
         self.record: OperationRecord | None = None
@@ -5828,6 +5835,12 @@ def write_uop(
     # The facts the uop assumes of its inputs, from their producers (F7)
     for line in ir_contract.assumed_assertions(uop, None):
         emitter.emit(line + "\n")
+    if emitter.uop_index - 1 == emitter.pin_at:
+        # After the arm's last guard: the word is untouched (g3/design.md
+        # section 2).  A stub reports the old pin's release, the forms
+        # discard it and the evaluator binds it to nothing
+        emitter.emit("IR_PIN_DEPARTING();\n")
+        emitter.pinned = True
     reachable, storage = emitter.emit_tokens(uop, storage, inst, False)
     if emitter.pending_owner is not None:
         raise analysis_error(
@@ -6867,6 +6880,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     validate_guarded_python_call(inst, fmt)
     emitter.result_publication = result_publication_contract(inst, fmt)
     record = build_record(name, inst, fmt, emitter.analysis, emitter.formats)
+    emitter.pin_at = pin_point(name, inst, emitter.analysis)
     saved = emitter.out
     roles: dict[str, set[str]] = {}
     emitter.declared_roles = {}
@@ -6886,12 +6900,52 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     emitter.declared_roles = roles
     emitter.declared_closes = set(emitter.close_names)
     emit_handler(record, emitter, out, {})
+    if emitter.pin_at is not None and not emitter.pinned:
+        raise analysis_error(f"{name}: departs its frame, and the emitter printed no "
+                             "IR_PIN_DEPARTING() before its departing uop", inst.where)
+    emitter.pin_at = None
     if record.generator_boundary is not None:
         check_boundary_expansion(name, record.generator_boundary, record,
                                  emitter.boundary_reached,
                                  emitter.boundary_completions, inst.where)
     check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
     ir_leaf.check_leaf(record, [p for p in inst.parts if isinstance(p, Uop)])
+
+
+def arm_departs(inst: Instruction, boundary: GeneratorBoundary | None) -> bool:
+    """Whether the arm departs its frame by a return or a yield: one of its
+    uops declares the exit, or its boundary(...) clause does (a delegated
+    yield, or a consumer whose completion returns).  A variant that departs
+    at(enter) leaves through the frame that it enters, whose arms pin."""
+    if any(ir_contract.declared_contract(part).exits & ir_contract.DEPARTING_EXITS
+           for part in inst.parts if isinstance(part, Uop)):
+        return True
+    if boundary is None or boundary.at == "enter":
+        return False
+    return boundary.yielded != "NONE" or "return" in boundary.exits
+
+
+def pin_point(name: str, inst: Instruction, analysis: Analysis) -> int | None:
+    """The uop of handler `name` before whose body the arm pins the code of
+    the frame it departs (IR_PIN_DEPARTING(), g3/design.md section 2): the
+    uop after its last guard, the last uop that declares miss or deopt.
+    None if no arm that runs this body departs; a body that generator-
+    boundary variants share (generator_word_entry()) pins if one of them
+    departs.  VT4 keeps every guard before the departing uop."""
+    boundaries = generator_boundaries(analysis)
+    insts = all_instructions(analysis)
+    sharing = {name} | {n for n in boundaries if generator_word_entry(n, analysis) == name}
+    if not any(arm_departs(insts[n] if n in insts else inst, boundaries.get(n))
+               for n in sharing):
+        return None
+    parts = [part for part in inst.parts if isinstance(part, Uop)]
+    guards = [i for i, part in enumerate(parts)
+              if ir_contract.declared_contract(part).exits & ir_contract.GUARD_EXITS]
+    at = guards[-1] + 1 if guards else 0
+    if at == len(parts):
+        raise analysis_error(f"{name}: departs its frame, and its last uop guards: no uop "
+                             "after its guards can take the pin", inst.where)
+    return at
 
 
 def canonical_body_tokens(part: Uop) -> list[str]:
@@ -7065,6 +7119,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
                             for site in (*uop.guards, *uop.transfers)
                             if site.site is not None}
     emitter.uop_index = 0
+    emitter.pinned = False
     emitter.generator_boundary = record.generator_boundary
     emitter.boundary_reached = set()
     emitter.boundary_completions = []
@@ -7541,6 +7596,7 @@ def event_twin_function(name: str, event: str, base: str) -> str:
 # result site yet (G1b) and no transfers (G3, G4).  `jump` is the
 # specializing uop's redispatch (DISPATCH_SAME_OPARG), status AGAIN.
 STUB_EXITS = frozenset(("next", "miss", "deopt", "raise", "jump"))
+STUB_JUMPS = frozenset(("DISPATCH_SAME_OPARG",))
 STUB_REGIONS = ("inline", "shared")
 # The effects after which a path may have reentered Python whatever it
 # released: the uop's entry sets ESCAPED
@@ -7553,6 +7609,8 @@ class StubPlan:
     family: str         # whose generic stub runs the word after a miss
     escapes: bool       # a uop declares runs_python or polls: every
                         # completion that reaches it reports ESCAPED
+    arm: str            # the handler whose template or stub the word
+                        # compiles: itself, or its family's baseline(...)
 
 
 def arm_escapes(inst: Instruction) -> bool:
@@ -7599,10 +7657,16 @@ def check_stub_arm(arm: Instruction, generic: bool) -> None:
             raise analysis_error(f"{arm.name}: {part.name} declares the exits "
                                  f"{', '.join(sorted(extra))}, which no stub plan has "
                                  "before G1b", arm.where)
-        if "jump" in contract.exits and "specializing" not in part.annotations:
-            raise analysis_error(f"{arm.name}: {part.name} declares `jump`, which a "
-                                 "stub has only as a specializing uop's redispatch",
-                                 arm.where)
+        # A stub binds a jump to its own word, DISPATCH_SAME_OPARG(), to
+        # AGAIN (a specializer's redispatch, _MAYBE_INSTRUMENT's rerun);
+        # no other jump
+        jumps = {t.text for t in part.body.tokens()
+                 if JUMP in TRANSFER_TOKENS.get(t.text, ())}
+        if "jump" in contract.exits and jumps - STUB_JUMPS:
+            raise analysis_error(f"{arm.name}: {part.name} jumps by "
+                                 f"{', '.join(sorted(jumps - STUB_JUMPS))}, which a stub "
+                                 "cannot bind: its one jump is to its own word "
+                                 "(DISPATCH_SAME_OPARG(), AGAIN)", arm.where)
         if generic and contract.exits & {"miss", "deopt"}:
             raise analysis_error(f"{arm.name} is its family's generic arm, but "
                                  f"{part.name} can miss", arm.where)
@@ -7620,12 +7684,27 @@ def stub_plans(analysis: Analysis) -> dict[str, StubPlan]:
         if head.region != "shared":
             raise analysis_error(f"{family.name}: a family's generic arm is "
                                  "region(shared)", head.where)
-        arms = [head] + [m for m in family.members if m.region is not None]
+        # The IR-only members too, which the opcode tables leave out
+        arms = [head] + [m for m in insts.values()
+                         if m.family is family and m is not head and m.region is not None]
         for arm in arms:
             check_stub_arm(arm, arm is head)
+        baseline = None
+        if family.baseline:
+            baseline = insts[family.baseline]
+            if baseline.region is None:
+                raise analysis_error(f"{family.name}: its baseline({baseline.name}) "
+                                     "declares no region", baseline.where)
         for name, inst in handlers.items():
-            if any(inst is arm for arm in arms) and name not in EXECUTION_VARIANTS:
-                plans[name] = StubPlan(inst.region, family.name, arm_escapes(inst))
+            if not any(inst is arm for arm in arms) or name in EXECUTION_VARIANTS:
+                continue
+            # The head's words compile to the baseline's arm, and miss to the
+            # head's stub
+            if inst is head and baseline is not None:
+                plans[name] = StubPlan(baseline.region, family.name,
+                                       arm_escapes(baseline), baseline.name)
+            else:
+                plans[name] = StubPlan(inst.region, family.name, arm_escapes(inst), name)
     return plans
 
 
@@ -7703,6 +7782,8 @@ STUB_BINDINGS = {
         "        return ir_status | _PyIR_RAISED; \\\n"
         "    } while (0)"),
     "IR_STUB_ESCAPE()": "(ir_status |= _PyIR_ESCAPED)",
+    # The departing frame's unit runs on until a switch leaves it
+    "IR_PIN_DEPARTING()": "(ir_status |= _PyJit_PinDeparting(tstate, frame))",
     "IR_CLOSE_WINDOW(W, N)": "_PyIR_STUB_CLOSE_WINDOW((W), (N))",
 }
 STUB_UNBOUND = ("DISPATCH_GOTO", "DISPATCH_INLINED", "IR_EXIT", "IR_OBSERVE_EDGE",
@@ -7789,10 +7870,10 @@ def generate_ir_stubs(analysis: Analysis, formats: dict[str, IRFormat],
     outfile.write(f"const _PyIRStubPlan _PyIR_StubPlans[{ir_numbers.IR_LIMIT}] = {{\n")
     for name in sorted(plans, key=lambda n: ids[n]):
         plan = plans[name]
-        stub = (f"(const void *){stub_function_name(name)}"
+        stub = (f"(const void *){stub_function_name(plan.arm)}"
                 if plan.region == "shared" else "NULL")
         outfile.write(f"    [{ids[name]}] = {{_PyIR_PLAN_{plan.region.upper()}, "
-                      f"{int(plan.escapes)}, {stub}, "
+                      f"{int(plan.escapes)}, {ids[plan.arm]}, {stub}, "
                       f"(const void *){stub_function_name(plan.family)}}},  "
                       f"// {name}\n")
     outfile.write("};\n")
@@ -7823,7 +7904,9 @@ def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
         if generator_word_entry(name, analysis) != name:
             continue
         plan = plans.get(name)
-        stub = plan is not None and plan.region == "shared" and stubs is not None
+        # The shared arms' stubs, and each family's generic (its head's)
+        stub = (plan is not None and stubs is not None
+                and (plan.region == "shared" or name == plan.family))
         if name in binary_ops:
             operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
             out.emit(f"TARGET({name}) {{\n")
@@ -8983,6 +9066,9 @@ def handler_contracts(analysis: Analysis,
     insts = {**handler_instructions(analysis),
              **{name: analysis.instructions[name] for name in STACK_ONLY
                 if name in analysis.instructions}}
+    # A family's baseline(...) arm runs in compiled code only, never on a
+    # word, so instrumentation never replaces it: it has no twin
+    baselines = {family.baseline for family in analysis.families.values()}
     for name, inst in insts.items():
         fmt = formats[name]
         record = build_record(name, inst, fmt, analysis, formats)
@@ -8992,7 +9078,7 @@ def handler_contracts(analysis: Analysis,
             reads=extent(list(record.inputs), inst),
             writes=extent([item for _, _, item, _ in record.outputs], inst),
             through=extent(record_through(record), inst),
-            twin=twin_of(name, fmt, ids),
+            twin=None if name in baselines else twin_of(name, fmt, ids),
             result_phase=(publication.phase if publication is not None
                           else RESULT_PHASE_NONE),
             output_kind=handler_output_kind(inst, fmt),

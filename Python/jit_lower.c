@@ -610,6 +610,13 @@ LOWERING(_PyValue_PublishedItem)                // [dst, w]
     return _PyJitCond_NONE;
 }
 
+LOWERING(_Py_EvalBreaker)                       // [dst]
+{
+    /* A relaxed load: a plain load on x86-64 */
+    _PyJitAsm_MovRM(A, REG(0), AT(_PyJit_TSTATE, offsetof(PyThreadState, eval_breaker)));
+    return _PyJitCond_NONE;
+}
+
 LOWERING(_Py_EvalBreakerHasEvents)              // []
 {
     _PyJitAsm_TestMI(A, AT(_PyJit_TSTATE, offsetof(PyThreadState, eval_breaker)),
@@ -1014,6 +1021,15 @@ LOWERING(FRAME_CO_CONSTS)                       // [dst]
     _PyJitReg dst = REG(0);
     _PyJitAsm_MovRM(A, dst, AT(_PyJit_FRAME, offsetof(_PyInterpreterFrame, f_executable)));
     _PyJitAsm_MovRM(A, dst, AT(dst, offsetof(PyCodeObject, co_consts)));
+    return _PyJitCond_NONE;
+}
+
+LOWERING(FRAME_CODE_INSTRUMENTATION_VERSION)    // [dst]
+{
+    /* An acquire load: a plain load on x86-64, whose loads are acquire */
+    _PyJitReg dst = REG(0);
+    _PyJitAsm_MovRM(A, dst, AT(_PyJit_FRAME, offsetof(_PyInterpreterFrame, f_executable)));
+    _PyJitAsm_MovRM(A, dst, AT(dst, offsetof(PyCodeObject, _co_instrumentation_version)));
     return _PyJitCond_NONE;
 }
 

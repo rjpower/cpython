@@ -176,6 +176,14 @@ class SliceTests(unittest.TestCase):
 EXTRA_ROWS = """
 #define TEST_ROWS(PRIMITIVE, HELPER, MACRO) \\
     MACRO(SPAM_TEST, ARGS(borrowed), TEST(inline_int), EFFECTS(writes), EXITS()) \\
+    HELPER(spam_retire, void, (PyThreadState *, _PyInterpreterFrame *), ARGS(tstate, frame), \\
+           NONE, EFFECTS(releases, retires_frame)) \\
+    HELPER(spam_retire_outer, void, (PyThreadState *, _PyInterpreterFrame *), \\
+           ARGS(tstate, frame), NONE, EFFECTS(releases, retires_frame), CALLS(spam_retire)) \\
+    MACRO(SPAM_ENTER, ARGS(), NONE, EFFECTS(runs_python, switches_frame), EXITS(enter, raise)) \\
+    MACRO(SPAM_ENTER_OUTER, ARGS(), NONE, EFFECTS(runs_python, switches_frame), \\
+          EXITS(enter, raise), CALLS(SPAM_ENTER)) \\
+    MACRO(SPAM_RETURN, ARGS(), NONE, EFFECTS(switches_frame), EXITS(return, raise)) \\
     HELPER(spam_dealloc, void, (PyObject *), ARGS(object), NONE, EFFECTS()) \\
     HELPER(spam_write, void, (PyObject *), ARGS(object), NONE, EFFECTS(writes)) \\
     INTRINSIC(SPAM_FT_ONLY, ARGS(scalar), SCALAR, BUILD(free_threaded)) \\
@@ -1485,6 +1493,42 @@ class VerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, r"region\(inline\), but _POP is not leaf"):
             ir_contract.verify_handler(inst, self.table, leaf={"_GUARD": True, "_POP": False})
 
+    def test_a_stub_binds_only_a_jump_to_its_own_word(self):
+        # A stub binds DISPATCH_SAME_OPARG() to AGAIN (a specializer's
+        # redispatch, RESUME's _MAYBE_INSTRUMENT); it has no other jump
+        source = """
+            op(_OP, (--)) effects() exits(next, jump) {
+                if (oparg) {
+                    next_instr = this_instr;
+                    %s;
+                }
+            }
+            macro(OP) region(shared) = _OP;
+        """
+        result = self.verify(source % "DISPATCH_SAME_OPARG()")
+        ir_generator.check_stub_arm(result.instructions["OP"], True)
+        result = self.verify(source % "DISPATCH_GOTO()")
+        with self.assertRaisesRegex(SyntaxError, r"OP: _OP jumps by DISPATCH_GOTO, which a "
+                                                 r"stub cannot bind"):
+            ir_generator.check_stub_arm(result.instructions["OP"], True)
+
+    def test_a_baseline_is_a_member(self):
+        source = """
+            inst(OP, (--)) effects() exits(next) {
+            }
+            inst(OP_A, (--)) effects() exits(next) {
+            }
+            inst(OP_B, (--)) effects() exits(next) {
+            }
+            family(OP, 0) baseline(%s) = { OP_A, OP_B };
+        """
+        self.assertEqual(self.verify(source % "OP_B").families["OP"].baseline, "OP_B")
+        self.refuses(source % "OP_C", r"family\(OP\): its baseline\(OP_C\) is not a member")
+        # RESUME's words compile to RESUME_CHECK
+        self.assertEqual(analysis.families["RESUME"].baseline, "RESUME_CHECK")
+        plan = ir_generator.stub_plans(analysis)["RESUME"]
+        self.assertEqual((plan.region, plan.arm, plan.family), ("inline", "RESUME_CHECK", "RESUME"))
+
     def test_modelled_primitive_needs_a_lowering(self):
         # V11 against the tree: every modelled PRIMITIVE row is lowered
         ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings())
@@ -1547,7 +1591,8 @@ class VerifierTests(unittest.TestCase):
         with self.assertRaisesRegex(SyntaxError, r"row spam: HELPER: 6 columns, then "
                                                  r"optionally each of FEEDBACK\(\.\.\.\), "
                                                  r"SLOW\(\.\.\.\), TAKES_VIEW\(\.\.\.\), "
-                                                 r"HOMES\(\.\.\.\), OBSERVER\(\.\.\.\) once; "
+                                                 r"HOMES\(\.\.\.\), OBSERVER\(\.\.\.\), "
+                                                 r"CALLS\(\.\.\.\) once; "
                                                  r"got 'EXITS\(next\)'"):
             ir_contract.parse_rows(
                 "#define X(PRIMITIVE, HELPER, MACRO) "
@@ -2431,15 +2476,20 @@ class VerifierTests(unittest.TestCase):
     def test_a_switch_on_some_paths_leaves_next(self):
         # _SEND: the generator is entered when it can be claimed; otherwise
         # the body runs on to its end
+        # the body runs on to its end. A uop that also completes switches
+        # only through a row that declares the switch (VT5), as _SEND's
+        # IR_ENTER_GENERATOR does
         source = """
-            op(_OP, (--)) effects(switches_frame) exits(%s) {
+            op(_OP, (--)) effects(%s) exits(%s) {
                 if (oparg) {
-                    frame = tstate->current_frame;
+                    %s
                 }
             }
         """
-        self.verify(source % "enter, next")
-        self.refuses(source % "enter", r"declares exits\(enter\), but the body takes enter, next")
+        self.verify(source % ("runs_python, switches_frame", "enter, next, raise",
+                              "SPAM_ENTER();"))
+        self.refuses(source % ("switches_frame", "enter", "frame = tstate->current_frame;"),
+                     r"declares exits\(enter\), but the body takes enter, next")
 
     def test_assumed_cursor_encodings(self):
         # A FOR_ITER cursor is a tagged index (GET_ITER, for exact lists and
@@ -3379,6 +3429,120 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"`return` is a form the walk does not model")
 
+    # VT1-VT5: transfers (g3/design.md section 7)
+
+    def table_with(self, text):
+        table = self.table | ir_contract.parse_rows(
+            "#define X(PRIMITIVE, HELPER, MACRO) " + text)
+        ir_contract.check_columns(table)
+        return table
+
+    def test_a_row_declares_what_its_callees_do(self):
+        # VT1 and VT3 through CALLS: a row that calls a retiring or switching
+        # row declares the retirement and the switch exits itself
+        self.assertEqual(self.table["spam_retire_outer"].calls, ("spam_retire",))
+        through = ("HELPER(spam_through, void, (PyThreadState *, _PyInterpreterFrame *), "
+                   "ARGS(tstate, frame), NONE, EFFECTS(%s), CALLS(spam_retire_outer))")
+        self.table_with(through % "releases, retires_frame")
+        with self.assertRaisesRegex(SyntaxError, r"row spam_through: calls spam_retire_outer, "
+                                    r"which retires a frame, and does not declare "
+                                    r"retires_frame"):
+            self.table_with(through % "releases")
+        switch = ("MACRO(SPAM_THROUGH, ARGS(), NONE, EFFECTS(runs_python, switches_frame), "
+                  "EXITS(%s), CALLS(SPAM_ENTER_OUTER))")
+        self.table_with(switch % "enter, raise")
+        with self.assertRaisesRegex(SyntaxError, r"row SPAM_THROUGH: calls SPAM_ENTER_OUTER, "
+                                    r"which switches frames by enter, and does not declare "
+                                    r"exits\(enter\)"):
+            self.table_with(switch % "raise")
+        with self.assertRaisesRegex(SyntaxError, r"CALLS\(spam_none\) names no row"):
+            self.table_with("MACRO(SPAM_THROUGH, ARGS(), NONE, EFFECTS(), EXITS(), "
+                            "CALLS(spam_none))")
+        # The real chains
+        table = ir_contract.rows()
+        self.assertIn("retires_frame",
+                      table["_PyEval_RetireThreadFrameWithResult"].effects)
+        self.assertEqual(table["IR_PROCESS_ERROR"].calls, ("_PyEval_ProcessError",))
+        self.assertEqual(table["IR_PIN_DEPARTING"].calls, ("_PyJit_PinDeparting",))
+
+    def test_a_retiring_uop_returns(self):
+        # VT3: a uop that calls a retire row, directly or through a row that
+        # calls one, declares retires_frame and return
+        source = """
+            op(_OP, (--)) effects(%s) exits(%s) {
+                %s(tstate, frame);
+                %s
+            }
+        """
+        returns = "frame = tstate->current_frame;"
+        for callee in ("spam_retire", "spam_retire_outer"):
+            with self.subTest(callee=callee):
+                self.verify(source % ("releases, switches_frame, retires_frame",
+                                      "return", callee, returns))
+                self.refuses(source % ("releases, switches_frame", "return", callee, returns),
+                             rf"`{callee}` may retires_frame")
+                self.refuses(source % ("releases, retires_frame", "next", callee, ""),
+                             r"retires a frame \(retires_frame\), and does not declare "
+                             r"exits\(return\)")
+
+    def test_a_uop_does_not_guard_and_depart(self):
+        # VT4: the guards of a departing arm are their own uop, before the pin
+        self.refuses("""
+            op(_OP, (--)) effects(switches_frame) exits(miss, return) {
+                EXIT_IF(oparg, "spam");
+                frame = tstate->current_frame;
+            }
+        """, r"declares exits\(miss\) and departs \(return\): split the guards")
+
+    def test_no_guard_after_a_switch(self):
+        # VT4 over the arm: no guard follows a switch or a departure
+        self.refuses("""
+            op(_SWITCH, (--)) effects(runs_python, switches_frame) exits(next, enter, raise) {
+                if (oparg) {
+                    SPAM_ENTER();
+                }
+            }
+            op(_GUARD, (--)) effects() exits(next, miss) {
+                EXIT_IF(oparg, "spam");
+            }
+            macro(OP) = _SWITCH + _GUARD;
+        """, r"OP: _GUARD guards \(miss\) after _SWITCH, which switches or departs")
+
+    def test_a_switch_followed_by_a_uop_completes(self):
+        # VT2: the rest of the arm runs on the switching uop's completions
+        source = """
+            op(_SWITCH, (--)) effects(runs_python, switches_frame) exits(%s) {
+                %s
+            }
+            op(_AFTER, (--)) effects() exits(next) {
+            }
+            macro(OP) = _SWITCH + _AFTER;
+        """
+        self.verify(source % ("next, enter, raise", "if (oparg) { SPAM_ENTER(); }"))
+        self.refuses(source % ("enter", "frame = tstate->current_frame;"),
+                     r"OP: _SWITCH switches frames, and _AFTER follows it, but it declares "
+                     r"no completing exit")
+        # CALL: _CHECK_PERIODIC_AT_END runs on the native callable's completion
+        call = analysis.instructions["CALL"]
+        parts = [p.name for p in call.parts if isinstance(p, cases.analyzer.Uop)]
+        self.assertEqual(parts[-2:], ["_DO_CALL", "_CHECK_PERIODIC_AT_END"])
+        ir_contract.verify_handler(call)
+
+    def test_a_completing_uop_switches_through_a_row(self):
+        # VT5: with a completing exit, DISPATCH() is the completion, and the
+        # switch comes from a row that declares it
+        source = """
+            op(_OP, (--)) effects(runs_python, switches_frame) exits(%s) {
+                if (oparg) {
+                    %s
+                }
+            }
+        """
+        self.verify(source % ("next, enter, raise", "SPAM_ENTER_OUTER();"))
+        self.refuses(source % ("next, enter", "frame = tstate->current_frame;\nDISPATCH();"),
+                     r"_OP: completes in its frame and switches by enter, which no row it "
+                     r"calls declares")
+
     def test_a_switch_exit_needs_a_switch(self):
         # A declared switch exit names how the body's frame switch leaves;
         # a body that does not switch completes, whatever it declares
@@ -4299,7 +4463,7 @@ class BoundaryTests(unittest.TestCase):
                      r"boundary\(CLEANUP_THROW\) needs at\(last\) or at\(enter\)")
         # SEND_GEN's last uop only enters
         self.refuses([(SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace("at(enter)", "at(last)"))],
-                     r"_PUSH_FRAME: a delegated yield needs the departing uop's fall-through")
+                     r"_SEND_GEN_FRAME: a delegated yield needs the departing uop's fall-through")
         # A native send yields and completes in its own uops
         self.refuses([(SEND_CLAUSE, SEND_CLAUSE.replace("at(last)", "at(enter)"))],
                      r"SEND\w*_XFER_\w+: departs at\(enter\), and its expansion reaches")
@@ -4345,6 +4509,102 @@ class BoundaryTests(unittest.TestCase):
                      r"boundary\(SEND\) only in at\(\.\.\.\)")
         self.refuses([(SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace(" yields(delegated)", ""))],
                      r"boundary\(SEND_GEN\) may differ")
+
+
+
+class PinTests(unittest.TestCase):
+    """The execution pin (g3/design.md section 2): every arm that departs
+    its frame by a return or a yield pins the frame's code once, after its
+    last guard, in every product: the function forms (and the evaluator,
+    whose handlers are the same text) and the stubs"""
+
+    @classmethod
+    def setUpClass(cls):
+        formats = ir_generator.compute_formats(analysis)
+        cls.stubs = {}
+        out = io.StringIO()
+        cls.forms = ir_generator.generate_ir_cases(analysis, formats, out, False,
+                                                   None, cls.stubs)
+        cls.evaluator = out.getvalue()
+        cls.handlers = ir_generator.handler_instructions(analysis)
+
+    def declares_departure(self, name):
+        return any(t.kind in (ir_records.RETURN, ir_records.YIELD)
+                   for u in records[name].uops for t in u.transfers)
+
+    def departs(self, name):
+        "Whether a handler that runs name's body declares return or yield"
+        return any(self.declares_departure(n) for n in self.handlers
+                   if ir_generator.generator_word_entry(n, analysis) == name)
+
+    def form(self, name):
+        return next(f for f in self.forms
+                    if re.search(rf"\bir_run_{name}\(", f.split("{", 1)[0]))
+
+    def test_every_departing_arm_pins_once(self):
+        named = 0
+        for text in self.forms:
+            m = re.search(r"\bir_run_(\w+)\(", text.split("{", 1)[0])
+            if m is None or m.group(1) not in self.handlers:
+                continue
+            name = m.group(1)
+            if (ir_generator.generator_word_entry(name, analysis) != name
+                    or name in ir_generator.EDGE_TWINS or name in ir_generator.EVENT_TWINS):
+                # A twin calls its base's form, which pins
+                continue
+            named += 1
+            with self.subTest(name=name):
+                self.assertEqual(text.count("IR_PIN_DEPARTING();"),
+                                 1 if self.departs(name) else 0)
+        self.assertGreater(named, 200)
+        # The stubs are the same text with the stub bindings
+        for function, text in self.stubs.items():
+            name = function.removeprefix("_PyIR_Stub_")
+            if name in self.handlers:
+                with self.subTest(stub=name):
+                    self.assertEqual(text.count("IR_PIN_DEPARTING();"),
+                                     1 if self.departs(name) else 0)
+        for name in ("RETURN_VALUE", "YIELD_VALUE", "SEND_VIRTUAL_XFER_DISCARD"):
+            self.assertTrue(self.departs(name), name)
+        for name in ("CALL_PY_EXACT_ARGS", "SEND_GEN_XFER_DISCARD", "LOAD_FAST"):
+            self.assertFalse(self.departs(name), name)
+
+    def test_the_pin_follows_the_last_guard(self):
+        # The guarded variants share their family's body, whose RETURN
+        # consumer completes through GEN_COMPLETE_RETURN
+        for name, guards, body, first in (
+                ("SEND_VIRTUAL_XFER_RETURN",
+                 ("_GUARD_TOS_IS_NONE", "_GUARD_NOS_NOT_NULL"), "_SEND_VIRTUAL",
+                 "PyObject *iter_o"),
+                ("SEND_VIRTUAL_XFER_STORE_LOCAL",
+                 ("_GUARD_TOS_IS_NONE", "_GUARD_NOS_NOT_NULL"), "_SEND_VIRTUAL",
+                 "PyObject *iter_o"),
+                ("SEND_ASYNC_GEN_XFER_RETURN",
+                 ("_GUARD_3OS_ASYNC_GEN_ASEND",), "_SEND_ASYNC_GEN",
+                 "PyObject *iter_o"),
+                ("SEND_ASYNC_GEN_XFER_POP_TOP",
+                 ("_GUARD_3OS_ASYNC_GEN_ASEND",), "_SEND_ASYNC_GEN",
+                 "PyObject *iter_o")):
+            with self.subTest(name=name):
+                self.assertTrue(self.declares_departure(name))
+                entry = ir_generator.generator_word_entry(name, analysis)
+                text = self.form(entry)
+                pin = text.index("IR_PIN_DEPARTING();")
+                for guard in guards:
+                    self.assertLess(text.index(f"// {guard}\n"), pin)
+                start = text.index(f"// {body}\n")
+                self.assertLess(start, pin)
+                self.assertLess(pin, text.index(first, start))
+                self.assertEqual(ir_generator.pin_point(entry, self.handlers[entry],
+                                                        analysis), len(guards))
+
+    def test_an_unguarded_return_pins_first(self):
+        # RETURN_VALUE has no guard: the pin is before its first uop's body
+        text = self.form("RETURN_VALUE")
+        self.assertLess(text.index("// _MAKE_HEAP_SAFE\n"), text.index("IR_PIN_DEPARTING();"))
+        self.assertLess(text.index("IR_PIN_DEPARTING();"), text.index("IR_DETACH("))
+        self.assertEqual(ir_generator.pin_point("RETURN_VALUE",
+                                                self.handlers["RETURN_VALUE"], analysis), 0)
 
 
 if __name__ == "__main__":

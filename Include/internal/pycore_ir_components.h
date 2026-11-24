@@ -1759,6 +1759,12 @@
      * (ir_leaf.py) and a lowering (jit_lower.c), so it stays a PRIMITIVE. */ \
     PRIMITIVE(_Py_EvalBreakerHasEvents, bool, (PyThreadState *), \
               ARGS(tstate), CONTEXT("the thread's eval breaker"), EFFECTS(reads)) \
+    /* ceval_macros.h: the thread's eval breaker word, a relaxed load (a plain \
+     * load on x86-64, as jit_lower.c lowers it).  No callee; it neither runs \
+     * code nor raises.  _RESUME_CHECK compares it with \
+     * FRAME_CODE_INSTRUMENTATION_VERSION().  A leaf model and a lowering. */ \
+    PRIMITIVE(_Py_EvalBreaker, uintptr_t, (PyThreadState *), \
+              ARGS(tstate), SCALAR, EFFECTS(reads)) \
     /* _Py_HandlePending (Python/ceval_gil.c): stop-the-world, signal \
      * handlers and pending calls (Python code), the collector (finalizers); \
      * -1 with an exception set */ \
@@ -1913,7 +1919,7 @@
     ROUTINE(_PyEval_ProcessError, _PyIRErrorResult, \
             (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, uint32_t), \
             ARGS(tstate, frame, scalar, scalar), SCALAR, \
-            EFFECTS(runs_python, switches_frame), EXITS(jump, exit)) \
+            EFFECTS(runs_python, switches_frame, retires_frame), EXITS(jump, exit)) \
     /* start_frame (Python/ceval_macros.h): the recursion check, which \
      * counts down the thread's remaining depth; nonzero \
      * with RecursionError set */ \
@@ -1996,7 +2002,8 @@
      * allocate the caller's frame object: `allocates`.  The result is the \
      * argument, unchanged, with its obligation: moved(2). */ \
     HELPER(_PyEval_FrameClearAndPopGeneralWithResult, PyValue, (PyThreadState *, _PyInterpreterFrame *, PyValue), \
-        ARGS(tstate, frame, consumed), VALUE(moved(2)), EFFECTS(reads, writes, allocates, releases)) \
+        ARGS(tstate, frame, consumed), VALUE(moved(2)), \
+        EFFECTS(reads, writes, allocates, releases, retires_frame)) \
     /* Evidence (Python/ceval.c, static inline; G0c batch 6).  The retire \
      * of a thread frame whose scratch is empty.  The same contract as \
      * _PyEval_FrameClearAndPopGeneralWithResult, which it calls when the \
@@ -2005,9 +2012,11 @@
      * f_executable, _PyThreadState_PopFrame.  Failure: none, the result is \
      * returned unchanged.  Callbacks: the closes and decrefs release, so \
      * finalizers may run Python.  It allocates only through the general \
-     * path. */ \
+     * path.  Both retire the frame: its code may die (retires_frame). */ \
     HELPER(_PyEval_RetireThreadFrameWithResult, PyValue, (PyThreadState *, _PyInterpreterFrame *, PyValue), \
-        ARGS(tstate, frame, consumed), VALUE(moved(2)), EFFECTS(reads, writes, allocates, releases)) \
+        ARGS(tstate, frame, consumed), VALUE(moved(2)), \
+        EFFECTS(reads, writes, allocates, releases, retires_frame), \
+        CALLS(_PyEval_FrameClearAndPopGeneralWithResult)) \
     /* pycore_interpframe.h: the frame's executable code object \
      * (f_executable) from the frame; a read, no failure */ \
     HELPER(_PyFrame_GetCode, PyCodeObject *, (_PyInterpreterFrame *), \
@@ -2803,6 +2812,11 @@
      * are home accesses, which a home write, a reentry and the skeleton's \
      * close kill (HOME) */ \
     MACRO(GLOBALS, ARGS(), PATH(globals), EFFECTS(reads), EXITS()) \
+    /* ceval_macros.h: the instrumentation version of the frame's code, an \
+     * acquire load (a plain load on x86-64, as jit_lower.c lowers it; x86-64 \
+     * loads are acquire), which asserts that it has no event bits.  It \
+     * reads the code, which instrumentation writes. */ \
+    MACRO(FRAME_CODE_INSTRUMENTATION_VERSION, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
     MACRO(BUILTINS, ARGS(), PATH(builtins), EFFECTS(reads), EXITS()) \
     /* A frame path's dict keys (pycore_dict.h), and their version: a \
      * fact of the path, `paths(globals: keys_version(v))` (G0a4) */ \
@@ -2942,6 +2956,25 @@
     MACRO(IR_JIT_EVENT, ARGS(), NONE, \
           EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
           EXITS(redirect, raise, exit)) \
+    /* The execution pin (g3/design.md section 2; Python/jit.c).  The \
+     * generator prints IR_PIN_DEPARTING() after the last guard of every \
+     * arm with a return or a yield; no body writes it.  \
+     * _PyJit_PinDeparting stores a new reference to the frame's code in \
+     * the evaluation loop's activation (jit_pin), then releases the old \
+     * pin: a code's deallocation runs its weakref callbacks, so \
+     * `releases`.  It returns _PyIR_ESCAPED when that release \
+     * deallocated, else 0; no failure. */ \
+    HELPER(_PyJit_PinDeparting, int, (PyThreadState *, _PyInterpreterFrame *), \
+        ARGS(tstate, frame), SCALAR, EFFECTS(releases)) \
+    MACRO(IR_PIN_DEPARTING, ARGS(), NONE, EFFECTS(releases), EXITS(), \
+          CALLS(_PyJit_PinDeparting)) \
+    /* Python/jit.c _PyJit_Event: the switch routine's cold call for a \
+     * frame whose code has no valid unit.  It reads the code's units, \
+     * counts the warm-up event (a write) and compiles or recompiles \
+     * (allocates; a failure is cleared, never raised).  It returns the \
+     * unit to run or NULL, and never runs Python. */ \
+    HELPER(_PyJit_Event, _PyJitUnit *, (PyThreadState *, _PyInterpreterFrame *), \
+        ARGS(tstate, frame), SCALAR, EFFECTS(reads, writes, allocates)) \
     /* Guards: ir_records.GUARD_TOKENS maps each to EXIT_GUARD (miss); \
      * IR_HELPER_EFFECTS gives IR_GUARD_INLINE_INT, IR_GUARD_ELEMENT_TYPE, \
      * IR_GUARD_ELEMENT_INDEX and IR_DUP_CANONICAL_ELEMENT an empty set.  \
@@ -3123,7 +3156,8 @@
      * never continues. */ \
     MACRO(IR_PROCESS_ERROR, ARGS(scalar, scalar), NONE, \
           EFFECTS(reads, writes, raises, releases, runs_python, \
-                  switches_frame), EXITS(raise, exit)) \
+                  switches_frame, retires_frame), EXITS(raise, exit), \
+          CALLS(_PyEval_ProcessError)) \
     /* Evidence (G0c batch 6; ir_generator.return_to_caller, \
      * finish_generator_return, Python/ceval_routines.h gen_return, \
      * Python/ceval.c _PyEval_CompleteGeneratorReturn).  Each macro \
@@ -3146,14 +3180,14 @@
           EFFECTS(reads, writes, raises, runs_python, switches_frame), \
           EXITS(return, raise)) \
     MACRO(IR_FINISH_GENERATOR_RETURN, ARGS(consumed, scalar), NONE, \
-          EFFECTS(reads, writes, raises, runs_python, switches_frame), \
+          EFFECTS(reads, writes, raises, runs_python, switches_frame, retires_frame), \
           EXITS(return, raise)) \
     /* Evidence (G0c8): ir_generator.py:5549: emits IR_GEN_RETURN(value, dying, 1): a tail call \
      * of ir_gen_return (ceval.c:2632), which completes the generator's return (callbacks: \
      * Python; may raise) and returns the next frame and word.  A terminal transfer \
      * (return or raise) that switches the frame. */ \
     MACRO(IR_FINISH_GENERATOR_RETURN_EMPTY, ARGS(consumed, scalar), NONE, \
-          EFFECTS(reads, writes, raises, runs_python, switches_frame), \
+          EFFECTS(reads, writes, raises, runs_python, switches_frame, retires_frame), \
           EXITS(return, raise)) \
     /* ir_generator.py enter_generator: stores the sent value's slot into \
      * the resumed frame (frame->return_slot, return_pc, previous, the \

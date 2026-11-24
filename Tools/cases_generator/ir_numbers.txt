@@ -485,3 +485,5 @@ POP_JUMP_IF_FALSE_SLOT 415
 # under -X jit=on and always, whose event enters the code's unit.
 RESUME_JIT 416
 JUMP_BACKWARD_JIT 417
+# regions89 G3a: the baseline's arm for RESUME's words (baseline(RESUME_CHECK))
+RESUME_CHECK 418

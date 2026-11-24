@@ -75,6 +75,10 @@ typedef struct {
     /* A uop of the arm declares runs_python or polls, so its completions
      * report ESCAPED: the site's cold path tests RETIRED inline */
     uint8_t escapes;
+    /* The handler whose template or stub a word of this plan compiles:
+     * the handler itself, or its family's baseline(...) arm (RESUME's
+     * words compile to RESUME_CHECK) */
+    uint16_t arm;
     /* int stub(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *site) */
     const void *stub;           // a SHARED arm's
     const void *generic;        // the family's generic, for a miss
@@ -150,6 +154,21 @@ _PyJit_CompiledHandler(_PyIRWord w)
         ? _PyIR_HandlerBase[handler] : handler;
 }
 
+#ifdef _PY_JIT_SUPPORTED
+/* The plan by which a unit compiles word w (Python/jit.c, emit_unit()): its
+ * compiled handler's, or none in a unit at the recompile cap. */
+PyAPI_FUNC(const _PyIRStubPlan *) _PyJit_PlanOf(_PyIRWord w, int capped);
+#endif
+
+/* The handler whose template, stub or form word w compiles under plan: the
+ * plan's arm, which is the handler itself or its family's baseline(...)
+ * arm, or the compiled handler when the word is not planned */
+static inline int
+_PyJit_ArmOf(const _PyIRStubPlan *plan, _PyIRWord w)
+{
+    return plan->region == _PyIR_PLAN_NONE ? _PyJit_CompiledHandler(w) : plan->arm;
+}
+
 /* Read -X jit and PYTHON_JIT into interp->ceval.jit.  An unknown value is
  * an error; a mode other than off on a process whose code memory cannot be
  * reserved leaves the JIT off. */
@@ -168,16 +187,17 @@ PyAPI_FUNC(int) _PyJit_IsAvailable(void);
 PyAPI_FUNC(int) _PyJit_PinDeparting(PyThreadState *tstate,
                                     struct _PyInterpreterFrame *frame);
 
-#ifdef _PY_JIT_SUPPORTED
-
 /* A warm-up event of frame: the frame enters or resumes its code, or jumps
  * back (RESUME_JIT, JUMP_BACKWARD_JIT, a unit's backward jump when it is
  * invalid), or goes back to an invalid unit.  Returns the code's valid
  * unit; otherwise counts the event, and compiles the code when it is warm
  * or recompiles a stale unit.  Returns the unit to run, or NULL to run the
- * frame in the evaluator. */
+ * frame in the evaluator.  Declared in every build, for its row's static
+ * check (pycore_ir_components.h); defined where the JIT is supported. */
 extern _PyJitUnit *_PyJit_Event(PyThreadState *tstate,
                                 struct _PyInterpreterFrame *frame);
+
+#ifdef _PY_JIT_SUPPORTED
 
 /* The code of exec is monitored: compiled code leaves its unit at the next
  * test (Python/instrumentation.c). */

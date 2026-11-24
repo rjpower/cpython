@@ -355,6 +355,9 @@ class Family:
     name: str
     size: str
     members: list[Instruction]
+    # The member that the baseline JIT compiles for the family's words
+    # that no feedback specialises (`baseline(ARM)`), or ""
+    baseline: str = ""
 
     def dump(self, indent: str) -> None:
         print(indent, self.name, "= ", ", ".join([m.name for m in self.members]))
@@ -1169,10 +1172,14 @@ def add_family(
     instructions: dict[str, Instruction],
     families: dict[str, Family],
 ) -> None:
+    if pfamily.baseline and pfamily.baseline not in pfamily.members:
+        raise analysis_error(f"family({pfamily.name}): its baseline({pfamily.baseline}) "
+                             "is not a member", pfamily.first_token)
     family = Family(
         pfamily.name,
         pfamily.size,
         [instructions[member_name] for member_name in pfamily.members],
+        pfamily.baseline,
     )
     for member in family.members:
         member.family = family

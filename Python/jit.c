@@ -129,7 +129,8 @@ _PyJit_IsAvailable(void)
 static void
 bad_entry(void)
 {
-    Py_FatalError("baseline JIT: an operand word entered, or a frame's base moved");
+    Py_FatalError("baseline JIT: an operand word entered, a frame's base moved, "
+                  "or a switch named a frame that is not current");
 }
 
 /* What compiled code tests after a word: RETIRED after a word that may run
@@ -459,11 +460,35 @@ build_unwind(const _PyJitCompiler *c, size_t code_size, uint8_t *buffer)
     return _PyJitUnwind_Terminate(&u);
 }
 
+/* A form's transfer to another frame, cold: a call, a return, a yield or a
+ * resume goes on at its successor through the switch routine, in the unit
+ * of that frame's code (g3/design.md section 1); one that raised or exited
+ * leaves for the error route.  The form has made the frame current. */
+static void
+emit_other_frame(_PyJitCompiler *c, _PyJitLabel other)
+{
+    _PyJitAsm *a = c->a;
+    _PyJitSection section = a->current;
+    _PyJitAsm_Section(a, _PyJitSection_COLD);
+    _PyJitAsm_Bind(a, other);
+    _PyJitAsm_TestRR(a, R(RDX), R(RDX));
+    _PyJitAsm_Jcc(a, _PyJitCond_E, c->leave);
+#ifndef NDEBUG
+    _PyJitAsm_AluRM(a, _PyJitAlu_CMP, R(RAX),
+                    AT(R12, offsetof(PyThreadState, current_frame)));
+    _PyJitAsm_Jcc(a, _PyJitCond_NE, c->trap);
+#endif
+    _PyJitAsm_MovMR(a, AT(RAX, offsetof(_PyInterpreterFrame, instr_ptr)), R(RDX));
+    _PyJitAsm_Call(a, c->switch_routine);
+    _PyJitAsm_JmpR(a, R(RAX));
+    _PyJitAsm_Section(a, section);
+}
+
 /* The continuation of word i, with its transfer in rax:rdx: the next word or
- * the word's static target in the same frame by a native jump, anything
- * else by leaving.  The unit's invalid byte is tested after a word that may
- * run Python (RETIRED: monitoring went on) and at a backward jump (either:
- * the backedge stub may recompile). */
+ * the word's static target in the same frame by a native jump, another
+ * frame by the switch routine, anything else by leaving.  The unit's invalid
+ * byte is tested after a word that may run Python (RETIRED: monitoring went
+ * on) and at a backward jump (either: the backedge stub may recompile). */
 static void
 emit_continuation(_PyJitCompiler *c, uint32_t i)
 {
@@ -471,9 +496,10 @@ emit_continuation(_PyJitCompiler *c, uint32_t i)
     _PyIRWord w = c->words[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(w));
     uint32_t next = i + (uint32_t)_PyIR_WordLength(w);
-    /* Another frame: a call, a return, a yield, a resume */
+    _PyJitLabel other = _PyJitAsm_NewLabel(a);
     _PyJitAsm_AluRR(a, _PyJitAlu_CMP, R(RAX), R(R13));
-    _PyJitAsm_Jcc(a, _PyJitCond_NE, c->leave);
+    _PyJitAsm_Jcc(a, _PyJitCond_NE, other);
+    emit_other_frame(c, other);
     int target = static_target(c->words, i);
     if (target >= 0 && ((uint32_t)target >= c->nwords || c->labels[target] < 0)) {
         target = -1;
@@ -564,11 +590,17 @@ typedef int (*completion_stub)(PyThreadState *, _PyInterpreterFrame *, _PyIRWord
  * marked or recompiled, so it plans nothing: each word keeps its handler
  * check and runs the live handler's form after the handler changes, as a
  * planned arm, which is compiled for one handler, cannot. */
+const _PyIRStubPlan *
+_PyJit_PlanOf(_PyIRWord w, int capped)
+{
+    static const _PyIRStubPlan none = {_PyIR_PLAN_NONE};
+    return capped ? &none : &_PyIR_StubPlans[_PyJit_CompiledHandler(w)];
+}
+
 static const _PyIRStubPlan *
 plan_of(_PyJitCompiler *c, _PyIRWord w)
 {
-    static const _PyIRStubPlan none = {_PyIR_PLAN_NONE};
-    return c->capped ? &none : &_PyIR_StubPlans[_PyJit_CompiledHandler(w)];
+    return _PyJit_PlanOf(w, c->capped);
 }
 
 /* r8 of resolve_status(): the word's handler bits as compiled */
@@ -800,11 +832,13 @@ has_block(_PyJitCompiler *c, uint32_t dest)
  * its slow path, after the destructor, and leaves for the next word; any
  * other release puts the test on the fall-through. */
 static void
-emit_template_word(_PyJitCompiler *c, uint32_t i, _PyJitTemplate template)
+emit_template_word(_PyJitCompiler *c, uint32_t i, int arm, _PyJitTemplate template)
 {
     _PyJitAsm *a = c->a;
     _PyIRWord w = c->words[i];
-    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(w));
+    /* The effects are the arm's, whose template runs: RESUME_CHECK's for a
+     * RESUME_JIT word, which itself may run Python */
+    const _PyIRFormat *fmt = _PyIR_FormatOf(arm);
     int planned = plan_of(c, w)->region == _PyIR_PLAN_INLINE;
     int may_run_python = (fmt->effects & (MAY_RUN_PYTHON & ~_PyIR_DEOPTS)) != 0;
     uint32_t next = i + (uint32_t)_PyIR_WordLength(w);
@@ -904,14 +938,14 @@ emit_unit(_PyJitCompiler *c)
     emit_frame(c);
     for (uint32_t i = 0; i < c->nwords; i += _PyIR_WordLength(c->words[i])) {
         _PyJitAsm_Bind(a, c->labels[i]);
-        int handler = _PyJit_CompiledHandler(c->words[i]);
-        _PyJitTemplate template = _PyJit_Templates[handler];
         const _PyIRStubPlan *plan = plan_of(c, c->words[i]);
+        int arm = _PyJit_ArmOf(plan, c->words[i]);
+        _PyJitTemplate template = _PyJit_Templates[arm];
         if (plan->region == _PyIR_PLAN_SHARED) {
             emit_stub_word(c, i, plan);
         }
         else if (template != NULL) {
-            emit_template_word(c, i, template);
+            emit_template_word(c, i, arm, template);
         }
         else {
             emit_form_word(c, i);

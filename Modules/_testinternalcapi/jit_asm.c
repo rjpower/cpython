@@ -86,6 +86,7 @@ label_of(Program *p, int64_t number)
     OP(cmov_rr, 3, 0, _PyJitAsm_CmovRR(A, v[0], v[1], v[2])) \
     OP(cmov_rm, 2, 1, _PyJitAsm_CmovRM(A, v[0], v[1], M(0))) \
     OP(jmp, 1, 0, _PyJitAsm_Jmp(A, L(0))) \
+    OP(call, 1, 0, _PyJitAsm_Call(A, L(0))) \
     OP(jcc, 2, 0, _PyJitAsm_Jcc(A, v[0], L(1))) \
     OP(jmp_r, 1, 0, _PyJitAsm_JmpR(A, v[0])) \
     OP(call_r, 1, 0, _PyJitAsm_CallR(A, v[0])) \

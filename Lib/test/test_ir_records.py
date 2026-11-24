@@ -192,10 +192,13 @@ class HandlerRecordTests(unittest.TestCase):
             for handler in ("SEND", "SEND_VIRTUAL", "SEND_ASYNC_GEN"):
                 last = records[f"{handler}_XFER_{consumer}"].uops[-1].transfers[-1]
                 self.assertEqual((last.kind, last.target), (ir_records.YIELD, "delegated"))
-            kinds = [t.kind for u in records[f"SEND_GEN_XFER_{consumer}"].uops
-                     for t in u.transfers]
+            uops = records[f"SEND_GEN_XFER_{consumer}"].uops
+            kinds = [t.kind for u in uops for t in u.transfers]
             self.assertNotIn(ir_records.YIELD, kinds)
-            self.assertEqual(kinds[-1], ir_records.ENTER_FRAME)
+            # The last uop enters, and nothing runs after it in this frame
+            last = {t.kind for t in uops[-1].transfers}
+            self.assertIn(ir_records.ENTER_FRAME, last)
+            self.assertNotIn(ir_records.NEXT, last)
 
 
 # The stand-in of the base handler OP: a function that reads its argument

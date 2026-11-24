@@ -234,6 +234,7 @@ PyAPI_FUNC(void) _PyJitAsm_CmovRR(_PyJitAsm *a, _PyJitCond cond, _PyJitReg dst, 
 PyAPI_FUNC(void) _PyJitAsm_CmovRM(_PyJitAsm *a, _PyJitCond cond, _PyJitReg dst, _PyJitMem src);
 
 PyAPI_FUNC(void) _PyJitAsm_Jmp(_PyJitAsm *a, _PyJitLabel target);
+PyAPI_FUNC(void) _PyJitAsm_Call(_PyJitAsm *a, _PyJitLabel target);
 PyAPI_FUNC(void) _PyJitAsm_Jcc(_PyJitAsm *a, _PyJitCond cond, _PyJitLabel target);
 PyAPI_FUNC(void) _PyJitAsm_JmpR(_PyJitAsm *a, _PyJitReg target);
 PyAPI_FUNC(void) _PyJitAsm_CallR(_PyJitAsm *a, _PyJitReg target);

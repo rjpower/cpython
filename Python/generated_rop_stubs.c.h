@@ -52,10 +52,3 @@
 #pragma pop_macro("JUMP_TO_PREDICTED")
 #pragma pop_macro("DISPATCH_SAME_OPARG")
 #pragma pop_macro("DISPATCH")
-
-/* The plan of each arm, by handler from ROP_FIRST_HANDLER: its region,
- * whether its completions report ESCAPED, its stub (shared), and its
- * family's generic stub, which runs the word after a miss */
-const _PyIRStubPlan _PyIR_RopStubPlans[ROP_NUM_HANDLERS] = {
-    [ROP_HANDLER_Add_Int - ROP_FIRST_HANDLER] = {_PyIR_PLAN_INLINE, 0, NULL, NULL},  // Add.Int
-};

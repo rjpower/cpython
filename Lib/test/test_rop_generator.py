@@ -45,7 +45,7 @@ class AddCheckedScaledTests(unittest.TestCase):
             for y in values:
                 with self.subTest(x=x, y=y):
                     exact = x + y
-                    overflowed, out = testcapi.rop_add_checked_scaled(x << shift, y << shift)
+                    overflowed, out = testcapi.leaf_primitive("_PyValue_AddCheckedScaled", x << shift, y << shift)
                     fits = -(1 << 50) <= exact < (1 << 50)
                     self.assertEqual(overflowed, not fits)
                     self.assertEqual(out, exact << shift if fits else exact)
@@ -120,7 +120,13 @@ class AddIntTemplateTests(unittest.TestCase):
         prog = products().program
         arm = prog.arms["Add.Int"]
         new = rop_leaf.template_of_arm(prog, arm, "Add_Int")
-        self.assertEqual(hot_sequence(new), hot_sequence(old_template("BINARY_OP_ADD_INT")))
+        old = hot_sequence(old_template("BINARY_OP_ADD_INT"))
+        # The old template spells the checked add as an add and a branch on
+        # overflow; the new one has the primitive that is both
+        i = old.index("_PyJitAsm_AluRR")
+        self.assertEqual(old[i:i + 2], ["_PyJitAsm_AluRR", "_PyJitAsm_Jcc"])
+        old[i:i + 2] = ["_PyJitLower__PyValue_AddCheckedScaled"]
+        self.assertEqual(hot_sequence(new), old)
 
 
 SHARED = """\
@@ -154,8 +160,10 @@ class StubTests(unittest.TestCase):
         text = out.getvalue()
         self.assertEqual(p.left_out, {})
         self.assertIn("_PyIR_Rop_Stub_F_Copy", text)
-        self.assertIn("{_PyIR_PLAN_SHARED, 0,", text)
-        self.assertIn("return _PyIR_MISS", text)
+        self.assertIn("return ir_status", text)
+        (entry,) = rop_generator.arm_entries(p)
+        self.assertEqual((entry.name, entry.region, entry.stub),
+                         ("F_Copy", "shared", "_PyIR_Rop_Stub_F_Copy"))
 
 
 class GeneratedAddIntTests(unittest.TestCase):

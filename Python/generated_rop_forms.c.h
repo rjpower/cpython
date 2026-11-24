@@ -13,7 +13,6 @@
     Py_FatalError("register instruction family " #FAMILY " has no generic arm")
 #endif
 
-static _PyIRTransfer ir_run_Add_Int(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 
 static Py_NO_INLINE _PyIRTransfer
 ir_run_Add_Int(
@@ -74,7 +73,3 @@ ir_run_Add_Int(
     }
     PROCESS_ERROR_AT(RAISE, 1, this_instr);
 }
-
-static const _PyIRForm ir_rop_forms[ROP_NUM_HANDLERS] = {
-    [ROP_HANDLER_Add_Int - ROP_FIRST_HANDLER] = ir_run_Add_Int,
-};

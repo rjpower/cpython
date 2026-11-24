@@ -5,7 +5,8 @@ From the checked `Program` of Python/register_ops/*.rop:
 - the interpreter cases (one computed-goto case per arm),
 - the function forms, with the same signature and completion contract as
   the old `ir_run_*` forms,
-- the dispatch table that adds the arms to the old one,
+- the completion stubs of the shared arms (the old generator, ir_generator.py,
+  lists the arms in its dispatch, form and stub-plan tables: arm_entries()),
 - the metadata: family and arm numbers, the arm-to-handler table, the
   point tables.
 
@@ -22,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
 
+import ir_numbers
 import jit_template_generator
 import rop_check
 import rop_leaf
@@ -158,29 +160,12 @@ def write_forms(out: TextIO, p: Products, sources: list[str]) -> None:
     write_header(__file__, sources, out)
     write_left_out(out, p)
     out.write(MISS_MACRO + "\n")
-    for name in p.lowered:
-        out.write(f"static _PyIRTransfer ir_run_{c_name(name)}(PyThreadState *tstate, "
-                  "_PyInterpreterFrame *frame, _PyInstr *next_instr, "
-                  "_PyIRWord ir_word);\n")
     for name, low in p.lowered.items():
         arm = p.program.arms[name]
         out.write(f"\nstatic Py_NO_INLINE _PyIRTransfer\nir_run_{c_name(name)}(\n"
                   "    PyThreadState *tstate, _PyInterpreterFrame *frame, "
                   "_PyInstr *next_instr, _PyIRWord ir_word)\n{\n")
         out.write("\n".join(handler_text(arm, low, "    ")) + "\n}\n")
-    out.write("\nstatic const _PyIRForm ir_rop_forms[ROP_NUM_HANDLERS] = {\n")
-    for name in p.lowered:
-        out.write(f"    [{handler(name)} - ROP_FIRST_HANDLER] = ir_run_{c_name(name)},\n")
-    out.write("};\n")
-
-
-# The dispatch table: ceval.c copies the old table, then runs these
-# assignments once
-
-def write_targets(out: TextIO, p: Products, sources: list[str]) -> None:
-    write_header(__file__, sources, out)
-    for name in p.lowered:
-        out.write(f"opcode_targets[{handler(name)}] = &&TARGET_{c_name(name)};\n")
 
 
 # Whole-word completion stubs (regions89 G1a) and the plan of each arm
@@ -259,21 +244,31 @@ def write_stubs(out: TextIO, p: Products, sources: list[str]) -> None:
                   "    int ir_status = 0;\n\n")
         out.write("\n".join(handler_text(arm, p.lowered[name], "    ")) + "\n}\n")
     out.write("\n" + STUB_EPILOGUE)
-    out.write("\n/* The plan of each arm, by handler from ROP_FIRST_HANDLER: its region,\n"
-              " * whether its completions report ESCAPED, its stub (shared), and its\n"
-              " * family's generic stub, which runs the word after a miss */\n")
-    out.write("const _PyIRStubPlan _PyIR_RopStubPlans[ROP_NUM_HANDLERS] = {\n")
+
+
+def arm_entries(p: Products) -> list[ir_numbers.ArmEntry]:
+    """The emitted arms for the old generator's forms, targets and stub-plan
+    tables (ir_generator.py), which list them after the old handlers"""
+    shared = [n for n in p.lowered if p.program.arms[n].region.name == "shared"]
+    entries = []
     for name in p.lowered:
         arm = p.program.arms[name]
-        generic = p.generic.get(arm.family)
-        generic_text = f"(const void *){stub_name(generic)}" if generic and generic in shared else "NULL"
-        region = {"inline": "_PyIR_PLAN_INLINE", "shared": "_PyIR_PLAN_SHARED"}.get(arm.region.name)
-        if region is None:
+        region = arm.region.name
+        if region not in ("inline", "shared"):
             continue
-        stub = f"(const void *){stub_name(name)}" if name in shared else "NULL"
-        out.write(f"    [{handler(name)} - ROP_FIRST_HANDLER] = {{{region}, "
-                  f"{int(declares_escape(arm))}, {stub}, {generic_text}}},  // {name}\n")
-    out.write("};\n")
+        generic = p.generic.get(arm.family)
+        entries.append(ir_numbers.ArmEntry(
+            c_name(name), p.numbers[name], region, declares_escape(arm),
+            stub_name(name) if name in shared else None,
+            stub_name(generic) if generic and generic in shared else None))
+    return entries
+
+
+def load_arm_entries(paths: list[Path] | None = None) -> list[ir_numbers.ArmEntry]:
+    program = rop_check.load(paths or sorted(ROP_DIR.glob("*.rop")))
+    if program.diagnostics:
+        raise GenerateError("\n".join(str(d) for d in program.diagnostics))
+    return arm_entries(lower_all(program, number_arms(program)))
 
 
 # Baseline templates, from the leaf graphs of the inline arms
@@ -447,8 +442,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--cases", help="the interpreter cases")
     parser.add_argument("--forms", help="the function forms")
-    parser.add_argument("--targets", help="the dispatch table")
-    parser.add_argument("--stubs", help="the completion stubs and arm plans")
+    parser.add_argument("--stubs", help="the completion stubs")
     parser.add_argument("--templates", help="the baseline templates")
     parser.add_argument("--metadata", help="the metadata header")
     parser.add_argument("sources", nargs="*", type=Path)
@@ -463,7 +457,7 @@ def main(argv: list[str] | None = None) -> int:
     products = lower_all(program, numbers)
     sources = [root_relative_path(str(s)) for s in paths]
     for option, writer in (("cases", write_cases), ("forms", write_forms),
-                           ("targets", write_targets), ("stubs", write_stubs),
+                           ("stubs", write_stubs),
                            ("templates", write_templates),
                            ("metadata", write_metadata)):
         target = getattr(args, option)

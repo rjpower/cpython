@@ -568,7 +568,7 @@ static const _PyIRStubPlan *
 plan_of(_PyJitCompiler *c, _PyIRWord w)
 {
     static const _PyIRStubPlan none = {_PyIR_PLAN_NONE};
-    return c->capped ? &none : _PyIR_StubPlanOf(_PyJit_CompiledHandler(w));
+    return c->capped ? &none : &_PyIR_StubPlans[_PyJit_CompiledHandler(w)];
 }
 
 /* r8 of resolve_status(): the word's handler bits as compiled */
@@ -597,7 +597,7 @@ resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *sit
     if (status & _PyIR_MISS) {
         assert(status == _PyIR_MISS);
         int handler = _PyJit_CompiledHandler((_PyIRWord)(compiled & COMPILED_HANDLER_BITS));
-        completion_stub generic = (completion_stub)_PyIR_StubPlanOf(handler)->generic;
+        completion_stub generic = (completion_stub)_PyIR_StubPlans[handler].generic;
         status = generic(tstate, frame, site);
         assert(!(status & _PyIR_MISS));
     }
@@ -638,7 +638,7 @@ emit_status_cold(_PyJitCompiler *c, uint32_t i, _PyJitLabel status, _PyJitLabel 
     }
     if (status >= 0) {
         _PyJitAsm_Bind(a, status);
-        if (_PyIR_StubPlanOf(_PyJit_CompiledHandler(w))->escapes &&
+        if (_PyIR_StubPlans[_PyJit_CompiledHandler(w)].escapes &&
             next < c->nwords && c->labels[next] >= 0) {
             /* ESCAPED alone, the status of every completion of an arm that
              * declares it may run Python (a generic arm): the RETIRED

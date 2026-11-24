@@ -73,6 +73,7 @@ Invariants:
 
 import argparse
 import io
+from collections.abc import Sequence
 import ir_contract
 import ir_leaf
 import ir_numbers
@@ -7765,7 +7766,8 @@ _PyIR_StubWindowDropsLast(const PyValue *window, int n)
 
 
 def generate_ir_stubs(analysis: Analysis, formats: dict[str, IRFormat],
-                      stubs: dict[str, str], outfile: TextIO) -> None:
+                      stubs: dict[str, str], outfile: TextIO,
+                      arms: Sequence[ir_numbers.ArmEntry] = ()) -> None:
     """The stubs of the planned shared arms (their texts in stubs, by
     function), the family stubs that a miss calls, and the plan table that
     Python/jit.c reads"""
@@ -7786,7 +7788,19 @@ def generate_ir_stubs(analysis: Analysis, formats: dict[str, IRFormat],
     outfile.write("\n/* The plan of each handler that has one: its region, whether "
                   "its\n * completions report ESCAPED, its stub (shared), and its "
                   "family's generic\n * stub, which runs the word after a miss */\n")
+    by_arm = arm_ids(analysis, arms)
+    outfile.write("\n/* The stubs of the register instruction arms, defined in "
+                  "generated_rop_stubs.c.h */\n")
+    for arm in by_arm.values():
+        for stub in sorted({s for s in (arm.stub, arm.generic) if s}):
+            outfile.write(f"static int {stub}(PyThreadState *, "
+                          "_PyInterpreterFrame *, _PyIRWord *);\n")
     outfile.write(f"const _PyIRStubPlan _PyIR_StubPlans[{ir_numbers.IR_LIMIT}] = {{\n")
+    for i, arm in sorted(by_arm.items()):
+        stub = f"(const void *){arm.stub}" if arm.stub else "NULL"
+        generic = f"(const void *){arm.generic}" if arm.generic else "NULL"
+        outfile.write(f"    [{i}] = {{_PyIR_PLAN_{arm.region.upper()}, "
+                      f"{int(arm.escapes)}, {stub}, {generic}}},  // {arm.name}\n")
     for name in sorted(plans, key=lambda n: ids[n]):
         plan = plans[name]
         stub = (f"(const void *){stub_function_name(name)}"
@@ -7959,23 +7973,41 @@ def label_forms(analysis: Analysis, formats: dict[str, IRFormat],
     return result
 
 
-def form_table(analysis: Analysis) -> str:
+def arm_ids(analysis: Analysis,
+            arms: Sequence[ir_numbers.ArmEntry]) -> dict[int, ir_numbers.ArmEntry]:
+    """The register instruction arms by handler id: they follow the old
+    handlers, in definition order (Python/register_ops)"""
+    first = num_handlers(analysis)
+    by_id = {first + arm.index: arm for arm in arms}
+    if by_id and max(by_id) >= ir_numbers.IR_LIMIT:
+        raise ir_numbers.NumberError(
+            f"the register instruction arms need ids up to {max(by_id)}, "
+            f"past the {ir_numbers.IR_LIMIT} that a handler field holds")
+    return by_id
+
+
+def form_table(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry] = ()) -> str:
     """The function form of every handler number, as opcode_targets has its
     label: ir_handler_forms[IR_HANDLER(word)] runs the word"""
     ids = handler_ids(analysis)
     by_index = {i: name for name, i in ids.items()}
+    by_arm = arm_ids(analysis, arms)
     lines = [f"static const _PyIRForm ir_handler_forms[{ir_numbers.IR_LIMIT}] = {{\n"]
     for i in range(ir_numbers.IR_LIMIT):
+        if i in by_arm:
+            lines.append(f"    [{i}] = ir_run_{by_arm[i].name},\n")
+            continue
         name = generator_word_entry(by_index.get(i, "UNKNOWN_OPCODE"), analysis)
         lines.append(f"    [{i}] = ir_run_{name},\n")
     lines.append("};\n")
     return "".join(lines)
 
 
-def form_declarations(analysis: Analysis) -> str:
+def form_declarations(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry] = ()) -> str:
     "Every form, declared before the forms, which call one another"
     ids = handler_ids(analysis)
-    names = sorted({generator_word_entry(name, analysis) for name in ids} | {"UNKNOWN_OPCODE"})
+    names = sorted({generator_word_entry(name, analysis) for name in ids}
+                   | {"UNKNOWN_OPCODE"} | {arm.name for arm in arms})
     lines = [f"static _PyIRTransfer ir_run_{name}({FORM_PARAMETERS}, _PyIRWord ir_word);\n"
              for name in names]
     lines.append(f"static _PyIRTransfer ir_binary_op({FORM_PARAMETERS}, _PyIRWord ir_word, "
@@ -9208,7 +9240,8 @@ def check_no_addressable_locals(analysis: Analysis) -> None:
 
 
 def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
-                lines: bool, stubs_outfile: TextIO | None = None) -> None:
+                lines: bool, stubs_outfile: TextIO | None = None,
+                arms: Sequence[ir_numbers.ArmEntry] = ()) -> None:
     formats = compute_formats(analysis)
     check_no_addressable_locals(analysis)
     checkpoints = {}
@@ -9218,16 +9251,16 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
     stubs: dict[str, str] = {}
     functions = generate_ir_cases(analysis, formats, cases, lines, checkpoints, stubs)
     if stubs_outfile is not None:
-        generate_ir_stubs(analysis, formats, stubs, stubs_outfile)
+        generate_ir_stubs(analysis, formats, stubs, stubs_outfile, arms)
     # The file is included twice by Python/ceval.c: at file scope for the
     # function forms of every handler and entry label, and in ir_evaluate()
     # for the evaluator's handlers and labels
     outfile.write("\n#ifdef IR_FUNCTION_FORMS\n")
     outfile.write("\n".join(ir_contract.component_checks()) + "\n\n")
-    outfile.write(form_declarations(analysis))
+    outfile.write(form_declarations(analysis, arms))
     outfile.writelines(functions)
     outfile.writelines(label_forms(analysis, formats, lines))
-    outfile.write(form_table(analysis))
+    outfile.write(form_table(analysis, arms))
     outfile.write("#else  // IR_FUNCTION_FORMS\n")
     outfile.write(f"""
             {INSTRUCTION_START_MARKER}
@@ -9250,7 +9283,8 @@ def num_handlers(analysis: Analysis) -> int:
 
 
 def generate_ir_targets(filenames: list[str], analysis: Analysis,
-                        outfile: TextIO) -> None:
+                        outfile: TextIO,
+                        arms: Sequence[ir_numbers.ArmEntry] = ()) -> None:
     """The tables of the evaluator.  Python/ceval_generator.h includes this
     file at file scope with IR_GEN_TABLES defined, for the generator transfer
     tables, which give the kind of transfer that a word's handler makes (the
@@ -9294,7 +9328,11 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     # id the mask yields; ids past n are UNKNOWN_OPCODE.
     by_index = {i: name for name, i in ids.items()}
     out.emit(f"static void *const opcode_targets[{ir_numbers.IR_LIMIT}] = {{\n")
+    by_arm = arm_ids(analysis, arms)
     for i in range(ir_numbers.IR_LIMIT):
+        if i in by_arm:
+            out.emit(f"[{i}] = &&TARGET_{by_arm[i].name},\n")
+            continue
         name = generator_word_entry(by_index.get(i, "UNKNOWN_OPCODE"), analysis)
         out.emit(f"[{i}] = &&TARGET_{name},\n")
     out.emit("};\n")
@@ -9343,8 +9381,11 @@ if __name__ == "__main__":
     if len(args.input) == 0:
         args.input.append(DEFAULT_INPUT)
     data = analyze_files(args.input)
+    # The register instruction arms follow the old handlers in every table
+    import rop_generator
+    arms = rop_generator.load_arm_entries()
     with open(args.output, "w") as outfile, open(args.stubs, "w") as stubs_outfile:
         generate_ir(args.input, data, outfile, args.emit_line_directives,
-                    stubs_outfile)
+                    stubs_outfile, arms)
     with open(args.targets, "w") as outfile:
-        generate_ir_targets(args.input, data, outfile)
+        generate_ir_targets(args.input, data, outfile, arms)

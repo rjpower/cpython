@@ -925,7 +925,7 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     // Register style: the outputs below dst pass their inputs through
     int through = 0;
     if (!window) {
-        through = fmt->operands != _PyIR_OPERANDS_NONE ? 0
+        through = _PyIR_CALL_SHAPED(fmt->operands) ? 0
                 : fmt->dst == _PyIR_NO_DST ? pushed : popped + fmt->dst;
         if (through < 0 || through > pushed) {
             PyErr_Format(PyExc_SystemError, "bad format for opcode %d",
@@ -1350,7 +1350,7 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
         return;
     }
     slots->base = top - op->npop;
-    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+    if (_PyIR_CALL_SHAPED(fmt->operands)) {
         // The callable is the deepest input, and the rest are operand words
         slots->in[0] = _PyRegCfg_Slot(cfg, in[0]);
         if (op->flags & _PyReg_DISCARD) {
@@ -2593,7 +2593,7 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                     }
                 }
             }
-            else if (fmt->operands != _PyIR_OPERANDS_NONE) {
+            else if (_PyIR_CALL_SHAPED(fmt->operands)) {
                 for (int k = 0; k < op->nread; k++) {
                     if (in[k] < nl && !_PyRegOp_CallBorrows(op, k)) {
                         err = verify_error(after, op, "a local in an input "

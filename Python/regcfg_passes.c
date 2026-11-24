@@ -98,7 +98,7 @@ static int
 borrow_field(const _PyRegCfg *cfg, const _PyRegOp *op, int k)
 {
     const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
-    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+    if (_PyIR_CALL_SHAPED(fmt->operands)) {
         // A call's operand words name any local that its handler reads
         // before it can run Python code (calls80, section 2)
         return k < op->nread && _PyRegOp_CallBorrows(op, k) ? k : -1;

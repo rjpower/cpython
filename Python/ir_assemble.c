@@ -542,7 +542,7 @@ handler_oparg(_PyRegCfg *cfg, _PyRegOp *op)
         _PyRegOp *jump = (fmt->flags & _PyIR_FUSED) ? &cfg->ops[op->fuse] : op;
         return jump_target(cfg, jump) - (op->word + 1);
     }
-    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+    if (_PyIR_CALL_SHAPED(fmt->operands)) {
         return call_noperands(op);
     }
     if (op->opcode == LOAD_GLOBAL) {
@@ -944,7 +944,7 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
             return ERROR;
         }
         op->nwords = 1;
-        if (_PyIR_FormatOf(op->handler)->operands != _PyIR_OPERANDS_NONE) {
+        if (_PyIR_CALL_SHAPED(_PyIR_FormatOf(op->handler)->operands)) {
             op->noperands = call_noperands(op);
             if (op->noperands > IR_FIELD_MAX) {
                 return too_large("call operands", op->noperands);
@@ -1311,7 +1311,7 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                 continue;
             }
             RETURN_IF_ERROR(encode(cfg, op, blk->reachable, &words[w]));
-            if (_PyIR_FormatOf(op->handler)->operands != _PyIR_OPERANDS_NONE) {
+            if (_PyIR_CALL_SHAPED(_PyIR_FormatOf(op->handler)->operands)) {
                 encode_operand_words(cfg, op, &words[w + 1]);
             }
             else if (op->nwords > 1) {

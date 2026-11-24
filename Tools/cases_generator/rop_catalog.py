@@ -251,11 +251,15 @@ class Select(enum.Enum):
     entry_frame = "entry_frame"            # the evaluator's entry frame
     vacant_scratch = "vacant_scratch"      # every temporary but the operand is vacant
     live_scratch = "live_scratch"          # some other temporary may hold a value
+    transfer = "transfer"                  # Move: each source's owner goes to its destination
+    retire = "retire"                      # Move: transfer, then close the sources left over
+    copy = "copy"                          # Move: each destination takes a second owner
 
 
 SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "frame": (Select.thread_frame, Select.generator_frame, Select.entry_frame),
     "scratch": (Select.vacant_scratch, Select.live_scratch),
+    "move": (Select.transfer, Select.retire, Select.copy),
 }
 
 

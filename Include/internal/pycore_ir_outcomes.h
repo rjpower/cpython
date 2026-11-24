@@ -306,7 +306,7 @@ _PyIR_ObservedHomes(_PyIRWord word, int edge, int nl, int limit,
 static inline int
 _PyIR_IsCallWord(_PyIRWord word)
 {
-    return _PyIR_FormatOf(IR_HANDLER(word))->operands != _PyIR_OPERANDS_NONE;
+    return _PyIR_CALL_SHAPED(_PyIR_FormatOf(IR_HANDLER(word))->operands);
 }
 
 static inline int
@@ -831,7 +831,7 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
     p->through = through;
     p->writes = writes;
 
-    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+    if (_PyIR_CALL_SHAPED(fmt->operands)) {
         /* Every successful call route takes its callable and operand
          * homes: native retirement clears them, and a Python child moves
          * them into its frame, which lies above the parent's.  Only the
@@ -1119,7 +1119,7 @@ _PyIR_NormalCallAbsence(const _PyIRWord *wp, int arg, int home, int nl, int limi
         return _PyIR_ABSENCE_UNKNOWN;
     }
     int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
-    int is_call = fmt->operands != _PyIR_OPERANDS_NONE;
+    int is_call = _PyIR_CALL_SHAPED(fmt->operands);
     int base = (int)IR_B(word), dst = (int)IR_A(word);
     if (!is_call) {
         /* Reached suspension/child outcomes leave their new recipient live.

@@ -192,7 +192,7 @@ int _PyRegCfg_PrepareKwargs(_PyRegCfg *cfg, int slot);
 static inline int
 _PyRegOp_Through(const _PyRegOp *op, const _PyIRFormat *fmt)
 {
-    if (fmt->operands != _PyIR_OPERANDS_NONE) {
+    if (_PyIR_CALL_SHAPED(fmt->operands)) {
         return 0;
     }
     return fmt->dst == _PyIR_NO_DST ? op->nout : op->npop + fmt->dst;

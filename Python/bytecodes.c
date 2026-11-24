@@ -595,9 +595,11 @@ dummy_func(
             EXIT_IF(!PyList_CheckExact(o));
         }
 
-        op(_GUARD_TOS_SLICE, (tos -- tos)) {
+        op(_GUARD_TOS_SLICE, (tos: object -- tos))
+            effects(reads) exits(next, miss)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(tos);
-            EXIT_IF(!PySlice_Check(o));
+            EXIT_IF(!PySlice_Check(o), "the operand is not a slice");
         }
 
         macro(TO_BOOL_LIST) = _GUARD_TOS_LIST + unused/1 + unused/2 + _TO_BOOL_LIST + POP_TOP;
@@ -624,10 +626,13 @@ dummy_func(
 
         macro(TO_BOOL_NONE) = unused/1 + unused/2 + _TO_BOOL_NONE;
 
-        op(_GUARD_NOS_COMPACT_ASCII, (nos, unused -- nos, unused)) {
+        op(_GUARD_NOS_COMPACT_ASCII,
+                (nos: object, unused -- nos: exact(PyUnicode_Type), unused))
+            effects(reads) exits(next, miss)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(nos);
             EXIT_IF(!PyUnicode_CheckExact(o));
-            EXIT_IF(!PyUnicode_IS_COMPACT_ASCII(o));
+            EXIT_IF(!PyUnicode_IS_COMPACT_ASCII(o), "the str is not compact ASCII");
         }
 
         op(_GUARD_NOS_UNICODE, (nos: object, unused -- nos: exact(PyUnicode_Type), unused))
@@ -1314,13 +1319,17 @@ dummy_func(
         macro(BINARY_OP_SUBSCR_STR_INT) =
             _GUARD_TOS_INT + _GUARD_NOS_COMPACT_ASCII + unused/5 + _BINARY_OP_SUBSCR_STR_INT + _POP_TOP_INT + _POP_TOP_UNICODE;
 
-        inline_ok op(_BINARY_OP_SUBSCR_STR_INT, (str_st, sub_st -- res, s, i)) {
+        inline_ok op(_BINARY_OP_SUBSCR_STR_INT,
+                (str_st: consumed object, sub_st: consumed inline_int
+                 -- res: owned, s: moved(str_st), i: moved(sub_st)))
+            effects(reads) exits(next, miss)
+        {
             PyObject *str = PyValue_AsKnownObjectBorrow(str_st);
             assert(PyUnicode_CheckExact(str));
 
             Py_ssize_t index = PyValue_InlineInt64(sub_st);
-            EXIT_IF(index < 0);
-            EXIT_IF(PyUnicode_GET_LENGTH(str) <= index);
+            EXIT_IF(index < 0, "the index is negative");
+            EXIT_IF(PyUnicode_GET_LENGTH(str) <= index, "the index is out of range");
             uint8_t c = PyUnicode_1BYTE_DATA(str)[index];
             assert(c < 128);
             STAT_INC(BINARY_OP, hit);
@@ -1334,16 +1343,21 @@ dummy_func(
         macro(BINARY_OP_SUBSCR_USTR_INT) =
             _GUARD_TOS_INT + _GUARD_NOS_UNICODE + unused/5 + _BINARY_OP_SUBSCR_USTR_INT + _POP_TOP_INT + _POP_TOP_UNICODE;
 
-        inline_ok op(_BINARY_OP_SUBSCR_USTR_INT, (str_st, sub_st -- res, s, i)) {
+        inline_ok op(_BINARY_OP_SUBSCR_USTR_INT,
+                (str_st: consumed object, sub_st: consumed inline_int
+                 -- res: owned, s: moved(str_st), i: moved(sub_st)))
+            effects(reads) exits(next, miss)
+        {
             PyObject *str = PyValue_AsKnownObjectBorrow(str_st);
             assert(PyUnicode_CheckExact(str));
 
             Py_ssize_t index = PyValue_InlineInt64(sub_st);
-            EXIT_IF(index < 0);
-            EXIT_IF(PyUnicode_GET_LENGTH(str) <= index);
+            EXIT_IF(index < 0, "the index is negative");
+            EXIT_IF(PyUnicode_GET_LENGTH(str) <= index, "the index is out of range");
             // Specialize for reading an ASCII character from any string:
             Py_UCS4 c = PyUnicode_READ_CHAR(str, index);
-            EXIT_IF(Py_ARRAY_LENGTH(_Py_SINGLETON(strings).ascii) <= c);
+            EXIT_IF(Py_ARRAY_LENGTH(_Py_SINGLETON(strings).ascii) <= c,
+                    "the character is not ASCII");
             STAT_INC(BINARY_OP, hit);
             PyObject *res_o = (PyObject*)&_Py_SINGLETON(strings).ascii[c];
             s = str_st;
@@ -1386,10 +1400,13 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        op(_GUARD_NOS_DICT_SUBSCRIPT, (nos, unused -- nos, unused)) {
+        op(_GUARD_NOS_DICT_SUBSCRIPT, (nos: object, unused -- nos, unused))
+            effects(reads) exits(next, miss, deopt)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(nos);
-            DEOPT_IF(!Py_TYPE(o)->tp_as_mapping);
-            DEOPT_IF(Py_TYPE(o)->tp_as_mapping->mp_subscript != _PyDict_Subscript);
+            DEOPT_IF(!Py_TYPE(o)->tp_as_mapping, "the type has no mapping slots");
+            DEOPT_IF(Py_TYPE(o)->tp_as_mapping->mp_subscript != _PyDict_Subscript,
+                     "the type's mp_subscript is not dict's");
         }
 
         op(_GUARD_NOS_DICT_STORE_SUBSCRIPT, (unused, nos, unused -- unused, nos, unused)) {

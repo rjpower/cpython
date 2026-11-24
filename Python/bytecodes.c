@@ -3767,7 +3767,11 @@ dummy_func(
                     && !PyList_CheckExact(o));
         }
 
-        op(_CONTAINS_OP_SEQUENCE, (left, right -- b, l, r)) {
+        op(_CONTAINS_OP_SEQUENCE,
+                (left: taken, right: taken object
+                 -- b: owned exact(PyBool_Type), l: moved(left), r: moved(right)))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
             STAT_INC(CONTAINS_OP, hit);
             _Py_containsvaluefunc contains_slot = _PyType_VALUE_SLOT(Py_TYPE(right_o), contains);
@@ -4158,7 +4162,7 @@ dummy_func(
         }
 
         op(_MATCH_CLASS,
-                (subject: taken, type: taken, names: taken object
+                (subject: taken, type: taken, names: taken assumed(object) by codegen_pattern_class
                  -- attrs: owned, s: moved(subject), tp: moved(type), n: moved(names)))
             effects(runs_python) exits(next, raise)
         {

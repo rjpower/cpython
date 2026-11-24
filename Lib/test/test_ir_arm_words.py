@@ -13,7 +13,7 @@ import json
 import textwrap
 import unittest
 
-from test.support import import_helper
+from test.support import import_helper, ir_dis
 from test.support.script_helper import assert_python_ok
 
 capi = import_helper.import_module("_testinternalcapi")
@@ -189,6 +189,11 @@ class ForceArmTests(unittest.TestCase):
                 length = _opcode.get_ir_word_length(handler)
                 self.assertEqual(length, 2 if name.startswith("GetMethod.") else 1)
                 self.assertIsNotNone(contract[handler])
+
+    def test_the_disassembler_names_every_arm_word(self):
+        for name, handler in capi.arm_handlers().items():
+            self.assertEqual(ir_dis._all_opname[handler], name)
+            self.assertEqual(ir_dis._all_opmap[name], handler)
 
     def test_dis_reads_the_stack_ops_of_a_function_with_an_arm_word(self):
         before = [(i.opname, i.offset) for i in dis.get_instructions(self.code)]

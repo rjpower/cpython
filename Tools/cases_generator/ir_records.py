@@ -1221,8 +1221,8 @@ def effect_sites(uop: Uop) -> list[tuple[Token, str | None]]:
     """The tokens of the body of uop that have an effect, in order, with it:
     None for a call that the tables do not know.  A uop with a declared
     contract has the sites of its rows (ir_contract.py)."""
+    import ir_contract
     if uop.clauses:
-        import ir_contract
         return ir_contract.record_effect_sites(uop)
     p = uop.properties
     tokens = [t for t in uop.body.tokens() if t.kind != "COMMENT"]
@@ -1273,6 +1273,10 @@ def effect_sites(uop: Uop) -> list[tuple[Token, str | None]]:
             sites += [(tkn, READS_HEAP), (tkn, WRITES_HEAP)]
         elif READER_CALLS.fullmatch(text):
             sites.append((tkn, READS_HEAP))
+        elif text in ir_contract.rows():
+            # A row declares the call; its effects are the row's, which this
+            # table of an undeclared body does not restate (G0d1 deletes it)
+            continue
         elif not text.isupper() or RELEASE_LIKE.search(text):
             # Not a statement macro (STAT_INC, TAKE, ...): it may do anything
             sites.append((tkn, None))

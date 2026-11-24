@@ -626,8 +626,11 @@ static_assert(__builtin_types_compatible_p(__typeof__(PyValue_NULL), PyValue),
               "PyValue_NULL: its C type differs from pycore_ir_components.h");
 }
 
+static _PyIRTransfer ir_run_Add_Extended(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Add_Float(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Add_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Add_Int(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Add_Text(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BINARY_OP_ADD(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BINARY_OP_ADD_FLOAT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BINARY_OP_ADD_INT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -17746,17 +17749,17 @@ static const _PyIRForm ir_handler_forms[512] = {
     [417] = ir_run_JUMP_BACKWARD_JIT,
     [418] = ir_run_RESUME_CHECK,
     [419] = ir_run_Add_Int,
-    [420] = ir_run_Add_Generic,
-    [421] = ir_run_GetAttr_Instance,
-    [422] = ir_run_UNKNOWN_OPCODE,
-    [423] = ir_run_GetAttr_Shape,
-    [424] = ir_run_GetAttr_PolyShape,
-    [425] = ir_run_GetMethod_MethodValues,
-    [426] = ir_run_UNKNOWN_OPCODE,
-    [427] = ir_run_GetMethod_PolyMethod,
-    [428] = ir_run_UNKNOWN_OPCODE,
+    [420] = ir_run_Add_Float,
+    [421] = ir_run_Add_Text,
+    [422] = ir_run_Add_Extended,
+    [423] = ir_run_Add_Generic,
+    [424] = ir_run_GetAttr_Instance,
+    [425] = ir_run_UNKNOWN_OPCODE,
+    [426] = ir_run_GetAttr_Shape,
+    [427] = ir_run_GetAttr_PolyShape,
+    [428] = ir_run_GetMethod_MethodValues,
     [429] = ir_run_UNKNOWN_OPCODE,
-    [430] = ir_run_UNKNOWN_OPCODE,
+    [430] = ir_run_GetMethod_PolyMethod,
     [431] = ir_run_UNKNOWN_OPCODE,
     [432] = ir_run_UNKNOWN_OPCODE,
     [433] = ir_run_UNKNOWN_OPCODE,

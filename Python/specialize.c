@@ -800,6 +800,26 @@ _PyRop_Backoff(_PyFbHeader *h)
     set_counter(h, adaptive_counter_backoff(load_counter(h)));
 }
 
+static int binary_op_extended_specialization(PyObject *lhs, PyObject *rhs, int oparg,
+                                             _PyBinaryOpSpecializationDescr **descr);
+
+bool
+_PyRop_FindAddExtension(_PyFbBinary *fb, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
+{
+    fb->descr = NULL;
+    if (!PyValue_IsObject(lhs_st) || !PyValue_IsObject(rhs_st)) {
+        return false;
+    }
+    _PyBinaryOpSpecializationDescr *descr;
+    if (!binary_op_extended_specialization(PyValue_AsKnownObjectBorrow(lhs_st),
+                                           PyValue_AsKnownObjectBorrow(rhs_st),
+                                           NB_ADD, &descr)) {
+        return false;
+    }
+    fb->descr = descr;
+    return true;
+}
+
 int
 _PyRop_Install(_PyInstr *instr, _PyFbHeader *h, int handler)
 {

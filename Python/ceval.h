@@ -327,41 +327,6 @@ static _PyExceptionHandler get_exception_handler(PyCodeObject *, int);
 #include <errno.h>
 #endif
 
-typedef struct {
-    _PyInterpreterFrame frame;
-    PyValue stack[1];
-} _PyEntryFrame;
-
-/* The state of one activation of the evaluation loop that persists across
- * its handlers: a local of _PyEval_EvalFrameLoop, linked from the thread
- * state (_PyThreadStateImpl.eval_activation) while it runs.  No handler
- * keeps state of its own here.  gdb walks the chain (Tools/gdb/libpython.py):
- * the innermost Python frame of an activation is tstate->current_frame for
- * the newest, and entry.frame.previous of the next newer one otherwise. */
-typedef struct _PyEvalActivation {
-    struct _PyEvalActivation *previous;   /* restored when this one exits */
-    _PyEntryFrame entry;                   /* its entry frame */
-    /* A nested C entry must not consume its parent's pending source error.
-     * This storage also covers failure to allocate an observer frame object. */
-    _PyInterpreterFrame *source_error_frame;
-    _PyExceptionHandler source_error_handler;
-    const _PyIRObserverSpec *observer_context;
-    /* Why a function form returned no next word (_PyIRTransfer), and what
-     * its caller needs to go on.  It is written on those exits only and read
-     * at once. */
-    int exit_kind;
-    uint32_t exit_entry;
-    _PyInstr *exit_next;
-    PyValue exit_value;
-    /* Whether the outlined conditional jump that ran last jumped
-     * (IR_REPORT_EDGE()), for the event of its instrumented twin. */
-    int edge;
-#ifdef Py_STATS
-    /* The handler that ran last, for pair counts (INSTRUCTION_STATS()) */
-    int last_handler;
-#endif
-} _PyEvalActivation;
-
 /* What a function form or a VM routine returns (tiers87, C2): the frame to
  * run and its next word, or a null word for an exit that the activation
  * describes. */

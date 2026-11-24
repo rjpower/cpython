@@ -217,7 +217,7 @@
     } while (0)
 
 /* The activation of the evaluation loop that runs the handler
- * (_PyEvalActivation, Python/ceval.h) */
+ * (_PyEvalActivation, Include/internal/pycore_ceval.h) */
 #define IR_ACTIVATION() (((_PyThreadStateImpl *)tstate)->eval_activation)
 
 /* Whether frame runs the executing copy of its code, as it must at every

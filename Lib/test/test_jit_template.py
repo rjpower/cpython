@@ -662,7 +662,7 @@ TEMPLATE_CASES = [
      [()]),
     *[(BINARY.format(op=op), (6, 3), handler, "ABC",
        [(Plain(), a, b) for a, b in INT_PAIRS])
-      for op, handler in (("+", "BINARY_OP_ADD_INT"), ("-", "BINARY_OP_SUBTRACT_INT"),
+      for op, handler in (("+", "Add.Int"), ("-", "BINARY_OP_SUBTRACT_INT"),
                           ("*", "BINARY_OP_MULTIPLY_INT"), ("&", "BINARY_OP_AND_INT"),
                           ("|", "BINARY_OP_OR_INT"), ("^", "BINARY_OP_XOR_INT"))],
     *[(src.format(op=op), (6, 3), handler, fields, [(Plain(), a, b) for a, b in DIV_PAIRS]
@@ -676,13 +676,14 @@ TEMPLATE_CASES = [
     (TEMPS.format(op=">>"), (6, 3), "BINARY_OP_RSHIFT_INT", "BC",
      [(a, b) for a in INTS for b in (0, 5, 63, 64, -1)]),
     *[(TEMPS.format(op=op), (6, 3), handler, "BC", INT_PAIRS)
-      for op, handler in (("+", "BINARY_OP_ADD_INT"), ("-", "BINARY_OP_SUBTRACT_INT"),
+      for op, handler in (("+", "Add.Int"), ("-", "BINARY_OP_SUBTRACT_INT"),
                           ("*", "BINARY_OP_MULTIPLY_INT"))],
     ("def f(a, b):\n    return (a * 2**30) * (b * 2**30)", (1, 1), "BINARY_OP_MULTIPLY_INT",
      "BC", [(2**30, 2**30), (2**25, -2**25), (1, 2**50 - 1), (-2**50, -1), (3, 5)]),
     *[(BINARY.format(op=op), (6.0, 3.0), handler, "ABC",
        [(Plain(), a, b) for a, b in FLOAT_PAIRS])
-      for op, handler in (("+", "BINARY_OP_ADD_FLOAT"), ("-", "BINARY_OP_SUBTRACT_FLOAT"),
+      # Add.Float is a shared arm: its stub is tested by test_rop_add
+      for op, handler in (("-", "BINARY_OP_SUBTRACT_FLOAT"),
                           ("*", "BINARY_OP_MULTIPLY_FLOAT"),
                           ("/", "BINARY_OP_TRUEDIV_FLOAT"))],
     *[(f"def f(a, b):\n    x = 1\n    x = a {op} b\n    return x", warm, handler, "ABC",
@@ -810,7 +811,7 @@ class FailedBoxTests(unittest.TestCase):
                 # PyValue_FromInt64 in the floor division of two ints
                 ("BINARY_OP_FLOOR_DIVIDE_INT", "a // b", (-2**50, -1), 2**50, (6, 3), 2),
                 # PyValue_FromDouble of a NaN
-                ("BINARY_OP_ADD_FLOAT", "a + b", (inf, -inf), nan, (1.5, 2.5), 4.0),
+                ("BINARY_OP_SUBTRACT_FLOAT", "a - b", (inf, inf), nan, (3.5, 2.5), 1.0),
             )
             for handler, expression, args, boxed, safe, safe_result in cases:
                 namespace = {}
@@ -945,13 +946,13 @@ class TemplateTests(unittest.TestCase):
     def test_temporaries(self):
         "TEMPS puts the inputs of its last word in temporaries"
         f = self.compile(TEMPS.format(op="+"), (6, 3))
-        index, (_, a, b, c, d) = word_of(f, "BINARY_OP_ADD_INT")
+        index, (_, a, b, c, d) = word_of(f, "Add.Int")
         self.assertGreaterEqual(min(b, c), nfixed(f))
 
     def test_fast_path(self):
         "Inputs that the guards accept stay on the template's own code"
         f = self.compile("def f(a, b):\n    return a + b", (3, 4))
-        index, (_, a, b, c, d) = word_of(f, "BINARY_OP_ADD_INT")
+        index, (_, a, b, c, d) = word_of(f, "Add.Int")
         self.assertFalse(capi.jit_template_run(f, index, {b: 1, c: 2}, True)[1])
         self.assertFalse(capi.jit_template_run(f, index, {b: 2**49, c: 2**49}, True)[1])
         self.assertTrue(capi.jit_template_run(f, index, {b: "x", c: 2}, True)[1])

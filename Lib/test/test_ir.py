@@ -1473,7 +1473,7 @@ class FoldTest(unittest.TestCase):
         self.assertEqual(words(g), [
             ("LOAD_ATTR", t, (0,)),
             ("LOAD_ATTR", t + 1, (0,)),
-            ("BINARY_OP_ADD", t, (t, t + 1)),
+            ("Add.Generic", t, (t, t + 1)),
             ("RETURN_VALUE_EMPTY", None, (t,)),
         ])
         o = types.SimpleNamespace(x=2, y=3)
@@ -1942,7 +1942,7 @@ class StoreFoldTest(unittest.TestCase):
             return x
         t = nlocalsplus(f)
         self.assertEqual(words(f), [
-            ("BINARY_OP_ADD", 2, (0, 1)),
+            ("Add.Generic", 2, (0, 1)),
             ("RETURN_VALUE_EMPTY", None, (2,)),
         ])
         # a, b, x and the discard slot
@@ -2316,7 +2316,7 @@ class RegCfgTest(unittest.TestCase):
             return x + one()
         for f in mul, add:
             self.assertIn("LOAD_FAST_BORROW", self.names(f))
-            op = [w for w in words(f) if w[0].startswith("BINARY_OP")][0]
+            op = [w for w in words(f) if w[0].startswith(("BINARY_OP", "Add."))][0]
             self.assertNotEqual(op[2][0], 0)
         self.run_specialized(lambda: self.assertEqual(mul(2), 6))
         self.run_specialized(lambda: self.assertEqual(add(2), 3))
@@ -2340,7 +2340,7 @@ class RegCfgTest(unittest.TestCase):
             x = a + b
             return x
         self.assertEqual(words(f), [
-            ("BINARY_OP_ADD", 2, (0, 1)),
+            ("Add.Generic", 2, (0, 1)),
             ("RETURN_VALUE_EMPTY", None, (2,)),
         ])
         self.run_specialized(lambda: self.assertEqual(f(1, 2), 3))
@@ -2520,8 +2520,8 @@ class RegCfgTest(unittest.TestCase):
         ir = IRCode(f.__code__)
         self.assertEqual(ir.nslots - ir.nfixed, 2)
         self.assertEqual(words(f), [
-            ("BINARY_OP_ADD", t, (0, 1)),
-            ("BINARY_OP_ADD", t + 1, (2, 3)),
+            ("Add.Generic", t, (0, 1)),
+            ("Add.Generic", t + 1, (2, 3)),
             ("BINARY_OP_MULTIPLY", t, (t, t + 1)),
             ("RETURN_VALUE_EMPTY", None, (t,)),
         ])

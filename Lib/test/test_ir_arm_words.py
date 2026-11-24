@@ -165,7 +165,7 @@ class ForceArmTests(unittest.TestCase):
 
     def test_names_every_arm(self):
         handlers = capi.arm_handlers()
-        self.assertEqual(handlers["Add.Int"], handlers["Add.Generic"] - 1)
+        self.assertEqual(handlers["Add.Generic"] - handlers["Add.Int"], 4)
         self.assertIn("GetAttr.Instance", handlers)
 
     def test_the_contract_export_has_a_row_for_each_arm(self):

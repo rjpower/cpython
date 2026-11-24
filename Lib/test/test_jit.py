@@ -643,6 +643,135 @@ class TestHandOff(JitTestCase):
 
 
 @unittest.skipIf(_testinternalcapi is None, "needs _testinternalcapi")
+class TestPins(unittest.TestCase):
+    """The execution pin (g3/design.md section 2): a departure from a frame
+    keeps the frame's code alive in the evaluation loop's activation until
+    the next pin, jit_run()'s release after the native call, or the loop's
+    exit, whichever comes first; nothing in one activation releases
+    another's pin.  _testinternalcapi.jit_pin_departing() pins as compiled
+    code does."""
+
+    # The interpreter, the function forms and both JIT modes
+    MODES = (("jit=off",), ("ir_forms",)) + (
+        (("jit=on",), ("jit=always",)) if AVAILABLE else ())
+
+    PRELUDE = """
+        import _testinternalcapi as t, operator, weakref
+        log = []
+        def g(x):
+            return x * 2
+        def callback(ref):
+            # Python runs inside the release: compiled code is called
+            log.append(("callback", [g(i) for i in range(3)]))
+        def fresh_code():
+            # A code that only what the caller keeps refers to
+            ns = {}
+            exec("def f(): pass", ns)
+            return ns.pop("f").__code__
+    """
+
+    def check_modes(self, source, expected=None):
+        """The script prints the same in every mode, or what expected
+        (a function of the mode's options) says."""
+        source = textwrap.dedent(self.PRELUDE) + textwrap.dedent(source)
+        for options in self.MODES:
+            with self.subTest(options=options):
+                want = expected(options) if expected else "ok\n"
+                self.assertEqual(run(source, *options), want)
+
+    def test_the_next_pin_releases_the_old_one(self):
+        # One call of the hook pins each item in turn, so that no release by
+        # jit_run() comes between the pins under the JIT
+        self.check_modes("""
+            def run():
+                code = fresh_code()
+                ref = weakref.ref(code, callback)
+                items = [code, None, run.__code__]
+                del code
+                # The code; the pinned code again by the pin's own and last
+                # reference (stored before the old pin is released, so it
+                # lives); another code, whose pin releases it: the callback
+                # runs inside that pin, which reports ESCAPED
+                log.append(t.jit_pin_departing(items))
+                log.append(ref() is None)
+            for i in range(40):
+                run()
+                assert log == [("callback", [0, 2, 4]), [0, 0, 2], True], (i, log)
+                log.clear()
+            print("ok")
+        """)
+
+    def test_a_nested_loop_releases_only_its_own_pin(self):
+        self.check_modes("""
+            def inner():
+                # From C: an evaluation loop of its own, whose pin this is
+                t.jit_pin_departing()
+                log.append("inner")
+            def run():
+                code = fresh_code()
+                ref = weakref.ref(code, callback)
+                items = [code, inner, run.__code__]
+                del code
+                # The outer pin outlives the nested loop's exit: the last
+                # pin releases it
+                log.append(t.jit_pin_departing(items))
+            for i in range(40):
+                run()
+                assert log == ["inner", ("callback", [0, 2, 4]), [0, None, 2]], (i, log)
+                log.clear()
+            print("ok")
+        """)
+
+    def test_the_departed_code_lives_until_a_release(self):
+        # f drops its function's reference to its code and pins it: once
+        # its frame is gone the pin holds the code.  From C, f runs in a
+        # loop of its own, whose exit (or jit_run()) releases the pin before
+        # the call returns.  Called directly, the code lives on until the
+        # next pin, unless jit_run() ran f (under always) and released it.
+        def expected(options):
+            if options == ("jit=always",):
+                return "returning dead\nreturning dead \n\n"
+            return "returning dead\nreturning alive\ndead\n"
+        self.check_modes("""
+            def make():
+                ns = {"t": t, "log": log}
+                exec("def f(self):\\n"
+                     "    self.__code__ = (lambda self: None).__code__\\n"
+                     "    t.jit_pin_departing()\\n"
+                     "    log.append('returning')\\n", ns)
+                f = ns.pop("f")
+                return f, weakref.ref(f.__code__, lambda r: log.append("dead"))
+            f, ref = make()
+            operator.call(f, f)
+            print(*log)
+            log.clear()
+            f, ref = make()
+            f(f)
+            print(*log, "alive" if ref() is not None else "")
+            log.clear()
+            t.jit_pin_departing()
+            print(*log)
+        """, expected)
+
+    def test_pinned_codes_come_and_go(self):
+        # Assert builds check at every free that no activation is running a
+        # unit of the code
+        self.check_modes("""
+            for i in range(300):
+                ns = {"t": t}
+                exec(f"def f(n):\\n"
+                     f"    t.jit_pin_departing()\\n"
+                     f"    return n + {i} if n < 3 else f(n - 1)\\n", ns)
+                f = ns["f"]
+                if i % 2:
+                    t.jit_compile(f.__code__)
+                assert f(5) == 2 + i
+                del f, ns
+            print("ok")
+        """)
+
+
+@unittest.skipIf(_testinternalcapi is None, "needs _testinternalcapi")
 class TestCompletionStubs(JitTestCase):
     """Whole-word completion stubs (g1a/abi.md): UNPACK_SEQUENCE's arms and
     BINARY_OP's generic are calls of generated C stubs, BINARY_OP's add arms

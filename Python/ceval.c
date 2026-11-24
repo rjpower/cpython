@@ -2862,10 +2862,19 @@ jit_run(PyThreadState *tstate, _PyJitUnit *unit, _PyInterpreterFrame *frame,
         }
         frame->jit_flags |= _PyFrame_JIT_RESUME;
         impl->jit_frame = frame;
+        _PyEvalActivation *activation = IR_ACTIVATION();
+#ifndef NDEBUG
+        activation->jit_unit = unit;
+#endif
         _PyIRTransfer t = ((jit_entry)unit->code.start)(
             tstate, frame, unit->entries[next - frame->ir_words]);
         impl->jit_frame = outer;
+#ifndef NDEBUG
+        activation->jit_unit = NULL;
+#endif
         Py_DECREF(code);
+        /* No unit runs: the code that it departed from last may go */
+        Py_CLEAR(activation->jit_pin);
         if (t.next == NULL) {
             return t;
         }
@@ -3147,6 +3156,10 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     activation.source_error_frame = NULL;
     activation.source_error_handler = (_PyExceptionHandler){0};
     activation.observer_context = NULL;
+    activation.jit_pin = NULL;
+#ifndef NDEBUG
+    activation.jit_unit = NULL;
+#endif
     tstate_impl->eval_activation = &activation;
 #if _Py_STACK_GROWS_DOWN
     assert(_Py_get_machine_stack_pointer() <= (uintptr_t)&activation);
@@ -3221,6 +3234,11 @@ early_exit:
     result = PyValue_NULL;
 
 leave:
+    /* The pin of the last departure that compiled code or a function form
+     * made in this activation, now that nothing of it runs (the backstop of
+     * -X ir_forms, which has no jit_run()).  A callback that its release
+     * runs runs in a loop of its own. */
+    Py_CLEAR(activation.jit_pin);
     assert(borrow->eval_floor == floor);
     _PyBorrowScope_Exit(tstate, floor);
     borrow->eval_floor = outer_floor;

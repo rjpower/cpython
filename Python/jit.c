@@ -8,6 +8,7 @@
  * code memory of Python/jit_asm.c and Python/jit_memory.c. */
 
 #include "Python.h"
+#include "pycore_ceval.h"           // _PyEvalActivation
 #include "pycore_initconfig.h"      // _Py_GetEnv()
 #include "pycore_interpframe.h"     // _PyFrame_Exec()
 #include "pycore_ir.h"
@@ -88,6 +89,20 @@ _PyJit_InitInterpreter(PyInterpreterState *interp)
         }
     }
     return _PyStatus_OK();
+}
+
+int
+_PyJit_PinDeparting(PyThreadState *tstate, _PyInterpreterFrame *frame)
+{
+    _PyEvalActivation *activation = ((_PyThreadStateImpl *)tstate)->eval_activation;
+    PyObject *old = activation->jit_pin;
+    activation->jit_pin = Py_NewRef(frame->f_executable);
+    if (old == NULL) {
+        return 0;
+    }
+    int status = Py_REFCNT(old) == 1 ? _PyIR_ESCAPED : 0;
+    Py_DECREF(old);
+    return status;
 }
 
 #ifndef _PY_JIT_SUPPORTED
@@ -931,12 +946,35 @@ _PyJit_Compile(PyCodeObject *code)
     return compile(code, exec);
 }
 
+#ifndef NDEBUG
+/* Whether an activation of the evaluation loop on this thread is running
+ * unit natively (its active-unit record): freeing it would pull the code
+ * from under it, which the execution pins exist to prevent. */
+static int
+unit_is_active(const _PyJitUnit *unit)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (tstate == NULL) {
+        return 0;
+    }
+    for (_PyEvalActivation *activation = ((_PyThreadStateImpl *)tstate)->eval_activation;
+         activation != NULL; activation = activation->previous)
+    {
+        if (activation->jit_unit == unit) {
+            return 1;
+        }
+    }
+    return 0;
+}
+#endif
+
 void
 _PyJit_FreeUnits(_PyCodeExec *exec)
 {
     _PyJitUnit *unit = exec->jit_unit;
     exec->jit_unit = NULL;
     while (unit != NULL) {
+        assert(!unit_is_active(unit));
         _PyJitUnit *older = unit->older;
         free_unit(unit);
         unit = older;

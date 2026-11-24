@@ -146,6 +146,16 @@ extern PyStatus _PyJit_InitInterpreter(PyInterpreterState *interp);
 /* Whether the JIT can run in this process (its code memory is reserved). */
 PyAPI_FUNC(int) _PyJit_IsAvailable(void);
 
+/* The execution pin (g3/design.md section 2): compiled code (a stub or a
+ * function form) that departs frame by a return or a yield calls this after
+ * the arm's last guard, before anything can drop the last reference to the
+ * frame's code.  Stores a new reference to the code in the evaluation
+ * loop's activation, then releases the previous pin: store first, so that a
+ * pin of the same code never drops it.  Returns _PyIR_ESCAPED if the
+ * release deallocated (a code's weakref callbacks run Python), else 0. */
+PyAPI_FUNC(int) _PyJit_PinDeparting(PyThreadState *tstate,
+                                    struct _PyInterpreterFrame *frame);
+
 #ifdef _PY_JIT_SUPPORTED
 
 /* A warm-up event of frame: the frame enters or resumes its code, or jumps

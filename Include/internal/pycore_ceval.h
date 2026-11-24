@@ -81,6 +81,20 @@ typedef struct _PyEvalActivation {
     /* Whether the outlined conditional jump that ran last jumped
      * (IR_REPORT_EDGE()), for the event of its instrumented twin. */
     int edge;
+    /* The baseline JIT's execution pin: a strong reference to the code that
+     * compiled code of this activation last departed from by a return or a
+     * yield (_PyJit_PinDeparting()), or NULL.  The departing unit runs on
+     * until it has switched frames, so its code must outlive the frame it
+     * departs.  Released by the next pin, by jit_run() after each native
+     * call, and when the loop exits. */
+    PyObject *jit_pin;
+#ifndef NDEBUG
+    /* The unit that this activation is running natively, or NULL: set where
+     * a unit is entered, cleared when it has left and before the pin is
+     * released.  _PyJit_FreeUnits() checks that it frees no unit named
+     * here. */
+    struct _PyJitUnit *jit_unit;
+#endif
 #ifdef Py_STATS
     /* The handler that ran last, for pair counts (INSTRUCTION_STATS()) */
     int last_handler;

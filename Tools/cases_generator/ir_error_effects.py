@@ -267,6 +267,10 @@ class SourceErrorEffects:
     callbacks_without_current_observer: bool = False
     # Final owning C results, not value identities or a readable home shape.
     owning_outputs: frozenset[str] = frozenset()
+    # Raise checkpoints: each ERROR_IF that declares holding(x) leaves those
+    # inputs in their slots, so its error route closes them there. The
+    # declaration is the contract verifier's (ir_contract.py), per site.
+    raise_checkpoints: tuple[tuple[int, frozenset[str]], ...] = ()
 
 
 def checked_native_step_effects(parts: tuple[Uop, ...]) -> SourceErrorEffects | None:
@@ -307,6 +311,17 @@ def _call(tokens: list[Token]) -> list[list[Token]] | None:
     return arguments if iterator.peek() is None else None
 
 
+def _holding(arguments: list[list[Token]]) -> frozenset[str] | None:
+    "The inputs that ERROR_IF's holding(x) arguments name, or None"
+    held = set()
+    for argument in arguments:
+        texts = [t.text for t in argument]
+        if len(texts) != 4 or texts[:2] != ["holding", "("] or texts[3] != ")":
+            return None
+        held.add(texts[2])
+    return frozenset(held)
+
+
 def analyze_error_effects(inst: Instruction, reserved_names=(), *,
                           observer_wrapper=False,
                           guard_prefix=False,
@@ -332,6 +347,7 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
     native_closed_errors: set[int] = set()
     native_closed_entries: set[int] = set()
     value_results: dict[int, HelperEffect] = {}
+    checkpoints: dict[int, frozenset[str]] = {}
     changes_origin = False
     reserved = {"frame", "slots", "window", "tstate", "next_instr", "this_instr",
                 "oparg", "PyValue_NULL", "FRAME_CO_CONSTS", "NULL", "true", "false",
@@ -609,6 +625,12 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
             name = texts[0]
             count = 0 if name in {"ERROR_NO_POP", "DISPATCH", "DISPATCH_SAME_OPARG",
                                  "DISPATCH_GOTO"} else 1
+            if name == "ERROR_IF" and len(arguments) > 1:
+                held = _holding(arguments[1:])
+                if held is None:
+                    return False
+                checkpoints[id(tokens[0])] = held
+                arguments = arguments[:1]
             values = [expression(arg, variables, origin) for arg in arguments]
             if len(arguments) != count or any(value.kind not in SCALAR_KINDS for value in values):
                 return False
@@ -760,7 +782,8 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
                               tuple(value_results.items()),
                               all(not h.opens_current_observer for h in used if h.callback),
                               frozenset(origin.owning_values)
-                              if origin.reachable and origin.native_closed() else frozenset())
+                              if origin.reachable and origin.native_closed() else frozenset(),
+                              tuple(checkpoints.items()))
 
 
 def owning_output_source(inst: Instruction) -> SourceErrorEffects | None:

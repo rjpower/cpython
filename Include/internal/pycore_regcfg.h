@@ -216,9 +216,28 @@ int _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
                        _Py_SourceLocation loc, int srcoff, int target,
                        int except);
 
-/* Convert the stack instructions into register ops, run the passes and
+/* Translate the stack instructions into register ops, run the passes and
  * assign the slots. */
 int _PyRegCfg_Build(_PyRegCfg *cfg);
+
+/* The translator's rules (Python/regcfg.c).  A rule translates one stack
+ * op: it pops the identities that the op consumes, emits register ops that
+ * name them, and pushes the identities it produces.  An emitted op keeps
+ * src's origin (srcoff, loc, except). */
+typedef struct _PyRegTr _PyRegTr;
+typedef int (*_PyRegRule)(_PyRegTr *t, const _PyRegOp *src);
+
+/* The top n identities, bottom first, removed from the stack */
+int _PyRegTr_Pop(_PyRegTr *t, int n, int *ids);
+int _PyRegTr_Push(_PyRegTr *t, int id);
+/* A new identity, defined by the next op emitted */
+int _PyRegTr_Fresh(_PyRegTr *t, int *id);
+/* An op of the given opcode that reads uses and defines defs, by name */
+int _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
+                  const int *uses, int nuses, const int *defs, int ndefs,
+                  _PyRegOp **op);
+/* The rule of an unported stack op: its old handler op */
+int _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *src);
 
 /* Give the inline scalar or immortal constants that ops read in place,
  * through register fields and call operands alike, a hidden slot each (G6),

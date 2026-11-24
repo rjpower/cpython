@@ -9,8 +9,8 @@
  * optimize_load_fast() has decided which loads borrow.  _PyRegCfg_Build()
  * then
  *
- *   1. converts every instruction into an op over virtual registers
- *      (convert());
+ *   1. translates every stack op into register ops over value identities
+ *      (translate());
  *   2. runs the passes, once each, in a fixed order (run_passes());
  *   3. computes liveness and assigns each temporary a frame slot
  *      (_PyRegCfg_Compact()).
@@ -248,7 +248,7 @@ handler_base(const _PyRegCfg *cfg, int h)
 }
 
 
-/* Conversion */
+/* Translation */
 
 /* The depth that the block needs at its start not to underflow, or -1 with
  * an exception set. */
@@ -454,28 +454,68 @@ resolve_next_locations(_PyRegCfg *cfg)
     }
 }
 
-typedef struct {
+/* The translator.
+ *
+ * Stack ops are transport: their meaning lives in the rules below, which
+ * turn each one into register ops at first call.  The translator keeps,
+ * only while it runs, the stack of value identities: the virtual register
+ * at each stack position.  A rule pops and pushes identities and emits the
+ * register ops that name them.  rules[] is indexed by opcode; an opcode
+ * without a rule is an unported family, which _PyRegTr_Legacy() turns into
+ * its old handler op with the operand conventions that handler expects.
+ *
+ * At a block that is not continued, position k holds the block parameter
+ * CANON(k), whose home is slot nlocalsplus + k (a bridge constraint until
+ * every consumer reads named operands): every edge into the block, and
+ * every op whose handler finds position k, gives CANON(k) the identity at
+ * position k. */
+
+struct _PyRegTr {
     _PyRegCfg *cfg;
-    _PyRegOp *ops;          // the converted ops
+    _PyRegOp *ops;          // the translated ops
     int nops;
     int aops;
-    int *stack;             // the register at each stack position
+    int *stack;             // the identity at each stack position
     int sp;
     int astack;
     int region_op;          // the first op of the current region
     int *def;               // per fresh register, the op that defines it
     int adef;
     int maxpos;             // the deepest stack position numbered
-} converter;
+};
 
-static int
-new_fresh(converter *c, int *v)
+int
+_PyRegTr_Fresh(_PyRegTr *t, int *v)
 {
-    _PyRegCfg *cfg = c->cfg;
+    _PyRegCfg *cfg = t->cfg;
     int k = cfg->nvregs - _PyReg_FRESH0(cfg);
-    RETURN_IF_ERROR(grow((void **)&c->def, &c->adef, k + 1, sizeof(int)));
-    c->def[k] = c->nops;
+    RETURN_IF_ERROR(grow((void **)&t->def, &t->adef, k + 1, sizeof(int)));
+    t->def[k] = t->nops;
     *v = cfg->nvregs++;
+    return SUCCESS;
+}
+
+int
+_PyRegTr_Pop(_PyRegTr *t, int n, int *ids)
+{
+    if (n > t->sp) {
+        PyErr_SetString(PyExc_SystemError, "translator stack underflow");
+        return ERROR;
+    }
+    t->sp -= n;
+    for (int k = 0; k < n; k++) {
+        ids[k] = t->stack[t->sp + k];
+    }
+    return SUCCESS;
+}
+
+int
+_PyRegTr_Push(_PyRegTr *t, int id)
+{
+    RETURN_IF_ERROR(grow((void **)&t->stack, &t->astack, t->sp + 2,
+                         sizeof(int)));
+    t->stack[t->sp++] = id;
+    t->maxpos = Py_MAX(t->maxpos, t->sp);
     return SUCCESS;
 }
 
@@ -500,15 +540,15 @@ rename_ops(_PyRegCfg *cfg, _PyRegOp *ops, int from_op, int to_op,
     }
 }
 
-/* Make the register at stack position k canonical.  Stack positions are
- * last in, first out and the conversion renames nothing else, so the
- * canonical temporary of position k is dead since its value was popped,
- * and the fresh register now at k may take its name. */
+/* Give the block parameter of stack position k the identity there.  Stack
+ * positions are last in, first out and the translator renames nothing
+ * else, so the parameter of position k is dead since its value was popped,
+ * and the fresh identity now at k may take its name. */
 static int
-canonicalise(converter *c, int k)
+bind_param(_PyRegTr *t, int k)
 {
-    _PyRegCfg *cfg = c->cfg;
-    int v = c->stack[k];
+    _PyRegCfg *cfg = t->cfg;
+    int v = t->stack[k];
     int canon = _PyReg_CANON(cfg, k);
     if (v == canon) {
         return SUCCESS;
@@ -518,18 +558,18 @@ canonicalise(converter *c, int k)
                      "register %d at stack position %d", v, k);
         return ERROR;
     }
-    int from_op = c->def[v - _PyReg_FRESH0(cfg)];
-    rename_ops(cfg, c->ops, Py_MAX(from_op, c->region_op), c->nops,
-                         v, canon);
-    c->stack[k] = canon;
+    int from_op = t->def[v - _PyReg_FRESH0(cfg)];
+    rename_ops(cfg, t->ops, Py_MAX(from_op, t->region_op), t->nops,
+               v, canon);
+    t->stack[k] = canon;
     return SUCCESS;
 }
 
 static int
-canonicalise_below(converter *c, int depth)
+bind_params_below(_PyRegTr *t, int depth)
 {
     for (int k = 0; k < depth; k++) {
-        RETURN_IF_ERROR(canonicalise(c, k));
+        RETURN_IF_ERROR(bind_param(t, k));
     }
     return SUCCESS;
 }
@@ -544,11 +584,55 @@ _PyRegCfg_AddOperands(_PyRegCfg *cfg, int n, int *index)
     return SUCCESS;
 }
 
-/* Convert the stack instruction instr into an op. */
+/* Append an op that stands for the stack op src: a copy of src, with uses
+ * and defs to be filled in by the caller. */
 static int
-convert_instr(converter *c, const _PyRegOp *instr)
+new_op(_PyRegTr *t, const _PyRegOp *src, int nuses, int ndefs,
+       _PyRegOp **result)
 {
-    _PyRegCfg *cfg = c->cfg;
+    _PyRegCfg *cfg = t->cfg;
+    int in, out;
+    RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, nuses, &in));
+    RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, ndefs, &out));
+    RETURN_IF_ERROR(grow((void **)&t->ops, &t->aops, t->nops + 1,
+                         sizeof(_PyRegOp)));
+    _PyRegOp *op = &t->ops[t->nops++];
+    *op = *src;
+    op->in = in;
+    op->out = out;
+    op->nread = (int16_t)nuses;
+    op->npop = (int16_t)nuses;
+    op->nimplicit = 0;
+    op->nout = (int16_t)ndefs;
+    op->depth = t->sp;
+    *result = op;
+    return SUCCESS;
+}
+
+int
+_PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
+              const int *uses, int nuses, const int *defs, int ndefs,
+              _PyRegOp **result)
+{
+    _PyRegOp *op;
+    RETURN_IF_ERROR(new_op(t, src, nuses, ndefs, &op));
+    op->opcode = opcode;
+    memcpy(_PyReg_IN(t->cfg, op), uses, nuses * sizeof(int));
+    memcpy(_PyReg_OUT(t->cfg, op), defs, ndefs * sizeof(int));
+    if (result != NULL) {
+        *result = op;
+    }
+    return SUCCESS;
+}
+
+/* The rule of an unported stack op: its old handler op.  It reads the top
+ * nread identities, the popped ones on top, and for a raise every identity
+ * below; a register-style op's outputs below its dst pass their inputs
+ * through, and a window's are its stack positions from its base. */
+int
+_PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
+{
+    _PyRegCfg *cfg = t->cfg;
     const _PyIRFormat *fmt = _PyRegCfg_FormatOf(instr->opcode, instr->oparg);
     int window = (fmt->flags & _PyIR_WINDOW) != 0;
     int popped = _PyOpcode_num_popped(instr->opcode, instr->oparg);
@@ -563,16 +647,13 @@ convert_instr(converter *c, const _PyRegOp *instr)
         popped = 3;
         pushed = 3;
     }
-    int depth = c->sp;
+    int depth = t->sp;
     assert(popped >= 0 && pushed >= 0 && popped <= depth);
-    if (instr->except >= 0) {
-        RETURN_IF_ERROR(canonicalise_below(c, handler_base(cfg, instr->except)));
-    }
     int jumps = op_jumps(instr);
     if (jumps) {
-        // The target finds the stack canonical.  The window of FOR_ITER
-        // and SEND is the stack they leave there.
-        RETURN_IF_ERROR(canonicalise_below(c, window ? depth : depth - popped));
+        // The target finds its parameters.  The window of FOR_ITER and
+        // SEND is the stack they leave there.
+        RETURN_IF_ERROR(bind_params_below(t, window ? depth : depth - popped));
     }
     int nread = window ? popped : Py_MAX(popped, fmt->ninputs);
     if (nread > depth) {
@@ -581,15 +662,6 @@ convert_instr(converter *c, const _PyRegOp *instr)
         return ERROR;
     }
     int nimplicit = IS_RAISE_OPCODE(instr->opcode) ? depth - popped : 0;
-    int in, out;
-    RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, nread + nimplicit, &in));
-    RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, pushed, &out));
-    for (int k = 0; k < nread; k++) {
-        cfg->operands[in + k] = c->stack[depth - nread + k];
-    }
-    for (int k = 0; k < nimplicit; k++) {
-        cfg->operands[in + nread + k] = c->stack[k];
-    }
     // Register style: the outputs below dst pass their inputs through
     int through = 0;
     if (!window) {
@@ -601,91 +673,118 @@ convert_instr(converter *c, const _PyRegOp *instr)
             return ERROR;
         }
     }
-    RETURN_IF_ERROR(grow((void **)&c->stack, &c->astack, depth + pushed + 1,
-                         sizeof(int)));
+    // The outputs first: a fresh one records the op about to be appended
     int base = depth - popped;
-    c->maxpos = Py_MAX(c->maxpos, base + pushed);
-    for (int j = 0; j < pushed; j++) {
-        int v;
+    int defs[4];
+    int *out = pushed <= 4 ? defs : PyMem_Malloc(pushed * sizeof(int));
+    if (out == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    int err = SUCCESS;
+    for (int j = 0; j < pushed && err == SUCCESS; j++) {
         if (j < through) {
-            v = c->stack[base + j];
+            out[j] = t->stack[base + j];
         }
         else if (jumps) {
-            v = _PyReg_CANON(cfg, base + j);
+            out[j] = _PyReg_CANON(cfg, base + j);
         }
         else {
-            RETURN_IF_ERROR(new_fresh(c, &v));
+            err = _PyRegTr_Fresh(t, &out[j]);
         }
-        cfg->operands[out + j] = v;
     }
-    for (int j = 0; j < pushed; j++) {
-        c->stack[base + j] = cfg->operands[out + j];
+    _PyRegOp *op;
+    if (err == SUCCESS) {
+        err = new_op(t, instr, nread + nimplicit, pushed, &op);
     }
-    c->sp = base + pushed;
+    if (err == SUCCESS) {
+        int *in = _PyReg_IN(cfg, op);
+        for (int k = 0; k < nread; k++) {
+            in[k] = t->stack[depth - nread + k];
+        }
+        for (int k = 0; k < nimplicit; k++) {
+            in[nread + k] = t->stack[k];
+        }
+        op->nread = (int16_t)nread;
+        op->npop = (int16_t)popped;
+        op->nimplicit = (int16_t)nimplicit;
+        memcpy(_PyReg_OUT(cfg, op), out, pushed * sizeof(int));
+        t->sp = base;
+        for (int j = 0; j < pushed && err == SUCCESS; j++) {
+            err = _PyRegTr_Push(t, out[j]);
+        }
+    }
+    if (out != defs) {
+        PyMem_Free(out);
+    }
+    return err;
+}
 
-    RETURN_IF_ERROR(grow((void **)&c->ops, &c->aops, c->nops + 1,
-                         sizeof(_PyRegOp)));
-    _PyRegOp *op = &c->ops[c->nops++];
-    *op = *instr;
-    op->nread = (int16_t)nread;
-    op->npop = (int16_t)popped;
-    op->nimplicit = (int16_t)nimplicit;
-    op->nout = (int16_t)pushed;
-    op->in = in;
-    op->out = out;
-    op->depth = depth;
-    return SUCCESS;
+/* The rules, by opcode.  NULL is the legacy rule. */
+static const _PyRegRule rules[256] = {
+    [0] = NULL,
+};
+
+static int
+translate_instr(_PyRegTr *t, const _PyRegOp *instr)
+{
+    // Every handler finds its parameters before the op can raise
+    if (instr->except >= 0) {
+        RETURN_IF_ERROR(bind_params_below(t, handler_base(t->cfg, instr->except)));
+    }
+    _PyRegRule rule = rules[instr->opcode & 255];
+    if (rule == NULL || instr->opcode > 255) {
+        rule = _PyRegTr_Legacy;
+    }
+    return rule(t, instr);
 }
 
 static int
-convert(_PyRegCfg *cfg)
+translate(_PyRegCfg *cfg)
 {
     RETURN_IF_ERROR(mark_blocks(cfg));
     resolve_next_locations(cfg);
-    converter c = {.cfg = cfg};
+    _PyRegTr t = {.cfg = cfg};
     int err = SUCCESS;
     for (int b = 0; b < cfg->nblocks && err == SUCCESS; b++) {
         _PyRegBlock *blk = &cfg->blocks[b];
         int start = blk->start, end = blk->end;
         if (!blk->continued) {
-            c.region_op = c.nops;
-            err = grow((void **)&c.stack, &c.astack, blk->startdepth + 1,
-                       sizeof(int));
+            t.region_op = t.nops;
+            t.sp = 0;
             for (int k = 0; err == SUCCESS && k < blk->startdepth; k++) {
-                c.stack[k] = _PyReg_CANON(cfg, k);
+                err = _PyRegTr_Push(&t, _PyReg_CANON(cfg, k));
             }
-            c.sp = blk->startdepth;
-            c.maxpos = Py_MAX(c.maxpos, blk->startdepth);
         }
-        else if (c.sp != blk->startdepth) {
+        else if (t.sp != blk->startdepth) {
             PyErr_Format(PyExc_SystemError,
                          "inconsistent stack depth at block %d", b);
             err = ERROR;
         }
-        blk->start = c.nops;
+        blk->start = t.nops;
         for (int i = start; err == SUCCESS && i < end; i++) {
-            err = convert_instr(&c, &cfg->ops[i]);
+            err = translate_instr(&t, &cfg->ops[i]);
         }
-        blk->end = c.nops;
+        blk->end = t.nops;
         if (err == SUCCESS && blk->falls_through
             && !cfg->blocks[b + 1].continued)
         {
-            err = canonicalise_below(&c, c.sp);
+            err = bind_params_below(&t, t.sp);
         }
     }
-    PyMem_Free(c.stack);
-    PyMem_Free(c.def);
+    PyMem_Free(t.stack);
+    PyMem_Free(t.def);
     if (err != SUCCESS) {
-        PyMem_Free(c.ops);
+        PyMem_Free(t.ops);
         return ERROR;
     }
     PyMem_Free(cfg->ops);
-    cfg->ops = c.ops;
-    cfg->nops = c.nops;
-    cfg->aops = c.aops;
-    // The passes rename registers to canonical ones that exist, so no
-    // register of a higher position appears after conversion
-    cfg->ncanon = Py_MIN(c.maxpos, IR_MAX_SLOTS);
+    cfg->ops = t.ops;
+    cfg->nops = t.nops;
+    cfg->aops = t.aops;
+    // The passes rename registers to parameters that exist, so no register
+    // of a higher position appears after translation
+    cfg->ncanon = Py_MIN(t.maxpos, IR_MAX_SLOTS);
     return SUCCESS;
 }
 
@@ -1781,7 +1880,7 @@ run_passes(_PyRegCfg *cfg)
 int
 _PyRegCfg_Build(_PyRegCfg *cfg)
 {
-    RETURN_IF_ERROR(convert(cfg));
+    RETURN_IF_ERROR(translate(cfg));
     RETURN_IF_ERROR(run_passes(cfg));
     int err = _PyRegCfg_Compact(cfg);
     DUMP(cfg, "compaction");

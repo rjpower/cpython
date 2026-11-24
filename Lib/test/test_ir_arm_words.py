@@ -178,6 +178,16 @@ class ForceArmTests(unittest.TestCase):
         self.assertIsNone(row.twin)
         self.assertTrue(contract[handlers["Add.Generic"]].effects & 0x1)
 
+    def test_word_length_follows_the_arms_derived_operand_words(self):
+        handlers = capi.arm_handlers()
+        contract = _opcode.get_ir_contract()
+        for name, handler in handlers.items():
+            with self.subTest(arm=name):
+                # The head's handler field is the low 9 bits of its word
+                length = _opcode.get_ir_word_length(handler)
+                self.assertEqual(length, 2 if name.startswith("GetMethod.") else 1)
+                self.assertIsNotNone(contract[handler])
+
     def test_dis_reads_the_stack_ops_of_a_function_with_an_arm_word(self):
         before = [(i.opname, i.offset) for i in dis.get_instructions(self.code)]
         capi.force_arm(self.code, self.offset, "Add.Int")

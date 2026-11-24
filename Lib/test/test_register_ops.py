@@ -541,14 +541,14 @@ class CheckTests(unittest.TestCase):
         ("extern helper h(v:B) -> O effects() ensures(result.exact<frozenset>(result)) "
          "pending;", []),
         # An optional owner may bind an optional destination, not a plain one
-        ("family F(d:Dst, e:Maybe<Dst>, x:Src) exits(next);\n"
+        ("family F(d:Dst, e:Maybe<Dst>, x:Src) exits(next) ops(NOP);\n"
          "point F.Done(current, next_head, clear) keep() spent(x) defs(d, e) held();\n"
          "extern helper h(v:B) -> Maybe<O> effects() pending;\n"
          "arm F.A inline effects(writes, releases) feedback() exits(next)\n"
          "{ entry(): let m:Maybe<O> = h(use(x));\n"
          "  publish [e = m] retire [spent(x), old(e)] at F.Done; exit next(); }",
          []),
-        ("family F(d:Dst, x:Src) exits(next);\n"
+        ("family F(d:Dst, x:Src) exits(next) ops(NOP);\n"
          "point F.Done(current, next_head, clear) keep() spent(x) defs(d) held();\n"
          "extern helper h(v:B) -> Maybe<O> effects() pending;\n"
          "arm F.A inline effects(writes, releases) feedback() exits(next)\n"

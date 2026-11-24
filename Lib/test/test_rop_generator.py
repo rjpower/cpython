@@ -281,7 +281,7 @@ class ArmRowTests(unittest.TestCase):
 
 
 ENVIRONMENT = """\
-family F(dst:Dst, x:Src) exits(next, miss);
+family F(dst:Dst, x:Src) exits(next, miss) ops(NOP);
 extern helper probe(t:Thread, f:Frame, s:Site, h:Head) -> Bool
   effects(reads)
   c probe_c as bool

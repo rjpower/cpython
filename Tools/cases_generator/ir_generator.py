@@ -73,6 +73,7 @@ Invariants:
 
 import argparse
 import io
+import ir_contract
 import ir_leaf
 import ir_numbers
 from ir_records import (
@@ -81,7 +82,7 @@ from ir_records import (
     RUNS_PYTHON, SITE_TOKENS, SLOT, TARGET, TEMP, WINDOW, YIELD, CallShape, Fact,
     FeedbackOperand, FeedbackSchema, Guard, Operand, OperationRecord, Subjects,
     Transfer, UopRecord, assigns_to, changes, check_record, feedback_schema,
-    guard_facts, infer_effects, passed_through, record_through, result_facts,
+    guard_facts, uop_record_effects, passed_through, record_through, result_facts,
     site_tokens, uop_transfers, walk_values,
 )
 from ir_read_effects import (
@@ -523,7 +524,7 @@ def runs_code(inst: Instruction) -> bool:
     finalizer may (ir_records.RUNS_PYTHON), or is an instrumented twin,
     which fires a monitoring event and so calls a Python callback"""
     return inst.name.startswith("INSTRUMENTED_") or any(
-        infer_effects(part) & RUNS_PYTHON for part in inst.parts if isinstance(part, Uop))
+        uop_record_effects(part) & RUNS_PYTHON for part in inst.parts if isinstance(part, Uop))
 
 
 def is_transparent(inst: Instruction) -> bool:
@@ -1335,13 +1336,13 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
     specialize = """{
         #if ENABLE_SPECIALIZATION
         _PyFbHeader *feedback = FB_COUNTER();
-        if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+        if (_PyFb_CounterTriggers(feedback)) {
             next_instr = this_instr;
             _Py_Specialize_Send(receiver, next_instr);
             DISPATCH_SAME_OPARG();
         }
         OPCODE_DEFERRED_INC(SEND);
-        ADVANCE_ADAPTIVE_COUNTER(feedback);
+        _PyFb_AdvanceCounter(feedback);
         #endif  /* ENABLE_SPECIALIZATION */
     }"""
     prefixes = [
@@ -5988,16 +5989,24 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
         # The implicit guards precede the body and its transfers
         transfers = tuple(Transfer(DEOPT, None, deopt) for _ in guards)
         subjects = Subjects(part, inputs)
+        # A uop with a declared contract has the record its declarations
+        # give, once its body is verified against them (ir_contract.py)
+        declared = ir_contract.contract_of(part) is not None
+        if declared:
+            ir_contract.verify_uop(part, len(guards))
         for site in site_tokens(part):
             if site.text in GUARD_TOKENS:
-                facts, reason = guard_facts(part, site, subjects)
+                facts, reason = (ir_contract.record_guard_facts(part, site, inputs) if declared
+                                 else guard_facts(part, site, subjects))
                 guards.append(Guard(GUARD_TOKENS[site.text], site, facts=facts, reason=reason))
         feedback = uop_feedback(part, schema, inst)
         leaf = ir_leaf.leaf_of(part, {fb.name: fb.field.ctype for fb in feedback})
         uops.append(UopRecord(part.name, inputs, outs, feedback,
                               part.properties.oparg, tuple(guards),
-                              transfers + uop_transfers(part, deopt), infer_effects(part),
-                              result_facts(part, outs), "pure" in part.annotations, leaf))
+                              transfers + uop_transfers(part, deopt), uop_record_effects(part),
+                              ir_contract.record_results(part, outs) if declared
+                              else result_facts(part, outs),
+                              "pure" in part.annotations, leaf))
     if (boundary is not None and boundary.yielded == "DELEGATED"
             and uops[-1].transfers[-1] == Transfer(NEXT)):
         # A native send that the inner generator suspended yields its value
@@ -6054,7 +6063,10 @@ def build_records(analysis: Analysis,
             record = replace(record, form=f"SHARED_BODY({generator_word_entry(name, analysis)})")
         check_record(record, [p for p in inst.parts if isinstance(p, Uop)])
         ir_leaf.check_leaf(record, [p for p in inst.parts if isinstance(p, Uop)])
+        ir_contract.verify_handler(inst, leaf={u.name: u.leaf is not None
+                                               for u in record.uops})
         records[name] = record
+    ir_contract.check_primitives(ir_leaf.PRIMITIVES, ir_contract.lowerings())
     return records
 
 
@@ -7960,13 +7972,13 @@ def binary_reader_contract(inst: Instruction, fmt: IRFormat) -> bool:
     specialize = """{
         #if ENABLE_SPECIALIZATION
         _PyFbHeader *feedback = FB_COUNTER();
-        if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
+        if (_PyFb_CounterTriggers(feedback)) {
             next_instr = this_instr;
             _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
             DISPATCH_SAME_OPARG();
         }
         OPCODE_DEFERRED_INC(BINARY_OP);
-        ADVANCE_ADAPTIVE_COUNTER(feedback);
+        _PyFb_AdvanceCounter(feedback);
         #endif  /* ENABLE_SPECIALIZATION */
         assert(NB_ADD <= oparg);
         assert(oparg <= NB_OPARG_LAST);
@@ -8780,6 +8792,7 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
     # function forms of every handler and entry label, and in ir_evaluate()
     # for the evaluator's handlers and labels
     outfile.write("\n#ifdef IR_FUNCTION_FORMS\n")
+    outfile.write("\n".join(ir_contract.component_checks()) + "\n\n")
     outfile.write(form_declarations(analysis))
     outfile.writelines(functions)
     outfile.writelines(label_forms(analysis, formats, lines))

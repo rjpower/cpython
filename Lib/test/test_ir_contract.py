@@ -707,8 +707,10 @@ class AnalyzerTests(unittest.TestCase):
 
 # A scan of Python/bytecodes.c by regular expressions, which shares no code
 # with the cases generator, for the columns that it can check
-_DEFINITION = re.compile(r"\b(?:op|inst)\((\w+),\s*\(([^)]*)\)\)\s*\{")
-_MACRO = re.compile(r"\bmacro\((\w+)\)\s*=\s*([^;]*);")
+# A definition's stack effect may hold declared contracts, `exact(T)`, and
+# clauses, `effects(...) exits(...)`, may follow it (ir_contract.py)
+_DEFINITION = re.compile(r"\b(?:op|inst)\((\w+),\s*\(")
+_MACRO = re.compile(r"\bmacro\((\w+)\)\s*(?:region\(\w+\)\s*)?=\s*([^;]*);")
 
 
 def _stack_items(text):
@@ -717,7 +719,7 @@ def _stack_items(text):
     for item in text.split(","):
         item = item.strip()
         if item and "/" not in item:    # not a cache entry
-            m = re.fullmatch(r"(\w+)\s*(?:\[(.*)\])?(?::\s*nullable)?", item)
+            m = re.fullmatch(r"(\w+)\s*(?:\[(.*?)\])?(?::.*)?", item, re.S)
             result.append((m.group(1), m.group(2)))
     return result
 
@@ -738,9 +740,13 @@ def _scan_definitions(path):
         text = re.sub(r"//[^\n]*|/\*.*?\*/", " ", f.read(), flags=re.S)
     ops = {}
     for m in _DEFINITION.finditer(text):
-        inputs, outputs = m.group(2).split("--")
+        depth, end = 1, m.end()
+        while depth:
+            depth += {"(": 1, ")": -1}.get(text[end], 0)
+            end += 1
+        inputs, outputs = text[m.end():end - 1].split("--")
         ops[m.group(1)] = (_stack_items(inputs), _stack_items(outputs),
-                           _body(text, m.end() - 1))
+                           _body(text, text.index("{", end)))
     macros = {}
     for m in _MACRO.finditer(text):
         parts = (p.strip() for p in m.group(2).split("+"))

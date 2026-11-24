@@ -1202,7 +1202,11 @@ def _lvalue_is_heap(tokens: list, i: int) -> bool:
 
 def effect_sites(uop: Uop) -> list[tuple[Token, str | None]]:
     """The tokens of the body of uop that have an effect, in order, with it:
-    None for a call that the tables do not know"""
+    None for a call that the tables do not know.  A uop with a declared
+    contract has the sites of its rows (ir_contract.py)."""
+    if uop.clauses:
+        import ir_contract
+        return ir_contract.record_effect_sites(uop)
     p = uop.properties
     tokens = [t for t in uop.body.tokens() if t.kind != "COMMENT"]
     texts = [t.text for t in tokens]
@@ -1269,8 +1273,17 @@ def uop_effects(uop: Uop) -> frozenset[str]:
     return frozenset(effects)
 
 
+def uop_record_effects(uop: Uop) -> frozenset[str]:
+    """The effects of uop's record: its declared effects if it declares a
+    contract (ir_contract.py), else the inferred ones"""
+    if uop.clauses:
+        import ir_contract
+        return ir_contract.contract_of(uop).record_effects()
+    return infer_effects(uop)
+
+
 def infer_effects(uop: Uop) -> frozenset[str]:
-    "The effects that uop may have"
+    "The effects that uop may have, inferred from its body"
     effects = set(uop_effects(uop)) | {
         e if e is not None else MAY_RUN_PYTHON for _, e in effect_sites(uop)}
     if MAY_RUN_PYTHON in effects:

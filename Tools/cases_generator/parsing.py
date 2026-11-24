@@ -249,6 +249,9 @@ class StackEffect(Node):
     name: str = field(compare=False)  # Equality compares extent and read qualifier.
     size: str = ""  # Optional `[size]`
     nullable: bool = False
+    # The declared contract of the item, after its colon: an ownership mode
+    # and facts, each as written (`taken`, `inline_int`, `exact(PyLong_Type)`)
+    contract: tuple[str, ...] = field(default=(), compare=False)
     # Note: size cannot be combined with type or cond
 
     def __repr__(self) -> str:
@@ -287,6 +290,8 @@ class InstHeader(Node):
     name: str
     inputs: list[InputEffect]
     outputs: list[OutputEffect]
+    # The declared clauses, `effects(...)` and `exits(...)`: None if absent
+    clauses: dict[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -297,6 +302,7 @@ class InstDef(Node):
     inputs: list[InputEffect]
     outputs: list[OutputEffect]
     block: BlockStmt
+    clauses: dict[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -304,6 +310,7 @@ class Macro(Node):
     name: str
     uops: list[UOp]
     annotations: list[str]
+    region: str | None = None   # the declared `region(kind)` of an arm
 
 
 @dataclass
@@ -371,6 +378,7 @@ class Parser(PLexer):
                 hdr.inputs,
                 hdr.outputs,
                 block,
+                hdr.clauses,
             )
         return None
 
@@ -391,9 +399,57 @@ class Parser(PLexer):
                 if self.expect(lx.COMMA):
                     inp, outp = self.io_effect()
                     if self.expect(lx.RPAREN):
+                        clauses = self.contract_clauses()
                         if (tkn := self.peek()) and tkn.kind == lx.LBRACE:
-                            return InstHeader(annotations, kind, name, inp, outp)
+                            return InstHeader(annotations, kind, name, inp, outp, clauses)
         return None
+
+    # The clauses of a uop's declared contract, between its stack effect and
+    # its body (Tools/cases_generator/ir_contract.py)
+    CONTRACT_CLAUSES = ("effects", "exits", "feedback")
+
+    def contract_clauses(self) -> dict[str, list[str]]:
+        clauses: dict[str, list[str]] = {}
+        while (tkn := self.peek()) and tkn.kind == lx.IDENTIFIER \
+                and tkn.text in self.CONTRACT_CLAUSES:
+            self.next()
+            if tkn.text in clauses:
+                raise self.make_syntax_error(f"A second {tkn.text}() clause")
+            self.require(lx.LPAREN)
+            names: list[str] = []
+            while name := self.word():
+                text = name.text
+                if self.expect(lx.LPAREN):
+                    # `read(counter)`
+                    arg = self.require(lx.IDENTIFIER).text
+                    self.require(lx.RPAREN)
+                    text = f"{text}({arg})"
+                names.append(text)
+                if not self.expect(lx.COMMA):
+                    break
+            self.require(lx.RPAREN)
+            clauses[tkn.text] = names
+        return clauses
+
+    def word(self) -> lx.Token | None:
+        """An identifier, or a C keyword used as a word of a contract
+        (`inline`, `return`)"""
+        if (tkn := self.peek()) and (tkn.kind == lx.IDENTIFIER or tkn.text in lx.keywords):
+            return self.next()
+        return None
+
+    def item_contract(self) -> list[str]:
+        """The words after an item's colon: each an identifier, or an
+        identifier with a parenthesized argument, `exact(PyLong_Type)`"""
+        words = []
+        while tkn := self.word():
+            text = tkn.text
+            if self.expect(lx.LPAREN):
+                arg = self.require(lx.IDENTIFIER).text
+                self.require(lx.RPAREN)
+                text = f"{text}({arg})"
+            words.append(text)
+        return words
 
     def io_effect(self) -> tuple[list[InputEffect], list[OutputEffect]]:
         # '(' [inputs] '--' [outputs] ')'
@@ -466,12 +522,14 @@ class Parser(PLexer):
                 self.require(lx.RBRACKET)
                 size_text = size.text.strip()
             nullable = False
+            contract: list[str] = []
             if self.expect(lx.COLON):
-                annotation = self.require(lx.IDENTIFIER)
-                if annotation.text != "nullable":
-                    raise self.make_syntax_error("Expected nullable input annotation")
-                nullable = True
-            return StackEffect(tkn.text, size_text, nullable)
+                words = self.item_contract()
+                if not words:
+                    raise self.make_syntax_error("Expected an item annotation")
+                nullable = "nullable" in words
+                contract = [w for w in words if w != "nullable"]
+            return StackEffect(tkn.text, size_text, nullable, tuple(contract))
         return None
 
     @contextual
@@ -514,10 +572,18 @@ class Parser(PLexer):
             if self.expect(lx.LPAREN):
                 if tkn := self.expect(lx.IDENTIFIER):
                     if self.expect(lx.RPAREN):
+                        region = None
+                        if (r := self.peek()) and r.kind == lx.IDENTIFIER and r.text == "region":
+                            self.next()
+                            self.require(lx.LPAREN)
+                            if not (word := self.word()):
+                                raise self.make_syntax_error("Expected a region kind")
+                            region = word.text
+                            self.require(lx.RPAREN)
                         if self.expect(lx.EQUALS):
                             if uops := self.uops():
                                 self.require(lx.SEMI)
-                                res = Macro(tkn.text, uops, annotations)
+                                res = Macro(tkn.text, uops, annotations, region)
                                 return res
         return None
 

@@ -92,6 +92,34 @@ ReplacementFunctionType = Callable[
     [Token, TokenIterator, CodeSection, Storage, Instruction | None], bool
 ]
 
+def raise_site_arguments(tkn: Token, tkn_iter: TokenIterator) -> tuple[list[Token], list[Token]]:
+    """The arguments of ERROR_IF after its `(`, through its `)`: the
+    condition, and the inputs that the site's holding(x) arguments name"""
+    args: list[list[Token]] = []
+    current: list[Token] = []
+    depth = 0
+    for t in tkn_iter:
+        if t.kind == "RPAREN" and depth == 0:
+            args.append(current)
+            break
+        if t.kind == "COMMA" and depth == 0:
+            args.append(current)
+            current = []
+            continue
+        depth += (t.kind == "LPAREN") - (t.kind == "RPAREN")
+        current.append(t)
+    else:
+        raise analysis_error("Expecting RPAREN. Reached end of file", tkn)
+    holding = []
+    for arg in args[1:]:
+        texts = [t.text for t in arg]
+        if len(texts) != 4 or texts[:2] != ["holding", "("] or texts[3] != ")":
+            raise analysis_error("an argument of ERROR_IF after its condition is "
+                                 "holding(input)", arg[0] if arg else tkn)
+        holding.append(arg[2])
+    return args[0], holding
+
+
 def always_true(tkn: Token | None) -> bool:
     if tkn is None:
         return False
@@ -364,30 +392,60 @@ class Emitter:
     ) -> bool:
         lparen = next(tkn_iter)
         assert lparen.kind == "LPAREN"
-        first_tkn = tkn_iter.peek()
-        unconditional = always_true(first_tkn)
+        condition, holding = raise_site_arguments(tkn, tkn_iter)
+        unconditional = len(condition) == 1 and always_true(condition[0])
         if unconditional:
-            next(tkn_iter)
-            next(tkn_iter)  # RPAREN
             self.out.start_line()
         else:
             self.out.emit_at("if ", tkn)
             self.emit(lparen)
-            emit_to(self.out, tkn_iter, "RPAREN")
+            for t in condition:
+                self.out.emit(t)
             self.out.emit(") {\n")
         next(tkn_iter)  # Semi colon
-        storage.clear_inputs("at ERROR_IF")
-
-        c_offset = storage.stack.sp_offset()
-        try:
-            offset = int(c_offset)
-        except ValueError:
-            offset = -1
-        self.out.emit(self.goto_error(offset, storage))
+        if holding:
+            # A raise checkpoint before the inputs' consumption: the inputs
+            # it holds stay in their slots, as at ERROR_NO_POP, and every
+            # other input is already released or moved
+            self.check_raise_checkpoint(tkn, uop, storage, holding)
+            self.out.emit(self.goto_error(0, storage))
+        else:
+            storage.clear_inputs("at ERROR_IF")
+            c_offset = storage.stack.sp_offset()
+            try:
+                offset = int(c_offset)
+            except ValueError:
+                offset = -1
+            self.out.emit(self.goto_error(offset, storage))
         self.out.emit("\n")
         if not unconditional:
             self.out.emit("}\n")
         return not unconditional
+
+    def check_raise_checkpoint(self, tkn: Token, uop: CodeSection, storage: Storage,
+                               holding: list[Token]) -> None:
+        """ERROR_IF(cond, holding(x), ...): the inputs live at the site are
+        the ones it names, besides those that a raise leaves untouched
+        (pass-throughs, and a declared uop's borrowed and taken inputs); the
+        verifier holds the declaration to the body (ir_contract.py)"""
+        import ir_contract
+        held = {t.text for t in holding}
+        contract = ir_contract.contract_of(uop) if isinstance(uop, Uop) else None
+        for var in storage.inputs:
+            if var.name == "unused" or var.item.peek:
+                continue
+            item = contract.input(var.name) if contract else None
+            untouched = item is not None and item.mode in ("borrowed", "taken")
+            live = storage.is_live(var)
+            if var.name in held and not live:
+                raise analysis_error(f"holding({var.name}) at this raise site, but "
+                                     f"'{var.name}' is no longer held there", tkn)
+            if live and var.name not in held and not untouched:
+                raise analysis_error(f"'{var.name}' is held at this raise site, which "
+                                     f"does not declare holding({var.name})", tkn)
+        inputs = {var.name for var in storage.inputs}
+        for name in sorted(held - inputs):
+            raise analysis_error(f"holding({name}) names no input of {uop.name}", tkn)
 
     def error_no_pop(
         self,

@@ -4327,7 +4327,7 @@ ir_run_CALL_EX_PY(
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
                 }
                 PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_st);
-                if (Py_TYPE(func) != &PyFunction_Type) {
+                if (!PyFunction_Check(func)) {
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
@@ -20586,7 +20586,7 @@ static const _PyIRForm ir_handler_forms[512] = {
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);
                 }
                 PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_st);
-                if (Py_TYPE(func) != &PyFunction_Type) {
+                if (!PyFunction_Check(func)) {
                     UPDATE_MISS_STATS(CALL_FUNCTION_EX);
                     assert(_PyOpcode_Deopt[opcode] == (CALL_FUNCTION_EX));
                     JUMP_TO_PREDICTED(CALL_FUNCTION_EX);

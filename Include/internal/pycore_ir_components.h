@@ -634,12 +634,22 @@
     /* seeded from a C macro (no static check), ir_records.effect_sites */ \
     MACRO(_Py_STR, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Evidence (Python/ceval.h do_raise; G0c batch 6).  It consumes a count \
+     * of exc and of cause on every return (its comment; each path closes \
+     * them: Py_DECREF(exc) for a non-exception, Py_DECREF(value and type) \
+     * after _PyErr_SetObject, raise_error's Py_XDECREF).  A bare raise \
+     * (exc NULL) re-raises the topmost exception and returns 1 with it \
+     * set; every other path returns 0 with an exception set (a number \
+     * cause is the flag, with cause NULL): the failure is the exception, \
+     * not the return value.  Callbacks: _PyErr_CreateExceptionFromArray \
+     * calls the exception class (Python code: __new__, __init__), \
+     * PyException_SetCause and the decrefs may run finalizers: \
+     * `runs_python`.  The seed said `object`, borrowed, and no effects. */ \
     HELPER(do_raise, int, (PyThreadState *, PyObject *, PyObject *, bool), \
-        ARGS(tstate, object, object, scalar), SCALAR, EFFECTS()) \
+        ARGS(tstate, consumed object, consumed object, scalar), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(native_call_builtin_o, PyValue, (PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue *), \
-        ARGS(tstate, frame, scalar, consumed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, frame, scalar, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(super_call, PyValue, (PyValueBorrow, PyValueBorrow, PyValue, int), \
         ARGS(borrowed, borrowed, consumed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
@@ -998,19 +1008,19 @@
         ARGS(tstate), CONTEXT("the C recursion limit"), EFFECTS(reads)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(call_builtin_values, PyValue, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, int), \
-        ARGS(tstate, frame, scalar, scalar, consumed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, frame, scalar, scalar, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(call_class_values, PyValue, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, int), \
-        ARGS(tstate, frame, scalar, scalar, consumed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, frame, scalar, scalar, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(call_descriptor_values, PyValue, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, int), \
-        ARGS(tstate, frame, scalar, scalar, consumed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(tstate, frame, scalar, scalar, borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(call_push_exact, _PyInterpreterFrame *, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, PyValue, int), \
         ARGS(tstate, frame, scalar, scalar, consumed, consumed, scalar), SCALAR, EFFECTS(allocates)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(call_vector, PyValue, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, PyValue), \
-        ARGS(tstate, frame, scalar, consumed), VALUE_OR_NULL(owned), EFFECTS(runs_python))
+        ARGS(tstate, frame, scalar, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python))
 
 /* Generators, coroutines and iteration */
 #define _PyIR_COMPONENTS_GENERATORS(PRIMITIVE, HELPER, MACRO) \

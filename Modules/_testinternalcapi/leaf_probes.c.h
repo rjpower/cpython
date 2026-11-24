@@ -1782,9 +1782,6 @@ leaf_probe__LOAD_SMALL_INT_INLINE(_PyInterpreterFrame *frame, PyValue *stack_poi
     (void)frame; (void)tstate; (void)oparg; (void)caches;
     PyValue value;
     value = PyValue_FromInlineInt(oparg);
-    if (PyValue_IsNull(value)) {
-        return LEAF_PROBE_RAISE;
-    }
     stack_pointer[0] = value;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);

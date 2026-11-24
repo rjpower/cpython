@@ -60,12 +60,13 @@ class EdgeNullTests(unittest.TestCase):
         body = text[begin:end]
         with tempfile.TemporaryDirectory() as directory:
             changed = Path(directory) / "bytecodes.c"
-            # The observed twin cannot certify a changed ordinary store.
+            # The ordinary twin declares `res: moved(cond) nullable` too
+            # (G0c9), so its declaration refuses a changed store
             changed.write_text(text[:begin] + body.replace("res = PyValue_NULL;", "res = PyValue_None;") + text[end:])
-            altered = analyzer.analyze_files([str(changed)])
-            rows = ir_generator.handler_contracts(altered, ir_generator.compute_formats(altered))
-            for name in (names[0], names[2]):
-                self.assertFalse(rows[name].ownership_events[0].flags & 4)
+            with self.assertRaisesRegex(SyntaxError, r"`res` is declared moved\(cond\), "
+                                        r"but is assigned `PyValue_None`"):
+                altered = analyzer.analyze_files([str(changed)])
+                ir_generator.handler_contracts(altered, ir_generator.compute_formats(altered))
 
             prefix = "// BEGIN BYTECODES //\n"
             suffix = "\n// END BYTECODES //\n"

@@ -176,6 +176,39 @@ class SliceTests(unittest.TestCase):
               'inferred "", declared "PyValue_None"',
               f'{handler}.record.uops[0].guards[0].facts[0].kind: '
               'inferred "IS_NONE", declared "IDENTITY"')),
+        # G0c9: _TO_BOOL_NONE's guard states the identity of the word with
+        # PyValue_None, as _GUARD_TOS_IS_NONE's does (F20)
+        *(line
+          for handler in ("POP_JUMP_IF_FALSE_NONE", "POP_JUMP_IF_TRUE_NONE",
+                          "TO_BOOL_NONE")
+          for line in (
+              f'{handler}.record.uops[0].guards[0].facts[0].arg: '
+              'inferred "", declared "PyValue_None"',
+              f'{handler}.record.uops[0].guards[0].facts[0].kind: '
+              'inferred "IS_NONE", declared "IDENTITY"')),
+        # G0c9: BUILD_LIST is IR_BUILD_LIST (_PyList_FromValueStealOnSuccess),
+        # an allocation that runs no Python, as BUILD_TUPLE's twin row says
+        'BUILD_LIST.record.format.runs_code: inferred true, declared false',
+        'BUILD_LIST.record.uops[0].effects: inferred 6 entries '
+        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
+        '"READS_HEAP", "WRITES_HEAP"], declared 2 ["ALLOCATES", "MAY_RAISE"]',
+        # G0c9: FORMAT_SIMPLE's str arm passes the input's reference on and
+        # its other arms make a new one; the result is owned on every path,
+        # which the record's ALIAS (the input's home) does not say
+        'FORMAT_SIMPLE/_FORMAT_SIMPLE: output `res` is declared owned, the record has ALIAS',
+        # G0c9: _GET_ITER's second result is a tagged index or NULL
+        # (_PyEval_GetIter's row, G0a5's representation table)
+        'GET_ITER.record.uops[1].results: inferred 0 entries [], declared 1 '
+        '[{"__type": "Fact", "arg": "tagged_index|null", "kind": "ENCODING", '
+        '"subject": "v2"}]',
+        # G0c9: GET_AWAITABLE's coroutine arm passes the input's reference
+        # on and the other arm makes a new one; the result is owned on both
+        'GET_AWAITABLE/_GET_AWAITABLE: output `iter` is declared owned, the record has ALIAS',
+        # G0c9: _SEND_ASYNC_GEN's body completes in place (it reaches the end
+        # of the body, `next`); SEND_ASYNC_GEN_XFER_DISCARD's yield is its
+        # fused transfer's, which G0d takes from the declaration
+        'SEND_ASYNC_GEN_XFER_DISCARD/_SEND_ASYNC_GEN: declares exits(branch, next, raise), '
+        'the record has branch, raise, yield',
         # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
         # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
         'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '
@@ -215,11 +248,12 @@ class SliceTests(unittest.TestCase):
         'CALL_PY_GENERAL/_PY_FRAME_GENERAL_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
     ]
 
-    # Batch 5: the assume op of `iter: assumed(object) by GET_ITER` in the
-    # leaf IR of the two iterator guards
+    # Batch 5 and G0c9: the assume op of `iter: assumed(object) by GET_ITER`
+    # in the leaf IR of the three iterator guards
     LISTED_LEAF_DIFFERENCES = [
         ("FOR_ITER_LIST.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
         ("FOR_ITER_TUPLE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
+        ("FOR_ITER_RANGE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
     ]
 
     def test_declarations_equal_the_inference(self):

@@ -8437,7 +8437,7 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
         "LOAD_CONST_INLINE_FLOAT": "{ value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg)); assert(PyValue_IsInlineFloat(value)); }",
         "LOAD_COMMON_CONSTANT": "{ assert(oparg < NUM_COMMON_CONSTANTS); value = PyValue_DUP(tstate->interp->common_consts[oparg]); }",
         "LOAD_SMALL_INT": "{ assert(oparg < _PY_NSMALLPOSINTS); value = PyValue_FromInlineInt(oparg); }",
-        "LOAD_SMALL_INT_INLINE": "{ assert(oparg < _PY_NSMALLPOSINTS); value = PyValue_FromInlineInt(oparg); ERROR_IF(PyValue_IsNull(value)); }",
+        "LOAD_SMALL_INT_INLINE": "{ assert(oparg < _PY_NSMALLPOSINTS); value = PyValue_FromInlineInt(oparg); }",
     }
     if inst.name in scalar:
         if (scalar_shape(0, 1) and fmt.field_of(ROLE_DST) is not None

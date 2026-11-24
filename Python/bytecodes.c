@@ -335,12 +335,13 @@ dummy_func(
             value = PyValue_FromInlineInt(oparg);
         }
 
+        // An inline int holds no memory: PyValue_FromInlineInt encodes the
+        // word and cannot fail, so there is no raise exit (G0c9)
         leaf inst(LOAD_SMALL_INT_INLINE, (-- value: owned exact(PyLong_Type) inline_int))
-            effects(raises) exits(next, raise)
+            effects() exits(next)
         {
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyValue_FromInlineInt(oparg);
-            ERROR_IF(PyValue_IsNull(value));
         }
 
         macro(STORE_FAST) = _SWAP_FAST + POP_TOP;
@@ -472,9 +473,6 @@ dummy_func(
                  index_or_null: closed, value: consumed -- val: moved(value)))
             effects(runs_python) exits(next, raise)
         {
-            // The generator's own check wants the test in the body, beside the
-            // assertion that the assumption generates
-            assert(PyValue_IsObject(receiver));
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
             // Taken before the monitoring call, which can run code
             PyValue held = TAKE(value);
@@ -585,7 +583,10 @@ dummy_func(
 
         macro(TO_BOOL_BOOL) = unused/1 + unused/2 + _GUARD_TOS_BOOL;
 
-        leaf inline_ok op(_TO_BOOL_INT, (value -- res, v)) {
+        leaf inline_ok op(_TO_BOOL_INT,
+                (value: consumed exact(PyLong_Type) -- res: owned exact(PyBool_Type), v: moved(value)))
+            effects(reads) exits(next)
+        {
             STAT_INC(TO_BOOL, hit);
             bool zero;
             if (PyValue_IsInlineInt(value)) {
@@ -637,7 +638,9 @@ dummy_func(
             DEAD(value);
         }
 
-        op(_TO_BOOL_NONE, (value -- res)) {
+        op(_TO_BOOL_NONE, (value: consumed -- res: owned exact(PyBool_Type)))
+            effects() exits(next, miss)
+        {
             // This one is a bit weird, because we expect *some* failures:
             EXIT_IF(!PyValue_IsNone(value));
             DEAD(value);
@@ -1442,10 +1445,14 @@ dummy_func(
                      "the type's mp_subscript is not dict's");
         }
 
-        op(_GUARD_NOS_DICT_STORE_SUBSCRIPT, (unused, nos, unused -- unused, nos, unused)) {
+        op(_GUARD_NOS_DICT_STORE_SUBSCRIPT,
+                (unused, nos: object, unused -- unused, nos, unused))
+            effects(reads) exits(next, miss, deopt)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(nos);
-            DEOPT_IF(!Py_TYPE(o)->tp_as_mapping);
-            DEOPT_IF(Py_TYPE(o)->tp_as_mapping->mp_ass_subscript != _PyDict_StoreSubscript);
+            DEOPT_IF(!Py_TYPE(o)->tp_as_mapping, "the type has no mapping slots");
+            DEOPT_IF(Py_TYPE(o)->tp_as_mapping->mp_ass_subscript != _PyDict_StoreSubscript,
+                     "the type's mp_ass_subscript is not dict's");
         }
 
         op(_GUARD_TOS_ANY_DICT, (tos: object -- tos: exact(PyAnyDict_Type)))
@@ -1826,7 +1833,6 @@ dummy_func(
             effects(runs_python) exits(next, raise)
         {
             // GET_AITER accepted it: it has __anext__
-            assert(PyValue_IsObject(aiter));
             PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(aiter));
             if (awaitable_o == NULL) {
                 ERROR_NO_POP();
@@ -1834,7 +1840,9 @@ dummy_func(
             awaitable = PyValue_FromObjectSteal(awaitable_o);
         }
 
-        outlined inst(GET_AWAITABLE, (iterable -- iter)) {
+        outlined inst(GET_AWAITABLE, (iterable: consumed -- iter: owned))
+            effects(runs_python) exits(next, raise)
+        {
             if (coro_awaitable_can_transfer(iterable)) {
                 iter = TAKE(iterable);
             }
@@ -1982,7 +1990,11 @@ dummy_func(
             EXIT_IF(!PyAsyncGenASend_CheckExact(iter_o));
         }
 
-        replaced op(_SEND_ASYNC_GEN, (iter, null_in, v -- asend, null_out, retval)) {
+        replaced op(_SEND_ASYNC_GEN,
+                (iter: taken exact(PyAsyncGenASend_Type), null_in: taken nullable, v: taken
+                 -- asend: moved(iter), null_out: moved(null_in) nullable, retval: owned))
+            effects(runs_python) exits(next, branch, raise)
+        {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             assert(PyAsyncGenASend_CheckExact(iter_o));
             _PyStatusValue sent = _PyValue_Send(iter_o, v);
@@ -2101,9 +2113,12 @@ dummy_func(
             }
         }
 
-        outlined tier1 inst(RERAISE, (values[oparg], exc_st -- values[oparg])) {
-            // An exception being handled is an instance of BaseException
-            assert(PyValue_IsObject(exc_st));
+        outlined tier1 inst(RERAISE,
+                (values[oparg], exc_st: consumed assumed(object) by exception_unwind -- values[oparg]))
+            effects(runs_python) exits(raise)
+        {
+            // An exception being handled is an instance of BaseException;
+            // the generator asserts the declared assumed(object)
             PyObject *exc = PyValue_AsKnownObjectSteal(exc_st);
 
             assert(oparg >= 0 && oparg <= 2);
@@ -2155,7 +2170,6 @@ dummy_func(
             effects(runs_python) exits(branch, raise)
         {
             // An exception being handled is an instance of BaseException
-            assert(PyValue_IsObject(exc_value_st));
             PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
@@ -2615,7 +2629,9 @@ dummy_func(
             }
         }
 
-        outlined inst(BUILD_STRING, (pieces[oparg] -- str)) {
+        outlined inst(BUILD_STRING, (pieces[oparg]: consumed -- str: owned))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *str_o = IR_BUILD_STRING(pieces);
             DEAD(pieces);
             ERROR_IF(str_o == NULL);
@@ -2661,7 +2677,9 @@ dummy_func(
             template = PyValue_FromObjectSteal(template_o);
         }
 
-        inst(BUILD_TUPLE, (values[oparg] -- tup)) {
+        inst(BUILD_TUPLE, (values[oparg]: taken -- tup: owned))
+            effects(allocates, raises) exits(next, raise)
+        {
             PyObject *tup_o = IR_BUILD_TUPLE(values);
             if (tup_o == NULL) {
                 ERROR_NO_POP();
@@ -2670,7 +2688,9 @@ dummy_func(
             tup = PyValue_FromObjectSteal(tup_o);
         }
 
-        inst(BUILD_LIST, (values[oparg] -- list)) {
+        inst(BUILD_LIST, (values[oparg]: taken -- list: owned))
+            effects(allocates, raises) exits(next, raise)
+        {
             PyObject *list_o = IR_BUILD_LIST(values);
             if (list_o == NULL) {
                 ERROR_NO_POP();
@@ -2683,7 +2703,6 @@ dummy_func(
                 (list_st: assumed(object) by BUILD_LIST, unused[oparg-1], iterable_st: taken -- list_st, unused[oparg-1], i: moved(iterable_st) object))
             effects(runs_python) exits(next, raise)
         {
-            assert(PyValue_IsObject(list_st));
             // A number is not iterable
             if (!PyValue_IsObject(iterable_st)) {
                 _PyErr_Format(tstate, PyExc_TypeError,
@@ -2719,7 +2738,6 @@ dummy_func(
                 (set: assumed(object) by BUILD_SET, unused[oparg-1], iterable: taken -- set, unused[oparg-1], i: moved(iterable) object))
             effects(runs_python) exits(next, raise)
         {
-            assert(PyValue_IsObject(set));
             // A number is not iterable
             if (!PyValue_IsObject(iterable)) {
                 _PyErr_Format(tstate, PyExc_TypeError,
@@ -2813,7 +2831,6 @@ dummy_func(
                 (dict: assumed(object) by BUILD_MAP, unused[oparg - 1], update: taken -- dict, unused[oparg - 1], upd: moved(update) object))
             effects(runs_python) exits(next, raise)
         {
-            assert(PyValue_IsObject(dict));
             // A number is not a mapping
             if (!PyValue_IsObject(update)) {
                 _PyErr_Format(tstate, PyExc_TypeError,
@@ -2854,7 +2871,6 @@ dummy_func(
                  -- callable, unused, unused, dict, unused[oparg - 1], u: moved(update) object))
             effects(runs_python) exits(next, raise)
         {
-            assert(PyValue_IsObject(dict));
             // A number is not a mapping
             if (!PyValue_IsObject(update)) {
                 _PyErr_Format(tstate, PyExc_TypeError,
@@ -3006,7 +3022,11 @@ dummy_func(
             EXIT_IF(!PyType_Check(class));
         }
 
-        op(_LOAD_SUPER_ATTR_METHOD, (global_super_st, class_st, self_st -- attr, self_or_null)) {
+        op(_LOAD_SUPER_ATTR_METHOD,
+                (global_super_st: taken, class_st: taken object, self_st: taken
+                 -- attr: owned, self_or_null: moved(self_st) nullable))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
 
             STAT_INC(LOAD_SUPER_ATTR, hit);
@@ -3920,8 +3940,13 @@ dummy_func(
         macro(INSTRUMENTED_IS_OP_JUMP) =
             _IS_OP + POP_TOP + POP_TOP + _INSTRUMENTED_JUMP_IF_COND;
 
-        outlined inst(CHECK_EG_MATCH, (exc_value_st, match_type_st -- rest, match)) {
-            assert(PyValue_IsObject(exc_value_st));
+        outlined inst(CHECK_EG_MATCH,
+                (exc_value_st: consumed assumed(object) by exception_unwind, match_type_st: consumed
+                 -- exc_rest: owned, exc_match: owned))
+            effects(runs_python, releases) exits(next, raise)
+        {
+            // The exception being handled is an object; the generator
+            // asserts the assumption
             PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
             // Taken before the check, which can run code
             PyValue held_exc = TAKE(exc_value_st);
@@ -3946,12 +3971,15 @@ dummy_func(
             if (!Py_IsNone(match_o)) {
                 PyErr_SetHandledException(match_o);
             }
-            rest = PyValue_FromObjectSteal(rest_o);
-            match = PyValue_FromObjectSteal(match_o);
+            exc_rest = PyValue_FromObjectSteal(rest_o);
+            exc_match = PyValue_FromObjectSteal(match_o);
         }
 
-        outlined inst(CHECK_EXC_MATCH, (left, right -- left, b)) {
-            assert(PyValue_IsObject(left));
+        outlined inst(CHECK_EXC_MATCH,
+                (left: assumed(object) by exception_unwind, right: consumed
+                 -- left, b: owned exact(PyBool_Type)))
+            effects(runs_python, releases) exits(next, raise)
+        {
             PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
             // Taken before the check, which can run code
             PyValue held_right = TAKE(right);
@@ -3971,10 +3999,12 @@ dummy_func(
         }
 
         // The compiler loads fromlist from a constant: None or a tuple of str
-        outlined inst(IMPORT_NAME, (level, fromlist -- res)) {
+        outlined inst(IMPORT_NAME,
+                (level: consumed, fromlist: consumed assumed(object) by compiler -- res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
-            assert(PyValue_IsObject(fromlist));
             // The level is an inline int: read it without a box
             int ilevel = value_import_level(level);
             if (ilevel == -1 && _PyErr_Occurred(tstate)) {
@@ -3999,7 +4029,9 @@ dummy_func(
             res = PyValue_FromObjectSteal(res_o);
         }
 
-        outlined inst(IMPORT_FROM, (from -- from, res)) {
+        outlined inst(IMPORT_FROM, (from -- from, res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             // The module may be a number, if __import__ returned one
             PyObject *from_o = PyValue_ObjectOrNull(from);
@@ -4075,7 +4107,9 @@ dummy_func(
             }
         }
 
-        leaf op(_IS_NONE, (value -- b)) {
+        leaf op(_IS_NONE, (value: consumed -- b: owned exact(PyBool_Type)))
+            effects(releases) exits(next)
+        {
             if (PyValue_IsNone(value)) {
                 b = PyValue_True;
                 DEAD(value);
@@ -4154,7 +4188,9 @@ dummy_func(
         // The jump of the None-or-plain form tests the None the guard
         // allowed, without forming the bool: the object path then carries no
         // result to select.
-        op(_POP_JUMP_IF_FALSE_NONE_OR_PLAIN, (value -- v)) {
+        op(_POP_JUMP_IF_FALSE_NONE_OR_PLAIN, (value: consumed -- v: moved(value)))
+            effects() exits(next, branch)
+        {
             int flag = PyValue_IsNone(value);
             IR_REPORT_EDGE(flag);
             v = value;
@@ -4164,7 +4200,9 @@ dummy_func(
             }
         }
 
-        op(_POP_JUMP_IF_TRUE_NONE_OR_PLAIN, (value -- v)) {
+        op(_POP_JUMP_IF_TRUE_NONE_OR_PLAIN, (value: consumed -- v: moved(value)))
+            effects() exits(next, branch)
+        {
             int flag = !PyValue_IsNone(value);
             IR_REPORT_EDGE(flag);
             v = value;
@@ -4210,7 +4248,9 @@ dummy_func(
         // register passes make it from those three (Python/regcfg_passes.c);
         // the result slot is NULL where it falls through.  It has no
         // feedback entry, since its fields fill the word.
-        inst(JUMP_IF_FALSE_OR_POP, (cond -- res)) {
+        inst(JUMP_IF_FALSE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
+            effects(runs_python) exits(next, branch, raise)
+        {
             // Taken before the truth test, which can run code
             PyValue held = TAKE(cond);
             int truth = _PyValue_IsTrue(held);
@@ -4228,7 +4268,9 @@ dummy_func(
             }
         }
 
-        inst(JUMP_IF_TRUE_OR_POP, (cond -- res)) {
+        inst(JUMP_IF_TRUE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
+            effects(runs_python) exits(next, branch, raise)
+        {
             // Taken before the truth test, which can run code
             PyValue held = TAKE(cond);
             int truth = _PyValue_IsTrue(held);
@@ -4275,7 +4317,6 @@ dummy_func(
         {
             // Pop TOS and TOS1. Set TOS to a tuple of attributes on success, or
             // None on failure.
-            assert(PyValue_IsObject(names));
             assert(PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)));
             // The class pattern may name a number: MatchClass rejects it
             PyObject *attrs_o = _PyEval_MatchClass(tstate,
@@ -4350,7 +4391,10 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        op(_GET_ITER, (iterable -- iter, index_or_null)) {
+        op(_GET_ITER,
+                (iterable: consumed -- iter: owned, index_or_null: inline encoding(tagged_index|null)))
+            effects(runs_python) exits(next, raise)
+        {
             _PyValuePair got = _PyEval_GetIter(iterable, oparg);
             DEAD(iterable);
             ERROR_IF(PyValue_IsNull(got.first));
@@ -4582,7 +4626,6 @@ dummy_func(
             effects(reads) exits(next, miss)
         {
             // GET_ITER always leaves an object, never an inline value.
-            assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(!PyList_CheckExact(iter_o));
             assert(PyValue_IsTaggedIndex(null_or_index));
@@ -4628,7 +4671,6 @@ dummy_func(
                  -- iter: exact(PyTuple_Type), null_or_index))
             effects(reads) exits(next, miss)
         {
-            assert(PyValue_IsObject(iter));
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(!PyTuple_CheckExact(iter_o));
             assert(PyValue_IsTaggedIndex(null_or_index));
@@ -4661,18 +4703,22 @@ dummy_func(
             _ITER_JUMP_TUPLE +
             _ITER_NEXT_TUPLE;
 
-        leaf op(_ITER_CHECK_RANGE, (iter, null_or_index -- iter, null_or_index)) {
-            assert(PyValue_IsObject(iter));
+        leaf op(_ITER_CHECK_RANGE,
+                (iter: assumed(object) by GET_ITER, null_or_index
+                 -- iter: exact(PyRangeIter_Type), null_or_index))
+            effects(reads) exits(next, miss)
+        {
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(Py_TYPE(r) != &PyRangeIter_Type);
 #ifdef Py_GIL_DISABLED
-            EXIT_IF(!_PyObject_IsUniquelyReferenced((PyObject *)r));
+            EXIT_IF(!_PyObject_IsUniquelyReferenced((PyObject *)r),
+                    "another reference to the range iterator exists");
 #endif
         }
 
         leaf replaced op(_ITER_JUMP_RANGE,
                 (iter: object, null_or_index -- iter, null_or_index))
-            effects(runs_python) exits(next, branch, raise)
+            effects(reads, runs_python(branch|raise)) exits(next, branch, raise)
         {
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
             assert(Py_TYPE(r) == &PyRangeIter_Type);
@@ -4711,10 +4757,13 @@ dummy_func(
             _ITER_JUMP_RANGE +
             _ITER_NEXT_RANGE;
 
-        op(_FOR_ITER_GEN_FRAME, (iter, null -- iter, null, gen_frame)) {
-            assert(PyValue_IsObject(iter));
+        op(_FOR_ITER_GEN_FRAME,
+                (iter: assumed(object) by GET_ITER, null -- iter, null, gen_frame: owned))
+            effects(reads, writes, raises, runs_python, switches_frame)
+            exits(miss, raise, enter)
+        {
             PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(iter);
-            EXIT_IF(Py_TYPE(gen) != &PyGen_Type);
+            EXIT_IF(Py_TYPE(gen) != &PyGen_Type, "the iterator is not a generator");
             EXIT_IF(!gen_may_claim(gen), "the generator runs or has finished");
             STAT_INC(FOR_ITER, hit);
             if (!gen_claim(tstate, gen)) {
@@ -6258,7 +6307,6 @@ dummy_func(
             effects(runs_python) exits(next, raise)
         {
             // The compiler loads the code object from a constant
-            assert(PyValue_IsObject(codeobj_st));
             PyObject *codeobj = PyValue_AsKnownObjectBorrow(codeobj_st);
 
             PyFunctionObject *func_obj = (PyFunctionObject *)
@@ -6336,11 +6384,15 @@ dummy_func(
             result = PyValue_FromObjectSteal(result_o);
         }
 
-        outlined inline_ok inst(FORMAT_SIMPLE, (value -- res)) {
+        outlined inline_ok inst(FORMAT_SIMPLE, (value: consumed -- res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             /* If value is a unicode object, then we know the result
              * of format(value) is value itself. An inline int or float
-             * formats as it prints: format(x, "") is str(x). */
-            if (PyValue_IsInline(value)) {
+             * formats as it prints: format(x, "") is str(x). A language
+             * value is an object or inline, so the test is the same as
+             * the inline test and states `object` on the other path. */
+            if (!PyValue_IsObject(value)) {
                 PyObject *res_o = _PyValue_Str(value);
                 PyValue_CLOSE(value);
                 ERROR_IF(res_o == NULL);

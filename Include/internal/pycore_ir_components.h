@@ -970,10 +970,10 @@
     MACRO(Py_IS_TYPE, \
         ARGS(scalar, scalar), TEST(exact(a1), ), EFFECTS(reads), EXITS()) \
     /* Reviewed G0c2 (Include/object.h): Py_Is(x, Py_None), a pointer         \
-     * compare with the None singleton; it reads no memory. The seed's        \
-     * `reads` is over-declared and kept (sound).                             */ \
+     * compare with the None singleton; it reads no memory, so it declares    \
+     * no effect (G0c9; the seed's `reads` was over-declared).                */ \
     MACRO(Py_IsNone, \
-        ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+        ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
     /* Include/refcount.h: `_Py_NewRef(_PyObject_CAST(obj))`, an increment \
      * (a count change is no effect, 1.3) returning obj: the result is a \
      * new reference the caller owes.  No call (immortal check inline), no \

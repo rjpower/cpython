@@ -14,13 +14,15 @@ enum PollKind(BACKEDGE, CALL_END, RESUME_POLL, JIT_EVENT);
 // P4: positional calls, init cleanup, return
 
 family Call(dst:Dst, fn:Src, args:Args, fb:Fb<Call>)
-  exits(next, enter, raise, redirect, miss, again) ops(CALL);
+  exits(next, enter, raise, redirect, miss, again) ops(CALL)
+  events(CALL, C_RETURN, C_RAISE);
 
 family InitResult(value:Src)
   exits(next, raise) ops(EXIT_INIT_CHECK);
 
 family Return(value:Src)
-  exits(return, exit, raise, redirect) ops(RETURN_VALUE, INTERPRETER_EXIT);
+  exits(return, exit, raise, redirect) ops(RETURN_VALUE, INTERPRETER_EXIT)
+  events(PY_RETURN);
 
 // The caller goes on here when the child returns: the child's value is dst
 point Call.Returned(caller, next_head, clear) keep() spent(fn, args) defs(dst) held();
@@ -29,6 +31,8 @@ point Call.Done(current, next_head, clear) keep() spent(fn, args) defs(dst) held
 point Call.PollFailed(current, site, pending) keep() spent(fn, args) defs(dst) held();
 // The call failed before it entered a frame or returned
 point Call.Failed(current, site, pending) keep() spent(fn, args) defs() held();
+// The PY_RETURN callback raised: the value was taken and is closed
+point Return.EventFailed(current, site, pending) keep() spent(value) defs() held();
 // The value has gone to the caller's return slot
 point Return.Delivered(caller, resume_head, clear) keep() spent(value) defs() held();
 // __init__ returned None, or something else
@@ -249,6 +253,51 @@ extern helper end_poll(t:Thread, f:Frame)
   evidence(
     review: "P4. ceval_macros.h: check_periodics_at_end (_CHECK_PERIODIC_AT_END).",
     contract: "A signal handler or a finalizer may run Python and raise.");
+
+// Observation (the observed wrappers Call.Observed and Return.Observed)
+
+// The CALL event, with the callable and the first argument (self first),
+// before the call runs
+extern helper call_event(t:Thread, f:Frame, at:Site, fn:Src, a:Args)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_CallEvent as int_zero_ok
+  evidence(
+    review: "P4. ceval.c: call_monitor with call_first_argument, as call_run does"
+            "for CALL_INSTRUMENTED.",
+    contract: "The callback may run Python and raise; the operands stay in their"
+              "homes.");
+
+// call_native, then for a callee that is not a Python function its C_RETURN
+// or C_RAISE event; a callback that raises in C_RETURN fails the call
+extern helper call_native_observed(t:Thread, f:Frame, at:Site, fn:Src, a:Args)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_CallNativeObserved as value_or_null
+  evidence(
+    review: "P4. ceval.c: call_vector_impl, then call_run_instrumented_result's"
+            "events (call_monitor_result); a generator function, a Python"
+            "function, fires none, as the old Python path did not.",
+    contract: "Borrows every operand; the result is a new owner, closed if a"
+              "callback raises.");
+
+// The PY_RETURN event with the value held
+extern helper return_event(t:Thread, f:Frame, at:Site, v:O)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises, releases)
+  c _PyRop_ReturnEvent as value_or_null
+  evidence(
+    review: "P4. bytecodes.c: _RETURN_VALUE_EVENT.",
+    contract: "Takes the value and gives it back; if the callback raises the value"
+              "is closed.");
+
+extern helper generator_frame(f:Frame) -> Bool
+  effects(reads)
+  c _PyRop_GeneratorFrame as bool
+  evidence(
+    review: "P4. ceval.c: frame->owner == FRAME_OWNED_BY_GENERATOR, what"
+            "_RETURN_VALUE tests.",
+    contract: "Reads the frame; no memory, no failure.");
 
 // Adaptation evidence (specialize.c): the call specializer in collecting
 // mode fills the site's entry and answers with the arm the call stands for
@@ -519,6 +568,53 @@ arm InitResult.Check split
     exit raise(InitResult.Wrong, e);
 }
 
+// The observed wrapper of every Call arm: the CALL event, then the call as
+// Call.Generic makes it, without adaptation, with the C events of a native
+// callee.  A Python callee's PY_START fires in its own RESUME.
+arm Call.Observed split
+  effects(runs_python, raises, polls, switches_frame)
+  feedback()
+  exits(next, enter, raise)
+{
+  entry():
+    call call_event(thread, frame, site, fn, args) {
+      ok -> Run();
+      err -> EventFailed();
+    }
+  EventFailed(ee:Err):
+    let esaved:Err = retire_failed_args(frame, fn, args, ee);
+    exit raise(Call.Failed, esaved);
+  Run():
+    branch python_target(thread, frame, fn, args) -> Python(), Native();
+  Python():
+    call push_python(thread, frame, fn, args) {
+      entered -> Enter();
+      err -> Failed();
+    }
+  Enter(c:NewFrame):
+    exit enter(c) resume Call.Returned;
+  Failed(e:Err):
+    exit raise(Call.Failed, e);
+  Native():
+    call call_native_observed(thread, frame, site, fn, args) {
+      ok -> Result();
+      err -> NativeFailed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [spent(args), spent(fn), old(dst)] at Call.Done;
+    call end_poll(thread, frame) {
+      ok -> Next();
+      err -> PollFailed();
+    }
+  Next():
+    exit next();
+  PollFailed(pe:Err):
+    exit raise(Call.PollFailed, pe);
+  NativeFailed(ne:Err):
+    let saved:Err = retire_failed_args(frame, fn, args, ne);
+    exit raise(Call.Failed, saved);
+}
+
 arm Return.Ordinary split select(thread_frame, live_scratch)
   effects(reads, writes, releases, switches_frame)
   feedback()
@@ -562,6 +658,38 @@ arm Return.Generator split select(generator_frame)
     let caller:Frame = previous_frame(frame);
     let dying:DeadFrame = depart(thread, frame);
     tail generator_return(caller, r, dying);
+}
+
+// The observed wrapper of every Return arm: the PY_RETURN event, then the
+// return of the frame the word runs in.  Return.External stands for
+// INTERPRETER_EXIT, which has no event and is never instrumented.
+arm Return.Observed split
+  effects(reads, writes, releases, raises, runs_python, switches_frame)
+  feedback()
+  exits(return, exit, raise, redirect)
+{
+  entry():
+    let r:O = acquire(value);
+    call return_event(thread, frame, site, r) {
+      ok -> Observed();
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit raise(Return.EventFailed, e);
+  Observed(v:O):
+    let _:Unit = pin_departing();
+    branch generator_frame(frame) -> Generator(), Thread();
+  Generator():
+    let gcaller:Frame = previous_frame(frame);
+    let gdying:DeadFrame = depart(thread, frame);
+    tail generator_return(gcaller, v, gdying);
+  Thread():
+    let caller:Frame = previous_frame(frame);
+    let dying:DeadFrame = depart(thread, frame);
+    let _:Unit = retire_frame(thread, dying);
+    let h:Head = deliver(caller, v);
+    publish [] retire [] at Return.Delivered;
+    exit return(caller, h);
 }
 
 arm Return.External split select(entry_frame)

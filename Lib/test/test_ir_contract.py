@@ -520,9 +520,10 @@ class ContractTests(unittest.TestCase):
         for co in mine | {c for c in sample.__code__.co_consts
                           if isinstance(c, types.CodeType)}:
             allowed = added
+            # A register instruction arm declares its family's events
             for _, h, *_ in dis._unpack_opargs(dis.IRCode(co).co_code):
-                if h in ROWS:
-                    allowed |= ROWS[h].events
+                if h < len(CONTRACT) and CONTRACT[h] is not None:
+                    allowed |= CONTRACT[h].events
             with self.subTest(code=co.co_name):
                 self.assertEqual(fired.get(co, 0) & ~allowed, 0)
 

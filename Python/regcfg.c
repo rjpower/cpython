@@ -27,6 +27,7 @@
 #include "pycore_opcode_utils.h"      // IS_SCOPE_EXIT_OPCODE()
 #include "pycore_pystate.h"           // _Py_GetConfig()
 #include "pycore_regcfg.h"
+#include "pycore_rop_metadata.h"      // ROP_HANDLER_Call_Generic
 
 #undef SUCCESS
 #undef ERROR
@@ -1016,8 +1017,61 @@ rule_swap(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Emit(t, src, NOP, NULL, 0, NULL, 0, NULL);
 }
 
+/* The rules below emit an op before it takes its operands off the stack:
+ * if the op raises, its handler finds the stack as it was when the op
+ * began, operands included, and the op's depth is that stack's. */
+static int
+stack_underflow(const _PyRegOp *src)
+{
+    PyErr_Format(PyExc_SystemError, "stack underflow at line %d",
+                 src->loc.lineno);
+    return ERROR;
+}
+
+/* CALL is the Call family (Python/register_ops/calls.rop): fn, then the
+ * arguments, self first, in; dst out.  The word starts on Call.Generic,
+ * which installs the arm the call calls for. */
+static int
+rule_call(_PyRegTr *t, const _PyRegOp *src)
+{
+    int nuses = 2 + src->oparg;
+    if (nuses > t->sp) {
+        return stack_underflow(src);
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Call_Generic,
+                                  &t->stack[t->sp - nuses], nuses, &dst, 1,
+                                  NULL));
+    t->sp -= nuses;
+    return _PyRegTr_Push(t, dst);
+}
+
+/* RETURN_VALUE is the Return family: value in.  The frame it leaves and
+ * whether a scratch slot may still own a value select the arm: a return
+ * that finds only its value on the stack leaves none, since each op
+ * retires the inputs it takes and the unwinder the stack above a
+ * handler's depth. */
+static int
+rule_return_value(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int handler = _PyRop_SelectReturn(
+        t->cfg->generator ? ROP_SELECT_GENERATOR_FRAME
+                          : ROP_SELECT_THREAD_FRAME,
+        t->sp == 1 ? ROP_SELECT_VACANT_SCRATCH : ROP_SELECT_LIVE_SCRATCH);
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - 1], 1,
+                                  NULL, 0, NULL));
+    t->sp--;
+    return SUCCESS;
+}
+
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
+    [CALL] = rule_call,
+    [RETURN_VALUE] = rule_return_value,
     [SWAP] = rule_swap,
 };
 

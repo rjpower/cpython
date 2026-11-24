@@ -7,6 +7,7 @@ family's definitions are Python/register_ops/calls.rop.
 """
 
 import dis
+import functools
 import gc
 import sys
 import unittest
@@ -72,7 +73,7 @@ class ReturnTests(unittest.TestCase):
         def f(x):
             return x * 2
         warm(f, 1)
-        self.assertIn("RETURN_VALUE_EMPTY", word_names(f.__code__))
+        self.assertIn("Return.Empty", word_names(f.__code__))
         force(f, "RETURN_VALUE", "Return.Empty")
         self.assertEqual(f(21), 42)
 
@@ -156,7 +157,7 @@ class CallExactTests(unittest.TestCase):
         def f(x):
             return g(x, 1)
         warm(f, 1)
-        self.assertIn("CALL_PY_EXACT_ARGS", word_names(f.__code__))
+        self.assertIn("Call.Exact", word_names(f.__code__))
         force(f, "CALL", "Call.Exact")
         self.assertEqual(f(10), 9)
         self.assertEqual(f(3), 2)
@@ -511,6 +512,306 @@ class CallGenericTests(unittest.TestCase):
         self.assertEqual(r(50), 0)
         with self.assertRaises(RecursionError):
             r(10 ** 6)
+
+
+def target(a, b):
+    return a + b
+
+
+def generator(n):
+    yield n
+    return n + 1
+
+
+class Spot:
+    def __init__(self, x):
+        self.x = x
+
+    def get(self):
+        return self.x
+
+
+def sample():
+    total = target(1, 2)
+    total += len([1])
+    total += Spot(3).get()
+    bound = Spot(4).get
+    total += bound()
+    try:
+        len(5)
+    except TypeError:
+        pass
+    return total + sum(generator(4))
+
+
+SAMPLE_EVENTS = [
+    ("PY_START", "sample"),
+    ("CALL", "sample", "target", 1),
+    ("PY_START", "target"),
+    ("PY_RETURN", "target", 3),
+    ("CALL", "sample", "len", [1]),
+    ("C_RETURN", "sample", "len", [1]),
+    ("CALL", "sample", "Spot", 3),
+    ("PY_START", "__init__"),
+    ("PY_RETURN", "__init__", None),
+    ("C_RETURN", "sample", "Spot", 3),
+    ("CALL", "sample", "get", "Spot"),
+    ("PY_START", "get"),
+    ("PY_RETURN", "get", 3),
+    ("CALL", "sample", "Spot", 4),
+    ("PY_START", "__init__"),
+    ("PY_RETURN", "__init__", None),
+    ("C_RETURN", "sample", "Spot", 4),
+    ("CALL", "sample", "get", "Spot"),
+    ("PY_START", "get"),
+    ("PY_RETURN", "get", 4),
+    ("CALL", "sample", "len", 5),
+    ("C_RAISE", "sample", "len", 5),
+    ("CALL", "sample", "generator", 4),
+    ("CALL", "sample", "sum", "generator"),
+    ("PY_START", "generator"),
+    ("PY_RETURN", "generator", 5),
+    ("C_RETURN", "sample", "sum", "generator"),
+    ("PY_RETURN", "sample", 15),
+]
+
+
+def shown(value):
+    if isinstance(value, (int, list)) or value is None:
+        return value
+    return getattr(value, "__name__", type(value).__name__)
+
+
+class Monitor:
+    """Records the call and return events of the code of the given
+    functions, by event name"""
+    EVENTS = ("PY_START", "PY_RETURN", "CALL", "C_RETURN", "C_RAISE")
+
+    def __init__(self, test, raising=None, callee=None, snapshot=None):
+        self.log = []
+        # Raise in the callbacks of raising (for a callee, its calls only)
+        self.raising = raising
+        self.callee = callee
+        # A function whose words to list when target starts
+        self.snapshot = snapshot
+        self.words = None
+        self.tool = sys.monitoring.DEBUGGER_ID
+        sys.monitoring.use_tool_id(self.tool, "test_rop_call")
+        test.addCleanup(sys.monitoring.free_tool_id, self.tool)
+        test.addCleanup(sys.monitoring.set_events, self.tool, 0)
+        mask = 0
+        for name in self.EVENTS:
+            bit = getattr(sys.monitoring.events, name)
+            mask |= bit
+            sys.monitoring.register_callback(
+                self.tool, bit, functools.partial(self.record, name))
+            test.addCleanup(sys.monitoring.register_callback, self.tool, bit, None)
+        self.mask = mask
+
+    def record(self, name, code, offset, *args):
+        if code.co_filename != __file__ or code in self.OWN:
+            return
+        if name in ("CALL", "C_RETURN", "C_RAISE"):
+            event = (name, code.co_name, shown(args[0]), shown(args[1]))
+        elif name == "PY_RETURN":
+            event = (name, code.co_name, shown(args[0]))
+        else:
+            event = (name, code.co_name)
+        self.log.append(event)
+        if name == "PY_START" and code is target.__code__ and self.snapshot:
+            self.words = word_names(self.snapshot.__code__)
+        if self.raising == name and self.callee in (None, event[2]):
+            raise KeyError(name)
+
+    def run(self, function, *args):
+        # The calls of run and of the callbacks are the monitor's own
+        sys.monitoring.set_events(self.tool, self.mask)
+        try:
+            return function(*args)
+        finally:
+            sys.monitoring.set_events(self.tool, 0)
+
+
+Monitor.OWN = frozenset({Monitor.run.__code__, Monitor.record.__code__,
+                         Monitor.__init__.__code__})
+
+
+@cpython_only
+class ObservationTests(unittest.TestCase):
+    """sys.monitoring and sys.settrace on the words of Call and Return: the
+    observed wrappers Call.Observed and Return.Observed fire the events of
+    the old CALL and RETURN_VALUE"""
+
+    def test_monitoring_events_of_every_arm(self):
+        warm(sample)
+        names = word_names(sample.__code__)
+        for arm in ("Call.Exact", "Call.BoundExact", "Call.Init",
+                    "Call.Generic", "Return.Empty"):
+            self.assertIn(arm, names)
+        self.assertIn("Return.Generator", word_names(generator.__code__))
+        monitor = Monitor(self)
+        self.assertEqual(monitor.run(sample), 15)
+        self.assertEqual(monitor.log, SAMPLE_EVENTS)
+        # Instrumentation starts each word again from the arm the translator
+        # chose, as it deoptimized the old handlers; the words adapt again
+        # once the events are off
+        warm(sample)
+        self.assertEqual(word_names(sample.__code__), names)
+
+    def test_observed_wrappers_run_while_monitoring(self):
+        warm(sample)
+        monitor = Monitor(self, snapshot=sample)
+        monitor.run(sample)
+        calls = [n for n in monitor.words if n.startswith("Call.")]
+        returns = [n for n in monitor.words if n.startswith("Return.")]
+        self.assertEqual(set(calls), {"Call.Generic.Observed"})
+        self.assertEqual(len(calls), 9)
+        self.assertEqual(returns, ["Return.Empty.Observed"])
+
+    def test_forced_arms_under_monitoring(self):
+        def g(a):
+            return a
+        class K:
+            def __init__(self, v):
+                self.v = v
+            def m(self):
+                return self.v
+        def f(k):
+            b = k.m
+            return g(1) + K(2).v + b()
+        k = K(3)
+        warm(f, k)
+        self.assertEqual(
+            [n for n in word_names(f.__code__) if n.startswith("Call.")],
+            ["Call.Exact", "Call.Init", "Call.BoundExact"])
+        monitor = Monitor(self)
+        for which, arm in enumerate(("Call.Exact", "Call.Init",
+                                     "Call.BoundExact")):
+            force(f, "CALL", arm, which)
+        self.assertEqual(monitor.run(f, k), 6)
+        self.assertEqual(monitor.log, [
+            ("PY_START", "f"),
+            ("CALL", "f", "g", 1), ("PY_START", "g"), ("PY_RETURN", "g", 1),
+            ("CALL", "f", "K", 2), ("PY_START", "__init__"),
+            ("PY_RETURN", "__init__", None), ("C_RETURN", "f", "K", 2),
+            ("CALL", "f", "m", "K"), ("PY_START", "m"), ("PY_RETURN", "m", 3),
+            ("PY_RETURN", "f", 6),
+        ])
+
+    def test_call_callback_raises(self):
+        warm(sample)
+        monitor = Monitor(self, raising="CALL")
+        with self.assertRaises(KeyError):
+            monitor.run(sample)
+        self.assertEqual(sample(), 15)
+
+    def test_return_callback_raises_in_the_returning_frame(self):
+        def f(x):
+            try:
+                return [x]
+            except KeyError:
+                return "caught"
+        warm(f, 1)
+        monitor = Monitor(self, raising="PY_RETURN")
+        # The event is the frame's last act: the frame's handlers do not
+        # see its error, as with the old RETURN_VALUE
+        with self.assertRaises(KeyError):
+            monitor.run(f, 1)
+        self.assertEqual(f(1), [1])
+
+    def test_c_return_callback_raises(self):
+        def f(x):
+            try:
+                return len(x)
+            except KeyError:
+                return -1
+        warm(f, [1])
+        monitor = Monitor(self, raising="C_RETURN")
+        self.assertEqual(monitor.run(f, [1]), -1)
+        self.assertEqual(f([1, 2]), 2)
+
+    def test_operands_released_when_an_event_raises(self):
+        def g(a):
+            return a
+        def f():
+            return g(Tracker("arg"))
+        warm(f)
+        Tracker.deaths.clear()
+        monitor = Monitor(self, raising="CALL", callee="g")
+        with self.assertRaises(KeyError):
+            monitor.run(f)
+        gc.collect()
+        self.assertEqual(Tracker.deaths, ["arg"])
+
+    def test_settrace(self):
+        warm(sample)
+        events = []
+        def tracer(frame, event, arg):
+            if frame.f_code.co_filename == __file__:
+                events.append((event, frame.f_code.co_name,
+                               frame.f_lineno - frame.f_code.co_firstlineno))
+            return tracer
+        sys.settrace(tracer)
+        try:
+            sample()
+        finally:
+            sys.settrace(None)
+        calls = [e for e in events if e[0] in ("call", "return")]
+        self.assertEqual([e[:2] for e in calls], [
+            ("call", "sample"),
+            ("call", "target"), ("return", "target"),
+            ("call", "__init__"), ("return", "__init__"),
+            ("call", "get"), ("return", "get"),
+            ("call", "__init__"), ("return", "__init__"),
+            ("call", "get"), ("return", "get"),
+            ("call", "generator"), ("return", "generator"),
+            ("call", "generator"), ("return", "generator"),
+            ("return", "sample"),
+        ])
+        lines = [e[2] for e in events if e[:2] == ("line", "sample")]
+        self.assertEqual(lines, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+
+    def test_jump_over_a_call(self):
+        seen = []
+        def g():
+            seen.append("g")
+            return 1
+        def f():
+            x = 0
+            x = g()
+            return x
+        warm(f)
+        first = f.__code__.co_firstlineno
+        def tracer(frame, event, arg):
+            if frame.f_code is f.__code__ and event == "line" and \
+                    frame.f_lineno == first + 2:
+                frame.f_lineno = first + 3
+            return tracer
+        seen.clear()
+        sys.settrace(tracer)
+        try:
+            result = f()
+        finally:
+            sys.settrace(None)
+        self.assertEqual((result, seen), (0, []))
+        self.assertEqual(f(), 1)
+
+    def test_traceback_through_calls(self):
+        def g(x):
+            return 1 / x
+        def f(x):
+            return g(x)
+        warm(f, 1)
+        try:
+            f(0)
+        except ZeroDivisionError as e:
+            names = []
+            tb = e.__traceback__
+            while tb is not None:
+                names.append((tb.tb_frame.f_code.co_name,
+                              tb.tb_lineno - tb.tb_frame.f_code.co_firstlineno))
+                tb = tb.tb_next
+        self.assertEqual(names[-2:], [("f", 1), ("g", 1)])
 
 
 if __name__ == "__main__":

@@ -209,7 +209,7 @@ class DisTests(unittest.TestCase):
         (i, head, operands), = calls(code)
         call = next(ins for ins in dis.get_instructions(code) if ins.offset == i)
         self.assertEqual(call.opname, "CALL")
-        self.assertEqual(call.handler, "CALL+NO_SELF")
+        self.assertEqual(call.handler, "Call.Generic+NO_SELF")
         self.assertEqual(call.length, 1 + len(operands))
         slots = [s for row in operands for s in row[1:]][:head[3]]
         self.assertEqual(list(call.srcs[-head[3]:]), slots)

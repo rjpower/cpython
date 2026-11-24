@@ -13,7 +13,7 @@ import _testinternalcapi
 from test import support
 
 
-HANDLERS = {**opcode.opmap, **opcode._specialized_opmap, **opcode._ir_opmap}
+HANDLERS = opcode._all_opmap
 NAMES = {number: name for name, number in HANDLERS.items()}
 CONTRACTS = _opcode.get_ir_contract()
 ROUNDS = _testinternalcapi.SPECIALIZATION_THRESHOLD * 3
@@ -69,7 +69,7 @@ class SpecializationPreservationTests(unittest.TestCase):
 
         for value in range(ROUNDS):
             self.assertEqual(build(value).value, value)
-        self.assertIn("CALL_ALLOC_AND_ENTER_INIT", ordinary_names(build))
+        self.assertIn("Call.Init", ordinary_names(build))
         for _, _, row in sites(build):
             self.assertEqual(row.generator_boundary_flags, 0)
 

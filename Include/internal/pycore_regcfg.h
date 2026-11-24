@@ -144,6 +144,7 @@ typedef struct _PyRegBlock {
 typedef struct _PyRegCfg {
     int nlocalsplus;
     int virtual_kwargs;     // compiler-proven immutable, uncaptured kwargs local
+    int generator;          // a return leaves a generator's frame
     int nvregs;             // registers allocated, fresh included
     _PyRegOp *ops;
     int nops;

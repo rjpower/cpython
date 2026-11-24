@@ -252,6 +252,12 @@ CHECK_CASES = [
                   'frame (return): make it split'),
          (40, 16, 'declared exit return is not reached'),
      ]),
+    ('observer', 'arm F.A inline',
+     'arm F.Observed inline', [
+         (23, 1, "an observed wrapper needs its family's events: F declares no "
+                 "events(...)"),
+         (23, 23, 'an observed wrapper adapts nothing (miss)'),
+     ]),
     ('callee', 'box(scale(l))',
      'box(scael(l))', [
          (30, 14, 'no row, macro or primitive scael'),

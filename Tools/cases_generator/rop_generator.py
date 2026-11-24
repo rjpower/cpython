@@ -349,15 +349,31 @@ def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
         0 if has_args else enc.words, writes)
 
 
+def observer(program: Program, family: str) -> str | None:
+    """The family's observed wrapper, the arm `<Family>.Observed`, if it has
+    one: every twin of the family's other arms runs it."""
+    name = f"{family}.{rop_check.OBSERVED}"
+    return name if name in program.arms else None
+
+
+def wrapped_arms(program: Program) -> list[str]:
+    """The arms that have a twin: those of a family that declares events,
+    but for the family's observed wrapper"""
+    return [name for name, arm in program.arms.items()
+            if program.families[arm.family].events
+            and name != observer(program, arm.family)]
+
+
 def arm_entries(p: Products) -> list[ir_numbers.ArmEntry]:
     """Every arm, in handler order, for the per-handler tables, then the
     observed wrapper (twin) of each arm of a family that declares events.
     The old generator's forms, targets and stub plans list the emitted ones
-    after the old handlers (ir_generator.py)."""
+    after the old handlers (ir_generator.py).  A twin runs its family's
+    `<Family>.Observed` arm, whose case and form it names; without one it
+    has neither."""
     shared = [n for n in p.lowered if p.program.arms[n].region.name == "shared"]
     entries = []
-    wrapped = [name for name, arm in p.program.arms.items()
-               if p.program.families[arm.family].events]
+    wrapped = wrapped_arms(p.program)
     twin_index = {name: len(p.program.arms) + k for k, name in enumerate(wrapped)}
     for name, arm in p.program.arms.items():
         fam = p.program.families[arm.family]
@@ -375,10 +391,19 @@ def arm_entries(p: Products) -> list[ir_numbers.ArmEntry]:
             arm_format(p.program, arm), twin_index.get(name), None, emitted))
     for name in wrapped:
         base = entries[p.numbers[name]]
+        runs = observer(p.program, p.program.arms[name].family)
+        if runs is None:
+            entries.append(dataclasses.replace(
+                base, name=base.name + "_Observed", index=twin_index[name],
+                dotted=base.dotted + ".Observed", stub=None, generic=None,
+                twin=None, observes=base.index, emitted=False))
+            continue
+        wrapper = entries[p.numbers[runs]]
         entries.append(dataclasses.replace(
-            base, name=base.name + "_Observed", index=twin_index[name],
-            dotted=base.dotted + ".Observed", stub=None, generic=None,
-            twin=None, observes=base.index, emitted=False))
+            base, name=wrapper.name, index=twin_index[name],
+            dotted=base.dotted + ".Observed", region=wrapper.region,
+            escapes=wrapper.escapes, stub=wrapper.stub, generic=None,
+            twin=None, observes=base.index, emitted=wrapper.emitted))
     return entries
 
 
@@ -485,7 +510,8 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     families = sorted(prog.families)
     out.write("\n#ifndef Py_INTERNAL_ROP_METADATA_H\n#define Py_INTERNAL_ROP_METADATA_H\n")
     out.write('\n#include "opcode_ids.h"        // IR_NUM_OLD_HANDLERS\n#include "pycore_ir.h"          // IR_F_LOCAL_A\n')
-    twins = sum(1 for a in prog.arms.values() if prog.families[a.family].events)
+    wrapped = wrapped_arms(prog)
+    twins = len(wrapped)
     out.write("\n/* The arms' handler ids follow the old handlers, in definition order; the\n"
               " * observed wrappers of the arms of families that declare events follow them */\n")
     out.write("#define ROP_FIRST_HANDLER IR_NUM_OLD_HANDLERS\n")
@@ -502,7 +528,6 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
     out.write("};\n\n/* Handler numbers of the arms */\n")
     for name in prog.arms:
         out.write(f"#define {handler(name)} (ROP_FIRST_HANDLER + {p.numbers[name]})\n")
-    wrapped = [n for n, a in prog.arms.items() if prog.families[a.family].events]
     for k, name in enumerate(wrapped):
         out.write(f"#define {handler(name)}_Observed "
                   f"(ROP_FIRST_HANDLER + {len(prog.arms) + k})\n")

@@ -659,7 +659,32 @@ def check_arm(c: Checker, a: Arm) -> None:
     for d in sorted({d for d in dimensions if dimensions.count(d) > 1}):
         c.report(a.span, a.name, f"select names two members of dimension {d}; one "
                  "holds")
+    if parts[1] == OBSERVED:
+        check_observer(c, a, fam)
     check_graph(c, a.name, a.graph, fam.params, fam, None)
+
+
+# The arm `<Family>.Observed` is the family's observed wrapper: the twin of
+# each of its other arms runs it when the word's stack op is instrumented
+OBSERVED = "Observed"
+
+
+def is_observer(name: str) -> bool:
+    return name.split(".")[-1] == OBSERVED
+
+
+def check_observer(c: Checker, a: Arm, fam: Family) -> None:
+    """An observed wrapper runs for the twins of a family that has events;
+    nothing selects or installs it, and it adapts nothing."""
+    if not fam.events:
+        c.report(a.span, a.name, f"an observed wrapper needs its family's events: "
+                 f"{fam.name} declares no events(...)")
+    if a.select:
+        c.report(a.span, a.name, "an observed wrapper is not selected statically")
+    adapting = sorted(set(a.contract.exits) & {"miss", "again"})
+    if adapting:
+        c.report(a.contract.span, a.name, f"an observed wrapper adapts nothing "
+                 f"({', '.join(adapting)})")
 
 
 # Exits that leave the word's frame, which a completion stub's status
@@ -674,7 +699,8 @@ def select_dimension(m: Select) -> str:
 def check_selection(c: Checker, fam: Family) -> None:
     """Arms chosen by static evidence: every combination of the dimensions
     the family's arms name is admitted by exactly one arm."""
-    arms = [a for a in c.arms.values() if a.name.split(".")[0] == fam.name]
+    arms = [a for a in c.arms.values()
+            if a.name.split(".")[0] == fam.name and not is_observer(a.name)]
     if not any(a.select for a in arms):
         return
     if "miss" in fam.exits:

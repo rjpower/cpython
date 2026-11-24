@@ -1624,8 +1624,8 @@ class TestFrameTransfers(JitTestCase):
                          {("callee", "inline", "template", "RESUME_CHECK"),
                           ("caller", "inline", "template", "RESUME_CHECK")}, plans)
         self.assertEqual([p[1] for p in resumes], ["0", "0"], plans)
-        transfers = [p for p in plans if p[2].startswith(("CALL_PY", "RETURN"))]
-        self.assertTrue(any(p[2].startswith("CALL_PY") for p in transfers), plans)
+        transfers = [p for p in plans if p[2].startswith(("Call.", "Return."))]
+        self.assertTrue(any(p[2] == "Call.Exact" for p in transfers), plans)
         for p in transfers:
             self.assertEqual(p[4], "form", p)
         self.assert_switched(outs["always"], "plans", 4)

@@ -657,6 +657,82 @@ ir_run_InitResult_Check(
 }
 
 static Py_NO_INLINE _PyIRTransfer
+ir_run_Call_Observed(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // Call.Observed (split)
+    int opcode = ROP_HANDLER_Call_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 1 + ((IR_C(ir_word) + IR_OPERANDS_PER_WORD - 1) / IR_OPERANDS_PER_WORD);
+    INSTRUCTION_STATS(ROP_HANDLER_Call_Observed);
+    PyValue *const home_fn = &IR_SLOT(IR_B(ir_word));
+    int ret1;
+    void * ret2;
+    PyValue ret3;
+    PyValue own_fn = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    int ret4;
+    _PyInterpreterFrame * c;
+    PyValue z;
+    IR_STUB_ESCAPE();
+    ret1 = _PyRop_CallEvent(tstate, frame, this_instr, home_fn, this_instr);
+    if (ret1 < 0) {
+        goto rop_Call_Observed_EventFailed;
+    }
+    if (_PyRop_PythonTarget(tstate, frame, home_fn, this_instr)) {
+        goto rop_Call_Observed_Python;
+    }
+    goto rop_Call_Observed_Native;
+    rop_Call_Observed_Python:
+    IR_STUB_ESCAPE();
+    ret2 = _PyRop_PushPython(tstate, frame, home_fn, this_instr);
+    if (ret2 == NULL) {
+        goto rop_Call_Observed_Failed;
+    }
+    c = ret2;
+    ROP_ENTER(c, IR_A(ir_word));
+    rop_Call_Observed_EventFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 5, this_instr);
+    rop_Call_Observed_Native:
+    IR_STUB_ESCAPE();
+    ret3 = _PyRop_CallNativeObserved(tstate, frame, this_instr, home_fn, this_instr);
+    if (PyValue_IsNull(ret3)) {
+        goto rop_Call_Observed_NativeFailed;
+    }
+    z = ret3;
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_fn = _PyFrame_TakeHome(frame, home_fn);
+    }
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, z);
+    _PyValue_CheckHome(*home_dst);
+    _PyRop_SpendArgs(frame, this_instr, home_dst);
+    PyValue_XCLOSE(own_fn);
+    PyValue_XCLOSE(old_dst);
+    IR_STUB_ESCAPE();
+    ret4 = _PyRop_EndPoll(tstate, frame);
+    if (ret4 < 0) {
+        goto rop_Call_Observed_PollFailed;
+    }
+    DISPATCH();
+    rop_Call_Observed_NativeFailed:
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFailedArgs(frame, home_fn, this_instr);
+    PROCESS_ERROR_AT(RAISE, 5, this_instr);
+    rop_Call_Observed_PollFailed:
+    PROCESS_ERROR_AT(RAISE, 6, this_instr);
+    rop_Call_Observed_Failed:
+    PROCESS_ERROR_AT(RAISE, 5, this_instr);
+}
+
+static Py_NO_INLINE _PyIRTransfer
 ir_run_Return_Ordinary(
     PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
 {
@@ -739,6 +815,57 @@ ir_run_Return_Generator(
     caller = _PyRop_PreviousFrame(frame);
     dying = _PyRop_Depart(tstate, frame);
     ROP_GEN_RETURN(caller, r, dying);
+}
+
+static Py_NO_INLINE _PyIRTransfer
+ir_run_Return_Observed(
+    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
+{
+    // Return.Observed (split)
+    int opcode = ROP_HANDLER_Return_Observed;
+    (void)opcode;
+    _PyIRWord *const this_instr = next_instr;
+    (void)this_instr;
+    frame->instr_ptr = next_instr;
+    IR_HOLD_NEXT();
+    next_instr += 1;
+    INSTRUCTION_STATS(ROP_HANDLER_Return_Observed);
+    PyValue *const home_value = &IR_SLOT(IR_A(ir_word));
+    PyValue r;
+    PyValue ret1;
+    _PyInterpreterFrame * gcaller;
+    _PyInterpreterFrame * gdying;
+    _PyInterpreterFrame * caller;
+    _PyInterpreterFrame * dying;
+    _PyInstr * h;
+    PyValue v;
+    r = ((ir_word & IR_F_LOCAL_A) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
+    IR_STUB_ESCAPE();
+    ret1 = _PyRop_ReturnEvent(tstate, frame, this_instr, r);
+    if (PyValue_IsNull(ret1)) {
+        goto rop_Return_Observed_Failed;
+    }
+    v = ret1;
+    IR_STUB_ESCAPE();
+    IR_PIN_DEPARTING();
+    if (_PyRop_GeneratorFrame(frame)) {
+        goto rop_Return_Observed_Generator;
+    }
+    goto rop_Return_Observed_Thread;
+    rop_Return_Observed_Generator:
+    gcaller = _PyRop_PreviousFrame(frame);
+    gdying = _PyRop_Depart(tstate, frame);
+    ROP_GEN_RETURN(gcaller, v, gdying);
+    rop_Return_Observed_Failed:
+    PROCESS_ERROR_AT(RAISE, 15, this_instr);
+    rop_Return_Observed_Thread:
+    caller = _PyRop_PreviousFrame(frame);
+    dying = _PyRop_Depart(tstate, frame);
+    IR_STUB_ESCAPE();
+    _PyRop_RetireFrame(tstate, dying);
+    IR_STUB_ESCAPE();
+    h = _PyRop_Deliver(caller, v);
+    ROP_RETURN(caller, h);
 }
 
 static Py_NO_INLINE _PyIRTransfer

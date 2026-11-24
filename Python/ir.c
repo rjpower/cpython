@@ -226,7 +226,8 @@ generator_completed_shape(const _PyIRWord *words, int nwords, int nl, int pc)
         return _PyIR_GEN_CONSUMER_STORE_LOCAL;
     }
     if ((generator_is(words[target], RETURN_VALUE) ||
-         generator_is(words[target], RETURN_VALUE_EMPTY)) &&
+         generator_is(words[target], RETURN_VALUE_EMPTY) ||
+         _PyIR_BaseOpcode(IR_HANDLER(words[target])) == RETURN_VALUE) &&
         (int)IR_A(words[target]) == home)
     {
         return _PyIR_GEN_CONSUMER_RETURN;
@@ -739,10 +740,12 @@ ordinary_handler_for(int handler, int opcode)
     }
     if (handler >= IR_NUM_OLD_HANDLERS && fmt->twin != 0 &&
         opcode >= MIN_INSTRUMENTED_OPCODE && opcode < IR_FIRST_ONLY_HANDLER &&
-        _PyOpcode_Deopt[opcode] == _PyIR_BaseOpcode(handler))
+        _PyIR_HandlerBase[opcode] == _PyIR_HandlerBase[handler])
     {
         // A register instruction arm of a family that has events: the
-        // instrumented form of its stack op runs the arm's observed wrapper.
+        // instrumented form of its stack op runs the arm's observed
+        // wrapper.  The handlers' base, not the deopt table, takes an
+        // instrumented opcode to its stack op.
         return fmt->twin;
     }
     if (handler == RETURN_VALUE_EMPTY || handler == INSTRUMENTED_RETURN_VALUE_EMPTY) {

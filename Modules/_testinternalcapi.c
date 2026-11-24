@@ -1903,9 +1903,7 @@ get_ir(PyObject *self, PyObject *args)
     for (Py_ssize_t w = 0; w < (Py_ssize_t)ir->nwords; w++) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(words[w]);
         int handler = IR_HANDLER(word);
-        const char *name = handler >= ROP_FIRST_HANDLER
-            ? _PyRop_Arms[handler - ROP_FIRST_HANDLER].name
-            : handler < IR_FIRST_ONLY_HANDLER
+        const char *name = handler < IR_FIRST_ONLY_HANDLER
             ? _PyOpcode_OpName[handler]
             : _PyIR_OnlyNames[handler - IR_FIRST_ONLY_HANDLER];
         /* The canonical flags follow the name, as in dis; the executing

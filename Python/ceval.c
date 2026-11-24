@@ -2279,6 +2279,33 @@ static _PyInterpreterFrame *_PyRop_PushPython(PyThreadState *tstate,
 static PyValue _PyRop_CallNative(PyThreadState *tstate,
                                  _PyInterpreterFrame *frame, PyValue *fn,
                                  const _PyIRWord *head);
+static int _PyRop_CallEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                            _PyInstr *site, PyValue *fn,
+                            const _PyIRWord *head);
+static PyValue _PyRop_CallNativeObserved(PyThreadState *tstate,
+                                         _PyInterpreterFrame *frame,
+                                         _PyInstr *site, PyValue *fn,
+                                         const _PyIRWord *head);
+
+/* The rows of Return.Observed */
+
+static Py_NO_INLINE PyValue
+_PyRop_ReturnEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   _PyInstr *site, PyValue value)
+{
+    if (_Py_call_instrumentation_arg(tstate, PY_MONITORING_EVENT_PY_RETURN,
+                                     frame, site, value)) {
+        PyValue_CLOSE(value);
+        return PyValue_NULL;
+    }
+    return value;
+}
+
+static inline bool
+_PyRop_GeneratorFrame(_PyInterpreterFrame *frame)
+{
+    return frame->owner == FRAME_OWNED_BY_GENERATOR;
+}
 
 static inline _PyInterpreterFrame *
 _PyRop_PreviousFrame(_PyInterpreterFrame *frame)
@@ -5798,6 +5825,51 @@ _PyRop_CallNative(PyThreadState *tstate, _PyInterpreterFrame *frame,
     PyValue callable = call_expand_method(*fn, rop_call_self_state(frame, head),
                                           &receiver);
     return call_vector_impl(tstate, frame, head, callable, receiver, 0);
+}
+
+/* The rows of Call.Observed: the events of call_run with CALL_INSTRUMENTED */
+
+static Py_NO_INLINE int
+_PyRop_CallEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                 _PyInstr *site, PyValue *fn, const _PyIRWord *head)
+{
+    assert(fn == &_PyFrame_Slots(frame)[IR_B(head[0])]);
+    PyValue receiver;
+    PyValue callable = call_expand_method(*fn, rop_call_self_state(frame, head),
+                                          &receiver);
+    PyValue first = call_first_argument(_PyFrame_Slots(frame), head,
+                                        receiver, 0);
+    return call_monitor(tstate, frame, site, callable, first);
+}
+
+/* A Python function, which a generator function is, fires no C event: the
+ * old call pushed its frame */
+static Py_NO_INLINE PyValue
+_PyRop_CallNativeObserved(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                          _PyInstr *site, PyValue *fn, const _PyIRWord *head)
+{
+    assert(fn == &_PyFrame_Slots(frame)[IR_B(head[0])]);
+    PyValue receiver;
+    PyValue callable = call_expand_method(*fn, rop_call_self_state(frame, head),
+                                          &receiver);
+    PyValue first = call_first_argument(_PyFrame_Slots(frame), head,
+                                        receiver, 0);
+    PyValue result = call_vector_impl(tstate, frame, site, callable, receiver,
+                                      0);
+    if (call_is_python_function(tstate, callable)) {
+        return result;
+    }
+    int refreshed = call_refresh(tstate, frame, site);
+    int failed = call_monitor_result(tstate, frame, site, callable, first,
+                                     PyValue_IsNull(result) || refreshed < 0);
+    if (!failed && refreshed == 0) {
+        refreshed = call_refresh(tstate, frame, site);
+    }
+    if (failed || refreshed < 0) {
+        PyValue_XCLOSE(result);
+        return PyValue_NULL;
+    }
+    return result;
 }
 
 /* The positional arguments of a CALL_FUNCTION_EX that are not a tuple, as a

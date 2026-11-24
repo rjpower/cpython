@@ -398,6 +398,7 @@ class CSource(enum.Enum):
     value = "value"                  # a status_value's value field
     exception = "exception"          # the pending exception: an Err token
     nonzero = "nonzero"              # the C result compared with 0, as a Bool
+    out = "out"                      # the scalar written through the last C parameter
 
 
 @dataclass(frozen=True, slots=True)
@@ -409,6 +410,9 @@ class COutcome:
     subject: CSource
     payload: tuple[CSource, ...]
     raised: bool
+    # The logical case this outcome selects, when the convention fixes it by
+    # name; None leaves it to the row's case order
+    case: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -463,6 +467,12 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
     _conv("bool_cases", CReturn.bool,
           COutcome(CTest.true, _RES, (), False),
           COutcome(CTest.false, _RES, (), False)),
+    # A checked scalar operation: the bool says whether it overflowed, and the
+    # scalar written through the last parameter is the result (false, the
+    # `fits` case) or the wide result (true, the `overflow` case)
+    _conv("bool_out", CReturn.bool,
+          COutcome(CTest.false, _RES, (CSource.out,), False, "fits"),
+          COutcome(CTest.true, _RES, (CSource.out,), False, "overflow")),
     # _PyStatusValue: status 0 the value, 1 the second kind, -1 raised
     _conv("status_value", CReturn.status_value,
           COutcome(CTest.zero, _RES, (_VAL,), False),

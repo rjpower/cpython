@@ -115,13 +115,19 @@ def token_ids(analysis) -> dict[int, str]:
 
 
 def strip_clauses(analysis) -> None:
-    "every uop of analysis without its clauses: today's inference"
+    """every uop of analysis without its clauses and its outputs'
+    replaces(x): today's inference"""
+    def strip(uop) -> None:
+        object.__setattr__(uop, "clauses", {})
+        for item in uop.stack.outputs:
+            object.__setattr__(item, "replaces", "")
+
     for inst in analysis.instructions.values():
         for part in inst.parts:
             if isinstance(part, analyzer.Uop):
-                object.__setattr__(part, "clauses", {})
+                strip(part)
     for uop in analysis.uops.values():
-        object.__setattr__(uop, "clauses", {})
+        strip(uop)
 
 
 def normalized(analysis, records) -> dict:

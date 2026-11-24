@@ -4571,7 +4571,7 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        replaced op(_FOR_ITER, (iter, index: consumed -- iter, next_index: inline encoding(tagged_index|null), next: owned))
+        replaced op(_FOR_ITER, (iter, index: consumed -- iter, next_index: inline encoding(tagged_index|null) replaces(index), next: owned))
             effects(runs_python) exits(next, branch, raise)
         {
             PyValue cursor = TAKE(index);
@@ -4597,7 +4597,7 @@ dummy_func(
         // exits.
         replaced op(_FOR_ITER_VIRTUAL,
                 (iter: assumed(object) by GET_ITER, index: consumed
-                 -- iter, next_index: inline encoding(tagged_index|null), next: owned))
+                 -- iter, next_index: inline encoding(tagged_index|null) replaces(index), next: owned))
             effects(runs_python) exits(next, branch, raise, miss)
         {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
@@ -4719,7 +4719,7 @@ dummy_func(
         }
 
         leaf replaced op(_ITER_NEXT_LIST,
-                (iter: object, index: consumed -- iter, next_index: inline, next: owned))
+                (iter: object, index: consumed -- iter, next_index: inline replaces(index), next: owned))
             effects(reads) exits(next)
         {
             PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
@@ -4758,7 +4758,7 @@ dummy_func(
         }
 
         leaf op(_ITER_NEXT_TUPLE,
-                (iter: object, index: consumed -- iter, next_index: inline, next: owned))
+                (iter: object, index: consumed -- iter, next_index: inline replaces(index), next: owned))
             effects(reads) exits(next)
         {
             PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);

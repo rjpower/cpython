@@ -163,6 +163,11 @@ class StackItem:
     nullable: bool = False
     # The declared mode and facts (parsing.StackEffect.contract)
     contract: tuple[str, ...] = ()
+    # An output's replaces(x): it takes over the stack entry of input x, at
+    # its position, with a new value (a cursor that advances, F16); on an
+    # input, that an output replaces it.  Declared, never inferred
+    replaces: str = ""
+    replaced: bool = False
 
     def __str__(self) -> str:
         size = f"[{self.size}]" if self.size else ""
@@ -418,7 +423,17 @@ def override_error(
 def convert_stack_item(
     item: parser.StackEffect, replace_op_arg_1: str | None
 ) -> StackItem:
-    return StackItem(item.name, item.size, nullable=item.nullable, contract=item.contract)
+    contract, replaces = [], ""
+    for word in item.contract:
+        m = re.fullmatch(r"replaces\((\w+)\)", word)
+        if m is None:
+            contract.append(word)
+        elif replaces:
+            raise analysis_error(f"`{item.name}` replaces two inputs", item.first_token)
+        else:
+            replaces = m.group(1)
+    return StackItem(item.name, item.size, nullable=item.nullable,
+                     contract=tuple(contract), replaces=replaces)
 
 def check_unused(stack: list[StackItem], input_names: dict[str, lexer.Token]) -> None:
     "Unused items cannot be on the stack above used, non-peek items"
@@ -428,6 +443,9 @@ def check_unused(stack: list[StackItem], input_names: dict[str, lexer.Token]) ->
             seen_unused = True
         elif item.peek:
             break
+        elif item.replaced:
+            # Its entry stays where it is, with the output's new value
+            continue
         elif seen_unused:
             raise analysis_error(f"Cannot have used input '{item.name}' below an unused value on the stack", input_names[item.name])
 
@@ -452,6 +470,27 @@ def analyze_stack(
     # Mark variables with matching names at the base of the stack as "peek"
     modified = False
     input_names: dict[str, lexer.Token] = { i.name : i.first_token for i in op.inputs if i.name != "unused" }
+    for item in inputs:
+        if item.replaces:
+            raise analysis_error(f"replaces({item.replaces}) is an output's: `{item.name}` "
+                                 "is an input", input_names.get(item.name, op.name))
+    for output, effect in zip(outputs, op.outputs):
+        if not output.replaces:
+            continue
+        position = next((k for k, i in enumerate(inputs) if i.name == output.replaces), None)
+        if position is None:
+            raise analysis_error(f"`{output.name}` replaces `{output.replaces}`, which is "
+                                 "no input", effect.first_token)
+        if output.replaces == output.name:
+            raise analysis_error(f"`{output.name}` replaces itself: it passes through, "
+                                 "so nothing replaces its entry", effect.first_token)
+        if position >= len(outputs) or outputs[position] is not output:
+            raise analysis_error(f"`{output.name}` replaces `{output.replaces}`, which is at "
+                                 "another stack position", effect.first_token)
+        if output.replaces in (o.name for o in outputs):
+            raise analysis_error(f"`{output.name}` replaces `{output.replaces}`, which an "
+                                 "output passes through", effect.first_token)
+        inputs[position].replaced = True
     for input, output in itertools.zip_longest(inputs, outputs):
         if output is None:
             pass

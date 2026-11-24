@@ -568,6 +568,67 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual(ir_generator.normal_transfer_kind(swap, formats["SWAP"]),
                          "_PyIR_TRANSFER_SWAP")
 
+    def test_replacements_are_declared(self):
+        # F16's cursor: each uop that advances it declares the entry that
+        # its next_index takes over, and only those replace an input
+        replaced = {(name, j) for name, uop in analysis.uops.items()
+                    for j in range(len(uop.stack.outputs))
+                    if ir_records.replaced_input(uop, j) is not None}
+        self.assertEqual(replaced, {(name, 1) for name in (
+            "_FOR_ITER", "_FOR_ITER_VIRTUAL", "_ITER_NEXT_LIST", "_ITER_NEXT_TUPLE")})
+        for name, _ in replaced:
+            output = analysis.uops[name].stack.outputs[1]
+            self.assertEqual((output.name, output.replaces), ("next_index", "index"))
+
+    def test_an_undeclared_replacement_is_refused(self):
+        # Renamed outputs above unused[oparg] move no entry only if declared
+        self.refuses("""
+            inst(OP, (callable: consumed, self_or_null: consumed, unused[oparg]
+                      -- init: owned, self: owned, unused[oparg]))
+                effects() exits(next)
+            {
+                init = callable;
+                self = self_or_null;
+            }
+        """, r"Cannot have used input 'self_or_null' below an unused value")
+
+    def test_a_replacement_names_a_consumed_input_at_its_position(self):
+        self.refuses("""
+            inst(OP, (iter, index -- iter, index: replaces(index)))
+                effects() exits(next)
+            {
+            }
+        """, r"`index` replaces itself")
+        self.refuses("""
+            inst(OP, (iter: consumed, index: consumed -- next_index: inline replaces(index)))
+                effects() exits(next)
+            {
+                next_index = index;
+                PyValue_CLOSE(iter);
+            }
+        """, r"`next_index` replaces `index`, which is at another stack position")
+        self.refuses("""
+            inst(OP, (iter: object, index: consumed -- iter, next_index: inline replaces(spam)))
+                effects() exits(next)
+            {
+                next_index = index;
+            }
+        """, r"`next_index` replaces `spam`, which is no input")
+        self.refuses("""
+            inst(OP, (iter: object, index: borrowed -- iter, next_index: inline replaces(index)))
+                effects() exits(next)
+            {
+                next_index = index;
+            }
+        """, r"OP: `next_index` replaces `index`, which is borrowed, not consumed")
+        self.refuses("""
+            inst(OP, (iter: object, index: consumed replaces(iter) -- iter, next_index: inline))
+                effects() exits(next)
+            {
+                next_index = index;
+            }
+        """, r"replaces\(iter\) is an output's: `index` is an input")
+
     # V1, V2
 
     def test_undeclared_callee(self):

@@ -155,6 +155,8 @@ EXTRA_ROWS = """
     HELPER(spam_write, void, (PyObject *), ARGS(object), NONE, EFFECTS(writes)) \\
     INTRINSIC(SPAM_FT_ONLY, ARGS(scalar), SCALAR, BUILD(free_threaded)) \\
     MACRO(SPAM_RAISE, ARGS(scalar), NONE, EFFECTS(raises), EXITS(raise)) \\
+    HELPER(T, PyValue, (PyValue), ARGS(taken), \\
+           VALUE_OR_NULL(owned), EFFECTS(allocates, raises)) \\
     MACRO(SPAM_GUARD, ARGS(scalar), NONE, EFFECTS(), EXITS(miss))
 """
 
@@ -812,6 +814,96 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual(ir_contract_diff.differences(records, parts),
                          ["OP/_OP: effects: declared ['READS_HEAP'], inferred []",
                           "1 declared uops compared"])
+
+    # G0a2: Astra's witnesses against 38a1500dbba (astra/g0a-review.md)
+
+    def test_overwritten_obligation(self):
+        self.refuses("""
+            op(_LEAK, (a: consumed, b: consumed --)) effects(releases) exits(next) {
+                PyValue t = a;
+                t = b;
+                PyValue_CLOSE_SPECIALIZED(t, _Py_Dealloc);
+            }
+        """, r"_LEAK: `t` is assigned while it holds an owner, which would leak")
+
+    def test_discarded_owned_result(self):
+        self.refuses("""
+            op(_LEAK_AND_MISS, (v -- v: inline_int)) effects() exits(next, miss) {
+                PyValue_XDUP(v);
+                EXIT_IF(!PyValue_IsInlineInt(v));
+            }
+        """, r"_LEAK_AND_MISS: `PyValue_XDUP \( v \)` discards the owned result of "
+             r"PyValue_XDUP")
+
+    def test_unmodelled_forms_are_refused(self):
+        source = """
+            op(_FORM, (a: consumed, b: consumed -- r: owned)) effects(releases) exits(next) {
+                %s
+            }
+        """
+        self.refuses(source % "PyValue t = oparg ? a : b;",
+                     r"`PyValue t = oparg \? a : b` uses `a` in a form the walk does not "
+                     r"model")
+        self.refuses(source % "goto done;", r"`goto` is a form the walk does not model")
+        self.refuses(source % "r = PyValue_XDUP(PyValue_XDUP(a));",
+                     r"calls PyValue_XDUP, which makes an owner, in a form the walk does "
+                     r"not model")
+
+    def test_taken_argument_is_kept_on_failure(self):
+        # T takes x only if it succeeds: on its NULL, x is still the uop's
+        self.refuses("""
+            op(_BAD, (x: consumed -- r: owned))
+                effects(allocates, raises) exits(next, raise) {
+                r = T(x);
+                ERROR_IF(PyValue_IsNull(r));
+            }
+        """, r"_BAD: on raise, `x` is still owned, but the site declares consumed")
+        # Steal on success: a taken input is kept on raise
+        self.verify("""
+            op(_GOOD, (x: taken -- r: owned))
+                effects(allocates, raises) exits(next, raise) {
+                r = T(x);
+                ERROR_IF(PyValue_IsNull(r));
+            }
+        """)
+        # A consumed input released where T fails
+        self.verify("""
+            op(_GOOD, (x: consumed exact(PyLong_Type) -- r: owned))
+                effects(allocates, raises, writes) exits(next, raise) {
+                r = T(x);
+                if (PyValue_IsNull(r)) {
+                    PyValue_CLOSE_SPECIALIZED(x, _PyLong_ExactDealloc);
+                    ERROR_IF(true);
+                }
+            }
+        """)
+        self.refuses("""
+            op(_UNTESTED, (x: taken -- r: owned))
+                effects(allocates, raises) exits(next) {
+                r = T(x);
+            }
+        """, r"on next, `x` is taken by a row only if `r` reports success, which nothing "
+             r"tests here")
+
+    def test_row_guard_after_a_detachment(self):
+        self.refuses("""
+            op(_MOVE, (x: taken -- y: moved(x))) effects() exits(next) { y = x; }
+            op(_GUARD, (y -- y)) effects() exits(next, miss) { SPAM_GUARD(oparg); }
+            macro(BAD) = _MOVE + _GUARD;
+        """, r"BAD: the guard in _GUARD follows the skeleton's detachment of `x` after "
+             r"_MOVE, so the word cannot restart")
+
+    def test_unknown_depth_keeps_restartability(self):
+        self.refuses("""
+            op(_WRITE, (--)) effects(writes) exits(next) feedback(write(counter)) {
+                _PyFb_AdvanceCounter(FB_COUNTER());
+            }
+            op(_GUARD_ARRAY, (xs[oparg] -- xs[oparg])) effects() exits(next, miss) {
+                EXIT_IF(oparg == 0, "test");
+            }
+            macro(BAD_ARRAY) = _WRITE + _GUARD_ARRAY;
+        """, r"BAD_ARRAY: the guard in _GUARD_ARRAY follows _WRITE, which may writes, so "
+             r"the word cannot restart")
 
     def test_intrinsic_outside_its_build(self):
         self.refuses("""

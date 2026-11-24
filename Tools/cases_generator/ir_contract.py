@@ -4246,11 +4246,14 @@ def position_writes(tokens: list[Token]) -> list[tuple[Token, str]]:
 def check_position_writes(uop: Uop, contract: Contract) -> None:
     """V12: a body that writes the frame's position (next_instr or
     frame->instr_ptr) declares an exit that leaves there, jump or redirect.
-    Two writes leave by another exit that reads them: next_instr after a
-    frame switch places the frame switched to (_YIELD_VALUE's
-    `next_instr = frame->return_pc`), and frame->instr_ptr in a uop whose
-    every exit is raise or yield is where the unwinder or the resumed frame
-    continues (RERAISE, _YIELD_VALUE)"""
+    Two writes are allowed because a declared exit fixes their destination:
+    - next_instr after a frame switch is where the switch exit (yield,
+      enter, return) continues, in the frame switched to: _YIELD_VALUE's
+      `next_instr = frame->return_pc`, the caller's resume point;
+    - frame->instr_ptr in a uop whose every exit is raise or yield is where
+      that exit continues: the unwinder looks up the handler at it
+      (exception_unwind; RERAISE), and the suspended frame resumes at it
+      (_YIELD_VALUE's `frame->instr_ptr++`)"""
     switches = [s.begin for s in analyzer.frame_switch_sites(list(uop.body.tokens()))]
     exits = set(contract.exits)
     for tkn, written in position_writes(_tokens(uop)):

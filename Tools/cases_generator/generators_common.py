@@ -431,11 +431,12 @@ class Emitter:
         verifier holds the declaration to the body (ir_contract.py)"""
         import ir_contract
         held = {t.text for t in holding}
-        contract = ir_contract.contract_of(uop) if isinstance(uop, Uop) else None
+        # A label has no stack items of its own; a uop declares its contract
+        contract = ir_contract.declared_contract(uop) if isinstance(uop, Uop) else None
         for var in storage.inputs:
             if var.name == "unused" or var.item.peek:
                 continue
-            item = contract.input(var.name) if contract else None
+            item = contract.input(var.name) if contract is not None else None
             untouched = item is not None and item.mode in ("borrowed", "taken", "closed")
             live = storage.is_live(var)
             if var.name in held and not live:

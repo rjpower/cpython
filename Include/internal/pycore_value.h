@@ -35,6 +35,16 @@ _PyValueGuarded_Load(_PyValueGuarded guarded)
     return value;
 }
 
+/* A guarded word that the specializer stores only as an object: the
+   descriptor (a classmethod, a getset descriptor) that the site's guards
+   name.  Its row says `assumed(object) by specializer`, which every
+   execution form asserts. */
+static inline PyValueBorrow
+_PyValueGuarded_LoadObject(_PyValueGuarded guarded)
+{
+    return _PyValueGuarded_Load(guarded);
+}
+
 /* Identities that name what the compiler shows of a word, so that a handler
    states it where it reads the word (its row's `assumed(...) by compiler`,
    which every execution form asserts): an item of the code object's

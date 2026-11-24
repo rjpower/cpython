@@ -32,7 +32,9 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
 
     def test_guarded_operand_has_metadata_type(self):
         output = self.generate("""
-        inst(LOAD_ATTR, (class_value/4, owner -- attr)) {
+        inst(LOAD_ATTR, (class_value/4, owner: consumed -- attr: owned))
+            effects(releases) exits(next)
+        {
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
             attr = PyValue_XDUP(found);
             DECREF_INPUTS();
@@ -54,7 +56,9 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
             with self.subTest(size=size):
                 with self.assertRaisesRegex(SyntaxError, "must use four units"):
                     self.generate(f"""
-                    inst(LOAD_ATTR, (class_value/{size}, owner -- attr)) {{
+                    inst(LOAD_ATTR, (class_value/{size}, owner: consumed -- attr: owned))
+                        effects(releases) exits(next)
+                    {{
                         attr = PyValue_DUP(owner);
                         PyValue_CLOSE(owner);
                     }}
@@ -62,12 +66,16 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
 
     def test_family_head_has_no_retirement_reload(self):
         source = """
-        inst(OP, (class_value/4, owner -- attr)) {
+        inst(OP, (class_value/4, owner: consumed -- attr: owned))
+            effects(releases) exits(next)
+        {
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
             attr = PyValue_XDUP(found);
             DECREF_INPUTS();
         }
-        inst(OP_SPECIALIZED, (class_value/4, owner -- attr)) {
+        inst(OP_SPECIALIZED, (class_value/4, owner: consumed -- attr: owned))
+            effects(releases) exits(next)
+        {
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
             attr = PyValue_XDUP(found);
             DECREF_INPUTS();
@@ -86,7 +94,9 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
     def test_guarded_operand_rejects_wrong_feedback_type(self):
         with self.assertRaisesRegex(SyntaxError, "names no field of _PyFbUnary"):
             self.generate("""
-            inst(TO_BOOL, (class_value/4, owner -- attr)) {
+            inst(TO_BOOL, (class_value/4, owner: consumed -- attr: owned))
+                effects(releases) exits(next)
+            {
                 attr = PyValue_DUP(owner);
                 PyValue_CLOSE(owner);
             }
@@ -155,7 +165,8 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
         positions = [handler.index(text) for text in (
             "#ifdef Py_GIL_DISABLED", "Py_TYPE(owner_o) != &PyType_Type",
             "class_version = fb->class_version", "tp_version_tag",
-            "_PyValueGuarded_Load(class_value)",
+            "_PyValueGuarded_LoadObject(class_value)",
+            "assert(PyValue_IsObject(descriptor));",
             "Py_IS_TYPE(cm, &PyClassMethod_Type)",
             "_PyClassMethod_GetFunc(cm)",
             "target == NULL || !Py_IS_TYPE(target, &PyFunction_Type)",
@@ -167,7 +178,7 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
         self.assertIn("const bool gil_disabled = true;", handler)
         self.assertIn("const bool gil_disabled = false;", handler)
         self.assertLess(handler.index("if (gil_disabled)"),
-                        handler.index("_PyValueGuarded_Load(class_value)"))
+                        handler.index("_PyValueGuarded_LoadObject(class_value)"))
         self.assertNotIn("retire_published_values(", handler)
         self.assertNotIn("PyObject *class_value", handler)
 
@@ -195,8 +206,32 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
         source = source.replace("_PyClassMethod_GetFunc(cm)", "unknown_getter(cm)")
-        with self.assertRaisesRegex(SyntaxError, "view 'owner' is read after a call"):
-            self.generate(source, runtime=True)
+        # The verifier refuses a callee that has no row, before the generator
+        # asks whether the call can run code.  So the stand-in has a row that
+        # declares runs_python, and the uop declares it too.  A miss may not
+        # follow such a call (the word could not restart), so the stand-in
+        # body drops its check of the result; the generator then refuses the
+        # read of the view `owner` (the TAKE) after the call
+        source = source.replace(
+            'EXIT_IF(target == NULL || !Py_IS_TYPE(target, &PyFunction_Type),\n'
+            '                    "the classmethod wraps no Python function");',
+            "(void)target;")
+        declared = ("(class_value/4, owner: consumed -- attr: owned, self: moved(owner)))\n"
+                    "            effects(reads) exits(next, miss)\n"
+                    "        {\n            assert(oparg & 1);")
+        self.assertEqual(source.count(declared), 1)
+        source = source.replace(declared, declared.replace(
+            "owner: consumed", "owner: taken").replace(
+            "effects(reads) exits(next, miss)",
+            "effects(reads, runs_python) exits(next, miss)"))
+        rows = cases.ir_contract.parse_rows("""
+        #define UNKNOWN_ROWS(PRIMITIVE, HELPER, MACRO) \\
+            HELPER(unknown_getter, PyObject *, (PyObject *), \\
+                   ARGS(object), SCALAR, EFFECTS(runs_python))
+        """)
+        with mock.patch.dict(cases.ir_contract.rows(), rows):
+            with self.assertRaisesRegex(SyntaxError, "view 'owner' is read after a call"):
+                self.generate(source, runtime=True)
 
     def test_classmethod_capture_requires_audited_readers(self):
         source = (Path(__file__).resolve().parents[2] /

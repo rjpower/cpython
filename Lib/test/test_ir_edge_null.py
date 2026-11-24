@@ -74,7 +74,9 @@ class EdgeNullTests(unittest.TestCase):
                          ("PyValue_NULL", "PyValue_None"),
                          ("PyValue_None", "PyValue_NULL")):
                 changed.write_text(prefix + """
-inst(JUMP_IF_FALSE_OR_POP, (cond -- res)) {
+inst(JUMP_IF_FALSE_OR_POP, (cond: consumed -- res: owned nullable))
+    effects(releases) exits(next)
+{
     PyValue held = TAKE(cond);
     if (oparg) { res = FIRST; } else { res = SECOND; }
     PyValue_CLOSE(held);

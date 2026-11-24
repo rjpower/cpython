@@ -906,33 +906,6 @@ def declared_aliases(stack: StackEffect) -> tuple[str, ...]:
     return tuple(o.name for o in stack.outputs if inputs & set(o.contract))
 
 
-def find_aliased_outputs(op: parser.InstDef) -> tuple[str, ...]:
-    """The outputs that a statement `out = in;` or `out = TAKE(in);` makes
-    alias an input: TAKE gives the input's value a count of its own, so the
-    output is the same value, as it is through `PyValue held = TAKE(in);`
-    and `out = held;`."""
-    innames = {i.name for i in op.inputs if isinstance(i, parser.StackEffect)}
-    outnames = {o.name for o in op.outputs} - innames
-    tokens = [t for t in op.block.tokens() if t.kind != "COMMENT"]
-    texts = [t.text for t in tokens]
-    for i in range(len(texts) - 7):
-        if (texts[i] == "PyValue" and texts[i + 2:i + 5] == ["=", "TAKE", "("]
-                and texts[i + 5] in innames and texts[i + 6:i + 8] == [")", ";"]):
-            innames = innames | {texts[i + 1]}
-    found: list[str] = []
-    for i in range(len(tokens) - 3):
-        if (tokens[i].text not in outnames or tokens[i + 1].kind != "EQUALS"
-                or (i > 0 and tokens[i - 1].kind not in ("SEMI", "LBRACE", "RBRACE"))
-                or tokens[i].text in found):
-            continue
-        rhs = [t.text for t in tokens[i + 2:i + 7]]
-        if (tokens[i + 2].text in innames and tokens[i + 3].kind == "SEMI"
-                or rhs[:2] == ["TAKE", "("] and len(rhs) == 5
-                and rhs[2] in innames and rhs[3:] == [")", ";"]):
-            found.append(tokens[i].text)
-    return tuple(found)
-
-
 def frame_switch_sites(tokens: list[lexer.Token]) -> list[lexer.Token]:
     """The tokens where a body assigns `frame`, directly or through
     DISPATCH_INLINED or a marker that switches"""
@@ -952,8 +925,8 @@ def frame_switch_sites(tokens: list[lexer.Token]) -> list[lexer.Token]:
 
 def assigns_frame(tokens: list[lexer.Token]) -> bool:
     """Whether a body assigns `frame`, directly or through DISPATCH_INLINED
-    or a marker that switches.  A check only: a uop that does must declare
-    switches_frame (ir_contract.py), which is the authority"""
+    or a marker that switches.  The verifier's check only: a uop that does
+    must declare switches_frame (ir_contract.py), which is the authority"""
     return bool(frame_switch_sites(tokens))
 
 
@@ -989,14 +962,10 @@ def compute_properties(op: parser.CodeDef) -> Properties:
     window = False if isinstance(op, parser.LabelDef) else "window" in op.annotations
     no_fold = False if isinstance(op, parser.LabelDef) else "no_fold" in op.annotations
     # Frame switches and returns are declared: the switches_frame effect and
-    # the return exit.  A uop without a contract still has the body's scan
-    # until the cutover removes the undeclared form
+    # the return exit
     clauses = {} if isinstance(op, parser.LabelDef) else op.clauses
-    if clauses:
-        switches = any(w.split("(")[0] == "switches_frame"
-                       for w in clauses.get("effects", ()))
-    else:
-        switches = assigns_frame(op.tokens)
+    switches = any(w.split("(")[0] == "switches_frame"
+                   for w in clauses.get("effects", ()))
     # Another frame's code runs after a frame switch
     escapes = escapes or switches
     returns = "return" in clauses.get("exits", ())
@@ -1060,23 +1029,18 @@ def find_object_inputs(
     An input whose contract declares `assumed(object) by <producer>` can
     never hold an inline value by construction of the bytecode, so it needs
     no test: the generator asserts each assumption in every execution form
-    (ir_contract.py, F7).  An undeclared op may say the same with
-    `assert(PyValue_IsObject(name))`.
+    (ir_contract.py, F7).  An assert in the body is no evidence: the
+    contract's walk proves the object fact of every conversion.
     """
     scalars = {item.name for item in stack.inputs if not item.is_array()}
     found: list[str] = []
     asserted: list[str] = [item.name for item in stack.inputs
                            if item.name in scalars and "assumed(object)" in item.contract]
-    # A declared uop has no use for the scan: its contract's walk proves the
-    # object fact of every conversion (a row's `object` argument), so an
-    # assert is no evidence.  An undeclared uop keeps it until it is declared
-    scanned = not op.clauses
     tokens = list(op.block.tokens())
     i = 0
     while i < len(tokens):
         tkn = tokens[i]
         if tkn.text == "assert":
-            start = i
             depth = 0
             i += 1
             while i < len(tokens):
@@ -1087,11 +1051,6 @@ def find_object_inputs(
                     if depth == 0:
                         break
                 i += 1
-            texts = [t.text for t in tokens[start:i + 1]]
-            if (scanned and len(texts) == 7
-                    and texts[2] in ("PyValue_IsObject", "PyValue_IsObjectOrNull")
-                    and texts[4] in scalars and texts[4] not in asserted):
-                asserted.append(texts[4])
         elif tkn.text in VALUE_TO_OBJECT and i + 3 < len(tokens):
             arg, close = tokens[i + 2], tokens[i + 3]
             if arg.text in scalars and close.kind == lexer.RPAREN and arg.text not in found:
@@ -1128,8 +1087,7 @@ def make_uop(
         properties=compute_properties(op),
         object_inputs=object_inputs,
         asserted_objects=asserted_objects,
-        aliased_outputs=(declared_aliases(stack) if op.clauses
-                         else find_aliased_outputs(op)),
+        aliased_outputs=declared_aliases(stack),
         clauses=op.clauses,
     )
 

@@ -592,6 +592,16 @@
     HELPER(_PyValue_IsTrue, int, (PyValueBorrow), \
         ARGS(borrowed), SCALAR, EFFECTS(runs_python, raises), \
         HOMES(canonical), OBSERVER(none)) \
+    /* G0d1.  Objects/object.c:2537: the truth of a value that is no bool, \
+     * None, int or float (asserted): PyValue_AsKnownObjectBorrow of it, so \
+     * an object, then the type's nb_bool (a value row or the adapted slot), \
+     * mp_length or sq_length; 1 without them.  Returns 1, 0, or a negative \
+     * status with an exception set.  The slots are a class's __bool__ or \
+     * __len__: Python, which leaves the homes canonical and opens no \
+     * observer context (as _PyValue_IsTrue).  The argument is borrowed */ \
+    HELPER(_PyValue_IsTrueSlow, int, (PyValueBorrow), \
+        ARGS(borrowed object), SCALAR, EFFECTS(runs_python, raises), \
+        HOMES(canonical), OBSERVER(none)) \
     /* Objects/longobject.c: the shift of a nonzero word by a count >= 0 \
      * through long_lshift_spans().  It gives PyValue_NULL with an exception \
      * set where the result would have too many digits (OverflowError) or \
@@ -715,6 +725,13 @@
      * generator asserts it after each call (F7) */ \
     PRIMITIVE(_PyValueGuarded_Load, PyValueBorrow, (_PyValueGuarded), \
               ARGS(scalar), VALUE(borrowed assumed(nonnull) by specializer), EFFECTS()) \
+    /* G0d1.  The same identity (pycore_value.h), for a site whose entry \
+     * the specializer fills only with an object: LOAD_ATTR_CLASSMETHOD's \
+     * classmethod and LOAD_ATTR_GETSET's getset descriptor \
+     * (specialize.c).  The generator asserts it after each call (F7).  No \
+     * leaf uop calls it, so it is a HELPER: no model or lowering (V11) */ \
+    HELPER(_PyValueGuarded_LoadObject, PyValueBorrow, (_PyValueGuarded), \
+              ARGS(scalar), VALUE(borrowed assumed(object) by specializer), EFFECTS()) \
     /* Identities on a word that state what the compiler shows of it \
      * (pycore_value.h); the generator asserts it after each call (F7). \
      * An item of a code object's co_consts: the compiler stores objects \
@@ -1255,6 +1272,14 @@
      * failure, no write.  Its caller was a name in analyzer.NON_ESCAPING_FUNCTIONS. */ \
     HELPER(_PyClassMethod_GetFunc, PyObject *, (PyObject *), \
         ARGS(object), SCALAR, EFFECTS(reads)) \
+    /* G0d1.  Include/internal/pycore_descrobject.h:65: the getter of a \
+     * getset descriptor with a _PyValueGetSet record (d_value), read before \
+     * the call, run on self: record->get(self, record->closure).  The getter \
+     * is any type's C code, which may run Python and raise; the result is a \
+     * new value, or NULL with an exception set.  descr is not used after the \
+     * call; self is borrowed */ \
+    HELPER(_PyGetSet_ValueRead, PyValue, (PyObject *, PyValueBorrow), \
+        ARGS(object, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
     /* Reviewed G0c5.  pycore_typeobject.h: type->_tp_iteritem != NULL && \
      * type->tp_iter != _PyType_SlotIter, two loads of the type and an \
      * address compare.  Callees: none.  It cannot fail and runs no \
@@ -1556,6 +1581,16 @@
      * removed value on 1.  The key is borrowed */ \
     HELPER(PyDict_PopValue, int, (PyObject *, PyValueBorrow, PyValue *), \
         ARGS(object, borrowed, scalar), SCALAR, EFFECTS(runs_python, raises)) \
+    /* G0d1.  Objects/dictobject.c:6173: one step of a dict item iterator \
+     * (asserted PyDictIterItem_Type) into two homes: dictiter_capture reads \
+     * the dict and advances the iterator (writes), and raises RuntimeError \
+     * for a dict that changed size or keys (-1); at the end it drops the \
+     * iterator's dict (Py_XDECREF: releases, 0).  On 1 the key and value \
+     * are stored in targets[0] and targets[1] (writes) and their old values \
+     * closed (releases).  No call of Python besides the finalizers of the \
+     * releases.  targets is the address of a home (IR_SLOT) */ \
+    HELPER(_PyDictIterItem_Next, int, (PyObject *, PyValue *), \
+        ARGS(object, scalar), SCALAR, EFFECTS(reads, writes, raises, releases)) \
     /* Objects/dictobject.c: the dict check (-1 with TypeError or \
      * SystemError), then _PyDict_SetValue_Take2 with a count taken of \
      * key and value (the row's arguments stay borrowed), \
@@ -2102,7 +2137,20 @@
      * publishes the result and call_publish releases the temporaries. The \
      * seed said `consumed`. */ \
     HELPER(call_vector, PyValue, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, PyValue), \
-        ARGS(tstate, frame, scalar, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises))
+        ARGS(tstate, frame, scalar, borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python, raises)) \
+    /* G0d1.  Python/ceval.c:2106: the generator of a call whose callee is a \
+     * generator function that takes exactly these arguments \
+     * (CALL_PY_GENERATOR).  call_exact_function moves the callable out of \
+     * its home (a local is counted), _PyGen_NewCall makes the generator \
+     * (allocates; on failure it closes the function and raises), \
+     * call_fill_exact moves the operands into the generator's frame, and \
+     * gen_prologue runs the prologue (iter() of a generator expression's \
+     * iterable: Python), which on failure discards the generator and the \
+     * arguments it owns.  Returns the generator, or NULL with an exception \
+     * set.  The callable is consumed */ \
+    HELPER(call_new_generator, PyValue, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, int), \
+        ARGS(tstate, frame, scalar, scalar, consumed, scalar), VALUE_OR_NULL(owned), \
+        EFFECTS(runs_python, raises))
 
 /* Generators, coroutines and iteration */
 #define _PyIR_COMPONENTS_GENERATORS(PRIMITIVE, HELPER, MACRO) \
@@ -2234,7 +2282,34 @@
      * returns true, else false (executing or finished).  One load, at \
      * most one store; no call, no exception. */ \
     HELPER(gen_try_set_executing, bool, (PyGenObject *), \
-        ARGS(scalar), SCALAR, EFFECTS(reads, writes))
+        ARGS(scalar), SCALAR, EFFECTS(reads, writes)) \
+    /* G0d1.  Objects/genobject.c:1258: the generator, coroutine or async \
+     * generator of a call of function, whose frame is made but not run.  It \
+     * reads the function and code, may compute a coroutine's origin, \
+     * allocates the object (PyObject_GC_NewVar), and writes its fields and \
+     * frame.  function and locals are consumed: the frame owns them, and on \
+     * failure (NULL with an exception set) they are closed (releases).  No \
+     * Python runs.  The result is a new reference */ \
+    HELPER(_PyGen_NewCall, PyGenObject *, (PyThreadState *, PyValue, PyObject *, PyCodeObject *, _PyInterpreterFrame *), \
+        ARGS(tstate, consumed, scalar, scalar, frame), VALUE_OR_NULL(owned object), \
+        EFFECTS(reads, writes, allocates, raises, releases)) \
+    /* G0d1.  Python/ceval.c:2093: the prologue of a new generator's code: \
+     * nothing for a code without cells that is no generator expression; \
+     * else gen_prologue_run (ceval.c:2037) makes the cells (allocates, \
+     * writes the generator's frame) and, for a generator expression, runs \
+     * iter() of its argument (Python).  Returns 0, or -1 with an exception \
+     * set; the generator is borrowed on both, and the caller discards it on \
+     * -1 (G0d1 moved that discard out, so that the owner stays the \
+     * caller's) */ \
+    HELPER(gen_prologue, int, (PyThreadState *, PyGenObject *, PyCodeObject *), \
+        ARGS(tstate, object, scalar), STATUS(NEGATIVE), EFFECTS(runs_python, raises)) \
+    /* G0d1.  Objects/genobject.c:1331: abandons a generator from \
+     * _PyGen_NewCall that never ran: marks its frame cleared (writes), \
+     * clears the frame (gen_clear_frame: closes the arguments and function \
+     * it owns) and drops the reference (Py_DECREF): releases, and consumes \
+     * the generator.  No failure */ \
+    HELPER(_PyGen_DiscardCall, void, (PyGenObject *), \
+        ARGS(consumed object), NONE, EFFECTS(writes, releases))
 
 /* Errors */
 #define _PyIR_COMPONENTS_ERRORS(PRIMITIVE, HELPER, MACRO) \
@@ -2801,8 +2876,11 @@
      * handler holds in a local: bits only. */ \
     MACRO(IR_FUSED_DISTANCE, ARGS(), SCALAR, EFFECTS(), EXITS()) \
     /* Evidence (G0c8): ceval_macros.h:500: bit 8 of the entry header's `arg` field, read \
-     * through the handler's `fb` local. */ \
-    MACRO(IR_FUSED_IF_FALSE, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
+     * through the handler's `fb` local.  Corrected (G0d1): `arg` is written only when the \
+     * entries are made (Python/ir.c:912, _PyIR_FBINIT_ARG), so the bit is as fixed as the \
+     * word's D field (IR_FUSED_DISTANCE): no heap state, and compiled code has it as an \
+     * immediate (ir_leaf.py, `imm fused_if_false`).  The row said reads. */ \
+    MACRO(IR_FUSED_IF_FALSE, ARGS(), SCALAR, EFFECTS(), EXITS()) \
     /* IR_REPORT_EDGE (ceval_macros.h): ((void)(TAKEN)) in the interpreter. \
      * Reviewed (G0c batch 1): in the function form (ceval.c) it stores the \
      * flag in the activation record, `IR_ACTIVATION()->edge = (TAKEN)`, a \

@@ -80,9 +80,9 @@ from ir_records import (
     ASSIGNMENTS, CONST, DEOPT, ENTER_FRAME, EXIT_GUARD, FEEDBACK, GUARD_TOKENS, NEXT,
     IMMEDIATE, LOCAL, MAY_RAISE, OPERANDS, POLY_TABLE_READERS, RELEASE_LIKE,
     RUNS_PYTHON, SITE_TOKENS, SLOT, TARGET, TEMP, WINDOW, YIELD, CallShape,
-    FeedbackOperand, FeedbackSchema, Guard, Operand, OperationRecord, Subjects,
+    FeedbackOperand, FeedbackSchema, Guard, Operand, OperationRecord,
     Transfer, UopRecord, assigns_to, changes, check_record, encoding, feedback_schema,
-    guard_facts, uop_record_effects, passed_through, record_through, result_facts,
+    uop_record_effects, passed_through, record_through,
     site_tokens, uop_transfers, walk_values,
 )
 # The exits of the generator-boundary variants (boundary_departure())
@@ -92,7 +92,7 @@ from ir_read_effects import (
     value_nonnull_changes, value_transport_expression,
 )
 from ir_error_effects import (
-    HELPERS, HomeEffect, analyze_error_effects, checked_native_step_effects, owning_output_source,
+    HELPERS, HomeEffect, analyze_error_effects, checked_native_step_effects,
 )
 import re
 from dataclasses import dataclass, fields, replace
@@ -1496,9 +1496,8 @@ def send_source_contract(inst: Instruction, fmt: IRFormat) -> tuple[Uop, ...] | 
         return None
     parts = [part for part in inst.parts if isinstance(part, Uop)]
     for index, part in enumerate(parts):
-        contract = ir_contract.contract_of(part)
-        if contract is None or (contract.effects - SEND_EFFECTS
-                                or contract.exits - SEND_EXITS):
+        contract = ir_contract.declared_contract(part)
+        if contract.effects - SEND_EFFECTS or contract.exits - SEND_EXITS:
             return None
         if any(item.is_array() for item in (*part.stack.inputs, *part.stack.outputs)):
             return None
@@ -1621,8 +1620,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
     else:
         imm_kind = "narrow"
     no_fold = any(m.properties.no_fold for m in members) or any(
-        e.aliased and e.item.name != owned_alias_result(m, io[m.name][1])
-        for m in members for e in io[m.name][1])
+        e.aliased for m in members for e in io[m.name][1])
 
     placed = None
     if metadata_inputs:
@@ -2303,16 +2301,6 @@ def generator_entry_recipe(inst: Instruction) -> GeneratorEntryRecipe | None:
     return GeneratorEntryRecipe(entry, tokens[2].text, kind)
 
 
-def owned_alias_result(inst: Instruction, outputs: list[Entry]) -> str | None:
-    "An alias whose final publication has a separate owning-result proof."
-    if (len(outputs) != 1 or not outputs[0].aliased
-            or outputs[0].external >= 0 or outputs[0].item.is_array()):
-        return None
-    source = owning_output_source(inst)
-    name = outputs[0].item.name
-    return name if source is not None and name in source.owning_outputs else None
-
-
 def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     """How inst, a member of a family whose dst may name a local, treats
     such a dst; None if it cannot.  The result must be the first new output
@@ -2347,8 +2335,7 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     if inst.properties.no_fold:
         return None
     j = result_offset(inst, outputs)
-    if j is None or (outputs[j].aliased
-                     and outputs[j].item.name != owned_alias_result(inst, outputs)):
+    if j is None or outputs[j].aliased:
         return None
     if all(e.item.is_array() and not e.item.size.isdigit()
            for e in outputs[j + 1:]):
@@ -2489,7 +2476,6 @@ class SlotLayout:
     temp_fields: tuple[str, ...] = ()
     store_dst: bool = False         # dst may name a local
     canonical_frame_transfer: bool = False  # proven unchanged canonical slot input
-    owning_result: str | None = None  # first publication of a checked owning alias
     native_entry: bool = False  # checked native interpreter-exit homes
     call_kind: str | None = None
     call_results: frozenset[str] = frozenset()  # names of a call's outputs
@@ -3210,10 +3196,6 @@ class IRStack(Stack):
                                 for edge, names in self.null_paths.items()}
         slot = self.out_slot(memory_offset)
         if at_dst:
-            if var.name == lay.owning_result:
-                if not var.owns_value or var.ir_inplace is not None:
-                    raise StackError(f"'{var.name}' lacks its final owning-result receipt")
-                var.owns_value = False
             if lay.dst in lay.temp_fields:
                 out.emit(f"IR_STORE_TEMP({slot}, {var.name});\n")
             else:
@@ -3483,7 +3465,6 @@ class IREmitter(Emitter):
         self.null_outputs: frozenset[str] | None = None
         self.error_source = None
         self.error_uop_name = None
-        self.owning_output_source = None
         self.callback_current_identity = False
         self.error_unwind_sources = set()
         self.error_terminal_sources = set()
@@ -4609,11 +4590,6 @@ class IREmitter(Emitter):
             text = owner_name(field)
         self.out.emit_at(text, tkn)
         self.out.last_token = rparen
-        if (tkn.text == "TAKE" and self.statement is not None
-                and _statement_text(self.statement) == [
-                    storage.stack.layout.owning_result, "=", "TAKE", "(",
-                    name.text, ")", ";"]):
-            self.owning_take_output = storage.stack.layout.owning_result
         return self.value_kill(name, storage, False)
 
     def note_pointer_assignment(self, stmt: SimpleStmt, storage: Storage) -> None:
@@ -5011,10 +4987,6 @@ class IREmitter(Emitter):
         for var in targets:
             if var.name == name:
                 var.ir_value = value
-                if name == stack.layout.owning_result:
-                    var.owns_value = (value is not None and value in stack.native_owners)
-                    if transport is None and result is not None:
-                        var.owns_value = result.result_owned is True
 
     def emit_SimpleStmt(self, stmt: SimpleStmt, uop: CodeSection,
                         storage: Storage, inst: Instruction | None
@@ -5052,7 +5024,6 @@ class IREmitter(Emitter):
         previous = self.cannot_escape
         self.statement = stmt
         self.element_result = None
-        self.owning_take_output = None
         # Capture RHS facts before TAKE/DEAD or an escaping release kills
         # its source. Apply them to the surviving identities after emission.
         locals = self.current_value_locals(storage)
@@ -5137,18 +5108,8 @@ class IREmitter(Emitter):
                   if self.error_source is not None else None)
         if self.element_result is not None:
             result = self.element_result
-        # Ownership-only source receipts cannot certify the scalar home graph
-        # or any ordinary error/normal route. They serve this terminal result.
-        owning_receipt = (dict(self.owning_output_source.value_results).get(id(stmt))
-                          if self.owning_output_source is not None else None)
         self.apply_value_transport(storage, assignment, transport, sources,
                                    nonnull_changes, result)
-        if assignment is not None and assignment[0] == stack.layout.owning_result:
-            for var in storage.outputs:
-                if var.name == assignment[0]:
-                    var.owns_value = (self.owning_take_output == var.name
-                        or transport is None and owning_receipt is not None
-                        and owning_receipt.result_owned is True)
         if guarded is not None and reachable:
             self.refine_current_value(storage, guarded, True)
         if self.observer_source is not None:
@@ -6102,7 +6063,6 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
     variant = EXECUTION_VARIANTS.get(name)
     layout = replace(layout, canonical_frame_transfer=canonical_frame_transfer_input(inst),
                      native_entry=native_entry_input_contract(inst),
-                     owning_result=owned_alias_result(inst, outputs),
                      call_kind=call.kind if call is not None else None,
                      call_results=(frozenset(o.item.name for o in outputs)
                                    if call is not None else frozenset()))
@@ -6118,24 +6078,20 @@ def build_record(name: str, inst: Instruction, fmt: IRFormat,
         guards = implicit_object_guards(walk, index, part, known)
         # The implicit guards precede the body and its transfers
         transfers = tuple(Transfer(DEOPT, None, deopt) for _ in guards)
-        subjects = Subjects(part, inputs)
-        # A uop with a declared contract has the record its declarations
-        # give, once its body is verified against them (ir_contract.py)
-        declared = ir_contract.contract_of(part) is not None
-        if declared:
-            ir_contract.verify_uop(part, len(guards))
+        # The record is what the uop's declarations give, once its body is
+        # verified against them (ir_contract.py)
+        ir_contract.declared_contract(part)
+        ir_contract.verify_uop(part, len(guards))
         for site in site_tokens(part):
             if site.text in GUARD_TOKENS:
-                facts, reason = (ir_contract.record_guard_facts(part, site, inputs) if declared
-                                 else guard_facts(part, site, subjects))
+                facts, reason = ir_contract.record_guard_facts(part, site, inputs)
                 guards.append(Guard(GUARD_TOKENS[site.text], site, facts=facts, reason=reason))
         feedback = uop_feedback(part, schema, inst)
         leaf = ir_leaf.leaf_of(part, {fb.name: fb.field.ctype for fb in feedback})
         uops.append(UopRecord(part.name, inputs, outs, feedback,
                               part.properties.oparg, tuple(guards),
                               transfers + uop_transfers(part, deopt), uop_record_effects(part),
-                              ir_contract.record_results(part, outs) if declared
-                              else result_facts(part, outs),
+                              ir_contract.record_results(part, outs),
                               "pure" in part.annotations, leaf))
     if boundary is not None:
         uops[-1] = boundary_departure(uops[-1], boundary, inst.where)
@@ -6296,12 +6252,10 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
         guard_shapes[1][0].append(("unused", True, ""))
         guard_shapes[1][1].append(("unused", True, ""))
         invoke_shape[0].append(("kwnames", False, ""))
-    contracts = [ir_contract.contract_of(p) for p in prefix]
+    contracts = [ir_contract.declared_contract(p) for p in prefix]
     facts: set = set()
     reasons = set()
     for part, contract in zip(prefix, contracts):
-        if contract is None:
-            break
         facts.update(*(o.facts for o in contract.outputs if o.name == "callable"))
         for site in site_tokens(part):
             if site.text in GUARD_TOKENS:
@@ -6321,7 +6275,6 @@ def validate_guarded_python_call(inst: Instruction, fmt: IRFormat) -> None:
                != ["IR_INVOKE_GUARDED_PYTHON_CALL"]
             # The prefix is declared guards that read, and the callable
             # passes through it unchanged
-            or None in contracts
             or any(not c.effects <= {"reads"} or not c.exits <= {"next", "miss", "deopt"}
                    or any(o.name == "callable" and o.mode for o in c.outputs)
                    for c in contracts)
@@ -7124,8 +7077,6 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
     emitter.abrupt_prefix = False
     emitter.send_source_parts = send_source_contract(inst, fmt)
     emitter.error_source = analyze_error_effects(inst, HANDLER_LOCALS)
-    emitter.owning_output_source = (owning_output_source(inst)
-                                  if owned_alias_result(inst, external_io(inst)[1]) else None)
     if emitter.error_source is None and emitter.send_source_parts is not None:
         emitter.error_source = checked_native_step_effects(emitter.send_source_parts)
     source = emitter.error_source
@@ -7256,7 +7207,7 @@ def emit_handler(record: OperationRecord, emitter: IREmitter, out: CWriter,
         state = ir_contract.rows()["call_state"]
         init = "IR_CALL_KWARGS_STATE" if kind == "CALL_EX" else state.init
         if kind == "CALL_EX" and any(
-                (c := ir_contract.contract_of(part)) is not None and c.state_item(state.name)
+                ir_contract.declared_contract(part).state_item(state.name)
                 for part in inst.parts if isinstance(part, Uop)):
             raise analysis_error(f"{name}: a uop declares state({state.name}), whose "
                                  "facts are the STATE row's, but CALL_FUNCTION_EX's "
@@ -7605,7 +7556,7 @@ class StubPlan:
 
 
 def arm_escapes(inst: Instruction) -> bool:
-    return any(ir_contract.contract_of(part).continuing_effects() & STUB_REENTRY
+    return any(ir_contract.declared_contract(part).continuing_effects() & STUB_REENTRY
                for part in inst.parts if isinstance(part, Uop))
 
 
@@ -7635,10 +7586,7 @@ def check_stub_arm(arm: Instruction, generic: bool) -> None:
     for part in arm.parts:
         if not isinstance(part, Uop):
             continue
-        contract = ir_contract.contract_of(part)
-        if contract is None:
-            raise analysis_error(f"{arm.name} declares region({arm.region}), but its uop "
-                                 f"{part.name} declares no contract", arm.where)
+        contract = ir_contract.declared_contract(part)
         for site in ir_contract.effect_sites(part):
             if site.token.text in ir_contract.rows() or site.effect != "releases":
                 continue
@@ -7691,7 +7639,7 @@ def stub_escapes(inst: Instruction) -> frozenset[str]:
     for part in inst.parts:
         if not isinstance(part, Uop):
             continue
-        contract = ir_contract.contract_of(part)
+        contract = ir_contract.declared_contract(part)
         if contract.continuing_effects() & STUB_REENTRY:
             names.add(part.name)
         elif any(site.effect == "releases" and site.token.text not in reporting
@@ -8621,8 +8569,8 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             and extent(inputs, inst) == (0, "_PyIR_EXT_OPARG")
             and extent([entry.item for entry in outputs], inst) == (1, "_PyIR_EXT_OPARG")
             and bodies_match("{ top = PyValue_DUP(bottom); }")) else unknown
-    contracts = [ir_contract.contract_of(part) for part in parts]
-    exchanged = {o.name for c in contracts if c is not None for o in c.outputs if o.exchange}
+    contracts = [ir_contract.declared_contract(part) for part in parts]
+    exchanged = {o.name for c in contracts for o in c.outputs if o.exchange}
     if exchanged:
         # A declared exchange (ir_contract.check_exchange, verify_exchange)
         # of the first and last items of an oparg window: the swap

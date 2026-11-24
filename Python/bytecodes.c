@@ -225,7 +225,13 @@ dummy_func(
         // the code's compiled unit at the next word once it has one
         // (IR_JIT_EVENT(), Python/jit.c).  Compiled code runs the forms,
         // where the event does nothing.
-        ir_only op(_JIT_EVENT, (--)) {
+        // Contract (G0d1): IR_JIT_EVENT's row (EFFECTS(... runs_python,
+        // switches_frame), EXITS(enter, return, raise, exit)): the unit it starts
+        // runs Python and leaves through its own transfers; otherwise the word
+        // continues (next).
+        ir_only op(_JIT_EVENT, (--))
+            effects(runs_python, switches_frame) exits(next, enter, return, raise, exit)
+        {
             IR_JIT_EVENT();
         }
 
@@ -2160,8 +2166,14 @@ dummy_func(
 
         boundary(INSTRUMENTED_YIELD_VALUE) at(last) resumes(SEND, STORE_LOCAL);
 
+        // Contract (G0d1): retval moves into the caller's home through
+        // IR_SUSPEND_DELEGATED (ARGS(consumed); its row's effects; EXITS(yield));
+        // the outputs keep the homes of the inputs (`value` the home of retval).
         ir_only no_fold op(_YIELD_DELEGATED,
-            (receiver, unused_cursor, retval -- receiver, unused_cursor, value)) {
+            (receiver, unused_cursor, retval: consumed
+             -- receiver, unused_cursor, value: moved(retval)))
+            effects(reads, writes, runs_python, switches_frame) exits(yield)
+        {
             IR_METADATA_PASSTHROUGH(1);
             PyValue outgoing = TAKE(retval);
             IR_SUSPEND_DELEGATED(outgoing);
@@ -3384,10 +3396,14 @@ dummy_func(
          * or an immortal's tag, so the read makes the canonical value of it
          * (PyValue_FromObjectBorrow). A NULL field deoptimizes: the generic
          * path answers None for the member (or raises). */
-        ir_only op(_LOAD_ATTR_SLOT_POINTER, (index/1, owner -- attr)) {
+        // Contract (G0d1): a read of the owner's field (reads); a NULL field misses;
+        // DECREF_INPUTS releases the owner.
+        ir_only op(_LOAD_ATTR_SLOT_POINTER, (index/1, owner: consumed object -- attr: owned))
+            effects(reads, releases) exits(next, miss)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             PyObject *field = *(PyObject **)((char *)owner_o + index);
-            EXIT_IF(field == NULL);
+            EXIT_IF(field == NULL, "the field is NULL");
             attr = PyValue_DUP(PyValue_FromObjectBorrow(field));
             STAT_INC(LOAD_ATTR, hit);
             DECREF_INPUTS();
@@ -3447,16 +3463,22 @@ dummy_func(
             EXIT_IF(Py_TYPE(owner_o) != &PyType_Type);
         }
 
-        ir_only op(_LOAD_ATTR_CLASSMETHOD, (class_value/4, owner -- attr, self)) {
+        // Contract (G0d1): reads the classmethod's callable (_PyClassMethod_GetFunc:
+        // reads); two guards miss; the owner moves to self (TAKE).  The entry holds
+        // the classmethod object (_PyValueGuarded_LoadObject).
+        ir_only op(_LOAD_ATTR_CLASSMETHOD,
+                (class_value/4, owner: consumed -- attr: owned, self: moved(owner)))
+            effects(reads) exits(next, miss)
+        {
             assert(oparg & 1);
-            PyValueBorrow descriptor = _PyValueGuarded_Load(class_value);
-            assert(PyValue_IsObject(descriptor));
+            PyValueBorrow descriptor = _PyValueGuarded_LoadObject(class_value);
             PyObject *cm = PyValue_AsKnownObjectBorrow(descriptor);
             EXIT_IF(!Py_IS_TYPE(cm, &PyClassMethod_Type));
             // __init__ can replace the wrapped callable without invalidating
             // the class version. Capture it before explicit argument evaluation.
             PyObject *target = _PyClassMethod_GetFunc(cm);
-            EXIT_IF(target == NULL || !Py_IS_TYPE(target, &PyFunction_Type));
+            EXIT_IF(target == NULL || !Py_IS_TYPE(target, &PyFunction_Type),
+                    "the classmethod wraps no Python function");
             attr = PyValue_DUP(PyValue_FromObjectBorrow(target));
             self = TAKE(owner);
             STAT_INC(LOAD_ATTR, hit);
@@ -3930,7 +3952,12 @@ dummy_func(
          * the handlers never poll the eval breaker.  The handlers stand for the
          * compare (their shadow, see ir_metadata_generator.py), and the
          * specialisations are those of the compare, in families of their own. */
-        leaf ir_only op(_JUMP_IF_COND, (cond -- )) {
+        // Contract (G0d1): cond is the compare's result, which _COMPARE_OP does not
+        // declare an exact bool, so the skeleton closes it (closed); the sense and
+        // the distance are fixed bits of the entry and the word; the branch jumps.
+        leaf ir_only op(_JUMP_IF_COND, (cond: closed -- ))
+            effects() exits(next, branch)
+        {
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
             DEAD(cond);
@@ -3940,7 +3967,11 @@ dummy_func(
             }
         }
 
-        ir_only op(_INSTRUMENTED_JUMP_IF_COND, (cond -- )) {
+        // Contract (seed, reviewed G0d1): cond as _JUMP_IF_COND's; the branch event
+        // (IR_OBSERVE_COMMITTED_BRANCH) runs tools and may raise.
+        ir_only op(_INSTRUMENTED_JUMP_IF_COND, (cond: closed -- ))
+            effects(runs_python) exits(next, branch, raise)
+        {
             assert(PyValue_BoolCheck(cond));
             int flag = PyValue_IsTrue(cond) ^ IR_FUSED_IF_FALSE();
             DEAD(cond);
@@ -4322,7 +4353,14 @@ dummy_func(
         // a class with __len__ or __bool__).  The test is the generic
         // one's without its decision of the inline kinds, and the site
         // keeps no counter.
-        ir_only op(_TO_BOOL_SLOT, (value -- res, v)) {
+        // Contract (seed, corrected G0d1): _PyValue_IsTrueSlow requires an object
+        // (PyValue_AsKnownObjectBorrow), which _GUARD_TYPE_VERSION before it
+        // requires too: `object`, which the seed lacked.  The slot runs Python and
+        // may fail with value kept (taken); value then moves to v.
+        ir_only op(_TO_BOOL_SLOT,
+                (value: taken object -- res: owned exact(PyBool_Type), v: moved(value)))
+            effects(runs_python) exits(next, raise)
+        {
             int truth = _PyValue_IsTrueSlow(value);
             if (truth < 0) {
                 ERROR_NO_POP();
@@ -4558,7 +4596,15 @@ dummy_func(
                     "the cached function changed version");
         }
 
-        ir_only op(_GET_ITER_PY_GENERATOR, (iterable -- iter, index_or_null)) {
+        // Contract (G0d1): _PyGen_NewCall allocates the generator; if it fails the
+        // iterable is still in its home (holding).  Then the iterable moves into the
+        // generator's frame (TAKE), and a failed prologue discards the generator
+        // with it (_PyGen_DiscardCall); the generator becomes iter.
+        ir_only op(_GET_ITER_PY_GENERATOR,
+                (iterable: consumed object
+                 -- iter: owned object, index_or_null: inline encoding(null)))
+            effects(runs_python) exits(next, raise)
+        {
             STAT_INC(GET_ITER, hit);
             assert(PyValue_IsObject(iterable));
             PyHeapTypeObject *ht =
@@ -4567,12 +4613,11 @@ dummy_func(
             PyGenObject *gen = _PyGen_NewCall(
                 tstate, PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)func)),
                 NULL, (PyCodeObject *)func->func_code, frame);
-            if (gen == NULL) {
-                // The iterable is still in its home, for the unwinder
-                ERROR_NO_POP();
-            }
+            // The iterable is still in its home, for the unwinder
+            ERROR_IF(gen == NULL, holding(iterable));
             gen->gi_iframe.base[0] = TAKE(iterable);
             if (gen_prologue(tstate, gen, (PyCodeObject *)func->func_code) < 0) {
+                _PyGen_DiscardCall(gen);
                 ERROR_NO_POP();
             }
             INPUTS_DEAD();
@@ -4692,8 +4737,14 @@ dummy_func(
         // the handler then continues after that word, which stays in place
         // for the generic form.  Instrumentation may replace that word, and
         // then the generic form runs it.
-        ir_only op(_FOR_ITER_DICT_ITEMS, (iter, null_or_index -- iter, null_or_index, unused)) {
-            assert(PyValue_IsObject(iter));
+        // Contract (G0d1): the iterator is GET_ITER's object; the step
+        // (_PyDictIterItem_Next) writes the two locals and may raise; exhaustion
+        // completes the step (IR_COMPLETE_STEP: branch, runs Python); a wrong type
+        // or an instrumented unpack word misses.
+        ir_only op(_FOR_ITER_DICT_ITEMS,
+                (iter: assumed(object) by GET_ITER, null_or_index -- iter, null_or_index, unused))
+            effects(runs_python) exits(next, branch, raise, miss)
+        {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(Py_TYPE(iter_o) != &PyDictIterItem_Type);
             _PyIRWord unpack = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr);
@@ -5077,8 +5128,13 @@ dummy_func(
             _LOAD_ATTR_METHOD_NO_DICT;
 
         /* A type without a version has no row in a poly table. */
-        ir_only op(_GUARD_TYPE_HAS_VERSION, (owner -- owner)) {
-            EXIT_IF(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_version_tag == 0);
+        // Contract (G0d1): a read of the type's version tag; no row establishes an
+        // unnamed version, so the guard gives its reason.
+        ir_only op(_GUARD_TYPE_HAS_VERSION, (owner: object -- owner))
+            effects(reads) exits(next, miss)
+        {
+            EXIT_IF(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_version_tag == 0,
+                    "the type has no version");
         }
 
         /* A method load whose site saw several receiver types: the site's
@@ -5086,7 +5142,13 @@ dummy_func(
          * or _NO_DICT observation) replace the one cached type version.  The
          * row of the receiver's type holds the method; a receiver of any other
          * type deoptimizes and the specializer adds its row. */
-        ir_only op(_LOAD_ATTR_METHOD_POLY, (owner -- attr, self_or_null[oparg&1])) {
+        // Contract (G0d1): IR_METHOD_POLY_LOOKUP reads the site's entry
+        // (FEEDBACK(read(entry))); a miss exits; the owner moves to self_or_null[0]
+        // (oparg & 1, asserted).
+        ir_only op(_LOAD_ATTR_METHOD_POLY,
+                (owner: consumed object -- attr: owned, self_or_null[oparg&1]: owned))
+            effects(reads) exits(next, miss) feedback(read(entry))
+        {
             assert(oparg & 1);
             PyValueBorrow method = IR_METHOD_POLY_LOOKUP(
                 FB_COUNTER(), PyValue_AsKnownObjectBorrow(owner));
@@ -5144,9 +5206,12 @@ dummy_func(
          * Python and may mutate the type, which can drop the dict's reference
          * to the descriptor. The record is read before the call and the
          * descriptor is not used again. */
-        ir_only op(_LOAD_ATTR_GETSET, (class_value/4, owner -- attr)) {
-            PyValueBorrow descriptor = _PyValueGuarded_Load(class_value);
-            assert(PyValue_IsObject(descriptor));
+        // Contract (G0d1): the getter (_PyGetSet_ValueRead) runs Python and may
+        // fail; DECREF_INPUTS releases the owner first.
+        ir_only op(_LOAD_ATTR_GETSET, (class_value/4, owner: consumed -- attr: owned))
+            effects(runs_python) exits(next, raise)
+        {
+            PyValueBorrow descriptor = _PyValueGuarded_LoadObject(class_value);
             PyObject *getset = PyValue_AsKnownObjectBorrow(descriptor);
             assert(Py_IS_TYPE(getset, &PyGetSetDescr_Type));
             STAT_INC(LOAD_ATTR, hit);
@@ -5532,7 +5597,14 @@ dummy_func(
         // exactly these arguments: the call creates the generator and fills
         // its frame from the operands.  No frame of the thread is pushed or
         // entered, so no stack or recursion check applies.
-        ir_only op(_CALL_PY_GENERATOR, (callable, self_or_null, args[oparg] -- res)) {
+        // Contract (seed, reviewed G0d1): call_new_generator consumes the callable and
+        // moves the operands into the generator's frame, leaving NULL homes that the
+        // skeleton closes (closed); it reads and writes the call state.
+        ir_only op(_CALL_PY_GENERATOR,
+                (callable: consumed, self_or_null: closed, args[oparg]: closed
+                 -- res: owned))
+            effects(runs_python) exits(next, raise) state(call_state -- call_state)
+        {
             STAT_INC(CALL, hit);
             PyValue generator = call_new_generator(
                 tstate, frame, this_instr, ir_word, callable, call_state);
@@ -6868,7 +6940,11 @@ dummy_func(
         // SEND (Python/assemble.c), which no instruction of the stack
         // machine stands for.  They leave frame->instr_ptr at the loop, so
         // that the events after them see the loop as the instruction before.
-        ir_only no_save_ip inst(IR_JUMP, ( -- )) {
+        // Contract (seed, reviewed G0d1): JUMP_FORWARD's, `effects() exits(next,
+        // jump)`.
+        ir_only no_save_ip inst(IR_JUMP, ( -- ))
+            effects() exits(next, jump)
+        {
             JUMPTO(oparg);
         }
 

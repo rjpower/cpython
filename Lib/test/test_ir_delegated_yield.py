@@ -7,6 +7,7 @@ import tempfile
 import textwrap
 import types
 import unittest
+from unittest import mock
 
 import _opcode
 import _testinternalcapi
@@ -168,6 +169,7 @@ class DelegatedYieldTests(unittest.TestCase):
         test_tools.skip_if_missing("cases_generator")
         with test_tools.imports_under_tool("cases_generator"):
             import analyzer
+            import ir_contract
             import ir_generator
             import ir_metadata_generator
 
@@ -227,16 +229,25 @@ class DelegatedYieldTests(unittest.TestCase):
                 ir_generator.handler_contracts(altered, altered_formats)
             source_marker = "macro(SEND) = unused/1 + _SPECIALIZE_SEND + _SEND;"
             self.assertIn(source_marker, text)
+            # `opaque` stands for a function that may run any code; a body
+            # calls only rows
+            rows = ir_contract.parse_rows("""
+                #define OPAQUE_ROWS(PRIMITIVE, HELPER, MACRO) \\
+                    HELPER(opaque, void, (int), ARGS(scalar), NONE, EFFECTS(runs_python))
+            """)
             suffix = """op(_OPAQUE_SEND_SUFFIX,
-                (receiver, cursor, value -- receiver, cursor, value)) {
-                opaque(alias);
+                (receiver, cursor, value -- receiver, cursor, value))
+                effects(runs_python) exits(next)
+            {
+                opaque(oparg);
             }
             """
             changed.write_text(text.replace(source_marker, suffix +
                 source_marker.replace("+ _SEND;", "+ _SEND + _OPAQUE_SEND_SUFFIX;"), 1))
             altered = analyzer.analyze_files([str(changed)])
             altered_formats = ir_generator.compute_formats(altered)
-            with self.assertRaisesRegex(SyntaxError,
+            with mock.patch.dict(ir_contract.rows(), rows), self.assertRaisesRegex(
+                    SyntaxError,
                     "generator boundary needs the complete SEND source contract"):
                 ir_generator.handler_contracts(altered, altered_formats)
             guard = "EXIT_IF(!PyValue_IsNone(val));"

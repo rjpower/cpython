@@ -1530,6 +1530,16 @@ def verify_exchange(uop: Uop, contract: Contract) -> None:
                                  uop.body.close)
 
 
+def declared_contract(uop: Uop) -> Contract:
+    """uop's contract.  Every uop of the IR declares one: an undeclared uop
+    is an error, not a body to infer from"""
+    contract = contract_of(uop)
+    if contract is None:
+        raise analysis_error(f"{uop.name} declares no contract: give it effects(...) "
+                             "and exits(...)", uop.body.open)
+    return contract
+
+
 def contract_of(uop: Uop) -> Contract | None:
     "uop's declared contract, or None if it declares none"
     if id(uop) in _CONTRACTS:
@@ -1847,11 +1857,10 @@ def effect_sites(uop: Uop, table: dict[str, Row] | None = None) -> list[Site]:
     """The sites of uop's body that have an effect, in order: calls of rows,
     the DSL's raises and releases, and the body's own heap accesses"""
     table = with_slots(uop, rows() if table is None else table)
-    contract = contract_of(uop)
-    inline = {i.name for i in contract.inputs if INLINE in implied(i.facts)} \
-        if contract else set()
+    contract = declared_contract(uop)
+    inline = {i.name for i in contract.inputs if INLINE in implied(i.facts)}
     # A store into an output array publishes; it writes nothing else
-    arrays = {o.name for o in contract.outputs if o.array} if contract else set()
+    arrays = {o.name for o in contract.outputs if o.array}
     tokens = _tokens(uop)
     texts = [t.text for t in tokens]
     calls = {id(t): args for t, args in body_calls(uop)}
@@ -1873,7 +1882,7 @@ def effect_sites(uop: Uop, table: dict[str, Row] | None = None) -> list[Site]:
                     sites.append(Site(t, e, why))
             elif text in RAISES:
                 sites.append(Site(t, "raises", text))
-            elif text == "DECREF_INPUTS" and contract is not None:
+            elif text == "DECREF_INPUTS":
                 if any(i.mode in ("consumed", "taken") and i.name not in inline
                        for i in contract.inputs):
                     sites.append(Site(t, "releases", "DECREF_INPUTS of an owned input"))
@@ -1976,6 +1985,12 @@ def check_feedback_pointers(uop: Uop, table: dict[str, Row]) -> None:
     for i, t in enumerate(texts):
         if t == "=" and i > 0:
             end = texts.index(";", i) if ";" in texts[i:] else len(texts)
+            # The value that a FEEDBACK row reads from the feedback is no
+            # pointer into it
+            call = _call_of(_uncast(texts[i + 1:end]), table)
+            if (call is not None and call[0].feedback
+                    and call[0].result.shape in ("VALUE", "VALUE_OR_NULL")):
+                continue
             if any(x in FEEDBACK_POINTERS or x in pointers for x in texts[i + 1:end]):
                 pointers.add(texts[i - 1])
 
@@ -2007,18 +2022,9 @@ def check_feedback_pointers(uop: Uop, table: dict[str, Row]) -> None:
 def feedback_access(uop: Uop) -> frozenset[tuple[str, str]]:
     """What a declared uop reads and writes of its site's feedback: its
     clause, and a read of the field of each cache operand"""
-    contract = contract_of(uop)
+    contract = declared_contract(uop)
     caches = {("read", c.name) for c in uop.caches if c.name != "unused"}
-    return frozenset(caches | (contract.feedback if contract else set()))
-
-
-def arm_feedback(inst: Instruction) -> frozenset[tuple[str, str]] | None:
-    """What an arm reads and writes of its site's feedback, through all of
-    its uops; None if one of them declares no contract"""
-    parts = [p for p in inst.parts if isinstance(p, Uop)]
-    if any(contract_of(p) is None for p in parts):
-        return None
-    return frozenset().union(*(feedback_access(p) for p in parts))
+    return frozenset(caches | contract.feedback)
 
 
 def record_effect_sites(uop: Uop) -> list[tuple[Token, str]]:
@@ -3316,13 +3322,18 @@ class OwnershipWalk:
 
     def passes_no_owner(self, arg: list[str], name: str | None, state: _State) -> bool:
         """Whether an argument that names no owner may still be consumed: a
-        row's new owner, passed as it is made, NULL, or a value that owes
-        no count (owes_nothing)"""
+        row's new owner, passed as it is made, NULL, a CONSTANT row's value,
+        or a value that owes no count (owes_nothing)"""
         call = _call_of(_uncast(_unwrap(arg, self.table)), self.table)
         if call is not None and call[0].new_owner():
             return True
         shown = implied(state.facts.get(name, frozenset()) if name is not None
                         else self.expression_facts(arg, state))
+        tokens = _unwrap(_uncast(arg), self.table)
+        constant = self.table.get(tokens[0]) if len(tokens) == 1 else None
+        if tokens[0] not in state.facts and is_value_constant(constant):
+            # A static immortal value (V8's roots), passed as itself
+            shown = implied(constant.result.facts)
         return NULL_FACT in shown or bool(shown) and self.owes_nothing(shown)
 
     def take(self, name: str, state: _State, where: Token, what: str) -> None:
@@ -3631,6 +3642,10 @@ class OwnershipWalk:
         for j in range(len(texts) - 3):
             if texts[j:j + 3] == ["(", "void", ")"] and re.fullmatch(r"\w+", texts[j + 3]):
                 covered[j:j + 4] = [True] * 4
+        for j in range(1, len(texts)):
+            # A member's name (`ht->_spec_cache.iter`) is no use of a value
+            if texts[j - 1] in (".", "->"):
+                covered[j] = True
         spans = [(i, _close(texts, i + 1)) for i, t in enumerate(texts)
                  if re.fullmatch(r"[A-Za-z_]\w*", t) and texts[i + 1:i + 2] == ["("]]
         for i, end in spans:
@@ -3968,14 +3983,26 @@ class OwnershipWalk:
         else:
             call = _call_of(value, self.table)
             row = call[0] if call is not None else None
+            moved = (row is not None and row.result.shape == "VALUE"
+                     and row.result.mode == "moved")
             if row is None or row.result.shape not in ("VALUE", "VALUE_OR_NULL") \
-                    or not row.new_owner():
+                    or not (row.new_owner() or moved):
                 self.fail(toks[0], f"stores `{' '.join(value)}` into the owned array "
                           f"`{array}`: an element is an owner moved in or a row's new "
                           "owner")
-            facts = (implied(row.result.facts | {NONNULL})
-                     if row.result.shape == "VALUE" and row.result.null_iff < 0
-                     else implied(row.result.facts) - {NONNULL})
+            if moved:
+                # VALUE(moved(k)), TAKE(x): x's obligation, which the row
+                # took (calls), moves into the element, with x's facts
+                arg = call[1][row.result.moved] if len(call[1]) > row.result.moved else []
+                if self.owner_of(arg, state) is None:
+                    self.fail(toks[0], f"{row.name} moves `{' '.join(arg)}`, which holds "
+                              "no obligation")
+                facts = state.facts.get(self.views_at(state).resolve(arg) or "".join(arg),
+                                        frozenset())
+            else:
+                facts = (implied(row.result.facts | {NONNULL})
+                         if row.result.shape == "VALUE" and row.result.null_iff < 0
+                         else implied(row.result.facts) - {NONNULL})
         if not declared.nullable and NONNULL not in implied(facts):
             self.fail(toks[0], f"stores `{' '.join(value)}`, which may be NULL, into "
                       f"`{array}`, whose elements are not nullable")
@@ -3999,7 +4026,7 @@ def walk_of(uop: Uop, table: dict[str, Row] | None = None,
     key = (id(uop), kills)
     if table is _ROWS and key in _WALKS:
         return _WALKS[key][1]
-    walk = OwnershipWalk(uop, contract_of(uop), table, kills).run()
+    walk = OwnershipWalk(uop, declared_contract(uop), table, kills).run()
     if table is _ROWS:
         _WALKS[key] = (uop, walk)
     return walk
@@ -4254,7 +4281,7 @@ def check_state_facts(uop: Uop, contract: Contract, walk: OwnershipWalk) -> None
                     uop.body.open)
 
 
-def check_state_reads(uop: Uop, contract: Contract | None, table: dict[str, Row]) -> None:
+def check_state_reads(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
     """A STATE item is read only by a uop whose state(...) clause declares
     it, and never addressed: its writes are the declared ones"""
     tokens = _tokens(uop)
@@ -4266,7 +4293,7 @@ def check_state_reads(uop: Uop, contract: Contract | None, table: dict[str, Row]
                 i < 2 or not re.fullmatch(r"\w+|\)|\]", tokens[i - 2].text)):
             raise analysis_error(f"{uop.name}: `&{t.text}` addresses a handler's state, "
                                  "whose writes must be the declared ones", t)
-        if contract is None or contract.state_item(t.text) is None:
+        if contract.state_item(t.text) is None:
             raise analysis_error(f"{uop.name}: reads `{t.text}`, a handler's state, which "
                                  "no state(...) clause declares", t)
 
@@ -4341,9 +4368,7 @@ def assumed_assertions(uop: Uop, texts: list[str], table: dict[str, Row] | None 
     """The assertions the generator emits for a declared uop: of its
     assumed inputs at entry (texts None), or after a statement that binds
     an assumed row result (F7)"""
-    contract = contract_of(uop)
-    if contract is None:
-        return []
+    contract = declared_contract(uop)
     if texts is None:
         return [assertion(a.fact, i.name) for i in contract.inputs for a in i.assumed]
     found = assumed_result_of(texts, rows() if table is None else table)
@@ -4400,8 +4425,8 @@ def check_fact_subjects(uop: Uop, contract: Contract) -> None:
 def verify_uop(uop: Uop, implicit_guards: int = 0, table: dict[str, Row] | None = None) -> None:
     "Check a declared uop's body against its contract (V1-V5, V7, V9; V6 inside it)"
     table = with_slots(uop, rows() if table is None else table)
-    contract = contract_of(uop)
-    if contract is None or (id(uop), implicit_guards) in _VERIFIED:
+    contract = declared_contract(uop)
+    if (id(uop), implicit_guards) in _VERIFIED:
         return
     if any(o.exchange for o in contract.outputs):
         verify_exchange(uop, contract)
@@ -4458,8 +4483,8 @@ def verify_handler(inst: Instruction, table: dict[str, Row] | None = None,
                 if not leaf.get(part.name, False):
                     raise analysis_error(f"{inst.name}: region(inline), but {part.name} "
                                          "is not leaf", inst.where)
-    contracts = [contract_of(p) for p in parts]
-    if not parts or any(c is None for c in contracts):
+    contracts = [declared_contract(p) for p in parts]
+    if not parts:
         return
     # A stack of value numbers; facts by value.  An array is one value, its
     # elements' common facts, with its declared size
@@ -4797,7 +4822,7 @@ def _calls_in_texts(texts: list[str]) -> list[tuple[str, list[list[str]]]]:
 def record_results(uop: Uop, outputs) -> tuple[Fact, ...]:
     """The facts of a declared uop's new values: the declared facts of its
     owned and inline outputs, as declared"""
-    contract = contract_of(uop)
+    contract = declared_contract(uop)
     by_name = {o.name: o for o in outputs}
     result = []
     for item in contract.outputs:

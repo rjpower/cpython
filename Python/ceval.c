@@ -2031,8 +2031,9 @@ call_push_exact(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * _PyGen_NewCall() made and whose arguments are bound, which the first send
  * does not run: a cell for each cell variable (an argument moves into its
  * cell) and, for a generator expression, the iterator of its argument.  The
- * free variables are already in the frame.  0, or -1 with an exception set
- * and the object discarded. */
+ * free variables are already in the frame.  0, or -1 with an exception set;
+ * the caller then discards the object (_PyGen_DiscardCall), which still owns
+ * the arguments. */
 static Py_NO_INLINE int
 gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
 {
@@ -2047,7 +2048,6 @@ gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
         // The slot holds the argument, or nothing for a cell variable
         PyObject *cell = PyCell_NewValue(frame->base[i]);
         if (cell == NULL) {
-            _PyGen_DiscardCall(gen);
             return -1;
         }
         PyValue argument = frame->base[i];
@@ -2079,7 +2079,6 @@ gen_prologue_run(PyThreadState *tstate, PyGenObject *gen, PyCodeObject *code)
             stack[1] = got.second;
         }
         if (PyValue_IsNull(stack[0])) {
-            _PyGen_DiscardCall(gen);
             return -1;
         }
     }
@@ -2120,6 +2119,7 @@ call_new_generator(PyThreadState *tstate, _PyInterpreterFrame *frame,
     call_fill_exact(slots, frame, head, word, PyValue_NULL, call_state,
                     gen->gi_iframe.base);
     if (gen_prologue(tstate, gen, code) < 0) {
+        _PyGen_DiscardCall(gen);
         return PyValue_NULL;
     }
     return PyValue_FromObjectSteal((PyObject *)gen);
@@ -4190,6 +4190,7 @@ eval_new_generator(PyThreadState *tstate, PyValue func, PyObject *locals,
         return NULL;
     }
     if (gen_prologue(tstate, gen, code) < 0) {
+        _PyGen_DiscardCall(gen);
         return NULL;
     }
     return gen;
@@ -5064,6 +5065,7 @@ call_bind_core(PyThreadState *tstate, _PyInterpreterFrame *frame,
     }
     if (!simple && generator) {
         if (gen_prologue(tstate, gen, code) < 0) {
+            _PyGen_DiscardCall(gen);
             return (_PyCallResult){-1, NULL};
         }
         return call_publish_object(tstate, frame, head, word, gen,

@@ -22,7 +22,8 @@ from rop_check import GraphInfo, Program
 from rop_model import (Advance, Arm, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
                        HandleType, Let, Name, Nat, Param, Placement, Publish,
-                       ScalarType, SchemaType, SpanLit, Tail, Target, Type, WrapType)
+                       ScalarType, SchemaType, SchemaVar, SpanLit, Tail, Target, Type,
+                       WrapType)
 
 
 class Unsupported(Exception):
@@ -107,7 +108,8 @@ def source_text(source: CSource, ret: str, out: str | None) -> str:
 
 
 # The C entry type of each feedback schema whose arms are lowered
-SCHEMA_C = {Schema.Attr: "_PyFbAttr", Schema.Call: "_PyFbCall"}
+SCHEMA_C = {Schema.Binary: "_PyFbBinary", Schema.Attr: "_PyFbAttr",
+            Schema.Global: "_PyFbGlobal", Schema.Call: "_PyFbCall"}
 
 
 def c_type(t: Type) -> str | None:
@@ -554,6 +556,10 @@ class ArmLowerer:
                     and a.name in self.placements):
                 # A row that spends a source takes its home
                 out.append(self.home(a.name))
+            elif (isinstance(t, SchemaType) and t.ctor is SchemaCtor.Fb
+                  and isinstance(t.schema, SchemaVar)):
+                # A row over every schema reads the entry's common header
+                out.append(f"&{self.expr_text(a)}->h")
             else:
                 out.append(self.expr(a, t))
         return out
@@ -562,9 +568,6 @@ class ArmLowerer:
         text = self.expr_text(e)
         if want is None:
             return text
-        if (isinstance(want, SchemaType) and want.ctor is SchemaCtor.Fb
-                and want.schema in SCHEMA_C):
-            return f"(const {SCHEMA_C[want.schema]} *){text}"
         have = self.type_of(e)
         if have == HandleType(Handle.O) and want == HandleType(Handle.B):
             return f"PyValue_Borrow({text})"
@@ -572,10 +575,10 @@ class ArmLowerer:
 
     def expr_text(self, e: Expr) -> str:
         if isinstance(e, Name):
-            if e.name in ENVIRONMENT_C:
-                return ENVIRONMENT_C[e.name]
             if e.name in self.placements:
                 return self.operand_value(e.name)
+            if e.name in ENVIRONMENT_C:
+                return ENVIRONMENT_C[e.name]
             if e.name not in self.info.types:
                 return e.name.rsplit(".", 1)[-1]
             return self.local(e.name)
@@ -594,9 +597,11 @@ class ArmLowerer:
         if p.kind is FieldKind.name:
             return f"GETITEM(FRAME_CO_NAMES, {self.field(operand)})"
         if p.kind is FieldKind.feedback:
-            # The entry's header; a row that takes the schema's entry casts
-            # it (expr)
-            return f"IR_FB({self.field(operand)})"
+            param = next(x for x in self.family.params if x.name == operand)
+            schema = param.type.schema
+            if schema not in SCHEMA_C:
+                raise Unsupported(f"{self.arm.name}: no C entry type for feedback {schema}")
+            return f"(({SCHEMA_C[schema]} *)IR_FB({self.field(operand)}))"
         if p.kind is FieldKind.vector and p.slots:
             return "this_instr"
         raise Unsupported(f"{self.arm.name}: operand {operand} used as a value")

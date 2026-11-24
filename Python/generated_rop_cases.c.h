@@ -37,7 +37,7 @@
             PyValue binary_at_origin1_value;
             PyValue binary_at_origin1_kept;
             PyValue binary_at_origin1_dropped;
-            if (!_PyFb_TickQuiet(IR_FB(IR_D(ir_word)))) {
+            if (!_PyFb_TickQuiet(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h)) {
                 goto rop_Add_Generic_adapt_before_use_add2_Sample;
             }
             rop_Add_Generic_adapt_before_use_add2_Run:
@@ -76,7 +76,7 @@
             goto rop_Add_Generic_adapt_before_use_add2_Other;
             rop_Add_Generic_adapt_before_use_add2_Chosen:
             adapt_before_use_add2_c = ROP_HANDLER_Add_Int;
-            ret2 = _PyRop_Install(this_instr, IR_FB(IR_D(ir_word)), adapt_before_use_add2_c);
+            ret2 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_add2_c);
             if (ret2 == 0) {
                 goto rop_Add_Generic_adapt_before_use_add2_Run;
             }
@@ -86,7 +86,7 @@
             next_instr = this_instr;
             DISPATCH_SAME_OPARG();
             rop_Add_Generic_adapt_before_use_add2_Other:
-            _PyRop_Backoff(IR_FB(IR_D(ir_word)));
+            _PyRop_Backoff(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h);
             goto rop_Add_Generic_Run;
             rop_Add_Generic_binary_at_origin1_Failed:
             IR_STUB_ESCAPE();
@@ -172,7 +172,7 @@
             if (!_PyRop_DefaultEvalFrame(tstate)) {
                 ROP_NO_GENERIC(Call);
             }
-            if (!_PyRop_FunctionVersion(PyValue_Borrow(*home_fn), (const _PyFbCall *)IR_FB(IR_D(ir_word)))) {
+            if (!_PyRop_FunctionVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
                 ROP_NO_GENERIC(Call);
             }
             if (!_PyRop_ExactPositional(frame, PyValue_Borrow(*home_fn), this_instr)) {
@@ -302,7 +302,7 @@
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             _PyAttrRecipe r;
-            if (!_PyAttr_AdmittedInstanceSlot((const _PyFbAttr *)IR_FB(IR_D(ir_word)), GETITEM(FRAME_CO_NAMES, IR_C(ir_word)), &out1)) {
+            if (!_PyAttr_AdmittedInstanceSlot(((_PyFbAttr *)IR_FB(IR_D(ir_word))), GETITEM(FRAME_CO_NAMES, IR_C(ir_word)), &out1)) {
                 goto rop_GetAttr_Instance_Miss;
             }
             r = out1;
@@ -354,7 +354,7 @@
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
             _PyAttrRecipe r;
-            if (!_PyAttr_AdmittedShape((const _PyFbAttr *)IR_FB(IR_D(ir_word)), GETITEM(FRAME_CO_NAMES, IR_C(ir_word)), &out1)) {
+            if (!_PyAttr_AdmittedShape(((_PyFbAttr *)IR_FB(IR_D(ir_word))), GETITEM(FRAME_CO_NAMES, IR_C(ir_word)), &out1)) {
                 goto rop_GetAttr_Shape_Miss;
             }
             r = out1;
@@ -407,7 +407,7 @@
                 ROP_NO_GENERIC(GetAttr);
             }
             o = PyValue_AsKnownObjectBorrow(v);
-            if (!_PyAttr_PolyShape(frame, (const _PyFbAttr *)IR_FB(IR_D(ir_word)), o, &out1)) {
+            if (!_PyAttr_PolyShape(frame, ((_PyFbAttr *)IR_FB(IR_D(ir_word))), o, &out1)) {
                 goto rop_GetAttr_PolyShape_Miss;
             }
             r = out1;
@@ -446,7 +446,7 @@
             PyValue old_self_dst;
             PyValue *const home_self_dst = &IR_SLOT(IR_B(ir_word));
             _PyAttrRecipe r;
-            if (!_PyAttr_AdmittedMethod((const _PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)), GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out1)) {
+            if (!_PyAttr_AdmittedMethod(((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))), GETITEM(FRAME_CO_NAMES, IR_D(ir_word)), &out1)) {
                 goto rop_GetMethod_MethodValues_Miss;
             }
             r = out1;
@@ -502,7 +502,7 @@
                 ROP_NO_GENERIC(GetMethod);
             }
             o = PyValue_AsKnownObjectBorrow(v);
-            if (!_PyAttr_PolyMethod(frame, (const _PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff)), o, &out1)) {
+            if (!_PyAttr_PolyMethod(frame, ((_PyFbAttr *)IR_FB(((uint32_t)(this_instr[1] >> 0) & 0xffff))), o, &out1)) {
                 goto rop_GetMethod_PolyMethod_Miss;
             }
             r = out1;

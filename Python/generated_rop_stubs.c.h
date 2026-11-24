@@ -84,7 +84,7 @@ _PyIR_Rop_Stub_Add_Generic(
     PyValue binary_at_origin1_value;
     PyValue binary_at_origin1_kept;
     PyValue binary_at_origin1_dropped;
-    if (!_PyFb_TickQuiet(IR_FB(IR_D(ir_word)))) {
+    if (!_PyFb_TickQuiet(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h)) {
         goto rop_Add_Generic_adapt_before_use_add2_Sample;
     }
     rop_Add_Generic_adapt_before_use_add2_Run:
@@ -123,7 +123,7 @@ _PyIR_Rop_Stub_Add_Generic(
     goto rop_Add_Generic_adapt_before_use_add2_Other;
     rop_Add_Generic_adapt_before_use_add2_Chosen:
     adapt_before_use_add2_c = ROP_HANDLER_Add_Int;
-    ret2 = _PyRop_Install(this_instr, IR_FB(IR_D(ir_word)), adapt_before_use_add2_c);
+    ret2 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_add2_c);
     if (ret2 == 0) {
         goto rop_Add_Generic_adapt_before_use_add2_Run;
     }
@@ -133,7 +133,7 @@ _PyIR_Rop_Stub_Add_Generic(
     next_instr = this_instr;
     DISPATCH_SAME_OPARG();
     rop_Add_Generic_adapt_before_use_add2_Other:
-    _PyRop_Backoff(IR_FB(IR_D(ir_word)));
+    _PyRop_Backoff(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h);
     goto rop_Add_Generic_Run;
     rop_Add_Generic_binary_at_origin1_Failed:
     IR_STUB_ESCAPE();

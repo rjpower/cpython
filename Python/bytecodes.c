@@ -5268,16 +5268,44 @@ dummy_func(
             EXIT_IF(((PyMethodObject *)callable_o)->im_weakreflist != NULL);
         }
 
-        // The method's function and receiver are views, which the method
-        // operand keeps alive until the frame is pushed: the push counts
-        // them and releases the method.
-        op(_INIT_CALL_BOUND_METHOD_EXACT_ARGS, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
-            assert(!(call_state & CALL_SELF_PRESENT));
+        // The guards of the bound method's function, through the method
+        // (the function guards, taken through im_func)
+        op(_CHECK_METHOD_EXACT_ARGS,
+                (callable: exact(PyMethod_Type), null, unused[oparg]
+                 -- callable, null, unused[oparg]))
+            effects(reads) exits(next, miss)
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+            PyFunctionObject *func =
+                (PyFunctionObject *)((PyMethodObject *)callable_o)->im_func;
+            PyCodeObject *code = (PyCodeObject *)func->func_code;
+            EXIT_IF(code->co_argcount != oparg + 1,
+                    "the function takes another number of arguments");
+        }
+
+        op(_CHECK_METHOD_STACK_SPACE,
+                (callable: exact(PyMethod_Type), unused, unused[oparg]
+                 -- callable, unused, unused[oparg]))
+            effects(reads) exits(next, deopt)
+        {
+            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+            PyFunctionObject *func =
+                (PyFunctionObject *)((PyMethodObject *)callable_o)->im_func;
+            PyCodeObject *code = (PyCodeObject *)func->func_code;
+            DEOPT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));
+        }
+
+        // After the last guard: the push takes the method's function and
+        // receiver in its place (CALL_EXPANDED).  The operands stay the
+        // method and NULL, so no state of the word holds a view.
+        op(_INIT_CALL_BOUND_METHOD_EXACT_ARGS,
+                (callable: exact(PyMethod_Type), null, unused[oparg]
+                 -- callable, null, unused[oparg]))
+            effects() exits(next)
+            state(call_state: self(absent) -- call_state: self(absent) method(expanded))
+        {
             STAT_INC(CALL, hit);
-            self_or_null = ((PyMethodObject *)callable_o)->im_self;
-            call_state |= CALL_SELF_PRESENT | CALL_EXPANDED;
-            callable = _PyIR_AdoptTemp(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
+            call_state |= CALL_EXPANDED;
         }
 
         op(_CHECK_PEP_523, (--))
@@ -5317,8 +5345,9 @@ dummy_func(
         }
 
         // The child takes its callable and arguments from the operands
-        // (a temporary moves, a local is counted) at the arena top, and
-        // the bound method's operand is released.
+        // (a temporary moves, a local is counted) at the arena top; for a
+        // bound method (CALL_EXPANDED), its function and receiver, counted,
+        // and the method's operand is released.
         op(_INIT_CALL_PY_EXACT_ARGS,
                 (callable: consumed, self_or_null: consumed, args[oparg]: closed
                  -- new_frame: owned))
@@ -5354,11 +5383,11 @@ dummy_func(
             unused/1 + // Skip over the entry distance
             _CHECK_PEP_523 +
             _CHECK_CALL_BOUND_METHOD_EXACT_ARGS +
-            _INIT_CALL_BOUND_METHOD_EXACT_ARGS +
-            _CHECK_FUNCTION_VERSION +
-            _CHECK_FUNCTION_EXACT_ARGS +
-            _CHECK_STACK_SPACE +
+            _CHECK_METHOD_VERSION +
+            _CHECK_METHOD_EXACT_ARGS +
+            _CHECK_METHOD_STACK_SPACE +
             _CHECK_RECURSION_REMAINING +
+            _INIT_CALL_BOUND_METHOD_EXACT_ARGS +
             _INIT_CALL_PY_EXACT_ARGS +
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;

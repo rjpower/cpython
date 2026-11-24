@@ -1965,13 +1965,14 @@
      * frame of the exactly-matching Python function \
      * (_PyFrame_PushUnchecked: a write of the data stack and tstate) and \
      * moves the operands into its first slots (call_fill_exact: a \
-     * temporary operand moves out of its home, a local is counted; a bound \
-     * method that the call expanded has its receiver counted and its \
-     * method operand released by call_release_callable, which is a \
+     * temporary operand moves out of its home, a local is counted; for a \
+     * bound method (CALL_EXPANDED) its function and receiver are counted \
+     * and its method operand released by call_release_callable, which is a \
      * release: the guard _CHECK_CALL_BOUND_METHOD_EXACT_ARGS makes the \
      * method have no weakrefs, but the row's contract is the function's). \
-     * callable is a view of the function for an expanded call, else the \
-     * home's value, which moves out; self is the receiver. No failure path \
+     * callable is the callable operand, the function or (CALL_EXPANDED) \
+     * the bound method; self is the self operand, NULL for a bound method; \
+     * a temporary of either moves out of its home. No failure path \
      * (the guards checked space and arity). Callbacks: none in the checked \
      * case; the release of the method operand is `releases`. */ \
     HELPER(call_push_exact, _PyInterpreterFrame *, (PyThreadState *, _PyInterpreterFrame *, const _PyIRWord *, _PyIRWord, PyValue, PyValue, int), \

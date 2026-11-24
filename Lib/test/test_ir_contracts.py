@@ -2531,7 +2531,7 @@ class VerifierTests(unittest.TestCase):
                      r"exact\(PyLong_Type\) is no fact of a handler's state")
 
     def test_a_declared_write_of_the_state(self):
-        # _INIT_CALL_BOUND_METHOD_EXACT_ARGS: self(absent) to self(present)
+        # A declared write of call_state: self(absent) to self(present)
         source = """
             op(_OP, (x: object -- x: object)) effects(%s) exits(next)
                 state(call_state: self(absent) -- call_state: %s)

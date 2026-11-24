@@ -412,6 +412,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&PyFunction_New), PyObject
               "PyFunction_New: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_FrameClearAndPopGeneralWithResult), PyValue (*)(PyThreadState *, _PyInterpreterFrame *, PyValue)),
               "_PyEval_FrameClearAndPopGeneralWithResult: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_RetireThreadFrameWithResult), PyValue (*)(PyThreadState *, _PyInterpreterFrame *, PyValue)),
+              "_PyEval_RetireThreadFrameWithResult: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyFrame_GetCode), PyCodeObject * (*)(_PyInterpreterFrame *)),
               "_PyFrame_GetCode: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyFrame_GetFunction), PyFunctionObject * (*)(_PyInterpreterFrame *)),

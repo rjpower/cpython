@@ -375,6 +375,7 @@ _PyIR_EventOpcode(int handler)
 int
 _PyIR_BaseOpcode(int handler)
 {
+    assert(handler >= 0 && handler < IR_NUM_HANDLERS);
     if (handler == IR_JUMP) {
         return JUMP_FORWARD;
     }
@@ -386,6 +387,8 @@ _PyIR_BaseOpcode(int handler)
         handler = _PyIR_Formats[handler].shadow;
         assert(handler < IR_FIRST_ONLY_HANDLER);
     }
+    // _PyOpcode_Deopt is sized for the stack ops: a handler id is no index
+    assert(handler < (int)Py_ARRAY_LENGTH(_PyOpcode_Deopt));
     return _PyOpcode_Deopt[handler];
 }
 

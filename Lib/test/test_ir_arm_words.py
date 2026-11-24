@@ -10,6 +10,7 @@ twice, with and without the forced arm, and the two outputs must agree.
 import _opcode
 import dis
 import json
+import types
 import textwrap
 import unittest
 
@@ -189,6 +190,29 @@ class ForceArmTests(unittest.TestCase):
                 length = _opcode.get_ir_word_length(handler)
                 self.assertEqual(length, 2 if name.startswith("GetMethod.") else 1)
                 self.assertIsNotNone(contract[handler])
+
+    def test_every_arm_stands_for_a_stack_op_of_its_family(self):
+        # Tables sized for stack ops (_PyOpcode_Deopt, _PyOpcode_Caches, the
+        # statistics) are indexed through the base opcode, never the handler
+        contract = _opcode.get_ir_contract()
+        stack_op = {"Add": "BINARY_OP", "GetAttr": "LOAD_ATTR",
+                    "GetMethod": "LOAD_ATTR"}
+        for name, handler in capi.arm_handlers().items():
+            with self.subTest(arm=name):
+                self.assertEqual(contract[handler].base,
+                                 dis.opmap[stack_op[name.split(".")[0]]])
+                self.assertEqual(contract[handler].shadow, contract[handler].base)
+
+    def test_the_old_specializer_leaves_a_forced_arm_to_its_miss_route(self):
+        # Adaptation of an arm word goes through the family's adaptation
+        # macro, not through specialize.c, whose tables the arm's handler id
+        # would index out of bounds.  Warming the function hits the generic
+        # word's counter and must leave the forced arm in place.
+        capi.force_arm(self.code, self.offset, "Add.Int")
+        f = types.FunctionType(self.code, {})
+        for _ in range(200):
+            self.assertEqual(f(1, 2), 3)
+        self.assertIn("Add.Int", [w[0] for w in capi.get_ir(self.code, True)])
 
     def test_the_disassembler_names_every_arm_word(self):
         for name, handler in capi.arm_handlers().items():

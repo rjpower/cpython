@@ -470,7 +470,10 @@ resolve_next_locations(_PyRegCfg *cfg)
  * CANON(k), whose home is slot nlocalsplus + k (a bridge constraint until
  * every consumer reads named operands): every edge into the block, and
  * every op whose handler finds position k, gives CANON(k) the identity at
- * position k. */
+ * position k.  Where SWAP has permuted identities so that a handler's
+ * parameter cannot be renamed, the op's exceptional edge carries an ingress
+ * recipe instead: the identities at the handler's positions, which the
+ * unwinder moves to the parameters' homes. */
 
 struct _PyRegTr {
     _PyRegCfg *cfg;
@@ -492,10 +495,17 @@ struct _PyRegTr {
     char *held;
     int *free_since;
     /* Whether SWAP permutes identities; a region that cannot bind its
-     * parameters so translates again with SWAP as a word (failed). */
+     * parameters so translates again (failed): with recipes on its
+     * exceptional edges, then with SWAP as a word. */
     int elide;
+    int recipes;            // exceptional edges take recipes, not renames
     int failed;
     int permuted;           // the region elided a SWAP
+    /* The recipe of the op being translated: pairs of an identity and the
+     * stack position of the parameter that it becomes */
+    int *rec;
+    int nrec;
+    int arec;
 };
 
 int
@@ -650,7 +660,7 @@ note_op(_PyRegTr *t, const _PyRegOp *op)
  * the fresh identity to the parameter from its definition.  That needs the
  * parameter free from there on.  Under last in, first out it always is;
  * after SWAP has permuted identities it may not be, and the region then
- * translates again with its SWAPs as words. */
+ * translates again, at the next level. */
 static int
 bind_param(_PyRegTr *t, int k)
 {
@@ -694,6 +704,33 @@ bind_params_below(_PyRegTr *t, int depth)
     return SUCCESS;
 }
 
+/* The recipe of an exceptional edge to a handler of the given base: each
+ * position below it whose identity is not its parameter.  A local is not
+ * the frame's to move, so its region keeps its SWAPs. */
+static int
+handler_recipe(_PyRegTr *t, int base)
+{
+    _PyRegCfg *cfg = t->cfg;
+    int n = Py_MIN(base, t->sp);
+    t->nrec = 0;
+    RETURN_IF_ERROR(grow((void **)&t->rec, &t->arec, Py_MAX(2 * n, 1),
+                         sizeof(int)));
+    for (int k = 0; k < n; k++) {
+        int v = t->stack[k];
+        if (v == _PyReg_CANON(cfg, k)) {
+            continue;
+        }
+        if (v < cfg->nlocalsplus || k >= IR_MAX_SLOTS) {
+            t->failed = 1;
+            continue;
+        }
+        t->rec[2 * t->nrec] = v;
+        t->rec[2 * t->nrec + 1] = k;
+        t->nrec++;
+    }
+    return SUCCESS;
+}
+
 int
 _PyRegCfg_AddOperands(_PyRegCfg *cfg, int n, int *index)
 {
@@ -724,6 +761,8 @@ new_op(_PyRegTr *t, const _PyRegOp *src, int nuses, int ndefs,
     op->npop = (int16_t)nuses;
     op->nimplicit = 0;
     op->nout = (int16_t)ndefs;
+    op->nrecipe = 0;
+    op->recipe = 0;
     op->depth = t->sp;
     *result = op;
     return SUCCESS;
@@ -773,7 +812,7 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
         pushed = 3;
     }
     // Every handler finds its parameters before the op can raise
-    if (instr->except >= 0) {
+    if (instr->except >= 0 && !t->recipes) {
         RETURN_IF_ERROR(bind_params_below(t, handler_base(cfg, instr->except)));
     }
     int depth = t->sp;
@@ -784,6 +823,12 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
         // SEND is the stack they leave there.
         RETURN_IF_ERROR(bind_params_below(t, window ? depth : depth - popped));
     }
+    // ... or, after the renames, its recipe
+    t->nrec = 0;
+    if (instr->except >= 0 && t->recipes) {
+        RETURN_IF_ERROR(handler_recipe(t, handler_base(cfg, instr->except)));
+    }
+    int nrec = t->nrec;
     int nread = window ? popped : Py_MAX(popped, fmt->ninputs);
     if (nread > depth) {
         PyErr_Format(PyExc_SystemError, "stack underflow at line %d",
@@ -824,7 +869,10 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     }
     _PyRegOp *op;
     if (err == SUCCESS) {
-        err = new_op(t, instr, nread + nimplicit, pushed, &op);
+        err = new_op(t, instr, nread + nimplicit + nrec, pushed, &op);
+    }
+    if (err == SUCCESS && nrec) {
+        err = _PyRegCfg_AddOperands(cfg, nrec, &op->recipe);
     }
     if (err == SUCCESS) {
         int *in = _PyReg_IN(cfg, op);
@@ -855,6 +903,13 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
         op->nimplicit = (int16_t)nimplicit;
         memcpy(_PyReg_OUT(cfg, op), out, pushed * sizeof(int));
         note_op(t, op);
+        // The recipe's identities live until the op, which takes none
+        for (int q = 0; q < nrec; q++) {
+            in[nread + nimplicit + q] = t->rec[2 * q];
+            cfg->operands[op->recipe + q] = t->rec[2 * q + 1];
+        }
+        op->nimplicit = (int16_t)(nimplicit + nrec);
+        op->nrecipe = (int16_t)nrec;
         for (int j = 0; wbase >= 0 && j < pushed; j++) {
             if (out[j] >= _PyReg_FRESH0(cfg)) {
                 t->natural[out[j] - _PyReg_FRESH0(cfg)] = wbase + j;
@@ -933,7 +988,10 @@ translate(_PyRegCfg *cfg)
         range[2 * b + 1] = cfg->blocks[b].end;
     }
     int err = SUCCESS;
-    int region_b = 0, again = 0;
+    /* A region translates first with SWAP permuting identities and
+     * handlers' parameters renamed, then with recipes on its exceptional
+     * edges, and last with SWAP as a word */
+    int region_b = 0, level = 0;
     int r_noperands = 0, r_nvregs = 0, r_maxpos = 0;
     for (int b = 0; b < n && err == SUCCESS; b++) {
         _PyRegBlock *blk = &cfg->blocks[b];
@@ -944,10 +1002,10 @@ translate(_PyRegCfg *cfg)
             r_noperands = cfg->noperands;
             r_nvregs = cfg->nvregs;
             r_maxpos = t.maxpos;
-            t.elide = !again && !cfg->legacy[b];
+            t.elide = level < 2 && !cfg->legacy[b];
+            t.recipes = t.elide && level == 1;
             t.failed = 0;
             t.permuted = 0;
-            again = 0;
             int used = Py_MIN(Py_MAX(t.touched, blk->startdepth) + 1,
                               IR_MAX_SLOTS);
             for (int k = 0; k < used; k++) {
@@ -979,14 +1037,15 @@ translate(_PyRegCfg *cfg)
             for (int r = region_b; r <= b; r++) {
                 cfg->elided[r] = t.elide && t.permuted;
             }
+            level = 0;
         }
         if (err == SUCCESS && region_end && t.failed) {
-            // Again, with SWAP as a word
+            // Again, at the next level
             t.nops = t.region_op;
             cfg->noperands = r_noperands;
             cfg->nvregs = r_nvregs;
             t.maxpos = r_maxpos;
-            again = 1;
+            level++;
             b = region_b - 1;
         }
     }
@@ -996,6 +1055,7 @@ translate(_PyRegCfg *cfg)
     PyMem_Free(t.natural);
     PyMem_Free(t.held);
     PyMem_Free(t.free_since);
+    PyMem_Free(t.rec);
     if (err != SUCCESS) {
         PyMem_Free(t.ops);
         return ERROR;
@@ -1098,12 +1158,13 @@ transfer(_PyRegCfg *cfg, _PyRegLiveness *lv, _PyRegOp *op, uint64_t *live,
         }
     }
     // The handler finds the values below its depth where they are, so
-    // they are live while the op runs
+    // they are live while the op runs.  Those of its recipe are the op's
+    // implicit inputs.
     if (op->except >= 0) {
         int hd = handler_base(cfg, op->except);
         uint64_t *h = lv->live_in[op->except];
         for (int k = 0; k < hd; k++) {
-            if (BIT_GET(h, k)) {
+            if (BIT_GET(h, k) && !_PyRegOp_RecipeDst(cfg, op, k)) {
                 BIT_SET(live, k);
             }
         }
@@ -1465,10 +1526,10 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
     int top_before = o->top;
     int stored = window ? fmt->dst : _PyRegOp_Through(op, fmt);
     // Inputs that the op takes free their slots: the popped ones, and
-    // those a raise leaves for the unwinder.  A value that is no longer
-    // read but not yet taken still holds its slot, as in a loop that
-    // never exits.
-    for (int k = op->nread - op->npop; k < nin; k++) {
+    // those a raise leaves for the unwinder, but not its recipe's.  A
+    // value that is no longer read but not yet taken still holds its slot,
+    // as in a loop that never exits.
+    for (int k = op->nread - op->npop; k < nin - op->nrecipe; k++) {
         int v = in[k];
         if (v < nl) {
             continue;
@@ -2062,6 +2123,13 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                             is_out |= out[j] == v;
                         }
                         if (is_out) {
+                            continue;
+                        }
+                        // The recipe moves its values, and releases what
+                        // its homes held
+                        if (_PyRegOp_RecipeSource(cfg, op, v) ||
+                            (s < first && _PyRegOp_RecipeDst(cfg, op, s - nl)))
+                        {
                             continue;
                         }
                         if (bit < hd ? s != nl + bit : s < first) {

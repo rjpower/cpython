@@ -642,6 +642,10 @@ def seed_clauses(uop, facts: dict, table, overrides: dict) -> Clauses:
                 raise Gap(f"`{item.name}` is an alias of no input it is assigned from")
             found = vocab(facts["guards"].get(source, ()), f"a guard fact of `{source}`")
             w = [f"moved({source})"] + words(found)
+        elif _always_null(uop, item.name):
+            # The CONSTANT row PyValue_NULL, VALUE(inline null): a NULL
+            # output owns nothing, and `null` says what the record holds
+            w = ["inline", "null"]
         else:
             found = vocab(facts["results"].get(item.name, ()), f"a result fact of `{item.name}`")
             w = ["owned"] + words(found)
@@ -658,6 +662,12 @@ def seed_clauses(uop, facts: dict, table, overrides: dict) -> Clauses:
         if subject in ins and subject not in names:
             vocab(found, f"a guard fact of the consumed input `{subject}`")
     return c
+
+
+def _always_null(uop, name: str) -> bool:
+    "whether every assignment of output name is PyValue_NULL"
+    rhs = [ir_records._uncast(r) for _, r in ir_contract._assignments(uop, name)]
+    return bool(rhs) and all(r == ["PyValue_NULL"] for r in rhs)
 
 
 def _alias_source(uop, name: str) -> str | None:

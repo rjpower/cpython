@@ -1716,7 +1716,9 @@ dummy_func(
             _RETURN_VALUE_EMPTY;
 
         // The value is taken before the event, which can run code
-        tier1 op(_RETURN_VALUE_EVENT, (val -- taken)) {
+        tier1 op(_RETURN_VALUE_EVENT, (val: consumed -- taken: moved(val)))
+            effects(runs_python) exits(next, raise)
+        {
             PyValue held = TAKE(val);
             int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_RETURN,

@@ -6488,7 +6488,9 @@ dummy_func(
         macro(BINARY_OP) region(shared) = unused/1 + _SPECIALIZE_BINARY_OP + unused/4 + _BINARY_OP;
 
         pure inst(SWAP, (bottom, unused[oparg-2], top --
-                    bottom, unused[oparg-2], top)) {
+                    bottom: moved(top), unused[oparg-2], top: moved(bottom)))
+            effects() exits(next)
+        {
             PyValue temp = bottom;
             bottom = top;
             top = temp;

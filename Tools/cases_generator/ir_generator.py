@@ -8650,11 +8650,18 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
             and extent(inputs, inst) == (0, "_PyIR_EXT_OPARG")
             and extent([entry.item for entry in outputs], inst) == (1, "_PyIR_EXT_OPARG")
             and bodies_match("{ top = PyValue_DUP(bottom); }")) else unknown
-    if inst.name == "SWAP":
-        return "_PyIR_TRANSFER_SWAP" if (fmt.window
+    contracts = [ir_contract.contract_of(part) for part in parts]
+    exchanged = {o.name for c in contracts if c is not None for o in c.outputs if o.exchange}
+    if exchanged:
+        # A declared exchange (ir_contract.check_exchange, verify_exchange)
+        # of the first and last items of an oparg window: the swap
+        items = parts[0].stack.inputs if len(parts) == 1 else []
+        return "_PyIR_TRANSFER_SWAP" if (fmt.window and len(items) == 3
+            and exchanged == {items[0].name, items[-1].name}
+            and items[1].name == "unused"
             and extent(inputs, inst) == (0, "_PyIR_EXT_OPARG")
             and extent([entry.item for entry in outputs], inst) == (0, "_PyIR_EXT_OPARG")
-            and bodies_match("{ PyValue temp = bottom; bottom = top; top = temp; }")) else unknown
+            ) else unknown
     if inst.name in ("IR_JUMP", "JUMP_FORWARD", "JUMP_BACKWARD_NO_INTERRUPT"):
         return "_PyIR_TRANSFER_PRESERVE" if scalar_shape(0, 0) and bodies_match("{ JUMPTO(oparg); }") else unknown
     if inst.name in ("POP_JUMP_IF_NONE", "POP_JUMP_IF_NOT_NONE"):

@@ -215,6 +215,13 @@ class SliceTests(unittest.TestCase):
         'the record has raise, return, yield',
         'CLEANUP_THROW_XFER_RETURN/_CLEANUP_THROW: declares exits(branch, raise), '
         'the record has raise, return',
+        # G3a: SWAP's exchange keeps every home (pass-throughs); the walk
+        # reads the copies as a consume of each input and a new owner in
+        # each output.  A record from the declaration reads Item.exchange.
+        'SWAP/_SWAP: input `bottom` is declared a pass-through, the record has CONSUMED',
+        'SWAP/_SWAP: input `top` is declared a pass-through, the record has CONSUMED',
+        'SWAP/_SWAP: output `bottom` is declared a pass-through, the record has OWNED',
+        'SWAP/_SWAP: output `top` is declared a pass-through, the record has OWNED',
         # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
         # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
         'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '
@@ -463,6 +470,15 @@ class VerifierTests(unittest.TestCase):
                 PyValue temp = bottom; bottom = top; top = temp;
             }
         """, r"OP: `top` is exchanged, and its home changes")
+
+    def test_swap_is_a_declared_exchange(self):
+        swap = analysis.instructions["SWAP"]
+        contract = ir_contract.contract_of(swap.parts[0])
+        self.assertEqual({o.name: o.exchange for o in contract.outputs if o.exchange},
+                         {"bottom": "top", "top": "bottom"})
+        formats = ir_generator.compute_formats(analysis)
+        self.assertEqual(ir_generator.normal_transfer_kind(swap, formats["SWAP"]),
+                         "_PyIR_TRANSFER_SWAP")
 
     # V1, V2
 

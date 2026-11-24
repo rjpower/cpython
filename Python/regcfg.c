@@ -1028,46 +1028,12 @@ rule_binary_op(_PyRegTr *t, const _PyRegOp *src)
     if (src->oparg != NB_ADD) {
         return _PyRegTr_Legacy(t, src);
     }
-    _PyRegCfg *cfg = t->cfg;
-    // Every handler finds its parameters before the op can raise ...
-    if (src->except >= 0 && !t->recipes) {
-        RETURN_IF_ERROR(bind_params_below(t, handler_base(cfg, src->except)));
-    }
-    // ... or, after the renames, its recipe
-    t->nrec = 0;
-    if (src->except >= 0 && t->recipes) {
-        RETURN_IF_ERROR(handler_recipe(t, handler_base(cfg, src->except)));
-    }
-    int nrec = t->nrec;
-    if (t->sp < 2) {
-        PyErr_Format(PyExc_SystemError, "stack underflow at line %d",
-                     src->loc.lineno);
-        return ERROR;
-    }
-    int uses[2] = {t->stack[t->sp - 2], t->stack[t->sp - 1]};
+    int uses[2];
     int dst;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 2, uses));
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    _PyRegOp *op;
-    RETURN_IF_ERROR(new_op(t, src, 2 + nrec, 1, &op));
-    if (nrec) {
-        RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, nrec, &op->recipe));
-    }
-    op->opcode = ROP_HANDLER_Add_Generic;
-    int *in = _PyReg_IN(cfg, op);
-    in[0] = uses[0];
-    in[1] = uses[1];
-    _PyReg_OUT(cfg, op)[0] = dst;
-    note_op(t, op);
-    // The recipe's identities live until the op, which takes none
-    for (int q = 0; q < nrec; q++) {
-        in[2 + q] = t->rec[2 * q];
-        cfg->operands[op->recipe + q] = t->rec[2 * q + 1];
-    }
-    op->nread = 2;
-    op->npop = 2;
-    op->nimplicit = (int16_t)nrec;
-    op->nrecipe = (int16_t)nrec;
-    t->sp -= 2;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Add_Generic, uses, 2,
+                                  &dst, 1, NULL));
     return _PyRegTr_Push(t, dst);
 }
 

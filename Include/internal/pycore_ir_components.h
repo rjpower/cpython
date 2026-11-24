@@ -351,9 +351,13 @@
               ARGS(borrowed object), VIEW, EFFECTS()) \
     PRIMITIVE(_PyValue_AsKnownObjectBorrowPointer, PyObject *, (PyValueBorrow), \
               ARGS(borrowed object), VIEW, EFFECTS()) \
-    /* The identity on a feedback word's bits (pycore_value.h) */ \
+    /* The identity on a feedback word's bits (pycore_value.h).  The word is \
+     * a cache entry's guarded value (class_value/4), which the specializer \
+     * stores only when it holds the attribute or method that the type \
+     * version names (specialize.c), so it is never PyValue_NULL; the \
+     * generator asserts it after each call (F7) */ \
     PRIMITIVE(_PyValueGuarded_Load, PyValueBorrow, (_PyValueGuarded), \
-              ARGS(scalar), SCALAR, EFFECTS()) \
+              ARGS(scalar), VALUE(borrowed assumed(nonnull) by specializer), EFFECTS()) \
     PRIMITIVE(PyValue_AsKnownObjectSteal, PyObject *, (PyValue), \
               ARGS(consumed object), VIEW, EFFECTS()) \
     /* The type of a value or an object, a pointer along the path `type`, \
@@ -541,9 +545,13 @@
     /* seeded from generators_common.py's expansion, ir_records.effect_sites */ \
     MACRO(SYNC_SP, \
         ARGS(), NONE, EFFECTS(), EXITS()) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* pycore_cell.h: a new owner of the cell's value (PyValue_XDUP: a count \
+     * only, no allocation, no callback), PyValue_NULL for an empty cell.  \
+     * No exception is set on that NULL: the caller says what an empty cell \
+     * means (LOAD_DEREF raises NameError).  VALUE_OR_NULL is the closest \
+     * shape: the caller tests the result before it uses it */ \
     HELPER(_PyCell_GetValue, PyValue, (PyCellObject *), \
-        ARGS(scalar), VALUE(owned), EFFECTS(reads)) \
+        ARGS(scalar), VALUE_OR_NULL(owned), EFFECTS(reads)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyCell_SetValue, void, (PyCellObject *, PyValue), \
         ARGS(scalar, consumed), NONE, EFFECTS(writes, releases)) \
@@ -643,7 +651,7 @@
         ARGS(frame, object, object), SCALAR, EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(value_import_level, int, (PyValue), \
-        ARGS(consumed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
     /* ceval.c: as _PyValue_GetOptionalItem, -1 if the lazy import fails (G0a4: a CASES result) */ \
     HELPER(value_load_from_dict, _PyStatusValue, (PyThreadState *, PyObject *, PyObject *), \
         ARGS(tstate, object, object), \
@@ -1183,9 +1191,14 @@
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_ImportName, PyObject *, (PyThreadState *, PyObject *, PyObject *, PyObject *, PyObject *, PyObject *, int), \
         ARGS(tstate, object, object, object, object, object, scalar), SCALAR, EFFECTS(runs_python)) \
-    /* seeded from the C prototype, ir_records.effect_sites */ \
+    /* Objects/lazyimportobject.c: a new reference, or NULL with an exception \
+     * set.  The arguments are borrowed.  Callees: lazy_import_get_loaded_attr \
+     * (sys.modules lookups, getattr on the loaded module, which runs \
+     * Python; it clears an Exception from a failed lookup and returns NULL \
+     * without one, which falls to the new lazy object) and _PyLazyImport_New \
+     * (allocates; NULL on failure) */ \
     HELPER(_PyEval_LazyImportFrom, PyObject *, (PyThreadState *, _PyInterpreterFrame *, PyObject *, PyObject *), \
-        ARGS(tstate, frame, object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(tstate, frame, object, object), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* seeded from the C prototype, ir_records.effect_sites */ \
     HELPER(_PyEval_LazyImportName, PyObject *, (PyThreadState *, PyObject *, PyObject *, PyObject *, PyObject *, PyObject *, int, int), \
         ARGS(tstate, object, object, object, object, object, scalar, scalar), SCALAR, EFFECTS(runs_python)) \

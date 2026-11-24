@@ -585,7 +585,10 @@ dummy_func(
 
         macro(TO_BOOL_BOOL) = unused/1 + unused/2 + _GUARD_TOS_BOOL;
 
-        leaf inline_ok op(_TO_BOOL_INT, (value -- res, v)) {
+        leaf inline_ok op(_TO_BOOL_INT,
+                (value: consumed exact(PyLong_Type) -- res: owned exact(PyBool_Type), v: moved(value)))
+            effects(reads) exits(next)
+        {
             STAT_INC(TO_BOOL, hit);
             bool zero;
             if (PyValue_IsInlineInt(value)) {
@@ -637,7 +640,9 @@ dummy_func(
             DEAD(value);
         }
 
-        op(_TO_BOOL_NONE, (value -- res)) {
+        op(_TO_BOOL_NONE, (value: consumed -- res: owned exact(PyBool_Type)))
+            effects() exits(next, miss)
+        {
             // This one is a bit weird, because we expect *some* failures:
             EXIT_IF(!PyValue_IsNone(value));
             DEAD(value);
@@ -4075,7 +4080,9 @@ dummy_func(
             }
         }
 
-        leaf op(_IS_NONE, (value -- b)) {
+        leaf op(_IS_NONE, (value: consumed -- b: owned exact(PyBool_Type)))
+            effects(releases) exits(next)
+        {
             if (PyValue_IsNone(value)) {
                 b = PyValue_True;
                 DEAD(value);

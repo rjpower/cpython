@@ -176,6 +176,16 @@ class SliceTests(unittest.TestCase):
               'inferred "", declared "PyValue_None"',
               f'{handler}.record.uops[0].guards[0].facts[0].kind: '
               'inferred "IS_NONE", declared "IDENTITY"')),
+        # G0c9: _TO_BOOL_NONE's guard states the identity of the word with
+        # PyValue_None, as _GUARD_TOS_IS_NONE's does (F20)
+        *(line
+          for handler in ("POP_JUMP_IF_FALSE_NONE", "POP_JUMP_IF_TRUE_NONE",
+                          "TO_BOOL_NONE")
+          for line in (
+              f'{handler}.record.uops[0].guards[0].facts[0].arg: '
+              'inferred "", declared "PyValue_None"',
+              f'{handler}.record.uops[0].guards[0].facts[0].kind: '
+              'inferred "IS_NONE", declared "IDENTITY"')),
         # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
         # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
         'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '

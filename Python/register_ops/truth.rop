@@ -152,7 +152,6 @@ extern helper value_truth(v:B)
 extern helper slot_truth(v:B)
   cases(yes(), no(), err(e:Err))
   effects(runs_python, raises)
-  requires(object(v))
   c _PyRop_SlotTruth as int_truth
   evidence(
     review: "Reviewed P5. bytecodes.c _TO_BOOL_SLOT: _PyValue_IsTrueSlow.",
@@ -504,7 +503,7 @@ macro adapt_before_use_branch_truth(f:Fb<Truth>, v:Src, mode:Enum<BranchMode>)
 }
 
 arm Truth.Bool inline
-  effects(writes, releases)
+  effects(reads, writes, releases)
   feedback()
   exits(next, miss)
   ensures(next.exact<bool>(dst))
@@ -519,7 +518,7 @@ arm Truth.Bool inline
 }
 
 arm Truth.Int inline
-  effects(writes, releases)
+  effects(reads, writes, releases)
   feedback()
   exits(next, miss)
   ensures(next.exact<bool>(dst))
@@ -534,7 +533,7 @@ arm Truth.Int inline
 }
 
 arm Truth.List inline
-  effects(writes, releases)
+  effects(reads, writes, releases)
   feedback()
   exits(next, miss)
   ensures(next.exact<bool>(dst))
@@ -549,7 +548,7 @@ arm Truth.List inline
 }
 
 arm Truth.None inline
-  effects(writes, releases)
+  effects(reads, writes, releases)
   feedback()
   exits(next, miss)
   ensures(next.exact<bool>(dst))
@@ -564,7 +563,7 @@ arm Truth.None inline
 }
 
 arm Truth.Str inline
-  effects(writes, releases)
+  effects(reads, writes, releases)
   feedback()
   exits(next, miss)
   ensures(next.exact<bool>(dst))
@@ -579,7 +578,7 @@ arm Truth.Str inline
 }
 
 arm Truth.Plain inline
-  effects(writes, releases)
+  effects(reads, writes, releases)
   feedback(read(entry.type_version))
   exits(next, miss)
   ensures(next.exact<bool>(dst))
@@ -594,7 +593,7 @@ arm Truth.Plain inline
 }
 
 arm Truth.Slot shared
-  effects(runs_python, writes, releases, raises)
+  effects(reads, runs_python, writes, releases, raises)
   feedback(read(entry.type_version))
   exits(next, miss, raise, redirect)
   ensures(next.exact<bool>(dst))
@@ -626,7 +625,7 @@ arm Truth.Slot shared
 }
 
 arm Truth.Generic shared
-  effects(runs_python, writes, releases, raises)
+  effects(reads, runs_python, writes, releases, raises)
   feedback(read(entry), write(entry), write(handler))
   exits(next, again, raise, redirect)
 {
@@ -662,7 +661,7 @@ arm Truth.Generic shared
 
 
 arm BranchTruth.Bool inline
-  effects(releases)
+  effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
 {
@@ -682,7 +681,7 @@ arm BranchTruth.Bool inline
 }
 
 arm BranchTruth.Int inline
-  effects(releases)
+  effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
 {
@@ -702,7 +701,7 @@ arm BranchTruth.Int inline
 }
 
 arm BranchTruth.List inline
-  effects(releases)
+  effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
 {
@@ -722,7 +721,7 @@ arm BranchTruth.List inline
 }
 
 arm BranchTruth.None inline
-  effects(releases)
+  effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
 {
@@ -742,7 +741,7 @@ arm BranchTruth.None inline
 }
 
 arm BranchTruth.Str inline
-  effects(releases)
+  effects(reads, writes, releases)
   feedback()
   exits(next, branch, miss)
 {
@@ -762,7 +761,7 @@ arm BranchTruth.Str inline
 }
 
 arm BranchTruth.Plain inline
-  effects(releases)
+  effects(reads, writes, releases)
   feedback(read(entry.type_version))
   exits(next, branch, miss)
 {
@@ -782,7 +781,7 @@ arm BranchTruth.Plain inline
 }
 
 arm BranchTruth.Slot shared
-  effects(runs_python, releases, raises)
+  effects(reads, runs_python, writes, releases, raises)
   feedback(read(entry.type_version))
   exits(next, branch, miss, raise, redirect)
 {
@@ -819,7 +818,7 @@ arm BranchTruth.Slot shared
 }
 
 arm BranchTruth.Generic shared
-  effects(runs_python, releases, raises)
+  effects(reads, runs_python, writes, releases, raises)
   feedback(read(entry), write(entry), write(handler))
   exits(next, branch, again, raise, redirect)
 {
@@ -865,7 +864,7 @@ arm BranchTruth.Generic shared
 
 // BranchNone: an identity test with None, in either sense
 arm BranchNone.Test inline
-  effects(releases)
+  effects(reads, writes, releases)
   feedback()
   exits(next, branch)
 {

@@ -8068,8 +8068,9 @@ ir_run_FOR_ITER_LIST(
                 null_or_index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
+                assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
-                if (Py_TYPE(iter_o) != &PyList_Type) {
+                if (!PyList_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
@@ -8219,8 +8220,9 @@ ir_run_FOR_ITER_TUPLE(
                 null_or_index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
+                assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
-                if (Py_TYPE(iter_o) != &PyTuple_Type) {
+                if (!PyTuple_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
@@ -23112,8 +23114,9 @@ static const _PyIRForm ir_handler_forms[512] = {
                 null_or_index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
+                assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
-                if (Py_TYPE(iter_o) != &PyList_Type) {
+                if (!PyList_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);
@@ -23255,8 +23258,9 @@ static const _PyIRForm ir_handler_forms[512] = {
                 null_or_index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
+                assert(PyValue_IsObject(iter));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
-                if (Py_TYPE(iter_o) != &PyTuple_Type) {
+                if (!PyTuple_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
                     assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
                     JUMP_TO_PREDICTED(FOR_ITER);

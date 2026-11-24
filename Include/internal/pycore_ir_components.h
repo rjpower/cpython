@@ -174,7 +174,10 @@
     /* Tagged indices (pycore_value.h): arithmetic on the word.  Reviewed \
      * G0c5.  PyValue_TagIndex builds the word Py_INDEX_BASE | (i & limit) \
      * (asserts -1 <= i < 2**47); it calls nothing, touches no memory, and \
-     * the result is an inline word (no count, never NULL).  \
+     * the result is a tagged index word: no count, never NULL, and not an \
+     * inline number (its bits lie below Py_DOUBLE_OFFSET, \
+     * pycore_value.h:257-259, so PyValue_IsInline is false of it; the \
+     * row's VALUE(inline) is a seed token that G0a5 corrects).  \
      * PyValue_IncrementTaggedIndexNoOverflow adds 1 to the bits of its \
      * argument, a tagged index, which owns no count; the result is the \
      * word advanced (a new value, not a pass-through of the old one: the \
@@ -1236,7 +1239,8 @@
      * not NULL: an inline number's type has neither _tp_iteritem nor \
      * PyObject_SelfIter, so it only reaches _PyValue_GetIter, which \
      * raises.  An owner of `iterable`'s obligation moves to `first`; \
-     * `second` is an inline word.  Callbacks: yes */ \
+     * `second` is a tagged index or NULL (the seed's `inline nullable` \
+     * token is corrected by G0a5).  Callbacks: yes */ \
     HELPER(_PyEval_GetIter, _PyValuePair, (PyValue, int), \
         ARGS(consumed, scalar), \
         CASES(first(null) second(null) raised, first(owned object) second(inline nullable)), EFFECTS(runs_python)) \

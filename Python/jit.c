@@ -460,16 +460,17 @@ static resolved_status
 resolve_status(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site,
                int status, uint32_t compiled, _PyJitUnit *unit)
 {
-    int generic_ran = status & _PyIR_MISS;
-    if (generic_ran) {
+    if (status & _PyIR_MISS) {
         assert(status == _PyIR_MISS);
         int handler = _PyJit_CompiledHandler((_PyIRWord)(compiled & COMPILED_HANDLER_BITS));
         completion_stub generic = (completion_stub)_PyIR_StubPlans[handler].generic;
         status = generic(tstate, frame, site);
         assert(!(status & _PyIR_MISS));
     }
-    if ((generic_ran || (status & _PyIR_AGAIN)) &&
-        (*site & 0xFFFF) != (compiled & COMPILED_HANDLER_BITS) &&
+    /* The word's handler is not the one the unit compiled: a guard miss
+     * or a specialisation found it (MISS, AGAIN), or a generic arm, which
+     * never misses, ran on a word that specialised elsewhere */
+    if ((*site & 0xFFFF) != (compiled & COMPILED_HANDLER_BITS) &&
         !(compiled & COMPILED_CAPPED)) {
         unit->invalid |= _PyJIT_STALE;
     }
@@ -505,12 +506,18 @@ emit_status_cold(_PyJitCompiler *c, uint32_t i, _PyJitLabel status, _PyJitLabel 
         if (next < c->nwords && c->labels[next] >= 0) {
             /* ESCAPED alone, the status of every completion that may have
              * run Python (a generic arm declares it at entry): the RETIRED
-             * test inline, the resolver only for a retired unit.  Only the
-             * status's low bits are defined. */
+             * test and the plan-change test inline, the resolver only for a
+             * retired unit or a changed handler.  Only the status's low
+             * bits are defined. */
             _PyJitLabel general = _PyJitAsm_NewLabel(a);
             _PyJitAsm_TestRI(a, R(RAX),
                              _PyIR_MISS | _PyIR_RAISED | _PyIR_BRANCH | _PyIR_AGAIN);
             _PyJitAsm_Jcc(a, _PyJitCond_NE, general);
+            if (!c->capped) {
+                _PyJitAsm_MovzxRM16(a, R(RCX), WORD_AT(i));
+                _PyJitAsm_AluRI(a, _PyJitAlu_CMP, R(RCX), (int32_t)(w & 0xFFFF));
+                _PyJitAsm_Jcc(a, _PyJitCond_NE, general);
+            }
             _PyJitAsm_TestMI(a, AT(RBX, offsetof(_PyJitUnit, invalid)), _PyJIT_RETIRED);
             _PyJitAsm_Jcc(a, _PyJitCond_E, c->labels[next]);
             _PyJitAsm_Bind(a, general);

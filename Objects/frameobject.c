@@ -1914,7 +1914,7 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
      * active child overlap uses the separate, stricter analysis below. */
     if (allow_null) {
         memset(null_home, 1, (size_t)nt);
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < n; i += _PyCode_InstrLength(code, i)) {
             _PyIRWord word = _PyCode_IRWords(code)[i];
             const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
             int arg = _PyCode_InstrOparg(code, i);
@@ -1994,10 +1994,22 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
         analysis->value_required = live + REGISTER_REQUIRE_VALUE * rows;
         analysis->null_required = live + REGISTER_REQUIRE_NULL_ONLY * rows;
     }
+    /* Mark the operand words, which are payload and not instructions: the
+     * sweep below skips them, and the final pass overwrites the marks. */
+    for (int i = 0; i < n;) {
+        int length = _PyCode_InstrLength(code, i);
+        for (int k = 1; k < length && i + k < n; k++) {
+            safe[i + k] = 1;
+        }
+        i += length;
+    }
     bool changed;
     do {
         changed = false;
         for (int i = n; i-- > 0;) {
+            if (safe[i]) {
+                continue;
+            }
             for (int lane = REGISTER_REQUIRE_ALL; lane < lanes; lane++) {
                 uint64_t *lane_live = live + (size_t)lane * rows;
                 _PyIRWord word = _PyCode_IRWords(code)[i];
@@ -2571,7 +2583,7 @@ register_resume_contexts(PyCodeObject *code, RegisterResumeAnalysis *analysis)
     for (int local = 0; local < analysis->nl; local++) {
         analysis->save_columns[local] = -1;
     }
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; i += _PyCode_InstrLength(code, i)) {
         _PyIRWord word = _PyCode_IRWords(code)[i];
         if (_PyIR_BaseOpcode(IR_HANDLER(word)) == LOAD_FAST_AND_CLEAR) {
             int local = (int)IR_B(word);
@@ -2677,7 +2689,7 @@ register_resume_analyze(_PyInterpreterFrame *frame, bool allow_null, bool path_n
     analysis->nl = _PyCode_IRFixed(code);
     analysis->nt = code->co_framesize - FRAME_SPECIALS_SIZE - analysis->nl;
     analysis->stride = (size_t)Py_MAX((analysis->nt + 63) / 64, 1);
-    for (int i = 0; i < analysis->n; i++) {
+    for (int i = 0; i < analysis->n; i += _PyCode_InstrLength(code, i)) {
         _PyIRWord word = _PyCode_IRWords(code)[i];
         const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
         uint32_t fields[] = {IR_A(word), IR_B(word), IR_C(word), IR_D(word)};
@@ -2863,7 +2875,7 @@ register_resume_recipe(_PyInterpreterFrame *frame, int current, int target,
     unsigned char *phase = NULL;
     int *queue = NULL;
     int result = 0;
-    for (int header = 0; header < n; header++) {
+    for (int header = 0; header < n; header += _PyCode_InstrLength(code, header)) {
         _PyIRWord word = _PyCode_IRWords(code)[header];
         if (_PyIR_BaseOpcode(IR_HANDLER(word)) != FOR_ITER) {
             continue;

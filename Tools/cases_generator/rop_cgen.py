@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, CReturn, CSource, CTest, DebtKind,
                          Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
                          Slot, Wrap)
-from rop_check import GraphInfo, Program
+from rop_check import GraphInfo, Program, is_args
 from rop_model import (Advance, Arm, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
                        HandleType, Let, Name, Nat, Param, Placement, Publish,
@@ -419,6 +419,7 @@ class Lowering:
     # The C expression of the payload words that follow them (an argument
     # descriptor's homes, four to a word), if the family has a payload
     payload: str | None = None
+    spans: bool = False      # span operands: the counts give the length
     decls: list[str] = field(default_factory=list)
     body: list[str] = field(default_factory=list)
 
@@ -503,8 +504,11 @@ class ArmLowerer:
         return self.homes[operand]
 
     def is_vector(self, operand: str) -> bool:
+        """An argument descriptor (Args): its homes follow in the payload
+        words.  Other vector operands are spans (is_span_operand)."""
         p = self.placements.get(operand)
-        return p is not None and p.kind is FieldKind.vector
+        return (p is not None and p.kind is FieldKind.vector
+                and not self.is_span_operand(operand))
 
     def local_flag(self, operand: str) -> str:
         return f"IR_F_LOCAL_{self.slot(operand).name}"
@@ -542,6 +546,31 @@ class ArmLowerer:
         flags = ", ".join(f"!!(ir_word & {self.local_flag(n)})" for n in names)
         return (f"&(_PyRopSrcs){{frame, {len(names)}, {{{flags}}}, {{{homes}}}}}")
 
+    def is_span_operand(self, operand: str) -> bool:
+        """A vector operand other than an argument descriptor (Args), whose
+        homes follow in the payload words"""
+        p = self.placements.get(operand)
+        return (p is not None and p.kind is FieldKind.vector
+                and not is_args(next(x for x in self.family.params
+                                     if x.name == operand).type))
+
+    def is_span(self, e: Expr) -> bool:
+        return isinstance(e, Name) and self.is_span_operand(e.name)
+
+    def span(self, operand: str) -> str:
+        """A span operand: its count, and the index of its first element
+        among the elements of the word's spans, which follow in
+        declaration order (pycore_ir.h, _PyIR_SpanElement())"""
+        before = []
+        for name, p in self.placements.items():
+            if name == operand:
+                break
+            if self.is_span_operand(name):
+                before.append(self.field(name))
+        first = " + ".join(before) or "0"
+        return (f"&(_PyRopSpan){{frame, this_instr, opcode, {first}, "
+                f"{self.field(operand)}}}")
+
     def c_args(self, args, params) -> list[str]:
         """The C arguments of a row call: a token has no value, an anchor
         and a span of sources are passed by address"""
@@ -554,6 +583,8 @@ class ArmLowerer:
                 continue
             if isinstance(a, SpanLit):
                 out.append(self.srcs(a))
+            elif self.is_span(a):
+                out.append(self.span(a.name))
             elif isinstance(t, HandleType) and t.handle is Handle.Anchors:
                 out.append("&" + self.expr_text(a))
             elif (t == HandleType(Handle.Src) and isinstance(a, Name)
@@ -659,14 +690,16 @@ class ArmLowerer:
         body = []
         for line in self.lines:
             body.append(line)
-        return Lowering(self.arm.name, self.enc.words, self.payload_words(), self.decls,
+        return Lowering(self.arm.name, self.enc.words, self.payload_words(),
+                        any(self.is_span_operand(n) for n in self.placements),
+                        self.decls,
                         self.drop_unused_labels(body))
 
     def payload_words(self) -> str | None:
         """An argument descriptor's homes follow the operand words, four to
         a word, as many as its count field says"""
         args = [p for p in self.enc.placements
-                if p.kind is FieldKind.vector and p.slots]
+                if self.is_vector(p.operand) and p.slots]
         if not args:
             return None
         (p,) = args

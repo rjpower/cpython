@@ -1979,7 +1979,12 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                           home < outcome.first + outcome.count) ||
                          home == outcome.dst);
                 }
-                if (opcode == SWAP && window >= 0) {
+                if (_PyIR_IsMoveWord(word)) {
+                    const _PyIRWord *wp = &_PyCode_IRWords(code)[i];
+                    written |= _PyIR_MoveGives(wp, home) >= 0 ||
+                               _PyIR_MoveReads(wp, home);
+                }
+                else if (opcode == SWAP && window >= 0) {
                     written |= home == window || home == window + arg - 1;
                 }
                 /* Unknown activation adapters can reuse the scratch tail. */
@@ -2105,7 +2110,29 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                 int real_handler = _PyIR_RealHandler(frame, instr);
                 _PyIRWord actual = (word & ~(_PyIRWord)IR_HANDLER_MASK) | real_handler;
                 int swap_lo = -1, swap_hi = -1;
-                if (_PyIR_BaseOpcode(real_handler) == SWAP) {
+                const _PyIRWord *wp = &_PyCode_IRWords(code)[i];
+                int is_move = _PyIR_IsMoveWord(*wp);
+                if (is_move && lane == REGISTER_REQUIRE_ALL) {
+                    /* A move requires nothing of its own: what is needed at
+                     * a destination after it is needed at its source before
+                     * it, and a source it vacates is NULL after it */
+                    memcpy(edge, work, stride * sizeof(uint64_t));
+                    for (int j = 0; j < nt; j++) {
+                        int from = _PyIR_MoveGives(wp, nl + j) - nl;
+                        if (from >= 0 || _PyIR_MoveReads(wp, nl + j)) {
+                            work[j / 64] &= ~((uint64_t)1 << (j % 64));
+                        }
+                    }
+                    for (int j = 0; j < nt; j++) {
+                        int from = _PyIR_MoveGives(wp, nl + j) - nl;
+                        if (from >= 0 && from < nt &&
+                            ((edge[j / 64] >> (j % 64)) & 1))
+                        {
+                            work[from / 64] |= (uint64_t)1 << (from % 64);
+                        }
+                    }
+                }
+                else if (!is_move && _PyIR_BaseOpcode(real_handler) == SWAP) {
                     /* A swap requires nothing: what is needed at one end
                      * after it is needed at the other before it, which the
                      * other lanes' transport already maps. */
@@ -2124,7 +2151,8 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                     }
                 }
                 for (int j = 0; j < nt; j++) {
-                    if (j == swap_lo || j == swap_hi) {
+                    if (j == swap_lo || j == swap_hi ||
+                        (is_move && _PyIR_MoveReads(wp, nl + j))) {
                         continue;
                     }
                     int home = nl + j;
@@ -2282,6 +2310,26 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
                          int *save_tops, int *origins)
 {
     _PyIRWord word = _PyCode_IRWords(code)[pc];
+    if (_PyIR_IsMoveWord(word)) {
+        /* A move transports the labels of its sources to its destinations
+         * and vacates the sources it does not keep */
+        const _PyIRWord *wp = &_PyCode_IRWords(code)[pc];
+        int *moved = PyMem_Malloc(Py_MAX(analysis->nt, 1) * sizeof(int));
+        if (moved == NULL) {
+            memset(origins, 0, (size_t)analysis->nt * sizeof(int));
+            return REGISTER_CONTEXT_AMBIGUOUS;
+        }
+        int copy = IR_HANDLER(word) == ROP_SELECT_Move_copy;
+        for (int j = 0; j < analysis->nt; j++) {
+            int home = analysis->nl + j;
+            int from = _PyIR_MoveGives(wp, home) - analysis->nl;
+            moved[j] = from >= 0 && from < analysis->nt ? origins[from]
+                     : (!copy && _PyIR_MoveReads(wp, home)) ? 0 : origins[j];
+        }
+        memcpy(origins, moved, (size_t)analysis->nt * sizeof(int));
+        PyMem_Free(moved);
+        return context;
+    }
     int opcode = _PyIR_BaseOpcode(IR_HANDLER(word));
     int arg = _PyCode_InstrOparg(code, pc);
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));

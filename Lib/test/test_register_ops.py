@@ -614,9 +614,10 @@ class CheckTests(unittest.TestCase):
          [("d", "A"), ("x", "B"), ("y", "C"), ("f", "D")]),
         ("family F(d:Dst, k:Bool, i:U16) exits(next);", 0,
          [("d", "A"), ("k", "B"), ("i", "C+D")]),
+        # A span's count takes a field, like an argument descriptor's
         ("family F(d:Dst, s:Span<Src>, a:Src, b:Src, c:Src, n:Name, i:U16) exits(next);", 1,
-         [("d", "A"), ("s", ""), ("a", "B"), ("b", "C"), ("c", "D"), ("n", "P0"),
-          ("i", "P1")]),
+         [("d", "A"), ("s", "B"), ("a", "C"), ("b", "D"), ("c", "P0"), ("n", "P1"),
+          ("i", "P2")]),
         ("family F(t:NearHead, m:Maybe<U8>, a:Src, b:Src, w:U32) exits(next);", 1,
          [("t", "A"), ("m", "B"), ("a", "C"), ("b", "D"), ("w", "P0+P1")]),
         # A near target takes one field, a far one two of the same word

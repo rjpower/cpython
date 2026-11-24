@@ -35,6 +35,7 @@
 #include "pycore_jit.h"           // _PyJitUnit
 #include "pycore_jit_lower.h"     // _PyJit_Templates
 #include "pycore_rop_metadata.h"  // _PyRop_Arms
+#include "pycore_rop_rows.h"      // _PyFrame_ApplyRecipe()
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_list.h"          // _PyList_SetItemTakeValue()
 #include "pycore_object.h"        // _PyObject_IsFreed()
@@ -1921,6 +1922,59 @@ get_ir(PyObject *self, PyObject *args)
         Py_DECREF(item);
     }
     return result;
+}
+
+/* Apply the ingress recipe PAIRS, a sequence of (source, home) slots, to
+ * the frame of GEN, a generator that has not started: the unwinder's path
+ * for a parallel move, which tests compare with the Move instruction's. */
+static PyObject *
+apply_recipe(PyObject *self, PyObject *args)
+{
+    PyObject *gen, *pairs;
+    if (!PyArg_ParseTuple(args, "O!O", &PyGen_Type, &gen, &pairs)) {
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = &((PyGenObject *)gen)->gi_iframe;
+    if (frame->owner != FRAME_OWNED_BY_GENERATOR
+            || ((PyGenObject *)gen)->gi_frame_state != FRAME_CREATED) {
+        PyErr_SetString(PyExc_ValueError, "the generator has started");
+        return NULL;
+    }
+    Py_ssize_t n = PySequence_Size(pairs);
+    if (n < 0) {
+        return NULL;
+    }
+    int nslots = _PyFrame_NumSlots(frame);
+    int32_t *recipe = PyMem_Calloc(1 + 2 * n, sizeof(int32_t));
+    if (n == 0 || n > nslots || recipe == NULL) {
+        if (recipe == NULL) {
+            PyErr_NoMemory();
+        }
+        else {
+            PyErr_SetString(PyExc_ValueError, "bad number of pairs");
+        }
+        PyMem_Free(recipe);
+        return NULL;
+    }
+    recipe[0] = (int32_t)n;
+    for (Py_ssize_t q = 0; q < n; q++) {
+        int s, h;
+        PyObject *pair = PySequence_GetItem(pairs, q);
+        int ok = pair != NULL && PyArg_ParseTuple(pair, "ii", &s, &h);
+        Py_XDECREF(pair);
+        if (!ok || s < 0 || h < 0 || s >= nslots || h >= nslots) {
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(PyExc_ValueError, "slot out of range");
+            }
+            PyMem_Free(recipe);
+            return NULL;
+        }
+        recipe[1 + 2 * q] = s;
+        recipe[2 + 2 * q] = h;
+    }
+    _PyFrame_ApplyRecipe(frame, recipe);
+    PyMem_Free(recipe);
+    Py_RETURN_NONE;
 }
 
 /* The register instruction arm called name, by its dotted name ("Add.Int") */
@@ -5366,6 +5420,7 @@ static PyMethodDef module_functions[] = {
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
+    {"apply_recipe", apply_recipe, METH_VARARGS, NULL},
     {"get_ir_raw", get_ir_raw, METH_O, NULL},
     {"arm_handlers", arm_handlers, METH_NOARGS, NULL},
     {"force_arm", force_arm, METH_VARARGS, NULL},

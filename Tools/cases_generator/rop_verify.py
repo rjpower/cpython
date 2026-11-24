@@ -326,11 +326,13 @@ def load(paths: Iterable[Path]) -> Program:
 def generic_arms(program: Program, family: str) -> list[Arm]:
     """The arms a miss reaches: shared arms, and the family's Generic arm
     when it is split (it leaves the frame, which a stub cannot), that do not
-    themselves miss."""
+    themselves miss.  An arm that the translator selects (`select(...)`) is
+    reached only so."""
     return [a for a in program.arms_of(family)
             if (a.region == Region.shared
                 or (a.region == Region.split and a.name == f"{family}.Generic"))
-            and "miss" not in a.contract.exits]
+            and "miss" not in a.contract.exits
+            and not a.select]
 
 
 def missing_generic(program: Program) -> tuple[str, ...]:

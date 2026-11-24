@@ -877,6 +877,9 @@ static _PyIRTransfer ir_run_MATCH_KEYS(PyThreadState *tstate, _PyInterpreterFram
 static _PyIRTransfer ir_run_MATCH_MAPPING(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_MATCH_SEQUENCE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_MATERIALIZE_KWARGS(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Move_Copy(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Move_Retire(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_Move_Transfer(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_NOP(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_POP_EXCEPT(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_POP_ITER(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -17782,17 +17785,17 @@ static const _PyIRForm ir_handler_forms[512] = {
     [439] = ir_run_GetMethod_MethodValues,
     [440] = ir_run_UNKNOWN_OPCODE,
     [441] = ir_run_GetMethod_PolyMethod,
-    [442] = ir_run_Call_Observed,
-    [443] = ir_run_Call_Observed,
-    [444] = ir_run_Call_Observed,
+    [442] = ir_run_Move_Transfer,
+    [443] = ir_run_Move_Retire,
+    [444] = ir_run_Move_Copy,
     [445] = ir_run_Call_Observed,
-    [446] = ir_run_Return_Observed,
-    [447] = ir_run_Return_Observed,
-    [448] = ir_run_Return_Observed,
+    [446] = ir_run_Call_Observed,
+    [447] = ir_run_Call_Observed,
+    [448] = ir_run_Call_Observed,
     [449] = ir_run_Return_Observed,
-    [450] = ir_run_UNKNOWN_OPCODE,
-    [451] = ir_run_UNKNOWN_OPCODE,
-    [452] = ir_run_UNKNOWN_OPCODE,
+    [450] = ir_run_Return_Observed,
+    [451] = ir_run_Return_Observed,
+    [452] = ir_run_Return_Observed,
     [453] = ir_run_UNKNOWN_OPCODE,
     [454] = ir_run_UNKNOWN_OPCODE,
     [455] = ir_run_UNKNOWN_OPCODE,

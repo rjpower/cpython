@@ -377,6 +377,7 @@ class SliceTests(unittest.TestCase):
     def test_a_steal_is_declared(self):
         # PyValue_FromNonNumberSteal steals its object (the in-place add's
         # `temp`, now that the walk admits it)
+        table = ir_contract.rows()
         self.assertEqual(table["PyValue_FromNonNumberSteal"].args[0].mode, "consumed")
 
     def test_component_checks_are_generated(self):

@@ -7,6 +7,7 @@ against the rows of Include/internal/pycore_ir_components.h.  The pilot
 declares BINARY_OP's add arms and generic form, UNPACK_SEQUENCE and
 LOAD_ATTR_INSTANCE_VALUE."""
 
+import dataclasses
 import io
 import os
 from pathlib import Path
@@ -1232,6 +1233,41 @@ class VerifierTests(unittest.TestCase):
                      r"DEAD\(`exc_value`\) drops an owned value")
         self.refuses(source % "PyValue_IsFalse(exc_value)",
                      r"DEAD\(`exc_value`\) drops an owned value")
+
+    def test_a_status_states_facts_of_an_argument_on_success(self):
+        # CHECK_EXC_MATCH: _PyEval_CheckExceptTypeValidValue succeeds only
+        # for an object, STATUS(NEGATIVE, , object), so the value is an
+        # object where the status says success, as a TEST's true side
+        source = """
+            inst(OP, (left: object, right: consumed -- left, b: inline exact(PyBool_Type)))
+                effects(runs_python) exits(next, raise)
+            {
+                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
+                PyValue held_right = TAKE(right);
+                int err = %s(tstate, held_right);
+                %s
+                if (err < 0) {
+                    PyValue_CLOSE(held_right);
+                    ERROR_NO_POP();
+                }
+                %s
+                int res = PyErr_GivenExceptionMatches(left_o, right_o);
+                PyValue_CLOSE(held_right);
+                b = res ? PyValue_True : PyValue_False;
+            }
+        """
+        borrow = "PyObject *right_o = PyValue_AsKnownObjectBorrow(held_right);"
+        check = "_PyEval_CheckExceptTypeValidValue"
+        self.assertEqual(self.table[check].result.success,
+                         (frozenset(), frozenset({ir_contract.OBJECT})))
+        self.verify(source % (check, "", borrow))
+        # Not where the status may report failure
+        self.refuses(source % (check, borrow, ""), r"requires object of it")
+        # A status that states nothing of its arguments shows nothing
+        self.table["SPAM_CHECK"] = dataclasses.replace(
+            self.table[check], name="SPAM_CHECK",
+            result=dataclasses.replace(self.table[check].result, success=()))
+        self.refuses(source % ("SPAM_CHECK", "", borrow), r"requires object of it")
 
     def test_an_exact_value_of_a_closed_type_owes_no_count(self):
         # _POP_JUMP_IF_TRUE: every bool is True or False, static immortal

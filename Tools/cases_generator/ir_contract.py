@@ -475,6 +475,9 @@ class Result:
     moved: int = -1                         # VALUE(moved(k)): argument k's value and
                                             # obligation
     failure: str = ""                       # STATUS: ZERO, NEGATIVE or NONZERO
+    # STATUS(failure, facts...): per argument, the facts that hold of it
+    # where the status reports success, as a TEST's true side (desk C)
+    success: tuple[frozenset[VFact], ...] = ()
     # VALUE: the facts it has from a producer (F7), also in facts; the
     # generator asserts them after each call
     assumed: tuple[Assumption, ...] = ()
@@ -603,9 +606,12 @@ def _parse_result(text: str) -> Result:
             raise ValueError("SLOT(protocol) names one SLOT row")
         return Result("SLOT", measure=inner.strip())
     if (inner := _inner(text, "STATUS")) is not None:
-        if inner.strip() not in STATUS_FAILURES:
-            raise ValueError(f"STATUS({' | '.join(STATUS_FAILURES)})")
-        return Result("STATUS", failure=inner.strip())
+        failure, *entries = _split_text(inner)
+        if failure.strip() not in STATUS_FAILURES:
+            raise ValueError(f"STATUS({' | '.join(STATUS_FAILURES)}[, facts of each argument "
+                             "on success])")
+        success = tuple(frozenset(parse_fact(w, None) for w in e.split()) for e in entries)
+        return Result("STATUS", failure=failure.strip(), success=success)
     if (inner := _inner(text, "MEASURE")) is not None:
         return Result("MEASURE", measure=inner.strip())
     if (inner := _inner(text, "CONTEXT")) is not None:
@@ -935,6 +941,8 @@ def check_columns(table: dict[str, Row]) -> None:
         return table[name]
 
     for row in table.values():
+        if len(row.result.success) > len(row.args):
+            fail(row, "STATUS states facts of more arguments than ARGS has")
         for name in row.instances:
             # Each instance is a VALUE CONSTANT of exactly this type
             instance = named(row, "INSTANCES", name)
@@ -2361,6 +2369,9 @@ class _State:
     # The row that assigned the next word on this path (JUMPTO): the word
     # may then only continue to its end
     successor: str = ""
+    # Locals holding a STATUS result whose row states facts of its
+    # arguments on success: the names and the facts (desk C)
+    status_facts: dict[str, tuple[tuple[str, frozenset], ...]] = field(default_factory=dict)
     # The inputs that the generator's storage has killed (DEAD, INPUTS_DEAD,
     # the close and steal forms): DECREF_INPUTS closes every other input
     dead: set[str] = field(default_factory=set)
@@ -2371,7 +2382,8 @@ class _State:
                       dict(self.status), self.restartable, self.why, dict(self.bindings),
                       dict(self.origins), dict(self.null_when), dict(self.signs),
                       set(self.exact), set(self.decided), self.split, self.no_exception,
-                      self.successor, set(self.dead))
+                      self.successor, dead=set(self.dead),
+                      status_facts=dict(self.status_facts))
 
     def end_restart(self, why: str) -> None:
         if self.restartable:
@@ -2902,6 +2914,9 @@ class OwnershipWalk:
         for owner, status in state.owners.items():
             if status == TAKEN + name:
                 state.owners[owner] = HELD if failed else GONE
+        if not failed:
+            for arg, facts in state.status_facts.get(name, ()):
+                state.add_facts(arg, facts)
 
     def effects(self, tokens: list[Token], state: _State) -> None:
         """the effects of the sites among tokens: heap facts die, homes may be
@@ -3532,6 +3547,10 @@ class OwnershipWalk:
             # Its `out` arguments are written on success only: the status
             # local decides which (refine)
             state.status[lhs] = result.failure
+            views = self.views_at(state)
+            state.status_facts[lhs] = tuple(
+                (name, facts) for arg, facts in zip(args, result.success)
+                if facts and (name := views.resolve(arg)) is not None)
             for name, st in state.arrays.items():
                 if st == PENDING:
                     state.arrays[name] = f"{PENDING}{lhs}"

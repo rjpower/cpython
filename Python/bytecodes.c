@@ -3989,10 +3989,12 @@ dummy_func(
         }
 
         // The compiler loads fromlist from a constant: None or a tuple of str
-        outlined inst(IMPORT_NAME, (level, fromlist -- res)) {
+        outlined inst(IMPORT_NAME,
+                (level: consumed, fromlist: consumed assumed(object) by compiler -- res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
-            assert(PyValue_IsObject(fromlist));
             // The level is an inline int: read it without a box
             int ilevel = value_import_level(level);
             if (ilevel == -1 && _PyErr_Occurred(tstate)) {
@@ -4017,7 +4019,9 @@ dummy_func(
             res = PyValue_FromObjectSteal(res_o);
         }
 
-        outlined inst(IMPORT_FROM, (from -- from, res)) {
+        outlined inst(IMPORT_FROM, (from -- from, res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             // The module may be a number, if __import__ returned one
             PyObject *from_o = PyValue_ObjectOrNull(from);

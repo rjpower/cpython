@@ -8791,9 +8791,9 @@ ir_run_IMPORT_NAME(
             PyValue res;
             fromlist = window[1];
             level = window[0];
+            assert(PyValue_IsObject(fromlist));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
-            assert(PyValue_IsObject(fromlist));
             int ilevel = value_import_level(level);
             if (ilevel == -1 && _PyErr_Occurred(tstate)) {
                 PyValue tmp = fromlist;

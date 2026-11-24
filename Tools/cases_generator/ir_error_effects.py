@@ -384,7 +384,8 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
                 "oparg", "PyValue_NULL", "FRAME_CO_CONSTS", "NULL", "true", "false",
                 "_PyFrame_GetCode", "ERROR_IF", "ERROR_NO_POP", "JUMPTO", "JUMPBY",
                 "JUMP_TARGET",
-                "DISPATCH", "DISPATCH_SAME_OPARG", "assert", "RELOAD_STACK",
+                "DISPATCH", "DISPATCH_SAME_OPARG", "DISPATCH_REDIRECT", "assert",
+                "RELOAD_STACK",
                 "IR_COMPLETE_STEP", "prev_instr", "DISPATCH_GOTO",
                 *HELPERS, *SCALAR_CONSTANTS, *VALUE_CONSTANTS, *reserved_names}
 
@@ -648,14 +649,15 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
             _apply_native(value, origin)
             return True
         if texts[:1] in (["ERROR_IF"], ["ERROR_NO_POP"], ["JUMPTO"], ["JUMPBY"],
-                         ["DISPATCH"], ["DISPATCH_SAME_OPARG"], ["assert"],
+                         ["DISPATCH"], ["DISPATCH_SAME_OPARG"], ["DISPATCH_REDIRECT"],
+                         ["assert"],
                          *([["DISPATCH_GOTO"]] if observer_wrapper else [])):
             arguments = _call(tokens)
             if arguments is None:
                 return False
             name = texts[0]
             count = 0 if name in {"ERROR_NO_POP", "DISPATCH", "DISPATCH_SAME_OPARG",
-                                 "DISPATCH_GOTO"} else 1
+                                 "DISPATCH_REDIRECT", "DISPATCH_GOTO"} else 1
             if name == "ERROR_IF" and len(arguments) > 1:
                 held = _holding(arguments[1:])
                 if held is None:
@@ -684,7 +686,11 @@ def analyze_error_effects(inst: Instruction, reserved_names=(), *,
                     _null_arm(values[0], origin, False)
                 if name == "ERROR_NO_POP" or [t.text for t in arguments[0]] == ["true"]:
                     origin.reachable = False
-            elif name in {"DISPATCH", "DISPATCH_SAME_OPARG", "DISPATCH_GOTO"}:
+            elif name in {"DISPATCH", "DISPATCH_SAME_OPARG", "DISPATCH_GOTO",
+                          "DISPATCH_REDIRECT"}:
+                if name == "DISPATCH_REDIRECT":
+                    # next_instr = frame->instr_ptr, then DISPATCH()
+                    changes_origin = origin.changed = True
                 terminals.add(id(tokens[0]))
                 origin.reachable = False
             elif name in {"JUMPTO", "JUMPBY"}:

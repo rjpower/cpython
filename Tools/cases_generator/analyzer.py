@@ -47,10 +47,10 @@ class Properties:
     # must not fold a store into them. Uop.aliased_outputs covers the
     # outputs that the body assigns from an input.
     no_fold: bool = False
-    # Assigns `frame`: what follows runs in another frame.
+    # Declares the effect switches_frame: what follows runs in another frame.
     switches_frame: bool = False
-    # Annotated `returns`: pops its frame, and pushes its outputs to the
-    # caller's.
+    # Declares the exit `return`: pops its frame, and pushes its outputs to
+    # the caller's.
     returns: bool = False
 
     def dump(self, indent: str) -> None:
@@ -356,6 +356,28 @@ class Family:
 
 
 @dataclass
+class Boundary:
+    """The declared generator-boundary variants of an instruction, or of
+    each member of the family it heads (parsing.Boundary): where the
+    variants depart; the consumers that a completion may run, each with
+    its variant's declared exits; a delegated yield, which every variant
+    takes; the consumers a resume may run"""
+    source: str
+    # Where the variants depart: "last", in the last uop (a native send),
+    # or "enter", through the generator frame that the last uop enters,
+    # which yields or returns to the word later
+    at: str
+    yields: str                             # "NONE" or "DELEGATED"
+    # The completion that the variants' consumers complete: "send", a send
+    # that ended its generator, or "throw", a throw into it that did
+    # (IR_COMPLETE_STEP's _PY_IR_SEND or _PY_IR_SEND_THROW); "" if none
+    completion: str
+    completes: dict[str, tuple[str, ...]]
+    resumes: tuple[str, ...]
+    where: lexer.Token
+
+
+@dataclass
 class Analysis:
     instructions: dict[str, Instruction]
     uops: dict[str, Uop]
@@ -370,6 +392,8 @@ class Analysis:
     ir_only: dict[str, Instruction]
     # The pinned numbers that opmap and the IR handlers come from
     numbers: ir_numbers.NumberTable
+    # The declared generator-boundary clauses, by source
+    boundaries: dict[str, Boundary] = field(default_factory=dict)
 
 
 def analysis_error(message: str, tkn: lexer.Token) -> SyntaxError:
@@ -577,6 +601,7 @@ IR_HELPER_CALLEES = {
 IR_HELPER_EFFECTS = {
     "IR_BUILD_STRING": frozenset(("escapes",)),
     "IR_BUILD_MAP": frozenset(("escapes",)),
+    "IR_BUILD_SET": frozenset(("escapes",)),
     **{name: frozenset() for name in IR_HELPER_CALLEES},
     "IR_LOOKUP_SPECIAL": frozenset(("escapes",)),
     "IR_WRITE_OUTPUT": frozenset(),
@@ -740,8 +765,9 @@ EXITS = {
 
 
 def always_exits(op: parser.CodeDef) -> bool:
+    # The body only: the header's exits(return) is a declaration, not a site
     depth = 0
-    tkn_iter = iter(op.tokens)
+    tkn_iter = op.block.tokens()
     for tkn in tkn_iter:
         if tkn.kind == "LBRACE":
             depth += 1
@@ -832,6 +858,12 @@ def stmt_escapes(stmt: Stmt) -> bool:
     else:
         assert False, "Unexpected statement type"
 
+def declared_aliases(stack: StackEffect) -> tuple[str, ...]:
+    "The outputs that a declared uop moves from an input: `moved(x)`"
+    inputs = {f"moved({i.name})" for i in stack.inputs}
+    return tuple(o.name for o in stack.outputs if inputs & set(o.contract))
+
+
 def find_aliased_outputs(op: parser.InstDef) -> tuple[str, ...]:
     """The outputs that a statement `out = in;` or `out = TAKE(in);` makes
     alias an input: TAKE gives the input's value a count of its own, so the
@@ -859,9 +891,11 @@ def find_aliased_outputs(op: parser.InstDef) -> tuple[str, ...]:
     return tuple(found)
 
 
-def switches_frame(op: parser.CodeDef) -> bool:
-    """Whether op assigns `frame`, directly or through DISPATCH_INLINED."""
-    tokens = [t for t in op.tokens if t.kind != "COMMENT"]
+def assigns_frame(tokens: list[lexer.Token]) -> bool:
+    """Whether a body assigns `frame`, directly or through DISPATCH_INLINED
+    or a marker that switches.  A check only: a uop that does must declare
+    switches_frame (ir_contract.py), which is the authority"""
+    tokens = [t for t in tokens if t.kind != "COMMENT"]
     for i, tkn in enumerate(tokens):
         if tkn.kind != "IDENTIFIER":
             continue
@@ -901,14 +935,24 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         )
     error_with_pop = has_error_with_pop(op)
     error_without_pop = has_error_without_pop(op)
-    # Another frame's code runs after a frame switch
-    escapes = stmt_escapes(op.block) or switches_frame(op)
+    escapes = stmt_escapes(op.block)
     pure = False if isinstance(op, parser.LabelDef) else "pure" in op.annotations
     no_save_ip = False if isinstance(op, parser.LabelDef) else "no_save_ip" in op.annotations
     inline_ok = False if isinstance(op, parser.LabelDef) else "inline_ok" in op.annotations
     window = False if isinstance(op, parser.LabelDef) else "window" in op.annotations
     no_fold = False if isinstance(op, parser.LabelDef) else "no_fold" in op.annotations
-    returns = False if isinstance(op, parser.LabelDef) else "returns" in op.annotations
+    # Frame switches and returns are declared: the switches_frame effect and
+    # the return exit.  A uop without a contract still has the body's scan
+    # until the cutover removes the undeclared form
+    clauses = {} if isinstance(op, parser.LabelDef) else op.clauses
+    if clauses:
+        switches = any(w.split("(")[0] == "switches_frame"
+                       for w in clauses.get("effects", ()))
+    else:
+        switches = assigns_frame(op.tokens)
+    # Another frame's code runs after a frame switch
+    escapes = escapes or switches
+    returns = "return" in clauses.get("exits", ())
     outlined = False if isinstance(op, parser.LabelDef) else "outlined" in op.annotations
     return Properties(
         escaping_calls=escaping_calls,
@@ -945,7 +989,7 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         window=window,
         outlined=outlined,
         no_fold=no_fold,
-        switches_frame=switches_frame(op),
+        switches_frame=switches,
         returns=returns,
     )
 
@@ -1037,7 +1081,8 @@ def make_uop(
         properties=compute_properties(op),
         object_inputs=object_inputs,
         asserted_objects=asserted_objects,
-        aliased_outputs=find_aliased_outputs(op),
+        aliased_outputs=(declared_aliases(stack) if op.clauses
+                         else find_aliased_outputs(op)),
         clauses=op.clauses,
     )
 
@@ -1129,6 +1174,42 @@ def add_family(
     # The head of the family is an implicit jump target for DEOPTs
     instructions[family.name].is_target = True
     families[family.name] = family
+
+
+def add_boundary(
+    pboundary: parser.Boundary,
+    instructions: dict[str, Instruction],
+    boundaries: dict[str, Boundary],
+) -> None:
+    where = pboundary.first_token
+    if pboundary.source not in instructions:
+        raise analysis_error(f"boundary({pboundary.source}): no such instruction", where)
+    if pboundary.source in boundaries:
+        raise analysis_error(f"A second boundary({pboundary.source})", where)
+    if pboundary.at not in ("last", "enter"):
+        raise analysis_error(f"boundary({pboundary.source}) needs at(last) "
+                             "or at(enter)", where)
+    if pboundary.yields not in (None, "delegated"):
+        raise analysis_error(f"boundary({pboundary.source}): yields({pboundary.yields}) "
+                             "is not a yield; the one kind is `delegated`", where)
+    if bool(pboundary.completes) != (pboundary.completion is not None):
+        raise analysis_error(f"boundary({pboundary.source}): completes(...) and "
+                             "completion(send) or completion(throw) go together", where)
+    if pboundary.completion not in (None, "send", "throw"):
+        raise analysis_error(f"boundary({pboundary.source}): completion"
+                             f"({pboundary.completion}) is not send or throw", where)
+    completes: dict[str, tuple[str, ...]] = {}
+    for consumers, exits in pboundary.completes:
+        for consumer in consumers:
+            if consumer in completes:
+                raise analysis_error(f"boundary({pboundary.source}) completes "
+                                     f"{consumer} twice", where)
+            completes[consumer] = tuple(exits)
+    if len(set(pboundary.resumes)) != len(pboundary.resumes):
+        raise analysis_error(f"boundary({pboundary.source}) resumes a consumer twice", where)
+    boundaries[pboundary.source] = Boundary(
+        pboundary.source, pboundary.at, "DELEGATED" if pboundary.yields else "NONE",
+        pboundary.completion or "", completes, tuple(pboundary.resumes), where)
 
 
 def add_pseudo(
@@ -1267,6 +1348,7 @@ def analyze_forest(
     instructions: dict[str, Instruction] = {}
     uops: dict[str, Uop] = {}
     families: dict[str, Family] = {}
+    boundaries: dict[str, Boundary] = {}
     pseudos: dict[str, PseudoInstruction] = {}
     labels: dict[str, Label] = {}
     for node in forest:
@@ -1281,6 +1363,8 @@ def analyze_forest(
                 pass
             case parser.Family():
                 pass
+            case parser.Boundary():
+                pass
             case parser.Pseudo():
                 pass
             case parser.LabelDef():
@@ -1294,6 +1378,8 @@ def analyze_forest(
         match node:
             case parser.Family():
                 add_family(node, instructions, families)
+            case parser.Boundary():
+                add_boundary(node, instructions, boundaries)
             case parser.Pseudo():
                 add_pseudo(node, instructions, pseudos)
             case parser.LabelDef():
@@ -1330,7 +1416,7 @@ def analyze_forest(
         instructions, families, pseudos, numbers or ir_numbers.load_table())
     return Analysis(
         instructions, uops, families, pseudos, labels, opmap, first_arg,
-        min_instrumented, ir_only, numbers or ir_numbers.load_table()
+        min_instrumented, ir_only, numbers or ir_numbers.load_table(), boundaries
     )
 
 

@@ -72,9 +72,9 @@ class HandlerRecordTests(unittest.TestCase):
                 ("_POP_TOP_INT", {WRITES_HEAP}),
                 ("_POP_TOP", {MAY_RELEASE}),
                 ("_INIT_CALL_PY_EXACT_ARGS", {ALLOCATES, READS_HEAP, WRITES_HEAP, MAY_RELEASE}),
-                # The method's function becomes the callee as a view: no
-                # count moves and nothing escapes (contract87 TR)
-                ("_INIT_CALL_BOUND_METHOD_EXACT_ARGS", {READS_HEAP}),
+                # The expansion only sets CALL_EXPANDED: the push reads the
+                # method's function and receiver after the last guard
+                ("_INIT_CALL_BOUND_METHOD_EXACT_ARGS", set()),
                 ("_STORE_ATTR_SLOT", {READS_HEAP, WRITES_HEAP, MAY_RELEASE}),
                 ("_LIST_APPEND", set(EFFECTS))):
             with self.subTest(uop=name):
@@ -89,7 +89,7 @@ class HandlerRecordTests(unittest.TestCase):
         integer = ("EXACT_TYPE", "PyLong_Type")
         for handler, uop, facts in (
                 ("BINARY_OP_ADD_INT", "_BINARY_OP_ADD_INT", {integer}),
-                ("BINARY_OP_AND_INT", "_BINARY_OP_AND_INT", {integer, ("INLINE_INT", "")}),
+                ("BINARY_OP_AND_INT", "_BINARY_OP_AND_INT", {integer, ("ENCODING", "inline_int")}),
                 ("BINARY_OP_ADD_FLOAT", "_BINARY_OP_ADD_FLOAT",
                  {("EXACT_TYPE", "PyFloat_Type")}),
                 ("COMPARE_OP_INT", "_COMPARE_OP_INT", {("EXACT_TYPE", "PyBool_Type")}),

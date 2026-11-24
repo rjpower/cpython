@@ -21,6 +21,8 @@ record.
 from dataclasses import dataclass
 import re
 
+import analyzer
+
 from analyzer import (CALL_INVOKE_MARKERS, IR_MARKER_EFFECTS, Instruction, StackItem,
                       Uop, analysis_error)
 from generators_common import ROOT
@@ -141,9 +143,11 @@ ENTER_FRAME = "ENTER_FRAME"     # runs a Python frame that it pushed
 RETURN = "RETURN"               # pops the frame
 YIELD = "YIELD"                 # suspends a generator
 EXIT = "EXIT"                   # leaves the evaluator
+REDIRECT = "REDIRECT"           # a monitoring callback moved the frame: the
+                                # word it chose, without the rest of the handler
 
 TRANSFER_KINDS = frozenset({NEXT, BRANCH, JUMP, DEOPT, RAISE, ENTER_FRAME,
-                            RETURN, YIELD, EXIT})
+                            RETURN, YIELD, EXIT, REDIRECT})
 
 # Guard kinds
 EXIT_GUARD, DEOPT_GUARD = "EXIT", "DEOPT"
@@ -251,6 +255,7 @@ TRANSFER_TOKENS: dict[str, tuple[str, ...]] = {
     "DISPATCH": (NEXT,),
     "DISPATCH_GOTO": (JUMP,),
     "DISPATCH_SAME_OPARG": (JUMP,),
+    "DISPATCH_REDIRECT": (REDIRECT,),
     "DISPATCH_INLINED": (ENTER_FRAME,),
     "JUMPBY": (JUMP,),
     "JUMPTO": (JUMP,),
@@ -311,6 +316,26 @@ def check_transfer_tokens() -> None:
 check_transfer_tokens()
 
 
+def replaced_input(uop: Uop, j: int) -> int | None:
+    """The index of the input whose stack entry the declared output j takes
+    over with a new value, or None.  A uop that advances a cursor declares an
+    inline output at the cursor's position, apart from the consumed input of
+    another name (F16): the entry is the input's, and the value is new"""
+    if not uop.clauses or j >= len(uop.stack.inputs):
+        return None
+    inputs, outputs = uop.stack.inputs, uop.stack.outputs
+    if any(item.is_array() for item in inputs[:j + 1] + outputs[:j + 1]):
+        return None
+    import ir_contract
+    contract = ir_contract.contract_of(uop)
+    output, input_ = contract.output(outputs[j].name), contract.input(inputs[j].name)
+    if (output is None or input_ is None or output.mode != "inline"
+            or input_.mode != "consumed"
+            or any(o.name == inputs[j].name for o in outputs)):
+        return None
+    return j
+
+
 def passed_through(uop: Uop, j: int) -> int | None:
     """The index of the input of uop that its output j passes through.
 
@@ -323,7 +348,7 @@ def passed_through(uop: Uop, j: int) -> int | None:
         for i, item in enumerate(inputs):
             if item.name == name:
                 return i
-        return None
+        return replaced_input(uop, j)
     if j < len(inputs) and not any(
             item.is_array() for item in inputs[:j + 1] + outputs[:j + 1]):
         return j
@@ -380,6 +405,20 @@ def assigns_to(uop: Uop, name: str) -> bool:
     )
 
 
+def passes(uop: Uop, item: StackItem) -> bool:
+    """Whether output item, named as an input, passes that input's value
+    through: declared without a mode and not exchanged, or for an undeclared
+    uop, an output that the body does not assign.  An exchanged output
+    (SWAP) keeps its home but takes another input's value"""
+    if item.name == "unused":
+        return True
+    if uop.clauses:
+        import ir_contract
+        output = ir_contract.contract_of(uop).output(item.name)
+        return not output.mode and not output.exchange
+    return not assigns_to(uop, item.name)
+
+
 def ends_handler(uop: Uop) -> bool:
     """Whether no uop after uop runs: a terminal call transaction owns the
     call's result and its return, so the uops after it do not execute"""
@@ -432,7 +471,7 @@ def walk_values(inst: Instruction) -> ValueWalk:
         outputs = []
         for j, item in enumerate(part.stack.outputs):
             i = passed_through(part, j)
-            if i is not None and not (item.name != "unused" and assigns_to(part, item.name)):
+            if i is not None and passes(part, item):
                 kept.add(i)
                 stack.append(popped[i])
                 outputs.append((item.name, popped[i][0], THROUGH, item.size))
@@ -460,7 +499,11 @@ def walk_values(inst: Instruction) -> ValueWalk:
         for i, item in enumerate(part.stack.inputs):
             inputs.append((item.name, popped[i][0],
                            BORROWED if i in kept else CONSUMED, item.size,
-                           item.name != "unused" and changes(part, item.name, item.is_array())))
+                           item.name != "unused" and (
+                               changes(part, item.name, item.is_array())
+                               # a replaced cursor is a new value in its entry
+                               or (i < len(part.stack.outputs)
+                                   and replaced_input(part, i) is not None))))
         bound.append((part, inputs, outputs))
         if ends_handler(part):
             break
@@ -530,12 +573,8 @@ def conditional(stmts: list[Stmt], token: Token, inside: bool = False) -> bool |
     return None
 
 
-def suspends_frame(uop: Uop) -> bool:
-    "Whether uop marks its generator's frame suspended: a yield"
-    tokens = " ".join(t.text for t in uop.body.tokens())
-    return bool(re.search(r"\bgi_frame_state\s*=\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens)
-                or re.search(r"\bFT_ATOMIC_STORE_INT8_RELEASE\s*\(\s*\w+\s*->\s*"
-                             r"gi_frame_state\s*,\s*FRAME_(?:CREATED|SUSPENDED)\b", tokens))
+# The declared exits that continue in another frame, and their transfers
+SWITCH_TRANSFERS = (("enter", ENTER_FRAME), ("return", RETURN), ("yield", YIELD))
 
 
 def uop_transfers(uop: Uop, deopt_target: str) -> tuple[Transfer, ...]:
@@ -560,16 +599,26 @@ def uop_transfers(uop: Uop, deopt_target: str) -> tuple[Transfer, ...]:
                 if kind == JUMP and not target and conditional(uop.body.body, token):
                     kind = BRANCH
                 result.append(Transfer(kind, token, target))
-    # A frame switch that no site names continues in the other frame, in
-    # place of the next word
-    p = uop.properties
-    if p.returns and not any(t.kind == RETURN for t in result):
-        result.append(Transfer(RETURN))
-    elif p.switches_frame and not any(t.kind in (ENTER_FRAME, RETURN, YIELD) for t in result):
-        result.append(Transfer(YIELD if suspends_frame(uop) else ENTER_FRAME))
-    elif not p.always_exits:
+    # A body that switches frames with no site that names the switch
+    # (`frame = ...`) continues in the other frame in place of the next
+    # word, by the switch exits the uop declares (ir_contract.body_exits)
+    if (analyzer.assigns_frame(list(uop.body.tokens()))
+            and not any(t.kind in (ENTER_FRAME, RETURN, YIELD) for t in result)):
+        declared = declared_exits(uop)
+        result.extend(Transfer(kind) for exit, kind in SWITCH_TRANSFERS
+                      if exit in declared)
+    elif not uop.properties.always_exits:
         result.append(Transfer(NEXT))
     return tuple(result)
+
+
+def declared_exits(uop: Uop) -> frozenset[str]:
+    """uop's declared exits.  Until the cutover removes the undeclared form,
+    a uop without a contract that switches frames continues in the frame it
+    pushed"""
+    import ir_contract
+    contract = ir_contract.contract_of(uop)
+    return contract.exits if contract is not None else frozenset(("enter",))
 
 
 # Guard facts (tiers87, C5).  A guard fails when its condition holds, and
@@ -593,14 +642,38 @@ class Fact:
 # TYPE_VERSION(v, K): type(v)'s version is K; TYPE_VERSION(v) without an
 # argument: type(v) has a version, not a specific one.
 FACT_KINDS = frozenset((
-    "INLINE_INT", "INLINE_FLOAT", "NUMBER", "OBJECT", "NOT_NULL", "IS_NULL",
-    "IS_NONE", "EXACT_TYPE", "NOT_TYPE", "SUBTYPE", "IDENTITY", "TYPE_VERSION",
+    "ENCODING", "IS_NONE", "EXACT_TYPE", "NOT_TYPE", "SUBTYPE", "IDENTITY", "TYPE_VERSION",
     "CLASS_VERSION", "KEYS_VERSION", "SHAPE", "INLINE_VALUES_VALID",
     "FUNC_VERSION", "LENGTH", "IN_BOUNDS", "NON_NEGATIVE", "NON_ZERO",
-    "ARGCOUNT", "OPERAND_COUNT", "CONVENTION", "SELF", "TYPE_FLAG", "TYPE_SLOT",
+    "ARGCOUNT", "OPERAND_COUNT", "CONVENTION", "SELF", "METHOD", "TYPE_FLAG", "TYPE_SLOT",
     "VECTORCALL", "UNIQUE", "ASCII", "NOT_SUBTYPE", "KEYS_KIND", "ENTRY_KEY",
-    "NO_MANAGED_DICT", "TAGGED_INDEX", "ENCODING",
+    "NO_MANAGED_DICT", "TAGGED_INDEX",
 ))
+
+
+def encoding(subject: str, word: str) -> Fact:
+    """The representation fact that the vocabulary's word (`inline_int`,
+    `object`, `nonnull`...) states: ENCODING with the kinds of word it allows
+    (ir_contract's lattice), the one kind of every representation fact"""
+    import ir_contract
+    return ir_contract.VFact(word).record(subject)
+
+
+def join_encodings(facts) -> tuple[Fact, ...]:
+    """facts with one ENCODING fact per subject, at its first: the kinds of
+    word that all of the subject's allow"""
+    kinds: dict[str, set[str]] = {}
+    for f in facts:
+        if f.kind == "ENCODING":
+            members = set(f.arg.split("|"))
+            kinds[f.subject] = kinds[f.subject] & members if f.subject in kinds else members
+    result = []
+    for f in facts:
+        if f.kind != "ENCODING":
+            result.append(f)
+        elif f.subject in kinds:
+            result.append(Fact("ENCODING", f.subject, "|".join(sorted(kinds.pop(f.subject)))))
+    return tuple(result)
 
 # Predicates of the thread or interpreter, which hold no fact of an operand
 CONTEXT_PREDICATES = {
@@ -731,8 +804,13 @@ _EXACT_CHECKS = frozenset({"PyFunction_Check", "PyMethod_Check"})
 def predicate_facts(p: list, subjects: Subjects) -> list[Fact] | None:
     "The facts that predicate p, which holds, establishes, or None"
     p = _strip(p)
-    simple = {"PyValue_IsInlineInt": "INLINE_INT", "PyValue_IsInlineFloat": "INLINE_FLOAT",
-              "PyValue_IsObject": "OBJECT", "PyValue_IsNone": "IS_NONE",
+    encodings = {"PyValue_IsInlineInt": "inline_int", "PyValue_IsInlineFloat": "inline_float",
+                 "PyValue_IsObject": "object"}
+    for name, word in encodings.items():
+        args = _call(p, name)
+        if args is not None and len(args) == 1:
+            return [encoding(subjects.of(args[0]), word)]
+    simple = {"PyValue_IsNone": "IS_NONE",
               "_PyObject_IsUniquelyReferenced": "UNIQUE",
               "PyUnicode_IS_COMPACT_ASCII": "ASCII"}
     for name, kind in simple.items():
@@ -741,7 +819,7 @@ def predicate_facts(p: list, subjects: Subjects) -> list[Fact] | None:
             return [Fact(kind, subjects.of(args[0]))]
     args = _call(p, "PyValue_FloatOperandValues")
     if args is not None:
-        return [Fact("NUMBER", subjects.of(args[0])), Fact("NUMBER", subjects.of(args[1]))]
+        return [encoding(subjects.of(args[0]), "inline"), encoding(subjects.of(args[1]), "inline")]
     args = _call(p, "PyValue_LongCheckExact")
     if args is not None:
         return [Fact("EXACT_TYPE", subjects.of(args[0]), "PyLong_Type")]
@@ -844,10 +922,10 @@ def comparison_facts(lhs: list, op: str, rhs: list,
         if len(left) == 1 and right[:1] == ["&"] or _uncast(rhs)[:1] == ["&"]:
             return [Fact("IDENTITY", subjects.of(left), " ".join(_uncast(rhs)).lstrip("& "))]
         if right == ["NULL"]:
-            return [Fact("IS_NULL", subjects.of(left))]
+            return [encoding(subjects.of(left), "null")]
     if op == "==":
         if right == ["NULL"]:
-            return [Fact("NOT_NULL", subjects.of(left))]
+            return [encoding(subjects.of(left), "nonnull")]
         if right == ["0"] and left[-2:] == ["->", "tp_version_tag"]:
             owner = subjects.of(left[:-2])
             if owner.startswith("type(") and owner.endswith(")"):
@@ -914,7 +992,7 @@ def failure_term_facts(term: list, subjects: Subjects) -> list[Fact] | None:
                      subjects.of(_call(term, term[0])[0]), m.group(1) + "_Type")]
     args = _call(term, "PyValue_IsNull")
     if args is not None:
-        return [Fact("NOT_NULL", subjects.of(args[0]))]
+        return [encoding(subjects.of(args[0]), "nonnull")]
     args = _call(term, "_PyObject_GetManagedDict")
     if args is not None:
         return [Fact("NO_MANAGED_DICT", subjects.of(args[0]))]
@@ -985,7 +1063,7 @@ def _nested_if(stmt: Stmt, site: Token) -> bool:
 
 # The guard markers and the facts that each establishes of its arguments
 MARKER_FACTS = {
-    "IR_GUARD_INLINE_INT": lambda a, s: [Fact("INLINE_INT", s.of(a[0]))],
+    "IR_GUARD_INLINE_INT": lambda a, s: [encoding(s.of(a[0]), "inline_int")],
     "IR_GUARD_ELEMENT_TYPE": lambda a, s: [Fact("EXACT_TYPE", s.of(a[0]), " ".join(a[1]))],
     "IR_GUARD_ELEMENT_INDEX": lambda a, s: [Fact("IN_BOUNDS", s.of(a[1]), s.of(a[0]))],
     "IR_GUARD_SHAPE_READ": lambda a, s: [Fact("TYPE_VERSION", s.of(a[0]), " ".join(a[1])),
@@ -999,7 +1077,7 @@ def guard_facts(uop: Uop, site: Token, subjects: Subjects) -> tuple[tuple[Fact, 
         tokens = [t.text for t in uop.body.tokens() if t.kind != "COMMENT"]
         i = [t for t in uop.body.tokens() if t.kind != "COMMENT"].index(site)
         args = _call(tokens[i:_close(tokens, i + 1) + 1], site.text)
-        return tuple(MARKER_FACTS[site.text](args, subjects)), ""
+        return join_encodings(MARKER_FACTS[site.text](args, subjects)), ""
     cond, reason = guard_condition(uop, site)
     if reason:
         return (), reason
@@ -1010,7 +1088,7 @@ def guard_facts(uop: Uop, site: Token, subjects: Subjects) -> tuple[tuple[Fact, 
     if facts is None:
         return (), ""       # check_record() refuses it
     assert all(f.kind in FACT_KINDS for f in facts)
-    return tuple(facts), ""
+    return join_encodings(facts), ""
 
 
 # The facts of a uop's results: every assignment to an output makes a
@@ -1042,7 +1120,7 @@ def result_facts(uop: Uop, outputs: tuple[UopOutput, ...]) -> tuple[Fact, ...]:
         if all(BOOL_RESULT.fullmatch(" ".join(src)) for src in sources):
             facts.append(Fact("EXACT_TYPE", subject, "PyBool_Type"))
         elif callees <= INLINE_INT_RESULTS:
-            facts += [Fact("INLINE_INT", subject), Fact("EXACT_TYPE", subject, "PyLong_Type")]
+            facts += [encoding(subject, "inline_int"), Fact("EXACT_TYPE", subject, "PyLong_Type")]
         elif callees <= INT_RESULTS:
             facts.append(Fact("EXACT_TYPE", subject, "PyLong_Type"))
         elif callees <= FLOAT_RESULTS:

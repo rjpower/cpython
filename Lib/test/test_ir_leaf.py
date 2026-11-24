@@ -147,6 +147,7 @@ for args in list(CASES["DK_UNICODE_ENTRIES"]):
 SEPARATE = {"PyValue_DUP", "PyValue_XDUP", "PyValue_CLOSE", "PyValue_XCLOSE",
             "PyValue_CLOSE_SPECIALIZED", "_PyObject_ShapeReadDup",
             "_PyDictValues_AddToInsertionOrder", "_PyDictValues_SetShape",
+            "_PyValueSlot_Exchange", "_PyValueSlot_ExchangeFilled", "_PyValueSlot_Fill",
             "GLOBALS", "BUILTINS", "FRAME_CO_CONSTS", "GETLOCAL", "IR_SLOTS",
             "_Py_EvalBreakerHasEvents",
             "PyValue_FromInt64", "PyValue_FromDouble"}
@@ -304,6 +305,35 @@ class PrimitiveTests(unittest.TestCase):
             obj = getattr(holder, attr)
             if got & ~TAG == id(obj) and not got & TAG:
                 ctypes.pythonapi.Py_DecRef(ctypes.py_object(obj))
+
+    def test_value_slot_stores(self):
+        "A store into a slot: the word in, and the slot's word out where there is one"
+        slot = (ctypes.c_uint64 * 1)()
+        address = ctypes.addressof(slot)
+        new = encode_int(-9)
+        for name, held in (("_PyValueSlot_Exchange", 0),
+                           ("_PyValueSlot_Exchange", encode_int(5)),
+                           ("_PyValueSlot_Exchange", word(OBJECTS[0])),
+                           ("_PyValueSlot_ExchangeFilled", encode_int(5)),
+                           ("_PyValueSlot_ExchangeFilled", word(OBJECTS[0])),
+                           ("_PyValueSlot_Fill", 0)):
+            with self.subTest(primitive=name, held=held):
+                slot[0] = held
+                expected, cx = run_spec(ir_leaf.PRIMITIVES[name], (address, new))
+                self.assertEqual([(a, after) for a, _, _, after in cx.mem.writes()],
+                                 [(address, new)])
+                self.assertEqual(slot[0], held)
+                got = capi.leaf_primitive(name, address, new)
+                self.assertEqual(slot[0], new)
+                if ir_leaf.PRIMITIVES[name].results:
+                    self.assertEqual(expected, held)
+                    self.assertEqual(got, held)
+        # The preconditions: the filled form needs a word in the slot, the fill a NULL
+        slot[0] = 0
+        self.assertIsNone(run_spec(ir_leaf.PRIMITIVES["_PyValueSlot_ExchangeFilled"],
+                                   (address, new))[0])
+        slot[0] = new
+        self.assertIsNone(run_spec(ir_leaf.PRIMITIVES["_PyValueSlot_Fill"], (address, new))[0])
 
     def test_dict_values_writes(self):
         holder = Holder()

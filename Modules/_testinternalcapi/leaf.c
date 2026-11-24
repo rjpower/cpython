@@ -136,6 +136,9 @@ static PyObject *lp__PyTuple_ITEMS(PyObject *const *args) { RET_WORD(_PyTuple_IT
 static PyObject *lp__PyObject_InlineValues(PyObject *const *args) { RET_WORD(_PyObject_InlineValues(PTR(PyObject, 0))); }
 static PyObject *lp__PyObject_Shape(PyObject *const *args) { RET_INT(_PyObject_Shape(PTR(PyObject, 0))); }
 static PyObject *lp__PyObject_ValueSlot(PyObject *const *args) { RET_WORD(_PyObject_ValueSlot(PTR(PyObject, 0), (size_t)WORD(1))); }
+static PyObject *lp__PyValueSlot_Exchange(PyObject *const *args) { RET_VAL(_PyValueSlot_Exchange(PTR(PyValue, 0), VAL(1))); }
+static PyObject *lp__PyValueSlot_ExchangeFilled(PyObject *const *args) { RET_VAL(_PyValueSlot_ExchangeFilled(PTR(PyValue, 0), VAL(1))); }
+static PyObject *lp__PyValueSlot_Fill(PyObject *const *args) { _PyValueSlot_Fill(PTR(PyValue, 0), VAL(1)); Py_RETURN_NONE; }
 static PyObject *lp__PyObject_ShapeReadDup(PyObject *const *args) { RET_VAL(_PyObject_ShapeReadDup(PTR(PyObject, 0), (uint32_t)WORD(1))); }
 static PyObject *lp_DK_UNICODE_ENTRIES(PyObject *const *args) { RET_WORD(DK_UNICODE_ENTRIES(PTR(PyDictKeysObject, 0))); }
 static PyObject *lp__PyLong_IsZero(PyObject *const *args) { RET_BOOL(_PyLong_IsZero(PTR(PyLongObject, 0))); }
@@ -227,6 +230,7 @@ static const struct {
     P(PyList_GET_SIZE, 1), P(PyTuple_GET_SIZE, 1), P(PyList_GET_VALUE, 2),
     P(PyTuple_GET_VALUE, 2), P(_PyList_ITEMS, 1), P(_PyTuple_ITEMS, 1), P(_PyObject_InlineValues, 1),
     P(_PyObject_Shape, 1), P(_PyObject_ValueSlot, 2), P(_PyObject_ShapeReadDup, 2),
+    P(_PyValueSlot_Exchange, 2), P(_PyValueSlot_ExchangeFilled, 2), P(_PyValueSlot_Fill, 2),
     P(DK_UNICODE_ENTRIES, 1), P(_PyDictValues_AddToInsertionOrder, 2),
     P(_PyDictValues_SetShape, 2), P(_PyLong_IsZero, 1), P(_PyValueGuarded_Load, 1),
     P(GLOBALS, 0), P(BUILTINS, 0), P(FRAME_CO_CONSTS, 0), P(GETLOCAL, 1), P(IR_SLOTS, 0),

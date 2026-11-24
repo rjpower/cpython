@@ -3,7 +3,9 @@ import asyncio
 import bdb
 import pdb
 import sys
+import textwrap
 import unittest
+from test.support import script_helper
 
 
 class EntryError(Exception):
@@ -105,6 +107,33 @@ class DebuggerEntryTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             sys._debugger_entry(None, callback)
         self.assertEqual(called, [])
+
+    def test_callee_redirects_its_caller(self):
+        # A callee redirects its caller, a strict ancestor whose pending
+        # call left its handler through `enter`: the caller resumes at the
+        # target when the callee returns, not in the rest of the call's word.
+        # Under the JIT off and always (the caller compiled)
+        source = textwrap.dedent('''
+            import sys
+            def callee(target):
+                def callback(frame):
+                    frame.f_lineno = target
+                sys._debugger_entry(sys._getframe(1), callback)
+            def caller(y):
+                x = 1
+                callee(caller.__code__.co_firstlineno + 4)
+                x = 99
+                return x + y
+            for _ in range(3):
+                print(caller(0))
+        ''')
+        modes = ["off"]
+        if sys._jit.is_available():
+            modes.append("always")
+        for mode in modes:
+            with self.subTest(jit=mode):
+                result = script_helper.assert_python_ok("-X", f"jit={mode}", "-c", source)
+                self.assertEqual(result.out.decode().split(), ["1", "1", "1"])
 
     def test_pending_ignored_call_jump(self):
         for backend in ('settrace', 'monitoring'):

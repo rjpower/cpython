@@ -266,6 +266,14 @@ do { \
         DISPATCH_GOTO(); \
     }
 
+/* A monitoring callback redirected the frame (a debugger's f_lineno jump):
+ * the word leaves for frame->instr_ptr, the redirect exit */
+#define DISPATCH_REDIRECT() \
+    do { \
+        next_instr = frame->instr_ptr; \
+        DISPATCH(); \
+    } while (0)
+
 #define DISPATCH_SAME_OPARG() \
     { \
         opcode = IR_HANDLER(*next_instr); \
@@ -506,17 +514,26 @@ PAUSE_ADAPTIVE_COUNTER(_PyFbHeader *fb)
 
 // If a trace function sets a new f_lineno and
 // *then* raises, we use the destination when searching
-// for an exception handler, displaying the traceback, and so on
+// for an exception handler, displaying the traceback, and so on.
+// A callback that redirects the frame (a debugger's f_lineno jump, which
+// retires the temporaries the new word does not keep) makes the word leave
+// for the new word at once, without the rest of its handler: the redirect
+// exit (Tools/cases_generator/ir_contract.py).
 #define INSTRUMENTED_JUMP(src, dest, event) \
 do { \
     _PyInstr *_dest = (dest); \
     if (tstate->tracing) {\
         next_instr = _dest; \
     } else { \
-        next_instr = _Py_call_instrumentation_jump(this_instr, tstate, event, frame, src, _dest); \
-        if (next_instr == NULL) { \
+        _PyIRObserverResult _jump = _Py_call_instrumentation_jump( \
+            this_instr, tstate, event, frame, src, _dest); \
+        if (_jump.status < 0) { \
             next_instr = frame->instr_ptr + 1; \
             PROCESS_ERROR_AT(RAISE, 0, next_instr - 1); \
+        } \
+        next_instr = _jump.next; \
+        if (_jump.status > 0) { \
+            DISPATCH(); \
         } \
     } \
 } while (0);

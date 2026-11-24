@@ -321,6 +321,23 @@ class Family(Node):
 
 
 @dataclass
+class Boundary(Node):
+    """`boundary(SOURCE) at(last | enter) yields(delegated) completion(send |
+    throw) completes(RETURN: exits(return, raise), STORE_LOCAL, ...:
+    exits(branch, raise)) resumes(SEND, STORE_LOCAL);`: the declared
+    contract of the generator-
+    boundary variants (`SOURCE_XFER_CONSUMER`) of an instruction, or of
+    every member of the family it heads (g3/design.md section 7)"""
+    source: str
+    at: str
+    yields: str | None
+    completion: str | None
+    # (consumers, their variants' declared exits), in declaration order
+    completes: list[tuple[list[str], list[str]]]
+    resumes: list[str]
+
+
+@dataclass
 class Pseudo(Node):
     name: str
     inputs: list[InputEffect]
@@ -336,7 +353,7 @@ class LabelDef(Node):
     block: BlockStmt
 
 
-AstNode = InstDef | Macro | Pseudo | Family | LabelDef
+AstNode = InstDef | Macro | Pseudo | Family | Boundary | LabelDef
 
 
 class Parser(PLexer):
@@ -346,6 +363,8 @@ class Parser(PLexer):
             return macro
         if family := self.family_def():
             return family
+        if boundary := self.boundary_def():
+            return boundary
         if pseudo := self.pseudo_def():
             return pseudo
         if inst := self.inst_def():
@@ -659,6 +678,58 @@ class Parser(PLexer):
                                         tkn.text, size.text if size else "", members
                                     )
         return None
+
+    @contextual
+    def boundary_def(self) -> Boundary | None:
+        if not ((tkn := self.expect(lx.IDENTIFIER)) and tkn.text == "boundary"
+                and self.expect(lx.LPAREN)):
+            return None
+        source = self.require(lx.IDENTIFIER).text
+        self.require(lx.RPAREN)
+        at, yields, completion, completes, resumes = "", None, None, [], []
+        seen = set()
+        while (tkn := self.peek()) and tkn.kind == lx.IDENTIFIER:
+            clause = self.next().text
+            if clause not in ("at", "yields", "completion", "completes", "resumes"):
+                raise self.make_syntax_error(f"`{clause}` is not a clause of boundary()")
+            if clause in seen:
+                raise self.make_syntax_error(f"A second {clause}() clause")
+            seen.add(clause)
+            self.require(lx.LPAREN)
+            if clause == "at":
+                at = self.require(lx.IDENTIFIER).text
+            elif clause == "yields":
+                yields = self.require(lx.IDENTIFIER).text
+            elif clause == "completion":
+                completion = self.require(lx.IDENTIFIER).text
+            elif clause == "resumes":
+                resumes = self.names()
+            else:
+                while True:
+                    consumers = self.names()
+                    self.require(lx.COLON)
+                    if self.require(lx.IDENTIFIER).text != "exits":
+                        raise self.make_syntax_error("Expected exits(...)")
+                    self.require(lx.LPAREN)
+                    exits = []
+                    while word := self.word():
+                        exits.append(word.text)
+                        if not self.expect(lx.COMMA):
+                            break
+                    self.require(lx.RPAREN)
+                    completes.append((consumers, exits))
+                    if not self.expect(lx.COMMA):
+                        break
+            self.require(lx.RPAREN)
+        self.require(lx.SEMI)
+        return Boundary(source, at, yields, completion, completes, resumes)
+
+    def names(self) -> list[str]:
+        "One or more identifiers, separated by commas"
+        names = [self.require(lx.IDENTIFIER).text]
+        while self.expect(lx.COMMA):
+            names.append(self.require(lx.IDENTIFIER).text)
+        return names
 
     def flags(self) -> list[str]:
         here = self.getpos()

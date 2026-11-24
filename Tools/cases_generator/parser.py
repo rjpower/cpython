@@ -3,6 +3,7 @@ from parsing import (  # noqa: F401
     Macro,
     Pseudo,
     Family,
+    Boundary,
     LabelDef,
     Parser,
     Context,

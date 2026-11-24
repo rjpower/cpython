@@ -1095,7 +1095,9 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(formats["GET_AWAITABLE"].borrow_mask, 1)
         self.assertTrue(formats["GET_AWAITABLE"].store_dst)
         self.assertFalse(formats["GET_AWAITABLE"].no_fold)
-        self.assertEqual(instruction.parts[0].aliased_outputs, ("iter",))
+        # Declared `iter: owned`: the transferred reference is the output's
+        # own, so it aliases no input
+        self.assertEqual(instruction.parts[0].aliased_outputs, ())
         predicate = "coro_awaitable_can_transfer"
         # The row declares no reentry, so the call does not escape
         self.assertFalse(ir_contract.rows()[predicate].effects & ir_contract.REENTRY)
@@ -1276,29 +1278,55 @@ class TestIRCases(unittest.TestCase):
         guard_instruction = ir_generator.replace(instruction, parts=[guard])
         self.assertIsNone(ir_generator.analyze_error_effects(guard_instruction))
 
-    def test_suspension_effect_requires_a_state_write(self):
-        def suspends(inst):
-            return any(ir_records.suspends_frame(part) for part in inst.parts
-                       if isinstance(part, analyzer.Uop))
+    def test_a_suspension_is_declared(self):
+        # The frame switch of a body that names none (`frame = ...`) takes
+        # the switch exits its uop declares; the generator state the body
+        # writes decides nothing
+        def switches(inst):
+            return [t.kind for part in inst.parts if isinstance(part, analyzer.Uop)
+                    for t in ir_records.uop_transfers(part, "")
+                    if t.kind in (ir_records.ENTER_FRAME, ir_records.YIELD)]
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
         Path(self.temp_input_filename).write_text(source)
         analysis = analyzer.analyze_files([self.temp_input_filename])
-        for name in ("SEND", "SEND_GEN"):
-            self.assertIn("FRAME_CREATED", ir_generator.uop_tokens(
-                analysis.instructions[name]))
-            self.assertFalse(suspends(analysis.instructions[name]))
         for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
-            self.assertTrue(suspends(analysis.instructions[name]))
-        source = source.replace(
-            "FT_ATOMIC_STORE_INT8_RELEASE(gen->gi_frame_state, FRAME_SUSPENDED + oparg);",
-            "assert(gen->gi_frame_state == FRAME_SUSPENDED + oparg);")
-        source = source.replace("gen->gi_frame_state = FRAME_CREATED;",
-                                "assert(gen->gi_frame_state == FRAME_CREATED);")
+            self.assertEqual(switches(analysis.instructions[name]), [ir_records.YIELD])
+        declared = "effects(reads, writes, switches_frame) exits(yield)"
+        self.assertEqual(source.count(declared), 1)
+        source = source.replace(declared, "effects(reads, writes, switches_frame) exits(enter)")
         Path(self.temp_input_filename).write_text(source)
         mutated = analyzer.analyze_files([self.temp_input_filename])
         for name in ("YIELD_VALUE", "INSTRUMENTED_YIELD_VALUE"):
-            self.assertFalse(suspends(mutated.instructions[name]))
+            self.assertEqual(switches(mutated.instructions[name]),
+                             [ir_records.ENTER_FRAME])
+
+    def test_the_guarded_call_prefix_is_declared(self):
+        # The binding plan relies on the callable's declared facts and on
+        # the prefix's declared guard reasons, not on the guards' bodies
+        source = (Path(__file__).resolve().parents[2] /
+                  "Python" / "bytecodes.c").read_text()
+
+        def validate(text):
+            Path(self.temp_input_filename).write_text(text)
+            with handle_stderr():
+                analysis = analyzer.analyze_files([self.temp_input_filename])
+            formats = ir_generator.compute_formats(analysis)
+            for name in ("CALL_PY_GENERAL", "CALL_KW_PY"):
+                ir_generator.validate_guarded_python_call(
+                    analysis.instructions[name], formats[name])
+
+        validate(source)
+        version = ("-- callable: exact(PyFunction_Type) func_version(func_version), "
+                   "unused, unused[oparg]))")
+        for old, new in [('"the recursion budget is spent"', '"spam"'),
+                         (version, version.replace(" func_version(func_version)", "")),
+                         ("op(_CHECK_PEP_523, (--))\n            effects(reads)",
+                          "op(_CHECK_PEP_523, (--))\n            effects(reads, writes)")]:
+            with self.subTest(old):
+                self.assertEqual(source.count(old), 1)
+                with self.assertRaisesRegex(SyntaxError, "requires the checked prefix"):
+                    validate(source.replace(old, new))
 
     def test_physical_output_mapping_matches_window_finalization(self):
         source = (Path(__file__).resolve().parents[2] /
@@ -2864,9 +2892,6 @@ class TestIRCases(unittest.TestCase):
              "RETIRE", "PyValue_XCLOSE", "PyValue_DUP"),
             ("COPY", "bottom, unused[oparg-1] -- bottom, unused[oparg-1], top",
              "top = PyValue_DUP(bottom);", "COPY", "PyValue_DUP(bottom)", "bottom"),
-            ("SWAP", "bottom, unused[oparg-2], top -- bottom, unused[oparg-2], top",
-             "PyValue temp = bottom; bottom = top; top = temp;",
-             "SWAP", "top = temp;", ""),
         )
         for name, effect, body, kind, old, new in cases:
             with self.subTest(handler=name):
@@ -2879,6 +2904,22 @@ class TestIRCases(unittest.TestCase):
                 self.assertIn(old, body)
                 self.assertEqual(kind_for(body.replace(old, new)),
                                  "_PyIR_TRANSFER_UNKNOWN")
+
+    def test_swap_transfer_comes_from_the_exchange(self):
+        # The swap is the declared exchange (ir_contract.check_exchange),
+        # not the body text: undeclared, the same body proves nothing
+        body = "PyValue temp = bottom; bottom = top; top = temp;"
+        def kind_for(effect, clauses=""):
+            analysis = self.analyze(f"\ninst(SWAP, ({effect})) {clauses} {{ {body} }}\n")
+            inst = analysis.instructions["SWAP"]
+            fmt = ir_generator.compute_formats(analysis)["SWAP"]
+            return ir_generator.normal_transfer_kind(inst, fmt)
+        self.assertEqual(kind_for("bottom, unused[oparg-2], top -- "
+                                  "bottom: moved(top), unused[oparg-2], top: moved(bottom)",
+                                  "effects() exits(next)"),
+                         "_PyIR_TRANSFER_SWAP")
+        self.assertEqual(kind_for("bottom, unused[oparg-2], top -- bottom, unused[oparg-2], top"),
+                         "_PyIR_TRANSFER_UNKNOWN")
 
     def test_transparent_leaf_still_has_a_consumer_recipe(self):
         source = "\nir_only inst(IR_JUMP, (--)) { JUMPTO(oparg); }\n"
@@ -3022,7 +3063,7 @@ class TestIRCases(unittest.TestCase):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
         expected = {"BUILD_STRING": "IR_BUILD_STRING", "BUILD_MAP": "IR_BUILD_MAP",
-                    "_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
+                    "BUILD_SET": "IR_BUILD_SET", "_LOAD_SPECIAL": "IR_LOOKUP_SPECIAL"}
         for name, helper in expected.items():
             part = analysis.uops[name]
             self.assertTrue(ir_generator.home_operation_contract(part))
@@ -4053,17 +4094,20 @@ class TestCallMarkers(unittest.TestCase):
                 self.assertNotIn("&call", body)
 
     def test_exact_method_guards_precede_the_push(self):
-        # The bound method's function and receiver are adopted as borrows, so
-        # every guard runs before call_push_exact() counts or moves anything,
-        # and a failed guard falls back to the generic call with the operands
-        # untouched
+        # Every guard, through the method's im_func, runs before the
+        # expansion, which only sets CALL_EXPANDED: the operands stay the
+        # method and NULL, call_push_exact() counts the function and the
+        # receiver, and a failed guard falls back to the generic call with
+        # the operands untouched
         for name in ("CALL_BOUND_METHOD_EXACT_ARGS",):
             with self.subTest(handler=name):
                 body = self.interpreter.split(f"TARGET({name}) {{", 1)[1].split("TARGET(", 1)[0]
                 push = body.index("call_push_exact(")
-                self.assertIn("call_state |= CALL_SELF_PRESENT | CALL_EXPANDED", body[:push])
-                self.assertGreaterEqual(body[:push].count("JUMP_TO_PREDICTED("), 4)
-                self.assertNotIn("JUMP_TO_PREDICTED(", body[push:])
+                expand = body.index("call_state |= CALL_EXPANDED;")
+                self.assertGreaterEqual(body[:expand].count("JUMP_TO_PREDICTED("), 8)
+                self.assertNotIn("JUMP_TO_PREDICTED(", body[expand:])
+                self.assertLess(expand, push)
+                self.assertNotIn("_PyIR_AdoptTemp", body)
                 self.assertNotIn("call_fallback_", body)
 
     def test_handlers_take_no_local_address(self):

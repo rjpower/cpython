@@ -91,17 +91,18 @@ class SliceTests(unittest.TestCase):
         def facts(guard):
             return [str(f) for f in guard.facts]
         add_int = uop_record("BINARY_OP_ADD_INT", "_GUARD_TOS_INT")
-        self.assertEqual([facts(g) for g in add_int.guards], [["INLINE_INT(v1)"]])
+        self.assertEqual([facts(g) for g in add_int.guards], [["ENCODING(v1, inline_int)"]])
         add_float = uop_record("BINARY_OP_ADD_FLOAT", "_BINARY_OP_ADD_FLOAT")
         self.assertEqual([facts(g) for g in add_float.guards],
-                         [["NUMBER(v0)", "NUMBER(v1)"]])
+                         [["ENCODING(v0, inline_float|inline_int)",
+                           "ENCODING(v1, inline_float|inline_int)"]])
         self.assertEqual([str(f) for f in add_float.results], ["EXACT_TYPE(v2, PyFloat_Type)"])
         result = uop_record("BINARY_OP_ADD_INT", "_BINARY_OP_ADD_INT").results
         self.assertEqual([str(f) for f in result], ["EXACT_TYPE(v2, PyLong_Type)"])
         # The implicit pointer-space guard, then the declared type test
         guard_list = uop_record("UNPACK_SEQUENCE_LIST", "_GUARD_TOS_LIST")
         self.assertEqual([facts(g) for g in guard_list.guards],
-                         [["OBJECT(v0)"], ["EXACT_TYPE(v0, PyList_Type)"]])
+                         [["ENCODING(v0, object)"], ["EXACT_TYPE(v0, PyList_Type)"]])
         unpack = uop_record("UNPACK_SEQUENCE_LIST", "_UNPACK_SEQUENCE_LIST")
         self.assertEqual([(facts(g), g.reason) for g in unpack.guards],
                          [([], "a free-threaded build's critical section"),
@@ -110,11 +111,11 @@ class SliceTests(unittest.TestCase):
         # inline values' flag; and the loaded value's, recorded on the local
         handler = "LOAD_ATTR_INSTANCE_VALUE"
         self.assertEqual([facts(g) for g in uop_record(handler, "_GUARD_TYPE_VERSION").guards],
-                         [["OBJECT(v0)"], ["TYPE_VERSION(v0, type_version)"]])
+                         [["ENCODING(v0, object)"], ["TYPE_VERSION(v0, type_version)"]])
         has_values = uop_record(handler, "_CHECK_MANAGED_OBJECT_HAS_VALUES")
         self.assertEqual([facts(g) for g in has_values.guards], [["INLINE_VALUES_VALID(v0)"]])
         load = uop_record(handler, "_LOAD_ATTR_INSTANCE_VALUE")
-        self.assertEqual([facts(g) for g in load.guards], [["NOT_NULL(found)"]])
+        self.assertEqual([facts(g) for g in load.guards], [["ENCODING(found, inline_float|inline_int|object)"]])
         self.assertEqual(load.effects, {READS_HEAP, MAY_RELEASE})
 
     # Where the tables (ir_records, deleted at G0d) declare an exit that the
@@ -143,19 +144,17 @@ class SliceTests(unittest.TestCase):
     # The reviewed corrections of G0c, each listed with its evidence in the
     # batch's differences.md and in the commit that made it.  Batch 8:
     # INSTRUMENTED_JUMP takes PROCESS_ERROR_AT when the event fails, so
-    # _MONITOR_END_ASYNC_FOR may raise
+    # _MONITOR_END_ASYNC_FOR may raise.  G0d1: it leaves by the redirect exit
+    # when a callback redirects the frame, which the record cannot say
     LISTED_DIFFERENCES = [
         'INSTRUMENTED_END_ASYNC_FOR/_MONITOR_END_ASYNC_FOR: declares exits(next, '
-        'raise), the record has next',
+        'raise, redirect), the record has next',
         # Batch 7: no word executes RETURN_GENERATOR, so its result is NULL
-        # (F19); _YIELD_VALUE moves the yielded value into the caller's
-        # frame (F5); _GUARD_TOS_IS_NONE tests the identity of the word
-        # with PyValue_None (F20)
+        # (F19); _GUARD_TOS_IS_NONE tests the identity of the word with
+        # PyValue_None (F20)
         'RETURN_GENERATOR.record.uops[0].results: inferred 0 entries [], '
-        'declared 1 [{"__type": "Fact", "arg": "", "kind": "IS_NULL", '
+        'declared 1 [{"__type": "Fact", "arg": "null", "kind": "ENCODING", '
         '"subject": "v0"}]',
-        'INSTRUMENTED_YIELD_VALUE/_YIELD_VALUE: output `value` is declared '
-        'moved, the record has OWNED',
         *(line
           for handler in ("SEND_VIRTUAL", "SEND_VIRTUAL_XFER_DISCARD",
                           "SEND_VIRTUAL_XFER_HOME", "SEND_VIRTUAL_XFER_POP_TOP",
@@ -176,27 +175,35 @@ class SliceTests(unittest.TestCase):
               'inferred "", declared "PyValue_None"',
               f'{handler}.record.uops[0].guards[0].facts[0].kind: '
               'inferred "IS_NONE", declared "IDENTITY"')),
-        # G0c9: FORMAT_SIMPLE's str arm passes the input's reference on and
-        # its other arms make a new one; the result is owned on every path,
-        # which the record's ALIAS (the input's home) does not say
-        'FORMAT_SIMPLE/_FORMAT_SIMPLE: output `res` is declared owned, the record has ALIAS',
         # G0c9: _GET_ITER's second result is a tagged index or NULL
         # (_PyEval_GetIter's row, G0a5's representation table)
         'GET_ITER.record.uops[1].results: inferred 0 entries [], declared 1 '
-        '[{"__type": "Fact", "arg": "tagged_index|null", "kind": "ENCODING", '
+        '[{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", '
         '"subject": "v2"}]',
-        # G0c9: GET_AWAITABLE's coroutine arm passes the input's reference
-        # on and the other arm makes a new one; the result is owned on both
-        'GET_AWAITABLE/_GET_AWAITABLE: output `iter` is declared owned, the record has ALIAS',
         # G0c9: _SEND_ASYNC_GEN's body completes in place (it reaches the end
         # of the body, `next`); SEND_ASYNC_GEN_XFER_DISCARD's yield is its
         # fused transfer's, which G0d takes from the declaration
         'SEND_ASYNC_GEN_XFER_DISCARD/_SEND_ASYNC_GEN: declares exits(branch, next, raise), '
         'the record has branch, raise, yield',
+        # G3a: a RETURN variant's completion returns (its boundary(...) clause,
+        # completes(RETURN: exits(return, raise))) where the uop branches
+        'SEND_ASYNC_GEN_XFER_RETURN/_SEND_ASYNC_GEN: declares exits(branch, next, raise), '
+        'the record has raise, return, yield',
+        'CLEANUP_THROW_XFER_RETURN/_CLEANUP_THROW: declares exits(branch, raise), '
+        'the record has raise, return',
+        # G3a: SWAP's exchange keeps every home (pass-throughs); the walk
+        # reads the copies as a consume of each input, and each output as
+        # the other input's value, whose count moves to it (ALIAS, from
+        # the declared moved(x) since G0d1).  A record from the
+        # declaration reads Item.exchange.
+        'SWAP/_SWAP: input `bottom` is declared a pass-through, the record has CONSUMED',
+        'SWAP/_SWAP: input `top` is declared a pass-through, the record has CONSUMED',
+        'SWAP/_SWAP: output `bottom` is declared a pass-through, the record has ALIAS',
+        'SWAP/_SWAP: output `top` is declared a pass-through, the record has ALIAS',
         # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
         # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
         'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '
-        '[{"__type": "Fact", "arg": "", "kind": "IS_NULL", "subject": "v1"}]',
+        '[{"__type": "Fact", "arg": "null", "kind": "ENCODING", "subject": "v1"}]',
         'LOAD_FAST_CHECK.record.format.runs_code: inferred false, declared true',
         'LOAD_FAST_CHECK.record.uops[0].effects: inferred 2 entries '
         '["MAY_RAISE", "READS_HEAP"], declared 6 ["ALLOCATES", "MAY_RAISE", '
@@ -235,6 +242,88 @@ class SliceTests(unittest.TestCase):
         'CALL_KW_NON_PY/_CALL_KW_NON_PY: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_KW_PY/_PY_FRAME_KW_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_PY_GENERAL/_PY_FRAME_GENERAL_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
+        # G0d4: the iterator family's cursor has distinct names (`index` in,
+        # `next_index` out, as the F16 rule asks).  The inference reads the
+        # handlers with their declarations removed, where nothing says that
+        # the output replaces the input in the same stack position (ir_records'
+        # replaced_input reads that from the declared modes), so it takes the
+        # FOR_ITER group for a plain push and a discarded window.  The declared
+        # records keep the group's format and mark the replaced cursor changed
+        # (its entry holds a new value); the leaf records of the uops differ
+        # only in the cursor's encoding fact, which GET_ITER and the cursor
+        # helper establish.
+        'FOR_ITER.record.format.discards: inferred false, declared true',
+        'FOR_ITER.record.format.dst_offset: inferred 1, declared 2',
+        'FOR_ITER.record.format.store_dst: inferred false, declared true',
+        'FOR_ITER.record.layout.move_dst: inferred null, declared 2',
+        'FOR_ITER.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
+        'FOR_ITER.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'FOR_ITER.record.outputs[1][1]: inferred -1, declared 1',
+        'FOR_ITER.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
+        'FOR_ITER.record.outputs[1][2].peek: inferred false, declared true',
+        'FOR_ITER.record.store_mode: inferred null, declared "store"',
+        'FOR_ITER.record.uops[1].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", "subject": "v2"}]',
+        'FOR_ITER_DICT_ITEMS.record.format.discards: inferred false, declared true',
+        'FOR_ITER_DICT_ITEMS.record.format.dst_offset: inferred 1, declared 2',
+        'FOR_ITER_DICT_ITEMS.record.format.store_dst: inferred false, declared true',
+        'FOR_ITER_DICT_ITEMS.record.layout.move_dst: inferred null, declared 2',
+        'FOR_ITER_DICT_ITEMS.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
+        'FOR_ITER_DICT_ITEMS.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'FOR_ITER_DICT_ITEMS.record.store_mode: inferred null, declared "store"',
+        'FOR_ITER_GEN.record.format.discards: inferred false, declared true',
+        'FOR_ITER_GEN.record.format.dst_offset: inferred 1, declared 2',
+        'FOR_ITER_GEN.record.format.store_dst: inferred false, declared true',
+        'FOR_ITER_GEN.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'FOR_ITER_GEN.record.results: inferred 0 entries [], declared 1 [[-1, {"__type": "Operand", "detail": "callee return", "field": "A", "kind": "SLOT", "may_name": [], "position": null}]]',
+        'FOR_ITER_GEN.record.store_mode: inferred null, declared "return"',
+        'FOR_ITER_LIST.record.format.discards: inferred false, declared true',
+        'FOR_ITER_LIST.record.format.dst_offset: inferred 1, declared 2',
+        'FOR_ITER_LIST.record.format.store_dst: inferred false, declared true',
+        'FOR_ITER_LIST.record.layout.move_dst: inferred null, declared 2',
+        'FOR_ITER_LIST.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
+        'FOR_ITER_LIST.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'FOR_ITER_LIST.record.outputs[1][1]: inferred -1, declared 1',
+        'FOR_ITER_LIST.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
+        'FOR_ITER_LIST.record.outputs[1][2].peek: inferred false, declared true',
+        'FOR_ITER_LIST.record.store_mode: inferred null, declared "store"',
+        'FOR_ITER_RANGE.record.format.discards: inferred false, declared true',
+        'FOR_ITER_RANGE.record.format.dst_offset: inferred 1, declared 2',
+        'FOR_ITER_RANGE.record.format.store_dst: inferred false, declared true',
+        'FOR_ITER_RANGE.record.layout.move_dst: inferred null, declared 2',
+        'FOR_ITER_RANGE.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
+        'FOR_ITER_RANGE.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'FOR_ITER_RANGE.record.store_mode: inferred null, declared "store"',
+        'FOR_ITER_TUPLE.record.format.discards: inferred false, declared true',
+        'FOR_ITER_TUPLE.record.format.dst_offset: inferred 1, declared 2',
+        'FOR_ITER_TUPLE.record.format.store_dst: inferred false, declared true',
+        'FOR_ITER_TUPLE.record.layout.move_dst: inferred null, declared 2',
+        'FOR_ITER_TUPLE.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
+        'FOR_ITER_TUPLE.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'FOR_ITER_TUPLE.record.outputs[1][1]: inferred -1, declared 1',
+        'FOR_ITER_TUPLE.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
+        'FOR_ITER_TUPLE.record.outputs[1][2].peek: inferred false, declared true',
+        'FOR_ITER_TUPLE.record.store_mode: inferred null, declared "store"',
+        'FOR_ITER_VIRTUAL.record.format.discards: inferred false, declared true',
+        'FOR_ITER_VIRTUAL.record.format.dst_offset: inferred 1, declared 2',
+        'FOR_ITER_VIRTUAL.record.format.store_dst: inferred false, declared true',
+        'FOR_ITER_VIRTUAL.record.layout.move_dst: inferred null, declared 2',
+        'FOR_ITER_VIRTUAL.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
+        'FOR_ITER_VIRTUAL.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'FOR_ITER_VIRTUAL.record.outputs[1][1]: inferred -1, declared 1',
+        'FOR_ITER_VIRTUAL.record.outputs[1][2].name: inferred "next_index", declared "index"',
+        'FOR_ITER_VIRTUAL.record.store_mode: inferred null, declared "store"',
+        'FOR_ITER_VIRTUAL.record.uops[0].results: inferred 0 entries [], declared 1 [{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", "subject": "v2"}]',
+        'FOR_ITER.record.uops[1].inputs[1].changed: inferred false, declared true',
+        'FOR_ITER_LIST.record.uops[2].inputs[1].changed: inferred false, declared true',
+        'FOR_ITER_TUPLE.record.uops[2].inputs[1].changed: inferred false, declared true',
+        'FOR_ITER_VIRTUAL.record.uops[0].inputs[1].changed: inferred false, declared true',
+        'INSTRUMENTED_FOR_ITER.record.format.discards: inferred false, declared true',
+        'INSTRUMENTED_FOR_ITER.record.format.dst_offset: inferred 1, declared 2',
+        'INSTRUMENTED_FOR_ITER.record.format.store_dst: inferred false, declared true',
+        'INSTRUMENTED_FOR_ITER.record.layout.move_dst: inferred null, declared 2',
+        'INSTRUMENTED_FOR_ITER.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
+        'INSTRUMENTED_FOR_ITER.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
+        'INSTRUMENTED_FOR_ITER.record.store_mode: inferred null, declared "store"',
     ]
 
     # Batch 5 and G0c9: the assume op of `iter: assumed(object) by GET_ITER`
@@ -243,6 +332,13 @@ class SliceTests(unittest.TestCase):
         ("FOR_ITER_LIST.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
         ("FOR_ITER_TUPLE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
         ("FOR_ITER_RANGE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
+        # G0d1: a yield is declared (`exits(yield)`); with the declarations
+        # removed the inference no longer reads the generator's state, and
+        # a frame switch that no site names is an entry.  The boundary
+        # variants' lines fall under LISTED_BOUNDARY_FAMILIES (G0d2)
+        ("YIELD_VALUE.record.uops[1].transfers[0].kind:", '"ENTER_FRAME", declared "YIELD"'),
+        ("INSTRUMENTED_YIELD_VALUE.record.uops[2].transfers[0].kind:",
+         '"ENTER_FRAME", declared "YIELD"'),
     ]
 
     # G0d2: the generator boundary is checked against the declarations of
@@ -297,6 +393,7 @@ EXTRA_ROWS = """
     HELPER(spam_write, void, (PyObject *), ARGS(object), NONE, EFFECTS(writes)) \\
     INTRINSIC(SPAM_FT_ONLY, ARGS(scalar), SCALAR, BUILD(free_threaded)) \\
     MACRO(SPAM_RAISE, ARGS(scalar), NONE, EFFECTS(raises), EXITS(raise)) \\
+    MACRO(SPAM_EVENT, ARGS(), NONE, EFFECTS(runs_python), EXITS(redirect)) \\
     HELPER(T, PyValue, (PyValue), ARGS(taken), \\
            VALUE_OR_NULL(owned), EFFECTS(allocates, raises)) \\
     MACRO(SPAM_GUARD, ARGS(scalar), NONE, EFFECTS(), EXITS(miss)) \
@@ -345,7 +442,7 @@ class VerifierTests(unittest.TestCase):
         patch.start()
         self.addCleanup(patch.stop)
 
-    def verify(self, source):
+    def verify(self, source, temporaries=False):
         with open(self.filename, "w") as f:
             f.write(cases.parser.BEGIN_MARKER)
             f.write(textwrap.dedent(source))
@@ -357,12 +454,12 @@ class VerifierTests(unittest.TestCase):
         # The handler rules for macros; an inst's inputs come from outside
         for inst in result.instructions.values():
             if len([p for p in inst.parts if isinstance(p, cases.analyzer.Uop)]) > 1:
-                ir_contract.verify_handler(inst, self.table)
+                ir_contract.verify_handler(inst, self.table, temporaries=temporaries)
         return result
 
-    def refuses(self, source, message):
+    def refuses(self, source, message, temporaries=False):
         with self.assertRaisesRegex(SyntaxError, message):
-            self.verify(source)
+            self.verify(source, temporaries)
 
     # The notation
 
@@ -384,6 +481,92 @@ class VerifierTests(unittest.TestCase):
                 DECREF_INPUTS();
             }
         """, r"OP: `flies` is not an effect")
+
+
+    # The exchange (SWAP): pass-through outputs that take each other's inputs
+
+    EXCHANGE = """
+        inst(OP, (bottom, unused[oparg-2], top --
+                  bottom: moved(top), unused[oparg-2], top: moved(bottom)))
+            effects() exits(next)
+        {
+            %s
+        }
+    """
+
+    def test_exchange_accepts_swap(self):
+        result = self.verify(self.EXCHANGE % "PyValue temp = bottom; bottom = top; top = temp;")
+        contract = ir_contract.contract_of(result.uops["OP"])
+        self.assertEqual({o.name: o.exchange for o in contract.outputs if o.exchange},
+                         {"bottom": "top", "top": "bottom"})
+        self.assertEqual({i.mode for i in contract.inputs}, {""})
+
+    def test_exchange_body_exchanges(self):
+        self.refuses(self.EXCHANGE % "PyValue temp = bottom; top = temp;",
+                     r"OP: the body leaves `bottom` with `bottom`, and it declares moved\(top\)")
+        self.refuses(self.EXCHANGE % "PyValue temp = bottom; bottom = top; top = temp; "
+                                     "PyValue_CLOSE(temp);",
+                     r"OP: an exchange's body only copies between bottom, top and temporaries")
+        self.refuses(self.EXCHANGE % "PyValue temp = bottom; bottom = PyValue_None; top = temp;",
+                     r"OP: an exchange's body only copies")
+        self.refuses("""
+            inst(OP, (bottom, unused[oparg-2], top --
+                      bottom: moved(top), unused[oparg-2], top: moved(bottom)))
+                effects(releases) exits(next)
+            {
+                PyValue temp = bottom; bottom = top; top = temp;
+            }
+        """, r"OP: an exchange has effects\(\) exits\(next\)")
+
+    def test_exchange_is_of_pass_throughs(self):
+        self.refuses("""
+            inst(OP, (bottom, top -- bottom: moved(top), top: moved(bottom), copy: moved(top)))
+                effects() exits(next)
+            {
+                PyValue temp = bottom; bottom = top; top = temp;
+            }
+        """, r"OP: `copy` is no pass-through, and moves from `top`, which is exchanged")
+        self.refuses("""
+            inst(OP, (bottom, top -- bottom: moved(bottom), top))
+                effects() exits(next)
+            {
+            }
+        """, r"OP: `bottom` is exchanged with itself")
+
+    def test_exchange_is_a_permutation(self):
+        self.refuses("""
+            inst(OP, (a, b, c -- a: moved(b), b: moved(c), c))
+                effects() exits(next)
+            {
+                a = b; b = c;
+            }
+        """, r"OP: the exchange of a, b takes b, c: no permutation")
+        self.refuses("""
+            inst(OP, (a, b, c -- a: moved(c), b: moved(c), c: moved(a)))
+                effects() exits(next)
+            {
+                PyValue t = a; a = c; b = c; c = t;
+            }
+        """, r"no permutation")
+
+    def test_exchange_keeps_homes(self):
+        self.refuses("""
+            inst(OP, (bottom, unused[oparg], top --
+                      bottom: moved(top), unused[oparg+1], top: moved(bottom)))
+                effects() exits(next)
+            {
+                PyValue temp = bottom; bottom = top; top = temp;
+            }
+        """, r"OP: `top` is exchanged, and its home changes")
+
+    def test_swap_is_a_declared_exchange(self):
+        swap = analysis.instructions["SWAP"]
+        contract = ir_contract.contract_of(swap.parts[0])
+        self.assertEqual({o.name: o.exchange for o in contract.outputs if o.exchange},
+                         {"bottom": "top", "top": "bottom"})
+        formats = ir_generator.compute_formats(analysis)
+        self.assertEqual(ir_generator.normal_transfer_kind(swap, formats["SWAP"]),
+                         "_PyIR_TRANSFER_SWAP")
 
     # V1, V2
 
@@ -2041,6 +2224,22 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % ("borrowed", "PyValue_AsKnownObjectBorrow"),
                      r"SPAM_STEAL consumes `x`, declared borrowed, which it does not own")
 
+    def test_from_object_steal_moves_its_argument(self):
+        # VALUE(moved(0)): the result is the argument's reference, so the
+        # argument must hold an obligation, as _PyValue_Str's new reference
+        # does; a pointer that a SCALAR row gives holds none
+        source = """
+            op(_OP, (x: borrowed -- r: owned)) effects(runs_python) exits(next, raise) {
+                PyObject *o = %s;
+                ERROR_IF(o == NULL);
+                r = PyValue_FromObjectSteal(o);
+            }
+        """
+        self.verify(source % "_PyValue_Str(x)")
+        self.refuses(source % "_PyErr_Occurred(tstate)",
+                     r"`_PyErr_Occurred \( tstate \)` is assigned to an output, but it is no "
+                     r"row with a value result")
+
     def test_decref_inputs_after_a_consumption(self):
         # DECREF_INPUTS closes every input the generator has not killed, so
         # an input a row consumed is closed twice unless it is marked DEAD
@@ -2133,6 +2332,107 @@ class VerifierTests(unittest.TestCase):
                 spam_dealloc(PyValue_AsKnownObjectBorrow(x));
             }
         """, r"passes `x` to PyValue_AsKnownObjectBorrow, which requires .*object of it")
+
+    def test_a_frame_switch_is_declared(self):
+        # The switches_frame effect and the switch exits (enter, return,
+        # yield) are the authority; the body's `frame =` is held to them and
+        # never names which switch it is
+        source = """
+            op(_OP, (--)) effects(%s) exits(%s) {
+                frame = tstate->current_frame;
+            }
+        """
+        self.verify(source % ("switches_frame", "enter"))
+        self.verify(source % ("switches_frame", "yield"))
+        self.refuses(source % ("switches_frame", "next"),
+                     r"declares switches_frame, but none of the exits enter, return, yield")
+        self.refuses(source % ("reads", "next"), r"may switches_frame")
+        self.refuses("""
+            op(_OP, (--)) effects() exits(enter) {
+                int x = 0;
+            }
+        """, r"declares exits\(enter\), but not the effect switches_frame")
+
+    def test_a_redirect_is_its_own_exit(self):
+        # _MONITOR_RESUME, _YIELD_VALUE_EVENT: after a callback moved the
+        # frame, the word leaves for the word it chose (DISPATCH_REDIRECT),
+        # which is neither next nor the jump to the word itself
+        source = """
+            op(_OP, (--)) effects(runs_python) exits(%s) {
+                Py_ssize_t n = _PyValue_Size(PyValue_None);
+                ERROR_IF(n < 0);
+                if (frame->instr_ptr != this_instr) {
+                    DISPATCH_REDIRECT();
+                }
+            }
+        """
+        self.verify(source % "next, raise, redirect")
+        self.refuses(source % "next, raise",
+                     r"declares exits\(next, raise\), but the body takes next, raise, redirect")
+
+    def test_an_assumption_on_a_temporary_survives_a_reentry(self):
+        # INSTRUMENTED_END_ASYNC_FOR: a temporary is replaced only by a
+        # debugger's f_lineno jump, which redirects the frame: from an event
+        # of this frame, in a uop that leaves by its redirect exit; from a
+        # descendant, only while the word's call has left through `enter`.
+        # On the next path the temporary holds what exception_unwind pushed
+        source = """
+            op(_EVENT, (--)) effects(runs_python) exits(next, %s) {
+                %s
+            }
+            op(_USE, (x: taken assumed(object) by exception_unwind --))
+                effects(releases) exits(next)
+            {
+                spam_dealloc(PyValue_AsKnownObjectBorrow(x));
+                PyValue_CLOSE(x);
+            }
+            macro(OP) = _EVENT + _USE;
+        """
+        redirects = source % ("redirect", "SPAM_EVENT();")
+        reenters = source % ("raise", "Py_ssize_t n = _PyValue_Size(PyValue_None);\n"
+                             "                ERROR_IF(n < 0);")
+        for text in (redirects, reenters):
+            self.verify(text, temporaries=True)
+            # An input that may be a local home: any reentry may have
+            # replaced it (a finalizer writes locals through FrameLocalsProxy)
+            self.refuses(text, r"`x`, which may have been replaced since the handler's "
+                         r"entry, at _EVENT, which may reenter \(")
+        # The real handler verifies with its window, and refuses without it
+        inst = analysis.instructions["INSTRUMENTED_END_ASYNC_FOR"]
+        ir_contract.verify_handler(inst, temporaries=True)
+        with self.assertRaisesRegex(SyntaxError, r"_END_ASYNC_FOR assumes object by "
+                                    r"exception_unwind of `exc_st`, which may have been "
+                                    r"replaced since the handler's entry, at "
+                                    r"_MONITOR_END_ASYNC_FOR"):
+            ir_contract.verify_handler(inst)
+
+    def test_a_fact_made_in_the_handler_survives_a_reentry(self):
+        # R1, POP_JUMP_IF_FALSE_LIST: the bool _TO_BOOL_LIST makes is a
+        # temporary, whose exact type no reentry (POP_TOP's close) replaces;
+        # a fact of an input that may be in a local home dies there
+        for name in ("POP_JUMP_IF_FALSE_LIST", "POP_JUMP_IF_TRUE_LIST"):
+            with self.subTest(name):
+                ir_contract.verify_handler(analysis.instructions[name])
+        source = """
+            op(_GUARD, (x: object -- x: exact(PyList_Type))) effects(reads) exits(next, miss) {
+                EXIT_IF(!PyList_CheckExact(PyValue_AsKnownObjectBorrow(x)));
+            }
+            op(_MAKE, (x: consumed -- b: owned exact(PyBool_Type))) effects(releases) exits(next) {
+                PyValue_CLOSE(x);
+                b = PyValue_True;
+            }
+            op(_EVENT, (--)) effects(runs_python) exits(next, raise) {
+                Py_ssize_t n = _PyValue_Size(PyValue_None);
+                ERROR_IF(n < 0);
+            }
+            op(_NEED, (v: %s -- v)) effects() exits(next) {
+            }
+            macro(OP) = _GUARD + %s;
+        """
+        self.verify(source % ("exact(PyBool_Type)", "_MAKE + _EVENT + _NEED"))
+        self.refuses(source % ("exact(PyList_Type)", "_EVENT + _NEED"),
+                     r"_NEED requires exact\(PyList_Type\).* of `v`, which nothing before "
+                     r"it establishes or which an effect since killed")
 
     def test_assumed_row_results(self):
         # _LOAD_ATTR_CLASS: the cached descriptor is not NULL by the cache's
@@ -2266,6 +2566,21 @@ class VerifierTests(unittest.TestCase):
                  "an exact status field")]:
             with self.subTest(text), self.assertRaisesRegex(ValueError, message):
                 ir_contract._parse_result(text)
+
+    def test_a_case_field_is_a_set_of_kinds_of_word(self):
+        # Nonnull by default; `nullable` and a union with null both allow
+        # NULL, and nullable is no more than that
+        [case, _] = ir_contract._parse_result(
+            "CASES(status<0 a(owned) b(owned nullable) c(inline encoding(tagged_index|null)) "
+            "d(owned exact(PyLong_Type)) e(null), status>0 a(owned) b(owned) c(null) "
+            "d(null) e(null))").cases
+        kinds = {f: (spec.kinds, spec.nullable) for f, spec in case.values}
+        self.assertEqual(kinds, {
+            "a": ({"inline_float", "inline_int", "object"}, False),
+            "b": ({"inline_float", "inline_int", "null", "object"}, True),
+            "c": ({"null", "tagged_index"}, True),
+            "d": ({"inline_int", "object"}, False),
+            "e": ({"null"}, True)})
 
     def test_the_walk_follows_each_outcome(self):
         # _LOAD_FROM_DICT_OR_GLOBALS: an error, a missing key, or an owned value
@@ -2427,7 +2742,10 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual((row.kind, row.ret, row.init), ("STATE", "int", "IR_CALL_SELF_STATE"))
         self.assertEqual(row.bits, (("CALL_SELF_PRESENT",
                                      frozenset({ir_contract.VFact("self", "present")}),
-                                     frozenset({ir_contract.VFact("self", "absent")})),))
+                                     frozenset({ir_contract.VFact("self", "absent")})),
+                                    ("CALL_EXPANDED",
+                                     frozenset({ir_contract.VFact("method", "expanded")}),
+                                     frozenset({ir_contract.VFact("method", "whole")}))))
         self.assertIn('static_assert((CALL_SELF_PRESENT) != 0, '
                       '"call_state: CALL_SELF_PRESENT is no bit");',
                       ir_contract.component_checks(self.table))
@@ -2436,6 +2754,8 @@ class VerifierTests(unittest.TestCase):
                  r"null is no fact of a handler's state"),
                 ("STATE(spam, int, BITS(SPAM: self(maybe) | self(absent)), INIT(SPAM_INIT))",
                  r"self\(maybe\) is no fact of a handler's state"),
+                ("STATE(spam, int, BITS(SPAM: method(bound) | method(whole)), INIT(SPAM_INIT))",
+                 r"method\(bound\) is no fact of a handler's state"),
                 ("STATE(spam, int, BITS(SPAM: self(present) | self(absent)))",
                  r"STATE\(name, ctype, BITS")]:
             with self.subTest(bad=bad):
@@ -2477,7 +2797,7 @@ class VerifierTests(unittest.TestCase):
                      r"exact\(PyLong_Type\) is no fact of a handler's state")
 
     def test_a_declared_write_of_the_state(self):
-        # _INIT_CALL_BOUND_METHOD_EXACT_ARGS: self(absent) to self(present)
+        # A declared write of call_state: self(absent) to self(present)
         source = """
             op(_OP, (x: object -- x: object)) effects(%s) exits(next)
                 state(call_state: self(absent) -- call_state: %s)
@@ -2486,10 +2806,25 @@ class VerifierTests(unittest.TestCase):
                 %s
             }
         """
-        write = "call_state |= CALL_SELF_PRESENT | CALL_EXPANDED;"
+        write = "call_state |= CALL_SELF_PRESENT;"
         self.verify(source % ("", "self(present)", write))
         self.refuses(source % ("", "self(absent)", write),
                      r"`call_state` is declared self\(absent\), which nothing establishes")
+        # Each bit states its own facts, and a write kills only those of
+        # the bits it writes: CALL_EXPANDED leaves self(absent)
+        self.verify(source % ("", "self(absent) method(expanded)",
+                              "call_state |= CALL_EXPANDED;"))
+        self.verify(source % ("", "self(present) method(expanded)",
+                              "call_state |= CALL_SELF_PRESENT | CALL_EXPANDED;"))
+        self.refuses(source % ("", "self(absent)", "call_state |= CALL_EXPANDED;"),
+                     r"the body establishes method\(expanded\) of `call_state`, which the "
+                     r"uop does not declare")
+        # A bit that the STATE row does not list states nothing: refused
+        self.refuses(source % ("", "self(absent)", "call_state |= CALL_KWARGS_PRESENT;"),
+                     r"writes `CALL_KWARGS_PRESENT`, which is no bit of `call_state` "
+                     r"\(CALL_SELF_PRESENT, CALL_EXPANDED\)")
+        self.refuses(source % ("", "self(absent)", "call_state &= ~CALL_KWARGS_PRESENT;"),
+                     r"writes `CALL_KWARGS_PRESENT`, which is no bit of `call_state`")
         # Heap kills leave the state's facts
         self.verify(source % ("writes", "self(absent)",
                               "spam_write(PyValue_AsKnownObjectBorrow(x));"))
@@ -2814,15 +3149,16 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"`return` is a form the walk does not model")
 
-    def test_frame_properties_give_exits(self):
+    def test_a_switch_exit_needs_a_switch(self):
+        # A declared switch exit names how the body's frame switch leaves;
+        # a body that does not switch completes, whatever it declares
         source = """
-            returns op(_RET, (--)) effects(switches_frame) exits(%s) {
+            op(_RET, (--)) effects(switches_frame) exits(%s) {
                 int x = 0;
             }
         """
-        self.verify(source % "return")
-        self.refuses(source % "next, return",
-                     r"declares exits\(next, return\), but the body takes return")
+        self.refuses(source % "return",
+                     r"declares exits\(return\), but the body takes next")
 
     # F4: inputs the skeleton closes
 
@@ -3618,6 +3954,167 @@ class ObjectRowTests(unittest.TestCase):
         del p, g
         support.gc_collect()
         self.assertEqual([r() for r in refs], [None, None])
+
+
+SEND_CLAUSE = """        boundary(SEND) at(last) yields(delegated) completion(send) completes(
+            RETURN: exits(return, raise),
+            STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));"""
+SEND_GEN_CLAUSE = SEND_CLAUSE.replace("boundary(SEND) at(last)",
+                                      "boundary(SEND_GEN) at(enter)")
+CLEANUP_CLAUSE = """        boundary(CLEANUP_THROW) at(last) completion(throw) completes(
+            RETURN: exits(return, raise),
+            STORE_LOCAL, DISCARD, HOME, STORE_FAST, POP_TOP: exits(branch, raise));"""
+
+
+def expand_variant(analysis, formats, name):
+    "Generate the generator-boundary variant name to no output; its emitter"
+    insts = ir_generator.handler_instructions(analysis)
+    out = ir_generator.CWriter.null()
+    emitter = ir_generator.IREmitter(out, analysis, formats)
+    emitter.handler_format = formats[name]
+    emitter.allowed_error_checkpoints = None
+    ir_generator.generate_handler(name, insts[name], formats[name], emitter, out)
+    return emitter
+
+
+def expand_variants(analysis):
+    "Generate each generator-boundary variant to no output"
+    formats = ir_generator.compute_formats(analysis)
+    for name in ir_generator.generator_boundaries(analysis):
+        expand_variant(analysis, formats, name)
+
+
+class BoundaryTests(unittest.TestCase):
+    """The generator-boundary variants (*_XFER_*): their records come from
+    the boundary(...) clauses, and their expansions are checked against
+    them (g3/design.md section 7)"""
+
+    def test_variants_come_from_the_clauses(self):
+        boundaries = ir_generator.generator_boundaries(analysis)
+        sources = {b.base for b in boundaries.values()}
+        self.assertEqual(sources, {
+            "SEND", "SEND_GEN", "SEND_VIRTUAL", "SEND_ASYNC_GEN", "CLEANUP_THROW",
+            "YIELD_VALUE", "YIELD_DELEGATED", "INSTRUMENTED_YIELD_VALUE",
+            "INSTRUMENTED_YIELD_DELEGATED"})
+        self.assertEqual(len(boundaries), 5 * 6 + 4 * 2)
+        self.assertEqual(boundaries["SEND_GEN_XFER_RETURN"].at, "enter")
+        self.assertEqual(boundaries["SEND_VIRTUAL_XFER_RETURN"].exits, ("return", "raise"))
+        self.assertEqual(boundaries["CLEANUP_THROW_XFER_HOME"].yielded, "NONE")
+        self.assertEqual(boundaries["YIELD_VALUE_XFER_STORE_LOCAL"].resume, "STORE_LOCAL")
+
+    def test_records_take_the_declared_exits(self):
+        def kinds(name):
+            return [t.kind for t in records[name].uops[-1].transfers]
+        for source in ("SEND", "SEND_VIRTUAL", "SEND_ASYNC_GEN"):
+            with self.subTest(source=source):
+                returning, storing = kinds(f"{source}_XFER_RETURN"), kinds(f"{source}_XFER_POP_TOP")
+                self.assertEqual(returning[-1], "YIELD")
+                self.assertIn("RETURN", returning)
+                self.assertNotIn("BRANCH", returning)
+                self.assertEqual(storing[-1], "YIELD")
+                self.assertIn("BRANCH", storing)
+                self.assertNotIn("RETURN", storing)
+        self.assertIn("RETURN", kinds("CLEANUP_THROW_XFER_RETURN"))
+        self.assertNotIn("YIELD", kinds("CLEANUP_THROW_XFER_RETURN"))
+        # SEND_GEN yields and completes in the frame it enters
+        self.assertEqual(kinds("SEND_GEN_XFER_RETURN"), kinds("SEND_GEN"))
+
+    def test_expansions_agree_with_the_clauses(self):
+        with cases.handle_stderr():
+            expand_variants(analysis)
+
+    def refuses(self, changes, message):
+        text = BYTECODES.read_text()
+        for old, new in changes:
+            self.assertEqual(text.count(old), 1, old)
+            text = text.replace(old, new)
+        fd, filename = tempfile.mkstemp(suffix=".c")
+        os.close(fd)
+        self.addCleanup(os.remove, filename)
+        with open(filename, "w") as f:
+            f.write(text)
+        with self.assertRaisesRegex(SyntaxError, message), cases.handle_stderr():
+            expand_variants(cases.analyzer.analyze_files([filename]))
+
+    def test_expansion_reaches_an_omitted_return(self):
+        # The RETURN arm of the completion routine returns from the frame
+        self.refuses([(SEND_CLAUSE, SEND_CLAUSE.replace("RETURN: exits(return, raise)",
+                                                        "RETURN: exits(branch, raise)")),
+                      (SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace(
+                          "RETURN: exits(return, raise)", "RETURN: exits(branch, raise)"))],
+                     r"SEND_\w*XFER_RETURN: its expansion reaches \['return'\], "
+                     r"which its boundary\(\.\.\.\) clause omits")
+        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace(
+                          "RETURN: exits(return, raise)", "RETURN: exits(raise)"))],
+                     r"CLEANUP_THROW_XFER_RETURN: its expansion reaches \['return'\]")
+
+    def test_expansion_reaches_an_omitted_yield(self):
+        self.refuses([(SEND_CLAUSE, SEND_CLAUSE.replace(" yields(delegated)", "")),
+                      (SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace(" yields(delegated)", ""))],
+                     r"SEND_\w*XFER_\w+: its expansion reaches `yield`, which its "
+                     r"boundary\(\.\.\.\) clause omits")
+
+    def test_clause_declares_an_unreached_exit(self):
+        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace(
+                          "POP_TOP: exits(branch, raise)", "POP_TOP: exits(branch, return, raise)"))],
+                     r"CLEANUP_THROW_XFER_\w+: its boundary\(\.\.\.\) clause declares "
+                     r"\['return'\], which its expansion never reaches")
+        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace("at(last)",
+                                                              "at(last) yields(delegated)"))],
+                     r"_CLEANUP_THROW: a delegated yield needs the departing uop's fall-through")
+
+    def test_departure_is_declared(self):
+        # No default: a clause states where its variants depart
+        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace(" at(last)", ""))],
+                     r"boundary\(CLEANUP_THROW\) needs at\(last\) or at\(enter\)")
+        # SEND_GEN's last uop only enters
+        self.refuses([(SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace("at(enter)", "at(last)"))],
+                     r"_PUSH_FRAME: a delegated yield needs the departing uop's fall-through")
+        # A native send yields and completes in its own uops
+        self.refuses([(SEND_CLAUSE, SEND_CLAUSE.replace("at(last)", "at(enter)"))],
+                     r"SEND\w*_XFER_\w+: departs at\(enter\), and its expansion reaches")
+
+    def test_completion_is_declared(self):
+        # completion(...) names the completion step's kind; GEN_THROWING in
+        # the completed table comes from completion(throw)
+        boundaries = ir_generator.generator_boundaries(analysis)
+        self.assertEqual(boundaries["CLEANUP_THROW_XFER_POP_TOP"].completion, "throw")
+        self.assertEqual(boundaries["SEND_GEN_XFER_POP_TOP"].completion, "send")
+        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace("completion(throw)",
+                                                              "completion(send)"))],
+                     r"CLEANUP_THROW_XFER_\w+: completes with _PY_IR_SEND_THROW, and its "
+                     r"boundary\(\.\.\.\) clause declares completion\(send\)")
+        self.refuses([(CLEANUP_CLAUSE, CLEANUP_CLAUSE.replace(" completion(throw)", ""))],
+                     r"boundary\(CLEANUP_THROW\): completes\(\.\.\.\) and "
+                     r"completion\(send\) or completion\(throw\) go together")
+
+    def test_completion_transfers_are_completion_sites(self):
+        # The departing uop's branches (returns, in a RETURN variant) are the
+        # completions that the body lowers; any other branch is refused
+        formats = ir_generator.compute_formats(analysis)
+        with cases.handle_stderr():
+            for name in ("SEND_VIRTUAL_XFER_POP_TOP", "SEND_VIRTUAL_XFER_RETURN"):
+                emitter = expand_variant(analysis, formats, name)
+                record = records[name]
+                boundary = record.generator_boundary
+                completions = emitter.boundary_completions
+                self.assertTrue(completions)
+                ir_generator.check_boundary_expansion(
+                    name, boundary, record, emitter.boundary_reached, completions,
+                    record.instruction.where)
+                with self.subTest(name=name), self.assertRaisesRegex(
+                        SyntaxError, rf"{name}: _SEND_VIRTUAL's (branch|return) at line "
+                                     r"\d+ is no generator completion"):
+                    ir_generator.check_boundary_expansion(
+                        name, boundary, record, emitter.boundary_reached, completions[1:],
+                        record.instruction.where)
+
+    def test_member_clause_differs_only_in_departure(self):
+        self.refuses([(SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace("HOME, ", ""))],
+                     r"boundary\(SEND_GEN\) may differ from its family's "
+                     r"boundary\(SEND\) only in at\(\.\.\.\)")
+        self.refuses([(SEND_GEN_CLAUSE, SEND_GEN_CLAUSE.replace(" yields(delegated)", ""))],
+                     r"boundary\(SEND_GEN\) may differ")
 
 
 if __name__ == "__main__":

@@ -37,6 +37,7 @@ with test_tools.imports_under_tool("cases_generator"):
     import analyzer
     from analyzer import StackItem
     from cwriter import CWriter
+    import ir_contract
     import ir_generator
     import ir_records
     import stack
@@ -1080,7 +1081,9 @@ class TestIRCases(unittest.TestCase):
         self.assertFalse(formats["GET_AWAITABLE"].no_fold)
         self.assertEqual(instruction.parts[0].aliased_outputs, ("iter",))
         predicate = "coro_awaitable_can_transfer"
-        self.assertIn(predicate, analyzer.NON_ESCAPING_FUNCTIONS)
+        # The row declares no reentry, so the call does not escape
+        self.assertFalse(ir_contract.rows()[predicate].effects & ir_contract.REENTRY)
+        self.assertFalse(analyzer.call_escapes(predicate))
         self.assertNotIn(predicate, analyzer.IR_MARKER_EFFECTS)
         effect = ir_generator.analyze_error_effects(self.analyze(
             "\ninst(OP, (value --)) { if (coro_awaitable_can_transfer(value)) { assert(true); } }\n"
@@ -3019,7 +3022,7 @@ class TestIRCases(unittest.TestCase):
             self.assertNotIn(marker, analyzer.IR_MARKER_EFFECTS)
             escapes = {escape.call.text for escape in part.properties.escaping_calls.values()}
             self.assertEqual(marker in escapes,
-                             analyzer.IR_HELPER_CALLEES[marker] not in analyzer.NON_ESCAPING_FUNCTIONS)
+                             bool(ir_contract.rows()[marker].effects & ir_contract.REENTRY))
 
     def test_input_drain_requires_its_sole_owning_array(self):
         def check(source):

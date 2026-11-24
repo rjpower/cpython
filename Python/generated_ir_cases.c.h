@@ -265,6 +265,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PySuper_LookupValue), _P
               "_PySuper_LookupValue: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyTemplate_Build), PyObject * (*)(PyObject *, PyObject *)),
               "_PyTemplate_Build: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyClassMethod_GetFunc), PyObject * (*)(PyObject *)),
+              "_PyClassMethod_GetFunc: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyType_IteratesByIndex), int (*)(PyTypeObject *)),
               "_PyType_IteratesByIndex: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyUnicode_Equal), int (*)(PyObject *, PyObject *)),

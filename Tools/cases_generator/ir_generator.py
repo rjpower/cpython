@@ -2535,6 +2535,15 @@ def designator_start(tokens: list[Token], i: int) -> int:
         return j
 
 
+def allocates(tokens: list[Token]) -> bool:
+    "Whether the expression calls a row that declares `allocates`"
+    table = ir_contract.rows()
+    return any(tkn.kind == "IDENTIFIER" and i + 1 < len(tokens)
+               and tokens[i + 1].kind == "LPAREN" and tkn.text in table
+               and "allocates" in table[tkn.text].effects
+               for i, tkn in enumerate(tokens))
+
+
 def object_source(tokens: list[Token], views: dict[str, int],
                   view_objects: dict[str, int]) -> int | None:
     """The position of the input whose object the expression reads, uncounted:
@@ -4597,13 +4606,14 @@ class IREmitter(Emitter):
             source = views[rhs[2]]
         elif len(rhs) == 1 and rhs[0] in stack.view_objects:
             source = stack.view_objects[rhs[0]]
-        elif not escapes and (
+        elif not escapes and not allocates(tokens[eq + 1:-1]) and (
                 eq >= 2 and (texts[eq - 2] == "*" or is_word(tokens[eq - 2])
                              and not is_value_type(texts[eq - 2]))
                 or eq == 1 and find_local(name, storage) is None):
             # A declaration of a pointer, or of a type that may be one, or
             # an assignment to a variable of the body: derived if the
-            # expression reads the object of a view
+            # expression reads the object of a view.  A call of a row that
+            # allocates returns a new object, which holds its own count
             source = object_source(tokens[eq + 1:-1], views,
                                    stack.view_objects)
         stale = len(rhs) == 1 and rhs[0] in stack.stale

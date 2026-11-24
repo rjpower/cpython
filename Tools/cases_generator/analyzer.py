@@ -612,221 +612,24 @@ def has_error_without_pop(op: parser.CodeDef) -> bool:
     )
 
 
-NON_ESCAPING_FUNCTIONS = (
-    # Not a call: a raise site's checkpoint, ERROR_IF(cond, holding(x))
-    # (ir_contract.py)
-    "holding",
-    "call_push_exact",
-    "coro_awaitable_can_transfer",
-    "native_vector_capture",
-    "_PyShape_FindTransition",
-    "PyCFunction_GET_FLAGS",
-    "_PyMethodDef_Convention",
-    "PyCFunction_GET_FUNCTION",
-    "PyCell_GetRef",
-    "PyCell_New",
-    "PyCell_SwapTakeRef",
-    "PyExceptionInstance_Class",
-    "PyException_GetCause",
-    "PyException_GetContext",
-    "PyException_GetTraceback",
-    "PyFloat_AS_DOUBLE",
-    "Py_ARITHMETIC_RIGHT_SHIFT",
-    "PyFloat_FromDouble",
-    "PyFunction_GET_CODE",
-    "PyFunction_GET_GLOBALS",
-    "_PyClassMethod_GetFunc",
-    "_PyValueGuarded_Load",
-    "_PyValue_NamesObject",
-    "_Py_EvalBreakerHasEvents",
-    "PyList_GET_ITEM",
-    "PyList_GET_VALUE",
-    "PyList_GET_SIZE",
-    "PyList_SET_ITEM",
-    "PyLong_AsLong",
-    "PyLong_FromLong",
-    "PyLong_FromSsize_t",
-    "PySlice_New",
-    "PyValue_AsKnownObjectBorrow",
-    "PyValue_AsPyObjectNew",
-    "PyValue_AsKnownObjectSteal",
-    "PyValue_CLOSE_SPECIALIZED",
-    "PyValue_Borrow",
-    "PyValue_DUP",
-    "PyValue_XDUP",
-    "PyValue_FromObjectBorrow",
-    "_PyIR_AdoptTemp",
-    "_PyValue_PointerBorrow",
-    "PyValue_DupImmortal",
-    "PyValue_False",
-    "PyValue_FromObjectSteal",
-    "PyValue_FromNonNumberSteal",
-    "PyValue_IsExactly",
-    "PyValue_IsNone",
-    "PyValue_Is",
-    "_PyValue_IsHome",
-    "PyValue_IsTrue",
-    "PyValue_IsFalse",
-    "PyValue_IsNull",
-    "PyValue_None",
-    "PyValue_RefcountOnObject",
-    "PyValue_TYPE",
-    "PyValue_True",
-    "PyBytes_GET_SIZE",
-    "PyDict_GET_SIZE",
-    "PySet_GET_SIZE",
-    "PyTuple_GET_ITEM",
-    "PyTuple_GET_VALUE",
-    "_PyTuple_GET_OBJECT",
-    "_PyCell_GetValue",
-    "PyTuple_GET_SIZE",
-    "PyType_FastSubclass",
-    "PyType_HasFeature",
-    "_PyType_IteratesByIndex",
-    "_PyType_VALUE_SLOT",
-    "PyUnicode_Concat",
-    "PyUnicode_GET_LENGTH",
-    "PyUnicode_READ_CHAR",
-    "PyUnicode_IS_COMPACT_ASCII",
-    "PyUnicode_1BYTE_DATA",
-    "Py_ARRAY_LENGTH",
-    "Py_FatalError",
-    "Py_INCREF",
-    "Py_IS_TYPE",
-    "Py_NewRef",
-    "Py_REFCNT",
-    "Py_SIZE",
-    "Py_TYPE",
-    "Py_UNREACHABLE",
-    "Py_Unicode_GET_LENGTH",
-    "_PyBinaryOp_ExtendDescr",
-    "_PyCode_CODE",
-    "_PyCode_GetOriginalOpcode",
-    "_PyDataStack_Slots",
-    "_PyDictValues_AddToInsertionOrder",
-    "_PyDictValues_SetShape",
-    "_PyDictValues_ShapeAfterAdd",
-    "_PyErr_Occurred",
-    "_PyFb_Entry",
-    "_PyFb_Header",
-    "_PyFb_HasEntry",
-    "_PyFrame_GetBytecode",
-    "_PyFrame_GetCode",
-    "_PyFrame_GetFunction",
-    "_PyFrame_IsIncomplete",
-    "_PyFrame_PushUnchecked",
-    "_PyFrame_Initialize",
-    "_PyFrame_MoveArgs",
-    "_PyFrame_SetReturnValue",
-    "_PyFrame_Slots",
-    "_PyFrame_AssertTemporariesClear",
-    "_PyEval_GeneratorReturnTarget",
-    "_PyFunction_SetVersion",
-    "_PyFunction_StoreAttribute",
-    "_PyGen_GetGeneratorFromFrame",
-    "gen_try_set_executing",
-    "gen_may_claim",
-    "gen_claim",
-    "_PyInterpreterState_GET",
-    "_PyList_AppendTakeRef",
-    "_PyList_ITEMS",
-    "_PyLong_CompactValue",
-    "_PyLong_DigitCount",
-    "_PyLong_IsCompact",
-    "_PyLong_IsNegative",
-    "_PyLong_IsNonNegativeCompact",
-    "_PyLong_IsZero",
-    "_PyLong_BothAreCompact",
-    "_PyManagedDictPointer_IsValues",
-    "_PyObject_GC_IS_SHARED",
-    "_PyObject_GC_IS_TRACKED",
-    "_PyObject_GC_MAY_BE_TRACKED",
-    "_PyObject_GC_TRACK",
-    "_PyObject_GetManagedDict",
-    "_PyObject_InlineValues",
-    "_PyObject_IsUniquelyReferenced",
-    "_PyObject_Shape",
-    "_PyObject_ValueSlot",
-    "_PyObject_ManagedDictPointer",
-    "_PyThreadState_HasStackSpace",
-    "_PyTuple_FromValueStealOnSuccess",
-    "_PyTuple_ITEMS",
-    "_PyType_HasFeature",
-    "_PyType_NewManagedObject",
-    "_PyUnicode_Equal",
-    "_PyUnicode_JoinArray",
-    "_Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY",
-    "_Py_ID",
-    "_Py_IsImmortal",
-    "_Py_IsOwnedByCurrentThread",
-    "_Py_LeaveRecursiveCallPy",
-    "_Py_LeaveRecursiveCallTstate",
-    "_Py_NewRef",
-    "_Py_SINGLETON",
-    "_Py_STR",
-    "_Py_TryIncrefCompare",
-    "_Py_TryIncrefCompareValue",
-    "_Py_atomic_compare_exchange_uint8",
-    "_Py_atomic_load_ptr_acquire",
-    "_Py_atomic_load_uintptr_relaxed",
-    "_Py_set_eval_breaker_bit",
-    "advance_backoff_counter",
-    # The specialization counters (pycore_ir_components.h)
-    "_PyFb_CounterTriggers",
-    "_PyFb_AdvanceCounter",
-    "assert",
-    "backoff_counter_triggers",
-    "JUMP_TO_LABEL",
-    "restart_backoff_counter",
-    "_Py_ReachedRecursionLimit",
-    "PyValue_IsTaggedIndex",
-    "PyValue_TagIndex",
-    "PyValue_UntagIndex",
-    "PyValue_IncrementTaggedIndexNoOverflow",
-    "PyValue_IsObject",
-    "PyValue_IsPointerSpace",
-    "PyValue_IsPointerSpaceAt",
-    "PyValue_IsInlineAt",
-    "PyValue_IsInline",
-    "PyValue_IsInlineInt",
-    "PyValue_IsInlineFloat",
-    "PyValue_BothInlineInt",
-    "PyValue_FromInlineInt",
-    "PyValue_InlineInt64",
-    "_PyValue_IntScaled",
-    "_PyValue_FromIntScaled",
-    "PyValue_LongCheckExact",
-    # Allocate an int; see the boxing entries below.
-    "PyValue_FromInt64",
-    "_PyValue_BoxInt64",
-    "_PyValue_MultiplyInt64",
-    "_PyValue_BoxArray",
-    # Debug checks of a home store (report only, no Python).
-    "_PyValue_CheckHome",
-    "_PyValue_RecheckHome",
-    "_PyValue_RecheckWindow",
-    "_PyValue_CheckTemp",
-    "PyValue_FromDoubleNotNaN",
-    "PyValue_InlineFloat",
-    "PyValue_FloatOperandsCheck",
-    "PyValue_NumberAsDouble",
-    "PyValue_FloatOperandValues",
-    # Allocate an int or float; see the boxing entries below.
-    "PyValue_FromDouble",
-    "_PyValue_LshiftInt64",
-    "PyValue_IsValid",
-    "PyValue_Wrap",
-    "PyValue_Unwrap",
-    "_PyLong_CheckExactAndCompact",
-    "_Py_unset_eval_breaker_bit",
-    "_Py_set_eval_breaker_bit",
-    "_PyThreadState_PopCValueSteal",
-    "doesnt_escape",
-    "_Py_GatherStats_GetIter",
-    "_PyStolenTuple_Free",
-    "PyObject_GC_UnTrack",
-    "_PyErr_ExceptionMatches",
-)
+def ir_contract():
+    "The contract module, imported late: it imports this one"
+    import ir_contract
+    return ir_contract
+
+
+def call_escapes(name: str) -> bool:
+    """Whether a call of `name` may reenter Python: its row declares a
+    reentry effect (ir_contract.REENTRY).  A name that no row declares
+    escapes: the generator trusts a declaration, never a name.  The DSL's
+    own constructs and the field readers that the walk folds into a field
+    are no calls."""
+    contract = ir_contract()
+    if (name in contract.DSL_CONSTRUCTS or name in contract.FIELD_READERS
+            or name in contract.FIELD_ACCESSORS):
+        return False
+    row = contract.rows().get(name)
+    return row is None or bool(row.effects & contract.REENTRY)
 
 
 def check_escaping_calls(instr: parser.CodeDef, escapes: dict[SimpleStmt, EscapingCall]) -> None:
@@ -862,32 +665,36 @@ def check_escaping_calls(instr: parser.CodeDef, escapes: dict[SimpleStmt, Escapi
 
 def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, EscapingCall]) -> None:
     tokens = stmt.contents
+    # The contents of assert() are no code: a release build drops them
+    asserted_until = -1
+    depth = 0
     for idx, tkn in enumerate(tokens):
         try:
             next_tkn = tokens[idx+1]
         except IndexError:
             break
+        if tkn.text == "assert" and next_tkn.kind == lexer.LPAREN:
+            asserted_until, depth = idx, 0
+        if asserted_until >= 0:
+            depth += tkn.kind == lexer.LPAREN
+            depth -= tkn.kind == lexer.RPAREN
+            if idx > asserted_until and depth == 0:
+                asserted_until = -1
+            continue
         if next_tkn.kind != lexer.LPAREN:
             continue
         effects = IR_MARKER_EFFECTS.get(tkn.text, IR_HELPER_EFFECTS.get(tkn.text))
-        callee = IR_HELPER_CALLEES.get(tkn.text, tkn.text)
-        if effects is not None and tkn.text not in IR_HELPER_CALLEES:
-            if "escapes" in effects:
+        if effects is not None:
+            # A marker that the generator expands: its row declares whether
+            # it reenters (the table, for a marker that has no row)
+            row = ir_contract().rows().get(tkn.text)
+            if (bool(row.effects & ir_contract().REENTRY) if row is not None
+                    else "escapes" in effects):
                 result[stmt] = EscapingCall(stmt, tkn, None)
             continue
+        callee = tkn.text
         if tkn.kind == lexer.IDENTIFIER:
-            if callee.upper() == callee:
-                # simple macro
-                continue
-            #if not tkn.text.startswith(("Py", "_Py", "monitor")):
-            #    continue
-            if callee.endswith("Check"):
-                continue
-            if callee.startswith("Py_Is"):
-                continue
-            if callee.endswith("CheckExact"):
-                continue
-            if callee in NON_ESCAPING_FUNCTIONS:
+            if not call_escapes(callee):
                 continue
         elif tkn.kind == "RPAREN":
             prev = tokens[idx-1]
@@ -1090,7 +897,8 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         )
     error_with_pop = has_error_with_pop(op)
     error_without_pop = has_error_without_pop(op)
-    escapes = stmt_escapes(op.block)
+    # Another frame's code runs after a frame switch
+    escapes = stmt_escapes(op.block) or switches_frame(op)
     pure = False if isinstance(op, parser.LabelDef) else "pure" in op.annotations
     no_save_ip = False if isinstance(op, parser.LabelDef) else "no_save_ip" in op.annotations
     inline_ok = False if isinstance(op, parser.LabelDef) else "inline_ok" in op.annotations

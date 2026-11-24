@@ -1145,6 +1145,11 @@
      * PyValue_FromObjectSteal) */ \
     HELPER(_PyTemplate_Build, PyObject *, (PyObject *, PyObject *), \
         ARGS(object, object), SCALAR, EFFECTS(allocates, raises)) \
+    /* G0d2.  Objects/funcobject.c: `return ((classmethod *)self)->cm_callable`, \
+     * a load of the wrapped callable, borrowed from the classmethod: no call, no \
+     * failure, no write.  Its caller was a name in analyzer.NON_ESCAPING_FUNCTIONS. */ \
+    HELPER(_PyClassMethod_GetFunc, PyObject *, (PyObject *), \
+        ARGS(object), SCALAR, EFFECTS(reads)) \
     /* Reviewed G0c5.  pycore_typeobject.h: type->_tp_iteritem != NULL && \
      * type->tp_iter != _PyType_SlotIter, two loads of the type and an \
      * address compare.  Callees: none.  It cannot fail and runs no \

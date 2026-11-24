@@ -3411,6 +3411,8 @@ ir_run_BUILD_TEMPLATE(
             strings = IR_VIEW(IR_B(ir_word));
             assert(PyValue_IsObject(strings));
             assert(PyValue_IsObject(interpolations));
+            assert(PyValue_IsObject(strings));
+            assert(PyValue_IsObject(interpolations));
             PyObject *strings_o = _PyValue_AsKnownObjectBorrowPointer(strings);
             PyObject *interpolations_o = _PyValue_AsKnownObjectBorrowPointer(interpolations);
             PyObject *template_o = _PyTemplate_Build(strings_o, interpolations_o);
@@ -7542,6 +7544,7 @@ ir_run_DICT_MERGE(
                 dict = window[3];
                 callable = window[0];
                 assert(PyValue_IsObject(dict));
+                assert(PyValue_IsObject(dict));
                 if (!PyValue_IsObject(update)) {
                     _PyErr_Format(tstate, PyExc_TypeError,
                               "Value after ** must be a mapping, not %N",
@@ -7595,6 +7598,7 @@ ir_run_DICT_UPDATE(
             {
                 update = window[1 + (oparg - 1)];
                 dict = window[0];
+                assert(PyValue_IsObject(dict));
                 assert(PyValue_IsObject(dict));
                 if (!PyValue_IsObject(update)) {
                     _PyErr_Format(tstate, PyExc_TypeError,
@@ -10028,6 +10032,7 @@ ir_run_LIST_EXTEND(
             {
                 iterable_st = window[1 + (oparg-1)];
                 list_st = window[0];
+                assert(PyValue_IsObject(list_st));
                 assert(PyValue_IsObject(list_st));
                 if (!PyValue_IsObject(iterable_st)) {
                     _PyErr_Format(tstate, PyExc_TypeError,
@@ -15204,6 +15209,7 @@ ir_run_SET_UPDATE(
             {
                 iterable = window[1 + (oparg-1)];
                 set = window[0];
+                assert(PyValue_IsObject(set));
                 assert(PyValue_IsObject(set));
                 if (!PyValue_IsObject(iterable)) {
                     _PyErr_Format(tstate, PyExc_TypeError,

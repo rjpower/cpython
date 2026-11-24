@@ -272,9 +272,7 @@ dummy_func(
             value = PyValue_DUP(value_s);
         }
 
-        leaf pure inst(LOAD_FAST, (-- value: owned))
-            effects() exits(next)
-        {
+        leaf pure inst(LOAD_FAST, (-- value)) {
             assert(!PyValue_IsNull(GETLOCAL(oparg)));
             value = PyValue_DUP(GETLOCAL(oparg));
         }
@@ -287,9 +285,7 @@ dummy_func(
             value = PyValue_DUP(GETLOCAL(oparg));
         }
 
-        leaf inst(LOAD_FAST_AND_CLEAR, (-- value: owned))
-            effects() exits(next)
-        {
+        leaf inst(LOAD_FAST_AND_CLEAR, (-- value)) {
             value = GETLOCAL(oparg);
             GETLOCAL(oparg) = PyValue_NULL;
         }
@@ -383,9 +379,7 @@ dummy_func(
             DEAD(value);
         }
 
-        op(_POP_TOP_UNICODE, (value: consumed --))
-            effects(writes) exits(next)
-        {
+        op(_POP_TOP_UNICODE, (value --)) {
             assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
             PyValue_CLOSE_SPECIALIZED(value, _PyUnicode_ExactDealloc);
         }
@@ -2428,9 +2422,7 @@ dummy_func(
             }
         }
 
-        inst(STORE_DEREF, (v: consumed --))
-            effects(writes, releases) exits(next)
-        {
+        inst(STORE_DEREF, (v --)) {
             PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
             PyValue owned = v;
             DEAD(v);
@@ -3108,9 +3100,7 @@ dummy_func(
             EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version);
         }
 
-        op(_LOAD_ATTR_CLASS, (class_value/4, owner: consumed -- attr: owned))
-            effects(releases) exits(next)
-        {
+        op(_LOAD_ATTR_CLASS, (class_value/4, owner -- attr)) {
             STAT_INC(LOAD_ATTR, hit);
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
             assert(!PyValue_IsNull(found));
@@ -4614,10 +4604,7 @@ dummy_func(
             _GUARD_TYPE_HAS_VERSION +
             _LOAD_ATTR_METHOD_POLY;
 
-        op(_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES,
-                (class_value/4, owner: consumed -- attr: owned))
-            effects(releases) exits(next)
-        {
+        op(_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES, (class_value/4, owner -- attr)) {
             assert((oparg & 1) == 0);
             STAT_INC(LOAD_ATTR, hit);
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
@@ -4633,10 +4620,7 @@ dummy_func(
             unused/2 +
             _LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
 
-        leaf op(_LOAD_ATTR_NONDESCRIPTOR_NO_DICT,
-                (class_value/4, owner: consumed -- attr: owned))
-            effects(releases) exits(next)
-        {
+        leaf op(_LOAD_ATTR_NONDESCRIPTOR_NO_DICT, (class_value/4, owner -- attr)) {
             assert((oparg & 1) == 0);
             assert(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_dictoffset == 0);
             STAT_INC(LOAD_ATTR, hit);

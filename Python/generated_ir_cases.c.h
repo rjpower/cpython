@@ -73,18 +73,6 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyFloat_ExactDealloc), v
               "_PyFloat_ExactDealloc: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&value_binary_op), PyValue (*)(int, PyValueBorrow, PyValueBorrow)),
               "value_binary_op: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_BoolCheck((PyValueBorrow){0})), bool),
-              "PyValue_BoolCheck: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_CLOSE((PyValue){0})), void),
-              "PyValue_CLOSE: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_DUP((PyValueBorrow){0})), PyValue),
-              "PyValue_DUP: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_FromDoubleNotNaN((double){0})), PyValue),
-              "PyValue_FromDoubleNotNaN: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_FromInlineInt((int64_t){0})), PyValue),
-              "PyValue_FromInlineInt: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_FromInt64((int64_t){0})), PyValue),
-              "PyValue_FromInt64: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_FromNonNumberSteal), PyValue (*)(PyObject *)),
               "PyValue_FromNonNumberSteal: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_FromObjectBorrow), PyValueBorrow (*)(PyObject *)),
@@ -93,42 +81,16 @@ static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_FromObjectSteal),
               "PyValue_FromObjectSteal: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_GenCheck), bool (*)(PyValueBorrow)),
               "PyValue_GenCheck: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IncrementTaggedIndexNoOverflow((PyValue){0})), PyValue),
-              "PyValue_IncrementTaggedIndexNoOverflow: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_InlineFloat((PyValueBorrow){0})), double),
-              "PyValue_InlineFloat: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_Is((PyValueBorrow){0}, (PyValueBorrow){0})), bool),
-              "PyValue_Is: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsFalse((PyValueBorrow){0})), bool),
-              "PyValue_IsFalse: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsInline((PyValueBorrow){0})), bool),
-              "PyValue_IsInline: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsInlineFloat((PyValueBorrow){0})), bool),
-              "PyValue_IsInlineFloat: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsNone((PyValueBorrow){0})), bool),
-              "PyValue_IsNone: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsTrue((PyValueBorrow){0})), bool),
-              "PyValue_IsTrue: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_LongCheckExact((PyValueBorrow){0})), bool),
-              "PyValue_LongCheckExact: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_ObjectOrNull), PyObject * (*)(PyValueBorrow)),
               "PyValue_ObjectOrNull: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_TagIndex((intptr_t){0})), PyValue),
-              "PyValue_TagIndex: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_UntagIndex((PyValueBorrow){0})), intptr_t),
-              "PyValue_UntagIndex: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_Unwrap), void * (*)(PyValue)),
               "PyValue_Unwrap: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_Wrap), PyValue (*)(void *)),
               "PyValue_Wrap: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyValue_XCLOSE((PyValue){0})), void),
-              "PyValue_XCLOSE: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyIR_AdoptTemp), PyValue (*)(PyValueBorrow)),
               "_PyIR_AdoptTemp: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyIR_BaseOpcode), int (*)(int)),
               "_PyIR_BaseOpcode: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyLong_IsZero((const PyLongObject *){0})), bool),
-              "_PyLong_IsZero: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_ASCII), PyObject * (*)(PyValueBorrow)),
               "_PyValue_ASCII: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_Contains), int (*)(PyValueBorrow, PyValueBorrow)),
@@ -151,10 +113,6 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_IsTrue), int (*)
               "_PyValue_IsTrue: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_LshiftInt64), PyValue (*)(int64_t, int64_t)),
               "_PyValue_LshiftInt64: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_MultiplyInt64), PyValue (*)(int64_t, int64_t)),
-              "_PyValue_MultiplyInt64: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyValue_NamesObject((PyValueBorrow){0}, (PyObject *){0})), bool),
-              "_PyValue_NamesObject: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_Negative), PyValue (*)(PyValueBorrow)),
               "_PyValue_Negative: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyValue_PointerBorrow), PyValueBorrow (*)(PyObject *)),
@@ -277,8 +235,6 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyObject_GetManagedDict)
               "_PyObject_GetManagedDict: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyObject_IsUniquelyReferenced), int (*)(PyObject *)),
               "_PyObject_IsUniquelyReferenced: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyObject_Shape((PyObject *){0})), uint32_t),
-              "_PyObject_Shape: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyShape_FindTransition), uint8_t (*)(PyTypeObject *, uint8_t, Py_ssize_t)),
               "_PyShape_FindTransition: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyShape_TransitionMissing), bool (*)(PyTypeObject *, uint8_t, Py_ssize_t)),
@@ -291,10 +247,6 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyType_IteratesByIndex),
               "_PyType_IteratesByIndex: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyUnicode_Equal), int (*)(PyObject *, PyObject *)),
               "_PyUnicode_Equal: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyValueGuarded_Load((_PyValueGuarded){0})), PyValueBorrow),
-              "_PyValueGuarded_Load: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(&_Py_HandlePending), int (*)(PyThreadState *)),
-              "_Py_HandlePending: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&do_raise), int (*)(PyThreadState *, PyObject *, PyObject *, bool)),
               "do_raise: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&native_call_builtin_o), PyValue (*)(PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue *)),
@@ -353,8 +305,6 @@ static_assert(__builtin_types_compatible_p(__typeof__(LOCK_OBJECT((PyObject *){0
               "LOCK_OBJECT: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(UNLOCK_OBJECT((PyObject *){0})), void),
               "UNLOCK_OBJECT: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(DK_UNICODE_ENTRIES((PyDictKeysObject *){0})), PyDictUnicodeEntry *),
-              "DK_UNICODE_ENTRIES: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyDict_New), PyObject * (*)(void)),
               "PyDict_New: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyDict_PopValue), int (*)(PyObject *, PyValueBorrow, PyValue *)),
@@ -363,16 +313,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&PyDict_SetValue), int (*)
               "PyDict_SetValue: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PyDict_Update), int (*)(PyObject *, PyObject *)),
               "PyDict_Update: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyList_GET_VALUE((PyObject *){0}, (Py_ssize_t){0})), PyValueBorrow),
-              "PyList_GET_VALUE: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&PySet_New), PyObject * (*)(PyObject *)),
               "PySet_New: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(PyTuple_GET_VALUE((PyObject *){0}, (Py_ssize_t){0})), PyValueBorrow),
-              "PyTuple_GET_VALUE: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyDictValues_AddToInsertionOrder((PyDictValues *){0}, (Py_ssize_t){0})), void),
-              "_PyDictValues_AddToInsertionOrder: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_PyDictValues_SetShape((PyDictValues *){0}, (uint8_t){0})), void),
-              "_PyDictValues_SetShape: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyDict_ContainsValue), int (*)(PyDictObject *, PyValueBorrow)),
               "_PyDict_ContainsValue: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyDict_SetValue), int (*)(PyDictObject *, PyValueBorrow, PyValueBorrow)),
@@ -505,8 +447,6 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_FormatKwargsError
               "_PyEval_FormatKwargsError: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&monitor_reraise), void (*)(PyThreadState *, _PyInterpreterFrame *, _PyInstr *)),
               "monitor_reraise: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(_Py_EvalBreakerHasEvents((PyThreadState *){0})), bool),
-              "_Py_EvalBreakerHasEvents: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_Instrument), int (*)(PyCodeObject *, PyInterpreterState *)),
               "_Py_Instrument: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_call_instrumentation), int (*)(PyThreadState *, int, _PyInterpreterFrame *, _PyInstr *)),

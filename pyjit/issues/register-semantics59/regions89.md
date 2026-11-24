@@ -38,9 +38,11 @@ is recorded.
 | G0a3 | The vocabulary the seed needs: fact kinds, GUARD results, CONSTANT rows, the `closed` input mode, `moved(k)` results, SLOT rows, `assumed(fact) by`, error-label exits, preprocessor arms, HOME for frame homes (Opus) | merged, `5af180074c5` |
 | G1a | Whole-word completion stubs generated from declared uops for UNPACK_SEQUENCE and BINARY_OP's generic arms; a 23-byte shared site with one cold resolver (MISS, ESCAPED, RAISED, BRANCH, AGAIN); staleness found by execution (Opus) | merged, `a5502da133f` |
 | G0a4 | The last vocabulary before G0c: correlated status-and-value results, frame-path and call-state facts, a leaf `assume` op, moves out of operand homes, object constants (Opus) | merged, `6966e459c7e` |
-| G0c | Review of the seeded contracts in eight batches by topic: evidence per row, corrections in both directions, the routed uops declared, native tests; vocabulary frozen, gaps routed to G0a5 (8 Sonnet) | running |
-| G0a5 | The 21 uops the batches cannot declare (facts of an input's field, a declared calling-convention enum, walk gaps, yields the walk misses) and the vocabulary desk during G0c (Opus) | running |
-| G3D | Design of compiled frame transfers: a per-unit switch routine, the next frame's entry from its `instr_ptr`, one code pin per evaluation loop placed by a declared `retires_frame` effect, a SWITCH bit in G1a's ABI (Opus) | note written; revising after Astra's review |
+| G0c | Review of the seeded contracts in eight batches by topic: evidence per row, corrections in both directions, the routed uops declared, native tests; vocabulary frozen, gaps routed to G0a5 (8 Sonnet) | merged, `3cf8fc95568`: 278 of 351 uops declared; each generated difference listed with its evidence; uops blocked by a gap left with their intended lines for G0c9 |
+| G0a5 | The 21 uops the batches cannot declare (facts of an input's field, a declared calling-convention enum, walk gaps, yields the walk misses) and the vocabulary desk during G0c (Opus) | running: field paths, the `_PyCallConvention` enum, walk gaps, committed exits, one encoding lattice, closed types, status facts; merging `3cf8fc95568` before its last tightening |
+| G3D | Design of compiled frame transfers: a per-unit switch routine, the next frame's entry from its `instr_ptr`, one code pin per evaluation loop placed by a declared `retires_frame` effect, a SWITCH bit in G1a's ABI (Opus) | accepted (revision 3) after two Astra reviews |
+| G0c9 | The pending declarations: each line the batches could not commit before G0a5's rules, applied or recorded for G0d (Sonnet) | after G0a5 |
+| G3a | Compiled frame transfers through the existing forms: pins, the switch routine, RESUME_CHECK, the forms' transfer path; runtime first, declarations after G0d (Opus) | running (runtime phase) |
 
 The design (`E59/regions89/rd/design.md`) sets the following units, in
 order:

@@ -36,8 +36,12 @@ completion stubs with 23-byte sites; and G0b's seed, 195 of 351 uops
 declared with unchanged generated output. Timed at `a5502da133f` against
 golden87 with its JIT off, `on` runs 1.022 of the warm time (jit88: 1.060);
 nbody 0.748, spectral_norm 0.792, unpack_sequence 1.380, richards 1.157.
-Running: G0c's eight review batches, G0a5 (the uops they cannot declare,
-and the vocabulary desk), and G3D's revision of the frame-transfer design.
+G0c's eight review batches are merged at `3cf8fc95568` (not yet pushed):
+278 of 351 uops declared, each generated difference listed. Running: G0a5
+(the uops the batches cannot declare, and the vocabulary desk) and G3a's
+runtime phase (pins and the switch routine for compiled frame transfers).
+Next: G0c9, the batches' pending declarations, then G0d, the cutover to
+declarations only.
 
 **Jit88, qualified 2026-11-23** at `ea4d023c2b4`
 ([record](issues/register-semantics59/jit88.md)): the baseline method JIT

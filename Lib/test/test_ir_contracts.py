@@ -1250,6 +1250,62 @@ class VerifierTests(unittest.TestCase):
         self.verify(source % "map_o == NULL")
         self.refuses(source % "map_o != NULL", r"on raise, the new owner `map_o` is still held")
         self.refuses(source % "oparg == 0", r"on raise, the new owner `map_o` is still held")
+        self.verify(source % "!map_o")
+        self.refuses(source % "map_o", r"on raise, the new owner `map_o` is still held")
+        # _BUILD_TUPLE: a row that takes its values only if it succeeds
+        source = """
+            op(_OP, (values[oparg]: taken -- tup: owned)) effects(allocates, raises)
+                exits(next, raise)
+            {
+                PyObject *tup_o = IR_BUILD_TUPLE(values);
+                if (%s) {
+                    ERROR_NO_POP();
+                }
+                INPUTS_DEAD();
+                tup = PyValue_FromObjectSteal(tup_o);
+            }
+        """
+        self.verify(source % "tup_o == NULL")
+        self.verify(source % "!tup_o")
+        self.refuses(source % "tup_o", r"on raise, `values` is released, but it is "
+                                        r"declared taken")
+
+    def test_a_move_joined_with_a_new_owner(self):
+        # _FORMAT_SIMPLE: res is value itself on one path and a new owner on
+        # the other; their join is owned, and the move discharges value
+        source = """
+            op(_OP, (value: consumed object -- res: %s)) effects(runs_python)
+                exits(next, raise)
+            {
+                if (%s) {
+                    PyObject *res_o = _PyValue_Format(value, PyValue_NULL);
+                    PyValue_CLOSE(value);
+                    ERROR_IF(res_o == NULL);
+                    res = PyValue_FromObjectSteal(res_o);
+                }
+                else {
+                    res = TAKE(value);
+                }
+            }
+        """
+        unicode = "!PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value))"
+        self.verify(source % ("owned", unicode))
+        # moved(value) only where every path moves
+        self.refuses(source % ("moved(value)", unicode),
+                     r"`res` is declared moved\(value\), but is assigned "
+                     r"`PyValue_FromObjectSteal")
+        # Where every path moves, it must say so
+        self.refuses("""
+            op(_OP, (value: consumed object -- res: owned)) effects() exits(next) {
+                if (oparg) {
+                    res = TAKE(value);
+                }
+                else {
+                    res = TAKE(value);
+                }
+            }
+        """, r"`res` is declared owned, but is assigned `TAKE \( value \)`, which is the "
+             r"input `value`'s value: declare moved\(value\)")
 
     def test_identities_of_static_objects(self):
         # F21, _GUARD_LOAD_SUPER_ATTR_METHOD: a CONSTANT row names a static

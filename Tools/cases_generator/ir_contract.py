@@ -1994,6 +1994,9 @@ class OwnershipWalk:
         self.views = Views(uop, table)
         self.declared = {i.name: i for i in contract.inputs if i.name != "unused"}
         self.new: set[str] = set()
+        # An owned output's last assignment of an input's value: the site and
+        # the refusal if every path to next moves that input (check_outputs)
+        self.moves: dict[str, tuple[Token, str]] = {}
         self.exit: _State | None = None
         self.site_effects: dict[int, list[str]] = {}
         for site in effect_sites(uop, table):
@@ -2101,6 +2104,10 @@ class OwnershipWalk:
                 continue
             live = state.facts.get(out.name, frozenset())
             source = state.sources.get(out.name)
+            origin = state.origins.get(out.name)
+            if (out.mode in ("owned", "inline") and origin and origin in self.declared
+                    and out.name in self.moves):
+                self.fail(*self.moves[out.name])
             if out.source == HOME_SOURCE and state.origins.get(out.name) != HOME_SOURCE:
                 self.fail(where, f"on next, `{out.name}` is declared moved(home), but the "
                           "home it is loaded from still holds it on some path: overwrite "
@@ -2369,6 +2376,14 @@ class OwnershipWalk:
         if null is None and len(cond) == 3 and cond[1] in ("==", "!=") and \
                 cond[2] == "NULL" and re.fullmatch(r"[A-Za-z_]\w*", cond[0]):
             null, holds = [[cond[0]]], holds == (cond[1] == "==")
+        # `x` or `!x` as a condition, of such a pointer: not NULL where it
+        # holds.  Only a new owner or a row's result that decides what the
+        # row took; a status local is refine_status's
+        if null is None and len(cond) == 1 and re.fullmatch(r"[A-Za-z_]\w*", cond[0]) \
+                and cond[0] not in state.status and (
+                    (state.owners.get(cond[0]) == HELD and cond[0] in self.new)
+                    or TAKEN + cond[0] in state.owners.values()):
+            null, holds = [[cond[0]]], not holds
         if null is not None and len(null) == 1:
             name = " ".join(null[0])
             for owner, status in state.owners.items():
@@ -2899,8 +2914,11 @@ class OwnershipWalk:
                          "is no input's value" if origin == "" else
                          "differs by path"))
         if out.mode in ("owned", "inline") and origin:
-            self.fail(toks[0], f"{what}, but is assigned `{' '.join(rhs)}`, which is the "
-                      f"input `{origin}`'s value: declare moved({origin})")
+            # Decided on next (check_outputs): a move joined with a new owner
+            # is owned; only a move on every path must say moved(x)
+            self.moves[out.name] = (toks[0], f"{what}, but is assigned `{' '.join(rhs)}`, "
+                                    f"which is the input `{origin}`'s value: declare "
+                                    f"moved({origin})")
 
     def bind_value(self, toks: list[Token], lhs: str, rhs: list[str], state: _State,
                    out: Item | None) -> None:

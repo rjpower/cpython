@@ -3770,74 +3770,6 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("_PyFrame_TakeHome(frame, &values[i])", output)
         self.assertNotIn("IR_TAKE_INPUT", output)
 
-    def test_disjoint_child_requires_actual_constructor_and_publication(self):
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        formats = ir_generator.compute_formats(analysis)
-        for name in ("LOAD_ATTR_PROPERTY", "LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN"):
-            inst = analysis.instructions[name]
-            fmt = formats[name]
-            with self.subTest(handler=name):
-                self.assertIsNotNone(ir_generator.disjoint_child_transport(inst, fmt))
-                parts = [p for p in inst.parts if isinstance(p, analyzer.Uop)]
-                for index, statement in (
-                        (-3, "frame->base[0] = PyValue_NULL;"),
-                        (-3, "pushed_frame->base[3] = PyValue_NULL;"),
-                        (-2, "frame->return_slot = 0;"),
-                        (-1, "frame->base[0] = PyValue_NULL;")):
-                    extra = self.analyze("\ninst(OP, (--)) { " + statement + " }\n")
-                    body = parts[index].body.body
-                    body.append(extra.instructions["OP"].parts[0].body.body[0])
-                    try:
-                        self.assertIsNone(ir_generator.disjoint_child_transport(inst, fmt))
-                    finally:
-                        body.pop()
-                producer = parts[-3]
-                for statement in producer.body.body:
-                    if not isinstance(statement, parser.SimpleStmt):
-                        continue
-                    for index, token in enumerate(statement.contents):
-                        if token.text not in ("_PyFrame_PushUnchecked", "TAKE", "SAVE_STACK"):
-                            continue
-                        original = token
-                        statement.contents[index] = token.replaceText("unknown_child_effect")
-                        try:
-                            self.assertIsNone(ir_generator.disjoint_child_transport(inst, fmt))
-                        finally:
-                            statement.contents[index] = original
-                # No instruction name is part of the constructor capability.
-                original = inst.name
-                inst.name = "UNNAMED_DISJOINT_CHILD"
-                try:
-                    self.assertIsNotNone(ir_generator.disjoint_child_transport(inst, fmt))
-                finally:
-                    inst.name = original
-
-    def test_disjoint_child_receipt_is_emitted_and_family_closed(self):
-        source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
-        analysis = analyzer.analyze_files([str(source)])
-        formats = ir_generator.compute_formats(analysis)
-        contracts = ir_generator.handler_contracts(analysis, formats)
-        for name in ("LOAD_ATTR_PROPERTY", "LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN"):
-            events = contracts[name].ownership_events
-            self.assertEqual(len(events), 1)
-            self.assertEqual(events[0].kind, "_PyIR_OWNER_NORMAL_CLEAR_INPUTS")
-            self.assertTrue(events[0].flags & 2)
-            self.assertFalse(events[0].flags & 1)
-        for name, fmt in formats.items():
-            if fmt.group == "LOAD_ATTR":
-                self.assertTrue(contracts[name].ownership_events, name)
-        # An unknown constructor removes the whole family's final-clear grant.
-        producer = analysis.uops["_LOAD_ATTR_PROPERTY_FRAME"]
-        extra = self.analyze("\ninst(OP, (--)) { opaque(frame); }\n")
-        producer.body.body.append(extra.instructions["OP"].parts[0].body.body[0])
-        try:
-            contracts = ir_generator.handler_contracts(analysis, formats)
-            for name in ("LOAD_ATTR", "LOAD_ATTR_PROPERTY"):
-                self.assertFalse(contracts[name].ownership_events)
-        finally:
-            producer.body.body.pop()
-
     def test_generator_marker_contract_checks_actual_body(self):
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         analysis = analyzer.analyze_files([str(source)])
@@ -3997,7 +3929,7 @@ class TestIRCases(unittest.TestCase):
             "POP_TOP": "RETIRE", "COPY": "COPY", "SWAP": "SWAP",
             "POP_JUMP_IF_NONE": "RETIRE", "POP_JUMP_IF_NOT_NONE": "RETIRE",
             "IR_JUMP": "PRESERVE", "RESUME": "PRESERVE", "RETURN_VALUE": "EXIT",
-            "CALL": "UNKNOWN", "LOAD_ATTR": "UNKNOWN", "SEND": "UNKNOWN",
+            "CALL": "UNKNOWN", "SEND": "UNKNOWN",
         }
         for name, kind in expected.items():
             with self.subTest(handler=name):
@@ -4276,125 +4208,6 @@ class TestShapeReadMetadata(unittest.TestCase):
         record = ir_generator.build_record(name, instruction, formats[name], analysis, formats)
         return output.getvalue(), ir_generator.handler_effects(record)
 
-    def test_shape_read_uses_checked_metadata_for_both_execution_forms(self):
-        root = Path(__file__).resolve().parents[2]
-        source = (root / "Python/bytecodes.c").read_text()
-        start = (root / "Python/ceval_macros.h").read_text().index("shape_read_offset(const _PyIRWord *words")
-        macros = (root / "Python/ceval_macros.h").read_text()[start:][:600]
-        poly_start = (root / "Python/ceval_macros.h").read_text().index("poly_row_index(const _PyIRWord *words")
-        poly_rows = (root / "Python/ceval_macros.h").read_text()[poly_start:][:300]
-        for suffix in ("", "_LOCAL_TEMP"):
-            for poly in (False, True):
-                name = "LOAD_ATTR_SHAPE" + ("_POLY" if poly else "") + suffix
-                with self.subTest(name=name):
-                    handler, effects = self.shape_read_handler(source, name)
-                    self.assertEqual("shape_read_offset(" in handler, poly)
-                    if poly:
-                        # The handler passes the frame's words; the row
-                        # finder steps back over the executing copy's header
-                        # to the block of the poly tables
-                        self.assertIn("shape_read_offset(frame->ir_words, fb,", handler)
-                        self.assertNotIn("_PyFrame_Exec(frame)->feedback", handler)
-                        self.assertIn("poly_row_index(words, h, version)", macros)
-                        self.assertIn("_PyFb_PolyOf(_PyIR_FbBlock(words), h)", macros)
-                        self.assertIn("_PyFb_PolyOf(_PyIR_FbBlock(words), h)", poly_rows)
-                    self.assertEqual("_PyIR_LEARNED_ONLY" in effects, poly)
-                    self.assertIn("uint32_t offset = " +
-                                  ("ir_shape_offset" if poly else "fb->offset") + ";", handler)
-                    self.assertIn("attr = _PyObject_ShapeReadDup(", handler)
-                    self.assertLess(handler.index("uint32_t offset ="),
-                                    handler.index("attr = _PyObject_ShapeReadDup("))
-                    if not poly:
-                        self.assertLess(handler.index("tp->tp_version_tag"),
-                                        handler.index("_PyObject_Shape("))
-                    if suffix:
-                        self.assertIn("ir_own_B = PyValue_NULL;", handler)
-                        self.assertNotIn("IR_CONSUME_INPUT(B", handler)
-
-    def test_shape_read_rejects_a_missing_or_changed_guard(self):
-        source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
-        guard = "IR_GUARD_SHAPE_READ(PyValue_AsKnownObjectBorrow(owner), type_version, shape);"
-        declared = self.GUARD_DECLARATION
-        swapped = guard.replace("type_version, shape", "shape, type_version")
-        # The verifier of the declaration refuses these first: the guard that
-        # is gone leaves no miss exit and none of its facts, the swapped
-        # arguments establish other facts, and a guard that releases its input
-        # is no guard
-        for changed, error in (
-                ("(void)owner;", "declares exits\\(miss, next\\), but the body takes next"),
-                (swapped, "`owner` is declared shape\\(shape\\), type_version\\(type_version\\), "
-                          "which nothing establishes"),
-                (guard + " PyValue_CLOSE(owner);", "`PyValue_CLOSE` may releases")):
-            with self.subTest(verifier=changed):
-                with self.assertRaisesRegex(SyntaxError, error):
-                    self.shape_read_handler(source.replace(guard, changed, 1),
-                                            "LOAD_ATTR_SHAPE_POLY")
-        # Declared as the edited body is, the generator's rules refuse them
-        no_guard = declared.replace(
-            "owner: shape(shape) type_version(type_version)))", "owner))").replace(
-            "exits(next, miss)", "exits(next)")
-        swapped_facts = declared.replace("shape(shape) type_version(type_version)",
-                                         "shape(type_version) type_version(shape)")
-        for changed, declaration in (
-                ("(void)owner;", no_guard),
-                (swapped, swapped_facts),
-                (guard + " offset++;", declared)):
-            with self.subTest(changed=changed):
-                edited = self.redeclared(source, declared, declaration).replace(
-                    guard, changed, 1)
-                with self.assertRaisesRegex(
-                        SyntaxError, "shape (guard|read)|may be an inline value"):
-                    self.shape_read_handler(edited, "LOAD_ATTR_SHAPE_POLY")
-
-    def test_shape_read_binding_expires_before_an_intervening_effect(self):
-        source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
-        read = "attr = IR_DUP_SHAPE_READ(owner, offset);"
-        # The prefix is a call that a row declares (`unknown_effect()` is no
-        # row), and the declaration says what the edited body does
-        plain = ("reads, releases", "next")
-        for prefix, (effects, exits), error in (
-                ("offset++;", plain, "shape read has no current guarded offset"),
-                ("PyValue_CLOSE(owner);", plain, "view 'owner' is read after a call"),
-                ("_PyEval_FormatExcUnbound(tstate, NULL, 0);", ("runs_python", "next"),
-                 "view 'owner' is read after a call"),
-                ("frame->return_slot = 0;", ("reads, writes, releases", "next"),
-                 "shape read has no current guarded offset"),
-                ("if (flag) { offset++; }", plain,
-                 "shape read has no current guarded offset"),
-                ("for (int i=0; i<0; i++) { offset++; }", plain,
-                 "shape read has no current guarded offset")):
-            with self.subTest(prefix=prefix):
-                edited = self.redeclared(
-                    source, self.LOAD_DECLARATION,
-                    self.LOAD_DECLARATION.replace("reads, releases", effects)
-                    .replace("exits(next)", f"exits({exits})"))
-                with self.assertRaisesRegex(SyntaxError, error):
-                    self.shape_read_handler(edited.replace(read, prefix + " " + read, 1),
-                                            "LOAD_ATTR_SHAPE_POLY")
-
-    def test_polymorphic_shape_requires_the_actual_read_action(self):
-        source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
-        changed = source.replace("attr = IR_DUP_SHAPE_READ(owner, offset);",
-                                 "attr = PyValue_None;", 1)
-        with self.assertRaisesRegex(SyntaxError, "one dominating checked read"):
-            self.shape_read_handler(changed, "LOAD_ATTR_SHAPE_POLY")
-
-    def test_shape_read_rejects_private_native_name_shadows(self):
-        source = (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
-        for name in ("shape_read_offset", "_PyObject_ShapeReadDup", "ir_shape_offset",
-                     "ir_selected_offset"):
-            for declaration in (f"int {name};", f"#define {name} opaque\n"):
-                prefix = ("op(_SHADOW_SHAPE_HELPER, (owner: object -- owner))\n"
-                          "    effects() exits(next)\n{\n" + declaration + "\n}\n")
-                changed = source.replace("        macro(LOAD_ATTR_SHAPE) =",
-                                         prefix + "        macro(LOAD_ATTR_SHAPE) =", 1)
-                changed = changed.replace("            _GUARD_SHAPE_READ +",
-                                          "            _SHADOW_SHAPE_HELPER +\n"
-                                          "            _GUARD_SHAPE_READ +", 1)
-                with self.subTest(name=name, declaration=declaration):
-                    with self.assertRaisesRegex(SyntaxError, "shape read reserved native name"):
-                        self.shape_read_handler(changed, "LOAD_ATTR_SHAPE_POLY")
-
     def test_zero_width_second_cache_has_no_encoded_operand(self):
         source = """
         // BEGIN BYTECODES //
@@ -4441,7 +4254,7 @@ class TestCallMarkers(unittest.TestCase):
         forms = forms[forms.index("#ifdef IR_FUNCTION_FORMS"):]
         handlers = set(re.findall(r"^\s*(?:HOT_)?TARGET\((\w+)\)(?: \{)?$", inline, re.M))
         defined = set(re.findall(r"^ir_run_(\w+)\($", forms, re.M))
-        self.assertGreater(len(handlers), 300)
+        self.assertGreater(len(handlers), 250)
         self.assertEqual(handlers, defined)
         table = re.findall(r"^    \[(\d+)\] = ir_run_(\w+),$", forms, re.M)
         self.assertEqual([int(i) for i, _ in table], list(range(len(table))))

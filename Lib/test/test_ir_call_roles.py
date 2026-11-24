@@ -12,6 +12,7 @@ from test.support import ir_dis as dis
 import _opcode
 import _testinternalcapi
 from test import support
+from test.support import import_helper
 
 
 CONTRACT = _opcode.get_ir_contract()
@@ -440,6 +441,113 @@ class CallRoleTests(unittest.TestCase):
         gc.collect()
         self.assertEqual([ref() for ref in refs], [None] * len(refs))
 
+    def test_class_call_counts_init_and_releases_the_class(self):
+        # CALL_ALLOC_AND_ENTER_INIT: the helper counts the cached __init__,
+        # allocates the instance and releases the class operand after the
+        # push; the arguments and the class keep their counts
+        class Point:
+            def __init__(self, x, y):
+                self.x, self.y = x, y
+        def make(cls, x, y):
+            return cls(x, y)
+        x, y = object(), object()
+        counts = sys.getrefcount(Point), sys.getrefcount(x), sys.getrefcount(y)
+        for _ in range(200):
+            p = make(Point, x, y)
+            self.assertIs(p.x, x)
+            self.assertIs(p.y, y)
+            self.assertIs(type(p), Point)
+        del p
+        gc.collect()
+        self.assertEqual((sys.getrefcount(Point), sys.getrefcount(x), sys.getrefcount(y)),
+                         counts)
+        if not support.Py_GIL_DISABLED:
+            self.assertEqual(self.specialized(make), "CALL_ALLOC_AND_ENTER_INIT+NO_SELF")
+
+    def test_class_call_guards_miss_before_any_count(self):
+        # A miss at _CHECK_OBJECT (the class's version) or at
+        # _CHECK_INIT_FUNCTION (a deep __init__ whose frame needs another
+        # data stack chunk), or at the recursion check, leaves the class
+        # and the arguments as they were: the generic call gives the result
+        names = ", ".join(f"v{i}" for i in range(60))
+        namespace = {}
+        exec(f"def __init__(self, n, arg):\n"
+             f"    {names} = (None,) * 60\n"
+             f"    self.arg = arg\n"
+             f"    self.child = type(self)(n - 1, arg) if n else None\n", namespace)
+        class Arg:
+            pass
+        def make(cls, n, value):
+            return cls(n, value)
+        def calls(Deep, arg):
+            for _ in range(200):
+                self.assertIs(make(Deep, 0, arg).arg, arg)
+            # The class's version changes
+            Deep.extra = 1
+            self.assertIs(make(Deep, 0, arg).arg, arg)
+            for _ in range(200):
+                self.assertIs(make(Deep, 0, arg).arg, arg)
+            # The cached __init__ is called another way: the generic call
+            # runs the replacement, whose result is not None
+            _testcapi = import_helper.import_module("_testcapi")
+            _testcapi.set_vectorcall_replacement(Deep.__init__)
+            try:
+                with self.assertRaises(TypeError):
+                    make(Deep, 0, arg)
+            finally:
+                _testcapi.restore_vectorcall(Deep.__init__)
+            self.assertIs(make(Deep, 0, arg).arg, arg)
+            # Recursion 300 deep through the class call crosses data stack
+            # chunks
+            node = make(Deep, 300, arg)
+            depth = 0
+            while node is not None:
+                self.assertIs(node.arg, arg)
+                node, depth = node.child, depth + 1
+            self.assertEqual(depth, 301)
+            with support.infinite_recursion(100):
+                with self.assertRaises(RecursionError):
+                    make(Deep, 10_000, arg)
+        Deep = type("Deep", (), {"__init__": namespace["__init__"]})
+        arg = Arg()
+        gc.collect()
+        counts = sys.getrefcount(Deep), sys.getrefcount(arg)
+        calls(Deep, arg)
+        gc.collect()
+        self.assertEqual((sys.getrefcount(Deep), sys.getrefcount(arg)), counts)
+        if not support.Py_GIL_DISABLED:
+            self.assertIn(self.specialized(make), ("CALL_ALLOC_AND_ENTER_INIT+NO_SELF",
+                                                   "CALL+NO_SELF"))
+        gone = weakref.ref(Deep), weakref.ref(arg)
+        del Deep, arg
+        gc.collect()
+        self.assertEqual([ref() for ref in gone], [None, None])
+
+    def test_class_call_failure_leaves_the_operands_to_the_unwinder(self):
+        # A binding error in the helper (create_init_frame_window: the
+        # cached __init__ takes another number of arguments) raises at the
+        # word, which stays specialized; the class, the argument and each
+        # instance are released once
+        freed = []
+        class Missing:
+            def __init__(self, a, b):
+                self.a = a
+            def __del__(self):
+                freed.append(1)
+        def make(cls, value):
+            return cls(value)
+        def calls(arg):
+            for _ in range(300):
+                with self.assertRaises(TypeError):
+                    make(Missing, arg)
+        arg = object()
+        counts = sys.getrefcount(Missing), sys.getrefcount(arg)
+        calls(arg)
+        gc.collect()
+        self.assertEqual((sys.getrefcount(Missing), sys.getrefcount(arg)), counts)
+        self.assertEqual(len(freed), 300)
+        if not support.Py_GIL_DISABLED:
+            self.assertEqual(self.specialized(make), "CALL_ALLOC_AND_ENTER_INIT+NO_SELF")
 
 if __name__ == "__main__":
     unittest.main()

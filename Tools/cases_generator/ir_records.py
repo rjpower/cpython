@@ -318,20 +318,9 @@ check_transfer_tokens()
 
 def replaced_input(uop: Uop, j: int) -> int | None:
     """The index of the input whose stack entry the declared output j takes
-    over with a new value, or None.  A uop that advances a cursor declares an
-    inline output at the cursor's position, apart from the consumed input of
-    another name (F16): the entry is the input's, and the value is new"""
-    if not uop.clauses or j >= len(uop.stack.inputs):
-        return None
-    inputs, outputs = uop.stack.inputs, uop.stack.outputs
-    if any(item.is_array() for item in inputs[:j + 1] + outputs[:j + 1]):
-        return None
-    import ir_contract
-    contract = ir_contract.contract_of(uop)
-    output, input_ = contract.output(outputs[j].name), contract.input(inputs[j].name)
-    if (output is None or input_ is None or output.mode != "inline"
-            or input_.mode != "consumed"
-            or any(o.name == inputs[j].name for o in outputs)):
+    over with a new value, or None: its replaces(x) (F16's cursor), at x's
+    position (analyzer.analyze_stack)"""
+    if j >= len(uop.stack.outputs) or not uop.stack.outputs[j].replaces:
         return None
     return j
 

@@ -533,7 +533,7 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_CheckExceptStarTy
               "_PyEval_CheckExceptStarTypeValidValue: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_CheckExceptTypeValidValue), int (*)(PyThreadState *, PyValueBorrow)),
               "_PyEval_CheckExceptTypeValidValue: its C type differs from pycore_ir_components.h");
-static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_CreateInitFrame), _PyInterpreterFrame * (*)(PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, PyValue, _PyInstr *)),
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_CreateInitFrame), _PyInterpreterFrame * (*)(PyThreadState *, _PyInterpreterFrame *, _PyInstr *, PyValue, _PyInstr *)),
               "_PyEval_CreateInitFrame: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyEval_GetAIter), PyValue (*)(PyThreadState *, PyValue)),
               "_PyEval_GetAIter: its C type differs from pycore_ir_components.h");
@@ -3606,8 +3606,6 @@ ir_run_CALL_ALLOC_AND_ENTER_INIT(
             (void)call_feedback;
             PyValue callable;
             PyValue self_or_null;
-            PyValue init;
-            PyValue self;
             PyValue *args;
             PyValue init_frame;
             PyValue new_frame;
@@ -3646,20 +3644,9 @@ ir_run_CALL_ALLOC_AND_ENTER_INIT(
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _CHECK_RECURSION_REMAINING
+            // _CHECK_INIT_FUNCTION
             {
-                if (tstate->py_recursion_remaining <= 1) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-            }
-            // _ALLOCATE_OBJECT
-            {
-                self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                assert(!(call_state & CALL_SELF_PRESENT));
-                assert(PyType_Check(callable_o));
                 PyTypeObject *tp = (PyTypeObject *)callable_o;
                 assert(tp->tp_new == PyBaseObject_Type.tp_new);
                 assert(tp->tp_flags & Py_TPFLAGS_HEAPTYPE);
@@ -3677,23 +3664,22 @@ ir_run_CALL_ALLOC_AND_ENTER_INIT(
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyValue init_owner = PyValue_DUP(PyValue_FromObjectBorrow(init_func));
-                STAT_INC(CALL, hit);
-                PyObject *self_o = PyType_GenericAlloc(tp, 0);
-                if (self_o == NULL) {
-                    PyValue_CLOSE(init_owner);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            // _CHECK_RECURSION_REMAINING
+            {
+                if (tstate->py_recursion_remaining <= 1) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
                 }
-                self_or_null = PyValue_FromObjectSteal(self_o);
-                callable = init_owner;
             }
             // _CREATE_INIT_FRAME
             {
                 args = NULL;
-                self = self_or_null;
-                init = callable;
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
+                STAT_INC(CALL, hit);
                 _PyInterpreterFrame *temp = _PyEval_CreateInitFrame(
-                    tstate, frame, this_instr, init, self, next_instr);
+                    tstate, frame, this_instr, callable, next_instr);
                 if (temp == NULL) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
@@ -19925,8 +19911,6 @@ static const _PyIRForm ir_handler_forms[512] = {
             (void)call_feedback;
             PyValue callable;
             PyValue self_or_null;
-            PyValue init;
-            PyValue self;
             PyValue *args;
             PyValue init_frame;
             PyValue new_frame;
@@ -19965,20 +19949,9 @@ static const _PyIRForm ir_handler_forms[512] = {
                     JUMP_TO_PREDICTED(CALL);
                 }
             }
-            // _CHECK_RECURSION_REMAINING
+            // _CHECK_INIT_FUNCTION
             {
-                if (tstate->py_recursion_remaining <= 1) {
-                    UPDATE_MISS_STATS(CALL);
-                    assert(_PyOpcode_Deopt[opcode] == (CALL));
-                    JUMP_TO_PREDICTED(CALL);
-                }
-            }
-            // _ALLOCATE_OBJECT
-            {
-                self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
                 PyObject *callable_o = _PyValue_AsKnownObjectBorrowPointer(callable);
-                assert(!(call_state & CALL_SELF_PRESENT));
-                assert(PyType_Check(callable_o));
                 PyTypeObject *tp = (PyTypeObject *)callable_o;
                 assert(tp->tp_new == PyBaseObject_Type.tp_new);
                 assert(tp->tp_flags & Py_TPFLAGS_HEAPTYPE);
@@ -19996,23 +19969,22 @@ static const _PyIRForm ir_handler_forms[512] = {
                     assert(_PyOpcode_Deopt[opcode] == (CALL));
                     JUMP_TO_PREDICTED(CALL);
                 }
-                PyValue init_owner = PyValue_DUP(PyValue_FromObjectBorrow(init_func));
-                STAT_INC(CALL, hit);
-                PyObject *self_o = PyType_GenericAlloc(tp, 0);
-                if (self_o == NULL) {
-                    PyValue_CLOSE(init_owner);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
+            }
+            // _CHECK_RECURSION_REMAINING
+            {
+                if (tstate->py_recursion_remaining <= 1) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
                 }
-                self_or_null = PyValue_FromObjectSteal(self_o);
-                callable = init_owner;
             }
             // _CREATE_INIT_FRAME
             {
                 args = NULL;
-                self = self_or_null;
-                init = callable;
+                self_or_null = ((call_state & CALL_SELF_PRESENT) ? IR_OPERAND(0) : PyValue_NULL);
+                STAT_INC(CALL, hit);
                 _PyInterpreterFrame *temp = _PyEval_CreateInitFrame(
-                    tstate, frame, this_instr, init, self, next_instr);
+                    tstate, frame, this_instr, callable, next_instr);
                 if (temp == NULL) {
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }

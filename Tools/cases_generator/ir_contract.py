@@ -1200,6 +1200,9 @@ class Item:
     # An exchange (SWAP): the pass-through input whose value this
     # pass-through output takes (check_exchange(), verify_exchange())
     exchange: str = ""
+    # replaces(x): the consumed input whose stack entry this output takes
+    # over, at its position, with a new value (check_replacements())
+    replaces: str = ""
 
     @property
     def nullable(self) -> bool:
@@ -1302,7 +1305,8 @@ def _item(stack_item, modes: tuple[str, ...], where: Token) -> Item:
     if any(f.kind == "encoding" and "null" in f.arg.split("|") for f in facts):
         kinds = word_kinds(facts)       # encoding(tagged_index|null)
     return Item(name, mode, source, frozenset(facts), kinds,
-                stack_item.is_array(), stack_item.size, assumed)
+                stack_item.is_array(), stack_item.size, assumed,
+                replaces=stack_item.replaces)
 
 
 _CONTRACTS: dict[int, tuple[Uop, Contract | None]] = {}
@@ -1424,6 +1428,20 @@ def _homes(items, stack_items) -> dict[str, tuple[str, ...]]:
             for k, item in enumerate(items)}
 
 
+def check_replacements(uop: Uop, inputs: tuple[Item, ...], outputs: tuple[Item, ...],
+                       where: Token) -> None:
+    """A replacement (F16's cursor): the input whose entry an output takes
+    over is consumed, so that its value is the body's to retire.  The
+    analyzer checked the position (analyzer.analyze_stack)"""
+    for o in outputs:
+        if not o.replaces:
+            continue
+        item = next(i for i in inputs if i.name == o.replaces)
+        if item.mode != "consumed":
+            raise analysis_error(f"{uop.name}: `{o.name}` replaces `{item.name}`, which is "
+                                 f"{item.mode or 'a pass-through'}, not consumed", where)
+
+
 def check_exchange(uop: Uop, inputs: tuple[Item, ...], outputs: tuple[Item, ...],
                    where: Token) -> None:
     """An exchange (SWAP): pass-through outputs that take `moved(x)` of
@@ -1519,6 +1537,7 @@ def contract_of(uop: Uop) -> Contract | None:
                                      "assumption is of a value that reaches the handler "
                                      "(F7), and an output's facts are shown", where)
         check_exchange(uop, inputs, outputs, where)
+        check_replacements(uop, inputs, outputs, where)
         feedback = parse_feedback(uop.clauses.get("feedback", ()), where)
         state = parse_state(uop, uop.clauses.get("state"), where)
         paths = parse_paths(uop, uop.clauses.get("paths"), where)

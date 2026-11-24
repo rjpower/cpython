@@ -2008,8 +2008,6 @@ dummy_func(
         outlined inst(POP_EXCEPT, (exc_value: consumed assumed(object) by _PUSH_EXC_INFO -- ))
             effects(reads, releases) exits(next)
         {
-            // PUSH_EXC_INFO saved an exception instance or None: always an object
-            assert(PyValue_IsObject(exc_value));
             _PyErr_StackItem *exc_info = tstate->exc_info;
             if (PyValue_IsNone(exc_value)) {
                 DEAD(exc_value);    // immortal: it owes no count

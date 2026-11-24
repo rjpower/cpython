@@ -1154,11 +1154,14 @@ def find_object_inputs(
 
     An input that op asserts to be an object, with
     `assert(PyValue_IsObject(name))`, can never hold an inline value by
-    construction of the bytecode, so it needs no test.
+    construction of the bytecode, so it needs no test.  So can one whose
+    contract declares `assumed(object) by <producer>`: the generator
+    asserts each assumption in every execution form (ir_contract.py, F7).
     """
     scalars = {item.name for item in stack.inputs if not item.is_array()}
     found: list[str] = []
-    asserted: list[str] = []
+    asserted: list[str] = [item.name for item in stack.inputs
+                           if item.name in scalars and "assumed(object)" in item.contract]
     tokens = list(op.block.tokens())
     i = 0
     while i < len(tokens):
@@ -1178,7 +1181,7 @@ def find_object_inputs(
             texts = [t.text for t in tokens[start:i + 1]]
             if (len(texts) == 7
                     and texts[2] in ("PyValue_IsObject", "PyValue_IsObjectOrNull")
-                    and texts[4] in scalars):
+                    and texts[4] in scalars and texts[4] not in asserted):
                 asserted.append(texts[4])
         elif tkn.text in VALUE_TO_OBJECT and i + 3 < len(tokens):
             arg, close = tokens[i + 2], tokens[i + 3]

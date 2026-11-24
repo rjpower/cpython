@@ -563,6 +563,25 @@ class TestIRCases(unittest.TestCase):
         self.assertNotIn("_PyValueTemps", handler)
         self.assertNotIn("finish_value_bridges", handler)
 
+    def test_an_assumed_object_input_needs_no_assert(self):
+        # A declared `assumed(object) by P` is the evidence: every execution
+        # form asserts the assumption, so the body need not repeat it
+        body = """
+        inst(OP, (value%s -- value)) effects(reads) exits(next) {
+            PyObject *object = PyValue_AsKnownObjectBorrow(value);
+            PyObject *code = PyFunction_GET_CODE(object);
+        }
+        """
+        output = self.ir_output(body % ": assumed(object) by SPAM")
+        self.assertIn("assert(PyValue_IsObject(value));", self.handler(output, "OP"))
+        self.assertEqual(self.analyze(body % ": assumed(object) by SPAM")
+                         .uops["OP"].asserted_objects, ("value",))
+        # Neither an assumption nor an assert: the contract refuses it, as
+        # the generator does an undeclared uop
+        # (test_inline_input_read_as_object_needs_an_assert)
+        with self.assertRaisesRegex(SyntaxError, "requires object of it"):
+            self.ir_output(body % "")
+
     def test_error_labels_use_explicit_literal_ingresses(self):
         source = "\n" + "\n".join(
             f"label({name}) {{ IR_PROCESS_ERROR({ingress}, 0); }}"

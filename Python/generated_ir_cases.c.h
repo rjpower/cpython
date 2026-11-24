@@ -12907,7 +12907,6 @@ ir_run_POP_EXCEPT(
             (void)ir_own_A;
             exc_value = IR_VIEW(IR_A(ir_word));
             assert(PyValue_IsObject(exc_value));
-            assert(PyValue_IsObject(exc_value));
             _PyErr_StackItem *exc_info = tstate->exc_info;
             if (PyValue_IsNone(exc_value)) {
                 ir_own_A = IR_DETACH(ir_word, A, exc_value);

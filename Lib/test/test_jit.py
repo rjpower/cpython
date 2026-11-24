@@ -746,11 +746,13 @@ class TestCompletionStubs(JitTestCase):
             print(f(ints))
         """)
 
-    def test_monitoring_enabled_by_a_displaced_locals_finalizer(self):
-        # A __del__ run by the close of a displaced local turns LINE events
-        # on: in an unpack (a stub's release) and in an add (the template's
-        # release slow path).  The compiled code leaves at the next word and
-        # the events are the interpreter's from there.
+    def test_monitoring_enabled_by_a_finalizer(self):
+        # A __del__ turns LINE events on: run by the generic unpack stub's
+        # release of its iterable (the stub reports ESCAPED and the site's
+        # cold path finds the unit retired), by the close of a local that an
+        # unpack's store displaces, and by an add's displaced local (the
+        # template's release slow path).  The compiled code leaves at the
+        # next word and the events are the interpreter's from there.
         self.check_same("""
             import sys
             mon = sys.monitoring
@@ -763,6 +765,18 @@ class TestCompletionStubs(JitTestCase):
             class D:
                 def __del__(self):
                     mon.set_events(TOOL, E.LINE)
+            class It:
+                def __init__(self, die): self.die = die
+                def __iter__(self): return iter((1, 2))
+                def __del__(self):
+                    if self.die:
+                        mon.set_events(TOOL, E.LINE)
+            def generic(n, at):
+                s = 0
+                for i in range(n):
+                    a, b = It(i == at)
+                    s += a + b
+                return s
             def unpack(n, at):
                 s = 0
                 a = None
@@ -782,7 +796,7 @@ class TestCompletionStubs(JitTestCase):
                     x = i + 1
                     s += x
                 return s
-            for f in (unpack, add):
+            for f in (generic, unpack, add):
                 for i in range(5):
                     f(6, -1)
                 events.clear()
@@ -793,22 +807,27 @@ class TestCompletionStubs(JitTestCase):
 
     def test_settrace_enabled_by_a_finalizer(self):
         # The same with sys.settrace, from a displaced local's close and from
-        # the release of an unpacked iterable (the generic stub)
+        # the release of an unpacked iterable (the generic stub).  The
+        # finalizer also traces the running frame, whose next line events
+        # then show where compiled code left.
         self.check_same("""
             import sys
             events = []
             def tracer(frame, event, arg):
                 events.append((frame.f_code.co_name, event, frame.f_lineno))
                 return tracer
+            def trace_caller():
+                sys.settrace(tracer)
+                sys._getframe(2).f_trace = tracer
             class D:
                 def __del__(self):
-                    sys.settrace(tracer)
+                    trace_caller()
             class It:
                 def __init__(self, die): self.die = die
                 def __iter__(self): return iter((1, 2))
                 def __del__(self):
                     if self.die:
-                        sys.settrace(tracer)
+                        trace_caller()
             def unpack(n, at):
                 s = 0
                 a = None

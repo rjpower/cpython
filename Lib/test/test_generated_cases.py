@@ -37,6 +37,7 @@ with test_tools.imports_under_tool("cases_generator"):
     import analyzer
     from analyzer import StackItem
     from cwriter import CWriter
+    import ir_contract
     import ir_generator
     import ir_records
     import stack
@@ -281,6 +282,16 @@ def generator_labels_source():
 
 
 
+TEST_ROWS = """
+#define TEST_ROWS(PRIMITIVE, HELPER, MACRO) \\
+    MACRO(SPAM, ARGS(scalar, scalar, scalar), SCALAR, EFFECTS(reads), EXITS()) \\
+    MACRO(SPAM_FLAG, ARGS(), SCALAR, EFFECTS(), EXITS()) \\
+    MACRO(SPAM_KEEP, ARGS(scalar), NONE, EFFECTS(), EXITS()) \\
+    MACRO(EGGS, ARGS(scalar, scalar), SCALAR, EFFECTS(), EXITS()) \\
+    MACRO(HAM, ARGS(scalar, scalar), SCALAR, EFFECTS(), EXITS())
+"""
+
+
 class TestIRCases(unittest.TestCase):
     """The register IR backend: ir_generator.py and ir_metadata_generator.py"""
 
@@ -301,6 +312,12 @@ class TestIRCases(unittest.TestCase):
                                     ir_generator.OBJECT_READERS | {"SPAM", "spam_call"})
         readers.start()
         self.addCleanup(readers.stop)
+        # The analyzer takes a call for one that can run code unless a row
+        # says otherwise: these upper-case stand-ins have rows that declare
+        # no effect that reenters
+        rows = mock.patch.dict(ir_contract.rows(), ir_contract.parse_rows(TEST_ROWS))
+        rows.start()
+        self.addCleanup(rows.stop)
 
     def tearDown(self) -> None:
         os.remove(self.temp_input_filename)
@@ -1082,7 +1099,9 @@ class TestIRCases(unittest.TestCase):
         # own, so it aliases no input
         self.assertEqual(instruction.parts[0].aliased_outputs, ())
         predicate = "coro_awaitable_can_transfer"
-        self.assertIn(predicate, analyzer.NON_ESCAPING_FUNCTIONS)
+        # The row declares no reentry, so the call does not escape
+        self.assertFalse(ir_contract.rows()[predicate].effects & ir_contract.REENTRY)
+        self.assertFalse(analyzer.call_escapes(predicate))
         self.assertNotIn(predicate, analyzer.IR_MARKER_EFFECTS)
         effect = ir_generator.analyze_error_effects(self.analyze(
             "\ninst(OP, (value --)) { if (coro_awaitable_can_transfer(value)) { assert(true); } }\n"
@@ -3060,7 +3079,7 @@ class TestIRCases(unittest.TestCase):
             self.assertNotIn(marker, analyzer.IR_MARKER_EFFECTS)
             escapes = {escape.call.text for escape in part.properties.escaping_calls.values()}
             self.assertEqual(marker in escapes,
-                             analyzer.IR_HELPER_CALLEES[marker] not in analyzer.NON_ESCAPING_FUNCTIONS)
+                             bool(ir_contract.rows()[marker].effects & ir_contract.REENTRY))
 
     def test_input_drain_requires_its_sole_owning_array(self):
         def check(source):
@@ -3143,7 +3162,7 @@ class TestIRCases(unittest.TestCase):
         for source in ("value = opaque();", "value = PyValue_NULL;",
                        "value.bits &= 0;", "value++;", "opaque(&((value)));",
                        "PyValue value;", "PyValue value = PyValue_None;",
-                       "PyValue_CLEAR(value);", "PyValue_XSETREF(value, PyValue_NULL);",
+                       "PyValue_CLEAR(value);", "Py_XSETREF(value, PyValue_NULL);",
                        "PyValue_CLOSE(value);"):
             with self.subTest(source=source):
                 self.assertFalse(changes(source)["value"])
@@ -4027,14 +4046,21 @@ class TestCallMarkers(unittest.TestCase):
             self.assertTrue(invoke.switches_frame)
         self.assertFalse(self.analysis.uops["_MONITOR_CALL"].properties.always_exits)
 
-    def test_exact_activation_does_not_escape(self):
+    def test_exact_activation_escapes_as_its_row_declares(self):
+        # call_push_exact releases the callable (its row: `releases`), which
+        # can run a finalizer; nothing else in the uop escapes
+        self.assertTrue(analyzer.call_escapes("call_push_exact"))
         properties = self.analysis.uops["_INIT_CALL_PY_EXACT_ARGS"].properties
-        self.assertFalse(properties.escapes)
+        self.assertTrue(properties.escapes)
         self.assertFalse(properties.error_without_pop)
         self.assertFalse(properties.sync_sp)
 
-    def test_pure_latch_and_unrelated_uppercase_macro(self):
-        for marker in ("IR_BEGIN_CALL_EFFECTS", "UNRELATED_MACRO"):
+    def test_pure_latch_and_undeclared_macro(self):
+        # A row decides, never an upper-case name: the latch declares no
+        # effect, a macro with no row escapes
+        node, = parse_src("op(_OP, (--)) { UNRELATED_MACRO(); }")
+        self.assertTrue(analyzer.compute_properties(node).escapes)
+        for marker in ("IR_BEGIN_CALL_EFFECTS",):
             node, = parse_src(f"op(_OP, (--)) {{ {marker}(); }}")
             properties = analyzer.compute_properties(node)
             self.assertFalse(properties.escapes)

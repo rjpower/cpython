@@ -1942,10 +1942,14 @@ dummy_func(
 
         macro(SEND) = unused/1 + _SPECIALIZE_SEND + _SEND;
 
-        inline_ok op(_SEND_GEN_FRAME, (receiver, null, v -- receiver, null, gen_frame)) {
-            EXIT_IF(!PyValue_IsObject(receiver));
+        inline_ok op(_SEND_GEN_FRAME,
+                (receiver, null: nullable, v: taken -- receiver, null, gen_frame: owned))
+            effects(runs_python, switches_frame) exits(miss, enter, raise)
+        {
+            EXIT_IF(!PyValue_IsObject(receiver), "a number is no generator");
             PyGenObject *gen = (PyGenObject *)PyValue_AsKnownObjectBorrow(receiver);
-            EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type);
+            EXIT_IF(Py_TYPE(gen) != &PyGen_Type && Py_TYPE(gen) != &PyCoro_Type,
+                    "the receiver is not a generator or a coroutine");
             EXIT_IF(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CREATED && !PyValue_IsNone(v),
                     "a created generator accepts only None");
             EXIT_IF(!gen_may_claim(gen), "the generator runs or has finished");
@@ -2304,7 +2308,6 @@ dummy_func(
                 DEAD(seq);
                 ERROR_IF(true);
             }
-            assert(PyValue_IsObject(seq));
             PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
             ERROR_IF(res == 0);
@@ -2358,7 +2361,6 @@ dummy_func(
                 DEAD(seq);
                 ERROR_IF(true);
             }
-            assert(PyValue_IsObject(seq));
             PyObject *seq_o = PyValue_AsKnownObjectSteal(seq);
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
             ERROR_IF(res == 0);
@@ -2697,7 +2699,6 @@ dummy_func(
                  -- interpolation: owned))
             effects(runs_python, releases) exits(next, raise)
         {
-            assert(PyValue_IsObject(str));
             PyObject *str_o = PyValue_AsKnownObjectBorrow(str);
             int conversion = oparg >> 2;
             PyObject *format_o;
@@ -2764,7 +2765,6 @@ dummy_func(
                               PyValue_TYPE(iterable_st)->tp_name);
                 ERROR_NO_POP();
             }
-            assert(PyValue_IsObject(iterable_st));
             PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
             PyObject *iterable = PyValue_AsKnownObjectBorrow(iterable_st);
 
@@ -2799,7 +2799,6 @@ dummy_func(
                               PyValue_TYPE(iterable)->tp_name);
                 ERROR_NO_POP();
             }
-            assert(PyValue_IsObject(iterable));
             int err = _PySet_Update(PyValue_AsKnownObjectBorrow(set),
                                     PyValue_AsKnownObjectBorrow(iterable));
             if (err < 0) {
@@ -2873,7 +2872,6 @@ dummy_func(
                               PyValue_TYPE(update));
                 ERROR_NO_POP();
             }
-            assert(PyValue_IsObject(update));
             PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
             PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
 
@@ -2913,7 +2911,6 @@ dummy_func(
                               PyValue_TYPE(update));
                 ERROR_NO_POP();
             }
-            assert(PyValue_IsObject(update));
             PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
             PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
 
@@ -4907,8 +4904,6 @@ dummy_func(
 
             // The exit function is any attribute value, a scalar included;
             // the call raises upstream's TypeError for one.
-            assert(PyValue_IsObject(val));
-            assert(PyValue_IsObjectOrNull(exit_self));
             PyObject *val_o = PyValue_AsKnownObjectBorrow(val);
 
             assert(val_o && PyExceptionInstance_Check(val_o));
@@ -4961,7 +4956,6 @@ dummy_func(
             else {
                 prev_exc = PyValue_None;
             }
-            assert(PyValue_IsObject(exc));
             assert(PyValue_ExceptionInstanceCheck(exc));
             exc_info->exc_value = PyValue_AsPyObjectNew(exc);
             new_exc = exc;
@@ -6438,8 +6432,6 @@ dummy_func(
             effects(reads, writes) exits(next)
         {
             // The attribute is a tuple, dict or function that the compiler built
-            assert(PyValue_IsObject(func_in));
-            assert(PyValue_IsObject(attr_st));
             PyObject *func = PyValue_AsKnownObjectBorrow(func_in);
             PyObject *attr = PyValue_AsKnownObjectSteal(attr_st);
             func_out = TAKE(func_in);

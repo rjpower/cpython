@@ -190,6 +190,11 @@ class GeneratorTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.source = Path(directory.name) / "records.c"
+        # SPAM_FLAG and its kin are stand-ins whose rows declare no reentry
+        rows = mock.patch.dict(cases.ir_contract.rows(),
+                               cases.ir_contract.parse_rows(cases.TEST_ROWS))
+        rows.start()
+        self.addCleanup(rows.stop)
 
     def generate(self, source):
         "The handlers of source, whose OP has the specialised form OP_INT"

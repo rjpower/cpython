@@ -8,6 +8,7 @@ to actual flush/terminal receipts before exporting a complete route contract.
 from dataclasses import dataclass, field, replace
 from enum import Enum, auto
 
+import ir_contract
 from analyzer import Instruction, Skip, Uop
 from generators_common import TokenIterator, instruction_macro_args
 from lexer import Token
@@ -55,105 +56,135 @@ class HelperEffect:
     opens_current_observer: bool = True
 
 
-def native_helper(inputs, result, may_fail=False, callback=False, *,
-                  canonical_clear=False, result_owned=None, steals=(),
-                  result_canonical=False, result_nonnull=False,
-                  opens_current_observer=True):
-    homes = (HomeEffect.PRESERVES_CANONICAL_OR_NULL if callback and canonical_clear
-             else HomeEffect.PRESERVES_SCRATCH_ABSENCE if callback
-             else HomeEffect.NO_ARENA_WRITE)
-    return HelperEffect(inputs, result, homes, may_fail, callback, result_owned, steals,
-                        result_canonical, result_nonnull, opens_current_observer)
+@dataclass(frozen=True)
+class Signature:
+    """What the rows cannot say of a call: the typed source's kinds, and a
+    result's ownership and shape.  Its effects, its failure through a row's
+    `raises`, its home and observer claims are the row's."""
+    inputs: tuple[Kind, ...]
+    result: Kind
+    fails: bool = False
+    result_owned: bool | None = None
+    result_canonical: bool = False
+    result_nonnull: bool = False
+    # The PyObject * arguments that the call steals, where its row does not
+    # say `consumed object` (G0d1: the uops' `temp` is moved through a view)
+    steals: tuple[int, ...] = ()
 
 
-# These interfaces receive native values, never an arena-home address. A
-# callback may change named bindings or vacate scratch through a debugger
-# redirect. It cannot publish a new scratch owner. The stronger canonical_clear
-# contract additionally preserves previously initialized scratch: f_locals
-# writes only bindings, frame_lineno_set_impl clears scratch with canonical NULL
-# and restores saved values only to bindings, and an executing frame cannot be
-# cleared or resumed. Nested activations reserve their own frame storage. This
-# permits canonical-or-NULL widening, never initialization from absence or an
-# old-PC shape after an accepted redirect. Generated operand writes remain a
-# separate emitter obligation. A returned failure is not a goto.
-HELPERS = {
-    "coro_awaitable_can_transfer": native_helper((Kind.VALUE,), Kind.SCALAR),
-    # The returned native count is known, but this contract grants no arena
-    # effect or callback-shape authority for arbitrary __await__ execution.
-    "_PyEval_GetAwaitable": HelperEffect((Kind.VALUE, Kind.SCALAR), Kind.OBJECT,
-        HomeEffect.UNKNOWN, may_fail=True, callback=True, result_owned=True),
-    "IS_PEP523_HOOKED": native_helper((Kind.TSTATE,), Kind.SCALAR),
-    "PyValue_DUP": native_helper((Kind.VALUE,), Kind.VALUE),
-    "PyValue_XDUP": native_helper((Kind.VALUE,), Kind.VALUE),
-    "TAKE": native_helper((Kind.VALUE,), Kind.VALUE),
-    "PyValue_IsNull": native_helper((Kind.VALUE,), Kind.SCALAR),
-    "PyValue_IsNone": native_helper((Kind.VALUE,), Kind.SCALAR),
-    "PyValue_IsObject": native_helper((Kind.VALUE,), Kind.SCALAR),
-    "PyValue_IsObjectOrNull": native_helper((Kind.VALUE,), Kind.SCALAR),
-    "PyValue_IsInlineInt": native_helper((Kind.VALUE,), Kind.SCALAR),
-    "PyValue_IsInlineFloat": native_helper((Kind.VALUE,), Kind.SCALAR),
-    "_PyValue_IsTrue": native_helper((Kind.VALUE,), Kind.SCALAR, True, True,
-                                     canonical_clear=True, opens_current_observer=False),
-    "PyValue_FromInlineInt": native_helper((Kind.SCALAR,), Kind.VALUE,
-        result_owned=True, result_canonical=True, result_nonnull=True),
+def _signature(inputs, result, fails=False, *, owned=None, canonical=False, nonnull=False,
+               steals=()):
+    return Signature(inputs, result, fails, owned, canonical, nonnull, steals)
+
+
+# The typed subset's names for the observer protocol's values (a tuple, an
+# observed opcode, a site index) are no C types, so the rows do not give
+# them.  Every call below has a row in pycore_ir_components.h, which gives
+# its effects: reentry, steals, homes and observer (HOMES, OBSERVER).
+SIGNATURES = {
+    "coro_awaitable_can_transfer": _signature((Kind.VALUE,), Kind.SCALAR),
+    "_PyEval_GetAwaitable": _signature((Kind.VALUE, Kind.SCALAR), Kind.OBJECT, True,
+                                       owned=True),
+    "IS_PEP523_HOOKED": _signature((Kind.TSTATE,), Kind.SCALAR),
+    "PyValue_DUP": _signature((Kind.VALUE,), Kind.VALUE),
+    "PyValue_XDUP": _signature((Kind.VALUE,), Kind.VALUE),
+    "TAKE": _signature((Kind.VALUE,), Kind.VALUE),
+    "PyValue_IsNull": _signature((Kind.VALUE,), Kind.SCALAR),
+    "PyValue_IsNone": _signature((Kind.VALUE,), Kind.SCALAR),
+    "PyValue_IsObject": _signature((Kind.VALUE,), Kind.SCALAR),
+    "PyExceptionInstance_Check": _signature((Kind.OBJECT,), Kind.SCALAR),
+    "PyValue_IsInlineInt": _signature((Kind.VALUE,), Kind.SCALAR),
+    "PyValue_IsInlineFloat": _signature((Kind.VALUE,), Kind.SCALAR),
+    "_PyValue_IsTrue": _signature((Kind.VALUE,), Kind.SCALAR, True),
+    "PyValue_FromInlineInt": _signature((Kind.SCALAR,), Kind.VALUE,
+        owned=True, canonical=True, nonnull=True),
     # The emitter requires current exact-container/bounds/anchor receipts
     # before lowering this intrinsic to an element read and owning XDUP.
-    "IR_DUP_CANONICAL_ELEMENT": native_helper((Kind.VALUE, Kind.SCALAR), Kind.VALUE,
-        result_owned=True, result_canonical=True, result_nonnull=True),
-    "PyValue_AsKnownObjectBorrow": native_helper((Kind.VALUE,), Kind.OBJECT,
-                                                 result_owned=False),
-    **{name: native_helper((Kind.OBJECT,), Kind.VALUE, steals=(0,),
-            result_owned=True, result_canonical=True, result_nonnull=True)
-       for name in ("PyValue_FromObjectSteal", "PyValue_FromNonNumberSteal")},
-    **{name: native_helper((Kind.VALUE,), Kind.VALUE, True, True,
-            canonical_clear=True, result_owned=True, opens_current_observer=False)
+    "IR_DUP_CANONICAL_ELEMENT": _signature((Kind.VALUE, Kind.SCALAR), Kind.VALUE,
+        owned=True, canonical=True, nonnull=True),
+    "PyValue_AsKnownObjectBorrow": _signature((Kind.VALUE,), Kind.OBJECT, owned=False),
+    "PyValue_FromObjectSteal": _signature((Kind.OBJECT,), Kind.VALUE,
+        owned=True, canonical=True, nonnull=True),
+    "PyValue_FromNonNumberSteal": _signature((Kind.OBJECT,), Kind.VALUE,
+        owned=True, canonical=True, nonnull=True, steals=(0,)),
+    **{name: _signature((Kind.VALUE,), Kind.VALUE, True, owned=True)
        for name in ("_PyValue_Negative", "_PyValue_Positive", "_PyValue_Invert")},
-    "PyValue_CLOSE": native_helper((Kind.VALUE,), Kind.VOID, callback=True,
-        canonical_clear=True, opens_current_observer=False),
-    "PyValue_XCLOSE": native_helper((Kind.VALUE,), Kind.VOID, callback=True,
-        canonical_clear=True, opens_current_observer=False),
-    "DEAD": native_helper((Kind.VALUE,), Kind.VOID),
-    # Their emitted writes are confined by IRStack, independently of this
-    # source summary. They grant no permission to pass a home to a C helper.
-    "DECREF_INPUTS": native_helper((), Kind.VOID, callback=True, canonical_clear=True),
-    "INPUTS_DEAD": native_helper((), Kind.VOID),
-    "GETLOCAL": native_helper((Kind.SCALAR,), Kind.VALUE),
-    "PyTuple_GET_VALUE": native_helper((Kind.TUPLE, Kind.SCALAR), Kind.VALUE),
-    "_PyTuple_GET_VALUE": native_helper((Kind.TUPLE, Kind.SCALAR), Kind.VALUE),
-    "_PyEval_GetANext": native_helper((Kind.OBJECT,), Kind.OBJECT, True, True,
-                                      canonical_clear=True, result_owned=True),
-    "check_periodics": native_helper((Kind.TSTATE,), Kind.SCALAR, True, True),
-    "_Py_Instrument": native_helper((Kind.CODE, Kind.INTERP), Kind.SCALAR, True),
-    "_Py_atomic_load_uintptr_relaxed": native_helper((Kind.ATOMIC_ADDRESS,), Kind.SCALAR),
-    "FT_ATOMIC_LOAD_UINTPTR_ACQUIRE": native_helper((Kind.ATOMIC_FIELD,), Kind.SCALAR),
-    "_Py_call_instrumentation": native_helper(
-        (Kind.TSTATE, Kind.SCALAR, Kind.FRAME, Kind.INSTR), Kind.SCALAR, True, True),
-    "monitor_reraise": native_helper(
-        (Kind.TSTATE, Kind.FRAME, Kind.INSTR), Kind.VOID, callback=True),
-    "PyExceptionInstance_Check": native_helper((Kind.OBJECT,), Kind.SCALAR),
-    "PyErr_GivenExceptionMatches": native_helper((Kind.OBJECT, Kind.OBJECT), Kind.SCALAR),
-    "Py_NewRef": native_helper((Kind.OBJECT,), Kind.OBJECT, result_owned=True),
-    "_PyErr_SetRaisedException": native_helper(
-        (Kind.TSTATE, Kind.OBJECT), Kind.VOID, callback=True, steals=(1,)),
+    "PyValue_CLOSE": _signature((Kind.VALUE,), Kind.VOID),
+    "PyValue_XCLOSE": _signature((Kind.VALUE,), Kind.VOID),
+    "GETLOCAL": _signature((Kind.SCALAR,), Kind.VALUE),
+    "PyTuple_GET_VALUE": _signature((Kind.TUPLE, Kind.SCALAR), Kind.VALUE),
+    "_PyEval_GetANext": _signature((Kind.OBJECT,), Kind.OBJECT, True, owned=True),
+    "check_periodics": _signature((Kind.TSTATE,), Kind.SCALAR, True),
+    "_Py_Instrument": _signature((Kind.CODE, Kind.INTERP), Kind.SCALAR, True),
+    "_Py_atomic_load_uintptr_relaxed": _signature((Kind.ATOMIC_ADDRESS,), Kind.SCALAR),
+    "FT_ATOMIC_LOAD_UINTPTR_ACQUIRE": _signature((Kind.ATOMIC_FIELD,), Kind.SCALAR),
+    "_Py_call_instrumentation": _signature(
+        (Kind.TSTATE, Kind.SCALAR, Kind.FRAME, Kind.INSTR), Kind.SCALAR, True),
+    "monitor_reraise": _signature((Kind.TSTATE, Kind.FRAME, Kind.INSTR), Kind.VOID),
+    "PyErr_GivenExceptionMatches": _signature((Kind.OBJECT, Kind.OBJECT), Kind.SCALAR),
+    "Py_NewRef": _signature((Kind.OBJECT,), Kind.OBJECT, owned=True),
+    "_PyErr_SetRaisedException": _signature((Kind.TSTATE, Kind.OBJECT), Kind.VOID),
     # The macro has its own checked argument/terminal grammar below. Its
     # generated helper also owns the encoded input window and recipient.
-    "IR_COMPLETE_STEP": native_helper((), Kind.VOID, True, True),
-    "_Py_call_instrumentation_line": native_helper(
-        (Kind.TSTATE, Kind.FRAME, Kind.INSTR, Kind.INSTR), Kind.OBSERVED_OPCODE, True, True),
-    "_Py_call_instrumentation_instruction": native_helper(
-        (Kind.TSTATE, Kind.FRAME, Kind.INSTR), Kind.OBSERVED_OPCODE, True, True),
-    "_PyCode_GetOriginalOpcode": native_helper((Kind.LINE_INFO, Kind.SITE_INDEX), Kind.OBSERVED_OPCODE),
-    "INSTR_OFFSET_OF": native_helper((Kind.INSTR,), Kind.SITE_INDEX),
-    "_PyFb_HasEntry": native_helper((Kind.OBSERVED_OPCODE,), Kind.SCALAR),
-    "FB_HEADER_OF": native_helper((Kind.INSTR, Kind.OBSERVED_OPCODE), Kind.FEEDBACK),
-    "PAUSE_ADAPTIVE_COUNTER": native_helper((Kind.FEEDBACK,), Kind.VOID),
-    "ORIGINAL_HANDLER": native_helper((Kind.OBSERVED_OPCODE,), Kind.SCALAR),
-    "PRE_DISPATCH_GOTO": native_helper((), Kind.VOID),
+    "IR_COMPLETE_STEP": _signature((), Kind.VOID, True),
+    "_Py_call_instrumentation_line": _signature(
+        (Kind.TSTATE, Kind.FRAME, Kind.INSTR, Kind.INSTR), Kind.OBSERVED_OPCODE, True),
+    "_Py_call_instrumentation_instruction": _signature(
+        (Kind.TSTATE, Kind.FRAME, Kind.INSTR), Kind.OBSERVED_OPCODE, True),
+    "_PyCode_GetOriginalOpcode": _signature((Kind.LINE_INFO, Kind.SITE_INDEX),
+                                            Kind.OBSERVED_OPCODE),
+    "INSTR_OFFSET_OF": _signature((Kind.INSTR,), Kind.SITE_INDEX),
+    "_PyFb_HasEntry": _signature((Kind.OBSERVED_OPCODE,), Kind.SCALAR),
+    "FB_HEADER_OF": _signature((Kind.INSTR, Kind.OBSERVED_OPCODE), Kind.FEEDBACK),
+    "PAUSE_ADAPTIVE_COUNTER": _signature((Kind.FEEDBACK,), Kind.VOID),
+    "ORIGINAL_HANDLER": _signature((Kind.OBSERVED_OPCODE,), Kind.SCALAR),
+    "PRE_DISPATCH_GOTO": _signature((), Kind.VOID),
     # The baseline JIT's warm-up event (RESUME_JIT, JUMP_BACKWARD_JIT), after
     # the word's effect: the frame may go on in its code's unit at the next
     # word, which runs Python.  Errors there are those of later words.
-    "IR_JIT_EVENT": native_helper((), Kind.VOID, callback=True),
+    "IR_JIT_EVENT": _signature((), Kind.VOID),
 }
+
+
+def helper_effect(name: str, signature: Signature) -> HelperEffect:
+    """The effects of a call by its row (ir_components.h): it runs a callback
+    when the row declares a reentry effect, and then what that code does to
+    the frame's homes is the row's HOMES; it steals the PyObject * arguments
+    that the row consumes.  These interfaces receive native values, never an
+    arena-home address.  A callback may change named bindings or vacate
+    scratch through a debugger redirect; it cannot publish a new scratch
+    owner.  `HOMES(canonical)` is the stronger claim that it also preserves
+    previously initialized scratch (f_locals writes only bindings,
+    frame_lineno_set_impl clears scratch with canonical NULL and restores
+    saved values only to bindings, and an executing frame cannot be cleared
+    or resumed); nested activations reserve their own frame storage.  It
+    permits canonical-or-NULL widening, never initialization from absence or
+    an old-PC shape after an accepted redirect.  A returned failure is not a
+    goto."""
+    row = ir_contract.rows()[name]
+    callback = bool(row.effects & ir_contract.REENTRY)
+    homes = (HomeEffect.NO_ARENA_WRITE if not callback
+             else HomeEffect.UNKNOWN if row.homes == "unknown"
+             else HomeEffect.PRESERVES_CANONICAL_OR_NULL if row.homes == "canonical"
+             else HomeEffect.PRESERVES_SCRATCH_ABSENCE)
+    steals = signature.steals or tuple(
+        at for at, (arg, param) in enumerate(zip(row.args, row.params))
+        if arg.mode == "consumed" and param.replace(" ", "") == "PyObject*")
+    return HelperEffect(signature.inputs, signature.result, homes,
+                        signature.fails or "raises" in row.effects, callback,
+                        signature.result_owned, steals, signature.result_canonical,
+                        signature.result_nonnull, row.observer != "none")
+
+
+# The DSL's constructs have no rows.  DECREF_INPUTS releases the inputs: its
+# finalizers run code that leaves canonical homes.
+HELPERS = {name: helper_effect(name, signature) for name, signature in SIGNATURES.items()}
+HELPERS.update({
+    "DEAD": HelperEffect((Kind.VALUE,), Kind.VOID, HomeEffect.NO_ARENA_WRITE),
+    "INPUTS_DEAD": HelperEffect((), Kind.VOID, HomeEffect.NO_ARENA_WRITE),
+    "DECREF_INPUTS": HelperEffect((), Kind.VOID, HomeEffect.PRESERVES_CANONICAL_OR_NULL,
+                                  callback=True),
+})
 
 # LINE may adopt a debugger target before failing. The setter normalizes that
 # target: context0 protected targets retain no scratch; protected-context paths

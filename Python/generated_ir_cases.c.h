@@ -275,6 +275,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PySuper_LookupValue), _P
               "_PySuper_LookupValue: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyTemplate_Build), PyObject * (*)(PyObject *, PyObject *)),
               "_PyTemplate_Build: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyClassMethod_GetFunc), PyObject * (*)(PyObject *)),
+              "_PyClassMethod_GetFunc: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyType_IteratesByIndex), int (*)(PyTypeObject *)),
               "_PyType_IteratesByIndex: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyUnicode_Equal), int (*)(PyObject *, PyObject *)),
@@ -3197,7 +3199,6 @@ ir_run_BUILD_INTERPOLATION(
             format = &window[2];
             str = window[1];
             value = window[0];
-            assert(PyValue_IsObject(str));
             PyObject *str_o = _PyValue_AsKnownObjectBorrowPointer(str);
             int conversion = oparg >> 2;
             PyObject *format_o;
@@ -7590,7 +7591,6 @@ ir_run_DICT_MERGE(
                               PyValue_TYPE(update));
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                assert(PyValue_IsObject(update));
                 PyObject *dict_o = _PyValue_AsKnownObjectBorrowPointer(dict);
                 PyObject *update_o = _PyValue_AsKnownObjectBorrowPointer(update);
                 _PyStatusObject merged = value_dict_merge_uniq(dict_o, update_o);
@@ -7644,7 +7644,6 @@ ir_run_DICT_UPDATE(
                               PyValue_TYPE(update));
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                assert(PyValue_IsObject(update));
                 PyObject *dict_o = _PyValue_AsKnownObjectBorrowPointer(dict);
                 PyObject *update_o = _PyValue_AsKnownObjectBorrowPointer(update);
                 int err = PyDict_Update(dict_o, update_o);
@@ -8349,8 +8348,8 @@ ir_run_FOR_ITER_VIRTUAL(
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
                 PyValue spent = index;
-                window[1] = PyValue_NULL;
                 _PyValue_DropCursor(spent);
+                window[1] = PyValue_NULL;
                 _PyStatusValue step = next_value(iter_o);
                 if (step.status != PYGEN_NEXT) {
                     if (step.status == PYGEN_ERROR && !_PyForIter_StopIsExhaustion(tstate, frame)) {
@@ -8369,9 +8368,9 @@ ir_run_FOR_ITER_VIRTUAL(
             else {
                 Py_ssize_t position = PyValue_UntagIndex(index);
                 PyValue spent = index;
-                window[1] = PyValue_NULL;
                 _PyValue_DropCursor(spent);
                 _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+                window[1] = PyValue_NULL;
                 _PyValueIndexPair item = iteritem(iter_o, position);
                 if (PyValue_IsNull(item.value)) {
                     if (item.index < 0) {
@@ -10088,7 +10087,6 @@ ir_run_LIST_EXTEND(
                               PyValue_TYPE(iterable_st)->tp_name);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                assert(PyValue_IsObject(iterable_st));
                 PyObject *list = _PyValue_AsKnownObjectBorrowPointer(list_st);
                 PyObject *iterable = _PyValue_AsKnownObjectBorrowPointer(iterable_st);
                 PyObject *none_val = _PyList_Extend((PyListObject *)list, iterable);
@@ -14111,7 +14109,6 @@ ir_run_PUSH_EXC_INFO(
             else {
                 prev_exc = PyValue_None;
             }
-            assert(PyValue_IsObject(exc));
             assert(PyValue_ExceptionInstanceCheck(exc));
             exc_info->exc_value = PyValue_AsPyObjectNew(exc);
             new_exc = exc;
@@ -15233,8 +15230,6 @@ ir_run_SET_FUNCTION_ATTRIBUTE(
             attr_st = IR_VIEW(IR_B(ir_word));
             assert(PyValue_IsObject(attr_st));
             assert(!PyValue_IsNull(func_in) && (PyValue_TYPE(func_in) == &PyFunction_Type));
-            assert(PyValue_IsObject(func_in));
-            assert(PyValue_IsObject(attr_st));
             PyObject *func = _PyValue_AsKnownObjectBorrowPointer(func_in);
             ir_own_B = IR_DETACH(ir_word, B, attr_st);
             PyObject *attr = _PyValue_AsPyObjectStealPointer(IR_TAKEN_POINTER(attr_st, ir_own_B));
@@ -15280,7 +15275,6 @@ ir_run_SET_UPDATE(
                               PyValue_TYPE(iterable)->tp_name);
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                assert(PyValue_IsObject(iterable));
                 int err = _PySet_Update(_PyValue_AsKnownObjectBorrowPointer(set),
                                     _PyValue_AsKnownObjectBorrowPointer(iterable));
                 if (err < 0) {
@@ -16677,7 +16671,6 @@ ir_run_UNPACK_EX(
                 window[0] = PyValue_NULL;
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
-            assert(PyValue_IsObject(seq));
             PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
             window[0] = PyValue_NULL;
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
@@ -16739,7 +16732,6 @@ ir_run_UNPACK_SEQUENCE(
                     window[0] = PyValue_NULL;
                     PROCESS_ERROR_AT(RAISE, 0, this_instr);
                 }
-                assert(PyValue_IsObject(seq));
                 PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
                 window[0] = PyValue_NULL;
                 int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
@@ -16910,8 +16902,6 @@ ir_run_WITH_EXCEPT_START(
             exit_func = window[0];
             assert(PyValue_IsObject(val));
             PyObject *exc, *tb;
-            assert(PyValue_IsObject(val));
-            assert(PyValue_IsObjectOrNull(exit_self));
             PyObject *val_o = _PyValue_AsKnownObjectBorrowPointer(val);
             assert(val_o && PyExceptionInstance_Check(val_o));
             exc = PyExceptionInstance_Class(val_o);
@@ -23414,8 +23404,8 @@ static const _PyIRForm ir_handler_forms[512] = {
                     JUMP_TO_PREDICTED(FOR_ITER);
                 }
                 PyValue spent = index;
-                window[1] = PyValue_NULL;
                 _PyValue_DropCursor(spent);
+                window[1] = PyValue_NULL;
                 _PyStatusValue step = next_value(iter_o);
                 if (step.status != PYGEN_NEXT) {
                     if (step.status == PYGEN_ERROR && !_PyForIter_StopIsExhaustion(tstate, frame)) {
@@ -23434,9 +23424,9 @@ static const _PyIRForm ir_handler_forms[512] = {
             else {
                 Py_ssize_t position = PyValue_UntagIndex(index);
                 PyValue spent = index;
-                window[1] = PyValue_NULL;
                 _PyValue_DropCursor(spent);
                 _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
+                window[1] = PyValue_NULL;
                 _PyValueIndexPair item = iteritem(iter_o, position);
                 if (PyValue_IsNull(item.value)) {
                     if (item.index < 0) {

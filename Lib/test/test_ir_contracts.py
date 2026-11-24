@@ -17,6 +17,7 @@ import tempfile
 import textwrap
 import unittest
 import weakref
+from unittest import mock
 
 from test import support
 from test.support import import_helper
@@ -142,30 +143,12 @@ class SliceTests(unittest.TestCase):
 
     # The reviewed corrections of G0c, each listed with its evidence in the
     # batch's differences.md and in the commit that made it.  Batch 8:
-    # MATERIALIZE_KWARGS is PyDict_New and one store, which run no Python;
     # INSTRUMENTED_JUMP takes PROCESS_ERROR_AT when the event fails, so
     # _MONITOR_END_ASYNC_FOR may raise.  G0d1: it leaves by the redirect exit
     # when a callback redirects the frame, which the record cannot say
     LISTED_DIFFERENCES = [
-        # G0d1: _PUSH_EXC_INFO moves the handled exception out with
-        # _PyErr_StackItemTakeValue, whose row reads and writes; the
-        # inference has no entry for it and assumes any call
-        'PUSH_EXC_INFO.record.format.runs_code: inferred true, declared false',
-        'PUSH_EXC_INFO.record.uops[0].effects: inferred 6 entries '
-        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
-        '"READS_HEAP", "WRITES_HEAP"], declared 2 ["READS_HEAP", "WRITES_HEAP"]',
-        'MATERIALIZE_KWARGS.record.format.runs_code: inferred true, declared false',
-        'MATERIALIZE_KWARGS.record.uops[0].effects: inferred 6 entries '
-        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
-        '"READS_HEAP", "WRITES_HEAP"], declared 3 ["ALLOCATES", "MAY_RAISE", '
-        '"WRITES_HEAP"]',
         'INSTRUMENTED_END_ASYNC_FOR/_MONITOR_END_ASYNC_FOR: declares exits(next, '
         'raise, redirect), the record has next',
-        # Batch 3: _PyTemplate_Build is a GC allocation and runs no Python
-        'BUILD_TEMPLATE.record.uops[0].effects: inferred 6 entries '
-        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
-        '"READS_HEAP", "WRITES_HEAP"], declared 3 ["ALLOCATES", "MAY_RAISE", '
-        '"MAY_RELEASE"]',
         # Batch 7: no word executes RETURN_GENERATOR, so its result is NULL
         # (F19); _GUARD_TOS_IS_NONE tests the identity of the word with
         # PyValue_None (F20)
@@ -192,12 +175,6 @@ class SliceTests(unittest.TestCase):
               'inferred "", declared "PyValue_None"',
               f'{handler}.record.uops[0].guards[0].facts[0].kind: '
               'inferred "IS_NONE", declared "IDENTITY"')),
-        # G0c9: BUILD_LIST is IR_BUILD_LIST (_PyList_FromValueStealOnSuccess),
-        # an allocation that runs no Python, as BUILD_TUPLE's twin row says
-        'BUILD_LIST.record.format.runs_code: inferred true, declared false',
-        'BUILD_LIST.record.uops[0].effects: inferred 6 entries '
-        '["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", '
-        '"READS_HEAP", "WRITES_HEAP"], declared 2 ["ALLOCATES", "MAY_RAISE"]',
         # G0c9: _GET_ITER's second result is a tagged index or NULL
         # (_PyEval_GetIter's row, G0a5's representation table)
         'GET_ITER.record.uops[1].results: inferred 0 entries [], declared 1 '
@@ -243,13 +220,18 @@ class SliceTests(unittest.TestCase):
         '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
         'LOAD_GLOBAL_BUILTIN.record.uops[1].guards[0].facts[0].subject: '
         'inferred "builtins", declared "dict"',
-        # Batch 6: _INIT_CALL_PY_EXACT_ARGS pushes a frame, which writes the heap and
-        # releases the callable; SET_FUNCTION_ATTRIBUTE runs no code; the call
-        # uops complete in place (exits next, G0d removes the inference)
-        'CALL_BOUND_METHOD_EXACT_ARGS.record.uops[7].effects: inferred 1 entries ["ALLOCATES"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
-        'CALL_PY_EXACT_ARGS.record.uops[5].effects: inferred 1 entries ["ALLOCATES"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
-        'SET_FUNCTION_ATTRIBUTE.record.format.runs_code: inferred true, declared false',
-        'SET_FUNCTION_ATTRIBUTE.record.uops[0].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 2 ["READS_HEAP", "WRITES_HEAP"]',
+        # G0d2 (analyzer and effect_sites read the rows): MATERIALIZE_KWARGS,
+        # BUILD_TEMPLATE and BUILD_LIST no longer differ.
+        # A call escapes where its row declares a reentry effect, and the
+        # inference reads an escape as every effect at once: the frame pushes
+        # release the callable (call_push_exact), while the declaration says
+        # which effects they have; the inference of the builders reads the
+        # rows of their calls, which state fewer effects than the uop declares
+        'BUILD_INTERPOLATION.record.uops[0].effects: inferred 3 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE"], declared 6 ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
+        'BUILD_SLICE.record.uops[0].effects: inferred 3 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE"], declared 6 ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
+        'SET_FUNCTION_ATTRIBUTE.record.uops[0].effects: inferred 1 entries ["WRITES_HEAP"], declared 2 ["READS_HEAP", "WRITES_HEAP"]',
+        'CALL_BOUND_METHOD_EXACT_ARGS.record.uops[7].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
+        'CALL_PY_EXACT_ARGS.record.uops[5].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 4 ["ALLOCATES", "MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
         'CALL/_DO_CALL: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_BOUND_METHOD_GENERAL/_PY_FRAME_GENERAL: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_EX_NON_PY_GENERAL/_CALL_FUNCTION_EX_NON_PY_GENERAL: declares exits(enter, next, raise), the record has enter, raise',
@@ -260,15 +242,6 @@ class SliceTests(unittest.TestCase):
         'CALL_KW_NON_PY/_CALL_KW_NON_PY: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_KW_PY/_PY_FRAME_KW_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
         'CALL_PY_GENERAL/_PY_FRAME_GENERAL_GUARDED: declares exits(enter, next, raise), the record has enter, raise',
-        # G0d4: the slot stores go through _PyValueSlot_Exchange, _ExchangeFilled and
-        # _Fill (pycore_object.h), which the inference does not know and takes for
-        # any effect; the declarations read their rows (reads, writes, and the
-        # releases of the closes)
-        'STORE_ATTR_INSTANCE_VALUE.record.uops[3].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 3 ["MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
-        'STORE_ATTR_SHAPE.record.uops[2].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 3 ["MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
-        'STORE_ATTR_SHAPE_ADD.record.uops[2].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 3 ["MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
-        'STORE_ATTR_SLOT.record.uops[1].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 3 ["MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
-        'STORE_SUBSCR_LIST_INT.record.uops[2].effects: inferred 6 entries ["ALLOCATES", "MAY_RAISE", "MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"], declared 3 ["MAY_RELEASE", "READS_HEAP", "WRITES_HEAP"]',
         # G0d4: the iterator family's cursor has distinct names (`index` in,
         # `next_index` out, as the F16 rule asks).  The inference reads the
         # handlers with their declarations removed, where nothing says that
@@ -361,19 +334,21 @@ class SliceTests(unittest.TestCase):
         ("FOR_ITER_RANGE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
         # G0d1: a yield is declared (`exits(yield)`); with the declarations
         # removed the inference no longer reads the generator's state, and
-        # a frame switch that no site names is an entry
+        # a frame switch that no site names is an entry.  The boundary
+        # variants' lines fall under LISTED_BOUNDARY_FAMILIES (G0d2)
         ("YIELD_VALUE.record.uops[1].transfers[0].kind:", '"ENTER_FRAME", declared "YIELD"'),
         ("INSTRUMENTED_YIELD_VALUE.record.uops[2].transfers[0].kind:",
          '"ENTER_FRAME", declared "YIELD"'),
-        ("INSTRUMENTED_YIELD_VALUE_XFER_SEND.record.uops[2].transfers[0].kind:",
-         '"ENTER_FRAME", declared "YIELD"'),
-        ("INSTRUMENTED_YIELD_VALUE_XFER_STORE_LOCAL.record.uops[2].transfers[0].kind:",
-         '"ENTER_FRAME", declared "YIELD"'),
-        ("YIELD_VALUE_XFER_SEND.record.uops[1].transfers[0].kind:",
-         '"ENTER_FRAME", declared "YIELD"'),
-        ("YIELD_VALUE_XFER_STORE_LOCAL.record.uops[1].transfers[0].kind:",
-         '"ENTER_FRAME", declared "YIELD"'),
     ]
+
+    # G0d2: the generator boundary is checked against the declarations of
+    # the SEND family's uops (send_source_contract), so the inference, which
+    # reads undeclared bodies, finds no boundary in the handlers that cross
+    # one: their records differ as a family, not one by one
+    LISTED_BOUNDARY_FAMILIES = re.compile(
+        r"(CLEANUP_THROW|INSTRUMENTED_YIELD_DELEGATED|INSTRUMENTED_YIELD_VALUE|"
+        r"SEND|SEND_ASYNC_GEN|SEND_GEN|SEND_VIRTUAL|YIELD_DELEGATED|YIELD_VALUE)"
+        r"_XFER_\w+\.record\.")
 
     def test_declarations_equal_the_inference(self):
         with cases.handle_stderr():
@@ -381,7 +356,9 @@ class SliceTests(unittest.TestCase):
         # Every reported line is a reviewed difference: an exact line
         # (LISTED_DIFFERENCES) or a long leaf-IR line named by its prefix and
         # a substring it must contain (LISTED_LEAF_DIFFERENCES)
-        reported = lines[:-1]
+        reported = [line for line in lines[:-1]
+                    if line in self.LISTED_DIFFERENCES
+                    or not self.LISTED_BOUNDARY_FAMILIES.match(line)]
         exact = [line for line in reported if line in self.LISTED_DIFFERENCES]
         self.assertCountEqual(exact, self.LISTED_DIFFERENCES)
         leaf = [line for line in reported if line not in self.LISTED_DIFFERENCES]
@@ -460,6 +437,10 @@ class VerifierTests(unittest.TestCase):
         os.close(fd)
         self.addCleanup(os.remove, self.filename)
         self.table = ir_contract.rows() | ir_contract.parse_rows(EXTRA_ROWS)
+        # The analyzer decides which calls escape from the rows too
+        patch = mock.patch.object(ir_contract, "rows", return_value=self.table)
+        patch.start()
+        self.addCleanup(patch.stop)
 
     def verify(self, source, temporaries=False):
         with open(self.filename, "w") as f:
@@ -1490,10 +1471,29 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual(rows["spam"].result.failure, "NEGATIVE")
         with self.assertRaisesRegex(SyntaxError, r"row spam: HELPER: 6 columns, then "
                                                  r"optionally each of FEEDBACK\(\.\.\.\), "
-                                                 r"SLOW\(\.\.\.\), TAKES_VIEW\(\.\.\.\) once; got 'EXITS\(next\)'"):
+                                                 r"SLOW\(\.\.\.\), TAKES_VIEW\(\.\.\.\), "
+                                                 r"HOMES\(\.\.\.\), OBSERVER\(\.\.\.\) once; "
+                                                 r"got 'EXITS\(next\)'"):
             ir_contract.parse_rows(
                 "#define X(PRIMITIVE, HELPER, MACRO) "
                 "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(), EXITS(next))")
+
+    def test_homes_and_observer_describe_a_reentrant_row(self):
+        rows = ir_contract.parse_rows(
+            "#define X(PRIMITIVE, HELPER, MACRO) "
+            "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(runs_python), "
+            "HOMES(canonical), OBSERVER(none))")
+        self.assertEqual((rows["spam"].homes, rows["spam"].observer), ("canonical", "none"))
+        for columns, message in (("HOMES(canonical)", "declares no reentry effect"),
+                                 ("OBSERVER(none)", "declares no reentry effect")):
+            with self.assertRaisesRegex(SyntaxError, message):
+                ir_contract.parse_rows(
+                    "#define X(PRIMITIVE, HELPER, MACRO) "
+                    f"HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(reads), {columns})")
+        with self.assertRaisesRegex(SyntaxError, r"HOMES\(canonical \| unknown\)"):
+            ir_contract.parse_rows(
+                "#define X(PRIMITIVE, HELPER, MACRO) "
+                "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(runs_python), HOMES(any))")
 
     # F1: fact kinds, their classes and lifetimes
 
@@ -1779,10 +1779,10 @@ class VerifierTests(unittest.TestCase):
                 res = held;
             }
         """, r"`res` is not written before IR_OBSERVE_COMMITTED_BRANCH")
-        # The generator's replacer and the declaration name the same row;
-        # the generator selecting it by declaration is a follow-up (G0d)
-        self.assertEqual({r.name for r in self.table.values() if r.committed},
-                         {"IR_OBSERVE_COMMITTED_BRANCH"})
+        # The generator's observer replacer is selected by the declaration
+        self.assertEqual(ir_generator.committed_markers(),
+                         {r.name for r in self.table.values() if r.committed})
+        self.assertIn("IR_OBSERVE_COMMITTED_BRANCH", ir_generator.committed_markers())
         # next publishes, and a guard exit restarts the word: neither is
         # committed, nor a successor
         for mark in ("committed", "successor"):
@@ -1889,6 +1889,33 @@ class VerifierTests(unittest.TestCase):
                      r"confines an effect to next")
         self.refuses(source % "reads, runs_python(branch|nowhere)",
                      r"confines an effect to nowhere, which is no exit")
+
+    def test_a_confined_effect_is_exported_where_compiled_code_goes_on(self):
+        # The record, the metadata and the stub plans read the effects of the
+        # paths after which compiled code goes on: an effect confined to
+        # raise leaves them, one confined to branch stays (the branch's
+        # target runs after it)
+        source = """
+            op(_JUMP, (iter: object, null_or_index -- iter, null_or_index))
+                effects(reads, %s) exits(next, branch, raise)
+            {
+                _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
+                if (r->len <= 0) {
+                    PyValue completed = PyValue_None;
+                    IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
+                }
+            }
+        """
+        contract = ir_contract.contract_of(self.verify(
+            source % "runs_python(branch|raise)").uops["_JUMP"])
+        self.assertNotIn("runs_python", contract.next_effects())
+        self.assertIn("runs_python", contract.continuing_effects())
+        # An effect confined to raise alone is not on a path that goes on
+        self.assertEqual(
+            ir_contract.Contract((), (), frozenset(("runs_python", "reads")),
+                                 frozenset(("next", "raise")), confined=(
+                ("runs_python", frozenset(("raise",))),)).continuing_effects(),
+            frozenset(("reads",)))
 
     def test_the_representation_table(self):
         # _TO_BOOL_INT: an exact int whose one encoding tested false is an

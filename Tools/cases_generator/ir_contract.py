@@ -71,6 +71,10 @@ KILLS = frozenset(("writes", "releases", "runs_python", "polls", "switches_frame
 # the uop's other exits no callback redirected the frame.
 EXITS = ("next", "branch", "jump", "miss", "deopt", "raise", "enter", "return",
          "yield", "exit", "redirect")
+# The exits after which no compiled code of the word's frame state runs: the
+# error route and the evaluator's exit.  A redirect continues the frame at
+# another word, so its effects are kept.
+LEAVING_EXITS = frozenset(("raise", "exit"))
 
 # Feedback access (design 1.6, section 6): what a row or a uop reads and
 # writes of its site's feedback, transitively.  `entry` is every field of
@@ -87,8 +91,9 @@ INPUT_MODES = ("borrowed", "consumed", "taken", "closed")
 # uop on next and on raise (design 1.2)
 UNOWNED = ("", "borrowed", "closed")
 OUTPUT_MODES = ("owned", "inline", "borrowed", "moved")
+# `lvalue`: a macro argument that the macro assigns (PyValue_CLEAR(x) sets x)
 ARG_MODES = ("borrowed", "consumed", "taken", "scalar", "object", "tstate", "frame",
-             "out", "destructor")
+             "out", "lvalue", "destructor")
 
 # Facts: the vocabulary's words and the record's Fact kinds.  A fact with an
 # argument is written `kind(arg)`; `exact(T1|T2)` is a union of exact types,
@@ -556,6 +561,15 @@ class Row:
     # continues, and that path's successor is published at the body's end
     # as next is
     successor: frozenset[str] = frozenset()
+    # HOMES(canonical | unknown): what code that a reentrant row runs does to
+    # the frame's homes.  Without it a reentrant row can vacate scratch homes
+    # (a debugger's redirect) and leaves canonical values or NULL elsewhere;
+    # `canonical` says it leaves initialized homes canonical-or-NULL, as a
+    # finalizer or a dunder method does, `unknown` that nothing is promised
+    homes: str = ""
+    # OBSERVER(none): the code that a reentrant row runs opens no observer
+    # (instrumentation) context of the current frame
+    observer: str = ""
     # CONSTANT: how the constant is held, VALUE (a PyValue, ret PyValue) or
     # OBJECT (a static object named by its address, ret its C type)
     representation: str = ""
@@ -686,9 +700,11 @@ def _parse_result(text: str) -> Result:
             if moved and shape == "VALUE":
                 # Argument k itself: its value, its identity and its
                 # obligation (a move, as an output's moved(x))
-                if len(words) > 1:
+                # null_iff(k) says it is NULL exactly where argument k is
+                k = int(moved.group(1))
+                if words[1:] not in ([], [f"null_iff({k})"]):
                     raise ValueError(f"VALUE(moved(k)) is argument k as it is: {text}")
-                return Result(shape, "moved", moved=int(moved.group(1)))
+                return Result(shape, "moved", moved=k, null_iff=k if words[1:] else -1)
             if not words or words[0] not in ("owned", "inline", "borrowed"):
                 raise ValueError(f"{shape} needs a mode: {text}")
             rest, assumed = _assumptions(words[1:], None)
@@ -763,10 +779,10 @@ def feedback_covered(access: tuple[str, str], declared) -> bool:
 # The optional columns after a row's fixed ones, by row kind
 OPTIONAL_COLUMNS = {
     "PRIMITIVE": ("FEEDBACK", "CONJOINS", "NONNULL_FORM", "SLOW", "TAKES_VIEW", "VIEW_CLOSE",
-                  "POINTER_FORM"),
-    "HELPER": ("FEEDBACK", "SLOW", "TAKES_VIEW"),
+                  "POINTER_FORM", "HOMES", "OBSERVER"),
+    "HELPER": ("FEEDBACK", "SLOW", "TAKES_VIEW", "HOMES", "OBSERVER"),
     "ROUTINE": ("FEEDBACK",),
-    "MACRO": ("FEEDBACK", "TAKES_VIEW"),
+    "MACRO": ("FEEDBACK", "TAKES_VIEW", "HOMES", "OBSERVER"),
     "SLOT": ("FEEDBACK",),
 }
 
@@ -799,7 +815,9 @@ def _row_options(fields: list[str], fixed: int, kind: str) -> dict:
             "slow": found.get("SLOW", ""),
             "takes_view": found.get("TAKES_VIEW", False),
             "view_close": found.get("VIEW_CLOSE", ""),
-            "pointer_form": found.get("POINTER_FORM", "")}
+            "pointer_form": found.get("POINTER_FORM", ""),
+            "homes": found.get("HOMES", ""),
+            "observer": found.get("OBSERVER", "")}
 
 
 def _parse_row(kind: str, fields: list[str]) -> Row:
@@ -940,6 +958,11 @@ def parse_rows(text: str, source: str = "pycore_ir_components.h") -> dict[str, R
             if k >= 0 and (k >= len(row.args)
                            or row.args[k].mode not in ("borrowed", "consumed", "taken")):
                 raise ValueError(f"null_iff({k}): argument {k} is no value argument")
+            if row.homes not in ("", "canonical", "unknown") or row.observer not in ("", "none"):
+                raise ValueError("HOMES(canonical | unknown), OBSERVER(none)")
+            if (row.homes or row.observer) and not row.effects & REENTRY:
+                raise ValueError("HOMES and OBSERVER describe the code a reentrant row runs: "
+                                 "the row declares no reentry effect")
             if row.result.shape == "HOME" and row.effects & {"reads", "writes"}:
                 raise ValueError("a HOME row addresses a frame home, which is not the heap: "
                                  "it declares no reads or writes")
@@ -1207,6 +1230,14 @@ class Contract:
         "the effects that may occur on a path to next, which kill its facts"
         return self.effects - {e for e, _ in self.confined}
 
+    def continuing_effects(self) -> frozenset[str]:
+        """the effects that may occur on a path after which compiled code
+        goes on: every effect except one confined to exits that leave the
+        word's frame state (raise, exit).  An effect confined to branch
+        stays: the branch's target runs after it, and the baseline JIT tests
+        RETIRED after a word that may run Python"""
+        return self.effects - {e for e, on in self.confined if on <= LEAVING_EXITS}
+
     def state_item(self, name: str) -> tuple[str, frozenset, frozenset] | None:
         return next((i for i in self.state if i[0] == name), None)
 
@@ -1217,7 +1248,7 @@ class Contract:
         return next((o for o in self.outputs if o.name == name), None)
 
     def record_effects(self) -> frozenset[str]:
-        return frozenset().union(*(RECORD_EFFECT[e] for e in self.effects))
+        return frozenset().union(*(RECORD_EFFECT[e] for e in self.continuing_effects()))
 
 
 # moved(home): an output that takes the value and the obligation of the

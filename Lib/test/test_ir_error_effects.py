@@ -1,5 +1,6 @@
 """Exceptional source effects need complete typed source, even when inert."""
 
+import dataclasses
 from pathlib import Path
 import tempfile
 import unittest
@@ -11,6 +12,7 @@ from test import test_tools
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import analyzer
+    import ir_contract
     import ir_error_effects
     import ir_generator
     import ir_numbers
@@ -111,6 +113,30 @@ class ErrorEffectTests(unittest.TestCase):
                 self.assertFalse(summary.unwind_sources)
                 self.assertFalse(summary.may_fail)
                 self.assertEqual(summary.homes, ir_error_effects.HomeEffect.NO_ARENA_WRITE)
+
+    def test_helper_effects_are_the_rows(self):
+        # A call's reentry, homes and observer claims are its row's: the
+        # same signature has other effects when the row declares others
+        effect = ir_error_effects.HomeEffect
+        rows = ir_contract.rows()
+        signature = ir_error_effects.SIGNATURES["check_periodics"]
+        for changes, homes, observer in (
+                ({}, effect.PRESERVES_SCRATCH_ABSENCE, True),
+                ({"homes": "canonical", "observer": "none"},
+                 effect.PRESERVES_CANONICAL_OR_NULL, False),
+                ({"homes": "unknown"}, effect.UNKNOWN, True),
+                ({"effects": frozenset({"reads"})}, effect.NO_ARENA_WRITE, True)):
+            with self.subTest(changes=changes):
+                row = dataclasses.replace(rows["check_periodics"], **changes)
+                with mock.patch.dict(rows, {"check_periodics": row}):
+                    helper = ir_error_effects.helper_effect("check_periodics", signature)
+                self.assertEqual(helper.homes, homes)
+                self.assertEqual(helper.opens_current_observer, observer)
+                self.assertEqual(helper.callback, homes != effect.NO_ARENA_WRITE)
+        self.assertEqual(ir_error_effects.HELPERS["PyValue_XCLOSE"].homes,
+                         effect.PRESERVES_CANONICAL_OR_NULL)
+        self.assertEqual(ir_error_effects.HELPERS["_PyEval_GetAwaitable"].homes,
+                         effect.UNKNOWN)
 
     def test_helper_failure_and_both_explicit_routes_remain_distinct(self):
         instruction, summary = self.analyze("""
@@ -362,32 +388,45 @@ class ErrorEffectTests(unittest.TestCase):
                     self.assertFalse(incomplete[name].abrupt_operands, name)
 
     def test_send_source_changes_revoke_the_whole_family(self):
+        # A changed SEND body is refused where the declaration is checked
+        # (_GUARD_TOS_IS_NONE declares its effects and its inputs), or, for
+        # the two uops that declare nothing yet (_SEND, _SEND_VIRTUAL), by
+        # the boundary that holds their audited text; no family member is
+        # left with error routes
         source = Path(__file__).resolve().parents[2] / "Python" / "bytecodes.c"
         if not source.is_file():
             self.skipTest("requires bytecodes.c")
         text = source.read_text()
         names = ("SEND", "SEND_GEN", "SEND_VIRTUAL", "SEND_ASYNC_GEN")
+        declared = r"_GUARD_TOS_IS_NONE: .*"
+        pinned = r"generator boundary needs the complete SEND source contract"
         changes = (
             ("EXIT_IF(!PyValue_IsNone(val));",
-             "window[0] = PyValue_NULL; EXIT_IF(!PyValue_IsNone(val));"),
-            ("_PyValue_Send(receiver_o, v)", "opaque_send(receiver_o, v)"),
+             "window[0] = PyValue_NULL; EXIT_IF(!PyValue_IsNone(val));",
+             declared + r"`=` may writes \(a store through a pointer\)"),
+            ("_PyValue_Send(receiver_o, v)", "opaque_send(receiver_o, v)", pinned),
             ("IR_ENTER_GENERATOR(gen, _PY_IR_SEND);",
-             "next_instr = this_instr; IR_ENTER_GENERATOR(gen, _PY_IR_SEND);"),
+             "next_instr = this_instr; IR_ENTER_GENERATOR(gen, _PY_IR_SEND);", pinned),
             ("IR_COMPLETE_STEP(_PY_IR_SEND, completed, oparg);",
              "int changed_target = oparg; "
-             "IR_COMPLETE_STEP(_PY_IR_SEND, completed, changed_target);"),
+             "IR_COMPLETE_STEP(_PY_IR_SEND, completed, changed_target);", pinned),
             ("EXIT_IF(!PyValue_IsNone(val));",
-             "PyValue *alias = &val; EXIT_IF(!PyValue_IsNone(val));"),
+             "PyValue *alias = &val; EXIT_IF(!PyValue_IsNone(val));",
+             declared + r"uses `val` in a form the walk does not model"),
         )
         with tempfile.TemporaryDirectory() as directory:
             changed = Path(directory) / "bytecodes.c"
-            for before, after in changes:
+            for before, after, refusal in changes:
                 with self.subTest(change=after):
                     self.assertIn(before, text)
                     changed.write_text(text.replace(before, after, 1))
-                    altered = analyzer.analyze_files([str(changed)])
-                    formats = ir_generator.compute_formats(altered)
-                    contracts = ir_generator.handler_contracts(altered, formats)
+                    try:
+                        altered = analyzer.analyze_files([str(changed)])
+                        formats = ir_generator.compute_formats(altered)
+                        contracts = ir_generator.handler_contracts(altered, formats)
+                    except SyntaxError as error:
+                        self.assertRegex(str(error), refusal)
+                        continue
                     for name in names:
                         self.assertFalse(contracts[name].error_routes, name)
                         self.assertFalse(contracts[name].abrupt_operands, name)

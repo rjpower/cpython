@@ -1,5 +1,6 @@
 """Typed cache bindings and publication for guarded class-value loads."""
 
+import dataclasses
 import io
 from pathlib import Path
 import tempfile
@@ -202,10 +203,14 @@ class TestGuardedAttributeCodegen(unittest.TestCase):
                   "Python" / "bytecodes.c").read_text()
         for reader in ("_PyClassMethod_GetFunc", "_PyValueGuarded_Load"):
             with self.subTest(reader=reader):
-                remaining = tuple(name for name in cases.analyzer.NON_ESCAPING_FUNCTIONS
-                                  if name != reader)
-                with mock.patch.object(cases.analyzer, "NON_ESCAPING_FUNCTIONS", remaining):
-                    with self.assertRaisesRegex(SyntaxError, "view 'owner' is read after a call"):
+                # A reader whose row declares a reentry effect escapes
+                row = cases.ir_contract.rows()[reader]
+                reentrant = dataclasses.replace(row, effects=frozenset({"runs_python"}))
+                with mock.patch.dict(cases.ir_contract.rows(), {reader: reentrant}):
+                    # The verifier refuses the uop's declared effects, or the
+                    # generator the view that the call may leave stale
+                    with self.assertRaisesRegex(
+                            SyntaxError, "may runs_python|view 'owner' is read after a call"):
                         self.generate(source, runtime=True)
 
 

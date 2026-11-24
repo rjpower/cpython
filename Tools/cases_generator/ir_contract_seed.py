@@ -672,7 +672,7 @@ def seed_clauses(uop, facts: dict, table, overrides: dict) -> Clauses:
             continue
         stated = []
         for kind, arg in sorted(found):
-            if kind not in ir_contract.FACT_KIND.values() and kind.lower() in ir_contract.STATE_FACTS \
+            if kind.lower() in ir_contract.STATE_FACTS \
                     and arg in ir_contract.STATE_ARGS[kind.lower()]:
                 stated.append(f"{kind.lower()}({arg})")
             else:

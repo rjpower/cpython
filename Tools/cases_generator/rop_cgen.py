@@ -22,7 +22,7 @@ from rop_check import GraphInfo, Program
 from rop_model import (Advance, Arm, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
                        HandleType, Let, Name, Nat, Param, Placement, Publish,
-                       ScalarType, SchemaType, SpanLit, Target, Type, WrapType)
+                       ScalarType, SchemaType, SpanLit, Tail, Target, Type, WrapType)
 
 
 class Unsupported(Exception):
@@ -43,6 +43,14 @@ HANDLE_C = {
     Handle.O: "PyValue",
     Handle.Obj: "PyObject *",
     Handle.Anchors: "_PyRopAnchors",
+    Handle.Thread: "PyThreadState *",
+    Handle.Frame: "_PyInterpreterFrame *",
+    Handle.NewFrame: "_PyInterpreterFrame *",
+    Handle.DeadFrame: "_PyInterpreterFrame *",
+    Handle.Head: "_PyInstr *",
+    # An argument descriptor is the instruction's head: a row reads its
+    # count, self role and homes from the head and the operand words
+    Handle.Args: "const _PyIRWord *",
 }
 
 # Linear tokens that the generated C does not carry as values
@@ -406,6 +414,9 @@ class Lowering:
     """The statements of one arm, with its decoding and labels"""
     arm: str
     words: int = 0           # operand words after the head, which dispatch skips
+    # The C expression of the payload words that follow them (an argument
+    # descriptor's homes, four to a word), if the family has a payload
+    payload: str | None = None
     decls: list[str] = field(default_factory=list)
     body: list[str] = field(default_factory=list)
 
@@ -462,7 +473,8 @@ class ArmLowerer:
 
     def slot(self, operand: str) -> Slot:
         p = self.placements[operand]
-        if p.kind not in (FieldKind.home, FieldKind.feedback, FieldKind.name):
+        if p.kind not in (FieldKind.home, FieldKind.feedback, FieldKind.name,
+                          FieldKind.vector) or not p.slots:
             raise Unsupported(f"{self.arm.name}: operand {operand} is a {p.kind.name} field")
         (slot,) = p.slots
         if slot.word != 0 and p.kind is not FieldKind.feedback:
@@ -538,6 +550,10 @@ class ArmLowerer:
                 out.append(self.srcs(a))
             elif isinstance(t, HandleType) and t.handle is Handle.Anchors:
                 out.append("&" + self.expr_text(a))
+            elif (t == HandleType(Handle.Src) and isinstance(a, Name)
+                    and a.name in self.placements):
+                # A row that spends a source takes its home
+                out.append(self.home(a.name))
             else:
                 out.append(self.expr(a, t))
         return out
@@ -581,6 +597,8 @@ class ArmLowerer:
             # The entry's header; a row that takes the schema's entry casts
             # it (expr)
             return f"IR_FB({self.field(operand)})"
+        if p.kind is FieldKind.vector and p.slots:
+            return "this_instr"
         raise Unsupported(f"{self.arm.name}: operand {operand} used as a value")
 
     def call_expr(self, e: Call) -> str:
@@ -632,8 +650,19 @@ class ArmLowerer:
         body = []
         for line in self.lines:
             body.append(line)
-        return Lowering(self.arm.name, self.enc.words, self.decls,
+        return Lowering(self.arm.name, self.enc.words, self.payload_words(), self.decls,
                         self.drop_unused_labels(body))
+
+    def payload_words(self) -> str | None:
+        """An argument descriptor's homes follow the operand words, four to
+        a word, as many as its count field says"""
+        args = [p for p in self.enc.placements
+                if p.kind is FieldKind.vector and p.slots]
+        if not args:
+            return None
+        (p,) = args
+        return (f"(({self.field(p.operand)} + IR_OPERANDS_PER_WORD - 1) / "
+                "IR_OPERANDS_PER_WORD)")
 
     def drop_unused_labels(self, lines: list[str]) -> list[str]:
         text = "\n".join(lines)
@@ -778,6 +807,11 @@ class ArmLowerer:
             self.lower_call(t)
         elif isinstance(t, Exit):
             self.lower_exit(t)
+        elif isinstance(t, Tail):
+            x = self.program.externs[t.callee]
+            if x.c is None:
+                raise Unsupported(f"{self.arm.name}: {t.callee} has no C body (pending)")
+            self.emit(f"{x.c.symbol}({', '.join(self.c_args(t.args, x.params))});")
         elif isinstance(t, (Each, Advance)):
             raise Unsupported(f"{self.arm.name}: each/advance is not lowered yet")
 
@@ -876,8 +910,25 @@ class ArmLowerer:
             point = t.args[0]
             assert isinstance(point, Name)
             self.emit(f"PROCESS_ERROR_AT(RAISE, {self.points[point.name]}, this_instr);")
+        elif t.kind == "enter":
+            self.emit(f"ROP_ENTER({self.expr(t.args[0])}, {self.resume_slot(t)});")
+        elif t.kind == "return":
+            caller, head = (self.expr(a) for a in t.args)
+            self.emit(f"ROP_RETURN({caller}, {head});")
+        elif t.kind == "exit":
+            self.emit(f"IR_EXIT({self.expr(t.args[0])});")
         else:
             raise Unsupported(f"{self.arm.name}: exit {t.kind} is not lowered yet")
+
+    def resume_slot(self, t: Exit) -> str:
+        """The home that the child's return value goes to: the resume
+        point's definition"""
+        assert t.resume is not None
+        defs = self.program.points[t.resume].defs
+        if not defs:
+            raise Unsupported(f"{self.arm.name}: a resume point with no definition")
+        (dst,) = defs
+        return self.field(dst)
 
 
 def lower_arm(program: Program, arm: Arm, numbers: Mapping[str, int],

@@ -638,7 +638,11 @@ static int _PyIR_Rop_Stub_Add_Generic(PyThreadState *, _PyInterpreterFrame *, _P
 const _PyIRStubPlan _PyIR_StubPlans[512] = {
     [419] = {_PyIR_PLAN_INLINE, 0, 419, NULL, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Int
     [420] = {_PyIR_PLAN_SHARED, 1, 420, (const void *)_PyIR_Rop_Stub_Add_Generic, (const void *)_PyIR_Rop_Stub_Add_Generic},  // Add_Generic
+    [421] = {_PyIR_PLAN_NONE, 0, 421, NULL, NULL},  // Call_Exact
+    [422] = {_PyIR_PLAN_NONE, 0, 422, NULL, NULL},  // Return_Ordinary
+    [423] = {_PyIR_PLAN_NONE, 0, 423, NULL, NULL},  // Return_Empty
     [424] = {_PyIR_PLAN_NONE, 0, 424, NULL, NULL},  // Return_Generator
+    [425] = {_PyIR_PLAN_NONE, 0, 425, NULL, NULL},  // Return_External
     [426] = {_PyIR_PLAN_INLINE, 0, 426, NULL, NULL},  // GetAttr_Instance
     [428] = {_PyIR_PLAN_INLINE, 0, 428, NULL, NULL},  // GetAttr_Shape
     [429] = {_PyIR_PLAN_INLINE, 0, 429, NULL, NULL},  // GetAttr_PolyShape

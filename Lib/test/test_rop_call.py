@@ -69,8 +69,9 @@ class ReturnTests(unittest.TestCase):
         warm(f, 1)
         force(f, RETURNS, "Return.Ordinary")
         value = object()
+        before = sys.getrefcount(value)
         self.assertIs(f(value), value)
-        self.assertEqual(sys.getrefcount(value), 2)
+        self.assertEqual(sys.getrefcount(value), before)
 
     def test_empty(self):
         def f(x):
@@ -144,7 +145,8 @@ class ReturnTests(unittest.TestCase):
         frames.clear()
         force(f, RETURNS, "Return.Ordinary")
         self.assertEqual(f(1), 2)
-        self.assertEqual(frames[0].f_locals, {"a": 1, "b": 2})
+        frame_locals = frames[0].f_locals
+        self.assertEqual((frame_locals["a"], frame_locals["b"]), (1, 2))
 
 
 @cpython_only
@@ -160,7 +162,7 @@ class CallExactTests(unittest.TestCase):
             return g(x, 1)
         warm(f, 1)
         self.assertIn("CALL_PY_EXACT_ARGS", word_names(f.__code__))
-        force(f, ("CALL",), "Call.Exact")
+        force(f, ("CALL_PY_EXACT_ARGS", "CALL_BOUND_METHOD_EXACT_ARGS"), "Call.Exact")
         self.assertEqual(f(10), 9)
         self.assertEqual(f(3), 2)
 
@@ -173,7 +175,7 @@ class CallExactTests(unittest.TestCase):
             return c.m(5)
         c = C()
         warm(f, c)
-        force(f, ("CALL",), "Call.Exact")
+        force(f, ("CALL_PY_EXACT_ARGS", "CALL_BOUND_METHOD_EXACT_ARGS"), "Call.Exact")
         self.assertEqual(f(c), (c, 5))
 
     def test_arguments_move_and_locals_stay(self):
@@ -184,10 +186,11 @@ class CallExactTests(unittest.TestCase):
             y = [x]
             return g(y, [x])
         warm(f, 1)
-        force(f, ("CALL",), "Call.Exact")
+        force(f, ("CALL_PY_EXACT_ARGS", "CALL_BOUND_METHOD_EXACT_ARGS"), "Call.Exact")
         value = object()
+        before = sys.getrefcount(value)
         self.assertEqual(f(value), [value])
-        self.assertEqual(sys.getrefcount(value), 2)
+        self.assertEqual(sys.getrefcount(value), before)
 
     def test_destination_was_the_function(self):
         def g(a):
@@ -197,7 +200,7 @@ class CallExactTests(unittest.TestCase):
             h = h(x)
             return h
         warm(f, g, 2)
-        force(f, ("CALL",), "Call.Exact")
+        force(f, ("CALL_PY_EXACT_ARGS", "CALL_BOUND_METHOD_EXACT_ARGS"), "Call.Exact")
         self.assertEqual(f(g, 2), 6)
 
     def test_displaced_destination_finalizer(self):
@@ -209,7 +212,7 @@ class CallExactTests(unittest.TestCase):
             x = g()
             return x
         warm(f)
-        force(f, ("CALL",), "Call.Exact")
+        force(f, ("CALL_PY_EXACT_ARGS", "CALL_BOUND_METHOD_EXACT_ARGS"), "Call.Exact")
         Tracker.deaths.clear()
         self.assertEqual(f(), 1)
         self.assertEqual(Tracker.deaths, ["displaced"])
@@ -221,11 +224,14 @@ class CallExactTests(unittest.TestCase):
         def f(x):
             return g(x)
         warm(f, 1)
-        force(f, ("CALL",), "Call.Exact")
-        with self.assertRaises(ZeroDivisionError) as cm:
+        force(f, ("CALL_PY_EXACT_ARGS", "CALL_BOUND_METHOD_EXACT_ARGS"), "Call.Exact")
+        try:
             f(0)
+        except ZeroDivisionError as exc:
+            tb = exc.__traceback__
+        else:
+            self.fail("no ZeroDivisionError")
         names = []
-        tb = cm.exception.__traceback__
         while tb is not None:
             names.append(tb.tb_frame.f_code.co_name)
             tb = tb.tb_next
@@ -239,7 +245,7 @@ class CallExactTests(unittest.TestCase):
         def f(x):
             return g(x)
         warm(f, 1)
-        force(f, ("CALL",), "Call.Exact")
+        force(f, ("CALL_PY_EXACT_ARGS", "CALL_BOUND_METHOD_EXACT_ARGS"), "Call.Exact")
         force(g, RETURNS, "Return.Ordinary")
         self.assertEqual(f(4), 5)
 

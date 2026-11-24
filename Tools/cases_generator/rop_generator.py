@@ -117,7 +117,8 @@ INSTRUCTION_STATS({handler});"""
 
 def handler_text(arm: Arm, low: Lowering, indent: str) -> list[str]:
     lines = [f"// {arm.name} ({arm.region.name})"]
-    lines += PROLOGUE.format(handler=handler(arm.name), advance=1 + low.words).splitlines()
+    advance = str(1 + low.words) if low.payload is None else f"{1 + low.words} + {low.payload}"
+    lines += PROLOGUE.format(handler=handler(arm.name), advance=advance).splitlines()
     lines += low.decls
     lines += low.body
     return [indent + line if line else line for line in lines]

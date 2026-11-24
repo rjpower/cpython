@@ -171,7 +171,9 @@ static inline void
 _PyFrame_WriteHome(_PyInterpreterFrame *frame, PyValue *home, PyValue value)
 {
     assert(frame != NULL && home >= frame->base);
-    assert(home < frame->base + _PyFrame_NumSlots(frame));
+    // The entry frame has no code: its one value slot follows the frame
+    assert(frame->owner == FRAME_OWNED_BY_INTERPRETER ||
+           home < frame->base + _PyFrame_NumSlots(frame));
     *home = value;
 }
 

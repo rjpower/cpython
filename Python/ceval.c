@@ -1094,16 +1094,19 @@ static_assert(offsetof(_PyEntryFrame, stack) ==
               offsetof(_PyInterpreterFrame, owned_slots) + sizeof(PyValue),
               "the entry frame's stack must follow owned_slots[0]");
 
-/* The entry frame's words.  Its slot 1 is a temporary, which
- * INTERPRETER_EXIT takes, so the word carries no slot-class flag; the header
- * precedes the words, as in every executing copy, for IR_IS_LOCAL(). */
+/* The entry frame's words: the Return arm of the entry frame
+ * (Return.External).  Its slot 1 is a temporary, which the arm takes, so the
+ * word carries no slot-class flag; the header precedes the words, as in
+ * every executing copy, for IR_IS_LOCAL(). */
 static const struct {
     _PyCodeExec exec;
     _PyIRWord words[1];
 } entry_trampoline = {
     .exec = { .nwords = 1, .nfixed = 1 },
     .words = {
-        IR_WORD(INTERPRETER_EXIT, 1, 0, 0, 0),  /* reached on return and yield */
+        /* reached on return and yield */
+        IR_WORD(_PyRop_SelectReturn(ROP_SELECT_ENTRY_FRAME, ROP_SELECT_VACANT_SCRATCH),
+                1, 0, 0, 0),
     },
 };
 #define _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS (entry_trampoline.words)
@@ -3336,7 +3339,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     entry->frame.f_executable = NULL;
     entry->frame.f_funcobj = NULL;
     entry->frame.base = entry->frame.owned_slots;
-    /* Returns and yields resume the explicit real INTERPRETER_EXIT target. */
+    /* Returns and yields resume at the trampoline's Return word. */
     entry->frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.ir_words = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
     entry->frame.owner = FRAME_OWNED_BY_INTERPRETER;
@@ -3366,7 +3369,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     result = tstate->interp->ceval.ir_forms
         ? ir_execute_forms(tstate, frame, throwflag)
         : ir_evaluate(tstate, frame, throwflag);
-    /* The handler that returned, INTERPRETER_EXIT or exit_unwind_notrace,
+    /* The handler that returned, Return.External or exit_unwind_notrace,
      * left the entry frame */
     assert(tstate_impl->eval_activation == &activation);
     tstate_impl->eval_activation = activation.previous;

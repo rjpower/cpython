@@ -22,6 +22,7 @@ from typing import Any
 
 from rop_catalog import (CONVENTIONS, ENVIRONMENT, EVIDENCE_KEYS, EVIDENCE_PRIMITIVE,
                          EVIDENCE_REQUIRED, FEEDBACK_ROOTS, INDEX_BITS, LINEAR_HANDLES,
+                         TARGET_BITS,
                          LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
                          SLOT_ORDER, WIDEST_IMMEDIATE, DebtKind, Effect, ExitKind,
                          FieldKind, Handle, RowKind, Scalar, Schema, SchemaCtor, Slot,
@@ -216,7 +217,7 @@ def field_kind(t: Type) -> FieldKind | None:
             return FieldKind.name
         if h == Handle.Const:
             return FieldKind.const
-        if h == Handle.Head and inner is t:
+        if h in TARGET_BITS and inner is t:
             return FieldKind.target
         if h == Handle.Args and inner is t:
             return FieldKind.vector
@@ -229,6 +230,17 @@ def field_kind(t: Type) -> FieldKind | None:
     if isinstance(inner, (ScalarType, EnumType)) and imm_bits(inner, {}) is not None:
         return FieldKind.imm
     return None
+
+
+def operand_bits(t: Type, kind: FieldKind, enums: Mapping[str, EnumDecl]) -> int:
+    if kind == FieldKind.imm:
+        bits = imm_bits(t, enums)
+        assert bits is not None
+        return bits
+    if kind == FieldKind.target:
+        assert isinstance(t, HandleType)
+        return TARGET_BITS[t.handle]
+    return INDEX_BITS
 
 
 def pack(family: str, params: Iterable[Param], enums: Mapping[str, EnumDecl]
@@ -251,8 +263,7 @@ def pack(family: str, params: Iterable[Param], enums: Mapping[str, EnumDecl]
         if kind == FieldKind.vector:
             placements.append(Placement(p.name, kind, 0, ()))
             continue
-        bits = imm_bits(p.type, enums) if kind == FieldKind.imm else INDEX_BITS
-        assert bits is not None
+        bits = operand_bits(p.type, kind, enums)
         if bits > WIDEST_IMMEDIATE:
             problems.append((p, f"operand {p.name}:{type_text(p.type)} needs {bits} "
                              f"bits; an immediate has at most {WIDEST_IMMEDIATE}"))
@@ -493,6 +504,11 @@ def check_contract(c: Checker, contract: Contract, definition: str,
 
 
 def check_fact(c: Checker, f: FactUse, definition: str, names: set[str]) -> None:
+    if f.fact.typed and f.type_arg is None:
+        c.report(f.span, definition, f"fact {f.fact.value} names a builtin type: "
+                 f"{f.fact.value}<T>(...)")
+    elif not f.fact.typed and f.type_arg is not None:
+        c.report(f.span, definition, f"fact {f.fact.value} takes no type argument")
     if len(f.subjects) != f.fact.arity:
         c.report(f.span, definition, f"fact {f.fact.value} takes {f.fact.arity} "
                  f"subject{'s' if f.fact.arity > 1 else ''}, not {len(f.subjects)}")
@@ -647,7 +663,7 @@ def check_graph(c: Checker, definition: str, graph: Graph, operands: tuple[Param
     types: dict[str, Type] = dict(ENVIRONMENT_TYPES)
     defs: dict[str, tuple[str, int]] = {n: ("", OPERAND) for n in ENVIRONMENT}
     for p in operands:
-        types[p.name] = p.type
+        types[p.name] = operand_value_type(p.type)
         defs[p.name] = ("", OPERAND)
     scope = Scope(definition, family, macro, exits, types, defs, blocks)
     order, preds = graph_shape(c, scope, graph)
@@ -667,6 +683,14 @@ def check_graph(c: Checker, definition: str, graph: Graph, operands: tuple[Param
 
 
 ENVIRONMENT_TYPES = {n: HandleType(h) for n, h in ENVIRONMENT.items()}
+
+
+def operand_value_type(t: Type) -> Type:
+    """The type a graph reads an operand as: a target operand, near or
+    far, names a Head; every other operand reads as declared."""
+    if isinstance(t, HandleType) and t.handle in TARGET_BITS:
+        return T(Handle.Head)
+    return t
 
 
 def graph_shape(c: Checker, scope: Scope, graph: Graph

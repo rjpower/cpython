@@ -59,7 +59,8 @@ def _schemas(schemas: tuple[str, ...]) -> str:
 
 
 def _fact(f: FactUse) -> str:
-    return f"{f.fact.value}({', '.join(f.subjects)})"
+    type_arg = f"<{f.type_arg.name}>" if f.type_arg else ""
+    return f"{f.fact.value}{type_arg}({', '.join(f.subjects)})"
 
 
 def _result(r: Result) -> str:

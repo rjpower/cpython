@@ -56,7 +56,7 @@ extern helper box_i64(v:I64)
   cases(ok(z:O), err(e:Err))
   effects(allocates, raises)
   requires(outside_i51(v))
-  ensures(ok.exact_int(z))
+  ensures(ok.exact<int>(z))
   c _PyValue_BoxInt64 as value_or_null
   evidence(
     review: "Reviewed G0c2. Python/pyvalue.c: PyLong_FromLongLong then"
@@ -116,7 +116,7 @@ arm Add.Int inline
   effects(writes, allocates, raises, releases)
   feedback()
   exits(next, miss, raise)
-  ensures(next.exact_int(dst))
+  ensures(next.exact<int>(dst))
 {
   entry():
     let l:B = use(x);

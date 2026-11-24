@@ -47,14 +47,15 @@ family Move(dsts:Span<Dst>, srcs:Span<Src>, retire:Enum<MoveRetire>)
 family Truth(dst:Dst, value:Src, invert:Bool, fb:Fb<Truth>)
   exits(next, raise, miss, again);
 
-family Jump(target:Head, poll:Enum<PollMode>)
+// Covers backward jumps, so its target is far
+family Jump(target:FarHead, poll:Enum<PollMode>)
   exits(jump, raise, redirect, exit);
 
-family BranchTruth(value:Src, target:Head, sense:Bool, keep:Enum<KeepMode>,
+family BranchTruth(value:Src, target:NearHead, sense:Bool, keep:Enum<KeepMode>,
                    fb:Fb<Truth>)
   exits(next, branch, raise, miss, again);
 
-family BranchNone(value:Src, target:Head, sense:Bool)
+family BranchNone(value:Src, target:NearHead, sense:Bool)
   exits(next, branch);
 
 // 1A: numeric and in-place operations, unary protocols
@@ -77,7 +78,7 @@ family Identity(dst:Dst, x:Src, y:Src, sense:Bool)
 family Contains(dst:Dst, item:Src, container:Src, sense:Bool, fb:Fb<Contains>)
   exits(next, raise, miss, again);
 
-family TestBranch(x:Src, y:Src, test:Enum<BranchTest>, target:Head, sense:Bool,
+family TestBranch(x:Src, y:Src, test:Enum<BranchTest>, target:NearHead, sense:Bool,
                   fb:Fb<Compare>)
   exits(next, branch, raise, miss, again);
 

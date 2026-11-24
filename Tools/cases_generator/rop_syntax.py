@@ -15,7 +15,8 @@ from typing import TypeVar
 
 import lexer
 from lexer import Token
-from rop_catalog import (AccessMode, DebtKind, Effect, ExcRole, Fact, FrameRole,
+from rop_catalog import (AccessMode, BuiltinType, DebtKind, Effect, ExcRole, Fact,
+                         FrameRole,
                          Handle, PcRole, Region, RowKind, Scalar, Schema,
                          SchemaCtor, Wrap)
 from rop_model import (Access, Advance, Arm, Binding, Block, BoolLit, Branch, Call,
@@ -426,9 +427,18 @@ class Parser:
 
     def fact(self) -> FactUse:
         fact, tok = self.enum_word(Fact, "a fact")
+        type_arg: BuiltinType | None = None
+        if self.accept("<"):
+            name = self.ident("a builtin type")
+            if name.text not in BuiltinType.__members__:
+                known = ", ".join(BuiltinType.__members__)
+                raise self.error(f"'{name.text}' is not a builtin type (one of: "
+                                 f"{known})", name)
+            type_arg = BuiltinType[name.text]
+            self.expect(">")
         self.expect("(")
         subjects = self.comma_list(")", lambda: self.qname().text)
-        return FactUse(fact, subjects, tok.span)
+        return FactUse(fact, subjects, type_arg, tok.span)
 
     def edge_fact(self) -> EdgeFact:
         edge = self.ident("an exit or case")

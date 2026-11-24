@@ -42,7 +42,10 @@ class Handle(enum.Enum):
 
     `B` is a borrowed PyValue, `O` an owning one.  `Src`, `Dst`, `Local`,
     `Cell`, `Free` name homes; `Name`, `Const` index the code's tables;
-    `Head` is an instruction head of this image; `Point` a checkpoint."""
+    `Head` is an instruction head of this image; `NearHead` and `FarHead`
+    are target operands, signed and relative to the next head, of 12 and
+    24 bits, which a graph reads as the `Head` they name; `Point` is a
+    checkpoint."""
     B = "B"
     O = "O"
     Src = "Src"
@@ -53,6 +56,8 @@ class Handle(enum.Enum):
     Name = "Name"
     Const = "Const"
     Head = "Head"
+    NearHead = "NearHead"
+    FarHead = "FarHead"
     Point = "Point"
     Site = "Site"
     Thread = "Thread"
@@ -224,24 +229,20 @@ ENVIRONMENT = {
 # Types of which an owner, error or resource must be accounted for: `_`
 # cannot discard them (rule 2), and F1 tracks them as linear tokens.
 LINEAR_HANDLES = frozenset({Handle.O, Handle.Err, Handle.Claim, Handle.Pin,
-                            Handle.Anchors, Handle.NewFrame, Handle.DeadFrame})
+                            Handle.Anchors, Handle.NewFrame, Handle.DeadFrame,
+                            Handle.Route})
 LINEAR_SCHEMA_CTORS = frozenset({SchemaCtor.Ticket})
 
 
 class Fact(enum.Enum):
-    """Fact names.  F1 owns their meaning; F0 resolves the name and its
-    number of subjects (FACT_ARITY)."""
+    """Fact names.  F1 owns their meaning; F0 resolves the name, its number
+    of subjects (FACT_ARITY) and its type argument (FACT_TYPED)."""
     nonnull = "nonnull"
     present = "present"
     object = "object"
     inline_int = "inline_int"
     inline_float = "inline_float"
-    exact_int = "exact_int"
-    exact_float = "exact_float"
-    exact_str = "exact_str"
-    exact_list = "exact_list"
-    exact_tuple = "exact_tuple"
-    exact_dict = "exact_dict"
+    exact = "exact"
     outside_i51 = "outside_i51"
     incrementable = "incrementable"
     in_bounds = "in_bounds"
@@ -253,10 +254,55 @@ class Fact(enum.Enum):
     def arity(self) -> int:
         return FACT_ARITY.get(self, 1)
 
+    @property
+    def typed(self) -> bool:
+        return self in FACT_TYPED
+
 
 # in_bounds(i, o): index i is within o's length; type_version(o, r): o's
 # type has the version recipe r names
 FACT_ARITY = {Fact.in_bounds: 2, Fact.type_version: 2}
+# exact<T>(v): v's type is exactly the builtin type T
+FACT_TYPED = frozenset({Fact.exact})
+
+
+class BuiltinType(enum.Enum):
+    """The builtin types a fact may name, and their C type objects (the
+    names ir_contract.py's `exact(...)` uses), so the migration check
+    compares them directly."""
+    int = "PyLong_Type"
+    float = "PyFloat_Type"
+    complex = "PyComplex_Type"
+    bool = "PyBool_Type"
+    NoneType = "_PyNone_Type"
+    str = "PyUnicode_Type"
+    bytes = "PyBytes_Type"
+    bytearray = "PyByteArray_Type"
+    list = "PyList_Type"
+    tuple = "PyTuple_Type"
+    dict = "PyDict_Type"
+    set = "PySet_Type"
+    frozenset = "PyFrozenSet_Type"
+    range = "PyRange_Type"
+    range_iterator = "PyRangeIter_Type"
+    list_iterator = "PyListIter_Type"
+    tuple_iterator = "PyTupleIter_Type"
+    slice = "PySlice_Type"
+    function = "PyFunction_Type"
+    method = "PyMethod_Type"
+    builtin_function = "PyCFunction_Type"
+    method_descriptor = "PyMethodDescr_Type"
+    classmethod = "PyClassMethod_Type"
+    property = "PyProperty_Type"
+    cell = "PyCell_Type"
+    code = "PyCode_Type"
+    generator = "PyGen_Type"
+    coroutine = "PyCoro_Type"
+    async_generator = "PyAsyncGen_Type"
+    type = "PyType_Type"
+    module = "PyModule_Type"
+    super = "PySuper_Type"
+    object = "PyBaseObject_Type"
 
 
 # Encoding.  A family's encoding is derived from its operand types (V8
@@ -298,10 +344,10 @@ SLOT_ORDER = tuple(Slot)
 
 
 class FieldKind(enum.Enum):
-    """What an operand field holds.  A home, index, feedback or target
-    field needs 12 bits; an operand whose value does not fit at run time
-    goes through the Wide descriptor.  An immediate needs its type's
-    width; a vector takes no fixed field."""
+    """What an operand field holds.  A home, index or feedback field needs
+    12 bits, a target its declared width (TARGET_BITS); an operand whose
+    value does not fit at run time goes through the Wide descriptor.  An
+    immediate needs its type's width; a vector takes no fixed field."""
     home = "home"
     imm = "imm"
     name = "name"
@@ -312,6 +358,7 @@ class FieldKind(enum.Enum):
 
 
 INDEX_BITS = 12
+TARGET_BITS = {Handle.NearHead: 12, Handle.FarHead: 24}
 # Widest immediate the rule packs: two adjacent fields of one word
 WIDEST_IMMEDIATE = 32
 

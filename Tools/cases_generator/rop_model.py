@@ -11,7 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import PurePath
 from typing import Union
 
-from rop_catalog import (AccessMode, DebtKind, Effect, ExcRole, Fact, FieldKind,
+from rop_catalog import (AccessMode, BuiltinType, DebtKind, Effect, ExcRole, Fact,
+                         FieldKind,
                          FrameRole, Handle, PcRole, Region, RowKind, Scalar, Schema,
                          SchemaCtor, Slot, Wrap)
 
@@ -198,14 +199,16 @@ class Access:
 
 @dataclass(frozen=True, slots=True)
 class FactUse:
+    """`fact(subjects)`, or `fact<T>(subjects)` for a typed fact."""
     fact: Fact
     subjects: tuple[str, ...]
+    type_arg: BuiltinType | None = None
     span: SrcSpan = _span()
 
 
 @dataclass(frozen=True, slots=True)
 class EdgeFact:
-    """A fact established on one exit or case: `next.exact_int(dst)`."""
+    """A fact established on one exit or case: `next.exact<int>(dst)`."""
     edge: str
     fact: FactUse
     span: SrcSpan = _span()

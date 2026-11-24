@@ -142,6 +142,13 @@ class ParseTests(unittest.TestCase):
          "saved_origin)"),
         ("extern helper h() -> Unit effects() c h as value evidence();", 1, 59,
          "expected at least one item"),
+        ("arm F.A inline effects() feedback() exits() requires(exact<long>(x)) "
+         "{ entry(): exit next(); }", 1, 60,
+         "'long' is not a builtin type (one of: int, float, complex, bool, NoneType, "
+         "str, bytes, bytearray, list, tuple, dict, set, frozenset, range, "
+         "range_iterator, list_iterator, tuple_iterator, slice, function, method, "
+         "builtin_function, method_descriptor, classmethod, property, cell, code, "
+         "generator, coroutine, async_generator, type, module, super, object)"),
         ("frobnicate", 1, 1, "expected a declaration (enum, family, point, arm, macro, "
          "extern), found 'frobnicate'"),
     ]
@@ -490,6 +497,44 @@ class CheckTests(unittest.TestCase):
         self.assertIn("add.rop:30:5: F.A: call box at add.rop:30 has no edge for err",
                       [str(d) for d in program.diagnostics])
 
+    # Targets, typed facts
+    MORE_CASES = [
+        ("family F(a:Src, b:Src, c:Src, u:FarHead) exits(next);",
+         [(1, 31, "operand u:FarHead needs 24 bits; field D and the next field of its "
+           "word cannot hold it")]),
+        ("family F(t:NearHead, u:FarHead) exits(branch, jump);\n"
+         "arm F.A inline effects() feedback() exits(branch, jump)\n"
+         "{ entry(): branch true -> N(), J(); N(): exit branch(t); J(): exit jump(u); }",
+         []),
+        ("family F(t:NearHead) exits(branch);\n"
+         "arm F.A inline effects() feedback() exits(branch)\n"
+         "{ entry(): let h:NearHead = t; exit branch(h); }",
+         [(3, 29, "t is Head, expected NearHead"),
+          (3, 44, "h is NearHead, expected Head")]),
+        ("extern helper h(v:B) -> O effects() ensures(result.exact(result)) pending;",
+         [(1, 52, "fact exact names a builtin type: exact<T>(...)")]),
+        ("extern helper h(v:B) -> O effects() ensures(result.object<int>(result)) "
+         "pending;",
+         [(1, 52, "fact object takes no type argument")]),
+        ("extern helper h(v:B) -> O effects() ensures(result.exact<frozenset>(result)) "
+         "pending;", []),
+    ]
+
+    def test_targets_and_typed_facts(self):
+        for src, expected in self.MORE_CASES:
+            with self.subTest(src):
+                program = rop_check.check([rop_syntax.parse(src, "t.rop")])
+                self.assertEqual([(d.span.line, d.span.column, d.message)
+                                  for d in program.diagnostics], expected)
+
+    def test_linear_types(self):
+        handles = rop_check.HandleType
+        self.assertTrue(rop_check.is_linear(handles(rop_check.Handle.Route)))
+        self.assertTrue(rop_check.is_linear(rop_check.SchemaType(
+            rop_check.SchemaCtor.Ticket, rop_check.Schema.Binary)))
+        self.assertFalse(rop_check.is_linear(rop_check.SchemaType(
+            rop_check.SchemaCtor.Candidate, rop_check.Schema.Binary)))
+
     def test_graph_info(self):
         program = rop_check.check([rop_syntax.parse(CHECK_BASE, "base.rop")])
         info = program.graphs["F.G"]
@@ -508,8 +553,13 @@ class CheckTests(unittest.TestCase):
         ("family F(d:Dst, s:Span<Src>, a:Src, b:Src, c:Src, n:Name, i:U16) exits(next);", 1,
          [("d", "A"), ("s", ""), ("a", "B"), ("b", "C"), ("c", "D"), ("n", "P0"),
           ("i", "P1")]),
-        ("family F(t:Head, m:Maybe<U8>, a:Src, b:Src, w:U32) exits(next);", 1,
+        ("family F(t:NearHead, m:Maybe<U8>, a:Src, b:Src, w:U32) exits(next);", 1,
          [("t", "A"), ("m", "B"), ("a", "C"), ("b", "D"), ("w", "P0+P1")]),
+        # A near target takes one field, a far one two of the same word
+        ("family F(t:NearHead, u:FarHead, s:Src) exits(next);", 0,
+         [("t", "A"), ("u", "B+C"), ("s", "D")]),
+        ("family F(a:Src, b:Src, c:Src, d:Src, u:FarHead) exits(next);", 1,
+         [("a", "A"), ("b", "B"), ("c", "C"), ("d", "D"), ("u", "P0+P1")]),
     ]
 
     def test_derived_encoding(self):

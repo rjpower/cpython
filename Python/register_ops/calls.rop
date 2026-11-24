@@ -38,8 +38,9 @@ family MaterializeKwargs(local:Local)
 family IterOpen(pair:IterPair, source:Src, mode:Enum<IterMode>, fb:Fb<Iter>)
   exits(next, raise, miss, again);
 
+// `body` is the loop's backward target (far), `done` its exit (near);
 // `second` receives the value of a dict-items pair delivery
-family ForIter(item:Dst, pair:IterPair, body:Head, done:Head, fb:Fb<Iter>,
+family ForIter(item:Dst, pair:IterPair, body:FarHead, done:NearHead, fb:Fb<Iter>,
                second:Maybe<Dst>)
   exits(next, branch, jump, enter, raise, redirect, miss, again);
 
@@ -52,11 +53,11 @@ family Awaitable(dst:Dst, source:Src, origin:Enum<AwaitOrigin>)
   exits(next, raise);
 
 // A folded consumer can also return or yield
-family Send(yielded:Dst, completed:Dst, pair:IterPair, sent:Src, done:Head,
+family Send(yielded:Dst, completed:Dst, pair:IterPair, sent:Src, done:NearHead,
             fb:Fb<Send>)
   exits(next, branch, enter, return, yield, raise, redirect, miss, again);
 
-family Yield(value:Src, resume:Dst, route:Head, mode:Enum<YieldMode>)
+family Yield(value:Src, resume:Dst, route:NearHead, mode:Enum<YieldMode>)
   exits(yield, raise, redirect);
 
 // 2D: exceptions
@@ -76,11 +77,11 @@ family ExceptMatch(dst:Dst, rest:Maybe<Dst>, exc:Src, pattern:Src,
 
 // 2E: throw completion, async-for termination, exceptional context exit
 
-family CleanupThrow(exc:Src, pair:IterPair, completed:Dst, done:Head, route:Head)
+family CleanupThrow(exc:Src, pair:IterPair, completed:Dst, done:NearHead, route:NearHead)
   exits(branch, return, raise, redirect);
 
 // `send` is the original Send head, the origin its branch observer reports
-family EndAsyncFor(exc:Src, target:Head, send:Head)
+family EndAsyncFor(exc:Src, target:NearHead, send:NearHead)
   exits(next, jump, raise, redirect);
 
 family WithExit(dst:Dst, exit_fn:Src, self:Maybe<Src>, exc:Src, context:Src)

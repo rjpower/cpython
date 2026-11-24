@@ -101,7 +101,7 @@ family Length(dst:Dst, value:Src)
   exits(next, raise);
 
 family Pattern(dst:Maybe<Dst>, subject:Src, kind:Enum<PatternKind>, cls:Maybe<Src>,
-               names:Maybe<Src>, count:Maybe<U8>, mismatch:Head)
+               names:Maybe<Src>, count:Maybe<U8>, mismatch:NearHead)
   exits(next, branch, raise);
 
 // 1I: functions and intrinsics

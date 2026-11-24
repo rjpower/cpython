@@ -313,7 +313,7 @@ class SliceTests(unittest.TestCase):
         'FOR_ITER_LIST.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
         'FOR_ITER_LIST.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
         'FOR_ITER_LIST.record.outputs[1][1]: inferred -1, declared 1',
-        'FOR_ITER_LIST.record.outputs[1][2].name: inferred "next_index", declared "index"',
+        'FOR_ITER_LIST.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
         'FOR_ITER_LIST.record.outputs[1][2].peek: inferred false, declared true',
         'FOR_ITER_LIST.record.store_mode: inferred null, declared "store"',
         # G0d2: _ITER_JUMP_LIST's cursor is a tagged index (GET_ITER, for an
@@ -334,7 +334,7 @@ class SliceTests(unittest.TestCase):
         'FOR_ITER_TUPLE.record.layout.move_dst_args: inferred "", declared "ir_word, A"',
         'FOR_ITER_TUPLE.record.operands[0].may_name: inferred 1 entries ["TEMP"], declared 2 ["LOCAL", "TEMP"]',
         'FOR_ITER_TUPLE.record.outputs[1][1]: inferred -1, declared 1',
-        'FOR_ITER_TUPLE.record.outputs[1][2].name: inferred "next_index", declared "index"',
+        'FOR_ITER_TUPLE.record.outputs[1][2].name: inferred "next_index", declared "null_or_index"',
         'FOR_ITER_TUPLE.record.outputs[1][2].peek: inferred false, declared true',
         'FOR_ITER_TUPLE.record.store_mode: inferred null, declared "store"',
         'FOR_ITER_TUPLE.record.uops[1].inputs[1].changed: inferred false, declared true',
@@ -372,6 +372,11 @@ class SliceTests(unittest.TestCase):
     # in the leaf IR of the three iterator guards
     LISTED_LEAF_DIFFERENCES = [
         ("FOR_ITER_LIST.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
+        # G0d2: the jumps assume the cursor of an exact list or tuple is a
+        # tagged index (`index: assumed(tagged_index) by GET_ITER`): the
+        # declared leaf has one more op, the assume
+        ("FOR_ITER_LIST.record.uops[1].leaf.blocks[0].ops:", "inferred 8 entries"),
+        ("FOR_ITER_TUPLE.record.uops[1].leaf.blocks[0].ops:", "inferred 8 entries"),
         ("FOR_ITER_TUPLE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
         ("FOR_ITER_RANGE.record.uops[0].leaf.blocks[0].ops:", '"kind": "assume"'),
         # G0d1: a yield is declared (`exits(yield)`); with the declarations

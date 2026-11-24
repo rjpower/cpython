@@ -951,6 +951,10 @@ jit_template_FOR_ITER_LIST(_PyJitWordCx *cx)
         _PyJitAsm_Pop(a, _PyJitReg_RCX);
     }
 #endif
+    _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX}, NULL);
+    int c7 = _PyJitLower_PyList_CheckExact(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c7), cx->slow);
+    _PyJitAsm_Bind(a, L3);
 #ifndef NDEBUG
     {
         _PyJitLabel ok = _PyJitAsm_NewLabel(a);
@@ -965,10 +969,6 @@ jit_template_FOR_ITER_LIST(_PyJitWordCx *cx)
         _PyJitAsm_Pop(a, _PyJitReg_RAX);
     }
 #endif
-    _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX}, NULL);
-    int c7 = _PyJitLower_PyList_CheckExact(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
-    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c7), cx->slow);
-    _PyJitAsm_Bind(a, L3);
     _PyJitLower_PyValue_UntagIndex(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RCX}, NULL);
     _PyJitAsm_MovRR(a, _PyJitReg_RSI, _PyJitReg_RDX);
     _PyJitLower_PyList_GET_SIZE(cx, (const uint8_t[]){_PyJitReg_RDI, _PyJitReg_RAX}, NULL);
@@ -1087,6 +1087,10 @@ jit_template_FOR_ITER_TUPLE(_PyJitWordCx *cx)
         _PyJitAsm_Pop(a, _PyJitReg_RCX);
     }
 #endif
+    _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX}, NULL);
+    int c7 = _PyJitLower_PyTuple_CheckExact(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c7), cx->slow);
+    _PyJitAsm_Bind(a, L3);
 #ifndef NDEBUG
     {
         _PyJitLabel ok = _PyJitAsm_NewLabel(a);
@@ -1101,10 +1105,6 @@ jit_template_FOR_ITER_TUPLE(_PyJitWordCx *cx)
         _PyJitAsm_Pop(a, _PyJitReg_RAX);
     }
 #endif
-    _PyJitLower_PyValue_AsKnownObjectBorrow(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX}, NULL);
-    int c7 = _PyJitLower_PyTuple_CheckExact(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RDX}, NULL);
-    _PyJitAsm_Jcc(a, _PyJitCond_Not((_PyJitCond)c7), cx->slow);
-    _PyJitAsm_Bind(a, L3);
     _PyJitLower_PyValue_UntagIndex(cx, (const uint8_t[]){_PyJitReg_RDX, _PyJitReg_RCX}, NULL);
     _PyJitLower_PyTuple_GET_SIZE(cx, (const uint8_t[]){_PyJitReg_RSI, _PyJitReg_RAX}, NULL);
     _PyJitAsm_AluRR(a, _PyJitAlu_CMP, _PyJitReg_RDX, _PyJitReg_RSI);

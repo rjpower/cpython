@@ -8115,10 +8115,8 @@ ir_run_FOR_ITER_LIST(
             PyValue next;
             // _ITER_CHECK_LIST
             {
-                index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                assert(PyValue_IsTaggedIndex(index));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyList_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
@@ -8135,6 +8133,8 @@ ir_run_FOR_ITER_LIST(
             }
             // _ITER_JUMP_LIST
             {
+                index = window[1];
+                assert(PyValue_IsTaggedIndex(index));
                 #ifdef Py_GIL_DISABLED
 
                 #else
@@ -8269,10 +8269,8 @@ ir_run_FOR_ITER_TUPLE(
             PyValue next;
             // _ITER_CHECK_TUPLE
             {
-                index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                assert(PyValue_IsTaggedIndex(index));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyTuple_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
@@ -8282,6 +8280,8 @@ ir_run_FOR_ITER_TUPLE(
             }
             // _ITER_JUMP_TUPLE
             {
+                index = window[1];
+                assert(PyValue_IsTaggedIndex(index));
                 PyObject *tuple_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 (void)tuple_o;
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
@@ -23204,10 +23204,8 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue next;
             // _ITER_CHECK_LIST
             {
-                index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                assert(PyValue_IsTaggedIndex(index));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyList_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
@@ -23224,6 +23222,8 @@ static const _PyIRForm ir_handler_forms[512] = {
             }
             // _ITER_JUMP_LIST
             {
+                index = window[1];
+                assert(PyValue_IsTaggedIndex(index));
                 #ifdef Py_GIL_DISABLED
 
                 #else
@@ -23350,10 +23350,8 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue next;
             // _ITER_CHECK_TUPLE
             {
-                index = window[1];
                 iter = window[0];
                 assert(PyValue_IsObject(iter));
-                assert(PyValue_IsTaggedIndex(index));
                 PyObject *iter_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 if (!PyTuple_CheckExact(iter_o)) {
                     UPDATE_MISS_STATS(FOR_ITER);
@@ -23363,6 +23361,8 @@ static const _PyIRForm ir_handler_forms[512] = {
             }
             // _ITER_JUMP_TUPLE
             {
+                index = window[1];
+                assert(PyValue_IsTaggedIndex(index));
                 PyObject *tuple_o = _PyValue_AsKnownObjectBorrowPointer(iter);
                 (void)tuple_o;
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);

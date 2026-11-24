@@ -1145,8 +1145,7 @@ leaf_probe__ITER_CHECK_LIST(_PyInterpreterFrame *frame, PyValue *stack_pointer, 
 {
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, index;
-    index = stack_pointer[-1];
+    PyValue iter, null_or_index;
     iter = stack_pointer[-2];
     PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
     if (!PyList_CheckExact(iter_o)) {
@@ -1188,8 +1187,7 @@ leaf_probe__ITER_CHECK_TUPLE(_PyInterpreterFrame *frame, PyValue *stack_pointer,
 {
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, index;
-    index = stack_pointer[-1];
+    PyValue iter, null_or_index;
     iter = stack_pointer[-2];
     PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
     if (!PyTuple_CheckExact(iter_o)) {

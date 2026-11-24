@@ -4711,13 +4711,9 @@ dummy_func(
             IR_OBSERVE_COMMITTED_BRANCH(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT, _PyIR_EDGE_FALLTHROUGH);
         }
 
-        // GET_ITER leaves a tagged index beside an exact list or tuple (its
-        // `_PyEval_GetIter` stores `PyValue_TagIndex(0)` for them), so the
-        // cursor of these loops is one
         leaf op(_ITER_CHECK_LIST,
-                (iter: assumed(object) by GET_ITER,
-                 index: assumed(tagged_index) by GET_ITER
-                 -- iter: exact(PyList_Type), index: tagged_index))
+                (iter: assumed(object) by GET_ITER, null_or_index
+                 -- iter: exact(PyList_Type), null_or_index))
             effects(reads) exits(next, miss)
         {
             // GET_ITER always leaves an object, never an inline value.
@@ -4729,8 +4725,13 @@ dummy_func(
 #endif
         }
 
+        // GET_ITER stores a tagged index beside an exact list (its
+        // `_PyEval_GetIter` gives `PyValue_TagIndex(0)` for it), and the
+        // guard before this uop has shown that the iterator is one: only
+        // then is the cursor assumed, so the assertion follows the guard
         leaf replaced op(_ITER_JUMP_LIST,
-                (iter: object, index: consumed tagged_index -- iter, next_index: inline tagged_index))
+                (iter: object, index: consumed assumed(tagged_index) by GET_ITER
+                 -- iter, next_index: inline tagged_index))
             effects(reads, runs_python(branch|raise)) exits(next, branch, raise)
         {
 #ifdef Py_GIL_DISABLED
@@ -4770,17 +4771,21 @@ dummy_func(
             _ITER_NEXT_LIST;
 
         leaf op(_ITER_CHECK_TUPLE,
-                (iter: assumed(object) by GET_ITER,
-                 index: assumed(tagged_index) by GET_ITER
-                 -- iter: exact(PyTuple_Type), index: tagged_index))
+                (iter: assumed(object) by GET_ITER, null_or_index
+                 -- iter: exact(PyTuple_Type), null_or_index))
             effects(reads) exits(next, miss)
         {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(!PyTuple_CheckExact(iter_o));
         }
 
+        // GET_ITER stores a tagged index beside an exact tuple (its
+        // `_PyEval_GetIter` gives `PyValue_TagIndex(0)` for it), and the
+        // guard before this uop has shown that the iterator is one: only
+        // then is the cursor assumed, so the assertion follows the guard
         leaf replaced op(_ITER_JUMP_TUPLE,
-                (iter: object, index: consumed tagged_index -- iter, next_index: inline tagged_index))
+                (iter: object, index: consumed assumed(tagged_index) by GET_ITER
+                 -- iter, next_index: inline tagged_index))
             effects(reads, runs_python(branch|raise)) exits(next, branch, raise)
         {
             PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);

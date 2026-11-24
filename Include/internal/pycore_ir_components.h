@@ -287,6 +287,15 @@
               ARGS(borrowed), SCALAR, EFFECTS()) \
     PRIMITIVE(PyValue_IncrementTaggedIndexNoOverflow, PyValue, (PyValue), \
               ARGS(consumed), VALUE(inline tagged_index), EFFECTS()) \
+    /* Evidence (G0d4), pycore_value.h, a static inline function: a no-op \
+     * (a cast to void, with an assert of the representation).  GET_ITER \
+     * leaves a for loop's cursor as NULL (the object protocol) or a tagged \
+     * index (the index protocol), both of which owe no count, and nothing \
+     * but the loop's steps changes it; a step that consumes the cursor \
+     * without a use of it drops it here (no memory, no call, no failure, \
+     * no callback). */ \
+    HELPER(_PyValue_DropCursor, void, (PyValue), \
+              ARGS(consumed), NONE, EFFECTS()) \
     /* PyValue_FromInt64 (pycore_value.h): _PyValue_FromIntScaled when the \
      * int fits inline, else _PyValue_BoxInt64, which gives NULL only when \
      * its allocation fails */ \
@@ -2088,7 +2097,8 @@
      * Py_TYPE(iter)->_tp_iteritem (the SLOT _Py_iteritemfunc: reads, \
      * allocates and raises, no Python) is called with the untagged index; \
      * an item advances *index_ptr (the only store: through the pointer, \
-     * to the caller's window cell, a tagged index) and gives {1, item}; at \
+     * to the caller's window cell, a tagged index; the value form returns \
+     * it in the result) and gives {1, item}; at \
      * the end {0, NULL} with no exception; on failure {-1, NULL} with an \
      * exception set and the cursor unchanged.  Any other cursor: the \
      * iternext value slot (the SLOT _Py_iternextvaluefunc: arbitrary \
@@ -2104,9 +2114,16 @@
      * which consumes it).  Borrowed `iter` is never released; the index \
      * pointer is not an ownership argument (the cursor is an inline \
      * word).  Callbacks: yes (runs_python covers the rest) */ \
-    HELPER(_PyForIter_VirtualIteratorNextInline, _PyStatusValue, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *), \
-        ARGS(tstate, frame, borrowed, scalar), \
-        CASES(status==-1 value(null) raised, status==0 value(owned nullable), status==1 value(owned)), EFFECTS(runs_python)) \
+    /* G0d4: the cursor goes in by value (consumed: it owes no count) and \
+     * comes out in the result's `cursor`, a tagged index or NULL as it \
+     * went in, advanced to the item's index on {1, item}; the other \
+     * outcomes return it as it was.  The out-of-line form keeps the \
+     * pointer for the steps that are not FOR_ITER's own. */ \
+    HELPER(_PyForIter_VirtualIteratorNextInline, _PyForIterStep, (PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue), \
+        ARGS(tstate, frame, borrowed, consumed), \
+        CASES(status==-1 value(null) cursor(inline encoding(tagged_index|null)) raised, \
+              status==0 value(owned nullable) cursor(inline encoding(tagged_index|null)), \
+              status==1 value(owned) cursor(inline encoding(tagged_index|null))), EFFECTS(runs_python)) \
     /* Include/internal/pycore_genobject.h, a static inline function: \
      * `frame - offsetof(PyGenObject, gi_iframe)`, address arithmetic with \
      * no dereference (the owner assertion is Py_DEBUG only).  No call, \

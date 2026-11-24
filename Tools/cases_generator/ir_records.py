@@ -316,6 +316,25 @@ def check_transfer_tokens() -> None:
 check_transfer_tokens()
 
 
+def replaced_input(uop: Uop, j: int) -> int | None:
+    """The index of the input whose stack entry the declared output j takes
+    over with a new value, or None.  A uop that advances a cursor declares an
+    inline output at the cursor's position, apart from the consumed input of
+    another name (F16): the entry is the input's, and the value is new"""
+    if not uop.clauses or j >= len(uop.stack.inputs):
+        return None
+    inputs, outputs = uop.stack.inputs, uop.stack.outputs
+    if any(item.is_array() for item in inputs[:j + 1] + outputs[:j + 1]):
+        return None
+    import ir_contract
+    contract = ir_contract.contract_of(uop)
+    if (contract.output(outputs[j].name).mode != "inline"
+            or contract.input(inputs[j].name).mode != "consumed"
+            or any(o.name == inputs[j].name for o in outputs)):
+        return None
+    return j
+
+
 def passed_through(uop: Uop, j: int) -> int | None:
     """The index of the input of uop that its output j passes through.
 
@@ -328,7 +347,7 @@ def passed_through(uop: Uop, j: int) -> int | None:
         for i, item in enumerate(inputs):
             if item.name == name:
                 return i
-        return None
+        return replaced_input(uop, j)
     if j < len(inputs) and not any(
             item.is_array() for item in inputs[:j + 1] + outputs[:j + 1]):
         return j

@@ -4559,9 +4559,11 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        replaced op(_FOR_ITER, (iter, null_or_index -- iter, null_or_index, next)) {
-            _PyStatusValue step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(iter), &window[1]);
-            null_or_index = window[1];
+        replaced op(_FOR_ITER, (iter, index: consumed -- iter, next_index: inline encoding(tagged_index|null), next: owned))
+            effects(runs_python) exits(next, branch, raise)
+        {
+            PyValue cursor = TAKE(index);
+            _PyForIterStep step = _PyForIter_VirtualIteratorNextInline(tstate, frame, PyValue_Borrow(iter), cursor);
             PyValue item = step.value;
             int found = step.status;
             if (found <= 0) {
@@ -4571,6 +4573,7 @@ dummy_func(
                 PyValue completed = PyValue_IsNull(item) ? PyValue_None : item;
                 IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
             }
+            next_index = step.cursor;
             next = item;
         }
 
@@ -4580,12 +4583,17 @@ dummy_func(
         // index-protocol iterator; a NULL cursor steps an object-protocol
         // iterator through its C value slot, and a type without the slot
         // exits.
-        replaced op(_FOR_ITER_VIRTUAL, (iter, null_or_index -- iter, null_or_index, next)) {
-            assert(PyValue_IsObject(iter));
+        replaced op(_FOR_ITER_VIRTUAL,
+                (iter: assumed(object) by GET_ITER, index: consumed
+                 -- iter, next_index: inline encoding(tagged_index|null), next: owned))
+            effects(runs_python) exits(next, branch, raise, miss)
+        {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-            if (PyValue_IsNull(null_or_index)) {
+            if (PyValue_IsNull(index)) {
                 _Py_iternextvaluefunc next_value = _PyType_VALUE_SLOT(Py_TYPE(iter_o), iternext);
                 EXIT_IF(next_value == NULL, "the type has no iternext value slot");
+                PyValue spent = TAKE(index);
+                _PyValue_DropCursor(spent);
                 _PyStatusValue step = next_value(iter_o);
                 if (step.status != PYGEN_NEXT) {
                     // A StopIteration is the exhaustion; any other error
@@ -4596,22 +4604,24 @@ dummy_func(
                     PyValue completed = PyValue_IsNull(step.value) ? PyValue_None : step.value;
                     IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
                 }
+                next_index = PyValue_NULL;
                 next = step.value;
             }
             else {
-                Py_ssize_t index = PyValue_UntagIndex(null_or_index);
+                Py_ssize_t position = PyValue_UntagIndex(index);
+                PyValue spent = TAKE(index);
+                _PyValue_DropCursor(spent);
                 _Py_iteritemfunc iteritem = Py_TYPE(iter_o)->_tp_iteritem;
-                _PyValueIndexPair next_index = iteritem(iter_o, index);
-                index = next_index.index;
-                if (PyValue_IsNull(next_index.value)) {
-                    if (index < 0) {
+                _PyValueIndexPair item = iteritem(iter_o, position);
+                if (PyValue_IsNull(item.value)) {
+                    if (item.index < 0) {
                         ERROR_NO_POP();
                     }
                     PyValue completed = PyValue_None;
                     IR_COMPLETE_STEP(_PY_IR_FOR_ITER, completed, oparg);
                 }
-                null_or_index = PyValue_TagIndex(index);
-                next = next_index.value;
+                next_index = PyValue_TagIndex(item.index);
+                next = item.value;
             }
         }
 
@@ -4696,11 +4706,15 @@ dummy_func(
 #endif
         }
 
-        leaf replaced op(_ITER_NEXT_LIST, (iter, null_or_index -- iter, null_or_index, next)) {
+        leaf replaced op(_ITER_NEXT_LIST,
+                (iter: object, index: consumed -- iter, next_index: inline, next: owned))
+            effects(reads) exits(next)
+        {
             PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
             assert(PyList_CheckExact(list_o));
-            next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
-            null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
+            next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
+            next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
+            DEAD(index);
         }
 
         macro(FOR_ITER_LIST) =
@@ -4731,13 +4745,17 @@ dummy_func(
             }
         }
 
-        leaf op(_ITER_NEXT_TUPLE, (iter, null_or_index -- iter, null_or_index, next)) {
+        leaf op(_ITER_NEXT_TUPLE,
+                (iter: object, index: consumed -- iter, next_index: inline, next: owned))
+            effects(reads) exits(next)
+        {
             PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
             assert(Py_TYPE(tuple_o) == &PyTuple_Type);
-            uintptr_t i = PyValue_UntagIndex(null_or_index);
+            uintptr_t i = PyValue_UntagIndex(index);
             assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
-            next = PyValue_XDUP(PyTuple_GET_VALUE(tuple_o, i));
-            null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
+            next = PyValue_DUP(PyTuple_GET_VALUE(tuple_o, i));
+            next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
+            DEAD(index);
         }
 
         macro(FOR_ITER_TUPLE) =

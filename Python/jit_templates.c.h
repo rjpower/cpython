@@ -1085,7 +1085,7 @@ jit_template_FOR_ITER_TUPLE(_PyJitWordCx *cx)
     _PyJitAsm_Bind(a, L7);
     _PyJitLower_PyTuple_GET_VALUE(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX, _PyJitReg_RDX}, NULL);
     cx->live = 0x2; cx->live_xmm = 0x0;
-    _PyJitLower_PyValue_XDUP(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX, _PyJitReg_RDX}, NULL);
+    _PyJitLower_PyValue_DUP(cx, (const uint8_t[]){_PyJitReg_RAX, _PyJitReg_RAX, _PyJitReg_RDX}, NULL);
     _PyJitLower_PyValue_IncrementTaggedIndexNoOverflow(cx, (const uint8_t[]){_PyJitReg_RCX, _PyJitReg_RCX}, NULL);
     _PyJitAsm_MovMR(a, _PyJitMem_At(_PyJit_BASE, (int32_t)(8 * (IR_B(ir_word) + 1))), _PyJitReg_RCX);
     if ((ir_word & IR_F_LOCAL_A)) {

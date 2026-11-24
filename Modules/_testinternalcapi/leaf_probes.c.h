@@ -1276,13 +1276,13 @@ leaf_probe__ITER_NEXT_LIST(_PyInterpreterFrame *frame, PyValue *stack_pointer, i
 {
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, null_or_index, next;
-    null_or_index = stack_pointer[-1];
+    PyValue iter, index, next_index, next;
+    index = stack_pointer[-1];
     iter = stack_pointer[-2];
     PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
-    next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
-    null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
-    stack_pointer[-1] = null_or_index;
+    next = PyValue_DUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(index)));
+    next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
+    stack_pointer[-1] = next_index;
     stack_pointer[0] = next;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);
@@ -1323,14 +1323,14 @@ leaf_probe__ITER_NEXT_TUPLE(_PyInterpreterFrame *frame, PyValue *stack_pointer, 
 {
     PyThreadState *tstate = _PyThreadState_GET();
     (void)frame; (void)tstate; (void)oparg; (void)caches;
-    PyValue iter, null_or_index, next;
-    null_or_index = stack_pointer[-1];
+    PyValue iter, index, next_index, next;
+    index = stack_pointer[-1];
     iter = stack_pointer[-2];
     PyObject *tuple_o = PyValue_AsKnownObjectBorrow(iter);
-    uintptr_t i = PyValue_UntagIndex(null_or_index);
-    next = PyValue_XDUP(PyTuple_GET_VALUE(tuple_o, i));
-    null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
-    stack_pointer[-1] = null_or_index;
+    uintptr_t i = PyValue_UntagIndex(index);
+    next = PyValue_DUP(PyTuple_GET_VALUE(tuple_o, i));
+    next_index = PyValue_IncrementTaggedIndexNoOverflow(index);
+    stack_pointer[-1] = next_index;
     stack_pointer[0] = next;
     stack_pointer += 1;
     ASSERT_WITHIN_STACK_BOUNDS(__FILE__, __LINE__);

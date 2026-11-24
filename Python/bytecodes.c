@@ -4449,7 +4449,9 @@ dummy_func(
 
         // A window: the method and self go to the canonical slots, which a
         // folded input, a local, would not name
-        window op(_INSERT_NULL, (self -- method_and_self[2])) {
+        window op(_INSERT_NULL, (self: consumed -- method_and_self[2]: owned))
+            effects() exits(next)
+        {
             IR_WRITE_OUTPUT(method_and_self, 1, self);
             IR_WRITE_OUTPUT(method_and_self, 0, PyValue_NULL);
             DEAD(self);

@@ -208,7 +208,7 @@ class SliceTests(unittest.TestCase):
         # G0c9: _GET_ITER's second result is a tagged index or NULL
         # (_PyEval_GetIter's row, G0a5's representation table)
         'GET_ITER.record.uops[1].results: inferred 0 entries [], declared 1 '
-        '[{"__type": "Fact", "arg": "tagged_index|null", "kind": "ENCODING", '
+        '[{"__type": "Fact", "arg": "null|tagged_index", "kind": "ENCODING", '
         '"subject": "v2"}]',
         # G0c9: GET_AWAITABLE's coroutine arm passes the input's reference
         # on and the other arm makes a new one; the result is owned on both

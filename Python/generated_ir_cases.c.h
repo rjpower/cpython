@@ -5989,18 +5989,16 @@ ir_run_CHECK_EG_MATCH(
             }
             PyObject *match_type = PyValue_AsKnownObjectBorrow(held_type);
             _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
-            PyObject *match_o = matched.match;
-            PyObject *rest_o = matched.rest;
             PyValue_CLOSE(held_type);
             PyValue_CLOSE(held_exc);
-            if (match_o == NULL) {
+            if (matched.match == NULL) {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
-            if (!Py_IsNone(match_o)) {
-                PyErr_SetHandledException(match_o);
+            if (!Py_IsNone(matched.match)) {
+                PyErr_SetHandledException(matched.match);
             }
-            exc_rest = PyValue_FromObjectSteal(rest_o);
-            exc_match = PyValue_FromObjectSteal(match_o);
+            exc_rest = PyValue_FromObjectSteal(matched.rest);
+            exc_match = PyValue_FromObjectSteal(matched.match);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), exc_rest);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), exc_match);
             DISPATCH();

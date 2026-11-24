@@ -2726,6 +2726,12 @@ class OwnershipWalk:
                 and null[0][0] in state.decided:
             facts = state.facts.get(null[0][0], frozenset())
             return (NULL_FACT in facts and not holds) or (NONNULL in facts and holds)
+        # A pointer field compared with NULL, `pair.match == NULL`
+        if len(cond) > 2 and cond[-2] in ("==", "!=") and cond[-1] == "NULL" \
+                and "".join(cond[:-2]) in state.decided:
+            facts = state.facts.get("".join(cond[:-2]), frozenset())
+            is_null = holds if cond[-2] == "==" else not holds
+            return (NULL_FACT in facts and not is_null) or (NONNULL in facts and is_null)
         name = cond[0] if cond else ""
         if name not in state.signs:
             return False
@@ -3577,7 +3583,9 @@ class OwnershipWalk:
             # VALUE(moved(k)): argument k itself, whose obligation the row
             # took (calls); it is the local's now
             arg = args[result.moved] if len(args) > result.moved else []
-            source = self.views_at(state).resolve(arg)
+            # A view, or a CASES field (`pair.rest`), whose facts the
+            # outcome states
+            source = self.views_at(state).resolve(arg) or "".join(arg)
             owner = self.owner_of(arg, state)
             if owner is None:
                 self.fail(toks[0], f"{row.name} moves `{' '.join(arg)}`, which holds no "

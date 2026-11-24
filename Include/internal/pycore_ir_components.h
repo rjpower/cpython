@@ -1256,7 +1256,9 @@
      * or {NULL, NULL} with an exception set. The frame is only read for      \
      * its f_exc state; exc_value and match_type are borrowed.                */ \
     HELPER(value_exception_group_match, _PyObjectPair, (_PyInterpreterFrame *, PyObject *, PyObject *), \
-        ARGS(frame, object, object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(frame, object, object), \
+        CASES(match(null) rest(null) raised, match(owned) rest(owned)), \
+        EFFECTS(runs_python)) \
     /* Python/ceval.c: an inline int in range is returned as a C int with \
      * no allocation; otherwise PyValue_AsObject boxes the level, \
      * _PyValue_AsInt (PyLong_AsInt: __index__ for a non-int, \
@@ -2028,7 +2030,7 @@
      * number is no awaitable; a coroutine already being awaited); \
      * success: a new reference. */ \
     HELPER(_PyEval_GetAwaitable, PyObject *, (PyValueBorrow, int), \
-        ARGS(borrowed, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed, scalar), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
     /* Reviewed G0c5 (ceval.c).  Called with an error set.  Callees: \
      * _PyErr_ExceptionMatches (a read; PyErr_GivenExceptionMatches walks \
      * the exception's MRO, which a metaclass __subclasscheck__ cannot \

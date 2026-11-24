@@ -3972,18 +3972,16 @@ dummy_func(
             PyObject *match_type = PyValue_AsKnownObjectBorrow(held_type);
 
             _PyObjectPair matched = value_exception_group_match(frame, exc_value, match_type);
-            PyObject *match_o = matched.match;
-            PyObject *rest_o = matched.rest;
             PyValue_CLOSE(held_type);
             PyValue_CLOSE(held_exc);
             // A null match is an error, including a failed match (res < 0)
-            ERROR_IF(match_o == NULL);
+            ERROR_IF(matched.match == NULL);
 
-            if (!Py_IsNone(match_o)) {
-                PyErr_SetHandledException(match_o);
+            if (!Py_IsNone(matched.match)) {
+                PyErr_SetHandledException(matched.match);
             }
-            exc_rest = PyValue_FromObjectSteal(rest_o);
-            exc_match = PyValue_FromObjectSteal(match_o);
+            exc_rest = PyValue_FromObjectSteal(matched.rest);
+            exc_match = PyValue_FromObjectSteal(matched.match);
         }
 
         outlined inst(CHECK_EXC_MATCH,

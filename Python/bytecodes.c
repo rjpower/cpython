@@ -142,17 +142,23 @@ dummy_func(
     switch (opcode) {
 
 // BEGIN BYTECODES //
-        pure inst(NOP, (--)) {
+        pure inst(NOP, (--))
+            effects() exits(next)
+        {
         }
 
-        outlined inst(MATERIALIZE_KWARGS, (--)) {
+        outlined inst(MATERIALIZE_KWARGS, (--))
+            effects(runs_python) exits(next, raise)
+        {
             assert(frame->pending_kwargs == IR_NO_DST ||
                    frame->pending_kwargs == oparg);
             int err = _PyFrame_MaterializeKwargs(frame);
             ERROR_IF(err < 0);
         }
 
-        leaf op(_CHECK_PERIODIC, (--)) {
+        leaf op(_CHECK_PERIODIC, (--))
+            effects(runs_python, polls) exits(next, raise)
+        {
             _Py_CHECK_EMSCRIPTEN_SIGNALS_PERIODICALLY();
             QSBR_QUIESCENT_STATE(tstate);
             if (_Py_EvalBreakerHasEvents(tstate)) {
@@ -161,19 +167,25 @@ dummy_func(
             }
         }
 
-        replaced op(_CHECK_PERIODIC_AT_END, (--)) {
+        replaced op(_CHECK_PERIODIC_AT_END, (--))
+            effects(runs_python, polls) exits(next, raise)
+        {
             int err = check_periodics_at_end(tstate, frame);
             ERROR_IF(err != 0);
         }
 
-        op(_CHECK_PERIODIC_IF_NOT_YIELD_FROM, (--)) {
+        op(_CHECK_PERIODIC_IF_NOT_YIELD_FROM, (--))
+            effects(runs_python, polls) exits(next, raise)
+        {
             if ((oparg & RESUME_OPARG_LOCATION_MASK) < RESUME_AFTER_YIELD_FROM) {
                 int err = check_periodics(tstate);
                 ERROR_IF(err != 0);
             }
         }
 
-        tier1 op(_MAYBE_INSTRUMENT, (--)) {
+        tier1 op(_MAYBE_INSTRUMENT, (--))
+            effects(runs_python) exits(next, raise)
+        {
             #ifdef Py_GIL_DISABLED
             // For thread-safety, we need to check instrumentation version
             // even when tracing. Otherwise, another thread may concurrently
@@ -225,7 +237,9 @@ dummy_func(
             _CHECK_PERIODIC_IF_NOT_YIELD_FROM +
             _JIT_EVENT;
 
-        op(_MONITOR_RESUME, (--)) {
+        op(_MONITOR_RESUME, (--))
+            effects(runs_python) exits(next, raise)
+        {
             int err = _Py_call_instrumentation(
                     tstate, oparg == 0 ? PY_MONITORING_EVENT_PY_START : PY_MONITORING_EVENT_PY_RESUME, frame, this_instr);
             RELOAD_STACK();
@@ -258,7 +272,9 @@ dummy_func(
             value = PyValue_DUP(value_s);
         }
 
-        leaf pure inst(LOAD_FAST, (-- value)) {
+        leaf pure inst(LOAD_FAST, (-- value: owned))
+            effects() exits(next)
+        {
             assert(!PyValue_IsNull(GETLOCAL(oparg)));
             value = PyValue_DUP(GETLOCAL(oparg));
         }
@@ -271,7 +287,9 @@ dummy_func(
             value = PyValue_DUP(GETLOCAL(oparg));
         }
 
-        leaf inst(LOAD_FAST_AND_CLEAR, (-- value)) {
+        leaf inst(LOAD_FAST_AND_CLEAR, (-- value: owned))
+            effects() exits(next)
+        {
             value = GETLOCAL(oparg);
             GETLOCAL(oparg) = PyValue_NULL;
         }
@@ -288,14 +306,18 @@ dummy_func(
         }
 
         // The constant is an inline int.
-        inst(LOAD_CONST_INLINE_INT, (-- value)) {
+        inst(LOAD_CONST_INLINE_INT, (-- value: owned))
+            effects(reads) exits(next)
+        {
             value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             assert(PyValue_IsInlineInt(value));
         }
 
         // The constant is an exact float other than NaN. Only builds with
         // inline values quicken to this.
-        inst(LOAD_CONST_INLINE_FLOAT, (-- value)) {
+        inst(LOAD_CONST_INLINE_FLOAT, (-- value: owned))
+            effects(reads) exits(next)
+        {
             value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             assert(PyValue_IsInlineFloat(value));
         }
@@ -304,12 +326,16 @@ dummy_func(
             LOAD_SMALL_INT_INLINE,
         };
 
-        pure inst(LOAD_SMALL_INT, (-- value)) {
+        pure inst(LOAD_SMALL_INT, (-- value: owned exact(PyLong_Type) inline_int))
+            effects() exits(next)
+        {
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyValue_FromInlineInt(oparg);
         }
 
-        leaf inst(LOAD_SMALL_INT_INLINE, (-- value)) {
+        leaf inst(LOAD_SMALL_INT_INLINE, (-- value: owned exact(PyLong_Type) inline_int))
+            effects(raises) exits(next, raise)
+        {
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyValue_FromInlineInt(oparg);
             ERROR_IF(PyValue_IsNull(value));
@@ -357,7 +383,9 @@ dummy_func(
             DEAD(value);
         }
 
-        op(_POP_TOP_UNICODE, (value --)) {
+        op(_POP_TOP_UNICODE, (value: consumed --))
+            effects(writes) exits(next)
+        {
             assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
             PyValue_CLOSE_SPECIALIZED(value, _PyUnicode_ExactDealloc);
         }
@@ -370,7 +398,9 @@ dummy_func(
             res = PyValue_NULL;
         }
 
-        no_save_ip inst(END_FOR, (value -- )) {
+        no_save_ip inst(END_FOR, (value: consumed -- ))
+            effects(releases) exits(next)
+        {
             /* Don't update instr_ptr, so that POP_ITER sees
              * the FOR_ITER as the previous instruction.
              * This has the benign side effect that if value is
@@ -386,7 +416,10 @@ dummy_func(
             PyValue_CLOSE(iter);
         }
 
-        no_save_ip tier1 inst(INSTRUMENTED_END_FOR, (receiver, index_or_null, value -- receiver, index_or_null)) {
+        no_save_ip tier1 inst(INSTRUMENTED_END_FOR,
+                (receiver, index_or_null, value: taken -- receiver, index_or_null))
+            effects(runs_python) exits(next, raise)
+        {
             /* Need to create a fake StopIteration error here,
              * to conform to PEP 380 */
             if (PyValue_GenCheck(receiver)) {
@@ -449,7 +482,9 @@ dummy_func(
         // Inline values are negated without a box. Only -Py_INT_MIN leaves
         // the inline range; negating a float that is not NaN gives one that
         // is not.
-        inline_ok op(_UNARY_NEGATIVE, (value -- res, v)) {
+        inline_ok op(_UNARY_NEGATIVE, (value: taken -- res: owned, v: moved(value)))
+            effects(runs_python) exits(next, raise)
+        {
             if (PyValue_IsInlineInt(value)) {
                 res = PyValue_FromInt64(-PyValue_InlineInt64(value));
             }
@@ -484,7 +519,9 @@ dummy_func(
             TO_BOOL_STR,
         };
 
-        specializing op(_SPECIALIZE_TO_BOOL, (value -- value)) {
+        specializing op(_SPECIALIZE_TO_BOOL, (value -- value))
+            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (_PyFb_CounterTriggers(feedback)) {
@@ -508,7 +545,9 @@ dummy_func(
 
         macro(TO_BOOL) = unused/1 + _SPECIALIZE_TO_BOOL + unused/2 + _TO_BOOL;
 
-        leaf op(_GUARD_TOS_BOOL, (value -- value)) {
+        leaf op(_GUARD_TOS_BOOL, (value -- value: exact(PyBool_Type)))
+            effects(reads) exits(next, miss)
+        {
             EXIT_IF(!PyValue_BoolCheck(value));
             STAT_INC(TO_BOOL, hit);
         }
@@ -532,7 +571,9 @@ dummy_func(
         macro(TO_BOOL_INT) =
             _GUARD_TOS_EXACT_INT + unused/1 + unused/2 + _TO_BOOL_INT + _POP_TOP_INT;
 
-        leaf op(_GUARD_NOS_LIST, (nos, unused -- nos, unused)) {
+        leaf op(_GUARD_NOS_LIST, (nos: object, unused -- nos: exact(PyList_Type), unused))
+            effects(reads) exits(next, miss)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(nos);
             EXIT_IF(!PyList_CheckExact(o));
         }
@@ -576,12 +617,16 @@ dummy_func(
             EXIT_IF(!PyUnicode_IS_COMPACT_ASCII(o));
         }
 
-        op(_GUARD_NOS_UNICODE, (nos, unused -- nos, unused)) {
+        op(_GUARD_NOS_UNICODE, (nos: object, unused -- nos: exact(PyUnicode_Type), unused))
+            effects(reads) exits(next, miss)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(nos);
             EXIT_IF(!PyUnicode_CheckExact(o));
         }
 
-        op(_GUARD_TOS_UNICODE, (value -- value)) {
+        op(_GUARD_TOS_UNICODE, (value: object -- value: exact(PyUnicode_Type)))
+            effects(reads) exits(next, miss)
+        {
             PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
             EXIT_IF(!PyUnicode_CheckExact(value_o));
         }
@@ -622,7 +667,9 @@ dummy_func(
 
         macro(UNARY_INVERT) = _UNARY_INVERT + POP_TOP;
 
-        op(_UNARY_INVERT, (value -- res, v)) {
+        op(_UNARY_INVERT, (value: taken -- res: owned, v: moved(value)))
+            effects(runs_python) exits(next, raise)
+        {
             res = _PyValue_Invert(value);
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
@@ -673,14 +720,20 @@ dummy_func(
             EXIT_IF(!PyValue_IsInlineInt(value));
         }
 
-        leaf inline_ok op(_GUARD_TOS_EXACT_INT, (value -- value)) {
+        leaf inline_ok op(_GUARD_TOS_EXACT_INT, (value -- value: exact(PyLong_Type)))
+            effects(reads) exits(next, miss)
+        {
             EXIT_IF(!PyValue_LongCheckExact(value));
         }
 
         // Int arithmetic on inline operands, on scaled values (see
         // _PyValue_IntScaled()): int64 overflow is exactly a result outside
         // the inline range, which is boxed.
-        leaf inline_ok pure op(_BINARY_OP_MULTIPLY_INT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_MULTIPLY_INT,
+                (left: taken exact(PyLong_Type) inline inline_int, right: taken exact(PyLong_Type) inline inline_int
+                 -- res: owned exact(PyLong_Type), l: moved(left), r: moved(right)))
+            effects(allocates, raises) exits(next, raise)
+        {
             int64_t a = _PyValue_IntScaled(left);
             int64_t b = PyValue_InlineInt64(right);
             int64_t product;
@@ -722,7 +775,11 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        leaf inline_ok pure op(_BINARY_OP_SUBTRACT_INT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_SUBTRACT_INT,
+                (left: taken exact(PyLong_Type) inline inline_int, right: taken exact(PyLong_Type) inline inline_int
+                 -- res: owned exact(PyLong_Type), l: moved(left), r: moved(right)))
+            effects(allocates, raises) exits(next, raise)
+        {
             int64_t a = _PyValue_IntScaled(left);
             int64_t b = _PyValue_IntScaled(right);
             int64_t difference;
@@ -797,7 +854,11 @@ dummy_func(
 
         // Ints behave as infinite two's complement under &, | and ^, so the
         // result for int51 operands is the int51 result.
-        inline_ok pure op(_BINARY_OP_AND_INT, (left, right -- res, l, r)) {
+        inline_ok pure op(_BINARY_OP_AND_INT,
+                (left: taken exact(PyLong_Type) inline inline_int, right: taken exact(PyLong_Type) inline inline_int
+                 -- res: owned exact(PyLong_Type) inline_int, l: moved(left), r: moved(right)))
+            effects(raises) exits(next, raise)
+        {
             STAT_INC(BINARY_OP, hit);
             res = PyValue_FromInlineInt(PyValue_InlineInt64(left) & PyValue_InlineInt64(right));
             if (PyValue_IsNull(res)) {
@@ -808,7 +869,11 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        inline_ok pure op(_BINARY_OP_OR_INT, (left, right -- res, l, r)) {
+        inline_ok pure op(_BINARY_OP_OR_INT,
+                (left: taken exact(PyLong_Type) inline inline_int, right: taken exact(PyLong_Type) inline inline_int
+                 -- res: owned exact(PyLong_Type) inline_int, l: moved(left), r: moved(right)))
+            effects(raises) exits(next, raise)
+        {
             STAT_INC(BINARY_OP, hit);
             res = PyValue_FromInlineInt(PyValue_InlineInt64(left) | PyValue_InlineInt64(right));
             if (PyValue_IsNull(res)) {
@@ -819,7 +884,11 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        inline_ok pure op(_BINARY_OP_XOR_INT, (left, right -- res, l, r)) {
+        inline_ok pure op(_BINARY_OP_XOR_INT,
+                (left: taken exact(PyLong_Type) inline inline_int, right: taken exact(PyLong_Type) inline inline_int
+                 -- res: owned exact(PyLong_Type) inline_int, l: moved(left), r: moved(right)))
+            effects(raises) exits(next, raise)
+        {
             STAT_INC(BINARY_OP, hit);
             res = PyValue_FromInlineInt(PyValue_InlineInt64(left) ^ PyValue_InlineInt64(right));
             if (PyValue_IsNull(res)) {
@@ -897,11 +966,15 @@ dummy_func(
         // The float guards accept an inline float only: a boxed exact float
         // is a NaN (canonical construction). The uops after them read the
         // value with PyValue_InlineFloat().
-        leaf inline_ok op(_GUARD_NOS_FLOAT, (left, unused -- left, unused)) {
+        leaf inline_ok op(_GUARD_NOS_FLOAT, (left, unused -- left: inline_float, unused))
+            effects() exits(next, miss)
+        {
             EXIT_IF(!PyValue_IsInlineFloat(left));
         }
 
-        leaf inline_ok op(_GUARD_TOS_FLOAT, (value -- value)) {
+        leaf inline_ok op(_GUARD_TOS_FLOAT, (value -- value: inline_float))
+            effects() exits(next, miss)
+        {
             EXIT_IF(!PyValue_IsInlineFloat(value));
         }
 
@@ -909,7 +982,11 @@ dummy_func(
         // an inline int (see PyValue_FloatOperandsCheck()). The test and the
         // reads are one step, so that two floats get a path of their own.
         // The result is inline unless it is NaN.
-        leaf inline_ok pure op(_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_MULTIPLY_FLOAT,
+                (left: taken, right: taken
+                 -- res: owned exact(PyFloat_Type), l: moved(left) inline, r: moved(right) inline))
+            effects(allocates, raises) exits(next, miss, raise)
+        {
             double a, b;
             EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
             STAT_INC(BINARY_OP, hit);
@@ -939,7 +1016,11 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        leaf inline_ok pure op(_BINARY_OP_SUBTRACT_FLOAT, (left, right -- res, l, r)) {
+        leaf inline_ok pure op(_BINARY_OP_SUBTRACT_FLOAT,
+                (left: taken, right: taken
+                 -- res: owned exact(PyFloat_Type), l: moved(left) inline, r: moved(right) inline))
+            effects(allocates, raises) exits(next, miss, raise)
+        {
             double a, b;
             EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
             STAT_INC(BINARY_OP, hit);
@@ -976,7 +1057,11 @@ dummy_func(
         macro(BINARY_OP_TRUEDIV_FLOAT) =
             unused/5 + _BINARY_OP_TRUEDIV_FLOAT + _POP_TOP_NUMBER + _POP_TOP_NUMBER;
 
-        pure op(_BINARY_OP_ADD_UNICODE, (left, right -- res, l, r)) {
+        pure op(_BINARY_OP_ADD_UNICODE,
+                (left: taken object, right: taken object
+                 -- res: owned, l: moved(left), r: moved(right)))
+            effects(reads, allocates, raises) exits(next, raise)
+        {
             PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
             PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
             assert(PyUnicode_CheckExact(left_o));
@@ -1076,7 +1161,10 @@ dummy_func(
         macro(BINARY_OP_INPLACE_ADD_UNICODE) =
             _GUARD_TOS_UNICODE + _GUARD_NOS_UNICODE + unused/5 + _BINARY_OP_INPLACE_ADD_UNICODE;
 
-        specializing op(_SPECIALIZE_BINARY_SLICE, (container, start, stop -- container, start, stop)) {
+        specializing op(_SPECIALIZE_BINARY_SLICE,
+                (container, start, stop -- container, start, stop))
+            effects() exits(next)
+        {
             // Placeholder until we implement BINARY_SLICE specialization
             #if ENABLE_SPECIALIZATION
             OPCODE_DEFERRED_INC(BINARY_SLICE);
@@ -1085,7 +1173,10 @@ dummy_func(
 
         // Inline bounds slice a list, tuple or str without boxes or a slice
         // object; see _PyEval_BinarySlice().
-        inline_ok op(_BINARY_SLICE, (container, start, stop -- res)) {
+        inline_ok op(_BINARY_SLICE,
+                (container: consumed, start: consumed, stop: consumed -- res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             res = _PyEval_BinarySlice(container, start, stop);
             DECREF_INPUTS();
             ERROR_IF(PyValue_IsNull(res));
@@ -1093,7 +1184,10 @@ dummy_func(
 
         outlined macro(BINARY_SLICE) = _SPECIALIZE_BINARY_SLICE + _BINARY_SLICE;
 
-        specializing op(_SPECIALIZE_STORE_SLICE, (v, container, start, stop -- v, container, start, stop)) {
+        specializing op(_SPECIALIZE_STORE_SLICE,
+                (v, container, start, stop -- v, container, start, stop))
+            effects() exits(next)
+        {
             // Placeholder until we implement STORE_SLICE specialization
             #if ENABLE_SPECIALIZATION
             OPCODE_DEFERRED_INC(STORE_SLICE);
@@ -1102,7 +1196,10 @@ dummy_func(
 
         // Inline bounds store to a list slice without boxes or a slice
         // object; see _PyEval_StoreSlice().
-        inline_ok op(_STORE_SLICE, (v, container, start, stop -- )) {
+        inline_ok op(_STORE_SLICE,
+                (v: consumed, container: consumed, start: consumed, stop: consumed --))
+            effects(runs_python) exits(next, raise)
+        {
             int err = _PyEval_StoreSlice(v, container, start, stop);
             DECREF_INPUTS();
             ERROR_IF(err);
@@ -1138,7 +1235,11 @@ dummy_func(
         macro(BINARY_OP_SUBSCR_LIST_SLICE) =
             _GUARD_TOS_SLICE + _GUARD_NOS_LIST + unused/5 + _BINARY_OP_SUBSCR_LIST_SLICE + POP_TOP + POP_TOP;
 
-        op(_BINARY_OP_SUBSCR_LIST_SLICE, (list_st, sub_st -- res, ls, ss)) {
+        op(_BINARY_OP_SUBSCR_LIST_SLICE,
+                (list_st: taken object, sub_st: taken object
+                 -- res: owned, ls: moved(list_st), ss: moved(sub_st)))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *sub = PyValue_AsKnownObjectBorrow(sub_st);
             PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
 
@@ -1239,7 +1340,9 @@ dummy_func(
             DEOPT_IF(Py_TYPE(o)->tp_as_mapping->mp_ass_subscript != _PyDict_StoreSubscript);
         }
 
-        op(_GUARD_TOS_ANY_DICT, (tos -- tos)) {
+        op(_GUARD_TOS_ANY_DICT, (tos: object -- tos: exact(PyAnyDict_Type)))
+            effects(reads) exits(next, miss)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(tos);
             EXIT_IF(!PyAnyDict_CheckExact(o));
         }
@@ -1271,7 +1374,10 @@ dummy_func(
             getitem = PyValue_DUP(PyValue_FromObjectBorrow(getitem_o));
         }
 
-        op(_BINARY_OP_SUBSCR_INIT_CALL, (container, sub, getitem -- new_frame)) {
+        op(_BINARY_OP_SUBSCR_INIT_CALL,
+                (container: consumed, sub: consumed, getitem: consumed -- new_frame: owned))
+            effects(reads, writes, allocates) exits(next)
+        {
             STAT_INC(BINARY_OP, hit);
             _PyInterpreterFrame* pushed_frame = _PyFrame_PushUnchecked(tstate, getitem, frame);
             pushed_frame->base[0] = TAKE(container);
@@ -1311,7 +1417,10 @@ dummy_func(
             ERROR_IF(err < 0);
         }
 
-        inline_ok inst(SET_ADD, (set, unused[oparg-1], v -- set, unused[oparg-1])) {
+        inline_ok inst(SET_ADD,
+                (set: object, unused[oparg-1], v: consumed -- set, unused[oparg-1]))
+            effects(runs_python) exits(next, raise)
+        {
             PyValue item = TAKE(v);
             int err = _PySet_AddValueTakeRef((PySetObject *)PyValue_AsKnownObjectBorrow(set), item);
             ERROR_IF(err);
@@ -1322,7 +1431,9 @@ dummy_func(
             STORE_SUBSCR_LIST_INT,
         };
 
-        specializing op(_SPECIALIZE_STORE_SUBSCR, (container, sub -- container, sub)) {
+        specializing op(_SPECIALIZE_STORE_SUBSCR, (container, sub -- container, sub))
+            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (_PyFb_CounterTriggers(feedback)) {
@@ -1335,7 +1446,9 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        inline_ok op(_STORE_SUBSCR, (v, container, sub -- )) {
+        inline_ok op(_STORE_SUBSCR, (v: consumed, container: consumed, sub: consumed -- ))
+            effects(runs_python) exits(next, raise)
+        {
             /* container[sub] = v */
             int err = _PyValue_SetItem(container, sub, v);
             DECREF_INPUTS();
@@ -1381,7 +1494,10 @@ dummy_func(
         macro(STORE_SUBSCR_DICT) =
             _GUARD_NOS_DICT_STORE_SUBSCRIPT + unused/1 + _STORE_SUBSCR_DICT;
 
-        inline_ok op(_STORE_SUBSCR_DICT, (value, dict_st, sub --)) {
+        inline_ok op(_STORE_SUBSCR_DICT,
+                (value: consumed, dict_st: consumed object, sub: consumed --))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
             assert(Py_TYPE(dict)->tp_as_mapping->mp_ass_subscript == _PyDict_StoreSubscript);
             STAT_INC(STORE_SUBSCR, hit);
@@ -1390,14 +1506,18 @@ dummy_func(
             ERROR_IF(err);
         }
 
-        outlined inst(DELETE_SUBSCR, (container, sub --)) {
+        outlined inst(DELETE_SUBSCR, (container: consumed, sub: consumed --))
+            effects(runs_python) exits(next, raise)
+        {
             /* del container[sub] */
             int err = _PyValue_DelItem(container, sub);
             DECREF_INPUTS();
             ERROR_IF(err);
         }
 
-        inline_ok op(_CALL_INTRINSIC_1, (value -- res, v)) {
+        inline_ok op(_CALL_INTRINSIC_1, (value: taken -- res: owned, v: moved(value)))
+            effects(runs_python) exits(next, raise)
+        {
             assert(oparg <= MAX_INTRINSIC_1);
             if (oparg == INTRINSIC_UNARY_POSITIVE) {
                 res = _PyValue_Positive(value);
@@ -1609,7 +1729,10 @@ dummy_func(
             SEND_ASYNC_GEN,
         };
 
-        specializing op(_SPECIALIZE_SEND, (receiver, unused, unused -- receiver, unused, unused)) {
+        specializing op(_SPECIALIZE_SEND,
+                (receiver, unused, unused -- receiver, unused, unused))
+            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (_PyFb_CounterTriggers(feedback)) {
@@ -1692,7 +1815,9 @@ dummy_func(
 
         macro(FOR_ITER) = unused/1 + _SPECIALIZE_FOR_ITER + _FOR_ITER;
 
-        op(_GUARD_NOS_NOT_NULL, (nos, unused -- nos, unused)) {
+        op(_GUARD_NOS_NOT_NULL, (nos, unused -- nos, unused))
+            effects() exits(next, miss)
+        {
             EXIT_IF(PyValue_IsNull(nos));
         }
 
@@ -1721,7 +1846,11 @@ dummy_func(
             _GUARD_NOS_NOT_NULL +
             _SEND_VIRTUAL;
 
-        op(_GUARD_3OS_ASYNC_GEN_ASEND, (iter, null_or_index, value -- iter, null_or_index, value)) {
+        op(_GUARD_3OS_ASYNC_GEN_ASEND,
+                (iter: object, null_or_index, value
+                 -- iter: exact(PyAsyncGenASend_Type), null_or_index, value))
+            effects(reads) exits(next, miss)
+        {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             EXIT_IF(!PyAsyncGenASend_CheckExact(iter_o));
         }
@@ -1795,7 +1924,9 @@ dummy_func(
             _MAKE_HEAP_SAFE +
             _YIELD_VALUE;
 
-        tier1 op(_YIELD_VALUE_EVENT, (val -- val)) {
+        tier1 op(_YIELD_VALUE_EVENT, (val -- val))
+            effects(runs_python) exits(next, raise)
+        {
             int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_YIELD,
                     frame, this_instr, val);
@@ -1899,7 +2030,9 @@ dummy_func(
             IR_COMPLETE_STEP(_PY_IR_SEND_THROW, completed, IR_EXIT);
         }
 
-        pure inst(LOAD_COMMON_CONSTANT, ( -- value)) {
+        pure inst(LOAD_COMMON_CONSTANT, ( -- value: owned))
+            effects(reads) exits(next)
+        {
             // Keep in sync with _common_constants in opcode.py
             assert(oparg < NUM_COMMON_CONSTANTS);
             value = PyValue_DUP(tstate->interp->common_consts[oparg]);
@@ -1918,7 +2051,9 @@ dummy_func(
             bc = found.value;
         }
 
-        outlined inst(STORE_NAME, (v -- )) {
+        outlined inst(STORE_NAME, (v: consumed -- ))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *ns = LOCALS();
             int error = _PyEval_StoreName(tstate, v, name, ns);
@@ -2000,7 +2135,11 @@ dummy_func(
             DECREF_INPUTS();
         }
 
-        outlined window inst(UNPACK_EX, (seq -- unused[oparg & 0xFF], unused, unused[oparg >> 8], top[0])) {
+        outlined window inst(UNPACK_EX,
+                (seq: consumed
+                 -- unused[oparg & 0xFF], unused, unused[oparg >> 8], top[0]: owned))
+            effects(runs_python) exits(next, raise)
+        {
             // A number is not iterable
             if (!PyValue_IsObject(seq)) {
                 _PyErr_Format(tstate, PyExc_TypeError,
@@ -2023,7 +2162,9 @@ dummy_func(
             STORE_ATTR_SHAPE_ADD,
         };
 
-        specializing op(_SPECIALIZE_STORE_ATTR, (v, owner -- v, owner)) {
+        specializing op(_SPECIALIZE_STORE_ATTR, (v, owner -- v, owner))
+            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (_PyFb_CounterTriggers(feedback)) {
@@ -2039,7 +2180,9 @@ dummy_func(
             #endif  /* ENABLE_SPECIALIZATION */
         }
 
-        inline_ok op(_STORE_ATTR, (v, owner --)) {
+        inline_ok op(_STORE_ATTR, (v: consumed, owner: consumed --))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             int err = _PyValue_SetAttr(owner, name, v);
             DECREF_INPUTS();
@@ -2096,7 +2239,9 @@ dummy_func(
             }
         }
 
-        outlined inst(LOAD_NAME, (-- v)) {
+        outlined inst(LOAD_NAME, (-- v: owned))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             v = _PyEval_LoadName(tstate, frame, name);
             ERROR_IF(PyValue_IsNull(v));
@@ -2107,7 +2252,9 @@ dummy_func(
             LOAD_GLOBAL_BUILTIN,
         };
 
-        specializing op(_SPECIALIZE_LOAD_GLOBAL, ( -- )) {
+        specializing op(_SPECIALIZE_LOAD_GLOBAL, ( -- ))
+            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (_PyFb_CounterTriggers(feedback)) {
@@ -2195,7 +2342,9 @@ dummy_func(
             _LOAD_GLOBAL_BUILTINS +
             _NULL_SLOT_CONDITIONAL;
 
-        outlined inst(DELETE_FAST, (--)) {
+        outlined inst(DELETE_FAST, (--))
+            effects(runs_python) exits(next, raise)
+        {
             PyValueBorrow v = PyValue_Borrow(GETLOCAL(oparg));
             if (PyValue_IsNull(v)) {
                 _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
@@ -2209,7 +2358,9 @@ dummy_func(
             PyValue_XCLOSE(tmp);
         }
 
-        outlined inst(MAKE_CELL, (--)) {
+        outlined inst(MAKE_CELL, (--))
+            effects(runs_python) exits(next, raise)
+        {
             // "initial" is probably NULL but not if it's an arg (or set
             // via the f_locals proxy before MAKE_CELL has run).
             PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
@@ -2221,7 +2372,9 @@ dummy_func(
             PyValue_XCLOSE(tmp);
         }
 
-        outlined inst(DELETE_DEREF, (--)) {
+        outlined inst(DELETE_DEREF, (--))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *cell = PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
             // Can't use ERROR_IF here.
             // Fortunately we don't need its superpower.
@@ -2275,14 +2428,18 @@ dummy_func(
             }
         }
 
-        inst(STORE_DEREF, (v --)) {
+        inst(STORE_DEREF, (v: consumed --))
+            effects(writes, releases) exits(next)
+        {
             PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
             PyValue owned = v;
             DEAD(v);
             _PyCell_SetValue(cell, owned);
         }
 
-        outlined inst(COPY_FREE_VARS, (--)) {
+        outlined inst(COPY_FREE_VARS, (--))
+            effects(reads, writes) exits(next)
+        {
             /* Copy closure variables to free variables */
             PyCodeObject *co = _PyFrame_GetCode(frame);
             PyFunctionObject *func = _PyFrame_GetFunction(frame);
@@ -2447,7 +2604,9 @@ dummy_func(
             ERROR_IF(failed);
         }
 
-        outlined inst(SETUP_ANNOTATIONS, (--)) {
+        outlined inst(SETUP_ANNOTATIONS, (--))
+            effects(runs_python) exits(next, raise)
+        {
             if (LOCALS() == NULL) {
                 _PyErr_Format(tstate, PyExc_SystemError,
                               "no locals found when setting up annotations");
@@ -2540,7 +2699,11 @@ dummy_func(
 
         outlined macro(DICT_MERGE) = _DICT_MERGE + POP_TOP;
 
-        inline_ok inst(MAP_ADD, (dict_st, unused[oparg - 1], key, value -- dict_st, unused[oparg - 1])) {
+        inline_ok inst(MAP_ADD,
+                (dict_st: object, unused[oparg - 1], key: consumed, value: consumed
+                 -- dict_st, unused[oparg - 1]))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
             assert(PyDict_CheckExact(dict));
             /* dict[key] = value */
@@ -2562,7 +2725,10 @@ dummy_func(
             LOAD_SUPER_ATTR_METHOD,
         };
 
-        specializing op(_SPECIALIZE_LOAD_SUPER_ATTR, (global_super_st, class_st, unused -- global_super_st, class_st, unused)) {
+        specializing op(_SPECIALIZE_LOAD_SUPER_ATTR,
+                (global_super_st, class_st, unused -- global_super_st, class_st, unused))
+            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             int load_method = oparg & 1;
@@ -2697,7 +2863,9 @@ dummy_func(
             LOAD_ATTR_METHOD_POLY,
         };
 
-        specializing op(_SPECIALIZE_LOAD_ATTR, (owner -- owner)) {
+        specializing op(_SPECIALIZE_LOAD_ATTR, (owner -- owner))
+            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (_PyFb_CounterTriggers(feedback)) {
@@ -2753,7 +2921,10 @@ dummy_func(
             EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version);
         }
 
-        op(_GUARD_TYPE_VERSION_LOCKED, (type_version/2, owner -- owner)) {
+        op(_GUARD_TYPE_VERSION_LOCKED,
+                (type_version/2, owner: object -- owner: type_version(type_version)))
+            effects(reads) exits(next, miss)
+        {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             assert(type_version != 0);
             PyTypeObject *tp = Py_TYPE(owner_o);
@@ -2806,7 +2977,9 @@ dummy_func(
             IR_GUARD_SHAPE_READ(PyValue_AsKnownObjectBorrow(owner), type_version, shape);
         }
 
-        leaf op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr)) {
+        leaf op(_LOAD_ATTR_SHAPE, (offset/1, owner: consumed -- attr: owned))
+            effects(reads, releases) exits(next)
+        {
             attr = IR_DUP_SHAPE_READ(owner, offset);
             STAT_INC(LOAD_ATTR, hit);
             DECREF_INPUTS();
@@ -2819,7 +2992,9 @@ dummy_func(
             unused/5 +
             _NULL_SLOT_CONDITIONAL;
 
-        leaf op(_GUARD_MODULE_EXACT, (owner -- owner)) {
+        leaf op(_GUARD_MODULE_EXACT, (owner: object -- owner: exact(PyModule_Type)))
+            effects(reads) exits(next, miss)
+        {
             EXIT_IF(!PyModule_CheckExact(PyValue_AsKnownObjectBorrow(owner)));
         }
 
@@ -2933,7 +3108,9 @@ dummy_func(
             EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(((PyTypeObject *)owner_o)->tp_version_tag) != class_version);
         }
 
-        op(_LOAD_ATTR_CLASS, (class_value/4, owner -- attr)) {
+        op(_LOAD_ATTR_CLASS, (class_value/4, owner: consumed -- attr: owned))
+            effects(releases) exits(next)
+        {
             STAT_INC(LOAD_ATTR, hit);
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
             assert(!PyValue_IsNull(found));
@@ -3082,7 +3259,9 @@ dummy_func(
             PyValue_XCLOSE(old_value);
         }
 
-        op(_LOCK_OBJECT, (value -- value)) {
+        op(_LOCK_OBJECT, (value: object -- value))
+            effects() exits(next, miss, deopt)
+        {
             DEOPT_IF(!LOCK_OBJECT(PyValue_AsKnownObjectBorrow(value)));
         }
 
@@ -3205,7 +3384,9 @@ dummy_func(
             COMPARE_OP_STR,
         };
 
-        specializing op(_SPECIALIZE_COMPARE_OP, (left, right -- left, right)) {
+        specializing op(_SPECIALIZE_COMPARE_OP, (left, right -- left, right))
+            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (_PyFb_CounterTriggers(feedback)) {
@@ -3322,7 +3503,9 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        specializing op(_SPECIALIZE_CONTAINS_OP, (left, right -- left, right)) {
+        specializing op(_SPECIALIZE_CONTAINS_OP, (left, right -- left, right))
+            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (_PyFb_CounterTriggers(feedback)) {
@@ -3337,7 +3520,9 @@ dummy_func(
 
         macro(CONTAINS_OP) = unused/1 + _SPECIALIZE_CONTAINS_OP + _CONTAINS_OP + POP_TOP + POP_TOP;
 
-        op(_GUARD_TOS_ANY_SET, (tos -- tos)) {
+        op(_GUARD_TOS_ANY_SET, (tos: object -- tos: exact(PyAnySet_Type)))
+            effects(reads) exits(next, miss)
+        {
             PyObject *o = PyValue_AsKnownObjectBorrow(tos);
             EXIT_IF(!PyAnySet_CheckExact(o));
         }
@@ -3561,7 +3746,9 @@ dummy_func(
             res = PyValue_FromObjectSteal(res_o);
         }
 
-        outlined inst(IMPORT_FROM, (from -- from, res)) {
+        outlined inst(IMPORT_FROM, (from -- from, res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             // The module may be a number, if __import__ returned one
             PyObject *from_o = PyValue_ObjectOrNull(from);
@@ -3578,7 +3765,9 @@ dummy_func(
             }
         }
 
-        leaf tier1 inst(JUMP_FORWARD, (--)) {
+        leaf tier1 inst(JUMP_FORWARD, (--))
+            effects() exits(next, jump)
+        {
             JUMPTO(oparg);
         }
 
@@ -3670,7 +3859,9 @@ dummy_func(
             POP_JUMP_IF_TRUE_STR,
         };
 
-        specializing op(_SPECIALIZE_POP_JUMP_IF, (value -- value)) {
+        specializing op(_SPECIALIZE_POP_JUMP_IF, (value -- value))
+            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (_PyFb_CounterTriggers(feedback)) {
@@ -3804,7 +3995,9 @@ dummy_func(
             }
         }
 
-        replaced inst(JUMP_BACKWARD_NO_INTERRUPT, (--)) {
+        replaced inst(JUMP_BACKWARD_NO_INTERRUPT, (--))
+            effects() exits(next, jump)
+        {
             /* This bytecode is used in the `yield from` or `await` loop.
              * If there is an interrupt, we want it handled in the innermost
              * generator or coroutine, so we deliberately do not check it here.
@@ -3814,7 +4007,9 @@ dummy_func(
             JUMPTO(oparg);
         }
 
-        outlined inst(GET_LEN, (obj -- obj, len)) {
+        outlined inst(GET_LEN, (obj -- obj, len: owned exact(PyLong_Type)))
+            effects(runs_python) exits(next, raise)
+        {
             // PUSH(len(TOS))
             Py_ssize_t len_i = _PyValue_Size(obj);
             ERROR_IF(len_i < 0);
@@ -3877,7 +4072,9 @@ dummy_func(
             GET_ITER_PY_GENERATOR,
         };
 
-        specializing op(_SPECIALIZE_GET_ITER, (iterable -- iterable)) {
+        specializing op(_SPECIALIZE_GET_ITER, (iterable -- iterable))
+            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (_PyFb_CounterTriggers(feedback)) {
@@ -3919,7 +4116,9 @@ dummy_func(
             STAT_INC(GET_ITER, hit);
         }
 
-        op(_PUSH_TAGGED_ZERO, ( -- zero)) {
+        op(_PUSH_TAGGED_ZERO, ( -- zero: owned))
+            effects() exits(next)
+        {
             zero = PyValue_TagIndex(0);
         }
 
@@ -3986,7 +4185,9 @@ dummy_func(
             FOR_ITER_DICT_ITEMS,
         };
 
-        specializing op(_SPECIALIZE_FOR_ITER, (iter, null_or_index -- iter, null_or_index)) {
+        specializing op(_SPECIALIZE_FOR_ITER, (iter, null_or_index -- iter, null_or_index))
+            effects(runs_python) exits(next, jump) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (_PyFb_CounterTriggers(feedback)) {
@@ -4187,7 +4388,10 @@ dummy_func(
 #endif
         }
 
-        leaf replaced op(_ITER_JUMP_RANGE, (iter, null_or_index -- iter, null_or_index)) {
+        leaf replaced op(_ITER_JUMP_RANGE,
+                (iter: object, null_or_index -- iter, null_or_index))
+            effects(runs_python) exits(next, branch, raise)
+        {
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
             assert(Py_TYPE(r) == &PyRangeIter_Type);
 #ifdef Py_GIL_DISABLED
@@ -4200,7 +4404,11 @@ dummy_func(
             }
         }
 
-        leaf op(_ITER_NEXT_RANGE, (iter, null_or_index -- iter, null_or_index, next)) {
+        leaf op(_ITER_NEXT_RANGE,
+                (iter: object, null_or_index
+                 -- iter, null_or_index, next: owned exact(PyLong_Type)))
+            effects(reads, writes, allocates, raises) exits(next, raise)
+        {
             _PyRangeIterObject *r = (_PyRangeIterObject *)PyValue_AsKnownObjectBorrow(iter);
             assert(Py_TYPE(r) == &PyRangeIter_Type);
 #ifdef Py_GIL_DISABLED
@@ -4247,7 +4455,9 @@ dummy_func(
             DEAD(self);
         }
 
-        op(_LOAD_SPECIAL, (method_and_self[2] -- method_and_self[2])) {
+        op(_LOAD_SPECIAL, (method_and_self[2] -- method_and_self[2]))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *name = _Py_SpecialMethods[oparg].name;
             int err = IR_LOOKUP_SPECIAL(name, method_and_self);
             if (err <= 0) {
@@ -4402,7 +4612,10 @@ dummy_func(
             _GUARD_TYPE_HAS_VERSION +
             _LOAD_ATTR_METHOD_POLY;
 
-        op(_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES, (class_value/4, owner -- attr)) {
+        op(_LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES,
+                (class_value/4, owner: consumed -- attr: owned))
+            effects(releases) exits(next)
+        {
             assert((oparg & 1) == 0);
             STAT_INC(LOAD_ATTR, hit);
             PyValueBorrow found = _PyValueGuarded_Load(class_value);
@@ -4418,7 +4631,10 @@ dummy_func(
             unused/2 +
             _LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES;
 
-        leaf op(_LOAD_ATTR_NONDESCRIPTOR_NO_DICT, (class_value/4, owner -- attr)) {
+        leaf op(_LOAD_ATTR_NONDESCRIPTOR_NO_DICT,
+                (class_value/4, owner: consumed -- attr: owned))
+            effects(releases) exits(next)
+        {
             assert((oparg & 1) == 0);
             assert(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_dictoffset == 0);
             STAT_INC(LOAD_ATTR, hit);
@@ -4513,7 +4729,11 @@ dummy_func(
             CALL_NON_PY_GENERAL,
         };
 
-        specializing op(_SPECIALIZE_CALL, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
+        specializing op(_SPECIALIZE_CALL,
+                (callable, self_or_null, unused[oparg]
+                 -- callable, self_or_null, unused[oparg]))
+            effects(runs_python) exits(next, raise) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
             #if ENABLE_SPECIALIZATION
             {
                 _PyFbHeader *feedback = FB_COUNTER();
@@ -4536,27 +4756,45 @@ dummy_func(
         // The call's operands are read through its words (the callable
         // operand and operand k, IR_OPERAND(k): a view that is read, not
         // closed), and call_run_vector() prepares the method form itself.
-        inline_ok op(_MAYBE_EXPAND_METHOD, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
+        inline_ok op(_MAYBE_EXPAND_METHOD,
+                (callable, self_or_null, unused[oparg]
+                 -- callable, self_or_null, unused[oparg]))
+            effects(runs_python) exits(next, raise)
+        {
             IR_PREPARE_CALL_METHOD();
         }
 
         // When calling Python, inline the call using DISPATCH_INLINED().
-        inline_ok op(_DO_CALL, (callable, self_or_null, args[oparg] -- res)) {
+        inline_ok op(_DO_CALL,
+                (callable: taken, self_or_null: taken, args[oparg]: taken -- res: owned))
+            effects(runs_python, switches_frame) exits(raise, enter)
+        {
             IR_INVOKE_CALL();
         }
 
-        inline_ok op(_MONITOR_CALL, (func, maybe_self, args[oparg] -- func, maybe_self, args[oparg])) {
+        inline_ok op(_MONITOR_CALL,
+                (func, maybe_self, args[oparg] -- func, maybe_self, args[oparg]))
+            effects(runs_python) exits(next, raise)
+        {
             IR_MONITOR_CALL();
         }
 
         macro(CALL) = unused/1 + _SPECIALIZE_CALL + unused/2 + _MAYBE_EXPAND_METHOD + _DO_CALL + _CHECK_PERIODIC_AT_END;
         macro(INSTRUMENTED_CALL) = unused/3 + _MAYBE_EXPAND_METHOD + _MONITOR_CALL + _DO_CALL + _CHECK_PERIODIC_AT_END;
 
-        inline_ok op(_PY_FRAME_GENERAL, (callable, self_or_null, args[oparg] -- new_frame)) {
+        inline_ok op(_PY_FRAME_GENERAL,
+                (callable: taken, self_or_null: taken, args[oparg]: taken
+                 -- new_frame: owned))
+            effects(runs_python, switches_frame) exits(raise, enter)
+        {
             IR_INVOKE_CALL();
         }
 
-        inline_ok op(_PY_FRAME_GENERAL_GUARDED, (callable, self_or_null, args[oparg] -- new_frame)) {
+        inline_ok op(_PY_FRAME_GENERAL_GUARDED,
+                (callable: taken, self_or_null: taken, args[oparg]: taken
+                 -- new_frame: owned))
+            effects(runs_python, switches_frame) exits(raise, enter)
+        {
             IR_INVOKE_GUARDED_PYTHON_CALL();
         }
 
@@ -4586,7 +4824,11 @@ dummy_func(
             EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
 
-        inline_ok op(_EXPAND_METHOD, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
+        inline_ok op(_EXPAND_METHOD,
+                (callable, self_or_null, unused[oparg]
+                 -- callable, self_or_null, unused[oparg]))
+            effects(runs_python) exits(next, raise)
+        {
             IR_PREPARE_CALL_METHOD();
         }
 
@@ -4660,7 +4902,11 @@ dummy_func(
             EXIT_IF(code->co_argcount != oparg + ((call_state & CALL_SELF_PRESENT) != 0));
         }
 
-        op(_CHECK_STACK_SPACE, (callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
+        op(_CHECK_STACK_SPACE,
+                (callable: object, unused, unused[oparg]
+                 -- callable, unused, unused[oparg]))
+            effects(reads) exits(next, deopt)
+        {
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             PyFunctionObject *func = (PyFunctionObject *)callable_o;
             PyCodeObject *code = (PyCodeObject *)func->func_code;
@@ -5144,7 +5390,9 @@ dummy_func(
             res = res_value;
         }
 
-        op(_CHECK_RECURSION_LIMIT, ( -- )) {
+        op(_CHECK_RECURSION_LIMIT, ( -- ))
+            effects(reads) exits(next, miss)
+        {
             EXIT_IF(_Py_ReachedRecursionLimit(tstate));
         }
 
@@ -5270,23 +5518,43 @@ dummy_func(
             CALL_KW_NON_PY,
         };
 
-        inline_ok op(_MONITOR_CALL_KW, (callable, self_or_null, args[oparg], unused -- callable, self_or_null, args[oparg], unused)) {
+        inline_ok op(_MONITOR_CALL_KW,
+                (callable, self_or_null, args[oparg], unused
+                 -- callable, self_or_null, args[oparg], unused))
+            effects(runs_python) exits(next, raise)
+        {
             IR_MONITOR_CALL();
         }
 
-        inline_ok op(_MAYBE_EXPAND_METHOD_KW, (callable, self_or_null, unused[oparg], unused -- callable, self_or_null, unused[oparg], unused)) {
+        inline_ok op(_MAYBE_EXPAND_METHOD_KW,
+                (callable, self_or_null, unused[oparg], unused
+                 -- callable, self_or_null, unused[oparg], unused))
+            effects(runs_python) exits(next, raise)
+        {
             IR_PREPARE_CALL_METHOD();
         }
 
-        inline_ok op(_DO_CALL_KW, (callable, self_or_null, args[oparg], kwnames -- res)) {
+        inline_ok op(_DO_CALL_KW,
+                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken
+                 -- res: owned))
+            effects(runs_python, switches_frame) exits(raise, enter)
+        {
             IR_INVOKE_CALL();
         }
 
-        inline_ok op(_PY_FRAME_KW, (callable, self_or_null, args[oparg], kwnames -- new_frame)) {
+        inline_ok op(_PY_FRAME_KW,
+                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken
+                 -- new_frame: owned))
+            effects(runs_python, switches_frame) exits(raise, enter)
+        {
             IR_INVOKE_CALL();
         }
 
-        inline_ok op(_PY_FRAME_KW_GUARDED, (callable, self_or_null, args[oparg], kwnames -- new_frame)) {
+        inline_ok op(_PY_FRAME_KW_GUARDED,
+                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken
+                 -- new_frame: owned))
+            effects(runs_python, switches_frame) exits(raise, enter)
+        {
             IR_INVOKE_GUARDED_PYTHON_CALL();
         }
 
@@ -5316,7 +5584,11 @@ dummy_func(
             EXIT_IF(call_state & CALL_SELF_PRESENT);
         }
 
-        inline_ok op(_EXPAND_METHOD_KW, (callable, self_or_null, unused[oparg], unused -- callable, self_or_null, unused[oparg], unused)) {
+        inline_ok op(_EXPAND_METHOD_KW,
+                (callable, self_or_null, unused[oparg], unused
+                 -- callable, self_or_null, unused[oparg], unused))
+            effects(runs_python) exits(next, raise)
+        {
             IR_PREPARE_CALL_METHOD();
         }
 
@@ -5329,7 +5601,11 @@ dummy_func(
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
-        specializing op(_SPECIALIZE_CALL_KW, (callable, self_or_null, unused[oparg], kwnames -- callable, self_or_null, unused[oparg], kwnames)) {
+        specializing op(_SPECIALIZE_CALL_KW,
+                (callable, self_or_null, unused[oparg], kwnames
+                 -- callable, self_or_null, unused[oparg], kwnames))
+            effects(runs_python) exits(next, raise) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (_PyFb_CounterTriggers(feedback)) {
@@ -5367,7 +5643,11 @@ dummy_func(
         }
 
 
-        inline_ok op(_CALL_KW_NON_PY, (callable, self_or_null, args[oparg], kwnames -- res)) {
+        inline_ok op(_CALL_KW_NON_PY,
+                (callable: taken, self_or_null: taken, args[oparg]: taken, kwnames: taken
+                 -- res: owned))
+            effects(runs_python, switches_frame) exits(raise, enter)
+        {
             IR_INVOKE_CALL();
         }
 
@@ -5382,15 +5662,25 @@ dummy_func(
             CALL_EX_NON_PY_GENERAL,
         };
 
-        inline_ok op(_MAKE_CALLARGS_A_TUPLE, (func, unused, callargs, kwargs -- func, unused, callargs, kwargs)) {
+        inline_ok op(_MAKE_CALLARGS_A_TUPLE,
+                (func, unused, callargs, kwargs -- func, unused, callargs, kwargs))
+            effects(runs_python) exits(next, raise)
+        {
             IR_PREPARE_CALL_TUPLE();
         }
 
-        inline_ok op(_DO_CALL_FUNCTION_EX, (func_st, null, callargs_st, kwargs_st -- result)) {
+        inline_ok op(_DO_CALL_FUNCTION_EX,
+                (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
+                 -- result: owned))
+            effects(runs_python, switches_frame) exits(raise, enter)
+        {
             IR_INVOKE_CALL();
         }
 
-        specializing op(_SPECIALIZE_CALL_FUNCTION_EX, (func, unused, callargs, unused -- func, unused, callargs, unused)) {
+        specializing op(_SPECIALIZE_CALL_FUNCTION_EX,
+                (func, unused, callargs, unused -- func, unused, callargs, unused))
+            effects(runs_python) exits(next, raise) feedback(read(counter), read(entry), write(counter), write(entry), write(handler))
+        {
         #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (_PyFb_CounterTriggers(feedback)) {
@@ -5418,7 +5708,11 @@ dummy_func(
             EXIT_IF(((PyFunctionObject *)func)->vectorcall != _PyFunction_Vectorcall);
         }
 
-        inline_ok op(_PY_FRAME_EX, (func_st, null, callargs_st, kwargs_st -- ex_frame)) {
+        inline_ok op(_PY_FRAME_EX,
+                (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
+                 -- ex_frame: owned))
+            effects(runs_python, switches_frame) exits(raise, enter)
+        {
             IR_INVOKE_CALL();
         }
 
@@ -5434,13 +5728,21 @@ dummy_func(
             _SAVE_RETURN_SLOT +
             _PUSH_FRAME;
 
-        op(_CHECK_IS_NOT_PY_CALLABLE_EX, (func_st, unused, unused, unused -- func_st, unused, unused, unused)) {
+        op(_CHECK_IS_NOT_PY_CALLABLE_EX,
+                (func_st: object, unused, unused, unused
+                 -- func_st, unused, unused, unused))
+            effects(reads) exits(next, miss)
+        {
             PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
             EXIT_IF(Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall,
                     "not a Python function with the standard vectorcall");
         }
 
-        inline_ok op(_CALL_FUNCTION_EX_NON_PY_GENERAL, (func_st, null, callargs_st, kwargs_st -- result)) {
+        inline_ok op(_CALL_FUNCTION_EX_NON_PY_GENERAL,
+                (func_st: taken, null: taken, callargs_st: taken, kwargs_st: taken
+                 -- result: owned))
+            effects(runs_python, switches_frame) exits(raise, enter)
+        {
             IR_INVOKE_CALL();
         }
 
@@ -5457,7 +5759,9 @@ dummy_func(
             _DO_CALL_FUNCTION_EX +
             _CHECK_PERIODIC_AT_END;
 
-        op(_MAKE_FUNCTION, (codeobj_st -- func, co)) {
+        op(_MAKE_FUNCTION, (codeobj_st: taken object -- func: owned, co: moved(codeobj_st)))
+            effects(runs_python) exits(next, raise)
+        {
             // The compiler loads the code object from a constant
             assert(PyValue_IsObject(codeobj_st));
             PyObject *codeobj = PyValue_AsKnownObjectBorrow(codeobj_st);
@@ -5503,7 +5807,9 @@ dummy_func(
             res = PyValue_NULL;
         }
 
-        inst(BUILD_SLICE, (args[oparg] -- slice)) {
+        inst(BUILD_SLICE, (args[oparg]: consumed -- slice: owned))
+            effects(runs_python) exits(next, raise)
+        {
             _PyValue_RecheckWindow(args, oparg);
             // The bounds are stored as the values they are: no box of an
             // inline one.
@@ -5514,7 +5820,9 @@ dummy_func(
             slice = PyValue_FromObjectSteal(slice_o);
         }
 
-        outlined inst(CONVERT_VALUE, (value -- result)) {
+        outlined inst(CONVERT_VALUE, (value: consumed -- result: owned))
+            effects(runs_python) exits(next, raise)
+        {
             assert(oparg >= FVC_STR && oparg <= FVC_ASCII);
             PyObject *result_o;
             if (oparg == FVC_STR) {
@@ -5552,14 +5860,19 @@ dummy_func(
             }
         }
 
-        outlined inst(FORMAT_WITH_SPEC, (value, fmt_spec -- res)) {
+        outlined inst(FORMAT_WITH_SPEC, (value: consumed, fmt_spec: consumed -- res: owned))
+            effects(runs_python) exits(next, raise)
+        {
             PyObject *res_o = _PyValue_Format(value, fmt_spec);
             DECREF_INPUTS();
             ERROR_IF(res_o == NULL);
             res = PyValue_FromObjectSteal(res_o);
         }
 
-        leaf pure inst(COPY, (bottom, unused[oparg-1] -- bottom, unused[oparg-1], top)) {
+        leaf pure inst(COPY,
+                (bottom, unused[oparg-1] -- bottom, unused[oparg-1], top: owned))
+            effects() exits(next)
+        {
             top = PyValue_DUP(bottom);
         }
 
@@ -5628,7 +5941,9 @@ dummy_func(
             DISPATCH_GOTO();
         }
 
-        inst(INSTRUMENTED_INSTRUCTION, ( -- )) {
+        inst(INSTRUMENTED_INSTRUCTION, ( -- ))
+            effects(runs_python) exits(jump, raise) feedback(write(counter))
+        {
             int next_opcode = _Py_call_instrumentation_instruction(
                 tstate, frame, this_instr);
             ERROR_IF(next_opcode < 0);
@@ -5641,12 +5956,16 @@ dummy_func(
             DISPATCH_GOTO();
         }
 
-        inst(INSTRUMENTED_JUMP_FORWARD, ( -- )) {
+        inst(INSTRUMENTED_JUMP_FORWARD, ( -- ))
+            effects(runs_python) exits(next, branch, raise)
+        {
             IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
                 PY_MONITORING_EVENT_JUMP, _PyIR_EDGE_TAKEN);
         }
 
-        op(_MONITOR_JUMP_BACKWARD, (-- )) {
+        op(_MONITOR_JUMP_BACKWARD, (-- ))
+            effects(runs_python) exits(next, branch, raise)
+        {
             IR_OBSERVE_COMMITTED_BRANCH(this_instr, JUMP_TARGET(oparg),
                 PY_MONITORING_EVENT_JUMP, _PyIR_EDGE_TAKEN);
         }
@@ -5748,12 +6067,16 @@ dummy_func(
             }
         }
 
-        tier1 inst(CACHE, (--)) {
+        tier1 inst(CACHE, (--))
+            effects() exits(next)
+        {
             assert(0 && "Executing a cache.");
             Py_FatalError("Executing a cache.");
         }
 
-        tier1 inst(RESERVED, (--)) {
+        tier1 inst(RESERVED, (--))
+            effects() exits(next)
+        {
             assert(0 && "Executing RESERVED instruction.");
             Py_FatalError("Executing RESERVED instruction.");
         }
@@ -5817,7 +6140,9 @@ dummy_func(
             Py_FatalError("Executing operand words.");
         }
 
-        op(_SAVE_RETURN_SLOT, (--)) {
+        op(_SAVE_RETURN_SLOT, (--))
+            effects(reads, writes) exits(next)
+        {
             frame->return_slot = (uint16_t)IR_DST_SLOT;
             frame->return_pc = next_instr;
         }

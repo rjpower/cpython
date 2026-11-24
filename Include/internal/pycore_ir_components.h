@@ -231,11 +231,187 @@
     HELPER(_Py_EnterRecursivePy, int, (PyThreadState *), \
            ARGS(tstate), STATUS(NONZERO), EFFECTS(writes, allocates, raises))
 
+/* The register IR's transaction macros (IR_*) that the uop bodies call,
+ * which the generator expands or ceval_macros.h and pycore_ir.h define.
+ * Written from today's inference tables (analyzer.IR_MARKER_EFFECTS and
+ * IR_HELPER_EFFECTS, ir_records.TRANSFER_TOKENS and GUARD_TOKENS) and the
+ * definitions, taking the larger declaration where they leave a choice;
+ * G0c reviews them with evidence.  "escapes" is runs_python, "error" is
+ * raises with a raise exit, "frame" is switches_frame. */
+#define _PyIR_COMPONENTS_TRANSACTIONS(PRIMITIVE, HELPER, MACRO) \
+    /* Word-field and frame accessors: C macros of Include/internal/pycore_ir.h \
+     * and Python/ceval_macros.h that read the word, the frame or the \
+     * activation, and write nothing */ \
+    MACRO(IR_ACTIVATION, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
+    MACRO(IR_C, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    MACRO(IR_D, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    MACRO(IR_HANDLER, ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    MACRO(IR_SLOT, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    MACRO(IR_OPERAND, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    MACRO(IR_CALL_ARG, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    MACRO(IR_CALL_FIRST, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
+    MACRO(IR_IS_LOCAL, ARGS(scalar), SCALAR, EFFECTS(reads), EXITS()) \
+    MACRO(IR_FUSED_DISTANCE, ARGS(), SCALAR, EFFECTS(), EXITS()) \
+    MACRO(IR_FUSED_IF_FALSE, ARGS(), SCALAR, EFFECTS(reads), EXITS()) \
+    /* IR_REPORT_EDGE (ceval_macros.h): ((void)(TAKEN)) in the interpreter */ \
+    MACRO(IR_REPORT_EDGE, ARGS(scalar), NONE, EFFECTS(), EXITS()) \
+    /* IR_METHOD_POLY_LOOKUP (ceval_macros.h): method_poly_lookup() reads the \
+     * polymorphic entry's payload and loads a guarded class value; NULL is \
+     * a miss that the uop tests (no raise).  Result is the borrowed method */ \
+    MACRO(IR_METHOD_POLY_LOOKUP, ARGS(scalar, object), \
+          VALUE(borrowed), EFFECTS(reads), EXITS()) \
+    /* Markers that emit no code or a fixed statement \
+     * (ir_generator.py: generator_marker, metadata_passthrough, call_effects, \
+     * and the prepare_call no-op; IR_MARKER_EFFECTS has an empty set for \
+     * IR_BEGIN_CALL_EFFECTS) */ \
+    MACRO(IR_GENERATOR_MARKER, ARGS(), NONE, EFFECTS(), EXITS()) \
+    MACRO(IR_METADATA_PASSTHROUGH, ARGS(scalar), NONE, EFFECTS(), EXITS()) \
+    MACRO(IR_BEGIN_CALL_EFFECTS, ARGS(), NONE, EFFECTS(), EXITS()) \
+    /* IR_SKIP_RESUME (ceval_macros.h): reads the eval breaker, advances \
+     * next_instr over a no-op RESUME; no table entry */ \
+    MACRO(IR_SKIP_RESUME, ARGS(), NONE, EFFECTS(reads, writes), EXITS()) \
+    /* IR_JIT_EVENT (ceval_macros.h): counts heat, may call _PyJit_Event and \
+     * jit_run through IR_STEP_DONE, which runs the unit, which runs Python, \
+     * and dispatches or leaves the evaluator; no table entry, so the larger \
+     * declaration */ \
+    MACRO(IR_JIT_EVENT, ARGS(), NONE, \
+          EFFECTS(reads, writes, allocates, raises, releases, runs_python, \
+                  switches_frame), EXITS(enter, return, raise, exit)) \
+    /* Guards: ir_records.GUARD_TOKENS maps each to EXIT_GUARD (miss); \
+     * IR_HELPER_EFFECTS gives IR_GUARD_INLINE_INT, IR_GUARD_ELEMENT_TYPE, \
+     * IR_GUARD_ELEMENT_INDEX and IR_DUP_CANONICAL_ELEMENT an empty set.  \
+     * The element index is a variable that the macro declares */ \
+    MACRO(IR_GUARD_INLINE_INT, ARGS(borrowed), NONE, EFFECTS(reads), \
+          EXITS(miss)) \
+    MACRO(IR_GUARD_ELEMENT_TYPE, ARGS(borrowed, scalar), NONE, \
+          EFFECTS(reads), EXITS(miss)) \
+    MACRO(IR_GUARD_ELEMENT_INDEX, ARGS(borrowed, borrowed, scalar, scalar), \
+          NONE, EFFECTS(reads), EXITS(miss)) \
+    /* GUARD_TOKENS: IR_GUARD_SHAPE_READ is an EXIT_GUARD; its owner is a \
+     * PyObject * (PyValue_AsKnownObjectBorrow), the rest scalars */ \
+    MACRO(IR_GUARD_SHAPE_READ, ARGS(object, scalar, scalar), NONE, \
+          EFFECTS(reads), EXITS(miss)) \
+    /* Duplicating reads (ir_generator.py: shape_read_value, \
+     * IR_DUP_CANONICAL_ELEMENT in IR_HELPER_EFFECTS with an empty set): a \
+     * new reference to an element or a slot's value, no Python */ \
+    MACRO(IR_DUP_CANONICAL_ELEMENT, ARGS(borrowed, scalar), VALUE(owned), \
+          EFFECTS(reads), EXITS()) \
+    MACRO(IR_DUP_SHAPE_READ, ARGS(borrowed, scalar), VALUE(owned), \
+          EFFECTS(reads), EXITS()) \
+    /* Home arrays (ir_generator.py: home_helper, take_input_home, \
+     * close_input_homes, write_output_home).  IR_BUILD_TUPLE and \
+     * IR_BUILD_LIST call _PyTuple_FromValueStealOnSuccess and its list \
+     * twin: they allocate, return NULL on failure (the uop raises) and keep \
+     * the values on failure (taken); IR_HELPER_EFFECTS has an empty set */ \
+    MACRO(IR_BUILD_TUPLE, ARGS(taken), VALUE_OR_NULL(owned), \
+          EFFECTS(reads, writes, allocates, raises), EXITS()) \
+    MACRO(IR_BUILD_LIST, ARGS(taken), VALUE_OR_NULL(owned), \
+          EFFECTS(reads, writes, allocates, raises), EXITS()) \
+    /* _Py_BuildString_ValueSteal and _Py_BuildMap_ValueSteal: \
+     * IR_HELPER_EFFECTS marks them "escapes" (they hash, compare and \
+     * release, which may run Python).  The values are taken, as for the \
+     * tuple */ \
+    MACRO(IR_BUILD_STRING, ARGS(taken), VALUE_OR_NULL(owned), \
+          EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
+          EXITS()) \
+    MACRO(IR_BUILD_MAP, ARGS(taken), VALUE_OR_NULL(owned), \
+          EFFECTS(reads, writes, allocates, raises, releases, runs_python), \
+          EXITS()) \
+    /* _PyObject_LookupSpecialMethod: 1 found, 0 missing (the uop raises), \
+     * negative on error; writes the two output homes.  "escapes" in \
+     * IR_HELPER_EFFECTS (a descriptor's __get__ may run Python).  The \
+     * failure values are zero and negative, which no STATUS names */ \
+    MACRO(IR_LOOKUP_SPECIAL, ARGS(object, out), SCALAR, \
+          EFFECTS(reads, writes, allocates, raises, runs_python), EXITS()) \
+    /* _PyFrame_WriteHome / _PyFrame_TakeHome: IR_HELPER_EFFECTS has an empty \
+     * set for both.  A value written moves into the home; a value taken \
+     * moves out of it */ \
+    MACRO(IR_WRITE_OUTPUT, ARGS(out, scalar, consumed), NONE, \
+          EFFECTS(writes), EXITS()) \
+    MACRO(IR_TAKE_INPUT, ARGS(consumed, scalar), VALUE(owned), \
+          EFFECTS(reads, writes), EXITS()) \
+    /* _PyFrame_CloseHomeRange: "escapes" in IR_HELPER_EFFECTS; the close \
+     * of owned values runs finalizers */ \
+    MACRO(IR_CLOSE_INPUTS, ARGS(consumed), NONE, \
+          EFFECTS(writes, releases, runs_python), EXITS()) \
+    /* The observer's deferred close (ir_generator.py: defer_observer_input): \
+     * the held value is closed after the observer; no table entry, so a \
+     * release is declared */ \
+    MACRO(IR_DEFER_CLOSE, ARGS(consumed), NONE, EFFECTS(writes, releases), \
+          EXITS()) \
+    /* The monitoring event of a committed branch: IR_MARKER_EFFECTS \
+     * escapes, error; TRANSFER_TOKENS (BRANCH, RAISE).  Arguments are the \
+     * instruction, the target, the event and the edge: all scalars */ \
+    MACRO(IR_OBSERVE_COMMITTED_BRANCH, ARGS(scalar, scalar, scalar, scalar), \
+          NONE, EFFECTS(reads, writes, raises, runs_python), \
+          EXITS(branch, raise)) \
+    /* IR_MARKER_EFFECTS: escapes, error, terminal; TRANSFER_TOKENS (BRANCH, \
+     * RAISE).  Arguments are the kind, whether the step completed and the \
+     * oparg */ \
+    MACRO(IR_COMPLETE_STEP, ARGS(scalar, scalar, scalar), NONE, \
+          EFFECTS(reads, writes, raises, runs_python), EXITS(branch, raise)) \
+    /* Errors: IR_MARKER_EFFECTS escapes, error, terminal, frame; \
+     * TRANSFER_TOKENS (RAISE) only.  PROCESS_ERROR_AT with an EXIT ingress \
+     * leaves the evaluator and unwinding may pop frames, so exit is added \
+     * to the table's raise */ \
+    MACRO(IR_PROCESS_ERROR, ARGS(scalar, scalar), NONE, \
+          EFFECTS(reads, writes, raises, releases, runs_python, \
+                  switches_frame), EXITS(raise, exit)) \
+    /* Returns: IR_MARKER_EFFECTS escapes, error, terminal, frame; \
+     * TRANSFER_TOKENS (RETURN, RAISE) for the three.  IR_RETURN_TO_CALLER \
+     * moves the result to the caller; the two finish macros leave the \
+     * value to the uop (it is passed on to the frame clear that follows) */ \
+    MACRO(IR_RETURN_TO_CALLER, ARGS(consumed, scalar), NONE, \
+          EFFECTS(reads, writes, raises, runs_python, switches_frame), \
+          EXITS(return, raise)) \
+    MACRO(IR_FINISH_GENERATOR_RETURN, ARGS(borrowed, scalar), NONE, \
+          EFFECTS(reads, writes, raises, runs_python, switches_frame), \
+          EXITS(return, raise)) \
+    MACRO(IR_FINISH_GENERATOR_RETURN_EMPTY, ARGS(borrowed, scalar), NONE, \
+          EFFECTS(reads, writes, raises, runs_python, switches_frame), \
+          EXITS(return, raise)) \
+    /* IR_MARKER_EFFECTS escapes, error, terminal, frame; TRANSFER_TOKENS \
+     * (ENTER_FRAME, RAISE) */ \
+    MACRO(IR_ENTER_GENERATOR, ARGS(object, scalar), NONE, \
+          EFFECTS(reads, writes, raises, runs_python, switches_frame), \
+          EXITS(enter, raise)) \
+    /* IR_MARKER_EFFECTS escapes, terminal, frame (no error); \
+     * TRANSFER_TOKENS (YIELD) */ \
+    MACRO(IR_SUSPEND_DELEGATED, ARGS(consumed), NONE, \
+          EFFECTS(reads, writes, runs_python, switches_frame), EXITS(yield)) \
+    /* IR_MARKER_EFFECTS escapes, error; TRANSFER_TOKENS (RAISE).  A hit \
+     * stores the result and dispatches, so the macro also leaves by next */ \
+    MACRO(IR_TRY_DICT_FIRST_PROBE, ARGS(), NONE, \
+          EFFECTS(reads, writes, raises, releases, runs_python), \
+          EXITS(raise)) \
+    /* Call preparation: IR_MARKER_EFFECTS escapes, error; TRANSFER_TOKENS \
+     * (RAISE) */ \
+    MACRO(IR_PREPARE_CALL_METHOD, ARGS(), NONE, \
+          EFFECTS(reads, writes, allocates, raises, runs_python), \
+          EXITS(raise)) \
+    MACRO(IR_PREPARE_CALL_TUPLE, ARGS(), NONE, \
+          EFFECTS(reads, writes, allocates, raises, runs_python), \
+          EXITS(raise)) \
+    MACRO(IR_MONITOR_CALL, ARGS(), NONE, \
+          EFFECTS(reads, writes, raises, runs_python), EXITS(raise)) \
+    MACRO(IR_REFRESH_CALL, ARGS(), NONE, \
+          EFFECTS(reads, writes, raises, runs_python), EXITS(raise)) \
+    /* Call invocation: IR_MARKER_EFFECTS escapes, error, terminal, frame; \
+     * TRANSFER_TOKENS (ENTER_FRAME, RAISE).  The call runs the callee or \
+     * enters its frame, and releases the operands */ \
+    MACRO(IR_INVOKE_CALL, ARGS(), NONE, \
+          EFFECTS(reads, writes, allocates, raises, releases, runs_python, \
+                  switches_frame), EXITS(enter, raise)) \
+    MACRO(IR_INVOKE_GUARDED_PYTHON_CALL, ARGS(), NONE, \
+          EFFECTS(reads, writes, allocates, raises, releases, runs_python, \
+                  switches_frame), EXITS(enter, raise))
+
 #define _PyIR_COMPONENTS(PRIMITIVE, HELPER, MACRO) \
     _PyIR_COMPONENTS_VALUES(PRIMITIVE, HELPER, MACRO) \
     _PyIR_COMPONENTS_OBJECTS(PRIMITIVE, HELPER, MACRO) \
     _PyIR_COMPONENTS_CONTAINERS(PRIMITIVE, HELPER, MACRO) \
     _PyIR_COMPONENTS_SPECIALIZATION(PRIMITIVE, HELPER, MACRO) \
-    _PyIR_COMPONENTS_LABELS(PRIMITIVE, HELPER, MACRO)
+    _PyIR_COMPONENTS_LABELS(PRIMITIVE, HELPER, MACRO) \
+    _PyIR_COMPONENTS_TRANSACTIONS(PRIMITIVE, HELPER, MACRO)
 
 #endif /* !Py_INTERNAL_IR_COMPONENTS_H */

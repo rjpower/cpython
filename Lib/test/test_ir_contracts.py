@@ -23,6 +23,7 @@ with test_tools.imports_under_tool("cases_generator"):
     import ir_contract
     import ir_error_effects
     import ir_leaf
+    import ir_records
     from ir_records import ALLOCATES, EFFECTS, MAY_RAISE, MAY_RELEASE, READS_HEAP, WRITES_HEAP
 
 BYTECODES = Path(test_tools.basepath) / "Python" / "bytecodes.c"
@@ -104,6 +105,24 @@ class SliceTests(unittest.TestCase):
         load = uop_record(handler, "_LOAD_ATTR_INSTANCE_VALUE")
         self.assertEqual([facts(g) for g in load.guards], [["NOT_NULL(found)"]])
         self.assertEqual(load.effects, {READS_HEAP, MAY_RELEASE})
+
+    def test_transaction_macros_have_rows(self):
+        # Every IR_* macro a body calls is a MACRO row whose exits cover the
+        # transfers and guard exits that today's tables give it
+        body = BYTECODES.read_text()
+        body = body[body.index("BEGIN BYTECODES"):body.index("END BYTECODES")]
+        called = set(re.findall(r"\b(IR_[A-Z0-9_]+)\s*\(", body))
+        table = ir_contract.rows()
+        exits = {"NEXT": "next", "BRANCH": "branch", "JUMP": "jump", "RAISE": "raise",
+                 "ENTER_FRAME": "enter", "RETURN": "return", "YIELD": "yield",
+                 "EXIT": "miss", "DEOPT": "deopt"}
+        for name in sorted(called):
+            with self.subTest(macro=name):
+                self.assertEqual(table[name].kind, "MACRO")
+                inferred = {exits[t] for t in ir_records.TRANSFER_TOKENS.get(name, ())}
+                if name in ir_records.GUARD_TOKENS:
+                    inferred.add(exits[ir_records.GUARD_TOKENS[name]])
+                self.assertLessEqual(inferred - {"next"}, set(table[name].exits))
 
     def test_component_checks_are_generated(self):
         checks = "\n".join(ir_contract.component_checks())

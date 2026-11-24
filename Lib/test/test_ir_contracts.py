@@ -1205,6 +1205,50 @@ class VerifierTests(unittest.TestCase):
             }
         """)
 
+    def test_an_unnamed_argument_is_checked_by_what_it_shows(self):
+        # Every argument with required facts is checked, named or not: a
+        # decided CASES field, a declared array element, a NULL literal and
+        # any other expression (which shows nothing).  Before, each of these
+        # passed unchecked
+        self.refuses("""
+            op(_OP, (-- v: owned)) effects() exits(next) {
+                v = PyValue_DUP(PyValue_NULL);
+            }
+        """, r"_OP: passes `PyValue_NULL` to PyValue_DUP, which requires nonnull of it")
+        self.refuses("""
+            op(_OP, (-- v: owned)) effects(reads) exits(next) {
+                PyValue *target = &IR_SLOT(IR_DST);
+                v = PyValue_DUP(*target);
+            }
+        """, r"_OP: passes `\* target` to PyValue_DUP, which requires nonnull of it")
+        array = """
+            op(_OP, (values[oparg]: borrowed%s -- v: owned)) effects() exits(next) {
+                v = PyValue_DUP(values[0]);
+            }
+        """
+        self.verify(array % "")
+        self.refuses(array % " nullable", r"_OP: passes `values \[ 0 \]` to "
+                     r"PyValue_DUP, which requires nonnull of it")
+        field = """
+            op(_OP, (d: borrowed object -- v: owned)) effects(runs_python) exits(next, raise) {
+                PyObject *o = PyValue_AsKnownObjectBorrow(d);
+                _PyStatusValue found = value_load_from_dict(tstate, o, o);
+                %s
+                ERROR_IF(found.status < 0);
+                if (found.status == 0) {
+                    v = PyValue_None;
+                }
+                else {
+                    %s
+                    v = found.value;
+                }
+            }
+        """
+        dup = "PyValue_CLOSE(PyValue_DUP(found.value));"
+        self.verify(field % ("", dup))
+        self.refuses(field % (dup, ""), r"_OP: passes `found\.value` to PyValue_DUP, "
+                     r"which requires nonnull of it")
+
     def test_an_identity_test_shares_facts(self):
         # PyValue_Is is declared IDENTITY(): where it holds, its arguments
         # are one word, so a copy of a home that is `left` has left's facts
@@ -1449,7 +1493,7 @@ class VerifierTests(unittest.TestCase):
                 _PyErr_StackItem *exc_info = tstate->exc_info;
                 if (%s) {
                     DEAD(exc_value);
-                    Py_XSETREF(exc_info->exc_value, NULL);
+                    Py_CLEAR(exc_info->exc_value);
                 }
                 else {
                     PyObject *exc = PyValue_AsKnownObjectSteal(exc_value);

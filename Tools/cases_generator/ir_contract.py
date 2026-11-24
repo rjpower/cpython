@@ -3103,6 +3103,23 @@ class OwnershipWalk:
         name = self.views_at(state).resolve(tokens, locals_=False)
         return name if name in self.declared else None
 
+    def expression_facts(self, arg: list[str], state: _State) -> frozenset:
+        """The facts of an argument that names no value: a field of a CASES
+        result this path decided, an element of a declared array (its
+        declaration), a literal NULL, a row's call (its result); nothing
+        for any other expression"""
+        tokens = _unwrap(_uncast(arg), self.table)
+        if len(tokens) == 1 and tokens[0] in state.decided:
+            return state.facts.get(tokens[0], frozenset())
+        if tokens in (["NULL"], ["PyValue_NULL"]):
+            return frozenset({NULL_FACT})
+        if len(tokens) == 4 and tokens[1] == "[" and tokens[3] == "]":
+            item = self.contract.input(tokens[0]) or self.contract.output(tokens[0])
+            if item is not None and item.array:
+                return implied(item.facts | {a.fact for a in item.assumed}
+                               | (frozenset() if item.nullable else {NONNULL}))
+        return argument_facts(arg, self.table)
+
     def take(self, name: str, state: _State, where: Token, what: str) -> None:
         "an owner's obligation leaves it (a consumption or a move)"
         item = self.declared.get(name)
@@ -3145,13 +3162,12 @@ class OwnershipWalk:
                                       f"exact({destructor.frees}), which it is not shown "
                                       "to be")
                 name = views.resolve(arg)
-                nested = name is None and _call_of(_uncast(arg), self.table) is not None
-                if spec.facts and (name is not None or nested):
+                if spec.facts:
                     # What the argument is shown to be: a named value's
-                    # facts, or a nested row call's result facts
+                    # facts, or what the expression shows
                     missing = implied(spec.facts) - (
                         state.facts.get(name, frozenset()) if name is not None
-                        else argument_facts(arg, self.table))
+                        else self.expression_facts(arg, state))
                     if missing:
                         self.fail(tkn, f"passes `{' '.join(arg)}` to {row.name}, which "
                                   f"requires {', '.join(sorted(map(str, missing)))} of it")

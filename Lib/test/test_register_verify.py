@@ -454,6 +454,11 @@ VERIFY_CASES = [
          (227, 5, 'Two.Both', 'points: publish at Two.Done: Two.Done does not list q in defs, but q is defined by publish at Two.Done at base.rop:227'),
          (227, 5, 'Two.Both', 'points: publish at Two.Done: Two.Done lists x in keep, but x is spent by publish at Two.Done at base.rop:227'),
      ]),
+    ('arm requires',
+     '  exits(next, miss, raise)\n  ensures(next.exact<int>(dst))',
+     '  exits(next, miss, raise)\n  requires(nonnull(fb))\n  ensures(next.exact<int>(dst))', [
+         (104, 12, 'F.Int', "facts: arm requires nonnull(fb), which nothing before the arm's dispatch establishes"),
+     ]),
     ('spends unmet',
      '    let r:Err = retire_failed(a, s, e);\n    exit result(r);',
      '    let _:Unit = drop_anchors(a);\n    exit result(e);', [

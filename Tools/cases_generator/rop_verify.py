@@ -377,6 +377,11 @@ def check_graph(program: Program, name: str, arm: Arm | None, macro: Macro | Non
     w = Walk(program, name, blocks, info.order, info.idom, family, macro, contract,
              {p.name: p.type for p in params}, defblock)
     walk(w, entry_state(w, params))
+    if arm is not None:
+        for f in contract.requires:
+            w.report(f.span, Rule.facts, f"arm requires "
+                     f"{FactT(f.fact, f.type_arg, f.subjects).text()}, which nothing "
+                     "before the arm's dispatch establishes")
     check_coverage(w)
     return list(w.diags.values())
 
@@ -395,8 +400,9 @@ def entry_state(w: Walk, params: tuple[Param, ...]) -> State:
             st.homes[p.name + "/dst"] = HomeState(Home.untouched)
         elif w.family is None and is_source(t):
             st.homes[p.name] = HomeState(Home.intact)
-    for f in w.contract.requires:
-        st.add_fact(FactT(f.fact, f.type_arg, f.subjects))
+    if w.family is None:
+        for f in w.contract.requires:
+            st.add_fact(FactT(f.fact, f.type_arg, f.subjects))
     return st
 
 
@@ -409,6 +415,7 @@ def walk(w: Walk, start: State) -> None:
     back: dict[str, list[tuple[str, State]]] = {}
     for _ in range(4):
         w.diags.clear()
+        w.fresh = 0
         w.effects.clear()
         w.feedback.clear()
         incoming: dict[str, list[tuple[str, State]]] = {ENTRY: [("", start)]}

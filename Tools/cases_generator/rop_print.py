@@ -80,6 +80,10 @@ def _contract(c: Contract, feedback: bool, exits: bool) -> list[str]:
         lines.append(f"  feedback({accesses})")
     if exits or c.exits:
         lines.append(f"  exits{_names(c.exits)}")
+    if c.borrows:
+        lines.append(f"  borrows{_names(c.borrows)}")
+    if c.spends:
+        lines.append(f"  spends{_names(c.spends)}")
     if c.requires:
         lines.append(f"  requires({', '.join(_fact(f) for f in c.requires)})")
     if c.ensures:

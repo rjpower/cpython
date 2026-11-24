@@ -401,6 +401,12 @@ class Parser:
             exit_names = self.names()
         elif exits is False and self.peek("exits"):
             raise self.error("a macro's exits are its cases: no 'exits' clause")
+        borrows: tuple[str, ...] = ()
+        spends: tuple[str, ...] = ()
+        if not exits and self.accept("borrows"):
+            borrows = self.names()
+        if not exits and self.accept("spends"):
+            spends = self.names()
         requires: tuple[FactUse, ...] = ()
         if self.accept("requires"):
             self.expect("(")
@@ -409,7 +415,8 @@ class Parser:
         if self.accept("ensures"):
             self.expect("(")
             ensures = self.comma_list(")", self.edge_fact)
-        return Contract(effects, feedback, exit_names, requires, ensures, start.span)
+        return Contract(effects, feedback, exit_names, requires, ensures, borrows, spends,
+                        start.span)
 
     def effect(self) -> EffectDecl:
         effect, tok = self.enum_word(Effect, "an effect")

@@ -221,6 +221,11 @@ class Contract:
     exits: tuple[str, ...] = ()
     requires: tuple[FactUse, ...] = ()
     ensures: tuple[EdgeFact, ...] = ()
+    # Parameter modes of a row or macro: a linear parameter is taken by the
+    # callee unless `borrows` lists it; a source parameter is read and left
+    # intact unless `spends` lists it, and then it is spent on every case.
+    borrows: tuple[str, ...] = ()
+    spends: tuple[str, ...] = ()
     span: SrcSpan = _span()
 
     @property

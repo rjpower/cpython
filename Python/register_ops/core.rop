@@ -81,6 +81,7 @@ macro anchor_for_call(s:Span<Src>) -> Anchors
 macro retire_failed_call(a:Anchors, s:Span<Src>, e:Err) -> Err
   effects(releases)
   feedback()
+  spends(s)
   pending;
 
 macro retire_abandoned(a:Anchors, r:Route) -> Route

@@ -143,9 +143,24 @@ class Program:
 # Helpers
 
 def is_linear(t: Type) -> bool:
+    """Whether a value of type t carries an obligation: a linear handle or
+    ticket, or a Maybe, Span or Pair of one.  An InOut is a home, not an
+    owner: `move` takes the owner out of it."""
     if isinstance(t, HandleType):
         return t.handle in LINEAR_HANDLES
+    if isinstance(t, WrapType):
+        return t.wrap != Wrap.InOut and is_linear(t.arg)
+    if isinstance(t, PairType):
+        return is_linear(t.first) or is_linear(t.second)
     return isinstance(t, SchemaType) and t.ctor in LINEAR_SCHEMA_CTORS
+
+
+def is_source(t: Type) -> bool:
+    """Whether t names source homes: a source operand type, or a Maybe or
+    Span of one."""
+    if isinstance(t, WrapType) and t.wrap in (Wrap.Maybe, Wrap.Span):
+        return is_source(t.arg)
+    return isinstance(t, HandleType) and t.handle in SOURCE_HANDLES
 
 
 def substitute(t: Type, binding: Mapping[str, Schema]) -> Type:
@@ -488,6 +503,18 @@ def check_contract(c: Checker, contract: Contract, definition: str,
                             for f in SCHEMA_FIELDS[s]})
             c.report(a.span, definition, f"{a.mode.value}({a.field}): the schema has no "
                      f"field {rest} (fields: {', '.join(known)})")
+    types = {p.name: p.type for p in params}
+    for n in contract.borrows:
+        if n not in types or not is_linear(types[n]):
+            c.report(contract.span, definition, f"borrows({n}): {n} is not a linear "
+                     "parameter")
+    for n in contract.spends:
+        if n not in types or not is_source(types[n]):
+            c.report(contract.span, definition, f"spends({n}): {n} is not a source "
+                     "parameter")
+    if contract.spends and Effect.releases not in contract.effect_set:
+        c.report(contract.span, definition, f"spends({', '.join(contract.spends)}): "
+                 "spending a source releases its owner; declare releases")
     if contract.exits and not exits_allowed:
         c.report(contract.span, definition, "only an arm or a routine declares exits")
     for n in contract.exits:

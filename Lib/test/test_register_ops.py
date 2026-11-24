@@ -518,6 +518,16 @@ class CheckTests(unittest.TestCase):
          [(1, 52, "fact object takes no type argument")]),
         ("extern helper h(v:B) -> O effects() ensures(result.exact<frozenset>(result)) "
          "pending;", []),
+        # Parameter modes: borrows names a linear parameter, spends a source
+        # one, and spending releases
+        ("extern helper h(a:Anchors, s:Span<Src>, e:Err) -> Err effects(releases) "
+         "borrows(a) spends(s) pending;", []),
+        ("extern helper h(v:B, s:Src) -> Unit effects(releases) borrows(v) spends(v) "
+         "pending;",
+         [(1, 37, "borrows(v): v is not a linear parameter"),
+          (1, 37, "spends(v): v is not a source parameter")]),
+        ("macro m(s:Span<Src>) -> Unit effects() feedback() spends(s) pending;",
+         [(1, 30, "spends(s): spending a source releases its owner; declare releases")]),
     ]
 
     def test_targets_and_typed_facts(self):

@@ -81,6 +81,7 @@ macro binary_at_origin(op:Enum<Numeric>, a:Anchors)
   cases(ok(z:O), err(e:Err), redirected(r:Route))
   effects(runs_python, raises)
   feedback()
+  borrows(a)
   pending;
 
 // Adaptation policy (addendum section 2)

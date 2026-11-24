@@ -1233,6 +1233,37 @@ class VerifierTests(unittest.TestCase):
         self.refuses(source % "PyValue_IsFalse(exc_value)",
                      r"DEAD\(`exc_value`\) drops an owned value")
 
+    def test_an_exact_value_of_a_closed_type_owes_no_count(self):
+        # _POP_JUMP_IF_TRUE: every bool is True or False, static immortal
+        # values (PyBool_Type's INSTANCES), so DEAD of an exact bool releases
+        # nothing.  An exact int is an object like any other
+        source = """
+            op(_OP, (cond: consumed assumed(exact(%s)) by _TO_BOOL --))
+                effects() exits(next, branch)
+            {
+                assert(PyValue_BoolCheck(cond));
+                int flag = PyValue_IsTrue(cond);
+                DEAD(cond);
+                IR_REPORT_EDGE(flag);
+                if (flag) {
+                    JUMPTO(oparg);
+                }
+            }
+        """
+        self.verify(source % "PyBool_Type")
+        self.verify(source % "_PyNone_Type")
+        self.refuses(source % "PyLong_Type", r"DEAD\(`cond`\) drops an owned value")
+        self.refuses(source % "PyBool_Type|PyLong_Type",
+                     r"DEAD\(`cond`\) drops an owned value")
+        # The instances are data, held to the CONSTANT rows
+        self.assertEqual(self.table["PyBool_Type"].instances,
+                         ("PyValue_True", "PyValue_False"))
+        with self.assertRaisesRegex(SyntaxError, r"INSTANCES\(PyValue_None\): not a VALUE "
+                                    r"CONSTANT of exact\(PyBool_Type\)"):
+            ir_contract.check_columns(ir_contract.rows() | ir_contract.parse_rows(
+                "#define SPAM_ROWS(PRIMITIVE, HELPER, MACRO) \\\n"
+                "    CONSTANT(PyBool_Type, OBJECT(PyTypeObject), INSTANCES(PyValue_None))\n"))
+
     def test_an_object_pointer_tested_for_null(self):
         # _BUILD_MAP: a row's VALUE_OR_NULL result as a PyObject *, which
         # `x == NULL` decides as PyValue_IsNull(x) does for a value

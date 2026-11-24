@@ -524,6 +524,10 @@ class Row:
     # CONSTANT: how the constant is held, VALUE (a PyValue, ret PyValue) or
     # OBJECT (a static object named by its address, ret its C type)
     representation: str = ""
+    # CONSTANT OBJECT of a type: INSTANCES(K1, ...), the VALUE CONSTANT rows
+    # that are every instance of the type, so an exact value of it is one
+    # of them and owes no count (G0a5 desk D)
+    instances: tuple[str, ...] = ()
 
     def new_owner(self) -> bool:
         "whether a call returns a value that its caller must release"
@@ -786,6 +790,13 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
         # A static immortal value (V8's roots): its facts are the value's.
         # Or a static object, named by its address: `is(K)` compares a
         # value's object with it
+        if len(fields) == 3 and fields[1].strip().startswith("OBJECT("):
+            # A type every instance of which is a CONSTANT row's value
+            instances = _inner(fields[2], "INSTANCES")
+            if instances is None or not instances.strip():
+                raise ValueError("CONSTANT(type, OBJECT(PyTypeObject), INSTANCES(K, ...))")
+            return dataclasses.replace(_parse_row(kind, fields[:2]), instances=tuple(
+                n.strip() for n in instances.split(",")))
         if len(fields) != 2:
             raise ValueError("CONSTANT(name, VALUE(inline facts) | OBJECT(type))")
         if fields[1].strip().startswith("OBJECT("):
@@ -924,6 +935,12 @@ def check_columns(table: dict[str, Row]) -> None:
         return table[name]
 
     for row in table.values():
+        for name in row.instances:
+            # Each instance is a VALUE CONSTANT of exactly this type
+            instance = named(row, "INSTANCES", name)
+            if not (is_value_constant(instance)
+                    and VFact("exact", row.name) in instance.result.facts):
+                fail(row, f"INSTANCES({name}): not a VALUE CONSTANT of exact({row.name})")
         if row.conjoins:
             # Fusion must not change failure or short-circuit behaviour: both
             # tests are total (no precondition beyond a borrowed value), have
@@ -2717,7 +2734,8 @@ class OwnershipWalk:
         "whether a value with facts is inline or a CONSTANT row's (V8's roots)"
         # A word that is neither an object nor NULL: an inline number, a
         # tagged index
-        return not word_kinds(facts) & {"object", "null"} or any(f.kind == "is" and is_value_constant(self.table.get(f.arg)) for f in facts)
+        return not word_kinds(facts) & {"object", "null"} or any(f.kind == "is" and is_value_constant(self.table.get(f.arg)) for f in facts) \
+            or owes_nothing_by_type(facts, self.table)
 
     def join(self, ends: list[_State | None]) -> _State | None:
         """where paths meet: the same obligations; the facts that all of them
@@ -3852,6 +3870,14 @@ def check_state_reads(uop: Uop, contract: Contract | None, table: dict[str, Row]
         if contract is None or contract.state_item(t.text) is None:
             raise analysis_error(f"{uop.name}: reads `{t.text}`, a handler's state, which "
                                  "no state(...) clause declares", t)
+
+
+def owes_nothing_by_type(facts, table: dict[str, Row]) -> bool:
+    """whether facts show an exact type whose every instance is a static
+    immortal CONSTANT (its row's INSTANCES): bool and NoneType"""
+    types = _exact_types(implied(facts))
+    return bool(types) and all(
+        table.get(t) is not None and table[t].instances for t in types)
 
 
 def is_value_constant(row: Row | None) -> bool:

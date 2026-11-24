@@ -104,6 +104,13 @@
     CONSTANT(PyValue_NULL, VALUE(inline null)) \
     /* Static objects that guards compare by address */ \
     CONSTANT(PySuper_Type, OBJECT(PyTypeObject)) \
+    /* Types every instance of which is one of the static immortal values \
+     * above, so an exact value of one owes no count (G0a5 desk D): \
+     * bool_new and every bool result return Py_True or Py_False, and bool \
+     * is final (no Py_TPFLAGS_BASETYPE, boolobject.c); NoneType's tp_new \
+     * returns Py_None and NoneType is final (object.c) */ \
+    CONSTANT(PyBool_Type, OBJECT(PyTypeObject), INSTANCES(PyValue_True, PyValue_False)) \
+    CONSTANT(_PyNone_Type, OBJECT(PyTypeObject), INSTANCES(PyValue_None)) \
     /* Tag tests: bits in, no memory.  PyValue_IsNull is bits == 0: NULL \
      * exactly when it holds */ \
     PRIMITIVE(PyValue_IsNull, bool, (PyValueBorrow), \

@@ -3,7 +3,7 @@
 // release of the receiver.
 
 family GetAttr(dst:Dst, obj:Src, name:Name, fb:Fb<Attr>)
-  exits(next, miss, again, enter, raise, redirect);
+  exits(next, miss, again, enter, raise, redirect) ops(LOAD_ATTR);
 
 point GetAttr.Failed(current, site, pending) keep() spent(obj) defs() held();
 point GetAttr.Done(current, next_head, clear) keep() spent(obj) defs(dst) held();
@@ -221,7 +221,7 @@ arm GetAttr.PolyShape inline
 // and, in its own home, the receiver or an absent self.
 
 family GetMethod(callable:Dst, self_dst:Maybe<Dst>, obj:Src, name:Name, fb:Fb<Attr>)
-  exits(next, miss, again, raise, redirect);
+  exits(next, miss, again, raise, redirect) ops(LOAD_ATTR);
 
 point GetMethod.Failed(current, site, pending) keep() spent(obj) defs() held();
 point GetMethod.Done(current, next_head, clear) keep() spent(obj) defs(callable, self_dst) held();

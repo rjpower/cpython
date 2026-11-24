@@ -28,7 +28,7 @@ def verify_source(src: str, filename: str = "base.rop") -> list[tuple[int, int, 
 VERIFY_BASE = """\
 enum Op(PLUS, MINUS);
 family F(dst:Dst, x:Src, y:Src, fb:Fb<Binary>)
-  exits(next, miss, again, raise, redirect);
+  exits(next, miss, again, raise, redirect) ops(NOP);
 point F.Done(current, next_head, clear) keep() spent(y, x) defs(dst) held();
 point F.Kept(current, site, pending) keep(x, y) spent() defs() held();
 point F.Gone(current, site, pending) keep() spent(y, x) defs() held();
@@ -207,7 +207,7 @@ arm F.Generic shared
     let now:Route = retire_gone(a, route);
     exit redirect(now);
 }
-family H(x:Src, y:Src, fb:Fb<Binary>) exits(branch, raise, enter);
+family H(x:Src, y:Src, fb:Fb<Binary>) exits(branch, raise, enter) ops(NOP);
 point H.Kept(current, site, pending) keep(x, y) spent() defs() held();
 point H.Back(caller, next_head, clear) keep() spent(y, x) defs() held();
 arm H.Cont split
@@ -241,7 +241,7 @@ arm H.Enter split
     publish [] retire [spent(y), spent(x)] at H.Back;
     exit enter(f) resume H.Back;
 }
-family Two(p:Dst, q:Dst, x:Src) exits(next);
+family Two(p:Dst, q:Dst, x:Src) exits(next) ops(NOP);
 point Two.Done(current, next_head, clear) keep() spent(x) defs(p, q) held();
 arm Two.Both inline
   effects(writes, releases)
@@ -470,7 +470,7 @@ VERIFY_CASES = [
 
 # A source acquired from an operand, held by the raise checkpoint
 HELD = """\
-family H(x:Src, fb:Fb<Binary>) exits(next, raise);
+family H(x:Src, fb:Fb<Binary>) exits(next, raise) ops(NOP);
 point H.Held(current, site, pending) keep() spent() defs() held(x);
 point H.Done(current, next_head, clear) keep() spent(x) defs() held();
 extern helper keep_o(o:O) cases(ok(), err(e:Err)) effects(raises, releases) pending;
@@ -517,7 +517,7 @@ macro anchored_after_close(a:Anchors) cases(done()) effects(releases, reads) fee
 # Frame transfers: a call that enters its child and resumes at a point, and
 # a return whose arms are selected statically by the kind of frame
 TRANSFERS = """\
-family K(dst:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss);
+family K(dst:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss) ops(NOP);
 point K.Returned(caller, next_head, clear) keep() spent(fn, a) defs(dst) held();
 point K.Early(current, next_head, clear) keep(fn, a) spent() defs(dst) held();
 extern primitive admits(v:B) -> Bool effects() pending;
@@ -532,7 +532,7 @@ arm K.Exact split
     let c:NewFrame = push(thread, fn, a);
     exit enter(c) resume K.Returned;
 }
-family R(value:Src) exits(return, exit, raise);
+family R(value:Src) exits(return, exit, raise) ops(NOP);
 point R.Delivered(caller, resume_head, clear) keep() spent(value) defs() held();
 extern helper pin_departing() -> Unit effects(writes) pending;
 extern primitive caller_of(f:Frame) -> Frame effects(reads) pending;
@@ -582,9 +582,9 @@ TRANSFER_CASES = [
          (14, 5, 'K.Exact', 'resume K.Returned: the point is (current, next_head); a resume point is (caller, next_head)'),
      ]),
     ('resume two definitions',
-     'family K(dst:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss);\n'
+     'family K(dst:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss) ops(NOP);\n'
      'point K.Returned(caller, next_head, clear) keep() spent(fn, a) defs(dst)',
-     'family K(dst:Dst, other:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss);\n'
+     'family K(dst:Dst, other:Dst, fn:Src, a:Args, fb:Fb<Call>) exits(enter, miss) ops(NOP);\n'
      'point K.Returned(caller, next_head, clear) keep() spent(fn, a) defs(dst, other)', [
          (14, 5, 'K.Exact', "resume K.Returned: the child's value is one definition, not 2"),
      ]),

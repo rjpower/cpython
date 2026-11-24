@@ -17,7 +17,7 @@ import lexer
 from lexer import Token
 from rop_catalog import (AccessMode, BuiltinType, DebtKind, Effect, ExcRole, Fact,
                          FrameRole,
-                         Handle, PcRole, Region, RowKind, Scalar, Schema, Select,
+                         Handle, MonitoringEvent, PcRole, Region, RowKind, Scalar, Schema, Select,
                          SchemaCtor, Wrap)
 from rop_model import (Access, Advance, Arm, Binding, Block, BoolLit, Branch, Call,
                        CallTerm, Cases, CaseDecl, CBinding, Contract, Debt, Decl,
@@ -266,8 +266,16 @@ class Parser:
         params = self.params()
         self.expect("exits")
         exits = self.names()
+        ops: tuple[str, ...] = ()
+        events: tuple[MonitoringEvent, ...] = ()
+        if self.accept("ops"):
+            ops = self.names()
+        if self.accept("events"):
+            self.expect("(")
+            events = self.comma_list(
+                ")", lambda: self.enum_word(MonitoringEvent, "a monitoring event")[0])
         self.expect(";")
-        return Family(name.text, params, exits, start.span)
+        return Family(name.text, params, exits, ops, events, start.span)
 
     def point(self) -> Point:
         start = self.take()

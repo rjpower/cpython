@@ -40,7 +40,7 @@ def parse_error(src: str) -> RopError:
 
 
 MINIMAL = """\
-family F(dst:Dst, x:Src) exits(next, miss);
+family F(dst:Dst, x:Src) exits(next, miss) ops(NOP);
 arm F.A inline effects() feedback() exits(next, miss)
 {
   entry():
@@ -121,7 +121,19 @@ class ParseTests(unittest.TestCase):
                 self.assertEqual(rop_syntax.parse(text, str(path)), parsed)
                 self.assertEqual(rop_print.print_file(rop_syntax.parse(text, "x")), text)
 
+    def test_family_clause(self):
+        text = "family F(x:Src) exits(next) ops(BINARY_OP, COMPARE_OP) events(CALL, C_RETURN);"
+        (family,) = rop_syntax.parse(text, "t.rop").decls
+        self.assertEqual(family.ops, ("BINARY_OP", "COMPARE_OP"))
+        self.assertEqual([e.value for e in family.events], ["CALL", "C_RETURN"])
+        self.assertEqual(rop_print.print_file(rop_syntax.parse(text, "t.rop")).split(),
+                         text.split())
+
     ERRORS = [
+        ("family F(x:Src) exits(next) events(CALLS);", 1, 36,
+         "'CALLS' is not a monitoring event (one of: PY_START, PY_RESUME, PY_RETURN, "
+         "PY_YIELD, CALL, JUMP, BRANCH, BRANCH_LEFT, BRANCH_RIGHT, STOP_ITERATION, "
+         "RAISE, EXCEPTION_HANDLED, PY_UNWIND, PY_THROW, RERAISE, C_RETURN, C_RAISE)"),
         ("family F(x:Src);", 1, 16, "expected 'exits', found ';'"),
         ("family F(x:Int) exits();", 1, 12, "'Int' is not a type of the catalog"),
         ("family F(x:Fb<Bin>) exits();", 1, 15,
@@ -166,7 +178,7 @@ class ParseTests(unittest.TestCase):
 CHECK_BASE = """\
 enum Op(PLUS, MINUS);
 family F(dst:Dst, x:Src, y:Src, fb:Fb<Binary>)
-  exits(next, miss, again, raise);
+  exits(next, miss, again, raise) ops(BINARY_OP);
 point F.Done(current, next_head, clear) keep() spent(y, x) defs(dst) held();
 point F.Failed(current, site, pending) keep(x, y) spent() defs() held();
 extern primitive test2(a:B, b:B) -> Bool effects() test(inline_int(a), inline_int(b)) pending;
@@ -346,6 +358,16 @@ CHECK_CASES = [
      'exits(next, miss, raise, again)', [
          (23, 16, 'declared exit again is not reached'),
      ]),
+    ('noops', ' ops(BINARY_OP)', '', [
+         (2, 1, 'a family with arms names the stack ops that lower to it: '
+                'ops(NAME, ...)'),
+     ]),
+    ('twoops', 'ops(BINARY_OP)', 'ops(BINARY_OP, BINARY_OP)', [
+         (2, 1, 'a stack op is listed twice'),
+     ]),
+    ('twoevents', 'ops(BINARY_OP)', 'ops(BINARY_OP) events(CALL, CALL)', [
+         (2, 1, 'an event is listed twice'),
+     ]),
     ('notfamily', 'exits(next, again)\n',
      'exits(next, again, redirect)\n', [
          (40, 16, 'exit redirect is not an exit of family F (next, miss, again, raise)'),
@@ -506,11 +528,11 @@ class CheckTests(unittest.TestCase):
         ("family F(a:Src, b:Src, c:Src, u:FarHead) exits(next);",
          [(1, 31, "operand u:FarHead needs 24 bits; field D and the next field of its "
            "word cannot hold it")]),
-        ("family F(t:NearHead, u:FarHead) exits(branch, jump);\n"
+        ("family F(t:NearHead, u:FarHead) exits(branch, jump) ops(NOP);\n"
          "arm F.A inline effects() feedback() exits(branch, jump)\n"
          "{ entry(): branch true -> N(), J(); N(): exit branch(t); J(): exit jump(u); }",
          []),
-        ("family F(t:NearHead) exits(branch);\n"
+        ("family F(t:NearHead) exits(branch) ops(NOP);\n"
          "arm F.A inline effects() feedback() exits(branch)\n"
          "{ entry(): let h:NearHead = t; exit branch(h); }",
          [(3, 29, "t is Head, expected NearHead"),
@@ -523,14 +545,14 @@ class CheckTests(unittest.TestCase):
         ("extern helper h(v:B) -> O effects() ensures(result.exact<frozenset>(result)) "
          "pending;", []),
         # An optional owner may bind an optional destination, not a plain one
-        ("family F(d:Dst, e:Maybe<Dst>, x:Src) exits(next);\n"
+        ("family F(d:Dst, e:Maybe<Dst>, x:Src) exits(next) ops(NOP);\n"
          "point F.Done(current, next_head, clear) keep() spent(x) defs(d, e) held();\n"
          "extern helper h(v:B) -> Maybe<O> effects() pending;\n"
          "arm F.A inline effects(writes, releases) feedback() exits(next)\n"
          "{ entry(): let m:Maybe<O> = h(use(x));\n"
          "  publish [e = m] retire [spent(x), old(e)] at F.Done; exit next(); }",
          []),
-        ("family F(d:Dst, x:Src) exits(next);\n"
+        ("family F(d:Dst, x:Src) exits(next) ops(NOP);\n"
          "point F.Done(current, next_head, clear) keep() spent(x) defs(d) held();\n"
          "extern helper h(v:B) -> Maybe<O> effects() pending;\n"
          "arm F.A inline effects(writes, releases) feedback() exits(next)\n"

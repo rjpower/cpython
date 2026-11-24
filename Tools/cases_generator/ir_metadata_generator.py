@@ -13,13 +13,20 @@ Include/internal/pycore_ir_metadata.h, which pycore_ir.h includes:
   handlers it generates, and its own columns (ir_generator.handler_contracts());
 - _PyIR_OnlyNames, the names of the IR-only handlers.
 
+The register instruction arms (Python/register_ops) follow the old handlers
+in every per-handler table, then the observed wrappers of the arms of
+families that declare events: rop_generator.arm_entries() lists them, and
+IR_NUM_HANDLERS counts them.
+
 The tables are defined where NEED_IR_METADATA is defined (Python/ir.c) and
 declared elsewhere. Handler indices without an instruction have a zeroed
 row, without _PyIR_VALID.
 """
 
 import argparse
+from collections.abc import Sequence
 
+import ir_numbers
 from analyzer import Analysis, Uop, analyze_files
 from generators_common import DEFAULT_INPUT, ROOT, write_header
 from cwriter import CWriter
@@ -45,6 +52,7 @@ from ir_generator import (
     monitoring_events,
     STACK_ONLY,
     num_handlers,
+    num_old_handlers,
     uses_feedback,
 )
 from typing import TextIO
@@ -137,7 +145,7 @@ def handler_facts(analysis: Analysis, formats: dict[str, IRFormat]
     for name, base in bases.items():
         if base not in ids or bases[base] != base:
             raise ValueError(f"noncanonical handler base: {name} -> {base}")
-    if len(set(ids.values())) != len(ids) or max(ids.values()) >= num_handlers(analysis):
+    if len(set(ids.values())) != len(ids) or max(ids.values()) >= num_old_handlers(analysis):
         raise ValueError("invalid handler domain")
     return ids, bases, flags
 
@@ -204,8 +212,73 @@ def format_initializer(fmt: IRFormat, shadow: str,
     )
 
 
+def arm_id(analysis: Analysis, arm: ir_numbers.ArmEntry) -> int:
+    return num_old_handlers(analysis) + arm.index
+
+
+def arm_base_ids(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry],
+                 fact_ids: dict[str, int], bases: dict[str, str]) -> dict[str, int]:
+    """The canonical old handler of each stack op that a family names"""
+    result = {}
+    for arm in arms:
+        op = arm.base
+        if op not in analysis.opmap or analysis.opmap[op] >= first_ir_only_handler(analysis):
+            raise ValueError(f"{arm.dotted}: ops({op}) is not a stack op")
+        if bases[op] != op:
+            raise ValueError(f"{arm.dotted}: ops({op}) is not a canonical opcode "
+                             f"(its base is {bases[op]})")
+        result[op] = fact_ids[op]
+    return result
+
+
+def arm_flags(arm: ir_numbers.ArmEntry) -> str:
+    parts = ["_PyIR_H_METADATA"]
+    if arm.emitted:
+        parts += ["_PyIR_H_DISPATCH", "_PyIR_H_SAVES_IP"]
+    if arm.adaptive and not arm.is_generic:
+        parts.append("_PyIR_H_SPECIALIZED")
+    if arm.observes is not None:
+        parts.append("_PyIR_H_INSTRUMENTED")
+    parts.append("_PyIR_H_IR_ONLY")
+    return " | ".join(parts)
+
+
+def arm_row(analysis: Analysis, arm: ir_numbers.ArmEntry) -> str:
+    """The _PyIRFormat row of an arm, or of its observed wrapper"""
+    fmt = arm.format
+    assert fmt is not None
+    own = arm_id(analysis, arm)
+    if arm.observes is not None:
+        twin = own
+    else:
+        twin = 0 if arm.twin is None else num_old_handlers(analysis) + arm.twin
+    fb_kind, fb_size = "0", "0"
+    if fmt.fb_schema is not None:
+        fb_kind = f"FB_{fmt.fb_schema.upper()}"
+        fb_size = f"sizeof(_PyFb{fmt.fb_schema})"
+    events = bits([f"(1u << PY_MONITORING_EVENT_{e})" for e in arm.events])
+    fixed = f".fixed_words = {fmt.fixed_words}, " if fmt.fixed_words else ""
+    dst = "_PyIR_NO_DST" if fmt.dst is None else str(fmt.dst)
+    return (
+        f"{{ .flags = {bits(list(fmt.flags))}, .effects = {bits(list(fmt.effects))}, "
+        f".roles = {{ {', '.join(fmt.roles)} }}, .imm = {fmt.imm}, "
+        f".fb = {fmt.fb}, .ninputs = {fmt.ninputs}, .dst = {dst}, "
+        f".borrow_mask = {fmt.borrow_mask:#x}, .fb_kind = {fb_kind}, "
+        f".fb_size = {fb_size}, .result_phase = _PyIR_RESULT_PHASE_NONE, "
+        f".output_kind = _PyIR_OUTPUT_REGISTER_DST, "
+        f".transfer_kind = _PyIR_TRANSFER_UNKNOWN, .owner_program = 0, "
+        f".owner_events = 0, .word_flags = 0, .error_routes = 0, "
+        f".operands = {fmt.operands}, {fixed}"
+        f".observer_outcome = {{ _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }}, "
+        f".reads = {{ {fmt.ninputs}, _PyIR_EXT_FIXED }}, "
+        f".writes = {{ {fmt.writes}, _PyIR_EXT_FIXED }}, "
+        f".through = {{ 0, _PyIR_EXT_FIXED }}, .shadow = {arm.base}, "
+        f".twin = {twin}, .events = {events} }}")
+
+
 def generate_ir_metadata(
-    filenames: list[str], analysis: Analysis, outfile: TextIO
+    filenames: list[str], analysis: Analysis, outfile: TextIO,
+    arms: Sequence[ir_numbers.ArmEntry] = ()
 ) -> None:
     formats = compute_formats(analysis)
     contracts = handler_contracts(analysis, formats)
@@ -239,7 +312,8 @@ def generate_ir_metadata(
     insts = handler_instructions(analysis)
     ids = handler_ids(analysis)
     fact_ids, bases, flags = handler_facts(analysis, formats)
-    n = num_handlers(analysis)
+    n = num_handlers(analysis, arms)
+    base_ids = arm_base_ids(analysis, arms, fact_ids, bases)
     first = first_ir_only_handler(analysis)
     ir_only = sorted((name for name in ids if ids[name] >= first),
                      key=lambda name: ids[name])
@@ -285,6 +359,10 @@ def generate_ir_metadata(
             out.emit(f"const {ctype} {table}[IR_NUM_HANDLERS] = {{\n")
             for name in sorted(fact_ids, key=fact_ids.get):
                 out.emit(f"[{fact_ids[name]}] = {values[name]}, /* {name} */\n")
+            for arm in arms:
+                value = (arm_flags(arm) if table == "_PyIR_HandlerFlags"
+                         else str(base_ids[arm.base]))
+                out.emit(f"[{arm_id(analysis, arm)}] = {value}, /* {arm.dotted} */\n")
             out.emit("};\n#endif\n\n")
         boundaries = generator_boundaries(analysis)
         out.emit("#ifdef NEED_IR_METADATA\n")
@@ -303,6 +381,9 @@ def generate_ir_metadata(
                          f"_PyIR_GEN_CONSUMER_{boundary.yielded}, "
                          f"_PyIR_GEN_CONSUMER_{boundary.completed}, "
                          f"_PyIR_GEN_CONSUMER_{boundary.resume}, {flags} }},\n")
+        for arm in arms:
+            i = arm_id(analysis, arm)
+            out.emit(f"[{i}] = {{ {i}, {i}, 0, 0, 0, 0 }},  /* {arm.dotted} */\n")
         out.emit("};\n#endif\n\n")
         ranges = analysis.numbers.ranges
         if ranges:
@@ -356,6 +437,9 @@ def generate_ir_metadata(
                                       programs[rows[name].ownership_events, rows[name].error_checkpoints,
                                                rows[name].normal_storage])
             out.emit(f"[{name}] = {init},\n")
+        for arm in arms:
+            out.emit(f"[{arm_id(analysis, arm)}] = {arm_row(analysis, arm)},  "
+                     f"/* {arm.dotted} */\n")
         out.emit("};\n")
         out.emit("#endif\n\n")
 
@@ -364,6 +448,9 @@ def generate_ir_metadata(
         out.emit(f"const char *const _PyIR_OnlyNames[{n - first}] = {{\n")
         for name in ir_only:
             out.emit(f'[{name} - IR_FIRST_ONLY_HANDLER] = "{name}",\n')
+        for arm in arms:
+            out.emit(f'[{arm_id(analysis, arm)} - IR_FIRST_ONLY_HANDLER] = '
+                     f'"{arm.dotted}",\n')
         out.emit("};\n")
         out.emit("#endif\n")
 
@@ -387,4 +474,6 @@ if __name__ == "__main__":
         args.input.append(DEFAULT_INPUT)
     data = analyze_files(args.input)
     with open(args.output, "w") as outfile:
-        generate_ir_metadata(args.input, data, outfile)
+        import rop_generator
+        generate_ir_metadata(args.input, data, outfile,
+                             rop_generator.load_arm_entries())

@@ -8060,13 +8060,9 @@ def arm_ids(analysis: Analysis,
             arms: Sequence[ir_numbers.ArmEntry]) -> dict[int, ir_numbers.ArmEntry]:
     """The register instruction arms by handler id: they follow the old
     handlers, in definition order (Python/register_ops)"""
-    first = num_handlers(analysis)
-    by_id = {first + arm.index: arm for arm in arms}
-    if by_id and max(by_id) >= ir_numbers.IR_LIMIT:
-        raise ir_numbers.NumberError(
-            f"the register instruction arms need ids up to {max(by_id)}, "
-            f"past the {ir_numbers.IR_LIMIT} that a handler field holds")
-    return by_id
+    num_handlers(analysis, arms)
+    first = num_old_handlers(analysis)
+    return {first + arm.index: arm for arm in arms if arm.emitted}
 
 
 def form_table(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry] = ()) -> str:
@@ -8090,7 +8086,7 @@ def form_declarations(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry] = 
     "Every form, declared before the forms, which call one another"
     ids = handler_ids(analysis)
     names = sorted({generator_word_entry(name, analysis) for name in ids}
-                   | {"UNKNOWN_OPCODE"} | {arm.name for arm in arms})
+                   | {"UNKNOWN_OPCODE"} | {arm.name for arm in arms if arm.emitted})
     lines = [f"static _PyIRTransfer ir_run_{name}({FORM_PARAMETERS}, _PyIRWord ir_word);\n"
              for name in names]
     lines.append(f"static _PyIRTransfer ir_binary_op({FORM_PARAMETERS}, _PyIRWord ir_word, "
@@ -9363,9 +9359,22 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
     outfile.write("#endif  // IR_FUNCTION_FORMS\n")
 
 
-def num_handlers(analysis: Analysis) -> int:
+def num_old_handlers(analysis: Analysis) -> int:
     "One past the highest pinned number, with the reserved ranges"
-    return analysis.numbers.num_handlers
+    return analysis.numbers.num_old_handlers
+
+
+def num_handlers(analysis: Analysis, arms: Sequence[ir_numbers.ArmEntry]) -> int:
+    """Every handler id: the old handlers, the register instruction arms and
+    the observed wrappers of the arms, which follow them.  The ids must fit
+    the handler field, IR_LIMIT of them."""
+    total = num_old_handlers(analysis) + len(arms)
+    if total > ir_numbers.IR_LIMIT:
+        raise ir_numbers.NumberError(
+            f"{num_old_handlers(analysis)} old handlers and {len(arms)} arms and "
+            f"wrappers need {total} handler ids, past the {ir_numbers.IR_LIMIT} "
+            "that a handler field holds")
+    return total
 
 
 def generate_ir_targets(filenames: list[str], analysis: Analysis,
@@ -9379,7 +9388,7 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     which is local to it and has the addresses of its labels."""
     ids = handler_ids(analysis)
     formats = compute_formats(analysis)
-    n = num_handlers(analysis)
+    n = num_old_handlers(analysis)
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
     boundaries = generator_boundaries(analysis)

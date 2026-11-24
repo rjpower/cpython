@@ -447,6 +447,13 @@ def check_family(c: Checker, fam: Family) -> None:
                      f"{', '.join(EXIT_NAMES)})")
     if len(set(fam.exits)) != len(fam.exits):
         c.report(fam.span, fam.name, "an exit is listed twice")
+    if not fam.ops and any(a.family == fam.name for a in c.arms.values()):
+        c.report(fam.span, fam.name, "a family with arms names the stack ops that "
+                 "lower to it: ops(NAME, ...)")
+    if len(set(fam.ops)) != len(fam.ops):
+        c.report(fam.span, fam.name, "a stack op is listed twice")
+    if len(set(fam.events)) != len(fam.events):
+        c.report(fam.span, fam.name, "an event is listed twice")
     schemas = feedback_schemas(fam.params)
     if len(schemas) > 1:
         c.report(fam.span, fam.name, "a family has at most one feedback operand")

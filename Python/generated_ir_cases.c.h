@@ -424,6 +424,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&_PyFunction_SetVersion), 
               "_PyFunction_SetVersion: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyThreadState_HasStackSpace), bool (*)(PyThreadState *, int)),
               "_PyThreadState_HasStackSpace: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&_PyThreadState_UpdateLastProfiledFrame), void (*)(PyThreadState *, _PyInterpreterFrame *, _PyInterpreterFrame *)),
+              "_PyThreadState_UpdateLastProfiledFrame: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_LeaveRecursiveCallPy), void (*)(PyThreadState *)),
               "_Py_LeaveRecursiveCallPy: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_Py_LeaveRecursiveCallTstate), void (*)(PyThreadState *)),

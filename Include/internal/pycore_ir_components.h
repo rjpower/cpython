@@ -147,8 +147,15 @@
               ARGS(borrowed), TEST(object), EFFECTS()) \
     PRIMITIVE(PyValue_IsFalse, bool, (PyValueBorrow), \
               ARGS(borrowed), TEST(object), EFFECTS()) \
+    /* PyValue_IsNone (pycore_value.h) is `PyValue_Is(v, PyValue_None)`: \
+     * the word's bits against None's bits (an object word, the static \
+     * _Py_NoneStruct address with Py_TAG_REFCNT).  No call, no memory, no \
+     * callback, no failure.  True means the word is None, so the fact is \
+     * is(PyValue_None); the CONSTANT row gives None `inline \
+     * exact(_PyNone_Type)`, which implies object, so readers of the true \
+     * arm still get object */ \
     PRIMITIVE(PyValue_IsNone, bool, (PyValueBorrow), \
-              ARGS(borrowed), TEST(object), EFFECTS()) \
+              ARGS(borrowed), TEST(is(PyValue_None)), EFFECTS()) \
     /* VALUE_CHECK_FUNC(Bool) and PyValue_LongCheckExact (pycore_value.h): \
      * an object word, and its type read through ob_type.  The object check \
      * dereferences the word, so NULL is not admitted */ \

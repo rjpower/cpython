@@ -1097,10 +1097,6 @@ class VerifierTests(unittest.TestCase):
                 "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(), EXITS(next))")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 # Rows that use the columns that name another row; TA declares the tree's
 COLUMN_ROWS = """
 #define TEST_COLUMNS(PRIMITIVE, HELPER, MACRO) \\
@@ -1255,3 +1251,7 @@ class ColumnTests(unittest.TestCase):
                         w = capi.leaf_primitive(row.name, i)
                         self.assertNotEqual(w, 0)
                         capi.leaf_primitive("PyValue_CLOSE", w)
+
+
+if __name__ == "__main__":
+    unittest.main()

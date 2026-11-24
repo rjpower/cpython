@@ -2806,12 +2806,14 @@ dummy_func(
             _GUARD_LOAD_SUPER_ATTR_METHOD +
             _LOAD_SUPER_ATTR_METHOD;
 
-        op(_GUARD_LOAD_SUPER_ATTR_METHOD, (global_super_st, class_st, unused -- global_super_st, class_st, unused)) {
+        op(_GUARD_LOAD_SUPER_ATTR_METHOD, (global_super_st: object, class_st: object, unused -- global_super_st: is(PySuper_Type), class_st, unused))
+            effects(reads) exits(next, miss)
+        {
             PyObject *global_super = PyValue_AsKnownObjectBorrow(global_super_st);
             PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
             assert(oparg & 1);
             EXIT_IF(global_super != (PyObject *)&PySuper_Type);
-            EXIT_IF(!PyType_Check(class));
+            EXIT_IF(!PyType_Check(class), "the class is not a type");
         }
 
         op(_LOAD_SUPER_ATTR_METHOD, (global_super_st, class_st, self_st -- attr, self_or_null)) {

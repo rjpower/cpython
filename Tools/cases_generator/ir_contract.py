@@ -398,6 +398,9 @@ class Row:
     # and the macro of the handler's word that initializes the item
     bits: tuple[tuple[str, frozenset, frozenset], ...] = ()
     init: str = ""
+    # CONSTANT: how the constant is held, VALUE (a PyValue, ret PyValue) or
+    # OBJECT (a static object named by its address, ret its C type)
+    representation: str = ""
 
     def new_owner(self) -> bool:
         "whether a call returns a value that its caller must release"
@@ -627,13 +630,20 @@ def _parse_row(kind: str, fields: list[str]) -> Row:
             raise ValueError("INIT(macro): a macro of the handler's word")
         return Row(kind, fields[0].strip(), fields[1].strip(), bits=tuple(bits), init=init)
     if kind == "CONSTANT":
-        # A static immortal value (V8's roots): its facts are the value's
+        # A static immortal value (V8's roots): its facts are the value's.
+        # Or a static object, named by its address: `is(K)` compares a
+        # value's object with it
         if len(fields) != 2:
-            raise ValueError("CONSTANT(name, VALUE(inline facts))")
+            raise ValueError("CONSTANT(name, VALUE(inline facts) | OBJECT(type))")
+        if fields[1].strip().startswith("OBJECT("):
+            ctype = _inner(fields[1], "OBJECT").strip()
+            if not re.fullmatch(r"\w+", ctype):
+                raise ValueError("OBJECT(type): the C type of the static object")
+            return Row(kind, fields[0], ctype, representation="OBJECT")
         result = _parse_result(fields[1])
         if result.shape != "VALUE" or result.mode != "inline":
             raise ValueError("a CONSTANT is a static immortal value: VALUE(inline facts)")
-        return Row(kind, fields[0], "PyValue", result=result)
+        return Row(kind, fields[0], "PyValue", result=result, representation="VALUE")
     if kind == "DESTRUCTOR":
         if (len(fields) != 3 or fields[2] not in ("callback_free",)
                 or not re.fullmatch(r"\w+", fields[1])):
@@ -859,6 +869,8 @@ def component_checks(table: dict[str, Row] | None = None) -> list[str]:
         elif row.kind == "PRIMITIVE":
             call = ", ".join(f"({p}){{0}}" for p in row.params)
             check(f"{row.name}({call})", row.ret, row.name)
+        elif row.kind == "CONSTANT" and row.representation == "OBJECT":
+            check(f"&{row.name}", f"{row.ret} *", row.name)
         elif row.kind == "CONSTANT":
             constants.append(row.name)
         elif row.kind == "STATE":
@@ -1735,6 +1747,15 @@ def condition_facts(cond: list[str], views: Views, table: dict[str, Row],
             break
     else:
         return None
+    other = _unwrap(sides[1], table)
+    if other[:1] == ["&"] and len(other) == 2 and table.get(other[1]) is not None \
+            and table[other[1]].representation == "OBJECT":
+        # `x == &K`: x's object is the static object K, is(K)
+        name = views.resolve(_unwrap(sides[0], table))
+        if name is None:
+            return None
+        return ({name: implied({VFact("is", other[1])})} if (op == "==") == holds
+                else {}), ""
     field = views.field(sides[0])
     call = _call_of(_unwrap(sides[0], table), table)
     if field is not None and field[0].result.shape == "MEASURE":
@@ -2172,8 +2193,7 @@ class OwnershipWalk:
     def owes_nothing(self, facts: frozenset) -> bool:
         "whether a value with facts is inline or a CONSTANT row's (V8's roots)"
         return INLINE in facts or any(
-            f.kind == "is" and f.arg in self.table and self.table[f.arg].kind == "CONSTANT"
-            for f in facts)
+            f.kind == "is" and is_value_constant(self.table.get(f.arg)) for f in facts)
 
     def join(self, ends: list[_State | None]) -> _State | None:
         """where paths meet: the same obligations; the facts that all of them
@@ -2812,7 +2832,7 @@ class OwnershipWalk:
             state.end_restart(f"the move of `{rhs[0]}`")
             return
         constant = self.table.get(rhs[0]) if len(rhs) == 1 else None
-        if constant is not None and constant.kind == "CONSTANT":
+        if is_value_constant(constant):
             # A static immortal value: its declared facts, no count
             facts = implied(constant.result.facts | (
                 set() if NULL_FACT in constant.result.facts else {NONNULL}))
@@ -3053,7 +3073,7 @@ def _value_results(uop: Uop, where: Token, rhs: list[str], table: dict[str, Row]
                     return [(implied(spec.facts | {NONNULL}), spec.mode, call[0].name)
                             for spec in specs]
     row = table.get(rhs[0]) if len(rhs) == 1 else None
-    if row is not None and row.kind == "CONSTANT":
+    if is_value_constant(row):
         identity = set() if NULL_FACT in row.result.facts else {VFact("is", row.name)}
         return [(implied(row.result.facts | identity), "inline", row.name)]
     if len(rhs) == 1 and re.fullmatch(r"[A-Za-z_]\w*", rhs[0]) and rhs[0] not in seen:
@@ -3225,6 +3245,11 @@ def check_state_reads(uop: Uop, contract: Contract | None, table: dict[str, Row]
                                  "no state(...) clause declares", t)
 
 
+def is_value_constant(row: Row | None) -> bool:
+    "whether row is a CONSTANT held as a PyValue (V8's roots)"
+    return row is not None and row.kind == "CONSTANT" and row.representation == "VALUE"
+
+
 def check_identities(uop: Uop, contract: Contract, table: dict[str, Row]) -> None:
     """is(K) names a CONSTANT row's value, which is not NULL (that is
     `null`), in the uop's declaration and in the rows it calls"""
@@ -3242,7 +3267,7 @@ def check_identities(uop: Uop, contract: Contract, table: dict[str, Row]) -> Non
         if constant is None or constant.kind != "CONSTANT":
             raise analysis_error(f"{uop.name}: {f} names `{f.arg}`, which is no CONSTANT row",
                                  where)
-        if NULL_FACT in constant.result.facts:
+        if constant.representation == "VALUE" and NULL_FACT in constant.result.facts:
             raise analysis_error(f"{uop.name}: {f}: NULL is no identity; it is `null`", where)
 
 
@@ -3623,6 +3648,11 @@ def _stated_facts(cond: list[str], views: Views, table: dict[str, Row],
     for name, facts in found[0].items():
         if name in table and table[name].kind == "STATE":
             result[name] = sorted(f for f in facts if f.kind in STATE_FACTS)
+        # A comparison with an object CONSTANT's address, `x == &K`
+        for f in sorted(facts):
+            row = table.get(f.arg) if f.kind == "is" else None
+            if row is not None and row.representation == "OBJECT" and "&" in cond:
+                result.setdefault(name, []).append(f)
     for tkn_text, args in _calls_in_texts(cond):
         row = table.get(tkn_text)
         if row is None:

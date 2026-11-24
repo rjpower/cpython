@@ -79,6 +79,9 @@
  *       a static immortal value (V8's roots): PyValue_None, PyValue_True,
  *       PyValue_False and PyValue_NULL, whose fact is `null`, the negation
  *       of nonnull
+ *   CONSTANT(name, OBJECT(type))
+ *       a static object, named by its address and held to its C type:
+ *       `is(name)` of a value is that its object is this one
  *
  * Rows for C functions are trusted declarations: the static checks hold
  * their types, not their effects, to the C definitions (rd/design.md
@@ -99,6 +102,8 @@
     CONSTANT(PyValue_True, VALUE(inline exact(PyBool_Type))) \
     CONSTANT(PyValue_False, VALUE(inline exact(PyBool_Type))) \
     CONSTANT(PyValue_NULL, VALUE(inline null)) \
+    /* Static objects that guards compare by address */ \
+    CONSTANT(PySuper_Type, OBJECT(PyTypeObject)) \
     /* Tag tests: bits in, no memory.  PyValue_IsNull is bits == 0: NULL \
      * exactly when it holds */ \
     PRIMITIVE(PyValue_IsNull, bool, (PyValueBorrow), \

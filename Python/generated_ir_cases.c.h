@@ -5,6 +5,8 @@
 
 #ifdef IR_FUNCTION_FORMS
 /* The rows of pycore_ir_components.h against their C definitions */
+static_assert(__builtin_types_compatible_p(__typeof__(&PySuper_Type), PyTypeObject *),
+              "PySuper_Type: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsNull((PyValueBorrow){0})), bool),
               "PyValue_IsNull: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(PyValue_IsInlineInt((PyValueBorrow){0})), bool),

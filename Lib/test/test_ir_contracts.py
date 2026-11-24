@@ -1208,6 +1208,36 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"is\(PyValue_NULL\): NULL is no identity; it is `null`")
 
+    def test_identities_of_static_objects(self):
+        # F21, _GUARD_LOAD_SUPER_ATTR_METHOD: a CONSTANT row names a static
+        # object by address; a comparison with it establishes is(K)
+        row = self.table["PySuper_Type"]
+        self.assertEqual((row.kind, row.ret, row.representation),
+                         ("CONSTANT", "PyTypeObject", "OBJECT"))
+        self.assertIn("__typeof__(&PySuper_Type), PyTypeObject *)",
+                      "\n".join(ir_contract.component_checks()))
+        source = """
+            op(_OP, (x: object -- x: is(PySuper_Type))) effects() exits(next, miss) {
+                PyObject *o = PyValue_AsKnownObjectBorrow(x);
+                EXIT_IF(%s);
+            }
+        """
+        self.verify(source % "o != (PyObject *)&PySuper_Type")
+        self.verify(source % "!(o == (PyObject *)&PySuper_Type)")
+        self.refuses(source % "o == (PyObject *)&PySuper_Type",
+                     r"`x` is declared is\(PySuper_Type\), which nothing establishes")
+        # A value that is a static object still owes its count, unlike
+        # PyValue_None's
+        self.refuses("""
+            op(_OP, (x: consumed object --)) effects() exits(next, miss) {
+                PyObject *o = PyValue_AsKnownObjectBorrow(x);
+                EXIT_IF(o != (PyObject *)&PySuper_Type);
+            }
+        """, r"on next, `x` is still owned, but it is declared consumed")
+        with self.assertRaisesRegex(SyntaxError, r"row SPAM: OBJECT\(type\)"):
+            ir_contract.parse_rows("#define X(PRIMITIVE, HELPER, MACRO) "
+                                   "CONSTANT(SPAM, OBJECT(PyTypeObject *))")
+
     def test_exact_types_join_by_union(self):
         # A union TEST, and the join of two exact types
         source = """

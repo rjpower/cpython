@@ -15,11 +15,11 @@ generated C uses the value API and never `.bits`.
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from rop_catalog import (CONVENTIONS, CReturn, CSource, CTest, DebtKind, Effect, Fact,
+from rop_catalog import (Schema, SchemaCtor, CONVENTIONS, CReturn, CSource, CTest, DebtKind, Effect, Fact,
                          FieldKind,
                          Handle, Scalar, Slot, Wrap)
 from rop_check import GraphInfo, Program
-from rop_model import (Advance, Arm, BoolLit, Branch, Call, CallTerm, Cases,
+from rop_model import (SchemaType, Advance, Arm, BoolLit, Branch, Call, CallTerm, Cases,
                        Each, Exit, Expr, Extern, Goto, Guard, HandleType, Let,
                        Name, Nat, Placement, Publish, ScalarType, Target, Type,
                        WrapType)
@@ -92,8 +92,14 @@ def source_text(source: CSource, ret: str, out: str | None) -> str:
             return ""
 
 
+# The C entry type of each feedback schema whose arms are lowered
+SCHEMA_C = {Schema.Attr: "_PyFbAttr"}
+
+
 def c_type(t: Type) -> str | None:
     """The C type of a graph value, None for one that has no C variable"""
+    if isinstance(t, SchemaType) and t.ctor is SchemaCtor.Recipe:
+        return {Schema.Attr: "_PyAttrRecipe"}.get(t.schema)
     if isinstance(t, ScalarType):
         return SCALAR_C.get(t.scalar)
     if isinstance(t, HandleType):
@@ -272,6 +278,7 @@ def home_views(arm: Arm) -> dict[str, str]:
 class Lowering:
     """The statements of one arm, with its decoding and labels"""
     arm: str
+    words: int = 0           # operand words after the head, which dispatch skips
     decls: list[str] = field(default_factory=list)
     body: list[str] = field(default_factory=list)
 
@@ -300,6 +307,7 @@ class ArmLowerer:
         self.facts_in: dict[str, Facts] = {}
         self.targeted: set[str] = set()      # blocks reached by a goto
         self.next_label: str | None = None
+        self.acquired: set[str] = set()      # operands whose owner acquire() took
 
     # Names
 
@@ -327,12 +335,22 @@ class ArmLowerer:
 
     def slot(self, operand: str) -> Slot:
         p = self.placements[operand]
-        if p.kind is not FieldKind.home and p.kind is not FieldKind.feedback:
+        if p.kind not in (FieldKind.home, FieldKind.feedback, FieldKind.name):
             raise Unsupported(f"{self.arm.name}: operand {operand} is a {p.kind.name} field")
         (slot,) = p.slots
-        if slot.word != 0:
+        if slot.word != 0 and p.kind is not FieldKind.feedback:
             raise Unsupported(f"{self.arm.name}: operand {operand} is in an operand word")
         return slot
+
+    def field(self, operand: str) -> str:
+        """The C expression of an operand's field.  The head's fields are
+        IR_A to IR_D; a field of an operand word is read from the word at its
+        place after the head, which the handler has not yet passed over."""
+        slot = self.slot(operand)
+        if slot.word == 0:
+            return f"IR_{slot.name}(ir_word)"
+        return (f"((uint32_t)(this_instr[{slot.word}] >> {slot.offset - 64 * slot.word})"
+                f" & {(1 << slot.width) - 1:#x})")
 
     def home(self, operand: str) -> str:
         """The address of an operand's home, declared on first use"""
@@ -358,7 +376,7 @@ class ArmLowerer:
         if isinstance(e, Call):
             if e.callee == "use":
                 return HandleType(Handle.B)
-            if e.callee == "dup":
+            if e.callee in ("dup", "acquire"):
                 return HandleType(Handle.O)
             x = self.program.externs.get(e.callee)
             if x is not None and not isinstance(x.result, Cases):
@@ -377,7 +395,7 @@ class ArmLowerer:
     def expr_text(self, e: Expr) -> str:
         if isinstance(e, Name):
             if e.name in self.placements:
-                raise Unsupported(f"{self.arm.name}: operand {e.name} used as a value")
+                return self.operand_value(e.name)
             return self.local(e.name)
         if isinstance(e, Nat):
             return str(e.value)
@@ -387,6 +405,20 @@ class ArmLowerer:
             return self.call_expr(e)
         raise Unsupported(f"{self.arm.name}: expression {e}")
 
+    def operand_value(self, operand: str) -> str:
+        """A name or feedback operand read as a value: the interned name, or
+        the site's entry (the entry is declared by its own field)"""
+        p = self.placements[operand]
+        if p.kind is FieldKind.name:
+            return f"GETITEM(FRAME_CO_NAMES, {self.field(operand)})"
+        if p.kind is FieldKind.feedback:
+            param = next(x for x in self.family.params if x.name == operand)
+            schema = param.type.schema
+            if schema not in SCHEMA_C:
+                raise Unsupported(f"{self.arm.name}: no C entry type for feedback {schema}")
+            return f"(const {SCHEMA_C[schema]} *)IR_FB({self.field(operand)})"
+        raise Unsupported(f"{self.arm.name}: operand {operand} used as a value")
+
     def call_expr(self, e: Call) -> str:
         if e.callee == "use":
             (arg,) = e.args
@@ -395,6 +427,15 @@ class ArmLowerer:
         if e.callee == "dup":
             (arg,) = e.args
             return f"PyValue_DUP({self.expr_text(arg)})"
+        if e.callee == "acquire":
+            # The owner of a dying source: a local keeps its binding, so the
+            # instruction takes a count of its own; a temporary gives its own
+            (arg,) = e.args
+            assert isinstance(arg, Name)
+            home = self.home(arg.name)
+            self.acquired.add(arg.name)
+            return (f"((ir_word & {self.local_flag(arg.name)}) ? PyValue_DUP(*{home}) "
+                    f": _PyFrame_TakeHome(frame, {home}))")
         if e.callee == "unwrap":
             (arg,) = e.args
             return self.expr_text(arg)
@@ -424,7 +465,8 @@ class ArmLowerer:
         body = []
         for line in self.lines:
             body.append(line)
-        return Lowering(self.arm.name, self.decls, self.drop_unused_labels(body))
+        return Lowering(self.arm.name, self.enc.words, self.decls,
+                        self.drop_unused_labels(body))
 
     def drop_unused_labels(self, lines: list[str]) -> list[str]:
         text = "\n".join(lines)
@@ -511,6 +553,10 @@ class ArmLowerer:
                 raise Unsupported(f"{self.arm.name}: debt {d.kind.name} is not lowered yet")
         owners: dict[str, str | None] = {}
         for d in spent:
+            if d.subject in self.acquired:
+                # acquire() already took the owner or a count of its own
+                owners[d.subject] = None
+                continue
             home, flag = self.home(d.subject), self.local_flag(d.subject)
             view = self.views.get(d.subject)
             if view is not None and facts.has(view, Fact.inline_int):

@@ -27,6 +27,7 @@
 #include "pycore_opcode_utils.h"      // IS_SCOPE_EXIT_OPCODE()
 #include "pycore_pystate.h"           // _Py_GetConfig()
 #include "pycore_regcfg.h"
+#include "pycore_rop_metadata.h"      // ROP_HANDLER_Add_Generic
 
 #undef SUCCESS
 #undef ERROR
@@ -947,8 +948,63 @@ rule_swap(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Emit(t, src, NOP, NULL, 0, NULL, 0, NULL);
 }
 
+/* BINARY_OP.  Addition is the Add family (Python/register_ops/add.rop): its
+ * register instruction is Add.Generic's, with the family's operands in their
+ * declared order, x and y in, dst out.  The word starts on that arm, which
+ * installs the arm the operands call for.  The other operations are
+ * unported. */
+static int
+rule_binary_op(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (src->oparg != NB_ADD) {
+        return _PyRegTr_Legacy(t, src);
+    }
+    _PyRegCfg *cfg = t->cfg;
+    // Every handler finds its parameters before the op can raise ...
+    if (src->except >= 0 && !t->recipes) {
+        RETURN_IF_ERROR(bind_params_below(t, handler_base(cfg, src->except)));
+    }
+    // ... or, after the renames, its recipe
+    t->nrec = 0;
+    if (src->except >= 0 && t->recipes) {
+        RETURN_IF_ERROR(handler_recipe(t, handler_base(cfg, src->except)));
+    }
+    int nrec = t->nrec;
+    if (t->sp < 2) {
+        PyErr_Format(PyExc_SystemError, "stack underflow at line %d",
+                     src->loc.lineno);
+        return ERROR;
+    }
+    int uses[2] = {t->stack[t->sp - 2], t->stack[t->sp - 1]};
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    _PyRegOp *op;
+    RETURN_IF_ERROR(new_op(t, src, 2 + nrec, 1, &op));
+    if (nrec) {
+        RETURN_IF_ERROR(_PyRegCfg_AddOperands(cfg, nrec, &op->recipe));
+    }
+    op->opcode = ROP_HANDLER_Add_Generic;
+    int *in = _PyReg_IN(cfg, op);
+    in[0] = uses[0];
+    in[1] = uses[1];
+    _PyReg_OUT(cfg, op)[0] = dst;
+    note_op(t, op);
+    // The recipe's identities live until the op, which takes none
+    for (int q = 0; q < nrec; q++) {
+        in[2 + q] = t->rec[2 * q];
+        cfg->operands[op->recipe + q] = t->rec[2 * q + 1];
+    }
+    op->nread = 2;
+    op->npop = 2;
+    op->nimplicit = (int16_t)nrec;
+    op->nrecipe = (int16_t)nrec;
+    t->sp -= 2;
+    return _PyRegTr_Push(t, dst);
+}
+
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
+    [BINARY_OP] = rule_binary_op,
     [SWAP] = rule_swap,
 };
 

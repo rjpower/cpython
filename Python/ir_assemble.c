@@ -8,7 +8,6 @@
 #include "pycore_opcode_utils.h"    // IS_BACKWARDS_JUMP_OPCODE
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
-#include "pycore_rop_metadata.h"    // ROP_HANDLER_Add_Generic
 #include "pycore_symtable.h"        // _Py_SourceLocation
 #include "pycore_tuple.h"           // PyTuple_GET_VALUE()
 #include "pycore_value.h"           // Canonical constant representation
@@ -465,11 +464,6 @@ choose_handler(_PyRegOp *op, PyObject *consts)
             PyErr_Format(PyExc_SystemError,
                          "invalid BINARY_OP operation %d", oparg);
             return ERROR;
-        }
-        /* Addition is the Add family: its word starts on the generic arm,
-         * which installs the arm the operands call for */
-        if (oparg == NB_ADD) {
-            return ROP_HANDLER_Add_Generic;
         }
         return _PyIR_BINARY_OP_FIRST + oparg;
     }

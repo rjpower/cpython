@@ -204,6 +204,11 @@ class SliceTests(unittest.TestCase):
         # G0c9: GET_AWAITABLE's coroutine arm passes the input's reference
         # on and the other arm makes a new one; the result is owned on both
         'GET_AWAITABLE/_GET_AWAITABLE: output `iter` is declared owned, the record has ALIAS',
+        # G0c9: _SEND_ASYNC_GEN's body completes in place (it reaches the end
+        # of the body, `next`); SEND_ASYNC_GEN_XFER_DISCARD's yield is its
+        # fused transfer's, which G0d takes from the declaration
+        'SEND_ASYNC_GEN_XFER_DISCARD/_SEND_ASYNC_GEN: declares exits(branch, next, raise), '
+        'the record has branch, raise, yield',
         # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
         # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
         'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '

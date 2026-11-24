@@ -1993,7 +1993,11 @@ dummy_func(
             EXIT_IF(!PyAsyncGenASend_CheckExact(iter_o));
         }
 
-        replaced op(_SEND_ASYNC_GEN, (iter, null_in, v -- asend, null_out, retval)) {
+        replaced op(_SEND_ASYNC_GEN,
+                (iter: taken exact(PyAsyncGenASend_Type), null_in: taken nullable, v: taken
+                 -- asend: moved(iter), null_out: moved(null_in) nullable, retval: owned))
+            effects(runs_python) exits(next, branch, raise)
+        {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             assert(PyAsyncGenASend_CheckExact(iter_o));
             _PyStatusValue sent = _PyValue_Send(iter_o, v);

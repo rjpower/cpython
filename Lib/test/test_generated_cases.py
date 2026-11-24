@@ -957,8 +957,8 @@ class TestIRCases(unittest.TestCase):
             ('value = temp;', '#define temp replacement\nvalue = temp;\n#undef temp'),
             ('#endif\n            RELOAD_STACK();',
              '#else\n            value = PyValue_None;\n#endif\n            RELOAD_STACK();'),
-            ('window op(_YIELD_VALUE, (retval -- value))',
-             'window op(_YIELD_VALUE, (TAKE/1, retval -- value))'),
+            ('window op(_YIELD_VALUE, (retval: consumed -- value: moved(retval)))',
+             'window op(_YIELD_VALUE, (TAKE/1, retval: consumed -- value: moved(retval)))'),
         )
         for old, new in changes:
             with self.subTest(new=new):

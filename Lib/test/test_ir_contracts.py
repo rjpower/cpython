@@ -387,6 +387,83 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"OP: `flies` is not an effect")
 
+
+    # The exchange (SWAP): pass-through outputs that take each other's inputs
+
+    EXCHANGE = """
+        inst(OP, (bottom, unused[oparg-2], top --
+                  bottom: moved(top), unused[oparg-2], top: moved(bottom)))
+            effects() exits(next)
+        {
+            %s
+        }
+    """
+
+    def test_exchange_accepts_swap(self):
+        result = self.verify(self.EXCHANGE % "PyValue temp = bottom; bottom = top; top = temp;")
+        contract = ir_contract.contract_of(result.uops["OP"])
+        self.assertEqual({o.name: o.exchange for o in contract.outputs if o.exchange},
+                         {"bottom": "top", "top": "bottom"})
+        self.assertEqual({i.mode for i in contract.inputs}, {""})
+
+    def test_exchange_body_exchanges(self):
+        self.refuses(self.EXCHANGE % "PyValue temp = bottom; top = temp;",
+                     r"OP: the body leaves `bottom` with `bottom`, and it declares moved\(top\)")
+        self.refuses(self.EXCHANGE % "PyValue temp = bottom; bottom = top; top = temp; "
+                                     "PyValue_CLOSE(temp);",
+                     r"OP: an exchange's body only copies between bottom, top and temporaries")
+        self.refuses(self.EXCHANGE % "PyValue temp = bottom; bottom = PyValue_None; top = temp;",
+                     r"OP: an exchange's body only copies")
+        self.refuses("""
+            inst(OP, (bottom, unused[oparg-2], top --
+                      bottom: moved(top), unused[oparg-2], top: moved(bottom)))
+                effects(releases) exits(next)
+            {
+                PyValue temp = bottom; bottom = top; top = temp;
+            }
+        """, r"OP: an exchange has effects\(\) exits\(next\)")
+
+    def test_exchange_is_of_pass_throughs(self):
+        self.refuses("""
+            inst(OP, (bottom, top -- bottom: moved(top), top: moved(bottom), copy: moved(top)))
+                effects() exits(next)
+            {
+                PyValue temp = bottom; bottom = top; top = temp;
+            }
+        """, r"OP: `copy` is no pass-through, and moves from `top`, which is exchanged")
+        self.refuses("""
+            inst(OP, (bottom, top -- bottom: moved(bottom), top))
+                effects() exits(next)
+            {
+            }
+        """, r"OP: `bottom` is exchanged with itself")
+
+    def test_exchange_is_a_permutation(self):
+        self.refuses("""
+            inst(OP, (a, b, c -- a: moved(b), b: moved(c), c))
+                effects() exits(next)
+            {
+                a = b; b = c;
+            }
+        """, r"OP: the exchange of a, b takes b, c: no permutation")
+        self.refuses("""
+            inst(OP, (a, b, c -- a: moved(c), b: moved(c), c: moved(a)))
+                effects() exits(next)
+            {
+                PyValue t = a; a = c; b = c; c = t;
+            }
+        """, r"no permutation")
+
+    def test_exchange_keeps_homes(self):
+        self.refuses("""
+            inst(OP, (bottom, unused[oparg], top --
+                      bottom: moved(top), unused[oparg+1], top: moved(bottom)))
+                effects() exits(next)
+            {
+                PyValue temp = bottom; bottom = top; top = temp;
+            }
+        """, r"OP: `top` is exchanged, and its home changes")
+
     # V1, V2
 
     def test_undeclared_callee(self):

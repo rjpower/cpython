@@ -260,7 +260,9 @@ dummy_func(
             LOAD_FAST,
         };
 
-        inst(LOAD_FAST_CHECK, (-- value)) {
+        inst(LOAD_FAST_CHECK, (-- value: owned))
+            effects(runs_python) exits(next, raise)
+        {
             PyValueBorrow value_s = PyValue_Borrow(GETLOCAL(oparg));
             if (PyValue_IsNull(value_s)) {
                 _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
@@ -357,7 +359,9 @@ dummy_func(
             STORE_FAST,
         };
 
-        leaf pure inst(POP_TOP, (value --)) {
+        leaf inst(POP_TOP, (value: consumed --))
+            effects(releases) exits(next)
+        {
             PyValue_XCLOSE(value);
         }
 
@@ -394,11 +398,15 @@ dummy_func(
             PyValue_CLOSE_SPECIALIZED(value, _PyUnicode_ExactDealloc);
         }
 
-        op(_POP_TOP_OPARG, (args[oparg] -- )) {
+        op(_POP_TOP_OPARG, (args[oparg]: consumed --))
+            effects(writes, releases) exits(next)
+        {
             IR_CLOSE_INPUTS(args);
         }
 
-        pure inst(PUSH_NULL, (-- res)) {
+        pure inst(PUSH_NULL, (-- res: owned null))
+            effects() exits(next)
+        {
             res = PyValue_NULL;
         }
 
@@ -679,15 +687,21 @@ dummy_func(
         // The one guarded form for a value that is None or an instance of a
         // type with no __bool__ or __len__ (the version covers those
         // slots): None is false, any such instance true.
-        op(_GUARD_NONE_OR_TYPE_VERSION, (type_version/2, value -- value)) {
+        op(_GUARD_NONE_OR_TYPE_VERSION, (type_version/2, value: object -- value: object))
+            effects(reads) exits(next, miss)
+        {
             assert(type_version != 0);
             if (!PyValue_IsNone(value)) {
                 PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(value));
-                EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version);
+                EXIT_IF(FT_ATOMIC_LOAD_UINT_RELAXED(tp->tp_version_tag) != type_version,
+                        "a value other than None must have the type version the word was specialized for");
             }
         }
 
-        op(_TRUTH_NONE_OR_PLAIN, (value -- res, v)) {
+        op(_TRUTH_NONE_OR_PLAIN,
+                (value: consumed -- res: owned exact(PyBool_Type), v: moved(value)))
+            effects() exits(next)
+        {
             res = PyValue_IsNone(value) ? PyValue_False : PyValue_True;
             v = value;
             DEAD(value);
@@ -6472,7 +6486,9 @@ dummy_func(
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        tier1 inst(NOT_TAKEN, ( -- )) {
+        tier1 inst(NOT_TAKEN, ( -- ))
+            effects() exits(next)
+        {
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }

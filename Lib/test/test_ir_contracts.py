@@ -173,6 +173,14 @@ class SliceTests(unittest.TestCase):
               'inferred "", declared "PyValue_None"',
               f'{handler}.record.uops[0].guards[0].facts[0].kind: '
               'inferred "IS_NONE", declared "IDENTITY"')),
+        # Batch 1: _PUSH_NULL's result is NULL (F19); LOAD_FAST_CHECK's raise
+        # path calls _PyEval_FormatExcCheckArg, which runs Python (F11)
+        'GET_ITER_SELF.record.uops[1].results: inferred 0 entries [], declared 1 '
+        '[{"__type": "Fact", "arg": "", "kind": "IS_NULL", "subject": "v1"}]',
+        'LOAD_FAST_CHECK.record.format.runs_code: inferred false, declared true',
+        'LOAD_FAST_CHECK.record.uops[0].effects: inferred 2 entries '
+        '["MAY_RAISE", "READS_HEAP"], declared 6 ["ALLOCATES", "MAY_RAISE", '
+        '"MAY_RELEASE", "MAY_RUN_PYTHON", "READS_HEAP", "WRITES_HEAP"]',
         # Batch 6: PyFunction_Check compares the exact type (funcobject.h);
         # _INIT_CALL_PY_EXACT_ARGS pushes a frame, which writes the heap and
         # releases the callable; SET_FUNCTION_ATTRIBUTE runs no code; the call

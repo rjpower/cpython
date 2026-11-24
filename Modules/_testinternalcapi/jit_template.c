@@ -84,6 +84,18 @@ emit_epilogue(_PyJitAsm *a)
     _PyJitAsm_Ret(a);
 }
 
+/* A release's slow path comes back through its tail (_PyJitWordCx);
+   the probe has no unit to test for retirement, so each tail goes straight
+   back to the hot path */
+static void
+bind_release_tails(_PyJitAsm *a, const _PyJitWordCx *cx)
+{
+    for (int k = 0; k < cx->nreleases && k < _PyJit_MAX_RELEASES; k++) {
+        _PyJitAsm_Bind(a, cx->release_tail[k]);
+        _PyJitAsm_Jmp(a, cx->release_back[k]);
+    }
+}
+
 static int
 u64_items(PyObject *seq, uint64_t *out, Py_ssize_t n, const char *what)
 {
@@ -255,6 +267,7 @@ jit_lower(PyObject *module, PyObject *args)
         return NULL;
     }
     emit_epilogue(&a);
+    bind_release_tails(&a, &cx);
     _PyJitCode code;
     int placed = _PyJitAsm_Place(&a, &code);
     _PyJitAsm_Fini(&a);
@@ -409,6 +422,7 @@ build_unit(_PyInterpreterFrame *frame, uint32_t index, _PyJitTemplate template,
         _PyJitAsm_Pop(&a, saved[i]);
     }
     _PyJitAsm_Ret(&a);
+    bind_release_tails(&a, &cx);
     int placed = _PyJitAsm_Place(&a, code);
     _PyJitAsm_Fini(&a);
     return placed;

@@ -2779,6 +2779,10 @@ IR_HOT_ROUTINE(gen_complete, PyValue gen_value);
 #define IR_FUNCTION_FORMS
 #include "generated_ir_cases.c.h"
 #undef IR_FUNCTION_FORMS
+/* The whole-word completion stubs of the planned arms (regions89 G1a),
+ * from the same handler text, with the forms' bindings of the macros they
+ * do not bind themselves */
+#include "generated_ir_stubs.c.h"
 #pragma GCC diagnostic pop
 
 #ifdef _PY_JIT_SUPPORTED

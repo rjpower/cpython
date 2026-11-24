@@ -45,6 +45,40 @@ extern "C" {
 
    The JIT runs in the GIL build on Linux x86-64 (_PY_JIT_SUPPORTED). */
 
+/* The completion status of a whole-word stub (g1a/abi.md), in eax:
+ * 0 the word completed and nothing reentrant ran; MISS a guard failed with
+ * the word untouched (alone); ESCAPED an executed path may have reentered
+ * Python (test RETIRED before the successor); RAISED the word raised, its
+ * raise checkpoint in force; BRANCH the word completed at its static
+ * target; AGAIN the word is untouched and runs again under its current
+ * handler (a specialisation's redispatch). */
+#define _PyIR_MISS      1
+#define _PyIR_ESCAPED   2
+#define _PyIR_RAISED    4
+#define _PyIR_BRANCH    8
+#define _PyIR_AGAIN     16
+
+/* The plan of a handler (Python/generated_ir_stubs.c.h, by handler): NONE
+ * keeps the template or the form's call; INLINE is a template whose misses
+ * run the family's generic stub; SHARED is a call of the arm's stub. */
+enum {
+    _PyIR_PLAN_NONE,
+    _PyIR_PLAN_INLINE,
+    _PyIR_PLAN_SHARED,
+};
+
+typedef struct {
+    uint8_t region;
+    /* A uop of the arm declares runs_python or polls, so its completions
+     * report ESCAPED: the site's cold path tests RETIRED inline */
+    uint8_t escapes;
+    /* int stub(PyThreadState *, _PyInterpreterFrame *, _PyIRWord *site) */
+    const void *stub;           // a SHARED arm's
+    const void *generic;        // the family's generic, for a miss
+} _PyIRStubPlan;
+
+PyAPI_DATA(const _PyIRStubPlan) _PyIR_StubPlans[];
+
 /* The jit modes (-X jit, PYTHON_JIT) */
 enum {
     _PyJIT_OFF,
@@ -53,7 +87,7 @@ enum {
 };
 
 /* _PyJitUnit.invalid, which compiled code tests */
-#define _PyJIT_STALE    1   // the handler column has changed since compile
+#define _PyJIT_STALE    1   // compiled code found a word whose handler changed
 #define _PyJIT_RETIRED  2   // the code is monitored: leave at once
 
 /* Warm-up events (frame entries and backward transfers) before jit=on
@@ -133,17 +167,6 @@ _PyJit_Retire(_PyCodeExec *exec)
     }
 }
 
-/* A handler of exec's column has been specialised or unspecialised
- * (Python/specialize.c): the unit is recompiled at the next warm-up event
- * while the code has compiles left. */
-static inline void
-_PyJit_NoteRewrite(_PyCodeExec *exec)
-{
-    if (exec->jit_unit != NULL && exec->jit_compiles < _PyJIT_MAX_COMPILES) {
-        exec->jit_unit->invalid |= _PyJIT_STALE;
-    }
-}
-
 /* Free the units of exec, which is being freed. */
 extern void _PyJit_FreeUnits(_PyCodeExec *exec);
 
@@ -159,7 +182,6 @@ PyAPI_FUNC(const void *const *) _PyEval_HandlerForms(void);
 #else  /* !_PY_JIT_SUPPORTED */
 
 static inline void _PyJit_Retire(_PyCodeExec *Py_UNUSED(exec)) {}
-static inline void _PyJit_NoteRewrite(_PyCodeExec *Py_UNUSED(exec)) {}
 static inline void _PyJit_FreeUnits(_PyCodeExec *Py_UNUSED(exec)) {}
 
 #endif  /* _PY_JIT_SUPPORTED */

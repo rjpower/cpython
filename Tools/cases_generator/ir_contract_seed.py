@@ -103,12 +103,16 @@ def uop_facts(analysis, records) -> dict[str, dict]:
                 for f in facts:
                     m = re.fullmatch(r"(\w+)\((.*?)(?:, (.*))?\)", f)
                     subject = values.get(m.group(2), m.group(2))
-                    entry["guards"].setdefault(subject, set()).add((m.group(1), m.group(3) or ""))
+                    # An argument that is a record value (in_bounds(v0)) is
+                    # written as the item that holds it, as the vocabulary does
+                    arg = values.get(m.group(3) or "", m.group(3) or "")
+                    entry["guards"].setdefault(subject, set()).add((m.group(1), arg))
             entry["implicit"].add(implicit)
             for f in u["results"]:
                 m = re.fullmatch(r"(\w+)\((.*?)(?:, (.*))?\)", f)
                 subject = values.get(m.group(2), m.group(2))
-                entry["results"].setdefault(subject, set()).add((m.group(1), m.group(3) or ""))
+                arg = values.get(m.group(3) or "", m.group(3) or "")
+                entry["results"].setdefault(subject, set()).add((m.group(1), arg))
     return found
 
 
@@ -252,10 +256,25 @@ def topic(name: str) -> str:
 
 
 def vocabulary_fact(kind: str, arg: str) -> ir_contract.VFact | None:
+    if kind == "IS_NONE":
+        # None is a CONSTANT row's value: its identity is is(PyValue_None)
+        return ir_contract.VFact("is", "PyValue_None")
     word = ir_contract.VOCABULARY_OF_KIND.get(kind)
-    if word is None or word in ir_contract.FACTS_WITH_ARGUMENT and not re.fullmatch(r"\w+", arg):
+    if word is None:
         return None
-    return ir_contract.VFact(word, arg if word in ir_contract.FACTS_WITH_ARGUMENT else "")
+    if word == "exact":
+        # A union of exact types: exact(T1|T2), without spaces
+        arg = "|".join(t.strip() for t in arg.split("|"))
+    elif word == "type_slot":
+        # A slot's value: type_slot(slot,fn); other comparisons have no word
+        parts = [t.strip() for t in arg.split("==")]
+        arg = ",".join(parts) if len(parts) == 2 else arg
+    if word not in ir_contract.FACTS_WITH_ARGUMENT | ir_contract.FACTS_WITH_OPTIONAL_ARGUMENT:
+        arg = ""
+    try:
+        return ir_contract.parse_fact(f"{word}({arg})" if arg else word, None)
+    except ValueError:
+        return None
 
 
 def predicate_test(name: str, arity: int) -> tuple[str, list[str]] | None:
@@ -341,6 +360,10 @@ def seed_rows(analysis, table, ctypes, macros, effects_of) -> tuple[list[SeedRow
         if (name in table or name in ir_contract.DSL_CONSTRUCTS
                 or ir_contract.CHECKED_ARITHMETIC.fullmatch(name)):
             continue
+        if all(name in ir_contract.with_slots(u, table) for u, _ in sites[name]):
+            # A local that holds a SLOT protocol's pointer at every call
+            # site (F6): the protocol's row declares the call
+            continue
         tables: list[str] = []
         arity = max(len(a) for _, a in sites[name])
         effects = set(effects_of.get(name, ()))
@@ -372,7 +395,7 @@ def seed_rows(analysis, table, ctypes, macros, effects_of) -> tuple[list[SeedRow
         if ctype is None and name not in macros:
             if name in ir_generator.VIEW_TAKES:
                 # A move of an owner out of its variable (ir_generator.VIEW_TAKES)
-                text = [f"MACRO({name}, ARGS(consumed), VALUE(owned), "
+                text = [f"MACRO({name}, ARGS(consumed), VALUE(moved(0)), "
                         f"EFFECTS({', '.join(ordered_effects(effects))}), EXITS())"]
                 rows.append(SeedRow(name, "MACRO", text, ["ir_generator.VIEW_TAKES"]
                                     + effect_tables, topic(name)))
@@ -552,6 +575,8 @@ class Clauses:
     effects: list[str] = field(default_factory=list)
     exits: list[str] = field(default_factory=list)
     feedback: list[str] = field(default_factory=list)
+    state: list[str] = field(default_factory=list)      # state(...) items
+    paths: list[str] = field(default_factory=list)      # paths(...) items
 
 
 class Gap(Exception):
@@ -576,8 +601,9 @@ def seed_clauses(uop, facts: dict, table, overrides: dict) -> Clauses:
     exits |= {GUARD_EXIT[k] for k in facts["guard_kinds"]}
     c.exits = [e for e in EXIT_ORDER if e in exits]
     feedback = set()
+    slots = ir_contract.with_slots(uop, table)
     for tkn, _ in ir_contract.body_calls(uop):
-        row = table.get(tkn.text)
+        row = slots.get(tkn.text)
         if row is not None:
             feedback |= row.feedback
     c.feedback = [f"{m}({f})" for m, f in sorted(feedback)]
@@ -623,6 +649,12 @@ def seed_clauses(uop, facts: dict, table, overrides: dict) -> Clauses:
                 raise Gap(f"`{item.name}` is an alias of no input it is assigned from")
             found = vocab(facts["guards"].get(source, ()), f"a guard fact of `{source}`")
             w = [f"moved({source})"] + words(found)
+        elif _always_null(uop, item.name):
+            # The CONSTANT row PyValue_NULL, VALUE(inline null): a NULL
+            # output owns nothing, and `null` says what the record holds
+            w = ["inline", "null"]
+        elif "out:" + item.name in overrides:
+            w = [f"moved({overrides['out:' + item.name]})"]
         else:
             found = vocab(facts["results"].get(item.name, ()), f"a result fact of `{item.name}`")
             w = ["owned"] + words(found)
@@ -632,7 +664,33 @@ def seed_clauses(uop, facts: dict, table, overrides: dict) -> Clauses:
     # than a value: the vocabulary has no place for it
     names = {o.name for o in uop.stack.outputs} | {
         o for o in (_alias_source(uop, x.name) for x in uop.stack.outputs) if o}
+    # A handler's state (STATE rows: call_state): a uop that reads it, or
+    # whose guards establish its facts (SELF(call_state, absent)), declares
+    # it in state(item -- item: facts), the facts at its next exit
+    for row in table.values():
+        if row.kind != "STATE":
+            continue
+        found = facts["guards"].get(row.name, set())
+        if not found and row.name not in [t.text for t in ir_contract._tokens(uop)]:
+            continue
+        stated = []
+        for kind, arg in sorted(found):
+            if kind.lower() in ir_contract.STATE_FACTS \
+                    and arg in ir_contract.STATE_ARGS[kind.lower()]:
+                stated.append(f"{kind.lower()}({arg})")
+            else:
+                raise Gap(f"a fact of the state `{row.name}`: {kind}({arg})")
+        c.state.append(f"{row.name} -- {row.name}" + (f": {' '.join(stated)}" if stated else ""))
+    # Facts of a frame path (a PATH row without arguments: globals,
+    # builtins), whose subject in the record is the path's name (G0a4)
+    frame_paths = {r.result.measure for r in table.values()
+                   if r.result.shape == "PATH" and not r.args}
+    for subject in sorted(set(facts["guards"]) & frame_paths):
+        found = vocab(facts["guards"][subject], f"a fact of the frame path `{subject}`")
+        c.paths.append(f"{subject}: {' '.join(words(found))}")
     for subject, found in facts["guards"].items():
+        if subject in table and table[subject].kind == "STATE" or subject in frame_paths:
+            continue
         if subject not in names and subject not in ins:
             raise Gap(f"guard facts of `{subject}`: "
                       f"{', '.join(f'{k}({a})' for k, a in sorted(found))}")
@@ -641,12 +699,24 @@ def seed_clauses(uop, facts: dict, table, overrides: dict) -> Clauses:
     return c
 
 
-def _alias_source(uop, name: str) -> str | None:
+def _always_null(uop, name: str) -> bool:
+    "whether every assignment of output name is PyValue_NULL"
+    rhs = [ir_records._uncast(r) for _, r in ir_contract._assignments(uop, name)]
+    return bool(rhs) and all(r == ["PyValue_NULL"] for r in rhs)
+
+
+def _alias_source(uop, name: str, depth: int = 0) -> str | None:
     ins = {i.name for i in uop.stack.inputs}
     for where, rhs in ir_contract._assignments(uop, name):
         rhs = ir_records._uncast(rhs)
         if len(rhs) == 1 and rhs[0] in ins:
             return rhs[0]
+        if len(rhs) == 1 and re.fullmatch(r"[A-Za-z_]\w*", rhs[0]) and depth < 3:
+            # A local that holds an input's value (G0a3: identity through
+            # locals): the input it was assigned from
+            source = _alias_source(uop, rhs[0], depth + 1)
+            if source is not None:
+                return source
         # `out = TAKE(in)`: the move of an input (ir_generator.VIEW_TAKES)
         args = ir_records._call(rhs, *sorted(ir_generator.VIEW_TAKES - {"PyValue_AsKnownObjectSteal"}))
         if args is not None and len(args) == 1 and len(args[0]) == 1 and args[0][0] in ins:
@@ -718,6 +788,10 @@ def render_uop(text: str, name: str, c: Clauses) -> str:
     clauses = [f"effects({', '.join(c.effects)})", f"exits({', '.join(c.exits)})"]
     if c.feedback:
         clauses.append(f"feedback({', '.join(c.feedback)})")
+    if c.state:
+        clauses.append(f"state({', '.join(c.state)})")
+    if c.paths:
+        clauses.append(f"paths({', '.join(c.paths)})")
     tail = text[close + 1:brace].strip()
     if tail:
         raise ValueError(f"{name}: text between its header and body: {tail!r}")
@@ -867,6 +941,13 @@ def differences(before: dict, after: dict) -> dict[str, list[str]]:
 # ---------------------------------------------------------------------------
 
 OVERRIDE = re.compile(r"on raise, `(\w+)` is still owned, but the site declares consumed")
+# DEAD(x) of an input the body neither releases nor moves: the skeleton
+# closes it after the uop, on next and on raise, which is `closed` (F4)
+CLOSE = re.compile(r"DEAD\(`(\w+)`\) drops an owned value")
+# An output assigned a local that holds an input's value: the verifier
+# names the move it expects (G0a3), and the record decides
+MOVE = re.compile(r"`(\w+)` is declared owned, but is assigned `\w+`, which is the input "
+                  r"`(\w+)`'s value: declare moved\((\w+)\)")
 REQUIREMENT = re.compile(r"passes `([^`]*)` to (\w+), which requires ([\w(), ]+) of it")
 REQUIRES = "requires"     # the overrides' key of an input's requirements
 
@@ -934,6 +1015,18 @@ def main() -> None:
                 m = OVERRIDE.search(error)
                 if m and name in seeded and overrides[name].get(m.group(1)) != "taken":
                     overrides[name][m.group(1)] = "taken"
+                    retried.add(name)
+                    changed = True
+                    continue
+                m = MOVE.search(error)
+                if m and name in seeded and overrides[name].get("out:" + m.group(1)) != m.group(3):
+                    overrides[name]["out:" + m.group(1)] = m.group(3)
+                    retried.add(name)
+                    changed = True
+                    continue
+                m = CLOSE.search(error)
+                if m and name in seeded and overrides[name].get(m.group(1)) != "closed":
+                    overrides[name][m.group(1)] = "closed"
                     retried.add(name)
                     changed = True
                     continue

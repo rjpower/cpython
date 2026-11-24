@@ -1299,10 +1299,29 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual(rows["spam"].result.failure, "NEGATIVE")
         with self.assertRaisesRegex(SyntaxError, r"row spam: HELPER: 6 columns, then "
                                                  r"optionally each of FEEDBACK\(\.\.\.\), "
-                                                 r"SLOW\(\.\.\.\), TAKES_VIEW\(\.\.\.\) once; got 'EXITS\(next\)'"):
+                                                 r"SLOW\(\.\.\.\), TAKES_VIEW\(\.\.\.\), "
+                                                 r"HOMES\(\.\.\.\), OBSERVER\(\.\.\.\) once; "
+                                                 r"got 'EXITS\(next\)'"):
             ir_contract.parse_rows(
                 "#define X(PRIMITIVE, HELPER, MACRO) "
                 "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(), EXITS(next))")
+
+    def test_homes_and_observer_describe_a_reentrant_row(self):
+        rows = ir_contract.parse_rows(
+            "#define X(PRIMITIVE, HELPER, MACRO) "
+            "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(runs_python), "
+            "HOMES(canonical), OBSERVER(none))")
+        self.assertEqual((rows["spam"].homes, rows["spam"].observer), ("canonical", "none"))
+        for columns, message in (("HOMES(canonical)", "declares no reentry effect"),
+                                 ("OBSERVER(none)", "declares no reentry effect")):
+            with self.assertRaisesRegex(SyntaxError, message):
+                ir_contract.parse_rows(
+                    "#define X(PRIMITIVE, HELPER, MACRO) "
+                    f"HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(reads), {columns})")
+        with self.assertRaisesRegex(SyntaxError, r"HOMES\(canonical \| unknown\)"):
+            ir_contract.parse_rows(
+                "#define X(PRIMITIVE, HELPER, MACRO) "
+                "HELPER(spam, int, (int), ARGS(scalar), SCALAR, EFFECTS(runs_python), HOMES(any))")
 
     # F1: fact kinds, their classes and lifetimes
 

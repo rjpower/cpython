@@ -1,5 +1,6 @@
 """Exceptional source effects need complete typed source, even when inert."""
 
+import dataclasses
 from pathlib import Path
 import tempfile
 import unittest
@@ -11,6 +12,7 @@ from test import test_tools
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import analyzer
+    import ir_contract
     import ir_error_effects
     import ir_generator
     import ir_numbers
@@ -111,6 +113,30 @@ class ErrorEffectTests(unittest.TestCase):
                 self.assertFalse(summary.unwind_sources)
                 self.assertFalse(summary.may_fail)
                 self.assertEqual(summary.homes, ir_error_effects.HomeEffect.NO_ARENA_WRITE)
+
+    def test_helper_effects_are_the_rows(self):
+        # A call's reentry, homes and observer claims are its row's: the
+        # same signature has other effects when the row declares others
+        effect = ir_error_effects.HomeEffect
+        rows = ir_contract.rows()
+        signature = ir_error_effects.SIGNATURES["check_periodics"]
+        for changes, homes, observer in (
+                ({}, effect.PRESERVES_SCRATCH_ABSENCE, True),
+                ({"homes": "canonical", "observer": "none"},
+                 effect.PRESERVES_CANONICAL_OR_NULL, False),
+                ({"homes": "unknown"}, effect.UNKNOWN, True),
+                ({"effects": frozenset({"reads"})}, effect.NO_ARENA_WRITE, True)):
+            with self.subTest(changes=changes):
+                row = dataclasses.replace(rows["check_periodics"], **changes)
+                with mock.patch.dict(rows, {"check_periodics": row}):
+                    helper = ir_error_effects.helper_effect("check_periodics", signature)
+                self.assertEqual(helper.homes, homes)
+                self.assertEqual(helper.opens_current_observer, observer)
+                self.assertEqual(helper.callback, homes != effect.NO_ARENA_WRITE)
+        self.assertEqual(ir_error_effects.HELPERS["PyValue_XCLOSE"].homes,
+                         effect.PRESERVES_CANONICAL_OR_NULL)
+        self.assertEqual(ir_error_effects.HELPERS["_PyEval_GetAwaitable"].homes,
+                         effect.UNKNOWN)
 
     def test_helper_failure_and_both_explicit_routes_remain_distinct(self):
         instruction, summary = self.analyze("""

@@ -225,6 +225,8 @@ static_assert(__builtin_types_compatible_p(__typeof__(&PyUnicode_READ_CHAR), Py_
               "PyUnicode_READ_CHAR: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&Py_INCREF), void (*)(PyObject *)),
               "Py_INCREF: its C type differs from pycore_ir_components.h");
+static_assert(__builtin_types_compatible_p(__typeof__(&PyValue_IsObjectOrNull), int (*)(PyValueBorrow)),
+              "PyValue_IsObjectOrNull: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&Py_XINCREF), void (*)(PyObject *)),
               "Py_XINCREF: its C type differs from pycore_ir_components.h");
 static_assert(__builtin_types_compatible_p(__typeof__(&_PyCell_GetValue), PyValue (*)(PyCellObject *)),

@@ -51,6 +51,14 @@
  * EFFECTS: reads writes allocates raises releases runs_python polls
  * switches_frame.  A `releases` may run a finalizer, which may run Python
  * and write the frame's homes (FrameLocalsProxy).
+ * HOMES(canonical | unknown), OBSERVER(none): optional columns of a row
+ * with a reentry effect.  Without HOMES, the code it runs may vacate
+ * scratch homes (a debugger's redirect) but leaves the others canonical or
+ * NULL; `canonical` says that it leaves initialized homes canonical or
+ * NULL (a finalizer or a dunder method: no redirect), `unknown` that it
+ * promises nothing.  OBSERVER(none): it opens no observer context of the
+ * current frame (ir_error_effects.py derives the source's error-path
+ * effects from them).
  * FEEDBACK: the feedback the row reads and writes, transitively:
  * read(f) and write(f) with f one of counter (the entry header's counter),
  * entry (every field of the site's entry, the counter included) and
@@ -551,7 +559,8 @@
      * allocated by the slot (covered by runs_python).  Callbacks: the \
      * slot, and the release of an old result a slot discards */ \
     HELPER(_PyValue_Invert, PyValue, (PyValueBorrow), \
-        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python), \
+        HOMES(canonical), OBSERVER(none)) \
     /* Evidence (G0c batch 6): Objects/abstract.c _PyValue_IsInstance \
      * (PyObject_IsInstance): exact-type fast path, then the metaclass's \
      * __instancecheck__ or the class's __bases__ walk (Python code and \
@@ -570,7 +579,8 @@
      * is borrowed on every path.  A NULL argument is not admitted: the \
      * slow path dereferences it */ \
     HELPER(_PyValue_IsTrue, int, (PyValueBorrow), \
-        ARGS(borrowed), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed), SCALAR, EFFECTS(runs_python), \
+        HOMES(canonical), OBSERVER(none)) \
     /* Objects/longobject.c: the shift of a nonzero word by a count >= 0 \
      * through long_lshift_spans().  It gives PyValue_NULL with an exception \
      * set where the result would have too many digits (OverflowError) or \
@@ -585,7 +595,8 @@
         EFFECTS(allocates, raises)) \
     /* _PyValue_Negative: see _PyValue_Invert above */ \
     HELPER(_PyValue_Negative, PyValue, (PyValueBorrow), \
-        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python), \
+        HOMES(canonical), OBSERVER(none)) \
     /* Evidence (G0c batch 6): Include/internal/pycore_value.h: builds the \
      * view of an object pointer. No count change, no call, no failure, no \
      * callback. The object must outlive the view: its owner is the \
@@ -599,7 +610,8 @@
      * 'bad operand type for unary +' and NULL. Returns an owner, or NULL \
      * with an exception set. The argument is borrowed. `runs_python`. */ \
     HELPER(_PyValue_Positive, PyValue, (PyValueBorrow), \
-        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python)) \
+        ARGS(borrowed), VALUE_OR_NULL(owned), EFFECTS(runs_python), \
+        HOMES(canonical), OBSERVER(none)) \
     /* pycore_value.h: a debug check, erased with the GIL */ \
     INTRINSIC(_PyValue_RecheckHome, ARGS(scalar), NONE, BUILD(gil)) \
     /* Include/internal/pycore_value.h: in assert builds a loop of \
@@ -798,12 +810,12 @@
      * (NULL for a local), or _PyValue_XCLOSE_POINTER for a value known to \
      * be in pointer space (pycore_value.h) */ \
     PRIMITIVE(PyValue_XCLOSE, void, (PyValue), \
-              ARGS(consumed), NONE, EFFECTS(releases), \
+              ARGS(consumed), NONE, EFFECTS(releases), HOMES(canonical), OBSERVER(none), \
               VIEW_CLOSE(PyValue_XCLOSE), POINTER_FORM(_PyValue_XCLOSE_POINTER)) \
     /* Evidence (G0d3): as PyValue_XCLOSE: a view's owner is released by \
      * XCLOSE, which tests for the NULL of a local */ \
     PRIMITIVE(PyValue_CLOSE, void, (PyValue), \
-              ARGS(consumed nonnull), NONE, EFFECTS(releases), \
+              ARGS(consumed nonnull), NONE, EFFECTS(releases), HOMES(canonical), OBSERVER(none), \
               VIEW_CLOSE(PyValue_XCLOSE), POINTER_FORM(_PyValue_XCLOSE_POINTER)) \
     /* Identities: a borrowed view of a value; in a build with the GIL the \
      * relaxed atomic loads are plain loads */ \
@@ -974,6 +986,16 @@
      * no effect (G0c9; the seed's `reads` was over-declared).                */ \
     MACRO(Py_IsNone, \
         ARGS(scalar), SCALAR, EFFECTS(), EXITS()) \
+    /* Evidence (G0d2): Include/pyerrors.h: PyType_FastSubclass(Py_TYPE(x), \
+     * Py_TPFLAGS_BASE_EXC_SUBCLASS), a load of the type's flags: no call \
+     * into other code, no write.  Every use in bytecodes.c is in an assert. */ \
+    MACRO(PyExceptionInstance_Check, \
+        ARGS(object), SCALAR, EFFECTS(reads), EXITS()) \
+    /* Evidence (G0d2): pycore_pyvalue.h: PyValue_IsObject, or the NULL word \
+     * of an empty slot; bit tests of the word, no memory read.  Every use \
+     * in bytecodes.c is in an assert. */ \
+    HELPER(PyValue_IsObjectOrNull, int, (PyValueBorrow), \
+        ARGS(borrowed), SCALAR, EFFECTS()) \
     /* Include/refcount.h: `_Py_NewRef(_PyObject_CAST(obj))`, an increment \
      * (a count change is no effect, 1.3) returning obj: the result is a \
      * new reference the caller owes.  No call (immortal check inline), no \
@@ -2017,7 +2039,7 @@
      * Failure: NULL with an exception set; success: a new reference to \
      * the awaitable. */ \
     HELPER(_PyEval_GetANext, PyObject *, (PyObject *), \
-        ARGS(object), SCALAR, EFFECTS(runs_python)) \
+        ARGS(object), SCALAR, EFFECTS(runs_python), HOMES(canonical)) \
     /* Python/ceval.c.  Borrows its operand.  Callees: PyErr_Format and \
      * _PyEval_FormatAwaitableError (reads the type, may run Python \
      * through _PyEval_SpecialMethodCanSuggest's lookups), \
@@ -2026,7 +2048,7 @@
      * number is no awaitable; a coroutine already being awaited); \
      * success: a new reference. */ \
     HELPER(_PyEval_GetAwaitable, PyObject *, (PyValueBorrow, int), \
-        ARGS(borrowed, scalar), SCALAR, EFFECTS(runs_python)) \
+        ARGS(borrowed, scalar), SCALAR, EFFECTS(runs_python), HOMES(unknown)) \
     /* Reviewed G0c5 (ceval.c).  Called with an error set.  Callees: \
      * _PyErr_ExceptionMatches (a read; PyErr_GivenExceptionMatches walks \
      * the exception's MRO, which a metaclass __subclasscheck__ cannot \

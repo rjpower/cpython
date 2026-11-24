@@ -30,6 +30,7 @@
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
 #include "pycore_ir_source.h"     // _PyIR_POSITION_RECORD
 #include "pycore_ir_outcomes.h"    // _PyIR_NormalPhysicalTransfer()
+#include "pycore_rop_metadata.h"    // _PyRop_Arms
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
 #include "pycore_jit.h"           // _PyJitUnit
 #include "pycore_jit_lower.h"     // _PyJit_Templates
@@ -1901,7 +1902,9 @@ get_ir(PyObject *self, PyObject *args)
     for (Py_ssize_t w = 0; w < (Py_ssize_t)ir->nwords; w++) {
         _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(words[w]);
         int handler = IR_HANDLER(word);
-        const char *name = handler < IR_FIRST_ONLY_HANDLER
+        const char *name = handler >= ROP_FIRST_HANDLER
+            ? _PyRop_Arms[handler - ROP_FIRST_HANDLER].name
+            : handler < IR_FIRST_ONLY_HANDLER
             ? _PyOpcode_OpName[handler]
             : _PyIR_OnlyNames[handler - IR_FIRST_ONLY_HANDLER];
         /* The canonical flags follow the name, as in dis; the executing
@@ -1919,6 +1922,44 @@ get_ir(PyObject *self, PyObject *args)
         Py_DECREF(item);
     }
     return result;
+}
+
+/* Run the register instruction arm named name ("Call.Exact") on word index
+ * of the code's executing copy, with the word's fields as they are: a test
+ * forces an arm before the translator selects it.  Returns the previous
+ * handler.  The code must have run, and its unit must not be compiled. */
+static PyObject *
+rop_set_arm(PyObject *self, PyObject *args)
+{
+    PyCodeObject *code;
+    int index;
+    const char *name;
+    if (!PyArg_ParseTuple(args, "O!is", &PyCode_Type, &code, &index, &name)) {
+        return NULL;
+    }
+    _PyCodeExec *exec = code->_co_exec;
+    if (exec == NULL) {
+        PyErr_SetString(PyExc_ValueError, "the code has not run");
+        return NULL;
+    }
+    if (index < 0 || (uint32_t)index >= exec->nwords) {
+        PyErr_SetString(PyExc_IndexError, "no such word");
+        return NULL;
+    }
+    for (int i = 0; i < ROP_NUM_ARMS; i++) {
+        if (strcmp(_PyRop_Arms[i].name, name) != 0) {
+            continue;
+        }
+        if (!_PyRop_Arms[i].emitted) {
+            PyErr_Format(PyExc_ValueError, "arm %s is not emitted", name);
+            return NULL;
+        }
+        int old = IR_HANDLER(exec->words[index]);
+        _PyIR_SetHandler(&exec->words[index], _PyRop_Arms[i].handler);
+        return PyLong_FromLong(old);
+    }
+    PyErr_Format(PyExc_ValueError, "no arm %s", name);
+    return NULL;
 }
 
 static PyObject *
@@ -5265,6 +5306,7 @@ static PyMethodDef module_functions[] = {
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
+    {"rop_set_arm", rop_set_arm, METH_VARARGS, NULL},
     {"get_ir_raw", get_ir_raw, METH_O, NULL},
     {"ir_normal_physical_transfer", ir_normal_physical_transfer,
      METH_VARARGS, NULL},

@@ -1425,7 +1425,10 @@ dummy_func(
         macro(BINARY_OP_SUBSCR_DICT) =
             _GUARD_NOS_DICT_SUBSCRIPT + unused/5 + _BINARY_OP_SUBSCR_DICT;
 
-        inline_ok op(_BINARY_OP_SUBSCR_DICT, (dict_st, sub_st -- res)) {
+        inline_ok op(_BINARY_OP_SUBSCR_DICT,
+                (dict_st: consumed, sub_st: consumed -- res: owned))
+            effects(reads, writes, raises, releases, runs_python) exits(next, raise)
+        {
             IR_TRY_DICT_FIRST_PROBE();
             STAT_INC(BINARY_OP, hit);
             res = value_subscript(dict_st, sub_st);

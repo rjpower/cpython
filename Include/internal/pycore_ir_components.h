@@ -1415,11 +1415,22 @@
      * TRANSFER_TOKENS (YIELD) */ \
     MACRO(IR_SUSPEND_DELEGATED, ARGS(consumed), NONE, \
           EFFECTS(reads, writes, runs_python, switches_frame), EXITS(yield)) \
-    /* IR_MARKER_EFFECTS escapes, error; TRANSFER_TOKENS (RAISE).  A hit \
-     * stores the result and dispatches, so the macro also leaves by next */ \
+    /* ir_generator.try_dict_first_probe: _PyDict_TryGetFirstProbeValue \
+     * (Objects/dictobject.c) reads an exact dict's first probe slot for an \
+     * inline int key and returns a new reference to the value only on an \
+     * identity hit; every other case returns NULL with the inputs, the \
+     * table and the exception state untouched, and no hash or __eq__ runs. \
+     * On a hit the macro detaches both inputs, stores the result in the \
+     * destination, closes the inputs and the displaced destination \
+     * (releases: a last reference may run a finalizer) and dispatches the \
+     * next word.  It never raises: the tables' RAISE was wrong, and the \
+     * raise sites of the uop lie after it, where the uop's own inputs are \
+     * released.  On a miss it falls through with everything unchanged. \
+     * The hit's inputs are consumed by the macro, which the walk does not \
+     * model; the fall-through path is the one it follows */ \
     MACRO(IR_TRY_DICT_FIRST_PROBE, ARGS(), NONE, \
-          EFFECTS(reads, writes, raises, releases, runs_python), \
-          EXITS(raise)) \
+          EFFECTS(reads, writes, releases), \
+          EXITS(next)) \
     /* Call preparation: IR_MARKER_EFFECTS escapes, error; TRANSFER_TOKENS \
      * (RAISE) */ \
     MACRO(IR_PREPARE_CALL_METHOD, ARGS(), NONE, \

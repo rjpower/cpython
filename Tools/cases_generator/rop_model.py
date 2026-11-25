@@ -414,11 +414,15 @@ class Family:
 @dataclass(frozen=True, slots=True)
 class Placement:
     """Where one operand lives: its field kind, the bits it needs and the
-    fields it takes (none for a vector, which follows in the payload)."""
+    fields it takes (none for a vector, which follows in the payload).
+    Consecutive small immediates share one field: `shift` is where an
+    immediate starts in it, and `shared` says that a reader must mask."""
     operand: str
     kind: FieldKind
     bits: int
     slots: tuple[Slot, ...]
+    shift: int = 0          # low bit of an immediate in its (first) field
+    shared: bool = False    # an immediate that shares its field with another
 
 
 @dataclass(frozen=True, slots=True)

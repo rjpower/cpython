@@ -571,11 +571,16 @@ def write_encodings(out: TextIO, p: Products) -> None:
     for f in families:
         enc = prog.encodings[f]
         params = {x.name: x for x in prog.families[f].params}
+        for pl in enc.placements:
+            if pl.shared:
+                # The translator builds the word's immediate with these
+                out.write(f"#define ROP_PACK_{f}_{pl.operand}(v) "
+                          f"((uint32_t)(v) << {pl.shift})\n")
         out.write(f"static const _PyRopOperand _PyRop_Operands_{f}[] = {{\n")
         for pl in enc.placements:
             role, optional = operand_role(params[pl.operand])
             slots = pl.slots
-            offset = slots[0].offset if slots else 0
+            offset = slots[0].offset + pl.shift if slots else 0
             flag = (f"IR_F_LOCAL_{slots[0].name}" if pl.kind is FieldKind.home
                     and slots and slots[0].word == 0 else "0")
             out.write(f'    {{"{pl.operand}", ROP_FIELD_{pl.kind.name.upper()}, '

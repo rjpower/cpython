@@ -694,6 +694,9 @@ class ArmLowerer:
         p = self.placements[operand]
         if not p.slots or any(s.word != 0 for s in p.slots):
             raise Unsupported(f"{self.arm.name}: immediate {operand} is not in the head")
+        if p.shared:
+            field = f"((uint32_t)IR_{p.slots[0].name}(ir_word) >> {p.shift})"
+            return f"({field} & {(1 << p.bits) - 1:#x})"
         parts = [f"((uint32_t)IR_{s.name}(ir_word) << {12 * i})" if i else
                  f"(uint32_t)IR_{s.name}(ir_word)" for i, s in enumerate(p.slots)]
         return "(" + " | ".join(parts) + ")" if len(parts) > 1 else parts[0]

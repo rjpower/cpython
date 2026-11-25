@@ -383,7 +383,10 @@ class LeafBuilder:
             for p in self.program.encodings[self.arm.family].placements:
                 if (p.operand == name and len(p.slots) == 1 and p.slots[0].word == 0
                         and t is not None):
-                    return Imm(f"IR_{p.slots[0].name}(ir_word)", t)
+                    field = f"IR_{p.slots[0].name}(ir_word)"
+                    if p.shared:
+                        field = f"((({field}) >> {p.shift}) & {(1 << p.bits) - 1:#x})"
+                    return Imm(field, t)
             self.refuse(f"the immediate {name} is not one field of the head")
         if kind is FieldKind.feedback:
             return Entry(param.type.schema)

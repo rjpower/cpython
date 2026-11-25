@@ -8,6 +8,7 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_cell.h"         // _PyCell_GetValue()
 #include "pycore_ceval.h"         // _PyEval_LoadGlobalValue()
 #include "pycore_code.h"          // _PyBinaryOp_ExtendDescr()
 #include "pycore_feedback.h"      // _PyFbBinary
@@ -17,6 +18,10 @@ extern "C" {
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
+#include "pycore_dict.h"          // _PyDict_ContainsValue()
+#include "pycore_setobject.h"     // _PySet_Contains()
+#include "pycore_unicodeobject.h" // _PyUnicode_Equal()
+#include "pycore_value_slots.h"   // _PyType_VALUE_SLOT()
 
 /* The C bodies of the call-boundary rows of Python/register_ops/core.rop.
  * The generated handlers build the arguments from the word: a `Span<Src>`
@@ -285,6 +290,51 @@ _PyRop_SaveLocal(PyValue *local)
     return saved;
 }
 
+/* The rows of the cell families (Python/register_ops/cells.rop).  A Cell
+ * operand's home holds a cell object, which MAKE_CELL or frame entry put
+ * there before any instruction reads it. */
+static inline PyCellObject *
+_PyRop_CellIn(PyValue *home)
+{
+    PyObject *cell = PyValue_AsKnownObjectBorrow(PyValue_Borrow(*home));
+    assert(PyCell_Check(cell));
+    return (PyCellObject *)cell;
+}
+
+/* The contents of the cell as a new owner; false when it is empty */
+static inline bool
+_PyRop_CellContents(PyValue *home, PyValue *out)
+{
+    PyValue v = _PyCell_GetValue(_PyRop_CellIn(home));
+    *out = v;
+    return !PyValue_IsNull(v);
+}
+
+/* v moves into the cell; false when it was empty, else the previous owner
+ * comes out for the caller to close */
+static inline bool
+_PyRop_CellExchange(PyValue *home, PyValue v, PyValue *old)
+{
+    PyValue previous = _PyCell_SwapValue(_PyRop_CellIn(home), v);
+    *old = previous;
+    return !PyValue_IsNull(previous);
+}
+
+/* The cell emptied; false when it was already empty */
+static inline bool
+_PyRop_CellTake(PyValue *home, PyValue *old)
+{
+    return _PyRop_CellExchange(home, PyValue_NULL, old);
+}
+
+/* Python/ceval.c: the error of an empty cell */
+void _PyRop_UnboundCell(_PyInterpreterFrame *frame, PyValue *home);
+/* The binding taken out of the local into a new cell, or NULL with the
+ * exception set (the binding is closed) */
+PyValue _PyRop_MakeCell(_PyInterpreterFrame *frame, PyValue *home);
+PyAPI_FUNC(_PyStatusValue) _PyRop_LoadFromDictCell(
+    PyThreadState *, _PyInterpreterFrame *, PyValueBorrow, PyValue *);
+
 /* Python/ceval.c: UnboundLocalError for the local in home */
 void _PyRop_UnboundLocal(_PyInterpreterFrame *frame, PyValue *home);
 /* The local's binding taken out of its home, or NULL with UnboundLocalError
@@ -452,6 +502,178 @@ static inline int
 _PyRop_SlotTruth(PyValueBorrow v)
 {
     return _PyValue_IsTrueSlow(v);
+}
+
+/* Python/register_ops/tests.rop: Compare, Identity, Contains, TestBranch */
+
+/* The enums of tests.rop, in declaration order */
+enum {
+    ROP_RELATION_LT, ROP_RELATION_LE, ROP_RELATION_EQ, ROP_RELATION_NE,
+    ROP_RELATION_GT, ROP_RELATION_GE,
+};
+enum { ROP_RESULT_RICH, ROP_RESULT_TRUTH };
+enum {
+    ROP_TEST_IDENTITY, ROP_TEST_CONTAINS, ROP_TEST_LT, ROP_TEST_LE, ROP_TEST_EQ,
+    ROP_TEST_NE, ROP_TEST_GT, ROP_TEST_GE,
+};
+
+static inline bool
+_PyRop_TestIsIdentity(int test)
+{
+    return test == ROP_TEST_IDENTITY;
+}
+
+static inline bool
+_PyRop_TestIsContains(int test)
+{
+    return test == ROP_TEST_CONTAINS;
+}
+
+static inline int
+_PyRop_RelationOf(int test)
+{
+    return test >= ROP_TEST_LT ? test - ROP_TEST_LT : ROP_RELATION_LT;
+}
+
+static inline bool
+_PyRop_ResultIsTruth(int result)
+{
+    return result == ROP_RESULT_TRUTH;
+}
+
+static inline bool
+_PyRop_EqualityRelation(int relation)
+{
+    return relation == ROP_RELATION_EQ || relation == ROP_RELATION_NE;
+}
+
+static inline bool
+_PyRop_BothInlineFloat(PyValueBorrow a, PyValueBorrow b)
+{
+    return PyValue_IsInlineFloat(a) && PyValue_IsInlineFloat(b);
+}
+
+static inline bool
+_PyRop_CompareScaled(int relation, int64_t a, int64_t b)
+{
+    switch (relation) {
+        case ROP_RELATION_LT: return a < b;
+        case ROP_RELATION_LE: return a <= b;
+        case ROP_RELATION_EQ: return a == b;
+        case ROP_RELATION_NE: return a != b;
+        case ROP_RELATION_GT: return a > b;
+        default: return a >= b;
+    }
+}
+
+/* IEEE: every relation but NE is false when either is NaN */
+static inline bool
+_PyRop_CompareFloats(int relation, PyValueBorrow a, PyValueBorrow b)
+{
+    double x = PyValue_InlineFloat(a);
+    double y = PyValue_InlineFloat(b);
+    switch (relation) {
+        case ROP_RELATION_LT: return x < y;
+        case ROP_RELATION_LE: return x <= y;
+        case ROP_RELATION_EQ: return x == y;
+        case ROP_RELATION_NE: return x != y;
+        case ROP_RELATION_GT: return x > y;
+        default: return x >= y;
+    }
+}
+
+static inline bool
+_PyRop_EqualStrings(int relation, PyValueBorrow a, PyValueBorrow b)
+{
+    assert(relation == ROP_RELATION_EQ || relation == ROP_RELATION_NE);
+    int eq = _PyUnicode_Equal(PyValue_AsKnownObjectBorrow(a),
+                              PyValue_AsKnownObjectBorrow(b));
+    return (relation == ROP_RELATION_EQ) == (eq != 0);
+}
+
+static inline PyValue
+_PyRop_RichCompare(int relation, PyValueBorrow a, PyValueBorrow b)
+{
+    return _PyValue_RichCompare(a, b, relation);
+}
+
+/* The comparison as a truth value: the rich result is closed before the
+ * conversion's failure is reported */
+static inline int
+_PyRop_CompareTruth(int relation, PyValueBorrow a, PyValueBorrow b)
+{
+    PyValue cmp = _PyValue_RichCompare(a, b, relation);
+    if (PyValue_IsNull(cmp)) {
+        return -1;
+    }
+    int res = _PyValue_IsTrue(cmp);
+    PyValue_CLOSE(cmp);
+    return res;
+}
+
+static inline bool
+_PyRop_ExactAnySet(PyValueBorrow c)
+{
+    return PyValue_IsObject(c) && PyAnySet_CheckExact(PyValue_AsKnownObjectBorrow(c));
+}
+
+static inline bool
+_PyRop_ExactAnyDict(PyValueBorrow c)
+{
+    return PyValue_IsObject(c) && PyAnyDict_CheckExact(PyValue_AsKnownObjectBorrow(c));
+}
+
+static inline bool
+_PyRop_ExactSequence(PyValueBorrow c)
+{
+    if (!PyValue_IsObject(c)) {
+        return false;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(c);
+    return PyUnicode_CheckExact(o) || PyTuple_CheckExact(o) || PyList_CheckExact(o);
+}
+
+static inline int
+_PyRop_SetContains(PyValueBorrow c, PyValueBorrow item)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(c);
+    assert(PyAnySet_CheckExact(o));
+    return _PySet_Contains((PySetObject *)o, item);
+}
+
+static inline int
+_PyRop_DictContains(PyValueBorrow c, PyValueBorrow item)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(c);
+    assert(PyAnyDict_CheckExact(o));
+    return _PyDict_ContainsValue((PyDictObject *)o, item);
+}
+
+static inline int
+_PyRop_SequenceContains(PyValueBorrow c, PyValueBorrow item)
+{
+    PyObject *o = PyValue_AsKnownObjectBorrow(c);
+    _Py_containsvaluefunc contains_slot = _PyType_VALUE_SLOT(Py_TYPE(o), contains);
+    return contains_slot(o, item);
+}
+
+static inline int
+_PyRop_ValueContains(PyValueBorrow c, PyValueBorrow item)
+{
+    return _PyValue_Contains(c, item);
+}
+
+/* The case of cases(set, dict, sequence, none) */
+static inline int
+_PyRop_ClassifyContains(PyValueBorrow c)
+{
+    if (_PyRop_ExactAnyDict(c)) {
+        return 1;
+    }
+    if (_PyRop_ExactAnySet(c)) {
+        return 0;
+    }
+    return _PyRop_ExactSequence(c) ? 2 : 3;
 }
 
 /* Python/specialize.c: the adaptation rows */

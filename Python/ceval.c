@@ -2297,8 +2297,6 @@ static PyValue _PyRop_IntrinsicImportStar(PyThreadState *tstate, PyValue x);
 static PyValue _PyRop_IntrinsicStopIteration(PyThreadState *tstate, PyValue x);
 static PyValue _PyRop_IntrinsicBinary(PyThreadState *tstate, uint32_t id,
                                       PyValue x, PyValue y);
-static PyValue _PyRop_IntrinsicCompare(PyThreadState *tstate, uint32_t id,
-                                       PyValue x, PyValue y);
 static PyValue _PyRop_IntrinsicAttr(PyThreadState *tstate, uint32_t id,
                                     PyValue x, PyValue y);
 
@@ -2360,8 +2358,10 @@ _PyRop_EdgeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     // An instruction event may have made the word transparent: its target is
     // in the format of the handler it wraps
     const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    // The wrapper's own length is one word; the fall-through continues past
+    // the fixed operand words of the word it wraps
     _PyInstr *dest = taken ? site + 1 + _PyIR_FormatDistance(fmt, *site)
-                           : site + _PyIR_WordLength(*site);
+                           : site + 1 + fmt->fixed_words;
     frame->return_pc = dest;
     _PyIRObserverResult result = _PyIR_ObserveCommittedBranch(
         tstate, frame, site, site, dest, event,
@@ -2816,6 +2816,40 @@ _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home)
         return PyValue_NULL;
     }
     return _PyFrame_TakeHome(frame, home);
+}
+
+/* The rows of the cell families (Python/register_ops/cells.rop) */
+void
+_PyRop_UnboundCell(_PyInterpreterFrame *frame, PyValue *home)
+{
+    _PyEval_FormatExcUnbound(_PyThreadState_GET(), _PyFrame_GetCode(frame),
+                             (int)(home - frame->base));
+}
+
+PyValue
+_PyRop_MakeCell(_PyInterpreterFrame *frame, PyValue *home)
+{
+    (void)frame;
+    // The cell holds its own count, so closing the binding cannot finalize it
+    PyValue binding = *home;
+    *home = PyValue_NULL;
+    PyObject *cell = PyCell_NewValue(binding);
+    PyValue_XCLOSE(binding);
+    if (cell == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(cell);
+}
+
+_PyStatusValue
+_PyRop_LoadFromDictCell(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        PyValueBorrow mapping, PyValue *home)
+{
+    assert(PyValue_IsObject(mapping));
+    int index = (int)(home - frame->base);
+    PyObject *name = _PyTuple_GET_OBJECT(
+        _PyFrame_GetCode(frame)->co_localsplusnames, index);
+    return value_load_from_dict(tstate, PyValue_AsKnownObjectBorrow(mapping), name);
 }
 
 /* The rows of the namespace families (Python/register_ops/namespaces.rop).
@@ -5548,6 +5582,7 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
         goto fail;
     }
     _PyFrame_Initialize(tstate, frame, func, locals, code, frame->base, previous);
+    _PyFrame_CopyFreeVars(frame, code);
     if (initialize_locals(tstate, func_obj, code, frame->base, args, argcount, kwnames)) {
         assert(frame->owner == FRAME_OWNED_BY_THREAD);
         _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
@@ -7044,6 +7079,7 @@ eval_vector(PyThreadState *tstate, PyFunctionObject *func, PyObject *locals,
         _PyFrame_Initialize(tstate, frame,
                             PyValue_DUP(PyValue_FromObjectBorrow(func)),
                             locals, code, frame->base, NULL);
+        _PyFrame_CopyFreeVars(frame, code);
         for (Py_ssize_t i = 0; i < nargs; i++) {
             frame->base[i] = PyValue_DUP(vector_arg(args, i, objects));
         }
@@ -8752,11 +8788,6 @@ static const uint8_t rop_intrinsic_number[] = {
     INTRINSIC_TYPEVAR_WITH_CONSTRAINTS, INTRINSIC_SET_FUNCTION_TYPE_PARAMS,
     INTRINSIC_SET_TYPEPARAM_DEFAULT, INTRINSIC_ADD_CONDITIONAL_ANNOTATION,
     INTRINSIC_MATCH_CLASS_ISINSTANCE,
-    INTRINSIC_COMPARE_OP + 0, INTRINSIC_COMPARE_OP + 1, INTRINSIC_COMPARE_OP + 2,
-    INTRINSIC_COMPARE_OP + 3, INTRINSIC_COMPARE_OP + 4, INTRINSIC_COMPARE_OP + 5,
-    INTRINSIC_COMPARE_OP + 6, INTRINSIC_COMPARE_OP + 7, INTRINSIC_COMPARE_OP + 8,
-    INTRINSIC_COMPARE_OP + 9, INTRINSIC_COMPARE_OP + 10, INTRINSIC_COMPARE_OP + 11,
-    INTRINSIC_CONTAINS_OP, INTRINSIC_CONTAINS_OP + 1,
     INTRINSIC_GETATTR, INTRINSIC_SETATTR,
 };
 
@@ -8807,12 +8838,6 @@ _PyRop_IntrinsicBinary(PyThreadState *tstate, uint32_t id, PyValue x, PyValue y)
     PyValue_XCLOSE(held1);
     PyValue_XCLOSE(held2);
     return res;
-}
-
-static PyValue
-_PyRop_IntrinsicCompare(PyThreadState *tstate, uint32_t id, PyValue x, PyValue y)
-{
-    return _PyRop_IntrinsicBinary(tstate, id, x, y);
 }
 
 static PyValue

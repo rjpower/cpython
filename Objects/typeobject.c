@@ -15736,10 +15736,6 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
     // was called from the C-API before the first MAKE_CELL op.
     if ((_PyLocals_GetKind(co->co_localspluskinds, 0) & CO_FAST_CELL) &&
             (_PyFrame_InstrOffset(cframe, cframe->instr_ptr) >= 0)) {
-        // MAKE_CELL and COPY_FREE_VARS have no quickened forms, so no need
-        // to use _PyOpcode_Deopt here:
-        assert(_PyCode_InstrHandler(co, 0) == MAKE_CELL ||
-               _PyCode_InstrHandler(co, 0) == COPY_FREE_VARS);
         assert(PyValue_IsObject(firstref));
         PyObject *cell = PyValue_AsKnownObjectBorrow(firstref);
         assert(PyCell_Check(cell));

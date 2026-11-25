@@ -305,6 +305,11 @@ class Parser:
         start = self.take()
         name = self.qname()
         self.where = name.text
+        completion: str | None = None
+        if self.accept("completion"):
+            self.expect("(")
+            completion = self.qname().text
+            self.expect(")")
         region, _ = self.enum_word(Region, "a region")
         select: tuple[Select, ...] = ()
         if self.accept("select"):
@@ -318,7 +323,8 @@ class Parser:
         observes = self.accept("observes") is not None
         contract = self.contract(exits=True)
         graph = self.graph()
-        return Arm(name.text, region, contract, graph, start.span, select, entry, observes)
+        return Arm(name.text, region, contract, graph, start.span, select, entry, observes,
+                   completion)
 
     def macro(self) -> Macro:
         start = self.take()
@@ -392,7 +398,7 @@ class Parser:
 
     def names(self) -> tuple[str, ...]:
         self.expect("(")
-        return self.comma_list(")", lambda: self.ident().text)
+        return self.comma_list(")", lambda: self.qname().text)
 
     def result(self, schemas: tuple[str, ...]) -> Result:
         tok = self.tok
@@ -644,11 +650,13 @@ class Parser:
             self.take()
             kind = self.ident("an exit")
             args = self.args()
-            resume = None
+            resume = complete = None
             if self.accept("resume"):
                 resume = self.qname().text
+                if self.accept("complete"):
+                    complete = self.qname().text
             self.expect(";")
-            return Exit(kind.text, args, tok.span, resume)
+            return Exit(kind.text, args, tok.span, resume, complete)
         raise self.error("expected a statement or a terminator (goto, branch, call, "
                          f"each, advance, exit), found '{tok.text or 'end of file'}'")
 

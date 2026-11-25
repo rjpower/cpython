@@ -152,9 +152,9 @@ class SourceReentryTests(unittest.TestCase):
 
     def test_fused_branch_preserves_source_only_lines(self):
         for condition, handler, yes, no in (
-            ('value == marker', 'COMPARE_OP_JUMP', (1, 1), (0, 1)),
-            ('value in marker', 'CONTAINS_OP_JUMP', (1, (1,)), (0, (1,))),
-            ('value is marker', 'IS_OP_JUMP', (None, None), (0, None)),
+            ('value == marker', 'TestBranch.Generic', (1, 1), (0, 1)),
+            ('value in marker', 'TestBranch.Generic', (1, (1,)), (0, (1,))),
+            ('value is marker', 'TestBranch.Identity', (None, None), (0, None)),
         ):
             with self.subTest(condition=condition):
                 source = (f'def target(value, marker):\n'
@@ -187,9 +187,9 @@ class SourceReentryTests(unittest.TestCase):
 
     def test_fused_branch_source_error_uses_source_handler(self):
         for condition, handler, yes, no in (
-            ('value == marker', 'COMPARE_OP_JUMP', (1, 1), (0, 1)),
-            ('value in marker', 'CONTAINS_OP_JUMP', (1, (1,)), (0, (1,))),
-            ('value is marker', 'IS_OP_JUMP', (None, None), (0, None)),
+            ('value == marker', 'TestBranch.Generic', (1, 1), (0, 1)),
+            ('value in marker', 'TestBranch.Generic', (1, (1,)), (0, (1,))),
+            ('value is marker', 'TestBranch.Identity', (None, None), (0, None)),
         ):
             with self.subTest(condition=condition):
                 source = (f'def target(value, marker):\n'

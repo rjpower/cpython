@@ -771,6 +771,29 @@ class ObservationTests(unittest.TestCase):
         lines = [e[2] for e in events if e[:2] == ("line", "sample")]
         self.assertEqual(lines, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
+    def test_line_event_survives_adaptation(self):
+        # The call is the first word of its line: the line event's word runs
+        # Call.Generic, whose adaptation must not replace the event's word
+        def f(g):
+            x = g(1, 2)
+            return x
+
+        def lines():
+            seen = []
+            def tracer(frame, event, arg):
+                if frame.f_code is f.__code__ and event == "line":
+                    seen.append(frame.f_lineno - f.__code__.co_firstlineno)
+                return tracer
+            sys.settrace(tracer)
+            try:
+                f(target)
+            finally:
+                sys.settrace(None)
+            return seen
+
+        for _ in range(4):
+            self.assertEqual(lines(), [1, 2])
+
     def test_jump_over_a_call(self):
         seen = []
         def g():

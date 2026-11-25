@@ -864,7 +864,10 @@ _PyRop_Install(_PyInstr *instr, _PyFbHeader *h, int handler)
     /* A nomination that does not change the word still consumes the
      * attempt, so the site does not sample again at once */
     set_counter(h, adaptive_counter_cooldown());
-    if (IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr)) == handler) {
+    int current = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
+    /* An instrumented word (INSTRUMENTED_LINE runs the arm for its line
+     * event) keeps its handler: installing over it would drop the event. */
+    if (current == handler || (_PyIR_HandlerFlags[current] & _PyIR_H_INSTRUMENTED)) {
         return 0;
     }
     if (!set_opcode(instr, handler)) {

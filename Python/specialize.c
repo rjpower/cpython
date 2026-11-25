@@ -739,7 +739,9 @@ typedef struct {
     int kind;           // the attr_kind the specializer found, or 0
 } attr_nomination;
 
-static attr_nomination *attr_collect;
+/* The classification under way on this thread.  Subinterpreters with
+ * their own GIL classify concurrently, so it is per thread. */
+static _Py_thread_local attr_nomination *attr_collect;
 
 /* Report the access found for the site: the form of specialized_opcode
  * (which is a store opcode or an attr kind). */

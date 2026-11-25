@@ -971,6 +971,13 @@ def compute_properties(op: parser.CodeDef) -> Properties:
                    for w in clauses.get("effects", ()))
     # Another frame's code runs after a frame switch
     escapes = escapes or switches
+    # A stack-only op's body only aborts: the register instructions that
+    # lower it run.  Whether it may run Python is declared, and the
+    # compiler's escape flag reads it (copy_local_as_load() in
+    # Python/flowgraph.c).
+    if tuple(clauses.get("exits", ())) == ("abort",):
+        escapes = escapes or any(w.split("(")[0] == "runs_python"
+                                 for w in clauses.get("effects", ()))
     returns = "return" in clauses.get("exits", ())
     outlined = False if isinstance(op, parser.LabelDef) else "outlined" in op.annotations
     return Properties(

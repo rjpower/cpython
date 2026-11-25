@@ -2301,6 +2301,66 @@ for _ in range(60):
 """
 
 
+# A local that code run between its read and a later use of the value
+# rebinds through f_locals: each use sees the value as it was read
+REBOUND_READ_PROGRAM = """
+import sys
+
+def rebind(name, value):
+    sys._getframe(2).f_locals[name] = value
+    return 0
+
+def ident(*a):
+    return a
+
+class Rebinds:
+    @property
+    def p(self):
+        return rebind("x", [20])
+
+def s1():
+    x = "old"
+    def f(): return rebind("x", "new")
+    return ident(x, f())
+
+def s2():
+    x = [10]; a = x
+    def f(): return rebind("x", [20])
+    x[f()] += 1
+    return a
+
+def s3():
+    x = "old"
+    def f(): return rebind("x", "new")
+    return (x, f())
+
+def s4():
+    x = 1
+    def f(): return rebind("x", 100)
+    return x + f()
+
+# Copy propagation: a borrowed read that a call separates from its reader
+def s5():
+    x = [10]
+    def f(): return rebind("x", [20])
+    return x[f()]
+
+# The copy that an attribute load separates from the read
+def s6():
+    x = [10]; a = x
+    o = Rebinds()
+    x[o.p] += 1
+    return a
+
+for _ in range(3):
+    for s in (s1, s2, s3, s4, s5, s6):
+        print(s.__name__, s())
+"""
+
+REBOUND_READ_OUTPUT = \
+    "s1 ('old', 0)\ns2 [11]\ns3 ('old', 0)\ns4 1\ns5 10\ns6 [11]\n" * 3
+
+
 class LocalArmTest(unittest.TestCase):
     """Locals and constants as register instructions (rir90 P1)"""
 
@@ -2349,6 +2409,26 @@ class LocalArmTest(unittest.TestCase):
     def test_borrowed_argument_survives_rebinding(self):
         line = "g sees 1\nfreed\nfreed\n1 [1, 2, 3]\n"
         self.check_jit_modes(BORROWED_ARGUMENT_PROGRAM, line * 60)
+
+    def test_read_survives_rebinding_before_later_use(self):
+        self.check_jit_modes(REBOUND_READ_PROGRAM, REBOUND_READ_OUTPUT)
+
+    def test_copy_across_running_code_survives(self):
+        # The compiler may turn a COPY of a local's load into a second load
+        # only where nothing between can rebind the local: not across a
+        # call or an attribute load (copy_local_as_load() in
+        # Python/flowgraph.c reads the stack ops' escape flags)
+        def call(x, f):
+            x[f()] += 1
+        def attr(x, o):
+            x[o.p] += 1
+        class O:
+            p = 0
+        call([1], lambda: 0)
+        attr([1], O())
+        for f in (call, attr):
+            with self.subTest(f=f.__name__):
+                self.assertEqual(handlers(f).count("Move.Copy"), 2)
 
 
 K = 3

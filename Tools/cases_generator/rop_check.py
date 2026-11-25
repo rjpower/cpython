@@ -70,7 +70,7 @@ EXIT_PAYLOAD: dict[ExitKind, tuple[Type | None, ...]] = {
     # The new frame; `resume P` names the caller's point at the return
     ExitKind.enter: (T(Handle.NewFrame),),
     ExitKind.return_: (T(Handle.Frame), T(Handle.Head)),
-    ExitKind.yield_: (T(Handle.Route),),
+    ExitKind.yield_: (O,),
     ExitKind.exit: (O,),
     ExitKind.redirect: (T(Handle.Route),),
 }
@@ -1479,10 +1479,13 @@ def check_exit(c: Checker, scope: Scope, t: Exit, block: str, i: int) -> None:
                  f"{what} of {scope.definition} ({', '.join(sorted(scope.exits))})")
         return
     scope.used_exits.add(t.kind)
-    if (t.resume is not None) != (t.kind == ExitKind.enter.value and
-                                  scope.family is not None):
-        c.report(t.span, scope.definition, "an arm's exit enter names its resume point "
-                 "(exit enter(c) resume P), and no other exit does")
+    resumes = (ExitKind.enter.value, ExitKind.yield_.value)
+    if (t.resume is not None) != (t.kind in resumes and scope.family is not None):
+        c.report(t.span, scope.definition, "an arm's exit enter or yield names its "
+                 "resume point (exit enter(c) resume P, exit yield(v) resume P), and "
+                 "no other exit does")
+    if t.complete is not None and t.kind != ExitKind.enter.value:
+        c.report(t.span, scope.definition, "only an enter names a completion")
     if t.resume is not None and scope.family is not None:
         check_resume(c, scope, t)
     if t.complete is not None and scope.family is not None:
@@ -1525,6 +1528,14 @@ def check_resume(c: Checker, scope: Scope, t: Exit) -> None:
     check_point_ref(c, scope, t.resume, t.span, "", 0)
     p = c.points.get(t.resume)
     if p is None or p.family != scope.family.name:
+        return
+    if t.kind == ExitKind.yield_.value:
+        # The generator itself resumes there, the sent value its definition
+        if p.frame != FrameRole.current or p.pc != PcRole.next_head or len(p.defs) != 1:
+            c.report(t.span, scope.definition, f"yield resume {p.name}: the point is "
+                     f"({p.frame.value}, {p.pc.value}) with {len(p.defs)} definitions; "
+                     "a generator resumes at (current, next_head) with one, the sent "
+                     "value")
         return
     if p.frame != FrameRole.caller or p.pc != PcRole.next_head:
         c.report(t.span, scope.definition, f"resume {p.name}: the point is "

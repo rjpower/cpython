@@ -265,6 +265,15 @@ class Select(enum.Enum):
     interruptible = "interruptible"        # Jump: a backedge polls
     jit_off = "jit_off"                    # the baseline JIT is off
     jit_on = "jit_on"                      # the baseline JIT is on, so a backedge warms the code
+    tuple = "tuple"                        # Build: a tuple display
+    list = "list"                          # Build: a list display
+    set = "set"                            # Build: a set display
+    map = "map"                            # Build: a dict display
+    append = "append"                      # AddElement: a list takes the item
+    add = "add"                            # AddElement: a set takes the item
+    extend = "extend"                      # UpdateContainer: a list takes an iterable
+    union = "union"                        # UpdateContainer: a set takes an iterable
+    overlay = "overlay"                    # UpdateContainer: a dict takes a mapping
 
 
 SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
@@ -276,6 +285,9 @@ SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "write": (Select.store, Select.restore),
     "interrupt": (Select.uninterrupted, Select.interruptible),
     "jit": (Select.jit_off, Select.jit_on),
+    "display": (Select.tuple, Select.list, Select.set, Select.map),
+    "element": (Select.append, Select.add),
+    "update": (Select.extend, Select.union, Select.overlay),
 }
 
 

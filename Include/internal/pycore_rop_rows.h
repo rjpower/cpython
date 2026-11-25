@@ -51,6 +51,19 @@ PyAPI_FUNC(void) _PyRop_ParallelMove(const _PyRopSpan *d, const _PyRopSpan *s);
 PyAPI_FUNC(void) _PyRop_CloseRest(const _PyRopSpan *d, const _PyRopSpan *s);
 PyAPI_FUNC(void) _PyRop_CopyHomes(const _PyRopSpan *d, const _PyRopSpan *s);
 
+/* Build, AddElement, AddEntry, UpdateContainer and MergeKeywords, in ceval.c */
+PyAPI_FUNC(PyValue) _PyRop_BuildTuple(const _PyRopSpan *items);
+PyAPI_FUNC(PyValue) _PyRop_BuildList(const _PyRopSpan *items);
+PyAPI_FUNC(PyValue) _PyRop_BuildSet(const _PyRopSpan *items);
+PyAPI_FUNC(PyValue) _PyRop_BuildMap(const _PyRopSpan *items);
+PyAPI_FUNC(int) _PyRop_ListAppend(PyValue *list, PyValue item);
+PyAPI_FUNC(int) _PyRop_SetAdd(PyValue *set, PyValue item);
+PyAPI_FUNC(int) _PyRop_DictPut(PyValue *dict, PyValue key, PyValue value);
+PyAPI_FUNC(int) _PyRop_ListExtend(PyValue *list, PyValue *iterable);
+PyAPI_FUNC(int) _PyRop_SetUnion(PyValue *set, PyValue *iterable);
+PyAPI_FUNC(int) _PyRop_DictOverlay(PyValue *dict, PyValue *update);
+PyAPI_FUNC(int) _PyRop_MergeKeywords(PyValue *dict, PyValue *update, PyValue *fn);
+
 /* The values a call reads.  A local source is held by an owner of its own,
  * because the call can reassign the local; a temporary is held by its
  * home. */

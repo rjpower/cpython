@@ -2321,54 +2321,6 @@ store_subscr_fail_kind(PyObject *container, PyValueBorrow sub)
 }
 #endif
 
-Py_NO_INLINE void
-(_Py_Specialize_StoreSubscr)(PyValueBorrow container_st, PyValueBorrow sub_st, _PyInstr *instr)
-{
-    assert(ENABLE_SPECIALIZATION);
-    fb_begin_binary(instr, PyValue_TYPE(container_st), PyValue_TYPE(sub_st));
-    if (PyValue_IsInline(container_st)) {
-        SPECIALIZATION_FAIL(STORE_SUBSCR, SPEC_FAIL_OTHER);
-        unspecialize(instr);
-        return;
-    }
-    PyObject *container = PyValue_AsKnownObjectBorrow(container_st);
-    PyTypeObject *container_type = Py_TYPE(container);
-    if (container_type == &PyList_Type) {
-        if (PyValue_LongCheckExact(sub_st)) {
-            if (PyValue_IsInlineInt(sub_st)
-                && PyValue_InlineInt64(sub_st) >= 0
-                && PyValue_InlineInt64(sub_st) < PyList_GET_SIZE(container))
-            {
-                specialize(instr, STORE_SUBSCR_LIST_INT);
-                return;
-            }
-            else {
-                SPECIALIZATION_FAIL(STORE_SUBSCR, SPEC_FAIL_OUT_OF_RANGE);
-                unspecialize(instr);
-                return;
-            }
-        }
-        else if (PyValue_TYPE(sub_st) == &PySlice_Type) {
-            SPECIALIZATION_FAIL(STORE_SUBSCR, SPEC_FAIL_SUBSCR_LIST_SLICE);
-            unspecialize(instr);
-            return;
-        }
-        else {
-            SPECIALIZATION_FAIL(STORE_SUBSCR, SPEC_FAIL_OTHER);
-            unspecialize(instr);
-            return;
-        }
-    }
-    if (container_type->tp_as_mapping != NULL &&
-        container_type->tp_as_mapping->mp_ass_subscript == _PyDict_StoreSubscript)
-    {
-        specialize(instr, STORE_SUBSCR_DICT);
-        return;
-    }
-    SPECIALIZATION_FAIL(STORE_SUBSCR, store_subscr_fail_kind(container, sub_st));
-    unspecialize(instr);
-}
-
 /* Returns a strong reference. */
 static PyObject *
 get_init_for_simple_managed_python_class(PyTypeObject *tp, unsigned int *tp_version)
@@ -2991,42 +2943,6 @@ binary_op_extended_specialization(PyObject *lhs, PyObject *rhs, int oparg,
     return 0;
 }
 
-/* Nominate BINARY_OP_SUBSCR_GETITEM for a heap type whose __getitem__ is a
- * simple Python function of two arguments.  The lookup neither allocates nor
- * runs code; the type caches the function under its version, which
- * PyType_Modified() invalidates. */
-static bool
-specialize_subscr_getitem(PyTypeObject *container_type, _PyInstr *instr)
-{
-    /* Don't specialize if PEP 523 is active */
-    if (!(container_type->tp_flags & Py_TPFLAGS_HEAPTYPE) ||
-        !_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
-    {
-        return false;
-    }
-    PyValue descriptor = PyValue_NULL;
-    unsigned int tp_version = 0;
-    bool nominated = false;
-    if (_PyType_TryLookupValueNoAlloc(container_type, &_Py_ID(__getitem__),
-                                      &descriptor, &tp_version) == 1 &&
-        PyValue_IsObject(descriptor) &&
-        PyFunction_Check(PyValue_AsKnownObjectBorrow(descriptor)))
-    {
-        PyObject *getitem = PyValue_AsKnownObjectBorrow(descriptor);
-        PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(getitem);
-        if (function_signature(code) == SIMPLE_SIGNATURE && code->co_argcount == 2 &&
-            prepare_function_for_inline(code) &&
-            _PyType_CacheGetItemForSpecialization(
-                (PyHeapTypeObject *)container_type, getitem, tp_version))
-        {
-            specialize(instr, BINARY_OP_SUBSCR_GETITEM);
-            nominated = true;
-        }
-    }
-    PyValue_XCLOSE(descriptor);
-    return nominated;
-}
-
 /* Nominate GET_ITER_PY_GENERATOR for a heap type whose __iter__ is a
  * generator function of one argument.
  * The lookup neither allocates nor runs code; the type caches the function
@@ -3192,40 +3108,6 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
         case NB_INPLACE_RSHIFT:
             if (inline_ints && PyValue_InlineInt64(rhs_st) >= 0) {
                 specialize(instr, BINARY_OP_RSHIFT_INT);
-                return;
-            }
-            break;
-        case NB_SUBSCR:
-            if (PyValue_IsInlineInt(rhs_st) && PyValue_InlineInt64(rhs_st) >= 0) {
-                if (lhs_type == &PyList_Type) {
-                    specialize(instr, BINARY_OP_SUBSCR_LIST_INT);
-                    return;
-                }
-                if (lhs_type == &PyTuple_Type) {
-                    specialize(instr, BINARY_OP_SUBSCR_TUPLE_INT);
-                    return;
-                }
-                if (lhs_type == &PyUnicode_Type) {
-                    if (PyUnicode_IS_COMPACT_ASCII(lhs)) {
-                        specialize(instr, BINARY_OP_SUBSCR_STR_INT);
-                        return;
-                    } else {
-                        specialize(instr, BINARY_OP_SUBSCR_USTR_INT);
-                        return;
-                    }
-                }
-            }
-            if (lhs_type->tp_as_mapping != NULL &&
-                lhs_type->tp_as_mapping->mp_subscript == _PyDict_Subscript)
-            {
-                specialize(instr, BINARY_OP_SUBSCR_DICT);
-                return;
-            }
-            if (lhs_type == &PyList_Type && rhs_type == &PySlice_Type) {
-                specialize(instr, BINARY_OP_SUBSCR_LIST_SLICE);
-                return;
-            }
-            if (specialize_subscr_getitem(lhs_type, instr)) {
                 return;
             }
             break;

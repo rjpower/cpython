@@ -859,7 +859,7 @@ value_import_level(PyValue level)
     return ilevel;
 }
 
-/* container[key] for BINARY_OP's NB_SUBSCR: an exact dict, and an exact list
+/* container[key] for GetItem.Generic: an exact dict, and an exact list
  * or tuple indexed by an inline int in range, as list_subscript() and
  * tuple_subscript() do, read the item as a value; anything else is
  * _PyValue_GetItem(). A dict miss raises KeyError with the key as it is.
@@ -903,9 +903,6 @@ value_subscript(PyValueBorrow container, PyValueBorrow key)
 static PyValue
 value_binary_op(int oparg, PyValueBorrow lhs, PyValueBorrow rhs)
 {
-    if (oparg == NB_SUBSCR) {
-        return value_subscript(lhs, rhs);
-    }
     return _PyValue_BinaryOps[oparg](lhs, rhs);
 }
 
@@ -3357,6 +3354,75 @@ static inline Py_ALWAYS_INLINE PyValue
 static inline Py_ALWAYS_INLINE PyValue
 (_PyEval_CallIntrinsic1)(PyThreadState *tstate, int oparg, PyValueBorrow value);
 #define _PyEval_CallIntrinsic1(T, O, V) (_PyEval_CallIntrinsic1)(T, O, PyValue_Borrow(V))
+
+/* The rows of the item families (Python/register_ops/items.rop) */
+static inline PyValue
+_PyRop_Subscript(PyValueBorrow container, PyValueBorrow key)
+{
+    return value_subscript(container, key);
+}
+
+static inline int
+_PyRop_SetItem(PyValueBorrow container, PyValueBorrow key, PyValueBorrow value)
+{
+    return _PyValue_SetItem(container, key, value);
+}
+
+static inline int
+_PyRop_DelItem(PyValueBorrow container, PyValueBorrow key)
+{
+    return _PyValue_DelItem(container, key);
+}
+
+static inline PyValue
+_PyRop_BinarySlice(PyValueBorrow container, PyValueBorrow start, PyValueBorrow stop)
+{
+    return (_PyEval_BinarySlice)(container, start, stop);
+}
+
+static inline int
+_PyRop_StoreSlice(PyValueBorrow container, PyValueBorrow start, PyValueBorrow stop,
+                  PyValueBorrow value)
+{
+    return (_PyEval_StoreSlice)(value, container, start, stop);
+}
+
+/* The slice of two or three parts.  Each temporary part leaves its home and
+ * is closed on both paths, a local stays; the error is set aside while a
+ * finalizer may run. */
+static PyValue
+_PyRop_SliceFromParts(const _PyRopSpan *parts)
+{
+    _PyInterpreterFrame *frame = parts->frame;
+    int n = parts->count;
+    assert(n == 2 || n == 3);
+    PyValue *home[3];
+    for (int i = 0; i < n; i++) {
+        int slot = _PyIR_SpanElement(parts->head, parts->handler, parts->first + i);
+        home[i] = &frame->base[slot];
+    }
+    // The bounds are stored as the values they are: no box of an inline one
+    PyValueBorrow step = PyValue_Borrow(PyValue_NULL);
+    if (n == 3) {
+        step = PyValue_Borrow(*home[2]);
+    }
+    PyObject *slice = _PySlice_FromValues(
+        PyValue_Borrow(*home[0]), PyValue_Borrow(*home[1]), step);
+    PyObject *exc = slice == NULL ? PyErr_GetRaisedException() : NULL;
+    PyValue taken[3];
+    for (int i = 0; i < n; i++) {
+        taken[i] = IR_IS_LOCAL(home[i] - frame->base)
+            ? PyValue_NULL : _PyFrame_TakeHome(frame, home[i]);
+    }
+    for (int i = 0; i < n; i++) {
+        PyValue_XCLOSE(taken[i]);
+    }
+    if (slice == NULL) {
+        PyErr_SetRaisedException(exc);
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(slice);
+}
 
 #include "ceval_generator.h"
 

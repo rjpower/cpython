@@ -110,7 +110,7 @@ def source_text(source: CSource, ret: str, out: str | None) -> str:
 # The C entry type of each feedback schema whose arms are lowered
 SCHEMA_C = {Schema.Binary: "_PyFbBinary", Schema.Attr: "_PyFbAttr",
             Schema.Global: "_PyFbGlobal", Schema.Call: "_PyFbCall",
-            Schema.Truth: "_PyFbUnary"}
+            Schema.Truth: "_PyFbUnary", Schema.Item: "_PyFbBinary"}
 
 
 def c_type(t: Type) -> str | None:

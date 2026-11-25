@@ -451,6 +451,18 @@ encode_operand_words(_PyRegCfg *cfg, _PyRegOp *op, _PyIRWord *words)
  * destinations and sources, and their slots in that order.  Resolution's
  * moves hold slots (_PyReg_MOVE_SLOTS); a translated Move names its
  * destinations as outputs and its sources as inputs. */
+static int
+span_counts(const _PyIRFormat *fmt)
+{
+    int n = 0;
+    for (int f = 0; f < 4; f++) {
+        n += fmt->roles[f] == _PyIR_ROLE_COUNT;
+    }
+    return n;
+}
+
+/* An instruction with one span has its destination in a field of its own
+ * and the span is its sources (BuildSlice); a Move has two. */
 static void
 move_spans(_PyRegCfg *cfg, const _PyRegOp *op, int counts[2], int *elems)
 {
@@ -460,6 +472,13 @@ move_spans(_PyRegCfg *cfg, const _PyRegOp *op, int counts[2], int *elems)
         counts[1] = e[1];
         for (int k = 0; k < e[0] + e[1]; k++) {
             elems[k] = e[2 + k];
+        }
+        return;
+    }
+    if (span_counts(_PyIR_FormatOf(op->handler)) == 1) {
+        counts[0] = op->nread;
+        for (int k = 0; k < op->nread; k++) {
+            elems[k] = _PyRegCfg_Slot(cfg, _PyReg_IN(cfg, op)[k]);
         }
         return;
     }
@@ -478,6 +497,9 @@ move_nelems(_PyRegCfg *cfg, const _PyRegOp *op)
 {
     if (op->flags & _PyReg_MOVE_SLOTS) {
         return cfg->operands[op->in] + cfg->operands[op->in + 1];
+    }
+    if (span_counts(_PyIR_FormatOf(op->handler)) == 1) {
+        return op->nread;
     }
     return op->nout + op->nread;
 }
@@ -515,8 +537,11 @@ encode_spans(_PyRegCfg *cfg, _PyRegOp *op, _PyIRWord *words)
                   : fmt->roles[f] == _PyIR_ROLE_ELEMENT
                     ? (e < n ? (uint32_t)elems[e++] : IR_FIELD_MAX)
                   : 0;
+        if (fmt->roles[f] == _PyIR_ROLE_DST) {
+            fields[f] = (uint32_t)_PyRegCfg_Slot(cfg, _PyReg_OUT(cfg, op)[0]);
+        }
     }
-    assert(c == 2);
+    assert(c == span_counts(fmt));
     words[0] = IR_WORD(op->handler, fields[0], fields[1], fields[2], fields[3]);
     for (int w = 0; e < n; w++) {
         for (int f = 0; f < IR_OPERANDS_PER_WORD; f++) {
@@ -567,7 +592,8 @@ choose_handler(_PyRegOp *op, PyObject *consts)
         return RESUME_JIT;
     }
     if (opcode == BINARY_OP) {
-        if (oparg > NB_OPARG_LAST) {
+        // NB_SUBSCR is the GetItem family's, never a BINARY_OP handler
+        if (oparg >= NB_SUBSCR) {
             PyErr_Format(PyExc_SystemError,
                          "invalid BINARY_OP operation %d", oparg);
             return ERROR;
@@ -645,7 +671,7 @@ needs_entry(int handler)
     const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
     return (fmt->imm == _PyIR_LOC_FBARG
             && !(handler >= _PyIR_BINARY_OP_FIRST
-                 && handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST))
+                 && handler < _PyIR_BINARY_OP_FIRST + NB_SUBSCR))
            || (fmt->flags & _PyIR_FUSED);
 }
 

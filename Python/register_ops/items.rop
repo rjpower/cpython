@@ -1,0 +1,351 @@
+// Batch 1C: item lookup, store and deletion, slices (Appendix A).  Every
+// family is entered on its Generic arm, which runs the protocol through the
+// call-boundary macros.
+
+family GetItem(dst:Dst, obj:Src, key:Src, fb:Fb<Item>)
+  exits(next, raise, redirect) ops(BINARY_OP);
+
+family SetItem(obj:Src, key:Src, value:Src, fb:Fb<Item>)
+  exits(next, raise, redirect) ops(STORE_SUBSCR);
+
+family DelItem(obj:Src, key:Src)
+  exits(next, raise, redirect) ops(DELETE_SUBSCR);
+
+family SliceRead(dst:Dst, obj:Src, start:Src, stop:Src)
+  exits(next, raise, redirect) ops(BINARY_SLICE);
+
+family SliceWrite(obj:Src, start:Src, stop:Src, value:Src)
+  exits(next, raise, redirect) ops(STORE_SLICE);
+
+family BuildSlice(dst:Dst, parts:Span<Src>)
+  exits(next, raise) ops(BUILD_SLICE);
+
+// The sources close later operand first, as the old handlers' DECREF_INPUTS
+point GetItem.Failed(current, site, pending) keep() spent(key, obj) defs() held();
+point GetItem.Done(current, next_head, clear) keep() spent(key, obj) defs(dst) held();
+point SetItem.Failed(current, site, pending) keep() spent(key, obj, value) defs() held();
+point SetItem.Done(current, next_head, clear) keep() spent(key, obj, value) defs() held();
+point DelItem.Failed(current, site, pending) keep() spent(key, obj) defs() held();
+point DelItem.Done(current, next_head, clear) keep() spent(key, obj) defs() held();
+point SliceRead.Failed(current, site, pending) keep() spent(stop, start, obj) defs() held();
+point SliceRead.Done(current, next_head, clear) keep() spent(stop, start, obj) defs(dst) held();
+point SliceWrite.Failed(current, site, pending) keep() spent(stop, start, obj, value) defs() held();
+point SliceWrite.Done(current, next_head, clear) keep() spent(stop, start, obj, value) defs() held();
+point BuildSlice.Failed(current, site, pending) keep() spent(parts) defs() held();
+point BuildSlice.Done(current, next_head, clear) keep() spent(parts) defs(dst) held();
+
+// The protocol rows.  Every operand is borrowed on every path.
+
+extern helper value_subscript(c:B, k:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_Subscript as value_or_null
+  evidence(
+    review: "Reviewed IT. ceval.c value_subscript: an exact dict, an exact list or"
+            "tuple with an inline index, else _PyValue_GetItem.",
+    contract: "Both operands borrowed; the result owned, or NULL with an exception"
+              "set. Callbacks: __getitem__, __hash__, __eq__, __index__.");
+
+extern helper value_set_item(c:B, k:B, v:B)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_SetItem as int_zero_ok
+  evidence(
+    review: "Reviewed IT. abstract.c _PyValue_SetItem: mp_ass_subscript or sq_ass_item.",
+    contract: "The operands are borrowed; the container takes its own count of the"
+              "value. Callbacks: __setitem__, __hash__, __eq__, __index__.");
+
+extern helper value_del_item(c:B, k:B)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_DelItem as int_zero_ok
+  evidence(
+    review: "Reviewed IT. abstract.c _PyValue_DelItem.",
+    contract: "The operands are borrowed. Callbacks: __delitem__, __hash__, __eq__.");
+
+extern helper value_binary_slice(c:B, a:B, b:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_BinarySlice as value_or_null
+  evidence(
+    review: "Reviewed IT. ceval.c _PyEval_BinarySlice: inline bounds slice a list,"
+            "tuple or str without a slice object; others go through _PyValue_GetItem.",
+    contract: "The operands are borrowed; the result owned, or NULL with an exception"
+              "set. Callbacks: __getitem__, __index__.");
+
+extern helper value_store_slice(c:B, a:B, b:B, v:B)
+  cases(ok(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_StoreSlice as int_zero_ok
+  evidence(
+    review: "Reviewed IT. ceval.c _PyEval_StoreSlice.",
+    contract: "The operands are borrowed. Callbacks: __setitem__, __index__.");
+
+// The slice of two or three parts; each temporary part is taken out of its
+// home and closed on every path, a local is left as it is.
+extern helper slice_from_parts(parts:Span<Src>)
+  cases(ok(z:O), err(e:Err))
+  effects(allocates, writes, releases, runs_python, raises)
+  spends(parts)
+  c _PyRop_SliceFromParts as value_or_null
+  evidence(
+    review: "Reviewed IT. sliceobject.c _PySlice_FromValues, then the closes of"
+            "the old BUILD_SLICE's DECREF_INPUTS, before the error is raised.",
+    contract: "Two or three parts. The slice takes counts of its own; a finalizer may"
+              "run when a temporary closes. The pending error is set aside while it does.");
+
+// Each macro runs its row once on the anchored operands.  A redirect that
+// won while Python ran discharges the result that was not committed.
+macro getitem_at_origin(a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_subscript(arg(a, 0), arg(a, 1)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro binary_slice_at_origin(a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_binary_slice(arg(a, 0), arg(a, 1), arg(a, 2)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro setitem_at_origin(a:Anchors)
+  cases(ok(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_set_item(arg(a, 0), arg(a, 1), arg(a, 2)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check():
+    call redirect_status(frame) {
+      running -> Done();
+      redirected -> Moved();
+    }
+  Done():
+    exit ok();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro delitem_at_origin(a:Anchors)
+  cases(ok(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_del_item(arg(a, 0), arg(a, 1)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check():
+    call redirect_status(frame) {
+      running -> Done();
+      redirected -> Moved();
+    }
+  Done():
+    exit ok();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro store_slice_at_origin(a:Anchors)
+  cases(ok(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_store_slice(arg(a, 0), arg(a, 1), arg(a, 2), arg(a, 3)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check():
+    call redirect_status(frame) {
+      running -> Done();
+      redirected -> Moved();
+    }
+  Done():
+    exit ok();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+arm GetItem.Generic shared
+  effects(runs_python, raises)
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([obj, key]);
+    call getitem_at_origin(a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(key), spent(obj), old(dst)] at GetItem.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [key, obj], e);
+    exit raise(GetItem.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm SetItem.Generic shared
+  effects(runs_python, raises)
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([obj, key, value]);
+    call setitem_at_origin(a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result():
+    publish [] retire [roots(a), spent(key), spent(obj), spent(value)] at SetItem.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [key, obj, value], e);
+    exit raise(SetItem.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm DelItem.Generic shared
+  effects(runs_python, raises)
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([obj, key]);
+    call delitem_at_origin(a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result():
+    publish [] retire [roots(a), spent(key), spent(obj)] at DelItem.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [key, obj], e);
+    exit raise(DelItem.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm SliceRead.Generic shared
+  effects(runs_python, raises)
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([obj, start, stop]);
+    call binary_slice_at_origin(a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result(z:O):
+    publish [dst = z] retire [roots(a), spent(stop), spent(start), spent(obj), old(dst)] at SliceRead.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [stop, start, obj], e);
+    exit raise(SliceRead.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm SliceWrite.Generic shared
+  effects(runs_python, raises)
+  feedback()
+  exits(next, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([obj, start, stop, value]);
+    call store_slice_at_origin(a) {
+      ok -> Result();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Result():
+    publish [] retire [roots(a), spent(stop), spent(start), spent(obj), spent(value)] at SliceWrite.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [stop, start, obj, value], e);
+    exit raise(SliceWrite.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm BuildSlice.Generic shared
+  effects(allocates, writes, releases, runs_python, raises)
+  feedback()
+  exits(next, raise)
+{
+  entry():
+    call slice_from_parts(parts) {
+      ok -> Result();
+      err -> Failed();
+    }
+  Result(z:O):
+    publish [dst = z] retire [old(dst)] at BuildSlice.Done;
+    exit next();
+  Failed(e:Err):
+    exit raise(BuildSlice.Failed, e);
+}

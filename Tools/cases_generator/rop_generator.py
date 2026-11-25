@@ -329,6 +329,9 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
             if fb_schema == "Truth":
                 # Truth sites share the unary entry
                 fb_schema = "Unary"
+            elif fb_schema == "Item":
+                # The item families keep the entry of BINARY_OP and STORE_SUBSCR
+                fb_schema = "Binary"
         elif pl.kind is FieldKind.target:
             has_target = True
             target = "_PyIR_LOC_AB" if len(pl.slots) == 2 else LOC_NAMES[pl.slots[0]]

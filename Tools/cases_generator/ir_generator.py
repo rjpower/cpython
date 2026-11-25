@@ -567,7 +567,9 @@ def binary_ops() -> list[str]:
     with open(ROOT / "Include/opcode.h") as f:
         for line in f:
             m = re.match(r"#define NB_(\w+)\s+(\d+)", line)
-            if m and m.group(1) != "OPARG_LAST":
+            # NB_SUBSCR is the GetItem family's (register_ops/items.rop), not
+            # a handler of BINARY_OP
+            if m and m.group(1) not in ("OPARG_LAST", "SUBSCR"):
                 ops[int(m.group(2))] = m.group(1)
     assert sorted(ops) == list(range(len(ops))), ops
     return [ops[i] for i in range(len(ops))]
@@ -842,7 +844,6 @@ INPLACE_READERS = {
     "_Py_Specialize_BinaryOp", "_Py_Specialize_CompareOp",
     "_Py_Specialize_ContainsOp",
     "_Py_Specialize_StoreAttr",
-    "_Py_Specialize_StoreSubscr",
 }
 
 
@@ -1301,7 +1302,8 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "INSTRUMENTED_JUMP_IF_FALSE_OR_POP", "INSTRUMENTED_JUMP_IF_TRUE_OR_POP",
               "LOAD_FAST", "LOAD_FAST_BORROW", "LOAD_FAST_CHECK", "LOAD_FAST_AND_CLEAR",
               "DELETE_FAST", "LOAD_CONST", "LOAD_SMALL_INT", "COPY", "SWAP",
-              "POP_TOP")
+              "POP_TOP", "STORE_SUBSCR", "DELETE_SUBSCR", "BINARY_SLICE",
+              "STORE_SLICE", "BUILD_SLICE")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are
@@ -3769,9 +3771,7 @@ class IREmitter(Emitter):
             self.ownership_event("TAKE", dst=index, src=index)
         storage.clear_inputs("before binary provider")
         storage.flush(self.out)
-        self.emit("PyValue ir_binary_result = oparg == NB_SUBSCR\n")
-        self.emit("    ? value_subscript(ir_binary_left, ir_binary_right)\n")
-        self.emit("    : _PyValue_BinaryOps[oparg](PyValue_Borrow(ir_binary_left),\n")
+        self.emit("PyValue ir_binary_result = _PyValue_BinaryOps[oparg](PyValue_Borrow(ir_binary_left),\n")
         self.emit("PyValue_Borrow(ir_binary_right));\n")
         # The error branch has its own snapshot; it cannot leak into normal
         # successor facts. Restore publishes only after its revalidation.

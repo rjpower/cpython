@@ -9138,11 +9138,11 @@ ir_run_INSTRUMENTED_INSTRUCTION(
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             next_instr = this_instr;
-            if (_PyFb_HasEntry(next_opcode)) {
-                PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, next_instr, next_opcode));
-            }
             assert(next_opcode > 0 && next_opcode < 256);
             opcode = _PyIR_OriginalHandler(frame, this_instr, next_opcode);
+            if (_PyFb_HasEntry(opcode)) {
+                PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, next_instr, opcode));
+            }
             DISPATCH_GOTO();
         }
 
@@ -9402,10 +9402,10 @@ ir_run_INSTRUMENTED_LINE(
                     DISPATCH();
                 }
             }
-            if (_PyFb_HasEntry(original_opcode)) {
-                PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, next_instr, original_opcode));
-            }
             opcode = _PyIR_OriginalHandler(frame, this_instr, original_opcode);
+            if (_PyFb_HasEntry(opcode)) {
+                PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, next_instr, opcode));
+            }
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
@@ -22409,11 +22409,11 @@ static const _PyIRForm ir_handler_forms[512] = {
                 PROCESS_ERROR_AT(RAISE, 0, this_instr);
             }
             next_instr = this_instr;
-            if (_PyFb_HasEntry(next_opcode)) {
-                PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, next_instr, next_opcode));
-            }
             assert(next_opcode > 0 && next_opcode < 256);
             opcode = _PyIR_OriginalHandler(frame, this_instr, next_opcode);
+            if (_PyFb_HasEntry(opcode)) {
+                PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, next_instr, opcode));
+            }
             DISPATCH_GOTO();
         }
 
@@ -22649,10 +22649,10 @@ static const _PyIRForm ir_handler_forms[512] = {
                     DISPATCH();
                 }
             }
-            if (_PyFb_HasEntry(original_opcode)) {
-                PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, next_instr, original_opcode));
-            }
             opcode = _PyIR_OriginalHandler(frame, this_instr, original_opcode);
+            if (_PyFb_HasEntry(opcode)) {
+                PAUSE_ADAPTIVE_COUNTER(_PyIR_FbHeaderOf(frame, next_instr, opcode));
+            }
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }

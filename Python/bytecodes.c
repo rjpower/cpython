@@ -6294,12 +6294,14 @@ dummy_func(
                     DISPATCH();
                 }
             }
-            if (_PyFb_HasEntry(original_opcode)) {
+            /* The handler decides: a stack-only opcode such as LOAD_ATTR has
+             * no entry itself, its word runs a family's generic arm. */
+            opcode = ORIGINAL_HANDLER(original_opcode);
+            if (_PyFb_HasEntry(opcode)) {
                 /* Prevent the underlying instruction from specializing
                 * and overwriting the instrumentation. */
-                PAUSE_ADAPTIVE_COUNTER(FB_HEADER_OF(next_instr, original_opcode));
+                PAUSE_ADAPTIVE_COUNTER(FB_HEADER_OF(next_instr, opcode));
             }
-            opcode = ORIGINAL_HANDLER(original_opcode);
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
@@ -6311,11 +6313,11 @@ dummy_func(
                 tstate, frame, this_instr);
             ERROR_IF(next_opcode < 0);
             next_instr = this_instr;
-            if (_PyFb_HasEntry(next_opcode)) {
-                PAUSE_ADAPTIVE_COUNTER(FB_HEADER_OF(next_instr, next_opcode));
-            }
             assert(next_opcode > 0 && next_opcode < 256);
             opcode = ORIGINAL_HANDLER(next_opcode);
+            if (_PyFb_HasEntry(opcode)) {
+                PAUSE_ADAPTIVE_COUNTER(FB_HEADER_OF(next_instr, opcode));
+            }
             DISPATCH_GOTO();
         }
 

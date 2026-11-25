@@ -1205,11 +1205,11 @@ static int read_local(_PyRegTr *t, const _PyRegOp *src, int local,
  * or run code that may rebind it through frame.f_locals (the rule of
  * CopyProp and of check_folded_load()) */
 static int
-may_change_local(const _PyRegOp *op, int x)
+may_change_local(const _PyRegCfg *cfg, const _PyRegOp *op, int x)
 {
     const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
     int role = _PyIR_OpargRole(fmt);
-    return _PyRegOp_WritesLocal(op, x)
+    return _PyRegOp_WritesLocal(cfg, op, x)
         || (op->oparg == x
             && (op->opcode == ROP_HANDLER_SaveLocal_Take
                 || role == _PyIR_ROLE_LOCAL_OUT
@@ -1247,7 +1247,7 @@ stable_local(const _PyRegTr *t, int v, const _PyRegOp *src)
     for (int i = p + 1; i < t->nops; i++) {
         const _PyRegOp *op = &t->ops[i];
         if (op->opcode != _PyReg_DEAD &&
-            (op->loc.lineno != read->loc.lineno || may_change_local(op, x)))
+            (op->loc.lineno != read->loc.lineno || may_change_local(t->cfg, op, x)))
         {
             return -1;
         }
@@ -3579,6 +3579,24 @@ reuse_slot(_PyRegCfg *cfg, occupancy *o, const _PyRegOp *op, int i,
     return -1;
 }
 
+/* Whether an output of op from first on is a temporary.  Most ops give the
+ * output at `first` itself; an unpack's targets that stores sent to locals
+ * leave the others (or none) */
+static int
+any_temp_output(const _PyRegCfg *cfg, const _PyRegOp *op, int first)
+{
+    const int *out = _PyReg_OUT(cfg, op);
+    for (int j = first; j < op->nout; j++) {
+        if (out[j] >= cfg->nlocalsplus) {
+            return 1;
+        }
+        if (!_PyIR_IsDstSpanFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg))) {
+            return 0;
+        }
+    }
+    return 0;
+}
+
 static int
 compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
 {
@@ -3669,9 +3687,8 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
                 RETURN_IF_ERROR(assign(cfg, o, out[j], dst + j, op));
             }
         }
-        else if (through < op->nout && out[through] >= nl) {
+        else if (through < op->nout && any_temp_output(cfg, op, through)) {
             int dst;
-            int v0 = out[through];
             // An output that is a parameter has a fixed home, whichever of
             // the outputs it is: the others follow it
             int canon = through;
@@ -3741,7 +3758,10 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
                 }
             }
             for (int j = through; j < op->nout; j++) {
-                RETURN_IF_ERROR(assign(cfg, o, out[j], dst + j, op));
+                // An unpack's output that a store sent to a local has no slot
+                if (out[j] >= nl) {
+                    RETURN_IF_ERROR(assign(cfg, o, out[j], dst + j, op));
+                }
             }
         }
     }
@@ -4067,7 +4087,7 @@ check_folded_load(_PyRegCfg *cfg, const char *after, int i)
         }
         const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
         int role = _PyIR_OpargRole(fmt);
-        if (_PyRegOp_WritesLocal(op, x) || (op->oparg == x && (role == _PyIR_ROLE_LOCAL_OUT
+        if (_PyRegOp_WritesLocal(cfg, op, x) || (op->oparg == x && (role == _PyIR_ROLE_LOCAL_OUT
                                                 || role == _PyIR_ROLE_LOCAL_CLEAR
                                                 || role == _PyIR_ROLE_LOCAL_MOVE)))
         {

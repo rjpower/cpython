@@ -1092,6 +1092,22 @@ _PyIR_SpanCountFields(const _PyIRFormat *fmt)
     return n;
 }
 
+/* A span format whose one span is destinations (Unpack's): it has no DST
+ * role of its own and the span is not counted twice as Move's are */
+static inline int
+_PyIR_IsDstSpanFormat(const _PyIRFormat *fmt)
+{
+    if (fmt->operands != _PyIR_OPERANDS_SPANS || _PyIR_SpanCountFields(fmt) != 1) {
+        return 0;
+    }
+    for (int f = 0; f < 4; f++) {
+        if (fmt->roles[f] == _PyIR_ROLE_DST) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 static inline int
 _PyIR_IsMoveFormat(const _PyIRFormat *fmt)
 {

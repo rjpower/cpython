@@ -250,7 +250,7 @@ _PyRegPass_CopyProp(_PyRegCfg *cfg)
 static int
 touches_local(const _PyRegCfg *cfg, const _PyRegOp *op, int z)
 {
-    if (_PyRegOp_WritesLocal(op, z) || written_local(op) == z) {
+    if (_PyRegOp_WritesLocal(cfg, op, z) || written_local(op) == z) {
         return 1;
     }
     // A handler that reads the slot its oparg names
@@ -281,6 +281,16 @@ store_producer(_PyRegCfg *cfg, int region_start, int s)
         const int *out = _PyReg_OUT(cfg, op);
         if (op->nout > 0 && out[op->nout - 1] == value) {
             return op;
+        }
+        // An unpack's outputs are all its targets', in any order
+        if (op->nout > 1
+            && _PyIR_IsDstSpanFormat(_PyRegCfg_FormatOf(op->opcode, op->oparg)))
+        {
+            for (int j = 0; j < op->nout; j++) {
+                if (out[j] == value) {
+                    return op;
+                }
+            }
         }
         // An op that writes a local releases its old value, which may run
         // other code, as STORE_FAST does
@@ -321,6 +331,27 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
                 continue;
             }
             const _PyIRFormat *fmt = _PyRegCfg_FormatOf(p->opcode, p->oparg);
+            if (_PyIR_IsDstSpanFormat(fmt)) {
+                // The store of one of an unpack's outputs names that output
+                // the local: the publish writes it and closes its old
+                // binding with the others', after every target is written
+                int *outs = _PyReg_OUT(cfg, p);
+                int k = 0;
+                while (k < p->nout && outs[k] != _PyReg_IN(cfg, op)[0]) {
+                    k++;
+                }
+                int twice = 0;
+                for (int j = 0; j < p->nout; j++) {
+                    twice |= outs[j] == op->oparg;
+                }
+                if (k == p->nout || twice) {
+                    continue;
+                }
+                outs[k] = op->oparg;
+                op->opcode = _PyReg_DEAD;
+                op->flags |= _PyReg_STORE_FOLDED;
+                continue;
+            }
             if (!(fmt->flags & _PyIR_STORE_DST) || fmt->dst == _PyIR_NO_DST) {
                 continue;
             }

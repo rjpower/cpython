@@ -691,7 +691,7 @@ class DefinitionTests(unittest.TestCase):
         GetItem SetItem DelItem SliceRead SliceWrite BuildSlice Build AddElement
         UpdateContainer MergeKeywords Unpack Cell NamespaceRead NamespaceWrite
         GlobalRead SetupAnnotations Import BuildText Convert Format Length Pattern
-        Function Intrinsic
+        Function FunctionSet Intrinsic IntrinsicPair
         Call InitResult Return CallKw CallEx MaterializeKwargs IterOpen ForIter
         AsyncIter Awaitable Send Yield Raise Reraise ExceptState ExceptMatch
         CleanupThrow EndAsyncFor WithExit Resume Poll

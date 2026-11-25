@@ -2284,6 +2284,30 @@ static inline bool _PyRop_PythonTarget(PyThreadState *tstate,
 static _PyInterpreterFrame *_PyRop_PushPython(PyThreadState *tstate,
                                               _PyInterpreterFrame *frame,
                                               PyValue *fn, _PyInstr *head);
+/* The rows of Function and Intrinsic (Python/register_ops/functions.rop) */
+static PyValue _PyRop_FunctionNew(_PyInterpreterFrame *frame, PyValue *code);
+static void _PyRop_RetireFailedFunction(_PyInterpreterFrame *frame,
+                                        PyValue *code);
+static void _PyRop_StoreField(PyValueBorrow fn, uint32_t field, PyValue attr);
+static PyValue _PyRop_IntrinsicUnary(PyThreadState *tstate,
+                                     _PyInterpreterFrame *frame, uint32_t id,
+                                     PyValue *x);
+static PyValue _PyRop_IntrinsicImportStar(PyThreadState *tstate,
+                                          _PyInterpreterFrame *frame,
+                                          PyValue *x);
+static PyValue _PyRop_IntrinsicStopIteration(PyThreadState *tstate,
+                                             _PyInterpreterFrame *frame,
+                                             PyValue *x);
+static PyValue _PyRop_IntrinsicBinary(PyThreadState *tstate,
+                                      _PyInterpreterFrame *frame, uint32_t id,
+                                      PyValue *x, PyValue *y);
+static PyValue _PyRop_IntrinsicCompare(PyThreadState *tstate,
+                                       _PyInterpreterFrame *frame, uint32_t id,
+                                       PyValue *x, PyValue *y);
+static PyValue _PyRop_IntrinsicAttr(PyThreadState *tstate,
+                                    _PyInterpreterFrame *frame, uint32_t id,
+                                    PyValue *x, PyValue *y);
+
 static PyValue _PyRop_CallNative(PyThreadState *tstate,
                                  _PyInterpreterFrame *frame, PyValue *fn,
                                  const _PyIRWord *head);
@@ -7959,6 +7983,162 @@ static inline Py_ALWAYS_INLINE PyValue
         }
     }
     _PyValueTemps_Close(&temps);
+    return res;
+}
+
+/* Function.Make and Intrinsic.*: the rows (functions.rop) */
+
+/* The owner of the value in a source home: a temporary's owner leaves its
+ * home, a local's value gets a count and stays */
+static PyValue
+rop_source_owner(_PyInterpreterFrame *frame, PyValue *home)
+{
+    if (home - _PyFrame_Slots(frame) < _PyFrame_GetCode(frame)->co_nlocalsplus) {
+        return PyValue_DUP(PyValue_Borrow(*home));
+    }
+    return _PyFrame_TakeHome(frame, home);
+}
+
+static PyValue
+_PyRop_FunctionNew(_PyInterpreterFrame *frame, PyValue *code)
+{
+    // The compiler loads the code object from a constant
+    PyObject *codeobj = PyValue_AsKnownObjectBorrow(*code);
+    PyFunctionObject *func_obj = (PyFunctionObject *)
+        PyFunction_New(codeobj, frame->f_globals);
+    if (func_obj == NULL) {
+        return PyValue_NULL;
+    }
+    _PyFunction_SetVersion(
+        func_obj, ((PyCodeObject *)func_obj->func_code)->co_version);
+    return PyValue_FromObjectSteal((PyObject *)func_obj);
+}
+
+static void
+_PyRop_RetireFailedFunction(_PyInterpreterFrame *frame, PyValue *code)
+{
+    PyObject *exc = PyErr_GetRaisedException();
+    PyValue_XCLOSE(rop_source_owner(frame, code));
+    PyErr_SetRaisedException(exc);
+}
+
+/* field is the member of FunctionField: the compiler's flag is 1 << field */
+static void
+_PyRop_StoreField(PyValueBorrow fn, uint32_t field, PyValue attr)
+{
+    PyObject *func = (PyValue_AsKnownObjectBorrow)(fn);
+    assert(PyFunction_Check(func));
+    _PyFunction_StoreAttribute((PyFunctionObject *)func, 1 << field,
+                               PyValue_AsKnownObjectSteal(attr));
+}
+
+/* The compiler's number of each member of IntrinsicId, in declaration order */
+static const uint8_t rop_intrinsic_number[] = {
+    INTRINSIC_PRINT, INTRINSIC_IMPORT_STAR, INTRINSIC_STOPITERATION_ERROR,
+    INTRINSIC_ASYNC_GEN_WRAP, INTRINSIC_UNARY_POSITIVE,
+    INTRINSIC_LIST_TO_TUPLE, INTRINSIC_TYPEVAR, INTRINSIC_PARAMSPEC,
+    INTRINSIC_TYPEVARTUPLE, INTRINSIC_SUBSCRIPT_GENERIC,
+    INTRINSIC_TYPEALIAS, INTRINSIC_BUILD_FROZENSET,
+    INTRINSIC_PREP_RERAISE_STAR, INTRINSIC_TYPEVAR_WITH_BOUND,
+    INTRINSIC_TYPEVAR_WITH_CONSTRAINTS, INTRINSIC_SET_FUNCTION_TYPE_PARAMS,
+    INTRINSIC_SET_TYPEPARAM_DEFAULT, INTRINSIC_ADD_CONDITIONAL_ANNOTATION,
+    INTRINSIC_MATCH_CLASS_ISINSTANCE,
+    INTRINSIC_COMPARE_OP + 0, INTRINSIC_COMPARE_OP + 1, INTRINSIC_COMPARE_OP + 2,
+    INTRINSIC_COMPARE_OP + 3, INTRINSIC_COMPARE_OP + 4, INTRINSIC_COMPARE_OP + 5,
+    INTRINSIC_COMPARE_OP + 6, INTRINSIC_COMPARE_OP + 7, INTRINSIC_COMPARE_OP + 8,
+    INTRINSIC_COMPARE_OP + 9, INTRINSIC_COMPARE_OP + 10, INTRINSIC_COMPARE_OP + 11,
+    INTRINSIC_CONTAINS_OP, INTRINSIC_CONTAINS_OP + 1,
+    INTRINSIC_GETATTR, INTRINSIC_SETATTR,
+};
+
+static PyValue
+_PyRop_IntrinsicUnary(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                      uint32_t id, PyValue *x)
+{
+    // Taken before the call, which can run code
+    PyValue value = rop_source_owner(frame, x);
+    int number = rop_intrinsic_number[id];
+    PyValue res;
+    if (number == INTRINSIC_UNARY_POSITIVE) {
+        res = _PyValue_Positive(value);
+    }
+    else {
+        // The other intrinsics take objects: the helper boxes a number
+        res = _PyEval_CallIntrinsic1(tstate, number, value);
+    }
+    PyValue_XCLOSE(value);
+    return res;
+}
+
+static PyValue
+_PyRop_IntrinsicImportStar(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                           PyValue *x)
+{
+    PyValue value = rop_source_owner(frame, x);
+    PyValue res = _PyEval_CallIntrinsic1(tstate, INTRINSIC_IMPORT_STAR, value);
+    PyValue_XCLOSE(value);
+    return res;
+}
+
+static PyValue
+_PyRop_IntrinsicStopIteration(PyThreadState *tstate,
+                              _PyInterpreterFrame *frame, PyValue *x)
+{
+    PyValue value = rop_source_owner(frame, x);
+    PyValue res = _PyEval_CallIntrinsic1(tstate, INTRINSIC_STOPITERATION_ERROR,
+                                         value);
+    PyValue_XCLOSE(value);
+    return res;
+}
+
+/* x is the deeper stack value, the function's first argument */
+static PyValue
+_PyRop_IntrinsicBinary(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       uint32_t id, PyValue *x, PyValue *y)
+{
+    PyValue held2 = rop_source_owner(frame, x);
+    PyValue held1 = rop_source_owner(frame, y);
+    PyValue res = _PyEval_CallIntrinsic2(tstate, rop_intrinsic_number[id],
+                                         held2, held1);
+    PyValue_XCLOSE(held1);
+    PyValue_XCLOSE(held2);
+    return res;
+}
+
+static PyValue
+_PyRop_IntrinsicCompare(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                        uint32_t id, PyValue *x, PyValue *y)
+{
+    return _PyRop_IntrinsicBinary(tstate, frame, id, x, y);
+}
+
+static PyValue
+_PyRop_IntrinsicAttr(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                     uint32_t id, PyValue *x, PyValue *y)
+{
+    PyValue held2 = rop_source_owner(frame, x);
+    PyValue held1 = rop_source_owner(frame, y);
+    PyValue res;
+    if (rop_intrinsic_number[id] == INTRINSIC_GETATTR) {
+        // The owner is a value; the name is a str
+        PyObject *name = PyValue_ObjectOrNull(held1);
+        assert(name != NULL && PyUnicode_CheckExact(name));
+        res = _PyValue_GetAttr(held2, name);
+    }
+    else {
+        // held2 is the value, NULL for a deletion; held1 is the tuple
+        // (owner, name)
+        assert(rop_intrinsic_number[id] == INTRINSIC_SETATTR);
+        PyObject *target = PyValue_ObjectOrNull(held1);
+        assert(target != NULL && PyTuple_CheckExact(target)
+               && PyTuple_GET_SIZE(target) == 2);
+        PyValueBorrow owner = PyTuple_GET_VALUE(target, 0);
+        PyObject *attr_name = _PyTuple_GET_OBJECT(target, 1);
+        int err = _PyValue_SetAttr(owner, attr_name, held2);
+        res = err < 0 ? PyValue_NULL : PyValue_None;
+    }
+    PyValue_XCLOSE(held1);
+    PyValue_XCLOSE(held2);
     return res;
 }
 

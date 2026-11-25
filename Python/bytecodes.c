@@ -1468,60 +1468,21 @@ dummy_func(
             ERROR_IF(err);
         }
 
-        inline_ok op(_CALL_INTRINSIC_1, (value: taken -- res: owned, v: moved(value)))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: its words are Intrinsic.*. */
+        tier1 inst(CALL_INTRINSIC_1, (value: consumed -- res: owned))
+            exits(abort)
         {
-            assert(oparg <= MAX_INTRINSIC_1);
-            if (oparg == INTRINSIC_UNARY_POSITIVE) {
-                res = _PyValue_Positive(value);
-                if (PyValue_IsNull(res)) {
-                    ERROR_NO_POP();
-                }
-            }
-            else {
-                // The other intrinsics take objects: the helper boxes a number
-                res = _PyEval_CallIntrinsic1(tstate, oparg, value);
-                if (PyValue_IsNull(res)) {
-                    ERROR_NO_POP();
-                }
-            }
-            v = value;
-            DEAD(value);
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + _POP_TOP_ANY;
-
-        outlined inst(CALL_INTRINSIC_2, (value2_st: consumed nullable, value1_st: consumed -- res: owned))
-            effects(runs_python) exits(next, raise)
+        tier1 inst(CALL_INTRINSIC_2, (value2_st: consumed nullable, value1_st: consumed -- res: owned))
+            exits(abort)
         {
-            assert(oparg <= MAX_INTRINSIC_2);
-            // Taken before the calls, which can run code
-            PyValue held2 = TAKE(value2_st);
-            PyValue held1 = TAKE(value1_st);
-            if (oparg == INTRINSIC_GETATTR) {
-                // The owner is a value; the name is a str
-                PyObject *name = PyValue_ObjectOrNull(held1);
-                assert(name != NULL && PyUnicode_CheckExact(name));
-                res = _PyValue_GetAttr(held2, name);
-            }
-            else if (oparg == INTRINSIC_SETATTR) {
-                // value2_st is the value, NULL for a deletion; value1_st is
-                // the tuple (owner, name), which stays in its slot
-                PyObject *target = PyValue_ObjectOrNull(held1);
-                assert(target != NULL && PyTuple_CheckExact(target) && PyTuple_GET_SIZE(target) == 2);
-                PyValueBorrow owner = PyTuple_GET_VALUE(target, 0);
-                PyObject *attr_name = _PyTuple_GET_OBJECT(target, 1);
-                int err = _PyValue_SetAttr(owner, attr_name, held2);
-                res = err < 0 ? PyValue_NULL : PyValue_None;
-            }
-            else {
-                // The other intrinsics take objects: the helper boxes a
-                // number (the subject or class of MATCH_CLASS_ISINSTANCE)
-                res = _PyEval_CallIntrinsic2(tstate, oparg, held2, held1);
-            }
-            PyValue_XCLOSE(held1);
-            PyValue_XCLOSE(held2);
-            ERROR_IF(PyValue_IsNull(res));
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         outlined tier1 inst(RAISE_VARARGS, (args[oparg]: consumed -- ))
@@ -4735,40 +4696,20 @@ dummy_func(
             _DO_CALL_FUNCTION_EX +
             _CHECK_PERIODIC_AT_END;
 
-        op(_MAKE_FUNCTION, (codeobj_st: taken assumed(object) by codegen -- func: owned, co: moved(codeobj_st)))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: its words are Function.Make. */
+        tier1 inst(MAKE_FUNCTION, (codeobj_st: consumed -- func: owned))
+            exits(abort)
         {
-            // The compiler loads the code object from a constant
-            PyObject *codeobj = PyValue_AsKnownObjectBorrow(codeobj_st);
-
-            PyFunctionObject *func_obj = (PyFunctionObject *)
-                PyFunction_New(codeobj, GLOBALS());
-
-            if (func_obj == NULL) {
-                ERROR_NO_POP();
-            }
-            co = codeobj_st;
-            DEAD(codeobj_st);
-
-            // The function's own reference: PyFunction_New can run code
-            _PyFunction_SetVersion(
-                func_obj, ((PyCodeObject *)func_obj->func_code)->co_version);
-            func = PyValue_FromObjectSteal((PyObject *)func_obj);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined macro(MAKE_FUNCTION) = _MAKE_FUNCTION + _POP_TOP_ANY;
-
-        outlined inst(SET_FUNCTION_ATTRIBUTE,
-                (attr_st: consumed assumed(object) by codegen,
-                 func_in: consumed assumed(exact(PyFunction_Type)) by _MAKE_FUNCTION -- func_out: moved(func_in)))
-            effects(reads, writes) exits(next)
+        tier1 inst(SET_FUNCTION_ATTRIBUTE, (attr_st: consumed, func_in: consumed -- func_out: owned))
+            exits(abort)
         {
-            // The attribute is a tuple, dict or function that the compiler built
-            PyObject *func = PyValue_AsKnownObjectBorrow(func_in);
-            PyObject *attr = PyValue_AsKnownObjectSteal(attr_st);
-            func_out = TAKE(func_in);
-            assert(PyFunction_Check(func));
-            _PyFunction_StoreAttribute((PyFunctionObject *)func, oparg, attr);
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         // The marker at the start of a generator's code: nothing executes it,

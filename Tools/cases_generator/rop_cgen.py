@@ -1118,10 +1118,11 @@ class ArmLowerer:
             # The word runs again, under the handler it now names
             self.emit("next_instr = this_instr;")
             self.emit("DISPATCH_SAME_OPARG();")
-        elif t.kind == "raise":
+        elif t.kind in ("raise", "unwind"):
             point = t.args[0]
             assert isinstance(point, Name)
-            self.emit(f"PROCESS_ERROR_AT(RAISE, {self.points[point.name]}, this_instr);")
+            ingress = t.kind.upper()
+            self.emit(f"PROCESS_ERROR_AT({ingress}, {self.points[point.name]}, this_instr);")
         elif t.kind == "enter":
             self.emit(f"ROP_ENTER({self.expr(t.args[0])}, {self.resume_slot(t)});")
         elif t.kind == "return":

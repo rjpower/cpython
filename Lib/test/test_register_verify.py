@@ -1162,6 +1162,66 @@ class VerifyTests(unittest.TestCase):
         ])
 
 
+
+# W2's transfers (WR): an exit that unwinds an exception the word already
+# reported
+UNWIND = """\
+family U(exc:Src) exits(unwind, raise) ops(NOP);
+point U.Raised(current, site, pending) keep(exc) spent() defs();
+extern helper restore(t:Thread, e:Src) cases(err(x:Err)) effects(runs_python, raises)
+  c RESTORE as raised evidence(review: "r", contract: "c");
+arm U.Restore split
+  effects(runs_python, raises)
+  feedback()
+  exits(unwind)
+{
+  entry():
+    call restore(thread, exc) {
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit unwind(U.Raised, e);
+}
+"""
+
+UNWIND_CASES = [
+    ('unwind to a point that is not pending',
+     'point U.Raised(current, site, pending)', 'point U.Raised(current, site, clear)', [
+         (15, 5, 'U.Restore', "exit unwind(U.Raised, ...): the exception is pending as the frame unwinds, but U.Raised's exception role is clear"),
+     ]),
+    ('unwind not declared',
+     '  exits(unwind)\n', '  exits(raise)\n', [
+         (6, 3, 'U.Restore', 'declared exit raise is not reached'),
+         (15, 5, 'U.Restore', 'exit unwind: unwind is not a declared exit of U.Restore (raise)'),
+     ]),
+    ('unwind without raises',
+     '  effects(runs_python, raises)\n  feedback()', '  effects(writes)\n  feedback()', [
+         (11, 5, 'U.Restore', 'effects: call restore may raises, which effects(writes) does not declare'),
+         (11, 5, 'U.Restore', 'effects: call restore may runs_python, which effects(writes) does not declare'),
+         (15, 5, 'U.Restore', 'effects: exit unwind may raises, which effects(writes) does not declare'),
+     ]),
+    ('unwind in a transfer row',
+     'cases(err(x:Err)) effects(runs_python, raises)\n  c RESTORE as raised',
+     'cases(unwind(x:Err)) effects(runs_python, raises)\n  c RESTORE as transfer', [
+         (3, 46, 'restore', 'case unwind of a transfer row names the exit its callee performs (one of: jump, branch, return, redirect, exit, raise)'),
+         (11, 5, 'U.Restore', 'call restore at t.rop:11 has no edge for unwind'),
+         (12, 7, 'U.Restore', 'call restore at t.rop:11: restore has no case err (cases: unwind)'),
+     ]),
+]
+
+
+class UnwindTests(unittest.TestCase):
+    def test_unwind_is_clean(self):
+        self.assertEqual(transfer_diagnostics(UNWIND), [])
+
+    def test_unwind_fixtures(self):
+        for name, old, new, expected in UNWIND_CASES:
+            with self.subTest(name):
+                self.assertIn(old, UNWIND)
+                found = transfer_diagnostics(UNWIND.replace(old, new, 1))
+                self.assertTrue(expected)
+                self.assertEqual(sorted(found), sorted(expected))
+
 def rop_files() -> list[Path]:
     return sorted(ROP_DIR.glob("*.rop"))
 

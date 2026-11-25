@@ -332,6 +332,9 @@ class ExitKind(enum.Enum):
     miss = "miss"
     again = "again"
     raise_ = "raise"
+    # Propagates an exception the word already reported: no traceback
+    # entry and no RAISE event (the old `goto exception_unwind`)
+    unwind = "unwind"
     enter = "enter"
     return_ = "return"
     yield_ = "yield"

@@ -280,7 +280,7 @@ class ArmRowTests(unittest.TestCase):
                     section = header[header.index(f"{table}[IR_NUM_HANDLERS] = {{"):]
                     section = section[:section.index("};")]
                     self.assertRegex(section, rf"\[{handler}\] = ")
-            self.assertIn(f'[{handler} - IR_FIRST_ONLY_HANDLER] = "{entry.dotted}"', header)
+            self.assertIn(f'[{handler}] = "{entry.dotted}"', header)
             self.assertIn(f"[{handler}] = {{ .flags = _PyIR_VALID", header)
 
     def test_too_many_handlers_name_the_overflow(self):

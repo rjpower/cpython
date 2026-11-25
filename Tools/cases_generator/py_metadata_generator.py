@@ -20,7 +20,7 @@ from collections.abc import Sequence
 
 import ir_arms
 from ir_generator import (BINARY_OP_FAMILY, IR_BASE_ONLY, STACK_ONLY, all_instructions,
-                          first_ir_only_handler, handler_ids, num_old_handlers)
+                          handler_ids, ir_only_handler_names, num_old_handlers)
 from typing import TextIO
 
 
@@ -83,17 +83,26 @@ def generate_ir_opmap(analysis: Analysis, out: CWriter,
     ids = handler_ids(analysis) | {
         name: analysis.opmap[name] for name in IR_BASE_ONLY
         if name not in handler_ids(analysis)}
+    only = set(ir_only_handler_names(analysis))
     for name, handler in sorted(ids.items(), key=lambda item: item[1]):
-        if handler >= first_ir_only_handler(analysis) or name in IR_BASE_ONLY:
+        if name in only or name in IR_BASE_ONLY:
             out.emit(f"{name}={handler},\n")
-    if not arms:
-        out.emit(")\n\n")
-        return
     first = num_old_handlers(analysis)
-    out.emit(") | frozendict({\n")
-    for arm in arms:
-        out.emit(f'"{arm.dotted}": {first + arm.index},\n')
-    out.emit("})\n\n")
+    if arms:
+        out.emit(") | frozendict({\n")
+        for arm in arms:
+            out.emit(f'"{arm.dotted}": {first + arm.index},\n')
+        out.emit("})\n\n")
+    else:
+        out.emit(")\n\n")
+    # Some of these numbers are below 256: a number says nothing about
+    # whether the handler is an opcode.
+    numbers = sorted([ids[name] for name in only]
+                     + [first + arm.index for arm in arms])
+    out.emit("_ir_only_handlers = frozenset((\n")
+    for number in numbers:
+        out.emit(f"{number},\n")
+    out.emit("))\n\n")
 
 
 def is_abort_body(analysis: Analysis, name: str) -> bool:

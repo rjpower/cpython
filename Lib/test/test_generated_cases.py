@@ -590,48 +590,6 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(expected, uncovered)
         self.assertIn("PROCESS_ERROR_AT(RAISE, 0, next_instr - 1)", expected)
 
-    def test_dict_first_probe_contract(self):
-        source = (Path(__file__).resolve().parents[2] /
-                  "Python" / "bytecodes.c").read_text()
-
-        def generate(text):
-            Path(self.temp_input_filename).write_text(text)
-            with handle_stderr():
-                analysis = analyzer.analyze_files([self.temp_input_filename])
-            out = io.StringIO()
-            ir_generator.generate_ir([self.temp_input_filename], analysis, out, False)
-            return out.getvalue()
-
-        body = self.handler(generate(source), "BINARY_OP_SUBSCR_DICT")
-        provider = body.index("_PyDict_TryGetFirstProbeValue")
-        detach = body.index("IR_DETACH(ir_word, B, dict_st)", provider)
-        store = body.index("IR_STORE_DST(ir_word, A, ir_leaf_result);", detach)
-        key = body.index("PyValue_XCLOSE(ir_leaf_key)", store)
-        dictionary = body.index("PyValue_XCLOSE(ir_leaf_dict)", key)
-        old = body.index("PyValue_XCLOSE(ir_old);", dictionary)
-        dispatch = body.index("DISPATCH();", old)
-        slow = body.index("value_subscript(dict_st, sub_st)", dispatch)
-        self.assertLess(provider, detach)
-        self.assertLess(dispatch, slow)
-        self.assertNotIn("value_reader_complete", body[provider:dispatch])
-        self.assertLess(slow, body.index("IR_STORE_DST(ir_word, A, res);", slow))
-
-        marker = "IR_TRY_DICT_FIRST_PROBE();"
-        guard = 'DEOPT_IF(!Py_TYPE(o)->tp_as_mapping, "the type has no mapping slots");'
-        changes = (
-            (marker, "STAT_INC(BINARY_OP, hit); " + marker),
-            (marker, marker + " " + marker),
-            (guard, "spam_call(); " + guard),
-            ("(dict_st: consumed, sub_st: consumed -- res: owned)",
-             "(sub_st: consumed, dict_st: consumed -- res: owned)"),
-            (marker, "if (oparg) { " + marker + " }"),
-        )
-        for old, new in changes:
-            with self.subTest(new=new):
-                self.assertIn(old, source)
-                with self.assertRaises(SyntaxError):
-                    generate(source.replace(old, new, 1))
-
     def test_guarded_keyword_call_contract(self):
         source = (Path(__file__).resolve().parents[2] /
                   "Python" / "bytecodes.c").read_text()
@@ -2691,18 +2649,7 @@ class TestIRCases(unittest.TestCase):
         with mock.patch.object(ir_generator, "OBJECT_READERS_SEEN", set()):
             formats = ir_generator.compute_formats(analysis)
             seen = ir_generator.OBJECT_READERS_SEEN
-            # Checked element intrinsics emit their object reads after the
-            # source-use analysis. Include their actual native calls rather
-            # than exempting a fixed list of now-hidden reader names.
             lowered = set()
-            for name in ("BINARY_OP_SUBSCR_LIST_INT", "BINARY_OP_SUBSCR_TUPLE_INT"):
-                output = io.StringIO()
-                out = CWriter(output, 0, False)
-                ir_generator.generate_handler(name, analysis.instructions[name], formats[name],
-                    ir_generator.IREmitter(out, analysis, formats), out)
-                tokens = list(lexer.tokenize(output.getvalue()))
-                lowered.update(token.text for token, following in zip(tokens, tokens[1:])
-                    if token.text in ir_generator.OBJECT_READERS and following.kind == "LPAREN")
         self.assertEqual(seen | lowered | {"SPAM", "spam_call"},
                          ir_generator.OBJECT_READERS)
 
@@ -3926,7 +3873,6 @@ class TestIRCases(unittest.TestCase):
         analysis = self.analyze(input)
         handlers = ir_generator.binary_op_handlers(analysis)
         self.assertEqual(handlers[0], "BINARY_OP_ADD")
-        self.assertIn("BINARY_OP_SUBSCR", handlers)
         ids = ir_generator.handler_ids(analysis)
         self.assertNotIn("BINARY_OP", ids)
         self.assertEqual(ids["IR_BACON"], 256)
@@ -4064,7 +4010,7 @@ class TestCallMarkers(unittest.TestCase):
         handlers = set(re.findall(r"^\s*(?:HOT_)?TARGET\((\w+)\)(?: \{)?$", inline, re.M))
         defined = set(re.findall(r"^ir_run_(\w+)\($", forms, re.M))
         # A floor, not a count: ported families delete old handlers
-        self.assertGreater(len(handlers), 200)
+        self.assertGreater(len(handlers), 150)
         self.assertEqual(handlers, defined)
         table = re.findall(r"^    \[(\d+)\] = ir_run_(\w+),$", forms, re.M)
         self.assertEqual([int(i) for i, _ in table], list(range(len(table))))
@@ -4143,7 +4089,7 @@ class TestCallMarkers(unittest.TestCase):
         # generator emits.  No handler keeps a value record or a box area.
         _, rest = self.interpreter.split(ir_generator.INSTRUCTION_START_MARKER)
         sites = generated_address_sites(rest)
-        self.assertGreater(len(sites), 200)
+        self.assertGreater(len(sites), 150)
         for name, found in sites.items():
             self.assertEqual(found, [], name)
 

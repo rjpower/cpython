@@ -3,10 +3,10 @@
 // call-boundary macros.
 
 family GetItem(dst:Dst, obj:Src, key:Src, fb:Fb<Item>)
-  exits(next, raise, redirect, miss, again) ops(BINARY_OP);
+  exits(next, raise, redirect, miss, again) generic(Generic) ops(BINARY_OP);
 
 family SetItem(obj:Src, key:Src, value:Src, fb:Fb<Item>)
-  exits(next, raise, redirect, miss, again) ops(STORE_SUBSCR);
+  exits(next, raise, redirect, miss, again) generic(Generic) ops(STORE_SUBSCR);
 
 family DelItem(obj:Src, key:Src)
   exits(next, raise, redirect) ops(DELETE_SUBSCR);
@@ -21,18 +21,18 @@ family BuildSlice(dst:Dst, parts:Span<Src>)
   exits(next, raise) ops(BUILD_SLICE);
 
 // The sources close later operand first, as the old handlers' DECREF_INPUTS
-point GetItem.Failed(current, site, pending) keep() spent(key, obj) defs() held();
-point GetItem.Done(current, next_head, clear) keep() spent(key, obj) defs(dst) held();
-point SetItem.Failed(current, site, pending) keep() spent(key, obj, value) defs() held();
-point SetItem.Done(current, next_head, clear) keep() spent(key, obj, value) defs() held();
-point DelItem.Failed(current, site, pending) keep() spent(key, obj) defs() held();
-point DelItem.Done(current, next_head, clear) keep() spent(key, obj) defs() held();
-point SliceRead.Failed(current, site, pending) keep() spent(stop, start, obj) defs() held();
-point SliceRead.Done(current, next_head, clear) keep() spent(stop, start, obj) defs(dst) held();
-point SliceWrite.Failed(current, site, pending) keep() spent(stop, start, obj, value) defs() held();
-point SliceWrite.Done(current, next_head, clear) keep() spent(stop, start, obj, value) defs() held();
-point BuildSlice.Failed(current, site, pending) keep() spent(parts) defs() held();
-point BuildSlice.Done(current, next_head, clear) keep() spent(parts) defs(dst) held();
+point GetItem.Failed(current, site, pending) keep() spent(key, obj) defs();
+point GetItem.Done(current, next_head, clear) keep() spent(key, obj) defs(dst);
+point SetItem.Failed(current, site, pending) keep() spent(key, obj, value) defs();
+point SetItem.Done(current, next_head, clear) keep() spent(key, obj, value) defs();
+point DelItem.Failed(current, site, pending) keep() spent(key, obj) defs();
+point DelItem.Done(current, next_head, clear) keep() spent(key, obj) defs();
+point SliceRead.Failed(current, site, pending) keep() spent(stop, start, obj) defs();
+point SliceRead.Done(current, next_head, clear) keep() spent(stop, start, obj) defs(dst);
+point SliceWrite.Failed(current, site, pending) keep() spent(stop, start, obj, value) defs();
+point SliceWrite.Done(current, next_head, clear) keep() spent(stop, start, obj, value) defs();
+point BuildSlice.Failed(current, site, pending) keep() spent(parts) defs();
+point BuildSlice.Done(current, next_head, clear) keep() spent(parts) defs(dst);
 
 // The protocol rows.  Every operand is borrowed on every path.
 
@@ -219,7 +219,7 @@ macro store_slice_at_origin(a:Anchors)
 }
 
 arm GetItem.Generic shared
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases on (dst))
   feedback(read(entry), write(entry), write(handler))
   exits(next, again, raise, redirect)
 {
@@ -302,7 +302,7 @@ arm DelItem.Generic shared
 }
 
 arm SliceRead.Generic shared
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise, redirect)
 {
@@ -348,7 +348,7 @@ arm SliceWrite.Generic shared
 }
 
 arm BuildSlice.Generic shared
-  effects(allocates, writes, releases, runs_python, raises)
+  effects(allocates, writes, runs_python, raises, releases on (dst))
   feedback()
   exits(next, raise)
 {
@@ -729,8 +729,8 @@ macro adapt_before_use_setitem(f:Fb<Item>, o:Src, k:Src)
 
 // Arms
 
-arm GetItem.ListIndex inline
-  effects(reads, writes, releases)
+arm GetItem.ListIndex inline entry(list_index)
+  effects(reads, writes, releases on (dst))
   feedback()
   exits(next, miss)
 {
@@ -746,8 +746,8 @@ arm GetItem.ListIndex inline
     exit next();
 }
 
-arm GetItem.TupleIndex inline
-  effects(reads, writes, releases)
+arm GetItem.TupleIndex inline entry(tuple_index)
+  effects(reads, writes, releases on (dst))
   feedback()
   exits(next, miss)
 {
@@ -763,8 +763,8 @@ arm GetItem.TupleIndex inline
     exit next();
 }
 
-arm GetItem.Ascii inline
-  effects(reads, writes, releases)
+arm GetItem.Ascii inline entry(ascii)
+  effects(reads, writes, releases on (dst))
   feedback()
   exits(next, miss)
 {
@@ -780,8 +780,8 @@ arm GetItem.Ascii inline
     exit next();
 }
 
-arm GetItem.UnicodeAsciiChar inline
-  effects(reads, writes, releases)
+arm GetItem.UnicodeAsciiChar inline entry(unicode_char)
+  effects(reads, writes, releases on (dst))
   feedback()
   exits(next, miss)
 {
@@ -798,8 +798,8 @@ arm GetItem.UnicodeAsciiChar inline
     exit next();
 }
 
-arm GetItem.ListSlice shared
-  effects(runs_python, raises)
+arm GetItem.ListSlice shared entry(list_slice)
+  effects(runs_python, raises, releases on (dst))
   feedback()
   exits(next, miss, raise, redirect)
 {
@@ -825,8 +825,8 @@ arm GetItem.ListSlice shared
     exit redirect(current_route);
 }
 
-arm GetItem.Dict inline
-  effects(runs_python, raises, writes, releases)
+arm GetItem.Dict inline entry(dict)
+  effects(runs_python, raises, writes, releases on (dst))
   feedback()
   exits(next, miss, raise, redirect)
 {
@@ -859,7 +859,7 @@ arm GetItem.Dict inline
     exit redirect(current_route);
 }
 
-arm SetItem.ListIndex inline
+arm SetItem.ListIndex inline entry(list_index)
   effects(reads, writes, releases, runs_python)
   feedback()
   exits(next, miss)
@@ -872,12 +872,11 @@ arm SetItem.ListIndex inline
     guard list_in_bounds(l, i) else miss;
     let x:O = acquire(value);
     let old:O = list_exchange(l, i, x);
-    let _:Unit = discard_result(old);
-    publish [] retire [spent(key), spent(obj), spent(value)] at SetItem.Done;
+    publish [] retire [owned(old), spent(key), spent(obj), spent(value)] at SetItem.Done;
     exit next();
 }
 
-arm SetItem.Dict inline
+arm SetItem.Dict inline entry(dict)
   effects(runs_python, raises)
   feedback()
   exits(next, miss, raise, redirect)

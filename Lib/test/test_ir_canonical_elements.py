@@ -1,90 +1,12 @@
-"""Canonical element ownership comes from checked guards and an atomic DUP."""
+"""Canonical element ownership: the item arms guard, then duplicate the element."""
 
-import io
 import gc
-from pathlib import Path
 import sys
-import tempfile
 import types
 import unittest
 import weakref
 
-from test import support, test_tools
-
-test_tools.skip_if_missing("cases_generator")
-with test_tools.imports_under_tool("cases_generator"):
-    import analyzer
-    import cwriter
-    import ir_generator
-
-
-class CanonicalElementTests(unittest.TestCase):
-    def source(self):
-        return (Path(__file__).resolve().parents[2] / "Python/bytecodes.c").read_text()
-
-    def emit(self, source, name):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "source.c"
-            path.write_text(source)
-            analysis = analyzer.analyze_files([str(path)])
-        formats = ir_generator.compute_formats(analysis)
-        out = io.StringIO()
-        writer = cwriter.CWriter(out, 0, False)
-        emitter = ir_generator.IREmitter(writer, analysis, formats)
-        instruction = ir_generator.handler_instructions(analysis)[name]
-        ir_generator.generate_handler(name, instruction, formats[name], emitter, writer)
-        return out.getvalue()
-
-    def test_list_and_tuple_use_the_same_canonical_token_consumer(self):
-        source = self.source()
-        for kind in ("LIST", "TUPLE"):
-            with self.subTest(kind=kind):
-                body = self.emit(source, f"BINARY_OP_SUBSCR_{kind}_INT")
-                self.assertIn(f"PyValue_DUP(Py{kind.title()}_GET_VALUE(", body)
-                self.assertIn("IR_STORE_DST(ir_word, A, res);", body)
-                self.assertNotIn("_PyValue_Publish", body)
-                # The result is stored before the dying container is
-                # released
-                self.assertLess(body.index("IR_STORE_DST("),
-                                body.index("_PyValue_XCLOSE_POINTER(ir_own_B);"))
-                self.assertLess(body.index("index >= Py"), body.index("PyValue_DUP(Py"))
-        renamed = source.replace("BINARY_OP_SUBSCR_LIST_INT", "RENAMED_ELEMENT")
-        self.assertIn("IR_STORE_DST(", self.emit(renamed, "RENAMED_ELEMENT"))
-
-    def test_guards_bounds_and_anchor_must_match_current_values(self):
-        source = self.source()
-        guard = "IR_GUARD_ELEMENT_INDEX(list_st, sub_st, index, FROM_END);"
-        read = "res = IR_DUP_CANONICAL_ELEMENT(list_st, index);"
-        mutations = (
-            ("IR_GUARD_INLINE_INT(value);", "(void)value;"),
-            ("IR_GUARD_ELEMENT_TYPE(container, PyList_Type);", "(void)container;"),
-            (guard, guard.replace("FROM_END", "NONNEGATIVE")),
-            (guard, guard.replace("sub_st", "list_st")),
-            (read, read.replace("list_st", "sub_st")),
-            (read, "index++; " + read),
-            (read, "if (++index) {} " + read),
-            (read, "if ((index = 0)) {} " + read),
-            (read, "if ((list_st = sub_st, 0)) {} " + read),
-            (read, "while (++index < 0) {} " + read),
-            (read, "for (index++; 0; index++) {} " + read),
-            (read, "opaque(); " + read),
-            (read, "PyValue_CLOSE(list_st); " + read),
-        )
-        for old, new in mutations:
-            with self.subTest(new=new), self.assertRaises(SyntaxError):
-                self.emit(source.replace(old, new, 1), "BINARY_OP_SUBSCR_LIST_INT")
-
-    def test_native_lowering_names_cannot_be_replaced_by_source(self):
-        source = self.source()
-        guard = "IR_GUARD_INLINE_INT(value);"
-        for prefix in ("PyValue (*PyValue_XDUP)(PyValue) = replacement; ",
-                       "PyValue (*PyValue_DUP)(PyValue) = replacement; ",
-                       "#define PyList_GET_VALUE replacement\n",
-                       "#if 1\n"):
-            suffix = "\n#endif" if prefix.startswith("#if") else ""
-            with self.subTest(prefix=prefix), self.assertRaises(SyntaxError):
-                self.emit(source.replace(guard, prefix + guard + suffix, 1),
-                          "BINARY_OP_SUBSCR_LIST_INT")
+from test import support
 
 
 class CanonicalElementRuntimeTests(unittest.TestCase):
@@ -100,7 +22,7 @@ class CanonicalElementRuntimeTests(unittest.TestCase):
             container = kind(values)
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 10):
                 self.assertIs(read(container, 0), values[0])
-            expected = f"BINARY_OP_SUBSCR_{kind.__name__.upper()}_INT"
+            expected = f"GetItem.{kind.__name__.capitalize()}Index"
             if kind is tuple or not support.Py_GIL_DISABLED:
                 self.assertIn(expected, {word[0] for word in
                                         _testinternalcapi.get_ir(read.__code__, True)})

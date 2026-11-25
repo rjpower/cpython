@@ -1,0 +1,1161 @@
+// Compare, Identity, Contains and TestBranch (Appendix A, batch 1B): the
+// value tests of COMPARE_OP, IS_OP and CONTAINS_OP, and the fusion of a test
+// with the conditional jump that consumes it.  A test is a row or macro that
+// answers yes or no; a word that produces a bool and a word that branches
+// differ only in what they do with the answer.
+
+enum Relation(LT, LE, EQ, NE, GT, GE);
+enum CompareResult(RICH, TRUTH);
+// What a TestBranch tests: the identity of its operands, the membership of
+// the first in the second, or one relation between them
+enum BranchTest(IDENTITY, CONTAINS, TEST_LT, TEST_LE, TEST_EQ, TEST_NE, TEST_GT,
+                TEST_GE);
+
+family Compare(dst:Dst, x:Src, y:Src, relation:Enum<Relation>,
+               result:Enum<CompareResult>, fb:Fb<Compare>)
+  exits(next, raise, miss, again, redirect) generic(Generic) ops(COMPARE_OP);
+
+family Identity(dst:Dst, x:Src, y:Src, sense:Bool)
+  exits(next) ops(IS_OP);
+
+// The item is tested against the container; sense inverts (not in)
+family Contains(dst:Dst, item:Src, container:Src, sense:Bool, fb:Fb<Contains>)
+  exits(next, raise, miss, again, redirect) generic(Generic) ops(CONTAINS_OP);
+
+// A test and the jump on its result.  The branch is taken when the test's
+// answer is `sense`: the translator folds the inversion of `is not` and
+// `not in` into it.  x is the left operand, or the item of a membership.
+family TestBranch(x:Src, y:Src, test:Enum<BranchTest>, sense:Bool,
+                  target:NearHead, fb:Fb<Compare>)
+  exits(next, branch, raise, miss, again, redirect) generic(Generic)
+  ops(POP_JUMP_IF_TRUE, POP_JUMP_IF_FALSE)
+  events(BRANCH_LEFT, BRANCH_RIGHT);
+
+point Compare.Done(current, next_head, clear) keep() spent(y, x) defs(dst);
+point Compare.Failed(current, site, pending) keep() spent(y, x) defs();
+point Identity.Done(current, next_head, clear) keep() spent(y, x) defs(dst);
+point Contains.Done(current, next_head, clear) keep() spent(container, item) defs(dst);
+point Contains.Failed(current, site, pending) keep() spent(container, item) defs();
+point TestBranch.Jumped(current, target, clear) keep() spent(y, x) defs();
+point TestBranch.Fell(current, next_head, clear) keep() spent(y, x) defs();
+point TestBranch.Failed(current, site, pending) keep() spent(y, x) defs();
+// A branch event's callback failed: the operands were retired before it
+point TestBranch.Event(current, site, pending) keep() spent(y, x) defs();
+
+// Tests of the word's own immediates: they fold into a template
+
+extern primitive test_is_identity(t:Enum<BranchTest>) -> Bool
+  effects()
+  c _PyRop_TestIsIdentity as bool
+  evidence(
+    review: "Reviewed CP. The word's test is IDENTITY.",
+    contract: "A function of the immediate: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_compare");
+
+extern primitive test_is_contains(t:Enum<BranchTest>) -> Bool
+  effects()
+  c _PyRop_TestIsContains as bool
+  evidence(
+    review: "Reviewed CP. The word's test is CONTAINS.",
+    contract: "A function of the immediate: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_compare");
+
+// The relation of a compare test; any other test gives LT, which no arm
+// that asks for a relation reads from such a word
+extern primitive relation_of(t:Enum<BranchTest>) -> Enum<Relation>
+  effects()
+  c _PyRop_RelationOf as scalar
+  evidence(
+    review: "Reviewed CP. TEST_LT to TEST_GE are LT to GE.",
+    contract: "A function of the immediate: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_compare");
+
+extern primitive result_is_truth(r:Enum<CompareResult>) -> Bool
+  effects()
+  c _PyRop_ResultIsTruth as bool
+  evidence(
+    review: "Reviewed CP. COMPARE_OP's oparg bit 16 converts the result to a bool.",
+    contract: "A function of the immediate: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_compare");
+
+extern primitive equality_relation(r:Enum<Relation>) -> Bool
+  effects()
+  c _PyRop_EqualityRelation as bool
+  evidence(
+    review: "Reviewed CP. specialize.c: COMPARE_OP_STR admits EQ and NE only.",
+    contract: "A function of the immediate: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_compare");
+
+// Identity
+
+extern primitive same_value(a:B, b:B) -> Bool
+  effects()
+  c PyValue_Is as bool
+  evidence(
+    review: "Reviewed CP. pycore_value.h: operands are canonical, so identity is a"
+            "comparison of their words.",
+    contract: "No memory, no failure, no callback.",
+    lowering: "jit_lower.c LOWERING(PyValue_Is)",
+    test: "test_ir_leaf CASES");
+
+// Compare: the relation of two admitted pairs
+
+extern primitive both_inline_float(a:B, b:B) -> Bool
+  effects()
+  test(inline_float(a), inline_float(b))
+  c _PyRop_BothInlineFloat as bool
+  evidence(
+    review: "Reviewed CP. bytecodes.c _GUARD_TOS_FLOAT and _GUARD_NOS_FLOAT: inline"
+            "floats; a boxed float is a NaN and takes the generic arm.",
+    contract: "A test of the two words: no memory, no failure.",
+    lowering: "none yet: PyValue_IsInlineFloat on each; add one when a template needs it",
+    test: "test_rop_compare");
+
+extern primitive compare_scaled(r:Enum<Relation>, a:Scaled51, b:Scaled51) -> Bool
+  effects()
+  c _PyRop_CompareScaled as bool
+  evidence(
+    review: "Reviewed CP. bytecodes.c _COMPARE_OP_INT: scaled values compare as the"
+            "values do.",
+    contract: "Pure arithmetic on two int64 values.",
+    lowering: "none yet",
+    test: "test_rop_compare");
+
+extern primitive compare_floats(r:Enum<Relation>, a:B, b:B) -> Bool
+  effects()
+  requires(inline_float(a), inline_float(b))
+  c _PyRop_CompareFloats as bool
+  evidence(
+    review: "Reviewed CP. bytecodes.c _COMPARE_OP_FLOAT: IEEE, so every relation but"
+            "NE is false when either is NaN.",
+    contract: "Reads two inline floats: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_compare");
+
+extern primitive equal_strings(r:Enum<Relation>, a:B, b:B) -> Bool
+  effects(reads)
+  requires(exact<str>(a), exact<str>(b))
+  c _PyRop_EqualStrings as bool
+  evidence(
+    review: "Reviewed CP. bytecodes.c _COMPARE_OP_STR: _PyUnicode_Equal, inverted for"
+            "NE.",
+    contract: "The relation is EQ or NE (asserted). Reads two exact strs: no memory,"
+              "no failure, no callback.",
+    lowering: "none yet",
+    test: "test_rop_compare");
+
+// The rich comparison of any two values: the object it returns
+extern helper value_compare(r:Enum<Relation>, a:B, b:B)
+  cases(ok(z:O), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_RichCompare as value_or_null
+  evidence(
+    review: "Reviewed CP. bytecodes.c _COMPARE_OP: _PyValue_RichCompare.",
+    contract: "Both operands borrowed on every path; the result owned, or NULL with"
+              "an exception set. Callbacks: arbitrary Python.");
+
+// The rich comparison converted to a truth value; the object it returns is
+// closed inside, before its conversion's error is raised, as _COMPARE_OP did
+extern helper value_compare_truth(r:Enum<Relation>, a:B, b:B)
+  cases(yes(), no(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_CompareTruth as int_truth
+  evidence(
+    review: "Reviewed CP. bytecodes.c _COMPARE_OP with oparg & 16: _PyValue_IsTrue,"
+            "then PyValue_CLOSE of the rich result.",
+    contract: "Both operands borrowed on every path. Callbacks: the comparison,"
+              "__bool__ and __len__, and the finalizer of the result.");
+
+// Contains: the container's kind and its test
+
+extern primitive exact_any_set(c:B) -> Bool
+  effects(reads)
+  c _PyRop_ExactAnySet as bool
+  evidence(
+    review: "Reviewed CP. bytecodes.c _GUARD_TOS_ANY_SET: PyAnySet_CheckExact.",
+    contract: "Reads the word and the type: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_compare");
+
+extern primitive exact_any_dict(c:B) -> Bool
+  effects(reads)
+  c _PyRop_ExactAnyDict as bool
+  evidence(
+    review: "Reviewed CP. bytecodes.c _GUARD_TOS_ANY_DICT: PyAnyDict_CheckExact.",
+    contract: "Reads the word and the type: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_compare");
+
+extern primitive exact_sequence(c:B) -> Bool
+  effects(reads)
+  c _PyRop_ExactSequence as bool
+  evidence(
+    review: "Reviewed CP. bytecodes.c _GUARD_TOS_STR_TUPLE_LIST: an exact str, tuple or"
+            "list.",
+    contract: "Reads the word and the type: no memory, no failure.",
+    lowering: "none yet",
+    test: "test_rop_compare");
+
+// The membership tests; each reports yes, no or the exception.  The
+// container is the first parameter, as in the C functions.
+extern helper set_contains(c:B, item:B)
+  cases(yes(), no(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_SetContains as int_truth
+  evidence(
+    review: "Reviewed CP. bytecodes.c _CONTAINS_OP_SET: _PySet_Contains, which hashes"
+            "the item.",
+    contract: "The container is an exact set or frozenset (asserted), both borrowed."
+              "Callbacks: the item's __hash__ and __eq__.");
+
+extern helper dict_contains(c:B, item:B)
+  cases(yes(), no(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_DictContains as int_truth
+  evidence(
+    review: "Reviewed CP. bytecodes.c _CONTAINS_OP_DICT: _PyDict_ContainsValue.",
+    contract: "The container is an exact dict (asserted), both borrowed. Callbacks:"
+              "the item's __hash__ and __eq__.");
+
+extern helper sequence_contains(c:B, item:B)
+  cases(yes(), no(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_SequenceContains as int_truth
+  evidence(
+    review: "Reviewed CP. bytecodes.c _CONTAINS_OP_SEQUENCE: the exact type's contains"
+            "slot, called by value.",
+    contract: "The container is an exact str, tuple or list (asserted), both borrowed."
+              "Callbacks: the items' __eq__.");
+
+extern helper value_contains(c:B, item:B)
+  cases(yes(), no(), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_ValueContains as int_truth
+  evidence(
+    review: "Reviewed CP. bytecodes.c _CONTAINS_OP: _PyValue_Contains(right, left).",
+    contract: "Both operands borrowed on every path. Callbacks: arbitrary Python.");
+
+// The test macros.  Each calls its row once on the anchored operands, checks
+// that no callback moved the frame, and answers as the row does.
+
+macro compare_test_at_origin(relation:Enum<Relation>, a:Anchors)
+  cases(yes(), no(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_compare_truth(relation, arg(a, 0), arg(a, 1)) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+    }
+  Yes():
+    call redirect_status(frame) {
+      running -> Said(true);
+      redirected -> Moved();
+    }
+  No():
+    call redirect_status(frame) {
+      running -> Said(false);
+      redirected -> Moved();
+    }
+  Said(hit:Bool):
+    branch hit -> Is(), Not();
+  Is():
+    exit yes();
+  Not():
+    exit no();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+// The comparison's value: the rich result, or its bool
+macro compare_at_origin(relation:Enum<Relation>, result:Enum<CompareResult>,
+                        a:Anchors)
+  cases(ok(z:O), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises, releases)
+  feedback()
+  borrows(a)
+{
+  entry():
+    branch result_is_truth(result) -> Truth(), Rich();
+  Rich():
+    call value_compare(relation, arg(a, 0), arg(a, 1)) {
+      ok -> Check();
+      err -> Failed();
+    }
+  Check(value:O):
+    call redirect_status(frame) {
+      running -> Done(value);
+      redirected -> Moved(value);
+    }
+  Done(kept:O):
+    exit ok(kept);
+  Moved(r:Route, dropped:O):
+    let _:Unit = discard_result(dropped);
+    exit redirected(r);
+  Truth():
+    call compare_test_at_origin(relation, a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> TruthMoved();
+    }
+  Yes():
+    exit ok(truth_object(true, false));
+  No():
+    exit ok(truth_object(false, false));
+  TruthMoved(tr:Route):
+    exit redirected(tr);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro set_test_at_origin(a:Anchors)
+  cases(yes(), no(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call set_contains(arg(a, 1), arg(a, 0)) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+    }
+  Yes():
+    call redirect_status(frame) {
+      running -> Said(true);
+      redirected -> Moved();
+    }
+  No():
+    call redirect_status(frame) {
+      running -> Said(false);
+      redirected -> Moved();
+    }
+  Said(hit:Bool):
+    branch hit -> Is(), Not();
+  Is():
+    exit yes();
+  Not():
+    exit no();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro dict_test_at_origin(a:Anchors)
+  cases(yes(), no(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call dict_contains(arg(a, 1), arg(a, 0)) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+    }
+  Yes():
+    call redirect_status(frame) {
+      running -> Said(true);
+      redirected -> Moved();
+    }
+  No():
+    call redirect_status(frame) {
+      running -> Said(false);
+      redirected -> Moved();
+    }
+  Said(hit:Bool):
+    branch hit -> Is(), Not();
+  Is():
+    exit yes();
+  Not():
+    exit no();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro sequence_test_at_origin(a:Anchors)
+  cases(yes(), no(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call sequence_contains(arg(a, 1), arg(a, 0)) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+    }
+  Yes():
+    call redirect_status(frame) {
+      running -> Said(true);
+      redirected -> Moved();
+    }
+  No():
+    call redirect_status(frame) {
+      running -> Said(false);
+      redirected -> Moved();
+    }
+  Said(hit:Bool):
+    branch hit -> Is(), Not();
+  Is():
+    exit yes();
+  Not():
+    exit no();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+macro contains_test_at_origin(a:Anchors)
+  cases(yes(), no(), err(e:Err), redirected(r:Route))
+  effects(runs_python, raises)
+  feedback()
+  borrows(a)
+{
+  entry():
+    call value_contains(arg(a, 1), arg(a, 0)) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+    }
+  Yes():
+    call redirect_status(frame) {
+      running -> Said(true);
+      redirected -> Moved();
+    }
+  No():
+    call redirect_status(frame) {
+      running -> Said(false);
+      redirected -> Moved();
+    }
+  Said(hit:Bool):
+    branch hit -> Is(), Not();
+  Is():
+    exit yes();
+  Not():
+    exit no();
+  Moved(r:Route):
+    exit redirected(r);
+  Failed(e:Err):
+    exit err(e);
+}
+
+// Adaptation (addendum section 2)
+
+// The kind of a container, from its type alone
+extern helper classify_contains(c:B)
+  cases(set(), dict(), sequence(), none())
+  effects(reads)
+  c _PyRop_ClassifyContains as case_index
+  evidence(
+    review: "Reviewed CP. specialize.c _Py_Specialize_ContainsOp: an exact dict, set or"
+            "frozenset, or an exact str, tuple or list.",
+    contract: "Reads the container's type. No memory, no Python, no failure.");
+
+macro adapt_before_use_compare(f:Fb<Compare>, x:Src, y:Src, relation:Enum<Relation>)
+  cases(run(), changed(t:Ticket<Compare>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    branch both_inline_int(use(x), use(y)) -> ChosenInt(), TryFloat();
+  ChosenInt():
+    let ci:Candidate<Compare> = candidate(Compare.Int);
+    call install(site, f, ci) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  TryFloat():
+    branch both_inline_float(use(x), use(y)) -> ChosenFloat(), TryStr();
+  ChosenFloat():
+    let cf:Candidate<Compare> = candidate(Compare.Float);
+    call install(site, f, cf) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  TryStr():
+    branch both_exact_str(use(x), use(y)) -> TryEquality(), NoArm();
+  TryEquality():
+    branch equality_relation(relation) -> ChosenStr(), NoArm();
+  ChosenStr():
+    let cs:Candidate<Compare> = candidate(Compare.Str);
+    call install(site, f, cs) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  NoArm():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Compare>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+macro adapt_before_use_contains(f:Fb<Contains>, item:Src, container:Src)
+  cases(run(), changed(t:Ticket<Contains>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    call classify_contains(use(container)) {
+      set -> ChosenSet();
+      dict -> ChosenDict();
+      sequence -> NoArm();
+      none -> NoArm();
+    }
+  ChosenSet():
+    let cs:Candidate<Contains> = candidate(Contains.Set);
+    call install(site, f, cs) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  ChosenDict():
+    let cd:Candidate<Contains> = candidate(Contains.Dict);
+    call install(site, f, cd) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  NoArm():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Contains>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+// A fused test chooses among the arms of either kind of test
+macro adapt_before_use_test(f:Fb<Compare>, x:Src, y:Src, test:Enum<BranchTest>)
+  cases(run(), changed(t:Ticket<Compare>))
+  effects(reads, writes, allocates)
+  feedback(read(entry), write(entry), write(handler))
+{
+  entry():
+    call tick(f) {
+      quiet -> Run();
+      due -> Sample();
+    }
+  Sample():
+    branch test_is_contains(test) -> Contained(), Compared();
+  Contained():
+    call classify_contains(use(y)) {
+      set -> ChosenSet();
+      dict -> ChosenDict();
+      sequence -> ChosenSequence();
+      none -> NoArm();
+    }
+  ChosenSet():
+    let cs:Candidate<Compare> = candidate(TestBranch.Set);
+    call install(site, f, cs) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  ChosenDict():
+    let cd:Candidate<Compare> = candidate(TestBranch.Dict);
+    call install(site, f, cd) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  ChosenSequence():
+    let cq:Candidate<Compare> = candidate(TestBranch.Sequence);
+    call install(site, f, cq) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  Compared():
+    branch both_inline_int(use(x), use(y)) -> ChosenInt(), TryFloat();
+  ChosenInt():
+    let ci:Candidate<Compare> = candidate(TestBranch.Int);
+    call install(site, f, ci) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  TryFloat():
+    branch both_inline_float(use(x), use(y)) -> ChosenFloat(), TryStr();
+  ChosenFloat():
+    let cf:Candidate<Compare> = candidate(TestBranch.Float);
+    call install(site, f, cf) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  TryStr():
+    branch both_exact_str(use(x), use(y)) -> TryEquality(), NoArm();
+  TryEquality():
+    branch equality_relation(relation_of(test)) -> ChosenStr(), NoArm();
+  ChosenStr():
+    let cs2:Candidate<Compare> = candidate(TestBranch.Str);
+    call install(site, f, cs2) {
+      changed -> Changed();
+      same -> Run();
+      blocked -> Run();
+    }
+  NoArm():
+    let _:Unit = backoff(f);
+    exit run();
+  Changed(t:Ticket<Compare>):
+    exit changed(t);
+  Run():
+    exit run();
+}
+
+// Compare
+
+arm Compare.Int shared
+  effects(writes, releases on (dst))
+  feedback()
+  exits(next, miss)
+  ensures(next.exact<bool>(dst))
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard both_inline_int(l, r) else miss;
+    goto Finish(truth_object(compare_scaled(relation, int_scaled(l), int_scaled(r)), false));
+  Finish(z:O):
+    publish [dst = z] retire [spent(y), spent(x), old(dst)] at Compare.Done;
+    exit next();
+}
+
+arm Compare.Float shared
+  effects(writes, releases on (dst))
+  feedback()
+  exits(next, miss)
+  ensures(next.exact<bool>(dst))
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard both_inline_float(l, r) else miss;
+    goto Finish(truth_object(compare_floats(relation, l, r), false));
+  Finish(z:O):
+    publish [dst = z] retire [spent(y), spent(x), old(dst)] at Compare.Done;
+    exit next();
+}
+
+arm Compare.Str shared
+  effects(reads, writes, releases on (dst))
+  feedback()
+  exits(next, miss)
+  ensures(next.exact<bool>(dst))
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard both_exact_str(l, r) else miss;
+    guard equality_relation(relation) else miss;
+    goto Finish(truth_object(equal_strings(relation, l, r), false));
+  Finish(z:O):
+    publish [dst = z] retire [spent(y), spent(x), old(dst)] at Compare.Done;
+    exit next();
+}
+
+arm Compare.Generic shared
+  effects(reads, runs_python, writes, releases on (dst), raises)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise, redirect)
+{
+  entry():
+    call adapt_before_use_compare(fb, x, y, relation) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(tk:Ticket<Compare>):
+    exit again(tk);
+  Run():
+    let a:Anchors = anchor_for_call([x, y]);
+    call compare_at_origin(relation, result, a) {
+      ok -> Finish();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Finish(z:O):
+    publish [dst = z] retire [roots(a), spent(y), spent(x), old(dst)] at Compare.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [y, x], e);
+    exit raise(Compare.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+// Identity
+
+arm Identity.Test inline
+  effects(reads, writes, releases on (dst), runs_python)
+  feedback()
+  exits(next)
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    goto Finish(truth_object(same_value(l, r), sense));
+  Finish(z:O):
+    publish [dst = z] retire [spent(y), spent(x), old(dst)] at Identity.Done;
+    exit next();
+}
+
+// Contains
+
+arm Contains.Set shared
+  effects(reads, runs_python, writes, releases on (dst), raises)
+  feedback()
+  exits(next, miss, raise, redirect)
+{
+  entry():
+    guard exact_any_set(use(container)) else miss;
+    let a:Anchors = anchor_for_call([item, container]);
+    call set_test_at_origin(a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Yes():
+    goto Finish(truth_object(true, sense));
+  No():
+    goto Finish(truth_object(false, sense));
+  Finish(z:O):
+    publish [dst = z] retire [roots(a), spent(container), spent(item), old(dst)] at Contains.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [container, item], e);
+    exit raise(Contains.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm Contains.Dict shared
+  effects(reads, runs_python, writes, releases on (dst), raises)
+  feedback()
+  exits(next, miss, raise, redirect)
+{
+  entry():
+    guard exact_any_dict(use(container)) else miss;
+    let a:Anchors = anchor_for_call([item, container]);
+    call dict_test_at_origin(a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Yes():
+    goto Finish(truth_object(true, sense));
+  No():
+    goto Finish(truth_object(false, sense));
+  Finish(z:O):
+    publish [dst = z] retire [roots(a), spent(container), spent(item), old(dst)] at Contains.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [container, item], e);
+    exit raise(Contains.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm Contains.Generic shared
+  effects(reads, runs_python, writes, releases on (dst), raises)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, again, raise, redirect)
+{
+  entry():
+    call adapt_before_use_contains(fb, item, container) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(tk:Ticket<Contains>):
+    exit again(tk);
+  Run():
+    let a:Anchors = anchor_for_call([item, container]);
+    call contains_test_at_origin(a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Yes():
+    goto Finish(truth_object(true, sense));
+  No():
+    goto Finish(truth_object(false, sense));
+  Finish(z:O):
+    publish [dst = z] retire [roots(a), spent(container), spent(item), old(dst)] at Contains.Done;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [container, item], e);
+    exit raise(Contains.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+// TestBranch: the same tests, then the edge
+
+arm TestBranch.Identity inline
+  effects(reads, writes, releases, runs_python)
+  feedback()
+  exits(next, branch)
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    goto Test(same_value(l, r));
+  Test(hit:Bool):
+    branch same_bool(sense, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [spent(y), spent(x)] at TestBranch.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [spent(y), spent(x)] at TestBranch.Fell;
+    exit next();
+}
+
+arm TestBranch.Int shared
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, branch, miss)
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard both_inline_int(l, r) else miss;
+    goto Test(compare_scaled(relation_of(test), int_scaled(l), int_scaled(r)));
+  Test(hit:Bool):
+    branch same_bool(sense, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [spent(y), spent(x)] at TestBranch.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [spent(y), spent(x)] at TestBranch.Fell;
+    exit next();
+}
+
+arm TestBranch.Float shared
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, branch, miss)
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard both_inline_float(l, r) else miss;
+    goto Test(compare_floats(relation_of(test), l, r));
+  Test(hit:Bool):
+    branch same_bool(sense, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [spent(y), spent(x)] at TestBranch.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [spent(y), spent(x)] at TestBranch.Fell;
+    exit next();
+}
+
+arm TestBranch.Str shared
+  effects(reads, writes, releases)
+  feedback()
+  exits(next, branch, miss)
+{
+  entry():
+    let l:B = use(x);
+    let r:B = use(y);
+    guard both_exact_str(l, r) else miss;
+    guard equality_relation(relation_of(test)) else miss;
+    goto Test(equal_strings(relation_of(test), l, r));
+  Test(hit:Bool):
+    branch same_bool(sense, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [spent(y), spent(x)] at TestBranch.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [spent(y), spent(x)] at TestBranch.Fell;
+    exit next();
+}
+
+arm TestBranch.Set shared
+  effects(reads, runs_python, writes, releases, raises)
+  feedback()
+  exits(next, branch, miss, raise, redirect)
+{
+  entry():
+    guard exact_any_set(use(y)) else miss;
+    let a:Anchors = anchor_for_call([x, y]);
+    call set_test_at_origin(a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Yes():
+    goto Test(true);
+  No():
+    goto Test(false);
+  Test(hit:Bool):
+    branch same_bool(sense, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [roots(a), spent(y), spent(x)] at TestBranch.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [roots(a), spent(y), spent(x)] at TestBranch.Fell;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [y, x], e);
+    exit raise(TestBranch.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm TestBranch.Dict shared
+  effects(reads, runs_python, writes, releases, raises)
+  feedback()
+  exits(next, branch, miss, raise, redirect)
+{
+  entry():
+    guard exact_any_dict(use(y)) else miss;
+    let a:Anchors = anchor_for_call([x, y]);
+    call dict_test_at_origin(a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Yes():
+    goto Test(true);
+  No():
+    goto Test(false);
+  Test(hit:Bool):
+    branch same_bool(sense, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [roots(a), spent(y), spent(x)] at TestBranch.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [roots(a), spent(y), spent(x)] at TestBranch.Fell;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [y, x], e);
+    exit raise(TestBranch.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm TestBranch.Sequence shared
+  effects(reads, runs_python, writes, releases, raises)
+  feedback()
+  exits(next, branch, miss, raise, redirect)
+{
+  entry():
+    guard exact_sequence(use(y)) else miss;
+    let a:Anchors = anchor_for_call([x, y]);
+    call sequence_test_at_origin(a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Yes():
+    goto Test(true);
+  No():
+    goto Test(false);
+  Test(hit:Bool):
+    branch same_bool(sense, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [roots(a), spent(y), spent(x)] at TestBranch.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [roots(a), spent(y), spent(x)] at TestBranch.Fell;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [y, x], e);
+    exit raise(TestBranch.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm TestBranch.Generic shared
+  effects(reads, runs_python, writes, releases, raises)
+  feedback(read(entry), write(entry), write(handler))
+  exits(next, branch, again, raise, redirect)
+{
+  entry():
+    branch test_is_identity(test) -> Identical(), Adapt();
+  Identical():
+    goto IdentityTest(same_value(use(x), use(y)));
+  IdentityTest(same:Bool):
+    branch same_bool(sense, same) -> IdentityTaken(), IdentityFall();
+  IdentityTaken():
+    publish [] retire [spent(y), spent(x)] at TestBranch.Jumped;
+    exit branch(target);
+  IdentityFall():
+    publish [] retire [spent(y), spent(x)] at TestBranch.Fell;
+    exit next();
+  Adapt():
+    call adapt_before_use_test(fb, x, y, test) {
+      run -> Run();
+      changed -> Retry();
+    }
+  Retry(tk:Ticket<Compare>):
+    exit again(tk);
+  Run():
+    let a:Anchors = anchor_for_call([x, y]);
+    branch test_is_contains(test) -> RunContains(), RunCompare();
+  RunCompare():
+    call compare_test_at_origin(relation_of(test), a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  RunContains():
+    call contains_test_at_origin(a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Yes():
+    goto Test(true);
+  No():
+    goto Test(false);
+  Test(hit:Bool):
+    branch same_bool(sense, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [roots(a), spent(y), spent(x)] at TestBranch.Jumped;
+    exit branch(target);
+  Fall():
+    publish [] retire [roots(a), spent(y), spent(x)] at TestBranch.Fell;
+    exit next();
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [y, x], e);
+    exit raise(TestBranch.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+// The observed wrapper: the generic test of any kind, the retirement of the
+// operands, then the branch event on the edge taken.  The event is the jump's:
+// the word's range covers it, and instrumentation reports its offset.
+arm TestBranch.Observed split observes
+  effects(reads, runs_python, writes, releases, raises)
+  feedback()
+  exits(next, branch, raise, redirect)
+{
+  entry():
+    branch test_is_identity(test) -> Identical(), Anchor();
+  Identical():
+    goto IdentityTest(same_value(use(x), use(y)));
+  IdentityTest(same:Bool):
+    branch same_bool(sense, same) -> IdentityTaken(), IdentityFall();
+  IdentityTaken():
+    publish [] retire [spent(y), spent(x)] at TestBranch.Jumped;
+    call branch_event(thread, frame, site, true) {
+      ok -> IdentityJump();
+      moved -> IdentityMoved();
+      err -> IdentityEventFailed();
+    }
+  IdentityJump():
+    exit branch(target);
+  IdentityFall():
+    publish [] retire [spent(y), spent(x)] at TestBranch.Fell;
+    call branch_event(thread, frame, site, false) {
+      ok -> IdentityNext();
+      moved -> IdentityMoved();
+      err -> IdentityEventFailed();
+    }
+  IdentityNext():
+    exit next();
+  IdentityMoved(ir:Route):
+    exit redirect(ir);
+  IdentityEventFailed(ie:Err):
+    exit raise(TestBranch.Event, ie);
+  Anchor():
+    let a:Anchors = anchor_for_call([x, y]);
+    branch test_is_contains(test) -> RunContains(), RunCompare();
+  RunCompare():
+    call compare_test_at_origin(relation_of(test), a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  RunContains():
+    call contains_test_at_origin(a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Yes():
+    goto Test(true);
+  No():
+    goto Test(false);
+  Test(hit:Bool):
+    branch same_bool(sense, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [roots(a), spent(y), spent(x)] at TestBranch.Jumped;
+    call branch_event(thread, frame, site, true) {
+      ok -> Jump();
+      moved -> Moved();
+      err -> EventFailed();
+    }
+  Jump():
+    exit branch(target);
+  Fall():
+    publish [] retire [roots(a), spent(y), spent(x)] at TestBranch.Fell;
+    call branch_event(thread, frame, site, false) {
+      ok -> Next();
+      moved -> Moved();
+      err -> EventFailed();
+    }
+  Next():
+    exit next();
+  Moved(r:Route):
+    exit redirect(r);
+  EventFailed(ee:Err):
+    exit raise(TestBranch.Event, ee);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [y, x], e);
+    exit raise(TestBranch.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}

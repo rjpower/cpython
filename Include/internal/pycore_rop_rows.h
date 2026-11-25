@@ -52,6 +52,19 @@ PyAPI_FUNC(void) _PyRop_ParallelMove(const _PyRopSpan *d, const _PyRopSpan *s);
 PyAPI_FUNC(void) _PyRop_CloseRest(const _PyRopSpan *d, const _PyRopSpan *s);
 PyAPI_FUNC(void) _PyRop_CopyHomes(const _PyRopSpan *d, const _PyRopSpan *s);
 
+/* A Span<O> value: count owners in storage from PyMem_Malloc (NULL when
+ * count is 0), which the row that makes it allocates.  A publish
+ * `d[] = v` exchanges each item with the owner its home displaces
+ * (_PyRop_StoreOwners); old(d) closes those and frees the storage
+ * (_PyRop_CloseOwners). */
+typedef struct {
+    PyValue *items;
+    Py_ssize_t count;
+} _PyRopOwners;
+
+PyAPI_FUNC(void) _PyRop_StoreOwners(const _PyRopSpan *d, _PyRopOwners *v);
+PyAPI_FUNC(void) _PyRop_CloseOwners(_PyRopOwners *v);
+
 /* The values a call reads.  A local source is held by an owner of its own,
  * because the call can reassign the local; a temporary is held by its
  * home. */

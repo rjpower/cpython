@@ -348,6 +348,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(
             {opcode.opname[op] for op in range(opcode.MIN_INSTRUMENTED_OPCODE)
              if CONTRACT[op] is not None
+             and op not in opcode._ir_only_handlers
              and CONTRACT[op].effects & _opcode.IR_SPECIALIZES},
             set(FEEDBACK))
 

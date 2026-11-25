@@ -271,9 +271,9 @@ static inline int
 instr_opcode(_PyInstr *instr)
 {
     int handler = IR_HANDLER(FT_ATOMIC_LOAD_UINT64_RELAXED(*instr));
-    if (handler >= IR_FIRST_ONLY_HANDLER) {
+    if (_PyIR_IsOnlyHandler(handler)) {
         handler = _PyIR_FormatOf(handler)->shadow;
-        assert(handler < IR_FIRST_ONLY_HANDLER);
+        assert(!_PyIR_IsOnlyHandler(handler));
     }
     return handler;
 }

@@ -222,8 +222,8 @@ extern "C" {
 #define HAVE_ARGUMENT                           41
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                234
-#define IR_NUM_OLD_HANDLERS                    352
-#define IR_NUM_HANDLERS                        444
+#define IR_NUM_OLD_HANDLERS                    282
+#define IR_NUM_HANDLERS                        374
 
 #ifdef __cplusplus
 }

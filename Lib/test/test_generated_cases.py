@@ -3007,7 +3007,10 @@ class TestIRCases(unittest.TestCase):
         lines = [line.strip() for line in out.getvalue().splitlines()]
         self.assertIn("#define _PyIR_OBSERVER_ENTRY_ABSENCE 0", lines)
         # The shared handler bound is emitted in opcode_ids.h, not metadata.
-        self.assertEqual(ir_generator.num_old_handlers(analysis), 258)
+        # The IR-only handlers fit the free numbers below 256, so the arms
+        # start at 256.
+        self.assertEqual(ir_generator.num_old_handlers(analysis), 256)
+        bacon, ir_pass = analysis.free_ids[:2]
         # The oparg names the local that LOAD reads (_PyIR_ROLE_LOCAL_IN).
         # Only the twin runs Python itself; the format does, as the twin's.
         load = ("{ .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE | _PyIR_DISCARDS, "
@@ -3031,8 +3034,8 @@ class TestIRCases(unittest.TestCase):
                                      ".effects = _PyIR_RAISES | _PyIR_ESCAPES | _PyIR_RUNS_PYTHON")
                             .replace("shadow = LOAD", "shadow = INSTRUMENTED_LOAD"))
         for expected in [
-            "#define IR_BACON                                       256",
-            "#define IR_PASS                                        257",
+            f"#define {'IR_BACON':<46} {bacon}",
+            f"#define {'IR_PASS':<46} {ir_pass}",
             f"[LOAD] = {load},",
             f"[INSTRUMENTED_LOAD] = {instrumented},",
             "[IR_PASS] = { .flags = _PyIR_VALID | _PyIR_TRANSPARENT, "
@@ -3051,8 +3054,8 @@ class TestIRCases(unittest.TestCase):
             ".writes = { 0, _PyIR_EXT_FIXED }, "
             ".through = { 0, _PyIR_EXT_FIXED }, .shadow = IR_PASS, "
             ".twin = 0, .events = 0 },",
-            '[IR_BACON - IR_FIRST_ONLY_HANDLER] = "IR_BACON",',
-            '[IR_PASS - IR_FIRST_ONLY_HANDLER] = "IR_PASS",',
+            f'[IR_BACON] = "IR_BACON",',
+            f'[IR_PASS] = "IR_PASS",',
         ]:
             self.assertIn(expected, lines)
 
@@ -3859,9 +3862,9 @@ class TestIRCases(unittest.TestCase):
                     self.slot_role(effect, body)
                 self.assertIsNotNone(cm.exception.lineno)
 
-    def test_ir_only_after_pseudo(self):
-        # IR-only handlers follow the pseudo-instructions, so that no number
-        # names both.
+    def test_ir_only_takes_free_numbers(self):
+        # IR-only handlers take the numbers below 256 that no opcode holds;
+        # a pseudo-instruction has no handler, so it reserves none.
         input = """
         inst(GO, ( -- )) {
             JUMPBY(oparg);
@@ -3875,8 +3878,31 @@ class TestIRCases(unittest.TestCase):
     """
         analysis = self.analyze(input)
         self.assertEqual(analysis.pseudos["JUMP"].opcode, 256)
-        self.assertEqual(ir_generator.first_ir_only_handler(analysis), 257)
-        self.assertEqual(ir_generator.handler_ids(analysis)["IR_BACON"], 257)
+        self.assertNotIn(256, analysis.free_ids)
+        self.assertNotIn(analysis.opmap["GO"], analysis.free_ids)
+        self.assertEqual(ir_generator.handler_ids(analysis)["IR_BACON"],
+                         analysis.free_ids[0])
+
+    def test_ir_only_continue_from_256(self):
+        # Past the free numbers, handlers continue from 256 and the arms
+        # follow them.
+        input = """
+        inst(GO, ( -- )) {
+            JUMPBY(oparg);
+        }
+        ir_only inst(IR_BACON, ( -- )) {
+            SPAM();
+        }
+        ir_only inst(IR_PASS, ( -- )) {
+            SPAM();
+        }
+    """
+        analysis = self.analyze(input)
+        analysis.free_ids = analysis.free_ids[:1]
+        ids = ir_generator.handler_ids(analysis)
+        self.assertEqual((ids["IR_BACON"], ids["IR_PASS"]),
+                         (analysis.free_ids[0], 256))
+        self.assertEqual(ir_generator.num_old_handlers(analysis), 257)
 
     def test_binary_op_handlers(self):
         # BINARY_OP has one generic handler per operation, with the operation
@@ -3929,9 +3955,8 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("BINARY_OP_SUBSCR", handlers)
         ids = ir_generator.handler_ids(analysis)
         self.assertNotIn("BINARY_OP", ids)
-        self.assertEqual(ids["IR_BACON"], 256)
-        self.assertEqual([ids[name] for name in handlers],
-                         list(range(257, 257 + len(handlers))))
+        self.assertEqual([ids["IR_BACON"], *(ids[name] for name in handlers)],
+                         analysis.free_ids[:1 + len(handlers)])
         formats = ir_generator.compute_formats(analysis)
         self.assertIs(formats["BINARY_OP_ADD"], formats["BINARY_OP"])
         self.assertEqual(

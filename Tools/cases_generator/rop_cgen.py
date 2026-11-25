@@ -13,13 +13,13 @@ generated C uses the value API and never `.bits`.
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from rop_catalog import (CONVENTIONS, ENVIRONMENT_C, FB_LAYOUT, RECIPE_LAYOUT, CReturn,
                          CSource, CTest, DebtKind, Effect, Fact, FieldKind, Handle, Scalar, Schema, SchemaCtor,
                          Slot, Wrap)
-from rop_check import GraphInfo, Program, is_args
-from rop_model import (Advance, Arm, BoolLit, Branch, Binding, Block, Call, CallTerm,
+from rop_check import GraphInfo, Program, expand_debts, expand_group, group_parts, is_args
+from rop_model import (Advance, Arm, EnumType, BoolLit, Branch, Binding, Block, Call, CallTerm,
                        Cases, DISCARD, Debt, Each, Edge, Exit, Expr, Extern, Goto, Guard,
                        HandleType, Let, Name, Nat, Null, Param, Placement, Publish,
                        ScalarType, SchemaType, SchemaVar, SpanLit, Target, Type,
@@ -126,6 +126,9 @@ def c_type(t: Type) -> str | None:
         return "int"
     if t == WrapType(Wrap.Span, HandleType(Handle.O)):
         return "_PyRopOwners"
+    if isinstance(t, EnumType):
+        # A member that a primitive computes from another operand
+        return "uint32_t"
     return None
 
 
@@ -490,6 +493,10 @@ class ArmLowerer:
         self.enc = program.encodings[arm.family]
         self.placements: dict[str, Placement] = {
             p.operand: p for p in self.enc.placements}
+        # A home group's projections: g.p is the home at g's field plus i
+        self.parts: dict[str, tuple[str, int]] = {
+            f"{p.name}.{q}": (p.name, i)
+            for p in self.family.params for i, q in enumerate(group_parts(p.type))}
         self.points = points
         self.generic = generic
         self.prefix = "rop_" + arm.name.replace(".", "_")
@@ -551,13 +558,23 @@ class ArmLowerer:
         return (f"((uint32_t)(this_instr[{slot.word}] >> {slot.offset - 64 * slot.word})"
                 f" & {(1 << slot.width) - 1:#x})")
 
+    def is_home(self, name: str) -> bool:
+        """An operand field or a projection of a home group"""
+        return name in self.placements or name in self.parts
+
+    def home_index(self, operand: str) -> str:
+        """The frame index of an operand's home"""
+        if operand in self.parts:
+            group, i = self.parts[operand]
+            return f"({self.field(group)} + {i})" if i else self.field(group)
+        return self.field(operand)
+
     def home(self, operand: str) -> str:
         """The address of an operand's home, declared on first use"""
         if operand not in self.homes:
-            name = "home_" + operand
+            name = "home_" + cname(operand)
             self.homes[operand] = name
-            self.declare(name, "PyValue *const",
-                         f"&IR_SLOT(IR_{self.slot(operand).name}(ir_word))")
+            self.declare(name, "PyValue *const", f"&IR_SLOT({self.home_index(operand)})")
         return self.homes[operand]
 
     def is_vector(self, operand: str) -> bool:
@@ -567,7 +584,11 @@ class ArmLowerer:
         return (p is not None and p.kind is FieldKind.vector
                 and not self.is_span_operand(operand))
 
-    def local_flag(self, operand: str) -> str:
+    def local_flag(self, operand: str) -> str | None:
+        """The word's flag that marks the home a local's; None for a
+        projection, which is always a temporary"""
+        if operand in self.parts:
+            return None
         return f"IR_F_LOCAL_{self.slot(operand).name}"
 
     # Expressions
@@ -598,11 +619,12 @@ class ArmLowerer:
         """The homes and local flags of a span of source operands"""
         names = []
         for item in e.items:
-            if not isinstance(item, Name) or item.name not in self.placements:
+            if not isinstance(item, Name) or not self.is_home(item.name):
                 raise Unsupported(f"{self.arm.name}: a span item {item} is not an operand")
             names.append(item.name)
         homes = ", ".join(self.home(n) for n in names)
-        flags = ", ".join(f"!!(ir_word & {self.local_flag(n)})" for n in names)
+        flags = ", ".join("0" if self.local_flag(n) is None
+                          else f"!!(ir_word & {self.local_flag(n)})" for n in names)
         return (f"&(_PyRopSrcs){{frame, {len(names)}, {{{flags}}}, {{{homes}}}}}")
 
     def is_span_operand(self, operand: str) -> bool:
@@ -653,7 +675,7 @@ class ArmLowerer:
             elif (t in (HandleType(Handle.Src), HandleType(Handle.Local),
                         HandleType(Handle.Cell),
                         WrapType(Wrap.Maybe, HandleType(Handle.Src)))
-                    and isinstance(a, Name) and a.name in self.placements):
+                    and isinstance(a, Name) and self.is_home(a.name)):
                 # A row that reads or spends a home takes its address
                 out.append(self.home(a.name))
             elif (isinstance(t, SchemaType) and t.ctor is SchemaCtor.Fb
@@ -675,6 +697,8 @@ class ArmLowerer:
 
     def expr_text(self, e: Expr) -> str:
         if isinstance(e, Name):
+            if e.name in self.parts:
+                return self.home(e.name)
             if e.name in self.placements:
                 return self.operand_value(e.name)
             if e.name in ENVIRONMENT_C:
@@ -734,10 +758,8 @@ class ArmLowerer:
     def target_value(self, operand: str) -> str:
         """A branch or jump target: the word the signed distance in the
         operand's field or fields leads to, counted from the word after the
-        head (the jump operands of a family have no operand words)"""
+        head, whether or not the family has operand words"""
         p = self.placements[operand]
-        if self.enc.words:
-            raise Unsupported(f"{self.arm.name}: a target in a family with operand words")
         first = p.slots[0]
         assert [s.offset for s in p.slots] == [first.offset + 12 * i for i in range(len(p.slots))]
         sign = 1 << (p.bits - 1)
@@ -759,7 +781,10 @@ class ArmLowerer:
             assert isinstance(arg, Name)
             home = self.home(arg.name)
             self.acquired.add(arg.name)
-            return (f"((ir_word & {self.local_flag(arg.name)}) ? PyValue_DUP(*{home}) "
+            flag = self.local_flag(arg.name)
+            if flag is None:
+                return f"_PyFrame_TakeHome(frame, {home})"
+            return (f"((ir_word & {flag}) ? PyValue_DUP(*{home}) "
                     f": _PyFrame_TakeHome(frame, {home}))")
         if e.callee == "unwrap":
             (arg,) = e.args
@@ -904,7 +929,9 @@ class ArmLowerer:
         facts = self.current_facts
         # The homes are cleared in operand order; the closes that follow keep
         # the order of the debts
-        order = list(self.placements)
+        operands = {p.name: p.type for p in self.family.params}
+        s = replace(s, debts=expand_debts(s.debts, operands))
+        order = [h for name in self.placements for h in expand_group(name, operands)]
         spent = sorted((d for d in s.debts if d.kind is DebtKind.spent),
                        key=lambda d: order.index(d.subject))
         olds = [d for d in s.debts if d.kind is DebtKind.old]
@@ -940,21 +967,17 @@ class ArmLowerer:
             if view is not None and facts.has(view, Fact.inline_int):
                 # An inline int owns no count: clearing the home retires it
                 owners[d.subject] = None
-                self.emit(f"if (!(ir_word & {flag})) {{")
-                self.emit(f"    _PyFrame_WriteHome(frame, {home}, PyValue_NULL);")
-                self.emit("}")
+                self.emit_temporary(flag, f"_PyFrame_WriteHome(frame, {home}, PyValue_NULL);")
                 continue
-            owner = "own_" + d.subject
+            owner = "own_" + cname(d.subject)
             self.declare(owner, "PyValue", "PyValue_NULL")
             owners[d.subject] = owner
-            self.emit(f"if (!(ir_word & {flag})) {{")
-            self.emit(f"    {owner} = _PyFrame_TakeHome(frame, {home});")
-            self.emit("}")
+            self.emit_temporary(flag, f"{owner} = _PyFrame_TakeHome(frame, {home});")
         for d in olds:
             if d.subject in stored:
                 continue
-            self.declare("old_" + d.subject, "PyValue")
-            self.emit(f"old_{d.subject} = *{self.home(d.subject)};")
+            self.declare("old_" + cname(d.subject), "PyValue")
+            self.emit(f"old_{cname(d.subject)} = *{self.home(d.subject)};")
         for target, value in stored.items():
             self.emit(f"_PyRop_StoreOwners({self.span(target)}, &{value});")
         for b in s.bindings:
@@ -986,9 +1009,19 @@ class ArmLowerer:
                 self.emit("IR_STUB_ESCAPE();")
                 self.emit(f"_PyRop_CloseOwners(&{stored[d.subject]});")
             elif d.kind is DebtKind.old:
-                self.emit(f"PyValue_XCLOSE(old_{d.subject});")
+                self.emit(f"PyValue_XCLOSE(old_{cname(d.subject)});")
             elif d.kind is DebtKind.roots:
                 self.emit(f"_PyRop_CloseAnchors(&{d.subject});")
+
+    def emit_temporary(self, flag: str | None, line: str) -> None:
+        """A statement for a home that is a temporary: a projection always
+        is; an operand is unless the word marks it a local's"""
+        if flag is None:
+            self.emit(line)
+            return
+        self.emit(f"if (!(ir_word & {flag})) {{")
+        self.emit(f"    {line}")
+        self.emit("}")
 
     # Terminators
 
@@ -1118,12 +1151,15 @@ class ArmLowerer:
             # The word runs again, under the handler it now names
             self.emit("next_instr = this_instr;")
             self.emit("DISPATCH_SAME_OPARG();")
-        elif t.kind == "raise":
+        elif t.kind in ("raise", "unwind"):
             point = t.args[0]
             assert isinstance(point, Name)
-            self.emit(f"PROCESS_ERROR_AT(RAISE, {self.points[point.name]}, this_instr);")
+            ingress = t.kind.upper()
+            self.emit(f"PROCESS_ERROR_AT({ingress}, {self.points[point.name]}, this_instr);")
         elif t.kind == "enter":
             self.emit(f"ROP_ENTER({self.expr(t.args[0])}, {self.resume_slot(t)});")
+        elif t.kind == "yield":
+            self.emit(f"ROP_YIELD({self.expr(t.args[0])}, {self.resume_slot(t)});")
         elif t.kind == "return":
             caller, head = (self.expr(a) for a in t.args)
             self.emit(f"ROP_RETURN({caller}, {head});")
@@ -1133,14 +1169,19 @@ class ArmLowerer:
             raise Unsupported(f"{self.arm.name}: exit {t.kind} is not lowered yet")
 
     def resume_slot(self, t: Exit) -> str:
-        """The home that the child's return value goes to: the resume
-        point's definition"""
+        """The home that the child's return value, or the value sent to a
+        yielding generator, goes to: the resume point's definition"""
         assert t.resume is not None
         defs = self.program.points[t.resume].defs
         if not defs:
             raise Unsupported(f"{self.arm.name}: a resume point with no definition")
         (dst,) = defs
-        return self.field(dst)
+        return self.home_index(dst)
+
+
+def cname(operand: str) -> str:
+    """A C identifier part for an operand or a projection g.p"""
+    return operand.replace(".", "_")
 
 
 def lower_arm(program: Program, arm: Arm, numbers: Mapping[str, int],

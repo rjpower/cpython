@@ -77,6 +77,8 @@ class Products:
     # The same arms for the forms and stubs, which call the out-of-line copy
     # of a row declared inline; empty when no row is
     outlined: Mapping[str, Lowering] = dataclasses.field(default_factory=dict)
+    # The completion arms, which compile to functions only
+    completions: Mapping[str, Lowering] = dataclasses.field(default_factory=dict)
 
     def for_forms(self, name: str) -> Lowering:
         return self.outlined.get(name, self.lowered[name])
@@ -119,8 +121,17 @@ def lower_all(program: Program, numbers: Mapping[str, int]) -> Products:
         outlined = {name: lower_arm(program, program.arms[name], numbers, points,
                                     generic, outline=True)
                     for name in lowered}
+    completions: dict[str, Lowering] = {}
+    for arm in program.completions.values():
+        try:
+            completions[arm.name] = lower_arm(program, arm, numbers, points, generic,
+                                              outline=True)
+        except Unsupported as e:
+            pending = pending_blockers(program, arm)
+            left_out[arm.name] = (f"pending: {', '.join(pending)}" if pending
+                                  else str(e))
     return Products(program, numbers, points, lowered, left_out,
-                    generic_arms, outlined)
+                    generic_arms, outlined, completions)
 
 
 # Interpreter cases and function forms
@@ -331,7 +342,60 @@ def write_stubs(out: TextIO, p: Products, sources: list[str]) -> None:
                   "    _PyInstr *next_instr = site;\n    _PyIRWord ir_word = *site;\n"
                   "    int ir_status = 0;\n\n")
         out.write("\n".join(handler_text(arm, p.for_forms(name), "    ")) + "\n}\n")
+    write_completions(out, p)
     out.write("\n" + STUB_EPILOGUE)
+
+
+def completion_name(arm: str) -> str:
+    return f"_PyRop_Complete_{c_name(arm)}"
+
+
+def write_completions(out: TextIO, p: Products) -> None:
+    """Each completion arm as a function with the stubs' status ABI, which
+    generator_return calls in the consumer's frame with the child's value,
+    and the table from every handler of a family that has one to its
+    completion: the observed completion for the instrumented twins.  The
+    consumer word's handler is read when the child returns, so a word
+    respecialized or instrumented meanwhile completes as it now is."""
+    if not p.completions:
+        return
+    for name, low in p.completions.items():
+        arm = p.program.completions[name]
+        (param,) = arm.graph.blocks[0].params
+        out.write(f"\nstatic Py_NO_INLINE int\n{completion_name(name)}(\n"
+                  "    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyIRWord *site,\n"
+                  "    PyValue ir_value)\n{\n"
+                  "    _PyIRWord ir_word = *site;\n    int ir_status = 0;\n")
+        lines = [f"// {name} (completion at {arm.completion})",
+                 "int opcode = IR_HANDLER(ir_word);", "(void)opcode;",
+                 "_PyIRWord *const this_instr = site;", "(void)this_instr;",
+                 *low.decls, f"{param.name} = ir_value;", *low.body]
+        out.write("\n".join("    " + line if line else line for line in lines) + "\n}\n")
+    out.write("\ntypedef int (*_PyRopCompletion)(PyThreadState *, _PyInterpreterFrame *,\n"
+              "                                 _PyIRWord *, PyValue);\n\n"
+              "static const _PyRopCompletion _PyRop_Completions[ROP_NUM_HANDLERS] = {\n")
+    for handler_name, arm in completion_table(p):
+        out.write(f"    [{handler_name} - ROP_FIRST_HANDLER] = {completion_name(arm)},\n")
+    out.write("};\n")
+
+
+def completion_table(p: Products) -> list[tuple[str, str]]:
+    """(handler, completion arm) for every handler of a family with an
+    emitted completion"""
+    prog = p.program
+    wrapped = set(wrapped_arms(prog))
+    table = []
+    for name, arm in prog.arms.items():
+        plain = rop_check.completion_of(prog, arm.family)
+        if plain is None or plain.name not in p.completions:
+            continue
+        observed = rop_check.completion_of(prog, arm.family, observes=True)
+        if observed is None or observed.name not in p.completions:
+            observed = plain
+        table.append((handler(name), (observed if arm.observes else plain).name))
+        if name in wrapped:
+            table.append((handler(name) + "_Observed", observed.name))
+    return table
 
 
 HEAD_FIELDS = {Slot.A: 0, Slot.B: 1, Slot.C: 2, Slot.D: 3}
@@ -432,7 +496,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
                    "_PyIR_LOC_AB" if both == ["A", "B"] else LOC_NAMES.get(first, imm))
     branch_events = bool({"BRANCH_LEFT", "BRANCH_RIGHT", "JUMP"} & {e.value for e in fam.events})
     exits = set(arm.contract.exits)
-    effects = {"_PyIR_RAISES"} if "raise" in exits else set()
+    effects = {"_PyIR_RAISES"} if exits & {"raise", "unwind"} else set()
     for e in arm.contract.effect_set:
         effects.update(EFFECT_FLAGS.get(e, ()))
     if "miss" in exits:
@@ -462,7 +526,7 @@ def arm_format(program: Program, arm: Arm) -> ir_arms.ArmFormat:
 
 
 # The exits that end the word abnormally: they carry no normal-edge contract
-ABNORMAL_EXITS = frozenset({"raise", "redirect"})
+ABNORMAL_EXITS = frozenset({"raise", "unwind", "redirect"})
 
 
 def arm_transfer(exits: set[str], ninputs: int, family: str) -> str:
@@ -588,7 +652,8 @@ def write_templates(out: TextIO, p: Products, sources: list[str]) -> None:
 # Metadata
 
 HOME_ROLES = {Handle.Src: "SRC", Handle.Dst: "DST", Handle.Local: "LOCAL",
-              Handle.Cell: "CELL", Handle.Free: "FREE", Handle.IterPair: "ITERPAIR"}
+              Handle.Cell: "CELL", Handle.Free: "FREE", Handle.IterPair: "ITERPAIR",
+              Handle.SendWindow: "SENDWINDOW"}
 
 
 def operand_role(param: Param) -> tuple[str, bool]:
@@ -637,7 +702,9 @@ def write_encodings(out: TextIO, p: Products) -> None:
 
 
 def operand_mask(names: tuple[str, ...], operands: list[str]) -> str:
-    return " | ".join(f"(1 << {operands.index(n)})" for n in names) or "0"
+    """The point's operand bits; a projection g.p sets its group's bit"""
+    bits = dict.fromkeys(operands.index(n.partition(".")[0]) for n in names)
+    return " | ".join(f"(1 << {b})" for b in bits) or "0"
 
 
 def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
@@ -684,7 +751,7 @@ def write_metadata(out: TextIO, p: Products, sources: list[str]) -> None:
 enum { ROP_FIELD_HOME, ROP_FIELD_IMM, ROP_FIELD_NAME, ROP_FIELD_CONST,
        ROP_FIELD_FEEDBACK, ROP_FIELD_TARGET, ROP_FIELD_VECTOR };
 enum { ROP_ROLE_NONE, ROP_ROLE_SRC, ROP_ROLE_DST, ROP_ROLE_LOCAL, ROP_ROLE_CELL,
-       ROP_ROLE_FREE, ROP_ROLE_ITERPAIR };
+       ROP_ROLE_FREE, ROP_ROLE_ITERPAIR, ROP_ROLE_SENDWINDOW };
 
 typedef struct {
     const char *name;

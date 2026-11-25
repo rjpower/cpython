@@ -1023,11 +1023,11 @@ TRANSFER_CASES = [
      ]),
     ('enter without resume',
      '    exit enter(c) resume K.Returned;', '    exit enter(c);', [
-         (14, 5, 'K.Exact', "an arm's exit enter names its resume point (exit enter(c) resume P), and no other exit does"),
+         (14, 5, 'K.Exact', "an arm's exit enter or yield names its resume point (exit enter(c) resume P, exit yield(v) resume P), and no other exit does"),
      ]),
     ('resume on another exit',
      '    exit exit(v);', '    exit exit(v) resume K.Returned;', [
-         (66, 5, 'R.External', "an arm's exit enter names its resume point (exit enter(c) resume P), and no other exit does"),
+         (66, 5, 'R.External', "an arm's exit enter or yield names its resume point (exit enter(c) resume P, exit yield(v) resume P), and no other exit does"),
          (66, 5, 'R.External', 'point K.Returned is not a point of R'),
      ]),
     ('select twice in a dimension',
@@ -1075,7 +1075,7 @@ TRANSFER_CASES = [
      '    publish [dst = o] retire [old(dst)] at K.Early;\n'
      '    let c:NewFrame = push(thread, fn, a);\n', [
          (14, 31, 'K.Exact', "effects: publish at K.Early: old(dst) releases the binding dst displaces when it names a local's home, which may run Python: declare releases on (dst)"),
-         (16, 5, 'K.Exact', 'points: exit enter resume K.Returned: dst is defined by publish at K.Early at t.rop:14 before the child returns; the return defines it'),
+         (16, 5, 'K.Exact', 'points: exit enter resume K.Returned: dst is defined by publish at K.Early at t.rop:14 before the frame resumes there; the resumption defines it'),
      ]),
     ('spent source missing',
      ') -> NewFrame effects(writes, releases) spends(fn, a) pending;',
@@ -1162,6 +1162,361 @@ class VerifyTests(unittest.TestCase):
         ])
 
 
+
+# W2's transfers (WR): an exit that unwinds an exception the word already
+# reported
+UNWIND = """\
+family U(exc:Src) exits(unwind, raise) ops(NOP);
+point U.Raised(current, site, pending) keep(exc) spent() defs();
+extern helper restore(t:Thread, e:Src) cases(err(x:Err)) effects(runs_python, raises)
+  c RESTORE as raised evidence(review: "r", contract: "c");
+arm U.Restore split
+  effects(runs_python, raises)
+  feedback()
+  exits(unwind)
+{
+  entry():
+    call restore(thread, exc) {
+      err -> Failed();
+    }
+  Failed(e:Err):
+    exit unwind(U.Raised, e);
+}
+"""
+
+UNWIND_CASES = [
+    ('unwind to a point that is not pending',
+     'point U.Raised(current, site, pending)', 'point U.Raised(current, site, clear)', [
+         (15, 5, 'U.Restore', "exit unwind(U.Raised, ...): the exception is pending as the frame unwinds, but U.Raised's exception role is clear"),
+     ]),
+    ('unwind not declared',
+     '  exits(unwind)\n', '  exits(raise)\n', [
+         (6, 3, 'U.Restore', 'declared exit raise is not reached'),
+         (15, 5, 'U.Restore', 'exit unwind: unwind is not a declared exit of U.Restore (raise)'),
+     ]),
+    ('unwind without raises',
+     '  effects(runs_python, raises)\n  feedback()', '  effects(writes)\n  feedback()', [
+         (11, 5, 'U.Restore', 'effects: call restore may raises, which effects(writes) does not declare'),
+         (11, 5, 'U.Restore', 'effects: call restore may runs_python, which effects(writes) does not declare'),
+         (15, 5, 'U.Restore', 'effects: exit unwind may raises, which effects(writes) does not declare'),
+     ]),
+    ('unwind in a transfer row',
+     'cases(err(x:Err)) effects(runs_python, raises)\n  c RESTORE as raised',
+     'cases(unwind(x:Err)) effects(runs_python, raises)\n  c RESTORE as transfer', [
+         (3, 46, 'restore', 'case unwind of a transfer row names the exit its callee performs (one of: jump, branch, return, redirect, exit, raise)'),
+         (11, 5, 'U.Restore', 'call restore at t.rop:11 has no edge for unwind'),
+         (12, 7, 'U.Restore', 'call restore at t.rop:11: restore has no case err (cases: unwind)'),
+     ]),
+]
+
+
+class UnwindTests(unittest.TestCase):
+    def test_unwind_is_clean(self):
+        self.assertEqual(transfer_diagnostics(UNWIND), [])
+
+    def test_unwind_fixtures(self):
+        for name, old, new, expected in UNWIND_CASES:
+            with self.subTest(name):
+                self.assertIn(old, UNWIND)
+                found = transfer_diagnostics(UNWIND.replace(old, new, 1))
+                self.assertTrue(expected)
+                self.assertEqual(sorted(found), sorted(expected))
+
+
+GROUPS = """\
+family G(item:Dst, pair:IterPair, done:NearHead) exits(next, branch) ops(NOP);
+point G.Stepped(current, next_head, clear) keep(pair.receiver) spent(pair.cursor) defs(item, pair.cursor);
+point G.Done(current, next_head, clear) keep() spent(pair) defs();
+extern helper next_item(r:B, c:B) cases(hit(v:O), absent()) effects(reads)
+  c NEXT_ITEM as bool_out_hit
+  evidence(review: "r", contract: "c");
+extern helper next_index(c:B) -> O effects(allocates)
+  c NEXT_INDEX as value
+  evidence(review: "r", contract: "c");
+arm G.Step split effects(reads, allocates, writes, releases on (item)) feedback() exits(next, branch)
+{
+  entry():
+    let r:B = use(pair.receiver);
+    let c:B = use(pair.cursor);
+    call next_item(r, c) { hit -> Hit(); absent -> Exhausted(); }
+  Hit(v:O):
+    let n:O = next_index(c);
+    publish [item = v, pair.cursor = n] retire [old(item), old(pair.cursor)] at G.Stepped;
+    exit next();
+  Exhausted():
+    publish [] retire [spent(pair)] at G.Done;
+    exit branch(done);
+}
+family W(window:SendWindow) exits(next) ops(NOP);
+point W.Done(current, next_head, clear) keep(window.receiver) spent(window.cursor, window.value) defs();
+arm W.Drop shared effects(writes, releases) feedback() exits(next)
+{
+  entry():
+    publish [] retire [spent(window.value), spent(window.cursor)] at W.Done;
+    exit next();
+}
+"""
+
+
+GROUPS_CASES = [
+    ('publish without old',
+     'retire [old(item), old(pair.cursor)]',
+     'retire [old(item)]', [
+         (18, 5, 'G.Step', 'publish: pair.cursor is bound but its displaced owner is not retired: add old(pair.cursor)'),
+         (18, 5, 'G.Step', 'points: publish at G.Stepped: G.Stepped lists pair.cursor in spent, but pair.cursor is intact'),
+     ]),
+    ('old of a group',
+     'old(pair.cursor)]',
+     'old(pair)]', [
+         (18, 60, 'G.Step', 'old(pair): pair is not a destination operand'),
+     ]),
+    ('use of a whole group',
+     'let c:B = use(pair.cursor);',
+     'let c:B = use(pair);', [
+         (14, 19, 'G.Step', 'pair is IterPair, expected Src'),
+     ]),
+    ('unknown projection',
+     'let c:B = use(pair.cursor);',
+     'let c:B = use(pair.value);', [
+         (14, 19, 'G.Step', 'unknown name pair.value'),
+     ]),
+    ('point keeps the republished cursor',
+     'keep(pair.receiver) spent(pair.cursor) defs(item, pair.cursor)',
+     'keep(pair) spent() defs(item, pair.cursor)', [
+         (18, 5, 'G.Step', 'points: publish at G.Stepped: G.Stepped lists pair.cursor in keep, but pair.cursor is spent by publish at G.Stepped at t.rop:18'),
+     ]),
+    ('point names an unknown projection',
+     'spent(window.cursor, window.value)',
+     'spent(window.cursor, window.sent)', [
+         (25, 1, 'W.Done', 'spent(window.sent): W has no operand window.sent'),
+         (29, 5, 'W.Drop', 'points: publish at W.Done: W.Done does not list window.value, but window.value is spent by publish at W.Done at t.rop:29'),
+     ]),
+    ('row takes a group',
+     'extern helper next_index(c:B)',
+     'extern helper next_index(c:B, w:SendWindow)', [
+         (7, 31, 'next_index', 'parameter w:SendWindow: a row takes one home of a group, a projection g.p, as a Src'),
+         (17, 15, 'G.Step', 'next_index takes 2 arguments, not 1'),
+     ]),
+    ('spent twice by group',
+     'retire [spent(window.value), spent(window.cursor)]',
+     'retire [spent(window), spent(window.cursor)]', [
+         (29, 5, 'W.Drop', 'points: publish at W.Done: W.Done lists window.receiver in keep, but window.receiver is spent by publish at W.Done at t.rop:29'),
+         (29, 39, 'W.Drop', 'publish: spent(window.cursor) is retired twice: a repeated operand makes one claim on its temporary'),
+     ]),
+    ('cursor release undeclared',
+     'arm W.Drop shared effects(writes, releases)',
+     'arm W.Drop shared effects(writes)', [
+         (29, 5, 'W.Drop', 'effects: publish at W.Done (spent(window.value), spent(window.cursor)) may releases, which effects(writes) does not declare'),
+     ]),
+]
+
+
+class GroupTests(unittest.TestCase):
+    """Home groups: IterPair and SendWindow operands stand for their
+    projections g.p, temporaries the instruction reads and writes"""
+    def test_groups_are_clean(self):
+        self.assertEqual(transfer_diagnostics(GROUPS), [])
+
+    def test_group_fixtures(self):
+        for name, old, new, expected in GROUPS_CASES:
+            with self.subTest(name):
+                self.assertIn(old, GROUPS)
+                found = transfer_diagnostics(GROUPS.replace(old, new, 1))
+                self.assertTrue(expected)
+                self.assertEqual(sorted(found), sorted(expected))
+
+
+
+COMPLETE = """\
+family S(completed:Dst, window:SendWindow, done:NearHead) exits(branch, enter, raise) ops(NOP);
+point S.Yielded(caller, next_head, clear) keep(window.receiver, window.cursor) spent(window.value) defs(window.value);
+point S.Completed(current, next_head, clear) keep() spent(window) defs(completed);
+point S.Failed(current, site, pending) keep(window.receiver, window.cursor) spent(window.value) defs();
+extern helper enter_generator(t:Thread, f:Frame, g:B, v:O)
+  cases(entered(c:NewFrame), err(e:Err))
+  effects(reads, writes, raises)
+  ensures(entered.generator_frame(c))
+  c ENTER_GENERATOR as pointer_or_raised
+  evidence(review: "r", contract: "c");
+arm S.Generator split effects(reads, writes, raises, switches_frame) feedback() exits(enter, raise)
+{
+  entry():
+    let g:B = use(window.receiver);
+    let v:O = acquire(window.value);
+    call enter_generator(thread, frame, g, v) { entered -> Enter(); err -> Failed(); }
+  Enter(c:NewFrame):
+    exit enter(c) resume S.Yielded complete S.Complete;
+  Failed(e:Err):
+    exit raise(S.Failed, e);
+}
+arm S.Complete completion(S.Yielded) split effects(writes, releases on (completed)) feedback() exits(branch)
+{
+  entry(v:O):
+    publish [completed = v] retire [spent(window.receiver), spent(window.cursor), old(completed)] at S.Completed;
+    exit branch(done);
+}
+"""
+
+
+COMPLETE_SECOND = """\
+arm S.Twice completion(S.Yielded) split effects(writes, releases on (completed)) feedback() exits(branch)
+{
+  entry(v:O):
+    publish [completed = v] retire [spent(window.receiver), spent(window.cursor), old(completed)] at S.Completed;
+    exit branch(done);
+}
+"""
+
+
+COMPLETE_CASES = [
+    ('a completion that leaves the frame',
+     'feedback() exits(branch)\n{\n  entry(v:O)',
+     'feedback() exits(branch, enter)\n{\n  entry(v:O)', [
+         (22, 44, 'S.Complete', 'a completion runs after its child returned; it cannot leave the frame or restart the word (enter)'),
+         (22, 44, 'S.Complete', 'declared exit enter is not reached'),
+     ]),
+    ('an entry with two parameters',
+     'entry(v:O):',
+     'entry(v:O, w:O):', [
+         (24, 3, 'S.Complete', "a completion's first block is entry(v:O), the child's final value"),
+     ]),
+    ('an entry with no parameter',
+     'entry(v:O):',
+     'entry():', [
+         (24, 3, 'S.Complete', "a completion's first block is entry(v:O), the child's final value"),
+         (25, 26, 'S.Complete', 'unknown name v'),
+     ]),
+    ('complete names a word arm',
+     'complete S.Complete;',
+     'complete S.Generator;', [
+         (18, 5, 'S.Generator', 'complete S.Generator: not a plain completion arm of S'),
+     ]),
+    ('complete at another point',
+     'arm S.Complete completion(S.Yielded)',
+     'point S.Again(caller, next_head, clear) keep(window.receiver, window.cursor) spent(window.value) defs(window.value);\narm S.Complete completion(S.Again)', [
+         (18, 5, 'S.Generator', 'complete S.Complete: it completes S.Again, but the enter resumes at S.Yielded'),
+     ]),
+    ('a completion point that is not a resume point',
+     'arm S.Complete completion(S.Yielded)',
+     'arm S.Complete completion(S.Completed)', [
+         (18, 5, 'S.Generator', 'complete S.Complete: it completes S.Completed, but the enter resumes at S.Yielded'),
+         (22, 1, 'S.Complete', 'completion(S.Completed): the point is (current, next_head) with 1 definitions; a resume point is (caller, next_head) with at most one'),
+     ]),
+    ('two plain completions',
+     '    exit branch(done);\n}\n',
+     '    exit branch(done);\n}\n' + COMPLETE_SECOND, [
+         (28, 1, 'S.Twice', 'S has two plain completions (S.Complete, S.Twice)'),
+     ]),
+    ('a generator entered without complete',
+     ' complete S.Complete;',
+     ';', [
+         (18, 5, 'S.Generator', "control: exit enter(c): the frame is a generator's, which returns through a completion: name it (resume P complete A)"),
+     ]),
+    ("complete on a frame not proved a generator's",
+     '  ensures(entered.generator_frame(c))\n',
+     '', [
+         (17, 5, 'S.Generator', 'control: exit enter(c) complete S.Complete: no fact proves generator_frame(c)'),
+     ]),
+    ('an observed completion without a plain one',
+     'arm S.Complete completion(S.Yielded) split',
+     'arm S.Complete completion(S.Yielded) split observes', [
+         (18, 5, 'S.Generator', 'complete S.Complete: not a plain completion arm of S'),
+         (22, 1, 'S.Complete', "an observed completion needs its family's events: S declares no events(...)"),
+         (22, 1, 'S.Complete', 'an observed completion needs a plain one: S has none'),
+     ]),
+]
+
+
+class CompletionTests(unittest.TestCase):
+    """Completion arms: a generator child's return runs the consumer
+    family's completion, from the resume point of the enter that names it"""
+    def test_completion_is_clean(self):
+        self.assertEqual(transfer_diagnostics(COMPLETE), [])
+
+    def test_completion_fixtures(self):
+        for name, old, new, expected in COMPLETE_CASES:
+            with self.subTest(name):
+                self.assertIn(old, COMPLETE)
+                found = transfer_diagnostics(COMPLETE.replace(old, new, 1))
+                self.assertTrue(expected)
+                self.assertEqual(sorted(found), sorted(expected))
+
+    def test_completions_are_not_word_arms(self):
+        program = rop_check.check([rop_syntax.parse(COMPLETE, "t.rop")])
+        self.assertEqual(set(program.completions), {"S.Complete"})
+        self.assertNotIn("S.Complete", program.arms)
+
+
+
+YIELD = """\
+family Y(value:Src, resume:Dst) exits(yield) ops(NOP);
+point Y.Resumed(current, next_head, clear) keep() spent(value) defs(resume);
+extern helper pin_departing() -> Unit
+  effects()
+  c PIN as unit
+  evidence(review: "r", contract: "c");
+arm Y.Value split effects(writes, switches_frame) feedback() exits(yield)
+{
+  entry():
+    let v:O = acquire(value);
+    let _:Unit = pin_departing();
+    exit yield(v) resume Y.Resumed;
+}
+"""
+
+
+YIELD_CASES = [
+    ('a yield without resume',
+     ' resume Y.Resumed;',
+     ';', [
+         (12, 5, 'Y.Value', "an arm's exit enter or yield names its resume point (exit enter(c) resume P, exit yield(v) resume P), and no other exit does"),
+     ]),
+    ('a resume point of the caller',
+     'point Y.Resumed(current,',
+     'point Y.Resumed(caller,', [
+         (12, 5, 'Y.Value', 'yield resume Y.Resumed: the point is (caller, next_head) with 1 definitions; a generator resumes at (current, next_head) with one, the sent value'),
+     ]),
+    ('a resume point whose definition is published before',
+     '    let v:O = acquire(value);\n',
+     '    let w:O = dup(use(value));\n    publish [resume = w] retire [old(resume)] at Y.Resumed;\n    let v:O = acquire(value);\n', [
+         (11, 5, 'Y.Value', 'points: publish at Y.Resumed: Y.Resumed lists value in spent, but value is intact'),
+         (11, 34, 'Y.Value', "effects: publish at Y.Resumed: old(resume) releases the binding resume displaces when it names a local's home, which may run Python: declare releases on (resume)"),
+         (14, 5, 'Y.Value', 'points: exit yield resume Y.Resumed: resume is defined by publish at Y.Resumed at t.rop:11 before the frame resumes there; the resumption defines it'),
+     ]),
+    ('a yield of a borrowed value',
+     'let v:O = acquire(value);',
+     'let v:B = use(value);', [
+         (12, 16, 'Y.Value', 'v is B, expected O'),
+     ]),
+    ('a yield on a path without pin_departing',
+     '    let _:Unit = pin_departing();\n',
+     '', [
+         (11, 5, 'Y.Value', 'control: exit yield releases the departing frame, whose code is not pinned on this path: call pin_departing() first'),
+     ]),
+    ('a yield that names a completion',
+     ' resume Y.Resumed;',
+     ' resume Y.Resumed complete Y.Value;', [
+         (12, 5, 'Y.Value', 'only an enter names a completion'),
+         (12, 5, 'Y.Value', 'complete Y.Value: not a plain completion arm of Y'),
+     ]),
+]
+
+
+class YieldTests(unittest.TestCase):
+    """exit yield(v) resume P: the generator gives v away and resumes at P,
+    the sent value P's one definition"""
+    def test_yield_is_clean(self):
+        self.assertEqual(transfer_diagnostics(YIELD), [])
+
+    def test_yield_fixtures(self):
+        for name, old, new, expected in YIELD_CASES:
+            with self.subTest(name):
+                self.assertIn(old, YIELD)
+                found = transfer_diagnostics(YIELD.replace(old, new, 1))
+                self.assertTrue(expected)
+                self.assertEqual(sorted(found), sorted(expected))
+
+
 def rop_files() -> list[Path]:
     return sorted(ROP_DIR.glob("*.rop"))
 
@@ -1221,6 +1576,23 @@ class PilotTests(unittest.TestCase):
                     f"{family}.Failed lists {name} in spent, but {name} is intact"
                     for name in item_spent[family])
         mapped = at("namespaces.rop", "exit raise(NamespaceReadFrom.Failed, saved);", 5)
+        # The arms of tests.rop that raise, in order of line: the family, the
+        # arm and the operands that its point lists in spent
+        tests_raises = [
+            f"{at('tests.rop', f'exit raise({family}.Failed, saved);', 5, nth=nth)}: "
+            f"{arm}: points: raise at {family}.Failed: {family}.Failed lists "
+            f"{operand} in spent, but {operand} is intact"
+            for family, nth, arm, operands in [
+                ("Compare", 0, "Compare.Generic", ("x", "y")),
+                ("Contains", 0, "Contains.Set", ("container", "item")),
+                ("Contains", 1, "Contains.Dict", ("container", "item")),
+                ("Contains", 2, "Contains.Generic", ("container", "item")),
+                ("TestBranch", 0, "TestBranch.Set", ("x", "y")),
+                ("TestBranch", 1, "TestBranch.Dict", ("x", "y")),
+                ("TestBranch", 2, "TestBranch.Sequence", ("x", "y")),
+                ("TestBranch", 3, "TestBranch.Generic", ("x", "y")),
+                ("TestBranch", 4, "TestBranch.Observed", ("x", "y"))]
+            for operand in operands]
         truth_slot = at("truth.rop", "exit raise(Truth.Failed, saved);", 5)
         truth_generic = at("truth.rop", "exit raise(Truth.Failed, saved);", 5, last=True)
         branch_slot = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5)
@@ -1271,6 +1643,7 @@ class PilotTests(unittest.TestCase):
               f"{mapped}: NamespaceReadFrom.Mapping: points: raise at "
               "NamespaceReadFrom.Failed: NamespaceReadFrom.Failed lists mapping in "
               "spent, but mapping is intact",
+              *tests_raises,
               f"{truth_slot}: Truth.Slot: points: raise at Truth.Failed: "
               "Truth.Failed lists value in spent, but value is intact",
               f"{truth_generic}: Truth.Generic: points: raise at Truth.Failed: "

@@ -794,7 +794,6 @@ bind_edge(_PyRegTr *t, int depth, const _PyRegOp *src)
     op->target = -1;
     op->dst = -1;
     op->reader = -1;
-    op->fuse = 0;
     op->completion = 0;
     op->kwnames = 0;
     // Its sources are implicit: no word reads them
@@ -1745,6 +1744,44 @@ rule_truth(_PyRegTr *t, const _PyRegOp *src)
     return _PyRegTr_Push(t, dst);
 }
 
+/* COMPARE_OP, IS_OP and CONTAINS_OP: the Compare, Identity and Contains
+ * families (Python/register_ops/tests.rop).  The register instruction of a
+ * compare starts on Compare.Generic, which installs the arm the operands
+ * call for; the immediate is the relation and whether the result is a bool.
+ * IS_OP and CONTAINS_OP carry their inversion (is not, not in) as the
+ * sense. */
+static int
+rule_test(_PyRegTr *t, const _PyRegOp *src)
+{
+    if (t->sp < 2) {
+        return stack_underflow(src);
+    }
+    int handler, imm;
+    switch (src->opcode) {
+        case COMPARE_OP:
+            handler = ROP_HANDLER_Compare_Generic;
+            imm = ROP_PACK_Compare_relation(src->oparg >> 5)
+                  | ROP_PACK_Compare_result(src->oparg & 16 ? ROP_RESULT_TRUTH
+                                                             : ROP_RESULT_RICH);
+            break;
+        case IS_OP:
+            handler = ROP_HANDLER_Identity_Test, imm = src->oparg;
+            break;
+        default:
+            assert(src->opcode == CONTAINS_OP);
+            handler = ROP_HANDLER_Contains_Generic, imm = src->oparg;
+            break;
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - 2], 2,
+                                  &dst, 1, &op));
+    op->oparg = imm;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 2, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
 /* The conditional jumps.  A branch reads its operand and, on the jump
  * edge, binds the target's parameters as the stack op did, so the rule is
  * the stack op's with the register instruction's handler and immediate:
@@ -2201,11 +2238,11 @@ rule_call_intrinsic(_PyRegTr *t, const _PyRegOp *src)
             PyErr_SetString(PyExc_SystemError, "invalid intrinsic function");
             return ERROR;
         }
-        id = n + 11;
+        // The ids of IntrinsicId follow the unary ones in order; the
+        // numbers 8 to 21 are unused
+        id = n < INTRINSIC_GETATTR ? n + 11 : n - 3;
         handler = _PyRop_SelectIntrinsicPair(
-            n < INTRINSIC_COMPARE_OP ? ROP_SELECT_BINARY
-            : n < INTRINSIC_GETATTR ? ROP_SELECT_COMPARE
-            : ROP_SELECT_ATTR);
+            n < INTRINSIC_GETATTR ? ROP_SELECT_BINARY : ROP_SELECT_ATTR);
     }
     if (t->sp < nuses) {
         return stack_underflow(src);
@@ -2437,6 +2474,9 @@ rule_insert(_PyRegTr *t, const _PyRegOp *src)
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
     [BINARY_OP] = rule_binary_op,
+    [COMPARE_OP] = rule_test,
+    [IS_OP] = rule_test,
+    [CONTAINS_OP] = rule_test,
     [TO_BOOL] = rule_truth,
     [UNARY_NOT] = rule_truth,
     [POP_JUMP_IF_FALSE] = rule_branch,
@@ -2537,13 +2577,20 @@ translate_instr(_PyRegTr *t, const _PyRegOp *instr)
     return rule(t, instr);
 }
 
-/* A compare that the conditional branch after it consumes, on the same line
- * and under the same handler: the pair that FuseJump may fuse */
+/* A test that the conditional branch after it consumes, on the same line
+ * and under the same handler: the pair that becomes one TestBranch.  The
+ * result is a bool the branch pops, so the test has no other reader; a
+ * COMPARE_OP whose result is not converted (bit 16) has a TO_BOOL between
+ * and is not adjacent. */
 static int
 feeds_branch(const _PyRegOp *cmp, const _PyRegOp *next)
 {
     switch (cmp->opcode) {
         case COMPARE_OP:
+            if (!(cmp->oparg & 16)) {
+                return 0;
+            }
+            break;
         case IS_OP:
         case CONTAINS_OP:
             break;
@@ -2555,20 +2602,24 @@ feeds_branch(const _PyRegOp *cmp, const _PyRegOp *next)
            && next->except == cmp->except && op_jumps(next);
 }
 
-/* The branch's target finds the parameters below the compare's operands,
- * which the compare leaves alone.  Their moves go before the compare, so
- * that the compare and the branch stay adjacent and fuse: the moves hold
- * on both edges, as they did before the compare.  The branch then finds
- * its parameters bound and emits no move.
+/* The branch's target finds the parameters below the test's operands,
+ * which the test leaves alone.  Their moves go before the test, so that
+ * the pair stays adjacent and becomes one word: the moves hold on both
+ * edges, as they did before the test.  The branch then finds its
+ * parameters bound and emits no move.
  *
  * The moves write parameter homes and rename identities below the operands,
  * so the hoist stands only when the operands are disjoint from them: no
  * operand is a parameter below, or the identity of a position below.  Else
- * the moves stay with the branch, between the compare and it. */
+ * the moves stay with the branch, between the test and it, the two do not
+ * fuse, and *stood is 0.  (A TestBranch word could not take them after it:
+ * the jump edge has no block of its own to put them in.) */
 static int
-hoist_edge(_PyRegTr *t, const _PyRegOp *cmp, const _PyRegOp *branch)
+hoist_edge(_PyRegTr *t, const _PyRegOp *cmp, const _PyRegOp *branch,
+           int *stood)
 {
     _PyRegCfg *cfg = t->cfg;
+    *stood = 0;
     int below = Py_MIN(t->sp - _PyOpcode_num_popped(cmp->opcode, cmp->oparg),
                        t->sp);
     for (int j = below; j < t->sp; j++) {
@@ -2595,7 +2646,61 @@ hoist_edge(_PyRegTr *t, const _PyRegOp *cmp, const _PyRegOp *branch)
     for (int j = 0; j < n; j++) {
         assert(t->stack[below + j] == operands[j]);
     }
+    *stood = 1;
     return SUCCESS;
+}
+
+/* A test and the conditional jump on its result as one register
+ * instruction: TestBranch (Python/register_ops/tests.rop).  The word has
+ * the test's origin, so a raise in the test and its line stay the test's,
+ * and the jump's target; its source range runs on over the jump, where
+ * instrumentation finds the offset that branch events report.  The test
+ * names its operands and nothing names the bool between.  The edge's
+ * moves were hoisted before the test (hoist_edge()). */
+static int
+translate_test_branch(_PyRegTr *t, const _PyRegOp *cmp, const _PyRegOp *jump)
+{
+    if (t->sp < 2) {
+        return stack_underflow(cmp);
+    }
+    _PyRegCfg *cfg = t->cfg;
+    t->src_sp = t->sp;
+    if (cmp->except >= 0) {
+        mark_maybe(t, handler_base(cfg, cmp->except));
+        if (!t->permuted) {
+            int hbase = Py_MIN(handler_base(cfg, cmp->except), t->sp);
+            for (int k = 0; k < hbase; k++) {
+                (void)rename_param(t, k);
+            }
+        }
+    }
+    // The branch is taken when the test's answer is the sense; `is not` and
+    // `not in` invert the answer, which the sense absorbs
+    int sense = jump->opcode == POP_JUMP_IF_TRUE;
+    int handler, test;
+    switch (cmp->opcode) {
+        case COMPARE_OP:
+            handler = ROP_HANDLER_TestBranch_Generic;
+            test = ROP_TEST_LT + (cmp->oparg >> 5);
+            break;
+        case IS_OP:
+            handler = ROP_HANDLER_TestBranch_Identity;
+            test = ROP_TEST_IDENTITY;
+            sense ^= cmp->oparg;
+            break;
+        default:
+            assert(cmp->opcode == CONTAINS_OP);
+            handler = ROP_HANDLER_TestBranch_Generic;
+            test = ROP_TEST_CONTAINS;
+            sense ^= cmp->oparg;
+            break;
+    }
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, cmp, handler, &t->stack[t->sp - 2], 2,
+                                  NULL, 0, &op));
+    op->target = jump->target;
+    op->oparg = ROP_PACK_TestBranch_test(test) | ROP_PACK_TestBranch_sense(sense);
+    return _PyRegTr_Pop(t, 2, NULL);
 }
 
 static int
@@ -2654,9 +2759,16 @@ translate(_PyRegCfg *cfg)
         blk->start = t.block_op = t.nops;
         for (int i = start; err == SUCCESS && i < end; i++) {
             if (i + 1 < end && feeds_branch(&cfg->ops[i], &cfg->ops[i + 1])) {
-                err = hoist_edge(&t, &cfg->ops[i], &cfg->ops[i + 1]);
+                int stood;
+                err = hoist_edge(&t, &cfg->ops[i], &cfg->ops[i + 1], &stood);
                 if (err != SUCCESS) {
                     break;
+                }
+                if (stood) {
+                    err = translate_test_branch(&t, &cfg->ops[i],
+                                                &cfg->ops[i + 1]);
+                    i++;
+                    continue;
                 }
             }
             err = translate_instr(&t, &cfg->ops[i]);
@@ -4716,7 +4828,6 @@ static const struct {
     {"store elimination", _PyRegPass_StoreElim},
     {"unpack to locals", _PyRegPass_UnpackLocals},
     {"truth folding", _PyRegPass_TruthFold},
-    {"jump fusion", _PyRegPass_FuseJump},
     {"call keyword names", _PyRegPass_KwNames},
     {"null elision", _PyRegPass_ElideNull},
     {"call input roles", _PyRegPass_CallRoles},
@@ -4910,7 +5021,7 @@ resolve_moves(_PyRegCfg *cfg)
             move->nstage = 0;
             move->dst = move->target = -1;
             move->reader = -1;
-            move->fuse = move->completion = move->kwnames = 0;
+            move->completion = move->kwnames = 0;
             move->flags = _PyReg_SLOT_RECIPE | _PyReg_MOVE_SLOTS;
             move->nrecipe = npairs;
             move->recipe = at;
@@ -4934,9 +5045,6 @@ resolve_moves(_PyRegCfg *cfg)
         _PyRegOp *op = &ops[i];
         if (op->flags & _PyReg_LOAD_FOLDED) {
             op->reader = index[op->reader];
-        }
-        if (op->fuse > 0) {
-            op->fuse = index[op->fuse];
         }
         if (op->completion > 0) {
             op->completion = index[op->completion - 1] + 1;

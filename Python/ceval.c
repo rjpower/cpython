@@ -2291,8 +2291,6 @@ static PyValue _PyRop_IntrinsicImportStar(PyThreadState *tstate, PyValue x);
 static PyValue _PyRop_IntrinsicStopIteration(PyThreadState *tstate, PyValue x);
 static PyValue _PyRop_IntrinsicBinary(PyThreadState *tstate, uint32_t id,
                                       PyValue x, PyValue y);
-static PyValue _PyRop_IntrinsicCompare(PyThreadState *tstate, uint32_t id,
-                                       PyValue x, PyValue y);
 static PyValue _PyRop_IntrinsicAttr(PyThreadState *tstate, uint32_t id,
                                     PyValue x, PyValue y);
 
@@ -2381,8 +2379,10 @@ _PyRop_EdgeEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
     // An instruction event may have made the word transparent: its target is
     // in the format of the handler it wraps
     const _PyIRFormat *fmt = _PyIR_FormatOf(_PyIR_RealHandler(frame, site));
+    // The wrapper's own length is one word; the fall-through continues past
+    // the fixed operand words of the word it wraps
     _PyInstr *dest = taken ? site + 1 + _PyIR_FormatDistance(fmt, *site)
-                           : site + _PyIR_WordLength(*site);
+                           : site + 1 + fmt->fixed_words;
     frame->return_pc = dest;
     _PyIRObserverResult result = _PyIR_ObserveCommittedBranch(
         tstate, frame, site, site, dest, event,
@@ -8892,11 +8892,6 @@ static const uint8_t rop_intrinsic_number[] = {
     INTRINSIC_TYPEVAR_WITH_CONSTRAINTS, INTRINSIC_SET_FUNCTION_TYPE_PARAMS,
     INTRINSIC_SET_TYPEPARAM_DEFAULT, INTRINSIC_ADD_CONDITIONAL_ANNOTATION,
     INTRINSIC_MATCH_CLASS_ISINSTANCE,
-    INTRINSIC_COMPARE_OP + 0, INTRINSIC_COMPARE_OP + 1, INTRINSIC_COMPARE_OP + 2,
-    INTRINSIC_COMPARE_OP + 3, INTRINSIC_COMPARE_OP + 4, INTRINSIC_COMPARE_OP + 5,
-    INTRINSIC_COMPARE_OP + 6, INTRINSIC_COMPARE_OP + 7, INTRINSIC_COMPARE_OP + 8,
-    INTRINSIC_COMPARE_OP + 9, INTRINSIC_COMPARE_OP + 10, INTRINSIC_COMPARE_OP + 11,
-    INTRINSIC_CONTAINS_OP, INTRINSIC_CONTAINS_OP + 1,
     INTRINSIC_GETATTR, INTRINSIC_SETATTR,
 };
 
@@ -8947,12 +8942,6 @@ _PyRop_IntrinsicBinary(PyThreadState *tstate, uint32_t id, PyValue x, PyValue y)
     PyValue_XCLOSE(held1);
     PyValue_XCLOSE(held2);
     return res;
-}
-
-static PyValue
-_PyRop_IntrinsicCompare(PyThreadState *tstate, uint32_t id, PyValue x, PyValue y)
-{
-    return _PyRop_IntrinsicBinary(tstate, id, x, y);
 }
 
 static PyValue

@@ -217,27 +217,38 @@ _PyRop_LocalView(PyValue *home)
     return PyValue_Borrow(*home);
 }
 
-static inline void
-_PyRop_RestoreLocal(PyValue *local, PyValue *value)
+/* Whether an optional source operand's home holds a value */
+static inline bool
+_PyRop_SrcPresent(PyValue *home)
 {
-    PyValue old = *local;
-    *local = *value;
-    *value = PyValue_NULL;
-    PyValue_XCLOSE(old);
+    return !PyValue_IsNull(*home);
 }
 
-static inline void
-_PyRop_SaveLocal(PyValue *dst, PyValue *local)
+/* The saved binding in a temporary, absent or not, taken out of its home;
+ * the arm publishes it into the local */
+static inline PyValue
+_PyRop_RestoreLocal(PyValue *value)
 {
-    PyValue old = *dst;
-    *dst = *local;
+    PyValue saved = *value;
+    *value = PyValue_NULL;
+    return saved;
+}
+
+/* The local's binding, absent or not, taken out of its home; the arm
+ * publishes it into dst */
+static inline PyValue
+_PyRop_SaveLocal(PyValue *local)
+{
+    PyValue saved = *local;
     *local = PyValue_NULL;
-    PyValue_XCLOSE(old);
+    return saved;
 }
 
 /* Python/ceval.c: UnboundLocalError for the local in home */
 void _PyRop_UnboundLocal(_PyInterpreterFrame *frame, PyValue *home);
-int _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home);
+/* The local's binding taken out of its home, or NULL with UnboundLocalError
+ * set when it is unbound */
+PyValue _PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home);
 
 
 /* Truth, BranchTruth and BranchNone (Python/register_ops/truth.rop).  The

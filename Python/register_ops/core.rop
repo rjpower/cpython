@@ -104,7 +104,7 @@ extern helper anchor_for_call(s:Span<Src>) -> Anchors
               "values already held by homes. The sources are left in their homes.");
 
 extern helper retire_failed_call(a:Anchors, s:Span<Src>, e:Err) -> Err
-  effects(releases)
+  effects(writes, releases)
   feedback()
   spends(s)
   c _PyRop_RetireFailedCall as handle

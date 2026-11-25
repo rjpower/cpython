@@ -7,9 +7,11 @@ the language's types.  It covers what a tracer needs from an arm:
 - a guard is a side exit, with the frame state at the exit (the entry
   state, by the restart rule);
 - a call to a row keeps the row's declared effects, feedback and parameter
-  modes, and a row with cases is a `Switch` with one edge per case;
+  modes, and a row with cases is a `Switch` with one edge per case; a
+  transfer row's Switch performs the exit each of its edges leads to;
 - `publish` is a sequence of home writes, a checkpoint and the releases in
-  the declared retire order (change 21);
+  the declared retire order (change 21); a vector binding moves or copies a
+  span of homes, as one op over the span;
 - every exit names its frame state and the tokens it discharges.
 
 Nothing is inferred.  Where a declaration does not say what an arm does to
@@ -24,13 +26,13 @@ the primitive rows that have them.
 import enum
 from dataclasses import dataclass, field
 
-from rop_catalog import ENVIRONMENT, DebtKind, Scalar, ExcRole, FieldKind, FrameRole, Handle, PcRole, Wrap
-from rop_cgen import Unsupported, flatten
-from rop_check import (CANDIDATE, DEST_HANDLES, PRIMITIVES, UNWRAP, Program,
-                       field_kind)
+from rop_catalog import (ENVIRONMENT, DebtKind, Fact, Scalar, ExcRole,
+                         FieldKind, FrameRole, Handle, PcRole, Wrap)
+from rop_cgen import Unsupported, flatten, is_transfer
+from rop_check import (CANDIDATE, PRIMITIVES, UNWRAP, Program, field_kind, select_facts)
 from rop_model import (Arm, BoolLit, Branch, Call, CallTerm, Cases, Diagnostic,
-                       Each, EnumType, Exit, Expr, Goto, Guard, HandleType, Let, Name, Nat,
-                       Publish, ScalarType, SpanLit, SrcSpan, Tail, Type,
+                       Each, EnumType, Exit, Expr, Family, Goto, Guard, HandleType, Let, Name, Nat,
+                       Null, Publish, ScalarType, SpanLit, SrcSpan, Type,
                        WrapType, DISCARD)
 
 
@@ -61,6 +63,12 @@ class OpKind(enum.Enum):
     take = "take"               # attr: home; a spent temporary's owner out of its home
     old = "old"                 # attr: home; the displaced owner of a destination
     store = "store"             # attr: home; args: (owner,)
+    null = "null"               # the vacancy a publish may write
+    rest = "rest"               # attr: span home; args: (owners,): the items past its count
+    # On a span operand, read, take, old, store and dup act on every item:
+    # read gives the items borrowed, take and old their owners, store writes
+    # item i of its argument to item i of the span, and dup is a new owner
+    # of each item
     checkpoint = "checkpoint"   # attr: the point the frame state now matches
     release = "release"         # attr: DebtKind; args: (owner or anchors,)
 
@@ -68,8 +76,7 @@ class OpKind(enum.Enum):
 @dataclass(frozen=True)
 class HomeState:
     """A home at an exit: intact (as on entry), spent (a temporary emptied,
-    a local left), defined(value) or held(value: an owner the checkpoint
-    carries)"""
+    a local left) or defined(value)"""
     state: str
     value: int | None = None
 
@@ -130,9 +137,13 @@ class CaseEdge:
 
 @dataclass(frozen=True)
 class Switch:
+    """A row with cases.  For a transfer row each edge leads to the exit its
+    case names, and the row has performed it: the frame state the exit
+    names is the one the row left"""
     row: str
     args: tuple[int, ...]
     edges: tuple[CaseEdge, ...]
+    transfer: bool = False
 
 
 @dataclass(frozen=True)
@@ -162,6 +173,9 @@ class SsaArm:
     blocks: dict[str, SsaBlock]
     types: dict[int, Type]
     names: dict[int, str]           # the language name of each value, for dumps
+    # The facts the arm's declaration grants on entry: its select items'
+    # (SELECT_FACTS) and, for an observer, instrumented(site)
+    facts: tuple[str, ...] = ()
 
     @property
     def entry(self) -> SsaBlock:
@@ -175,10 +189,12 @@ class SsaArm:
 
 
 def is_dest_param(t: Type) -> bool:
-    "A row parameter that names a home the row may write"
+    """A row parameter that names a home the row may write: the checker
+    refuses Dst parameters on rows; a Local one a row may only spend"""
     if isinstance(t, WrapType) and t.wrap in (Wrap.Maybe, Wrap.Span):
         return is_dest_param(t.arg)
-    return isinstance(t, HandleType) and t.handle in DEST_HANDLES
+    return isinstance(t, HandleType) and t.handle in (Handle.Dst, Handle.Cell,
+                                                      Handle.IterPair)
 
 
 O_TYPE = HandleType(Handle.O)
@@ -232,6 +248,8 @@ class Expander:
             return self.emit(OpKind.const, SIZE, (), e.value)
         if isinstance(e, BoolLit):
             return self.emit(OpKind.const, BOOL, (), e.value)
+        if isinstance(e, Null):
+            return self.emit(OpKind.null, WrapType(Wrap.Maybe, O_TYPE), (), None, "null")
         if isinstance(e, SpanLit):
             items = [self.expr(i) for i in e.items]
             return self.emit(OpKind.span, WrapType(Wrap.Span, self.types[items[0]])
@@ -339,17 +357,43 @@ class Expander:
             self.fail(s.span, f"statement {type(s).__name__}")
 
     def publish(self, s: Publish) -> None:
-        values = [(b.target, self.expr(b.value)) for b in s.bindings]
+        """Change 21's four steps: take the spent inputs (a vector move's
+        sources among them), read the olds, write, then close"""
+        owners = WrapType(Wrap.Span, O_TYPE)
+        values: list[tuple[str, int]] = []
         taken: dict[str, int] = {}
+        moved: set[str] = set()
+        for b in s.bindings:
+            if not b.vector:
+                values.append((b.target, self.expr(b.value)))
+                continue
+            if isinstance(b.value, Call):
+                # d[] = dup(s[]): a second owner of each source item
+                (src,) = b.value.args
+                items = self.emit(OpKind.read, WrapType(Wrap.Span, HandleType(Handle.B)),
+                                  (), src.name, src.name)
+                values.append((b.target, self.emit(OpKind.dup, owners, (items,), None,
+                                                   f"dup_{src.name}")))
+                continue
+            # d[] = s[]: the sources' owners move
+            src = b.value.name
+            taken[src] = self.emit(OpKind.take, owners, (), src, f"own_{src}")
+            moved.add(src)
+            values.append((b.target, taken[src]))
         for d in s.debts:
             # An acquired source's owner already left its home with the acquire
-            if d.kind is DebtKind.spent and d.subject not in self.acquired:
-                taken[d.subject] = self.emit(OpKind.take, O_TYPE, (), d.subject, f"own_{d.subject}")
+            if (d.kind is DebtKind.spent and d.subject not in self.acquired
+                    and d.subject not in taken):
+                t = owners if self.operands.get(d.subject) is FieldKind.vector else O_TYPE
+                taken[d.subject] = self.emit(OpKind.take, t, (), d.subject, f"own_{d.subject}")
         olds: dict[str, int] = {}
         for target, _ in values:
-            olds[target] = self.emit(OpKind.old, O_TYPE, (), target, f"old_{target}")
+            t = owners if self.operands.get(target) is FieldKind.vector else O_TYPE
+            olds[target] = self.emit(OpKind.old, t, (), target, f"old_{target}")
         for target, v in values:
             self.emit(OpKind.store, None, (v,), target)
+        for name in moved:
+            self.homes[name] = HomeState("spent")
         for d in s.debts:
             if d.kind is DebtKind.spent:
                 self.homes[d.subject] = HomeState("spent")
@@ -357,10 +401,16 @@ class Expander:
             self.homes[target] = HomeState("defined", v)
         self.emit(OpKind.checkpoint, None, (), s.point)
         self.point = s.point
+        targets = {b.value.name: b.target for b in s.bindings
+                   if b.vector and isinstance(b.value, Name)}
         for d in s.debts:
             if d.kind is DebtKind.spent and d.subject not in taken:
                 continue
-            if d.kind is DebtKind.spent:
+            if d.kind is DebtKind.spent and d.subject in moved:
+                # A moved span's items past its destination's count
+                arg = self.emit(OpKind.rest, owners, (taken[d.subject],),
+                                targets[d.subject], f"rest_{d.subject}")
+            elif d.kind is DebtKind.spent:
                 arg = taken[d.subject]
             elif d.kind is DebtKind.old:
                 arg = olds[d.subject]
@@ -384,7 +434,8 @@ class Expander:
         p = self.program.points[point]
         homes = dict(self.current_homes())
         for h in p.spent:
-            if homes[h].state not in ("spent",):
+            # A home both spent and defined (a local deleted) is defined
+            if homes[h].state not in ("spent",) and h not in p.defs:
                 homes[h] = HomeState("spent")
         return FrameState(frame or p.frame.value, pc or p.pc.value, p.exc.value,
                           tuple(homes.items()), point)
@@ -465,11 +516,6 @@ class Expander:
             args = tuple(self.expr(a) for a in t.args
                          if not (t.kind == "raise" and a is t.args[0]))
             self.cur.term = ExitTerm(t.kind, args, self.exit_state(t, args))
-        elif isinstance(t, Tail):
-            x = self.program.externs[t.callee]
-            self.fail(t.span, f"tail {t.callee}: the routine's exits ({', '.join(x.contract.exits)}) "
-                              "declare no payload and no point, so the frame state at each "
-                              "is not declared")
         elif isinstance(t, Each):
             self.fail(t.span, "each: no pilot arm loops")
         else:
@@ -492,7 +538,8 @@ class Expander:
             facts = tuple(fact_text(ef.fact) for ef in x.contract.ensures if ef.edge == e.case)
             target = self.jump(e.target)
             edges.append(CaseEdge(e.case, payload, target, facts))
-        self.cur.term = Switch(t.callee, args, tuple(edges))
+        self.cur.term = Switch(t.callee, args, tuple(edges),
+                               is_transfer(self.program, t.callee))
 
     def expand(self) -> SsaArm:
         flat = self.flat
@@ -521,7 +568,8 @@ class Expander:
                 del self.env[k]
         self.fix_switch_payloads()
         return SsaArm(self.arm.name, self.arm.family, self.arm.region.value,
-                      dict(self.operands), self.blocks, self.types, self.names)
+                      dict(self.operands), self.blocks, self.types, self.names,
+                      entry_facts(self.family, self.arm))
 
     def fix_switch_payloads(self) -> None:
         """A status edge's payload binds the target block's first
@@ -534,7 +582,14 @@ class Expander:
                 target = self.blocks[e.target.block]
                 n = len(e.payload)
                 edges.append(CaseEdge(e.case, target.params[:n], e.target, e.facts))
-            b.term = Switch(b.term.row, b.term.args, tuple(edges))
+            b.term = Switch(b.term.row, b.term.args, tuple(edges), b.term.transfer)
+
+
+def entry_facts(fam: Family, arm: Arm) -> tuple[str, ...]:
+    facts = [f"{fact.value}({subject})" for fact, subject in select_facts(fam, arm)]
+    if arm.observes:
+        facts.append(f"{Fact.instrumented.value}(site)")
+    return tuple(facts)
 
 
 def _with(state: FrameState, tokens: tuple[int, ...]) -> FrameState:
@@ -605,7 +660,8 @@ def dump(arm: SsaArm) -> str:
         elif isinstance(t, BranchTerm):
             lines.append(f"    branch {v(t.cond)} -> {j(t.if_true)}, {j(t.if_false)}")
         elif isinstance(t, Switch):
-            lines.append(f"    switch {t.row}({', '.join(v(a) for a in t.args)})")
+            lines.append(f"    {'transfer' if t.transfer else 'switch'} {t.row}"
+                         f"({', '.join(v(a) for a in t.args)})")
             for e in t.edges:
                 lines.append(f"      {e.case} -> {j(e.target)} [{', '.join(e.facts)}]")
         elif isinstance(t, ExitTerm):

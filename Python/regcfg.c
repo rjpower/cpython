@@ -517,6 +517,11 @@ struct _PyRegTr {
     char *maybe;
     int amaybe;
     char *maybe_pos;
+    /* The Move.Copy ops of this region that rule_copy() emitted and that
+     * collapse_unwound() may still merge, by op index */
+    int *copies;
+    int ncopies;
+    int acopies;
 };
 
 int
@@ -911,6 +916,113 @@ _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
     return SUCCESS;
 }
 
+/* How many times op names register v, as an input of any kind or an output */
+static int
+names_of(const _PyRegCfg *cfg, const _PyRegOp *op, int v)
+{
+    const int *in = _PyReg_IN(cfg, op);
+    const int *out = _PyReg_OUT(cfg, op);
+    int n = 0;
+    for (int k = 0; k < op->nread + op->nimplicit; k++) {
+        n += in[k] == v;
+    }
+    for (int j = 0; j < op->nout; j++) {
+        n += out[j] == v;
+    }
+    return n;
+}
+
+/* The raise being translated leaves the value at stack position k to the
+ * unwinder.  If that value is the source of a provisional Move.Copy whose
+ * copy an op T has already taken, one owner covers both uses: T takes the
+ * original instead, and the unwinder finds nothing to release.  This is
+ * the cleanup of an except or with body, COPY 3; POP_EXCEPT; RERAISE 1,
+ * where POP_EXCEPT spends the copy of the previous exception and RERAISE
+ * leaves the original behind.  It holds when
+ *
+ *   - no op between the Move.Copy and the raise jumps or binds an edge,
+ *     and the copy is not a parameter, so no other block sees either;
+ *   - T names the copy once, among the inputs it takes, and does not name
+ *     the original; no other op names the copy;
+ *   - no op after T names the original: T is its last use;
+ *   - the raise's handler, if any, does not find position k: k is at or
+ *     above the handler's depth, so the unwinder clears its home, which T
+ *     left empty.
+ *
+ * Then the copy becomes the original in T, the Move.Copy becomes a
+ * source-only op, and the raise does not list the original as a value it
+ * leaves.  Returns 1 if it merged, 0 if not. */
+static int
+collapse_unwound(_PyRegTr *t, const _PyRegOp *instr, int k)
+{
+    _PyRegCfg *cfg = t->cfg;
+    int x = t->stack[k];
+    if (instr->except >= 0 && k < handler_base(cfg, instr->except)) {
+        return 0;
+    }
+    for (int q = 0; q < t->ncopies; q++) {
+        int c = t->copies[q];
+        _PyRegOp *copy = &t->ops[c];
+        if (copy->opcode != ROP_HANDLER_Move_Copy || copy->nread != 1 ||
+            copy->nout != 1 || _PyReg_IN(cfg, copy)[0] != x)
+        {
+            continue;
+        }
+        int y = _PyReg_OUT(cfg, copy)[0];
+        if (y < _PyReg_FRESH0(cfg)) {
+            return 0;
+        }
+        int taker = -1;
+        for (int i = c + 1; i < t->nops; i++) {
+            const _PyRegOp *op = &t->ops[i];
+            if (op->opcode == _PyReg_DEAD) {
+                continue;
+            }
+            if (op->target >= 0 || (op->flags & (_PyReg_MOVES | _PyReg_JUMP_OUTPUT))) {
+                return 0;
+            }
+            int ny = names_of(cfg, op, y), nx = names_of(cfg, op, x);
+            if (ny == 0) {
+                if (nx != 0 && taker >= 0) {
+                    return 0;
+                }
+                continue;
+            }
+            if (taker >= 0 || ny != 1 || nx != 0) {
+                return 0;
+            }
+            const int *in = _PyReg_IN(cfg, op);
+            int taken = 0;
+            for (int j = op->nread - op->npop; j < op->nread; j++) {
+                taken |= in[j] == y;
+            }
+            if (!taken) {
+                return 0;
+            }
+            taker = i;
+        }
+        if (taker < 0) {
+            return 0;
+        }
+        _PyRegOp *T = &t->ops[taker];
+        int *in = _PyReg_IN(cfg, T);
+        for (int j = 0; j < T->nread; j++) {
+            if (in[j] == y) {
+                in[j] = x;
+            }
+        }
+        // The Move.Copy stays for its offset, as an op with no word: its
+        // recipe follows its one use
+        copy->opcode = NOP;
+        copy->in++;
+        copy->nread = copy->npop = 0;
+        copy->nout = 0;
+        t->copies[q] = t->copies[--t->ncopies];
+        return 1;
+    }
+    return 0;
+}
+
 /* The rule of an unported stack op: its old handler op.  It reads the top
  * nread identities, the popped ones on top, and for a raise every identity
  * below; a register-style op's outputs below its dst pass their inputs
@@ -961,6 +1073,17 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
         return ERROR;
     }
     int nimplicit = IS_RAISE_OPCODE(instr->opcode) ? depth - popped : 0;
+    // The values the raise leaves, less those whose one owner a copy
+    // already spent (collapse_unwound())
+    char unwound[IR_MAX_SLOTS];
+    int nleft = 0;
+    for (int k = 0; k < nimplicit; k++) {
+        int merged = k < IR_MAX_SLOTS && collapse_unwound(t, instr, k);
+        if (k < IR_MAX_SLOTS) {
+            unwound[k] = (char)merged;
+        }
+        nleft += !merged;
+    }
     // Register style: the outputs below dst pass their inputs through
     int through = 0;
     if (!window) {
@@ -994,7 +1117,7 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     }
     _PyRegOp *op;
     if (err == SUCCESS) {
-        err = new_op(t, instr, nread + nimplicit + nrec, pushed, &op);
+        err = new_op(t, instr, nread + nleft + nrec, pushed, &op);
     }
     if (err == SUCCESS && nrec) {
         err = _PyRegCfg_AddOperands(cfg, nrec, &op->recipe);
@@ -1004,9 +1127,13 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
         for (int k = 0; k < nread; k++) {
             in[k] = t->stack[depth - nread + k];
         }
+        int left = 0;
         for (int k = 0; k < nimplicit; k++) {
-            in[nread + k] = t->stack[k];
+            if (k >= IR_MAX_SLOTS || !unwound[k]) {
+                in[nread + left++] = t->stack[k];
+            }
         }
+        nimplicit = left;
         // A window's outputs go from its base: where its first input is,
         // unless allocation stages its inputs
         int wbase = window && nread > 0 ? natural_pos(t, in[0]) : -1;
@@ -1046,10 +1173,110 @@ stack_underflow(const _PyRegOp *src)
     return ERROR;
 }
 
-/* COPY n pushes a second owner of the identity n - 1 below the top: a
- * Move.Copy of one pair, whose source stays live (it takes nothing).  A
- * copy of a value that one stable owner holds for both uses is an alias;
- * CopyProp folds a copied local read into its reader. */
+/* COPY n pushes a second use of the value n - 1 below the top.  One owner
+ * covers both uses where that is proved; a second owner exists only where
+ * two consumers each spend the value.  The rule takes the first of these
+ * that applies:
+ *
+ *   1. The value is a read of local x on the COPY's line, and no op since
+ *      that read may change x (a write to it, or code that may rebind it
+ *      through frame.f_locals, or a line start, where a trace function
+ *      may).  The copy is a second read of x, and x owns the
+ *      value for both uses.  CopyProp folds that read into its reader's
+ *      field, which borrows x in place, under the same proof carried on to
+ *      the reader; where it cannot, the read stays a LocalRead word.
+ *   2. The value is a constant that an op of this region loaded.  The copy
+ *      is the same Const op again, which yields the same object.
+ *   3. Otherwise a Move.Copy into a fresh register: the second owner.  It
+ *      is provisional.  Where one owner turns out to cover both uses (the
+ *      copy is spent, and the original is left to the unwinder at a raise
+ *      with nothing reading it in between), collapse_unwound() merges the
+ *      two and the Move.Copy goes.
+ *
+ * In every case the stack never holds one identity at two positions, so
+ * edges, recipes, windows and retirements see each owner once. */
+
+static int read_local(_PyRegTr *t, const _PyRegOp *src, int local,
+                      int handler);
+
+/* Whether op may change the binding of local x: write, clear or vacate it,
+ * or run code that may rebind it through frame.f_locals (the rule of
+ * CopyProp and of check_folded_load()) */
+static int
+may_change_local(const _PyRegOp *op, int x)
+{
+    const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode, op->oparg);
+    int role = _PyIR_OpargRole(fmt);
+    return _PyRegOp_WritesLocal(op, x)
+        || (op->oparg == x
+            && (op->opcode == ROP_HANDLER_SaveLocal_Take
+                || role == _PyIR_ROLE_LOCAL_OUT
+                || role == _PyIR_ROLE_LOCAL_CLEAR
+                || role == _PyIR_ROLE_LOCAL_MOVE))
+        || _PyIR_MayRunPython(fmt, op->dst >= 0);
+}
+
+/* The local whose binding identity v still is when src runs: v was read
+ * from it in this region and nothing since may have changed it; else -1.
+ * Like CopyProp, it also asks that no line starts in between, where a
+ * trace function could rebind the local through frame.f_locals. */
+static int
+stable_local(const _PyRegTr *t, int v, const _PyRegOp *src)
+{
+    const _PyRegCfg *cfg = t->cfg;
+    if (v < _PyReg_FRESH0(cfg)) {
+        return -1;
+    }
+    int p = t->def[v - _PyReg_FRESH0(cfg)];
+    if (p < t->region_op || p >= t->nops) {
+        return -1;
+    }
+    const _PyRegOp *read = &t->ops[p];
+    if ((read->opcode != ROP_HANDLER_LocalRead_Bound &&
+         read->opcode != ROP_HANDLER_LocalRead_Checked) ||
+        read->nout != 1 || _PyReg_OUT(cfg, read)[0] != v)
+    {
+        return -1;
+    }
+    int x = read->oparg;
+    if (src->loc.lineno != read->loc.lineno) {
+        return -1;
+    }
+    for (int i = p + 1; i < t->nops; i++) {
+        const _PyRegOp *op = &t->ops[i];
+        if (op->opcode != _PyReg_DEAD &&
+            (op->loc.lineno != read->loc.lineno || may_change_local(op, x)))
+        {
+            return -1;
+        }
+    }
+    return x;
+}
+
+/* The Const op of this region that defined identity v, or NULL */
+static const _PyRegOp *
+const_producer(const _PyRegTr *t, int v)
+{
+    const _PyRegCfg *cfg = t->cfg;
+    if (v < _PyReg_FRESH0(cfg)) {
+        return NULL;
+    }
+    int p = t->def[v - _PyReg_FRESH0(cfg)];
+    if (p < t->region_op || p >= t->nops) {
+        return NULL;
+    }
+    const _PyRegOp *op = &t->ops[p];
+    switch (op->opcode) {
+        case ROP_HANDLER_Const_Pool:
+        case ROP_HANDLER_Const_Small:
+        case ROP_HANDLER_Const_Common:
+            break;
+        default:
+            return NULL;
+    }
+    return op->nout == 1 && _PyReg_OUT(cfg, op)[0] == v ? op : NULL;
+}
+
 static int
 rule_copy(_PyRegTr *t, const _PyRegOp *src)
 {
@@ -1057,13 +1284,31 @@ rule_copy(_PyRegTr *t, const _PyRegOp *src)
     if (n < 1 || n > t->sp) {
         return stack_underflow(src);
     }
+    int v = t->stack[t->sp - n];
+    int x = stable_local(t, v, src);
+    if (x >= 0) {
+        return read_local(t, src, x, ROP_SELECT_LocalRead_bound);
+    }
+    const _PyRegOp *k = const_producer(t, v);
+    if (k != NULL) {
+        int opcode = k->opcode, oparg = k->oparg;
+        int dst;
+        _PyRegOp *op;
+        RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+        RETURN_IF_ERROR(_PyRegTr_Emit(t, src, opcode, NULL, 0, &dst, 1, &op));
+        op->oparg = oparg;
+        return _PyRegTr_Push(t, dst);
+    }
     int dst;
     _PyRegOp *op;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
     RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_SELECT_Move_copy,
-                                  &t->stack[t->sp - n], 1, &dst, 1, &op));
+                                  &v, 1, &dst, 1, &op));
     op->npop = 0;
     op->oparg = 0;
+    RETURN_IF_ERROR(grow((void **)&t->copies, &t->acopies, t->ncopies + 1,
+                         sizeof(int)));
+    t->copies[t->ncopies++] = (int)(op - t->ops);
     return _PyRegTr_Push(t, dst);
 }
 
@@ -1835,6 +2080,7 @@ translate(_PyRegCfg *cfg)
         if (!blk->continued) {
             t.region_op = t.nops;
             t.permuted = 0;
+            t.ncopies = 0;
             int used = Py_MIN(Py_MAX(t.touched, blk->startdepth) + 1,
                               IR_MAX_SLOTS);
             for (int k = 0; k < used; k++) {
@@ -1883,6 +2129,7 @@ translate(_PyRegCfg *cfg)
     PyMem_Free(t.mv);
     PyMem_Free(t.maybe);
     PyMem_Free(t.maybe_pos);
+    PyMem_Free(t.copies);
     if (err != SUCCESS) {
         PyMem_Free(t.ops);
         return ERROR;
@@ -3387,6 +3634,133 @@ check_folded_load(_PyRegCfg *cfg, const char *after, int i)
     return SUCCESS;
 }
 
+/* Whether register v is a temporary: not a local, cell, free variable or
+ * constant slot */
+static int
+is_temporary(const _PyRegCfg *cfg, int v)
+{
+    return v >= cfg->nlocalsplus
+        && !(v >= cfg->const_first && v < cfg->const_first + cfg->nconst);
+}
+
+/* Whether a temporary occurs twice in vs[0 .. n - 1] */
+static int
+has_duplicate(const _PyRegCfg *cfg, const int *vs, int n)
+{
+    for (int a = 0; a < n; a++) {
+        for (int b = a + 1; b < n; b++) {
+            if (vs[a] == vs[b] && is_temporary(cfg, vs[a])) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* Ownership: each value has one owner (RV change 9).  An op takes no value
+ * twice; a parallel move, a recipe and a Move.Retire name each value once;
+ * and within a region nothing names a temporary after an op took it,
+ * unless an op has defined it again.  A wrong alias breaks one of these:
+ * a value released twice, or a home read after it was emptied.  Ops that
+ * resolution made name slots, not registers, and are not checked. */
+static int
+verify_owners(_PyRegCfg *cfg, const char *after)
+{
+    int nl = cfg->nlocalsplus;
+    int *taken = PyMem_Malloc(Py_MAX(cfg->nvregs - nl, 1) * sizeof(int));
+    if (taken == NULL) {
+        PyErr_NoMemory();
+        return ERROR;
+    }
+    // taken[v - nl]: the region (block index + 1) in which v was taken
+    memset(taken, 0, Py_MAX(cfg->nvregs - nl, 1) * sizeof(int));
+    int err = SUCCESS, region = 0;
+    for (int b = 0; b < cfg->nblocks && err == SUCCESS; b++) {
+        _PyRegBlock *blk = &cfg->blocks[b];
+        if (!blk->continued) {
+            region = b + 1;
+        }
+        if (!blk->reachable) {
+            continue;
+        }
+        for (int i = blk->start; err == SUCCESS && i < blk->end; i++) {
+            _PyRegOp *op = &cfg->ops[i];
+            if (op->opcode == _PyReg_DEAD
+                || (op->flags & (_PyReg_MOVE_SLOTS | _PyReg_SLOT_RECIPE)))
+            {
+                continue;
+            }
+            const int *in = _PyReg_IN(cfg, op);
+            const int *out = _PyReg_OUT(cfg, op);
+            const int *stage = &cfg->operands[op->stage];
+            int nin = op->nread + op->nimplicit;
+            for (int k = 0; k < nin && err == SUCCESS; k++) {
+                if (is_temporary(cfg, in[k]) && taken[in[k] - nl] == region) {
+                    err = verify_error(after, op, "a value named after the "
+                                       "op that took it");
+                }
+            }
+            for (int q = 0; q < op->nstage && err == SUCCESS; q++) {
+                int v = stage[2 * q];
+                if (is_temporary(cfg, v) && taken[v - nl] == region) {
+                    err = verify_error(after, op, "a value named after the "
+                                       "op that took it");
+                }
+            }
+            if (err != SUCCESS) {
+                break;
+            }
+            // The values the op takes: the popped inputs it does not pass
+            // through, or a parallel move's sources
+            int first = op->nread - op->npop, ntake = op->npop;
+            if (op->flags & _PyReg_MOVES) {
+                first = 0;
+                ntake = op->nout;
+            }
+            if (has_duplicate(cfg, &in[first], ntake)) {
+                err = verify_error(after, op, "a value that the op takes "
+                                   "twice");
+            }
+            else if (has_duplicate(cfg, &in[nin - op->nrecipe], op->nrecipe)) {
+                err = verify_error(after, op, "a value that a recipe moves "
+                                   "twice");
+            }
+            if (err != SUCCESS) {
+                break;
+            }
+            for (int k = first; k < first + ntake; k++) {
+                int v = in[k];
+                int through = 0;
+                for (int j = 0; j < op->nout; j++) {
+                    through |= out[j] == v;
+                }
+                if (is_temporary(cfg, v) && !through) {
+                    taken[v - nl] = region;
+                }
+            }
+            for (int q = 0; q < op->nstage; q++) {
+                int v = stage[2 * q];
+                if (v >= nl) {
+                    taken[v - nl] = region;
+                }
+            }
+            for (int q = 0; q < op->nstage; q++) {
+                int v = stage[2 * q + 1];
+                if (v >= nl) {
+                    taken[v - nl] = 0;
+                }
+            }
+            for (int j = 0; j < op->nout; j++) {
+                if (out[j] >= nl) {
+                    taken[out[j] - nl] = 0;
+                }
+            }
+        }
+    }
+    PyMem_Free(taken);
+    return err;
+}
+
 /* Whether the registers in live are in distinct slots of the frame */
 static int
 verify_slots(_PyRegCfg *cfg, _PyRegLiveness *lv, const uint64_t *live,
@@ -3573,6 +3947,9 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
         if (op->opcode == _PyReg_DEAD && (op->flags & _PyReg_LOAD_FOLDED)) {
             err = check_folded_load(cfg, after, i);
         }
+    }
+    if (err == SUCCESS) {
+        err = verify_owners(cfg, after);
     }
     if (err == SUCCESS && physical) {
         // The constraints of note 06 section 12, op by op

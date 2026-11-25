@@ -1699,4 +1699,8 @@ const _PyJitTemplate _PyJit_Templates[512] = {
     [283] = jit_template_IS_OP_JUMP,
     [284] = jit_template_RESUME_CHECK,
     [ROP_HANDLER_Add_Int] = jit_template_Add_Int,
+    [ROP_HANDLER_BranchTruth_Bool] = jit_template_BranchTruth_Bool,
+    [ROP_HANDLER_BranchTruth_None] = jit_template_BranchTruth_None,
+    [ROP_HANDLER_BranchNone_Test] = jit_template_BranchNone_Test,
+    [ROP_HANDLER_Jump_Direct] = jit_template_Jump_Direct,
 };

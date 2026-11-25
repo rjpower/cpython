@@ -702,8 +702,18 @@ TEMPLATE_CASES = [
     *[(f"def f(a, b):\n    if a {op} b:\n        return 1\n    return 0", (None, None),
        "IS_OP_JUMP", "AB", [(a, b) for a in ANY for b in ANY[::2]])
       for op in ("is", "is not")],
-    # (The truth and branch arms are tested by test_rop_truth, by their form
-    # and completion stub: they have no template yet.)
+    ("def f(a, b):\n    if a:\n        return 1\n    return 0", (True, 0),
+     "BranchTruth.Bool", "A", [(x,) for x in ANY]),
+    ("def f(a, b):\n    if not a:\n        return 1\n    return 0", (True, 0),
+     "BranchTruth.Bool", "A", [(x,) for x in ANY]),
+    ("def f(a, b):\n    if a:\n        return 1\n    return 0", (None, 0),
+     "BranchTruth.None", "A", [(x,) for x in ANY]),
+    ("def f(a, b):\n    if a is None:\n        return 1\n    return 0", (None, 0),
+     "BranchNone.Test", "A", [(x,) for x in ANY]),
+    ("def f(a, b):\n    if a is not None:\n        return 1\n    return 0", (None, 0),
+     "BranchNone.Test", "A", [(x,) for x in ANY]),
+    ("def f(a, b):\n    if a is None:\n        x = 1\n    else:\n        x = 2\n"
+     "    return (x + b) * (b - x) - 3", (None, 0), "Jump.Direct", "", [()]),
     *[("def f(a, b):\n    x = 1\n    x = a[b]\n    return x", (seq_type([1, 2, 3]), 1),
        handler, "ABC", [(Plain(), seq, i) for seq in seqs for i in INDICES])
       for seq_type, handler, seqs in (

@@ -1023,11 +1023,11 @@ TRANSFER_CASES = [
      ]),
     ('enter without resume',
      '    exit enter(c) resume K.Returned;', '    exit enter(c);', [
-         (14, 5, 'K.Exact', "an arm's exit enter names its resume point (exit enter(c) resume P), and no other exit does"),
+         (14, 5, 'K.Exact', "an arm's exit enter or yield names its resume point (exit enter(c) resume P, exit yield(v) resume P), and no other exit does"),
      ]),
     ('resume on another exit',
      '    exit exit(v);', '    exit exit(v) resume K.Returned;', [
-         (66, 5, 'R.External', "an arm's exit enter names its resume point (exit enter(c) resume P), and no other exit does"),
+         (66, 5, 'R.External', "an arm's exit enter or yield names its resume point (exit enter(c) resume P, exit yield(v) resume P), and no other exit does"),
          (66, 5, 'R.External', 'point K.Returned is not a point of R'),
      ]),
     ('select twice in a dimension',
@@ -1075,7 +1075,7 @@ TRANSFER_CASES = [
      '    publish [dst = o] retire [old(dst)] at K.Early;\n'
      '    let c:NewFrame = push(thread, fn, a);\n', [
          (14, 31, 'K.Exact', "effects: publish at K.Early: old(dst) releases the binding dst displaces when it names a local's home, which may run Python: declare releases on (dst)"),
-         (16, 5, 'K.Exact', 'points: exit enter resume K.Returned: dst is defined by publish at K.Early at t.rop:14 before the child returns; the return defines it'),
+         (16, 5, 'K.Exact', 'points: exit enter resume K.Returned: dst is defined by publish at K.Early at t.rop:14 before the frame resumes there; the resumption defines it'),
      ]),
     ('spent source missing',
      ') -> NewFrame effects(writes, releases) spends(fn, a) pending;',
@@ -1445,6 +1445,76 @@ class CompletionTests(unittest.TestCase):
         program = rop_check.check([rop_syntax.parse(COMPLETE, "t.rop")])
         self.assertEqual(set(program.completions), {"S.Complete"})
         self.assertNotIn("S.Complete", program.arms)
+
+
+
+YIELD = """\
+family Y(value:Src, resume:Dst) exits(yield) ops(NOP);
+point Y.Resumed(current, next_head, clear) keep() spent(value) defs(resume);
+extern helper pin_departing() -> Unit
+  effects()
+  c PIN as unit
+  evidence(review: "r", contract: "c");
+arm Y.Value split effects(writes, switches_frame) feedback() exits(yield)
+{
+  entry():
+    let v:O = acquire(value);
+    let _:Unit = pin_departing();
+    exit yield(v) resume Y.Resumed;
+}
+"""
+
+
+YIELD_CASES = [
+    ('a yield without resume',
+     ' resume Y.Resumed;',
+     ';', [
+         (12, 5, 'Y.Value', "an arm's exit enter or yield names its resume point (exit enter(c) resume P, exit yield(v) resume P), and no other exit does"),
+     ]),
+    ('a resume point of the caller',
+     'point Y.Resumed(current,',
+     'point Y.Resumed(caller,', [
+         (12, 5, 'Y.Value', 'yield resume Y.Resumed: the point is (caller, next_head) with 1 definitions; a generator resumes at (current, next_head) with one, the sent value'),
+     ]),
+    ('a resume point whose definition is published before',
+     '    let v:O = acquire(value);\n',
+     '    let w:O = dup(use(value));\n    publish [resume = w] retire [old(resume)] at Y.Resumed;\n    let v:O = acquire(value);\n', [
+         (11, 5, 'Y.Value', 'points: publish at Y.Resumed: Y.Resumed lists value in spent, but value is intact'),
+         (11, 34, 'Y.Value', "effects: publish at Y.Resumed: old(resume) releases the binding resume displaces when it names a local's home, which may run Python: declare releases on (resume)"),
+         (14, 5, 'Y.Value', 'points: exit yield resume Y.Resumed: resume is defined by publish at Y.Resumed at t.rop:11 before the frame resumes there; the resumption defines it'),
+     ]),
+    ('a yield of a borrowed value',
+     'let v:O = acquire(value);',
+     'let v:B = use(value);', [
+         (12, 16, 'Y.Value', 'v is B, expected O'),
+     ]),
+    ('a yield on a path without pin_departing',
+     '    let _:Unit = pin_departing();\n',
+     '', [
+         (11, 5, 'Y.Value', 'control: exit yield releases the departing frame, whose code is not pinned on this path: call pin_departing() first'),
+     ]),
+    ('a yield that names a completion',
+     ' resume Y.Resumed;',
+     ' resume Y.Resumed complete Y.Value;', [
+         (12, 5, 'Y.Value', 'only an enter names a completion'),
+         (12, 5, 'Y.Value', 'complete Y.Value: not a plain completion arm of Y'),
+     ]),
+]
+
+
+class YieldTests(unittest.TestCase):
+    """exit yield(v) resume P: the generator gives v away and resumes at P,
+    the sent value P's one definition"""
+    def test_yield_is_clean(self):
+        self.assertEqual(transfer_diagnostics(YIELD), [])
+
+    def test_yield_fixtures(self):
+        for name, old, new, expected in YIELD_CASES:
+            with self.subTest(name):
+                self.assertIn(old, YIELD)
+                found = transfer_diagnostics(YIELD.replace(old, new, 1))
+                self.assertTrue(expected)
+                self.assertEqual(sorted(found), sorted(expected))
 
 
 def rop_files() -> list[Path]:

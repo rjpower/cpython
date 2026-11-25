@@ -485,7 +485,9 @@ class Expander:
         if kind == "return":
             return FrameState("value", "value", ExcRole.clear.value, self.current_homes(),
                               None, ())
-        if kind in ("redirect", "yield"):
+        if kind == "yield":
+            return _with(self.point_state(t.resume, t.span), args)
+        if kind == "redirect":
             return FrameState(FrameRole.current.value, "value", ExcRole.clear.value,
                               self.current_homes(), self.point, args)
         if kind == "exit":

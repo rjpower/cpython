@@ -544,6 +544,12 @@ CONVENTIONS: dict[str, Convention] = {c.name: c for c in (
           COutcome(CTest.positive, _RES, (), False),
           COutcome(CTest.zero, _RES, (), False),
           COutcome(CTest.negative, _RES, (_EXC,), True)),
+    # A branch event: zero ran on, positive moved the frame (the token is the
+    # route to the word), negative raised
+    _conv("int_redirect", CReturn.int_status,
+          COutcome(CTest.zero, _RES, (), False),
+          COutcome(CTest.positive, _RES, (CSource.token,), False),
+          COutcome(CTest.negative, _RES, (_EXC,), True)),
     # An adaptation status: positive changed (the ticket is a proof, not a
     # value), zero same, negative blocked; none of them raises
     _conv("ticket_status", CReturn.int_status,

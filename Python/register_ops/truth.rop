@@ -13,6 +13,12 @@ point BranchTruth.Fell(current, next_head, clear) keep() spent(value) defs() hel
 point BranchTruth.Kept(current, target, clear) keep(value) spent() defs() held();
 point BranchTruth.Failed(current, site, pending) keep() spent(value) defs() held();
 
+// A branch event's callback failed: the operand was retired before the event,
+// except where a keep mode jumps
+point BranchTruth.Event(current, site, pending) keep() spent(value) defs() held();
+point BranchTruth.KeptEvent(current, site, pending) keep(value) spent() defs() held();
+point BranchNone.Event(current, site, pending) keep() spent(value) defs() held();
+
 point BranchNone.Jumped(current, target, clear) keep() spent(value) defs() held();
 point BranchNone.Fell(current, next_head, clear) keep() spent(value) defs() held();
 
@@ -206,6 +212,19 @@ extern primitive same_bool(a:Bool, b:Bool) -> Bool
     contract: "A comparison of two bools: no memory, no failure.",
     lowering: "none yet",
     test: "test_rop_truth");
+
+// The branch event of an observed word: BRANCH_RIGHT where the jump is
+// taken, BRANCH_LEFT where it falls through.  The callbacks run Python,
+// may fail, and may move the frame.
+extern helper branch_event(t:Thread, f:Frame, at:Site, taken:Bool)
+  cases(ok(), moved(r:Route), err(e:Err))
+  effects(runs_python, raises)
+  c _PyRop_BranchEvent as int_redirect
+  evidence(
+    review: "Reviewed P5. bytecodes.c _INSTRUMENTED_POP_JUMP_IF_x:"
+            "IR_OBSERVE_COMMITTED_BRANCH, ceval.c ir_event_edge.",
+    contract: "The operand is retired before the call. A callback may raise,"
+              "or move the frame, whose return_pc then names the word to run.");
 
 // Adaptation (addendum section 2)
 
@@ -881,3 +900,105 @@ arm BranchNone.Test inline
     exit next();
 }
 
+
+// The observed wrappers (Observed.<Family>, the twin of every arm of the
+// family when the word's stack op is instrumented): the generic test, the
+// retirement of the operand, then the branch event, which may move the frame
+
+arm BranchTruth.Observed split
+  effects(reads, runs_python, writes, releases, raises)
+  feedback()
+  exits(next, branch, raise, redirect)
+{
+  entry():
+    let a:Anchors = anchor_for_call([value]);
+    call truth_at_origin(a) {
+      yes -> Yes();
+      no -> No();
+      err -> Failed();
+      redirected -> Gone();
+    }
+  Yes():
+    goto Test(true);
+  No():
+    goto Test(false);
+  Test(hit:Bool):
+    branch branch_taken(mode, hit) -> Taken(), Fall();
+  Taken():
+    branch branch_keeps(mode) -> Kept(), Dropped();
+  Kept():
+    publish [] retire [roots(a)] at BranchTruth.Kept;
+    call branch_event(thread, frame, site, true) {
+      ok -> KeptJump();
+      moved -> KeptMoved();
+      err -> KeptEventFailed();
+    }
+  KeptJump():
+    exit branch(target);
+  KeptMoved(kr:Route):
+    exit redirect(kr);
+  KeptEventFailed(kee:Err):
+    exit raise(BranchTruth.KeptEvent, kee);
+  Dropped():
+    publish [] retire [roots(a), spent(value)] at BranchTruth.Jumped;
+    call branch_event(thread, frame, site, true) {
+      ok -> Jump();
+      moved -> Moved();
+      err -> EventFailed();
+    }
+  Jump():
+    exit branch(target);
+  Fall():
+    publish [] retire [roots(a), spent(value)] at BranchTruth.Fell;
+    call branch_event(thread, frame, site, false) {
+      ok -> Next();
+      moved -> Moved();
+      err -> EventFailed();
+    }
+  Next():
+    exit next();
+  Moved(r:Route):
+    exit redirect(r);
+  EventFailed(ee:Err):
+    exit raise(BranchTruth.Event, ee);
+  Failed(e:Err):
+    let saved:Err = retire_failed_call(a, [value], e);
+    exit raise(BranchTruth.Failed, saved);
+  Gone(route:Route):
+    let current_route:Route = retire_abandoned(a, route);
+    exit redirect(current_route);
+}
+
+arm BranchNone.Observed split
+  effects(reads, writes, releases, raises, runs_python)
+  feedback()
+  exits(next, branch, raise, redirect)
+{
+  entry():
+    let v:B = use(value);
+    goto Test(exact_none(v));
+  Test(hit:Bool):
+    branch same_bool(sense, hit) -> Taken(), Fall();
+  Taken():
+    publish [] retire [spent(value)] at BranchNone.Jumped;
+    call branch_event(thread, frame, site, true) {
+      ok -> Jump();
+      moved -> Moved();
+      err -> EventFailed();
+    }
+  Jump():
+    exit branch(target);
+  Fall():
+    publish [] retire [spent(value)] at BranchNone.Fell;
+    call branch_event(thread, frame, site, false) {
+      ok -> Next();
+      moved -> Moved();
+      err -> EventFailed();
+    }
+  Next():
+    exit next();
+  Moved(r:Route):
+    exit redirect(r);
+  EventFailed(ee:Err):
+    exit raise(BranchNone.Event, ee);
+}

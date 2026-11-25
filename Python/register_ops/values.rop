@@ -129,11 +129,13 @@ family Jump(target:FarHead)
 // value in A, the entry in B, the mode in C and the target in D
 family BranchTruth(value:Src, fb:Fb<Truth>, mode:Enum<BranchMode>, target:NearHead)
   exits(next, branch, raise, miss, again, redirect)
-  ops(POP_JUMP_IF_TRUE, POP_JUMP_IF_FALSE, JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP);
+  ops(POP_JUMP_IF_TRUE, POP_JUMP_IF_FALSE, JUMP_IF_TRUE_OR_POP, JUMP_IF_FALSE_OR_POP)
+  events(BRANCH_LEFT, BRANCH_RIGHT);
 
 family BranchNone(value:Src, sense:Bool, target:NearHead)
-  exits(next, branch)
-  ops(POP_JUMP_IF_NONE, POP_JUMP_IF_NOT_NONE);
+  exits(next, branch, raise, redirect)
+  ops(POP_JUMP_IF_NONE, POP_JUMP_IF_NOT_NONE)
+  events(BRANCH_LEFT, BRANCH_RIGHT);
 
 // 1A: numeric and in-place operations, unary protocols
 

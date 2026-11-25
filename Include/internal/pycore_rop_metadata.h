@@ -12,11 +12,11 @@
 /* The arms' handler ids follow the old handlers, in definition order; the
  * observed wrappers of the arms of families that declare events follow them */
 #define ROP_FIRST_HANDLER IR_NUM_OLD_HANDLERS
-#define ROP_NUM_HANDLERS 51
+#define ROP_NUM_HANDLERS 62
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS <= 512,
               "the arms' handler ids fit the handler field");
 #define ROP_NUM_FAMILIES 68
-#define ROP_NUM_ARMS 43
+#define ROP_NUM_ARMS 45
 static_assert(ROP_FIRST_HANDLER + ROP_NUM_HANDLERS == IR_NUM_HANDLERS,
               "the handler count is the old handlers, the arms and their wrappers");
 
@@ -133,17 +133,28 @@ enum {
 #define ROP_HANDLER_BranchTruth_Slot (ROP_FIRST_HANDLER + 37)
 #define ROP_HANDLER_BranchTruth_Generic (ROP_FIRST_HANDLER + 38)
 #define ROP_HANDLER_BranchNone_Test (ROP_FIRST_HANDLER + 39)
-#define ROP_HANDLER_Move_Transfer (ROP_FIRST_HANDLER + 40)
-#define ROP_HANDLER_Move_Retire (ROP_FIRST_HANDLER + 41)
-#define ROP_HANDLER_Move_Copy (ROP_FIRST_HANDLER + 42)
-#define ROP_HANDLER_Call_Exact_Observed (ROP_FIRST_HANDLER + 43)
-#define ROP_HANDLER_Call_BoundExact_Observed (ROP_FIRST_HANDLER + 44)
-#define ROP_HANDLER_Call_Init_Observed (ROP_FIRST_HANDLER + 45)
-#define ROP_HANDLER_Call_Generic_Observed (ROP_FIRST_HANDLER + 46)
-#define ROP_HANDLER_Return_Ordinary_Observed (ROP_FIRST_HANDLER + 47)
-#define ROP_HANDLER_Return_Empty_Observed (ROP_FIRST_HANDLER + 48)
-#define ROP_HANDLER_Return_Generator_Observed (ROP_FIRST_HANDLER + 49)
-#define ROP_HANDLER_Return_External_Observed (ROP_FIRST_HANDLER + 50)
+#define ROP_HANDLER_BranchTruth_Observed (ROP_FIRST_HANDLER + 40)
+#define ROP_HANDLER_BranchNone_Observed (ROP_FIRST_HANDLER + 41)
+#define ROP_HANDLER_Move_Transfer (ROP_FIRST_HANDLER + 42)
+#define ROP_HANDLER_Move_Retire (ROP_FIRST_HANDLER + 43)
+#define ROP_HANDLER_Move_Copy (ROP_FIRST_HANDLER + 44)
+#define ROP_HANDLER_Call_Exact_Observed (ROP_FIRST_HANDLER + 45)
+#define ROP_HANDLER_Call_BoundExact_Observed (ROP_FIRST_HANDLER + 46)
+#define ROP_HANDLER_Call_Init_Observed (ROP_FIRST_HANDLER + 47)
+#define ROP_HANDLER_Call_Generic_Observed (ROP_FIRST_HANDLER + 48)
+#define ROP_HANDLER_Return_Ordinary_Observed (ROP_FIRST_HANDLER + 49)
+#define ROP_HANDLER_Return_Empty_Observed (ROP_FIRST_HANDLER + 50)
+#define ROP_HANDLER_Return_Generator_Observed (ROP_FIRST_HANDLER + 51)
+#define ROP_HANDLER_Return_External_Observed (ROP_FIRST_HANDLER + 52)
+#define ROP_HANDLER_BranchTruth_Bool_Observed (ROP_FIRST_HANDLER + 53)
+#define ROP_HANDLER_BranchTruth_Int_Observed (ROP_FIRST_HANDLER + 54)
+#define ROP_HANDLER_BranchTruth_List_Observed (ROP_FIRST_HANDLER + 55)
+#define ROP_HANDLER_BranchTruth_None_Observed (ROP_FIRST_HANDLER + 56)
+#define ROP_HANDLER_BranchTruth_Str_Observed (ROP_FIRST_HANDLER + 57)
+#define ROP_HANDLER_BranchTruth_Plain_Observed (ROP_FIRST_HANDLER + 58)
+#define ROP_HANDLER_BranchTruth_Slot_Observed (ROP_FIRST_HANDLER + 59)
+#define ROP_HANDLER_BranchTruth_Generic_Observed (ROP_FIRST_HANDLER + 60)
+#define ROP_HANDLER_BranchNone_Test_Observed (ROP_FIRST_HANDLER + 61)
 
 /* The arm of a statically selected family that each selection admits
  * (its `select`): ROP_SELECT_<Family>_<member>... */
@@ -159,26 +170,29 @@ enum {
 #define ROP_POINT_Add_BoxFailed 1
 #define ROP_POINT_Add_Done 2
 #define ROP_POINT_Add_OpFailed 3
-#define ROP_POINT_BranchNone_Fell 4
-#define ROP_POINT_BranchNone_Jumped 5
-#define ROP_POINT_BranchTruth_Failed 6
-#define ROP_POINT_BranchTruth_Fell 7
-#define ROP_POINT_BranchTruth_Jumped 8
-#define ROP_POINT_BranchTruth_Kept 9
-#define ROP_POINT_Call_Done 10
-#define ROP_POINT_Call_Failed 11
-#define ROP_POINT_Call_PollFailed 12
-#define ROP_POINT_Call_Returned 13
-#define ROP_POINT_GetAttr_Done 14
-#define ROP_POINT_GetAttr_Failed 15
-#define ROP_POINT_GetMethod_Done 16
-#define ROP_POINT_GetMethod_Failed 17
-#define ROP_POINT_InitResult_Done 18
-#define ROP_POINT_InitResult_Wrong 19
-#define ROP_POINT_Return_Delivered 20
-#define ROP_POINT_Return_EventFailed 21
-#define ROP_POINT_Truth_Done 22
-#define ROP_POINT_Truth_Failed 23
+#define ROP_POINT_BranchNone_Event 4
+#define ROP_POINT_BranchNone_Fell 5
+#define ROP_POINT_BranchNone_Jumped 6
+#define ROP_POINT_BranchTruth_Event 7
+#define ROP_POINT_BranchTruth_Failed 8
+#define ROP_POINT_BranchTruth_Fell 9
+#define ROP_POINT_BranchTruth_Jumped 10
+#define ROP_POINT_BranchTruth_Kept 11
+#define ROP_POINT_BranchTruth_KeptEvent 12
+#define ROP_POINT_Call_Done 13
+#define ROP_POINT_Call_Failed 14
+#define ROP_POINT_Call_PollFailed 15
+#define ROP_POINT_Call_Returned 16
+#define ROP_POINT_GetAttr_Done 17
+#define ROP_POINT_GetAttr_Failed 18
+#define ROP_POINT_GetMethod_Done 19
+#define ROP_POINT_GetMethod_Failed 20
+#define ROP_POINT_InitResult_Done 21
+#define ROP_POINT_InitResult_Wrong 22
+#define ROP_POINT_Return_Delivered 23
+#define ROP_POINT_Return_EventFailed 24
+#define ROP_POINT_Truth_Done 25
+#define ROP_POINT_Truth_Failed 26
 
 /* How a family's operands sit in its words (Program.encodings): the field
  * kind, the role of a home, the bit offset in the 64-bit-per-word image of
@@ -783,35 +797,40 @@ static const _PyRopArm _PyRop_Arms[ROP_NUM_ARMS] = {
     {"BranchTruth.Slot", ROP_HANDLER_BranchTruth_Slot, ROP_FAMILY_BranchTruth, 1},
     {"BranchTruth.Generic", ROP_HANDLER_BranchTruth_Generic, ROP_FAMILY_BranchTruth, 1},
     {"BranchNone.Test", ROP_HANDLER_BranchNone_Test, ROP_FAMILY_BranchNone, 1},
+    {"BranchTruth.Observed", ROP_HANDLER_BranchTruth_Observed, ROP_FAMILY_BranchTruth, 1},
+    {"BranchNone.Observed", ROP_HANDLER_BranchNone_Observed, ROP_FAMILY_BranchNone, 1},
     {"Move.Transfer", ROP_HANDLER_Move_Transfer, ROP_FAMILY_Move, 1},
     {"Move.Retire", ROP_HANDLER_Move_Retire, ROP_FAMILY_Move, 1},
     {"Move.Copy", ROP_HANDLER_Move_Copy, ROP_FAMILY_Move, 1},
 };
 
-static const _PyRopPoint _PyRop_Points[23] = {
+static const _PyRopPoint _PyRop_Points[26] = {
     {"Add.BoxFailed", ROP_FAMILY_Add, 1, 0, 0, 1, (1 << 1) | (1 << 2), 0, 0, 0},
     {"Add.Done", ROP_FAMILY_Add, 2, 0, 1, 0, 0, (1 << 2) | (1 << 1), (1 << 0), 0},
     {"Add.OpFailed", ROP_FAMILY_Add, 3, 0, 0, 1, 0, (1 << 2) | (1 << 1), 0, 0},
-    {"BranchNone.Fell", ROP_FAMILY_BranchNone, 4, 0, 1, 0, 0, (1 << 0), 0, 0},
-    {"BranchNone.Jumped", ROP_FAMILY_BranchNone, 5, 0, 2, 0, 0, (1 << 0), 0, 0},
-    {"BranchTruth.Failed", ROP_FAMILY_BranchTruth, 6, 0, 0, 1, 0, (1 << 0), 0, 0},
-    {"BranchTruth.Fell", ROP_FAMILY_BranchTruth, 7, 0, 1, 0, 0, (1 << 0), 0, 0},
-    {"BranchTruth.Jumped", ROP_FAMILY_BranchTruth, 8, 0, 2, 0, 0, (1 << 0), 0, 0},
-    {"BranchTruth.Kept", ROP_FAMILY_BranchTruth, 9, 0, 2, 0, (1 << 0), 0, 0, 0},
-    {"Call.Done", ROP_FAMILY_Call, 10, 0, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
-    {"Call.Failed", ROP_FAMILY_Call, 11, 0, 0, 1, 0, (1 << 1) | (1 << 2), 0, 0},
-    {"Call.PollFailed", ROP_FAMILY_Call, 12, 0, 0, 1, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
-    {"Call.Returned", ROP_FAMILY_Call, 13, 1, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
-    {"GetAttr.Done", ROP_FAMILY_GetAttr, 14, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
-    {"GetAttr.Failed", ROP_FAMILY_GetAttr, 15, 0, 0, 1, 0, (1 << 1), 0, 0},
-    {"GetMethod.Done", ROP_FAMILY_GetMethod, 16, 0, 1, 0, 0, (1 << 2), (1 << 0) | (1 << 1), 0},
-    {"GetMethod.Failed", ROP_FAMILY_GetMethod, 17, 0, 0, 1, 0, (1 << 2), 0, 0},
-    {"InitResult.Done", ROP_FAMILY_InitResult, 18, 0, 1, 0, 0, (1 << 0), 0, 0},
-    {"InitResult.Wrong", ROP_FAMILY_InitResult, 19, 0, 0, 1, (1 << 0), 0, 0, 0},
-    {"Return.Delivered", ROP_FAMILY_Return, 20, 1, 3, 0, 0, (1 << 0), 0, 0},
-    {"Return.EventFailed", ROP_FAMILY_Return, 21, 0, 0, 1, 0, (1 << 0), 0, 0},
-    {"Truth.Done", ROP_FAMILY_Truth, 22, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
-    {"Truth.Failed", ROP_FAMILY_Truth, 23, 0, 0, 1, 0, (1 << 1), 0, 0},
+    {"BranchNone.Event", ROP_FAMILY_BranchNone, 4, 0, 0, 1, 0, (1 << 0), 0, 0},
+    {"BranchNone.Fell", ROP_FAMILY_BranchNone, 5, 0, 1, 0, 0, (1 << 0), 0, 0},
+    {"BranchNone.Jumped", ROP_FAMILY_BranchNone, 6, 0, 2, 0, 0, (1 << 0), 0, 0},
+    {"BranchTruth.Event", ROP_FAMILY_BranchTruth, 7, 0, 0, 1, 0, (1 << 0), 0, 0},
+    {"BranchTruth.Failed", ROP_FAMILY_BranchTruth, 8, 0, 0, 1, 0, (1 << 0), 0, 0},
+    {"BranchTruth.Fell", ROP_FAMILY_BranchTruth, 9, 0, 1, 0, 0, (1 << 0), 0, 0},
+    {"BranchTruth.Jumped", ROP_FAMILY_BranchTruth, 10, 0, 2, 0, 0, (1 << 0), 0, 0},
+    {"BranchTruth.Kept", ROP_FAMILY_BranchTruth, 11, 0, 2, 0, (1 << 0), 0, 0, 0},
+    {"BranchTruth.KeptEvent", ROP_FAMILY_BranchTruth, 12, 0, 0, 1, (1 << 0), 0, 0, 0},
+    {"Call.Done", ROP_FAMILY_Call, 13, 0, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
+    {"Call.Failed", ROP_FAMILY_Call, 14, 0, 0, 1, 0, (1 << 1) | (1 << 2), 0, 0},
+    {"Call.PollFailed", ROP_FAMILY_Call, 15, 0, 0, 1, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
+    {"Call.Returned", ROP_FAMILY_Call, 16, 1, 1, 0, 0, (1 << 1) | (1 << 2), (1 << 0), 0},
+    {"GetAttr.Done", ROP_FAMILY_GetAttr, 17, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
+    {"GetAttr.Failed", ROP_FAMILY_GetAttr, 18, 0, 0, 1, 0, (1 << 1), 0, 0},
+    {"GetMethod.Done", ROP_FAMILY_GetMethod, 19, 0, 1, 0, 0, (1 << 2), (1 << 0) | (1 << 1), 0},
+    {"GetMethod.Failed", ROP_FAMILY_GetMethod, 20, 0, 0, 1, 0, (1 << 2), 0, 0},
+    {"InitResult.Done", ROP_FAMILY_InitResult, 21, 0, 1, 0, 0, (1 << 0), 0, 0},
+    {"InitResult.Wrong", ROP_FAMILY_InitResult, 22, 0, 0, 1, (1 << 0), 0, 0, 0},
+    {"Return.Delivered", ROP_FAMILY_Return, 23, 1, 3, 0, 0, (1 << 0), 0, 0},
+    {"Return.EventFailed", ROP_FAMILY_Return, 24, 0, 0, 1, 0, (1 << 0), 0, 0},
+    {"Truth.Done", ROP_FAMILY_Truth, 25, 0, 1, 0, 0, (1 << 1), (1 << 0), 0},
+    {"Truth.Failed", ROP_FAMILY_Truth, 26, 0, 0, 1, 0, (1 << 1), 0, 0},
 };
 
 /* Static selection (rop_catalog.Select): the members of each dimension */

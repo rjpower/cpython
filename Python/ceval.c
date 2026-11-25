@@ -2287,6 +2287,34 @@ static PyValue _PyRop_CallNativeObserved(PyThreadState *tstate,
                                          _PyInstr *site, PyValue *fn,
                                          const _PyIRWord *head);
 
+/* The row of BranchTruth.Observed and BranchNone.Observed: the event of the
+ * edge the word took, as ir_event_edge() fires it.  A callback that moves
+ * the frame leaves the word to run in frame->return_pc, where the
+ * redirect exit goes on. */
+static Py_NO_INLINE int
+_PyRop_BranchEvent(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                   _PyInstr *site, bool taken)
+{
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(*site));
+    _PyInstr *dest = taken ? site + 1 + _PyIR_FormatDistance(fmt, *site)
+                           : site + _PyIR_WordLength(*site);
+    frame->return_pc = dest;
+    _PyIRObserverResult result = _PyIR_ObserveCommittedBranch(
+        tstate, frame, site, site, dest,
+        taken ? PY_MONITORING_EVENT_BRANCH_RIGHT : PY_MONITORING_EVENT_BRANCH_LEFT,
+        taken ? _PyIR_EDGE_TAKEN : _PyIR_EDGE_FALLTHROUGH);
+    PyObject *exception = result.status < 0 ? PyErr_GetRaisedException() : NULL;
+    frame->instr_ptr = result.next;
+    if (result.status < 0) {
+        PyErr_SetRaisedException(exception);
+        return -1;
+    }
+    if (result.status > 0) {
+        frame->return_pc = result.next;
+    }
+    return result.status;
+}
+
 /* The rows of Return.Observed */
 
 static Py_NO_INLINE PyValue

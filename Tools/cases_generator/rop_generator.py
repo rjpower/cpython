@@ -346,6 +346,7 @@ def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
         elif role == "_PyIR_ROLE_IMM" and imm == "_PyIR_LOC_NONE":
             both = [s.name for s in pl.slots]
             imm = "_PyIR_LOC_CD" if both == ["C", "D"] else LOC_NAMES.get(first, imm)
+    branch_events = bool({"BRANCH_LEFT", "BRANCH_RIGHT"} & {e.value for e in fam.events})
     exits = set(arm.contract.exits)
     effects = {"_PyIR_RAISES"} if "raise" in exits else set()
     for e in arm.contract.effect_set:
@@ -372,7 +373,8 @@ def arm_format(program: Program, arm: Arm) -> ir_numbers.ArmFormat:
         imm, fb, ninputs, -ninputs if writes else None, (1 << ninputs) - 1,
         fb_schema, ("_PyIR_OPERANDS_CALL" if has_args else
                     "_PyIR_OPERANDS_SPANS" if has_span else "_PyIR_OPERANDS_NONE"),
-        0 if has_args else enc.words, writes, target)
+        0 if has_args else enc.words, writes, target,
+        "_PyIR_OBSERVER_FORMAT_VALUE" if branch_events else "_PyIR_OBSERVER_NONE")
 
 
 def observer(program: Program, family: str) -> str | None:

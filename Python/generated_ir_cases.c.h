@@ -691,12 +691,14 @@ static _PyIRTransfer ir_run_BUILD_SLICE(PyThreadState *tstate, _PyInterpreterFra
 static _PyIRTransfer ir_run_BUILD_STRING(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BUILD_TEMPLATE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BUILD_TUPLE(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_BranchNone_Observed(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BranchNone_Test(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BranchTruth_Bool(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BranchTruth_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BranchTruth_Int(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BranchTruth_List(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BranchTruth_None(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_BranchTruth_Observed(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BranchTruth_Plain(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BranchTruth_Slot(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_BranchTruth_Str(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -17819,28 +17821,28 @@ static const _PyIRForm ir_handler_forms[512] = {
     [456] = ir_run_BranchTruth_Slot,
     [457] = ir_run_BranchTruth_Generic,
     [458] = ir_run_BranchNone_Test,
-    [459] = ir_run_Move_Transfer,
-    [460] = ir_run_Move_Retire,
-    [461] = ir_run_Move_Copy,
-    [462] = ir_run_Call_Observed,
-    [463] = ir_run_Call_Observed,
+    [459] = ir_run_BranchTruth_Observed,
+    [460] = ir_run_BranchNone_Observed,
+    [461] = ir_run_Move_Transfer,
+    [462] = ir_run_Move_Retire,
+    [463] = ir_run_Move_Copy,
     [464] = ir_run_Call_Observed,
     [465] = ir_run_Call_Observed,
-    [466] = ir_run_Return_Observed,
-    [467] = ir_run_Return_Observed,
+    [466] = ir_run_Call_Observed,
+    [467] = ir_run_Call_Observed,
     [468] = ir_run_Return_Observed,
     [469] = ir_run_Return_Observed,
-    [470] = ir_run_UNKNOWN_OPCODE,
-    [471] = ir_run_UNKNOWN_OPCODE,
-    [472] = ir_run_UNKNOWN_OPCODE,
-    [473] = ir_run_UNKNOWN_OPCODE,
-    [474] = ir_run_UNKNOWN_OPCODE,
-    [475] = ir_run_UNKNOWN_OPCODE,
-    [476] = ir_run_UNKNOWN_OPCODE,
-    [477] = ir_run_UNKNOWN_OPCODE,
-    [478] = ir_run_UNKNOWN_OPCODE,
-    [479] = ir_run_UNKNOWN_OPCODE,
-    [480] = ir_run_UNKNOWN_OPCODE,
+    [470] = ir_run_Return_Observed,
+    [471] = ir_run_Return_Observed,
+    [472] = ir_run_BranchTruth_Observed,
+    [473] = ir_run_BranchTruth_Observed,
+    [474] = ir_run_BranchTruth_Observed,
+    [475] = ir_run_BranchTruth_Observed,
+    [476] = ir_run_BranchTruth_Observed,
+    [477] = ir_run_BranchTruth_Observed,
+    [478] = ir_run_BranchTruth_Observed,
+    [479] = ir_run_BranchTruth_Observed,
+    [480] = ir_run_BranchNone_Observed,
     [481] = ir_run_UNKNOWN_OPCODE,
     [482] = ir_run_UNKNOWN_OPCODE,
     [483] = ir_run_UNKNOWN_OPCODE,

@@ -390,7 +390,7 @@ _PyIR_Rop_Stub_Truth_Generic(
     rop_Truth_Generic_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
-    PROCESS_ERROR_AT(RAISE, 23, this_instr);
+    PROCESS_ERROR_AT(RAISE, 26, this_instr);
     rop_Truth_Generic_truth_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         truth_at_origin1_hit = false;
@@ -599,7 +599,7 @@ _PyIR_Rop_Stub_BranchTruth_Generic(
     rop_BranchTruth_Generic_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}});
-    PROCESS_ERROR_AT(RAISE, 6, this_instr);
+    PROCESS_ERROR_AT(RAISE, 8, this_instr);
     rop_BranchTruth_Generic_truth_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         truth_at_origin1_hit = false;
@@ -878,7 +878,7 @@ _PyIR_Rop_Stub_Truth_Slot(
     rop_Truth_Slot_slot_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
-    PROCESS_ERROR_AT(RAISE, 23, this_instr);
+    PROCESS_ERROR_AT(RAISE, 26, this_instr);
     rop_Truth_Slot_slot_truth_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         slot_truth_at_origin1_hit = false;
@@ -962,7 +962,7 @@ _PyIR_Rop_Stub_BranchTruth_Slot(
     rop_BranchTruth_Slot_slot_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_A)}, {home_value}});
-    PROCESS_ERROR_AT(RAISE, 6, this_instr);
+    PROCESS_ERROR_AT(RAISE, 8, this_instr);
     rop_BranchTruth_Slot_slot_truth_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         slot_truth_at_origin1_hit = false;

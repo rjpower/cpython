@@ -275,7 +275,7 @@ def arm_row(analysis: Analysis, arm: ir_numbers.ArmEntry) -> str:
         f".transfer_kind = _PyIR_TRANSFER_UNKNOWN, .owner_program = 0, "
         f".owner_events = 0, .word_flags = 0, .error_routes = 0, "
         f".operands = {fmt.operands}, {fixed}"
-        f".observer_outcome = {{ _PyIR_OBSERVER_NONE, _PyIR_OBSERVER_NONE }}, "
+        f".observer_outcome = {{ {fmt.observer}, {fmt.observer} }}, "
         f".reads = {{ {fmt.ninputs}, _PyIR_EXT_FIXED }}, "
         f".writes = {{ {fmt.writes}, _PyIR_EXT_FIXED }}, "
         f".through = {{ 0, _PyIR_EXT_FIXED }}, .shadow = {shadow}, "

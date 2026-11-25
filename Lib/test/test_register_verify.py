@@ -1196,6 +1196,7 @@ class PilotTests(unittest.TestCase):
         raise_ = at("add.rop", "exit raise(Add.OpFailed, saved);", 5, last=True)
         retire = at("add.rop", "let saved:Err = retire_failed_call(", last=True)
         raise_ext = at("add.rop", "exit raise(Add.OpFailed, saved);", 5)
+        cell_map = at("cells.rop", "exit raise(CellMapRead.Failed, saved);", 5)
         dup = at("getattr.rop", "let result:O = dup(unwrap(item));")
         guard = at("getattr.rop", "guard present(item) else miss;")
         # The GetSet arm raises first; Generic's is the second
@@ -1269,6 +1270,8 @@ class PilotTests(unittest.TestCase):
               "AttrWrite.DeleteFailed lists obj in spent, but obj is intact",
               f"{special}: SpecialLookup.Generic: points: raise at SpecialLookup.Failed: "
               "SpecialLookup.Failed lists obj in spent, but obj is intact",
+              f"{cell_map}: CellMapRead.Lookup: points: raise at CellMapRead.Failed: "
+              "CellMapRead.Failed lists mapping in spent, but mapping is intact",
               f"{raise_getset}: GetAttr.GetSet: points: raise at GetAttr.Failed: "
               "GetAttr.Failed lists obj in spent, but obj is intact",
               f"{raise_attr}: GetAttr.Generic: points: raise at GetAttr.Failed: "

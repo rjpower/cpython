@@ -713,6 +713,11 @@ static _PyIRTransfer ir_run_Call_Exact(PyThreadState *tstate, _PyInterpreterFram
 static _PyIRTransfer ir_run_Call_Generic(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Call_Init(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Call_Observed(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_CellDelete_Unbind(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_CellMake_Wrap(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_CellMapRead_Lookup(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_CellRead_Get(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
+static _PyIRTransfer ir_run_CellStore_Set(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Const_Common(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Const_Pool(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
 static _PyIRTransfer ir_run_Const_Small(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word);
@@ -4580,14 +4585,9 @@ ir_run_COPY_FREE_VARS(
             INSTRUCTION_STATS(COPY_FREE_VARS);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
-            PyCodeObject *co = _PyFrame_GetCode(frame);
-            PyFunctionObject *func = _PyFrame_GetFunction(frame);
-            PyObject *closure = func->func_closure;
-            assert(oparg == co->co_nfreevars);
-            int offset = co->co_nlocalsplus - oparg;
-            for (int i = 0; i < oparg; ++i) {
-                frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
-            }
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
             DISPATCH();
         }
 
@@ -4610,11 +4610,9 @@ ir_run_DELETE_DEREF(
             assert(!PyValue_IsNull(cell_v) && (PyValue_TYPE(cell_v) == &PyCell_Type));
             PyObject *cell = PyValue_AsKnownObjectBorrow(cell_v);
             PyValue old = _PyCell_SwapValue((PyCellObject *)cell, PyValue_NULL);
-            if (PyValue_IsNull(old)) {
-                _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            PyValue_CLOSE(old);
+            PyValue_XCLOSE(old);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
             DISPATCH();
         }
 
@@ -6289,11 +6287,9 @@ ir_run_LOAD_DEREF(
             assert(!PyValue_IsNull(cell_v) && (PyValue_TYPE(cell_v) == &PyCell_Type));
             PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
             value = _PyCell_GetValue(cell);
-            if (PyValue_IsNull(value)) {
-                _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
-                PyValue_XCLOSE(value);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
+            PyValue_XCLOSE(value);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
@@ -6322,37 +6318,17 @@ ir_run_LOAD_FROM_DICT_OR_DEREF(
             (void)ir_own_B;
             class_dict_st = IR_VIEW(IR_B(ir_word));
             assert(PyValue_IsObject(class_dict_st));
-            PyObject *name;
-            assert(PyValue_IsObject(class_dict_st));
-            PyObject *class_dict = _PyValue_AsKnownObjectBorrowPointer(class_dict_st);
             ir_own_B = IR_DETACH(ir_word, B, class_dict_st);
-            PyValue held_class_dict = IR_TAKEN_POINTER(class_dict_st, ir_own_B);
-            assert(class_dict);
-            assert(oparg >= 0 && oparg < _PyFrame_GetCode(frame)->co_nlocalsplus);
-            name = _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
-            _PyStatusValue found = value_load_from_dict(tstate, class_dict, name);
-            if (found.status < 0) {
-                PyValue_CLOSE(held_class_dict);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
-            PyValue selected;
-            if (found.status == 0) {
-                PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
-                assert(!PyValue_IsNull(cell_v) && (PyValue_TYPE(cell_v) == &PyCell_Type));
-                PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
-                selected = _PyCell_GetValue(cell);
-                if (PyValue_IsNull(selected)) {
-                    _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
-                    PyValue_CLOSE(held_class_dict);
-                    PROCESS_ERROR_AT(RAISE, 0, this_instr);
-                }
-            }
-            else {
-                selected = found.value;
-            }
-            PyValue_CLOSE(held_class_dict);
-            value = selected;
+            (void)(ir_own_B);
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            assert(!PyValue_IsNull(cell_v) && (PyValue_TYPE(cell_v) == &PyCell_Type));
+            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
+            value = _PyCell_GetValue(cell);
+            PyValue_XCLOSE(value);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
             IR_STORE_DST(ir_word, A, value);
+            _PyValue_XCLOSE_POINTER(ir_own_B);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
@@ -6373,12 +6349,11 @@ ir_run_MAKE_CELL(
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
             PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
-            if (cell == NULL) {
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
             PyValue tmp = GETLOCAL(oparg);
             GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
             PyValue_XCLOSE(tmp);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
             DISPATCH();
         }
 
@@ -7658,6 +7633,8 @@ ir_run_STORE_DEREF(
             PyValue owned = v;
             _PyFrame_WriteHome(frame, &IR_SLOT(IR_A(ir_word)), PyValue_NULL);
             _PyCell_SetValue(cell, owned);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
             DISPATCH();
         }
 
@@ -8598,133 +8575,133 @@ static const _PyIRForm ir_handler_forms[512] = {
     [284] = ir_run_Return_Generator,
     [285] = ir_run_Return_Observed,
     [286] = ir_run_Return_External,
-    [287] = ir_run_Build_Tuple,
-    [288] = ir_run_Build_List,
-    [289] = ir_run_Build_Set,
-    [290] = ir_run_Build_Map,
-    [291] = ir_run_AddElement_Append,
-    [292] = ir_run_AddElement_Add,
-    [293] = ir_run_AddEntry_Put,
-    [294] = ir_run_UpdateContainer_Extend,
-    [295] = ir_run_UpdateContainer_Union,
-    [296] = ir_run_UpdateContainer_Overlay,
-    [297] = ir_run_MergeKeywords_Merge,
-    [298] = ir_run_Function_Make,
-    [299] = ir_run_Intrinsic_Unary,
-    [300] = ir_run_Intrinsic_ImportStar,
-    [301] = ir_run_Intrinsic_StopIteration,
-    [302] = ir_run_IntrinsicPair_Binary,
-    [303] = ir_run_IntrinsicPair_Compare,
-    [304] = ir_run_IntrinsicPair_Attr,
-    [305] = ir_run_GetAttr_Instance,
-    [306] = ir_run_GetAttr_GetSet,
-    [307] = ir_run_GetAttr_Generic,
-    [308] = ir_run_GetAttr_Shape,
-    [309] = ir_run_GetAttr_PolyShape,
-    [310] = ir_run_GetAttr_Module,
-    [311] = ir_run_GetAttr_Hint,
-    [312] = ir_run_GetAttr_ValueSlot,
-    [313] = ir_run_GetAttr_PointerSlot,
-    [314] = ir_run_GetAttr_Class,
-    [315] = ir_run_GetAttr_NonDescriptorValues,
-    [316] = ir_run_GetAttr_NonDescriptorNoDict,
-    [317] = ir_run_GetMethod_MethodValues,
-    [318] = ir_run_GetMethod_Generic,
-    [319] = ir_run_GetMethod_PolyMethod,
-    [320] = ir_run_GetMethod_NoDict,
-    [321] = ir_run_GetMethod_LazyDict,
-    [322] = ir_run_GetMethod_ClassMethod,
-    [323] = ir_run_GetItem_Generic,
-    [324] = ir_run_SetItem_Generic,
-    [325] = ir_run_DelItem_Generic,
-    [326] = ir_run_SliceRead_Generic,
-    [327] = ir_run_SliceWrite_Generic,
-    [328] = ir_run_BuildSlice_Generic,
-    [329] = ir_run_GetItem_ListIndex,
-    [330] = ir_run_GetItem_TupleIndex,
-    [331] = ir_run_GetItem_Ascii,
-    [332] = ir_run_GetItem_UnicodeAsciiChar,
-    [333] = ir_run_GetItem_ListSlice,
-    [334] = ir_run_GetItem_Dict,
-    [335] = ir_run_SetItem_ListIndex,
-    [336] = ir_run_SetItem_Dict,
-    [337] = ir_run_GlobalRead_Generic,
-    [338] = ir_run_GlobalRead_Module,
-    [339] = ir_run_GlobalRead_Builtin,
-    [340] = ir_run_NamespaceRead_Name,
-    [341] = ir_run_NamespaceRead_Locals,
-    [342] = ir_run_NamespaceRead_BuildClass,
-    [343] = ir_run_NamespaceReadFrom_Mapping,
-    [344] = ir_run_NamespaceWrite_Name,
-    [345] = ir_run_NamespaceWrite_Global,
-    [346] = ir_run_SetupAnnotations_Setup,
-    [347] = ir_run_Import_Eager,
-    [348] = ir_run_Import_Policy,
-    [349] = ir_run_Import_Lazy,
-    [350] = ir_run_ImportFrom_From,
-    [351] = ir_run_ImportFrom_FromLast,
-    [352] = ir_run_Truth_Bool,
-    [353] = ir_run_Truth_Int,
-    [354] = ir_run_Truth_List,
-    [355] = ir_run_Truth_None,
-    [356] = ir_run_Truth_Str,
-    [357] = ir_run_Truth_Plain,
-    [358] = ir_run_Truth_Slot,
-    [359] = ir_run_Truth_Generic,
-    [360] = ir_run_BranchTruth_Bool,
-    [361] = ir_run_BranchTruth_Int,
-    [362] = ir_run_BranchTruth_List,
-    [363] = ir_run_BranchTruth_None,
-    [364] = ir_run_BranchTruth_Str,
-    [365] = ir_run_BranchTruth_Plain,
-    [366] = ir_run_BranchTruth_Slot,
-    [367] = ir_run_BranchTruth_Generic,
-    [368] = ir_run_BranchNone_Test,
-    [369] = ir_run_BranchTruth_Observed,
-    [370] = ir_run_BranchNone_Observed,
-    [371] = ir_run_Jump_Direct,
-    [372] = ir_run_Jump_Poll,
-    [373] = ir_run_Jump_Warm,
-    [374] = ir_run_Jump_Observed,
-    [375] = ir_run_Const_Pool,
-    [376] = ir_run_Const_Small,
-    [377] = ir_run_Const_Common,
-    [378] = ir_run_LocalRead_Bound,
-    [379] = ir_run_LocalRead_Checked,
-    [380] = ir_run_LocalWrite_Store,
-    [381] = ir_run_LocalWrite_Restore,
-    [382] = ir_run_SaveLocal_Take,
-    [383] = ir_run_LocalDelete_Checked,
-    [384] = ir_run_Move_Transfer,
-    [385] = ir_run_Move_Retire,
-    [386] = ir_run_Move_Copy,
-    [387] = ir_run_SuperAttr_Observed,
-    [388] = ir_run_SuperAttrExplicit_Observed,
-    [389] = ir_run_Call_Observed,
-    [390] = ir_run_Call_Observed,
-    [391] = ir_run_Call_Observed,
-    [392] = ir_run_Call_Observed,
-    [393] = ir_run_Return_Observed,
-    [394] = ir_run_Return_Observed,
-    [395] = ir_run_Return_Observed,
-    [396] = ir_run_Return_Observed,
-    [397] = ir_run_BranchTruth_Observed,
-    [398] = ir_run_BranchTruth_Observed,
-    [399] = ir_run_BranchTruth_Observed,
-    [400] = ir_run_BranchTruth_Observed,
-    [401] = ir_run_BranchTruth_Observed,
+    [287] = ir_run_CellMake_Wrap,
+    [288] = ir_run_CellRead_Get,
+    [289] = ir_run_CellMapRead_Lookup,
+    [290] = ir_run_CellStore_Set,
+    [291] = ir_run_CellDelete_Unbind,
+    [292] = ir_run_Build_Tuple,
+    [293] = ir_run_Build_List,
+    [294] = ir_run_Build_Set,
+    [295] = ir_run_Build_Map,
+    [296] = ir_run_AddElement_Append,
+    [297] = ir_run_AddElement_Add,
+    [298] = ir_run_AddEntry_Put,
+    [299] = ir_run_UpdateContainer_Extend,
+    [300] = ir_run_UpdateContainer_Union,
+    [301] = ir_run_UpdateContainer_Overlay,
+    [302] = ir_run_MergeKeywords_Merge,
+    [303] = ir_run_Function_Make,
+    [304] = ir_run_Intrinsic_Unary,
+    [305] = ir_run_Intrinsic_ImportStar,
+    [306] = ir_run_Intrinsic_StopIteration,
+    [307] = ir_run_IntrinsicPair_Binary,
+    [308] = ir_run_IntrinsicPair_Compare,
+    [309] = ir_run_IntrinsicPair_Attr,
+    [310] = ir_run_GetAttr_Instance,
+    [311] = ir_run_GetAttr_GetSet,
+    [312] = ir_run_GetAttr_Generic,
+    [313] = ir_run_GetAttr_Shape,
+    [314] = ir_run_GetAttr_PolyShape,
+    [315] = ir_run_GetAttr_Module,
+    [316] = ir_run_GetAttr_Hint,
+    [317] = ir_run_GetAttr_ValueSlot,
+    [318] = ir_run_GetAttr_PointerSlot,
+    [319] = ir_run_GetAttr_Class,
+    [320] = ir_run_GetAttr_NonDescriptorValues,
+    [321] = ir_run_GetAttr_NonDescriptorNoDict,
+    [322] = ir_run_GetMethod_MethodValues,
+    [323] = ir_run_GetMethod_Generic,
+    [324] = ir_run_GetMethod_PolyMethod,
+    [325] = ir_run_GetMethod_NoDict,
+    [326] = ir_run_GetMethod_LazyDict,
+    [327] = ir_run_GetMethod_ClassMethod,
+    [328] = ir_run_GetItem_Generic,
+    [329] = ir_run_SetItem_Generic,
+    [330] = ir_run_DelItem_Generic,
+    [331] = ir_run_SliceRead_Generic,
+    [332] = ir_run_SliceWrite_Generic,
+    [333] = ir_run_BuildSlice_Generic,
+    [334] = ir_run_GetItem_ListIndex,
+    [335] = ir_run_GetItem_TupleIndex,
+    [336] = ir_run_GetItem_Ascii,
+    [337] = ir_run_GetItem_UnicodeAsciiChar,
+    [338] = ir_run_GetItem_ListSlice,
+    [339] = ir_run_GetItem_Dict,
+    [340] = ir_run_SetItem_ListIndex,
+    [341] = ir_run_SetItem_Dict,
+    [342] = ir_run_GlobalRead_Generic,
+    [343] = ir_run_GlobalRead_Module,
+    [344] = ir_run_GlobalRead_Builtin,
+    [345] = ir_run_NamespaceRead_Name,
+    [346] = ir_run_NamespaceRead_Locals,
+    [347] = ir_run_NamespaceRead_BuildClass,
+    [348] = ir_run_NamespaceReadFrom_Mapping,
+    [349] = ir_run_NamespaceWrite_Name,
+    [350] = ir_run_NamespaceWrite_Global,
+    [351] = ir_run_SetupAnnotations_Setup,
+    [352] = ir_run_Import_Eager,
+    [353] = ir_run_Import_Policy,
+    [354] = ir_run_Import_Lazy,
+    [355] = ir_run_ImportFrom_From,
+    [356] = ir_run_ImportFrom_FromLast,
+    [357] = ir_run_Truth_Bool,
+    [358] = ir_run_Truth_Int,
+    [359] = ir_run_Truth_List,
+    [360] = ir_run_Truth_None,
+    [361] = ir_run_Truth_Str,
+    [362] = ir_run_Truth_Plain,
+    [363] = ir_run_Truth_Slot,
+    [364] = ir_run_Truth_Generic,
+    [365] = ir_run_BranchTruth_Bool,
+    [366] = ir_run_BranchTruth_Int,
+    [367] = ir_run_BranchTruth_List,
+    [368] = ir_run_BranchTruth_None,
+    [369] = ir_run_BranchTruth_Str,
+    [370] = ir_run_BranchTruth_Plain,
+    [371] = ir_run_BranchTruth_Slot,
+    [372] = ir_run_BranchTruth_Generic,
+    [373] = ir_run_BranchNone_Test,
+    [374] = ir_run_BranchTruth_Observed,
+    [375] = ir_run_BranchNone_Observed,
+    [376] = ir_run_Jump_Direct,
+    [377] = ir_run_Jump_Poll,
+    [378] = ir_run_Jump_Warm,
+    [379] = ir_run_Jump_Observed,
+    [380] = ir_run_Const_Pool,
+    [381] = ir_run_Const_Small,
+    [382] = ir_run_Const_Common,
+    [383] = ir_run_LocalRead_Bound,
+    [384] = ir_run_LocalRead_Checked,
+    [385] = ir_run_LocalWrite_Store,
+    [386] = ir_run_LocalWrite_Restore,
+    [387] = ir_run_SaveLocal_Take,
+    [388] = ir_run_LocalDelete_Checked,
+    [389] = ir_run_Move_Transfer,
+    [390] = ir_run_Move_Retire,
+    [391] = ir_run_Move_Copy,
+    [392] = ir_run_SuperAttr_Observed,
+    [393] = ir_run_SuperAttrExplicit_Observed,
+    [394] = ir_run_Call_Observed,
+    [395] = ir_run_Call_Observed,
+    [396] = ir_run_Call_Observed,
+    [397] = ir_run_Call_Observed,
+    [398] = ir_run_Return_Observed,
+    [399] = ir_run_Return_Observed,
+    [400] = ir_run_Return_Observed,
+    [401] = ir_run_Return_Observed,
     [402] = ir_run_BranchTruth_Observed,
     [403] = ir_run_BranchTruth_Observed,
     [404] = ir_run_BranchTruth_Observed,
-    [405] = ir_run_BranchNone_Observed,
-    [406] = ir_run_Jump_Observed,
-    [407] = ir_run_Jump_Observed,
-    [408] = ir_run_Jump_Observed,
-    [409] = ir_run_UNKNOWN_OPCODE,
-    [410] = ir_run_UNKNOWN_OPCODE,
-    [411] = ir_run_UNKNOWN_OPCODE,
-    [412] = ir_run_UNKNOWN_OPCODE,
-    [413] = ir_run_UNKNOWN_OPCODE,
+    [405] = ir_run_BranchTruth_Observed,
+    [406] = ir_run_BranchTruth_Observed,
+    [407] = ir_run_BranchTruth_Observed,
+    [408] = ir_run_BranchTruth_Observed,
+    [409] = ir_run_BranchTruth_Observed,
+    [410] = ir_run_BranchNone_Observed,
+    [411] = ir_run_Jump_Observed,
+    [412] = ir_run_Jump_Observed,
+    [413] = ir_run_Jump_Observed,
     [414] = ir_run_UNKNOWN_OPCODE,
     [415] = ir_run_UNKNOWN_OPCODE,
     [416] = ir_run_UNKNOWN_OPCODE,
@@ -11591,11 +11568,43 @@ static const _PyIRForm ir_handler_forms[512] = {
         TARGET(CONVERT_VALUE) {
             IR_RUN_OUTLINED(ir_run_CONVERT_VALUE);
         }
+
         TARGET(COPY_FREE_VARS) {
-            IR_RUN_OUTLINED(ir_run_COPY_FREE_VARS);
+            int opcode = COPY_FREE_VARS;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(COPY_FREE_VARS);
+            int oparg = (int)IR_A(ir_word);
+            (void)oparg;
+            (void)oparg;
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+            DISPATCH();
         }
+
         TARGET(DELETE_DEREF) {
-            IR_RUN_OUTLINED(ir_run_DELETE_DEREF);
+            int opcode = DELETE_DEREF;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(DELETE_DEREF);
+            int oparg = (int)IR_A(ir_word);
+            (void)oparg;
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            assert(!PyValue_IsNull(cell_v) && (PyValue_TYPE(cell_v) == &PyCell_Type));
+            PyObject *cell = PyValue_AsKnownObjectBorrow(cell_v);
+            PyValue old = _PyCell_SwapValue((PyCellObject *)cell, PyValue_NULL);
+            PyValue_XCLOSE(old);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+            DISPATCH();
         }
         TARGET(END_ASYNC_FOR) {
             IR_RUN_OUTLINED(ir_run_END_ASYNC_FOR);
@@ -12822,20 +12831,66 @@ static const _PyIRForm ir_handler_forms[512] = {
             assert(!PyValue_IsNull(cell_v) && (PyValue_TYPE(cell_v) == &PyCell_Type));
             PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
             value = _PyCell_GetValue(cell);
-            if (PyValue_IsNull(value)) {
-                _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
-                PyValue_XCLOSE(value);
-                PROCESS_ERROR_AT(RAISE, 0, this_instr);
-            }
+            PyValue_XCLOSE(value);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
             IR_STORE_DST(ir_word, A, value);
             PyValue_XCLOSE(ir_old);
             DISPATCH();
         }
+
         TARGET(LOAD_FROM_DICT_OR_DEREF) {
-            IR_RUN_OUTLINED(ir_run_LOAD_FROM_DICT_OR_DEREF);
+            int opcode = LOAD_FROM_DICT_OR_DEREF;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(LOAD_FROM_DICT_OR_DEREF);
+            PyValue ir_old = PyValue_NULL;
+            (void)ir_old;
+            int oparg = (int)IR_C(ir_word);
+            (void)oparg;
+            PyValueBorrow class_dict_st;
+            PyValue value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            class_dict_st = IR_VIEW(IR_B(ir_word));
+            assert(PyValue_IsObject(class_dict_st));
+            ir_own_B = IR_DETACH(ir_word, B, class_dict_st);
+            (void)(ir_own_B);
+            PyValueBorrow cell_v = _PyValue_CellLocal(GETLOCAL(oparg));
+            assert(!PyValue_IsNull(cell_v) && (PyValue_TYPE(cell_v) == &PyCell_Type));
+            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(cell_v);
+            value = _PyCell_GetValue(cell);
+            PyValue_XCLOSE(value);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+            IR_STORE_DST(ir_word, A, value);
+            _PyValue_XCLOSE_POINTER(ir_own_B);
+            PyValue_XCLOSE(ir_old);
+            DISPATCH();
         }
+
         TARGET(MAKE_CELL) {
-            IR_RUN_OUTLINED(ir_run_MAKE_CELL);
+            int opcode = MAKE_CELL;
+            (void)(opcode);
+            _PyIRWord* const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(MAKE_CELL);
+            int oparg = (int)IR_A(ir_word);
+            (void)oparg;
+            PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
+            PyValue tmp = GETLOCAL(oparg);
+            GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
+            PyValue_XCLOSE(tmp);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
+            DISPATCH();
         }
         TARGET(MATCH_CLASS) {
             IR_RUN_OUTLINED(ir_run_MATCH_CLASS);
@@ -13613,6 +13668,8 @@ static const _PyIRForm ir_handler_forms[512] = {
             PyValue owned = v;
             _PyFrame_WriteHome(frame, &IR_SLOT(IR_A(ir_word)), PyValue_NULL);
             _PyCell_SetValue(cell, owned);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
             DISPATCH();
         }
 

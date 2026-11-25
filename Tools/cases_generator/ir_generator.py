@@ -870,7 +870,7 @@ OBJECT_READERS = {
     "PyUnicode_Concat",
 
     "value_exception_group_match",
-    "value_load_from_dict", "_PySet_Contains", "_PyTemplate_Build",
+    "_PySet_Contains", "_PyTemplate_Build",
     "_PyUnicode_Equal",
     # The indirect calls of BINARY_OP_EXTEND, through a table of functions
     # that read their operands
@@ -8496,28 +8496,6 @@ def normal_transfer_kind(inst: Instruction, fmt: IRFormat) -> str:
                        for part, body in zip(parts, (instrument, periodic, event)))):
             return unknown
         return "_PyIR_TRANSFER_PRESERVE"
-
-    if inst.name == "MAKE_CELL" and scalar_shape(0, 0):
-        body = """{
-            PyObject *cell = PyCell_NewValue(GETLOCAL(oparg));
-            if (cell == NULL) { ERROR_NO_POP(); }
-            PyValue tmp = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
-            PyValue_XCLOSE(tmp);
-        }"""
-        return "_PyIR_TRANSFER_PRESERVE" if bodies_match(body) else unknown
-    if inst.name == "COPY_FREE_VARS" and scalar_shape(0, 0):
-        body = """{
-            PyCodeObject *co = _PyFrame_GetCode(frame);
-            PyFunctionObject *func = _PyFrame_GetFunction(frame);
-            PyObject *closure = func->func_closure;
-            assert(oparg == co->co_nfreevars);
-            int offset = co->co_nlocalsplus - oparg;
-            for (int i = 0; i < oparg; ++i) {
-                frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
-            }
-        }"""
-        return "_PyIR_TRANSFER_PRESERVE" if bodies_match(body) else unknown
 
     scalar = {
         "LOAD_COMMON_CONSTANT": ("{ assert(oparg < NUM_COMMON_CONSTANTS); PyValueBorrow constant = "

@@ -14,8 +14,10 @@ path of the expansion must agree with C:
 The path must also balance its own owners.  For C, each input object's count
 must change by exactly the number of homes that hold it afterwards."""
 
+import builtins
 import functools
 import sys
+import types
 import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -266,6 +268,70 @@ def materialised():
     return o
 
 
+class Shadowed:
+    "A class attribute that the store shadows: kept apart from ClassAttr, whose\n    GetAttr arm a shadowing instance would refuse"
+    x = 5
+
+
+class RaisesSetAttr:
+    def __setattr__(self, name, value):
+        raise ZeroDivisionError("setattr")
+
+
+class SA:
+    x = 5
+
+    def m(self):
+        return 1
+
+
+class SB(SA):
+    def attr(self):
+        return super().x
+
+    def method(self):
+        return super().m()
+
+    def explicit(self):
+        return super(SB, self).x
+
+    def explicit_method(self):
+        return super(SB, self).m()
+
+
+# A module that names `super` makes the compiler keep `super()` calls; the
+# builtin is found by attribute so that SB's methods use LOAD_SUPER_ATTR
+SUPER = getattr(builtins, "super")
+
+
+def fake_super(*args):
+    return SA()
+
+
+class Manager:
+    def __enter__(self):
+        return 1
+
+    def __exit__(self, *exc):
+        return False
+
+
+class AsyncManager:
+    async def __aenter__(self):
+        return 1
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+def method_of(name):
+    "A source that makes a function of SB's method, with a code object of its own"
+    return ("import types\nfrom test.test_rop_ssa import SB\n"
+            f"fn = SB.__dict__[{name!r}]\n"
+            "f = types.FunctionType(fn.__code__.replace(), globals(), None, None, "
+            "fn.__closure__)\n")
+
+
 TRUTHS = [True, False, 0, 1, -1, 2**50, 2**60, 0.0, 1.5, None, "", "a", [], [1], (), {1: 2},
           Plain(), Slotted(0), Slotted(3), Sized(0), Sized(2), RaisesBool()]
 PAIRS = [(3, 4), (2**50, 2**50), (2**60, 5), (-2**50, -2**50), (1.5, 2), (2, 0.25),
@@ -415,6 +481,22 @@ SCENARIOS = {
     "LocalDelete": Scenario("LocalDelete", {
         "delete": "def f(a):\n    b = a\n    del b\n    return a\n"},
         [{"local": v} for v in (1, "s", Plain(), 2**70)] + [{}], warm=(1,)),
+    "CellRead": Scenario("CellRead", {
+        "get": "def f(a):\n    def g():\n        return a\n    return (g, a)\n"},
+        [{"cell": types.CellType(v)} for v in (1, "s", Plain(), 2**70)]
+        + [{"cell": types.CellType()}], warm=(1,)),
+    "CellStore": Scenario("CellStore", {
+        "set": "def f(a, b):\n    def g():\n        return a\n    a = b\n    return g\n"},
+        [{"cell": types.CellType(v), "value": w}
+         for v in (None, 1, Plain()) for w in (1, "s", Plain(), 2**70)]
+        + [{"cell": types.CellType(), "value": 1}], warm=(1, 2), holds=True),
+    "CellDelete": Scenario("CellDelete", {
+        "delete": "def f(a):\n    def g():\n        return a\n    del a\n    return g\n"},
+        [{"cell": types.CellType(v)} for v in (1, "s", Plain(), 2**70)]
+        + [{"cell": types.CellType()}], warm=(1,)),
+    "CellMake": Scenario("CellMake", {
+        "wrap": "def f(a):\n    return lambda: a\n"},
+        [{"local": v} for v in (1, "s", Plain(), 2**70)] + [{}], warm=(1,), holds=True),
     "Move": Scenario("Move", {
         "join": "def f(a):\n    return (len(a) > 4 and\n            a[:2] == a[-2:] == '__'"
                 " and\n            a[2] != '_')\n",
@@ -608,6 +690,43 @@ SCENARIOS = {
             # TYPEVAR_WITH_BOUND (a name, the bound's evaluator): the new
             # typevar holds the evaluator, so it is immortal
             "binary": [{"x": x, "y": None} for x in ("T", "U")]}),
+    "AttrWrite": Scenario("AttrWrite", {
+        "store": "def f(a, v):\n    a.x = v\n",
+        "delete": "def f(a):\n    del a.x\n"},
+        # The stored value is held by its object, which the count check cannot see
+        [{"obj": Point(), "value": 1}], warm=(Point(), 1), holds=True,
+        inputs_by_source={
+            "store": [{"obj": o, "value": v}
+                      for o in (Point(), WithSlots(), Plain(), Shadowed(), 1, Many(),
+                                RaisesSetAttr(), materialised())
+                      for v in (1, "s", None, Plain(), 2**70)],
+            "delete": [{"obj": o} for o in (Point(), Plain(), WithSlots(), 1, Many(),
+                                            RaisesSetAttr(), materialised())]}),
+    "SuperAttr": Scenario("SuperAttr", {
+        "attr": method_of("attr"),
+        "method": method_of("method"),
+        "monitored": method_of("attr")},
+        [{"parts": [SUPER, SB, SB()]}, {"parts": [SUPER, SB, 5]},
+         {"parts": [fake_super, SB, SB()]}, {"parts": [len, SB, SB()]},
+         {"parts": [SUPER, SA, SB()]}],
+        warm=(SB(),), monitored=("monitored",),
+        # A bound method holds its receiver, which the count check cannot see
+        holds=True),
+    "SuperAttrExplicit": Scenario("SuperAttrExplicit", {
+        "attr": method_of("explicit"),
+        "method": method_of("explicit_method"),
+        "monitored": method_of("explicit")},
+        [{"parts": [SUPER, SB, SB()]}, {"parts": [SUPER, SB, 5]},
+         {"parts": [fake_super, SB, SB()]}, {"parts": [len, SB, SB()]},
+         {"parts": [SUPER, SA, SB()]}],
+        warm=(SB(),), monitored=("monitored",),
+        # A bound method holds its receiver, which the count check cannot see
+        holds=True),
+    "SpecialLookup": Scenario("SpecialLookup", {
+        "with": "def f(a):\n    with a:\n        pass\n",
+        "async": "async def f(a):\n    async with a:\n        pass\n"},
+        [{"obj": v} for v in (Manager(), AsyncManager(), 3, Plain())],
+        warm=(Manager(),)),
 }
 
 
@@ -906,6 +1025,7 @@ NOT_RUN = {
                           "cannot call as a function",
     "NamespaceRead.Locals": "LOAD_LOCALS occurs in class code",
     "NamespaceReadFrom.Mapping": "LOAD_FROM_DICT_OR_GLOBALS occurs in class code",
+    "CellMapRead.Lookup": "LOAD_FROM_DICT_OR_DEREF occurs in class code",
     "NamespaceWrite.Name": "STORE_NAME occurs in module and class code",
     "SetupAnnotations.Setup": "SETUP_ANNOTATIONS occurs in module and class code",
     "Import.Policy": "a function's imports are eager; the policy applies to module code",

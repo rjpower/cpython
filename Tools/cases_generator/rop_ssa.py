@@ -191,11 +191,11 @@ class SsaArm:
 
 def is_dest_param(t: Type) -> bool:
     """A row parameter that names a home the row may write: the checker
-    refuses Dst parameters on rows; a Local one a row may only spend"""
+    refuses Dst parameters on rows; a Local one a row may only spend, and
+    a Cell is a read-only home"""
     if isinstance(t, WrapType) and t.wrap in (Wrap.Maybe, Wrap.Span):
         return is_dest_param(t.arg)
-    return isinstance(t, HandleType) and t.handle in (Handle.Dst, Handle.Cell,
-                                                      Handle.IterPair)
+    return isinstance(t, HandleType) and t.handle in (Handle.Dst, Handle.IterPair)
 
 
 O_TYPE = HandleType(Handle.O)

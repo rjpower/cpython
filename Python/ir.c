@@ -673,7 +673,11 @@ _PyCode_InstrFbIndex(PyCodeObject *co, int i)
     _PyIRWord word = _PyCode_IRWords(co)[i];
     const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
     if (fmt->fb == _PyIR_LOC_NONE) {
-        return -1;
+        if (fmt->fixed_words == 0) {
+            return -1;
+        }
+        // An arm's entry is P0 of its first operand word
+        return (int)(_PyCode_IRWords(co)[i + 1] & 0xFFFF);
     }
     return (int)read_field(word, fmt->fb);
 }

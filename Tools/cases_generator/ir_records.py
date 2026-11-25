@@ -782,7 +782,7 @@ RELEASE_LIKE = re.compile(r"CLOSE|DECREF|CLEAR|SETREF|RETIRE|Close|Clear|"
                           r"Dealloc|_READER|FINISH_VALUE")
 # The macros that read the site's poly rows, which only the specializer
 # fills (OperationRecord.reads_poly_table)
-POLY_TABLE_READERS = frozenset(("IR_METHOD_POLY_LOOKUP",))
+POLY_TABLE_READERS: frozenset[str] = frozenset()
 
 ASSIGNS = frozenset(("=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "<<=", ">>="))
 

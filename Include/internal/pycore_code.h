@@ -197,10 +197,6 @@ extern int _PyCode_SafeAddr2Line(PyCodeObject *co, int addr);
 
 PyAPI_FUNC(void) _Py_Specialize_LoadSuperAttr(PyValue global_super, PyValue cls,
                                          _PyInstr *instr, int load_method);
-PyAPI_FUNC(void) _Py_Specialize_LoadAttr(PyValueBorrow owner, _PyInstr *instr,
-                                    PyObject *name);
-#define _Py_Specialize_LoadAttr(V0, V1, V2) \
-    (_Py_Specialize_LoadAttr)(PyValue_Borrow(V0), V1, V2)
 PyAPI_FUNC(void) _Py_Specialize_StoreAttr(PyValueBorrow owner, _PyInstr *instr,
                                      PyObject *name);
 #define _Py_Specialize_StoreAttr(V0, V1, V2) \

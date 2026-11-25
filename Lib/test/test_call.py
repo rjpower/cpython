@@ -1125,11 +1125,11 @@ class TestPEP590(unittest.TestCase):
 
         assert_equal = self.assertEqual
         x = X()
-        # trigger LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN specialization
+        # trigger the overridden-getattribute site specialization
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             assert_equal("a", get_a(x))
         function_setvectorcall(X.__getattribute__)
-        # make sure specialized LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN
+        # make sure specialized the overridden-getattribute site
         # gets deopted due to overridden vectorcall
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             assert_equal("overridden", get_a(x))

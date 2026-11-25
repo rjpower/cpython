@@ -1859,11 +1859,6 @@
      * (prepare_function_exec). */ \
     HELPER(_Py_Specialize_GetIter, void, (PyValue, _PyInstr *), \
         ARGS(borrowed, scalar), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
-    /* Evidence (G0c8): as _Py_Specialize_BinaryOp. The attribute lookups \
-     * (specialize_instance_load_attr, specialize_class_load_attr, module and class \
-     * paths) read type and instance dicts and shapes and watch dicts. */ \
-    HELPER(_Py_Specialize_LoadAttr, void, (PyValueBorrow, _PyInstr *, PyObject *), \
-        ARGS(borrowed, scalar, object), NONE, EFFECTS(runs_python), FEEDBACK(read(entry), write(entry), write(handler))) \
     /* Evidence (G0c8): as _Py_Specialize_BinaryOp. \
      * specialize_load_global_lock_held reads the globals' and builtins' keys under \
      * their critical sections and PyDict_Watch es both; for a call it may lower \
@@ -2901,18 +2896,6 @@
      * local C struct that is neither heap nor a home; no failure, no \
      * callback.  Per-form macros cannot be one function */ \
     MACRO(IR_REPORT_EDGE, ARGS(scalar), NONE, EFFECTS(), EXITS()) \
-    /* IR_METHOD_POLY_LOOKUP (ceval_macros.h): method_poly_lookup() reads the \
-     * polymorphic entry's payload and loads a guarded class value; NULL is \
-     * a miss that the uop tests (no raise).  Result is the borrowed method. \
-     * The payload is the site's feedback entry */ \
-    /* Evidence (G0c8): ceval_macros.h:1059: method_poly_lookup(frame->ir_words, h, owner), a \
-     * static inline function: poly_row_index over the entry's polymorphic rows keyed by \
-     * Py_TYPE(owner)->tp_version_tag, then (for LOAD_ATTR_METHOD_WITH_VALUES) a read of \
-     * the owner's inline-values `valid` byte, and a guarded load of the cached class \
-     * value.  NULL is a miss.  No callback, no allocation, no write.  Already a \
-     * function: the macro only supplies the frame's words. */ \
-    MACRO(IR_METHOD_POLY_LOOKUP, ARGS(scalar, object), \
-          VALUE(borrowed), EFFECTS(reads), EXITS(), FEEDBACK(read(entry))) \
     /* ir_generator.py generator_marker: emits Py_UNREACHABLE() after the \
      * ownership event GENERATOR_MARKER.  No word executes \
      * RETURN_GENERATOR: a call creates the generator in \

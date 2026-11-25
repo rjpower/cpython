@@ -20,9 +20,11 @@ ROUNDS = _testinternalcapi.SPECIALIZATION_THRESHOLD * 3
 
 
 def sites(function, adaptive=False):
+    # An arm's operand words are payload, not instructions
     return [(pc, word, CONTRACTS[HANDLERS[word[0].partition("+")[0]]])
             for pc, word in enumerate(
-                _testinternalcapi.get_ir(function.__code__, adaptive))]
+                _testinternalcapi.get_ir(function.__code__, adaptive))
+            if word[0] != "OPERAND"]
 
 
 def ordinary_names(function):

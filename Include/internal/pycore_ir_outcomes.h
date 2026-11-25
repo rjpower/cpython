@@ -45,7 +45,9 @@ _PyIR_NormalSemanticTransfer(_PyIRWord word, int arg, int home, int nl)
     int dst = -1, input = -1, base = -1;
     for (int f = 0; f < 4; f++) {
         if (fmt->roles[f] == _PyIR_ROLE_DST) {
-            dst = (int)fields[f];
+            if (dst < 0) {
+                dst = (int)fields[f];
+            }
         }
         else if (fmt->roles[f] == _PyIR_ROLE_BASE) {
             base = (int)fields[f];
@@ -180,7 +182,7 @@ _PyIR_ObservedHomes(_PyIRWord word, int edge, int nl, int limit,
             base = (int)fields[f];
         }
         else if (role == _PyIR_ROLE_DST) {
-            dst = (int)fields[f];
+            dst = dst < 0 ? (int)fields[f] : dst;
         }
         else if (role >= _PyIR_ROLE_IN0 &&
                  !_PyIR_ObserveHome(observed, (int)fields[f], nl, limit,
@@ -731,7 +733,9 @@ _PyIR_DefinesOf(_PyIRWord word, int arg)
     int dst = -1, window = -1;
     for (int f = 0; f < 4; f++) {
         if (fmt->roles[f] == _PyIR_ROLE_DST) {
-            dst = (int)fields[f];
+            if (dst < 0) {
+                dst = (int)fields[f];
+            }
         }
         if (fmt->roles[f] == _PyIR_ROLE_BASE) {
             window = (int)fields[f];
@@ -883,7 +887,7 @@ _PyIR_PhysicalWord(const _PyIRWord *wp, int arg, int edge, int nl, int limit,
             base = (int)fields[f];
         }
         else if (role == _PyIR_ROLE_DST) {
-            dst = (int)fields[f];
+            dst = dst < 0 ? (int)fields[f] : dst;
             if (dst != IR_NO_DST && dst >= limit) {
                 return;
             }

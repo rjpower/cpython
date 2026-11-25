@@ -21,8 +21,10 @@ THRESHOLD = _testinternalcapi.SPECIALIZATION_THRESHOLD
 COOLDOWN = _testinternalcapi.SPECIALIZATION_COOLDOWN
 
 
-def opnames(f):
-    return {i.opname for i in dis.get_instructions(f, adaptive=True)}
+def opnames(func):
+    # The stack ops, and the register instruction arms that the words run
+    names = {i.opname for i in dis.get_instructions(func, adaptive=True)}
+    return names | {w[0] for w in _testinternalcapi.get_ir(func.__code__, True)}
 
 
 def make_class():
@@ -183,10 +185,10 @@ class SpecializationTests(unittest.TestCase):
             get(o)
             put(o, 1)
             C()
-        self.assertIn("LOAD_ATTR_SHAPE", opnames(get))
+        self.assertIn("GetAttr.Shape", opnames(get))
         self.assertIn("STORE_ATTR_SHAPE", opnames(put))
         self.assertIn("STORE_ATTR_SHAPE_ADD", opnames(C.__init__))
-        self.assertNotIn("LOAD_ATTR_INSTANCE_VALUE", opnames(get))
+        self.assertNotIn("GetAttr.Instance", opnames(get))
         self.assertNotIn("STORE_ATTR_INSTANCE_VALUE", opnames(put))
 
     def test_load_deopts_after_dict_materialisation(self):
@@ -197,13 +199,13 @@ class SpecializationTests(unittest.TestCase):
         objects = [C() for _ in range(THRESHOLD)]
         for o in objects:
             get(o)
-        self.assertIn("LOAD_ATTR_SHAPE", opnames(get))
+        self.assertIn("GetAttr.Shape", opnames(get))
         o = objects[0]
         o.__dict__["x"] = 10
         for _ in range(2 * COOLDOWN):
             self.assertEqual(get(o), 10)
         # The site falls back to the inline values, which the dict shares.
-        self.assertIn("LOAD_ATTR_INSTANCE_VALUE", opnames(get))
+        self.assertIn("GetAttr.Instance", opnames(get))
         self.assertEqual(get(objects[1]), 1)
 
     def test_load_deopts_after_delete(self):
@@ -214,7 +216,7 @@ class SpecializationTests(unittest.TestCase):
         objects = [C() for _ in range(THRESHOLD)]
         for o in objects:
             get(o)
-        self.assertIn("LOAD_ATTR_SHAPE", opnames(get))
+        self.assertIn("GetAttr.Shape", opnames(get))
         o = objects[0]
         del o.y
         with self.assertRaises(AttributeError):
@@ -304,7 +306,7 @@ class SpecializationTests(unittest.TestCase):
             self.assertEqual(get(t), 0)
             mark(t)
         # Two shapes of one type: the sites check presence instead.
-        self.assertIn("LOAD_ATTR_INSTANCE_VALUE", opnames(get))
+        self.assertIn("GetAttr.Instance", opnames(get))
         self.assertIn("STORE_ATTR_INSTANCE_VALUE", opnames(mark))
         self.assertIn("STORE_ATTR_INSTANCE_VALUE", opnames(Token.__init__))
         # Adding through the instance value handler keeps the shape.

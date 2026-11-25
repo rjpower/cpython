@@ -79,6 +79,10 @@ for _names in (opmap, _specialized_opmap, _ir_opmap):
     for name, op in _names.items():
         _all_opname[op] = name
         _all_opmap[name] = op
+# The arms of the register instruction families, which have no stack opcode
+for name, op in _testinternalcapi.arm_handlers().items():
+    _all_opname[op] = name
+    _all_opmap[name] = op
 opname = _all_opname
 
 deoptmap = {
@@ -544,6 +548,10 @@ def _decode_word(handler, fields, fbinit=None):
         arg = _field(fields, imm)
         if row.flags & _IR_FORWARD and arg >= 0x800:
             arg -= 0x1000       # a signed distance
+        if base == LOAD_ATTR:
+            # The arm's operand is the name; the oparg of the stack
+            # instruction adds the method bit
+            arg = arg << 1 | _all_opname[handler].startswith("GetMethod")
     return arg, dst, tuple(srcs), fb
 
 def _unpack_words(code):

@@ -749,17 +749,23 @@ class PilotTests(unittest.TestCase):
         raise_getset = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5)
         raise_attr = at("getattr.rop", "exit raise(GetAttr.Failed, saved);", 5, nth=1)
         raise_method = at("getattr.rop", "exit raise(GetMethod.Failed, saved);", 5)
-        item_arms = [
-            (family, at("items.rop", f"exit raise({family}.Failed, saved);", 5), spent)
-            for family, spent in (("GetItem", ("key", "obj")),
-                                  ("SetItem", ("key", "obj", "value")),
-                                  ("DelItem", ("key", "obj")),
-                                  ("SliceRead", ("obj", "start", "stop")),
-                                  ("SliceWrite", ("obj", "start", "stop", "value")))]
-        item_diagnostics = [
-            f"{where}: {family}.Generic: points: raise at {family}.Failed: "
-            f"{family}.Failed lists {name} in spent, but {name} is intact"
-            for family, where, spent in item_arms for name in spent]
+        # Every arm of items.rop that raises: its family's sources, each of
+        # which the arm's raise exit lists in spent
+        item_spent = {"GetItem": ("key", "obj"), "SetItem": ("key", "obj", "value"),
+                      "DelItem": ("key", "obj"), "SliceRead": ("obj", "start", "stop"),
+                      "SliceWrite": ("obj", "start", "stop", "value")}
+        item_diagnostics = []
+        arm = None
+        for number, source in enumerate(
+                (ROP_DIR / "items.rop").read_text().splitlines(), 1):
+            if source.startswith("arm "):
+                arm = source.split()[1]
+            elif source.lstrip().startswith("exit raise(") and arm.split(".")[0] in item_spent:
+                family = arm.split(".")[0]
+                item_diagnostics.extend(
+                    f"items.rop:{number}:5: {arm}: points: raise at {family}.Failed: "
+                    f"{family}.Failed lists {name} in spent, but {name} is intact"
+                    for name in item_spent[family])
         truth_slot = at("truth.rop", "exit raise(Truth.Failed, saved);", 5)
         truth_generic = at("truth.rop", "exit raise(Truth.Failed, saved);", 5, last=True)
         branch_slot = at("truth.rop", "exit raise(BranchTruth.Failed, saved);", 5)

@@ -2574,6 +2574,80 @@ specialize_py_call_kw(PyFunctionObject *func, _PyInstr *instr, int nargs,
     return 0;
 }
 
+/* The evidence rows of GetItem and SetItem (classify_getitem and
+ * classify_setitem, Python/register_ops/items.rop): the arm that a subscript
+ * of v by k stands for, as the index of its case in the declared order, with
+ * the site's entry holding the operand type versions.  Every arm guards what
+ * it relies on, so the entry records evidence and guards nothing. */
+enum { GETITEM_LIST_INDEX, GETITEM_TUPLE_INDEX, GETITEM_ASCII, GETITEM_UNICODE_CHAR,
+       GETITEM_DICT, GETITEM_LIST_SLICE, GETITEM_NONE };
+enum { SETITEM_LIST_INDEX, SETITEM_DICT, SETITEM_NONE };
+
+static bool
+item_record(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k)
+{
+    if (is_shared_entry(&fb->h) || !PyValue_IsObject(v) ||
+        !_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
+    {
+        return false;
+    }
+    memset(&fb->h + 1, 0, sizeof(_PyFbBinary) - sizeof(_PyFbHeader));
+    fb->lhs_version = fb_type_version(PyValue_TYPE(v));
+    fb->rhs_version = fb_type_version(PyValue_TYPE(k));
+    return true;
+}
+
+int
+_PyRop_ClassifyGetItem(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k)
+{
+    if (!item_record(fb, v, k)) {
+        return GETITEM_NONE;
+    }
+    PyObject *container = PyValue_AsKnownObjectBorrow(v);
+    PyTypeObject *tp = Py_TYPE(container);
+    bool int_key = PyValue_IsInlineInt(k);
+    if (tp == &PyList_Type) {
+        if (int_key) {
+            return GETITEM_LIST_INDEX;
+        }
+        return PyValue_TYPE(k) == &PySlice_Type ? GETITEM_LIST_SLICE : GETITEM_NONE;
+    }
+    if (tp == &PyTuple_Type) {
+        return int_key ? GETITEM_TUPLE_INDEX : GETITEM_NONE;
+    }
+    if (tp == &PyUnicode_Type) {
+        if (!int_key) {
+            return GETITEM_NONE;
+        }
+        return PyUnicode_IS_COMPACT_ASCII(container)
+            ? GETITEM_ASCII : GETITEM_UNICODE_CHAR;
+    }
+    if (tp->tp_as_mapping != NULL &&
+        tp->tp_as_mapping->mp_subscript == _PyDict_Subscript)
+    {
+        return GETITEM_DICT;
+    }
+    return GETITEM_NONE;
+}
+
+int
+_PyRop_ClassifySetItem(_PyFbBinary *fb, PyValueBorrow v, PyValueBorrow k)
+{
+    if (!item_record(fb, v, k)) {
+        return SETITEM_NONE;
+    }
+    PyTypeObject *tp = Py_TYPE(PyValue_AsKnownObjectBorrow(v));
+    if (tp == &PyList_Type) {
+        return PyValue_IsInlineInt(k) ? SETITEM_LIST_INDEX : SETITEM_NONE;
+    }
+    if (tp->tp_as_mapping != NULL &&
+        tp->tp_as_mapping->mp_ass_subscript == _PyDict_StoreSubscript)
+    {
+        return SETITEM_DICT;
+    }
+    return SETITEM_NONE;
+}
+
 /* The evidence row of Call (classify_call, Python/register_ops/calls.rop):
  * the arm that a call of fn at site stands for, as the index of its case
  * (exact, bound_exact, init, other), with the site's entry filled for that

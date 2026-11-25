@@ -22,6 +22,11 @@
 //   GetAttr.PolyShape: GetAttr.PolyShape: let o has no leaf type
 //   GetAttr.Shape: GetAttr.Shape: fb is not a leaf value
 //   GetAttr.ValueSlot: GetAttr.ValueSlot: fb is not a leaf value
+//   GetItem.Ascii: GetItem.Ascii: compact_ascii_str has no leaf lowering
+//   GetItem.Dict: GetItem.Dict: dict_subscript_slot has no leaf lowering
+//   GetItem.ListIndex: GetItem.ListIndex: exact_list has no leaf lowering
+//   GetItem.TupleIndex: GetItem.TupleIndex: exact_tuple has no leaf lowering
+//   GetItem.UnicodeAsciiChar: GetItem.UnicodeAsciiChar: exact_str has no leaf lowering
 //   GetMethod.ClassMethod: GetMethod.ClassMethod: fb is not a leaf value
 //   GetMethod.LazyDict: GetMethod.LazyDict: fb is not a leaf value
 //   GetMethod.MethodValues: GetMethod.MethodValues: fb is not a leaf value
@@ -29,6 +34,8 @@
 //   GetMethod.PolyMethod: GetMethod.PolyMethod: let o has no leaf type
 //   LocalRead.Bound: LocalRead.Bound: dup has no C body (pending)
 //   LocalWrite.Store: LocalWrite.Store: acquire has no C body (pending)
+//   SetItem.Dict: SetItem.Dict: dict_assign_slot has no leaf lowering
+//   SetItem.ListIndex: SetItem.ListIndex: exact_list has no leaf lowering
 //   Truth.Bool: Truth.Bool: truth_object has no leaf lowering
 //   Truth.Int: Truth.Int: exact_int has no leaf lowering
 //   Truth.List: Truth.List: exact_list has no leaf lowering

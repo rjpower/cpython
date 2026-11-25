@@ -737,10 +737,28 @@
             PyValue own_key = PyValue_NULL;
             PyValue old_dst;
             PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            int ret2;
+            int adapt_before_use_getitem2_c1;
+            int ret3;
+            int adapt_before_use_getitem2_c6;
+            int ret4;
+            int adapt_before_use_getitem2_c5;
+            int ret5;
+            int adapt_before_use_getitem2_c4;
+            int ret6;
+            int adapt_before_use_getitem2_c3;
+            int ret7;
+            int adapt_before_use_getitem2_c2;
+            int ret8;
             PyValue z;
             PyValue getitem_at_origin1_value;
             PyValue getitem_at_origin1_kept;
             PyValue getitem_at_origin1_dropped;
+            if (!_PyFb_TickQuiet(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h)) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Sample;
+            }
+            rop_GetItem_Generic_adapt_before_use_getitem2_Run:
+            rop_GetItem_Generic_Run:
             a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_key}});
             IR_STUB_ESCAPE();
             ret1 = _PyRop_Subscript(_PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1));
@@ -768,6 +786,90 @@
             PyValue_XCLOSE(own_obj);
             PyValue_XCLOSE(old_dst);
             DISPATCH();
+            rop_GetItem_Generic_adapt_before_use_getitem2_Sample:
+            ret2 = _PyRop_ClassifyGetItem(((_PyFbBinary *)IR_FB(IR_D(ir_word))), PyValue_Borrow(*home_obj), PyValue_Borrow(*home_key));
+            if (ret2 == 1) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_TupleIndex;
+            }
+            if (ret2 == 2) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Ascii;
+            }
+            if (ret2 == 3) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_UnicodeChar;
+            }
+            if (ret2 == 4) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Dict;
+            }
+            if (ret2 == 5) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_ListSlice;
+            }
+            if (ret2 == 6) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Other;
+            }
+            adapt_before_use_getitem2_c1 = ROP_HANDLER_GetItem_ListIndex;
+            ret3 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getitem2_c1);
+            if (ret3 == 0) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Run;
+            }
+            if (ret3 < 0) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Run;
+            }
+            rop_GetItem_Generic_adapt_before_use_getitem2_Changed:
+            next_instr = this_instr;
+            DISPATCH_SAME_OPARG();
+            rop_GetItem_Generic_adapt_before_use_getitem2_Other:
+            _PyRop_Backoff(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h);
+            goto rop_GetItem_Generic_Run;
+            rop_GetItem_Generic_adapt_before_use_getitem2_ListSlice:
+            adapt_before_use_getitem2_c6 = ROP_HANDLER_GetItem_ListSlice;
+            ret4 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getitem2_c6);
+            if (ret4 > 0) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Changed;
+            }
+            if (ret4 == 0) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Run;
+            }
+            goto rop_GetItem_Generic_adapt_before_use_getitem2_Run;
+            rop_GetItem_Generic_adapt_before_use_getitem2_Dict:
+            adapt_before_use_getitem2_c5 = ROP_HANDLER_GetItem_Dict;
+            ret5 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getitem2_c5);
+            if (ret5 > 0) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Changed;
+            }
+            if (ret5 == 0) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Run;
+            }
+            goto rop_GetItem_Generic_adapt_before_use_getitem2_Run;
+            rop_GetItem_Generic_adapt_before_use_getitem2_UnicodeChar:
+            adapt_before_use_getitem2_c4 = ROP_HANDLER_GetItem_UnicodeAsciiChar;
+            ret6 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getitem2_c4);
+            if (ret6 > 0) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Changed;
+            }
+            if (ret6 == 0) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Run;
+            }
+            goto rop_GetItem_Generic_adapt_before_use_getitem2_Run;
+            rop_GetItem_Generic_adapt_before_use_getitem2_Ascii:
+            adapt_before_use_getitem2_c3 = ROP_HANDLER_GetItem_Ascii;
+            ret7 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getitem2_c3);
+            if (ret7 > 0) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Changed;
+            }
+            if (ret7 == 0) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Run;
+            }
+            goto rop_GetItem_Generic_adapt_before_use_getitem2_Run;
+            rop_GetItem_Generic_adapt_before_use_getitem2_TupleIndex:
+            adapt_before_use_getitem2_c2 = ROP_HANDLER_GetItem_TupleIndex;
+            ret8 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_getitem2_c2);
+            if (ret8 > 0) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Changed;
+            }
+            if (ret8 == 0) {
+                goto rop_GetItem_Generic_adapt_before_use_getitem2_Run;
+            }
+            goto rop_GetItem_Generic_adapt_before_use_getitem2_Run;
             rop_GetItem_Generic_getitem_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_key, home_obj}});
@@ -798,6 +900,16 @@
             PyValue own_obj = PyValue_NULL;
             PyValue own_key = PyValue_NULL;
             PyValue own_value = PyValue_NULL;
+            int ret2;
+            int adapt_before_use_setitem2_c1;
+            int ret3;
+            int adapt_before_use_setitem2_c2;
+            int ret4;
+            if (!_PyFb_TickQuiet(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h)) {
+                goto rop_SetItem_Generic_adapt_before_use_setitem2_Sample;
+            }
+            rop_SetItem_Generic_adapt_before_use_setitem2_Run:
+            rop_SetItem_Generic_Run:
             a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_key, home_value}});
             IR_STUB_ESCAPE();
             ret1 = _PyRop_SetItem(_PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1), _PyRop_AnchorArg(&a, 2));
@@ -821,6 +933,38 @@
             PyValue_XCLOSE(own_obj);
             PyValue_XCLOSE(own_value);
             DISPATCH();
+            rop_SetItem_Generic_adapt_before_use_setitem2_Sample:
+            ret2 = _PyRop_ClassifySetItem(((_PyFbBinary *)IR_FB(IR_D(ir_word))), PyValue_Borrow(*home_obj), PyValue_Borrow(*home_key));
+            if (ret2 == 1) {
+                goto rop_SetItem_Generic_adapt_before_use_setitem2_Dict;
+            }
+            if (ret2 == 2) {
+                goto rop_SetItem_Generic_adapt_before_use_setitem2_Other;
+            }
+            adapt_before_use_setitem2_c1 = ROP_HANDLER_SetItem_ListIndex;
+            ret3 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_setitem2_c1);
+            if (ret3 == 0) {
+                goto rop_SetItem_Generic_adapt_before_use_setitem2_Run;
+            }
+            if (ret3 < 0) {
+                goto rop_SetItem_Generic_adapt_before_use_setitem2_Run;
+            }
+            rop_SetItem_Generic_adapt_before_use_setitem2_Changed:
+            next_instr = this_instr;
+            DISPATCH_SAME_OPARG();
+            rop_SetItem_Generic_adapt_before_use_setitem2_Other:
+            _PyRop_Backoff(&((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h);
+            goto rop_SetItem_Generic_Run;
+            rop_SetItem_Generic_adapt_before_use_setitem2_Dict:
+            adapt_before_use_setitem2_c2 = ROP_HANDLER_SetItem_Dict;
+            ret4 = _PyRop_Install(this_instr, &((_PyFbBinary *)IR_FB(IR_D(ir_word)))->h, adapt_before_use_setitem2_c2);
+            if (ret4 > 0) {
+                goto rop_SetItem_Generic_adapt_before_use_setitem2_Changed;
+            }
+            if (ret4 == 0) {
+                goto rop_SetItem_Generic_adapt_before_use_setitem2_Run;
+            }
+            goto rop_SetItem_Generic_adapt_before_use_setitem2_Run;
             rop_SetItem_Generic_setitem_at_origin1_Failed:
             IR_STUB_ESCAPE();
             _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}});
@@ -2818,6 +2962,461 @@
             DISPATCH();
             rop_GetMethod_ClassMethod_Miss:
             JUMP_TO_PREDICTED(GetMethod_Generic);
+        }
+
+        TARGET(GetItem_ListIndex) {
+            // GetItem.ListIndex (inline)
+            int opcode = ROP_HANDLER_GetItem_ListIndex;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_GetItem_ListIndex);
+            PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow i;
+            PyValueBorrow item;
+            PyValue result;
+            PyValue own_obj = PyValue_NULL;
+            PyValue own_key = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            l = PyValue_Borrow(*home_obj);
+            i = PyValue_Borrow(*home_key);
+            if (!_PyRop_ExactList(l)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            if (!PyValue_IsInlineInt(i)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            if (!_PyRop_ListInBounds(l, i)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            item = _PyRop_ListItem(l, i);
+            result = PyValue_DUP(item);
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_obj = _PyFrame_TakeHome(frame, home_obj);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                own_key = _PyFrame_TakeHome(frame, home_key);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, result);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(own_key);
+            PyValue_XCLOSE(own_obj);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+        }
+
+        TARGET(GetItem_TupleIndex) {
+            // GetItem.TupleIndex (inline)
+            int opcode = ROP_HANDLER_GetItem_TupleIndex;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_GetItem_TupleIndex);
+            PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow i;
+            PyValueBorrow item;
+            PyValue result;
+            PyValue own_obj = PyValue_NULL;
+            PyValue own_key = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            l = PyValue_Borrow(*home_obj);
+            i = PyValue_Borrow(*home_key);
+            if (!_PyRop_ExactTuple(l)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            if (!PyValue_IsInlineInt(i)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            if (!_PyRop_TupleInBounds(l, i)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            item = _PyRop_TupleItem(l, i);
+            result = PyValue_DUP(item);
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_obj = _PyFrame_TakeHome(frame, home_obj);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                own_key = _PyFrame_TakeHome(frame, home_key);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, result);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(own_key);
+            PyValue_XCLOSE(own_obj);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+        }
+
+        TARGET(GetItem_Ascii) {
+            // GetItem.Ascii (inline)
+            int opcode = ROP_HANDLER_GetItem_Ascii;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_GetItem_Ascii);
+            PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow i;
+            PyValueBorrow item;
+            PyValue result;
+            PyValue own_obj = PyValue_NULL;
+            PyValue own_key = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            l = PyValue_Borrow(*home_obj);
+            i = PyValue_Borrow(*home_key);
+            if (!_PyRop_CompactAsciiStr(l)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            if (!PyValue_IsInlineInt(i)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            if (!_PyRop_StrInBounds(l, i)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            item = _PyRop_AsciiChar(l, i);
+            result = PyValue_DUP(item);
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_obj = _PyFrame_TakeHome(frame, home_obj);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                own_key = _PyFrame_TakeHome(frame, home_key);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, result);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(own_key);
+            PyValue_XCLOSE(own_obj);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+        }
+
+        TARGET(GetItem_UnicodeAsciiChar) {
+            // GetItem.UnicodeAsciiChar (inline)
+            int opcode = ROP_HANDLER_GetItem_UnicodeAsciiChar;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_GetItem_UnicodeAsciiChar);
+            PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow i;
+            PyValueBorrow item;
+            PyValue result;
+            PyValue own_obj = PyValue_NULL;
+            PyValue own_key = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            l = PyValue_Borrow(*home_obj);
+            i = PyValue_Borrow(*home_key);
+            if (!_PyRop_ExactStr(l)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            if (!PyValue_IsInlineInt(i)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            if (!_PyRop_StrInBounds(l, i)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            item = _PyRop_UnicodeAsciiChar(l, i);
+            if (!_PyValue_BorrowPresent(item)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            result = PyValue_DUP(item);
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_obj = _PyFrame_TakeHome(frame, home_obj);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                own_key = _PyFrame_TakeHome(frame, home_key);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, result);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(own_key);
+            PyValue_XCLOSE(own_obj);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+        }
+
+        TARGET(GetItem_ListSlice) {
+            // GetItem.ListSlice (shared)
+            int opcode = ROP_HANDLER_GetItem_ListSlice;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_GetItem_ListSlice);
+            PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow s;
+            _PyRopAnchors a;
+            PyValue ret1;
+            PyValue own_obj = PyValue_NULL;
+            PyValue own_key = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            PyValue z;
+            PyValue list_slice_at_origin1_value;
+            PyValue list_slice_at_origin1_kept;
+            PyValue list_slice_at_origin1_dropped;
+            l = PyValue_Borrow(*home_obj);
+            s = PyValue_Borrow(*home_key);
+            if (!_PyRop_ExactList(l)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            if (!_PyRop_ExactSlice(s)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_key}});
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_ListSlice(_PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1));
+            if (PyValue_IsNull(ret1)) {
+                goto rop_GetItem_ListSlice_list_slice_at_origin1_Failed;
+            }
+            list_slice_at_origin1_value = ret1;
+            if (_PyRop_RedirectPending(frame)) {
+                list_slice_at_origin1_dropped = list_slice_at_origin1_value;
+                goto rop_GetItem_ListSlice_list_slice_at_origin1_Moved;
+            }
+            list_slice_at_origin1_kept = list_slice_at_origin1_value;
+            z = list_slice_at_origin1_kept;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_obj = _PyFrame_TakeHome(frame, home_obj);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                own_key = _PyFrame_TakeHome(frame, home_key);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_CloseAnchors(&a);
+            PyValue_XCLOSE(own_key);
+            PyValue_XCLOSE(own_obj);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_GetItem_ListSlice_list_slice_at_origin1_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_key, home_obj}});
+            PROCESS_ERROR_AT(RAISE, 25, this_instr);
+            rop_GetItem_ListSlice_list_slice_at_origin1_Moved:
+            IR_STUB_ESCAPE();
+            _PyRop_DiscardResult(list_slice_at_origin1_dropped);
+            IR_STUB_ESCAPE();
+            _PyRop_RetireAbandoned(&a);
+            IR_REDIRECT();
+        }
+
+        TARGET(GetItem_Dict) {
+            // GetItem.Dict (inline)
+            int opcode = ROP_HANDLER_GetItem_Dict;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_GetItem_Dict);
+            PyValue *const home_obj = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_key = &IR_SLOT(IR_C(ir_word));
+            PyValueBorrow i;
+            PyValue out1;
+            PyValue own_obj = PyValue_NULL;
+            PyValue own_key = PyValue_NULL;
+            PyValue old_dst;
+            PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+            _PyRopAnchors a;
+            PyValue ret2;
+            PyValue first;
+            PyValue z;
+            PyValue getitem_at_origin1_value;
+            PyValue getitem_at_origin1_kept;
+            PyValue getitem_at_origin1_dropped;
+            l = PyValue_Borrow(*home_obj);
+            i = PyValue_Borrow(*home_key);
+            if (!_PyRop_DictSubscriptSlot(l)) {
+                JUMP_TO_PREDICTED(GetItem_Generic);
+            }
+            if (!_PyRop_DictFirstProbe(l, i, &out1)) {
+                goto rop_GetItem_Dict_Slow;
+            }
+            first = out1;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_obj = _PyFrame_TakeHome(frame, home_obj);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                own_key = _PyFrame_TakeHome(frame, home_key);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, first);
+            _PyValue_CheckHome(*home_dst);
+            PyValue_XCLOSE(own_key);
+            PyValue_XCLOSE(own_obj);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_GetItem_Dict_Slow:
+            a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_key}});
+            IR_STUB_ESCAPE();
+            ret2 = _PyRop_Subscript(_PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1));
+            if (PyValue_IsNull(ret2)) {
+                goto rop_GetItem_Dict_getitem_at_origin1_Failed;
+            }
+            getitem_at_origin1_value = ret2;
+            if (_PyRop_RedirectPending(frame)) {
+                getitem_at_origin1_dropped = getitem_at_origin1_value;
+                goto rop_GetItem_Dict_getitem_at_origin1_Moved;
+            }
+            getitem_at_origin1_kept = getitem_at_origin1_value;
+            z = getitem_at_origin1_kept;
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_obj = _PyFrame_TakeHome(frame, home_obj);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                own_key = _PyFrame_TakeHome(frame, home_key);
+            }
+            old_dst = *home_dst;
+            _PyFrame_WriteHome(frame, home_dst, z);
+            _PyValue_CheckHome(*home_dst);
+            _PyRop_CloseAnchors(&a);
+            PyValue_XCLOSE(own_key);
+            PyValue_XCLOSE(own_obj);
+            PyValue_XCLOSE(old_dst);
+            DISPATCH();
+            rop_GetItem_Dict_getitem_at_origin1_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 2, {!!(ir_word & IR_F_LOCAL_C), !!(ir_word & IR_F_LOCAL_B)}, {home_key, home_obj}});
+            PROCESS_ERROR_AT(RAISE, 25, this_instr);
+            rop_GetItem_Dict_getitem_at_origin1_Moved:
+            IR_STUB_ESCAPE();
+            _PyRop_DiscardResult(getitem_at_origin1_dropped);
+            IR_STUB_ESCAPE();
+            _PyRop_RetireAbandoned(&a);
+            IR_REDIRECT();
+        }
+
+        TARGET(SetItem_ListIndex) {
+            // SetItem.ListIndex (inline)
+            int opcode = ROP_HANDLER_SetItem_ListIndex;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_SetItem_ListIndex);
+            PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
+            PyValueBorrow i;
+            PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+            PyValue x;
+            PyValue old;
+            PyValue own_obj = PyValue_NULL;
+            PyValue own_key = PyValue_NULL;
+            l = PyValue_Borrow(*home_obj);
+            i = PyValue_Borrow(*home_key);
+            if (!_PyRop_ExactList(l)) {
+                JUMP_TO_PREDICTED(SetItem_Generic);
+            }
+            if (!PyValue_IsInlineInt(i)) {
+                JUMP_TO_PREDICTED(SetItem_Generic);
+            }
+            if (!_PyRop_ListInBounds(l, i)) {
+                JUMP_TO_PREDICTED(SetItem_Generic);
+            }
+            x = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
+            old = _PyRop_ListExchange(l, i, x);
+            IR_STUB_ESCAPE();
+            _PyRop_DiscardResult(old);
+            if (!(ir_word & IR_F_LOCAL_A)) {
+                own_obj = _PyFrame_TakeHome(frame, home_obj);
+            }
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_key = _PyFrame_TakeHome(frame, home_key);
+            }
+            PyValue_XCLOSE(own_key);
+            PyValue_XCLOSE(own_obj);
+            DISPATCH();
+        }
+
+        TARGET(SetItem_Dict) {
+            // SetItem.Dict (inline)
+            int opcode = ROP_HANDLER_SetItem_Dict;
+            (void)opcode;
+            _PyIRWord *const this_instr = next_instr;
+            (void)this_instr;
+            frame->instr_ptr = next_instr;
+            IR_HOLD_NEXT();
+            next_instr += 1;
+            INSTRUCTION_STATS(ROP_HANDLER_SetItem_Dict);
+            PyValue *const home_obj = &IR_SLOT(IR_A(ir_word));
+            PyValueBorrow l;
+            PyValue *const home_key = &IR_SLOT(IR_B(ir_word));
+            PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
+            _PyRopAnchors a;
+            int ret1;
+            PyValue own_obj = PyValue_NULL;
+            PyValue own_key = PyValue_NULL;
+            PyValue own_value = PyValue_NULL;
+            l = PyValue_Borrow(*home_obj);
+            if (!_PyRop_DictAssignSlot(l)) {
+                JUMP_TO_PREDICTED(SetItem_Generic);
+            }
+            a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_C)}, {home_obj, home_key, home_value}});
+            IR_STUB_ESCAPE();
+            ret1 = _PyRop_DictStore(_PyRop_AnchorArg(&a, 0), _PyRop_AnchorArg(&a, 1), _PyRop_AnchorArg(&a, 2));
+            if (ret1 < 0) {
+                goto rop_SetItem_Dict_dict_store_at_origin1_Failed;
+            }
+            if (_PyRop_RedirectPending(frame)) {
+                goto rop_SetItem_Dict_dict_store_at_origin1_Moved;
+            }
+            if (!(ir_word & IR_F_LOCAL_A)) {
+                own_obj = _PyFrame_TakeHome(frame, home_obj);
+            }
+            if (!(ir_word & IR_F_LOCAL_B)) {
+                own_key = _PyFrame_TakeHome(frame, home_key);
+            }
+            if (!(ir_word & IR_F_LOCAL_C)) {
+                own_value = _PyFrame_TakeHome(frame, home_value);
+            }
+            _PyRop_CloseAnchors(&a);
+            PyValue_XCLOSE(own_key);
+            PyValue_XCLOSE(own_obj);
+            PyValue_XCLOSE(own_value);
+            DISPATCH();
+            rop_SetItem_Dict_dict_store_at_origin1_Failed:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 3, {!!(ir_word & IR_F_LOCAL_B), !!(ir_word & IR_F_LOCAL_A), !!(ir_word & IR_F_LOCAL_C)}, {home_key, home_obj, home_value}});
+            PROCESS_ERROR_AT(RAISE, 39, this_instr);
+            rop_SetItem_Dict_dict_store_at_origin1_Moved:
+            IR_STUB_ESCAPE();
+            _PyRop_RetireAbandoned(&a);
+            IR_REDIRECT();
         }
 
         TARGET(Truth_Bool) {

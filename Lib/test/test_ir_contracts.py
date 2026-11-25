@@ -390,14 +390,8 @@ class VerifierTests(unittest.TestCase):
             }
         """, r"OP: `top` is exchanged, and its home changes")
 
-    def test_swap_is_a_declared_exchange(self):
-        swap = analysis.instructions["SWAP"]
-        contract = ir_contract.contract_of(swap.parts[0])
-        self.assertEqual({o.name: o.exchange for o in contract.outputs if o.exchange},
-                         {"bottom": "top", "top": "bottom"})
-        formats = ir_generator.compute_formats(analysis)
-        self.assertEqual(ir_generator.normal_transfer_kind(swap, formats["SWAP"]),
-                         "_PyIR_TRANSFER_SWAP")
+    # SWAP is a stack op that regcfg.c lowers by its own rule, so no
+    # declared handler is an exchange; the synthetic OP above stands in
 
     def test_replacements_are_declared(self):
         # F16's cursor: each uop that advances it declares the entry that

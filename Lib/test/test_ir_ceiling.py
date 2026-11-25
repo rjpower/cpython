@@ -114,6 +114,25 @@ class ArmNameTests(unittest.TestCase):
         self.assertTrue(families)
         self.assertFalse(families & stack_op_names())
 
+    def test_definitions_declare_no_stack_op_name(self):
+        # Every name the register definitions declare: enums and their
+        # members, families and operands, points, arms, rows and macros and
+        # their parameters.  Only the ops(...) clause names stack ops.
+        test_tools.skip_if_missing("cases_generator")
+        with test_tools.imports_under_tool("cases_generator"):
+            import rop_check
+        program = rop_check.load(sorted(rop_check.ROP_DIR.glob("*.rop")))
+        declared = set()
+        for e in program.enums.values():
+            declared |= {e.name, *e.members}
+        for f in program.families.values():
+            declared |= {f.name, *(p.name for p in f.params)}
+        declared |= {n.split(".")[1] for n in [*program.points, *program.arms]}
+        for x in [*program.externs.values(), *program.macros.values()]:
+            declared |= {x.name, *(p.name for p in x.params)}
+        self.assertGreater(len(declared), 100)
+        self.assertEqual(declared & stack_op_names(), set())
+
 
 class BannerTests(unittest.TestCase):
     def test_bytecodes_banner(self):

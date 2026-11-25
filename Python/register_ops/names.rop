@@ -3,10 +3,10 @@
 // family: the translator pushes it as an elided PUSH_NULL.
 
 family GlobalRead(dst:Dst, name:Name, fb:Fb<Global>)
-  exits(next, raise, redirect, miss, again) ops(LOAD_GLOBAL);
+  exits(next, raise, redirect, miss, again) generic(Generic) ops(LOAD_GLOBAL);
 
-point GlobalRead.Failed(current, site, pending) keep() spent() defs() held();
-point GlobalRead.Done(current, next_head, clear) keep() spent() defs(dst) held();
+point GlobalRead.Failed(current, site, pending) keep() spent() defs();
+point GlobalRead.Done(current, next_head, clear) keep() spent() defs(dst);
 
 // The name in the frame's globals, then its builtins.  A non-dict
 // namespace runs Python (__getitem__), and a lazy import value is reified,
@@ -155,7 +155,7 @@ macro adapt_before_use_global(f:Fb<Global>, n:Name)
 }
 
 arm GlobalRead.Generic shared
-  effects(runs_python, raises, releases)
+  effects(runs_python, raises, releases on (dst))
   feedback(read(entry), write(entry), write(handler))
   exits(next, again, raise, redirect)
 {
@@ -181,8 +181,8 @@ arm GlobalRead.Generic shared
     exit redirect(route);
 }
 
-arm GlobalRead.Module inline
-  effects(reads, writes, releases)
+arm GlobalRead.Module inline entry(module)
+  effects(reads, writes, releases on (dst))
   feedback(read(entry.globals_version), read(entry.index))
   exits(next, miss)
 {
@@ -202,8 +202,8 @@ arm GlobalRead.Module inline
     exit miss();
 }
 
-arm GlobalRead.Builtin inline
-  effects(reads, writes, releases)
+arm GlobalRead.Builtin inline entry(builtin)
+  effects(reads, writes, releases on (dst))
   feedback(read(entry.globals_version), read(entry.builtins_version), read(entry.index))
   exits(next, miss)
 {

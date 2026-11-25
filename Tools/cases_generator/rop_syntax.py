@@ -23,10 +23,10 @@ from rop_model import (Access, Advance, Arm, Binding, Block, BoolLit, Branch, Ca
                        CallTerm, Cases, CaseDecl, CBinding, Contract, Debt, Decl,
                        Diagnostic, Each, EdgeFact, Edge, EffectDecl, EnumDecl,
                        EnumType, EvidenceItem, Exit, Expr, Extern, FactUse, Family,
-                       Goto, Graph, Guard, HandleType, Let, Macro, Name, Nat,
+                       Goto, Graph, Guard, HandleType, Let, Macro, Name, Nat, Null,
                        Param, PairType, Point, Publish, Result, Returns, RopError,
                        ScalarType, SchemaType, SchemaVar, SourceFile, SpanLit,
-                       SrcSpan, Stmt, Tail, Target, Term, Type, WrapType)
+                       SrcSpan, Stmt, Target, Term, Type, WrapType)
 
 ID = "ID"
 NUM = "NUM"
@@ -266,6 +266,11 @@ class Parser:
         params = self.params()
         self.expect("exits")
         exits = self.names()
+        generic: str | None = None
+        if self.accept("generic"):
+            self.expect("(")
+            generic = self.ident("an arm name").text
+            self.expect(")")
         ops: tuple[str, ...] = ()
         events: tuple[MonitoringEvent, ...] = ()
         if self.accept("ops"):
@@ -275,7 +280,7 @@ class Parser:
             events = self.comma_list(
                 ")", lambda: self.enum_word(MonitoringEvent, "a monitoring event")[0])
         self.expect(";")
-        return Family(name.text, params, exits, ops, events, start.span)
+        return Family(name.text, params, exits, ops, events, start.span, generic)
 
     def point(self) -> Point:
         start = self.take()
@@ -289,12 +294,12 @@ class Parser:
         exc, _ = self.enum_word(ExcRole, "an exception role")
         self.expect(")")
         lists = []
-        for word in ("keep", "spent", "defs", "held"):
+        for word in ("keep", "spent", "defs"):
             self.expect(word)
             lists.append(self.names())
         self.expect(";")
-        keep, spent, defs, held = lists
-        return Point(name.text, frame, pc, exc, keep, spent, defs, held, start.span)
+        keep, spent, defs = lists
+        return Point(name.text, frame, pc, exc, keep, spent, defs, start.span)
 
     def arm(self) -> Arm:
         start = self.take()
@@ -305,9 +310,15 @@ class Parser:
         if self.accept("select"):
             self.expect("(")
             select = self.comma_list(")", lambda: self.enum_word(Select, "a selection")[0])
+        entry: str | None = None
+        if self.accept("entry"):
+            self.expect("(")
+            entry = self.ident("a classifier case").text
+            self.expect(")")
+        observes = self.accept("observes") is not None
         contract = self.contract(exits=True)
         graph = self.graph()
-        return Arm(name.text, region, contract, graph, start.span, select)
+        return Arm(name.text, region, contract, graph, start.span, select, entry, observes)
 
     def macro(self) -> Macro:
         start = self.take()
@@ -398,7 +409,8 @@ class Parser:
     def contract(self, exits: bool | None, schemas: tuple[str, ...] = ()) -> Contract:
         """`exits` True: an arm's contract, effects, feedback and exits
         required; False: a macro's, no exits (its cases are its exits);
-        None: an extern's, feedback and exits optional."""
+        None: an extern's, feedback optional and no exits (a row's
+        outcomes are its cases)."""
         start = self.expect("effects")
         self.expect("(")
         effects = self.comma_list(")", self.effect)
@@ -408,11 +420,12 @@ class Parser:
             self.expect("(")
             feedback = self.comma_list(")", self.access)
         exit_names: tuple[str, ...] = ()
-        if exits or (exits is None and self.peek("exits")):
+        if exits:
             self.expect("exits")
             exit_names = self.names()
-        elif exits is False and self.peek("exits"):
-            raise self.error("a macro's exits are its cases: no 'exits' clause")
+        elif self.peek("exits"):
+            what = "a macro's" if exits is False else "a row's"
+            raise self.error(f"{what} exits are its cases: no 'exits' clause")
         borrows: tuple[str, ...] = ()
         spends: tuple[str, ...] = ()
         if not exits and self.accept("borrows"):
@@ -554,8 +567,24 @@ class Parser:
 
     def binding(self) -> Binding:
         target = self.qname()
+        if not self.accept("["):
+            self.expect("=")
+            return Binding(target.text, self.expr(), target.span)
+        self.expect("]")
         self.expect("=")
-        return Binding(target.text, self.expr(), target.span)
+        # A vector binding's value: `s[]` or `dup(s[])`
+        dup = self.peek("dup") and self.peek("(", 1)
+        if dup:
+            call = self.take()
+            self.expect("(")
+        source = self.qname()
+        self.expect("[")
+        self.expect("]")
+        value: Expr = Name(source.text, source.span)
+        if dup:
+            self.expect(")")
+            value = Call("dup", (value,), call.span)
+        return Binding(target.text, value, target.span, vector=True)
 
     def debt(self) -> Debt:
         kind, tok = self.enum_word(DebtKind, "a debt")
@@ -617,14 +646,8 @@ class Parser:
                 resume = self.qname().text
             self.expect(";")
             return Exit(kind.text, args, tok.span, resume)
-        if word == "tail":
-            self.take()
-            callee = self.qname()
-            args = self.args()
-            self.expect(";")
-            return Tail(callee.text, args, tok.span)
         raise self.error("expected a statement or a terminator (goto, branch, call, "
-                         f"each, advance, exit, tail), found '{tok.text or 'end of file'}'")
+                         f"each, advance, exit), found '{tok.text or 'end of file'}'")
 
     def edge(self) -> Edge:
         case = self.ident("a case name")
@@ -650,6 +673,9 @@ class Parser:
         if tok.kind == ID and tok.text in ("true", "false"):
             self.take()
             return BoolLit(tok.text == "true", tok.span)
+        if tok.kind == ID and tok.text == "null" and not self.peek("(", 1):
+            self.take()
+            return Null(tok.span)
         name = self.qname()
         if self.peek("("):
             return Call(name.text, self.args(), name.span)

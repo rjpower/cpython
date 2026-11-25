@@ -24,6 +24,7 @@ from test import test_tools
 test_tools.skip_if_missing("cases_generator")
 with test_tools.imports_under_tool("cases_generator"):
     import rop_check
+    import rop_verify
 
 ROOT = Path(test_tools.basepath)
 METADATA = ROOT / "Include" / "internal" / "pycore_opcode_metadata.h"
@@ -279,16 +280,17 @@ class TransportFlagTests(unittest.TestCase):
 class ReleaseDeclarationTests(unittest.TestCase):
 
     def test_releasing_a_binding_declares_runs_python(self):
-        # An arm that releases an operand's old binding (a local's) may run
-        # its finalizer, and says so
+        # An arm that releases a Local operand's old binding may run its
+        # finalizer, and says so (rop_verify's per-class release rule)
         with tempfile.TemporaryDirectory() as d:
             for path in rop_check.ROP_DIR.glob("*.rop"):
                 text = path.read_text().replace(
                     "releases on (local), runs_python)", "releases on (local))", 1)
                 (Path(d) / path.name).write_text(text)
-            checked = rop_check.load(sorted(Path(d).glob("*.rop")))
+            checked = rop_verify.load(sorted(Path(d).glob("*.rop")))
         self.assertEqual(len(checked.diagnostics), 1)
-        self.assertIn("declare runs_python", checked.diagnostics[0].message)
+        self.assertIn("(old(local) closes a local's binding) may runs_python",
+                      checked.diagnostics[0].message)
 
 
 if __name__ == "__main__":

@@ -2431,6 +2431,220 @@ class LocalArmTest(unittest.TestCase):
                 self.assertEqual(handlers(f).count("Move.Copy"), 2)
 
 
+COPY_ALIAS_PROGRAM = """
+import sys
+
+released = []
+
+class D:
+    def __init__(self, name, value=0):
+        self.name = name
+        self.value = value
+    def __del__(self):
+        released.append(self.name)
+    def __lt__(self, other):
+        return self.value < other.value
+    def __getitem__(self, i):
+        return self.value
+    def __setitem__(self, i, v):
+        self.value = v
+    def __enter__(self):
+        return self
+    def __exit__(self, *exc):
+        return False
+
+def rebind(name, value):
+    sys._getframe(2).f_locals[name] = value
+    return 0
+
+class Rebinding:
+    # Every operation rebinds the caller's local "x"
+    def __init__(self, value):
+        self.value = value
+    def __lt__(self, other):
+        rebind("x", Rebinding(-100))
+        return self.value < other.value
+    def __getitem__(self, i):
+        rebind("x", Rebinding(-100))
+        return self.value
+    def __setitem__(self, i, v):
+        self.value = v
+    @property
+    def a(self):
+        rebind("x", Rebinding(-100))
+        return self.value
+    @a.setter
+    def a(self, v):
+        self.value = v
+
+def chain(a, x, c):
+    return a < x < c
+
+def augsub(x, i, v):
+    orig = x
+    x[i] += v
+    return orig.value, x.value
+
+def augattr(x, v):
+    orig = x
+    x.a += v
+    return orig.value, x.value
+
+def multi(a):
+    x = y = a
+    return x is y
+
+def consts():
+    x = y = None
+    return x is y
+
+def walrus(xs):
+    return [y for x in xs if (y := x)]
+
+def with_(cm):
+    with cm as y:
+        return y is cm
+
+async def awith(cm):
+    async with cm as y:
+        return y
+
+class ACM:
+    async def __aenter__(self):
+        return "entered"
+    async def __aexit__(self, *exc):
+        return False
+
+def match(s):
+    match s:
+        case 1: return "one"
+        case [a, b]: return "pair"
+        case {"k": v}: return "map"
+        case D(name=n): return "D " + n
+        case _: return "other"
+
+class Boom(Exception):
+    def __del__(self):
+        released.append("boom")
+
+def except_(n):
+    try:
+        try:
+            raise Boom()
+        except Boom as e:
+            if n:
+                raise
+            return "caught"
+    except Boom:
+        return "reraised"
+
+def except_star():
+    try:
+        raise ExceptionGroup("g", [ValueError(1), TypeError(2)])
+    except* ValueError as e:
+        r = [type(x).__name__ for x in e.exceptions]
+    except* TypeError as e:
+        r.append(type(e.exceptions[0]).__name__)
+    return r
+
+def run():
+    out = []
+    out.append(chain(D("a", 1), D("b", 2), D("c", 3)))
+    out.append(chain(D("a", 3), D("b", 2), D("c", 3)))
+    out.append(augsub(D("s", 1), 0, 5)[0])
+    out.append(augsub(Rebinding(1), 0, 5))
+    out.append(multi(D("m")))
+    out.append(consts())
+    out.append(walrus([0, 1, 2]))
+    out.append(with_(D("w")))
+    try:
+        awith(ACM()).send(None)
+    except StopIteration as e:
+        out.append(e.value)
+    out.append([match(s) for s in (1, [1, 2], {"k": 1}, D("d"), 7)])
+    out.append([except_(0), except_(1)])
+    out.append(except_star())
+    # The second use sees the value the local held at the first read
+    out.append(chain(Rebinding(1), Rebinding(2), Rebinding(0)))
+    out.append(augattr(Rebinding(1), 5))
+    return out
+
+for _ in range(3):
+    released.clear()
+    r = run()
+    print(r, sorted(released))
+"""
+
+COPY_ALIAS_OUTPUT = (
+    "[True, False, 6, (6, -100), True, True, [1, 2], True, 'entered', "
+    "['one', 'pair', 'map', 'D d', 'other'], ['caught', 'reraised'], "
+    "['ValueError', 'TypeError'], False, (6, -100)] "
+    "['a', 'a', 'b', 'b', 'boom', 'boom', 'c', 'c', 'd', 'm', 's', 'w']\n" * 3)
+
+
+class CopyAliasTest(unittest.TestCase):
+    """COPY without a second owner where one owner covers both uses (rir90 CA)"""
+
+    def check_jit_modes(self, program, expected):
+        from test.support import script_helper
+        for mode in ("0", "always"):
+            with self.subTest(jit=mode):
+                result = script_helper.assert_python_ok("-c", program, PYTHON_JIT=mode)
+                self.assertEqual(result.out.decode(), expected)
+
+    def test_no_second_owner(self):
+        # A stable local read is read again, and the reader borrows the
+        # local; a constant is loaded again; the copy that an except
+        # body's cleanup spends is the original, which RERAISE leaves
+        def chain(a, b, c):
+            return a < b < c
+        def augsub(x, i, v):
+            x[i] += v
+        def augattr(o, v):
+            o.a += v
+        def multi(a):
+            x = y = a
+            return x, y
+        def consts():
+            x = y = None
+            return x, y
+        def walrus(xs):
+            return [y for x in xs if (y := x)]
+        def cleanup():
+            try:
+                one()
+            except ValueError as e:
+                one(e)
+        class O:
+            a = 1
+        for f, args in ((chain, (1, 2, 3)), (augsub, ([1], 0, 1)),
+                        (augattr, (O(), 1)), (multi, (1,)), (consts, ()),
+                        (walrus, ([0, 1],)), (cleanup, ())):
+            with self.subTest(f=f.__name__):
+                f(*args)
+                self.assertNotIn("Move.Copy", handlers(f))
+
+    def test_two_spends_keep_a_second_owner(self):
+        # Both LOAD_SPECIALs of a computed manager spend it
+        def with_call(f):
+            with f():
+                pass
+        class CM:
+            def __enter__(self):
+                return self
+            def __exit__(self, *exc):
+                return False
+        with_call(CM)
+        self.assertEqual(handlers(with_call).count("Move.Copy"), 1)
+
+    @support.requires_refcounting
+    def test_shapes_releases_and_rebinding(self):
+        # Results, the values finalized, and second uses that must see the
+        # value a local held at its first read when code in between
+        # rebinds the local through f_locals
+        self.check_jit_modes(COPY_ALIAS_PROGRAM, COPY_ALIAS_OUTPUT)
+
+
 K = 3
 
 

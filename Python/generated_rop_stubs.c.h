@@ -950,7 +950,7 @@ _PyIR_Rop_Stub_Truth_Generic(
     rop_Truth_Generic_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
-    PROCESS_ERROR_AT(RAISE, 35, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
     rop_Truth_Generic_truth_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         truth_at_origin1_hit = false;
@@ -1438,7 +1438,7 @@ _PyIR_Rop_Stub_Truth_Slot(
     rop_Truth_Slot_slot_truth_at_origin1_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
-    PROCESS_ERROR_AT(RAISE, 35, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
     rop_Truth_Slot_slot_truth_at_origin1_No:
     if (!_PyRop_RedirectPending(frame)) {
         slot_truth_at_origin1_hit = false;
@@ -1580,7 +1580,7 @@ _PyIR_Rop_Stub_LocalRead_Checked(
     DISPATCH();
     rop_LocalRead_Checked_Unbound:
     _PyRop_UnboundLocal(frame, home_local);
-    PROCESS_ERROR_AT(RAISE, 30, this_instr);
+    PROCESS_ERROR_AT(RAISE, 31, this_instr);
 }
 
 static Py_NO_INLINE int
@@ -1600,10 +1600,15 @@ _PyIR_Rop_Stub_LocalWrite_Restore(
     IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_LocalWrite_Restore);
-    PyValue *const home_local = &IR_SLOT(IR_A(ir_word));
     PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
-    IR_STUB_ESCAPE();
-    _PyRop_RestoreLocal(home_local, home_value);
+    PyValue v;
+    PyValue old_local;
+    PyValue *const home_local = &IR_SLOT(IR_A(ir_word));
+    v = _PyRop_RestoreLocal(home_value);
+    old_local = *home_local;
+    _PyFrame_WriteHome(frame, home_local, v);
+    _PyValue_CheckHome(*home_local);
+    PyValue_XCLOSE(old_local);
     DISPATCH();
 }
 
@@ -1624,10 +1629,15 @@ _PyIR_Rop_Stub_SaveLocal_Take(
     IR_HOLD_NEXT();
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_SaveLocal_Take);
-    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue *const home_local = &IR_SLOT(IR_B(ir_word));
-    IR_STUB_ESCAPE();
-    _PyRop_SaveLocal(home_dst, home_local);
+    PyValue v;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
+    v = _PyRop_SaveLocal(home_local);
+    old_dst = *home_dst;
+    _PyFrame_WriteHome(frame, home_dst, v);
+    _PyValue_CheckHome(*home_dst);
+    PyValue_XCLOSE(old_dst);
     DISPATCH();
 }
 
@@ -1649,15 +1659,21 @@ _PyIR_Rop_Stub_LocalDelete_Checked(
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_LocalDelete_Checked);
     PyValue *const home_local = &IR_SLOT(IR_A(ir_word));
-    int ret1;
-    IR_STUB_ESCAPE();
+    PyValue ret1;
+    PyValue old_local;
+    PyValue old;
     ret1 = _PyRop_DeleteLocal(frame, home_local);
-    if (ret1 < 0) {
+    if (PyValue_IsNull(ret1)) {
         goto rop_LocalDelete_Checked_Failed;
     }
+    old = ret1;
+    old_local = *home_local;
+    _PyFrame_WriteHome(frame, home_local, PyValue_NULL);
+    PyValue_XCLOSE(old_local);
+    PyValue_XCLOSE(old);
     DISPATCH();
     rop_LocalDelete_Checked_Failed:
-    PROCESS_ERROR_AT(RAISE, 28, this_instr);
+    PROCESS_ERROR_AT(RAISE, 29, this_instr);
 }
 
 static Py_NO_INLINE int

@@ -3,10 +3,10 @@
 // release of the receiver.
 
 family GetAttr(dst:Dst, obj:Src, name:Name, fb:Fb<Attr>)
-  exits(next, miss, again, enter, raise, redirect) ops(LOAD_ATTR);
+  exits(next, miss, again, enter, raise, redirect) generic(Generic) ops(LOAD_ATTR);
 
-point GetAttr.Failed(current, site, pending) keep() spent(obj) defs() held();
-point GetAttr.Done(current, next_head, clear) keep() spent(obj) defs(dst) held();
+point GetAttr.Failed(current, site, pending) keep() spent(obj) defs();
+point GetAttr.Done(current, next_head, clear) keep() spent(obj) defs(dst);
 
 // Instance-slot evidence: a recipe for this name on the observed type, read
 // coherently from the site's entry.  Declared ahead of its C body (F2).
@@ -54,8 +54,8 @@ extern primitive borrow_value_slot(o:Obj, r:Recipe<Attr>) -> Maybe<B>
     lowering: "none yet: an arm that calls it keeps the call of its form (rop_leaf has no lowering)",
     test: "test_rop_getattr row tests");
 
-arm GetAttr.Instance inline
-  effects(reads, writes, releases)
+arm GetAttr.Instance inline entry(instance)
+  effects(reads, writes, releases on (dst))
   feedback(read(entry.kind), read(entry.type_version), read(entry.offset))
   exits(next, miss)
 {
@@ -289,8 +289,8 @@ extern helper value_getset_read(recipe:Recipe<Attr>, v:B)
     review: "descrobject.c _PyGetSet_ValueRead: the descriptor's value getter, called with the owner.",
     contract: "The descriptor is loaded from the recipe inside the call and the owner is borrowed, as the old handler did; the result owned, or NULL with an exception set. Callbacks: arbitrary Python (the getter).");
 
-arm GetAttr.GetSet inline
-  effects(runs_python, raises, releases)
+arm GetAttr.GetSet inline entry(getset)
+  effects(runs_python, raises, releases on (dst))
   feedback(read(entry))
   exits(next, miss, raise, redirect)
 {
@@ -324,7 +324,7 @@ arm GetAttr.GetSet inline
 }
 
 arm GetAttr.Generic shared
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases on (dst))
   feedback(read(entry), write(entry), write(handler))
   exits(next, again, raise, redirect)
 {
@@ -398,8 +398,8 @@ extern helper poly_shape(fr:Frame, f:Fb<Attr>, o:Obj)
     review: "pycore_attr_recipe.h: the row of the owner's version whose shape is the owner's.",
     contract: "Reads the site's poly table; no callee. The hit carries the version and the shape that it matched.");
 
-arm GetAttr.Shape inline
-  effects(reads, writes, releases)
+arm GetAttr.Shape inline entry(shape)
+  effects(reads, writes, releases on (dst))
   feedback(read(entry.kind), read(entry.type_version), read(entry.shape), read(entry.offset))
   exits(next, miss)
 {
@@ -423,7 +423,7 @@ arm GetAttr.Shape inline
 
 // Two to four compatible recipes of one site: the row of the owner's type
 arm GetAttr.PolyShape inline
-  effects(reads, writes, releases)
+  effects(reads, writes, releases on (dst))
   feedback(read(entry))
   exits(next, miss)
 {
@@ -546,8 +546,8 @@ extern primitive classmethod_function(r:Recipe<Attr>) -> Maybe<B>
     lowering: "none yet: an arm that calls it keeps the call of its form",
     test: "test_rop_getattr row tests");
 
-arm GetAttr.Module inline
-  effects(reads, writes, releases)
+arm GetAttr.Module inline entry(module)
+  effects(reads, writes, releases on (dst))
   feedback(read(entry))
   exits(next, miss)
 {
@@ -570,8 +570,8 @@ arm GetAttr.Module inline
     exit miss();
 }
 
-arm GetAttr.Hint inline
-  effects(reads, writes, releases)
+arm GetAttr.Hint inline entry(hint)
+  effects(reads, writes, releases on (dst))
   feedback(read(entry))
   exits(next, miss)
 {
@@ -594,8 +594,8 @@ arm GetAttr.Hint inline
     exit miss();
 }
 
-arm GetAttr.ValueSlot inline
-  effects(reads, writes, releases)
+arm GetAttr.ValueSlot inline entry(value_slot)
+  effects(reads, writes, releases on (dst))
   feedback(read(entry))
   exits(next, miss)
 {
@@ -618,8 +618,8 @@ arm GetAttr.ValueSlot inline
     exit miss();
 }
 
-arm GetAttr.PointerSlot inline
-  effects(reads, writes, releases)
+arm GetAttr.PointerSlot inline entry(pointer_slot)
+  effects(reads, writes, releases on (dst))
   feedback(read(entry))
   exits(next, miss)
 {
@@ -642,8 +642,8 @@ arm GetAttr.PointerSlot inline
     exit miss();
 }
 
-arm GetAttr.Class inline
-  effects(reads, writes, releases)
+arm GetAttr.Class inline entry(class_)
+  effects(reads, writes, releases on (dst))
   feedback(read(entry))
   exits(next, miss)
 {
@@ -665,8 +665,8 @@ arm GetAttr.Class inline
 }
 
 // A class value that is not a descriptor, under an unshadowed layout
-arm GetAttr.NonDescriptorValues inline
-  effects(reads, writes, releases)
+arm GetAttr.NonDescriptorValues inline entry(nondescriptor_values)
+  effects(reads, writes, releases on (dst))
   feedback(read(entry))
   exits(next, miss)
 {
@@ -688,8 +688,8 @@ arm GetAttr.NonDescriptorValues inline
     exit miss();
 }
 
-arm GetAttr.NonDescriptorNoDict inline
-  effects(reads, writes, releases)
+arm GetAttr.NonDescriptorNoDict inline entry(nondescriptor_no_dict)
+  effects(reads, writes, releases on (dst))
   feedback(read(entry))
   exits(next, miss)
 {
@@ -714,10 +714,10 @@ arm GetAttr.NonDescriptorNoDict inline
 // and, in its own home, the receiver or an absent self.
 
 family GetMethod(callable:Dst, self_dst:Maybe<Dst>, obj:Src, name:Name, fb:Fb<Attr>)
-  exits(next, miss, again, raise, redirect) ops(LOAD_ATTR);
+  exits(next, miss, again, raise, redirect) generic(Generic) ops(LOAD_ATTR);
 
-point GetMethod.Failed(current, site, pending) keep() spent(obj) defs() held();
-point GetMethod.Done(current, next_head, clear) keep() spent(obj) defs(callable, self_dst) held();
+point GetMethod.Failed(current, site, pending) keep() spent(obj) defs();
+point GetMethod.Done(current, next_head, clear) keep() spent(obj) defs(callable, self_dst);
 
 // Method evidence: the site's recipe when it names an unshadowed method of
 // the observed type
@@ -887,8 +887,8 @@ macro adapt_before_use_getmethod(f:Fb<Attr>, o:Src, n:Name)
     exit run();
 }
 
-arm GetMethod.MethodValues inline
-  effects(reads, writes, releases)
+arm GetMethod.MethodValues inline entry(method_values)
+  effects(reads, writes, releases on (callable, self_dst))
   feedback(read(entry.kind), read(entry.type_version), read(entry.descr))
   exits(next, miss)
 {
@@ -913,7 +913,7 @@ arm GetMethod.MethodValues inline
 }
 
 arm GetMethod.Generic shared
-  effects(runs_python, raises)
+  effects(runs_python, raises, releases on (callable, self_dst))
   feedback(read(entry), write(entry), write(handler))
   exits(next, again, raise, redirect)
 {
@@ -946,7 +946,7 @@ arm GetMethod.Generic shared
 // Two to four method rows of one site: the row of the receiver's type, with
 // its own shadowing guard
 arm GetMethod.PolyMethod inline
-  effects(reads, writes, releases)
+  effects(reads, writes, releases on (callable, self_dst))
   feedback(read(entry.kind), read(entry.rows))
   exits(next, miss)
 {
@@ -969,8 +969,8 @@ arm GetMethod.PolyMethod inline
     exit miss();
 }
 
-arm GetMethod.NoDict inline
-  effects(reads, writes, releases)
+arm GetMethod.NoDict inline entry(no_dict)
+  effects(reads, writes, releases on (callable, self_dst))
   feedback(read(entry))
   exits(next, miss)
 {
@@ -994,8 +994,8 @@ arm GetMethod.NoDict inline
 }
 
 // A receiver with a dictionary slot that has no dictionary yet
-arm GetMethod.LazyDict inline
-  effects(reads, writes, releases)
+arm GetMethod.LazyDict inline entry(lazy_dict)
+  effects(reads, writes, releases on (callable, self_dst))
   feedback(read(entry))
   exits(next, miss)
 {
@@ -1020,8 +1020,8 @@ arm GetMethod.LazyDict inline
 }
 
 // A class receiver: the wrapped function of a classmethod, with the class as self
-arm GetMethod.ClassMethod inline
-  effects(reads, writes, releases)
+arm GetMethod.ClassMethod inline entry(classmethod)
+  effects(reads, writes, releases on (callable, self_dst))
   feedback(read(entry))
   exits(next, miss)
 {

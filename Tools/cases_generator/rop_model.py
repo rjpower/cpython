@@ -142,7 +142,13 @@ class SpanLit:
     span: SrcSpan = _span()
 
 
-Expr = Union[Name, Nat, BoolLit, Call, SpanLit]
+@dataclass(frozen=True, slots=True)
+class Null:
+    """`null`: the vacancy, which only a publish binding may write."""
+    span: SrcSpan = _span()
+
+
+Expr = Union[Name, Nat, BoolLit, Call, SpanLit, Null]
 
 
 # Declarations' parts
@@ -256,10 +262,14 @@ DISCARD = "_"
 
 @dataclass(frozen=True, slots=True)
 class Binding:
-    """`dst = value` in a publish: a destination operand and its owner."""
+    """`dst = value` in a publish: a destination operand and its owner, or
+    `null`.  A vector binding `d[] = s[]` (or `d[] = dup(s[])`) gives
+    element i of the span operand d the owner taken from (or a second owner
+    of) element i of the span operand s."""
     target: str
     value: Expr
     span: SrcSpan = _span()
+    vector: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -350,15 +360,7 @@ class Exit:
     resume: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class Tail:
-    """`tail r(args);`: the word leaves through routine r's own exits."""
-    callee: str
-    args: tuple[Expr, ...]
-    span: SrcSpan = _span()
-
-
-Term = Union[Goto, Branch, CallTerm, Each, Advance, Exit, Tail]
+Term = Union[Goto, Branch, CallTerm, Each, Advance, Exit]
 
 
 @dataclass(frozen=True, slots=True)
@@ -402,6 +404,8 @@ class Family:
     # The events of the family's observed wrapper (its arms' twins)
     events: tuple[MonitoringEvent, ...] = ()
     span: SrcSpan = _span()
+    # The arm a miss restarts in (`generic(Arm)`), by its short name
+    generic: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -428,7 +432,7 @@ class Encoding:
 @dataclass(frozen=True, slots=True)
 class Point:
     """A checkpoint: frame, pc and exception roles, and the family operands
-    kept, spent, defined and held there."""
+    kept, spent and defined there."""
     name: str
     frame: FrameRole
     pc: PcRole
@@ -436,7 +440,6 @@ class Point:
     keep: tuple[str, ...]
     spent: tuple[str, ...]
     defs: tuple[str, ...]
-    held: tuple[str, ...]
     span: SrcSpan = _span()
 
     @property
@@ -454,6 +457,10 @@ class Arm:
     # The static evidence that selects the arm (`select(...)`), for a family
     # whose arms never miss
     select: tuple[Select, ...] = ()
+    # The classifier case whose recipe the arm's entry holds (`entry(k)`)
+    entry: str | None = None
+    # The family's observed wrapper, which runs under instrumented twins
+    observes: bool = False
 
     @property
     def family(self) -> str:

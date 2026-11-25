@@ -12,6 +12,39 @@
     Py_FatalError("register instruction family " #FAMILY " has no generic arm")
 #endif
 
+/* Rows declared inline: always inlined into the interpreter, one
+ * out-of-line copy for the forms and stubs */
+static Py_ALWAYS_INLINE bool _PyRop_FloatOperands(PyValueBorrow, PyValueBorrow);
+static Py_NO_INLINE bool _PyRop_FloatOperands_Outlined(PyValueBorrow p0, PyValueBorrow p1)
+{ return _PyRop_FloatOperands(p0, p1); }
+static Py_ALWAYS_INLINE PyValue _PyRop_AddFloats(PyValueBorrow, PyValueBorrow);
+static Py_NO_INLINE PyValue _PyRop_AddFloats_Outlined(PyValueBorrow p0, PyValueBorrow p1)
+{ return _PyRop_AddFloats(p0, p1); }
+static Py_ALWAYS_INLINE bool _PyRop_ExactPositional(_PyInterpreterFrame *, PyValueBorrow, const _PyIRWord *);
+static Py_NO_INLINE bool _PyRop_ExactPositional_Outlined(_PyInterpreterFrame *p0, PyValueBorrow p1, const _PyIRWord *p2)
+{ return _PyRop_ExactPositional(p0, p1, p2); }
+static Py_ALWAYS_INLINE _PyInterpreterFrame *_PyRop_PushExact(PyThreadState *, _PyInterpreterFrame *, PyValue *, const _PyIRWord *);
+static Py_NO_INLINE _PyInterpreterFrame *_PyRop_PushExact_Outlined(PyThreadState *p0, _PyInterpreterFrame *p1, PyValue *p2, const _PyIRWord *p3)
+{ return _PyRop_PushExact(p0, p1, p2, p3); }
+static Py_ALWAYS_INLINE bool _PyRop_ExactPositionalBound(_PyInterpreterFrame *, PyValueBorrow, const _PyIRWord *);
+static Py_NO_INLINE bool _PyRop_ExactPositionalBound_Outlined(_PyInterpreterFrame *p0, PyValueBorrow p1, const _PyIRWord *p2)
+{ return _PyRop_ExactPositionalBound(p0, p1, p2); }
+static Py_ALWAYS_INLINE _PyInterpreterFrame *_PyRop_PushBoundExact(PyThreadState *, _PyInterpreterFrame *, PyValue *, const _PyIRWord *);
+static Py_NO_INLINE _PyInterpreterFrame *_PyRop_PushBoundExact_Outlined(PyThreadState *p0, _PyInterpreterFrame *p1, PyValue *p2, const _PyIRWord *p3)
+{ return _PyRop_PushBoundExact(p0, p1, p2, p3); }
+static Py_ALWAYS_INLINE PyValue _PyRop_CallNative(PyThreadState *, _PyInterpreterFrame *, PyValue *, const _PyIRWord *);
+static Py_NO_INLINE PyValue _PyRop_CallNative_Outlined(PyThreadState *p0, _PyInterpreterFrame *p1, PyValue *p2, const _PyIRWord *p3)
+{ return _PyRop_CallNative(p0, p1, p2, p3); }
+static Py_ALWAYS_INLINE void _PyRop_RetireFrame(PyThreadState *, _PyInterpreterFrame *);
+static Py_NO_INLINE void _PyRop_RetireFrame_Outlined(PyThreadState *p0, _PyInterpreterFrame *p1)
+{ _PyRop_RetireFrame(p0, p1); }
+static Py_ALWAYS_INLINE void _PyRop_RetireFrameEmpty(PyThreadState *, _PyInterpreterFrame *);
+static Py_NO_INLINE void _PyRop_RetireFrameEmpty_Outlined(PyThreadState *p0, _PyInterpreterFrame *p1)
+{ _PyRop_RetireFrameEmpty(p0, p1); }
+static Py_ALWAYS_INLINE _PyInstr *_PyRop_Deliver(_PyInterpreterFrame *, PyValue);
+static Py_NO_INLINE _PyInstr *_PyRop_Deliver_Outlined(_PyInterpreterFrame *p0, PyValue p1)
+{ return _PyRop_Deliver(p0, p1); }
+
 
 static Py_NO_INLINE _PyIRTransfer
 ir_run_Add_Generic(
@@ -96,7 +129,7 @@ ir_run_Add_Generic(
     next_instr = this_instr;
     DISPATCH_SAME_OPARG();
     rop_Add_Generic_adapt_before_use_add2_Other:
-    if (_PyRop_FloatOperands(PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
+    if (_PyRop_FloatOperands_Outlined(PyValue_Borrow(*home_x), PyValue_Borrow(*home_y))) {
         goto rop_Add_Generic_adapt_before_use_add2_ChosenFloat;
     }
     goto rop_Add_Generic_adapt_before_use_add2_TryText;
@@ -246,7 +279,7 @@ ir_run_Call_Generic(
     goto rop_Call_Generic_adapt_before_use_call1_Run;
     rop_Call_Generic_Native:
     IR_STUB_ESCAPE();
-    ret6 = _PyRop_CallNative(tstate, frame, home_fn, this_instr);
+    ret6 = _PyRop_CallNative_Outlined(tstate, frame, home_fn, this_instr);
     if (PyValue_IsNull(ret6)) {
         goto rop_Call_Generic_NativeFailed;
     }
@@ -1237,10 +1270,10 @@ ir_run_Add_Float(
     PyValue z;
     l = PyValue_Borrow(*home_x);
     r = PyValue_Borrow(*home_y);
-    if (!_PyRop_FloatOperands(l, r)) {
+    if (!_PyRop_FloatOperands_Outlined(l, r)) {
         JUMP_TO_PREDICTED(Add_Generic);
     }
-    ret1 = _PyRop_AddFloats(l, r);
+    ret1 = _PyRop_AddFloats_Outlined(l, r);
     if (PyValue_IsNull(ret1)) {
         goto rop_Add_Float_Failed;
     }
@@ -1404,7 +1437,7 @@ ir_run_Call_Exact(
     if (!_PyRop_FunctionVersion(PyValue_Borrow(*home_fn), ((_PyFbCall *)IR_FB(IR_D(ir_word))))) {
         JUMP_TO_PREDICTED(Call_Generic);
     }
-    if (!_PyRop_ExactPositional(frame, PyValue_Borrow(*home_fn), this_instr)) {
+    if (!_PyRop_ExactPositional_Outlined(frame, PyValue_Borrow(*home_fn), this_instr)) {
         JUMP_TO_PREDICTED(Call_Generic);
     }
     if (!_PyRop_FrameSpace(tstate, PyValue_Borrow(*home_fn))) {
@@ -1414,7 +1447,7 @@ ir_run_Call_Exact(
         JUMP_TO_PREDICTED(Call_Generic);
     }
     IR_STUB_ESCAPE();
-    c = _PyRop_PushExact(tstate, frame, home_fn, this_instr);
+    c = _PyRop_PushExact_Outlined(tstate, frame, home_fn, this_instr);
     ROP_ENTER(c, IR_A(ir_word));
 }
 
@@ -1445,7 +1478,7 @@ ir_run_Call_BoundExact(
     if (!_PyRop_NoWeakrefs(PyValue_Borrow(*home_fn))) {
         JUMP_TO_PREDICTED(Call_Generic);
     }
-    if (!_PyRop_ExactPositionalBound(frame, PyValue_Borrow(*home_fn), this_instr)) {
+    if (!_PyRop_ExactPositionalBound_Outlined(frame, PyValue_Borrow(*home_fn), this_instr)) {
         JUMP_TO_PREDICTED(Call_Generic);
     }
     if (!_PyRop_FrameSpaceBound(tstate, PyValue_Borrow(*home_fn))) {
@@ -1455,7 +1488,7 @@ ir_run_Call_BoundExact(
         JUMP_TO_PREDICTED(Call_Generic);
     }
     IR_STUB_ESCAPE();
-    c = _PyRop_PushBoundExact(tstate, frame, home_fn, this_instr);
+    c = _PyRop_PushBoundExact_Outlined(tstate, frame, home_fn, this_instr);
     ROP_ENTER(c, IR_A(ir_word));
 }
 
@@ -1631,9 +1664,9 @@ ir_run_Return_Ordinary(
     caller = _PyRop_PreviousFrame(frame);
     dying = _PyRop_Depart(tstate, frame);
     IR_STUB_ESCAPE();
-    _PyRop_RetireFrame(tstate, dying);
+    _PyRop_RetireFrame_Outlined(tstate, dying);
     IR_STUB_ESCAPE();
-    h = _PyRop_Deliver(caller, r);
+    h = _PyRop_Deliver_Outlined(caller, r);
     ROP_RETURN(caller, h);
 }
 
@@ -1661,9 +1694,9 @@ ir_run_Return_Empty(
     caller = _PyRop_PreviousFrame(frame);
     dying = _PyRop_Depart(tstate, frame);
     IR_STUB_ESCAPE();
-    _PyRop_RetireFrameEmpty(tstate, dying);
+    _PyRop_RetireFrameEmpty_Outlined(tstate, dying);
     IR_STUB_ESCAPE();
-    h = _PyRop_Deliver(caller, r);
+    h = _PyRop_Deliver_Outlined(caller, r);
     ROP_RETURN(caller, h);
 }
 
@@ -1741,9 +1774,9 @@ ir_run_Return_Observed(
     caller = _PyRop_PreviousFrame(frame);
     dying = _PyRop_Depart(tstate, frame);
     IR_STUB_ESCAPE();
-    _PyRop_RetireFrame(tstate, dying);
+    _PyRop_RetireFrame_Outlined(tstate, dying);
     IR_STUB_ESCAPE();
-    h = _PyRop_Deliver(caller, v);
+    h = _PyRop_Deliver_Outlined(caller, v);
     ROP_RETURN(caller, h);
 }
 

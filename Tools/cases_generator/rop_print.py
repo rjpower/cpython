@@ -190,7 +190,7 @@ def decl_lines(d: Decl) -> list[str]:
         lines.append(f"  test({', '.join(_fact(f) for f in d.test)})")
     if d.c is None:
         return lines + ["  pending;"]
-    lines.append(f"  c {d.c.symbol} as {d.c.convention}")
+    lines.append(f"  c {d.c.symbol} as {d.c.convention}" + (" inline" if d.c.inline else ""))
     if d.c.evidence:
         items = [f"    {e.key}: {_string(e.text)}" for e in d.c.evidence]
         lines += ["  evidence("] + [item + "," for item in items[:-1]] + [items[-1] + ")"]

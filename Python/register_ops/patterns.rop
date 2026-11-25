@@ -118,6 +118,17 @@ extern helper match_class(count:U16, s:B, c:B, n:B)
     review: "ceval.c _PyRop_MatchClass: _PyEval_MatchClass; the tuple of attributes, or None when it is NULL without an exception, as MATCH_CLASS did.",
     contract: "All three are borrowed on every path; the result is a new owner, or NULL with an exception set. A type check or a property may run Python.");
 
+// The sources of a span, retired where the call is over: each temporary is
+// taken out of its home and closed, in the order listed
+extern helper retire_sources(s:Span<Src>) -> Unit
+  effects(writes, releases)
+  feedback()
+  spends(s)
+  c _PyRop_RetireSources as unit
+  evidence(
+    review: "pycore_rop_rows.h: the closes of the sources that the bytecode popped.",
+    contract: "Takes each temporary source out of its home and closes it; a local is left. A finalizer may run Python. It does not fail.");
+
 macro match_class_at_origin(count:U16, a:Anchors)
   cases(ok(z:O), err(e:Err), redirected(r:Route))
   effects(runs_python, raises, releases)
@@ -156,7 +167,8 @@ arm PatternClass.Match shared
       redirected -> Gone();
     }
   Finish(z:O):
-    publish [dst = z] retire [roots(a), spent(parts), old(dst)] at PatternClass.Done;
+    let _:Unit = retire_sources(parts);
+    publish [dst = z] retire [roots(a), old(dst)] at PatternClass.Done;
     exit next();
   Failed(e:Err):
     let saved:Err = retire_failed_call(a, parts, e);

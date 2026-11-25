@@ -162,7 +162,7 @@ arm Convert.Text shared
 }
 
 // Format: format(value) or format(value, spec).  An exact str formats as
-// itself: the owner of the value is the result.
+// itself, which the format row returns as the new owner.
 
 family Format(dst:Dst, value:Src)
   exits(next, raise, redirect) ops(FORMAT_SIMPLE);
@@ -249,13 +249,6 @@ arm Format.Simple shared
   exits(next, raise, redirect)
 {
   entry():
-    let v:B = use(value);
-    branch exact_str(v) -> Same(), Run();
-  Same():
-    let s:O = acquire(value);
-    publish [dst = s] retire [spent(value), old(dst)] at Format.Done;
-    exit next();
-  Run():
     let a:Anchors = anchor_for_call([value]);
     call format_plain_at_origin(a) {
       ok -> Finish();

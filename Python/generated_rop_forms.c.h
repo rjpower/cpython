@@ -5621,8 +5621,6 @@ ir_run_PatternClass_Match(
     INSTRUCTION_STATS(ROP_HANDLER_PatternClass_Match);
     _PyRopAnchors a;
     PyValue ret1;
-    PyValue *const home_parts = &IR_SLOT(IR_B(ir_word));
-    PyValue own_parts = PyValue_NULL;
     PyValue old_dst;
     PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
@@ -5642,14 +5640,12 @@ ir_run_PatternClass_Match(
     }
     match_class_at_origin1_kept = match_class_at_origin1_value;
     z = match_class_at_origin1_kept;
-    if (!(ir_word & IR_F_LOCAL_B)) {
-        own_parts = _PyFrame_TakeHome(frame, home_parts);
-    }
+    IR_STUB_ESCAPE();
+    _PyRop_RetireSources(&(_PyRopSpan){frame, this_instr, opcode, 0, IR_B(ir_word)});
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
     _PyRop_CloseAnchors(&a);
-    PyValue_XCLOSE(own_parts);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
     rop_PatternClass_Match_match_class_at_origin1_Failed:
@@ -6887,29 +6883,15 @@ ir_run_Format_Simple(
     next_instr += 1;
     INSTRUCTION_STATS(ROP_HANDLER_Format_Simple);
     PyValue *const home_value = &IR_SLOT(IR_B(ir_word));
-    PyValueBorrow v;
-    PyValue s;
-    PyValue old_dst;
-    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     _PyRopAnchors a;
     PyValue ret1;
+    PyValue own_value = PyValue_NULL;
+    PyValue old_dst;
+    PyValue *const home_dst = &IR_SLOT(IR_A(ir_word));
     PyValue z;
     PyValue format_plain_at_origin1_value;
     PyValue format_plain_at_origin1_kept;
     PyValue format_plain_at_origin1_dropped;
-    v = PyValue_Borrow(*home_value);
-    if (_PyRop_ExactStr(v)) {
-        goto rop_Format_Simple_Same;
-    }
-    goto rop_Format_Simple_Run;
-    rop_Format_Simple_Same:
-    s = ((ir_word & IR_F_LOCAL_B) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
-    old_dst = *home_dst;
-    _PyFrame_WriteHome(frame, home_dst, s);
-    _PyValue_CheckHome(*home_dst);
-    PyValue_XCLOSE(old_dst);
-    DISPATCH();
-    rop_Format_Simple_Run:
     a = _PyRop_AnchorForCall(&(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_value}});
     IR_STUB_ESCAPE();
     ret1 = _PyRop_FormatPlain(_PyRop_AnchorArg(&a, 0));
@@ -6923,10 +6905,14 @@ ir_run_Format_Simple(
     }
     format_plain_at_origin1_kept = format_plain_at_origin1_value;
     z = format_plain_at_origin1_kept;
+    if (!(ir_word & IR_F_LOCAL_B)) {
+        own_value = _PyFrame_TakeHome(frame, home_value);
+    }
     old_dst = *home_dst;
     _PyFrame_WriteHome(frame, home_dst, z);
     _PyValue_CheckHome(*home_dst);
     _PyRop_CloseAnchors(&a);
+    PyValue_XCLOSE(own_value);
     PyValue_XCLOSE(old_dst);
     DISPATCH();
     rop_Format_Simple_format_plain_at_origin1_Failed:

@@ -137,6 +137,18 @@ _PyRop_RetireFailedSrcs(_PyRopAnchors *a, const _PyRopSrcs *s)
     PyErr_SetRaisedException(exc);
 }
 
+/* The temporary sources of a span, taken out of their homes and closed */
+static inline void
+_PyRop_RetireSources(const _PyRopSpan *span)
+{
+    _PyRopSrcs s = _PyRop_SrcsOfSpan(span);
+    for (int i = 0; i < s.n; i++) {
+        if (!s.local[i]) {
+            PyValue_XCLOSE(_PyFrame_TakeHome(s.frame, s.home[i]));
+        }
+    }
+}
+
 /* The sources of a call are the listed operands or a span */
 #define _PyRop_AnchorForCall(...) \
     _Generic((__VA_ARGS__), \

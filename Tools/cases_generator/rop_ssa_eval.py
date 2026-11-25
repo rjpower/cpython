@@ -693,6 +693,8 @@ def decode_site(program: Program, family: str, words: list[int], index: int,
         value = 0
         for i, slot in enumerate(p.slots):
             value |= field(word, payload, slot) << (12 * i)
+        if p.shared:
+            value = (value >> p.shift) & ((1 << p.bits) - 1)
         if p.kind is FieldKind.target:
             if value >> (p.bits - 1):
                 value -= 1 << p.bits

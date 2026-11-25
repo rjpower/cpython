@@ -500,13 +500,15 @@ static const _PyRopOperand _PyRop_Operands_CleanupThrow[] = {
     {"route", ROP_FIELD_TARGET, ROP_ROLE_NONE, 0, 12, 64, 0},  /* NearHead */
 };
 static const uint16_t _PyRop_Ops_CleanupThrow[] = {CLEANUP_THROW};
+#define ROP_PACK_Compare_relation(v) ((uint32_t)(v) << 0)
+#define ROP_PACK_Compare_result(v) ((uint32_t)(v) << 3)
 static const _PyRopOperand _PyRop_Operands_Compare[] = {
     {"dst", ROP_FIELD_HOME, ROP_ROLE_DST, 0, 12, 16, IR_F_LOCAL_A},  /* Dst */
     {"x", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 28, IR_F_LOCAL_B},  /* Src */
     {"y", ROP_FIELD_HOME, ROP_ROLE_SRC, 0, 12, 40, IR_F_LOCAL_C},  /* Src */
     {"relation", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 3, 52, 0},  /* Enum<Relation> */
-    {"result", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 64, 0},  /* Enum<CompareResult> */
-    {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 80, 0},  /* Fb<Compare> */
+    {"result", ROP_FIELD_IMM, ROP_ROLE_NONE, 0, 1, 55, 0},  /* Enum<CompareResult> */
+    {"fb", ROP_FIELD_FEEDBACK, ROP_ROLE_NONE, 0, 12, 64, 0},  /* Fb<Compare> */
 };
 static const uint16_t _PyRop_Ops_Compare[] = {COMPARE_OP};
 static const _PyRopOperand _PyRop_Operands_Const[] = {

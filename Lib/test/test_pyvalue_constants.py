@@ -23,7 +23,7 @@ class PyValueConstantTests(unittest.TestCase):
             self.assertEqual(constant(), [-1])
         handlers = [word[0] for word in
                     _testinternalcapi.get_ir(constant.__code__, True)]
-        self.assertIn('LOAD_COMMON_CONSTANT', handlers)
+        self.assertIn('Const.Common', handlers)
 
     def test_owned_compile_fold_and_constant_results(self):
         for source, expected in [

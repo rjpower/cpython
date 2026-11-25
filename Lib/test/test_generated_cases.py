@@ -3058,19 +3058,14 @@ class TestIRCases(unittest.TestCase):
 
     def test_normal_transfer_source_proofs(self):
         cases = (
-            ("LOAD_CONST", "-- value: owned", "effects(reads) exits(next)",
-             "PyValueBorrow constant = _PyValue_CodeConstant(PyTuple_GET_VALUE("
-             "FRAME_CO_CONSTS, oparg)); value = PyValue_DUP(constant);",
+            ("LOAD_COMMON_CONSTANT", "-- value: owned", "effects(reads) exits(next)",
+             "assert(oparg < NUM_COMMON_CONSTANTS); PyValueBorrow constant = "
+             "_PyValue_CommonConstant(tstate->interp->common_consts[oparg]); "
+             "value = PyValue_DUP(constant);",
              "FRESH", "PyValue_DUP", "PyValue_XDUP"),
-            ("LOAD_FAST_AND_CLEAR", "-- value: moved(home)", "effects() exits(next)",
-             "value = GETLOCAL(oparg); GETLOCAL(oparg) = PyValue_NULL;",
-             "LOCAL_MOVE", "GETLOCAL(oparg) = PyValue_NULL;", ""),
             ("POP_TOP", "value: consumed --", "effects(releases) exits(next)",
              "PyValue_XCLOSE(value);",
              "RETIRE", "PyValue_XCLOSE", "PyValue_DUP"),
-            ("COPY", "bottom, unused[oparg-1] -- bottom, unused[oparg-1], top: owned",
-             "effects() exits(next)",
-             "top = PyValue_DUP(bottom);", "COPY", "PyValue_DUP(bottom)", "bottom"),
         )
         for name, effect, clauses, body, kind, old, new in cases:
             with self.subTest(handler=name):
@@ -3740,14 +3735,11 @@ class TestIRCases(unittest.TestCase):
         analysis = analyzer.analyze_files([str(source)])
         formats = ir_generator.compute_formats(analysis)
         insts = ir_generator.handler_instructions(analysis)
+        # The local, constant and shuffle stack ops other than STORE_FAST
+        # and POP_TOP are stack-only: their families cover them
         expected = {
-            "LOAD_CONST": "FRESH", "LOAD_CONST_INLINE_INT": "FRESH",
-            "LOAD_CONST_INLINE_FLOAT": "FRESH", "LOAD_COMMON_CONSTANT": "FRESH",
-            "LOAD_SMALL_INT": "FRESH", "LOAD_SMALL_INT_INLINE": "FRESH",
-            "LOAD_FAST": "LOCAL_DUP", "LOAD_FAST_BORROW": "LOCAL_DUP",
-            "LOAD_FAST_CHECK": "LOCAL_DUP", "LOAD_FAST_AND_CLEAR": "LOCAL_MOVE",
-            "STORE_FAST": "LOCAL_STORE", "DELETE_FAST": "LOCAL_CLEAR",
-            "POP_TOP": "RETIRE", "COPY": "COPY", "SWAP": "SWAP",
+            "LOAD_COMMON_CONSTANT": "FRESH",
+            "STORE_FAST": "LOCAL_STORE", "POP_TOP": "RETIRE",
             "IR_JUMP": "PRESERVE", "RESUME": "PRESERVE",
             "CALL_KW": "UNKNOWN", "SEND": "UNKNOWN",
         }
@@ -4074,6 +4066,7 @@ class TestCallMarkers(unittest.TestCase):
         forms = forms[forms.index("#ifdef IR_FUNCTION_FORMS"):]
         handlers = set(re.findall(r"^\s*(?:HOT_)?TARGET\((\w+)\)(?: \{)?$", inline, re.M))
         defined = set(re.findall(r"^ir_run_(\w+)\($", forms, re.M))
+        # A floor, not a count: ported families delete old handlers
         self.assertGreater(len(handlers), 200)
         self.assertEqual(handlers, defined)
         table = re.findall(r"^    \[(\d+)\] = ir_run_(\w+),$", forms, re.M)

@@ -2780,6 +2780,27 @@ error_apply_recipe(_PyInterpreterFrame *frame, int index)
         _PyCode_IR(_PyFrame_GetCode(frame)), index));
 }
 
+/* The rows of the checked local families (Python/register_ops/values.rop) */
+void
+_PyRop_UnboundLocal(_PyInterpreterFrame *frame, PyValue *home)
+{
+    int index = (int)(home - frame->base);
+    _PyEval_FormatExcCheckArg(
+        _PyThreadState_GET(), PyExc_UnboundLocalError, UNBOUNDLOCAL_ERROR_MSG,
+        _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, index));
+}
+
+int
+_PyRop_DeleteLocal(_PyInterpreterFrame *frame, PyValue *home)
+{
+    if (PyValue_IsNull(*home)) {
+        _PyRop_UnboundLocal(frame, home);
+        return -1;
+    }
+    PyValue_CLOSE(_PyFrame_TakeHome(frame, home));
+    return 0;
+}
+
 /* The rows of the Move arms (Python/register_ops/values.rop).  The homes of
  * a span are decoded once; a set has at most IR_FIELD_MAX pairs. */
 static int

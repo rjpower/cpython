@@ -119,7 +119,7 @@ class AssemblerTest(unittest.TestCase):
         def f(o):
             return o.attr
         ir = get_ir(f.__code__)
-        self.assertNotIn("LOAD_FAST_BORROW", [word[0] for word in ir])
+        self.assertNotIn("LocalRead.Bound", [word[0] for word in ir])
         attr = [word for word in ir if word[0] == "GetAttr.Generic"][0]
         self.assertEqual(attr[1], nlocalsplus(f))
         self.assertEqual(attr[2], 0)
@@ -629,14 +629,12 @@ class AssemblerTest(unittest.TestCase):
         self.assertGreater(len(IRCode(f.__code__).co_code) // 8, 65535)
         self.assertGreater(f.__code__.co_names.index("attr"), IR_FIELD_MAX)
         ir = get_ir(f.__code__)
-        # The last LOAD_CONST, which may push its constant inline, names it
-        # through CD
-        index = [k for k, word in enumerate(ir)
-                 if word[0].startswith("LOAD_CONST")][-1]
-        _, _, _, c, d = ir[index]
+        # The last constant names its index through B and C
+        index = [k for k, word in enumerate(ir) if word[0] == "Const.Pool"][-1]
+        _, _, b, c, _ = ir[index]
         arg = list(dis.get_instructions(f))[index].arg
         self.assertGreater(arg, IR_FIELD_MAX)
-        self.assertEqual(d << 12 | c, arg)
+        self.assertEqual(c << 12 | b, arg)
         self.check_offsets(f)
 
         # The handlers that run the LOAD_ATTR: specialised, deoptimised and
@@ -1503,7 +1501,7 @@ class FoldTest(unittest.TestCase):
         # Nothing between the load of x and the add writes x
         def f(x):
             return x + 1
-        self.assertNotIn("LOAD_FAST_BORROW", [w[0] for w in words(f)])
+        self.assertNotIn("LocalRead.Bound", [w[0] for w in words(f)])
         self.assertEqual(f(1), 2)
 
     def test_store_to_the_loaded_local(self):
@@ -1958,13 +1956,14 @@ class StoreFoldTest(unittest.TestCase):
         self.run_specialized(lambda: self.assertEqual(f("a", "b"), "ab"))
 
     def test_copy_before_the_store_to_its_source(self):
-        # The store to y is folded into the load of x; the later store to x
-        # must not change y.
+        # The copy to y is one store from x, with no read word; the later
+        # store to x must not change y.
         def f(x):
             y = x
             x = x + 1
             return y
-        self.assertNotIn("STORE_FAST", [w[0] for w in words(f)])
+        self.assertEqual([w[0] for w in words(f)],
+                         ["LocalWrite.Store", "Add.Generic", "Return.Empty"])
         self.run_specialized(lambda: self.assertEqual(f(1), 1))
 
     def test_loop_index(self):
@@ -1974,7 +1973,7 @@ class StoreFoldTest(unittest.TestCase):
                 total += a[i] * b[i]
             return total
         handlers = [w[0] for w in words(f)]
-        self.assertNotIn("STORE_FAST", handlers)
+        self.assertNotIn("LocalWrite.Store", handlers)
         self.run_specialized(
             lambda: self.assertEqual(f([1.0, 2.0], [3.0, 4.0]), 11.0))
 
@@ -2211,6 +2210,147 @@ class StoreFoldTest(unittest.TestCase):
         self.assertTrue(rejected)
 
 
+
+# Reads and stores that the translator erases: x = a and y = x + 1 have no
+# read word, the store of y is the add's own, and the swap is two stores
+# through one temporary.  The events, the jumps and the values must be the
+# stack program's.
+ERASED_LOCALS_PROGRAM = """
+import sys, warnings
+warnings.simplefilter("ignore", RuntimeWarning)
+
+def f(a):
+    x = a
+    y = x + 1
+    z = y
+    a, z = z, a
+    return x, y, z, a
+
+first = f.__code__.co_firstlineno
+for _ in range(60):
+    f(1)
+
+def traced(jumps):
+    lines = []
+    def trace(frame, event, arg):
+        if frame.f_code is f.__code__ and event == "line":
+            line = frame.f_lineno - first
+            lines.append(line)
+            if jumps.get(line):
+                frame.f_lineno = first + jumps.pop(line)
+        return trace
+    sys.settrace(trace)
+    try:
+        return lines, f(1)
+    finally:
+        sys.settrace(None)
+
+print(traced({}))
+print(traced({3: 1}))
+print(traced({2: 4}))
+
+mon = sys.monitoring
+mon.use_tool_id(3, "erased")
+lines = []
+mon.register_callback(3, mon.events.LINE, lambda code, line:
+                      lines.append(line - first) if code is f.__code__ else None)
+mon.set_events(3, mon.events.LINE)
+result = f(1)
+mon.set_events(3, 0)
+mon.free_tool_id(3)
+print(lines, result)
+"""
+
+ERASED_LOCALS_OUTPUT = """\
+([1, 2, 3, 4, 5], (1, 2, 1, 2))
+([1, 2, 3, 2, 3, 4, 5], (1, 2, 1, 2))
+([1, 2, 5], (1, None, 1, None))
+[1, 2, 3, 4, 5] (1, 2, 1, 2)
+"""
+
+# A call reads its argument from the caller's local, with no read word.  The
+# callee, or a callback of the callee, rebinds that local through f_locals:
+# the argument must stay alive until the call returns.
+BORROWED_ARGUMENT_PROGRAM = """
+import gc, sys
+
+class D(list):
+    def __del__(self):
+        print("freed")
+
+def g(a):
+    sys._getframe(1).f_locals["x"] = None
+    gc.collect()
+    print("g sees", a[0])
+    return a[0]
+
+def key(v):
+    sys._getframe(2).f_locals["x"] = None
+    return v
+
+def direct():
+    x = D([1, 2, 3])
+    return g(x)
+
+def through_sorted():
+    x = D([3, 2, 1])
+    return sorted(x, key=key)
+
+for _ in range(60):
+    print(direct(), through_sorted())
+"""
+
+
+class LocalArmTest(unittest.TestCase):
+    """Locals and constants as register instructions (rir90 P1)"""
+
+    def test_no_move_words(self):
+        # Locals, saved bindings and swaps become stores and renames; the
+        # resolver has no parallel set left to move
+        def comp(xs):
+            return [x * 2 for x in xs if x]
+        def nested(xs, ys):
+            return {x: [y for y in ys] for x in xs}
+        def unpack(seq):
+            a, b = seq
+            c, *rest = b, a, 3
+            return a + b + c + len(rest)
+        def swap(a, b):
+            a, b = b, a
+            return a - b
+        def consts(x):
+            y = 5
+            z = "s"
+            w = 2**40
+            return x, y, z, w
+        for f, args in ((comp, ([1, 0, 2],)), (nested, ([1, 2], [3])),
+                        (unpack, ((1, 2),)), (swap, (1, 2)), (consts, (1,))):
+            with self.subTest(f=f.__name__):
+                f(*args)
+                names = handlers(f)
+                self.assertEqual([n for n in names if n.startswith("Move.")], [])
+        self.assertIn("SaveLocal.Take", handlers(comp))
+        self.assertIn("LocalWrite.Restore", handlers(comp))
+        self.assertEqual(handlers(swap).count("LocalWrite.Store"), 2)
+        self.assertIn("Const.Small", handlers(consts))
+        self.assertIn("Const.Pool", handlers(consts))
+
+    def check_jit_modes(self, program, expected):
+        from test.support import script_helper
+        for mode in ("0", "always"):
+            with self.subTest(jit=mode):
+                result = script_helper.assert_python_ok("-c", program, PYTHON_JIT=mode)
+                self.assertEqual(result.out.decode(), expected)
+
+    def test_erased_reads_and_stores_observed(self):
+        self.check_jit_modes(ERASED_LOCALS_PROGRAM, ERASED_LOCALS_OUTPUT)
+
+    @support.requires_refcounting
+    def test_borrowed_argument_survives_rebinding(self):
+        line = "g sees 1\nfreed\nfreed\n1 [1, 2, 3]\n"
+        self.check_jit_modes(BORROWED_ARGUMENT_PROGRAM, line * 60)
+
+
 K = 3
 
 
@@ -2326,7 +2466,7 @@ class RegCfgTest(unittest.TestCase):
         def add(x):
             return x + one()
         for f in mul, add:
-            self.assertIn("LOAD_FAST_BORROW", self.names(f))
+            self.assertIn("LocalRead.Bound", self.names(f))
             op = [w for w in words(f) if w[0].startswith(("BINARY_OP", "Add."))][0]
             self.assertNotEqual(op[2][0], 0)
         self.run_specialized(lambda: self.assertEqual(mul(2), 6))
@@ -2340,7 +2480,7 @@ class RegCfgTest(unittest.TestCase):
         def walrus(x):
             return x + (x := x + 1)
         # The first x of walrus is read before the store: it stays a load
-        self.assertIn("LOAD_FAST", self.names(walrus))
+        self.assertIn("LocalRead.Bound", self.names(walrus))
         self.run_specialized(lambda: self.assertEqual(copy(1), 1))
         self.run_specialized(lambda: self.assertEqual(walrus(1), 3))
 
@@ -2397,7 +2537,7 @@ class RegCfgTest(unittest.TestCase):
             except ValueError:
                 pass
             return z
-        self.assertNotIn("STORE_FAST", self.names(f))
+        self.assertNotIn("LocalWrite.Store", self.names(f))
         call = [w for w in words(f) if w[0].startswith("Call.")][1]
         self.assertEqual(call[1], 0)
         n = _testinternalcapi.SPECIALIZATION_THRESHOLD + 2
@@ -2490,7 +2630,7 @@ class RegCfgTest(unittest.TestCase):
         self.assertIn("JUMP_IF_FALSE_OR_POP", self.ops(conj))
         self.assertIn("JUMP_IF_TRUE_OR_POP", self.ops(disj))
         for f in conj, disj:
-            self.assertNotIn("COPY", self.names(f))
+            self.assertNotIn("Move.Copy", self.names(f))
             self.assertNotIn("POP_TOP", self.names(f))
         empty, full = [], [1]
         for x, b in ((empty, "b"), (full, "b"), (0, None), (2.5, 0)):
@@ -2678,11 +2818,12 @@ class MoveResolutionTest(unittest.TestCase):
 
     @staticmethod
     def cycle(a, b, c):
-        # The chained comparison exchanges b.real and its copy of b: a
-        # Move whose destinations are its sources
-        if a <= b.real < c:
-            return 1
-        return 0
+        # The mapping pattern with a rest exchanges two of its values on
+        # the way to its test: a Move whose destinations are its sources
+        match b.real:
+            case {0: 1, **rest}:
+                return len(rest)
+        return int(a <= b.real < c)
 
     @staticmethod
     def move_sets(func):
@@ -2737,12 +2878,13 @@ class MoveResolutionTest(unittest.TestCase):
             def __init__(self, real):
                 self.real = real
         b = Real(object())
-        self.cycle(0, Real(1), 2)
+        self.cycle(0, Real({0: 1, 2: 3}), 2)
         cycles = [(dsts, srcs) for dsts, srcs in self.move_sets(self.cycle)
                   if sorted(dsts) == sorted(srcs) and dsts != srcs]
         self.assertTrue(cycles)
         before = self.counts(b, b.real)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
+            self.assertEqual(self.cycle(0, Real({0: 1, 2: 3}), 2), 1)
             self.assertEqual(self.cycle(0, Real(1), 2), 1)
             self.assertEqual(self.cycle(0, Real(5), 2), 0)
             with self.assertRaises(TypeError):
@@ -2828,7 +2970,7 @@ class MoveResolutionTest(unittest.TestCase):
 
     def test_every_cycle_word_unwinds(self):
         class Real:
-            real = 1
+            real = {0: 1, 2: 3}
         b = Real()
         self.raise_at_each_word(self.cycle, lambda: (0, b, 2))
 
@@ -2866,7 +3008,7 @@ class UnpackToLocalsTest(unittest.TestCase):
                 (star, "abc", (1, 2, 3, 4))):
             with self.subTest(func=func.__name__):
                 varnames = func.__code__.co_varnames
-                self.assertNotIn("STORE_FAST", self.names(func))
+                self.assertNotIn("LocalWrite.Store", self.names(func))
                 # The word writes the run from the first target
                 _, dst, _ = self.unpack_word(func)
                 self.assertEqual(dst, varnames.index(targets[0]))
@@ -2896,7 +3038,7 @@ class UnpackToLocalsTest(unittest.TestCase):
         return out.getvalue()
 
     def assert_stores_stay(self, func):
-        self.assertIn("STORE_FAST", self.names(func))
+        self.assertIn("LocalWrite.Store", self.names(func))
         _, dst, _ = self.unpack_word(func)
         # The elements stay in the window: no run of locals
         self.assertIsNone(dst)
@@ -2929,7 +3071,7 @@ class UnpackToLocalsTest(unittest.TestCase):
             (a,
              b) = p
             return a + b
-        self.assertIn("STORE_FAST", self.names(f))
+        self.assertIn("LocalWrite.Store", self.names(f))
         self.run_specialized(lambda: self.assertEqual(f((1, 2)), 3))
 
     def test_other_targets_stay(self):

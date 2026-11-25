@@ -11,6 +11,9 @@
 //   BranchTruth.None: BranchTruth.None: branch_drops has no leaf lowering
 //   BranchTruth.Plain: BranchTruth.Plain: none_or_plain has no leaf lowering
 //   BranchTruth.Str: BranchTruth.Str: exact_str has no leaf lowering
+//   Const.Common: Const.Common: common_constant has no leaf lowering
+//   Const.Pool: Const.Pool: code_constant has no leaf lowering
+//   Const.Small: Const.Small: small_int has no leaf lowering
 //   GetAttr.Class: GetAttr.Class: fb is not a leaf value
 //   GetAttr.GetSet: GetAttr.GetSet: fb is not a leaf value
 //   GetAttr.Hint: GetAttr.Hint: fb is not a leaf value
@@ -29,6 +32,8 @@
 //   GetMethod.PolyMethod: GetMethod.PolyMethod: let o has no leaf type
 //   Jump.Direct: Jump.Direct: exit jump has no leaf lowering
 //   Jump.Poll: Jump.Poll: thread is not a leaf value
+//   LocalRead.Bound: LocalRead.Bound: dup has no C body (pending)
+//   LocalWrite.Store: LocalWrite.Store: acquire has no C body (pending)
 //   Truth.Bool: Truth.Bool: truth_object has no leaf lowering
 //   Truth.Int: Truth.Int: exact_int has no leaf lowering
 //   Truth.List: Truth.List: exact_list has no leaf lowering

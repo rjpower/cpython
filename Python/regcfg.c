@@ -500,6 +500,7 @@ struct _PyRegTr {
     char *held;
     int *free_since;
     int permuted;           // the region elided a SWAP
+    int src_sp;             // the depth before the stack op being translated
     /* The recipe of the op being translated, and the moves of an edge:
      * pairs of an identity and the stack position of the parameter that it
      * becomes */
@@ -509,6 +510,12 @@ struct _PyRegTr {
     int *mv;
     int nmv;
     int amv;
+    /* Per fresh register, whether it holds a binding that SaveLocal took,
+     * which may be absent; per stack position, whether such a binding was
+     * ever there, so that its parameter may hold one */
+    char *maybe;
+    int amaybe;
+    char *maybe_pos;
 };
 
 int
@@ -519,8 +526,10 @@ _PyRegTr_Fresh(_PyRegTr *t, int *v)
     RETURN_IF_ERROR(grow((void **)&t->def, &t->adef, k + 1, sizeof(int)));
     RETURN_IF_ERROR(grow((void **)&t->natural, &t->anatural, k + 1,
                          sizeof(int)));
+    RETURN_IF_ERROR(grow((void **)&t->maybe, &t->amaybe, k + 1, 1));
     t->def[k] = t->nops;
     t->natural[k] = -1;
+    t->maybe[k] = 0;
     *v = cfg->nvregs++;
     return SUCCESS;
 }
@@ -533,7 +542,7 @@ _PyRegTr_Pop(_PyRegTr *t, int n, int *ids)
         return ERROR;
     }
     t->sp -= n;
-    for (int k = 0; k < n; k++) {
+    for (int k = 0; ids != NULL && k < n; k++) {
         ids[k] = t->stack[t->sp + k];
     }
     return SUCCESS;
@@ -836,12 +845,38 @@ new_op(_PyRegTr *t, const _PyRegOp *src, int nuses, int ndefs,
     return SUCCESS;
 }
 
+#ifndef NDEBUG
+/* Whether identity v is at a stack position in [lo, hi) */
+static int
+on_stack(const _PyRegTr *t, int lo, int hi, int v)
+{
+    for (int k = lo; k < hi; k++) {
+        if (t->stack[k] == v) {
+            return 1;
+        }
+    }
+    return 0;
+}
+#endif
+
+/* An op that reads uses and defines defs.  A rule emits an op before it
+ * pops the op's stack inputs: the op's depth is the stack's with them, and
+ * its handler's recipe is taken from that stack, so a raise finds every
+ * position below the handler's depth where the stack op left it.  An input
+ * that an earlier op of the same stack op already popped is an error,
+ * unless the identity is still on the stack below. */
 int
 _PyRegTr_Emit(_PyRegTr *t, const _PyRegOp *src, int opcode,
               const int *uses, int nuses, const int *defs, int ndefs,
               _PyRegOp **result)
 {
     _PyRegCfg *cfg = t->cfg;
+#ifndef NDEBUG
+    for (int k = 0; k < nuses; k++) {
+        assert(!on_stack(t, t->sp, Py_MIN(t->src_sp, t->astack), uses[k]) ||
+               on_stack(t, 0, t->sp, uses[k]));
+    }
+#endif
     // An op that may raise carries its handler's recipe
     t->nrec = 0;
     if (src->except >= 0) {
@@ -1002,6 +1037,43 @@ _PyRegTr_Legacy(_PyRegTr *t, const _PyRegOp *instr)
     return err;
 }
 
+static int
+stack_underflow(const _PyRegOp *src)
+{
+    PyErr_Format(PyExc_SystemError, "stack underflow at line %d",
+                 src->loc.lineno);
+    return ERROR;
+}
+
+/* COPY n pushes a second owner of the identity n - 1 below the top: a
+ * Move.Copy of one pair, whose source stays live (it takes nothing).  A
+ * copy of a value that one stable owner holds for both uses is an alias;
+ * CopyProp folds a copied local read into its reader. */
+static int
+rule_copy(_PyRegTr *t, const _PyRegOp *src)
+{
+    int n = src->oparg;
+    if (n < 1 || n > t->sp) {
+        return stack_underflow(src);
+    }
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_SELECT_Move_copy,
+                                  &t->stack[t->sp - n], 1, &dst, 1, &op));
+    op->npop = 0;
+    op->oparg = 0;
+    return _PyRegTr_Push(t, dst);
+}
+
+/* NOP runs nothing.  It stays a source-only op: the assembler gives it a
+ * position record and its line event, and no word. */
+static int
+rule_nop(_PyRegTr *t, const _PyRegOp *src)
+{
+    return _PyRegTr_Emit(t, src, NOP, NULL, 0, NULL, 0, NULL);
+}
+
 /* SWAP n exchanges the identities at the top and n - 1 below it.  No word
  * runs; a NOP keeps its origin for the source map and line events. */
 static int
@@ -1032,14 +1104,17 @@ rule_load_attr(_PyRegTr *t, const _PyRegOp *src)
     // oparg carries the method flag below it
     int name = src->oparg >> 1;
     _PyRegOp *op;
-    int obj;
-    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, &obj));
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int obj = t->stack[t->sp - 1];
     if (!(src->oparg & 1)) {
         int dst;
         RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
         RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_GetAttr_Generic,
                                       &obj, 1, &dst, 1, &op));
         op->oparg = name;
+        RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
         return _PyRegTr_Push(t, dst);
     }
     int defs[2];
@@ -1048,6 +1123,7 @@ rule_load_attr(_PyRegTr *t, const _PyRegOp *src)
     RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_GetMethod_Generic,
                                   &obj, 1, defs, 2, &op));
     op->oparg = name;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
     RETURN_IF_ERROR(_PyRegTr_Push(t, defs[0]));
     return _PyRegTr_Push(t, defs[1]);
 }
@@ -1063,12 +1139,14 @@ rule_binary_op(_PyRegTr *t, const _PyRegOp *src)
     if (src->oparg != NB_ADD) {
         return _PyRegTr_Legacy(t, src);
     }
-    int uses[2];
+    if (t->sp < 2) {
+        return stack_underflow(src);
+    }
     int dst;
-    RETURN_IF_ERROR(_PyRegTr_Pop(t, 2, uses));
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Add_Generic, uses, 2,
-                                  &dst, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Add_Generic,
+                                  &t->stack[t->sp - 2], 2, &dst, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 2, NULL));
     return _PyRegTr_Push(t, dst);
 }
 
@@ -1079,13 +1157,16 @@ rule_binary_op(_PyRegTr *t, const _PyRegOp *src)
 static int
 rule_truth(_PyRegTr *t, const _PyRegOp *src)
 {
-    int use, dst;
-    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, &use));
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int dst;
     RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
     _PyRegOp *op;
-    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Truth_Generic, &use, 1,
-                                  &dst, 1, &op));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_Truth_Generic,
+                                  &t->stack[t->sp - 1], 1, &dst, 1, &op));
     op->oparg = src->opcode == UNARY_NOT;
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, 1, NULL));
     return _PyRegTr_Push(t, dst);
 }
 
@@ -1141,15 +1222,151 @@ rule_jump(_PyRegTr *t, const _PyRegOp *src)
     return SUCCESS;
 }
 
-/* The rules below emit an op before it takes its operands off the stack:
- * if the op raises, its handler finds the stack as it was when the op
- * began, operands included, and the op's depth is that stack's. */
+/* Whether identity v may hold an absent binding (a Maybe value): one that
+ * SaveLocal took, or a parameter of a position where one has been.  The
+ * positions over-approximate the edges, which is safe: a Restore of a
+ * present value is a Store. */
 static int
-stack_underflow(const _PyRegOp *src)
+maybe_absent(const _PyRegTr *t, int v)
 {
-    PyErr_Format(PyExc_SystemError, "stack underflow at line %d",
-                 src->loc.lineno);
-    return ERROR;
+    const _PyRegCfg *cfg = t->cfg;
+    if (v >= _PyReg_FRESH0(cfg)) {
+        return t->maybe[v - _PyReg_FRESH0(cfg)];
+    }
+    return _PyReg_IS_CANON(cfg, v) && t->maybe_pos[v - cfg->nlocalsplus];
+}
+
+/* Locals are homes: a read names the local as its source and a store as
+ * its destination (Python/register_ops/values.rop). */
+
+/* LOAD_FAST, LOAD_FAST_BORROW and LOAD_FAST_CHECK: the local's binding
+ * into a fresh temporary.  CopyProp later folds a read into the field of
+ * its one reader where nothing between can change the local. */
+static int
+read_local(_PyRegTr *t, const _PyRegOp *src, int local, int handler)
+{
+    int dst;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &local, 1, &dst, 1, &op));
+    op->oparg = local;
+    return _PyRegTr_Push(t, dst);
+}
+
+/* STORE_FAST: the value into the local, which releases its old binding.
+ * A binding that SaveLocal took may be absent: Restore. */
+static int
+write_local(_PyRegTr *t, const _PyRegOp *src, int local)
+{
+    if (t->sp < 1) {
+        return stack_underflow(src);
+    }
+    int value = t->stack[t->sp - 1];
+    _PyRegOp *op;
+    int handler = maybe_absent(t, value) ? ROP_SELECT_LocalWrite_restore
+                                         : ROP_SELECT_LocalWrite_store;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &value, 1, &local, 1, &op));
+    op->oparg = local;
+    op->dst = local;
+    t->sp--;
+    return SUCCESS;
+}
+
+static int
+rule_load_fast(_PyRegTr *t, const _PyRegOp *src)
+{
+    return read_local(t, src, src->oparg, ROP_SELECT_LocalRead_bound);
+}
+
+static int
+rule_load_fast_check(_PyRegTr *t, const _PyRegOp *src)
+{
+    return read_local(t, src, src->oparg, ROP_SELECT_LocalRead_checked);
+}
+
+static int
+rule_load_fast_load_fast(_PyRegTr *t, const _PyRegOp *src)
+{
+    RETURN_IF_ERROR(read_local(t, src, src->oparg >> 4,
+                               ROP_SELECT_LocalRead_bound));
+    return read_local(t, src, src->oparg & 15, ROP_SELECT_LocalRead_bound);
+}
+
+static int
+rule_store_fast(_PyRegTr *t, const _PyRegOp *src)
+{
+    return write_local(t, src, src->oparg);
+}
+
+static int
+rule_store_fast_load_fast(_PyRegTr *t, const _PyRegOp *src)
+{
+    RETURN_IF_ERROR(write_local(t, src, src->oparg >> 4));
+    return read_local(t, src, src->oparg & 15, ROP_SELECT_LocalRead_bound);
+}
+
+static int
+rule_store_fast_store_fast(_PyRegTr *t, const _PyRegOp *src)
+{
+    RETURN_IF_ERROR(write_local(t, src, src->oparg >> 4));
+    return write_local(t, src, src->oparg & 15);
+}
+
+/* LOAD_FAST_AND_CLEAR: the comprehension takes the local's binding, which
+ * may be absent, and leaves the local vacant */
+static int
+rule_load_fast_and_clear(_PyRegTr *t, const _PyRegOp *src)
+{
+    int dst, local = src->oparg;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_SaveLocal_Take,
+                                  &local, 1, &dst, 1, &op));
+    op->oparg = local;
+    t->maybe[dst - _PyReg_FRESH0(t->cfg)] = 1;
+    return _PyRegTr_Push(t, dst);
+}
+
+static int
+rule_delete_fast(_PyRegTr *t, const _PyRegOp *src)
+{
+    int local = src->oparg;
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, ROP_HANDLER_LocalDelete_Checked,
+                                  NULL, 0, &local, 1, &op));
+    op->oparg = local;
+    op->dst = local;
+    return SUCCESS;
+}
+
+/* LOAD_CONST, LOAD_SMALL_INT and LOAD_COMMON_CONSTANT: the Const arm of
+ * the kind, its index in the oparg.  ConstSlots later gives most constants
+ * hidden homes. */
+static int
+load_const(_PyRegTr *t, const _PyRegOp *src, int handler)
+{
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, NULL, 0, &dst, 1, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+static int
+rule_load_const(_PyRegTr *t, const _PyRegOp *src)
+{
+    return load_const(t, src, ROP_SELECT_Const_pool);
+}
+
+static int
+rule_load_small_int(_PyRegTr *t, const _PyRegOp *src)
+{
+    return load_const(t, src, ROP_SELECT_Const_small);
+}
+
+static int
+rule_load_common_constant(_PyRegTr *t, const _PyRegOp *src)
+{
+    return load_const(t, src, ROP_SELECT_Const_common);
 }
 
 /* CALL is the Call family (Python/register_ops/calls.rop): fn, then the
@@ -1205,10 +1422,37 @@ static const _PyRegRule rules[256] = {
     [JUMP_BACKWARD] = rule_jump,
     [JUMP_BACKWARD_NO_INTERRUPT] = rule_jump,
     [CALL] = rule_call,
+    [COPY] = rule_copy,
+    [DELETE_FAST] = rule_delete_fast,
+    [LOAD_COMMON_CONSTANT] = rule_load_common_constant,
+    [LOAD_CONST] = rule_load_const,
+    [LOAD_FAST] = rule_load_fast,
+    [LOAD_FAST_AND_CLEAR] = rule_load_fast_and_clear,
+    [LOAD_FAST_BORROW] = rule_load_fast,
+    [LOAD_FAST_BORROW_LOAD_FAST_BORROW] = rule_load_fast_load_fast,
+    [LOAD_FAST_CHECK] = rule_load_fast_check,
+    [LOAD_FAST_LOAD_FAST] = rule_load_fast_load_fast,
+    [LOAD_SMALL_INT] = rule_load_small_int,
+    [NOP] = rule_nop,
     [RETURN_VALUE] = rule_return_value,
+    [STORE_FAST] = rule_store_fast,
+    [STORE_FAST_LOAD_FAST] = rule_store_fast_load_fast,
+    [STORE_FAST_STORE_FAST] = rule_store_fast_store_fast,
     [SWAP] = rule_swap,
     [LOAD_ATTR] = rule_load_attr,
 };
+
+/* An edge binds the parameters of the positions below depth: one that
+ * holds a binding that may be absent gives its parameter that type */
+static void
+mark_maybe(_PyRegTr *t, int depth)
+{
+    for (int k = 0; k < depth && k < t->sp && k < IR_MAX_SLOTS; k++) {
+        if (maybe_absent(t, t->stack[k])) {
+            t->maybe_pos[k] = 1;
+        }
+    }
+}
 
 static int
 translate_instr(_PyRegTr *t, const _PyRegOp *instr)
@@ -1216,6 +1460,14 @@ translate_instr(_PyRegTr *t, const _PyRegOp *instr)
     _PyRegRule rule = rules[instr->opcode & 255];
     if (rule == NULL || instr->opcode > 255) {
         rule = _PyRegTr_Legacy;
+    }
+    t->src_sp = t->sp;
+    // The edges of instr: its handler's, and its jump's
+    if (instr->except >= 0) {
+        mark_maybe(t, handler_base(t->cfg, instr->except));
+    }
+    if (op_jumps(instr)) {
+        mark_maybe(t, t->sp);
     }
     return rule(t, instr);
 }
@@ -1231,10 +1483,14 @@ translate(_PyRegCfg *cfg)
     int *range = PyMem_Malloc(Py_MAX(2 * n, 1) * sizeof(int));
     t.held = PyMem_Calloc(IR_MAX_SLOTS, 1);
     t.free_since = PyMem_Malloc(IR_MAX_SLOTS * sizeof(int));
-    if (range == NULL || t.held == NULL || t.free_since == NULL) {
+    t.maybe_pos = PyMem_Calloc(IR_MAX_SLOTS, 1);
+    if (range == NULL || t.held == NULL || t.free_since == NULL ||
+        t.maybe_pos == NULL)
+    {
         PyMem_Free(range);
         PyMem_Free(t.held);
         PyMem_Free(t.free_since);
+        PyMem_Free(t.maybe_pos);
         PyErr_NoMemory();
         return ERROR;
     }
@@ -1279,6 +1535,7 @@ translate(_PyRegCfg *cfg)
             // the block, under the handler of its last op
             _PyRegOp edge = {.except = -1, .dst = -1, .target = -1,
                              .reader = -1, .depth = -1, .fb = -1};
+            mark_maybe(&t, t.sp);
             err = bind_edge(&t, t.sp, end > start ? &cfg->ops[end - 1] : &edge);
         }
         blk->end = t.nops;
@@ -1291,6 +1548,8 @@ translate(_PyRegCfg *cfg)
     PyMem_Free(t.free_since);
     PyMem_Free(t.rec);
     PyMem_Free(t.mv);
+    PyMem_Free(t.maybe);
+    PyMem_Free(t.maybe_pos);
     if (err != SUCCESS) {
         PyMem_Free(t.ops);
         return ERROR;
@@ -1926,15 +2185,44 @@ op_reads(const _PyRegCfg *cfg, const _PyRegOp *op, int v)
     return 0;
 }
 
+/* A folded load's register that holds its slot for the reader (see
+ * reserve_folded()) has no value: an output that needs the slot moves the
+ * reservation to the first free slot from hi up, with no staging move.
+ * Returns 1 if w was such a register, 0 if not. */
+static int
+relocate_folded(_PyRegCfg *cfg, occupancy *o, const _PyRegOp *op, int w,
+                int hi)
+{
+    int nl = cfg->nlocalsplus;
+    for (int r = 0; r < o->nreserved; r++) {
+        if (_PyReg_OUT(cfg, o->reserved[r])[0] != w) {
+            continue;
+        }
+        occ_free(o, _PyRegCfg_Slot(cfg, w) - nl, w);
+        int s = Py_MAX(o->top, hi - nl);
+        while (occ_at(o, s) >= 0) {
+            s++;
+        }
+        cfg->slot[_PyReg_INDEX(cfg, w)] = nl + s;
+        cfg->ntemps = Py_MAX(cfg->ntemps, s + 1);
+        RETURN_IF_ERROR(occ_take(o, s, w, op));
+        return 1;
+    }
+    return 0;
+}
+
 /* Outputs whose slots a parameter's home fixes: the live values in slots
- * lo .. hi - 1 that op neither reads nor writes move away first */
+ * lo .. hi - 1 that op neither reads nor writes move away first.  A Move
+ * leaves its sources live, so a source there moves away too. */
 static int
 evict(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int lo, int hi)
 {
     int nl = cfg->nlocalsplus;
+    int move = _PyRegCfg_FormatOf(op->opcode, op->oparg)->operands
+               == _PyIR_OPERANDS_SPANS;
     for (int s = lo; s < hi; s++) {
         int w = occ_at(o, s - nl);
-        if (w < 0 || op_reads(cfg, op, w)) {
+        if (w < 0 || (!move && op_reads(cfg, op, w))) {
             continue;
         }
         const int *out = _PyReg_OUT(cfg, op);
@@ -1947,6 +2235,11 @@ evict(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int lo, int hi)
         }
         if (w < _PyReg_FRESH0(cfg)) {
             return slot_error(op, "a parameter where an output goes");
+        }
+        int moved = relocate_folded(cfg, o, op, w, hi);
+        RETURN_IF_ERROR(moved);
+        if (moved) {
+            continue;
         }
         int x;
         RETURN_IF_ERROR(add_stage(cfg, o, op, i, w, 0, &x));
@@ -2023,15 +2316,18 @@ defer_outputs(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i)
 
 /* Slots for the registers that staging moves give values to and that op
  * does not read, as evict() makes them: vacant ones outside lo .. hi - 1,
- * where op's inputs and outputs are */
+ * where op's inputs and outputs are.  A Move's evicted source is read but
+ * lives on: it is placed the same way. */
 static int
 place_evicted(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op, int i, int lo,
               int hi)
 {
     int nl = cfg->nlocalsplus;
+    int move = _PyRegCfg_FormatOf(op->opcode, op->oparg)->operands
+               == _PyIR_OPERANDS_SPANS;
     for (int q = 0; q < op->nstage; q++) {
         int x = cfg->operands[op->stage + 2 * q + 1];
-        if (op_reads(cfg, op, x)) {
+        if (!move && op_reads(cfg, op, x)) {
             continue;
         }
         if (_PyReg_IS_CANON(cfg, x)) {

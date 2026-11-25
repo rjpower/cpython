@@ -254,6 +254,13 @@ class Select(enum.Enum):
     transfer = "transfer"                  # Move: each source's owner goes to its destination
     retire = "retire"                      # Move: transfer, then close the sources left over
     copy = "copy"                          # Move: each destination takes a second owner
+    pool = "pool"                          # Const: the code's constant
+    small = "small"                        # Const: an immediate int
+    common = "common"                      # Const: an interpreter root
+    bound = "bound"                        # LocalRead: the compiler proved the local bound
+    checked = "checked"                    # LocalRead: the local may be unbound
+    store = "store"                        # LocalWrite: the value is present
+    restore = "restore"                    # LocalWrite: a saved binding, maybe absent
     uninterrupted = "uninterrupted"        # Jump: no poll (a forward jump, a yield-from loop's)
     interruptible = "interruptible"        # Jump: a backedge polls
     jit_off = "jit_off"                    # the baseline JIT is off
@@ -264,6 +271,9 @@ SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "frame": (Select.thread_frame, Select.generator_frame, Select.entry_frame),
     "scratch": (Select.vacant_scratch, Select.live_scratch),
     "move": (Select.transfer, Select.retire, Select.copy),
+    "const": (Select.pool, Select.small, Select.common),
+    "read": (Select.bound, Select.checked),
+    "write": (Select.store, Select.restore),
     "interrupt": (Select.uninterrupted, Select.interruptible),
     "jit": (Select.jit_off, Select.jit_on),
 }

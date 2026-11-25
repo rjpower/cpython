@@ -107,8 +107,8 @@ class UnboundLocalTests(unittest.TestCase):
                 first = p.shifted(1).x + p.x
             else:
                 first = None
-            # The comprehension saves the outer p with LOAD_FAST_AND_CLEAR
-            # and restores it, unbound if it was.
+            # The comprehension saves the outer p (SaveLocal) and restores
+            # it, unbound if it was.
             xs = [p.shifted(1).x + p.x for p in points]
             try:
                 last = p.x
@@ -121,7 +121,7 @@ class UnboundLocalTests(unittest.TestCase):
             self.assertEqual(f(points, False), (None, [1, 3, 5], None))
             self.assertEqual(f(points, True), (-1, [1, 3, 5], -1))
             self.assertEqual(f([], False), (None, [], None))
-        self.assertIn('LOAD_FAST_AND_CLEAR', executing_handlers(f))
+        self.assertIn('SaveLocal.Take', executing_handlers(f))
 
     def test_comprehension_of_numbers_restores_unbound_local(self):
         def f(numbers, bind):

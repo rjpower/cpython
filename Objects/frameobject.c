@@ -2316,6 +2316,22 @@ register_context_forget_reads(PyCodeObject *code, int pc,
     }
 }
 
+/* The local that a word saves or stores to, where an arm names it as a
+ * home operand; otherwise local, the oparg's */
+static int
+register_local_of(int handler, const uint32_t *fields, int local)
+{
+    if (handler == ROP_HANDLER_SaveLocal_Take) {
+        return (int)fields[1];
+    }
+    if (handler == ROP_HANDLER_LocalWrite_Store ||
+        handler == ROP_HANDLER_LocalWrite_Restore)
+    {
+        return (int)fields[0];
+    }
+    return local;
+}
+
 static int
 register_context_normal(PyCodeObject *code, int pc, int taken,
                          RegisterResumeAnalysis *analysis, int context,
@@ -2365,6 +2381,9 @@ register_context_normal(PyCodeObject *code, int pc, int taken,
             input = (int)fields[f] - analysis->nl;
         }
     }
+    // The local families name the local as a home: SaveLocal's source (B),
+    // LocalWrite's destination (A)
+    local = register_local_of(IR_HANDLER(word), fields, local);
     int input_origin = input >= 0 && input < analysis->nt ? origins[input] : 0;
     int old = base >= 0 && base < analysis->nt ? origins[base] : 0;
     int top = opcode == SWAP && base >= 0 && base < analysis->nt &&
@@ -2525,6 +2544,9 @@ register_stopped_state_bind(PyFrameObject *self, RegisterResumeAnalysis *analysi
         if (fmt->roles[f] == _PyIR_ROLE_LOCAL_MOVE) {
             return 0;
         }
+    }
+    if (IR_HANDLER(word) == ROP_HANDLER_SaveLocal_Take) {
+        return 0;
     }
     if (phase->context < 0) {
         return 0;

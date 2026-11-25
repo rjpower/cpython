@@ -92,55 +92,44 @@ class PyValueCodeObjectTests(unittest.TestCase):
                 self.assertIs(item[0], nested_interned)
                 self.assertEqual(math.copysign(1, item[-1]), -1)
 
-    def inline_constant_function(self, original, handler):
+    def pool_constant_function(self, original):
         # The constant is a list item, a window input that keeps its load;
-        # a return or a call operand would read a constant slot. Lowering
-        # selects the inline form from the constant itself.
+        # a return or a call operand would read a constant slot.  Const.Pool
+        # reads the code's constant whatever its form.
         words = _testinternalcapi.get_ir(original.__code__)
         index = next(i for i, word in enumerate(words)
-                     if word[0] == handler)
+                     if word[0] == 'Const.Pool')
         return original, index
 
-    def test_warmed_integer_replacement_falls_back(self):
-        original, word_index = self.inline_constant_function(
-            eval('lambda: [1073741824]'), 'LOAD_CONST_INLINE_INT')
+    def check_replacements(self, original, word_index, value, replacements):
         for _ in range(64):
-            self.assertEqual(original(), [1073741824])
-        index = next(i for i, value in enumerate(original.__code__.co_consts)
-                     if type(value) is int and value == 1073741824)
-        for replacement in (1 << 50, True, 'different type', object()):
+            self.assertEqual(original(), [value])
+        index = next(i for i, c in enumerate(original.__code__.co_consts)
+                     if type(c) is type(value) and c == value)
+        for replacement in replacements:
             with self.subTest(kind=type(replacement)):
                 consts = list(original.__code__.co_consts)
                 consts[index] = replacement
                 code = original.__code__.replace(co_consts=tuple(consts))
+                # The replaced code lowers afresh and loads the new constant
                 self.assertEqual(_testinternalcapi.get_ir(code)[word_index][0],
-                                 'LOAD_CONST')
-                result = types.FunctionType(code, {})()
-                self.assertIs(result[0], replacement)
-
-    def test_warmed_float_replacement_falls_back(self):
-        original, word_index = self.inline_constant_function(
-            eval('lambda: [1.5]'), 'LOAD_CONST_INLINE_FLOAT')
-        for _ in range(64):
-            self.assertEqual(original(), [1.5])
-        index = next(i for i, value in enumerate(original.__code__.co_consts)
-                     if type(value) is float and value == 1.5)
-        for replacement in (float('nan'), 1 << 40, object()):
-            with self.subTest(kind=type(replacement)):
-                consts = list(original.__code__.co_consts)
-                consts[index] = replacement
-                code = original.__code__.replace(co_consts=tuple(consts))
-                # The replaced code lowers afresh: an integer that fits
-                # takes its own inline form, never the stale float one.
-                handler = _testinternalcapi.get_ir(code)[word_index][0]
-                self.assertNotEqual(handler, 'LOAD_CONST_INLINE_FLOAT')
+                                 'Const.Pool')
                 result = types.FunctionType(code, {})()[0]
-                if handler == 'LOAD_CONST':
-                    self.assertIs(result, replacement)
-                else:
-                    self.assertEqual(handler, 'LOAD_CONST_INLINE_INT')
+                self.assertIs(type(result), type(replacement))
+                if replacement == replacement:
                     self.assertEqual(result, replacement)
 
+    def test_warmed_integer_replacement_falls_back(self):
+        original, word_index = self.pool_constant_function(
+            eval('lambda: [1073741824]'))
+        self.check_replacements(original, word_index, 1073741824,
+                                (1 << 50, True, 'different type', object()))
+
+    def test_warmed_float_replacement_falls_back(self):
+        original, word_index = self.pool_constant_function(
+            eval('lambda: [1.5]'))
+        self.check_replacements(original, word_index, 1.5,
+                                (float('nan'), 1 << 40, object()))
 
 if __name__ == '__main__':
     unittest.main()

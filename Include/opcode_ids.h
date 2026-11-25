@@ -171,25 +171,22 @@ extern "C" {
 #define FOR_ITER_VIRTUAL                       166
 #define GET_ITER_SELF                          167
 #define GET_ITER_VIRTUAL                       168
-#define LOAD_CONST_INLINE_FLOAT                169
-#define LOAD_CONST_INLINE_INT                  170
-#define LOAD_GLOBAL_BUILTIN                    171
-#define LOAD_GLOBAL_MODULE                     172
-#define LOAD_SMALL_INT_INLINE                  173
-#define LOAD_SUPER_ATTR_ATTR                   174
-#define LOAD_SUPER_ATTR_METHOD                 175
-#define SEND_ASYNC_GEN                         176
-#define SEND_GEN                               177
-#define SEND_VIRTUAL                           178
-#define STORE_ATTR_INSTANCE_VALUE              179
-#define STORE_ATTR_SHAPE                       180
-#define STORE_ATTR_SHAPE_ADD                   181
-#define STORE_ATTR_SLOT                        182
-#define STORE_ATTR_WITH_HINT                   183
-#define STORE_SUBSCR_DICT                      184
-#define STORE_SUBSCR_LIST_INT                  185
-#define UNPACK_SEQUENCE_LIST                   186
-#define UNPACK_SEQUENCE_TUPLE                  187
+#define LOAD_GLOBAL_BUILTIN                    169
+#define LOAD_GLOBAL_MODULE                     170
+#define LOAD_SUPER_ATTR_ATTR                   171
+#define LOAD_SUPER_ATTR_METHOD                 172
+#define SEND_ASYNC_GEN                         173
+#define SEND_GEN                               174
+#define SEND_VIRTUAL                           175
+#define STORE_ATTR_INSTANCE_VALUE              176
+#define STORE_ATTR_SHAPE                       177
+#define STORE_ATTR_SHAPE_ADD                   178
+#define STORE_ATTR_SLOT                        179
+#define STORE_ATTR_WITH_HINT                   180
+#define STORE_SUBSCR_DICT                      181
+#define STORE_SUBSCR_LIST_INT                  182
+#define UNPACK_SEQUENCE_LIST                   183
+#define UNPACK_SEQUENCE_TUPLE                  184
 #define INSTRUMENTED_END_FOR                   234
 #define INSTRUMENTED_POP_ITER                  235
 #define INSTRUMENTED_END_SEND                  236
@@ -228,7 +225,7 @@ extern "C" {
 #define MIN_SPECIALIZED_OPCODE                 129
 #define MIN_INSTRUMENTED_OPCODE                234
 #define IR_NUM_OLD_HANDLERS                    352
-#define IR_NUM_HANDLERS                        432
+#define IR_NUM_HANDLERS                        441
 
 #ifdef __cplusplus
 }

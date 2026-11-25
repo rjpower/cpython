@@ -2652,7 +2652,7 @@ ir_run_NamespaceRead_Name(
     PyValue_XCLOSE(old_dst);
     DISPATCH();
     rop_NamespaceRead_Name_Failed:
-    PROCESS_ERROR_AT(RAISE, 42, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -2683,7 +2683,7 @@ ir_run_NamespaceRead_Locals(
     PyValue_XCLOSE(old_dst);
     DISPATCH();
     rop_NamespaceRead_Locals_Failed:
-    PROCESS_ERROR_AT(RAISE, 42, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -2715,7 +2715,7 @@ ir_run_NamespaceRead_BuildClass(
     PyValue_XCLOSE(old_dst);
     DISPATCH();
     rop_NamespaceRead_BuildClass_Failed:
-    PROCESS_ERROR_AT(RAISE, 42, this_instr);
+    PROCESS_ERROR_AT(RAISE, 40, this_instr);
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -2770,7 +2770,7 @@ ir_run_NamespaceReadFrom_Mapping(
     rop_NamespaceReadFrom_Mapping_Failed:
     IR_STUB_ESCAPE();
     _PyRop_RetireFailedCall(&a, &(_PyRopSrcs){frame, 1, {!!(ir_word & IR_F_LOCAL_B)}, {home_mapping}});
-    PROCESS_ERROR_AT(RAISE, 44, this_instr);
+    PROCESS_ERROR_AT(RAISE, 42, this_instr);
 }
 
 static Py_NO_INLINE _PyIRTransfer
@@ -2789,6 +2789,12 @@ ir_run_NamespaceWrite_Name(
     PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
     PyValue v;
     int ret1;
+    int ret2;
+    if (_PyRop_SrcPresent(home_value)) {
+        goto rop_NamespaceWrite_Name_Store;
+    }
+    goto rop_NamespaceWrite_Name_Delete;
+    rop_NamespaceWrite_Name_Store:
     v = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
     IR_STUB_ESCAPE();
     ret1 = _PyRop_StoreName(tstate, frame, ((uint32_t)IR_A(ir_word) | ((uint32_t)IR_B(ir_word) << 12)), v);
@@ -2796,6 +2802,15 @@ ir_run_NamespaceWrite_Name(
         goto rop_NamespaceWrite_Name_Failed;
     }
     DISPATCH();
+    rop_NamespaceWrite_Name_Delete:
+    IR_STUB_ESCAPE();
+    ret2 = _PyRop_DeleteName(tstate, frame, ((uint32_t)IR_A(ir_word) | ((uint32_t)IR_B(ir_word) << 12)));
+    if (ret2 < 0) {
+        goto rop_NamespaceWrite_Name_DeleteFailed;
+    }
+    DISPATCH();
+    rop_NamespaceWrite_Name_DeleteFailed:
+    PROCESS_ERROR_AT(RAISE, 43, this_instr);
     rop_NamespaceWrite_Name_Failed:
     PROCESS_ERROR_AT(RAISE, 46, this_instr);
 }
@@ -2816,6 +2831,12 @@ ir_run_NamespaceWrite_Global(
     PyValue *const home_value = &IR_SLOT(IR_C(ir_word));
     PyValue v;
     int ret1;
+    int ret2;
+    if (_PyRop_SrcPresent(home_value)) {
+        goto rop_NamespaceWrite_Global_Store;
+    }
+    goto rop_NamespaceWrite_Global_Delete;
+    rop_NamespaceWrite_Global_Store:
     v = ((ir_word & IR_F_LOCAL_C) ? PyValue_DUP(*home_value) : _PyFrame_TakeHome(frame, home_value));
     IR_STUB_ESCAPE();
     ret1 = _PyRop_StoreGlobal(tstate, frame, ((uint32_t)IR_A(ir_word) | ((uint32_t)IR_B(ir_word) << 12)), v);
@@ -2823,56 +2844,17 @@ ir_run_NamespaceWrite_Global(
         goto rop_NamespaceWrite_Global_Failed;
     }
     DISPATCH();
+    rop_NamespaceWrite_Global_Delete:
+    IR_STUB_ESCAPE();
+    ret2 = _PyRop_DeleteGlobal(tstate, frame, ((uint32_t)IR_A(ir_word) | ((uint32_t)IR_B(ir_word) << 12)));
+    if (ret2 < 0) {
+        goto rop_NamespaceWrite_Global_DeleteFailed;
+    }
+    DISPATCH();
+    rop_NamespaceWrite_Global_DeleteFailed:
+    PROCESS_ERROR_AT(RAISE, 43, this_instr);
     rop_NamespaceWrite_Global_Failed:
     PROCESS_ERROR_AT(RAISE, 46, this_instr);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_NamespaceDelete_Name(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    // NamespaceDelete.Name (shared)
-    int opcode = ROP_HANDLER_NamespaceDelete_Name;
-    (void)opcode;
-    _PyIRWord *const this_instr = next_instr;
-    (void)this_instr;
-    frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
-    next_instr += 1;
-    INSTRUCTION_STATS(ROP_HANDLER_NamespaceDelete_Name);
-    int ret1;
-    IR_STUB_ESCAPE();
-    ret1 = _PyRop_DeleteName(tstate, frame, ((uint32_t)IR_A(ir_word) | ((uint32_t)IR_B(ir_word) << 12)));
-    if (ret1 < 0) {
-        goto rop_NamespaceDelete_Name_Failed;
-    }
-    DISPATCH();
-    rop_NamespaceDelete_Name_Failed:
-    PROCESS_ERROR_AT(RAISE, 40, this_instr);
-}
-
-static Py_NO_INLINE _PyIRTransfer
-ir_run_NamespaceDelete_Global(
-    PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *next_instr, _PyIRWord ir_word)
-{
-    // NamespaceDelete.Global (shared)
-    int opcode = ROP_HANDLER_NamespaceDelete_Global;
-    (void)opcode;
-    _PyIRWord *const this_instr = next_instr;
-    (void)this_instr;
-    frame->instr_ptr = next_instr;
-    IR_HOLD_NEXT();
-    next_instr += 1;
-    INSTRUCTION_STATS(ROP_HANDLER_NamespaceDelete_Global);
-    int ret1;
-    IR_STUB_ESCAPE();
-    ret1 = _PyRop_DeleteGlobal(tstate, frame, ((uint32_t)IR_A(ir_word) | ((uint32_t)IR_B(ir_word) << 12)));
-    if (ret1 < 0) {
-        goto rop_NamespaceDelete_Global_Failed;
-    }
-    DISPATCH();
-    rop_NamespaceDelete_Global_Failed:
-    PROCESS_ERROR_AT(RAISE, 40, this_instr);
 }
 
 static Py_NO_INLINE _PyIRTransfer

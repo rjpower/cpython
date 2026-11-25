@@ -1,6 +1,6 @@
 """The namespace, annotation and import families
 (Python/register_ops/namespaces.rop): NamespaceRead, NamespaceReadFrom,
-NamespaceWrite, NamespaceDelete, SetupAnnotations, Import and ImportFrom.
+NamespaceWrite, SetupAnnotations, Import and ImportFrom.
 Their stack ops lower to these arms and nothing else runs them."""
 
 import sys
@@ -62,7 +62,7 @@ class WordTests(unittest.TestCase):
         self.check("x = 1\ny = x\n", "NamespaceWrite.Name", "NamespaceRead.Name")
 
     def test_delete(self):
-        self.check("x = 1\ndel x\n", "NamespaceDelete.Name")
+        self.check("x = 1\ndel x\n", "NamespaceWrite.Name")
 
     def test_global(self):
         ns = {}
@@ -72,7 +72,7 @@ class WordTests(unittest.TestCase):
         body = ns["f"].__code__
         names = arms(body)
         self.assertIn("NamespaceWrite.Global", names)
-        self.assertIn("NamespaceDelete.Global", names)
+        self.assertIn("NamespaceWrite.Global", names)
 
     def test_class_body(self):
         self.check("class C:\n    x = 1\n    y = x\n",

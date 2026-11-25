@@ -344,9 +344,6 @@ SCENARIOS = {
         "or": "def f(a, b):\n    return (a and b) or a\n"},
         [{"srcs": [v]} for v in (1, "s", Plain(), 2**70)], warm=("__x__", 1),
         per_arm=True),
-    "NamespaceDelete": Scenario("NamespaceDelete", {
-        "global": "def f(a):\n    global g\n    g = a\n    del g\n    return a\n"},
-        [{}], warm=(1,)),
     "Import": Scenario("Import", {
         "eager": "def f(a):\n    import os\n    return a\n"},
         [{"level": 0, "fromlist": None}], warm=(1,)),
@@ -672,9 +669,8 @@ NOT_RUN = {
                                 "a class body is not a function the probe warms",
     "NamespaceReadFrom.Mapping": "LOAD_FROM_DICT_OR_GLOBALS occurs in class code",
     "NamespaceWrite.Global": "the value moves into the globals dict, an owner the probe's "
-                             "home count does not see",
+                             "home count does not see; a delete shares the arm",
     "NamespaceWrite.Name": "STORE_NAME occurs in module and class code",
-    "NamespaceDelete.Name": "a name delete occurs in module and class code",
     "SetupAnnotations.Setup": "SETUP_ANNOTATIONS occurs in module and class code",
     "Import.Policy": "a function's imports are eager; the policy applies to module code",
     "Import.Lazy": "`lazy import` is a module-level statement",

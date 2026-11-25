@@ -1920,28 +1920,17 @@ rule_load_from_dict_or_globals(_PyRegTr *t, const _PyRegOp *src)
 }
 
 /* STORE_NAME and STORE_GLOBAL.  The compiler writes `del name` as PUSH_NULL
- * and the store: a value made by PUSH_NULL is the deletion, which has no
- * source. */
+ * and the store: the elided PUSH_NULL's register holds NULL, which the
+ * word's optional value reads as absent, so the arm deletes. */
 static int
-store_namespace(_PyRegTr *t, const _PyRegOp *src, int set, int del)
+store_namespace(_PyRegTr *t, const _PyRegOp *src, int handler)
 {
     if (t->sp < 1) {
         return stack_underflow(src);
     }
-    int v = t->stack[t->sp - 1];
-    _PyRegOp *prod = sole_producer(t, v);
     _PyRegOp *op;
-    if (prod != NULL && prod->opcode == PUSH_NULL) {
-        // The deletion takes no source: the NULL's op is dropped, as a dead
-        // producer is, and the word stands for both
-        prod->opcode = _PyReg_DEAD;
-        RETURN_IF_ERROR(_PyRegTr_Emit(t, src, del, NULL, 0, NULL, 0, &op));
-        op->loc = prod->loc;
-        op->flags |= prod->flags & _PyReg_SOURCE_ORIGIN;
-    }
-    else {
-        RETURN_IF_ERROR(_PyRegTr_Emit(t, src, set, &v, 1, NULL, 0, &op));
-    }
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - 1], 1,
+                                  NULL, 0, &op));
     op->oparg = src->oparg;
     return _PyRegTr_Pop(t, 1, NULL);
 }
@@ -1949,15 +1938,13 @@ store_namespace(_PyRegTr *t, const _PyRegOp *src, int set, int del)
 static int
 rule_store_name(_PyRegTr *t, const _PyRegOp *src)
 {
-    return store_namespace(t, src, ROP_SELECT_NamespaceWrite_name_scope,
-                           ROP_SELECT_NamespaceDelete_name_scope);
+    return store_namespace(t, src, ROP_SELECT_NamespaceWrite_name_scope);
 }
 
 static int
 rule_store_global(_PyRegTr *t, const _PyRegOp *src)
 {
-    return store_namespace(t, src, ROP_SELECT_NamespaceWrite_global_scope,
-                           ROP_SELECT_NamespaceDelete_global_scope);
+    return store_namespace(t, src, ROP_SELECT_NamespaceWrite_global_scope);
 }
 
 static int

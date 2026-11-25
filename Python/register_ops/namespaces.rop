@@ -90,8 +90,11 @@ arm NamespaceRead.BuildClass shared select(build_class_scope)
     exit raise(NamespaceRead.Failed, e);
 }
 
-// The class namespace (or any mapping) first, then the globals and
-// builtins.  The mapping is anchored for the lookups and spent at the end.
+// NamespaceReadFrom: the name in a mapping (a class body's), then the globals,
+// then the builtins.  The mapping is anchored for the lookups and spent at
+// the end.  The family stays apart from NamespaceRead: its sources are
+// always present, and an absent one would need a vacant register that no
+// translated operation provides.
 family NamespaceReadFrom(dst:Dst, mapping:Src, name:U16)
   exits(next, raise) ops(LOAD_FROM_DICT_OR_GLOBALS);
 
@@ -143,13 +146,18 @@ arm NamespaceReadFrom.Mapping shared
     exit raise(NamespaceReadFrom.Failed, saved);
 }
 
-// NamespaceWrite: the value into the namespace, which takes its own owner.
-// Name is the locals (a mapping); Global is the globals dict.
-family NamespaceWrite(name:U16, value:Src)
+// NamespaceWrite: the value into the namespace, which takes its own owner,
+// or, with no value, `del name` (the compiler writes a delete as a NULL
+// store).  Name is the locals (a mapping); Global is the globals dict.  A
+// missing name raises NameError.
+family NamespaceWrite(name:U16, value:Maybe<Src>)
   exits(next, raise) ops(STORE_NAME, STORE_GLOBAL);
 
 point NamespaceWrite.Failed(current, site, pending) keep() spent(value) defs();
 point NamespaceWrite.Done(current, next_head, clear) keep() spent(value) defs();
+// A delete has no value to spend
+point NamespaceWrite.DeleteFailed(current, site, pending) keep(value) spent() defs();
+point NamespaceWrite.Deleted(current, next_head, clear) keep(value) spent() defs();
 
 extern helper store_name(t:Thread, fr:Frame, n:U16, v:O)
   cases(ok(), err(e:Err))
@@ -167,50 +175,6 @@ extern helper store_global(t:Thread, fr:Frame, n:U16, v:O)
     review: "ceval.c _PyRop_StoreGlobal: PyDict_SetValue into the globals, then the value closed.",
     contract: "Consumes the value on every path. 0, or -1 with the exception set. Callbacks: a dict key's __eq__, a finalizer.");
 
-arm NamespaceWrite.Name shared select(name_scope)
-  effects(runs_python, raises)
-  feedback()
-  exits(next, raise)
-{
-  entry():
-    let v:O = acquire(value);
-    call store_name(thread, frame, name, v) {
-      ok -> Done();
-      err -> Failed();
-    }
-  Done():
-    publish [] retire [] at NamespaceWrite.Done;
-    exit next();
-  Failed(e:Err):
-    exit raise(NamespaceWrite.Failed, e);
-}
-
-arm NamespaceWrite.Global shared select(global_scope)
-  effects(runs_python, raises)
-  feedback()
-  exits(next, raise)
-{
-  entry():
-    let v:O = acquire(value);
-    call store_global(thread, frame, name, v) {
-      ok -> Done();
-      err -> Failed();
-    }
-  Done():
-    publish [] retire [] at NamespaceWrite.Done;
-    exit next();
-  Failed(e:Err):
-    exit raise(NamespaceWrite.Failed, e);
-}
-
-// NamespaceDelete: `del name`, which the compiler writes as a NULL store.
-// A missing name raises NameError.
-family NamespaceDelete(name:U16)
-  exits(next, raise) ops(STORE_NAME, STORE_GLOBAL);
-
-point NamespaceDelete.Failed(current, site, pending) keep() spent() defs();
-point NamespaceDelete.Done(current, next_head, clear) keep() spent() defs();
-
 extern helper delete_name(t:Thread, fr:Frame, n:U16)
   cases(ok(), err(e:Err))
   effects(allocates, raises, runs_python)
@@ -227,36 +191,62 @@ extern helper delete_global(t:Thread, fr:Frame, n:U16)
     review: "ceval.c _PyRop_DeleteGlobal: PyDict_PopValue from the globals, NameError when missing.",
     contract: "0, or -1 with the exception set. Callbacks: a dict key's __eq__, a finalizer.");
 
-arm NamespaceDelete.Name shared select(name_scope)
+arm NamespaceWrite.Name shared select(name_scope)
   effects(runs_python, raises)
   feedback()
   exits(next, raise)
 {
   entry():
-    call delete_name(thread, frame, name) {
+    branch present_src(value) -> Store(), Delete();
+  Store():
+    let v:O = acquire(value);
+    call store_name(thread, frame, name, v) {
       ok -> Done();
       err -> Failed();
     }
+  Delete():
+    call delete_name(thread, frame, name) {
+      ok -> Deleted();
+      err -> DeleteFailed();
+    }
   Done():
+    publish [] retire [] at NamespaceWrite.Done;
     exit next();
   Failed(e:Err):
-    exit raise(NamespaceDelete.Failed, e);
+    exit raise(NamespaceWrite.Failed, e);
+  Deleted():
+    exit next();
+  DeleteFailed(d:Err):
+    exit raise(NamespaceWrite.DeleteFailed, d);
 }
 
-arm NamespaceDelete.Global shared select(global_scope)
+arm NamespaceWrite.Global shared select(global_scope)
   effects(runs_python, raises)
   feedback()
   exits(next, raise)
 {
   entry():
-    call delete_global(thread, frame, name) {
+    branch present_src(value) -> Store(), Delete();
+  Store():
+    let v:O = acquire(value);
+    call store_global(thread, frame, name, v) {
       ok -> Done();
       err -> Failed();
     }
+  Delete():
+    call delete_global(thread, frame, name) {
+      ok -> Deleted();
+      err -> DeleteFailed();
+    }
   Done():
+    publish [] retire [] at NamespaceWrite.Done;
     exit next();
   Failed(e:Err):
-    exit raise(NamespaceDelete.Failed, e);
+    exit raise(NamespaceWrite.Failed, e);
+  Deleted():
+    exit next();
+  DeleteFailed(d:Err):
+    exit raise(NamespaceWrite.DeleteFailed, d);
 }
 
 // SetupAnnotations: __annotations__ in the namespace, created when missing

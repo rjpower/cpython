@@ -267,8 +267,8 @@ class Select(enum.Enum):
     named = "named"                        # NamespaceRead: a name in the locals, globals and builtins
     locals_scope = "locals_scope"          # NamespaceRead: the locals themselves
     build_class_scope = "build_class_scope"  # NamespaceRead: the builtins' __build_class__
-    name_scope = "name_scope"              # NamespaceWrite, NamespaceDelete: the locals
-    global_scope = "global_scope"          # NamespaceWrite, NamespaceDelete: the globals
+    name_scope = "name_scope"              # NamespaceWrite: the locals
+    global_scope = "global_scope"          # NamespaceWrite: the globals
     eager_import = "eager_import"          # Import: forced eager
     policy_import = "policy_import"        # Import: lazy when the policy says so
     lazy_import = "lazy_import"            # Import: `lazy import`

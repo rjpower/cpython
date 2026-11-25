@@ -363,6 +363,7 @@ leaf_layout(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(ignored))
 #define OFF(S, F) if (add_int(off, #S "." #F, (long long)offsetof(S, F)) < 0) goto error
     OFF(PyObject, ob_refcnt); OFF(PyObject, ob_type); OFF(PyVarObject, ob_size);
     OFF(PyTypeObject, tp_version_tag); OFF(PyTypeObject, tp_basicsize);
+    OFF(PyTypeObject, tp_flags);
     OFF(PyListObject, ob_item); OFF(PyListObject, allocated);
     OFF(PyTupleObject, ob_item); OFF(PyDictObject, ma_keys);
     OFF(PyDictKeysObject, dk_version); OFF(PyDictKeysObject, dk_nentries);

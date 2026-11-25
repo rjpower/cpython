@@ -728,6 +728,31 @@ def _module_entry(b, o, r):
     return (b.choose(current, ir_leaf.VALUE, at_index, lambda: _null(b)),)
 
 
+def _has_type_flag(b, tp: int, flag: str) -> int:
+    "PyType_HasFeature(tp, flag)"
+    flags = b.load("PyTypeObject.tp_flags", tp)
+    return b.cmp("ne", b.emit1("and", "u64", (flags, b.emit1("jconst", "u64", (), flag))),
+                 b.const("u64", 0))
+
+
+def _class_current(b, o, r):
+    """_PyAttr_ClassCurrent: a class with the recipe's version, whose
+    metaclass has its type version when the recipe holds one"""
+    o = b.leaf(o)
+
+    def metaclass_current():
+        tv = r["type_version"]
+        return b.choose(
+            b.cmp("eq", tv, b.const("u32", 0)), "bool", lambda: b.const("bool", 1),
+            lambda: b.cmp("eq", b.load("PyTypeObject.tp_version_tag", b.prim1("Py_TYPE", o)), tv))
+
+    def version_current():
+        return b.and_then(b.cmp("eq", b.load("PyTypeObject.tp_version_tag", o), r["aux"]),
+                          metaclass_current)
+    is_type = _has_type_flag(b, b.prim1("Py_TYPE", o), "Py_TPFLAGS_TYPE_SUBCLASS")
+    return (b.and_then(is_type, version_current),)
+
+
 def _admitted_instance_slot(b, fb, name):
     "_PyAttr_AdmittedInstanceSlot: a live type version"
     tv = b.cache(fb, "type_version")
@@ -816,6 +841,29 @@ def _str_nonempty(b, v):
     return (b.cmp("ne", b.load("PyASCIIObject.length", o), b.const("i64", 0)),)
 
 
+def _not_none(b, v):
+    "_PyRop_NotNone"
+    return (b.emit1("lnot", "bool", (b.prim1("PyValue_IsNone", b.leaf(v)),)),)
+
+
+def _none_or_plain(b, fb, v):
+    """_PyRop_NoneOrPlain: None, or an object whose type has the entry's
+    version and is a heap type"""
+    w = b.leaf(v)
+
+    def plain():
+        def versioned():
+            tv = b.cache(fb, "type_version")
+
+            def matches():
+                tp = b.prim1("Py_TYPE", b.prim1("PyValue_AsKnownObjectBorrow", w))
+                return b.and_then(b.cmp("eq", b.load("PyTypeObject.tp_version_tag", tp), tv),
+                                  lambda: _has_type_flag(b, tp, "Py_TPFLAGS_HEAPTYPE"))
+            return b.and_then(b.cmp("ne", tv, b.const("u32", 0)), matches)
+        return b.and_then(b.prim1("PyValue_IsObject", w), versioned)
+    return (b.choose(b.prim1("PyValue_IsNone", w), "bool", lambda: b.const("bool", 1), plain),)
+
+
 def _list_nonempty(b, v):
     "_PyRop_ListNonempty"
     size = b.prim1("PyList_GET_SIZE", b.prim1("PyValue_AsKnownObjectBorrow", b.leaf(v)))
@@ -845,6 +893,8 @@ ROW_LOWERINGS: dict[str, LoweringFn] = {
     "_PyRop_ExactList": _exact_list,
     "_PyRop_ListNonempty": _list_nonempty,
     "_PyRop_ExactStr": _exact_str,
+    "_PyRop_NoneOrPlain": _none_or_plain,
+    "_PyRop_NotNone": _not_none,
     "_PyRop_StrNonempty": _str_nonempty,
     "_PyRop_TruthObject": _truth_object,
     # Constants
@@ -857,6 +907,7 @@ ROW_LOWERINGS: dict[str, LoweringFn] = {
     "_PyAttr_AdmittedMethod": _admitted_method,
     "_PyAttr_BorrowMethod": _borrow_method,
     "_PyAttr_IsModule": _is_module,
+    "_PyAttr_ClassCurrent": _class_current,
     "_PyAttr_ModuleEntry": _module_entry,
     "_PyAttr_InstanceVersion": _instance_version,
     "_PyAttr_ValidInlineValues": _valid_inline_values,

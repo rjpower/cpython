@@ -146,6 +146,7 @@ FIELDS = {f"{f.struct}.{f.name}": f for f in (
     Field("PyVarObject", "ob_size", "i64"),
     Field("PyTypeObject", "tp_version_tag", "u32"),
     Field("PyTypeObject", "tp_basicsize", "i64"),
+    Field("PyTypeObject", "tp_flags", "u64"),
     Field("PyListObject", "ob_item", "PyValue*"),
     Field("PyListObject", "allocated", "i64"),
     Field("PyTupleObject", "ob_item", "PyValue*"),   # an array in place

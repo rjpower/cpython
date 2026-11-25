@@ -245,13 +245,13 @@ class ScalarResultTests(unittest.TestCase):
         for extra, effects in (("", "releases"), ("opaque(oparg);", "runs_python")):
             with self.subTest(extra=extra), mock.patch.dict(ir_contract.rows(), rows):
                 contract = test_ir_scalar_storage.ScalarStorageTests().program(f"""
-                    family(UNARY_INVERT, 0) = {{ UNARY_NOT }};
+                    family(UNARY_INVERT, 0) = {{ UNARY_NEGATIVE }};
                     inst(UNARY_INVERT, (value: consumed -- out: owned))
                         effects(releases) exits(next)
                     {{
                         out = PyValue_FromInlineInt(1); PyValue_CLOSE(value);
                     }}
-                    inst(UNARY_NOT, (value: consumed -- out: owned))
+                    inst(UNARY_NEGATIVE, (value: consumed -- out: owned))
                         effects({effects}) exits(next)
                     {{
                         out = PyValue_FromInlineInt(1); PyValue_CLOSE(value); {extra}

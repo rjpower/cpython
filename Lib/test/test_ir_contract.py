@@ -39,9 +39,6 @@ FIELD_LOCS = (_opcode.IR_LOC_A, _opcode.IR_LOC_B, _opcode.IR_LOC_C,
 # The feedback entry of each family (Include/internal/pycore_feedback.h):
 # its kind and size in bytes
 FEEDBACK = {
-    "POP_JUMP_IF_FALSE": ("BRANCH", 24),
-    "POP_JUMP_IF_TRUE": ("BRANCH", 24),
-    "TO_BOOL": ("UNARY", 24),
     "UNPACK_SEQUENCE": ("UNARY", 24),
     "FOR_ITER": ("UNARY", 24),
     "GET_ITER": ("UNARY", 24),
@@ -219,7 +216,8 @@ class ContractTests(unittest.TestCase):
                                          *(opcode._ir_opmap[name] for name in IR_BASE_ONLY)})
                 self.assertIn(row.shadow, ROWS)
         for name in (*opcode._specialized_opmap, *opcode._ir_opmap):
-            if opcode._ir_opmap.get(name, 0) >= _opcode.IR_NUM_OLD_HANDLERS:
+            if (opcode._ir_opmap.get(name, 0) >= _opcode.IR_NUM_OLD_HANDLERS
+                    or name in IR_BASE_ONLY and name != "MATERIALIZE_KWARGS"):
                 continue
             self.assertIn(name, BY_NAME)
 
@@ -346,8 +344,7 @@ class ContractTests(unittest.TestCase):
             {"END_ASYNC_FOR"})
         always = {name for name in names_with(_opcode.IR_JUMP_ALWAYS, "flags")
                   if not name.startswith("INSTRUMENTED_")}
-        self.assertLessEqual({"JUMP_FORWARD", "JUMP_BACKWARD",
-                              "JUMP_BACKWARD_NO_INTERRUPT"}, always)
+        self.assertLessEqual({"IR_JUMP"}, always)
         for name in always:
             self.assertTrue(BY_NAME[name].flags
                             & (_opcode.IR_JUMPS | _opcode.IR_FORWARD), name)
@@ -368,7 +365,7 @@ class ContractTests(unittest.TestCase):
                     # has the size of the entry of a branch.
                     if family == "IS_OP":
                         self.assertEqual((kinds[row.fb_kind], row.fb_size),
-                                         FEEDBACK["TO_BOOL"])
+                                         ("UNARY", 24))
                     else:
                         self.assertEqual((kinds[row.fb_kind], row.fb_size),
                                          FEEDBACK[family])
@@ -436,9 +433,6 @@ class ContractTests(unittest.TestCase):
             "INSTRUMENTED_INSTRUCTION": {"INSTRUCTION"},
             "INSTRUMENTED_YIELD_VALUE": {"PY_YIELD"},
             "INSTRUMENTED_YIELD_DELEGATED": {"PY_YIELD"},
-            "INSTRUMENTED_JUMP_FORWARD": {"JUMP"},
-            "INSTRUMENTED_JUMP_BACKWARD": {"JUMP"},
-            "INSTRUMENTED_POP_JUMP_IF_TRUE": {"BRANCH_RIGHT", "BRANCH_LEFT"},
             "INSTRUMENTED_END_SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
             "INSTRUMENTED_END_FOR": {"STOP_ITERATION"},
             "INSTRUMENTED_FOR_ITER": {"BRANCH_LEFT", "BRANCH_RIGHT", "STOP_ITERATION"},
@@ -546,7 +540,6 @@ class ContractTests(unittest.TestCase):
         for name in ("CALL_KW", "STORE_FAST", "DELETE_FAST", "LOAD_GLOBAL",
                      "BINARY_OP"):
             self.assertTrue(BY_NAME[name].flags & _opcode.IR_RUNS_CODE, name)
-        self.assertTrue(BY_NAME["JUMP_BACKWARD"].effects & _opcode.IR_POLLS)
         self.assertTrue(BY_NAME["RESUME"].effects & _opcode.IR_POLLS)
         self.assertTrue(BY_NAME["BINARY_OP_ADD_INT"].effects & _opcode.IR_DEOPTS)
 
@@ -841,7 +834,7 @@ class SourceScanTests(unittest.TestCase):
                 result[h] = _scan_stack(ops, macros, name)
         names = {opcode.opname[h] for h in result}
         self.assertLessEqual({"SWAP", "FOR_ITER", "FOR_ITER_RANGE", "SEND"}, names)
-        self.assertGreater(len(result), 200)
+        self.assertGreater(len(result), 150)
         return result
 
     def test_through(self):

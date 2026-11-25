@@ -1137,8 +1137,7 @@ class TemplateGraphTests(unittest.TestCase):
     def test_guards_leave_by_their_exit_without_a_bool(self):
         "A predicate that only guards leaves by the exit: no result, no branch on one"
         for handler, name in (("BINARY_OP_ADD_FLOAT", "PyValue_FloatOperandValues"),
-                              ("BINARY_OP_SUBSCR_LIST_INT", "PyValue_IsObject"),
-                              ("POP_JUMP_IF_FALSE_BOOL", "PyValue_BoolCheck")):
+                              ("BINARY_OP_SUBSCR_LIST_INT", "PyValue_IsObject")):
             with self.subTest(handler=handler):
                 graph = graph_of(handler)
                 ops = [op for block in graph.blocks.values() for op in block.ops

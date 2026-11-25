@@ -679,11 +679,6 @@ HANDLERS = {
     "COMPARE_OP_JUMP_INT": (mixed_domain, None, [i << 5 | k for i in range(6) for k in (0, 16)]),
     "COMPARE_OP_JUMP_FLOAT": (float_domain, None, [i << 5 | k for i in range(6) for k in (0, 16)]),
     "IS_OP_JUMP": (mixed_domain, None, [0, 1]),
-    "POP_JUMP_IF_FALSE_BOOL": (lambda: [(w,) for w in BOOL_WORDS + OTHER_WORDS], None, [0]),
-    "POP_JUMP_IF_TRUE_BOOL": (lambda: [(w,) for w in BOOL_WORDS + OTHER_WORDS], None, [0]),
-    "POP_JUMP_IF_NOT_NONE": (lambda: [(w,) for w in BOOL_WORDS + OTHER_WORDS + INT_WORDS[:3]],
-                             None, [0]),
-    "POP_JUMP_IF_FALSE_INT": (lambda: [(w,) for w in INT_WORDS + OTHER_WORDS], None, [0]),
     "BINARY_OP_SUBSCR_LIST_INT": (lambda: subscript_domain(LISTS), None, [0]),
     "BINARY_OP_SUBSCR_TUPLE_INT": (lambda: subscript_domain(TUPLES), None, [0]),
     "FOR_ITER_LIST": (lambda: iterator_domain(lambda: [(l, len(l)) for l in LISTS]), None, [0]),
@@ -695,8 +690,6 @@ HANDLERS = {
     "LOAD_SMALL_INT_INLINE": (lambda: [()], None, [0, 1, 200, 255]),
     "LOAD_FAST_BORROW": (lambda: [()], None, [0, 1]),
     "LOAD_FAST": (lambda: [()], None, [0, 1]),
-    "JUMP_FORWARD": (lambda: [()], None, [0, 3]),
-    "JUMP_BACKWARD": (lambda: [()], None, [0, 3]),
 }
 
 

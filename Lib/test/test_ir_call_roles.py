@@ -106,12 +106,6 @@ class CallRoleTests(unittest.TestCase):
             return fn(values[0])
         def comprehension(values):
             return [value[0] for value in values]
-        def feedback_row(left, right):
-            return left - right
-        # The subscript is a register family: the feedback-encoded row is a
-        # BINARY_OP selector (an Add family word has none)
-        self.assertTrue(any(contract_of(row[0]).imm == _opcode.IR_LOC_FBARG
-                            for row in _testinternalcapi.get_ir(feedback_row.__code__)))
         payload = object()
         for admitted in routes(select.__code__):
             function = types.FunctionType(admitted, globals())

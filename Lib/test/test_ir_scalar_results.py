@@ -245,18 +245,18 @@ class ScalarResultTests(unittest.TestCase):
         for extra, effects in (("", "releases"), ("opaque(oparg);", "runs_python")):
             with self.subTest(extra=extra), mock.patch.dict(ir_contract.rows(), rows):
                 contract = test_ir_scalar_storage.ScalarStorageTests().program(f"""
-                    family(UNARY_INVERT, 0) = {{ UNARY_NEGATIVE }};
-                    inst(UNARY_INVERT, (value: consumed -- out: owned))
+                    family(SPAM_OP, 0) = {{ HAM_OP }};
+                    inst(SPAM_OP, (value: consumed -- out: owned))
                         effects(releases) exits(next)
                     {{
                         out = PyValue_FromInlineInt(1); PyValue_CLOSE(value);
                     }}
-                    inst(UNARY_NEGATIVE, (value: consumed -- out: owned))
+                    inst(HAM_OP, (value: consumed -- out: owned))
                         effects({effects}) exits(next)
                     {{
                         out = PyValue_FromInlineInt(1); PyValue_CLOSE(value); {extra}
                     }}
-                """, name="UNARY_INVERT")
+                """, name="SPAM_OP")
                 self.assertEqual(contract.normal_storage is not None, not extra)
 
     def test_stack_only_format_has_no_emitted_family_certificate(self):

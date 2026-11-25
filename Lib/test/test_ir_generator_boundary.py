@@ -50,7 +50,7 @@ def finish(generator, value):
 
 class GeneratorContractExportTests(unittest.TestCase):
     def test_metadata_only_operation_has_an_ordinary_identity(self):
-        handler = HANDLERS["BINARY_OP"]
+        handler = HANDLERS["COMPARE_OP"]
         row = CONTRACTS[handler]
         self.assertEqual(row.ordinary_handler, handler)
         self.assertEqual(row.generator_yielded_consumer, _opcode.GEN_CONSUMER_NONE)

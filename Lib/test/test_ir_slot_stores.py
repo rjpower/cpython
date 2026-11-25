@@ -1,7 +1,7 @@
 """The stores into a heap slot release the value they displace exactly once.
 
 _STORE_ATTR_SLOT, _STORE_ATTR_INSTANCE_VALUE, _STORE_ATTR_SHAPE,
-_STORE_ATTR_SHAPE_ADD, _STORE_ATTR_WITH_HINT and _STORE_SUBSCR_LIST_INT move
+_STORE_ATTR_SHAPE_ADD, _STORE_ATTR_WITH_HINT and _SetItem.ListIndex move
 the stored value into the slot (pycore_object.h's _PyValueSlot_Exchange,
 _PyValueSlot_ExchangeFilled and _PyValueSlot_Fill) and close the value that
 the slot held.  Each case warms a store until its specialized handler runs,
@@ -154,10 +154,10 @@ def list_case():
     targets = [[None, None], [None, None]]
     def f(n):
         targets[n % 2][1] = Value(n)
-    check_released({"STORE_SUBSCR_LIST_INT"}, f, targets)
+    check_released({"SetItem.ListIndex"}, f, targets)
     def g(target, value):
         target[1] = value
-    check_held_elsewhere({"STORE_SUBSCR_LIST_INT"}, g, targets)
+    check_held_elsewhere({"SetItem.ListIndex"}, g, targets)
 
 
 for case in (slot_case, shape_case, instance_value_case, add_case, hint_case, list_case):

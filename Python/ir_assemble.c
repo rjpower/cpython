@@ -623,7 +623,8 @@ choose_handler(_PyRegOp *op, PyObject *consts)
         return RESUME_JIT;
     }
     if (opcode == BINARY_OP) {
-        if (oparg > NB_OPARG_LAST) {
+        // NB_SUBSCR is the GetItem family's, never a BINARY_OP handler
+        if (oparg >= NB_SUBSCR) {
             PyErr_Format(PyExc_SystemError,
                          "invalid BINARY_OP operation %d", oparg);
             return ERROR;
@@ -697,7 +698,7 @@ needs_entry(int handler)
     const _PyIRFormat *fmt = _PyIR_FormatOf(handler);
     return (fmt->imm == _PyIR_LOC_FBARG
             && !(handler >= _PyIR_BINARY_OP_FIRST
-                 && handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST))
+                 && handler < _PyIR_BINARY_OP_FIRST + NB_SUBSCR))
            || (fmt->flags & _PyIR_FUSED);
 }
 

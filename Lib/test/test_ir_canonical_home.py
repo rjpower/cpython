@@ -51,10 +51,10 @@ class CanonicalHomeTests(unittest.TestCase):
         routes = {}
         for function in (local, temporary, discard):
             words = _testinternalcapi.get_ir(function.__code__, True)
-            self.assertIn('BINARY_OP_SUBSCR_LIST_INT',
+            self.assertIn('GetItem.ListIndex',
                           [word[0] for word in words])
             routes[function] = next(word for word in words
-                                    if word[0] == 'BINARY_OP_SUBSCR_LIST_INT')
+                                    if word[0] == 'GetItem.ListIndex')
         local_count = len(_testinternalcapi.get_co_localskinds(local.__code__))
         self.assertLess(routes[local][1], local_count)
         # Temporaries follow the fixed slots (locals, constants, discard)
@@ -98,7 +98,7 @@ class CanonicalHomeTests(unittest.TestCase):
 
         for _ in range(64):
             self.assertEqual(read(lambda: [2.5]), 2.5)
-        self.assertIn('BINARY_OP_SUBSCR_LIST_INT',
+        self.assertIn('GetItem.ListIndex',
                       [word[0] for word in _testinternalcapi.get_ir(
                           read.__code__, True)])
         result = read(factory)

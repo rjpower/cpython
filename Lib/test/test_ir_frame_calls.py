@@ -345,7 +345,7 @@ class FrameCallTests(unittest.TestCase):
             reader[3]
 
         rows = _testinternalcapi.get_ir(read.__code__)
-        for opcode in ("GetAttr.Generic", "BINARY_OP_SUBSCR"):
+        for opcode in ("GetAttr.Generic", "GetItem.Generic"):
             self.assertTrue(any(row[0] == opcode and row[1] == 4095
                                 for row in rows), rows)
         reader = Reader()

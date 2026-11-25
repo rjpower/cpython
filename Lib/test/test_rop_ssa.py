@@ -319,6 +319,18 @@ def truth_inputs(operand):
     return [{operand: v} for v in TRUTHS]
 
 
+class Getter:
+    "A container of Python's own: every item protocol call runs its methods"
+    def __getitem__(self, key):
+        return key
+
+    def __setitem__(self, key, value):
+        pass
+
+    def __delitem__(self, key):
+        pass
+
+
 def identity(x):
     return x
 
@@ -440,6 +452,48 @@ SCENARIOS = {
                         "instance": (materialised(),), "nodict": (SlotsClassAttr(),),
                         "pointer": (functools.partial(identity),)},
         warmups=200, coherent=True),
+    "GetItem": Scenario("GetItem", {
+        "list": "def f(a, k=1):\n    return a[k]\n",
+        "tuple": "def f(a, k=1):\n    return a[k]\n",
+        "ascii": "def f(a, k=1):\n    return a[k]\n",
+        "unicode": "def f(a, k=1):\n    return a[k]\n",
+        "dict": "def f(a, k=1):\n    return a[k]\n",
+        "slice": "def f(a, k=slice(0, 2)):\n    return a[k]\n",
+        "generic": "def f(a, k=1):\n    return a[k]\n"},
+        [{"obj": o, "key": k} for o in ([10, 20, 30], (10, 20, 30), "abc", "a\u00e9c",
+                                        {1: 2, 2**70: 3}, Getter(), Plain())
+         for k in (0, 1, -1, 7, -9, 1, 2**70, "x", slice(0, 2), 1.5)],
+        warm_by_source={"list": ([1, 2],), "tuple": ((1, 2),), "ascii": ("ab",),
+                        "unicode": ("a\u00e9",), "dict": ({1: 2},),
+                        "slice": ([1, 2, 3],), "generic": (Getter(),)},
+        warmups=200, coherent=True),
+    "SetItem": Scenario("SetItem", {
+        "list": "def f(a, k=1, v=5):\n    a[k] = v\n",
+        "dict": "def f(a, k=1, v=5):\n    a[k] = v\n",
+        "generic": "def f(a, k=1, v=5):\n    a[k] = v\n"},
+        [{"obj": o, "key": k, "value": v}
+         for o in ([10, 20, 30], {1: 2}, Getter(), (1, 2))
+         for k in (0, 1, -1, 7, "x") for v in (5, None)],
+        warm_by_source={"list": ([1, 2],), "dict": ({1: 2},), "generic": (Getter(),)},
+        warmups=200, coherent=True),
+    "DelItem": Scenario("DelItem", {
+        "generic": "def f(a, k=0):\n    del a[k]\n"},
+        [{"obj": o, "key": k} for o in ([10, 20, 30], {1: 2, 0: 1}, Getter(), (1, 2))
+         for k in (0, 1, -1, 7, "x")], warm=([1, 2],)),
+    "SliceRead": Scenario("SliceRead", {
+        "generic": "def f(a, i=0, j=1):\n    return a[i:j]\n"},
+        [{"obj": o, "start": i, "stop": j}
+         for o in ([1, 2, 3], (1, 2, 3), "abc", Getter(), 5)
+         for i, j in ((0, 1), (None, None), (-2, 5), ("x", 1))], warm=([1, 2],)),
+    "SliceWrite": Scenario("SliceWrite", {
+        "generic": "def f(a, i=0, j=1, v=()):\n    a[i:j] = v\n"},
+        [{"obj": o, "start": i, "stop": j, "value": v}
+         for o in ([1, 2, 3], Getter(), 5) for i, j in ((0, 1), (None, None), ("x", 1))
+         for v in ([9], 7)], warm=([1, 2],)),
+    "BuildSlice": Scenario("BuildSlice", {
+        "generic": "def f(a, i=0, j=1, k=2):\n    return a[i:j:k]\n"},
+        [{"parts": parts} for parts in ([0, 1], [0, 1, 2], [None, None, None],
+                                        [Plain(), 1], [1, 2, 0])], warm=([1, 2],)),
     "GetMethod": Scenario("GetMethod", {
         "values": "def f(a):\n    return a.norm()\n",
         "nodict": "def f(a):\n    return a.norm()\n",

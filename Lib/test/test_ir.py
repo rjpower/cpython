@@ -2621,7 +2621,7 @@ class RegCfgTest(unittest.TestCase):
         self.assertIn("JUMP_IF_FALSE_OR_POP", self.names(conj))
         self.assertIn("JUMP_IF_TRUE_OR_POP", self.names(disj))
         for f in conj, disj:
-            self.assertNotIn("COPY", self.names(f))
+            self.assertNotIn("Move.Copy", self.names(f))
             self.assertNotIn("POP_TOP", self.names(f))
         empty, full = [], [1]
         for x, b in ((empty, "b"), (full, "b"), (0, None), (2.5, 0)):
@@ -2809,11 +2809,12 @@ class MoveResolutionTest(unittest.TestCase):
 
     @staticmethod
     def cycle(a, b, c):
-        # The chained comparison exchanges b.real and its copy of b: a
-        # Move whose destinations are its sources
-        if a <= b.real < c:
-            return 1
-        return 0
+        # The mapping pattern with a rest exchanges two of its values on
+        # the way to its test: a Move whose destinations are its sources
+        match b.real:
+            case {0: 1, **rest}:
+                return len(rest)
+        return int(a <= b.real < c)
 
     @staticmethod
     def move_sets(func):
@@ -2868,12 +2869,13 @@ class MoveResolutionTest(unittest.TestCase):
             def __init__(self, real):
                 self.real = real
         b = Real(object())
-        self.cycle(0, Real(1), 2)
+        self.cycle(0, Real({0: 1, 2: 3}), 2)
         cycles = [(dsts, srcs) for dsts, srcs in self.move_sets(self.cycle)
                   if sorted(dsts) == sorted(srcs) and dsts != srcs]
         self.assertTrue(cycles)
         before = self.counts(b, b.real)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
+            self.assertEqual(self.cycle(0, Real({0: 1, 2: 3}), 2), 1)
             self.assertEqual(self.cycle(0, Real(1), 2), 1)
             self.assertEqual(self.cycle(0, Real(5), 2), 0)
             with self.assertRaises(TypeError):
@@ -2959,7 +2961,7 @@ class MoveResolutionTest(unittest.TestCase):
 
     def test_every_cycle_word_unwinds(self):
         class Real:
-            real = 1
+            real = {0: 1, 2: 3}
         b = Real()
         self.raise_at_each_word(self.cycle, lambda: (0, b, 2))
 

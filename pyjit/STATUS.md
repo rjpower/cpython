@@ -38,29 +38,47 @@ Astra's [design](design/proposals/rir90-astra-design.md) and
 the end condition agreed with the user, the register IR and the
 interpreter hold no reference to the stack at step D, and tests check it.
 
-`pyjit/rir90` at `797247a5775` (pushed) holds:
+`pyjit/rir90` at `a7795635a94` (pushed) holds:
 - the foundation: F0, the language; F1, its checker; F2, the generated
   products; F3, the stack-op translator; P0, per-arm tables;
 - the pilot families: locals, constants and `Move` (P1), `Add` (P2),
   `GetAttr` and `GetMethod` (P3), `Call`, `InitResult` and `Return` (P4),
   and truth, branches and jumps (P5);
 - handler numbers computed at each build, with no pin table (PN);
-- the freeze units:
+- the freeze:
   - PT: POP_TOP emits no instruction, and slots no longer creep;
   - TT: stack ops carry no semantic flags;
   - EC: tests show the set of inherited instructions only shrinks;
-  - SSA: 60 of the 69 pilot arms expand to the tracer's SSA form, and 58
-    match the C path.
+  - SSA: pilot arms expand to the tracer's SSA form, checked against C;
+  - LF, the frozen language:
+    - only `publish` writes homes;
+    - a row that leaves the word is a transfer row;
+    - declared `entry`, `generic`, `observes` and `requires` clauses;
+    - optional sources are read only where `present(x)` holds;
+    - spans of owners;
+  - CA: COPY emits no word where one owner covers both uses (Move.Copy
+    words 64,952 to 28,294);
+  - HN: deleted handlers free their ids;
+  - IL: a row declared `inline` is always inlined into the interpreter,
+    and function forms and stubs call one out-of-line copy;
+  - TM: baseline templates derive from the same arm expansion as the
+    tracer, and can read word and feedback-entry fields; templated static
+    words rise from 3.3% to 30.6% of arm words;
+- W1 round 1: global loads (GR), namespaces and imports (NS), items and
+  slices (IT), functions and intrinsics (FN, one word per `def`), displays
+  (DP, span operands for every format), and packed small immediates (CP).
 
-Family arms are 56.0% of the IR words over Lib/; 116 inherited
-instructions remain, in 237 handlers. At the pilot join, `always` ran
-about 1.30 of golden87's interpreter time, and rir90's interpreter about
-1.26. Most of the gap is Call and Return rows compiled out of line (28%)
-and attribute loads (26%). By the user's choice, it is fixed after D.
+Family arms are 80.6% of the IR words over Lib/ (55.5% at the freeze); 85
+inherited instructions remain. Merge checks show known failures only, and
+the verifier reports no error over 109,185 code objects. At the pilot
+join, `always` ran about 1.30 of golden87's interpreter time, and rir90's
+interpreter about 1.26. Most of the gap was Call and Return rows compiled
+out of line (28%), which IL addresses, and attribute loads (26%). By the
+user's choice, the remainder is fixed after D; timing is next taken at the
+W1 join.
 
-An Opus review of the checker and products, and a unit that freezes the
-language, are running; the Sonnet port of the remaining families (W1 and
-W2) follows.
+W1 round 2 is running: displays' unpack step, comparisons, cells,
+attribute writes, numeric operators, and text and patterns.
 
 **Closed: regions89, 2026-11-24**
 ([record](issues/register-semantics59/regions89.md)): declared operation

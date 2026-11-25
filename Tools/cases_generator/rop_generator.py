@@ -31,7 +31,8 @@ import rop_leaf
 import rop_verify
 from generators_common import root_relative_path, write_header
 from rop_cgen import ESCAPING, Lowering, Unsupported, lower_arm, pending_blockers
-from rop_catalog import SELECT_DIMENSIONS, Effect, FieldKind, Handle, Slot, Wrap
+from rop_catalog import (FB_LAYOUT, RECIPE_LAYOUT, SELECT_DIMENSIONS, Effect, FieldKind,
+                         Handle, Slot, Wrap)
 from rop_check import Program, select_dimension
 from rop_model import Arm, HandleType, Param, WrapType
 from rop_print import type_text
@@ -167,6 +168,23 @@ MISS_MACRO = """\
     Py_FatalError("register instruction family " #FAMILY " has no generic arm")
 #endif
 """
+
+
+def write_layout_checks(out: TextIO) -> None:
+    """Each schema and recipe field's C member has the type that
+    rop_catalog states: the structs stay hand-written, and the build fails
+    when one drifts from the table"""
+    out.write("/* The C layout of the feedback schemas and recipes "
+              "(rop_catalog.FB_LAYOUT,\n * RECIPE_LAYOUT) */\n")
+    for what, layouts in (("schema", FB_LAYOUT), ("recipe", RECIPE_LAYOUT)):
+        for schema, layout in layouts.items():
+            for name, f in layout.fields.items():
+                if f.member is None:
+                    continue
+                out.write(f"static_assert(_Generic((({layout.struct} *)0)->{f.member}, "
+                          f"{f.ctype}: 1, default: 0),\n"
+                          f"              \"{what} {schema.value}.{name}: "
+                          f"{layout.struct}.{f.member} is not {f.ctype}\");\n")
 
 
 def write_forms(out: TextIO, p: Products, sources: list[str]) -> None:
@@ -503,6 +521,7 @@ def template_arm_names(paths: list[Path] | None = None) -> list[str]:
 def write_templates(out: TextIO, p: Products, sources: list[str]) -> None:
     made, refused = template_texts(p)
     write_header(__file__, sources, out)
+    write_layout_checks(out)
     out.write(f"//\n// {len(made)} templates.  Inline arms that keep the call of their form:\n")
     for name, why in sorted(refused.items()):
         out.write(f"//   {name}: {why}\n")

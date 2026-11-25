@@ -1,6 +1,8 @@
 """Tests of the generated products of the register instruction definitions:
 Tools/cases_generator/rop_cgen.py and rop_generator.py."""
 
+import dataclasses
+import io
 import re
 import unittest
 from unittest import mock
@@ -14,6 +16,7 @@ with test_tools.imports_under_tool("cases_generator"):
     import ir_generator
     import ir_leaf
     import ir_leaf_eval
+    import rop_catalog
     import rop_check
     import rop_generator
     import rop_leaf
@@ -484,6 +487,60 @@ class GeneratedAddIntTests(unittest.TestCase):
                              for p in (ROOT / "Python" / "register_ops").glob("*.rop"))
             writer(out, self.products, sources)
             self.assertEqual((ROOT / name).read_text(), out.getvalue(), name)
+
+
+class TemplateLayoutTests(unittest.TestCase):
+    """Templates read feedback entries through rop_catalog.FB_LAYOUT, the
+    one statement of each field's C member and type"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.products = products()
+        cls.made, cls.refused = rop_generator.template_texts(cls.products)
+
+    def test_the_layout_states_every_schema_field(self):
+        for schema, layout in rop_catalog.FB_LAYOUT.items():
+            with self.subTest(schema):
+                self.assertEqual(set(layout.fields), set(rop_catalog.SCHEMA_FIELDS[schema]))
+                for f in layout.fields.values():
+                    self.assertEqual(f.member is None, not f.ctype)
+
+    def test_every_member_gets_a_static_check(self):
+        out = io.StringIO()
+        rop_generator.write_layout_checks(out)
+        text = out.getvalue()
+        for layouts in (rop_catalog.FB_LAYOUT, rop_catalog.RECIPE_LAYOUT):
+            for layout in layouts.values():
+                for f in layout.fields.values():
+                    if f.member is not None:
+                        self.assertIn(f"(({layout.struct} *)0)->{f.member}, "
+                                      f"{f.ctype}: 1", text)
+
+    def test_a_template_that_reads_its_entry_checks_its_handler(self):
+        for name in ("GetAttr.Shape", "GetAttr.Instance"):
+            self.assertIn(name, self.made)
+        for name, lines in self.made.items():
+            text = "\n".join(lines)
+            with self.subTest(name):
+                self.assertEqual("_PyJitTemplate_CheckHandler(cx);" in text,
+                                 "&fb->" in text)
+
+    def test_reading_an_undeclared_field_refuses(self):
+        prog = self.products.program
+        arm = prog.arms["GetAttr.Shape"]
+        feedback = tuple(a for a in arm.contract.feedback if a.field != "entry.shape")
+        narrowed = dataclasses.replace(
+            arm, contract=dataclasses.replace(arm.contract, feedback=feedback))
+        with self.assertRaisesRegex(rop_generator.Unsupported, "entry.shape"):
+            rop_leaf.leaf_of_arm(prog, narrowed)
+
+    def test_templates_file_is_current(self):
+        out = io.StringIO()
+        sources = sorted(f"Python/register_ops/{p.name}"
+                         for p in (ROOT / "Python" / "register_ops").glob("*.rop"))
+        rop_generator.write_templates(out, self.products, sources)
+        self.assertEqual((ROOT / "Python/generated_rop_templates.c.h").read_text(),
+                         out.getvalue())
 
 
 if __name__ == "__main__":

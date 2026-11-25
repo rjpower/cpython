@@ -110,6 +110,15 @@ class Conj:
 Rep = int | Imm | Entry | Opaque | Record | Conj | None
 
 
+def immediate_expr(p) -> str:
+    "An immediate's C expression over the head: its fields, low field first"
+    if len(p.slots) == 1:
+        return f"IR_{p.slots[0].name}(ir_word)"
+    return "(" + " | ".join(f"((uint32_t)IR_{s.name}(ir_word) << {12 * i})" if i else
+                            f"(uint32_t)IR_{s.name}(ir_word)"
+                            for i, s in enumerate(p.slots)) + ")"
+
+
 def record_fields(schema: Schema) -> list[tuple[str, str]]:
     layout = RECIPE_LAYOUT.get(schema)
     if layout is None:
@@ -233,6 +242,25 @@ class LeafBuilder:
         "A field of ir_leaf.FIELDS, or a leaf type read through the pointer"
         t = ir_leaf.FIELDS[field].type if field in ir_leaf.FIELDS else field
         return self.emit1("load", t, (ptr,), field)
+
+    def choose(self, test: int, t: str, yes: Callable[[], int], no: Callable[[], int]) -> int:
+        """yes() when the test holds, else no(), each in a block of its own:
+        a row whose C body branches"""
+        here = self.cur
+        yes_block, no_block, join = self.new_block(), self.new_block(), self.new_block()
+        result = self.value(t)
+        join.params.append(result)
+        here.term = ("br", test, yes_block.id, no_block.id)
+        for block, fn in ((yes_block, yes), (no_block, no)):
+            self.cur = block
+            v = fn()
+            self.cur.term = ("jmp", join.id, (v,))
+        self.cur = join
+        return result
+
+    def and_then(self, test: int, then: Callable[[], int]) -> int:
+        "C's `test && then()`"
+        return self.choose(test, "bool", then, lambda: self.const("bool", 0))
 
     def zext(self, t: str, v: int) -> int:
         return self.emit1("conv", t, (v,))
@@ -381,10 +409,10 @@ class LeafBuilder:
         if kind in (FieldKind.imm, FieldKind.const):
             t = "u32" if isinstance(param.type, EnumType) else leaf_type(param.type)
             for p in self.program.encodings[self.arm.family].placements:
-                if (p.operand == name and len(p.slots) == 1 and p.slots[0].word == 0
-                        and t is not None):
-                    return Imm(f"IR_{p.slots[0].name}(ir_word)", t)
-            self.refuse(f"the immediate {name} is not one field of the head")
+                if (p.operand == name and p.slots and t is not None
+                        and all(s.word == 0 for s in p.slots)):
+                    return Imm(immediate_expr(p), t)
+            self.refuse(f"the immediate {name} is not in the head")
         if kind is FieldKind.feedback:
             return Entry(param.type.schema)
         if kind in (FieldKind.name, FieldKind.target):
@@ -592,6 +620,108 @@ def _borrow_present(b, m):
     return (b.emit1("lnot", "bool", (b.prim1("PyValue_IsNull", b.leaf(m)),)),)
 
 
+def _attr_recipe(b, **values) -> Record:
+    "An attribute recipe; the fields the admission row leaves unset are zero"
+    fields = []
+    for name, t in record_fields(Schema.Attr):
+        v = values.get(name)
+        if v is None:
+            v = b.const(t, "PyValue_NULL" if t == ir_leaf.VALUE else 0)
+        fields.append((name, v))
+    return Record(Schema.Attr, tuple(fields))
+
+
+def _admitted_instance_slot(b, fb, name):
+    "_PyAttr_AdmittedInstanceSlot: a live type version"
+    tv = b.cache(fb, "type_version")
+    hit = b.cmp("ne", tv, b.const("u32", 0))
+    return hit, _attr_recipe(b, type_version=tv, offset=b.cache(fb, "offset"))
+
+
+def _admitted_shape(b, fb, name):
+    "_PyAttr_AdmittedShape: a live type version and a shape read (Py_SHAPES)"
+    tv = b.cache(fb, "type_version")
+    live = b.cmp("ne", tv, b.const("u32", 0))
+    shape_read = b.emit1("jconst", "u32", (), "_Py_FB_READ_SHAPE")
+    is_shape = b.cmp("eq", b.cache(fb, "kind"), shape_read)
+    return Conj((live, is_shape)), _attr_recipe(
+        b, type_version=tv, aux=b.cache(fb, "shape"), offset=b.cache(fb, "offset"),
+        read_kind=shape_read)
+
+
+def _instance_version(b, o, r):
+    "_PyAttr_InstanceVersion"
+    tp = b.prim1("Py_TYPE", b.leaf(o))
+    return (b.cmp("eq", b.load("PyTypeObject.tp_version_tag", tp), r["type_version"]),)
+
+
+def _valid_inline_values(b, o):
+    "_PyAttr_ValidInlineValues"
+    values = b.prim1("_PyObject_InlineValues", b.leaf(o))
+    return (b.cmp("ne", b.load("PyDictValues.valid", values), b.const("u8", 0)),)
+
+
+def _shape_current(b, o, r):
+    "_PyAttr_ShapeCurrent (Py_SHAPES)"
+    return (b.cmp("eq", b.prim1("_PyObject_Shape", b.leaf(o)), r["aux"]),)
+
+
+def _borrow_value_slot(b, o, r):
+    "_PyAttr_BorrowValueSlot, _PyAttr_BorrowValueSlotFilled: the word at the offset"
+    slot = b.prim1("_PyObject_ValueSlot", b.leaf(o), b.zext("u64", r["offset"]))
+    return (b.load(ir_leaf.VALUE, slot),)
+
+
+def _small_int(b, i):
+    "_PyRop_SmallInt"
+    return (b.prim1("PyValue_FromInlineInt", b.emit1("jconst", "i64", (), _imm(b, i))),)
+
+
+def _code_constant(b, frame, i):
+    "_PyRop_CodeConstant: an item of the code's constants, with a count"
+    consts = b.prim1("FRAME_CO_CONSTS")
+    item = b.prim1("PyTuple_GET_VALUE", consts, b.emit1("jconst", "i64", (), _imm(b, i)))
+    return (b.prim1("PyValue_DUP", b.prim1("_PyValue_CodeConstant", item)),)
+
+
+def _exact_int(b, v):
+    "_PyRop_ExactInt"
+    return (b.prim1("PyValue_LongCheckExact", b.leaf(v)),)
+
+
+def _int_nonzero(b, v):
+    "_PyRop_IntNonzero: an inline int's value, else the boxed int's"
+    w = b.leaf(v)
+    return (b.choose(
+        b.prim1("PyValue_IsInlineInt", w), "bool",
+        lambda: b.cmp("ne", b.prim1("PyValue_InlineInt64", w), b.const("i64", 0)),
+        lambda: b.emit1("lnot", "bool", (b.prim1(
+            "_PyLong_IsZero", b.prim1("PyValue_AsKnownObjectBorrow", w)),))),)
+
+
+def _exact_list(b, v):
+    "_PyRop_ExactList"
+    w = b.leaf(v)
+    return (b.and_then(b.prim1("PyValue_IsObject", w), lambda: b.prim1(
+        "PyList_CheckExact", b.prim1("PyValue_AsKnownObjectBorrow", w))),)
+
+
+def _list_nonempty(b, v):
+    "_PyRop_ListNonempty"
+    size = b.prim1("PyList_GET_SIZE", b.prim1("PyValue_AsKnownObjectBorrow", b.leaf(v)))
+    return (b.cmp("ne", size, b.const("i64", 0)),)
+
+
+def _truth_object(b, test, invert):
+    "_PyRop_TruthObject: True when the test differs from invert"
+    if isinstance(invert, Imm):
+        differs = b.emit1("xorb", "bool", (b.leaf(test),), invert.expr)
+    else:
+        differs = b.emit1("xor", "bool", (b.leaf(test), b.leaf(invert)))
+    return (b.emit1("select", ir_leaf.VALUE, (differs, b.const(ir_leaf.VALUE, "PyValue_True"),
+                                             b.const(ir_leaf.VALUE, "PyValue_False"))),)
+
+
 ROW_LOWERINGS: dict[str, LoweringFn] = {
     # A branch's tests of its mode or sense: functions of the word, or a
     # test result negated or not by the word
@@ -599,6 +729,23 @@ ROW_LOWERINGS: dict[str, LoweringFn] = {
     "_PyRop_BranchTaken": _branch_taken,
     "_PyRop_SameBool": _same_bool,
     "_PyValue_BorrowPresent": _borrow_present,
+    # Truth
+    "_PyRop_ExactInt": _exact_int,
+    "_PyRop_IntNonzero": _int_nonzero,
+    "_PyRop_ExactList": _exact_list,
+    "_PyRop_ListNonempty": _list_nonempty,
+    "_PyRop_TruthObject": _truth_object,
+    # Constants
+    "_PyRop_SmallInt": _small_int,
+    "_PyRop_CodeConstant": _code_constant,
+    # Attribute recipes
+    "_PyAttr_AdmittedInstanceSlot": _admitted_instance_slot,
+    "_PyAttr_AdmittedShape": _admitted_shape,
+    "_PyAttr_InstanceVersion": _instance_version,
+    "_PyAttr_ValidInlineValues": _valid_inline_values,
+    "_PyAttr_ShapeCurrent": _shape_current,
+    "_PyAttr_BorrowValueSlot": _borrow_value_slot,
+    "_PyAttr_BorrowValueSlotFilled": _borrow_value_slot,
 }
 
 

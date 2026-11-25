@@ -22,7 +22,6 @@ class FunctionTests(unittest.TestCase):
     def test_words(self):
         w = words(make_all_fields)
         self.assertIn("Function.Make", w)
-        self.assertIn("FunctionSet.SetField", w)
         self.assertNotIn("MAKE_FUNCTION", w)
         self.assertNotIn("SET_FUNCTION_ATTRIBUTE", w)
 

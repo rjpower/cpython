@@ -740,14 +740,14 @@ class DefinitionTests(unittest.TestCase):
         CellMake CellRead CellMapRead CellStore CellDelete NamespaceRead NamespaceReadFrom
         NamespaceWrite
         GlobalRead SetupAnnotations Import ImportFrom BuildText Convert Format Length Pattern
-        Function FunctionSet Intrinsic IntrinsicPair
+        Function Intrinsic IntrinsicPair
         Call InitResult Return CallKw CallEx MaterializeKwargs IterOpen ForIter
         AsyncIter Awaitable Send Yield Raise Reraise ExceptState ExceptMatch
         CleanupThrow EndAsyncFor WithExit Resume Poll
     """.split()
 
     def test_appendix_a_families(self):
-        self.assertEqual(len(self.APPENDIX_A), 77)
+        self.assertEqual(len(self.APPENDIX_A), 76)
         self.assertEqual(sorted(self.program.families), sorted(self.APPENDIX_A))
         for fam in self.program.families.values():
             with self.subTest(fam.name):

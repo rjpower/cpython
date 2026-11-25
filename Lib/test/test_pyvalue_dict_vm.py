@@ -386,7 +386,7 @@ class PyValueDictVMTests(unittest.TestCase):
         owner = Owner()
         owner.x = 3.25
         owner.__dict__
-        # Each read deoptimises LOAD_ATTR_MODULE until its cooldown ends.
+        # Each read deoptimises GetAttr.Module until its cooldown ends.
         for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN + 1):
             self.assertEqual(read(owner), 3.25)
         self.assertTrue(set(handlers(read)) & {

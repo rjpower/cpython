@@ -251,9 +251,6 @@ class ContractTests(unittest.TestCase):
             for oparg in OPARGS:
                 if not _opcode.has_arg(op) and oparg:
                     continue
-                if opcode.opname[h] == "LOAD_ATTR_CLASSMETHOD" and not oparg & 1:
-                    # An IR-only specialisation of the method load
-                    continue
                 try:
                     expected = _opcode.stack_effect(
                         op, oparg if _opcode.has_arg(op) else None)
@@ -888,9 +885,6 @@ class SourceScanTests(unittest.TestCase):
                 shadow = opcode.opname[row.shadow]
                 name = shadow if shadow in popped else opcode.opname[row.base]
             for oparg in OPARGS:
-                if opcode.opname[h] == "LOAD_ATTR_CLASSMETHOD" and not oparg & 1:
-                    # An IR-only specialisation of the method load
-                    continue
                 counts = (extent(row.reads, oparg),
                           extent(row.writes, oparg))
                 expected = (eval(popped[name], {"oparg": oparg}),

@@ -2698,7 +2698,7 @@ class VerifierTests(unittest.TestCase):
                      r"it establishes or which an effect since killed")
 
     def test_assumed_row_results(self):
-        # _LOAD_ATTR_CLASS: the cached descriptor is not NULL by the cache's
+        # The class arm: the cached descriptor is not NULL by the cache's
         # invariant, declared on the row that reads it
         row = self.table["SPAM_DESCR"]
         self.assertEqual(row.result.assumed, (ir_contract.Assumption(

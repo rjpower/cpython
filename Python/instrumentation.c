@@ -2508,9 +2508,17 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
             // we know what the original opcode was.
             _PyIRWord *words = exec_words(code);
             /* Every entry, the operand words' too: de-instrumentation may
-             * read any index that a source edge names. */
-            for (int i = 0; i < code_len; i++) {
-                code->_co_monitoring->per_instruction_opcodes[i] = word_opcode(words, i);
+             * read any index that a source edge names.  An operand word is
+             * payload with no handler, so it takes its head's opcode; the
+             * length comes from the code object's word, which is never
+             * wrapped. */
+            for (int i = 0; i < code_len; ) {
+                int opcode = word_opcode(words, i);
+                int length = _PyCode_InstrLength(code, i);
+                for (int k = 0; k < length; k++) {
+                    code->_co_monitoring->per_instruction_opcodes[i + k] = opcode;
+                }
+                i += length;
             }
         }
         if (multitools && code->_co_monitoring->per_instruction_tools == NULL) {

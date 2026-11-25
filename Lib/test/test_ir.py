@@ -321,7 +321,7 @@ class AssemblerTest(unittest.TestCase):
             self.assertIsNone(f(object()))
 
     def test_exception_from_a_pushed_frame(self):
-        # LOAD_ATTR_PROPERTY pushes the frame of the getter.  When the getter
+        # The property arm pushes the frame of the getter.  When the getter
         # raises, the unwinding of f looks up the word of LOAD_ATTR in the
         # exception table.
         class P:
@@ -2399,7 +2399,7 @@ class RegCfgTest(unittest.TestCase):
         self.assertEqual(Counted.freed, 2 * n)
 
     def test_pushed_frame_result_to_a_local(self):
-        # LOAD_ATTR_PROPERTY and BINARY_OP_SUBSCR_GETITEM push the frame of
+        # The property arm and BINARY_OP_SUBSCR_GETITEM push the frame of
         # the getter, which returns to the local
         class C:
             @property

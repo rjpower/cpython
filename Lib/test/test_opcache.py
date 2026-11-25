@@ -2488,7 +2488,7 @@ class TestSpecializer(TestBase):
     def test_load_attr_module_subclass_with_data_descriptor(self):
         # gh-156399: a types.ModuleType subclass inherits
         # PyModule_Type.tp_getattro, so guarding specialization on tp_getattro
-        # alone let subclasses take LOAD_ATTR_MODULE. That reads the module
+        # alone let subclasses take GetAttr.Module. That reads the module
         # dict directly, silently bypassing a data descriptor defined on the
         # subclass once the instruction had specialized.
         class Descriptor:

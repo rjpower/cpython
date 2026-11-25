@@ -289,7 +289,7 @@ class PyValueSlotTests(unittest.TestCase):
 
 
 class PointerFieldTests(unittest.TestCase):
-    """LOAD_ATTR_SLOT_POINTER: a PyObject * member or the type of the owner."""
+    """GetAttr.PointerSlot: a PyObject * member or the type of the owner."""
 
     HANDLER = 'GetAttr.PointerSlot'
 

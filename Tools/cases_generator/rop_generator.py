@@ -696,7 +696,7 @@ def write_encodings(out: TextIO, p: Products) -> None:
 
 def operand_mask(names: tuple[str, ...], operands: list[str]) -> str:
     """The point's operand bits; a projection g.p sets its group's bit"""
-    bits = sorted({operands.index(n.partition(".")[0]) for n in names})
+    bits = dict.fromkeys(operands.index(n.partition(".")[0]) for n in names)
     return " | ".join(f"(1 << {b})" for b in bits) or "0"
 
 

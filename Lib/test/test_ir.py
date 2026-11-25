@@ -3166,8 +3166,7 @@ class MoveResolutionTest(unittest.TestCase):
 
     @staticmethod
     def cycle(a, b, c):
-        # The mapping pattern with a rest exchanges two of its values on
-        # the way to its test: a Move whose destinations are its sources
+        # The mapping pattern with a rest copies its subject into a dict
         match b.real:
             case {0: 1, **rest}:
                 return len(rest)
@@ -3221,15 +3220,12 @@ class MoveResolutionTest(unittest.TestCase):
             self.assertEqual(self.moves(b, a, m, []), [False])
         self.assertEqual(self.counts(s1, s2, a, b, m), before)
 
-    def test_cycle_word(self):
+    def test_mapping_pattern_leaves_one_owner(self):
         class Real:
             def __init__(self, real):
                 self.real = real
         b = Real(object())
         self.cycle(0, Real({0: 1, 2: 3}), 2)
-        cycles = [(dsts, srcs) for dsts, srcs in self.move_sets(self.cycle)
-                  if sorted(dsts) == sorted(srcs) and dsts != srcs]
-        self.assertTrue(cycles)
         before = self.counts(b, b.real)
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 2):
             self.assertEqual(self.cycle(0, Real({0: 1, 2: 3}), 2), 1)
@@ -3241,32 +3237,15 @@ class MoveResolutionTest(unittest.TestCase):
 
     def test_cycle_recipe(self):
         # The unwinder's ingress recipe runs the same parallel move as the
-        # Move word: the cycle of self.cycle, then a longer cycle with a
-        # chain whose last source is released
-        dsts, srcs = next((d, s) for d, s in self.move_sets(self.cycle)
-                          if sorted(d) == sorted(s) and d != s)
-
-        names = [f"a{i}" for i in range(max(dsts + srcs) + 1)]
-        ns = {}
-        exec(f"def frame({', '.join(names)}):\n    yield", ns)
-        values = [object() for _ in names]
-        # The first call of counts holds one more reference in its loop
-        self.counts(*values)
-        before = self.counts(*values)
-        gen = ns["frame"](*values)
-        _testinternalcapi.apply_recipe(gen, list(zip(srcs, dsts)))
-        homes = gen.gi_frame.f_locals
-        expected = list(values)
-        for d, s in zip(dsts, srcs):
-            expected[d] = values[s]
-        self.assertEqual([homes[name] for name in names], expected)
-        del gen, homes, expected
-        self.assertEqual(self.counts(*values), before)
-
+        # Move word: a cycle with a chain whose last source is released.
+        # No lowering emits a cycle now (the stack shuffles that did are
+        # gone), so the recipe is given directly
         def frame(a, b, c, d, e):
             yield
 
         values = [object() for _ in range(5)]
+        # The first call of counts holds one more reference in its loop
+        self.counts(*values)
         before = self.counts(*values)
         gen = frame(*values)
         # a -> b -> c -> a, d -> e: e's value is released and d is vacated
@@ -3488,9 +3467,9 @@ class AppendSourcesTest(unittest.TestCase):
             return {x for x in xs}
         def dct(xs):
             return {k: k for k in xs}
-        for func, handler, count in ((lst, "LIST_APPEND", 1),
-                                     (st, "SET_ADD", 1),
-                                     (dct, "MAP_ADD", 2)):
+        for func, handler, count in ((lst, "AddElement.Append", 1),
+                                     (st, "AddElement.Add", 1),
+                                     (dct, "AddEntry.Put", 2)):
             with self.subTest(handler=handler):
                 loop_var = func.__code__.co_varnames.index(
                     "x" if func is not dct else "k")

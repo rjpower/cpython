@@ -719,7 +719,7 @@ class DefinitionTests(unittest.TestCase):
         Nop Const LocalRead LocalWrite SaveLocal LocalDelete Move Add Truth Jump
         BranchTruth BranchNone Binary Unary Compare Identity Contains TestBranch
         GetAttr GetMethod AttrWrite SuperLookup SpecialLookup
-        GetItem SetItem DelItem SliceRead SliceWrite BuildSlice Build AddElement
+        GetItem SetItem DelItem SliceRead SliceWrite BuildSlice Build AddElement AddEntry
         UpdateContainer MergeKeywords Unpack Cell NamespaceRead NamespaceReadFrom
         NamespaceWrite
         GlobalRead SetupAnnotations Import ImportFrom BuildText Convert Format Length Pattern
@@ -730,7 +730,7 @@ class DefinitionTests(unittest.TestCase):
     """.split()
 
     def test_appendix_a_families(self):
-        self.assertEqual(len(self.APPENDIX_A), 72)
+        self.assertEqual(len(self.APPENDIX_A), 73)
         self.assertEqual(sorted(self.program.families), sorted(self.APPENDIX_A))
         for fam in self.program.families.values():
             with self.subTest(fam.name):

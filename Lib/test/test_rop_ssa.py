@@ -768,6 +768,19 @@ def cx():
 
 # The arms no scenario runs, and why.  Each expands.
 NOT_RUN = {
+    # The display families have no scenarios: their rows take spans of homes
+    # and run Python (test_rop_displays runs them)
+    "Build.Tuple": "no scenario; test_rop_displays runs it",
+    "Build.List": "no scenario; test_rop_displays runs it",
+    "AddElement.Append": "no scenario; test_rop_displays runs it",
+    "AddElement.Add": "no scenario; test_rop_displays runs it",
+    "AddEntry.Put": "no scenario; test_rop_displays runs it",
+    "UpdateContainer.Extend": "no scenario; test_rop_displays runs it",
+    "UpdateContainer.Overlay": "no scenario; test_rop_displays runs it",
+    "MergeKeywords.Merge": "no scenario; test_rop_displays runs it",
+    "Build.Set": "no scenario; test_rop_displays runs it",
+    "Build.Map": "no scenario; test_rop_displays runs it",
+    "UpdateContainer.Union": "no scenario; test_rop_displays runs it",
     "InitResult.Check": "its word exists only in the init shim",
     "Return.External": "chosen only for the evaluator's entry frame",
     "Return.Generator": "returns from a generator frame, which rop_transfer_run's "

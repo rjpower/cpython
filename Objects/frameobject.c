@@ -1987,6 +1987,10 @@ register_resume_liveness(_PyInterpreterFrame *frame, bool allow_null,
                 else if (opcode == SWAP && window >= 0) {
                     written |= home == window || home == window + arg - 1;
                 }
+                else if (fmt->operands == _PyIR_OPERANDS_SPANS) {
+                    // The span's sources leave their homes vacant
+                    written |= _PyIR_SpanReadsHome(&_PyCode_IRWords(code)[i], home);
+                }
                 /* Unknown activation adapters can reuse the scratch tail. */
                 if ((fmt->effects & _PyIR_PUSHES_FRAME) &&
                     opcode != CALL && opcode != CALL_KW &&

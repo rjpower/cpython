@@ -1299,7 +1299,10 @@ STACK_ONLY = ("CALL", "INSTRUMENTED_CALL", "RETURN_VALUE",
               "CALL_INTRINSIC_1", "CALL_INTRINSIC_2",
               "LOAD_NAME", "LOAD_LOCALS", "LOAD_BUILD_CLASS",
               "LOAD_FROM_DICT_OR_GLOBALS", "STORE_NAME", "STORE_GLOBAL",
-              "SETUP_ANNOTATIONS", "IMPORT_NAME", "IMPORT_FROM")
+              "SETUP_ANNOTATIONS", "IMPORT_NAME", "IMPORT_FROM",
+              "BUILD_TUPLE", "BUILD_LIST", "BUILD_SET", "BUILD_MAP",
+              "LIST_APPEND", "SET_ADD", "MAP_ADD", "LIST_EXTEND", "SET_UPDATE",
+              "DICT_UPDATE", "DICT_MERGE")
 
 # Handlers that the register passes make and that no stack bytecode has, but
 # whose opcode numbers lie in the opcode space (their instrumented forms are

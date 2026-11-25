@@ -342,6 +342,15 @@ class Select(enum.Enum):
     lazy_import = "lazy_import"            # Import: `lazy import`
     module_kept = "module_kept"            # ImportFrom: the module stays for the next read
     module_spent = "module_spent"          # ImportFrom: the last read spends the module
+    tuple = "tuple"                        # Build: a tuple display
+    list = "list"                          # Build: a list display
+    set = "set"                            # Build: a set display
+    map = "map"                            # Build: a dict display
+    append = "append"                      # AddElement: a list takes the item
+    add = "add"                            # AddElement: a set takes the item
+    extend = "extend"                      # UpdateContainer: a list takes an iterable
+    union = "union"                        # UpdateContainer: a set takes an iterable
+    overlay = "overlay"                    # UpdateContainer: a dict takes a mapping
     present = "present"                    # the family's optional operands hold values
     absent = "absent"                      # its optional operands are vacant
 
@@ -361,6 +370,9 @@ SELECT_DIMENSIONS: dict[str, tuple[Select, ...]] = {
     "namespace": (Select.name_scope, Select.global_scope),
     "import_kind": (Select.eager_import, Select.policy_import, Select.lazy_import),
     "module_use": (Select.module_kept, Select.module_spent),
+    "display": (Select.tuple, Select.list, Select.set, Select.map),
+    "element": (Select.append, Select.add),
+    "update": (Select.extend, Select.union, Select.overlay),
     "operand": (Select.present, Select.absent),
 }
 

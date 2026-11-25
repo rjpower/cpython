@@ -3076,7 +3076,7 @@ done:
 }
 
 int
-_PyRop_MergeKeywords(PyValue *dict_home, PyValue *update_home, PyValue *fn_home)
+_PyRop_MergeKeywords(PyValue *fn_home, PyValue *dict_home, PyValue *update_home)
 {
     PyThreadState *tstate = _PyThreadState_GET();
     PyValue dict = PyValue_DUP(PyValue_Borrow(*dict_home));

@@ -62,7 +62,7 @@ PyAPI_FUNC(int) _PyRop_DictPut(PyValue *dict, PyValue key, PyValue value);
 PyAPI_FUNC(int) _PyRop_ListExtend(PyValue *list, PyValue *iterable);
 PyAPI_FUNC(int) _PyRop_SetUnion(PyValue *set, PyValue *iterable);
 PyAPI_FUNC(int) _PyRop_DictOverlay(PyValue *dict, PyValue *update);
-PyAPI_FUNC(int) _PyRop_MergeKeywords(PyValue *dict, PyValue *update, PyValue *fn);
+PyAPI_FUNC(int) _PyRop_MergeKeywords(PyValue *fn, PyValue *dict, PyValue *update);
 
 /* The values a call reads.  A local source is held by an owner of its own,
  * because the call can reassign the local; a temporary is held by its

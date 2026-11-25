@@ -56,13 +56,9 @@ inherited BINARY_OP_XOR
 inherited BINARY_OP_XOR_INT
 inherited BINARY_SLICE
 inherited BUILD_INTERPOLATION
-inherited BUILD_LIST
-inherited BUILD_MAP
-inherited BUILD_SET
 inherited BUILD_SLICE
 inherited BUILD_STRING
 inherited BUILD_TEMPLATE
-inherited BUILD_TUPLE
 inherited CALL_EX_NON_PY_GENERAL
 inherited CALL_EX_PY
 inherited CALL_FUNCTION_EX
@@ -100,8 +96,6 @@ inherited CONVERT_VALUE
 inherited COPY_FREE_VARS
 inherited DELETE_DEREF
 inherited DELETE_SUBSCR
-inherited DICT_MERGE
-inherited DICT_UPDATE
 inherited END_ASYNC_FOR
 inherited END_FOR
 inherited END_SEND
@@ -147,8 +141,6 @@ inherited INSTRUMENTED_YIELD_VALUE_XFER_STORE_LOCAL
 inherited IR_JUMP
 inherited IS_OP
 inherited IS_OP_JUMP
-inherited LIST_APPEND
-inherited LIST_EXTEND
 inherited LOAD_BUILD_CLASS
 inherited LOAD_COMMON_CONSTANT
 inherited LOAD_DEREF
@@ -165,7 +157,6 @@ inherited LOAD_SUPER_ATTR_ATTR
 inherited LOAD_SUPER_ATTR_METHOD
 inherited MAKE_CELL
 inherited MAKE_FUNCTION
-inherited MAP_ADD
 inherited MATCH_CLASS
 inherited MATCH_KEYS
 inherited MATCH_MAPPING
@@ -210,9 +201,7 @@ inherited SEND_XFER_RETURN
 inherited SEND_XFER_STORE_FAST
 inherited SEND_XFER_STORE_LOCAL
 inherited SETUP_ANNOTATIONS
-inherited SET_ADD
 inherited SET_FUNCTION_ATTRIBUTE
-inherited SET_UPDATE
 inherited STORE_ATTR
 inherited STORE_ATTR_INSTANCE_VALUE
 inherited STORE_ATTR_SHAPE
@@ -241,10 +230,16 @@ inherited YIELD_VALUE
 inherited YIELD_VALUE_XFER_SEND
 inherited YIELD_VALUE_XFER_STORE_LOCAL
 stub BINARY_OP
+stub BUILD_LIST
+stub BUILD_MAP
+stub BUILD_SET
+stub BUILD_TUPLE
 stub CACHE
 stub CALL
 stub COPY
 stub DELETE_FAST
+stub DICT_MERGE
+stub DICT_UPDATE
 stub EXIT_INIT_CHECK
 stub EXTENDED_ARG
 stub INSTRUMENTED_CALL
@@ -264,6 +259,8 @@ stub JUMP_BACKWARD_NO_INTERRUPT
 stub JUMP_FORWARD
 stub JUMP_IF_FALSE_OR_POP
 stub JUMP_IF_TRUE_OR_POP
+stub LIST_APPEND
+stub LIST_EXTEND
 stub LOAD_ATTR
 stub LOAD_CONST
 stub LOAD_FAST
@@ -273,6 +270,7 @@ stub LOAD_FAST_BORROW_LOAD_FAST_BORROW
 stub LOAD_FAST_CHECK
 stub LOAD_FAST_LOAD_FAST
 stub LOAD_SMALL_INT
+stub MAP_ADD
 stub NOT_TAKEN
 stub POP_JUMP_IF_FALSE
 stub POP_JUMP_IF_NONE
@@ -282,6 +280,8 @@ stub POP_TOP
 stub PUSH_NULL
 stub RESERVED
 stub RETURN_VALUE
+stub SET_ADD
+stub SET_UPDATE
 stub STORE_FAST_LOAD_FAST
 stub STORE_FAST_STORE_FAST
 stub SWAP

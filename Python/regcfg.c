@@ -1580,6 +1580,76 @@ rule_return_value(_PyRegTr *t, const _PyRegOp *src)
     return SUCCESS;
 }
 
+/* The display families (Python/register_ops/displays.rop).  A span is the
+ * homes of the identities it names, wherever allocation puts them, so no
+ * rule here stages a value to make its inputs adjacent. */
+
+/* BUILD_TUPLE, BUILD_LIST, BUILD_SET and BUILD_MAP: the items are the top
+ * identities (a map's are its keys and values in order), the container the
+ * one output.  The kind is the arm. */
+static int
+rule_build(_PyRegTr *t, const _PyRegOp *src)
+{
+    int n = src->opcode == BUILD_MAP ? 2 * src->oparg : src->oparg;
+    if (n > t->sp) {
+        return stack_underflow(src);
+    }
+    int handler;
+    switch (src->opcode) {
+        case BUILD_TUPLE: handler = ROP_SELECT_Build_tuple; break;
+        case BUILD_LIST: handler = ROP_SELECT_Build_list; break;
+        case BUILD_SET: handler = ROP_SELECT_Build_set; break;
+        default: handler = ROP_SELECT_Build_map; break;
+    }
+    int dst;
+    RETURN_IF_ERROR(_PyRegTr_Fresh(t, &dst));
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, &t->stack[t->sp - n], n,
+                                  &dst, 1, NULL));
+    RETURN_IF_ERROR(_PyRegTr_Pop(t, n, NULL));
+    return _PyRegTr_Push(t, dst);
+}
+
+/* LIST_APPEND, SET_ADD, MAP_ADD, LIST_EXTEND, SET_UPDATE, DICT_UPDATE and
+ * DICT_MERGE: the container lies oparg positions below the top operand (the
+ * callable of DICT_MERGE three below the container) and stays; the top
+ * operands go.  The instruction names the container's home, so no stack
+ * depth is an operand.  The reads are in stack order, the popped ones last. */
+static int
+rule_insert(_PyRegTr *t, const _PyRegOp *src)
+{
+    int handler, popped, extra = 0;
+    switch (src->opcode) {
+        case LIST_APPEND: handler = ROP_SELECT_AddElement_append; popped = 1; break;
+        case SET_ADD: handler = ROP_SELECT_AddElement_add; popped = 1; break;
+        case MAP_ADD: handler = ROP_HANDLER_AddEntry_Put; popped = 2; break;
+        case LIST_EXTEND: handler = ROP_SELECT_UpdateContainer_extend; popped = 1; break;
+        case SET_UPDATE: handler = ROP_SELECT_UpdateContainer_union; popped = 1; break;
+        case DICT_UPDATE: handler = ROP_SELECT_UpdateContainer_overlay; popped = 1; break;
+        default:
+            handler = ROP_HANDLER_MergeKeywords_Merge;
+            popped = 1;
+            extra = 3;
+            break;
+    }
+    int oparg = src->oparg;
+    int container = t->sp - popped - oparg;
+    if (oparg < 1 || container - extra < 0) {
+        return stack_underflow(src);
+    }
+    int uses[3], n = 0;
+    if (extra) {
+        uses[n++] = t->stack[container - extra];
+    }
+    uses[n++] = t->stack[container];
+    for (int k = 0; k < popped; k++) {
+        uses[n++] = t->stack[t->sp - popped + k];
+    }
+    _PyRegOp *op;
+    RETURN_IF_ERROR(_PyRegTr_Emit(t, src, handler, uses, n, NULL, 0, &op));
+    op->npop = (int16_t)popped;
+    return _PyRegTr_Pop(t, popped, NULL);
+}
+
 /* The rules, by opcode.  NULL is the legacy rule. */
 static const _PyRegRule rules[256] = {
     [BINARY_OP] = rule_binary_op,
@@ -1612,6 +1682,17 @@ static const _PyRegRule rules[256] = {
     [STORE_FAST_STORE_FAST] = rule_store_fast_store_fast,
     [SWAP] = rule_swap,
     [LOAD_ATTR] = rule_load_attr,
+    [BUILD_TUPLE] = rule_build,
+    [BUILD_LIST] = rule_build,
+    [BUILD_SET] = rule_build,
+    [BUILD_MAP] = rule_build,
+    [LIST_APPEND] = rule_insert,
+    [SET_ADD] = rule_insert,
+    [MAP_ADD] = rule_insert,
+    [LIST_EXTEND] = rule_insert,
+    [SET_UPDATE] = rule_insert,
+    [DICT_UPDATE] = rule_insert,
+    [DICT_MERGE] = rule_insert,
 };
 
 /* An edge binds the parameters of the positions below depth: one that

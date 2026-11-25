@@ -296,13 +296,14 @@ arm UpdateContainer.Overlay shared select(overlay)
     exit next();
 }
 
-family MergeKeywords(dict:Src, source:Src, fn:Src)
+// The operands are in stack order: the callable, the dict, then the mapping
+family MergeKeywords(fn:Src, dict:Src, source:Src)
   exits(next, raise) ops(DICT_MERGE);
 
-point MergeKeywords.Failed(current, site, pending) keep(dict, source, fn) spent() defs() held();
-point MergeKeywords.Done(current, next_head, clear) keep(dict, fn) spent(source) defs() held();
+point MergeKeywords.Failed(current, site, pending) keep(fn, dict, source) spent() defs() held();
+point MergeKeywords.Done(current, next_head, clear) keep(fn, dict) spent(source) defs() held();
 
-extern helper merge_unique(dict:Src, source:Src, fn:Src)
+extern helper merge_unique(fn:Src, dict:Src, source:Src)
   cases(ok(), err(e:Err))
   effects(allocates, raises, runs_python)
   c _PyRop_MergeKeywords as int_zero_ok
@@ -316,7 +317,7 @@ arm MergeKeywords.Merge shared
   exits(next, raise)
 {
   entry():
-    call merge_unique(dict, source, fn) {
+    call merge_unique(fn, dict, source) {
       ok -> Finish();
       err -> Failed();
     }

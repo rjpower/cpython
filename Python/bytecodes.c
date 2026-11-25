@@ -1355,25 +1355,22 @@ dummy_func(
             _BINARY_OP_SUBSCR_INIT_CALL +
             _PUSH_FRAME;
 
-        inline_ok inst(LIST_APPEND,
+        /* A stack op only: LIST_APPEND is the AddElement family (Python/register_ops/displays.rop). */
+        tier1 inst(LIST_APPEND,
                 (list: object, unused[oparg-1], v: consumed -- list, unused[oparg-1]))
-            effects(runs_python) exits(next, raise)
+            exits(abort)
         {
-            PyValue item = TAKE(v);
-            PyListObject *list_o = (PyListObject *)PyValue_AsKnownObjectBorrow(list);
-            // The store is in line while the list has room; growth is the
-            // function's.
-            int err = _PyList_AppendTakeValueInline(list_o, item);
-            ERROR_IF(err < 0);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inline_ok inst(SET_ADD,
+        /* A stack op only: SET_ADD is the AddElement family (Python/register_ops/displays.rop). */
+        tier1 inst(SET_ADD,
                 (set: object, unused[oparg-1], v: consumed -- set, unused[oparg-1]))
-            effects(runs_python) exits(next, raise)
+            exits(abort)
         {
-            PyValue item = TAKE(v);
-            int err = _PySet_AddValueTakeRef((PySetObject *)PyValue_AsKnownObjectBorrow(set), item);
-            ERROR_IF(err);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         family(STORE_SUBSCR, INLINE_CACHE_ENTRIES_STORE_SUBSCR) = {
@@ -2513,100 +2510,60 @@ dummy_func(
             template = PyValue_FromObjectSteal(template_o);
         }
 
-        inst(BUILD_TUPLE, (values[oparg]: taken -- tup: owned))
-            effects(allocates, raises) exits(next, raise)
+        /* A stack op only: BUILD_TUPLE is the Build family (Python/register_ops/displays.rop). */
+        tier1 inst(BUILD_TUPLE,
+                (values[oparg]: consumed -- tup: owned))
+            exits(abort)
         {
-            PyObject *tup_o = IR_BUILD_TUPLE(values);
-            if (tup_o == NULL) {
-                ERROR_NO_POP();
-            }
-            INPUTS_DEAD();
-            tup = PyValue_FromObjectSteal(tup_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        inst(BUILD_LIST, (values[oparg]: taken -- list: owned))
-            effects(allocates, raises) exits(next, raise)
+        /* A stack op only: BUILD_LIST is the Build family (Python/register_ops/displays.rop). */
+        tier1 inst(BUILD_LIST,
+                (values[oparg]: consumed -- seq: owned))
+            exits(abort)
         {
-            PyObject *list_o = IR_BUILD_LIST(values);
-            if (list_o == NULL) {
-                ERROR_NO_POP();
-            }
-            INPUTS_DEAD();
-            list = PyValue_FromObjectSteal(list_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        op(_LIST_EXTEND,
-                (list_st: assumed(object) by BUILD_LIST, unused[oparg-1], iterable_st: taken -- list_st, unused[oparg-1], i: moved(iterable_st) object))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: LIST_EXTEND is the UpdateContainer family (Python/register_ops/displays.rop). */
+        tier1 inst(LIST_EXTEND,
+                (list_st: object, unused[oparg-1], iterable_st: consumed -- list_st, unused[oparg-1]))
+            exits(abort)
         {
-            // A number is not iterable
-            if (!PyValue_IsObject(iterable_st)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "Value after * must be an iterable, not %.200s",
-                              PyValue_TYPE(iterable_st)->tp_name);
-                ERROR_NO_POP();
-            }
-            PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
-            PyObject *iterable = PyValue_AsKnownObjectBorrow(iterable_st);
-
-            PyObject *none_val = _PyList_Extend((PyListObject *)list, iterable);
-            if (none_val == NULL) {
-                int matches = _PyErr_ExceptionMatches(tstate, PyExc_TypeError);
-                if (matches &&
-                   (Py_TYPE(iterable)->tp_iter == NULL && !_PyValue_SequenceCheck(PyValue_FromObjectBorrow(iterable))))
-                {
-                    _PyErr_Clear(tstate);
-                    _PyErr_Format(tstate, PyExc_TypeError,
-                          "Value after * must be an iterable, not %.200s",
-                          Py_TYPE(iterable)->tp_name);
-                }
-                ERROR_NO_POP();
-            }
-            assert(Py_IsNone(none_val));
-            i = iterable_st;
-            DEAD(iterable_st);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined macro(LIST_EXTEND) = _LIST_EXTEND + _POP_TOP_ANY;
 
-        op(_SET_UPDATE,
-                (set: assumed(object) by BUILD_SET, unused[oparg-1], iterable: taken -- set, unused[oparg-1], i: moved(iterable) object))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: SET_UPDATE is the UpdateContainer family (Python/register_ops/displays.rop). */
+        tier1 inst(SET_UPDATE,
+                (set: object, unused[oparg-1], iterable: consumed -- set, unused[oparg-1]))
+            exits(abort)
         {
-            // A number is not iterable
-            if (!PyValue_IsObject(iterable)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "'%.200s' object is not iterable",
-                              PyValue_TYPE(iterable)->tp_name);
-                ERROR_NO_POP();
-            }
-            int err = _PySet_Update(PyValue_AsKnownObjectBorrow(set),
-                                    PyValue_AsKnownObjectBorrow(iterable));
-            if (err < 0) {
-                ERROR_NO_POP();
-            }
-            i = iterable;
-            DEAD(iterable);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined macro(SET_UPDATE) = _SET_UPDATE + _POP_TOP_ANY;
 
-        outlined inst(BUILD_SET, (values[oparg]: consumed -- set: owned))
-            effects(reads, writes, allocates, raises, releases, runs_python) exits(next, raise)
+        /* A stack op only: BUILD_SET is the Build family (Python/register_ops/displays.rop). */
+        tier1 inst(BUILD_SET,
+                (values[oparg]: consumed -- items: owned))
+            exits(abort)
         {
-            PyObject *set_o = IR_BUILD_SET(values);
-            DEAD(values);
-            ERROR_IF(set_o == NULL);
-            set = PyValue_FromObjectSteal(set_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined inline_ok inst(BUILD_MAP, (values[oparg*2]: consumed -- map: owned))
-            effects(reads, writes, allocates, raises, releases, runs_python) exits(next, raise)
+        /* A stack op only: BUILD_MAP is the Build family (Python/register_ops/displays.rop). */
+        tier1 inst(BUILD_MAP,
+                (values[oparg*2]: consumed -- mapping: owned))
+            exits(abort)
         {
-            PyObject *map_o = IR_BUILD_MAP(values);
-            DEAD(values);
-            ERROR_IF(map_o == NULL);
-            map = PyValue_FromObjectSteal(map_o);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         outlined inst(SETUP_ANNOTATIONS, (--))
@@ -2642,85 +2599,33 @@ dummy_func(
             NOP,
         };
 
-        op(_DICT_UPDATE,
-                (dict: assumed(object) by BUILD_MAP, unused[oparg - 1], update: taken -- dict, unused[oparg - 1], upd: moved(update) object))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: DICT_UPDATE is the UpdateContainer family (Python/register_ops/displays.rop). */
+        tier1 inst(DICT_UPDATE,
+                (dict: object, unused[oparg - 1], update: consumed -- dict, unused[oparg - 1]))
+            exits(abort)
         {
-            // A number is not a mapping
-            if (!PyValue_IsObject(update)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "'%N' object is not a mapping",
-                              PyValue_TYPE(update));
-                ERROR_NO_POP();
-            }
-            PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
-            PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
-
-            int err = PyDict_Update(dict_o, update_o);
-            if (err < 0) {
-                int matches = _PyErr_ExceptionMatches(tstate, PyExc_AttributeError);
-                if (matches) {
-                    PyObject *exc = _PyErr_GetRaisedException(tstate);
-                    int has_keys = PyObject_HasAttrWithError(update_o, &_Py_ID(keys));
-                    if (has_keys == 0) {
-                        _PyErr_Format(tstate, PyExc_TypeError,
-                                        "'%T' object is not a mapping",
-                                        update_o);
-                        Py_XDECREF(exc);
-                    }
-                    else {
-                        _PyErr_ChainExceptions1(exc);
-                    }
-                }
-                ERROR_NO_POP();
-            }
-            upd = update;
-            DEAD(update);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined macro(DICT_UPDATE) = _DICT_UPDATE + _POP_TOP_ANY;
 
-        op(_DICT_MERGE,
-                (callable, unused, unused, dict: assumed(object) by BUILD_MAP, unused[oparg - 1], update: taken
-                 -- callable, unused, unused, dict, unused[oparg - 1], u: moved(update) object))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: DICT_MERGE is the MergeKeywords family (Python/register_ops/displays.rop). */
+        tier1 inst(DICT_MERGE,
+                (callable, unused, unused, dict: object, unused[oparg - 1], update: consumed -- callable, unused, unused, dict, unused[oparg - 1]))
+            exits(abort)
         {
-            // A number is not a mapping
-            if (!PyValue_IsObject(update)) {
-                _PyErr_Format(tstate, PyExc_TypeError,
-                              "Value after ** must be a mapping, not %N",
-                              PyValue_TYPE(update));
-                ERROR_NO_POP();
-            }
-            PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
-            PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
-
-            _PyStatusObject merged = value_dict_merge_uniq(dict_o, update_o);
-            if (merged.status < 0) {
-                _PyEval_FormatKwargsError(tstate, callable, update_o, merged.object);
-                Py_XDECREF(merged.object);
-                ERROR_NO_POP();
-            }
-            u = update;
-            DEAD(update);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
-        outlined macro(DICT_MERGE) = _DICT_MERGE + _POP_TOP_ANY;
 
-        inline_ok inst(MAP_ADD,
-                (dict_st: object, unused[oparg - 1], key: consumed, value: consumed
-                 -- dict_st, unused[oparg - 1]))
-            effects(runs_python) exits(next, raise)
+        /* A stack op only: MAP_ADD is the AddEntry family (Python/register_ops/displays.rop). */
+        tier1 inst(MAP_ADD,
+                (dict_st: object, unused[oparg - 1], key: consumed, value: consumed -- dict_st, unused[oparg - 1]))
+            exits(abort)
         {
-            PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
-            assert(PyDict_CheckExact(dict));
-            /* dict[key] = value */
-            // Do not DECREF INPUTS because the function steals the references
-            PyValue stored_key = TAKE(key);
-            PyValue stored_value = TAKE(value);
-            int err = _PyDict_SetValue_Take2(
-                (PyDictObject *)dict, stored_key, stored_value);
-            ERROR_IF(err != 0);
+            assert(0 && "Executing a stack-only instruction.");
+            Py_FatalError("Executing a stack-only instruction.");
         }
 
         macro(INSTRUMENTED_LOAD_SUPER_ATTR) =

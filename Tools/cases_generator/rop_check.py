@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from rop_catalog import (CONVENTIONS, ENVIRONMENT, CSource, Convention, EVIDENCE_KEYS, EVIDENCE_PRIMITIVE,
-                         EVIDENCE_REQUIRED, FEEDBACK_ROOTS, INDEX_BITS, LINEAR_HANDLES,
+                         EVIDENCE_REQUIRED, FEEDBACK_ROOTS, HOME_GROUPS, INDEX_BITS, LINEAR_HANDLES,
                          TARGET_BITS, TRANSFER_EXITS, AccessMode,
                          LINEAR_SCHEMA_CTORS, READ_ONLY_EFFECTS, SCHEMA_FIELDS,
                          OPTIONAL, SELECT_DIMENSIONS, SELECT_FACTS, SLOT_ORDER,
@@ -30,7 +30,7 @@ from rop_catalog import (CONVENTIONS, ENVIRONMENT, CSource, Convention, EVIDENCE
                          Effect, ExcRole, ExitKind, Fact, FieldKind, FrameRole, Handle, PcRole,
                          Region, RowKind, Scalar, Schema, SchemaCtor, Select, Slot, Wrap)
 from rop_model import (RESULT_CASE, Advance, Arm, Binding, Block, BoolLit, Branch, Call,
-                       CallTerm, Cases, Contract, Decl, Diagnostic, Each, Edge, Encoding,
+                       CallTerm, Cases, Contract, Debt, Decl, Diagnostic, Each, Edge, Encoding,
                        EnumDecl, Placement,
                        EnumType, Exit, Expr, Extern, FactUse, Family, Goto, Graph,
                        Guard, HandleType, Let, Macro, Name, Nat, Null, PairType, Param,
@@ -79,8 +79,40 @@ EXIT_NAMES = {e.value: e for e in ExitKind}
 # Operand roles: the types a point may list as kept or spent sources, and
 # as definitions
 SOURCE_HANDLES = frozenset({Handle.Src, Handle.Local, Handle.Cell, Handle.Free,
-                            Handle.IterPair, Handle.Args})
-DEST_HANDLES = frozenset({Handle.Dst, Handle.Local, Handle.IterPair})
+                            *HOME_GROUPS, Handle.Part, Handle.Args})
+DEST_HANDLES = frozenset({Handle.Dst, Handle.Local, *HOME_GROUPS, Handle.Part})
+PART = T(Handle.Part)
+
+
+def group_parts(t: Type | None) -> tuple[str, ...]:
+    """The projections of a home group type; () for any other type"""
+    return HOME_GROUPS.get(t.handle, ()) if isinstance(t, HandleType) else ()
+
+
+def home_params(params: Iterable[Param]) -> tuple[Param, ...]:
+    """The operands as homes: each home group stands for its projections
+    `g.p`, which are temporaries the instruction reads and writes"""
+    out: list[Param] = []
+    for p in params:
+        parts = group_parts(p.type)
+        if parts:
+            out.extend(Param(f"{p.name}.{q}", PART, p.span) for q in parts)
+        else:
+            out.append(p)
+    return tuple(out)
+
+
+def expand_group(name: str, operands: Mapping[str, Type]) -> tuple[str, ...]:
+    """A name in a point list or a spent debt: a group is its projections"""
+    parts = group_parts(operands.get(name))
+    return tuple(f"{name}.{q}" for q in parts) if parts else (name,)
+
+
+def expand_debts(debts: Iterable[Debt], operands: Mapping[str, Type]) -> tuple[Debt, ...]:
+    """spent(g) of a home group is spent(g.p) of each projection, in order"""
+    return tuple(replace(d, subject=n) for d in debts
+                 for n in (expand_group(d.subject, operands)
+                           if d.kind == DebtKind.spent else (d.subject,)))
 
 
 # Language primitives (operation dictionary, P).  Actions may stand only as
@@ -135,6 +167,8 @@ class Program:
     graphs: Mapping[str, GraphInfo]
     encodings: Mapping[str, Encoding]
     diagnostics: tuple[Diagnostic, ...]
+    # Completion arms (`completion(P)`), which have no word and no handler
+    completions: Mapping[str, Arm] = field(default_factory=dict)
 
     @property
     def pending(self) -> tuple[str, ...]:
@@ -242,7 +276,7 @@ def imm_bits(t: Type, enums: Mapping[str, EnumDecl]) -> int | None:
 
 
 HOME_HANDLES = frozenset({Handle.Src, Handle.Dst, Handle.Local, Handle.Cell,
-                          Handle.Free, Handle.IterPair})
+                          Handle.Free, *HOME_GROUPS})
 
 
 def field_kind(t: Type) -> FieldKind | None:
@@ -366,6 +400,11 @@ class Checker:
     graphs: dict[str, GraphInfo] = field(default_factory=dict)
     callees: dict[str, frozenset[str]] = field(default_factory=dict)
     encodings: dict[str, Encoding] = field(default_factory=dict)
+    completions: dict[str, Arm] = field(default_factory=dict)
+
+    def arm(self, name: str) -> Arm:
+        """A word arm or a completion arm"""
+        return self.arms[name] if name in self.arms else self.completions[name]
 
     def report(self, span: SrcSpan, definition: str, message: str) -> None:
         self.diagnostics.append(Diagnostic(span, definition, message))
@@ -386,12 +425,15 @@ def check(files: Iterable[SourceFile]) -> Program:
         check_macro(c, m)
     for a in c.arms.values():
         check_arm(c, a)
+    for a in c.completions.values():
+        check_completion_arm(c, a)
     for fam in c.families.values():
         check_selection(c, fam)
     check_macro_recursion(c)
     return Program(c.files, dict(c.enums), dict(c.families), dict(c.points),
                    dict(c.arms), dict(c.macros), dict(c.externs), dict(c.graphs),
-                   dict(c.encodings), tuple(sorted(c.diagnostics, key=diagnostic_order)))
+                   dict(c.encodings), tuple(sorted(c.diagnostics, key=diagnostic_order)),
+                   dict(c.completions))
 
 
 def diagnostic_order(d: Diagnostic) -> tuple[str, int, int]:
@@ -426,7 +468,12 @@ def collect(c: Checker) -> None:
             elif isinstance(d, Point):
                 table = c.points
             elif isinstance(d, Arm):
-                table = c.arms
+                table = c.arms if d.completion is None else c.completions
+                if d.name in c.arms or d.name in c.completions:
+                    first = c.arm(d.name)
+                    c.report(d.span, d.name, f"{d.name} is declared twice; first at "
+                             f"{first.span}")
+                    continue
             elif isinstance(d, Macro):
                 table = c.macros
             else:
@@ -534,7 +581,8 @@ def check_point(c: Checker, p: Point) -> None:
         c.report(p.span, p.name, f"point {p.name} does not name a family's point "
                  "(Family.Point)")
         return
-    operands = {q.name: q.type for q in fam.params}
+    # A point may list a whole group or any of its projections
+    operands = {q.name: q.type for q in fam.params + home_params(fam.params)}
 
     def role(names: tuple[str, ...], what: str, handles: frozenset[Handle]) -> None:
         for n in names:
@@ -725,11 +773,16 @@ def inline_refusal(x: Extern, conv: Convention) -> str | None:
 
 
 def check_no_dst(c: Checker, params: tuple[Param, ...], definition: str) -> None:
-    """Only `publish` writes homes: no row or macro takes a destination."""
+    """Only `publish` writes homes: no row or macro takes a destination.
+    A row takes a projection of a home group as a Src, never the group."""
     for p in params:
         t = p.type
         while isinstance(t, WrapType):
             t = t.arg
+        if group_parts(t) or t == PART:
+            c.report(p.span, definition, f"parameter {p.name}:{type_text(p.type)}: a "
+                     "row takes one home of a group, a projection g.p, as a Src")
+            continue
         if t == DST:
             c.report(p.span, definition, f"parameter {p.name}:{type_text(p.type)}: a "
                      "row cannot write a home; return the value and publish it")
@@ -821,6 +874,66 @@ def check_observer(c: Checker, a: Arm, fam: Family) -> None:
 # Exits that leave the word's frame, which a completion stub's status
 # (g1a/abi.md) cannot report
 FRAME_EXITS = frozenset({"enter", "return", "yield", "exit"})
+# A completion arm runs after its child finished, from inside a transfer: it
+# neither leaves the frame nor restarts the word
+COMPLETION_EXITS = frozenset({"next", "branch", "jump", "raise", "unwind", "redirect"})
+
+
+def check_completion_arm(c: Checker, a: Arm) -> None:
+    """`arm F.A completion(P)`: runs in the consumer's frame when a
+    generator that F's word entered returns, with the child's value, from
+    the homes of P, the resume point of that enter.  A family has at most
+    one plain completion and one observed one, which runs under the
+    instrumented twins."""
+    assert a.completion is not None
+    parts = a.name.split(".")
+    fam = c.families.get(parts[0])
+    if len(parts) != 2 or fam is None:
+        c.report(a.span, a.name, f"arm {a.name} does not name a family's arm "
+                 "(Family.Arm)")
+        return
+    edges = {n: () for n in a.contract.exits}
+    check_contract(c, a.contract, a.name, fam.params, edges, True)
+    for n in a.contract.exits:
+        if n not in fam.exits:
+            c.report(a.contract.span, a.name, f"exit {n} is not an exit of family "
+                     f"{fam.name} ({', '.join(fam.exits)})")
+    refused = sorted(set(a.contract.exits) - COMPLETION_EXITS)
+    if refused:
+        c.report(a.contract.span, a.name, f"a completion runs after its child "
+                 f"returned; it cannot leave the frame or restart the word "
+                 f"({', '.join(refused)})")
+    if a.select or a.entry is not None:
+        c.report(a.span, a.name, "a completion is not selected and holds no recipe")
+    p = c.points.get(a.completion)
+    if p is None or p.family != fam.name:
+        c.report(a.span, a.name, f"completion({a.completion}): no point "
+                 f"{a.completion} of {fam.name}")
+    elif p.frame != FrameRole.caller or p.pc != PcRole.next_head or len(p.defs) > 1:
+        c.report(a.span, a.name, f"completion({p.name}): the point is "
+                 f"({p.frame.value}, {p.pc.value}) with {len(p.defs)} definitions; a "
+                 "resume point is (caller, next_head) with at most one")
+    same = [b for b in c.completions.values()
+            if b.family == fam.name and b.observes == a.observes]
+    if same[0] is not a:
+        kind = "observed" if a.observes else "plain"
+        c.report(a.span, a.name, f"{fam.name} has two {kind} completions "
+                 f"({same[0].name}, {a.name})")
+    if a.observes:
+        if not fam.events:
+            c.report(a.span, a.name, f"an observed completion needs its family's "
+                     f"events: {fam.name} declares no events(...)")
+        if not any(b.family == fam.name and not b.observes
+                   for b in c.completions.values()):
+            c.report(a.span, a.name, f"an observed completion needs a plain one: "
+                     f"{fam.name} has none")
+    check_graph(c, a.name, a.graph, fam.params, fam, None)
+
+
+def completion_of(program: "Program", family: str, observes: bool = False) -> Arm | None:
+    """The family's plain completion, or its observed one"""
+    return next((a for a in program.completions.values()
+                 if a.family == family and a.observes == observes), None)
 
 
 def select_dimension(m: Select) -> str:
@@ -888,8 +1001,9 @@ def successors(b: Block) -> list[tuple[str, bool]]:
 def check_graph(c: Checker, definition: str, graph: Graph, operands: tuple[Param, ...],
                 family: Family | None, macro: Macro | None) -> None:
     if family is not None:
-        exits = frozenset(c.arms[definition].contract.exits)
-        declared = c.arms[definition].contract.span
+        arm = c.arm(definition)
+        exits = frozenset(arm.contract.exits)
+        declared = arm.contract.span
     else:
         assert macro is not None
         exits = frozenset(result_cases(macro.result))
@@ -902,11 +1016,16 @@ def check_graph(c: Checker, definition: str, graph: Graph, operands: tuple[Param
         else:
             blocks[b.label] = b
     first = graph.blocks[0]
-    if first.label != ENTRY or first.params:
+    if family is not None and c.arm(definition).completion is not None:
+        # A completion starts with the child's final value
+        if first.label != ENTRY or [p.type for p in first.params] != [O]:
+            c.report(first.span, definition, "a completion's first block is "
+                     "entry(v:O), the child's final value")
+    elif first.label != ENTRY or first.params:
         c.report(first.span, definition, "the first block is entry()")
     types: dict[str, Type] = dict(ENVIRONMENT_TYPES)
     defs: dict[str, tuple[str, int]] = {n: ("", OPERAND) for n in ENVIRONMENT}
-    for p in operands:
+    for p in operands + home_params(operands):
         types[p.name] = operand_value_type(p.type)
         defs[p.name] = ("", OPERAND)
     scope = Scope(definition, family, macro, exits, types, defs, blocks)
@@ -1142,10 +1261,11 @@ def check_publish(c: Checker, scope: Scope, s: Publish, block: str, i: int) -> N
 
 
 def is_dst(t: Type) -> bool:
-    """A scalar destination home: Dst or Local, or their Maybe"""
+    """A scalar destination home: Dst, Local or a group's projection, or
+    their Maybe"""
     if isinstance(t, WrapType) and t.wrap == Wrap.Maybe:
         t = t.arg
-    return t in (DST, T(Handle.Local))
+    return t in (DST, T(Handle.Local), PART)
 
 
 def is_span_of(t: Type | None, element: Type) -> bool:
@@ -1365,6 +1485,8 @@ def check_exit(c: Checker, scope: Scope, t: Exit, block: str, i: int) -> None:
                  "(exit enter(c) resume P), and no other exit does")
     if t.resume is not None and scope.family is not None:
         check_resume(c, scope, t)
+    if t.complete is not None and scope.family is not None:
+        check_complete(c, scope, t)
     if scope.family is None:
         assert scope.macro is not None
         want = tuple(p.type for p in result_cases(scope.macro.result)[t.kind])
@@ -1413,6 +1535,19 @@ def check_resume(c: Checker, scope: Scope, t: Exit) -> None:
                  f"one definition, not {len(p.defs)}")
 
 
+def check_complete(c: Checker, scope: Scope, t: Exit) -> None:
+    """`complete A`: A is the family's plain completion, and it completes
+    the point the enter resumes at"""
+    assert t.complete is not None and scope.family is not None
+    a = c.completions.get(t.complete)
+    if a is None or a.family != scope.family.name or a.observes:
+        c.report(t.span, scope.definition, f"complete {t.complete}: not a plain "
+                 f"completion arm of {scope.family.name}")
+    elif a.completion != t.resume:
+        c.report(t.span, scope.definition, f"complete {t.complete}: it completes "
+                 f"{a.completion}, but the enter resumes at {t.resume}")
+
+
 # Expressions
 
 def is_optional_source(scope: Scope, e: Expr, want: Type, have: Type | None) -> bool:
@@ -1426,6 +1561,9 @@ def expect(c: Checker, scope: Scope, e: Expr, want: Type, block: str, i: int,
            outer: bool) -> None:
     have = type_of(c, scope, e, want, block, i, outer)
     if is_optional_source(scope, e, want, have):
+        return
+    if want == SRC and have == PART:
+        # A projection is a source home the instruction also writes
         return
     if have is not None and have != want:
         c.report(e.span, scope.definition, f"{expr_text(e)} is {type_text(have)}, "

@@ -137,6 +137,8 @@ def _term(t: Term) -> list[str]:
         return [f"advance {t.body};"]
     assert isinstance(t, Exit)
     resume = "" if t.resume is None else f" resume {t.resume}"
+    if t.complete is not None:
+        resume += f" complete {t.complete}"
     return [f"exit {t.kind}({_join(t.args)}){resume};"]
 
 
@@ -174,7 +176,8 @@ def decl_lines(d: Decl) -> list[str]:
                   f" select({', '.join(m.value for m in d.select)})")
         entry = "" if d.entry is None else f" entry({d.entry})"
         observes = " observes" if d.observes else ""
-        return ([f"arm {d.name} {d.region.value}{select}{entry}{observes}"]
+        completion = "" if d.completion is None else f" completion({d.completion})"
+        return ([f"arm {d.name}{completion} {d.region.value}{select}{entry}{observes}"]
                 + _contract(d.contract, True, True) + _graph(d.graph))
     if isinstance(d, Macro):
         head = [f"macro {d.name}{_schemas(d.schema_params)}{_params(d.params)}",

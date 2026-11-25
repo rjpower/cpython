@@ -292,6 +292,49 @@ class StubTests(unittest.TestCase):
         self.assertIn("PROCESS_ERROR_AT(UNWIND, ", text)
         self.assertNotIn("PROCESS_ERROR_AT(RAISE, ", text)
 
+    def test_a_projection_is_its_groups_home_plus_its_index(self):
+        from test.test_register_verify import GROUPS
+        program = rop_check.check([rop_syntax.parse(GROUPS, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        p = rop_generator.lower_all(program, rop_generator.number_arms(program))
+        self.assertEqual(p.left_out, {})
+        decls = "\n".join(p.lowered["W.Drop"].decls)
+        self.assertIn("home_window_cursor = &IR_SLOT((IR_A(ir_word) + 1));", decls)
+        self.assertIn("home_window_value = &IR_SLOT((IR_A(ir_word) + 2));", decls)
+        step = "\n".join(p.lowered["G.Step"].decls)
+        self.assertIn("home_pair_receiver = &IR_SLOT(IR_B(ir_word));", step)
+        # A projection is never a local's home: no flag test guards the take
+        text = "\n".join(p.lowered["W.Drop"].body)
+        self.assertNotIn("IR_F_LOCAL", text)
+        order = [text.index(mark) for mark in (
+            "own_window_cursor = _PyFrame_TakeHome(", "own_window_value = _PyFrame_TakeHome(",
+            "PyValue_XCLOSE(own_window_value)", "PyValue_XCLOSE(own_window_cursor)")]
+        self.assertEqual(order, sorted(order))
+
+    def test_a_completion_is_a_function_every_handler_of_its_family_finds(self):
+        import io
+        from test.test_register_verify import COMPLETE
+        program = rop_check.check([rop_syntax.parse(COMPLETE, "t.rop")])
+        self.assertEqual(program.diagnostics, ())
+        numbers = rop_generator.number_arms(program)
+        self.assertNotIn("S.Complete", numbers)
+        p = rop_generator.lower_all(program, numbers)
+        self.assertEqual(p.left_out, {})
+        self.assertIn("ROP_ENTER(c, (IR_B(ir_word) + 2));",
+                      "\n".join(p.lowered["S.Generator"].body))
+        out = io.StringIO()
+        rop_generator.write_stubs(out, p, [])
+        text = out.getvalue()
+        self.assertIn("_PyRop_Complete_S_Complete(\n    PyThreadState *tstate, "
+                      "_PyInterpreterFrame *frame, _PyIRWord *site,\n    PyValue ir_value)",
+                      text)
+        self.assertIn("    v = ir_value;\n", text)
+        self.assertIn("[ROP_HANDLER_S_Generator - ROP_FIRST_HANDLER] = "
+                      "_PyRop_Complete_S_Complete,", text)
+        # The completion's status returns are the stubs' (pushed macros)
+        self.assertLess(text.index("_PyRop_Complete_S_Complete("),
+                        text.index('#pragma pop_macro("IR_BRANCH")'))
+
 
 UNWIND = """\
 family U(exc:Src) exits(unwind) ops(NOP);

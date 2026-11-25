@@ -71,6 +71,10 @@ class Handle(enum.Enum):
     Gen = "Gen"
     Cursor = "Cursor"
     IterPair = "IterPair"
+    SendWindow = "SendWindow"
+    # A projection `g.p` of a home group: a temporary home the instruction
+    # reads and writes, never a local's
+    Part = "Part"
     Args = "Args"
     Anchors = "Anchors"
     Err = "Err"
@@ -78,6 +82,15 @@ class Handle(enum.Enum):
     Claim = "Claim"
     Pin = "Pin"
     Stamp = "Stamp"
+
+
+# Home groups: one home field naming a run of adjacent temporaries, which
+# the translator keeps for the life of the loop.  Projection i, `g.p`, is
+# the home at the field plus i.
+HOME_GROUPS = {
+    Handle.IterPair: ("receiver", "cursor"),
+    Handle.SendWindow: ("receiver", "cursor", "value"),
+}
 
 
 class Wrap(enum.Enum):

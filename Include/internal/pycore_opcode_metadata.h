@@ -1897,22 +1897,22 @@ const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
 PyAPI_DATA(const uint8_t) _PyOpcode_Deopt[256];
 #ifdef NEED_OPCODE_METADATA
 const uint8_t _PyOpcode_Deopt[256] = {
-    [189] = 189,
-    [190] = 190,
-    [191] = 191,
-    [192] = 192,
-    [193] = 193,
-    [194] = 194,
-    [195] = 195,
-    [196] = 196,
-    [197] = 197,
-    [198] = 198,
-    [199] = 199,
-    [200] = 200,
-    [201] = 201,
-    [202] = 202,
-    [239] = 239,
-    [87] = 87,
+    [120] = 120,
+    [121] = 121,
+    [122] = 122,
+    [123] = 123,
+    [124] = 124,
+    [125] = 125,
+    [126] = 126,
+    [127] = 127,
+    [226] = 226,
+    [227] = 227,
+    [228] = 228,
+    [229] = 229,
+    [230] = 230,
+    [231] = 231,
+    [232] = 232,
+    [233] = 233,
     [BINARY_OP] = BINARY_OP,
     [BINARY_OP_ADD_FLOAT] = BINARY_OP,
     [BINARY_OP_ADD_INT] = BINARY_OP,
@@ -2158,22 +2158,22 @@ const uint8_t _PyOpcode_Deopt[256] = {
 #endif // NEED_OPCODE_METADATA
 
 #define EXTRA_CASES \
-    case 87: \
-    case 189: \
-    case 190: \
-    case 191: \
-    case 192: \
-    case 193: \
-    case 194: \
-    case 195: \
-    case 196: \
-    case 197: \
-    case 198: \
-    case 199: \
-    case 200: \
-    case 201: \
-    case 202: \
-    case 239: \
+    case 120: \
+    case 121: \
+    case 122: \
+    case 123: \
+    case 124: \
+    case 125: \
+    case 126: \
+    case 127: \
+    case 226: \
+    case 227: \
+    case 228: \
+    case 229: \
+    case 230: \
+    case 231: \
+    case 232: \
+    case 233: \
         ;
 struct pseudo_targets {
     uint8_t as_sequence;

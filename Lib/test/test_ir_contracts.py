@@ -231,7 +231,7 @@ class VerifierTests(unittest.TestCase):
             f.write(textwrap.dedent(source))
             f.write(cases.parser.END_MARKER)
         with cases.handle_stderr():
-            result = cases.analyzer.analyze_files([self.filename], cases.SequentialNumbers())
+            result = cases.analyzer.analyze_files([self.filename])
         for uop in result.uops.values():
             ir_contract.verify_uop(uop, 0, self.table)
         # The handler rules for macros; an inst's inputs come from outside
@@ -272,7 +272,7 @@ class VerifierTests(unittest.TestCase):
             f.write(textwrap.dedent(source))
             f.write("\n" + cases.parser.END_MARKER)
         with cases.handle_stderr():
-            analysis = cases.analyzer.analyze_files([self.filename], cases.SequentialNumbers())
+            analysis = cases.analyzer.analyze_files([self.filename])
         out = io.StringIO()
         ir_generator.generate_ir([self.filename], analysis, out, False)
         return out.getvalue()

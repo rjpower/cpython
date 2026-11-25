@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-import ir_numbers
 import itertools
 import lexer
 import parser
@@ -398,8 +397,9 @@ class Analysis:
     # Instructions annotated `ir_only`: handlers of the register IR that
     # have no opcode, kept apart so that the opcode tables do not see them.
     ir_only: dict[str, Instruction]
-    # The pinned numbers that opmap and the IR handlers come from
-    numbers: ir_numbers.NumberTable
+    # The handler number of the first IR-only handler: the one after the
+    # last pseudo-instruction.
+    first_ir_only: int
     # The declared generator-boundary clauses, by source
     boundaries: dict[str, Boundary] = field(default_factory=dict)
 
@@ -1250,33 +1250,26 @@ def assign_opcodes(
     instructions: dict[str, Instruction],
     families: dict[str, Family],
     pseudos: dict[str, PseudoInstruction],
-    table: ir_numbers.NumberTable,
 ) -> tuple[dict[str, int], int, int]:
-    """Reads the opcodes from the pinned table (ir_numbers.txt), then returns
-    the opmap, have_arg and min_instrumented values.  Each number must lie
-    within the bounds of its class."""
-    have_arg = table.have_arg
-    min_instrumented = table.min_instrumented
-    first_only = table.first_ir_only
+    """Assigns opcodes, then returns the opmap,
+    have_arg and min_instrumented values"""
     instmap: dict[str, int] = {}
 
-    def assign(name: str, low: int, high: int, what: str) -> None:
-        instmap[name] = table.number(name, low, high, what)
-
     # 0 is reserved for cache entries. This helps debugging.
-    assign("CACHE", 0, 1, "opcode")
+    instmap["CACHE"] = 0
 
     # 17 is reserved as it is the initial value for the specializing counter.
     # This helps catch cases where we attempt to execute a cache.
-    assign("RESERVED", 17, 18, "opcode")
+    instmap["RESERVED"] = 17
 
     # 128 is RESUME - it is hard coded as such in Tools/build/deepfreeze.py
-    assign("RESUME", 128, 129, "opcode")
+    instmap["RESUME"] = 128
 
     # This is an historical oddity.
-    assign("BINARY_OP_INPLACE_ADD_UNICODE", 3, 4, "opcode")
+    instmap["BINARY_OP_INPLACE_ADD_UNICODE"] = 3
 
-    assign("INSTRUMENTED_LINE", 255, 256, "opcode")
+    # The last opcode of the byte; no opcode follows it.
+    instmap["INSTRUMENTED_LINE"] = 255
 
     instrumented = [name for name in instructions if name.startswith("INSTRUMENTED")]
 
@@ -1298,30 +1291,43 @@ def assign_opcodes(
         else:
             no_arg.append(name)
 
-    # HAVE_ARGUMENT counts CACHE, so the last opcode without an argument is
-    # numbered HAVE_ARGUMENT itself.
+    # Specialized ops appear in their own section
+    # Instrumented opcodes are at the end of the valid range
+    min_internal = instmap["RESUME"] + 1
+    min_instrumented = 256 - len(instrumented)
+    assert min_internal + len(specialized) < min_instrumented
+
+    next_opcode = 1
+
+    def add_instruction(name: str) -> None:
+        nonlocal next_opcode
+        if name in instmap:
+            return  # Pre-defined name
+        while next_opcode in instmap.values():
+            next_opcode += 1
+        instmap[name] = next_opcode
+        next_opcode += 1
+
     for name in sorted(no_arg):
-        if name not in instmap:
-            assign(name, 0, have_arg + 1, "opcode without argument")
+        add_instruction(name)
     for name in sorted(has_arg):
-        if name not in instmap:
-            assign(name, have_arg + 1, min_instrumented, "opcode with argument")
-    # Specialized ops take the numbers that no other instruction uses.
+        add_instruction(name)
+    # For compatibility
+    next_opcode = min_internal
     for name in sorted(specialized):
-        if name not in instmap:
-            assign(name, 1, min_instrumented, "specialized opcode")
+        add_instruction(name)
+    next_opcode = min_instrumented
     for name in instrumented:
-        if name not in instmap:
-            assign(name, min_instrumented, 256, "instrumented opcode")
+        add_instruction(name)
 
     for name in instructions:
         instructions[name].opcode = instmap[name]
 
-    for name in sorted(pseudos):
-        assign(name, 256, first_only, "pseudo-instruction")
-        pseudos[name].opcode = instmap[name]
+    for op, name in enumerate(sorted(pseudos), 256):
+        instmap[name] = op
+        pseudos[name].opcode = op
 
-    return instmap, have_arg, min_instrumented
+    return instmap, len(no_arg), min_instrumented
 
 
 def get_instruction_size_for_uop(instructions: dict[str, Instruction], uop: Uop) -> int | None:
@@ -1355,7 +1361,6 @@ def get_instruction_size_for_uop(instructions: dict[str, Instruction], uop: Uop)
 
 def analyze_forest(
     forest: list[parser.AstNode],
-    numbers: ir_numbers.NumberTable | None = None,
 ) -> Analysis:
     instructions: dict[str, Instruction] = {}
     uops: dict[str, Uop] = {}
@@ -1425,17 +1430,15 @@ def analyze_forest(
         inst.family = families["BINARY_OP"]
         families["BINARY_OP"].members.append(inst)
     opmap, first_arg, min_instrumented = assign_opcodes(
-        instructions, families, pseudos, numbers or ir_numbers.load_table())
+        instructions, families, pseudos)
     return Analysis(
         instructions, uops, families, pseudos, labels, opmap, first_arg,
-        min_instrumented, ir_only, numbers or ir_numbers.load_table(), boundaries
+        min_instrumented, ir_only, 256 + len(pseudos), boundaries
     )
 
 
-def analyze_files(
-    filenames: list[str], numbers: ir_numbers.NumberTable | None = None
-) -> Analysis:
-    return analyze_forest(parser.parse_files(filenames), numbers)
+def analyze_files(filenames: list[str]) -> Analysis:
+    return analyze_forest(parser.parse_files(filenames))
 
 
 def dump_analysis(analysis: Analysis) -> None:

@@ -571,20 +571,28 @@ dummy_func(
             DEAD(value);
         }
 
-        /* Stack ops only: rule_truth (Python/regcfg.c) lowers them to Truth
-         * (Python/register_ops/truth.rop). */
-        tier1 inst(UNARY_NOT, (value: consumed -- res: owned exact(PyBool_Type)))
-            effects() exits(abort)
+        /* Stack ops only: rule_truth, rule_branch and rule_jump (Python/regcfg.c)
+         * lower them to Truth, BranchTruth, BranchNone and Jump
+         * (Python/register_ops/truth.rop), and no handler runs them
+         * (STACK_ONLY in Tools/cases_generator/ir_generator.py).  The bodies
+         * give the compiler the opcode's flags (escapes, error, jump,
+         * eval breaker; Python/flowgraph.c) and its stack effect. */
+        inst(UNARY_NOT, (value: consumed -- res: owned exact(PyBool_Type)))
+            effects(runs_python) exits(next, raise)
         {
-            assert(0 && "Executing a stack-only instruction.");
-            Py_FatalError("Executing a stack-only instruction.");
+            int truth = _PyValue_IsTrue(value);
+            PyValue_CLOSE(value);
+            ERROR_IF(truth < 0);
+            res = truth ? PyValue_False : PyValue_True;
         }
 
-        tier1 inst(TO_BOOL, (unused/3, value: consumed -- res: owned exact(PyBool_Type)))
-            effects() exits(abort)
+        inst(TO_BOOL, (unused/3, value: consumed -- res: owned exact(PyBool_Type)))
+            effects(runs_python) exits(next, raise)
         {
-            assert(0 && "Executing a stack-only instruction.");
-            Py_FatalError("Executing a stack-only instruction.");
+            int truth = _PyValue_IsTrue(value);
+            PyValue_CLOSE(value);
+            ERROR_IF(truth < 0);
+            res = truth ? PyValue_True : PyValue_False;
         }
 
         leaf op(_GUARD_NOS_LIST, (nos: object, unused -- nos: exact(PyList_Type), unused))
@@ -3699,24 +3707,21 @@ dummy_func(
          * (Python/regcfg.c) lower them to Jump, BranchTruth, BranchNone and
          * Truth (Python/register_ops/truth.rop).  The jumps keep JUMPTO so that
          * the opcode metadata knows them as jumps. */
-        tier1 inst(JUMP_FORWARD, ( -- ))
+        leaf inst(JUMP_FORWARD, (--))
             effects() exits(next, jump)
         {
-            assert(0 && "Executing a stack-only instruction.");
             JUMPTO(oparg);
         }
 
-        tier1 inst(JUMP_BACKWARD, (unused/1 -- ))
-            effects() exits(next, jump)
-        {
-            assert(0 && "Executing a stack-only instruction.");
-            JUMPTO(oparg);
-        }
+        macro(JUMP_BACKWARD) =
+            unused/1 +
+            _CHECK_PERIODIC +
+            JUMP_BACKWARD_NO_INTERRUPT;
 
-        tier1 inst(JUMP_BACKWARD_NO_INTERRUPT, ( -- ))
+
+        inst(JUMP_BACKWARD_NO_INTERRUPT, (--))
             effects() exits(next, jump)
         {
-            assert(0 && "Executing a stack-only instruction.");
             JUMPTO(oparg);
         }
 
@@ -3741,23 +3746,48 @@ dummy_func(
         /* The keeping jumps of "x and y" and "x or y" are BranchTruth words
          * (the keep modes); these names remain for the family's ops and the
          * event tables of Python/instrumentation.c, with no handler. */
-        tier1 inst(JUMP_IF_FALSE_OR_POP, (cond: closed -- ))
-            effects() exits(next, jump)
+        inst(JUMP_IF_FALSE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
+            effects(runs_python) exits(next, branch, raise)
         {
-            assert(0 && "Executing a stack-only instruction.");
-            JUMPTO(oparg);
+            PyValue held = TAKE(cond);
+            int truth = _PyValue_IsTrue(held);
+            if (truth < 0) {
+                PyValue_CLOSE(held);
+                ERROR_NO_POP();
+            }
+            if (!truth) {
+                res = held;
+                JUMPTO(oparg);
+            }
+            else {
+                PyValue_CLOSE(held);
+                res = PyValue_NULL;
+            }
         }
 
-        tier1 inst(JUMP_IF_TRUE_OR_POP, (cond: closed -- ))
-            effects() exits(next, jump)
+        inst(JUMP_IF_TRUE_OR_POP, (cond: consumed -- res: moved(cond) nullable))
+            effects(runs_python) exits(next, branch, raise)
         {
-            assert(0 && "Executing a stack-only instruction.");
-            JUMPTO(oparg);
+            PyValue held = TAKE(cond);
+            int truth = _PyValue_IsTrue(held);
+            if (truth < 0) {
+                PyValue_CLOSE(held);
+                ERROR_NO_POP();
+            }
+            if (truth) {
+                res = held;
+                JUMPTO(oparg);
+            }
+            else {
+                PyValue_CLOSE(held);
+                res = PyValue_NULL;
+            }
         }
 
         tier1 inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond: closed -- ))
             effects() exits(abort)
         {
+            (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
@@ -3765,36 +3795,51 @@ dummy_func(
         tier1 inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond: closed -- ))
             effects() exits(abort)
         {
+            (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
 
-        tier1 inst(POP_JUMP_IF_FALSE, (unused/1, cond: closed -- ))
-            effects() exits(next, jump)
+        inst(POP_JUMP_IF_FALSE, (unused/1, cond: consumed -- ))
+            effects(runs_python) exits(next, branch, raise)
         {
-            assert(0 && "Executing a stack-only instruction.");
-            JUMPTO(oparg);
+            int truth = _PyValue_IsTrue(cond);
+            PyValue_CLOSE(cond);
+            ERROR_IF(truth < 0);
+            if (!truth) {
+                JUMPTO(oparg);
+            }
         }
 
-        tier1 inst(POP_JUMP_IF_TRUE, (unused/1, cond: closed -- ))
-            effects() exits(next, jump)
+        inst(POP_JUMP_IF_TRUE, (unused/1, cond: consumed -- ))
+            effects(runs_python) exits(next, branch, raise)
         {
-            assert(0 && "Executing a stack-only instruction.");
-            JUMPTO(oparg);
+            int truth = _PyValue_IsTrue(cond);
+            PyValue_CLOSE(cond);
+            ERROR_IF(truth < 0);
+            if (truth) {
+                JUMPTO(oparg);
+            }
         }
 
-        tier1 inst(POP_JUMP_IF_NONE, (unused/1, value: closed -- ))
-            effects() exits(next, jump)
+        inst(POP_JUMP_IF_NONE, (unused/1, value: consumed -- ))
+            effects(runs_python) exits(next, branch)
         {
-            assert(0 && "Executing a stack-only instruction.");
-            JUMPTO(oparg);
+            int jump = PyValue_IsNone(value);
+            PyValue_CLOSE(value);
+            if (jump) {
+                JUMPTO(oparg);
+            }
         }
 
-        tier1 inst(POP_JUMP_IF_NOT_NONE, (unused/1, value: closed -- ))
-            effects() exits(next, jump)
+        inst(POP_JUMP_IF_NOT_NONE, (unused/1, value: consumed -- ))
+            effects(runs_python) exits(next, branch)
         {
-            assert(0 && "Executing a stack-only instruction.");
-            JUMPTO(oparg);
+            int jump = PyValue_IsNone(value);
+            PyValue_CLOSE(value);
+            if (!jump) {
+                JUMPTO(oparg);
+            }
         }
 
         outlined inst(GET_LEN, (obj -- obj, len: owned exact(PyLong_Type)))
@@ -5002,6 +5047,7 @@ dummy_func(
         tier1 inst(INSTRUMENTED_JUMP_FORWARD, ( -- ))
             effects() exits(abort)
         {
+            (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
@@ -5009,6 +5055,7 @@ dummy_func(
         tier1 inst(INSTRUMENTED_JUMP_BACKWARD, (unused/1 -- ))
             effects() exits(abort)
         {
+            (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
@@ -5016,6 +5063,7 @@ dummy_func(
         tier1 inst(INSTRUMENTED_POP_JUMP_IF_TRUE, (unused/1, cond: closed -- ))
             effects() exits(abort)
         {
+            (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
@@ -5023,6 +5071,7 @@ dummy_func(
         tier1 inst(INSTRUMENTED_POP_JUMP_IF_FALSE, (unused/1, cond: closed -- ))
             effects() exits(abort)
         {
+            (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
@@ -5030,6 +5079,7 @@ dummy_func(
         tier1 inst(INSTRUMENTED_POP_JUMP_IF_NONE, (unused/1, value: closed -- ))
             effects() exits(abort)
         {
+            (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }
@@ -5037,6 +5087,7 @@ dummy_func(
         tier1 inst(INSTRUMENTED_POP_JUMP_IF_NOT_NONE, (unused/1, value: closed -- ))
             effects() exits(abort)
         {
+            (void)oparg;
             assert(0 && "Executing a stack-only instruction.");
             Py_FatalError("Executing a stack-only instruction.");
         }

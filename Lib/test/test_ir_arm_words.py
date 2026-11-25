@@ -147,10 +147,6 @@ MON = sys.monitoring
 from _opcode_metadata import _ir_opmap
 
 LOW = {"decoy": dis.opmap["RETURN_VALUE"], "marker": _ir_opmap["IR_OPERANDS"]}
-# The operand word's low 16 bits are the site's feedback unit; the site
-# is the generator's only attribute load, so unit 0. The decoy or marker
-# value sits above them.
-PAYLOAD = 0xDEAD_BEEF_0000_0000 | (LOW[sys.argv[1]] << 16)
 
 
 def gen(flag, o):
@@ -163,6 +159,12 @@ def gen(flag, o):
 
 code = gen.__code__
 offset = [i.offset for i in dis.get_instructions(gen) if i.opname == "LOAD_ATTR"][0]
+# The operand word's low 16 bits are the site's feedback unit, which the
+# GetAttr word that the plant replaces names in D: a unit the code has no
+# entry for would send warm-up writes outside the feedback block.  The
+# decoy or marker value sits above them.
+site = next(w for w in capi.get_ir(code) if w[0] == "GetAttr.Generic")
+PAYLOAD = 0xDEAD_BEEF_0000_0000 | (LOW[sys.argv[1]] << 16) | site[4]
 capi.plant_arm_words(code, offset, "GetMethod.Generic", (PAYLOAD,))
 head = next(i for i, w in enumerate(capi.get_ir(code, True))
             if w[0] == "GetMethod.Generic")
